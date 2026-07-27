@@ -89,6 +89,158 @@ final class LagunaRoPE: Module, OffsetLayer {
             freqs: frequencies
         )
     }
+
+    func callAsFunction(_ x: MLXArray, offsets: [Int]) -> MLXArray {
+        precondition(
+            x.dim(0) == offsets.count,
+            "Laguna RoPE requires one position offset per batch row."
+        )
+        guard let first = offsets.first else {
+            return x
+        }
+        if offsets.allSatisfy({ $0 == first }) {
+            return callAsFunction(x, offset: first)
+        }
+        return concatenated(
+            offsets.enumerated().map { index, offset in
+                callAsFunction(x[index..<(index + 1), 0..., 0..., 0...], offset: offset)
+            },
+            axis: 0
+        )
+    }
+}
+
+/// A transient decode-time cache view that packs independently positioned
+/// request rows into one MLX batch. The underlying row caches remain the
+/// source of truth, so splitting after the forward is zero-copy at the cache
+/// object level and each row keeps its own absolute position.
+final class LagunaRaggedKVCache: Gemma4AttentionCache {
+    private let rows: [Gemma4AttentionCache]
+    private(set) var lastAttentionKeyLengths: [Int] = []
+
+    init?(rows: [Gemma4AttentionCache]) {
+        guard !rows.isEmpty else { return nil }
+        let cacheType = String(describing: type(of: rows[0]))
+        guard rows.allSatisfy({ String(describing: type(of: $0)) == cacheType }) else {
+            return nil
+        }
+        self.rows = rows
+    }
+
+    var offset: Int {
+        positionOffsets.min() ?? 0
+    }
+
+    var positionOffsets: [Int] {
+        rows.map(\.offset)
+    }
+
+    func currentState() -> (MLXArray, MLXArray)? {
+        paddedState(rows.compactMap { $0.currentState() })
+    }
+
+    func decodeState() -> (MLXArray, MLXArray)? {
+        paddedState(rows.compactMap { $0.decodeState() })
+    }
+
+    func append(keys: MLXArray, values: MLXArray) {
+        precondition(keys.dim(0) == rows.count && values.dim(0) == rows.count)
+        for (index, row) in rows.enumerated() {
+            row.append(
+                keys: keys[index..<(index + 1), 0..., 0..., 0...],
+                values: values[index..<(index + 1), 0..., 0..., 0...]
+            )
+        }
+    }
+
+    func attentionState(
+        appending keys: MLXArray,
+        values: MLXArray
+    ) -> (MLXArray, MLXArray)? {
+        precondition(keys.dim(0) == rows.count && values.dim(0) == rows.count)
+        var states: [(MLXArray, MLXArray)] = []
+        states.reserveCapacity(rows.count)
+        for (index, row) in rows.enumerated() {
+            guard let state = row.attentionState(
+                appending: keys[index..<(index + 1), 0..., 0..., 0...],
+                values: values[index..<(index + 1), 0..., 0..., 0...]
+            ) else {
+                return nil
+            }
+            states.append(state)
+        }
+        lastAttentionKeyLengths = states.map { $0.0.dim(2) }
+        return paddedState(states)
+    }
+
+    func fork() -> Gemma4AttentionCache {
+        LagunaRaggedKVCache(rows: rows.map { $0.fork() })!
+    }
+
+    func batched(with caches: [Gemma4AttentionCache]) -> Gemma4AttentionCache? {
+        let nestedRows = caches.compactMap { ($0 as? LagunaRaggedKVCache)?.rows }
+        guard nestedRows.count == caches.count else { return nil }
+        return LagunaRaggedKVCache(rows: nestedRows.flatMap { $0 })
+    }
+
+    func unbatchedRows(count: Int) -> [Gemma4AttentionCache]? {
+        guard count == rows.count else { return nil }
+        return rows
+    }
+
+    func specializedAttention(
+        queries: MLXArray,
+        repeats: Int,
+        scale: Float
+    ) -> MLXArray? {
+        nil
+    }
+
+    func reencoded(
+        quantization: Gemma4KVCacheQuantization
+    ) -> Gemma4AttentionCache? {
+        let converted = rows.compactMap { $0.reencoded(quantization: quantization) }
+        guard converted.count == rows.count else { return nil }
+        return LagunaRaggedKVCache(rows: converted)
+    }
+
+    func evaluateStorage() {
+        rows.forEach { $0.evaluateStorage() }
+    }
+
+    func storageArraysForEvaluation() -> [MLXArray] {
+        rows.flatMap { $0.storageArraysForEvaluation() }
+    }
+
+    private func paddedState(
+        _ states: [(MLXArray, MLXArray)]
+    ) -> (MLXArray, MLXArray)? {
+        guard states.count == rows.count, let first = states.first else {
+            return nil
+        }
+        let maximumLength = states.map { $0.0.dim(2) }.max() ?? 0
+        guard maximumLength > 0 else { return nil }
+
+        func pad(_ array: MLXArray, to length: Int) -> MLXArray {
+            let missing = length - array.dim(2)
+            guard missing > 0 else { return array }
+            return concatenated(
+                [
+                    array,
+                    MLXArray.zeros(
+                        [1, array.dim(1), missing, array.dim(3)],
+                        dtype: array.dtype
+                    ),
+                ],
+                axis: 2
+            )
+        }
+
+        let keys = concatenated(states.map { pad($0.0, to: maximumLength) }, axis: 0)
+        let values = concatenated(states.map { pad($0.1, to: maximumLength) }, axis: 0)
+        precondition(keys.dim(1) == first.0.dim(1))
+        return (keys, values)
+    }
 }
 
 class LagunaFeedForward: Module {
@@ -363,6 +515,8 @@ final class LagunaAttention: Module {
         let batch = x.dim(0)
         let sequenceLength = x.dim(1)
         let offset = cache?.offset ?? 0
+        let positionOffsets = (cache as? LagunaRaggedKVCache)?.positionOffsets
+            ?? Array(repeating: offset, count: batch)
 
         var queries = qProj(x).reshaped(batch, sequenceLength, headCount, headDim)
         var keys = kProj(x).reshaped(batch, sequenceLength, keyValueHeadCount, headDim)
@@ -370,19 +524,21 @@ final class LagunaAttention: Module {
         queries = qNorm(queries).transposed(0, 2, 1, 3)
         keys = kNorm(keys).transposed(0, 2, 1, 3)
         values = values.transposed(0, 2, 1, 3)
-        queries = rope(queries, offset: offset)
-        keys = rope(keys, offset: offset)
+        queries = rope(queries, offsets: positionOffsets)
+        keys = rope(keys, offsets: positionOffsets)
 
+        var keyLengths: [Int]?
         if let cache {
-            cache.append(keys: keys, values: values)
-            let state = sequenceLength == 1 ? cache.decodeState() : cache.currentState()
+            let state = cache.attentionState(appending: keys, values: values)
             keys = state!.0
             values = state!.1
+            keyLengths = (cache as? LagunaRaggedKVCache)?.lastAttentionKeyLengths
         }
 
         let mask = attentionMask(
             queryLength: sequenceLength,
-            queryOffset: offset,
+            queryOffsets: positionOffsets,
+            keyLengths: keyLengths ?? Array(repeating: keys.dim(2), count: batch),
             keyLength: keys.dim(2),
             dtype: x.dtype
         )
@@ -408,30 +564,66 @@ final class LagunaAttention: Module {
 
     private func attentionMask(
         queryLength: Int,
-        queryOffset: Int,
+        queryOffsets: [Int],
+        keyLengths: [Int],
         keyLength: Int,
         dtype: DType
     ) -> MLXFast.ScaledDotProductAttentionMaskMode {
-        guard queryLength > 1 else {
+        precondition(queryOffsets.count == keyLengths.count)
+        guard queryLength > 1 || keyLengths.contains(where: { $0 != keyLength }) else {
             return .none
         }
-
-        let keyStart = max(0, queryOffset + queryLength - keyLength)
-        let queryPositions = MLXArray(
-            Int32(queryOffset)..<Int32(queryOffset + queryLength)
-        ).reshaped(queryLength, 1)
-        let keyPositions = MLXArray(
-            Int32(keyStart)..<Int32(keyStart + keyLength)
-        ).reshaped(1, keyLength)
-        var allowed = keyPositions .<= queryPositions
-        if let slidingWindow {
-            allowed = allowed .&& (keyPositions .> (queryPositions - Int32(slidingWindow)))
+        if queryOffsets.count == 1, keyLengths[0] == keyLength {
+            let queryOffset = queryOffsets[0]
+            let keyStart = max(0, queryOffset + queryLength - keyLength)
+            let queryPositions = MLXArray(
+                Int32(queryOffset)..<Int32(queryOffset + queryLength)
+            ).reshaped(queryLength, 1)
+            let keyPositions = MLXArray(
+                Int32(keyStart)..<Int32(keyStart + keyLength)
+            ).reshaped(1, keyLength)
+            var allowed = keyPositions .<= queryPositions
+            if let slidingWindow {
+                allowed = allowed
+                    .&& (keyPositions .> (queryPositions - Int32(slidingWindow)))
+            }
+            let typed = allowed.asType(dtype).reshaped(1, 1, queryLength, keyLength)
+            let zeros = MLXArray.zeros([1, 1, queryLength, keyLength], dtype: dtype)
+            let negative = zeros + MLXArray(-1e9).asType(dtype)
+            return .array(MLX.where(
+                typed .> MLXArray(0).asType(dtype),
+                zeros,
+                negative
+            ))
         }
 
-        let typed = allowed.asType(dtype).reshaped(1, 1, queryLength, keyLength)
-        let zeros = MLXArray.zeros([1, 1, queryLength, keyLength], dtype: dtype)
+        let rowMasks = zip(queryOffsets, keyLengths).map { queryOffset, validKeyLength in
+            let keyStart = max(0, queryOffset + queryLength - validKeyLength)
+            let queryPositions = MLXArray(
+                Int32(queryOffset)..<Int32(queryOffset + queryLength)
+            ).reshaped(queryLength, 1)
+            let keyIndices = MLXArray(Int32(0)..<Int32(keyLength)).reshaped(1, keyLength)
+            let keyPositions = keyIndices + Int32(keyStart)
+            var allowed = (keyIndices .< Int32(validKeyLength))
+                .&& (keyPositions .<= queryPositions)
+            if let slidingWindow {
+                allowed = allowed
+                    .&& (keyPositions .> (queryPositions - Int32(slidingWindow)))
+            }
+            return allowed
+        }
+        let allowed = stacked(rowMasks).reshaped(
+            queryOffsets.count,
+            1,
+            queryLength,
+            keyLength
+        )
+        let zeros = MLXArray.zeros(
+            [queryOffsets.count, 1, queryLength, keyLength],
+            dtype: dtype
+        )
         let negative = zeros + MLXArray(-1e9).asType(dtype)
-        return .array(MLX.where(typed .> MLXArray(0).asType(dtype), zeros, negative))
+        return .array(MLX.where(allowed, zeros, negative))
     }
 }
 
@@ -466,6 +658,11 @@ final class LagunaDecoderLayer: Module {
     }
 }
 
+struct LagunaLanguageModelOutput {
+    let hidden: MLXArray
+    let capturedHiddenStates: [Int: MLXArray]
+}
+
 final class LagunaLanguageModel: Module {
     @ModuleInfo(key: "embed_tokens") var embedTokens: Embedding
     @ModuleInfo(key: "layers") var layers: [LagunaDecoderLayer]
@@ -487,11 +684,26 @@ final class LagunaLanguageModel: Module {
     }
 
     func callAsFunction(_ inputIDs: MLXArray, cache: [Gemma4AttentionCache]? = nil) -> MLXArray {
+        forward(inputIDs, cache: cache).hidden
+    }
+
+    func forward(
+        _ inputIDs: MLXArray,
+        cache: [Gemma4AttentionCache]? = nil,
+        captureLayerIndices: Set<Int> = []
+    ) -> LagunaLanguageModelOutput {
         var hidden = embedTokens(inputIDs)
+        var capturedHiddenStates: [Int: MLXArray] = [:]
         for (index, layer) in layers.enumerated() {
             hidden = layer(hidden, cache: cache?[index])
+            if captureLayerIndices.contains(index) {
+                capturedHiddenStates[index] = hidden
+            }
         }
-        return norm(hidden)
+        return LagunaLanguageModelOutput(
+            hidden: norm(hidden),
+            capturedHiddenStates: capturedHiddenStates
+        )
     }
 
     func makeCache() -> [Gemma4AttentionCache] {
@@ -502,6 +714,11 @@ final class LagunaLanguageModel: Module {
             return Gemma4FullKVCache()
         }
     }
+}
+
+struct LagunaForwardOutput {
+    let logits: MLXArray
+    let capturedHiddenStates: [Int: MLXArray]
 }
 
 final class LagunaCausalLM: Module {
@@ -520,19 +737,43 @@ final class LagunaCausalLM: Module {
     }
 
     func callAsFunction(_ inputIDs: MLXArray, cache: [Gemma4AttentionCache]? = nil) -> MLXArray {
-        let hidden = model(inputIDs, cache: cache)
-        return lmHead?(hidden) ?? model.embedTokens.asLinear(hidden)
+        forward(inputIDs, cache: cache).logits
+    }
+
+    func forward(
+        _ inputIDs: MLXArray,
+        cache: [Gemma4AttentionCache]? = nil,
+        captureLayerIndices: Set<Int> = [],
+        lastPositionOnly: Bool = false
+    ) -> LagunaForwardOutput {
+        let output = model.forward(
+            inputIDs,
+            cache: cache,
+            captureLayerIndices: captureLayerIndices
+        )
+        var hidden = output.hidden
+        if lastPositionOnly, hidden.dim(1) > 1 {
+            hidden = hidden[0..., (hidden.dim(1) - 1)..., 0...]
+        }
+        return LagunaForwardOutput(
+            logits: lmHead?(hidden) ?? model.embedTokens.asLinear(hidden),
+            capturedHiddenStates: output.capturedHiddenStates
+        )
     }
 
     func lastPositionLogits(
         _ inputIDs: MLXArray,
         cache: [Gemma4AttentionCache]? = nil
     ) -> MLXArray {
-        var hidden = model(inputIDs, cache: cache)
-        if hidden.dim(1) > 1 {
-            hidden = hidden[0..., (hidden.dim(1) - 1)..., 0...]
-        }
-        return lmHead?(hidden) ?? model.embedTokens.asLinear(hidden)
+        forward(inputIDs, cache: cache, lastPositionOnly: true).logits
+    }
+
+    func inputEmbeddings(for inputIDs: MLXArray) -> MLXArray {
+        model.embedTokens(inputIDs)
+    }
+
+    func logits(from hidden: MLXArray) -> MLXArray {
+        lmHead?(hidden) ?? model.embedTokens.asLinear(hidden)
     }
 
     func makeCache() -> [Gemma4AttentionCache] {

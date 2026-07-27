@@ -17,6 +17,21 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
     )
     var lagunaPath: String?
 
+    @Option(
+        name: [.long],
+        help: "Local poolside/Laguna-S-2.1-DFlash checkpoint directory."
+    )
+    var lagunaDflashPath: String?
+
+    @Option(name: [.long], help: "Laguna DFlash speculative tokens per round (1...15).")
+    var lagunaDflashTokens: Int = LagunaDFlashRouting.defaultSpeculativeTokens
+
+    @Option(
+        name: [.long],
+        help: "Use Laguna DFlash when the effective output budget is at least this many tokens."
+    )
+    var lagunaDflashMinTokens: Int = LagunaDFlashRouting.defaultMinimumOutputTokens
+
     @Option(name: [.long], help: "Benchmark suite.")
     var suite: CodeBenchmarkSuite = .humanEvalSlice
 
@@ -74,6 +89,15 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
         }
         guard executionTimeout > 0, executionTimeout.isFinite else {
             throw ValidationError("--execution-timeout must be a positive finite number.")
+        }
+        guard (1...15).contains(lagunaDflashTokens) else {
+            throw ValidationError("--laguna-dflash-tokens must be between 1 and 15.")
+        }
+        guard lagunaDflashMinTokens > 0 else {
+            throw ValidationError("--laguna-dflash-min-tokens must be greater than zero.")
+        }
+        if lagunaDflashPath != nil, lagunaPath == nil {
+            throw ValidationError("--laguna-dflash-path requires --laguna-path.")
         }
         if !dryRun {
             try CodeExecutionSandbox.preflight(mode: sandbox)
@@ -181,11 +205,18 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
                     reason: "Laguna evaluation requires --laguna-path."
                 )
             }
-            let generator = LagunaGenerator()
+            let generator = LagunaGenerator(
+                dflashModelPath: lagunaDflashPath,
+                dflashSpeculativeTokens: lagunaDflashTokens,
+                dflashMinimumOutputTokens: lagunaDflashMinTokens
+            )
             do {
                 let result = try await runTasks(
                     modelID,
-                    engine: "laguna-mlx",
+                    engine: lagunaDflashPath == nil
+                        ? "laguna-mlx"
+                        : "laguna-mlx+dflash-auto-k\(lagunaDflashTokens)"
+                            + "-min\(lagunaDflashMinTokens)",
                     modelPath: lagunaPath,
                     tasks: tasks,
                     generate: { request in
@@ -363,7 +394,7 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
             || ManagedModelCatalog.spec(for: modelID)?.validationKind == .q35
     }
 
-    private static let systemPrompt = """
+    static let systemPrompt = """
     You are completing Python programming benchmark tasks. Return only valid Python code.
     Do not include Markdown fences, prose, comments about your approach, or test code.
     Stop immediately after the requested function implementation.

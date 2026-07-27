@@ -17,6 +17,21 @@ struct ModelBenchmarkToolCalls: AsyncParsableCommand {
     )
     var lagunaPath: String?
 
+    @Option(
+        name: [.long],
+        help: "Local poolside/Laguna-S-2.1-DFlash checkpoint directory."
+    )
+    var lagunaDflashPath: String?
+
+    @Option(name: [.long], help: "Laguna DFlash speculative tokens per round (1...15).")
+    var lagunaDflashTokens: Int = LagunaDFlashRouting.defaultSpeculativeTokens
+
+    @Option(
+        name: [.long],
+        help: "Use Laguna DFlash when the effective output budget is at least this many tokens."
+    )
+    var lagunaDflashMinTokens: Int = LagunaDFlashRouting.defaultMinimumOutputTokens
+
     @Option(name: [.long], help: "Comma-separated tool-call case ids.")
     var cases: String?
 
@@ -60,6 +75,15 @@ struct ModelBenchmarkToolCalls: AsyncParsableCommand {
             guard contextSize > 0 else {
                 throw ValidationError("--context-size must be greater than zero.")
             }
+        }
+        guard (1...15).contains(lagunaDflashTokens) else {
+            throw ValidationError("--laguna-dflash-tokens must be between 1 and 15.")
+        }
+        guard lagunaDflashMinTokens > 0 else {
+            throw ValidationError("--laguna-dflash-min-tokens must be greater than zero.")
+        }
+        if lagunaDflashPath != nil, lagunaPath == nil {
+            throw ValidationError("--laguna-dflash-path requires --laguna-path.")
         }
         _ = try selectedModelIDs()
         _ = try selectedCases()
@@ -139,11 +163,18 @@ struct ModelBenchmarkToolCalls: AsyncParsableCommand {
                     reason: "Laguna evaluation requires --laguna-path."
                 )
             }
-            let generator = LagunaGenerator()
+            let generator = LagunaGenerator(
+                dflashModelPath: lagunaDflashPath,
+                dflashSpeculativeTokens: lagunaDflashTokens,
+                dflashMinimumOutputTokens: lagunaDflashMinTokens
+            )
             do {
                 let result = try await runCases(
                     modelID,
-                    engine: "laguna-mlx",
+                    engine: lagunaDflashPath == nil
+                        ? "laguna-mlx"
+                        : "laguna-mlx+dflash-auto-k\(lagunaDflashTokens)"
+                            + "-min\(lagunaDflashMinTokens)",
                     modelPath: lagunaPath,
                     cases: cases,
                     generate: { request in

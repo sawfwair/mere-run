@@ -35,6 +35,18 @@ The format is based on Keep a Changelog.
 - added generation recipe schema 2 with the final effective BPM, duration,
   key/scale, vocal language, and time signature after LM planning and explicit
   overrides.
+- added evaluation-only Laguna S 2.1 acceleration controls for the official
+  DFlash companion checkpoint, lossless target verification, ragged
+  continuous batching, and machine-readable acceptance, recovery, batching,
+  prefill, and decode metrics. A length-aware output-budget router bypasses
+  DFlash work for short requests, uses the measured 12-token proposal default,
+  and falls back losslessly after one clearly low-acceptance round or two
+  sub-threshold rounds. Greedy verification keeps the anchor, proposals, and
+  target verification GPU-lazy until one round-level readback. A
+  resident-process target/DFlash crossover benchmark records exact decode
+  lengths, mixed concurrency, output fingerprints, and MLX memory. Laguna
+  remains outside the managed catalog and normal serving routes pending
+  broader qualification.
 
 ### Changed
 

@@ -131,11 +131,18 @@ protocol Gemma4AttentionCache: AnyObject {
     /// order.
     func decodeState() -> (MLXArray, MLXArray)?
     func append(keys: MLXArray, values: MLXArray)
+    /// Appends the new keys and values and returns the state that a query of
+    /// the same length must attend over. Sliding caches override this for
+    /// multi-token chunked prefill so early queries in the chunk can still see
+    /// the preceding window even though the resident cache is trimmed for the
+    /// next step.
+    func attentionState(appending keys: MLXArray, values: MLXArray) -> (MLXArray, MLXArray)?
     func fork() -> Gemma4AttentionCache
     func batched(with caches: [Gemma4AttentionCache]) -> Gemma4AttentionCache?
     func unbatchedRows(count: Int) -> [Gemma4AttentionCache]?
     func specializedAttention(queries: MLXArray, repeats: Int, scale: Float) -> MLXArray?
     func reencoded(quantization: Gemma4KVCacheQuantization) -> Gemma4AttentionCache?
+    func storageArraysForEvaluation() -> [MLXArray]
     func evaluateStorage()
 }
 
@@ -146,6 +153,11 @@ extension Gemma4CausalModel {
 }
 
 extension Gemma4AttentionCache {
+    func attentionState(appending keys: MLXArray, values: MLXArray) -> (MLXArray, MLXArray)? {
+        append(keys: keys, values: values)
+        return keys.dim(2) == 1 ? decodeState() : currentState()
+    }
+
     func decodeState() -> (MLXArray, MLXArray)? {
         currentState()
     }
@@ -166,7 +178,18 @@ extension Gemma4AttentionCache {
         nil
     }
 
+    func storageArraysForEvaluation() -> [MLXArray] {
+        guard let state = currentState() else { return [] }
+        return [state.0, state.1]
+    }
+
     func evaluateStorage() {}
+}
+
+func evaluateGemma4CacheStorage(_ caches: [Gemma4AttentionCache]) {
+    let arrays = caches.flatMap { $0.storageArraysForEvaluation() }
+    guard !arrays.isEmpty else { return }
+    MLX.eval(arrays)
 }
 
 final class Gemma4FullKVCache: Gemma4AttentionCache {
@@ -254,6 +277,11 @@ final class Gemma4FullKVCache: Gemma4AttentionCache {
         }
     }
 
+    func storageArraysForEvaluation() -> [MLXArray] {
+        guard let keys, let values else { return [] }
+        return [keys, values]
+    }
+
     func batched(with caches: [Gemma4AttentionCache]) -> Gemma4AttentionCache? {
         guard let typed = caches as? [Gemma4FullKVCache],
               !typed.isEmpty,
@@ -296,8 +324,9 @@ final class Gemma4SlidingKVCache: Gemma4AttentionCache {
     private(set) var offset: Int = 0
     private var writeIndex: Int = 0
 
-    init(maxSize: Int) {
+    init(maxSize: Int, initialOffset: Int = 0) {
         self.maxSize = max(1, maxSize)
+        self.offset = max(0, initialOffset)
     }
 
     var configuredMaxSize: Int {
@@ -330,6 +359,23 @@ final class Gemma4SlidingKVCache: Gemma4AttentionCache {
         } else {
             updateByConcatenating(keys: keys, values: values)
         }
+    }
+
+    func attentionState(appending keys: MLXArray, values: MLXArray) -> (MLXArray, MLXArray)? {
+        guard keys.dim(2) > 1 else {
+            append(keys: keys, values: values)
+            return decodeState()
+        }
+
+        let previous = currentState()
+        append(keys: keys, values: values)
+        guard let previous else {
+            return currentState()
+        }
+        return (
+            concatenated([previous.0, keys], axis: 2),
+            concatenated([previous.1, values], axis: 2)
+        )
     }
 
     private func updateByConcatenating(keys: MLXArray, values: MLXArray) {
@@ -470,6 +516,11 @@ final class Gemma4SlidingKVCache: Gemma4AttentionCache {
         if let keys, let values {
             MLX.eval(keys, values)
         }
+    }
+
+    func storageArraysForEvaluation() -> [MLXArray] {
+        guard let keys, let values else { return [] }
+        return [keys, values]
     }
 
     func batched(with caches: [Gemma4AttentionCache]) -> Gemma4AttentionCache? {

@@ -33,6 +33,26 @@ public struct LagunaRopeParameters: Decodable, Sendable, Hashable {
         case partialRotaryFactor = "partial_rotary_factor"
     }
 
+    public init(
+        ropeType: String = "default",
+        ropeTheta: Float = 10_000,
+        factor: Float? = nil,
+        originalMaxPositionEmbeddings: Int? = nil,
+        betaSlow: Float? = nil,
+        betaFast: Float? = nil,
+        attentionFactor: Float? = nil,
+        partialRotaryFactor: Float = 1
+    ) {
+        self.ropeType = ropeType
+        self.ropeTheta = ropeTheta
+        self.factor = factor
+        self.originalMaxPositionEmbeddings = originalMaxPositionEmbeddings
+        self.betaSlow = betaSlow
+        self.betaFast = betaFast
+        self.attentionFactor = attentionFactor
+        self.partialRotaryFactor = partialRotaryFactor
+    }
+
     public init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         self.ropeType = try container.decodeIfPresent(String.self, forKey: .ropeType) ?? "default"

@@ -137,6 +137,77 @@ captured `<think>...</think>` content is reported as reasoning metadata. A secon
 generated reasoning block is reported as `reasoning_reopened=true`; treat that as
 a loop or phase-restart warning, not an automatic correctness failure.
 
+### Laguna Pre-Integration Evaluation
+
+Laguna S 2.1 remains outside the managed catalog while its native MLX path is
+being qualified. Use an explicit target checkpoint directory with
+`--laguna-path` on the chat, tool-call, or code benchmark. Add the official
+DFlash companion with `--laguna-dflash-path`; `--laguna-dflash-tokens` controls
+the proposal length and defaults to the measured value of `12`.
+`--laguna-dflash-min-tokens` controls the output-budget router and defaults to
+`32`. Requests below the threshold skip DFlash prompt-context projection and
+decode. Routed requests fall back losslessly when acceptance is below `0.25`
+after one speculative round or below `0.60` after two rounds. Reports count
+routed, bypassed, and fallback requests. The companion still requires an
+explicit local checkpoint path: its setup/context-projection cost can outweigh
+speculative savings on short or low-acceptance outputs, so compare the phase
+timings on the workload you intend to run.
+
+```bash
+swift run mere.run model benchmark chat \
+  --laguna-path /path/to/Laguna-S-2.1-NVFP4-mlx \
+  --laguna-dflash-path /path/to/Laguna-S-2.1-DFlash \
+  --laguna-dflash-tokens 12 \
+  --laguna-dflash-min-tokens 32 \
+  --cases MereChat/0,MereChat/3 \
+  --log-responses
+```
+
+Use the resident-process crossover command for timing decisions. It loads the
+target and draft once, rotates target-only, forced DFlash, and automatic order,
+requires exact decode lengths, and records MLX active, cache, and peak memory:
+
+```bash
+swift build -c release
+.build/release/mere.run model benchmark laguna-dflash \
+  --laguna-path /path/to/Laguna-S-2.1-NVFP4-mlx \
+  --laguna-dflash-path /path/to/Laguna-S-2.1-DFlash \
+  --fixture code-completion \
+  --decode-token-values 32,48,64,96 \
+  --repetitions 3 \
+  --include-automatic \
+  --json
+```
+
+Add `--concurrency-values 1,2,4 --mixed-fixtures` to run an unmeasured warmup
+at each sorted concurrency level followed by resident target-only, forced
+DFlash, and optional automatic groups. Mixed groups rotate deterministic prose,
+grounded email, and code prompts while also rotating the requested decode
+lengths. The report includes aggregate tokens per second, p50/p95 latency and
+time to first token, per-row decode-throughput fairness, physical same- and
+variable-position batch steps, maximum batch size, memory, DFlash acceptance,
+and stable output fingerprints. `byte_exact_target_equivalent` is true only
+when every DFlash or automatic row matches the deterministic target output and
+repeated target rows remain internally consistent. The official NVFP4 target
+can select different but coherent greedy continuations at different sequence
+or batch shapes, so a false byte-exact result is a hard signal to inspect the
+logged responses and workload quality checks, not by itself proof of semantic
+corruption. Set `--warmup-repetitions 0` only when deliberately measuring cold
+graph compilation.
+
+The chat benchmark's `--concurrency` option runs cases in fixed-size waves.
+Values above one enable Laguna's ragged target continuous-batching scheduler.
+The DFlash batch kernel is retained for forced evaluation, but automatic
+DFlash uses the acceptance-aware serial coordinator. Text and JSON reports
+include physical batch-step counts, same- versus variable-position steps,
+maximum observed batch size, DFlash acceptance, and target verification,
+recovery, and fallback forward counts. Compare concurrency on identical
+fixtures; fewer physical forwards do not by themselves establish a wall-time
+speedup.
+
+These flags are an evaluation boundary, not a pull or serving contract. Do not
+infer catalog support from a successful local checkpoint run.
+
 ### VLM
 
 `model benchmark vlm` has two modes:

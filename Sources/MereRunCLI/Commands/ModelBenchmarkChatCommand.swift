@@ -17,6 +17,27 @@ struct ModelBenchmarkChat: AsyncParsableCommand {
     )
     var lagunaPath: String?
 
+    @Option(
+        name: [.long],
+        help: "Local poolside/Laguna-S-2.1-DFlash checkpoint directory."
+    )
+    var lagunaDflashPath: String?
+
+    @Option(name: [.long], help: "Laguna DFlash speculative tokens per round (1...15).")
+    var lagunaDflashTokens: Int = LagunaDFlashRouting.defaultSpeculativeTokens
+
+    @Option(
+        name: [.long],
+        help: "Use Laguna DFlash when the effective output budget is at least this many tokens."
+    )
+    var lagunaDflashMinTokens: Int = LagunaDFlashRouting.defaultMinimumOutputTokens
+
+    @Option(
+        name: [.long],
+        help: "Laguna DFlash routing policy for evaluation."
+    )
+    var lagunaDflashRouting: LagunaDFlashRoutingMode = .automatic
+
     @Option(name: [.long], help: "Benchmark suite.")
     var suite: ChatBenchmarkSuite = .mereChatSlice
 
@@ -34,6 +55,9 @@ struct ModelBenchmarkChat: AsyncParsableCommand {
 
     @Option(name: [.long], help: "Maximum context tokens passed to the runtime.")
     var contextSize: Int?
+
+    @Option(name: [.long], help: "Number of benchmark cases generated concurrently.")
+    var concurrency: Int = 1
 
     @Flag(name: [.long], help: "Print the benchmark plan without loading models.")
     var dryRun: Bool = false
@@ -68,6 +92,21 @@ struct ModelBenchmarkChat: AsyncParsableCommand {
                 throw ValidationError("--context-size must be greater than zero.")
             }
         }
+        guard concurrency > 0 else {
+            throw ValidationError("--concurrency must be greater than zero.")
+        }
+        guard (1...15).contains(lagunaDflashTokens) else {
+            throw ValidationError("--laguna-dflash-tokens must be between 1 and 15.")
+        }
+        guard lagunaDflashMinTokens > 0 else {
+            throw ValidationError("--laguna-dflash-min-tokens must be greater than zero.")
+        }
+        if lagunaDflashPath != nil, lagunaPath == nil {
+            throw ValidationError("--laguna-dflash-path requires --laguna-path.")
+        }
+        if lagunaDflashRouting == .dflash, lagunaDflashPath == nil {
+            throw ValidationError("--laguna-dflash-routing dflash requires --laguna-dflash-path.")
+        }
         _ = try selectedModelIDs()
         _ = try selectedCases()
     }
@@ -82,7 +121,8 @@ struct ModelBenchmarkChat: AsyncParsableCommand {
             maxTokens: maxTokens,
             temperature: temperature,
             topP: topP,
-            contextSize: contextSize
+            contextSize: contextSize,
+            concurrency: concurrency
         )
 
         if dryRun {
@@ -148,17 +188,51 @@ struct ModelBenchmarkChat: AsyncParsableCommand {
                     reason: "Laguna evaluation requires --laguna-path."
                 )
             }
-            let generator = LagunaGenerator()
+            let generator = LagunaGenerator(
+                continuousBatchingEnabled: concurrency > 1,
+                dflashModelPath: lagunaDflashPath,
+                dflashSpeculativeTokens: lagunaDflashTokens,
+                dflashMinimumOutputTokens: lagunaDflashMinTokens
+            )
             do {
-                let result = try await runCases(
+                if concurrency > 1 {
+                    try await generator.prepare(modelPath: lagunaPath)
+                }
+                var result = try await runCases(
                     modelID,
-                    engine: "laguna-mlx",
+                    engine: lagunaDflashPath == nil
+                        ? "laguna-mlx"
+                        : "laguna-mlx+dflash-\(lagunaDflashRouting.rawValue)"
+                            + "-k\(lagunaDflashTokens)"
+                            + "-min\(lagunaDflashMinTokens)",
                     modelPath: lagunaPath,
                     cases: cases,
                     generate: { request in
-                        try await generator.chat(request, modelPath: lagunaPath, progressHandler: nil)
+                        try await generator.chat(
+                            request,
+                            modelPath: lagunaPath,
+                            dflashRouting: lagunaDflashRouting,
+                            progressHandler: nil
+                        )
                     }
                 )
+                let batching = await generator.continuousBatchingStats()
+                let dflash = await generator.dflashStats()
+                result.acceleration = LagunaBenchmarkAcceleration(
+                    batching: batching,
+                    dflash: dflash
+                )
+                if !json {
+                    CLIStderr.write(
+                        "Laguna acceleration: batch_steps=\(batching.batchedDecodeSteps) "
+                            + "variable_position=\(batching.variablePositionBatchedSteps) "
+                            + "max_batch=\(batching.maxBatchSize) "
+                            + "dflash_routed=\(dflash.routedRequests) "
+                            + "dflash_bypassed=\(dflash.bypassedRequests) "
+                            + "dflash_rounds=\(dflash.rounds) "
+                            + "dflash_acceptance=\(String(format: "%.3f", dflash.acceptanceRate))\n"
+                    )
+                }
                 await generator.unload()
                 return result
             } catch {
@@ -284,61 +358,95 @@ struct ModelBenchmarkChat: AsyncParsableCommand {
         engine: String,
         modelPath: String,
         cases: [ChatBenchmarkCase],
-        generate: (ChatRequest) async throws -> ChatResponse
+        generate: @escaping @Sendable (ChatRequest) async throws -> ChatResponse
     ) async throws -> ChatBenchmarkModelResult {
         var caseResults: [ChatBenchmarkCaseResult] = []
         caseResults.reserveCapacity(cases.count)
-        for benchmarkCase in cases {
-            let request = ChatRequest(
-                messages: [
-                    ChatMessage(role: .system, content: Self.systemPrompt),
-                    ChatMessage(role: .user, content: benchmarkCase.promptText),
-                ],
-                maxTokens: maxTokens,
-                temperature: temperature,
-                topP: topP,
-                showThinking: false,
-                stopOnEOS: true,
-                maxContextTokens: contextSize
-            )
-            let start = Date()
-            do {
-                let response = try await generate(request)
-                let generationSeconds = Date().timeIntervalSince(start)
-                let cleaned = Self.cleanResponse(response.response)
-                let evaluation = benchmarkCase.evaluate(cleaned)
-                caseResults.append(
-                    ChatBenchmarkCaseResult(
-                        caseID: benchmarkCase.caseID,
-                        category: benchmarkCase.category,
-                        passed: evaluation.passed,
-                        passedChecks: evaluation.passedChecks,
-                        totalChecks: evaluation.totalChecks,
-                        failedChecks: evaluation.failedChecks,
-                        generationSeconds: generationSeconds,
-                        tokensGenerated: response.tokensGenerated,
-                        decodeTokensPerSecond: response.decodeTokensPerSecond(elapsed: generationSeconds),
-                        response: logResponses ? cleaned : nil,
-                        error: nil
-                    )
-                )
-            } catch {
-                caseResults.append(
-                    ChatBenchmarkCaseResult(
-                        caseID: benchmarkCase.caseID,
-                        category: benchmarkCase.category,
-                        passed: false,
-                        passedChecks: 0,
-                        totalChecks: benchmarkCase.expectation.checkCount,
-                        failedChecks: ["generation failed: \(String(describing: error))"],
-                        generationSeconds: Date().timeIntervalSince(start),
-                        tokensGenerated: 0,
-                        decodeTokensPerSecond: nil,
-                        response: nil,
-                        error: String(describing: error)
-                    )
-                )
+        let requestMaxTokens = maxTokens
+        let requestTemperature = temperature
+        let requestTopP = topP
+        let requestContextSize = contextSize
+        let includeResponses = logResponses
+        for startIndex in stride(from: 0, to: cases.count, by: concurrency) {
+            let endIndex = min(startIndex + concurrency, cases.count)
+            let batch = Array(cases[startIndex..<endIndex].enumerated())
+            let batchResults = await withTaskGroup(
+                of: (Int, ChatBenchmarkCaseResult).self,
+                returning: [(Int, ChatBenchmarkCaseResult)].self
+            ) { group in
+                for (batchIndex, benchmarkCase) in batch {
+                    group.addTask {
+                        let request = ChatRequest(
+                            messages: [
+                                ChatMessage(role: .system, content: Self.systemPrompt),
+                                ChatMessage(role: .user, content: benchmarkCase.promptText),
+                            ],
+                            maxTokens: requestMaxTokens,
+                            temperature: requestTemperature,
+                            topP: requestTopP,
+                            showThinking: false,
+                            stopOnEOS: true,
+                            maxContextTokens: requestContextSize
+                        )
+                        let startedAt = Date()
+                        do {
+                            let response = try await generate(request)
+                            let generationSeconds = Date().timeIntervalSince(startedAt)
+                            let cleaned = Self.cleanResponse(response.response)
+                            let evaluation = benchmarkCase.evaluate(cleaned)
+                            return (
+                                batchIndex,
+                                ChatBenchmarkCaseResult(
+                                    caseID: benchmarkCase.caseID,
+                                    category: benchmarkCase.category,
+                                    passed: evaluation.passed,
+                                    passedChecks: evaluation.passedChecks,
+                                    totalChecks: evaluation.totalChecks,
+                                    failedChecks: evaluation.failedChecks,
+                                    generationSeconds: generationSeconds,
+                                    tokensGenerated: response.tokensGenerated,
+                                    decodeTokensPerSecond: response.decodeTokensPerSecond(
+                                        elapsed: generationSeconds
+                                    ),
+                                    promptTokens: response.promptTokens,
+                                    prefillSeconds: response.timing?.prefillSeconds,
+                                    decodeSeconds: response.timing?.decodeSeconds,
+                                    response: includeResponses ? cleaned : nil,
+                                    error: nil
+                                )
+                            )
+                        } catch {
+                            return (
+                                batchIndex,
+                                ChatBenchmarkCaseResult(
+                                    caseID: benchmarkCase.caseID,
+                                    category: benchmarkCase.category,
+                                    passed: false,
+                                    passedChecks: 0,
+                                    totalChecks: benchmarkCase.expectation.checkCount,
+                                    failedChecks: [
+                                        "generation failed: \(String(describing: error))",
+                                    ],
+                                    generationSeconds: Date().timeIntervalSince(startedAt),
+                                    tokensGenerated: 0,
+                                    decodeTokensPerSecond: nil,
+                                    promptTokens: nil,
+                                    prefillSeconds: nil,
+                                    decodeSeconds: nil,
+                                    response: nil,
+                                    error: String(describing: error)
+                                )
+                            )
+                        }
+                    }
+                }
+                var results: [(Int, ChatBenchmarkCaseResult)] = []
+                for await result in group {
+                    results.append(result)
+                }
+                return results
             }
+            caseResults.append(contentsOf: batchResults.sorted { $0.0 < $1.0 }.map(\.1))
         }
         return ChatBenchmarkModelResult(
             model: modelID,
@@ -411,7 +519,7 @@ struct ModelBenchmarkChat: AsyncParsableCommand {
         return result
     }
 
-    private static let systemPrompt = """
+    static let systemPrompt = """
     You are running a grounded local assistant benchmark. Answer using only the evidence in the user prompt.
     If the answer is not present in the evidence, say NOT_IN_EVIDENCE.
     Do not invent emails, links, dates, commands, workspace names, or people.
@@ -430,7 +538,7 @@ enum ChatBenchmarkSuite: String, CaseIterable, ExpressibleByArgument {
     }
 }
 
-struct ChatBenchmarkCase: Encodable {
+struct ChatBenchmarkCase: Encodable, Sendable {
     let caseID: String
     let category: String
     let title: String
@@ -1174,7 +1282,7 @@ struct ChatBenchmarkCase: Encodable {
     ]
 }
 
-struct ChatBenchmarkExpectation: Encodable {
+struct ChatBenchmarkExpectation: Encodable, Sendable {
     var requiredPhrases: [String] = []
     var requiredAnyPhrases: [[String]] = []
     var forbiddenPhrases: [String] = []
@@ -1397,6 +1505,7 @@ private struct ChatBenchmarkPlan: Encodable {
     let temperature: Double
     let topP: Double
     let contextSize: Int?
+    let concurrency: Int
 }
 
 private struct ChatBenchmarkReport: Encodable {
@@ -1417,6 +1526,7 @@ private struct ChatBenchmarkReport: Encodable {
             "cases: \(plan.cases.joined(separator: ", "))",
             "models: \(plan.models.joined(separator: ", "))",
             "sampling: temperature=\(plan.temperature) top_p=\(plan.topP) max_tokens=\(plan.maxTokens)",
+            "concurrency: \(plan.concurrency)",
             plan.contextSize.map { "context_size: \($0)" },
             "",
         ].compactMap { $0 }
@@ -1444,6 +1554,7 @@ private struct ChatBenchmarkModelResult: Encodable {
     let status: String
     let error: String?
     let cases: [ChatBenchmarkCaseResult]
+    var acceleration: LagunaBenchmarkAcceleration?
 
     static func missing(model: String, reason: String) -> ChatBenchmarkModelResult {
         ChatBenchmarkModelResult(
@@ -1488,11 +1599,25 @@ private struct ChatBenchmarkModelResult: Encodable {
         if let error {
             lines.append("  \(error)")
         }
+        if let acceleration {
+            lines.append(
+                "  acceleration: batch_steps=\(acceleration.batching.batchedDecodeSteps) "
+                    + "variable_position=\(acceleration.batching.variablePositionBatchedSteps) "
+                    + "max_batch=\(acceleration.batching.maxBatchSize) "
+                    + "dflash_routed=\(acceleration.dflash.routedRequests) "
+                    + "dflash_bypassed=\(acceleration.dflash.bypassedRequests) "
+                    + "dflash_rounds=\(acceleration.dflash.rounds) "
+                    + "dflash_acceptance=\(String(format: "%.3f", acceleration.dflash.acceptanceRate))"
+            )
+        }
         for result in cases {
             let mark = result.passed ? "pass" : "fail"
             let timing = [
                 "gen=\(Self.format(result.generationSeconds))s",
                 "checks=\(result.passedChecks)/\(result.totalChecks)",
+                result.promptTokens.map { "prompt=\($0)" },
+                result.prefillSeconds.map { "prefill=\(Self.format($0))s" },
+                result.decodeSeconds.map { "decode=\(Self.format($0))s" },
                 result.decodeTokensPerSecond.map { "tps=\(Self.format($0))" },
             ]
                 .compactMap { $0 }
@@ -1541,7 +1666,12 @@ private struct ChatBenchmarkModelResult: Encodable {
     }
 }
 
-private struct ChatBenchmarkCaseResult: Encodable {
+private struct LagunaBenchmarkAcceleration: Encodable {
+    let batching: LagunaContinuousBatchingStats
+    let dflash: LagunaDFlashStats
+}
+
+private struct ChatBenchmarkCaseResult: Encodable, Sendable {
     let caseID: String
     let category: String
     let passed: Bool
@@ -1551,6 +1681,9 @@ private struct ChatBenchmarkCaseResult: Encodable {
     let generationSeconds: Double
     let tokensGenerated: Int
     let decodeTokensPerSecond: Double?
+    let promptTokens: Int?
+    let prefillSeconds: Double?
+    let decodeSeconds: Double?
     let response: String?
     let error: String?
 }

@@ -147,6 +147,7 @@ Public tree:
     - `mere.run model benchmark gemma4-kv` — Compare Gemma4 default KV cache decode against packed PolarKV.
     - `mere.run model benchmark gemma4-mtp` — Compare Gemma4 serial decode against verified MTP speculative decode.
     - `mere.run model benchmark q36-mtp` — Compare Qwen3.6 serial decode against adaptive and forced MTP speculative decode.
+    - `mere.run model benchmark laguna-dflash` — Measure Laguna target-only and DFlash decode in one resident process.
     - `mere.run model benchmark api-workload` — Replay a chat workload against a running API server and measure runtime cache counters.
     - `mere.run model benchmark vlm` — Compare vision-language chat models on synthetic or lmms-eval datasets.
   - `mere.run model repair-manifests` — Write missing mererun_model.json for known models in the local mere.run model store.
