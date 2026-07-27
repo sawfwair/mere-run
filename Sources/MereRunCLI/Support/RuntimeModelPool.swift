@@ -20,6 +20,7 @@ func runtimeOptionalEnvironmentFlag(
 
 struct RuntimeContinuousBatchingConfiguration: Equatable, Sendable {
     let gemma4: Bool
+    let laguna: Bool
     let q35: Bool
     let lfm2: Bool
 
@@ -30,6 +31,10 @@ struct RuntimeContinuousBatchingConfiguration: Equatable, Sendable {
         let defaultEnabled = maxActiveRequests > 1
         gemma4 = runtimeOptionalEnvironmentFlag(
             "MERERUN_GEMMA4_CONTINUOUS_BATCHING",
+            environment: environment
+        ) ?? defaultEnabled
+        laguna = runtimeOptionalEnvironmentFlag(
+            "MERERUN_LAGUNA_CONTINUOUS_BATCHING",
             environment: environment
         ) ?? defaultEnabled
         q35 = runtimeOptionalEnvironmentFlag(
@@ -120,6 +125,7 @@ struct RuntimeControlPlaneCapabilities: Codable, Equatable, Sendable {
     static func current(
         gemma4PrefixKVCacheEnabled: Bool,
         gemma4ContinuousBatchingEnabled: Bool,
+        lagunaContinuousBatchingEnabled: Bool = false,
         q35ContinuousBatchingEnabled: Bool,
         q35PrefixKVCacheEnabled: Bool,
         lfm2ContinuousBatchingEnabled: Bool = false,
@@ -129,6 +135,7 @@ struct RuntimeControlPlaneCapabilities: Codable, Equatable, Sendable {
             || q35PrefixKVCacheEnabled
             || lfm2PrefixKVCacheEnabled
         let continuousBatchingEnabled = gemma4ContinuousBatchingEnabled
+            || lagunaContinuousBatchingEnabled
             || q35ContinuousBatchingEnabled
             || lfm2ContinuousBatchingEnabled
         return RuntimeControlPlaneCapabilities(
@@ -140,13 +147,13 @@ struct RuntimeControlPlaneCapabilities: Codable, Equatable, Sendable {
             chunkedPrefill: RuntimeCapabilityStatus(
                 available: true,
                 enabled: true,
-                detail: "Gemma4, Qwen-family, and LFM2 models prefill long prompts in cancellable chunks."
+                detail: "Gemma4, Laguna, Qwen-family, and LFM2 models prefill long prompts in cancellable chunks."
             ),
             continuousBatching: RuntimeCapabilityStatus(
                 available: true,
                 enabled: continuousBatchingEnabled,
                 detail: continuousBatchingEnabled
-                    ? "Gemma4, Qwen-family, and LFM2 decode rows are packed when typed cache state is compatible; Qwen-family and LFM2 rows may batch across decode positions."
+                    ? "Gemma4, Laguna, Qwen-family, and LFM2 decode rows are packed when typed cache state is compatible; Laguna, Qwen-family, and LFM2 rows may batch across decode positions."
                     : "Decode batching engages automatically when --max-active-requests is above 1; the per-engine MERERUN_*_CONTINUOUS_BATCHING flags override it."
             ),
             prefixKVReuse: RuntimeCapabilityStatus(
@@ -905,6 +912,7 @@ actor RuntimeModelPool {
     private let gemma4KVCacheQuantization: Gemma4KVCacheQuantization
     private let gemma4PrefixKVCacheEnabled: Bool
     private let gemma4ContinuousBatchingEnabled: Bool
+    private let lagunaContinuousBatchingEnabled: Bool
     private let q35PrefixKVCacheEnabled: Bool
     private let q35ContinuousBatchingEnabled: Bool
     private let lfm2PrefixKVCacheEnabled: Bool
@@ -931,6 +939,8 @@ actor RuntimeModelPool {
         gemma4KVCacheQuantization: Gemma4KVCacheQuantization = Gemma4KVCacheQuantization(),
         gemma4PrefixKVCacheEnabled: Bool = runtimeDefaultOnEnvironmentFlag("MERERUN_GEMMA4_PREFIX_KV_CACHE"),
         gemma4ContinuousBatchingEnabled: Bool = ProcessInfo.processInfo.environment["MERERUN_GEMMA4_CONTINUOUS_BATCHING"] == "1",
+        lagunaContinuousBatchingEnabled: Bool =
+            ProcessInfo.processInfo.environment["MERERUN_LAGUNA_CONTINUOUS_BATCHING"] == "1",
         q35PrefixKVCacheEnabled: Bool = runtimeDefaultOnEnvironmentFlag("MERERUN_Q35_PREFIX_KV_CACHE"),
         q35ContinuousBatchingEnabled: Bool = ProcessInfo.processInfo.environment["MERERUN_Q35_CONTINUOUS_BATCHING"] == "1",
         lfm2PrefixKVCacheEnabled: Bool = runtimeDefaultOnEnvironmentFlag("MERERUN_LFM2_PREFIX_KV_CACHE"),
@@ -958,6 +968,7 @@ actor RuntimeModelPool {
         self.gemma4KVCacheQuantization = gemma4KVCacheQuantization
         self.gemma4PrefixKVCacheEnabled = gemma4PrefixKVCacheEnabled
         self.gemma4ContinuousBatchingEnabled = gemma4ContinuousBatchingEnabled
+        self.lagunaContinuousBatchingEnabled = lagunaContinuousBatchingEnabled
         self.q35PrefixKVCacheEnabled = q35PrefixKVCacheEnabled
         self.q35ContinuousBatchingEnabled = q35ContinuousBatchingEnabled
         self.lfm2PrefixKVCacheEnabled = lfm2PrefixKVCacheEnabled
@@ -1033,6 +1044,7 @@ actor RuntimeModelPool {
             capabilities: .current(
                 gemma4PrefixKVCacheEnabled: gemma4PrefixKVCacheEnabled,
                 gemma4ContinuousBatchingEnabled: gemma4ContinuousBatchingEnabled,
+                lagunaContinuousBatchingEnabled: lagunaContinuousBatchingEnabled,
                 q35ContinuousBatchingEnabled: q35ContinuousBatchingEnabled,
                 q35PrefixKVCacheEnabled: q35PrefixKVCacheEnabled,
                 lfm2ContinuousBatchingEnabled: lfm2ContinuousBatchingEnabled,
@@ -1577,6 +1589,14 @@ actor RuntimeModelPool {
                 ),
                 modelPath: resolved.installPath
             )
+        case .textChatLaguna:
+            return .textChatLaguna(
+                LagunaGenerator(
+                    continuousBatchingEnabled: lagunaContinuousBatchingEnabled,
+                    dflashModelPath: LagunaResources.installedDFlashPath()
+                ),
+                modelPath: resolved.installPath
+            )
         case .textChatQ36, .textChatQ35:
             return .textChatQ35(
                 Q35Generator(
@@ -1817,6 +1837,7 @@ actor RuntimeModelPool {
             return ManagedModelCategory.textCode.rawValue
         case .textChatKlein,
              .textChatGemma4,
+             .textChatLaguna,
              .textChatQ36,
              .textChatQ35,
              .textChatLFM2,
@@ -2136,6 +2157,7 @@ enum RuntimeLoadedModel: Sendable {
     case textCode(CodeGenGenerator, modelPath: String?)
     case textChatKlein(Flux2KleinGenerator, modelPath: String?, useStandalone: Bool)
     case textChatGemma4(Gemma4Generator, modelPath: String?)
+    case textChatLaguna(LagunaGenerator, modelPath: String?)
     case textChatQ35(Q35Generator, modelPath: String?)
     case textChatLFM2(LFM2Generator, modelPath: String?)
     case textChatDeepseekV4Flash(DeepseekV4FlashGenerator, modelPath: String?)
@@ -2155,6 +2177,11 @@ enum RuntimeLoadedModel: Sendable {
             )
         case .textChatGemma4(let generator, let modelPath):
             try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
+        case .textChatLaguna(let generator, let modelPath):
+            guard let modelPath else {
+                throw LagunaError.modelPathRequired
+            }
+            try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
         case .textChatQ35(let generator, let modelPath):
             try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
         case .textChatLFM2(let generator, let modelPath):
@@ -2171,6 +2198,8 @@ enum RuntimeLoadedModel: Sendable {
         case .textChatKlein(let generator, _, _):
             await generator.unload()
         case .textChatGemma4(let generator, _):
+            await generator.unload()
+        case .textChatLaguna(let generator, _):
             await generator.unload()
         case .textChatQ35(let generator, _):
             await generator.unload()
@@ -2189,7 +2218,7 @@ enum RuntimeLoadedModel: Sendable {
             return await generator.prefixKVCacheStats()
         case .textChatLFM2(let generator, _):
             return await generator.prefixKVCacheStats()
-        case .textCode, .textChatKlein, .textChatDeepseekV4Flash:
+        case .textCode, .textChatKlein, .textChatLaguna, .textChatDeepseekV4Flash:
             return nil
         }
     }
@@ -2197,6 +2226,8 @@ enum RuntimeLoadedModel: Sendable {
     func continuousBatchingStats() async -> RuntimeDecodeBatchingStats? {
         switch self {
         case .textChatGemma4(let generator, _):
+            return await generator.continuousBatchingStats()
+        case .textChatLaguna(let generator, _):
             return await generator.continuousBatchingStats()
         case .textChatQ35(let generator, _):
             return await generator.continuousBatchingStats()
@@ -2211,7 +2242,8 @@ enum RuntimeLoadedModel: Sendable {
         switch self {
         case .textChatGemma4(let generator, _):
             return await generator.mtpStats()
-        case .textCode, .textChatKlein, .textChatQ35, .textChatLFM2, .textChatDeepseekV4Flash:
+        case .textCode, .textChatKlein, .textChatLaguna, .textChatQ35, .textChatLFM2,
+             .textChatDeepseekV4Flash:
             return nil
         }
     }
@@ -2237,6 +2269,15 @@ enum RuntimeLoadedModel: Sendable {
             return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
         case .textChatGemma4(let generator, let modelPath):
             return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
+        case .textChatLaguna(let generator, let modelPath):
+            guard let modelPath else {
+                throw LagunaError.modelPathRequired
+            }
+            return try await generator.chat(
+                request,
+                modelPath: modelPath,
+                progressHandler: progressHandler
+            )
         case .textChatQ35(let generator, let modelPath):
             return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
         case .textChatLFM2(let generator, let modelPath):
@@ -2255,7 +2296,8 @@ enum RuntimeLoadedModel: Sendable {
                 modelPath: modelPath,
                 progressHandler: progressHandler
             )
-        case .textCode, .textChatKlein, .textChatGemma4, .textChatQ35, .textChatLFM2:
+        case .textCode, .textChatKlein, .textChatGemma4, .textChatLaguna, .textChatQ35,
+             .textChatLFM2:
             throw RuntimeModelPoolError.rawProxyUnavailable("")
         }
     }
@@ -2270,6 +2312,8 @@ extension RuntimeServingEngine {
             return .localTextWithStructuredJSON
         case .textChatGemma4:
             return .localTextWithToolsAndStructuredJSON
+        case .textChatLaguna:
+            return .localTextWithToolsAndStopSequences
         case .textChatQ36, .textChatQ35:
             return .localTextWithToolsVisionAndStructuredJSON
         case .textChatLFM2:

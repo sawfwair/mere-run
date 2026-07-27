@@ -13,13 +13,13 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
 
     @Option(
         name: [.long],
-        help: "Local poolside/Laguna-S-2.1-NVFP4-mlx checkpoint directory for pre-integration evaluation."
+        help: "Override the installed Laguna target with a local poolside/Laguna-S-2.1-NVFP4-mlx checkpoint directory."
     )
     var lagunaPath: String?
 
     @Option(
         name: [.long],
-        help: "Local poolside/Laguna-S-2.1-DFlash checkpoint directory."
+        help: "Override the installed Laguna DFlash companion with a local poolside/Laguna-S-2.1-DFlash checkpoint directory."
     )
     var lagunaDflashPath: String?
 
@@ -108,9 +108,6 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
         guard lagunaDflashMinTokens > 0 else {
             throw ValidationError("--laguna-dflash-min-tokens must be greater than zero.")
         }
-        if lagunaDflashPath != nil, lagunaPath == nil {
-            throw ValidationError("--laguna-dflash-path requires --laguna-path.")
-        }
         if !dryRun {
             try CodeExecutionSandbox.preflight(mode: sandbox)
         }
@@ -164,7 +161,9 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
     private func selectedModelIDs() throws -> [String] {
         let rawModels = models?.split(separator: ",").map {
             $0.trimmingCharacters(in: .whitespacesAndNewlines)
-        } ?? (lagunaPath == nil ? Self.defaultModelIDs() : [LagunaResources.modelID])
+        } ?? (lagunaPath == nil && lagunaDflashPath == nil
+            ? Self.defaultModelIDs()
+            : [LagunaResources.modelID])
         let modelIDs = rawModels.filter { !$0.isEmpty }
         guard !modelIDs.isEmpty else {
             throw ValidationError("--models must include at least one model id.")
@@ -213,30 +212,33 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
 
     private func runModel(_ modelID: String, tasks: [CodeBenchmarkTask]) async throws -> CodeBenchmarkModelResult {
         if modelID == LagunaResources.modelID {
-            guard let lagunaPath else {
+            guard let resolvedLagunaPath = lagunaPath
+                ?? ManagedModelResolver.resolveInstalledModel(id: LagunaResources.modelID)?.path else {
                 return CodeBenchmarkModelResult.missing(
                     model: modelID,
-                    reason: "Laguna evaluation requires --laguna-path."
+                    reason: "Model is not installed. Run "
+                        + "`mere.run model pull \(LagunaResources.modelID) --accept-model-license` first."
                 )
             }
+            let resolvedDFlashPath = lagunaDflashPath ?? LagunaResources.installedDFlashPath()
             let generator = LagunaGenerator(
-                dflashModelPath: lagunaDflashPath,
+                dflashModelPath: resolvedDFlashPath,
                 dflashSpeculativeTokens: lagunaDflashTokens,
                 dflashMinimumOutputTokens: lagunaDflashMinTokens
             )
             do {
                 let result = try await runTasks(
                     modelID,
-                    engine: lagunaDflashPath == nil
+                    engine: resolvedDFlashPath == nil
                         ? "laguna-mlx"
                         : "laguna-mlx+dflash-auto-k\(lagunaDflashTokens)"
                             + "-min\(lagunaDflashMinTokens)",
-                    modelPath: lagunaPath,
+                    modelPath: resolvedLagunaPath,
                     tasks: tasks,
                     generate: { request in
                         try await generator.chat(
                             request,
-                            modelPath: lagunaPath,
+                            modelPath: resolvedLagunaPath,
                             progressHandler: nil
                         )
                     }
@@ -398,7 +400,8 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
     }
 
     var resolvedMinP: Double {
-        minP ?? (lagunaPath == nil ? 0 : LagunaResources.recommendedMinP)
+        let includesLaguna = (try? selectedModelIDs().contains(LagunaResources.modelID)) == true
+        return minP ?? (includesLaguna ? LagunaResources.recommendedMinP : 0)
     }
 
     private func printReport(_ report: CodeBenchmarkReport) throws {

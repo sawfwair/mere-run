@@ -69,6 +69,21 @@ swift run mere.run model pull text-chat-lfm25-a1b-8bit --accept-model-license
 swift run mere.run api serve --engine text-chat-lfm2
 ```
 
+For the opt-in Laguna S 2.1 target with its automatically installed DFlash
+companion:
+
+```bash
+swift run mere.run model pull text-chat-laguna-s-2-1 --accept-model-license
+swift run mere.run api serve \
+  --engine text-chat-laguna \
+  --max-active-requests 2
+```
+
+Laguna uses its validated `1/1/20/0.02` temperature, top-p, top-k, and min-p
+recipe when a request does not override sampling. The server automatically
+routes output budgets of at least 32 tokens through DFlash and falls back
+losslessly when measured draft acceptance is poor.
+
 In another terminal, confirm that the server is reachable and which model it
 reports:
 

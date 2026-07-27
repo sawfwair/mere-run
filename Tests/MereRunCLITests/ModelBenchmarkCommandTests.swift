@@ -694,10 +694,13 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         XCTAssertEqual(try tools.selectedModelIDs(), [LagunaResources.modelID])
     }
 
-    func testLagunaDFlashBenchmarkFlagsRejectInvalidCombinations() {
-        XCTAssertThrowsError(try ModelBenchmarkChat.parse([
+    func testLagunaDFlashBenchmarkFlagsUseInstalledDefaultsAndRejectInvalidCombinations() throws {
+        let installed = try ModelBenchmarkChat.parse([
             "--laguna-dflash-path", "/tmp/Laguna-S-2.1-DFlash",
-        ]))
+        ])
+        XCTAssertEqual(try installed.selectedModelIDs(), [LagunaResources.modelID])
+        XCTAssertEqual(installed.lagunaDflashPath, "/tmp/Laguna-S-2.1-DFlash")
+
         XCTAssertThrowsError(try ModelBenchmarkChat.parse([
             "--laguna-path", "/tmp/Laguna-S-2.1-NVFP4-mlx",
             "--laguna-dflash-tokens", "16",

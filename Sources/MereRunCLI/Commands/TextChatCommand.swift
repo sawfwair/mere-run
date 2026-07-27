@@ -36,6 +36,7 @@ struct TextChat: AsyncParsableCommand {
           - text-chat-gemma4 (Gemma 4 31B; large/slow, kept for compatibility)
           - text-chat-gemma4-max (Gemma 4 31B native Swift runtime)
           - text-chat-gemma4-nano (Gemma 4 4B native Swift runtime)
+          - text-chat-laguna-s-2-1 (Poolside Laguna S 2.1 118B-A8B NVFP4 with DFlash)
           - text-chat-lfm25-a1b-8bit (LiquidAI LFM2.5 8B-A1B MLX 8-bit native Swift runtime)
           - text-chat-psi-agent
         Models are cached under ~/Library/Application Support/MereRun/models/<model-id>.
@@ -61,16 +62,16 @@ struct TextChat: AsyncParsableCommand {
     @Option(name: [.customLong("context-size")], help: "Maximum prompt plus generation context. Bonsai 27B supports up to 262144 tokens.")
     var contextSize: Int?
 
-    @Option(name: [.long], help: "Temperature. Default: 0.7, or the model's published value where one exists (Bonsai: 0.7; Ornith: 1.0).")
+    @Option(name: [.long], help: "Temperature. Default: 0.7, or the model's published value where one exists (Laguna/Ornith: 1.0).")
     var temperature: Double?
 
-    @Option(name: [.long], help: "Top-p. Default: 0.9, or the model's published value where one exists (Bonsai/Ornith: 0.95).")
+    @Option(name: [.long], help: "Top-p. Default: 0.9, or the model's published value where one exists (Laguna: 1.0; Bonsai/Ornith: 0.95).")
     var topP: Double?
 
-    @Option(name: [.customLong("top-k")], help: "Top-k sampling cutoff. Default: no cutoff, or the model's published value where one exists (Bonsai/Ornith: 20).")
+    @Option(name: [.customLong("top-k")], help: "Top-k sampling cutoff. Default: no cutoff, or the model's published value where one exists (Laguna/Bonsai/Ornith: 20).")
     var topK: Int?
 
-    @Option(name: [.customLong("min-p")], help: "Min-p cutoff relative to the most likely token. Default: 0 (disabled).")
+    @Option(name: [.customLong("min-p")], help: "Min-p cutoff relative to the most likely token. Default: 0 (disabled), or 0.02 for Laguna S 2.1.")
     var minP: Double?
 
     @Option(name: [.long], help: "Quantize the KV cache to this many bits. Qwen-family supports affine 4 or 8; Gemma4 also supports its model-specific schemes.")
@@ -128,7 +129,7 @@ struct TextChat: AsyncParsableCommand {
         return NativeMLXRuntime.backendDescription
     }
 
-    @Option(name: [.long], help: "Canonical model id. Default: text-chat-gemma4-12b-4bit (Apple Silicon) / text-chat-q36-nano-gguf (Linux CUDA). Others: text-chat-bonsai-27b-1bit, text-chat-bonsai-27b-2bit, text-chat-q36-nano, text-agent-ornith-9b, text-agent-ornith-35b-mlx, text-chat-gemma4[-12b|-12b-4bit|-turbo|-max|-nano], text-chat-lfm25-a1b-8bit, text-chat-psi-agent.")
+    @Option(name: [.long], help: "Canonical model id. Default: text-chat-gemma4-12b-4bit (Apple Silicon) / text-chat-q36-nano-gguf (Linux CUDA). Others: text-chat-laguna-s-2-1, text-chat-bonsai-27b-1bit, text-chat-bonsai-27b-2bit, text-chat-q36-nano, text-agent-ornith-9b, text-agent-ornith-35b-mlx, text-chat-gemma4[-12b|-12b-4bit|-turbo|-max|-nano], text-chat-lfm25-a1b-8bit, text-chat-psi-agent.")
     var model: String = TextChat.defaultChatModelId
 
     @Option(
@@ -196,8 +197,12 @@ struct TextChat: AsyncParsableCommand {
         }
         if requireInstalled {
             guard installedModelPath != nil else {
+                let acceptance = isLagunaModelID(normalizedModelId)
+                    ? " --accept-model-license"
+                    : ""
                 throw ValidationError(
-                    "Model '\(normalizedModelId)' is not installed. Run 'mere.run model pull \(normalizedModelId)' explicitly."
+                    "Model '\(normalizedModelId)' is not installed. Run "
+                        + "'mere.run model pull \(normalizedModelId)\(acceptance)' explicitly."
                 )
             }
         }
@@ -246,6 +251,7 @@ struct TextChat: AsyncParsableCommand {
         }
 
         let recommendedSampling = Q35Resources.recommendedSampling(forModelId: model)
+        let isLaguna = LagunaResources.handles(modelSpec: normalizedModelId)
         let q35KVCacheMode = try resolveQ35KVCacheMode(for: normalizedModelId)
         if let contextSize, contextSize <= 0 {
             throw ValidationError("--context-size must be greater than zero.")
@@ -254,10 +260,15 @@ struct TextChat: AsyncParsableCommand {
         let request = ChatRequest(
             messages: messages,
             maxTokens: maxTokens,
-            temperature: temperature ?? recommendedSampling?.temperature ?? 0.7,
-            topP: topP ?? recommendedSampling?.topP ?? 0.9,
-            topK: topK ?? recommendedSampling?.topK,
-            minP: minP ?? 0,
+            temperature: temperature
+                ?? (isLaguna ? LagunaResources.recommendedTemperature : recommendedSampling?.temperature)
+                ?? 0.7,
+            topP: topP
+                ?? (isLaguna ? LagunaResources.recommendedTopP : recommendedSampling?.topP)
+                ?? 0.9,
+            topK: topK
+                ?? (isLaguna ? LagunaResources.recommendedTopK : recommendedSampling?.topK),
+            minP: minP ?? (isLaguna ? LagunaResources.recommendedMinP : 0),
             showThinking: requiresJSON ? false : (thinking ?? Q35Resources.thinkingDefault(forModelId: model)),
             lora: lora,
             requiresJSON: requiresJSON,
@@ -284,6 +295,10 @@ struct TextChat: AsyncParsableCommand {
             CLIStderr.write("[runtime] text backend: \(Self.backendDescription(for: normalizedModelId))\n")
         }
         var lastGemma4MTPStats: Gemma4MTPStats?
+        var lastLagunaDFlashStats: LagunaDFlashStats?
+        let lagunaGenerator = isLaguna
+            ? LagunaGenerator(dflashModelPath: LagunaResources.installedDFlashPath())
+            : nil
 
         let chatOnce: (ChatRequest) async throws -> ChatResponse = { req in
             if normalizedModelId == Psi3ChatResources.defaultModelId {
@@ -298,6 +313,23 @@ struct TextChat: AsyncParsableCommand {
                 )
                 let response = try await generator.chat(req, modelPath: runtimeModelRoot, progressHandler: progressHandler)
                 lastGemma4MTPStats = await generator.mtpStats()
+                return response
+            } else if LagunaResources.handles(modelSpec: normalizedModelId) {
+                guard let lagunaModelPath = self.modelRoot ?? installedModelPath else {
+                    throw ValidationError(
+                        "Model '\(LagunaResources.modelID)' is not installed. Run "
+                            + "'mere.run model pull \(LagunaResources.modelID) --accept-model-license' first."
+                    )
+                }
+                guard let generator = lagunaGenerator else {
+                    throw LagunaError.modelNotLoaded
+                }
+                let response = try await generator.chat(
+                    req,
+                    modelPath: lagunaModelPath,
+                    progressHandler: progressHandler
+                )
+                lastLagunaDFlashStats = await generator.dflashStats()
                 return response
             } else if ManagedModelCatalog.spec(for: normalizedModelId)?.validationKind == .codegenGGUF {
                 // GGUF chat models run through the llama.cpp engine (the same path
@@ -419,11 +451,17 @@ struct TextChat: AsyncParsableCommand {
                     if let mtp = lastGemma4MTPStats {
                         CLIStderr.write(Self.formatGemma4MTPStats(mtp) + "\n")
                     }
+                    if let dflash = lastLagunaDFlashStats {
+                        CLIStderr.write(Self.formatLagunaDFlashStats(dflash) + "\n")
+                    }
                 } else {
                     let line = String(format: "time=%.2fs tokens=%d tps=%.2f", elapsed, result.tokensGenerated, e2eTps)
                     CLIStderr.write("\(line)\n")
                     if let mtp = lastGemma4MTPStats {
                         CLIStderr.write(Self.formatGemma4MTPStats(mtp) + "\n")
+                    }
+                    if let dflash = lastLagunaDFlashStats {
+                        CLIStderr.write(Self.formatLagunaDFlashStats(dflash) + "\n")
                     }
                 }
             }
@@ -442,6 +480,10 @@ struct TextChat: AsyncParsableCommand {
             return FileManager.default.fileExists(atPath: url.path) ? url.path : nil
         }
         return ManagedModelResolver.resolveInstalledModel(id: modelID)?.path
+    }
+
+    private func isLagunaModelID(_ modelID: String) -> Bool {
+        LagunaResources.isManagedIdentifier(modelID)
     }
 
     private func emitPreflight(modelID: String, installedModelPath: String?) throws {
@@ -502,6 +544,20 @@ struct TextChat: AsyncParsableCommand {
         return "mtp=\(state) block=\(stats.blockSize) threshold=\(stats.threshold) rounds=\(stats.rounds) drafted=\(stats.draftedTokens) accepted=\(stats.acceptedTokens) rejected=\(stats.rejectedTokens)\(reason)"
     }
 
+    static func formatLagunaDFlashStats(_ stats: LagunaDFlashStats) -> String {
+        String(
+            format: "dflash=%@ proposals=%d routed=%d bypassed=%d drafted=%d accepted=%d acceptance=%.1f%% fallbacks=%d",
+            stats.enabled ? "active" : "unavailable",
+            stats.speculativeTokens,
+            stats.routedRequests,
+            stats.bypassedRequests,
+            stats.draftedTokens,
+            stats.acceptedDraftTokens,
+            stats.acceptanceRate * 100,
+            stats.adaptiveFallbacks
+        )
+    }
+
     static func validate(responseFormat: TextChatResponseFormat, modelID: String) throws {
         guard responseFormat == .jsonObject else { return }
         if ManagedModelCatalog.spec(for: modelID)?.validationKind == .codegenGGUF {
@@ -512,6 +568,11 @@ struct TextChat: AsyncParsableCommand {
         if modelID == Psi3ChatResources.defaultModelId || LFM2Resources.handles(modelSpec: modelID) {
             throw ValidationError(
                 "--response-format json_object is supported by native Gemma4 and Qwen-family MLX chat models."
+            )
+        }
+        if LagunaResources.handles(modelSpec: modelID) {
+            throw ValidationError(
+                "--response-format json_object is not yet supported by the Laguna native runtime."
             )
         }
     }

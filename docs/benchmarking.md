@@ -143,30 +143,31 @@ captured `<think>...</think>` content is reported as reasoning metadata. A secon
 generated reasoning block is reported as `reasoning_reopened=true`; treat that as
 a loop or phase-restart warning, not an automatic correctness failure.
 
-### Laguna Pre-Integration Evaluation
+### Laguna S 2.1 Evaluation
 
-Laguna S 2.1 remains outside the managed catalog while its native MLX path is
-being qualified. Use an explicit target checkpoint directory with
-`--laguna-path` on the chat, tool-call, or code benchmark. Add the official
-DFlash companion with `--laguna-dflash-path`; `--laguna-dflash-tokens` controls
-the proposal length and defaults to the measured value of `12`.
-The Laguna-only benchmark default is `--min-p 0.02`, selected by the
+Laguna S 2.1 is available as the opt-in managed model
+`text-chat-laguna-s-2-1`. Pull it once with
+`mere.run model pull text-chat-laguna-s-2-1 --accept-model-license`; the
+official DFlash companion is installed automatically. The chat, tool-call, and
+code benchmarks resolve the managed checkpoints by default. `--laguna-path`
+and `--laguna-dflash-path` remain available as explicit checkpoint overrides;
+`--laguna-dflash-tokens` controls the proposal length and defaults to the
+measured value of `12`. The Laguna benchmark default is `--min-p 0.02`,
+selected by the
 [M4 Max quality and richness gate](./benchmarks/laguna-min-p-m4-max.md).
 Pass `--min-p 0` to reproduce Poolside's published control. Managed-model
-benchmark defaults remain unchanged.
+defaults for models other than Laguna remain unchanged.
 `--laguna-dflash-min-tokens` controls the output-budget router and defaults to
 `32`. Requests below the threshold skip DFlash prompt-context projection and
 decode. Routed requests fall back losslessly when acceptance is below `0.25`
 after one speculative round or below `0.60` after two rounds. Reports count
-routed, bypassed, and fallback requests. The companion still requires an
-explicit local checkpoint path: its setup/context-projection cost can outweigh
-speculative savings on short or low-acceptance outputs, so compare the phase
-timings on the workload you intend to run.
+routed, bypassed, and fallback requests. The companion's
+setup/context-projection cost can outweigh speculative savings on short or
+low-acceptance outputs, so compare the phase timings on the workload you
+intend to run.
 
 ```bash
 swift run mere.run model benchmark chat \
-  --laguna-path /path/to/Laguna-S-2.1-NVFP4-mlx \
-  --laguna-dflash-path /path/to/Laguna-S-2.1-DFlash \
   --laguna-dflash-tokens 12 \
   --laguna-dflash-min-tokens 32 \
   --min-p 0.02 \

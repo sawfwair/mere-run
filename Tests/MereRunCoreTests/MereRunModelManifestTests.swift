@@ -4,6 +4,34 @@ import XCTest
 
 final class MereRunModelManifestTests: MereRunCoreTestCase {
 
+    func testLagunaTemplatesPinTheValidatedTargetAndDFlashRevisions() {
+        let createdAt = Date(timeIntervalSince1970: 0)
+        let target = MereRunModelManifest.template(for: .lagunaS21, createdAt: createdAt)
+        let dflash = MereRunModelManifest.template(for: .lagunaS21DFlash, createdAt: createdAt)
+
+        XCTAssertEqual(target.id, LagunaResources.modelID)
+        XCTAssertEqual(target.engine, .laguna)
+        XCTAssertEqual(target.family, .laguna)
+        XCTAssertEqual(target.precision, .int4)
+        XCTAssertEqual(target.quantization?.bits, 4)
+        XCTAssertEqual(target.quantization?.groupSize, 16)
+        XCTAssertEqual(target.quantization?.scheme, "mlx-nvfp4")
+        XCTAssertEqual(target.supports, [.chat, .codeGeneration])
+        XCTAssertEqual(
+            target.upstreamRepoId,
+            "\(LagunaResources.upstreamModelID)@\(LagunaResources.upstreamRevision)"
+        )
+
+        XCTAssertEqual(dflash.id, LagunaResources.dflashModelID)
+        XCTAssertEqual(dflash.engine, .laguna)
+        XCTAssertEqual(dflash.family, .laguna)
+        XCTAssertEqual(dflash.precision, .bf16)
+        XCTAssertEqual(
+            dflash.upstreamRepoId,
+            "\(LagunaResources.dflashUpstreamModelID)@\(LagunaResources.dflashUpstreamRevision)"
+        )
+    }
+
     func testGemma4TwelveB4BitTemplatePinsSawfwairConversion() throws {
         let manifest = MereRunModelManifest.template(
             for: .gemma4TwelveB4Bit,

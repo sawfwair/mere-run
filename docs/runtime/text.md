@@ -19,6 +19,7 @@ embeddings, PII anonymization, and native text LoRA preparation.
 - `text-chat-gemma4-12b` (managed dense Google Gemma 4 12B-it snapshot)
 - `text-chat-gemma4-12b-4bit` (managed MLX 4-bit Gemma 4 12B-it snapshot)
 - `text-chat-gemma4-turbo` (managed MLX NVFP4 Gemma 4 26B-A4B MoE snapshot)
+- `text-chat-laguna-s-2-1` (managed Poolside Laguna S 2.1 118B-A8B NVFP4 target plus DFlash)
 - `text-chat-q36-nano`
 - `text-chat-bonsai-27b-1bit` (managed packed 1-bit dense Qwen3.6 27B vision/reasoning snapshot)
 - `text-chat-bonsai-27b-2bit` (managed packed 2-bit ternary dense Qwen3.6 27B vision/reasoning snapshot)
@@ -85,6 +86,25 @@ Concurrent serve workloads use ragged, cache-safe decode batching when
 overrides); rows at different prompt lengths share a forward only when every
 attention and short-conv cache proves compatibility.
 
+`text-chat-laguna-s-2-1` is an opt-in 96 GB-and-up Apple Silicon lane and is
+never selected by setup or hardware-aware defaults. Its roughly 72 GB target
+and 2.2 GB DFlash companion use immutable official Poolside revisions and
+require explicit OpenMDW-1.1 acceptance:
+
+```bash
+swift run mere.run model pull text-chat-laguna-s-2-1 --accept-model-license
+swift run mere.run text chat \
+  --model text-chat-laguna-s-2-1 \
+  --prompt "Implement a bounded Swift actor queue and explain its invariants." \
+  --stats
+```
+
+The native runtime defaults Laguna to temperature `1`, top-p `1`, top-k `20`,
+and the measured min-p `0.02`. Automatic DFlash proposes 12 tokens for output
+budgets of at least 32 tokens and falls back losslessly to target-only decode
+when acceptance is poor. Longer requests can use ragged continuous batching in
+`api serve` when `--max-active-requests` is above `1`.
+
 Per-model API-serving KV behavior is set with `mere.run model runtime
 --kv-cache-mode` (see [Model Management](./model-management.md)); it is not a
 flag on `text chat` or `api serve`. For Gemma4, Qwen-family, and LFM2 models
@@ -147,9 +167,9 @@ instead of the generic chat defaults. Other Qwen-family lanes such as
 Native and llama.cpp text generation also accept min-p sampling. A value such
 as `0.05` removes tokens with less than 5% of the most likely token's
 probability after top-k/top-p filtering, then renormalizes the remaining
-distribution. It is disabled by default, does not change temperature-zero
-greedy output, and is available as `--min-p` in text commands and `min_p` in
-OpenAI-compatible chat requests.
+distribution. It is disabled by default except for Laguna's measured `0.02`,
+does not change temperature-zero greedy output, and is available as `--min-p`
+in text commands and `min_p` in OpenAI-compatible chat requests.
 
 Native MLX Gemma and Qwen-family chat models support
 `--response-format json_object`. The output must be one complete root object;

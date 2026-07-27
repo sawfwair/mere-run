@@ -13,6 +13,8 @@ Supported engines:
 - `text-code`: GGUF code models such as `text-code-qwen3`,
   `text-code-north-mini`, and `text-agent-ornith-35b`.
 - `text-chat-gemma4`: Gemma text chat models, including `text-chat-gemma4-12b`.
+- `text-chat-laguna`: managed Laguna S 2.1 target with automatic DFlash;
+  defaults to `text-chat-laguna-s-2-1`.
 - `vision-chat-gemma4-12b`: Gemma 4 12B vision chat over the Gemma4 API serving engine.
 - `text-chat-q36`: Qwen-family serving engine; defaults to `text-chat-q36-nano`
   and also serves `text-chat-bonsai-27b-1bit`, `text-chat-bonsai-27b-2bit`,
@@ -47,14 +49,14 @@ mere.run status
 - `--port`, `-p`: listen port, default `8080`.
 - `--host`: bind host, default `127.0.0.1`.
 - `--model`, `-m`, `--model-path`: model path or engine-specific model root.
-- `--engine`: `text-code`, `text-chat-klein`, `text-chat-gemma4`, `text-chat-q36`, `text-chat-lfm2`, or `text-chat-deepseek-v4-flash`.
+- `--engine`: `text-code`, `text-chat-klein`, `text-chat-gemma4`, `text-chat-laguna`, `text-chat-q36`, `text-chat-lfm2`, or `text-chat-deepseek-v4-flash`.
 - `--lora`: default LoRA adapter path for all requests.
 - `--api-key`: bearer token, also read from `MERERUN_API_KEY`.
 - `--rate-limit-per-minute`: global OpenAI-compatible request limit.
 - `--max-active-requests`: fair FIFO admission limit for concurrent local
   inference across chat, embedding, image, TTS, and ASR requests; default `1`.
   Values above `1` automatically enable supported
-  Gemma4, Qwen-family, and LFM2 decode batching unless an engine-specific
+  Gemma4, Laguna, Qwen-family, and LFM2 decode batching unless an engine-specific
   environment override forces the serial path.
 - `--memory-guard`: runtime memory guard tier, default `balanced`. Accepted
   values are `off`, `safe`, `balanced`, `aggressive`, and `custom`.
@@ -270,6 +272,11 @@ mere.run api serve --engine text-chat-gemma4 --model vision-chat-gemma4-12b --po
 ```bash
 mere.run model pull text-chat-lfm25-a1b-8bit --accept-model-license
 mere.run api serve --engine text-chat-lfm2 --port 11434
+```
+
+```bash
+mere.run model pull text-chat-laguna-s-2-1 --accept-model-license
+mere.run api serve --engine text-chat-laguna --max-active-requests 2 --port 11434
 ```
 
 ```bash

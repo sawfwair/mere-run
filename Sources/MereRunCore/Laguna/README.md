@@ -1,9 +1,8 @@
 # Laguna S 2.1
 
-Native Swift/MLX evaluation support for Poolside's official
-`Laguna-S-2.1-NVFP4-mlx` checkpoint. This module is intentionally isolated
-from the managed model catalog while checkpoint compatibility and real-device
-quality are being evaluated.
+Native Swift/MLX support for Poolside's official
+`Laguna-S-2.1-NVFP4-mlx` checkpoint and DFlash companion. The validated pair
+is available as the opt-in managed model `text-chat-laguna-s-2-1`.
 
 ## Files
 
@@ -26,7 +25,23 @@ quality are being evaluated.
 - `LagunaToolParser.swift` converts the checkpoint's GLM-style tool markup to
   mere.run's typed `ToolCall` output.
 
-## Evaluation boundary
+## Supported boundary
+
+Pulling the target installs both immutable checkpoint revisions:
+
+```bash
+mere.run model pull text-chat-laguna-s-2-1 --accept-model-license
+mere.run text chat \
+  --model text-chat-laguna-s-2-1 \
+  --prompt "Write a bounded Swift actor queue." \
+  --stats
+mere.run api serve --engine text-chat-laguna --max-active-requests 2
+```
+
+Laguna requires at least 96 GB unified memory and is not a setup or
+hardware-aware default. The normal chat and serving routes use temperature
+`1`, top-p `1`, top-k `20`, and min-p `0.02`; callers can override those
+values explicitly.
 
 The CLI benchmark commands accept `--laguna-path` as an explicit local-only
 checkpoint override. Pass `--laguna-dflash-path` to evaluate the official
@@ -35,9 +50,9 @@ length. The measured default is 12 proposals per round.
 The resident DFlash benchmark accepts `--temperature`, `--top-p`, `--top-k`,
 and `--min-p` so sampled target-only, forced-DFlash, and automatic-routing
 performance can be compared at an exact decode length in one process.
-Laguna evaluation lanes default to min-p `0.02`, the quality/richness winner on
+Laguna lanes default to min-p `0.02`, the quality/richness winner on
 the M4 Max gate. Pass `--min-p 0` for the official Poolside control. This
-recommendation does not change sampling defaults for managed models.
+recommendation does not change sampling defaults for other managed models.
 `--laguna-dflash-min-tokens` controls the length-aware router and defaults to
 32 effective output tokens. Requests below that budget use target-only prefill
 and decode, without building DFlash prompt context. Routed requests fall back
@@ -49,10 +64,9 @@ batching plus DFlash counters in both text and JSON output. DFlash batching
 remains a forced evaluation path because fewer physical batch forwards did not
 produce lower wall time on the measured two-row workload.
 
-The checkpoint is not a catalog model, is never selected by default, and is
-not part of public pull or serving behavior. Keep it behind this boundary until
-official weights have passed load, deterministic decode, quality, memory, and
-performance evaluation on Apple Silicon.
+The checkpoint is a catalog model but remains explicitly opt-in: it is never
+selected by default, requires acceptance of its published usage terms, and
+keeps explicit checkpoint overrides for evaluation and rollback.
 
 Laguna's routed experts sort prefill and multi-token verification routes by
 expert before issuing the NVFP4 gather matmuls. This is enabled by default for
@@ -85,8 +99,6 @@ Example:
 
 ```bash
 mere.run model benchmark chat \
-  --laguna-path /path/to/Laguna-S-2.1-NVFP4-mlx \
-  --laguna-dflash-path /path/to/Laguna-S-2.1-DFlash \
   --laguna-dflash-tokens 12 \
   --laguna-dflash-min-tokens 32 \
   --json

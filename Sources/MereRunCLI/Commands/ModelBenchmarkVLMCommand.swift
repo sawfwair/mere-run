@@ -326,6 +326,8 @@ struct ModelBenchmarkVLM: AsyncParsableCommand {
         switch engine.canonical {
         case .textChatGemma4:
             return .textChatGemma4
+        case .textChatLaguna:
+            return .textChatLaguna
         case .textChatQ35:
             return .textChatQ35
         case .textChatQ36:

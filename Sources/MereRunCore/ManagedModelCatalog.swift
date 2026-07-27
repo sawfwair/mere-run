@@ -37,6 +37,8 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case gemma4
     case gemma4Unified
     case gemma4MTPAssistant
+    case laguna
+    case lagunaDFlash
     case q35
     case lfm2
     case qwen3TTS
@@ -534,6 +536,14 @@ public enum ManagedModelCatalog {
         licenseURL: "https://huggingface.co/\(Cosmos3Resources.officialRepoID)/blob/\(Cosmos3Resources.officialRevision)/LICENSE"
     )
 
+    private static let lagunaUsageRestriction = usageRestriction(
+        summary: "Laguna S 2.1 is distributed under OpenMDW-1.1; its attribution and acceptable-use conditions apply.",
+        license: "OpenMDW-1.1",
+        sourceRepoId: LagunaResources.upstreamModelID,
+        sourceRevision: LagunaResources.upstreamRevision,
+        licenseURL: "https://huggingface.co/poolside/Laguna-S-2.1/blob/main/LICENSE.md"
+    )
+
     public static let allSpecs: [ManagedModelSpec] = [
         ManagedModelSpec(
             id: "image-klein-nano",
@@ -1013,6 +1023,24 @@ public enum ManagedModelCatalog {
             validationKind: .gemma4,
             estimatedDownloadBytes: 62_578_654_199,
             defaultCLICommands: ["api serve"]
+        ),
+        ManagedModelSpec(
+            id: LagunaResources.modelID,
+            category: .textChat,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: LagunaResources.upstreamModelID,
+                revision: LagunaResources.upstreamRevision,
+                patterns: LagunaResources.snapshotPatterns
+            ),
+            upstreamRepoId: LagunaResources.upstreamModelID,
+            upstreamRevision: LagunaResources.upstreamRevision,
+            usageRestriction: lagunaUsageRestriction,
+            validationKind: .laguna,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: LagunaResources.estimatedDownloadBytes,
+            defaultCLICommands: ["text chat", "api serve", "model benchmark chat"],
+            companionModelIDs: [LagunaResources.dflashModelID]
         ),
         ManagedModelSpec(
             id: Q35Resources.q36NanoModelId,
@@ -2257,6 +2285,21 @@ private extension ManagedModelCatalog {
                 estimatedDownloadBytes: 4 * 1_073_741_824
             ),
             ManagedModelSpec(
+                id: LagunaResources.dflashModelID,
+                category: .textChat,
+                installShape: .directoryRoot,
+                hubFallback: HubFallbackConfig(
+                    repoId: LagunaResources.dflashUpstreamModelID,
+                    revision: LagunaResources.dflashUpstreamRevision,
+                    patterns: LagunaResources.dflashSnapshotPatterns
+                ),
+                upstreamRepoId: LagunaResources.dflashUpstreamModelID,
+                upstreamRevision: LagunaResources.dflashUpstreamRevision,
+                validationKind: .lagunaDFlash,
+                runtimeAutoDownloadAllowed: false,
+                estimatedDownloadBytes: LagunaResources.dflashEstimatedDownloadBytes
+            ),
+            ManagedModelSpec(
                 id: ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue,
                 category: .textChat,
                 installShape: .directoryRoot,
@@ -2367,6 +2410,10 @@ public extension ManagedModelSpec {
             )
         case .gemma4MTPAssistant:
             return Gemma4MTPResources(rootURL: rootURL).validate(fileManager: fileManager)
+        case .laguna:
+            return LagunaResources.missingTargetFiles(rootURL: rootURL, fileManager: fileManager)
+        case .lagunaDFlash:
+            return LagunaResources.missingDFlashFiles(rootURL: rootURL, fileManager: fileManager)
         case .q35:
             return Q35Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .lfm2:

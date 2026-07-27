@@ -4,6 +4,7 @@ public enum RuntimeServingEngine: String, Codable, CaseIterable, Hashable, Senda
     case textCode = "text-code"
     case textChatKlein = "text-chat-klein"
     case textChatGemma4 = "text-chat-gemma4"
+    case textChatLaguna = "text-chat-laguna"
     case textChatQ36 = "text-chat-q36"
     case textChatQ35 = "text-chat-q35"
     case textChatLFM2 = "text-chat-lfm2"
@@ -412,6 +413,8 @@ public extension ManagedModelSpec {
             return .textCode
         case .gemma4, .gemma4Unified:
             return .textChatGemma4
+        case .laguna:
+            return .textChatLaguna
         case .q35:
             return .textChatQ36
         case .lfm2:

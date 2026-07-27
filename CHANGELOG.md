@@ -40,20 +40,24 @@ The format is based on Keep a Changelog.
   tool-call, and code benchmark lanes. Filtered tokens retain exactly zero
   probability, greedy output is unchanged, and Laguna DFlash applies the same
   normalized distribution to draft sampling and target rejection correction.
-  The isolated Laguna evaluation lanes use the measured `0.02` default while
-   retaining explicit `--min-p 0` control; managed-model defaults are unchanged.
-- added evaluation-only Laguna S 2.1 acceleration controls for the official
-  DFlash companion checkpoint, lossless target verification, ragged
-  continuous batching, and machine-readable acceptance, recovery, batching,
-  prefill, and decode metrics. A length-aware output-budget router bypasses
-  DFlash work for short requests, uses the measured 12-token proposal default,
-  and falls back losslessly after one clearly low-acceptance round or two
-  sub-threshold rounds. Greedy verification keeps the anchor, proposals, and
-  target verification GPU-lazy until one round-level readback. A
-  resident-process target/DFlash crossover benchmark records exact decode
-  lengths, mixed concurrency, output fingerprints, and MLX memory. Laguna
-  remains outside the managed catalog and normal serving routes pending
-  broader qualification.
+  Laguna uses the measured `0.02` default while retaining explicit
+  `--min-p 0` control; other managed-model defaults are unchanged.
+- added managed, opt-in Laguna S 2.1 chat and OpenAI-compatible serving with
+  immutable official target and DFlash companion revisions, explicit
+  OpenMDW-1.1 acceptance, checkpoint validation, and hardware support
+  guidance. Pulling `text-chat-laguna-s-2-1` installs both checkpoints;
+  `text chat` and `api serve --engine text-chat-laguna` enable the validated
+  sampling recipe and automatic DFlash routing without making the 74 GB pair
+  a setup or machine default.
+- added lossless Laguna target verification, ragged continuous batching, and
+  machine-readable acceptance, recovery, batching, prefill, and decode
+  metrics. A length-aware output-budget router bypasses DFlash work for short
+  requests, uses the measured 12-token proposal default, and falls back
+  losslessly after one clearly low-acceptance round or two sub-threshold
+  rounds. Greedy verification keeps the anchor, proposals, and target
+  verification GPU-lazy until one round-level readback. A resident-process
+  target/DFlash crossover benchmark records exact decode lengths, mixed
+  concurrency, output fingerprints, and MLX memory.
 
 ### Changed
 

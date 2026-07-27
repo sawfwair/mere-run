@@ -102,6 +102,49 @@ final class LagunaModelTests: MereRunCoreTestCase {
         XCTAssertTrue(config.isSparse(layerIndex: 1))
     }
 
+    func testManagedResourceContractCoversOfficialTargetAndDFlashPayloads() throws {
+        let root = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let dflashRoot = root.appendingPathComponent("dflash", isDirectory: true)
+        try FileManager.default.createDirectory(at: dflashRoot, withIntermediateDirectories: true)
+
+        let targetFiles = [
+            "config.json",
+            "tokenizer.json",
+            "tokenizer_config.json",
+            "chat_template.jinja",
+            "model.safetensors.index.json",
+        ] + (1...14).map {
+            String(format: "model-%05d-of-00014.safetensors", $0)
+        }
+        for file in targetFiles {
+            XCTAssertTrue(FileManager.default.createFile(
+                atPath: root.appendingPathComponent(file).path,
+                contents: Data()
+            ))
+        }
+        for file in ["config.json", "model.safetensors"] {
+            XCTAssertTrue(FileManager.default.createFile(
+                atPath: dflashRoot.appendingPathComponent(file).path,
+                contents: Data()
+            ))
+        }
+
+        XCTAssertTrue(LagunaResources.missingTargetFiles(rootURL: root).isEmpty)
+        XCTAssertTrue(LagunaResources.missingDFlashFiles(rootURL: dflashRoot).isEmpty)
+        XCTAssertTrue(LagunaResources.handles(modelSpec: LagunaResources.modelID))
+        XCTAssertTrue(LagunaResources.handles(modelSpec: LagunaResources.upstreamModelID))
+        XCTAssertTrue(LagunaResources.handles(modelSpec: "/tmp/Laguna-S-2.1-NVFP4-mlx"))
+
+        try FileManager.default.removeItem(
+            at: root.appendingPathComponent("model-00014-of-00014.safetensors")
+        )
+        XCTAssertEqual(
+            LagunaResources.missingTargetFiles(rootURL: root).map(\.lastPathComponent),
+            ["model-00014-of-00014.safetensors"]
+        )
+    }
+
     func testDFlashConfigurationAndParameterPathsMatchOfficialContract() throws {
         let config = try makeDFlashConfig()
         let model = LagunaDFlashModel(config: config)

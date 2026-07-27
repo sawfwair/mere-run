@@ -11,7 +11,7 @@ public enum LagunaError: LocalizedError {
     public var errorDescription: String? {
         switch self {
         case .modelPathRequired:
-            return "Laguna evaluation requires an explicit local MLX checkpoint path."
+            return "Laguna requires an installed managed model or an explicit local MLX checkpoint path."
         case .missingFiles(let files):
             return "Laguna checkpoint is missing required files: \(files.joined(separator: ", "))."
         case .dflashIncompatible(let message):
@@ -20,33 +20,6 @@ public enum LagunaError: LocalizedError {
             return "Laguna model is not loaded."
         case .generationFailed(let message):
             return "Laguna generation failed: \(message)"
-        }
-    }
-}
-
-public enum LagunaResources {
-    public static let modelID = "poolside/Laguna-S-2.1-NVFP4-mlx"
-    public static let dflashModelID = "poolside/Laguna-S-2.1-DFlash"
-    public static let defaultContextLength = 32_768
-    public static let recommendedMinP = 0.02
-
-    static let requiredFiles = [
-        "config.json",
-        "tokenizer.json",
-        "tokenizer_config.json",
-        "chat_template.jinja",
-        "model.safetensors.index.json",
-    ]
-
-    static func validate(rootURL: URL) -> [String] {
-        requiredFiles.filter {
-            !FileManager.default.fileExists(atPath: rootURL.appending(path: $0).path)
-        }
-    }
-
-    static func validateDFlash(rootURL: URL) -> [String] {
-        ["config.json", "model.safetensors"].filter {
-            !FileManager.default.fileExists(atPath: rootURL.appending(path: $0).path)
         }
     }
 }

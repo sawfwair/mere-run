@@ -376,6 +376,27 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(cmd.model, LFM2Resources.defaultModelId)
     }
 
+    func testAPIServeParsesLagunaEngineAndCanonicalDefault() throws {
+        let cmd = try APIServe.parse([
+            "--engine", "text-chat-laguna",
+        ])
+
+        XCTAssertEqual(cmd.engine, .textChatLaguna)
+        XCTAssertEqual(cmd.engine.runtimeServingEngine, .textChatLaguna)
+        XCTAssertEqual(cmd.defaultRuntimeModelID(modelPath: nil), LagunaResources.modelID)
+    }
+
+    func testAPIServeLagunaAcceptsExplicitLocalCheckpointPath() throws {
+        let path = "/tmp/Laguna-S-2.1-NVFP4-mlx"
+        let cmd = try APIServe.parse([
+            "--engine", "text-chat-laguna",
+            "--model", path,
+        ])
+
+        XCTAssertEqual(try cmd.resolveModelPath(), path)
+        XCTAssertEqual(cmd.defaultRuntimeModelID(modelPath: path), "Laguna-S-2.1-NVFP4-mlx")
+    }
+
     func testAPIServeParsesLegacyQ35EngineAlias() throws {
         let cmd = try APIServe.parse([
             "--engine", "text-chat-q35",
@@ -2605,6 +2626,27 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(chatRequest.topK, 20)
         XCTAssertEqual(chatRequest.temperature, 1.0)
         XCTAssertEqual(chatRequest.topP, 0.95)
+    }
+
+    func testChatRequestUsesValidatedLagunaSamplingDefaults() throws {
+        let request = OpenAIChatRequest(
+            model: LagunaResources.modelID,
+            messages: [OpenAIChatMessage(role: "user", content: "hello")]
+        )
+
+        let chatRequest = try APIServerContract.chatRequest(
+            from: request,
+            fallbackLoraPath: nil,
+            contextSize: LagunaResources.defaultContextLength,
+            capabilities: RuntimeServingEngine.textChatLaguna.openAICompatibility,
+            servedModelID: LagunaResources.modelID
+        )
+
+        XCTAssertEqual(chatRequest.temperature, LagunaResources.recommendedTemperature)
+        XCTAssertEqual(chatRequest.topP, LagunaResources.recommendedTopP)
+        XCTAssertEqual(chatRequest.topK, LagunaResources.recommendedTopK)
+        XCTAssertEqual(chatRequest.minP, LagunaResources.recommendedMinP)
+        XCTAssertFalse(chatRequest.requiresJSON)
     }
 
     func testChatRequestExplicitSamplingSkipsRecommendedTopK() throws {

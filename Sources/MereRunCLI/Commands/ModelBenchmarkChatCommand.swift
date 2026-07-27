@@ -13,13 +13,13 @@ struct ModelBenchmarkChat: AsyncParsableCommand {
 
     @Option(
         name: [.long],
-        help: "Local poolside/Laguna-S-2.1-NVFP4-mlx checkpoint directory for pre-integration evaluation."
+        help: "Override the installed Laguna target with a local poolside/Laguna-S-2.1-NVFP4-mlx checkpoint directory."
     )
     var lagunaPath: String?
 
     @Option(
         name: [.long],
-        help: "Local poolside/Laguna-S-2.1-DFlash checkpoint directory."
+        help: "Override the installed Laguna DFlash companion with a local poolside/Laguna-S-2.1-DFlash checkpoint directory."
     )
     var lagunaDflashPath: String?
 
@@ -113,11 +113,13 @@ struct ModelBenchmarkChat: AsyncParsableCommand {
         guard lagunaDflashMinTokens > 0 else {
             throw ValidationError("--laguna-dflash-min-tokens must be greater than zero.")
         }
-        if lagunaDflashPath != nil, lagunaPath == nil {
-            throw ValidationError("--laguna-dflash-path requires --laguna-path.")
-        }
-        if lagunaDflashRouting == .dflash, lagunaDflashPath == nil {
-            throw ValidationError("--laguna-dflash-routing dflash requires --laguna-dflash-path.")
+        if lagunaDflashRouting == .dflash,
+           lagunaDflashPath == nil,
+           LagunaResources.installedDFlashPath() == nil {
+            throw ValidationError(
+                "--laguna-dflash-routing dflash requires --laguna-dflash-path "
+                    + "or the installed \(LagunaResources.dflashModelID) companion."
+            )
         }
         _ = try selectedModelIDs()
         _ = try selectedCases()
@@ -163,7 +165,9 @@ struct ModelBenchmarkChat: AsyncParsableCommand {
     func selectedModelIDs() throws -> [String] {
         let rawModels = models?.split(separator: ",").map {
             $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        } ?? (lagunaPath == nil ? Self.defaultModelIDs : [LagunaResources.modelID])
+        } ?? (lagunaPath == nil && lagunaDflashPath == nil
+            ? Self.defaultModelIDs
+            : [LagunaResources.modelID])
         let modelIDs = Self.deduplicated(rawModels.filter { !$0.isEmpty })
         guard !modelIDs.isEmpty else {
             throw ValidationError("--models must include at least one model id.")
@@ -196,35 +200,38 @@ struct ModelBenchmarkChat: AsyncParsableCommand {
 
     private func runModel(_ modelID: String, cases: [ChatBenchmarkCase]) async throws -> ChatBenchmarkModelResult {
         if modelID == LagunaResources.modelID {
-            guard let lagunaPath else {
+            guard let resolvedLagunaPath = lagunaPath
+                ?? ManagedModelResolver.resolveInstalledModel(id: LagunaResources.modelID)?.path else {
                 return ChatBenchmarkModelResult.missing(
                     model: modelID,
-                    reason: "Laguna evaluation requires --laguna-path."
+                    reason: "Model is not installed. Run "
+                        + "`mere.run model pull \(LagunaResources.modelID) --accept-model-license` first."
                 )
             }
+            let resolvedDFlashPath = lagunaDflashPath ?? LagunaResources.installedDFlashPath()
             let generator = LagunaGenerator(
                 continuousBatchingEnabled: concurrency > 1,
-                dflashModelPath: lagunaDflashPath,
+                dflashModelPath: resolvedDFlashPath,
                 dflashSpeculativeTokens: lagunaDflashTokens,
                 dflashMinimumOutputTokens: lagunaDflashMinTokens
             )
             do {
                 if concurrency > 1 {
-                    try await generator.prepare(modelPath: lagunaPath)
+                    try await generator.prepare(modelPath: resolvedLagunaPath)
                 }
                 var result = try await runCases(
                     modelID,
-                    engine: lagunaDflashPath == nil
+                    engine: resolvedDFlashPath == nil
                         ? "laguna-mlx"
                         : "laguna-mlx+dflash-\(lagunaDflashRouting.rawValue)"
                             + "-k\(lagunaDflashTokens)"
                             + "-min\(lagunaDflashMinTokens)",
-                    modelPath: lagunaPath,
+                    modelPath: resolvedLagunaPath,
                     cases: cases,
                     generate: { request in
                         try await generator.chat(
                             request,
-                            modelPath: lagunaPath,
+                            modelPath: resolvedLagunaPath,
                             dflashRouting: lagunaDflashRouting,
                             progressHandler: nil
                         )
@@ -477,7 +484,8 @@ struct ModelBenchmarkChat: AsyncParsableCommand {
     }
 
     var resolvedMinP: Double {
-        minP ?? (lagunaPath == nil ? 0 : LagunaResources.recommendedMinP)
+        let includesLaguna = (try? selectedModelIDs().contains(LagunaResources.modelID)) == true
+        return minP ?? (includesLaguna ? LagunaResources.recommendedMinP : 0)
     }
 
     private func printReport(_ report: ChatBenchmarkReport) throws {
