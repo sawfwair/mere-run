@@ -682,6 +682,74 @@ final class MereRunController: ObservableObject {
         }
     }
 
+    /// Selects the active Studio mode's canonical command and carries the quick composer's typed
+    /// values into Advanced. Keeping this transition in the controller makes opening Advanced and
+    /// switching modes while it is already open follow the same tested path.
+    func syncAdvanced(to mode: StudioMode, from studioDraft: StudioDraft) {
+        guard let template = CommandCatalog.template(id: mode.defaultTemplateID) else { return }
+        select(template)
+        draft.prompt = studioDraft.prompt
+        if !studioDraft.model.isBlank { draft.model = studioDraft.model }
+        if !studioDraft.inputPath.isBlank { draft.inputPath = studioDraft.inputPath }
+        draft.temperature = studioDraft.temperature
+        draft.topP = studioDraft.topP
+        draft.maxTokens = studioDraft.maxTokens
+        draft.contextSize = studioDraft.contextSize
+        draft.topK = studioDraft.topK
+        draft.kvBits = studioDraft.kvBits
+        draft.kvQuantScheme = studioDraft.kvQuantScheme
+        draft.kvGroupSize = studioDraft.kvGroupSize
+        draft.quantizedKVStart = studioDraft.quantizedKVStart
+        draft.responseFormat = studioDraft.responseFormat
+        draft.thinkingMode = studioDraft.thinkingMode
+        draft.loraPath = studioDraft.loraPath
+        draft.loraScale = studioDraft.loraScale
+        draft.force = studioDraft.stats
+        draft.tools = studioDraft.tools
+        draft.toolLoop = studioDraft.toolLoop
+        draft.allowShellExec = studioDraft.allowShellExec
+        draft.allowAbsoluteToolPaths = studioDraft.allowAbsoluteToolPaths
+        draft.autoApproveTools = studioDraft.autoApproveTools
+        draft.sandboxDir = studioDraft.sandboxDir
+        draft.requireInstalled = studioDraft.requireInstalled
+        draft.json = studioDraft.preflightJSON
+        draft.cfgScale = studioDraft.cfgScale
+        draft.strength = studioDraft.strength
+        draft.sigmaShift = studioDraft.sigmaShift
+        draft.referenceImagePaths = studioDraft.referenceImagePaths
+        draft.keepOriginalAspect = studioDraft.keepOriginalAspect
+        draft.structuredPrompt = studioDraft.structuredPrompt
+        draft.structuredPromptModel = studioDraft.structuredPromptModel
+        draft.structuredPromptMaxTokens = studioDraft.structuredPromptMaxTokens
+        draft.maxSequenceLength = studioDraft.imageMaxSequenceLength
+        draft.kreaConditioningMultiplier = studioDraft.kreaConditioningMultiplier
+        draft.kreaConditioningLayerWeights = studioDraft.kreaConditioningLayerWeights
+        draft.kreaBaseQuantizationBits = studioDraft.kreaBaseQuantizationBits
+        draft.progressJSON = studioDraft.progressJSON
+        draft.language = studioDraft.language
+        draft.backend = studioDraft.backend
+        draft.timestamps = studioDraft.timestamps
+        draft.fps = studioDraft.fps
+        draft.numFrames = studioDraft.numFrames
+        draft.useDuration = studioDraft.useDuration
+        draft.durationSeconds = studioDraft.durationSeconds
+        draft.videoQuality = studioDraft.videoQuality
+        draft.videoOutputMode = studioDraft.videoOutputMode
+        draft.audioPath = studioDraft.audioPath
+        draft.audioStartTime = studioDraft.audioStartTime
+        draft.endImagePath = studioDraft.endImagePath
+        draft.endImageStrength = studioDraft.endImageStrength
+        draft.scheduleShift = studioDraft.scheduleShift
+        draft.a2vGuidanceScale = studioDraft.a2vGuidanceScale
+        draft.videoCFGGuidanceScale = studioDraft.videoCFGGuidanceScale
+        draft.audioCFGGuidanceScale = studioDraft.audioCFGGuidanceScale
+        draft.v2aGuidanceScale = studioDraft.v2aGuidanceScale
+        draft.a2vSteps = studioDraft.a2vSteps
+        draft.preflight = studioDraft.preflight
+        draft.timings = studioDraft.timings
+        draft.timingsOutputPath = studioDraft.timingsOutputPath
+    }
+
     private func applyRecommendedChatDefaultsToCurrentDraft(replacing oldRecommendation: String?) {
         applyRecommendedChatDefaults(
             to: &draft,

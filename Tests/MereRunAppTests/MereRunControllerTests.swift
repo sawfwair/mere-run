@@ -612,6 +612,31 @@ final class MereRunControllerTests: XCTestCase {
         XCTAssertNil(controller.runtimeAuthorizationHeader)
     }
 
+    func testAdvancedSurfaceFollowsStudioModeChanges() {
+        let controller = MereRunController(processRunner: RecordingProcessRunner(), resolvesCLIOnInit: false)
+        var imageDraft = StudioDraft()
+        imageDraft.reset(for: .createImage)
+        imageDraft.prompt = "an image prompt"
+        controller.syncAdvanced(to: .createImage, from: imageDraft)
+
+        XCTAssertEqual(controller.selectedTemplate.id, .imageGenerate)
+        XCTAssertEqual(controller.draft.prompt, "an image prompt")
+
+        var videoDraft = StudioDraft()
+        videoDraft.reset(for: .video)
+        videoDraft.prompt = "a video prompt"
+        videoDraft.inputPath = "/tmp/start.png"
+        videoDraft.audioPath = "/tmp/song.wav"
+        videoDraft.videoOutputMode = .audioVideo
+        controller.syncAdvanced(to: .video, from: videoDraft)
+
+        XCTAssertEqual(controller.selectedTemplate.id, .videoGenerate)
+        XCTAssertEqual(controller.draft.prompt, "a video prompt")
+        XCTAssertEqual(controller.draft.inputPath, "/tmp/start.png")
+        XCTAssertEqual(controller.draft.audioPath, "/tmp/song.wav")
+        XCTAssertEqual(controller.draft.videoOutputMode, .audioVideo)
+    }
+
     func testDetectOutputURLPrefersStdoutContractPath() {
         let probe = StubFileProbe()
         probe.existingPaths = ["/out/render.png"]
