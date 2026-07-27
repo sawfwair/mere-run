@@ -54,6 +54,14 @@ The format is based on Keep a Changelog.
   expert before the NVFP4 gather matmuls, with the reference routing order
   retained for small decode forwards and as a
   `MERERUN_LAGUNA_SORTED_MOE=0` rollback path.
+- fused small-route gate/up gather-GEMV plus SwiGLU for the measured Laguna
+  NVFP4 and LFM2 affine-8 decode layouts. Both paths preserve the native down
+  projection, fall back on incompatible shapes, and retain explicit
+  environment rollback controls. The pinned MLX fork exposes the required
+  quantized Metal helper headers only to custom kernels that request them.
+- established a task-local MLX default stream for LFM2 chat and preparation,
+  matching the other native MLX engines and fixing first use from a new Swift
+  task.
 - refreshed the pinned MLX and mlx-swift forks to MLX 0.32.1 while preserving
   native affine 1-bit Metal/CUDA execution, the generation-17 NAX correctness
   gate, and the Linux/CUDA bridge. The runtime and local gate now reject Metal

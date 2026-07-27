@@ -10,6 +10,15 @@ implementation now supplied upstream. Changes stay scoped to their bit width,
 group size, quantization mode, and backend so stock 2-bit and wider models keep
 their existing paths.
 
+The current pin also lets an MLXFast custom Metal kernel explicitly request
+the core quantized helper headers. The source marker
+`MLX_INCLUDE_FP_QUANTIZED_HEADERS` exposes the NVFP4 helpers, while
+`MLX_INCLUDE_AFFINE_QUANTIZED_HEADERS` exposes the affine helpers. Kernels
+without either marker compile from the unchanged default header set. The
+embedded MLX core revision is `9bee51623d5a34806821e0f414fae293f90dda19`;
+the mlx-swift revision pinned by mere.run is
+`0c63032c7deeec3cb0600aa933cb0b50d16addb6`.
+
 A separate measured one-line compiled-call optimization exists on staging
 branches but is **deliberately not included in the pin**. The rest of this
 document records why, and what a safe version of that fix requires.

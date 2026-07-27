@@ -1,5 +1,6 @@
 import Foundation
 import MLX
+import MLXNN
 import MLXRandom
 import XCTest
 @testable import MereRunCore
@@ -430,6 +431,101 @@ final class LagunaModelTests: MereRunCoreTestCase {
         XCTAssertFalse(LagunaMoEAccelerationPolicy.parseBoolean("0", default: true))
         XCTAssertTrue(LagunaMoEAccelerationPolicy.parseBoolean(nil, default: true))
         XCTAssertFalse(LagunaMoEAccelerationPolicy.parseBoolean("unexpected", default: false))
+    }
+
+    func testFusedGatherNVFP4SwiGLUMatchesNativeGathers() throws {
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip("The fused NVFP4 routed MoE kernel requires MERERUN_TEST_MLX_DEVICE=gpu.")
+        }
+        MLXRandom.seed(55)
+        let expertCount = 4
+        let tokenCount = 2
+        let topK = 3
+        let routeCount = tokenCount * topK
+        let inputDimensions = 512
+        let outputDimensions = 64
+        let groupSize = 16
+        let bits = 4
+        let input = MLXRandom.uniform(
+            low: -0.5,
+            high: 0.5,
+            [1, tokenCount, inputDimensions]
+        ).asType(.bfloat16)
+        let gate = MLX.quantized(
+            MLXRandom.uniform(
+                low: -0.25,
+                high: 0.25,
+                [expertCount, outputDimensions, inputDimensions]
+            ),
+            groupSize: groupSize,
+            bits: bits,
+            mode: .nvfp4
+        )
+        let up = MLX.quantized(
+            MLXRandom.uniform(
+                low: -0.25,
+                high: 0.25,
+                [expertCount, outputDimensions, inputDimensions]
+            ),
+            groupSize: groupSize,
+            bits: bits,
+            mode: .nvfp4
+        )
+        let indices = MLXArray(
+            [Int32(0), 2, 1, 3, 0, 2],
+            [1, tokenCount, topK]
+        )
+        let routedInput = input
+            .reshaped([tokenCount, inputDimensions])
+            .take(MLXArray([Int32(0), 0, 0, 1, 1, 1]), axis: 0)
+            .reshaped([routeCount, 1, inputDimensions])
+        let flattenedIndices = indices.reshaped([routeCount])
+
+        let gateOutput = portableGatherQuantizedMM(
+            routedInput,
+            gate.wq,
+            scales: gate.scales,
+            biases: gate.biases,
+            rhsIndices: flattenedIndices,
+            transpose: true,
+            groupSize: groupSize,
+            bits: bits,
+            mode: .nvfp4,
+            sortedIndices: false
+        )
+        let upOutput = portableGatherQuantizedMM(
+            routedInput,
+            up.wq,
+            scales: up.scales,
+            biases: up.biases,
+            rhsIndices: flattenedIndices,
+            transpose: true,
+            groupSize: groupSize,
+            bits: bits,
+            mode: .nvfp4,
+            sortedIndices: false
+        )
+        let reference = MLXNN.silu(gateOutput) * upOutput
+        let actual = try XCTUnwrap(
+            RoutedMoERouting.fusedGatherNVFP4SwiGLU(
+                input,
+                gateWeight: gate.wq,
+                gateScales: gate.scales,
+                upWeight: up.wq,
+                upScales: up.scales,
+                expertIndices: indices,
+                topK: topK,
+                groupSize: groupSize,
+                bits: bits
+            )
+        )
+        MLX.eval(reference, actual)
+
+        XCTAssertEqual(actual.shape, reference.shape)
+        let maximumDifference = MLX.max(
+            MLX.abs(reference.asType(.float32) - actual.asType(.float32))
+        ).item(Float.self)
+        XCTAssertEqual(maximumDifference, 0)
     }
 
     func testSortedMoERoutingMatchesUnsortedRouting() throws {

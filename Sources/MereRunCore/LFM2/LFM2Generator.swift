@@ -183,27 +183,37 @@ public actor LFM2Generator: ChatGenerator {
         modelPath: String?,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> ChatResponse {
-        let rootURL = try await resolveModelRoot(modelPath: modelPath, progressHandler: progressHandler)
-        let loadStart = Date()
-        try await ensureLoaded(rootURL: rootURL, progressHandler: progressHandler)
-        let loadSeconds = Date().timeIntervalSince(loadStart)
+        try await Stream.withNewDefaultStream {
+            let rootURL = try await resolveModelRoot(
+                modelPath: modelPath,
+                progressHandler: progressHandler
+            )
+            let loadStart = Date()
+            try await ensureLoaded(rootURL: rootURL, progressHandler: progressHandler)
+            let loadSeconds = Date().timeIntervalSince(loadStart)
 
-        var response = try await generate(request, progressHandler: progressHandler)
-        if var timing = response.timing {
-            timing.loadSeconds = loadSeconds
-            response.timing = timing
-        } else {
-            response.timing = ChatTiming(loadSeconds: loadSeconds)
+            var response = try await generate(request, progressHandler: progressHandler)
+            if var timing = response.timing {
+                timing.loadSeconds = loadSeconds
+                response.timing = timing
+            } else {
+                response.timing = ChatTiming(loadSeconds: loadSeconds)
+            }
+            return response
         }
-        return response
     }
 
     public func prepare(
         modelPath: String? = nil,
         progressHandler: (@Sendable (ChatProgress) -> Void)? = nil
     ) async throws {
-        let rootURL = try await resolveModelRoot(modelPath: modelPath, progressHandler: progressHandler)
-        try await ensureLoaded(rootURL: rootURL, progressHandler: progressHandler)
+        try await Stream.withNewDefaultStream {
+            let rootURL = try await resolveModelRoot(
+                modelPath: modelPath,
+                progressHandler: progressHandler
+            )
+            try await ensureLoaded(rootURL: rootURL, progressHandler: progressHandler)
+        }
     }
 
     public func unload() {

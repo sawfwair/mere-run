@@ -178,6 +178,105 @@ final class LFM2ConfigAndModelTests: MereRunCoreTestCase {
         XCTAssertTrue(MLX.max(MLX.abs(logits.asType(.float32))).item(Float.self).isFinite)
     }
 
+    func testFusedGatherAffine8SwiGLUMatchesNativeGathers() throws {
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip("The fused affine routed MoE kernel requires MERERUN_TEST_MLX_DEVICE=gpu.")
+        }
+        MLXRandom.seed(45)
+        let expertCount = 4
+        let tokenCount = 2
+        let topK = 3
+        let routeCount = tokenCount * topK
+        let inputDimensions = 512
+        let outputDimensions = 64
+        let groupSize = 64
+        let bits = 8
+        let input = MLXRandom.uniform(
+            low: -0.5,
+            high: 0.5,
+            [1, tokenCount, inputDimensions]
+        ).asType(.bfloat16)
+        let gate = MLX.quantized(
+            MLXRandom.uniform(
+                low: -0.25,
+                high: 0.25,
+                [expertCount, outputDimensions, inputDimensions]
+            ).asType(.bfloat16),
+            groupSize: groupSize,
+            bits: bits,
+            mode: .affine
+        )
+        let up = MLX.quantized(
+            MLXRandom.uniform(
+                low: -0.25,
+                high: 0.25,
+                [expertCount, outputDimensions, inputDimensions]
+            ).asType(.bfloat16),
+            groupSize: groupSize,
+            bits: bits,
+            mode: .affine
+        )
+        let gateBiases = try XCTUnwrap(gate.biases)
+        let upBiases = try XCTUnwrap(up.biases)
+        let indices = MLXArray(
+            [Int32(0), 2, 1, 3, 0, 2],
+            [1, tokenCount, topK]
+        )
+        let routedInput = input
+            .reshaped([tokenCount, inputDimensions])
+            .take(MLXArray([Int32(0), 0, 0, 1, 1, 1]), axis: 0)
+            .reshaped([routeCount, 1, inputDimensions])
+        let flattenedIndices = indices.reshaped([routeCount])
+
+        let gateOutput = portableGatherQuantizedMM(
+            routedInput,
+            gate.wq,
+            scales: gate.scales,
+            biases: gateBiases,
+            rhsIndices: flattenedIndices,
+            transpose: true,
+            groupSize: groupSize,
+            bits: bits,
+            mode: .affine,
+            sortedIndices: false
+        )
+        let upOutput = portableGatherQuantizedMM(
+            routedInput,
+            up.wq,
+            scales: up.scales,
+            biases: upBiases,
+            rhsIndices: flattenedIndices,
+            transpose: true,
+            groupSize: groupSize,
+            bits: bits,
+            mode: .affine,
+            sortedIndices: false
+        )
+        let reference = MLXNN.silu(gateOutput) * upOutput
+        let actual = try XCTUnwrap(
+            RoutedMoERouting.fusedGatherAffine8SwiGLU(
+                input,
+                gateWeight: gate.wq,
+                gateScales: gate.scales,
+                gateBiases: gateBiases,
+                upWeight: up.wq,
+                upScales: up.scales,
+                upBiases: upBiases,
+                expertIndices: indices,
+                topK: topK,
+                groupSize: groupSize,
+                bits: bits
+            )
+        )
+        MLX.eval(reference, actual)
+
+        XCTAssertEqual(actual.shape, reference.shape)
+        let maximumDifference = MLX.max(
+            MLX.abs(reference.asType(.float32) - actual.asType(.float32))
+        ).item(Float.self)
+        XCTAssertEqual(maximumDifference, 0)
+    }
+
     func testRaggedBatchedDecodeMatchesIndependentRowsAndSplitsCaches() throws {
         MLXRandom.seed(421)
         let config = try makeTinyConfig()

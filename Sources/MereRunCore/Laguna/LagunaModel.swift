@@ -9,6 +9,10 @@ enum LagunaMoEAccelerationPolicy {
         "MERERUN_LAGUNA_SORTED_MOE",
         default: true
     )
+    static let fusedNVFP4MoEEnabled = booleanEnvironment(
+        "MERERUN_LAGUNA_FUSED_NVFP4_MOE",
+        default: true
+    )
 
     static func parseBoolean(_ raw: String?, default defaultValue: Bool) -> Bool {
         guard let raw else { return defaultValue }
@@ -297,9 +301,9 @@ final class LagunaSwitchLinear: Module {
     @ModuleInfo(key: "scales") var scales: MLXArray?
     @ModuleInfo(key: "biases") var biases: MLXArray?
 
-    private let groupSize: Int
-    private let bits: Int
-    private let mode: QuantizationMode
+    let groupSize: Int
+    let bits: Int
+    let mode: QuantizationMode
 
     init(
         inputDimensions: Int,
@@ -460,6 +464,39 @@ final class LagunaSwitchGLU: Module {
     }
 
     func unsorted(_ x: MLXArray, indices: MLXArray) -> MLXArray {
+        let batch = x.dim(0)
+        let sequenceLength = x.dim(1)
+        let topK = indices.dim(2)
+        if LagunaMoEAccelerationPolicy.fusedNVFP4MoEEnabled,
+           gateProj.mode == .nvfp4,
+           upProj.mode == .nvfp4,
+           gateProj.groupSize == upProj.groupSize,
+           gateProj.bits == upProj.bits,
+           gateProj.biases == nil,
+           upProj.biases == nil,
+           let gateScales = gateProj.scales,
+           let upScales = upProj.scales,
+           let fused = RoutedMoERouting.fusedGatherNVFP4SwiGLU(
+               x,
+               gateWeight: gateProj.weight,
+               gateScales: gateScales,
+               upWeight: upProj.weight,
+               upScales: upScales,
+               expertIndices: indices,
+               topK: topK,
+               groupSize: gateProj.groupSize,
+               bits: gateProj.bits
+           ) {
+            return downProj(
+                fused.reshaped([
+                    batch,
+                    sequenceLength,
+                    topK,
+                    fused.dim(-1),
+                ]),
+                indices: indices
+            )
+        }
         let gate = gateProj(x, indices: indices)
         let up = upProj(x, indices: indices)
         return downProj(MLXNN.silu(gate) * up, indices: indices)

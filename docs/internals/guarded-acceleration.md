@@ -7,6 +7,41 @@ theoretically faster.
 
 ## Shippable paths
 
+### Fused small-route quantized MoE decode
+
+`RoutedMoERouting` fuses the gate and up gather-GEMVs with SwiGLU for two
+measured decode layouts: Laguna NVFP4 (group 16, 4-bit) and LFM2 affine
+(group 64, 8-bit). The input token is read directly for each route, so the
+kernel avoids materializing the repeated top-k activation tensor. The down
+projection remains the native MLX gather operation.
+
+The path is enabled by default only when running on an Apple GPU with
+BF16/FP16 activations, input width divisible by 512, output width divisible by
+8, matching gate/up shapes, and the exact quantization contract above. A
+failed guard returns to the portable path. Prefill and larger routed forwards
+are not redirected through this small-route kernel. The two explicit rollback
+controls are:
+
+```bash
+MERERUN_LAGUNA_FUSED_NVFP4_MOE=0
+MERERUN_LFM2_FUSED_AFFINE8_MOE=0
+```
+
+On an AC-powered M4 Max with 128 GB unified memory and no thermal warning, the
+official Laguna target's resident eight-token decode median moved from about
+0.319 seconds (25.1 tok/s) to 0.252 seconds (31.8 tok/s), about 21% faster,
+while retaining output fingerprint `6fe878c90faf26e8`. Its DFlash row improved
+from about 0.097 to 0.092 seconds. The managed LFM2 checkpoint produced
+byte-identical greedy output; warmed 128-token release runs measured
+184.74-185.16 tok/s portable versus 188.27-189.54 tok/s fused. A 512-token
+control averaged about 185.2 versus 187.6 tok/s.
+
+The generic-tail NVFP4/GELU experiment on Gemma Turbo, custom route planners,
+weighted reduction, sorted gate/up fusion, and full fused-MoE kernel were
+removed after neutral or regressive real-checkpoint measurements. These
+results establish a runtime/checkpoint win, not a claim that shader ALUs or
+unified-memory bandwidth are at their physical limit.
+
 ### Shared autoregressive pipeline saturation
 
 The shared decode loop confirms the first sampled token before opening its

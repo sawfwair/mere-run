@@ -33,6 +33,14 @@ applies sharded safetensor weights with `HFSafetensorsWeightsLoader`, pre-fills
 in cancellable chunks, then uses either the pipelined serial loop or the
 row-compacting continuous decode scheduler selected by the serving runtime.
 
+Small-route decode fuses the affine-8 gate and up gather-GEMVs with SwiGLU,
+then keeps the native down projection. The fused path is enabled by default
+and can be disabled with `MERERUN_LFM2_FUSED_AFFINE8_MOE=0` for a controlled
+A/B or rollback. It applies only on Apple GPU execution with BF16/FP16
+activations, affine group size 64, 8-bit weights, an input width divisible by
+512, and an output width divisible by 8. Other quantization and tensor layouts
+fall back to MLX's portable gather path.
+
 ## Notes
 
 - This runtime is Swift-native and does not bridge to Python.
@@ -45,3 +53,5 @@ row-compacting continuous decode scheduler selected by the serving runtime.
 - Cold model preparation is deduplicated by the serving pool. Residency epochs
   invalidate stale decode loops and explicit unloads without canceling another
   request that is waiting on the same shared preparation task.
+- Public generator entrypoints establish a task-local MLX default stream before
+  loading or evaluating the model, matching the other native MLX chat engines.

@@ -56,6 +56,15 @@ for comparison or rollback. Do not lower the threshold without measuring
 short verification and concurrent decode: two route sorts can cost more than
 grouped expert locality saves on small batches.
 
+Single-token target decode fuses the NVFP4 gate and up gather-GEMVs with
+SwiGLU, then keeps the native down projection. The fused path is enabled by
+default and can be disabled with `MERERUN_LAGUNA_FUSED_NVFP4_MOE=0` for a
+controlled A/B or rollback. It applies only on Apple GPU execution with
+BF16/FP16 activations, NVFP4 group size 16, 4-bit weights, an input width
+divisible by 512, and an output width divisible by 8. Every other layout falls
+back to MLX's portable gather path. Prefill and multi-token verification keep
+the measured expert-sorted implementation above.
+
 Example:
 
 ```bash
