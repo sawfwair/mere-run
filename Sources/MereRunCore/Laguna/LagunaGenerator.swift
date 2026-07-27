@@ -653,14 +653,23 @@ public actor LagunaGenerator: ChatGenerator {
                     )
                 }
                 let rowID = UUID()
+                // The row and model stay confined to this generator actor. Swift
+                // 6.0's targeted-concurrency checker still treats the continuation
+                // closure as a send boundary, so make that ownership transfer
+                // explicit just as the other continuous-batching runtimes do.
+                let initialLogitsBox = RuntimeUncheckedSendable(initialLogits)
+                let targetCachesBox = RuntimeUncheckedSendable(caches)
+                let draftCachesBox = RuntimeUncheckedSendable(dflashCache)
+                let modelBox = RuntimeUncheckedSendable(model)
+                let dflashBox = RuntimeUncheckedSendable(dflash)
                 return try await withTaskCancellationHandler {
                     try await withCheckedThrowingContinuation { continuation in
                         enqueueDFlashDecodeRow(
                             LagunaDFlashBatchedDecodeRow(
                                 id: rowID,
-                                logits: initialLogits,
-                                targetCaches: caches,
-                                draftCaches: dflashCache,
+                                logits: initialLogitsBox.value,
+                                targetCaches: targetCachesBox.value,
+                                draftCaches: draftCachesBox.value,
                                 eosTokens: eosTokens,
                                 generationConfig: generationConfig,
                                 tokenBudget: tokenBudget,
@@ -668,8 +677,8 @@ public actor LagunaGenerator: ChatGenerator {
                                 progressHandler: progressHandler,
                                 continuation: continuation
                             ),
-                            model: model,
-                            dflash: dflash,
+                            model: modelBox.value,
+                            dflash: dflashBox.value,
                             tokenizerAndTemplate: tokenizerAndTemplate
                         )
                     }
@@ -743,13 +752,16 @@ public actor LagunaGenerator: ChatGenerator {
         }
 
         let rowID = UUID()
+        let initialLogitsBox = RuntimeUncheckedSendable(initialLogits)
+        let cachesBox = RuntimeUncheckedSendable(caches)
+        let modelBox = RuntimeUncheckedSendable(model)
         return try await withTaskCancellationHandler {
             try await withCheckedThrowingContinuation { continuation in
                 enqueueDecodeRow(
                     LagunaBatchedDecodeRow(
                         id: rowID,
-                        logits: initialLogits,
-                        caches: caches,
+                        logits: initialLogitsBox.value,
+                        caches: cachesBox.value,
                         eosTokens: eosTokens,
                         generationConfig: generationConfig,
                         tokenBudget: tokenBudget,
@@ -757,7 +769,7 @@ public actor LagunaGenerator: ChatGenerator {
                         progressHandler: progressHandler,
                         continuation: continuation
                     ),
-                    model: model,
+                    model: modelBox.value,
                     tokenizerAndTemplate: tokenizerAndTemplate
                 )
             }
