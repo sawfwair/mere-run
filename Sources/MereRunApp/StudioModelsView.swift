@@ -198,6 +198,7 @@ enum StudioModelInventoryParser {
 
 struct StudioModelsSheet: View {
     @EnvironmentObject private var controller: MereRunController
+    @EnvironmentObject private var library: StudioLibraryStore
     @Environment(\.dismiss) private var dismiss
 
     let onModelsChanged: () -> Void
@@ -224,6 +225,7 @@ struct StudioModelsSheet: View {
     @State private var runtimeTopP = ""
     @State private var runtimeMinP = ""
     @State private var runtimePinned = false
+    @State private var showHealth = false
 
     private var installedRows: [StudioModelInventoryRow] {
         rows.filter(\.isInstalled)
@@ -302,6 +304,11 @@ struct StudioModelsSheet: View {
                 )
             }
         }
+        .sheet(isPresented: $showHealth) {
+            StudioModelHealthSheet(onModelsChanged: onModelsChanged)
+                .environmentObject(controller)
+                .environmentObject(library)
+        }
     }
 
     private var header: some View {
@@ -340,6 +347,14 @@ struct StudioModelsSheet: View {
             .buttonStyle(.bordered)
             .disabled(isRefreshing || isCleaningStorage)
             .help("Preview unreferenced payloads and partial downloads before deleting them")
+
+            Button {
+                showHealth = true
+            } label: {
+                Label("Health", systemImage: "checkmark.shield")
+            }
+            .buttonStyle(.bordered)
+            .help("Audit manifests and run installed-model quality gates")
 
             Button {
                 Task { await refresh() }

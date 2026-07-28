@@ -409,12 +409,29 @@ It identifies every connected device and reports concrete blockers such as a
 legacy worker, fleet policy, busy state, contract or worker version, missing
 node kind or model, accelerator backend or memory, and available disk.
 
-The macOS Studio app exposes these durable run controls in Advanced →
-Operations, including local/remote listing, inspection, event watching,
-verified fetch, cancellation, and immutable Relay retry. Graph authoring opens
-the canonical Graph Studio product, while device pairing and fleet policy open
-the Node/Relay console; the macOS inference app does not keep parallel graph or
-fleet schemas.
+The macOS Studio app exposes a top-level **Runs & Operations** workspace. It
+discovers local run folders and structured reports, lists recent Relay jobs,
+polls inspection state, shows artifact inventories, reveals local runs, and
+offers verified fetch, cancellation, and immutable Relay retry. The Advanced
+forms remain available for raw arguments and JSON streaming.
+
+Relay profile setup and device authorization also stay on the public
+`executor add relay`, `executor auth-status`, and `executor login` contracts.
+Studio streams the CLI's approval URL, opens it after the user chooses **Sign
+In**, and never reads or stores bearer credentials itself.
+
+The ownership boundary is deliberate:
+
+| Studio owns | Relay and its Node app own |
+| --- | --- |
+| Creator-facing local and Relay run inbox | Account-scoped scheduling and durable control-plane state |
+| Run inspection, artifact fetch, cancel, retry | Node identity, eligibility, leases, placement, and retries |
+| Local executor profile selection and run destinations | Worker lifecycle, hardware/runtime telemetry, model inventory and distribution |
+| Links into the fleet console | Fleet policy, draining, priority, device revocation, and inventory refresh |
+
+Graph authoring opens the canonical Graph Studio product, while device pairing
+and fleet policy open the Relay console. Studio consumes public CLI contracts
+and does not keep parallel graph, fleet, node, or scheduling schemas.
 
 ## Schemas
 

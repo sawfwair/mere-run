@@ -789,6 +789,34 @@ final class MereRunControllerTests: XCTestCase {
         XCTAssertTrue(controller.isRunning)
         XCTAssertEqual(controller.lastOutputURL?.path, output.path)
     }
+
+    func testUtilityCommandCanStreamProgressWhileStillReturningCapturedOutput() async {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        var streamed: [String] = []
+
+        let pending = Task {
+            await controller.utilityCommandResult(
+                args: ["executor", "login", "relay:fleet", "--json"],
+                onOutput: { streamed.append($0) }
+            )
+        }
+        while runner.starts.isEmpty {
+            await Task.yield()
+        }
+        XCTAssertEqual(runner.starts.count, 1)
+
+        runner.starts[0].stderr("Open https://relay.example/device and enter code MERE-42.\n")
+        runner.starts[0].stdout(#"{"executor":"relay:fleet"}"#)
+        runner.starts[0].termination(0)
+        let result = await pending.value
+        await Task.yield()
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(result.stdout.contains("relay:fleet"))
+        XCTAssertTrue(streamed.joined().contains("https://relay.example/device"))
+    }
 }
 
 private func supportedCapabilitiesOutput(for modelID: String, minimum: Int) -> String {

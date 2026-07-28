@@ -2345,7 +2345,12 @@ Write missing `mererun_model.json` manifests for known local model roots.
 ```bash
 swift run mere.run model repair-manifests
 swift run mere.run model repair-manifests --dry-run
+swift run mere.run model repair-manifests --dry-run --json
 ```
+
+`--json` returns the operation mode, healthy/proposed-or-completed/skipped
+counts, and one typed status entry per known model. Combine it with `--dry-run`
+for a non-mutating repair preview suitable for Studio and other thin clients.
 
 ### `mere.run api serve`
 

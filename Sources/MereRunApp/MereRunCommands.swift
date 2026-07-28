@@ -10,6 +10,8 @@ struct MereRunCommands: Commands {
     @FocusedValue(\.showLibrary) private var showLibrary: Binding<Bool>?
     @FocusedValue(\.showAdvanced) private var showAdvanced: Binding<Bool>?
     @FocusedValue(\.showModels) private var showModels: Binding<Bool>?
+    @FocusedValue(\.showOperations) private var showOperations: Binding<Bool>?
+    @FocusedValue(\.showPlugins) private var showPlugins: Binding<Bool>?
 
     var body: some Commands {
         // Single-window studio: remove the default "New" item rather than spawn windows.
@@ -22,7 +24,8 @@ struct MereRunCommands: Commands {
         // View toggles act on whichever Studio window is key (via focused scene values). When no
         // Studio window holds focus all three are nil, so the group (and its divider) stay empty.
         CommandGroup(after: .sidebar) {
-            if showLibrary != nil || showAdvanced != nil || showModels != nil {
+            if showLibrary != nil || showAdvanced != nil || showModels != nil
+                || showOperations != nil || showPlugins != nil {
                 if let showLibrary {
                     Toggle("Show Library", isOn: showLibrary)
                         .keyboardShortcut("l", modifiers: [.command, .control])
@@ -34,6 +37,14 @@ struct MereRunCommands: Commands {
                 if let showModels {
                     Button("Browse Models…") { showModels.wrappedValue = true }
                         .keyboardShortcut("m", modifiers: [.command, .shift])
+                }
+                if let showOperations {
+                    Button("Runs & Operations…") { showOperations.wrappedValue = true }
+                        .keyboardShortcut("r", modifiers: [.command, .control])
+                }
+                if let showPlugins {
+                    Button("Plugins…") { showPlugins.wrappedValue = true }
+                        .keyboardShortcut("p", modifiers: [.command, .shift])
                 }
                 Divider()
             }

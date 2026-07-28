@@ -1820,7 +1820,8 @@ public enum MereRunCapabilityCatalog {
         title: "Repair manifests",
         summary: "Restore missing manifests for known local models.",
         options: [
-            .init(flag: "--dry-run", label: "Dry run", kind: .boolean)
+            .init(flag: "--dry-run", label: "Dry run", kind: .boolean),
+            .init(flag: "--json", label: "JSON", kind: .boolean)
         ],
         output: .init(kind: .text)
     )

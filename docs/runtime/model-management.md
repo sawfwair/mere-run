@@ -177,8 +177,23 @@ install links, or `--force --json` for structured automation.
 
 ### `mere.run model repair-manifests`
 
-Repairs manifest metadata in the local store when that metadata is missing or
-stale.
+Repairs missing manifest metadata for known models in the local store. Preview
+the exact writes and consume a typed report with:
+
+```bash
+mere.run model repair-manifests --dry-run --json
+mere.run model repair-manifests --json
+```
+
+The report identifies healthy manifests, proposed or completed writes, absent
+model directories, and write errors without treating models that were never
+installed as damaged.
+
+In macOS Studio, open **Models → Health**. The workspace presents the structured
+manifest audit, confirms repair before writing, and runs `mere.run gate` suites
+as durable Library jobs. Correctness suites can be selected independently,
+strict performance thresholds are opt-in, and baseline replacement requires a
+separate warning confirmation. Every gate writes a JSON report.
 
 ### `mere.run model runtime`
 

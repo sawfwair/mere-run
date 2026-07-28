@@ -972,7 +972,8 @@ final class MereRunController: ObservableObject {
     func utilityCommandResult(
         args: [String],
         masksSecrets: Bool = true,
-        environmentOverrides: [String: String] = [:]
+        environmentOverrides: [String: String] = [:],
+        onOutput: (@MainActor @Sendable (String) -> Void)? = nil
     ) async -> MereRunUtilityCommandResult {
         let launch = cliResolve(cliPath)
         let cliArgs: [String]
@@ -996,8 +997,18 @@ final class MereRunController: ObservableObject {
                         environmentDraft: CommandDraft(),
                         environmentOverrides: environmentOverrides
                     ),
-                    stdout: { text in output.append(text) },
-                    stderr: { text in errors.append(text) },
+                    stdout: { text in
+                        output.append(text)
+                        if let onOutput {
+                            Task { @MainActor in onOutput(text) }
+                        }
+                    },
+                    stderr: { text in
+                        errors.append(text)
+                        if let onOutput {
+                            Task { @MainActor in onOutput(text) }
+                        }
+                    },
                     termination: { [weak self] code in
                         let result = MereRunUtilityCommandResult(
                             commandPreview: display,

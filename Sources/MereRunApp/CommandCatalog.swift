@@ -933,6 +933,9 @@ struct CommandTemplate: Identifiable, Equatable {
             draft.port = 8081
         case .adapterList:
             draft.json = true
+        case .modelRepairManifests:
+            draft.force = true
+            draft.json = true
         case .runList:
             draft.json = true
         case .runInspect, .runFetch, .runCancel, .runRetry:
@@ -1308,6 +1311,7 @@ struct CommandTemplate: Identifiable, Equatable {
         case .modelRepairManifests:
             args = ["model", "repair-manifests"]
             if draft.force { args.append("--dry-run") }
+            if draft.json { args.append("--json") }
 
         case .imageGenerate:
             args = ["image", "generate", "--prompt", draft.prompt, "--output", draft.outputPath]

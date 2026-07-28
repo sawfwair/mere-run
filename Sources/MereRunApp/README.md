@@ -68,13 +68,23 @@ It renders face/pose overlays and dense optical-flow vectors, plays live trackin
 and depth review videos, embeds geometry point clouds, and preserves every JSON,
 EXR, mask, camera, and 3D sidecar as a durable Library artifact.
 
-Operations covers the verified adapter catalog, durable local/SSH/Relay run
-listing and lifecycle, DreamX/Cosmos3 world sessions, server status, installed
-model quality gates, physical model storage and safe garbage collection, and
-typed per-model runtime policy. Server credentials are passed through
-`MERERUN_API_KEY`, not process arguments. Visual Graph v2 authoring and fleet
-policy stay in their canonical products: the app links directly to Graph
-Studio and the Node/Relay console instead of reimplementing those surfaces.
+Runs & Operations is a top-level first-class destination over the public
+`executor` and `run` contracts. It discovers local durable reports, lists Relay
+jobs, polls typed inspection state, shows artifact inventories, reveals local
+runs, and exposes verified fetch, cancellation, and immutable Relay retry.
+Client-side Relay profile setup and device sign-in also go through the CLI;
+Studio streams the approval URL but never handles the credential itself.
+Studio owns the creator's run inbox; Relay remains the control plane for node
+identity, placement, scheduling policy, model distribution, worker lifecycle,
+and fleet telemetry. The app links to the Relay console instead of copying
+those schemas or controls.
+
+Models includes a dedicated Health & Repair workspace. Manifest audit is a
+structured dry run, repair requires confirmation and writes only missing known
+manifests, and installed-model correctness/performance gates run as durable
+Library jobs with JSON reports. Existing model browsing, storage cleanup, and
+runtime policy remain in the Models and Serving destinations rather than being
+duplicated.
 
 Serving is also a top-level first-class destination. **Serving & Agents**
 owns API preflight/start/stop/restart, external-server reconnection, LAN/auth
@@ -94,7 +104,13 @@ metadata, and durable artifacts. The packaged app and embedded CLI carry the
 microphone usage description and audio-input entitlement required by those
 capture paths.
 
-Models, Setup, plugins, Qwen3.6 MTP and Laguna DFlash benchmarks,
+Plugins is also a top-level catalog workspace. It consumes the CLI's enriched
+plugin snapshot, shows installed path/version and manifest verification, offers
+channel selection and copyable pinned install commands, confirms install or
+update, and runs the plugin's fixed doctor verb. Plugin implementations remain
+out-of-process.
+
+Setup, Qwen3.6 MTP and Laguna DFlash benchmarks,
 API serving, and Open WebUI also use contract-backed typed forms. Laguna is
 available as a managed chat/API engine, while Chat and Code expose min-p and
 the runtime-policy editors can persist or clear it. The run console recognizes

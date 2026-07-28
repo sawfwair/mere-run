@@ -15,6 +15,8 @@ struct StudioRootView: View {
     @State private var showOptions = false
     @State private var showModels = false
     @State private var showServing = false
+    @State private var showOperations = false
+    @State private var showPlugins = false
     @State private var showAdapters = false
     @State private var showRealtimeMusic = false
     @State private var showSCAIL = false
@@ -154,6 +156,8 @@ struct StudioRootView: View {
                         mode: $mode,
                         modeCapabilities: modeCapabilities,
                         onShowServing: { showServing = true },
+                        onShowOperations: { showOperations = true },
+                        onShowPlugins: { showPlugins = true },
                         onShowModels: { showModels = true },
                         onShowHelp: { showHelp = true }
                     )
@@ -204,6 +208,8 @@ struct StudioRootView: View {
             serverStatus: controller.serverStatus,
             resolvedCLI: controller.resolvedCLI,
             onShowServing: { showServing = true },
+            onShowOperations: { showOperations = true },
+            onShowPlugins: { showPlugins = true },
             onShowModels: { showModels = true },
             onShowHelp: { showHelp = true }
         )
@@ -454,12 +460,21 @@ struct StudioRootView: View {
                     .environmentObject(controller)
                     .environmentObject(library)
             }
+            .sheet(isPresented: $showOperations) {
+                StudioOperationsCenterSheet()
+                    .environmentObject(controller)
+            }
+            .sheet(isPresented: $showPlugins) {
+                StudioPluginsSheet()
+                    .environmentObject(controller)
+            }
             .sheet(isPresented: $showModels) {
                 StudioModelsSheet(onModelsChanged: {
                     refreshReadiness()
                     refreshInstalledModels()
                 })
                 .environmentObject(controller)
+                .environmentObject(library)
             }
             .sheet(isPresented: $showAdapters) {
                 StudioAdaptersSheet(
@@ -593,6 +608,8 @@ struct StudioRootView: View {
             .focusedSceneValue(\.showLibrary, visibleLibraryBinding)
             .focusedSceneValue(\.showAdvanced, $showAdvanced)
             .focusedSceneValue(\.showModels, $showModels)
+            .focusedSceneValue(\.showOperations, $showOperations)
+            .focusedSceneValue(\.showPlugins, $showPlugins)
     }
 
     private var lifecycleShell: some View {

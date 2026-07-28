@@ -10,6 +10,8 @@ struct StudioSidebar: View {
     let serverStatus: StudioServerStatus?
     let resolvedCLI: String
     let onShowServing: () -> Void
+    let onShowOperations: () -> Void
+    let onShowPlugins: () -> Void
     let onShowModels: () -> Void
     let onShowHelp: () -> Void
 
@@ -103,6 +105,22 @@ struct StudioSidebar: View {
             .help("Operate serving, models, resources, agents, and clients (⇧⌘S)")
 
             HStack(spacing: 8) {
+                Button(action: onShowOperations) {
+                    Label("Runs", systemImage: "list.bullet.rectangle.portrait")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.mereSecondary)
+                .help("Open Runs & Operations (⌃⌘R)")
+
+                Button(action: onShowPlugins) {
+                    Label("Plugins", systemImage: "puzzlepiece.extension")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.mereSecondary)
+                .help("Discover and manage plugins (⇧⌘P)")
+            }
+
+            HStack(spacing: 8) {
                 Button(action: onShowModels) {
                     Label("Models", systemImage: "shippingbox")
                         .frame(maxWidth: .infinity)
@@ -190,6 +208,8 @@ struct StudioSidebarRail: View {
     @Binding var mode: StudioMode
     let modeCapabilities: [StudioMode: StudioModelCapability]
     let onShowServing: () -> Void
+    let onShowOperations: () -> Void
+    let onShowPlugins: () -> Void
     let onShowModels: () -> Void
     let onShowHelp: () -> Void
 
@@ -244,6 +264,8 @@ struct StudioSidebarRail: View {
 
             VStack(spacing: 4) {
                 railAction(system: "network", help: "Serving & Agents (⇧⌘S)", label: "Serving & Agents", action: onShowServing)
+                railAction(system: "list.bullet.rectangle.portrait", help: "Runs & Operations (⌃⌘R)", label: "Runs & Operations", action: onShowOperations)
+                railAction(system: "puzzlepiece.extension", help: "Plugins (⇧⌘P)", label: "Plugins", action: onShowPlugins)
                 railAction(system: "shippingbox", help: "Models (⇧⌘M)", label: "Models", action: onShowModels)
                 railAction(system: "questionmark.circle", help: "Guide", label: "Guide", action: onShowHelp)
             }

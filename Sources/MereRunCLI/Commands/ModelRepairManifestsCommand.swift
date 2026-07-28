@@ -11,65 +11,149 @@ struct ModelRepairManifests: ParsableCommand {
     @Flag(name: [.long], help: "Print what would change without writing files.")
     var dryRun: Bool = false
 
-    func run() throws {
-        let fm = FileManager.default
+    @Flag(name: [.long], help: "Emit a structured JSON repair report.")
+    var json: Bool = false
 
+    func run() throws {
         let modelDirs = resolveCandidateModelDirs()
-        if modelDirs.isEmpty {
+        guard !modelDirs.isEmpty else {
             throw ValidationError("Could not locate any model directories to repair.")
         }
 
-        var wroteCount = 0
-        var alreadyCount = 0
-        var skippedCount = 0
+        let report = makeReport(modelDirs: modelDirs)
+        if json {
+            print(try StructuredRunOutput.encode(report))
+            return
+        }
 
-        for modelId in ModelResolver.ModelID.allCases {
-            var foundAnyModel = false
-            for modelsDir in modelDirs {
-                let modelRoot = modelsDir.appendingPathComponent(modelId.rawValue, isDirectory: true)
-                var isDir: ObjCBool = false
-                guard fm.fileExists(atPath: modelRoot.path, isDirectory: &isDir), isDir.boolValue else {
-                    continue
-                }
-                foundAnyModel = true
-
-                let manifestURL = MereRunModelManifest.url(in: modelRoot)
-                if fm.fileExists(atPath: manifestURL.path) {
-                    alreadyCount += 1
-                    print("[ok] \(modelId.rawValue): \(manifestURL.path)")
-                    continue
-                }
-
-                if dryRun {
-                    wroteCount += 1
-                    print("[dry-run] would write \(modelId.rawValue) -> \(manifestURL.path)")
-                    continue
-                }
-
-                do {
-                    _ = try MereRunModelManifest.writeTemplateIfKnown(modelId: modelId.rawValue, to: modelRoot)
-                    wroteCount += 1
-                    print("[wrote] \(modelId.rawValue): \(manifestURL.path)")
-                } catch {
-                    skippedCount += 1
-                    print("[skip] \(modelId.rawValue): \(error.localizedDescription)")
-                }
-            }
-
-            if !foundAnyModel {
-                skippedCount += 1
-                print("[skip] \(modelId.rawValue): model directory not found")
+        for entry in report.entries {
+            switch entry.status {
+            case .ok:
+                print("[ok] \(entry.modelID): \(entry.path ?? "")")
+            case .wouldWrite:
+                print("[dry-run] would write \(entry.modelID) -> \(entry.path ?? "")")
+            case .wrote:
+                print("[wrote] \(entry.modelID): \(entry.path ?? "")")
+            case .skipped:
+                print("[skip] \(entry.modelID): \(entry.message ?? "unknown error")")
             }
         }
 
         print("")
-        print("Summary: wrote=\(wroteCount) already=\(alreadyCount) skipped=\(skippedCount)")
+        print(
+            "Summary: wrote=\(report.wroteCount) already=\(report.alreadyCount) "
+                + "skipped=\(report.skippedCount)"
+        )
         if dryRun {
             print("Run again without `--dry-run` to apply.")
         }
     }
 
+    func makeReport(
+        modelDirs: [URL],
+        fileManager: FileManager = .default
+    ) -> ModelRepairManifestsReport {
+        var entries: [ModelRepairManifestEntry] = []
+
+        for modelID in ModelResolver.ModelID.allCases {
+            var foundAnyModel = false
+            for modelsDir in modelDirs {
+                let modelRoot = modelsDir.appendingPathComponent(modelID.rawValue, isDirectory: true)
+                var isDirectory: ObjCBool = false
+                guard fileManager.fileExists(atPath: modelRoot.path, isDirectory: &isDirectory),
+                      isDirectory.boolValue else {
+                    continue
+                }
+                foundAnyModel = true
+
+                let manifestURL = MereRunModelManifest.url(in: modelRoot)
+                if fileManager.fileExists(atPath: manifestURL.path) {
+                    entries.append(.init(modelID: modelID.rawValue, status: .ok, path: manifestURL.path))
+                    continue
+                }
+                if dryRun {
+                    entries.append(.init(modelID: modelID.rawValue, status: .wouldWrite, path: manifestURL.path))
+                    continue
+                }
+                do {
+                    _ = try MereRunModelManifest.writeTemplateIfKnown(
+                        modelId: modelID.rawValue,
+                        to: modelRoot
+                    )
+                    entries.append(.init(modelID: modelID.rawValue, status: .wrote, path: manifestURL.path))
+                } catch {
+                    entries.append(
+                        .init(
+                            modelID: modelID.rawValue,
+                            status: .skipped,
+                            path: manifestURL.path,
+                            message: error.localizedDescription
+                        )
+                    )
+                }
+            }
+
+            if !foundAnyModel {
+                entries.append(
+                    .init(modelID: modelID.rawValue, status: .skipped, message: "model directory not found")
+                )
+            }
+        }
+
+        return ModelRepairManifestsReport(
+            mode: dryRun ? "preview" : "apply",
+            wroteCount: entries.filter { $0.status == .wouldWrite || $0.status == .wrote }.count,
+            alreadyCount: entries.filter { $0.status == .ok }.count,
+            skippedCount: entries.filter { $0.status == .skipped }.count,
+            entries: entries
+        )
+    }
+
     private func resolveCandidateModelDirs() -> [URL] {
         [MereRunModelPaths.modelsDir]
+    }
+}
+
+struct ModelRepairManifestsReport: Codable, Equatable {
+    let mode: String
+    let wroteCount: Int
+    let alreadyCount: Int
+    let skippedCount: Int
+    let entries: [ModelRepairManifestEntry]
+
+    enum CodingKeys: String, CodingKey {
+        case mode
+        case wroteCount = "wrote_count"
+        case alreadyCount = "already_count"
+        case skippedCount = "skipped_count"
+        case entries
+    }
+}
+
+struct ModelRepairManifestEntry: Codable, Equatable {
+    enum Status: String, Codable {
+        case ok
+        case wouldWrite = "would_write"
+        case wrote
+        case skipped
+    }
+
+    let modelID: String
+    let status: Status
+    let path: String?
+    let message: String?
+
+    init(modelID: String, status: Status, path: String? = nil, message: String? = nil) {
+        self.modelID = modelID
+        self.status = status
+        self.path = path
+        self.message = message
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case modelID = "model_id"
+        case status
+        case path
+        case message
     }
 }
