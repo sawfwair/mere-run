@@ -95,6 +95,13 @@ done < <(find Sources -type d | sort)
 
 dynamic_boundary_files=(
   "Sources/AudioSTT/Qwen3ASR/Qwen3ASRTokenizer.swift"
+  # Studio artifact explorers deliberately accept polymorphic manifests/results from saved
+  # runs. Voice Studio is included because AVAudioRecorder's settings API requires [String: Any].
+  "Sources/MereRunApp/Studio3DCreationView.swift"
+  "Sources/MereRunApp/StudioMusicToolsView.swift"
+  "Sources/MereRunApp/StudioTrainingView.swift"
+  "Sources/MereRunApp/StudioUtilityLabView.swift"
+  "Sources/MereRunApp/StudioVoiceView.swift"
   "Sources/MereRunCLI/Support/ResumeLoRABootstrap.swift"
   "Sources/MereRunCore/Asset3D/MeshGLBWriter.swift"
   "Sources/MereRunCore/FalconPerception/FalconPerceptionTokenizer.swift"

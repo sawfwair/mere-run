@@ -25,6 +25,15 @@ place the hits in sync with what is on screen.
 - `sfx-woosh-vflow-8s`
 - `sfx-mmaudio-large-44k-v2`
 
+## macOS SFX Lab
+
+The Sound FX workspace opens **SFX Lab**, a dedicated surface for all six
+command families. It provides text generation and video-synchronized Foley,
+renoise and negative-conditioning controls, text-conditioning export, Woosh-AE
+encode/decode, and CLAP prompt/audio scoring. Generated audio and source video
+are reviewable in place; encoded NPY results show their dtype, shape, NumPy
+version, layout, and size. Progress and every output remain durable in Library.
+
 ## Guides
 
 ```bash

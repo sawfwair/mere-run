@@ -35,6 +35,12 @@ preflight, immutable output directories, manifest statistics, and embedded
 orbitable GLB/OBJ/PLY previews. Progress and every mesh, texture, voxel, and
 manifest artifact remain in Library.
 
+Create Image's **Training** button opens the unified Training Studio with
+image-caption previews, Krea/Klein recipes, memory and schedule controls,
+preflight, launch/resume, live loss charts, samples, checkpoints, history, and
+run comparison. **Utilities** opens deterministic validation, dataset discovery
+candidate cards, and saved-plan preflight/materialization with durable paths.
+
 Advanced → Image also exposes the entire public family as guided forms:
 
 - generation/editing with repeatable references, structured prompts, and LoRAs;
@@ -144,11 +150,17 @@ Core `train-lora` hyperparameters and their defaults:
 - `--rank`: LoRA rank; default `16`
 - `--alpha`: LoRA alpha; defaults to the rank
 - `--seed`: random seed; defaults to wall-clock time when omitted or zero
+- `--resume-from`: continue a FLUX.2 Klein run from a saved adapter checkpoint
 
 `--recipe` presets set curated values for steps, learning rate, rank, and
 alpha; an explicit flag always wins over the recipe. `swift run mere.run image
 train-lora --help` and the [CLI Reference](../cli.md) list the full flag
 surface.
+
+Klein resume restores the selected adapter checkpoint before the next optimizer
+step. Krea 2 rejects `--resume-from` explicitly rather than silently starting a
+new run. Training Studio discovers checkpoint artifacts beside a prior output
+and sends the same public flag.
 
 ```bash
 swift run mere.run model pull image-klein-base-9b --accept-model-license

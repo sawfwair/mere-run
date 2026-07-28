@@ -142,33 +142,75 @@ struct MusicTrainAdapter: AsyncParsableCommand {
             textEncoderResources: resources.textEncoderResources
         )
         let outputURL = ACEStepCLIHelper.resolveUserPath(output)
-        let report = try pipeline.trainAdapter(
-            examples: examples,
-            configuration: .init(
-                kind: kind,
-                rank: rank,
-                alpha: alpha,
-                factor: factor,
-                trainingSteps: steps,
-                learningRate: learningRate,
-                weightDecay: weightDecay,
-                seed: seed
-            ),
-            outputURL: outputURL
-        ) { progress in
-            if progress.step == 1
-                || progress.step == progress.totalSteps
-                || progress.step.isMultiple(of: logEvery)
-            {
-                CLIStderr.write(
-                    String(
-                        format: "ACE-Step adapter step %d/%d loss=%.6f\n",
-                        progress.step,
-                        progress.totalSteps,
-                        progress.loss
-                    )
+        let eventLogger = try LoRATrainingEventLogger(baseOutputURL: outputURL)
+        try eventLogger.record(
+            type: "run_started",
+            stage: "training",
+            message: "ACE-Step \(kind.rawValue) training started.",
+            step: 0,
+            totalSteps: steps,
+            fraction: 0,
+            path: outputURL.path,
+            metadata: ["dataset": manifestURL.path, "model": model]
+        )
+        let report: ACEStepAdapterTrainingReport
+        do {
+            report = try pipeline.trainAdapter(
+                examples: examples,
+                configuration: .init(
+                    kind: kind,
+                    rank: rank,
+                    alpha: alpha,
+                    factor: factor,
+                    trainingSteps: steps,
+                    learningRate: learningRate,
+                    weightDecay: weightDecay,
+                    seed: seed
+                ),
+                outputURL: outputURL
+            ) { progress in
+                try? eventLogger.record(
+                    type: "progress",
+                    stage: "training",
+                    step: progress.step,
+                    totalSteps: progress.totalSteps,
+                    loss: progress.loss,
+                    fraction: Float(progress.step) / Float(max(progress.totalSteps, 1)),
+                    path: outputURL.path
                 )
+                if progress.step == 1
+                    || progress.step == progress.totalSteps
+                    || progress.step.isMultiple(of: logEvery)
+                {
+                    CLIStderr.write(
+                        String(
+                            format: "ACE-Step adapter step %d/%d loss=%.6f\n",
+                            progress.step,
+                            progress.totalSteps,
+                            progress.loss
+                        )
+                    )
+                }
             }
+            try eventLogger.record(
+                type: "run_finished",
+                stage: "finished",
+                message: "ACE-Step adapter training finished.",
+                step: steps,
+                totalSteps: steps,
+                loss: report.finalLoss,
+                fraction: 1,
+                path: outputURL.path,
+                metadata: ["sha256": report.outputSHA256]
+            )
+        } catch {
+            try? eventLogger.record(
+                type: "run_failed",
+                stage: "failed",
+                message: error.localizedDescription,
+                path: outputURL.path
+            )
+            throw error
         }
         CLIStderr.write(
             String(

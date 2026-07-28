@@ -19,6 +19,17 @@ struct StudioRootView: View {
     @State private var showSCAIL = false
     @State private var show3DCreation = false
     @State private var showVisionLab = false
+    @State private var showVoiceStudio = false
+    @State private var voiceTask: StudioVoiceTask = .synthesize
+    @State private var showSFXLab = false
+    @State private var showTraining = false
+    @State private var trainingKind: StudioTrainingKind = .image
+    @State private var showMusicTools = false
+    @State private var musicTool: StudioMusicTool = .analyze
+    @State private var openTrainingAfterMusicTools = false
+    @State private var openRealtimeAfterMusicTools = false
+    @State private var showUtilityLab = false
+    @State private var utilityTask: StudioUtilityTask = .embeddings
     @State private var showHelp = false
     @State private var advancedWidth: CGFloat = 560
     @State private var advancedDragStartWidth: CGFloat?
@@ -472,6 +483,48 @@ struct StudioRootView: View {
                     .environmentObject(controller)
                     .environmentObject(library)
             }
+            .sheet(isPresented: $showVoiceStudio) {
+                StudioVoiceSheet(initialTask: voiceTask, initialDraft: draft)
+                    .environmentObject(controller)
+                    .environmentObject(library)
+            }
+            .sheet(isPresented: $showSFXLab) {
+                StudioSFXLabSheet(initialTask: .generate, initialDraft: draft)
+                    .environmentObject(controller)
+                    .environmentObject(library)
+            }
+            .sheet(isPresented: $showTraining) {
+                StudioTrainingSheet(initialKind: trainingKind)
+                    .environmentObject(controller)
+                    .environmentObject(library)
+            }
+            .sheet(isPresented: $showMusicTools, onDismiss: {
+                if openTrainingAfterMusicTools {
+                    openTrainingAfterMusicTools = false
+                    trainingKind = .music
+                    showTraining = true
+                } else if openRealtimeAfterMusicTools {
+                    openRealtimeAfterMusicTools = false
+                    showRealtimeMusic = true
+                }
+            }) {
+                StudioMusicToolsSheet(
+                    initialTool: musicTool,
+                    onOpenTraining: {
+                        openTrainingAfterMusicTools = true
+                    },
+                    onOpenRealtime: {
+                        openRealtimeAfterMusicTools = true
+                    }
+                )
+                .environmentObject(controller)
+                .environmentObject(library)
+            }
+            .sheet(isPresented: $showUtilityLab) {
+                StudioUtilityLabSheet(initialTask: utilityTask)
+                    .environmentObject(controller)
+                    .environmentObject(library)
+            }
             .sheet(isPresented: $showWelcome) {
                 StudioWelcomeSheet(
                     resolvedCLI: controller.resolvedCLI,
@@ -750,6 +803,70 @@ struct StudioRootView: View {
                 .buttonStyle(.bordered)
                 .controlSize(.small)
                 .help("Open first-class SCAIL subject animation")
+            }
+
+            if mode == .speak || mode == .listen {
+                Button {
+                    voiceTask = mode == .listen ? .transcribe : .synthesize
+                    showVoiceStudio = true
+                } label: {
+                    Label("Voice Studio", systemImage: "waveform.badge.mic")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("Open synthesis, voice cloning, profiles, recording, and transcription")
+            }
+
+            if mode == .sfx {
+                Button {
+                    showSFXLab = true
+                } label: {
+                    Label("SFX Lab", systemImage: "waveform.badge.plus")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("Open generation, video Foley, conditioning, codec, and CLAP tools")
+            }
+
+            if mode == .music {
+                Button {
+                    musicTool = .analyze
+                    showMusicTools = true
+                } label: {
+                    Label("Music Tools", systemImage: "music.note.list")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("Open analysis, MIDI transcription, resident serving, and adapter training")
+            }
+
+            if mode == .createImage || mode == .chat || mode == .code {
+                Button {
+                    trainingKind = mode == .createImage ? .image : .text
+                    showTraining = true
+                } label: {
+                    Label("Training", systemImage: "chart.xyaxis.line")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("Open the first-class image, text, and music Training Studio")
+            }
+
+            if mode == .createImage || mode == .chat {
+                Button {
+                    utilityTask = mode == .createImage ? .imageValidation : .embeddings
+                    showUtilityLab = true
+                } label: {
+                    Label("Utilities", systemImage: "wrench.and.screwdriver")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("Explore embeddings, PII redaction, validation, datasets, and saved plans")
             }
 
             if mode == .createImage {
@@ -1059,13 +1176,18 @@ struct StudioRootView: View {
     }
 
     private func openAdvancedTraining(_ templateID: CommandTemplateID) {
-        showAdvanced = true
-        Task { @MainActor in
-            await Task.yield()
-            if let template = CommandCatalog.template(id: templateID) {
-                controller.select(template)
-            }
+        switch templateID {
+        case .imageTrainLoRA:
+            trainingKind = .image
+        case .textTrainLoRA:
+            trainingKind = .text
+        case .musicTrainAdapter:
+            trainingKind = .music
+        default:
+            showAdvanced = true
+            return
         }
+        showTraining = true
     }
 
     private func freshDraft(for mode: StudioMode) -> StudioDraft {

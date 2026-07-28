@@ -22,10 +22,13 @@ The macOS app compiles against the same `MereRunContract` emitted by
 `mere.run catalog --json`. Chat's Options panel exposes text versus constrained
 `json_object` output, model-default/show/disable reasoning, context and sampling
 controls, KV quantization, a catalog adapter id or local LoRA file, tool
-permissions, preflight, and installed-model enforcement. The Advanced surface
-adds guided Code, Embeddings, Anonymize, and native Text LoRA Training forms;
-the generated flags are checked against the public ArgumentParser command help
-in the repository gate.
+permissions, preflight, and installed-model enforcement. **Utilities** turns
+Embeddings into a vector explorer with dimensions, norms, previews, and cosine
+similarity, and turns Anonymize into original/protected text review with labeled
+PII spans. **Training** opens a text-dataset preview, preflight, live metrics,
+artifact, history, and comparison workspace for native LoRA. Advanced retains
+guided raw forms; every generated flag is checked against public ArgumentParser
+help in the repository gate.
 
 ## Model families
 

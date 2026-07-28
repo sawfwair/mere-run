@@ -457,6 +457,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--base-quantization-bits", label: "Base quantization", kind: .choice, choices: ["4", "8"]),
             .init(flag: "--exclude-preview-images", label: "Exclude preview images", kind: .boolean),
             .init(flag: "--checkpoint-interval", label: "Checkpoint interval", kind: .integer),
+            .init(flag: "--resume-from", label: "Resume checkpoint", kind: .file),
             .init(flag: "--max-resolution", label: "Max resolution", kind: .integer),
             .init(flag: "--progressive", label: "Progressive resolution", kind: .boolean),
             .init(flag: "--low-ram", label: "Low RAM", kind: .boolean),

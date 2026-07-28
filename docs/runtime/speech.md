@@ -28,6 +28,19 @@ machine in either direction.
 - `speech-asr-qwen3`
 - `speech-asr-parakeet`
 
+## macOS Voice Studio
+
+The Speak and Listen workspaces expose **Voice Studio** as the purpose-built
+speech surface. It covers styled and reference/profile-cloned synthesis,
+reference recording, reusable profile create/list/delete, streaming chunk
+controls and feedback, A/B playback of recent renders, backend/task/language
+selection, transcription, and an editable transcript that can be saved as a
+durable artifact. Runs use the public CLI contract and stay in Library.
+
+The packaged app declares `NSMicrophoneUsageDescription` and signs both the app
+and embedded CLI with the audio-input entitlement. Recording is local; granting
+microphone access does not enable a network upload path.
+
 ## Typical workflows
 
 ### Synthesize speech

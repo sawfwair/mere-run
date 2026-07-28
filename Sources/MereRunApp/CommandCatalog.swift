@@ -379,6 +379,8 @@ struct CommandDraft: Equatable, Codable {
     var baseQuantizationBits = ""
     var excludePreviewImages = false
     var checkpointInterval = 0
+    /// Optional preserves Library decoding for rows written before checkpoint resume was exposed.
+    var trainingResumePath: String?
     var maxResolution = 0
     var progressive = false
     var lowRAM = false
@@ -1385,6 +1387,9 @@ struct CommandTemplate: Identifiable, Equatable {
             if emitsRecipeOverrides, draft.checkpointInterval > 0 {
                 args += ["--checkpoint-interval", String(draft.checkpointInterval)]
             }
+            if let resumePath = draft.trainingResumePath, !resumePath.isBlank {
+                args += ["--resume-from", resumePath]
+            }
             if emitsRecipeOverrides, draft.maxResolution > 0 {
                 args += ["--max-resolution", String(draft.maxResolution)]
             }
@@ -1572,7 +1577,10 @@ struct CommandTemplate: Identifiable, Equatable {
             if draft.quiet { args.append("--quiet") }
 
         case .textEmbed:
-            args = ["text", "embed", draft.prompt]
+            let embeddingTexts = draft.prompt
+                .components(separatedBy: .newlines)
+                .filter { !$0.isBlank }
+            args = ["text", "embed"] + (embeddingTexts.isEmpty ? [draft.prompt] : embeddingTexts)
             if !draft.model.isBlank { args += ["--model", draft.model] }
             if draft.maxTokens > 0 { args += ["--max-tokens", String(draft.maxTokens)] }
             if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }

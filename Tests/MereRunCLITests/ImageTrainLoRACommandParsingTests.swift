@@ -139,6 +139,7 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
         XCTAssertNil(cmd.baseQuantizationBits)
         XCTAssertFalse(cmd.excludePreviewImages)
         XCTAssertNil(cmd.checkpointInterval)
+        XCTAssertNil(cmd.resumeFrom)
         XCTAssertNil(cmd.maxResolution)
         XCTAssertFalse(cmd.progressive)
         XCTAssertFalse(cmd.lowRam)
@@ -194,6 +195,7 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
             "--base-quantization-bits", "4",
             "--exclude-preview-images",
             "--checkpoint-interval", "250",
+            "--resume-from", "/tmp/checkpoint-step250.safetensors",
             "--max-resolution", "1536",
             "--low-ram",
             "--no-compile",
@@ -239,6 +241,7 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.baseQuantizationBits, 4)
         XCTAssertTrue(cmd.excludePreviewImages)
         XCTAssertEqual(cmd.checkpointInterval, 250)
+        XCTAssertEqual(cmd.resumeFrom, "/tmp/checkpoint-step250.safetensors")
         XCTAssertEqual(cmd.maxResolution, 1536)
         XCTAssertFalse(cmd.progressive)
         XCTAssertTrue(cmd.lowRam)
@@ -687,12 +690,15 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
 
         let model = temp.appendingPathComponent("model", isDirectory: true)
         try writeManifest(id: "local-klein", family: .klein, to: model)
+        let resumeCheckpoint = temp.appendingPathComponent("checkpoint-step500.safetensors")
+        try Data("checkpoint".utf8).write(to: resumeCheckpoint)
 
         let cmd = try ImageTrainLoRA.parse([
             "--data", dataset.path,
             "--output", temp.appendingPathComponent("style.safetensors").path,
             "--model", model.path,
             "--steps", "10",
+            "--resume-from", resumeCheckpoint.path,
             "--preflight",
             "--json",
         ])
@@ -721,6 +727,8 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
             model.path,
             "--training-steps",
             "10",
+            "--resume-from",
+            resumeCheckpoint.path,
         ])
 
         let plan = envelope.result.runPlan
@@ -730,8 +738,10 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
         XCTAssertEqual(plan.arguments.output, temp.appendingPathComponent("style.safetensors").path)
         XCTAssertEqual(plan.arguments.model, model.path)
         XCTAssertEqual(plan.arguments.trainingSteps, 10)
+        XCTAssertEqual(plan.arguments.resumeFrom, resumeCheckpoint.path)
         XCTAssertEqual(plan.arguments.executableArgv().prefix(3), ["mere.run", "image", "train-lora"])
         XCTAssertTrue(plan.arguments.executableArgv().contains("--model"))
+        XCTAssertTrue(plan.arguments.executableArgv().contains("--resume-from"))
 
         let encodedPlan = try StructuredRunOutput.encode(plan)
         let planURL = temp.appendingPathComponent("style.plan.json")
@@ -750,6 +760,7 @@ final class ImageTrainLoRACommandParsingTests: XCTestCase {
         XCTAssertEqual(commandFromPlan.output, temp.appendingPathComponent("style.safetensors").path)
         XCTAssertEqual(commandFromPlan.model, model.path)
         XCTAssertEqual(commandFromPlan.trainingSteps, 10)
+        XCTAssertEqual(commandFromPlan.resumeFrom, resumeCheckpoint.path)
         XCTAssertFalse(commandFromPlan.preflight)
         XCTAssertFalse(commandFromPlan.json)
     }

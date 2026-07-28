@@ -27,15 +27,18 @@ and durable Library jobs.
 Text uses the same contract for native/MLX chat, code, embeddings,
 anonymization, and text-LoRA training. Chat exposes typed text/JSON response
 format, reasoning policy, context and KV controls, LoRA application, tool
-permissions, and preflight in both Studio and Advanced. Advanced also owns the
-full text-LoRA training form.
+permissions, and preflight. The first-class Utility Lab adds vector norms and
+cosine-similarity inspection plus original/protected PII span review. Training
+opens the unified Training Studio rather than a generic form.
 
 Image uses the shared contract for generation/editing, LoRA training,
 validation, dataset discovery, durable plans and dashboards, TripoSR,
 TRELLIS.2, and InstantMesh. The primary Studio surface includes multi-reference
 editing, structured prompts, LoRA catalog IDs or local adapters, Krea tuning,
-preflight, and machine-readable progress; Advanced exposes every specialist
-workflow and training control.
+preflight, and machine-readable progress. Training Studio adds dataset previews,
+preflight, launch/resume, loss metrics, samples, checkpoints, and run comparison
+for Krea 2 and FLUX.2 Klein. Utility Lab renders validation artifacts, candidate
+dataset diagnostics, and materialized plan paths.
 Create Image opens a first-class 3D Creation workspace for TripoSR, native
 TRELLIS.2 PBR reconstruction, and ordered 4/6-view InstantMesh. It includes
 engine-specific controls, immutable output directories, embedded orbitable
@@ -44,9 +47,11 @@ Quick Look models, manifest statistics, and the shared progress/Library lifecycl
 Music is a production workspace, not a prompt-only wrapper. Studio exposes
 quality planning, covers/repaint/flow edits, source and timbre-reference audio,
 candidate ranking, LM planning, adapter stacks, stems, LRC, recipes, and DAW
-delivery. Advanced adds the complete ACE-Step diffusion/layout controls,
-standalone audio understanding, MuScriptor MIDI/event transcription, Magenta
-RT2 playback and MIDI steering, LoRA/LoKr training, and the resident music API.
+delivery. Music Tools adds standalone ACE-Step understanding with structured
+results, MuScriptor transcription with an embedded MIDI piano roll, and resident
+server health and lifecycle. Realtime opens the dedicated Magenta RT2 workspace;
+Training opens the shared LoRA/LoKr studio with dataset audio previews and live
+loss events. Advanced retains the complete raw command surface.
 The API key is injected through `MERERUN_API_KEY`, never placed in process
 arguments.
 
@@ -71,7 +76,15 @@ typed per-model runtime policy. Server credentials are passed through
 policy stay in their canonical products: the app links directly to Graph
 Studio and the Node/Relay console instead of reimplementing those surfaces.
 
-Models, Setup, Speech, SFX, plugins, Qwen3.6 MTP and Laguna DFlash benchmarks,
+Voice Studio is the first-class path for styled or cloned synthesis, reusable
+profiles, reference recording, streaming feedback, A/B playback, file/live
+transcription, and transcript editing. SFX Lab covers text generation, video
+Foley, conditioning, AE encode/decode, CLAP scoring, waveform review, NPY
+metadata, and durable artifacts. The packaged app and embedded CLI carry the
+microphone usage description and audio-input entitlement required by those
+capture paths.
+
+Models, Setup, plugins, Qwen3.6 MTP and Laguna DFlash benchmarks,
 API serving, and Open WebUI also use contract-backed typed forms. Laguna is
 available as a managed chat/API engine, while Chat and Code expose min-p and
 the runtime-policy editors can persist or clear it. The run console recognizes

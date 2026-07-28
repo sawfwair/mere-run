@@ -154,11 +154,12 @@ plutil -insert SUAutomaticallyUpdate -bool false "${contents}/Info.plist"
 plutil -insert SUScheduledCheckInterval -integer 86400 "${contents}/Info.plist"
 plutil -insert SUVerifyUpdateBeforeExtraction -bool true "${contents}/Info.plist"
 plutil -insert SURequireSignedFeed -bool true "${contents}/Info.plist"
-# TCC usage string. The CLI opens the camera as a child of this bundle, so TCC attributes
-# access to the app and the string must live here. (No microphone string: nothing records the
-# mic yet — add NSMicrophoneUsageDescription when `music realtime` mic capture ships.)
+# TCC usage strings. The CLI opens the camera as a child of this bundle and Voice Studio records
+# microphone references in the app process, so both descriptions must live in the bundle plist.
 plutil -insert NSCameraUsageDescription -string \
   "MereRun uses the camera for live object tracking (vision track-live)." "${contents}/Info.plist"
+plutil -insert NSMicrophoneUsageDescription -string \
+  "MereRun uses the microphone to record local voice references and transcription input." "${contents}/Info.plist"
 
 if [[ -f "$app_icon" ]]; then
   cp "$app_icon" "${resources}/AppIcon.icns"
@@ -169,9 +170,9 @@ fi
 # signature. We deliberately do not lean on `codesign --deep --force` for entitlements: a forced
 # deep pass applies the *same* entitlements to every nested binary (unreliable across toolchains
 # and wrong here — the app and CLI need different sets). The app executable links only system
-# frameworks and just opens the camera, so it gets the minimal app set; the bundled CLI and the
+# frameworks and opens the camera or microphone, so it gets the minimal app set; the bundled CLI and the
 # vendored ds4 inference binaries JIT, load co-located unsigned frameworks, and capture the
-# camera, so they get the broader CLI set. With a Developer ID identity this yields a
+# camera or microphone, so they get the broader CLI set. With a Developer ID identity this yields a
 # hardened-runtime, notarizable bundle; with the default "-" it ad-hoc signs for local dev.
 cli_entitlements="${repo_root}/scripts/MereRunCLI.entitlements"
 

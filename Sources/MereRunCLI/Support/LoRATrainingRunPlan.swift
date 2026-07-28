@@ -76,6 +76,7 @@ struct LoRATrainingRunPlanArguments: Codable, Equatable {
     let lite: Bool
     let excludePreviewImages: Bool
     let checkpointInterval: Int?
+    let resumeFrom: String?
     let maxResolution: Int?
     let progressive: Bool
     let lowRam: Bool
@@ -127,6 +128,7 @@ struct LoRATrainingRunPlanArguments: Codable, Equatable {
         case lite
         case excludePreviewImages = "exclude_preview_images"
         case checkpointInterval = "checkpoint_interval"
+        case resumeFrom = "resume_from"
         case maxResolution = "max_resolution"
         case progressive
         case lowRam = "low_ram"
@@ -184,6 +186,7 @@ struct LoRATrainingRunPlanArguments: Codable, Equatable {
             lite: lite,
             excludePreviewImages: excludePreviewImages,
             checkpointInterval: checkpointInterval,
+            resumeFrom: resumeFrom,
             maxResolution: maxResolution,
             progressive: progressive,
             lowRam: lowRam,
@@ -245,6 +248,7 @@ struct LoRATrainingRunPlanArguments: Codable, Equatable {
         appendBoolFlag("--lite", when: lite, to: &args)
         appendBoolFlag("--exclude-preview-images", when: excludePreviewImages, to: &args)
         appendOption("--checkpoint-interval", checkpointInterval, to: &args)
+        appendOption("--resume-from", resumeFrom, to: &args)
         appendOption("--max-resolution", maxResolution, to: &args)
         appendBoolFlag("--progressive", when: progressive, to: &args)
         appendBoolFlag("--low-ram", when: lowRam, to: &args)
@@ -362,6 +366,7 @@ extension ImageTrainLoRA {
                 lite: lite,
                 excludePreviewImages: excludePreviewImages,
                 checkpointInterval: options.checkpointInterval,
+                resumeFrom: resumeFrom,
                 maxResolution: options.maxResolution,
                 progressive: progressive,
                 lowRam: options.lowRam,

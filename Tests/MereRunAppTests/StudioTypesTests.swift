@@ -907,6 +907,7 @@ final class StudioTypesTests: XCTestCase {
         draft.height = 768
         draft.steps = 1200
         draft.seed = "7"
+        draft.trainingResumePath = "/tmp/checkpoint-step750.safetensors"
 
         XCTAssertEqual(template.inputKind, .directory)
         XCTAssertEqual(template.defaultModel, "image-krea2-raw")
@@ -926,6 +927,7 @@ final class StudioTypesTests: XCTestCase {
                 "--max-text-length", "512",
                 "--scheduler-steps", "1000",
                 "--seed", "7",
+                "--resume-from", "/tmp/checkpoint-step750.safetensors",
             ]
         )
     }
