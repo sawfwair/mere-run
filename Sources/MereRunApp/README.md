@@ -60,8 +60,10 @@ typed per-model runtime policy. Server credentials are passed through
 policy stay in their canonical products: the app links directly to Graph
 Studio and the Node/Relay console instead of reimplementing those surfaces.
 
-Models, Setup, Speech, SFX, plugins, the Qwen3.6 benchmark, API serving, and
-Open WebUI also use contract-backed typed forms. The run console recognizes
+Models, Setup, Speech, SFX, plugins, Qwen3.6 MTP and Laguna DFlash benchmarks,
+API serving, and Open WebUI also use contract-backed typed forms. Laguna is
+available as a managed chat/API engine, while Chat and Code expose min-p and
+the runtime-policy editors can persist or clear it. The run console recognizes
 adapter catalogs and structured JSON receipts, and can copy or save a receipt.
 Hugging Face tokens, API keys, and the Open WebUI admin password cross the
 process boundary through environment variables instead of appearing in argv.

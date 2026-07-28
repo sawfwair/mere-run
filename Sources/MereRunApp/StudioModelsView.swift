@@ -95,6 +95,7 @@ struct StudioRuntimeSettings: Codable, Equatable {
     var maxTokens: Int?
     var temperature: Double?
     var topP: Double?
+    var minP: Double?
     var engineOverride: String?
 
     init(
@@ -105,6 +106,7 @@ struct StudioRuntimeSettings: Codable, Equatable {
         maxTokens: Int? = nil,
         temperature: Double? = nil,
         topP: Double? = nil,
+        minP: Double? = nil,
         engineOverride: String? = nil
     ) {
         self.alias = alias
@@ -114,6 +116,7 @@ struct StudioRuntimeSettings: Codable, Equatable {
         self.maxTokens = maxTokens
         self.temperature = temperature
         self.topP = topP
+        self.minP = minP
         self.engineOverride = engineOverride
     }
 
@@ -126,6 +129,7 @@ struct StudioRuntimeSettings: Codable, Equatable {
         maxTokens = try container.decodeIfPresent(Int.self, forKey: .maxTokens)
         temperature = try container.decodeIfPresent(Double.self, forKey: .temperature)
         topP = try container.decodeIfPresent(Double.self, forKey: .topP)
+        minP = try container.decodeIfPresent(Double.self, forKey: .minP)
         engineOverride = try container.decodeIfPresent(String.self, forKey: .engineOverride)
     }
 }
@@ -218,6 +222,7 @@ struct StudioModelsSheet: View {
     @State private var runtimeMaxTokens = ""
     @State private var runtimeTemperature = ""
     @State private var runtimeTopP = ""
+    @State private var runtimeMinP = ""
     @State private var runtimePinned = false
 
     private var installedRows: [StudioModelInventoryRow] {
@@ -587,6 +592,9 @@ struct StudioModelsSheet: View {
                     runtimeField("Temperature", text: $runtimeTemperature, width: 100)
                     runtimeField("Top P", text: $runtimeTopP, width: 100)
                 }
+                GridRow {
+                    runtimeField("Min P", text: $runtimeMinP, width: 150)
+                }
             }
 
             HStack(spacing: MereRunTheme.Spacing.sm) {
@@ -715,6 +723,7 @@ struct StudioModelsSheet: View {
         runtimeMaxTokens = settings.maxTokens.map(String.init) ?? ""
         runtimeTemperature = settings.temperature.map { String($0) } ?? ""
         runtimeTopP = settings.topP.map { String($0) } ?? ""
+        runtimeMinP = settings.minP.map { String($0) } ?? ""
         runtimePinned = settings.pinned
     }
 
@@ -752,6 +761,7 @@ struct StudioModelsSheet: View {
             to: &args
         )
         appendStringSetting(runtimeTopP, setFlag: "--top-p", clearFlag: "--clear-top-p", to: &args)
+        appendStringSetting(runtimeMinP, setFlag: "--min-p", clearFlag: "--clear-min-p", to: &args)
     }
 
     private func appendStringSetting(

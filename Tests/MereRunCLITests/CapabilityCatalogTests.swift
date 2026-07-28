@@ -73,6 +73,7 @@ import Testing
         "model.remove": ModelRemove.helpMessage(),
         "model.repair-manifests": ModelRepairManifests.helpMessage(),
         "model.benchmark.q36-mtp": ModelBenchmarkQ36MTP.helpMessage(),
+        "model.benchmark.laguna-dflash": ModelBenchmarkLagunaDFlash.helpMessage(),
         "speech.synthesize": SpeechSynthesize.helpMessage(),
         "speech.transcribe": SpeechTranscribe.helpMessage(),
         "speech.profile.list": SpeechProfileList.helpMessage(),

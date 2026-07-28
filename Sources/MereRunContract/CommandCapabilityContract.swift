@@ -222,6 +222,7 @@ public enum MereRunCapabilityCatalog {
             modelRemove,
             modelRepairManifests,
             modelBenchmarkQ36MTP,
+            modelBenchmarkLagunaDFlash,
             speechSynthesize,
             speechTranscribe,
             speechProfileList,
@@ -263,6 +264,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--temperature", label: "Temperature", kind: .number),
             .init(flag: "--top-p", label: "Top-p", kind: .number),
             .init(flag: "--top-k", label: "Top-k", kind: .integer),
+            .init(flag: "--min-p", label: "Min-p", kind: .number),
             .init(flag: "--kv-bits", label: "KV bits", kind: .integer),
             .init(
                 flag: "--kv-quant-scheme",
@@ -311,6 +313,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--max-tokens", label: "Max tokens", kind: .integer),
             .init(flag: "--temperature", label: "Temperature", kind: .number),
             .init(flag: "--top-p", label: "Top-p", kind: .number),
+            .init(flag: "--min-p", label: "Min-p", kind: .number),
             .init(flag: "--model", label: "Model", kind: .file),
             .init(flag: "--stats", label: "Stats", kind: .boolean),
             .init(flag: "--quiet", label: "Quiet", kind: .boolean),
@@ -1625,13 +1628,16 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--clear-temperature", label: "Clear temperature", kind: .boolean),
             .init(flag: "--top-p", label: "Top-p", kind: .number),
             .init(flag: "--clear-top-p", label: "Clear top-p", kind: .boolean),
+            .init(flag: "--min-p", label: "Min-p", kind: .number),
+            .init(flag: "--clear-min-p", label: "Clear min-p", kind: .boolean),
             .init(
                 flag: "--engine",
                 label: "Engine",
                 kind: .choice,
                 choices: [
                     "text-code", "text-chat-klein", "text-chat-gemma4", "text-chat-q36",
-                    "text-chat-q35", "text-chat-lfm2", "text-chat-deepseek-v4-flash"
+                    "text-chat-q35", "text-chat-laguna", "text-chat-lfm2",
+                    "text-chat-deepseek-v4-flash"
                 ]
             ),
             .init(flag: "--clear-engine", label: "Clear engine", kind: .boolean),
@@ -1818,6 +1824,40 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--context-size", label: "Context", kind: .integer),
             .init(flag: "--mtp-block-size", label: "MTP block", kind: .integer),
             .init(flag: "--forced-mtp-min-prompt-tokens", label: "Forced MTP threshold", kind: .integer),
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let modelBenchmarkLagunaDFlash = MereRunCommandCapability(
+        id: "model.benchmark.laguna-dflash",
+        command: ["model", "benchmark", "laguna-dflash"],
+        title: "Laguna DFlash benchmark",
+        summary: "Compare target-only, fixed DFlash, and adaptive Laguna decode in one resident process.",
+        options: [
+            .init(flag: "--laguna-path", label: "Laguna path", kind: .directory, required: true),
+            .init(flag: "--laguna-dflash-path", label: "DFlash path", kind: .directory, required: true),
+            .init(flag: "--decode-token-values", label: "Decode matrix", kind: .string),
+            .init(flag: "--repetitions", label: "Repetitions", kind: .integer),
+            .init(flag: "--laguna-dflash-tokens", label: "Speculative tokens", kind: .integer),
+            .init(flag: "--temperature", label: "Temperature", kind: .number),
+            .init(flag: "--top-p", label: "Top-p", kind: .number),
+            .init(flag: "--top-k", label: "Top-k", kind: .integer),
+            .init(flag: "--min-p", label: "Min-p", kind: .number),
+            .init(flag: "--prompt", label: "Prompt", kind: .string),
+            .init(flag: "--prompt-file", label: "Prompt file", kind: .file),
+            .init(
+                flag: "--fixture",
+                label: "Fixture",
+                kind: .choice,
+                choices: ["deterministic-prose", "grounded-email", "code-completion"]
+            ),
+            .init(flag: "--context-size", label: "Context", kind: .integer),
+            .init(flag: "--concurrency-values", label: "Concurrency matrix", kind: .string),
+            .init(flag: "--warmup-repetitions", label: "Warmups", kind: .integer),
+            .init(flag: "--mixed-fixtures", label: "Mixed fixtures", kind: .boolean),
+            .init(flag: "--include-automatic", label: "Adaptive routing", kind: .boolean),
+            .init(flag: "--log-responses", label: "Log responses", kind: .boolean),
             .init(flag: "--json", label: "JSON", kind: .boolean)
         ],
         output: .init(kind: .text)
@@ -2066,7 +2106,15 @@ public enum MereRunCapabilityCatalog {
         options: [
             .init(flag: "--host", label: "API host", kind: .string),
             .init(flag: "--port", label: "API port", kind: .integer),
-            .init(flag: "--engine", label: "Engine", kind: .string),
+            .init(
+                flag: "--engine",
+                label: "Engine",
+                kind: .choice,
+                choices: [
+                    "text-chat-q36", "text-code", "text-chat-klein", "text-chat-gemma4",
+                    "text-chat-laguna", "text-chat-lfm2", "text-chat-deepseek-v4-flash"
+                ]
+            ),
             .init(flag: "--webui-host", label: "WebUI host", kind: .string),
             .init(flag: "--webui-port", label: "WebUI port", kind: .integer),
             .init(flag: "--container-name", label: "Container", kind: .string),
@@ -2104,7 +2152,15 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--port", label: "Port", kind: .integer),
             .init(flag: "--host", label: "Host", kind: .string),
             .init(flag: "--model", label: "Model", kind: .string),
-            .init(flag: "--engine", label: "Engine", kind: .string),
+            .init(
+                flag: "--engine",
+                label: "Engine",
+                kind: .choice,
+                choices: [
+                    "text-chat-q36", "text-code", "text-chat-klein", "text-chat-gemma4",
+                    "text-chat-laguna", "text-chat-lfm2", "text-chat-deepseek-v4-flash"
+                ]
+            ),
             .init(flag: "--lora", label: "Adapter", kind: .string),
             .init(flag: "--api-key", label: "API key", kind: .string),
             .init(flag: "--rate-limit-per-minute", label: "Rate limit", kind: .integer),

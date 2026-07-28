@@ -463,6 +463,8 @@ private struct CommandEditor: View {
             SFXOptions()
         case .modelBenchmark:
             ModelBenchmarkOptions()
+        case .modelBenchmarkLagunaDFlash:
+            LagunaDFlashBenchmarkOptions()
         case .pluginList, .pluginInstall, .pluginDoctor:
             PluginOptions()
         case .openWebui:
@@ -1690,6 +1692,7 @@ private struct TextGenerationOptions: View {
                         )
                         NumberField(title: "Temp", value: $controller.draft.temperature)
                         NumberField(title: "Top-p", value: $controller.draft.topP)
+                        NumberField(title: "Min-p", value: $controller.draft.minP)
                     }
                 } else {
                     NumberStepper(
@@ -3883,6 +3886,11 @@ private struct ModelRuntimePolicyOptions: View {
                             value: $controller.draft.operationsRuntimeTopP,
                             clear: $controller.draft.operationsClearTopP
                         )
+                        optionalPolicyField(
+                            "Min-p",
+                            value: $controller.draft.operationsRuntimeMinP,
+                            clear: $controller.draft.operationsClearMinP
+                        )
                     }
                 }
                 EditorSection("Engine & KV") {
@@ -4037,6 +4045,113 @@ private struct ModelBenchmarkOptions: View {
     }
 }
 
+private struct LagunaDFlashBenchmarkOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        VStack(spacing: 14) {
+            EditorSection("Checkpoints") {
+                VStack(spacing: 10) {
+                    PathField(
+                        path: $controller.draft.modelRoot,
+                        placeholder: "Laguna S 2.1 checkpoint (required)",
+                        mode: .openDirectory
+                    )
+                    PathField(
+                        path: $controller.draft.secondaryText,
+                        placeholder: "Laguna DFlash checkpoint (required)",
+                        mode: .openDirectory
+                    )
+                }
+            }
+            EditorSection("Workload") {
+                VStack(spacing: 10) {
+                    TextEditor(text: $controller.draft.prompt)
+                        .font(MereRunTheme.bodyFont)
+                        .scrollContentBackground(.hidden)
+                        .frame(minHeight: 72)
+                        .padding(8)
+                        .merePanel()
+                    PathField(
+                        path: $controller.draft.benchmarkPromptFile,
+                        placeholder: "Prompt file (optional)",
+                        mode: .openFile([.plainText])
+                    )
+                    Picker("Fixture", selection: $controller.draft.benchmarkFixture) {
+                        Text("Deterministic prose").tag("deterministic-prose")
+                        Text("Grounded email").tag("grounded-email")
+                        Text("Code completion").tag("code-completion")
+                    }
+                    .pickerStyle(.segmented)
+                    AdaptiveControlRow {
+                        TextField(
+                            "Decode lengths (comma-separated)",
+                            text: $controller.draft.benchmarkDecodeTokenValues
+                        )
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                        TextField(
+                            "Concurrency levels (optional)",
+                            text: $controller.draft.benchmarkConcurrencyValues
+                        )
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                    }
+                }
+            }
+            EditorSection("Decode") {
+                VStack(spacing: 10) {
+                    AdaptiveControlRow {
+                        NumberStepper(
+                            title: "Repetitions",
+                            value: $controller.draft.benchmarkRepetitions,
+                            range: 1...1_000,
+                            step: 1
+                        )
+                        NumberStepper(
+                            title: "DFlash tokens",
+                            value: $controller.draft.benchmarkLagunaDFlashTokens,
+                            range: 1...15,
+                            step: 1
+                        )
+                        NumberStepper(
+                            title: "Warmups",
+                            value: $controller.draft.benchmarkWarmupRepetitions,
+                            range: 0...100,
+                            step: 1
+                        )
+                    }
+                    AdaptiveControlRow {
+                        NumberField(title: "Temperature", value: $controller.draft.temperature)
+                        NumberField(title: "Top-p", value: $controller.draft.topP)
+                        NumberStepper(
+                            title: "Top-k",
+                            value: $controller.draft.topK,
+                            range: 0...512,
+                            step: 1
+                        )
+                        NumberField(title: "Min-p", value: $controller.draft.minP)
+                    }
+                    NumberStepper(
+                        title: "Context",
+                        value: $controller.draft.contextSize,
+                        range: 1_024...1_048_576,
+                        step: 1_024
+                    )
+                    AdaptiveControlRow {
+                        Toggle("Mixed fixtures", isOn: $controller.draft.benchmarkMixedFixtures)
+                        Toggle("Adaptive policy", isOn: $controller.draft.benchmarkIncludeAutomatic)
+                        Toggle("Log responses", isOn: $controller.draft.benchmarkLogResponses)
+                        Toggle("Structured JSON", isOn: $controller.draft.json)
+                    }
+                }
+            }
+        }
+    }
+}
+
 private struct PluginOptions: View {
     @EnvironmentObject private var controller: MereRunController
 
@@ -4076,6 +4191,7 @@ private struct OpenWebUIOptions: View {
                         Text("Gemma4").tag("text-chat-gemma4")
                         Text("Qwen 3.6").tag("text-chat-q36")
                         Text("Klein").tag("text-chat-klein")
+                        Text("Laguna S 2.1").tag("text-chat-laguna")
                         Text("LFM2").tag("text-chat-lfm2")
                         Text("DeepSeek V4").tag("text-chat-deepseek-v4-flash")
                     }
@@ -4179,6 +4295,7 @@ private struct APIOptions: View {
                     Text("Chat Qwen 3.6").tag("text-chat-q36")
                     Text("Chat Klein").tag("text-chat-klein")
                     Text("Code").tag("text-code")
+                    Text("Laguna S 2.1").tag("text-chat-laguna")
                     Text("LFM2").tag("text-chat-lfm2")
                     Text("DeepSeek V4").tag("text-chat-deepseek-v4-flash")
                 }

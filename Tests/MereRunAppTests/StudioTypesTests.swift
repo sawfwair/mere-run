@@ -138,6 +138,7 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertFalse(args.contains("--tools"))
         XCTAssertFalse(args.contains("--tool-loop"))
         XCTAssertFalse(args.contains("--allow-shell-exec"))
+        XCTAssertFalse(args.contains("--min-p"), "Omitting min-p preserves managed-model defaults")
     }
 
     func testChatBuildsJSONLoRAKVPreflightAndToolPermissionFlags() throws {
@@ -185,11 +186,12 @@ final class StudioTypesTests: XCTestCase {
             (.textChat, "text.chat", {
                 $0.responseFormat = .jsonObject
                 $0.thinkingMode = .show
+                $0.minP = 0.02
                 $0.loraPath = "/tmp/chat.safetensors"
                 $0.preflight = true
                 $0.json = true
             }),
-            (.textCode, "text.code", { _ in }),
+            (.textCode, "text.code", { $0.minP = 0.05 }),
             (.textEmbed, "text.embed", { _ in }),
             (.textAnonymize, "text.anonymize", {
                 $0.replacement = "<{label}:{index}>"
@@ -244,6 +246,10 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertEqual(try args(.sfxClapScore) { $0.prompt = "door"; $0.inputPath = "/a.wav" }.prefix(3).map { $0 }, ["sfx", "clap", "score"])
         XCTAssertEqual(try args(.sfxConditionText) { $0.prompt = "door" }.prefix(3).map { $0 }, ["sfx", "condition", "text"])
         XCTAssertEqual(try args(.modelBenchmark).prefix(3).map { $0 }, ["model", "benchmark", "q36-mtp"])
+        XCTAssertEqual(
+            try args(.modelBenchmarkLagunaDFlash).prefix(3).map { $0 },
+            ["model", "benchmark", "laguna-dflash"]
+        )
         XCTAssertEqual(try args(.pluginList).prefix(2).map { $0 }, ["plugin", "list"])
         XCTAssertEqual(
             try args(.pluginInstall) {
@@ -255,6 +261,33 @@ final class StudioTypesTests: XCTestCase {
         )
         XCTAssertEqual(try args(.pluginDoctor) { $0.prompt = "mere-runpod" }, ["plugin", "doctor", "mere-runpod"])
         XCTAssertEqual(try args(.openWebui).prefix(2).map { $0 }, ["open-webui", "quickstart"])
+    }
+
+    func testLagunaSurfacesUseManagedEngineAndValidateBenchmarkCheckpoints() throws {
+        XCTAssertEqual(
+            StudioChatDefaults.servingEngine(for: "text-chat-laguna-s-2-1"),
+            "text-chat-laguna"
+        )
+
+        for id in [CommandTemplateID.apiServe, .openWebui] {
+            let template = try XCTUnwrap(CommandCatalog.template(id: id))
+            var draft = template.defaultDraft()
+            draft.engine = "text-chat-laguna"
+            assertPair(template.arguments(from: draft), "--engine", "text-chat-laguna")
+        }
+
+        let benchmark = try XCTUnwrap(CommandCatalog.template(id: .modelBenchmarkLagunaDFlash))
+        var draft = benchmark.defaultDraft()
+        XCTAssertNotNil(benchmark.validationMessage(for: draft))
+        draft.modelRoot = "/tmp/laguna"
+        XCTAssertNotNil(benchmark.validationMessage(for: draft))
+        draft.secondaryText = "/tmp/laguna-dflash"
+        XCTAssertNil(benchmark.validationMessage(for: draft))
+        let arguments = benchmark.arguments(from: draft)
+        assertPair(arguments, "--laguna-path", "/tmp/laguna")
+        assertPair(arguments, "--laguna-dflash-path", "/tmp/laguna-dflash")
+        assertPair(arguments, "--min-p", "0.02")
+        XCTAssertTrue(arguments.contains("--json"))
     }
 
     func testSetupModelsSpeechSFXAndServerArgumentsAreContractDeclared() throws {
@@ -307,6 +340,16 @@ final class StudioTypesTests: XCTestCase {
                 $0.benchmarkTemperatureValues = "0,0.7"
                 $0.benchmarkMTPBlockSize = "4"
                 $0.json = true
+            }),
+            (.modelBenchmarkLagunaDFlash, "model.benchmark.laguna-dflash", {
+                $0.modelRoot = "/tmp/laguna"
+                $0.secondaryText = "/tmp/laguna-dflash"
+                $0.prompt = "Benchmark"
+                $0.benchmarkPromptFile = "/tmp/prompt.txt"
+                $0.benchmarkConcurrencyValues = "1,2,4"
+                $0.benchmarkMixedFixtures = true
+                $0.benchmarkIncludeAutomatic = true
+                $0.benchmarkLogResponses = true
             }),
             (.speechSynthesize, "speech.synthesize", {
                 $0.stream = true
@@ -731,7 +774,8 @@ final class StudioTypesTests: XCTestCase {
                 $0.operationsRuntimeMaxTokens = "2048"
                 $0.operationsRuntimeTemperature = "0.4"
                 $0.operationsRuntimeTopP = "0.9"
-                $0.operationsRuntimeEngine = "text-chat-gemma4"
+                $0.operationsRuntimeMinP = "0.02"
+                $0.operationsRuntimeEngine = "text-chat-laguna"
                 $0.operationsRuntimeKVCacheMode = "auto"
             })
         ]
@@ -1267,10 +1311,12 @@ final class StudioTypesTests: XCTestCase {
         draft.reset(for: .chat)
         draft.prompt = "hi"
         draft.temperature = 0.3
+        draft.minP = 0.02
         draft.maxTokens = 1234
         let request = try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft)
         let args = request.template.arguments(from: request.draft)
         assertPair(args, "--temperature", "0.3")
+        assertPair(args, "--min-p", "0.02")
         assertPair(args, "--max-tokens", "1234")
     }
 
@@ -1282,6 +1328,7 @@ final class StudioTypesTests: XCTestCase {
         draft.thinkingMode = .hide
         draft.contextSize = 32_768
         draft.topK = 20
+        draft.minP = 0.02
         draft.kvBits = 8
         draft.kvQuantScheme = "turboquant"
         draft.kvGroupSize = 64
@@ -1305,6 +1352,7 @@ final class StudioTypesTests: XCTestCase {
         assertPair(args, "--response-format", "json_object")
         assertPair(args, "--context-size", "32768")
         assertPair(args, "--top-k", "20")
+        assertPair(args, "--min-p", "0.02")
         assertPair(args, "--kv-bits", "8")
         assertPair(args, "--kv-quant-scheme", "turboquant")
         assertPair(args, "--lora", "adapter-assistant")
@@ -1478,6 +1526,7 @@ final class StudioTypesTests: XCTestCase {
         let base = CommandCatalog.template(id: StudioMode.chat.defaultTemplateID)?.defaultDraft()
         XCTAssertEqual(draft.temperature, base?.temperature)
         XCTAssertEqual(draft.topP, base?.topP)
+        XCTAssertEqual(draft.minP, base?.minP)
         XCTAssertEqual(draft.maxTokens, base?.maxTokens)
         XCTAssertEqual(draft.responseFormat, base?.responseFormat)
         XCTAssertEqual(draft.thinkingMode, base?.thinkingMode)
@@ -1629,7 +1678,8 @@ final class StudioTypesTests: XCTestCase {
           "maxTokens": 512,
           "temperature": 0.4,
           "topP": 0.8,
-          "engineOverride": "text-chat-gemma4"
+          "minP": 0.02,
+          "engineOverride": "text-chat-laguna"
         }
         """.data(using: .utf8)!
 
@@ -1642,7 +1692,8 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertEqual(settings.maxTokens, 512)
         XCTAssertEqual(settings.temperature, 0.4)
         XCTAssertEqual(settings.topP, 0.8)
-        XCTAssertEqual(settings.engineOverride, "text-chat-gemma4")
+        XCTAssertEqual(settings.minP, 0.02)
+        XCTAssertEqual(settings.engineOverride, "text-chat-laguna")
     }
 
     func testModelReadinessParserFindsInstalledMissingAndUnknown() {

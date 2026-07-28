@@ -8,7 +8,7 @@ The format is based on Keep a Changelog.
 
 ### Added
 
-- added a machine-readable, shared 88-command CLI capability contract emitted by
+- added a machine-readable, shared 89-command CLI capability contract emitted by
   `mere.run catalog --json`, plus executable CLI-help, App-to-contract, and
   inverse contract-to-App drift tests.
 - expanded the macOS Studio into typed Text, Image, Video, Music, Speech, SFX,
@@ -63,6 +63,11 @@ The format is based on Keep a Changelog.
   `text chat` and `api serve --engine text-chat-laguna` enable the validated
   sampling recipe and automatic DFlash routing without making the 74 GB pair
   a setup or machine default.
+- added complete macOS Studio access to Laguna: model-aware API and Open WebUI
+  routing, first-class min-p controls in Chat and Code, persistent min-p runtime
+  policy in both model editors, and a typed target/DFlash benchmark workspace
+  with checkpoint, decode, fixture, concurrency, adaptive-routing, response-log,
+  and JSON controls.
 - added lossless Laguna target verification, ragged continuous batching, and
   machine-readable acceptance, recovery, batching, prefill, and decode
   metrics. A length-aware output-budget router bypasses DFlash work for short

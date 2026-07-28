@@ -5,10 +5,10 @@ _Verified multi-agent review of `Sources/MereRunApp` (~6,500 LOC) against the CL
 > **Implementation update (2026-07-27):** This document preserves the original
 > pre-parity audit and sequencing rationale. The capability gaps described below
 > are no longer the current product state. The app now consumes the shared
-> machine-readable 88-command capability contract and has executable drift tests
+> machine-readable 89-command capability contract and has executable drift tests
 > for every local Advanced template. Studio provides typed Text, Image, Video,
 > Music, Speech, SFX, Vision/VFX, adapter, run, world, setup, model, plugin,
-> benchmark, Open WebUI, and API workflows; Graph Studio and Node remain explicit
+> Qwen3.6/Laguna benchmark, Open WebUI, and API workflows; Graph Studio and Node remain explicit
 > external boundaries. Structured receipts, file pickers, validation, retry and
 > resume controls are implemented. See
 > [`Sources/MereRunApp/README.md`](../Sources/MereRunApp/README.md) for the

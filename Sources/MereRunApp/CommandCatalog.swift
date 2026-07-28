@@ -100,6 +100,7 @@ enum CommandTemplateID: String, CaseIterable {
     case sfxClapScore
     case sfxConditionText
     case modelBenchmark
+    case modelBenchmarkLagunaDFlash
     case pluginList
     case pluginInstall
     case pluginDoctor
@@ -189,6 +190,7 @@ enum CommandTemplateID: String, CaseIterable {
         case .sfxClapScore: return "sfx.clap.score"
         case .sfxConditionText: return "sfx.condition.text"
         case .modelBenchmark: return "model.benchmark.q36-mtp"
+        case .modelBenchmarkLagunaDFlash: return "model.benchmark.laguna-dflash"
         case .pluginList: return "plugin.list"
         case .pluginInstall: return "plugin.install"
         case .pluginDoctor: return "plugin.doctor"
@@ -250,6 +252,9 @@ enum StudioChatDefaults {
         }
         if normalized.contains("q36") || normalized.contains("q35") {
             return "text-chat-q36"
+        }
+        if normalized.contains("laguna") {
+            return "text-chat-laguna"
         }
         if normalized.contains("lfm") {
             return "text-chat-lfm2"
@@ -343,6 +348,7 @@ struct CommandDraft: Equatable {
     var temperature = 0.7
     var topP = 0.9
     var topK = 0
+    var minP = 0.0
     var kvBits = 0
     var kvQuantScheme = ""
     var kvGroupSize = 0
@@ -607,6 +613,7 @@ struct CommandDraft: Equatable {
     var operationsRuntimeMaxTokens = ""
     var operationsRuntimeTemperature = ""
     var operationsRuntimeTopP = ""
+    var operationsRuntimeMinP = ""
     var operationsRuntimeEngine = ""
     var operationsRuntimeKVCacheMode = ""
     var operationsClearAlias = false
@@ -617,6 +624,7 @@ struct CommandDraft: Equatable {
     var operationsClearMaxTokens = false
     var operationsClearTemperature = false
     var operationsClearTopP = false
+    var operationsClearMinP = false
     var operationsClearEngine = false
     var operationsClearKVCacheMode = false
     var fps = 24
@@ -696,6 +704,14 @@ struct CommandDraft: Equatable {
     var benchmarkTemperatureValues = ""
     var benchmarkMTPBlockSize = ""
     var benchmarkForcedMTPMinPromptTokens = 1
+    var benchmarkRepetitions = 3
+    var benchmarkLagunaDFlashTokens = 12
+    var benchmarkFixture = "deterministic-prose"
+    var benchmarkConcurrencyValues = ""
+    var benchmarkWarmupRepetitions = 1
+    var benchmarkMixedFixtures = false
+    var benchmarkIncludeAutomatic = false
+    var benchmarkLogResponses = false
     var sfxRenoise = ""
     var sfxSynchformerModel = "sfx-woosh-synchformer"
     var sfxSyncBatchSize = 1
@@ -923,6 +939,14 @@ struct CommandTemplate: Identifiable, Equatable {
             draft.temperature = 0
             draft.topP = 0.9
             draft.contextSize = 16_384
+        case .modelBenchmarkLagunaDFlash:
+            draft.benchmarkDecodeTokenValues = "8,12,16,24,32,48"
+            draft.temperature = 0
+            draft.topP = 1
+            draft.topK = 0
+            draft.minP = 0.02
+            draft.contextSize = 4_096
+            draft.json = true
         default:
             break
         }
@@ -1094,11 +1118,19 @@ struct CommandTemplate: Identifiable, Equatable {
                 (!draft.operationsRuntimeMaxTokens.isBlank, draft.operationsClearMaxTokens, "max tokens"),
                 (!draft.operationsRuntimeTemperature.isBlank, draft.operationsClearTemperature, "temperature"),
                 (!draft.operationsRuntimeTopP.isBlank, draft.operationsClearTopP, "top-p"),
+                (!draft.operationsRuntimeMinP.isBlank, draft.operationsClearMinP, "min-p"),
                 (!draft.operationsRuntimeEngine.isBlank, draft.operationsClearEngine, "engine"),
                 (!draft.operationsRuntimeKVCacheMode.isBlank, draft.operationsClearKVCacheMode, "KV cache")
             ]
             if let conflict = conflictingRuntimeValues.first(where: { $0.0 && $0.1 }) {
                 return "Set or clear \(conflict.2), not both."
+            }
+        case .modelBenchmarkLagunaDFlash:
+            if draft.modelRoot.isBlank {
+                return "Laguna model path is required."
+            }
+            if draft.secondaryText.isBlank {
+                return "Laguna DFlash model path is required."
             }
         case .imageTrainLoRA:
             if draft.inputPath.isBlank && draft.syntheticSamples <= 0 {
@@ -1454,6 +1486,7 @@ struct CommandTemplate: Identifiable, Equatable {
             ]
             if draft.contextSize > 0 { args += ["--context-size", String(draft.contextSize)] }
             if draft.topK > 0 { args += ["--top-k", String(draft.topK)] }
+            if draft.minP > 0 { args += ["--min-p", format(draft.minP)] }
             if draft.kvBits > 0 { args += ["--kv-bits", String(draft.kvBits)] }
             if !draft.kvQuantScheme.isBlank { args += ["--kv-quant-scheme", draft.kvQuantScheme] }
             if draft.kvGroupSize > 0 { args += ["--kv-group-size", String(draft.kvGroupSize)] }
@@ -1493,6 +1526,7 @@ struct CommandTemplate: Identifiable, Equatable {
             args = ["text", "code", "--prompt", draft.prompt]
             if !draft.secondaryText.isBlank { args += ["--system", draft.secondaryText] }
             args += ["--max-tokens", String(draft.maxTokens), "--temperature", format(draft.temperature), "--top-p", format(draft.topP)]
+            if draft.minP > 0 { args += ["--min-p", format(draft.minP)] }
             if !draft.model.isBlank { args += ["--model", draft.model] }
             if draft.stream { args.append("--stream") }
             if draft.force { args.append("--stats") }
@@ -2418,6 +2452,10 @@ struct CommandTemplate: Identifiable, Equatable {
                 args += ["--top-p", draft.operationsRuntimeTopP]
             }
             if draft.operationsClearTopP { args.append("--clear-top-p") }
+            if !draft.operationsRuntimeMinP.isBlank {
+                args += ["--min-p", draft.operationsRuntimeMinP]
+            }
+            if draft.operationsClearMinP { args.append("--clear-min-p") }
             if !draft.operationsRuntimeEngine.isBlank {
                 args += ["--engine", draft.operationsRuntimeEngine]
             }
@@ -2482,6 +2520,34 @@ struct CommandTemplate: Identifiable, Equatable {
             if !draft.benchmarkMTPBlockSize.isBlank {
                 args += ["--mtp-block-size", draft.benchmarkMTPBlockSize]
             }
+            if draft.json { args.append("--json") }
+
+        case .modelBenchmarkLagunaDFlash:
+            args = [
+                "model", "benchmark", "laguna-dflash",
+                "--laguna-path", draft.modelRoot,
+                "--laguna-dflash-path", draft.secondaryText,
+                "--decode-token-values", draft.benchmarkDecodeTokenValues,
+                "--repetitions", String(draft.benchmarkRepetitions),
+                "--laguna-dflash-tokens", String(draft.benchmarkLagunaDFlashTokens),
+                "--temperature", format(draft.temperature),
+                "--top-p", format(draft.topP),
+                "--top-k", String(draft.topK),
+                "--min-p", format(draft.minP),
+                "--fixture", draft.benchmarkFixture,
+                "--context-size", String(draft.contextSize),
+                "--warmup-repetitions", String(draft.benchmarkWarmupRepetitions)
+            ]
+            if !draft.prompt.isBlank { args += ["--prompt", draft.prompt] }
+            if !draft.benchmarkPromptFile.isBlank {
+                args += ["--prompt-file", draft.benchmarkPromptFile]
+            }
+            if !draft.benchmarkConcurrencyValues.isBlank {
+                args += ["--concurrency-values", draft.benchmarkConcurrencyValues]
+            }
+            if draft.benchmarkMixedFixtures { args.append("--mixed-fixtures") }
+            if draft.benchmarkIncludeAutomatic { args.append("--include-automatic") }
+            if draft.benchmarkLogResponses { args.append("--log-responses") }
             if draft.json { args.append("--json") }
 
         case .pluginList:
@@ -3354,10 +3420,17 @@ enum CommandCatalog {
         CommandTemplate(
             id: .modelBenchmark,
             category: .models,
-            title: "Benchmark",
+            title: "Qwen3.6 benchmark",
             subtitle: "Focused Qwen3.6 MTP benchmark",
             systemImage: "speedometer",
             defaultModel: "text-chat-q36-nano"
+        ),
+        CommandTemplate(
+            id: .modelBenchmarkLagunaDFlash,
+            category: .models,
+            title: "Laguna benchmark",
+            subtitle: "Target-only, fixed DFlash, and adaptive routing",
+            systemImage: "bolt.horizontal.circle"
         ),
         CommandTemplate(
             id: .pluginList,

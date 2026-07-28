@@ -74,6 +74,7 @@ import Testing
         "model.remove",
         "model.repair-manifests",
         "model.benchmark.q36-mtp",
+        "model.benchmark.laguna-dflash",
         "speech.synthesize",
         "speech.transcribe",
         "speech.profile.list",
@@ -95,7 +96,7 @@ import Testing
         "config.get",
         "config.unset"
     ])
-    #expect(document.commands.count == 88)
+    #expect(document.commands.count == 89)
 
     let data = try JSONEncoder().encode(document)
     let decoded = try JSONDecoder().decode(MereRunCapabilityDocument.self, from: data)
@@ -114,6 +115,27 @@ import Testing
     let responseFormat = chat.options.first { $0.flag == "--response-format" }
 
     #expect(responseFormat?.choices == TextResponseFormat.allCases.map(\.rawValue))
+}
+
+@Test func lagunaControlsAreFirstClassAcrossSharedCommandSurfaces() {
+    #expect(MereRunCapabilityCatalog.textChat.options.contains { $0.flag == "--min-p" })
+    #expect(MereRunCapabilityCatalog.textCode.options.contains { $0.flag == "--min-p" })
+    #expect(
+        MereRunCapabilityCatalog.modelRuntimeSet.options
+            .first { $0.flag == "--engine" }?
+            .choices
+            .contains("text-chat-laguna") == true
+    )
+    #expect(
+        MereRunCapabilityCatalog.apiServe.options
+            .first { $0.flag == "--engine" }?
+            .choices
+            .contains("text-chat-laguna") == true
+    )
+    #expect(
+        MereRunCapabilityCatalog.modelBenchmarkLagunaDFlash.command
+            == ["model", "benchmark", "laguna-dflash"]
+    )
 }
 
 @Test func videoProductChoicesComeFromTypedSharedEnums() {

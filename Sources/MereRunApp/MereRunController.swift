@@ -693,6 +693,7 @@ final class MereRunController: ObservableObject {
         if !studioDraft.inputPath.isBlank { draft.inputPath = studioDraft.inputPath }
         draft.temperature = studioDraft.temperature
         draft.topP = studioDraft.topP
+        draft.minP = studioDraft.minP
         draft.maxTokens = studioDraft.maxTokens
         draft.contextSize = studioDraft.contextSize
         draft.topK = studioDraft.topK

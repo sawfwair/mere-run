@@ -633,6 +633,8 @@ struct StudioOptionsPanel: View {
             in: 0...512
         )
         .font(MereRunTheme.captionFont)
+        TextField("Min-p (0 = model default)", value: $draft.minP, format: .number)
+            .textFieldStyle(.roundedBorder)
 
         Picker("KV bits", selection: $draft.kvBits) {
             Text("Auto").tag(0)

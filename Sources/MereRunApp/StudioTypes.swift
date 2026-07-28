@@ -294,6 +294,7 @@ struct StudioDraft: Codable, Equatable {
     // seeded from the matching template's CommandDraft so the two surfaces never drift.
     var temperature = 0.7
     var topP = 0.9
+    var minP = 0.0
     var maxTokens = 2048
     var contextSize = 0
     var topK = 0
@@ -395,6 +396,7 @@ struct StudioDraft: Codable, Equatable {
         saveProfileName = ""
         temperature = base?.temperature ?? 0.7
         topP = base?.topP ?? 0.9
+        minP = base?.minP ?? 0
         maxTokens = base?.maxTokens ?? 2048
         contextSize = base?.contextSize ?? 0
         topK = base?.topK ?? 0
@@ -516,6 +518,7 @@ enum StudioOptionSchema {
             return [
                 StudioOptionField(id: "temperature", label: "Temperature", control: .double(\.temperature)),
                 StudioOptionField(id: "topP", label: "Top-p", control: .double(\.topP)),
+                StudioOptionField(id: "minP", label: "Min-p (0 = model default)", control: .double(\.minP)),
                 StudioOptionField(id: "maxTokens", label: "Max tokens", control: .int(\.maxTokens, range: 1...32_768, step: 64)),
             ]
         case .createImage:
@@ -655,6 +658,7 @@ enum StudioCommandAdapter {
             draft.model = studioDraft.model.isBlank ? draft.model : studioDraft.model
             draft.temperature = studioDraft.temperature
             draft.topP = studioDraft.topP
+            draft.minP = studioDraft.minP
             draft.maxTokens = studioDraft.maxTokens
             if mode == .chat {
                 draft.contextSize = studioDraft.contextSize
