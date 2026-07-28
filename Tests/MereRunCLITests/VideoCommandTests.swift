@@ -237,6 +237,9 @@ final class VideoCommandTests: XCTestCase {
 
     func testVideoAnimatePreflightReportsMissingInputsWithoutLoading() throws {
         let adaptersRoot = try makeTempDirectory()
+        let adapterSpec = try XCTUnwrap(
+            ManagedAdapterCatalog.spec(for: ManagedAdapterCatalog.scail2LightX2VFourStepID)
+        )
         let command = try VideoAnimate.parse([
             "a dancer turns",
             "--reference", "/tmp/missing-ref.png",
@@ -252,19 +255,57 @@ final class VideoCommandTests: XCTestCase {
             requireInstalledAdapter: false,
             adaptersRoot: adaptersRoot
         )
-        let report = command.makePreflightReport(options: options, modelRootURL: nil)
+        let report = command.makePreflightReport(
+            options: options,
+            modelRootURL: nil,
+            adaptersRoot: adaptersRoot
+        )
 
         XCTAssertEqual(report.status, "blocked")
         XCTAssertFalse(report.modelInstalled)
         XCTAssertEqual(report.missingInputFiles.count, 5)
         XCTAssertTrue(
             report.missingInputFiles.contains(
-                try XCTUnwrap(
-                    ManagedAdapterCatalog.spec(for: ManagedAdapterCatalog.scail2LightX2VFourStepID)
-                ).installedFileURL(adaptersRoot: adaptersRoot).path
+                adapterSpec.installedFileURL(adaptersRoot: adaptersRoot).path
             )
         )
         XCTAssertEqual(report.mode, "animation")
+    }
+
+    func testVideoAnimatePreflightRejectsUnverifiedManagedAdapter() throws {
+        let adaptersRoot = try makeTempDirectory()
+        let adapterSpec = try XCTUnwrap(
+            ManagedAdapterCatalog.spec(for: ManagedAdapterCatalog.scail2LightX2VFourStepID)
+        )
+        let adapterURL = adapterSpec.installedFileURL(adaptersRoot: adaptersRoot)
+        try createFile(adapterURL)
+        let reference = try makeTempFile(name: "ref.png")
+        let referenceMask = try makeTempFile(name: "ref-mask.png")
+        let drivingVideo = try makeTempFile(name: "driving.mp4")
+        let drivingMask = try makeTempFile(name: "driving-mask.mov")
+        let command = try VideoAnimate.parse([
+            "a dancer turns",
+            "--reference", reference.path,
+            "--reference-mask", referenceMask.path,
+            "--driving-video", drivingVideo.path,
+            "--driving-mask", drivingMask.path,
+            "--preflight",
+            "--json",
+        ])
+        let options = try command.makeOptions(
+            prompt: command.prompt,
+            outputURL: URL(fileURLWithPath: "/tmp/result.mp4"),
+            requireInstalledAdapter: false,
+            adaptersRoot: adaptersRoot
+        )
+        let report = command.makePreflightReport(
+            options: options,
+            modelRootURL: nil,
+            adaptersRoot: adaptersRoot
+        )
+
+        XCTAssertEqual(report.status, "blocked")
+        XCTAssertEqual(report.missingInputFiles, [adapterURL.path])
     }
 
     func testVideoGenerateParsesDefaults() throws {

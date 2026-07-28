@@ -369,7 +369,8 @@ struct VideoAnimate: AsyncParsableCommand {
 
     func makePreflightReport(
         options: SCAIL2GenerationOptions,
-        modelRootURL: URL?
+        modelRootURL: URL?,
+        adaptersRoot: URL = MereRunModelPaths.adaptersDir
     ) -> SCAIL2AnimationPreflightReport {
         let inputs = [
             options.reference.imageURL,
@@ -378,7 +379,19 @@ struct VideoAnimate: AsyncParsableCommand {
             options.drivingMaskVideoURL,
         ] + options.additionalReferences.flatMap { [$0.imageURL, $0.maskURL] }
             + (options.distilledAdapterURL.map { [$0] } ?? [])
-        let missingInputs = inputs.filter { !FileManager.default.fileExists(atPath: $0.path) }
+        let effectiveAdapterReference = profile == .fast
+            ? distilledAdapter ?? ManagedAdapterCatalog.scail2LightX2VFourStepID
+            : distilledAdapter
+        let managedAdapterSpec = effectiveAdapterReference.flatMap {
+            ManagedAdapterCatalog.spec(for: $0)
+        }
+        let missingInputs = inputs.filter { input in
+            if input == options.distilledAdapterURL,
+               let managedAdapterSpec {
+                return !managedAdapterSpec.isInstalled(adaptersRoot: adaptersRoot)
+            }
+            return !FileManager.default.fileExists(atPath: input.path)
+        }
         let missingModels = modelRootURL.map { SCAIL2Resources(rootURL: $0).validate() } ?? []
         let installed = modelRootURL != nil && missingModels.isEmpty
         return SCAIL2AnimationPreflightReport(
