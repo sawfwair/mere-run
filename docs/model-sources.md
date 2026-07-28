@@ -1,12 +1,15 @@
 # Model Sources
 
-This repo supports two model paths:
+Weights reach `mere.run` in exactly two ways:
 
-1. Hugging Face snapshots pulled into the local mere.run model store with `mere.run model pull`
-2. Explicit local paths passed to commands with `--model`, `--model-root`, or equivalent command-specific options
+1. **Managed pulls** — cataloged Hugging Face snapshots installed into the local
+   model store by `mere.run model pull`
+2. **Local paths** — a directory you point at yourself with `--model`,
+   `--model-root`, or the command's equivalent option
 
-The public repo no longer supports private model archives, R2 credentials, or a
-packaged central model host.
+There is no private model archive, no credentialed mirror, and no central host
+in between. Every managed model's source repository and pinned revision are in
+the catalog, so you can see exactly where each byte came from.
 
 The canonical local model store is:
 

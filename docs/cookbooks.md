@@ -1,8 +1,10 @@
 # Cookbooks
 
-`mere.run guide` is the offline cookbook reader built into the CLI. It prints
-Markdown by default, can emit JSON for agents or tools, and `--markdown` renders
-the topic list as a Markdown table.
+Every command carries its own manual. `mere.run guide` is a cookbook reader
+built into the binary, and it works with the network off — on a plane, in a
+locked-down lab, or on a machine that has never had an API key. It prints
+Markdown by default, emits JSON for agents and tools, and renders the topic
+list as a Markdown table with `--markdown`.
 
 ```bash
 mere.run guide --list
@@ -17,10 +19,9 @@ mere.run guide open-webui
 mere.run guide video generate --json
 ```
 
-The cookbooks are packaged with the CLI binary, so installed copies can read
-them without internet access. They are meant for practical use: what the command
-does, which model to install, which flags matter, prompting patterns, examples,
-iteration tips, troubleshooting, and source links.
+Each guide is written to be used, not skimmed: what the command does, which
+model to install, which flags actually change the output, prompting patterns,
+worked examples, iteration tips, troubleshooting, and links into the source.
 
 ## Available Topics
 

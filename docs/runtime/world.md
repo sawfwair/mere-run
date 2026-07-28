@@ -1,15 +1,23 @@
 # Persistent World Runtime
 
-`mere.run world` runs a long-lived, local conditioned-video session. The
-loopback-first HTTP server supports two native Swift/MLX backends:
+A generated place you can walk around in. Send a camera move and get back a
+video chunk; send another and it continues from where the last one ended — same
+corridor, same light, same scene. The session is a navigation graph rather than
+a one-way chain, so an exact inverse move replays the edge you arrived on
+instead of inventing a new room on the way back.
+
+It runs as a long-lived local HTTP server, loopback-first, on either of two
+native Swift/MLX backends:
 
 - `dreamx`: Wan 2.2 TI2V resources plus a converted DreamX causal checkpoint
 - `cosmos3`: the official Cosmos3-Edge checkpoint with learned action
   conditioning and the `camera_pose` action domain
 
-## Public surface
+## Commands
 
-- `mere.run world serve`
+| Command | What it does |
+| --- | --- |
+| `mere.run world serve` | Serve one warm native world-model session over HTTP. |
 
 ## Required models
 

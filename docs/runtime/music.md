@@ -1,17 +1,22 @@
 # Music Runtime
 
-This page covers the native music-generation paths exposed through
-`mere.run music analyze`, `mere.run music generate`, `mere.run music realtime`,
-and `mere.run music transcribe`.
+Write a track from a text prompt, cover an existing song in a different genre,
+play a model live from a MIDI controller, or turn a finished mix back into
+instrument-separated MIDI with tempo, meter, and key already filled in.
+Generation, analysis, adapter training, resident serving, realtime steering,
+and transcription are native Swift and MLX paths — Magenta RT2 takes CC knobs
+while it is still generating.
 
-## Public surface
+## Commands
 
-- `mere.run music generate`
-- `mere.run music analyze`
-- `mere.run music serve`
-- `mere.run music train-adapter`
-- `mere.run music realtime`
-- `mere.run music transcribe`
+| Command | What it does |
+| --- | --- |
+| `mere.run music generate` | Generate audio from a music prompt. |
+| `mere.run music analyze` | Analyze source audio with ACE-Step audio understanding. |
+| `mere.run music serve` | Keep an ACE-Step pipeline resident behind the native music API. |
+| `mere.run music train-adapter` | Train a reloadable ACE-Step LoRA or LoKr adapter. |
+| `mere.run music realtime` | Run Magenta RealTime 2 music generation, steerable from stdin or CoreMIDI. |
+| `mere.run music transcribe` | Transcribe a full music mix into instrument-separated MIDI with MuScriptor. |
 
 ## Model family
 
