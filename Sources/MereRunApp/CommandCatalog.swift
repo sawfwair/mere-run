@@ -18,7 +18,7 @@ enum CommandCategory: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-enum CommandTemplateID: String, CaseIterable {
+enum CommandTemplateID: String, CaseIterable, Codable {
     case setup
     case agentOnboard
     case agentInstallPi
@@ -319,11 +319,15 @@ enum StudioCodeDefaults {
     }
 }
 
-struct CommandDraft: Equatable {
+struct CommandDraft: Equatable, Codable {
     var prompt = ""
     var secondaryText = ""
     var model = ""
     var inputPath = ""
+    /// Optional so Library rows written before mask editing still decode through synthesized Codable.
+    var imageMaskPath: String?
+    var imageOutpaint: String?
+    var imageMaskFeather: Int?
     var outputPath = ""
     var width = 1024
     var height = 1024
@@ -1287,6 +1291,11 @@ struct CommandTemplate: Identifiable, Equatable {
             if !draft.seed.isBlank { args += ["--seed", draft.seed] }
             if !draft.inputPath.isBlank {
                 args += ["--input", draft.inputPath, "--strength", format(draft.strength)]
+            }
+            if let mask = draft.imageMaskPath, !mask.isBlank { args += ["--mask", mask] }
+            if let outpaint = draft.imageOutpaint, !outpaint.isBlank { args += ["--outpaint", outpaint] }
+            if let feather = draft.imageMaskFeather, feather != 8 {
+                args += ["--mask-feather", String(feather)]
             }
             for path in pathList(draft.referenceImagePaths) {
                 args += ["--ref-image", path]
@@ -2686,6 +2695,123 @@ struct CommandTemplate: Identifiable, Equatable {
             .flatMap { $0.split(separator: ",", omittingEmptySubsequences: true) }
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
+    }
+}
+
+extension CommandTemplate {
+    /// The primary Studio workspace that owns this command's durable Library entry.
+    ///
+    /// Advanced exposes specialist commands without adding dozens of modes to the main sidebar.
+    /// Mapping them into the nearest creative workspace lets every run use the same queue,
+    /// progress, history, and result canvas while `StudioLibraryItem.templateID` preserves the
+    /// precise command identity and title.
+    var libraryMode: StudioMode {
+        switch id {
+        case .imageGenerate,
+             .imageTrainLoRA,
+             .imageValidate,
+             .imageDatasetDiscover,
+             .imageRunPlan,
+             .imageVisualizeRun,
+             .imageReconstruct3D,
+             .imageReconstruct3DTrellis2,
+             .imageReconstruct3DMultiview:
+            return .createImage
+
+        case .textChat, .textEmbed, .textAnonymize, .textTrainLoRA:
+            return .chat
+        case .textCode:
+            return .code
+
+        case .speechSynthesize,
+             .speechProfileList,
+             .speechProfileCreate,
+             .speechProfileDelete:
+            return .speak
+        case .speechTranscribe:
+            return .listen
+
+        case .visionGround:
+            return .findObjects
+        case .visionSegment:
+            return .segment
+        case .visionTrack, .visionTrackLive:
+            return .track
+        case .visionInspect,
+             .visionCaption,
+             .visionOCR,
+             .visionFaceDetect,
+             .visionFaceEmbed,
+             .visionFaceCompare,
+             .visionFaceBatch,
+             .visionPose,
+             .visionFlow,
+             .visionDepthVideo,
+             .visionGeometry,
+             .visionGeometryMultiview:
+            return .readImage
+
+        case .musicGenerate,
+             .musicAnalyze,
+             .musicTranscribe,
+             .musicRealtime,
+             .musicTrainAdapter,
+             .musicServe:
+            return .music
+
+        case .videoGenerate,
+             .videoAnimate,
+             .videoCosmos3,
+             .videoPrepareMasks,
+             .videoExportLatents,
+             .videoSession,
+             .worldServe:
+            return .video
+
+        case .sfxGenerate,
+             .sfxVideo,
+             .sfxAEEncode,
+             .sfxAEDecode,
+             .sfxClapScore,
+             .sfxConditionText:
+            return .sfx
+
+        case .setup,
+             .agentOnboard,
+             .agentInstallPi,
+             .agentStart,
+             .modelList,
+             .modelCapabilities,
+             .modelPull,
+             .modelInfo,
+             .modelRemove,
+             .modelRepairManifests,
+             .adapterList,
+             .adapterPull,
+             .runList,
+             .runInspect,
+             .runWatch,
+             .runFetch,
+             .runCancel,
+             .runRetry,
+             .statusSnapshot,
+             .qualityGate,
+             .modelStorage,
+             .modelGarbageCollect,
+             .modelRuntimeGet,
+             .modelRuntimeSet,
+             .graphStudio,
+             .nodeConsole,
+             .modelBenchmark,
+             .modelBenchmarkLagunaDFlash,
+             .pluginList,
+             .pluginInstall,
+             .pluginDoctor,
+             .openWebui,
+             .apiServe,
+             .custom:
+            return .chat
+        }
     }
 }
 

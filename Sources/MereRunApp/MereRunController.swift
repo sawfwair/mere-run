@@ -413,6 +413,7 @@ struct MereRunRunResult: Identifiable, Equatable {
     let commandPreview: String
     let exitCode: Int32
     let outputURL: URL?
+    let artifactURLs: [URL]
     let outputText: String?
     let completedAt: Date
     /// When this run was a chat/code turn, the conversation it belongs to (so completion routes
@@ -426,6 +427,7 @@ struct MereRunRunResult: Identifiable, Equatable {
         commandPreview: String,
         exitCode: Int32,
         outputURL: URL?,
+        artifactURLs: [URL] = [],
         outputText: String?,
         completedAt: Date = Date(),
         conversationID: UUID? = nil
@@ -436,6 +438,7 @@ struct MereRunRunResult: Identifiable, Equatable {
         self.commandPreview = commandPreview
         self.exitCode = exitCode
         self.outputURL = outputURL
+        self.artifactURLs = artifactURLs
         self.outputText = outputText
         self.completedAt = completedAt
         self.conversationID = conversationID
@@ -543,6 +546,10 @@ final class MereRunController: ObservableObject {
     }
     @Published private(set) var liveOutputText = ""
     @Published private(set) var currentProgress: StudioRunProgress?
+    /// Live progress keyed by durable Studio request id. Unlike `currentProgress`, this covers
+    /// background runs too, so Library rows keep reporting useful work while another run owns
+    /// the foreground canvas.
+    @Published private(set) var progressByRequestID: [UUID: StudioRunProgress] = [:]
     @Published private(set) var cliVersion: String?
 
     /// The app's own version, read from the bundle for the version handshake display.
@@ -615,6 +622,15 @@ final class MereRunController: ObservableObject {
         return session.spec.template.id == .videoSession
             && session.process != nil
             && session.exitCode == nil
+    }
+
+    func canSteerRealtimeMusic(requestID: UUID) -> Bool {
+        sessions.contains {
+            $0.spec.requestID == requestID
+                && $0.spec.template.id == .musicRealtime
+                && $0.process != nil
+                && $0.exitCode == nil
+        }
     }
 
     init(
@@ -890,6 +906,15 @@ final class MereRunController: ObservableObject {
         let result = await utilityCommandResult(args: ["speech", "profile", "list"])
         guard result.exitCode == 0 else { return [] }
         return StudioVoiceProfile.parse(listOutput: result.stdout)
+    }
+
+    func loadMIDIInputs() async -> [String] {
+        let result = await utilityCommandResult(args: ["music", "realtime", "--list-midi-inputs"])
+        guard result.exitCode == 0 else { return [] }
+        return result.stdout
+            .components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty && $0 != "No MIDI input sources found." }
     }
 
     /// Offline guide topics for the in-app help panel (`guide --list --json`).
@@ -1295,6 +1320,27 @@ final class MereRunController: ObservableObject {
     }
 
     @discardableResult
+    func submitRealtimeMusicCommand(_ line: String, requestID: UUID) -> Bool {
+        guard let session = sessions.first(where: {
+            $0.spec.requestID == requestID && $0.spec.template.id == .musicRealtime
+        }),
+        let process = session.process,
+        session.exitCode == nil else {
+            return false
+        }
+        do {
+            try process.sendStandardInput(line + "\n")
+            append("Live control → \(line)", stream: .system, to: session)
+            mirrorForeground(session)
+            return true
+        } catch {
+            append(error.localizedDescription, stream: .stderr, to: session)
+            mirrorForeground(session)
+            return false
+        }
+    }
+
+    @discardableResult
     func submitVideoSessionRequest() -> Bool {
         guard let session = foregroundSession,
               session.spec.template.id == .videoSession,
@@ -1480,12 +1526,24 @@ final class MereRunController: ObservableObject {
         session.process = nil
         session.exitCode = exitCode
         session.currentProgress = nil
+        if let requestID = session.spec.requestID {
+            progressByRequestID[requestID] = nil
+        }
 
         // Conversation replies are prose, not artifacts — never run output-file detection on them
         // (a path-like substring in a reply must not become a bogus lastOutputURL/status).
         let detectedOutput = session.spec.conversationID == nil
             ? detectOutputURL(expected: session.expectedOutput, stdout: session.stdoutBuffer)
             : nil
+        let reportedOutputs = session.spec.conversationID == nil
+            ? detectedOutputURLs(stdout: session.stdoutBuffer)
+            : []
+        let artifactURLs = StudioArtifactDiscovery.urls(
+            templateID: session.spec.template.id,
+            draft: session.spec.draft,
+            primaryOutput: detectedOutput,
+            reportedOutputs: reportedOutputs
+        )
         // Conversation turns finalize from the unbounded, think-stripped accumulator so long
         // replies are not clipped by the 32 KB console buffer; other modes use the buffer.
         let outputText: String?
@@ -1540,6 +1598,7 @@ final class MereRunController: ObservableObject {
             commandPreview: session.preview,
             exitCode: exitCode,
             outputURL: detectedOutput,
+            artifactURLs: artifactURLs,
             outputText: outputText,
             conversationID: session.spec.conversationID
         )
@@ -1552,6 +1611,9 @@ final class MereRunController: ObservableObject {
 
     private func finishPreflightFailure(session: RunSession, exitCode: Int32, outputText: String?) {
         lastExitCode = exitCode
+        if let requestID = session.spec.requestID {
+            progressByRequestID[requestID] = nil
+        }
         if let conversationID = session.spec.conversationID {
             runningConversationIDs.remove(conversationID)
         }
@@ -1561,6 +1623,7 @@ final class MereRunController: ObservableObject {
             commandPreview: session.preview,
             exitCode: exitCode,
             outputURL: nil,
+            artifactURLs: [],
             outputText: outputText,
             conversationID: session.spec.conversationID
         )
@@ -1711,6 +1774,9 @@ final class MereRunController: ObservableObject {
             // instead of flooding the log with hundreds of lines.
             if let progress = StudioProgressParser.parse(trimmed) {
                 session.currentProgress = progress
+                if let requestID = session.spec.requestID {
+                    progressByRequestID[requestID] = progress
+                }
                 continue
             }
             session.logs.append(LogLine(stream: stream, text: trimmed))
@@ -1868,6 +1934,14 @@ final class MereRunController: ObservableObject {
         return nil
     }
 
+    private func detectedOutputURLs(stdout: String) -> [URL] {
+        StudioResultParser.outputPaths(fromStdout: stdout).compactMap { candidate in
+            let expanded = NSString(string: candidate).expandingTildeInPath
+            guard fileSystem.fileExists(atPath: expanded) else { return nil }
+            return URL(fileURLWithPath: expanded)
+        }
+    }
+
     private func processEnvironment(templateID: CommandTemplateID, draft: CommandDraft) -> [String: String] {
         var env = ProcessInfo.processInfo.environment
         env["PATH"] = [
@@ -1916,7 +1990,7 @@ final class MereRunController: ObservableObject {
             arguments: processArgs,
             currentDirectoryURL: workingDirectoryURL(),
             environment: environment,
-            keepsStandardInputOpen: templateID == .videoSession
+            keepsStandardInputOpen: templateID == .videoSession || templateID == .musicRealtime
         )
     }
 

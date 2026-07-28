@@ -1,6 +1,7 @@
 import XCTest
 @testable import MereRunCLI
 @testable import MereRunCore
+import MediaIO
 
 final class ImageGenerateCommandParsingTests: XCTestCase {
     func testDefaultManagedImageModelIsNano() {
@@ -47,6 +48,111 @@ final class ImageGenerateCommandParsingTests: XCTestCase {
         ])
 
         XCTAssertEqual(cmd.strength, 0.35)
+    }
+
+    func testParsesMaskOutpaintAndFeatherOptions() throws {
+        let cmd = try ImageGenerate.parse([
+            "--prompt", "extend the garden",
+            "--input", "/tmp/source.png",
+            "--mask", "/tmp/mask.png",
+            "--outpaint", "64,128,64,0",
+            "--mask-feather", "16",
+        ])
+
+        XCTAssertEqual(cmd.mask, "/tmp/mask.png")
+        XCTAssertEqual(cmd.outpaint, "64,128,64,0")
+        XCTAssertEqual(cmd.maskFeather, 16)
+        XCTAssertEqual(
+            try ImageOutpaintInsets.parse(cmd.outpaint ?? ""),
+            ImageOutpaintInsets(top: 64, right: 128, bottom: 64, left: 0)
+        )
+    }
+
+    func testOutpaintRejectsInvalidInsetsAndMaskFeatherSmoothsBoundary() throws {
+        XCTAssertThrowsError(try ImageOutpaintInsets.parse("64,-1,0,0"))
+        XCTAssertThrowsError(try ImageOutpaintInsets.parse("0,0,0,0"))
+        XCTAssertThrowsError(try ImageOutpaintInsets.parse("64,32"))
+
+        let feathered = ImageEditPreparation.feather(
+            [0, 0, 255, 255, 255],
+            width: 5,
+            height: 1,
+            radius: 1
+        )
+        XCTAssertEqual(feathered.count, 5)
+        XCTAssertGreaterThan(feathered[1], 0)
+        XCTAssertLessThan(feathered[2], 255)
+    }
+
+    func testImageEditRestoresProtectedPixelsAndUsesGeneratedMaskedPixels() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mererun-mask-test-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let inputURL = root.appendingPathComponent("input.png")
+        let maskURL = root.appendingPathComponent("mask.png")
+        try MediaImageIO.writePNG(
+            try MediaImage(
+                width: 2,
+                height: 1,
+                rgba8: [255, 0, 0, 255, 0, 255, 0, 255]
+            ),
+            to: inputURL
+        )
+        try MediaImageIO.writePNG(
+            try MediaImage(
+                width: 2,
+                height: 1,
+                rgba8: [0, 0, 0, 255, 255, 255, 255, 255]
+            ),
+            to: maskURL
+        )
+        let preparation = try ImageEditPreparation.make(
+            inputURL: inputURL,
+            maskURL: maskURL,
+            outpaint: nil,
+            width: 2,
+            height: 1,
+            featherPixels: 0
+        )
+        defer { preparation.cleanup() }
+        try MediaImageIO.writePNG(
+            try MediaImage(
+                width: 2,
+                height: 1,
+                rgba8: [0, 0, 255, 255, 0, 0, 255, 255]
+            ),
+            to: preparation.generationInputURL
+        )
+
+        try preparation.finish(generatedURL: preparation.generationInputURL)
+        let result = try MediaImageIO.decode(preparation.generationInputURL)
+        XCTAssertEqual(Array(result.rgba8[0..<4]), [255, 0, 0, 255])
+        XCTAssertEqual(Array(result.rgba8[4..<8]), [0, 0, 255, 255])
+    }
+
+    func testOutpaintInsetsCreateExactEditableEdges() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mererun-outpaint-test-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let inputURL = root.appendingPathComponent("input.png")
+        try MediaImageIO.writePNG(
+            try MediaImage(width: 1, height: 1, rgba8: [255, 0, 0, 255]),
+            to: inputURL
+        )
+        let preparation = try ImageEditPreparation.make(
+            inputURL: inputURL,
+            maskURL: nil,
+            outpaint: ImageOutpaintInsets(top: 0, right: 1, bottom: 0, left: 1),
+            width: 3,
+            height: 1,
+            featherPixels: 0
+        )
+        defer { preparation.cleanup() }
+
+        XCTAssertEqual(preparation.editMask, [255, 0, 255])
+        XCTAssertEqual(Array(preparation.baseImage.rgba8[4..<8]), [255, 0, 0, 255])
     }
 
     func testKleinTreatsInputAsReferenceImage() {

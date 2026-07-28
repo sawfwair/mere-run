@@ -11,6 +11,9 @@ struct ImageGenerationPreflightInput {
     let seed: UInt64?
     let model: String?
     let input: String?
+    let mask: String?
+    let outpaint: String?
+    let maskFeather: Int
     let referenceImages: [String]
     let keepOriginalAspect: Bool
     let strength: Double?
@@ -41,6 +44,9 @@ struct ImageGenerationPreflightRequest: Codable, Equatable {
     let steps: Int?
     let seed: UInt64?
     let input: String?
+    let mask: String?
+    let outpaint: String?
+    let maskFeather: Int
     let referenceImages: [String]
     let keepOriginalAspect: Bool
     let strength: Double?
@@ -68,6 +74,9 @@ struct ImageGenerationPreflightRequest: Codable, Equatable {
         case steps
         case seed
         case input
+        case mask
+        case outpaint
+        case maskFeather = "mask_feather"
         case referenceImages = "reference_images"
         case keepOriginalAspect = "keep_original_aspect"
         case strength
@@ -151,12 +160,18 @@ struct ImageGenerationOutputPreflightSummary: Codable, Equatable {
 
 struct ImageGenerationInputPreflightSummary: Codable, Equatable {
     let inputImage: ImageGenerationPathPreflightSummary?
+    let maskImage: ImageGenerationPathPreflightSummary?
     let referenceImages: [ImageGenerationPathPreflightSummary]
+    let outpaint: String?
+    let maskFeather: Int
     let missingCount: Int
 
     enum CodingKeys: String, CodingKey {
         case inputImage = "input_image"
+        case maskImage = "mask_image"
         case referenceImages = "reference_images"
+        case outpaint
+        case maskFeather = "mask_feather"
         case missingCount = "missing_count"
     }
 }
@@ -317,6 +332,9 @@ struct ImageGenerationPreflightAnalyzer {
             steps: input.steps,
             seed: input.seed,
             input: input.input,
+            mask: input.mask,
+            outpaint: input.outpaint,
+            maskFeather: input.maskFeather,
             referenceImages: input.referenceImages,
             keepOriginalAspect: input.keepOriginalAspect,
             strength: input.strength,
@@ -491,8 +509,20 @@ struct ImageGenerationPreflightAnalyzer {
         diagnostics: inout [PreflightDiagnostic]
     ) -> ImageGenerationInputPreflightSummary {
         let inputImage = input.input.map { pathSummary(requested: $0) }
+        let maskImage = input.mask.map { pathSummary(requested: $0) }
         let referenceImages = input.referenceImages.map { pathSummary(requested: $0) }
-        let allInputs = [inputImage].compactMap { $0 } + referenceImages
+        let allInputs = [inputImage, maskImage].compactMap { $0 } + referenceImages
+
+        if (maskImage != nil || input.outpaint != nil), inputImage == nil {
+            diagnostics.append(
+                PreflightDiagnostic(
+                    id: "image_edit_input_missing",
+                    severity: .blocker,
+                    title: "Image edit input missing",
+                    message: "--mask and --outpaint require --input."
+                )
+            )
+        }
 
         for item in allInputs {
             if !item.exists {
@@ -520,7 +550,10 @@ struct ImageGenerationPreflightAnalyzer {
 
         return ImageGenerationInputPreflightSummary(
             inputImage: inputImage,
+            maskImage: maskImage,
             referenceImages: referenceImages,
+            outpaint: input.outpaint,
+            maskFeather: input.maskFeather,
             missingCount: allInputs.filter { !$0.exists }.count
         )
     }

@@ -56,6 +56,21 @@ struct ImageGenerate: AsyncParsableCommand {
     var input: String?
 
     @Option(
+        name: [.customLong("mask")],
+        help: "Black/white edit mask. White pixels may change; black pixels are restored from --input."
+    )
+    var mask: String?
+
+    @Option(
+        name: [.customLong("outpaint")],
+        help: "Expand the editable canvas as top,right,bottom,left padding inside --width/--height."
+    )
+    var outpaint: String?
+
+    @Option(name: [.customLong("mask-feather")], help: "Blend radius in pixels at mask/outpaint edges.")
+    var maskFeather: Int = 8
+
+    @Option(
         name: [.customLong("ref-image")],
         help: "Reference image path for FLUX.2 Klein or HiDream O1 editing/personalization. Repeat for multiple references."
     )
@@ -161,6 +176,35 @@ struct ImageGenerate: AsyncParsableCommand {
         } else {
             inputURL = nil
         }
+        let maskURL: URL?
+        if let mask {
+            let url = URL(fileURLWithPath: mask).standardizedFileURL
+            guard FileManager.default.fileExists(atPath: url.path) else {
+                throw ValidationError("Mask image not found: \(url.path)")
+            }
+            maskURL = url
+        } else {
+            maskURL = nil
+        }
+        let outpaintInsets = try outpaint.map(ImageOutpaintInsets.parse)
+        let editPreparation: ImageEditPreparation?
+        if maskURL != nil || outpaintInsets != nil {
+            guard let inputURL else {
+                throw ValidationError("--mask and --outpaint require --input.")
+            }
+            editPreparation = try ImageEditPreparation.make(
+                inputURL: inputURL,
+                maskURL: maskURL,
+                outpaint: outpaintInsets,
+                width: width,
+                height: height,
+                featherPixels: maskFeather
+            )
+        } else {
+            editPreparation = nil
+        }
+        defer { editPreparation?.cleanup() }
+        let effectiveInputURL = editPreparation?.generationInputURL ?? inputURL
 
         let referenceImageURLs = try referenceImages.map { path in
             let url = URL(fileURLWithPath: path).standardizedFileURL
@@ -218,7 +262,7 @@ struct ImageGenerate: AsyncParsableCommand {
         }
         let conditioning = Self.resolveConditioningInputs(
             family: manifest.family,
-            inputImage: inputURL,
+            inputImage: effectiveInputURL,
             referenceImages: referenceImageURLs,
             strength: strength
         )
@@ -347,6 +391,7 @@ struct ImageGenerate: AsyncParsableCommand {
                  .tts, .asr, .embed, .code, .ocr, .music, .sfx, .video, .psi, .privacy, .deepseek, nil:
                 throw ValidationError("Unsupported image model family for `mere.run image generate`: \(manifest.id)")
             }
+            try editPreparation?.finish(generatedURL: result.outputURL)
 
             try runEventLogger?.record(
                 type: "run_finished",
@@ -379,6 +424,15 @@ struct ImageGenerate: AsyncParsableCommand {
         if let strength, !(0.0...1.0).contains(strength) {
             throw ValidationError("--strength must be between 0.0 and 1.0")
         }
+        if (mask != nil || outpaint != nil), input == nil {
+            throw ValidationError("--mask and --outpaint require --input")
+        }
+        if maskFeather < 0 {
+            throw ValidationError("--mask-feather must be >= 0")
+        }
+        if let outpaint {
+            _ = try ImageOutpaintInsets.parse(outpaint)
+        }
         if let kreaBaseQuantizationBits, kreaBaseQuantizationBits != 4, kreaBaseQuantizationBits != 8 {
             throw ValidationError("--krea-base-quantization-bits must be 4 or 8")
         }
@@ -399,6 +453,9 @@ struct ImageGenerate: AsyncParsableCommand {
             seed: seed,
             model: model,
             input: input,
+            mask: mask,
+            outpaint: outpaint,
+            maskFeather: maskFeather,
             referenceImages: referenceImages,
             keepOriginalAspect: keepOriginalAspect,
             strength: strength,
@@ -463,6 +520,15 @@ struct ImageGenerate: AsyncParsableCommand {
         }
         if let input {
             args += ["--input", input]
+        }
+        if let mask {
+            args += ["--mask", mask]
+        }
+        if let outpaint {
+            args += ["--outpaint", outpaint]
+        }
+        if maskFeather != 8 {
+            args += ["--mask-feather", String(maskFeather)]
         }
         for referenceImage in referenceImages {
             args += ["--ref-image", referenceImage]

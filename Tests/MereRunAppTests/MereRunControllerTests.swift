@@ -302,6 +302,29 @@ final class MereRunControllerTests: XCTestCase {
         XCTAssertTrue(controller.canSubmitVideoSessionRequest)
     }
 
+    func testRealtimeMusicKeepsInputOpenAndAcceptsTargetedLiveControls() throws {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        let template = try XCTUnwrap(CommandCatalog.template(id: .musicRealtime))
+        var draft = template.defaultDraft()
+        draft.prompt = "ambient glass percussion"
+        draft.durationSeconds = 60
+        draft.musicInteractive = true
+        let request = StudioRunRequest(
+            mode: .music,
+            templateID: .musicRealtime,
+            template: template,
+            draft: draft
+        )
+
+        XCTAssertTrue(controller.run(studio: request))
+        XCTAssertTrue(runner.starts[0].configuration.keepsStandardInputOpen)
+        XCTAssertTrue(controller.canSteerRealtimeMusic(requestID: request.id))
+        XCTAssertTrue(controller.submitRealtimeMusicCommand("temp 0.8", requestID: request.id))
+        XCTAssertEqual(runner.processes[0].standardInputs, ["temp 0.8\n"])
+    }
+
     func testStudioRunsExecuteConcurrentlyUpToCapThenQueue() async throws {
         let runner = RecordingProcessRunner()
         let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
@@ -340,6 +363,36 @@ final class MereRunControllerTests: XCTestCase {
         XCTAssertEqual(controller.queuedRunCount, 0)
         XCTAssertEqual(runner.starts.count, 3)
         XCTAssertEqual(runner.starts[2].configuration.arguments, ["third"])
+    }
+
+    func testBackgroundStudioRunPublishesProgressByRequestID() async throws {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        let template = try XCTUnwrap(CommandCatalog.template(id: .custom))
+        func request(_ arg: String) -> StudioRunRequest {
+            var draft = template.defaultDraft()
+            draft.extraArguments = arg
+            return StudioRunRequest(mode: .createImage, templateID: .custom, template: template, draft: draft)
+        }
+        let background = request("background")
+        let foreground = request("foreground")
+
+        XCTAssertTrue(controller.run(studio: background))
+        XCTAssertTrue(controller.run(studio: foreground))
+        runner.starts[0].stderr("Training (2/4) loss 0.123456\n")
+        await Task.yield()
+
+        let progress = try XCTUnwrap(controller.progressByRequestID[background.id])
+        XCTAssertEqual(progress.label, "Training")
+        XCTAssertEqual(progress.fractionCompleted, 0.5)
+        XCTAssertTrue(progress.detail?.contains("loss 0.123456") == true)
+        XCTAssertNil(controller.currentProgress)
+
+        runner.starts[0].termination(0)
+        await Task.yield()
+        await Task.yield()
+        XCTAssertNil(controller.progressByRequestID[background.id])
     }
 
     func testQueuedConversationTurnIsTrackedInFlightAtSubmission() throws {

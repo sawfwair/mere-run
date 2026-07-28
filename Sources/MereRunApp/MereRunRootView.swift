@@ -241,12 +241,14 @@ private struct CommandRow: View {
 
 private struct CommandEditor: View {
     @EnvironmentObject private var controller: MereRunController
+    @EnvironmentObject private var library: StudioLibraryStore
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 header
                 commandPreview
+                runStatus
                 templateFields
                 if controller.selectedTemplate.externalURL == nil {
                     runtimeFields
@@ -257,6 +259,46 @@ private struct CommandEditor: View {
             .frame(maxWidth: .infinity, alignment: .topLeading)
         }
         .background(MereRunTheme.background)
+    }
+
+    @ViewBuilder
+    private var runStatus: some View {
+        if controller.isRunning {
+            VStack(alignment: .leading, spacing: 7) {
+                HStack {
+                    Label(controller.status, systemImage: "bolt.horizontal.circle.fill")
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(MereRunTheme.accent)
+                    Spacer()
+                    if controller.queuedRunCount > 0 {
+                        Text("\(controller.queuedRunCount) queued")
+                            .font(MereRunTheme.captionFont)
+                            .foregroundStyle(MereRunTheme.textMuted)
+                    }
+                }
+                if let progress = controller.currentProgress {
+                    if let fraction = progress.fractionCompleted {
+                        ProgressView(value: fraction)
+                            .tint(MereRunTheme.accent)
+                    } else {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                    HStack {
+                        Text(progress.label)
+                        Spacer()
+                        if let detail = progress.detail { Text(detail) }
+                    }
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.textMuted)
+                } else {
+                    ProgressView()
+                        .controlSize(.small)
+                }
+            }
+            .padding(12)
+            .merePanel()
+        }
     }
 
     private var header: some View {
@@ -535,15 +577,14 @@ private struct CommandEditor: View {
                 .keyboardShortcut(.return, modifiers: .command)
             } else {
                 Button {
-                    controller.run()
+                    runAdvancedCommand()
                 } label: {
-                    Label("Run", systemImage: "play.fill")
+                    Label(controller.isRunning ? "Queue" : "Run", systemImage: "play.fill")
                         .frame(minWidth: 86)
                 }
                 .buttonStyle(.borderedProminent)
                 .tint(MereRunTheme.accent)
                 .keyboardShortcut(.return, modifiers: .command)
-                .disabled(controller.isRunning)
 
                 Button {
                     controller.cancel()
@@ -575,6 +616,23 @@ private struct CommandEditor: View {
                 .accessibilityLabel("Reveal output in Finder")
             }
         }
+    }
+
+    private func runAdvancedCommand() {
+        let template = controller.selectedTemplate
+        let draft = controller.draft
+        let request = StudioRunRequest(
+            mode: template.libraryMode,
+            templateID: template.id,
+            template: template,
+            draft: draft
+        )
+        let preview = controller.commandPreview(template: template, draft: draft, masksSecrets: true)
+        let status: StudioLibraryStatus = controller.isRunning || controller.queuedRunCount > 0
+            ? .queued
+            : .running
+        library.start(request: request, commandPreview: preview, status: status)
+        _ = controller.run(studio: request)
     }
 
     private var showsModelField: Bool {
@@ -629,8 +687,16 @@ private struct RunConsole: View {
                 }
                 Spacer()
                 if controller.isRunning {
-                    ProgressView()
-                        .controlSize(.small)
+                    if let progress = controller.currentProgress,
+                       let fraction = progress.fractionCompleted {
+                        ProgressView(value: fraction)
+                            .frame(width: 110)
+                            .tint(MereRunTheme.accent)
+                            .help(progress.detail ?? progress.label)
+                    } else {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
                 }
                 if !controller.logs.isEmpty {
                     Button {

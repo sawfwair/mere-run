@@ -60,6 +60,41 @@ final class StudioLibraryStoreTests: XCTestCase {
         XCTAssertEqual(store.items.first?.outputURL?.path, "/tmp/plate.png")
     }
 
+    func testAdvancedRunPersistsTypedDraftAndAllArtifacts() throws {
+        let url = try temporaryLibraryURL()
+        let store = StudioLibraryStore(libraryURL: url)
+        let template = try XCTUnwrap(CommandCatalog.template(id: .musicTrainAdapter))
+        var draft = template.defaultDraft()
+        draft.inputPath = "/tmp/music-dataset.jsonl"
+        draft.outputPath = "/tmp/my-style.safetensors"
+        let request = StudioRunRequest(
+            mode: template.libraryMode,
+            templateID: template.id,
+            template: template,
+            draft: draft
+        )
+
+        store.start(request: request, commandPreview: "mere.run music train-adapter")
+        store.complete(
+            id: request.id,
+            exitCode: 0,
+            outputURL: URL(fileURLWithPath: draft.outputPath),
+            outputText: nil,
+            commandPreview: "mere.run music train-adapter",
+            artifactURLs: [
+                URL(fileURLWithPath: draft.outputPath),
+                URL(fileURLWithPath: "/tmp/my-style.loss.csv"),
+            ]
+        )
+
+        let reloaded = StudioLibraryStore(libraryURL: url)
+        let item = try XCTUnwrap(reloaded.items.first)
+        XCTAssertEqual(item.templateID, .musicTrainAdapter)
+        XCTAssertEqual(item.commandDraft, draft)
+        XCTAssertEqual(item.displayKindTitle, "Train music adapter")
+        XCTAssertEqual(item.allArtifactURLs.count, 2)
+    }
+
     func testRunningLibraryItemStartsWithoutOutputAndCanPublishOutput() throws {
         let url = try temporaryLibraryURL()
         let store = StudioLibraryStore(libraryURL: url)

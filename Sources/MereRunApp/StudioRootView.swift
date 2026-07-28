@@ -14,6 +14,8 @@ struct StudioRootView: View {
     @State private var draft = StudioDraft()
     @State private var showOptions = false
     @State private var showModels = false
+    @State private var showAdapters = false
+    @State private var showRealtimeMusic = false
     @State private var showHelp = false
     @State private var advancedWidth: CGFloat = 560
     @State private var advancedDragStartWidth: CGFloat?
@@ -36,6 +38,10 @@ struct StudioRootView: View {
     private var selectedItem: StudioLibraryItem? {
         if let selectedLibraryID, let found = library.items.first(where: { $0.id == selectedLibraryID }) {
             return found
+        }
+        if mode.isConversational {
+            guard let activeConversationID else { return nil }
+            return library.items.first { $0.id == activeConversationID && $0.isConversation }
         }
         // Fall back to the most recent run for the active mode so switching modes never
         // leaves an unrelated mode's output on the canvas.
@@ -190,11 +196,14 @@ struct StudioRootView: View {
     private var regularLibrary: some View {
         StudioLibraryPanel(
             items: library.items,
+            progressByID: controller.progressByRequestID,
             selectedID: $selectedLibraryID,
             isVisible: $showLibrary,
             onDelete: deleteLibraryItem,
             onRename: library.rename,
-            onQuickLook: { QuickLookCoordinator.shared.preview($0) }
+            onQuickLook: { QuickLookCoordinator.shared.preview($0) },
+            onRetry: retryLibraryItem,
+            onEdit: editLibraryItem
         )
         .frame(width: StudioLayoutPolicy.libraryWidth)
     }
@@ -202,11 +211,14 @@ struct StudioRootView: View {
     private func compactLibraryPanel(availableWidth: CGFloat) -> some View {
         StudioLibraryPanel(
             items: library.items,
+            progressByID: controller.progressByRequestID,
             selectedID: compactLibrarySelection,
             isVisible: $showCompactLibrary,
             onDelete: deleteLibraryItem,
             onRename: library.rename,
-            onQuickLook: { QuickLookCoordinator.shared.preview($0) }
+            onQuickLook: { QuickLookCoordinator.shared.preview($0) },
+            onRetry: retryLibraryItem,
+            onEdit: editLibraryItem
         )
         .frame(
             width: StudioLayoutPolicy.compactPanelWidth(
@@ -235,6 +247,7 @@ struct StudioRootView: View {
                     docked: true,
                     onClose: { showAdvanced = false }
                 )
+                    .environmentObject(library)
                     .frame(
                         width: StudioLayoutPolicy.compactPanelWidth(
                             availableWidth: availableWidth,
@@ -250,6 +263,7 @@ struct StudioRootView: View {
                         onDetach: { advancedDetached = true },
                         onClose: { showAdvanced = false }
                     )
+                        .environmentObject(library)
                         .frame(width: advancedWidth)
                         .clipped()
                 }
@@ -370,7 +384,8 @@ struct StudioRootView: View {
             error: studioError,
             logs: controller.logs,
             liveOutputText: controller.liveOutputText,
-            progress: controller.currentProgress,
+            progress: selectedItem.flatMap { controller.progressByRequestID[$0.id] }
+                ?? controller.currentProgress,
             onOpen: openSelectedOutput,
             onReveal: revealSelectedOutput,
             onQuickLook: {
@@ -381,6 +396,8 @@ struct StudioRootView: View {
             onNewChat: startNewConversation,
             onCopy: copyToClipboard,
             onRetry: retryLastTurn,
+            onRerunItem: retryLibraryItem,
+            onEditRun: editLibraryItem,
             onEdit: editMessage,
             onStop: controller.cancel,
             onUseExample: useExamplePrompt,
@@ -404,7 +421,12 @@ struct StudioRootView: View {
             onStop: controller.cancel,
             onAttach: chooseAttachment,
             onPaste: pasteImageFromClipboard,
-            onShowModels: { showModels = true }
+            onShowModels: { showModels = true },
+            onShowAdapters: { showAdapters = true },
+            onShowRealtimeMusic: {
+                showOptions = false
+                showRealtimeMusic = true
+            }
         )
     }
 
@@ -416,6 +438,21 @@ struct StudioRootView: View {
                     refreshInstalledModels()
                 })
                 .environmentObject(controller)
+            }
+            .sheet(isPresented: $showAdapters) {
+                StudioAdaptersSheet(
+                    activeModelID: draft.model,
+                    onUse: applyAdapter,
+                    onUseLocal: applyLocalAdapter,
+                    onTrain: openAdvancedTraining
+                )
+                .environmentObject(controller)
+                .environmentObject(library)
+            }
+            .sheet(isPresented: $showRealtimeMusic) {
+                StudioRealtimeMusicSheet(initialDraft: draft)
+                    .environmentObject(controller)
+                    .environmentObject(library)
             }
             .sheet(isPresented: $showWelcome) {
                 StudioWelcomeSheet(
@@ -451,6 +488,7 @@ struct StudioRootView: View {
                 }
                 .frame(width: 1_260, height: 780)
                 .environmentObject(controller)
+                .environmentObject(library)
             }
             .alert(
                 "Acknowledge third-party model terms",
@@ -628,7 +666,8 @@ struct StudioRootView: View {
                     exitCode: result.exitCode,
                     outputURL: result.outputURL,
                     outputText: result.outputText,
-                    commandPreview: result.commandPreview.maskingAPIKeyValue()
+                    commandPreview: result.commandPreview.maskingAPIKeyValue(),
+                    artifactURLs: result.artifactURLs
                 )
                 selectedLibraryID = requestID
             }
@@ -700,6 +739,18 @@ struct StudioRootView: View {
             .buttonStyle(.mereIcon)
             .help(libraryIsVisible(isCompact: isCompact) ? "Hide library (⌃⌘L)" : "Show library (⌃⌘L)")
             .accessibilityLabel(libraryIsVisible(isCompact: isCompact) ? "Hide library" : "Show library")
+
+            Button {
+                showAdapters = true
+            } label: {
+                Image(systemName: "square.stack.3d.up")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(MereRunTheme.textSecondary)
+                    .frame(width: 30, height: 30)
+            }
+            .buttonStyle(.mereIcon)
+            .help("Browse adapters")
+            .accessibilityLabel("Browse adapters")
 
             Button {
                 withAnimation(MereRunTheme.Motion.standard) {
@@ -853,6 +904,43 @@ struct StudioRootView: View {
         }
     }
 
+    private func retryLibraryItem(_ item: StudioLibraryItem) {
+        guard let templateID = item.templateID,
+              let commandDraft = item.commandDraft,
+              let template = CommandCatalog.template(id: templateID) else {
+            studioError = "This older Library item does not include a replayable command."
+            return
+        }
+        let request = StudioRunRequest(
+            mode: item.mode,
+            templateID: templateID,
+            template: template,
+            draft: commandDraft
+        )
+        let preview = controller.commandPreview(template: template, draft: commandDraft, masksSecrets: true)
+        let status: StudioLibraryStatus = controller.isRunning || controller.queuedRunCount > 0
+            ? .queued
+            : .running
+        library.start(request: request, commandPreview: preview, status: status)
+        selectedLibraryID = request.id
+        _ = controller.run(studio: request)
+    }
+
+    private func editLibraryItem(_ item: StudioLibraryItem) {
+        guard let templateID = item.templateID,
+              let commandDraft = item.commandDraft,
+              let template = CommandCatalog.template(id: templateID) else {
+            studioError = "This older Library item does not include editable command settings."
+            return
+        }
+        showAdvanced = true
+        Task { @MainActor in
+            await Task.yield()
+            controller.select(template)
+            controller.draft = commandDraft
+        }
+    }
+
     /// A draggable divider that resizes the docked Advanced column. The panel is on the right, so
     /// dragging left widens it; width is clamped to a usable range.
     private var advancedResizeHandle: some View {
@@ -879,6 +967,51 @@ struct StudioRootView: View {
     /// current task without silently reverting edits.
     private func syncAdvancedToStudio() {
         controller.syncAdvanced(to: mode, from: draft)
+    }
+
+    private func applyAdapter(_ adapter: StudioAdapterRow) {
+        let reference = adapter.path ?? adapter.id
+        switch mode {
+        case .music:
+            let existing = draft.musicAdapterPaths
+                .components(separatedBy: .newlines)
+                .filter { !$0.isBlank }
+            if !existing.contains(reference) {
+                draft.musicAdapterPaths = (existing + [reference]).joined(separator: "\n")
+            }
+        case .createImage, .chat, .code:
+            draft.loraPath = reference
+        default:
+            // Specialist adapters (for example SCAIL-2) are applied from their typed Advanced
+            // workflow, which this opens with the catalog id already visible in the command.
+            showAdvanced = true
+        }
+    }
+
+    private func applyLocalAdapter(_ path: String) {
+        switch mode {
+        case .music:
+            let existing = draft.musicAdapterPaths
+                .components(separatedBy: .newlines)
+                .filter { !$0.isBlank }
+            if !existing.contains(path) {
+                draft.musicAdapterPaths = (existing + [path]).joined(separator: "\n")
+            }
+        case .createImage, .chat, .code:
+            draft.loraPath = path
+        default:
+            showAdvanced = true
+        }
+    }
+
+    private func openAdvancedTraining(_ templateID: CommandTemplateID) {
+        showAdvanced = true
+        Task { @MainActor in
+            await Task.yield()
+            if let template = CommandCatalog.template(id: templateID) {
+                controller.select(template)
+            }
+        }
     }
 
     private func freshDraft(for mode: StudioMode) -> StudioDraft {

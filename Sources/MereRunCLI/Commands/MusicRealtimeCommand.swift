@@ -184,6 +184,7 @@ struct MusicRealtime: AsyncParsableCommand {
         defer { inputTask?.cancel() }
 
         let startedAt = Date()
+        let totalFrameCount = max(1, Int(ceil(durationSeconds * Float(MagentaRT2Resources.frameRate))))
         do {
             try await MagentaRT2RealtimeSession.run(
                 MagentaRT2RealtimeRequest(
@@ -198,7 +199,7 @@ struct MusicRealtime: AsyncParsableCommand {
             ) { frameIndex, frame in
                 try sink.consume(frameIndex: frameIndex, frame: frame)
                 if !quiet, frameIndex % 25 == 0 {
-                    CLIStderr.write("Realtime frame \(frameIndex + 1)\n")
+                    CLIStderr.write("Realtime frame \(frameIndex + 1)/\(totalFrameCount)\n")
                 }
                 paceFrameIfNeeded(frameIndex: frameIndex, startedAt: startedAt)
             }
