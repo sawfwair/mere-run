@@ -180,6 +180,29 @@ final class LinuxNativeBridgeTests: XCTestCase {
         XCTAssertFalse(script.contains("if notarize \"$dmg_path\""))
     }
 
+    func testMacOSAppBundlesAndSecurelyConfiguresSparkle() throws {
+        let package = try readRepositoryFile("Package.swift")
+        let script = try readRepositoryFile("scripts/build_mere_run_app.sh")
+
+        XCTAssertTrue(package.contains(#".product(name: "Sparkle", package: "Sparkle")"#))
+        XCTAssertTrue(package.contains(#"sparkle-project/Sparkle", exact: "2.9.2""#))
+        XCTAssertTrue(script.contains("ditto \"$sparkle_framework\" \"${frameworks}/Sparkle.framework\""))
+        XCTAssertTrue(script.contains("SUFeedURL"))
+        XCTAssertTrue(script.contains("https://mere.run/releases/appcast.xml"))
+        XCTAssertTrue(script.contains("git describe --tags --exact-match"))
+        XCTAssertTrue(script.contains(#"sparkle_public_ed_key="6sFs+7UqYcE7rThPAovzMDsZtKyf/h4/d8rUmPSH2rw=""#))
+        XCTAssertTrue(script.contains("SUEnableAutomaticChecks"))
+        XCTAssertTrue(script.contains("SUVerifyUpdateBeforeExtraction"))
+        XCTAssertTrue(script.contains("SURequireSignedFeed"))
+        XCTAssertTrue(script.contains("MereRunDebug.entitlements"))
+        XCTAssertTrue(script.contains(#"if [[ "$identity" == "-" ]]"#))
+        XCTAssertTrue(script.contains("--preserve-metadata=entitlements"))
+        XCTAssertTrue(script.contains("XPCServices/Installer.xpc"))
+        XCTAssertTrue(script.contains("XPCServices/Downloader.xpc"))
+        XCTAssertTrue(script.contains(#""${sparkle_version_root}/Autoupdate""#))
+        XCTAssertTrue(script.contains(#""${sparkle_version_root}/Updater.app""#))
+    }
+
     private func readRepositoryFile(_ relativePath: String) throws -> String {
         let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent(relativePath, isDirectory: false)

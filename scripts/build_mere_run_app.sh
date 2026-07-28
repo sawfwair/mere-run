@@ -15,19 +15,26 @@ cd "$repo_root"
 
 # Version/build derive from git when not provided, so the bundle has a single source of
 # truth in CI. Fall back to a pinned value when git metadata is unavailable.
-default_version="0.27.0"
-if git_version="$(git describe --tags --abbrev=0 2>/dev/null)"; then
+default_version="0.27.1"
+if git_version="$(git describe --tags --exact-match 2>/dev/null)"; then
   default_version="${git_version#v}"
 fi
 default_build="$(git rev-list --count HEAD 2>/dev/null || echo 1)"
 app_version="${MERERUN_APP_VERSION:-$default_version}"
 app_build="${MERERUN_APP_BUILD:-$default_build}"
+sparkle_feed_url="${MERERUN_SPARKLE_FEED_URL:-https://mere.run/releases/appcast.xml}"
+sparkle_public_ed_key="6sFs+7UqYcE7rThPAovzMDsZtKyf/h4/d8rUmPSH2rw="
 
 app_icon="${repo_root}/assets/MereRunApp/AppIcon.icns"
-entitlements="${repo_root}/scripts/MereRun.entitlements"
+release_entitlements="${repo_root}/scripts/MereRun.entitlements"
+debug_entitlements="${repo_root}/scripts/MereRunDebug.entitlements"
 # Developer ID Application identity; defaults to ad-hoc ("-") for local/dev builds.
 # Set MERERUN_CODESIGN_IDENTITY="Developer ID Application: ..." for distributable builds.
 identity="${MERERUN_CODESIGN_IDENTITY:--}"
+entitlements="$release_entitlements"
+if [[ "$identity" == "-" ]]; then
+  entitlements="$debug_entitlements"
+fi
 
 swift_app_args=(build --product mere.run.app)
 swift_cli_args=(build --product mere.run)
@@ -65,6 +72,7 @@ bundle="${build_dir}/MereRun.app"
 contents="${bundle}/Contents"
 macos="${contents}/MacOS"
 resources="${contents}/Resources"
+frameworks="${contents}/Frameworks"
 # Executable code (CLI, frameworks, vendored helpers) must NOT live under
 # Contents/Resources or notarization rejects the bundle. Place it flat in Helpers/ (not a
 # same-named subfolder, which codesign would mistake for a malformed bundle) so the CLI and
@@ -73,9 +81,19 @@ helpers="${contents}/Helpers"
 cli_payload="${helpers}"
 
 rm -rf "$bundle"
-mkdir -p "$macos" "$resources" "$cli_payload"
+mkdir -p "$macos" "$resources" "$frameworks" "$cli_payload"
 cp "$executable" "${macos}/mere.run.app"
 cp "$cli_executable" "${cli_payload}/mere.run"
+
+# Sparkle is a versioned framework with symlinked helpers and XPC services.
+# `ditto` preserves that layout; flattening or dereferencing it breaks both
+# dyld lookup and its nested code signatures.
+sparkle_framework="${repo_root}/.build/artifacts/sparkle/Sparkle/Sparkle.xcframework/macos-arm64_x86_64/Sparkle.framework"
+if [[ ! -d "$sparkle_framework" ]]; then
+  echo "Sparkle framework not found: ${sparkle_framework}" >&2
+  exit 66
+fi
+ditto "$sparkle_framework" "${frameworks}/Sparkle.framework"
 
 if [[ -d "${repo_root}/skills/use-mere-run" ]]; then
   mkdir -p "${resources}/skills"
@@ -129,6 +147,13 @@ plutil -insert NSHighResolutionCapable -bool true "${contents}/Info.plist"
 plutil -insert CFBundleInfoDictionaryVersion -string "6.0" "${contents}/Info.plist"
 plutil -insert LSApplicationCategoryType -string "public.app-category.developer-tools" "${contents}/Info.plist"
 plutil -insert NSHumanReadableCopyright -string "© mere.run" "${contents}/Info.plist"
+plutil -insert SUFeedURL -string "$sparkle_feed_url" "${contents}/Info.plist"
+plutil -insert SUPublicEDKey -string "$sparkle_public_ed_key" "${contents}/Info.plist"
+plutil -insert SUEnableAutomaticChecks -bool true "${contents}/Info.plist"
+plutil -insert SUAutomaticallyUpdate -bool false "${contents}/Info.plist"
+plutil -insert SUScheduledCheckInterval -integer 86400 "${contents}/Info.plist"
+plutil -insert SUVerifyUpdateBeforeExtraction -bool true "${contents}/Info.plist"
+plutil -insert SURequireSignedFeed -bool true "${contents}/Info.plist"
 # TCC usage string. The CLI opens the camera as a child of this bundle, so TCC attributes
 # access to the app and the string must live here. (No microphone string: nothing records the
 # mic yet — add NSMicrophoneUsageDescription when `music realtime` mic capture ships.)
@@ -158,6 +183,19 @@ sign() {
   [[ -n "$ents" ]] && args+=(--entitlements "$ents")
   codesign "${args[@]}" "$@"
 }
+
+# Sparkle's nested services require distinct signing treatment. In particular,
+# Downloader.xpc carries entitlements that must survive re-signing. Keep the
+# explicit inside-out order from Sparkle's distribution guidance.
+sparkle_bundle="${frameworks}/Sparkle.framework"
+sparkle_version_root="${sparkle_bundle}/Versions/B"
+sign "" "${sparkle_version_root}/XPCServices/Installer.xpc"
+sparkle_downloader_args=(--force --options runtime --sign "$identity" --preserve-metadata=entitlements)
+[[ "$identity" != "-" ]] && sparkle_downloader_args+=(--timestamp)
+codesign "${sparkle_downloader_args[@]}" "${sparkle_version_root}/XPCServices/Downloader.xpc"
+sign "" "${sparkle_version_root}/Autoupdate"
+sign "" "${sparkle_version_root}/Updater.app"
+sign "" "$sparkle_bundle"
 
 # 1. Co-located executable frameworks/bundles — no entitlements. SwiftPM also
 #    places resource-only .bundle directories here; those have no executable

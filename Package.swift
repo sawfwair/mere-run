@@ -466,10 +466,19 @@ if !isLinuxPackage {
   targets.append(
     .executableTarget(
       name: "MereRunApp",
-      dependencies: ["MereRunContract"],
+      dependencies: [
+        "MereRunContract",
+        .product(name: "Sparkle", package: "Sparkle")
+      ],
       path: "Sources/MereRunApp",
       exclude: [
         "README.md"
+      ],
+      linkerSettings: [
+        .unsafeFlags([
+          "-Xlinker", "-rpath",
+          "-Xlinker", "@loader_path/../Frameworks"
+        ])
       ]
     )
   )
@@ -499,6 +508,9 @@ var packageDependencies: [Package.Dependency] = (useLinuxPrebuiltMLX ? [] : [
 if !isLinuxPackage {
   packageDependencies.append(
     .package(url: "https://github.com/readdle/swift-onnxruntime.git", exact: "1.20.1")
+  )
+  packageDependencies.append(
+    .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.9.2")
   )
 }
 

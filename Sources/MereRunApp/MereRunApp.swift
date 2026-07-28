@@ -1,5 +1,6 @@
 import AppKit
 import Quartz
+import Sparkle
 import SwiftUI
 
 final class MereRunAppDelegate: NSObject, NSApplicationDelegate {
@@ -26,6 +27,11 @@ final class MereRunAppDelegate: NSObject, NSApplicationDelegate {
 struct MereRunApp: App {
     @NSApplicationDelegateAdaptor(MereRunAppDelegate.self) private var appDelegate
     @StateObject private var controller = MereRunController()
+    private let updaterController = SPUStandardUpdaterController(
+        startingUpdater: true,
+        updaterDelegate: nil,
+        userDriverDelegate: nil
+    )
 
     var body: some Scene {
         WindowGroup {
@@ -48,7 +54,10 @@ struct MereRunApp: App {
         .windowResizability(.contentMinSize)
         .defaultSize(width: 1280, height: 820)
         .commands {
-            MereRunCommands(controller: controller)
+            MereRunCommands(
+                controller: controller,
+                updater: updaterController.updater
+            )
         }
 
         Settings {

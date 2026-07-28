@@ -78,3 +78,9 @@ the app before placing that already-stapled app into the signed and notarized
 DMG. `LinuxNativeBridgeTests.testMacOSPackageEmbedsTheStapledAppBeforeCreatingTheDMG`
 guards that ordering. Release proof must validate the mounted/installed app and
 its embedded CLI, not only the outer DMG.
+
+The packaged app embeds Sparkle and exposes **Check for Updates…** in the app
+menu. Release builds use the stable HTTPS appcast, automatic daily discovery,
+an Ed25519-signed archive and feed, Developer ID verification, and
+pre-extraction signature validation. Sparkle updates the complete app bundle,
+including its embedded CLI, as one atomic unit.

@@ -169,6 +169,11 @@ The default `--profile fast` managed four-step path selects the pinned
 schedule at 832x480. `--profile quality` remains available as an explicit
 opt-in to the configurable 40-step UniPC/CFG recipe:
 
+Preflight resolves that managed default without loading it, then verifies the
+installed file's exact byte count and SHA-256. A missing or corrupt adapter is
+reported in `missing_input_files`; generation keeps strict resolution and
+cannot continue with an unverified file.
+
 ```bash
 swift run mere.run video animate \
   "a silver puppet follows the dancer" \

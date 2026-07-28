@@ -4,6 +4,24 @@ All notable changes to this public repository will be documented in this file.
 
 The format is based on Keep a Changelog.
 
+## 0.27.1 - 2026-07-27
+
+### Added
+
+- added Sparkle 2.9.2 to the macOS Studio with a standard Check for Updates
+  command and daily background discovery through the stable HTTPS appcast.
+  Updates are Developer ID signed, notarized, verified with a pinned Ed25519
+  key before extraction, and delivered through a signed feed.
+
+### Fixed
+
+- made SCAIL-2 fast-profile preflight return a structured blocked report when
+  its managed four-step adapter is missing or fails byte-count/SHA-256
+  verification. Generation still resolves the adapter strictly before loading.
+- bundled and signed Sparkle's versioned framework and nested helpers
+  inside-out while preserving the Downloader service entitlements and framework
+  symlinks.
+
 ## 0.27.0 - 2026-07-27
 
 This release brings the macOS Studio to full public CLI capability coverage,
