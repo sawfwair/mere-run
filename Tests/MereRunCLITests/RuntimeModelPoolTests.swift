@@ -255,9 +255,11 @@ final class RuntimeModelPoolTests: XCTestCase {
         )
 
         XCTAssertFalse(serialized.gemma4)
+        XCTAssertFalse(serialized.laguna)
         XCTAssertFalse(serialized.q35)
         XCTAssertFalse(serialized.lfm2)
         XCTAssertTrue(concurrent.gemma4)
+        XCTAssertTrue(concurrent.laguna)
         XCTAssertTrue(concurrent.q35)
         XCTAssertTrue(concurrent.lfm2)
     }
@@ -274,8 +276,26 @@ final class RuntimeModelPoolTests: XCTestCase {
 
         XCTAssertFalse(forcedOff.lfm2)
         XCTAssertTrue(forcedOff.gemma4)
+        XCTAssertTrue(forcedOff.laguna)
         XCTAssertTrue(forcedOff.q35)
         XCTAssertTrue(forcedOn.lfm2)
+    }
+
+    func testLagunaBatchingEnvironmentOverrideWinsOverServeConcurrency() {
+        let forcedOff = RuntimeContinuousBatchingConfiguration(
+            maxActiveRequests: 4,
+            environment: ["MERERUN_LAGUNA_CONTINUOUS_BATCHING": "off"]
+        )
+        let forcedOn = RuntimeContinuousBatchingConfiguration(
+            maxActiveRequests: 1,
+            environment: ["MERERUN_LAGUNA_CONTINUOUS_BATCHING": "1"]
+        )
+
+        XCTAssertFalse(forcedOff.laguna)
+        XCTAssertTrue(forcedOff.gemma4)
+        XCTAssertTrue(forcedOff.q35)
+        XCTAssertTrue(forcedOff.lfm2)
+        XCTAssertTrue(forcedOn.laguna)
     }
 
     func testConcurrentColdLoadsSharePreparationAndWaitUntilReady() async throws {

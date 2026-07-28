@@ -59,6 +59,7 @@ final class ManagedModelCatalogTests: XCTestCase {
             "image-krea2-raw",
             "image-krea2-turbo",
             "image-ideogram4-sdnq-uint4",
+            LagunaResources.modelID,
             "text-chat-lfm25-a1b-8bit",
             "vision-segment-sam31",
             "vision-face-buffalo-l",
@@ -553,6 +554,32 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.hubFallback?.repoId, Gemma4MTPResources.upstreamModelId)
         XCTAssertEqual(spec.validationKind, .gemma4MTPAssistant)
         XCTAssertEqual(spec.runtimeAutoDownloadAllowed, false)
+    }
+
+    func testLagunaUsesPinnedOfficialTargetAndCompanion() throws {
+        let target = try XCTUnwrap(ManagedModelCatalog.spec(for: LagunaResources.modelID))
+        let companion = try XCTUnwrap(ManagedModelCatalog.spec(for: LagunaResources.dflashModelID))
+
+        XCTAssertEqual(target.category, .textChat)
+        XCTAssertEqual(target.hubFallback?.repoId, LagunaResources.upstreamModelID)
+        XCTAssertEqual(target.hubFallback?.revision, LagunaResources.upstreamRevision)
+        XCTAssertEqual(target.hubFallback?.patterns, LagunaResources.snapshotPatterns)
+        XCTAssertEqual(target.upstreamRepoId, LagunaResources.upstreamModelID)
+        XCTAssertEqual(target.upstreamRevision, LagunaResources.upstreamRevision)
+        XCTAssertEqual(target.validationKind, .laguna)
+        XCTAssertEqual(target.defaultRuntimeServingEngine, .textChatLaguna)
+        XCTAssertEqual(target.estimatedDownloadBytes, LagunaResources.estimatedDownloadBytes)
+        XCTAssertEqual(target.companionModelIDs, [LagunaResources.dflashModelID])
+        XCTAssertFalse(target.runtimeAutoDownloadAllowed)
+        XCTAssertNotNil(target.usageRestriction)
+
+        XCTAssertFalse(ManagedModelCatalog.allSpecs.contains { $0.id == companion.id })
+        XCTAssertEqual(companion.hubFallback?.repoId, LagunaResources.dflashUpstreamModelID)
+        XCTAssertEqual(companion.hubFallback?.revision, LagunaResources.dflashUpstreamRevision)
+        XCTAssertEqual(companion.hubFallback?.patterns, LagunaResources.dflashSnapshotPatterns)
+        XCTAssertEqual(companion.validationKind, .lagunaDFlash)
+        XCTAssertEqual(companion.estimatedDownloadBytes, LagunaResources.dflashEstimatedDownloadBytes)
+        XCTAssertFalse(companion.runtimeAutoDownloadAllowed)
     }
 
     func testQ36NanoUsesOptiQHubSource() throws {

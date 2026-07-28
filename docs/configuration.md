@@ -126,7 +126,7 @@ yet derived for LFM2. Bounded to 4 entries with the shared retention planner.
 Measured on a ~2.9k-token prompt: repeat requests drop from 11.7s to 0.3s
 end to end.
 
-### Continuous batching (`MERERUN_GEMMA4_CONTINUOUS_BATCHING`, `MERERUN_Q35_CONTINUOUS_BATCHING`, `MERERUN_LFM2_CONTINUOUS_BATCHING`)
+### Continuous batching (`MERERUN_GEMMA4_CONTINUOUS_BATCHING`, `MERERUN_LAGUNA_CONTINUOUS_BATCHING`, `MERERUN_Q35_CONTINUOUS_BATCHING`, `MERERUN_LFM2_CONTINUOUS_BATCHING`)
 
 Decode batching for concurrent requests engages automatically when
 `mere.run api serve` runs with `--max-active-requests` above 1 — the
@@ -137,6 +137,11 @@ engagement under `decodeBatching` (`batchedDecodeSteps`, `maxBatchSize`);
 per-model stats include `recentDecodeTokensPerSecond`, a rolling last-10
 window that surfaces mid-flight throughput regressions lifetime averages
 hide.
+
+Laguna follows the same switch through
+`MERERUN_LAGUNA_CONTINUOUS_BATCHING`. The target supports ragged decode rows;
+automatic DFlash uses its acceptance-aware serial coordinator, while forced
+DFlash batching remains available in the dedicated benchmark lane.
 
 LFM2 follows the same `--max-active-requests` switch and exposes
 `MERERUN_LFM2_CONTINUOUS_BATCHING` as an explicit override. Its attention cache

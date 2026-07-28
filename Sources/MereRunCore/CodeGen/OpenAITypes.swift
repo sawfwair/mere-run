@@ -86,6 +86,7 @@ public struct OpenAIChatRequest: Codable, Sendable {
     public var messages: [OpenAIChatMessage]
     public var temperature: Double?
     public var top_p: Double?
+    public var min_p: Double?
     public var max_tokens: Int?
     public var max_completion_tokens: Int?
     public var stream: Bool?
@@ -119,6 +120,7 @@ public struct OpenAIChatRequest: Codable, Sendable {
         case messages
         case temperature
         case top_p
+        case min_p
         case max_tokens
         case max_completion_tokens
         case stream
@@ -152,6 +154,7 @@ public struct OpenAIChatRequest: Codable, Sendable {
         messages: [OpenAIChatMessage],
         temperature: Double? = nil,
         top_p: Double? = nil,
+        min_p: Double? = nil,
         max_tokens: Int? = nil,
         max_completion_tokens: Int? = nil,
         stream: Bool? = nil,
@@ -183,6 +186,7 @@ public struct OpenAIChatRequest: Codable, Sendable {
         self.messages = messages
         self.temperature = temperature
         self.top_p = top_p
+        self.min_p = min_p
         self.max_tokens = max_tokens
         self.max_completion_tokens = max_completion_tokens
         self.stream = stream
@@ -218,6 +222,7 @@ public struct OpenAIChatRequest: Codable, Sendable {
         messages = try container.decode([OpenAIChatMessage].self, forKey: .messages)
         temperature = try container.decodeIfPresent(Double.self, forKey: .temperature)
         top_p = try container.decodeIfPresent(Double.self, forKey: .top_p)
+        min_p = try container.decodeIfPresent(Double.self, forKey: .min_p)
         max_tokens = try container.decodeIfPresent(Int.self, forKey: .max_tokens)
         max_completion_tokens = try container.decodeIfPresent(Int.self, forKey: .max_completion_tokens)
         stream = try container.decodeIfPresent(Bool.self, forKey: .stream)
@@ -260,6 +265,7 @@ public struct OpenAIChatRequest: Codable, Sendable {
         try container.encode(messages, forKey: .messages)
         try container.encodeIfPresent(temperature, forKey: .temperature)
         try container.encodeIfPresent(top_p, forKey: .top_p)
+        try container.encodeIfPresent(min_p, forKey: .min_p)
         try container.encodeIfPresent(max_tokens, forKey: .max_tokens)
         try container.encodeIfPresent(max_completion_tokens, forKey: .max_completion_tokens)
         try container.encodeIfPresent(stream, forKey: .stream)

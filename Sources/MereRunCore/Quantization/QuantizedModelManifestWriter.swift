@@ -26,6 +26,7 @@ public enum QuantizedModelManifestWriter {
             if id.hasPrefix("image-hidream-") { return .hidream }
             if id.hasPrefix("image-krea2-") { return .krea }
             if id.hasPrefix("image-ideogram4-") { return .ideogram }
+            if id.hasPrefix("text-chat-laguna-") { return .laguna }
             if id.hasPrefix("vision-segment-") { return .sam }
             if id.hasPrefix("vision-ground-") { return .falcon }
             if id.hasPrefix("vision-geometry-") { return .geometry }
@@ -52,6 +53,7 @@ public enum QuantizedModelManifestWriter {
             case .ideogram4: return .ideogram
             case .gemma4: return .gemma
             case .lfm2: return .liquid
+            case .laguna: return .laguna
             case .qwen35HybridMoE: return .qwen
             case .samSegmentation: return .sam
             case .falconPerception: return .falcon
@@ -110,6 +112,8 @@ public enum QuantizedModelManifestWriter {
                     return [.chat]
                 case .lfm2:
                     return [.chat]
+                case .laguna:
+                    return [.chat, .codeGeneration]
                 case .qwen35HybridMoE:
                     return [.chat]
                 case .samSegmentation:
@@ -219,6 +223,8 @@ public enum QuantizedModelManifestWriter {
             case .gemma4:
                 break
             case .lfm2:
+                break
+            case .laguna:
                 break
             case .qwen35HybridMoE:
                 break

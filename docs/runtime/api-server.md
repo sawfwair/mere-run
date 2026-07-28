@@ -69,6 +69,21 @@ swift run mere.run model pull text-chat-lfm25-a1b-8bit --accept-model-license
 swift run mere.run api serve --engine text-chat-lfm2
 ```
 
+For the opt-in Laguna S 2.1 target with its automatically installed DFlash
+companion:
+
+```bash
+swift run mere.run model pull text-chat-laguna-s-2-1 --accept-model-license
+swift run mere.run api serve \
+  --engine text-chat-laguna \
+  --max-active-requests 2
+```
+
+Laguna uses its validated `1/1/20/0.02` temperature, top-p, top-k, and min-p
+recipe when a request does not override sampling. The server automatically
+routes output budgets of at least 32 tokens through DFlash and falls back
+losslessly when measured draft acceptance is poor.
+
 In another terminal, confirm that the server is reachable and which model it
 reports:
 
@@ -138,7 +153,8 @@ swift run mere.run model runtime set text-chat-gemma4 \
   --max-context-tokens 8192 \
   --max-tokens 1024 \
   --temperature 0.6 \
-  --top-p 0.9
+  --top-p 0.9 \
+  --min-p 0.05
 ```
 
 Network-exposed example:
@@ -279,8 +295,8 @@ swift run mere.run api serve \
   geometry/3D/depth requests must use `multipart/form-data`; browser-simple
   form/text posts are rejected before the request body is processed
 - chat requests are validated before generation; `max_tokens`,
-  `max_completion_tokens`, `temperature`, and `top_p` must stay within bounded
-  ranges
+  `max_completion_tokens`, `temperature`, `top_p`, and the supported `min_p`
+  extension must stay within bounded ranges
 - LoRA adapters are configured at server startup with `--lora`; request bodies
   cannot select local LoRA paths
 - streaming and JSON error paths are sanitized so the local server does not
@@ -375,8 +391,8 @@ Engine compatibility:
 - Both Ornith lanes serve with thinking-enabled generation by default (the
   models degenerate without it); the reasoning arrives in the response's
   `reasoning_content` field while `content` carries only the visible answer.
-  When a request sets no explicit `temperature`/`top_p`, these lanes also apply
-  the model's published top-k of 20.
+  When a request sets no explicit `temperature`/`top_p`/`min_p`, these lanes
+  also apply the model's published top-k of 20.
 - `text-chat-lfm25-a1b-8bit`: uses the LFM2 serving engine with the
   LiquidAI LFM2.5 8B-A1B MLX 8-bit weights, accepts function tools, and rejects
   image content parts.

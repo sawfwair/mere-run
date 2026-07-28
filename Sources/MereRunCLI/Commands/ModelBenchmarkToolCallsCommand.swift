@@ -11,6 +11,27 @@ struct ModelBenchmarkToolCalls: AsyncParsableCommand {
     @Option(name: [.long], help: "Comma-separated model ids. Defaults to Q36 and Gemma 4 12B 4-bit.")
     var models: String?
 
+    @Option(
+        name: [.long],
+        help: "Override the installed Laguna target with a local poolside/Laguna-S-2.1-NVFP4-mlx checkpoint directory."
+    )
+    var lagunaPath: String?
+
+    @Option(
+        name: [.long],
+        help: "Override the installed Laguna DFlash companion with a local poolside/Laguna-S-2.1-DFlash checkpoint directory."
+    )
+    var lagunaDflashPath: String?
+
+    @Option(name: [.long], help: "Laguna DFlash speculative tokens per round (1...15).")
+    var lagunaDflashTokens: Int = LagunaDFlashRouting.defaultSpeculativeTokens
+
+    @Option(
+        name: [.long],
+        help: "Use Laguna DFlash when the effective output budget is at least this many tokens."
+    )
+    var lagunaDflashMinTokens: Int = LagunaDFlashRouting.defaultMinimumOutputTokens
+
     @Option(name: [.long], help: "Comma-separated tool-call case ids.")
     var cases: String?
 
@@ -22,6 +43,12 @@ struct ModelBenchmarkToolCalls: AsyncParsableCommand {
 
     @Option(name: [.long], help: "Top-p for generation.")
     var topP: Double = 1
+
+    @Option(name: [.customLong("top-k")], help: "Top-k for generation; zero disables it.")
+    var topK: Int = 0
+
+    @Option(name: [.customLong("min-p")], help: "Min-p cutoff relative to the most likely token.")
+    var minP: Double?
 
     @Option(name: [.long], help: "Maximum context tokens passed to the runtime.")
     var contextSize: Int?
@@ -50,10 +77,22 @@ struct ModelBenchmarkToolCalls: AsyncParsableCommand {
         guard (0...1).contains(topP), topP.isFinite else {
             throw ValidationError("--top-p must be finite and between 0 and 1.")
         }
+        guard topK >= 0 else {
+            throw ValidationError("--top-k must be zero or greater.")
+        }
+        if let minP, !(0...1).contains(minP) || !minP.isFinite {
+            throw ValidationError("--min-p must be finite and between 0 and 1.")
+        }
         if let contextSize {
             guard contextSize > 0 else {
                 throw ValidationError("--context-size must be greater than zero.")
             }
+        }
+        guard (1...15).contains(lagunaDflashTokens) else {
+            throw ValidationError("--laguna-dflash-tokens must be between 1 and 15.")
+        }
+        guard lagunaDflashMinTokens > 0 else {
+            throw ValidationError("--laguna-dflash-min-tokens must be greater than zero.")
         }
         _ = try selectedModelIDs()
         _ = try selectedCases()
@@ -68,6 +107,8 @@ struct ModelBenchmarkToolCalls: AsyncParsableCommand {
             maxTokens: maxTokens,
             temperature: temperature,
             topP: topP,
+            topK: topK,
+            minP: resolvedMinP,
             contextSize: contextSize
         )
 
@@ -95,7 +136,9 @@ struct ModelBenchmarkToolCalls: AsyncParsableCommand {
     func selectedModelIDs() throws -> [String] {
         let rawModels = models?.split(separator: ",").map {
             $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        } ?? Self.defaultModelIDs
+        } ?? (lagunaPath == nil && lagunaDflashPath == nil
+            ? Self.defaultModelIDs
+            : [LagunaResources.modelID])
         let modelIDs = Self.deduplicated(rawModels.filter { !$0.isEmpty })
         guard !modelIDs.isEmpty else {
             throw ValidationError("--models must include at least one model id.")
@@ -126,6 +169,46 @@ struct ModelBenchmarkToolCalls: AsyncParsableCommand {
     }
 
     private func runModel(_ modelID: String, cases: [ToolBenchmarkCase]) async throws -> ToolBenchmarkModelResult {
+        if modelID == LagunaResources.modelID {
+            guard let resolvedLagunaPath = lagunaPath
+                ?? ManagedModelResolver.resolveInstalledModel(id: LagunaResources.modelID)?.path else {
+                return ToolBenchmarkModelResult.missing(
+                    model: modelID,
+                    reason: "Model is not installed. Run "
+                        + "`mere.run model pull \(LagunaResources.modelID) --accept-model-license` first."
+                )
+            }
+            let resolvedDFlashPath = lagunaDflashPath ?? LagunaResources.installedDFlashPath()
+            let generator = LagunaGenerator(
+                dflashModelPath: resolvedDFlashPath,
+                dflashSpeculativeTokens: lagunaDflashTokens,
+                dflashMinimumOutputTokens: lagunaDflashMinTokens
+            )
+            do {
+                let result = try await runCases(
+                    modelID,
+                    engine: resolvedDFlashPath == nil
+                        ? "laguna-mlx"
+                        : "laguna-mlx+dflash-auto-k\(lagunaDflashTokens)"
+                            + "-min\(lagunaDflashMinTokens)",
+                    modelPath: resolvedLagunaPath,
+                    cases: cases,
+                    generate: { request in
+                        try await generator.chat(
+                            request,
+                            modelPath: resolvedLagunaPath,
+                            progressHandler: nil
+                        )
+                    }
+                )
+                await generator.unload()
+                return result
+            } catch {
+                await generator.unload()
+                throw error
+            }
+        }
+
         guard let spec = ManagedModelCatalog.spec(for: modelID) else {
             return ToolBenchmarkModelResult.missing(model: modelID, reason: "Unknown model id.")
         }
@@ -208,6 +291,8 @@ struct ModelBenchmarkToolCalls: AsyncParsableCommand {
                 maxTokens: maxTokens,
                 temperature: temperature,
                 topP: topP,
+                topK: topK,
+                minP: resolvedMinP,
                 showThinking: false,
                 tools: benchmarkCase.tools,
                 stopOnEOS: true,
@@ -262,6 +347,11 @@ struct ModelBenchmarkToolCalls: AsyncParsableCommand {
             error: nil,
             cases: caseResults
         )
+    }
+
+    var resolvedMinP: Double {
+        let includesLaguna = (try? selectedModelIDs().contains(LagunaResources.modelID)) == true
+        return minP ?? (includesLaguna ? LagunaResources.recommendedMinP : 0)
     }
 
     private func printReport(_ report: ToolBenchmarkReport) throws {
@@ -671,6 +761,8 @@ private struct ToolBenchmarkPlan: Encodable {
     let maxTokens: Int
     let temperature: Double
     let topP: Double
+    let topK: Int
+    let minP: Double
     let contextSize: Int?
 }
 
@@ -690,7 +782,8 @@ private struct ToolBenchmarkReport: Encodable {
             "Tool-call benchmark",
             "cases: \(plan.cases.joined(separator: ", "))",
             "models: \(plan.models.joined(separator: ", "))",
-            "sampling: temperature=\(plan.temperature) top_p=\(plan.topP) max_tokens=\(plan.maxTokens)",
+            "sampling: temperature=\(plan.temperature) top_p=\(plan.topP) "
+                + "top_k=\(plan.topK) min_p=\(plan.minP) max_tokens=\(plan.maxTokens)",
             plan.contextSize.map { "context_size: \($0)" },
             "",
         ].compactMap { $0 }

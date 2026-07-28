@@ -8,7 +8,7 @@ Read or update typed per-model API serving settings. These settings feed
 ## Required Models
 
 Use a managed API-capable model id such as `text-chat-gemma4`,
-`text-chat-q36-nano`, `text-chat-lfm25-a1b-8bit`, `text-agent-deepseek-v4-flash`,
+`text-chat-laguna-s-2-1`, `text-chat-q36-nano`, `text-chat-lfm25-a1b-8bit`, `text-agent-deepseek-v4-flash`,
 `text-agent-qwen35-9b`, or `text-chat-mebot`.
 
 ## Install And Check
@@ -34,6 +34,7 @@ mere.run status --json
 - `--max-tokens` / `--clear-max-tokens`
 - `--temperature` / `--clear-temperature`
 - `--top-p` / `--clear-top-p`
+- `--min-p` / `--clear-min-p`
 - `--engine` / `--clear-engine`
 - `--kv-cache-mode` / `--clear-kv-cache-mode`
 - `--json`
@@ -86,6 +87,7 @@ mere.run model runtime set text-chat-gemma4 \
   --max-tokens 1024 \
   --temperature 0.6 \
   --top-p 0.9 \
+  --min-p 0.05 \
   --kv-cache-mode auto
 ```
 

@@ -202,16 +202,19 @@ final class TextChatCommandParsingTests: XCTestCase {
         XCTAssertNil(cmd.temperature)
         XCTAssertNil(cmd.topP)
         XCTAssertNil(cmd.topK)
+        XCTAssertNil(cmd.minP)
 
         let explicit = try TextChat.parse([
             "--prompt", "hi",
             "--temperature", "0.2",
             "--top-p", "0.8",
             "--top-k", "40",
+            "--min-p", "0.05",
         ])
         XCTAssertEqual(explicit.temperature, 0.2)
         XCTAssertEqual(explicit.topP, 0.8)
         XCTAssertEqual(explicit.topK, 40)
+        XCTAssertEqual(explicit.minP, 0.05)
     }
 
     func testOrnithLanesDefaultToThinkingAndRecommendedSampling() {

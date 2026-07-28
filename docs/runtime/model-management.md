@@ -45,7 +45,7 @@ swift run mere.run --models-root /path/to/models model list
 Examples:
 
 - images: `image-klein-nano`, `image-bonsai-binary`, `image-bonsai-ternary`, `image-zimage-nano`, `image-klein-max`, `image-zimage-max`
-- text: `text-chat-gemma4`, `text-chat-q36-nano`, `text-chat-bonsai-27b-1bit`, `text-chat-bonsai-27b-2bit`, `text-chat-lfm25-a1b-8bit`, `text-agent-deepseek-v4-flash`, `text-agent-qwen35-9b`, `text-agent-ornith-9b`, `text-agent-ornith-35b-mlx`, `text-agent-ornith-35b`, `text-code-north-mini`, `text-code-qwen3`, `text-embed-qwen3-0.6b`
+- text: `text-chat-gemma4`, `text-chat-laguna-s-2-1`, `text-chat-q36-nano`, `text-chat-bonsai-27b-1bit`, `text-chat-bonsai-27b-2bit`, `text-chat-lfm25-a1b-8bit`, `text-agent-deepseek-v4-flash`, `text-agent-qwen35-9b`, `text-agent-ornith-9b`, `text-agent-ornith-35b-mlx`, `text-agent-ornith-35b`, `text-code-north-mini`, `text-code-qwen3`, `text-embed-qwen3-0.6b`
 - speech: `speech-tts-qwen3-nano`, `speech-asr-parakeet`
 - vision: `vision-ocr-lighton`
 - music: `music-acestep`, `music-acestep-xl-turbo`, `music-acestep-xl-turbo-lm4b`, `music-acestep-xl-sft`, `music-acestep-xl-base`, `music-magenta-rt2-small`, `music-magenta-rt2-base`
@@ -192,12 +192,13 @@ mere.run model runtime set text-chat-gemma4 \
 `set` accepts `--alias` (request-facing alias), `--pinned`/`--unpinned` (keep
 the model loaded across automatic TTL/LRU eviction), `--ttl-seconds` (unload
 TTL), `--max-context-tokens`, `--max-tokens`, `--temperature`, `--top-p`,
-`--engine` (engine override, validated against catalog compatibility), and
+`--min-p`, `--engine` (engine override, validated against catalog
+compatibility), and
 `--kv-cache-mode` (`default`, `affine4`, `affine8` — `affine8` applies to
 Gemma4/Qwen/LFM2 — plus Gemma4-only `polar2`/`auto`). Each option has a
 matching clear flag (`--clear-alias`, `--clear-ttl`,
 `--clear-max-context-tokens`, `--clear-max-tokens`,
-`--clear-temperature`, `--clear-top-p`, `--clear-engine`,
+`--clear-temperature`, `--clear-top-p`, `--clear-min-p`, `--clear-engine`,
 `--clear-kv-cache-mode`) to remove the stored value. Both subcommands accept
 `--json`. Only models with configurable API residency are accepted.
 

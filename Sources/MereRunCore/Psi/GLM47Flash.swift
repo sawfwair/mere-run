@@ -36,6 +36,7 @@ public final class GLM47Flash: @unchecked Sendable {
         maxNewTokens: Int = 512,
         temperature: Float = 0.7,
         topP: Float = 0.9,
+        minP: Float = 0,
         tools: [ToolDefinition]? = nil
     ) throws -> String {
         try generateWithStats(
@@ -43,6 +44,7 @@ public final class GLM47Flash: @unchecked Sendable {
             maxNewTokens: maxNewTokens,
             temperature: temperature,
             topP: topP,
+            minP: minP,
             tools: tools
         ).response
     }
@@ -52,6 +54,7 @@ public final class GLM47Flash: @unchecked Sendable {
         maxNewTokens: Int = 512,
         temperature: Float = 0.7,
         topP: Float = 0.9,
+        minP: Float = 0,
         tools: [ToolDefinition]? = nil
     ) throws -> (response: String, tokensGenerated: Int) {
         let tokens = tokenizer.encodeChat(messages: messages, tools: tools, addGenerationPrompt: true)
@@ -69,6 +72,7 @@ public final class GLM47Flash: @unchecked Sendable {
             maxTokens: maxNewTokens,
             temperature: temperature,
             topP: topP,
+            minP: minP,
             repetitionPenalty: 1.05,
             repetitionContextSize: 32
         )
@@ -94,6 +98,7 @@ public final class GLM47Flash: @unchecked Sendable {
         maxNewTokens: Int = 512,
         temperature: Float = 0.7,
         topP: Float = 0.9,
+        minP: Float = 0,
         tools: [ToolDefinition]? = nil,
         onUpdate: (@Sendable (String) -> Void)? = nil
     ) throws -> String {
@@ -112,6 +117,7 @@ public final class GLM47Flash: @unchecked Sendable {
             maxTokens: maxNewTokens,
             temperature: temperature,
             topP: topP,
+            minP: minP,
             repetitionPenalty: 1.05,
             repetitionContextSize: 32
         )

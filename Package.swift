@@ -321,6 +321,7 @@ targets.append(contentsOf: [
       "Ideogram4/README.md",
       "InstantMesh/README.md",
       "Krea2/README.md",
+      "Laguna/README.md",
       "MuScriptor/README.md",
       "LFM2/README.md",
       "LightOnOCR/README.md",
@@ -468,7 +469,7 @@ if !isLinuxPackage {
 var packageDependencies: [Package.Dependency] = (useLinuxPrebuiltMLX ? [] : [
   .package(
     url: "https://github.com/sawfwair/mlx-swift",
-    revision: "e6bf70134e0c15577e80594b843a7e13f374bf8f"
+    revision: "0c63032c7deeec3cb0600aa933cb0b50d16addb6"
   )
 ]) + [
   .package(

@@ -244,7 +244,7 @@ patch_mlx_cuda_jit_include_path() {
   if [[ ! -f "$mlx_jit_module" ]]; then
     return
   fi
-  if grep -Fq "MERERUN_CUDA_CCCL_INCLUDE_PATH" "$mlx_jit_module"; then
+  if grep -Fq "MERERUN_MLX_CUDA_JIT_INCLUDE_PATH" "$mlx_jit_module"; then
     return
   fi
 
@@ -252,6 +252,15 @@ patch_mlx_cuda_jit_include_path() {
   mlx_jit_tmp="$(mktemp "${TMPDIR:-/tmp}/mererun-mlx-jit.XXXXXX")"
   if ! awk '
     /return args;/ && !inserted {
+      print "      // MERERUN_MLX_CUDA_JIT_INCLUDE: packaged MLX CUDA kernels need"
+      print "      // their matching CUTLASS/CuTe headers at NVRTC compile time."
+      print "      if (auto mererun_mlx_cuda_jit = std::getenv(\"MERERUN_MLX_CUDA_JIT_INCLUDE_PATH\")) {"
+      print "        auto mererun_mlx_cuda_jit_path = std::filesystem::path(mererun_mlx_cuda_jit);"
+      print "        if (std::filesystem::exists(mererun_mlx_cuda_jit_path / \"cute\") &&"
+      print "            std::filesystem::exists(mererun_mlx_cuda_jit_path / \"cutlass\")) {"
+      print "          args.push_back(fmt::format(\"--include-path={}\", mererun_mlx_cuda_jit_path.string()));"
+      print "        }"
+      print "      }"
       print "      // MERERUN_CUDA_CCCL_INCLUDE: CUDA 13 installs cuda/std under include/cccl."
       print "      // Keep this explicit because NVRTC does not inherit the package launcher CPATH."
       print "      auto add_mererun_cuda_cccl_include = [&](const std::filesystem::path& cuda_cccl_path) {"
@@ -378,6 +387,47 @@ patch_mlx_cuda_bf16_power() {
   fi
   mv "$mlx_binary_tmp" "$mlx_binary_ops"
   echo "[prepare-linux-native] patched mlx-swift CUDA bf16 power in ${mlx_binary_ops#$repo_root/}."
+}
+
+patch_mlx_cpu_jit_f16c_probe() {
+  local mlx_jit_compiler="$1"
+  if [[ ! -f "$mlx_jit_compiler" ]]; then
+    return
+  fi
+  if grep -Fq "MERERUN_MLX_X86_AVX2_IMPLIES_F16C" "$mlx_jit_compiler"; then
+    return
+  fi
+
+  local mlx_jit_tmp
+  mlx_jit_tmp="$(mktemp "${TMPDIR:-/tmp}/mererun-mlx-cpu-jit.XXXXXX")"
+  if ! awk '
+    /return __builtin_cpu_supports\("avx2"\) && __builtin_cpu_supports\("fma"\) &&/ && !patched {
+      line1 = $0
+      if ((getline line2) <= 0) {
+        print line1
+        next
+      }
+      if (line2 == "      __builtin_cpu_supports(\"f16c\");") {
+        print "  // MERERUN_MLX_X86_AVX2_IMPLIES_F16C: the Clang shipped with the"
+        print "  // Swift 6.0 Jammy image rejects f16c as a builtin feature string."
+        print "  // Every production x86 CPU implementing AVX2 also implements F16C."
+        print "  return __builtin_cpu_supports(\"avx2\") && __builtin_cpu_supports(\"fma\");"
+        patched=1
+        next
+      }
+      print line1
+      print line2
+      next
+    }
+    { print }
+    END { if (!patched) exit 42 }
+  ' "$mlx_jit_compiler" >"$mlx_jit_tmp"; then
+    rm -f "$mlx_jit_tmp"
+    echo "[prepare-linux-native] error: could not patch MLX x86 F16C probe in ${mlx_jit_compiler#$repo_root/}." >&2
+    exit 69
+  fi
+  mv "$mlx_jit_tmp" "$mlx_jit_compiler"
+  echo "[prepare-linux-native] patched MLX x86 F16C probe in ${mlx_jit_compiler#$repo_root/}."
 }
 
 detect_cuda_dependency_defaults() {
@@ -600,6 +650,9 @@ patch_mlx_swift_for_linux() {
   echo "[prepare-linux-native] resolving Swift package dependencies"
   swift package resolve
 
+  patch_mlx_cpu_jit_f16c_probe \
+    "$mlx_swift_checkout/Source/Cmlx/mlx/mlx/backend/cpu/jit_compiler.cpp"
+
   if [[ "$linux_accel" == "cuda" ]]; then
     patch_mlx_cuda_jit_include_path "$mlx_swift_checkout/Source/Cmlx/mlx/mlx/backend/cuda/jit_module.cpp"
     patch_mlx_cuda_bf16_sigmoid "$mlx_swift_checkout/Source/Cmlx/mlx/mlx/backend/cuda/device/unary_ops.cuh"
@@ -681,6 +734,9 @@ smoke_mlx_swift_cuda() {
   patch_mlx_cuda_jit_include_path "$mlx_cmake_src/Source/Cmlx/mlx/mlx/backend/cuda/jit_module.cpp"
   patch_mlx_cuda_jit_include_path "$mlx_cmake_build/_deps/mlx-src/mlx/backend/cuda/jit_module.cpp"
   patch_mlx_cuda_jit_include_path "$mlx_cmake_build/_deps/mlx-c-src/mlx/backend/cuda/jit_module.cpp"
+  patch_mlx_cpu_jit_f16c_probe "$mlx_cmake_src/Source/Cmlx/mlx/mlx/backend/cpu/jit_compiler.cpp"
+  patch_mlx_cpu_jit_f16c_probe "$mlx_cmake_build/_deps/mlx-src/mlx/backend/cpu/jit_compiler.cpp"
+  patch_mlx_cpu_jit_f16c_probe "$mlx_cmake_build/_deps/mlx-c-src/mlx/backend/cpu/jit_compiler.cpp"
   patch_mlx_cuda_bf16_sigmoid "$mlx_cmake_src/Source/Cmlx/mlx/mlx/backend/cuda/device/unary_ops.cuh"
   patch_mlx_cuda_bf16_sigmoid "$mlx_cmake_build/_deps/mlx-src/mlx/backend/cuda/device/unary_ops.cuh"
   patch_mlx_cuda_bf16_sigmoid "$mlx_cmake_build/_deps/mlx-c-src/mlx/backend/cuda/device/unary_ops.cuh"

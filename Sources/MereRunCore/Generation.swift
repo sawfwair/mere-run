@@ -290,6 +290,8 @@ public struct ChatRequest: Sendable, Hashable {
     public var topP: Double
     /// Top-k sampling cutoff; nil leaves the engine's default (no cutoff).
     public var topK: Int?
+    /// Min-p sampling cutoff relative to the most likely token; zero disables it.
+    public var minP: Double
     public var showThinking: Bool
     public var lora: LoRA?
     public var requiresJSON: Bool
@@ -305,6 +307,7 @@ public struct ChatRequest: Sendable, Hashable {
         temperature: Double = 0.7,
         topP: Double = 0.9,
         topK: Int? = nil,
+        minP: Double = 0,
         showThinking: Bool = true,
         lora: LoRA? = nil,
         requiresJSON: Bool = false,
@@ -319,6 +322,7 @@ public struct ChatRequest: Sendable, Hashable {
         self.temperature = temperature
         self.topP = topP
         self.topK = topK
+        self.minP = minP
         self.showThinking = showThinking
         self.lora = lora
         self.requiresJSON = requiresJSON

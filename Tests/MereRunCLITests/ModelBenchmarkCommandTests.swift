@@ -33,6 +33,112 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         XCTAssertTrue(commandNames.contains("code"))
     }
 
+    func testBenchmarkCommandExposesLagunaDFlashSubcommand() {
+        let commandNames = Set(ModelBenchmark.configuration.subcommands.map {
+            $0.configuration.commandName
+        })
+        XCTAssertTrue(commandNames.contains("laguna-dflash"))
+    }
+
+    func testLagunaDFlashBenchmarkParsesDefaults() throws {
+        let command = try ModelBenchmarkLagunaDFlash.parse([
+            "--laguna-path", "/tmp/Laguna-S-2.1-NVFP4-mlx",
+            "--laguna-dflash-path", "/tmp/Laguna-S-2.1-DFlash",
+        ])
+
+        XCTAssertEqual(command.decodeTokenValues, "8,12,16,24,32,48")
+        XCTAssertEqual(command.repetitions, 3)
+        XCTAssertEqual(command.lagunaDflashTokens, 12)
+        XCTAssertEqual(command.temperature, 0)
+        XCTAssertEqual(command.topP, 1)
+        XCTAssertEqual(command.topK, 0)
+        XCTAssertEqual(command.minP, LagunaResources.recommendedMinP)
+        XCTAssertEqual(command.contextSize, 4_096)
+        XCTAssertEqual(command.fixture, .deterministicProse)
+        XCTAssertNil(command.prompt)
+        XCTAssertNil(command.promptFile)
+        XCTAssertNil(command.concurrencyValues)
+        XCTAssertEqual(command.warmupRepetitions, 1)
+        XCTAssertFalse(command.mixedFixtures)
+        XCTAssertFalse(command.includeAutomatic)
+        XCTAssertFalse(command.logResponses)
+        XCTAssertFalse(command.json)
+    }
+
+    func testLagunaDFlashBenchmarkRejectsInvalidMatrix() {
+        XCTAssertThrowsError(try ModelBenchmarkLagunaDFlash.parse([
+            "--laguna-path", "/tmp/Laguna-S-2.1-NVFP4-mlx",
+            "--laguna-dflash-path", "/tmp/Laguna-S-2.1-DFlash",
+            "--decode-token-values", "8,0,32",
+        ]))
+        XCTAssertThrowsError(try ModelBenchmarkLagunaDFlash.parse([
+            "--laguna-path", "/tmp/Laguna-S-2.1-NVFP4-mlx",
+            "--laguna-dflash-path", "/tmp/Laguna-S-2.1-DFlash",
+            "--repetitions", "0",
+        ]))
+    }
+
+    func testLagunaDFlashBenchmarkParsesCodeCompletionFixture() throws {
+        let command = try ModelBenchmarkLagunaDFlash.parse([
+            "--laguna-path", "/tmp/Laguna-S-2.1-NVFP4-mlx",
+            "--laguna-dflash-path", "/tmp/Laguna-S-2.1-DFlash",
+            "--fixture", "code-completion",
+        ])
+
+        XCTAssertEqual(command.fixture, .codeCompletion)
+    }
+
+    func testLagunaDFlashBenchmarkParsesSamplingRecipe() throws {
+        let command = try ModelBenchmarkLagunaDFlash.parse([
+            "--laguna-path", "/tmp/Laguna-S-2.1-NVFP4-mlx",
+            "--laguna-dflash-path", "/tmp/Laguna-S-2.1-DFlash",
+            "--temperature", "1",
+            "--top-p", "0.95",
+            "--top-k", "20",
+            "--min-p", "0.05",
+        ])
+
+        XCTAssertEqual(command.temperature, 1)
+        XCTAssertEqual(command.topP, 0.95)
+        XCTAssertEqual(command.topK, 20)
+        XCTAssertEqual(command.minP, 0.05)
+    }
+
+    func testLagunaDFlashBenchmarkParsesResidentConcurrencyMatrix() throws {
+        let command = try ModelBenchmarkLagunaDFlash.parse([
+            "--laguna-path", "/tmp/Laguna-S-2.1-NVFP4-mlx",
+            "--laguna-dflash-path", "/tmp/Laguna-S-2.1-DFlash",
+            "--concurrency-values", "1,2,4",
+            "--warmup-repetitions", "2",
+            "--mixed-fixtures",
+            "--log-responses",
+        ])
+
+        XCTAssertEqual(command.concurrencyValues, "1,2,4")
+        XCTAssertEqual(command.warmupRepetitions, 2)
+        XCTAssertTrue(command.mixedFixtures)
+        XCTAssertTrue(command.logResponses)
+    }
+
+    func testLagunaDFlashBenchmarkRejectsInvalidConcurrencyMatrix() {
+        let prefix = [
+            "--laguna-path", "/tmp/Laguna-S-2.1-NVFP4-mlx",
+            "--laguna-dflash-path", "/tmp/Laguna-S-2.1-DFlash",
+        ]
+        XCTAssertThrowsError(try ModelBenchmarkLagunaDFlash.parse(
+            prefix + ["--concurrency-values", "1,0,4"]
+        ))
+        XCTAssertThrowsError(try ModelBenchmarkLagunaDFlash.parse(
+            prefix + ["--concurrency-values", "1,2,2"]
+        ))
+        XCTAssertThrowsError(try ModelBenchmarkLagunaDFlash.parse(
+            prefix + ["--mixed-fixtures"]
+        ))
+        XCTAssertThrowsError(try ModelBenchmarkLagunaDFlash.parse(
+            prefix + ["--warmup-repetitions", "-1"]
+        ))
+    }
+
     func testCodeBenchmarkRequiresExecutionOptIn() {
         XCTAssertThrowsError(try ModelBenchmarkCode.parse([]))
     }
@@ -41,12 +147,19 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         let cmd = try ModelBenchmarkCode.parse(["--dry-run"])
 
         XCTAssertNil(cmd.models)
+        XCTAssertNil(cmd.lagunaPath)
+        XCTAssertNil(cmd.lagunaDflashPath)
+        XCTAssertEqual(cmd.lagunaDflashTokens, 12)
+        XCTAssertEqual(cmd.lagunaDflashMinTokens, 32)
         XCTAssertEqual(cmd.suite, .humanEvalSlice)
         XCTAssertNil(cmd.tasks)
         XCTAssertNil(cmd.humanevalFile)
         XCTAssertEqual(cmd.maxTokens, 1024)
         XCTAssertEqual(cmd.temperature, 0)
         XCTAssertEqual(cmd.topP, 1)
+        XCTAssertEqual(cmd.topK, 0)
+        XCTAssertNil(cmd.minP)
+        XCTAssertEqual(cmd.resolvedMinP, 0)
         XCTAssertEqual(cmd.executionTimeout, 5)
         XCTAssertEqual(cmd.python, "python3")
         XCTAssertEqual(cmd.sandbox, .auto)
@@ -86,6 +199,8 @@ final class ModelBenchmarkCommandTests: XCTestCase {
             "--max-tokens", "256",
             "--temperature", "0.2",
             "--top-p", "0.8",
+            "--top-k", "20",
+            "--min-p", "0.05",
             "--execution-timeout", "3.5",
             "--python", "/tmp/venv/bin/python",
             "--sandbox", "none",
@@ -100,6 +215,8 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         XCTAssertEqual(cmd.maxTokens, 256)
         XCTAssertEqual(cmd.temperature, 0.2)
         XCTAssertEqual(cmd.topP, 0.8)
+        XCTAssertEqual(cmd.topK, 20)
+        XCTAssertEqual(cmd.minP, 0.05)
         XCTAssertEqual(cmd.executionTimeout, 3.5)
         XCTAssertEqual(cmd.python, "/tmp/venv/bin/python")
         XCTAssertEqual(cmd.sandbox, .none)
@@ -118,6 +235,21 @@ final class ModelBenchmarkCommandTests: XCTestCase {
 
         XCTAssertEqual(cmd.humanevalFile, url.path)
         XCTAssertEqual(cmd.tasks, "HumanEval/42")
+    }
+
+    func testCodeBenchmarkLagunaPathSelectsEvaluationModel() throws {
+        let cmd = try ModelBenchmarkCode.parse([
+            "--laguna-path", "/tmp/Laguna-S-2.1-NVFP4-mlx",
+            "--laguna-dflash-path", "/tmp/Laguna-S-2.1-DFlash",
+            "--laguna-dflash-tokens", "5",
+            "--laguna-dflash-min-tokens", "24",
+            "--dry-run",
+        ])
+
+        XCTAssertEqual(cmd.lagunaPath, "/tmp/Laguna-S-2.1-NVFP4-mlx")
+        XCTAssertEqual(cmd.lagunaDflashPath, "/tmp/Laguna-S-2.1-DFlash")
+        XCTAssertEqual(cmd.lagunaDflashTokens, 5)
+        XCTAssertEqual(cmd.lagunaDflashMinTokens, 24)
     }
 
     func testHumanEvalJSONLLoaderDecodesOfficialShape() throws {
@@ -402,12 +534,21 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         let cmd = try ModelBenchmarkChat.parse([])
 
         XCTAssertNil(cmd.models)
+        XCTAssertNil(cmd.lagunaPath)
+        XCTAssertNil(cmd.lagunaDflashPath)
+        XCTAssertEqual(cmd.lagunaDflashTokens, 12)
+        XCTAssertEqual(cmd.lagunaDflashMinTokens, 32)
+        XCTAssertEqual(cmd.lagunaDflashRouting, .automatic)
         XCTAssertEqual(cmd.suite, .mereChatSlice)
         XCTAssertNil(cmd.cases)
         XCTAssertEqual(cmd.maxTokens, 96)
         XCTAssertEqual(cmd.temperature, 0)
         XCTAssertEqual(cmd.topP, 1)
+        XCTAssertEqual(cmd.topK, 0)
+        XCTAssertNil(cmd.minP)
+        XCTAssertEqual(cmd.resolvedMinP, 0)
         XCTAssertNil(cmd.contextSize)
+        XCTAssertEqual(cmd.concurrency, 1)
         XCTAssertFalse(cmd.dryRun)
         XCTAssertFalse(cmd.logResponses)
         XCTAssertFalse(cmd.json)
@@ -421,7 +562,11 @@ final class ModelBenchmarkCommandTests: XCTestCase {
             "--max-tokens", "128",
             "--temperature", "0.1",
             "--top-p", "0.8",
+            "--top-k", "20",
+            "--min-p", "0.05",
             "--context-size", "4096",
+            "--concurrency", "2",
+            "--laguna-dflash-routing", "target-only",
             "--dry-run",
             "--log-responses",
             "--json",
@@ -433,7 +578,11 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         XCTAssertEqual(cmd.maxTokens, 128)
         XCTAssertEqual(cmd.temperature, 0.1)
         XCTAssertEqual(cmd.topP, 0.8)
+        XCTAssertEqual(cmd.topK, 20)
+        XCTAssertEqual(cmd.minP, 0.05)
         XCTAssertEqual(cmd.contextSize, 4096)
+        XCTAssertEqual(cmd.concurrency, 2)
+        XCTAssertEqual(cmd.lagunaDflashRouting, .targetOnly)
         XCTAssertTrue(cmd.dryRun)
         XCTAssertTrue(cmd.logResponses)
         XCTAssertTrue(cmd.json)
@@ -494,14 +643,80 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         let cmd = try ModelBenchmarkToolCalls.parse([])
 
         XCTAssertNil(cmd.models)
+        XCTAssertNil(cmd.lagunaPath)
+        XCTAssertNil(cmd.lagunaDflashPath)
+        XCTAssertEqual(cmd.lagunaDflashTokens, 12)
+        XCTAssertEqual(cmd.lagunaDflashMinTokens, 32)
         XCTAssertNil(cmd.cases)
         XCTAssertEqual(cmd.maxTokens, 192)
         XCTAssertEqual(cmd.temperature, 0)
         XCTAssertEqual(cmd.topP, 1)
+        XCTAssertEqual(cmd.topK, 0)
+        XCTAssertNil(cmd.minP)
+        XCTAssertEqual(cmd.resolvedMinP, 0)
         XCTAssertNil(cmd.contextSize)
         XCTAssertFalse(cmd.dryRun)
         XCTAssertFalse(cmd.logResponses)
         XCTAssertFalse(cmd.json)
+    }
+
+    func testChatAndToolCallBenchmarksSelectLagunaEvaluationPath() throws {
+        let path = "/Volumes/model-store/Laguna-S-2.1-NVFP4-mlx"
+        let draftPath = "/Volumes/model-store/Laguna-S-2.1-DFlash"
+        let chat = try ModelBenchmarkChat.parse([
+            "--laguna-path", path,
+            "--laguna-dflash-path", draftPath,
+            "--laguna-dflash-tokens", "5",
+            "--laguna-dflash-min-tokens", "24",
+            "--laguna-dflash-routing", "dflash",
+            "--dry-run",
+        ])
+        let tools = try ModelBenchmarkToolCalls.parse([
+            "--laguna-path", path,
+            "--laguna-dflash-path", draftPath,
+            "--laguna-dflash-tokens", "5",
+            "--laguna-dflash-min-tokens", "24",
+            "--dry-run",
+        ])
+
+        XCTAssertEqual(chat.lagunaPath, path)
+        XCTAssertEqual(chat.lagunaDflashPath, draftPath)
+        XCTAssertEqual(chat.lagunaDflashTokens, 5)
+        XCTAssertEqual(chat.lagunaDflashMinTokens, 24)
+        XCTAssertEqual(chat.lagunaDflashRouting, .dflash)
+        XCTAssertEqual(chat.resolvedMinP, LagunaResources.recommendedMinP)
+        XCTAssertEqual(try chat.selectedModelIDs(), [LagunaResources.modelID])
+        XCTAssertEqual(tools.lagunaPath, path)
+        XCTAssertEqual(tools.lagunaDflashPath, draftPath)
+        XCTAssertEqual(tools.lagunaDflashTokens, 5)
+        XCTAssertEqual(tools.lagunaDflashMinTokens, 24)
+        XCTAssertEqual(tools.resolvedMinP, LagunaResources.recommendedMinP)
+        XCTAssertEqual(try tools.selectedModelIDs(), [LagunaResources.modelID])
+    }
+
+    func testLagunaDFlashBenchmarkFlagsUseInstalledDefaultsAndRejectInvalidCombinations() throws {
+        let installed = try ModelBenchmarkChat.parse([
+            "--laguna-dflash-path", "/tmp/Laguna-S-2.1-DFlash",
+        ])
+        XCTAssertEqual(try installed.selectedModelIDs(), [LagunaResources.modelID])
+        XCTAssertEqual(installed.lagunaDflashPath, "/tmp/Laguna-S-2.1-DFlash")
+
+        XCTAssertThrowsError(try ModelBenchmarkChat.parse([
+            "--laguna-path", "/tmp/Laguna-S-2.1-NVFP4-mlx",
+            "--laguna-dflash-tokens", "16",
+        ]))
+        XCTAssertThrowsError(try ModelBenchmarkChat.parse([
+            "--laguna-path", "/tmp/Laguna-S-2.1-NVFP4-mlx",
+            "--concurrency", "0",
+        ]))
+        XCTAssertThrowsError(try ModelBenchmarkChat.parse([
+            "--laguna-path", "/tmp/Laguna-S-2.1-NVFP4-mlx",
+            "--laguna-dflash-min-tokens", "0",
+        ]))
+        XCTAssertThrowsError(try ModelBenchmarkChat.parse([
+            "--laguna-path", "/tmp/Laguna-S-2.1-NVFP4-mlx",
+            "--laguna-dflash-routing", "dflash",
+        ]))
     }
 
     func testToolCallsBenchmarkParsesOverrides() throws {
@@ -511,6 +726,8 @@ final class ModelBenchmarkCommandTests: XCTestCase {
             "--max-tokens", "96",
             "--temperature", "0.1",
             "--top-p", "0.8",
+            "--top-k", "20",
+            "--min-p", "0.05",
             "--context-size", "4096",
             "--dry-run",
             "--log-responses",
@@ -522,6 +739,8 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         XCTAssertEqual(cmd.maxTokens, 96)
         XCTAssertEqual(cmd.temperature, 0.1)
         XCTAssertEqual(cmd.topP, 0.8)
+        XCTAssertEqual(cmd.topK, 20)
+        XCTAssertEqual(cmd.minP, 0.05)
         XCTAssertEqual(cmd.contextSize, 4096)
         XCTAssertTrue(cmd.dryRun)
         XCTAssertTrue(cmd.logResponses)

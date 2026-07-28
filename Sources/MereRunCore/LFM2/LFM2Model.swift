@@ -380,6 +380,13 @@ final class LFM2SwitchLinear: Module {
     }
 }
 
+enum LFM2MoEAccelerationPolicy {
+    static let fusedAffine8MoEEnabled = RoutedMoERouting.parseBoolean(
+        ProcessInfo.processInfo.environment["MERERUN_LFM2_FUSED_AFFINE8_MOE"],
+        default: true
+    )
+}
+
 final class LFM2SwitchGLU: Module {
     @ModuleInfo(key: "gate_proj") var gateProj: LFM2SwitchLinear
     @ModuleInfo(key: "up_proj") var upProj: LFM2SwitchLinear
@@ -418,6 +425,43 @@ final class LFM2SwitchGLU: Module {
     }
 
     func callAsFunction(_ x: MLXArray, indices: MLXArray) -> MLXArray {
+        return unsorted(x, indices: indices)
+    }
+
+    private func unsorted(_ x: MLXArray, indices: MLXArray) -> MLXArray {
+        let batch = x.dim(0)
+        let sequenceLength = x.dim(1)
+        let topK = indices.dim(2)
+        if LFM2MoEAccelerationPolicy.fusedAffine8MoEEnabled,
+           gateProj.groupSize == upProj.groupSize,
+           gateProj.bits == upProj.bits,
+           let gateScales = gateProj.scales,
+           let gateBiases = gateProj.biases,
+           let upScales = upProj.scales,
+           let upBiases = upProj.biases,
+           let fused = RoutedMoERouting.fusedGatherAffine8SwiGLU(
+               x,
+               gateWeight: gateProj.weight,
+               gateScales: gateScales,
+               gateBiases: gateBiases,
+               upWeight: upProj.weight,
+               upScales: upScales,
+               upBiases: upBiases,
+               expertIndices: indices,
+               topK: topK,
+               groupSize: gateProj.groupSize,
+               bits: gateProj.bits
+           ) {
+            return downProj(
+                fused.reshaped([
+                    batch,
+                    sequenceLength,
+                    topK,
+                    fused.dim(-1),
+                ]),
+                indices: indices
+            )
+        }
         let up = upProj(x, indices: indices)
         let gate = gateProj(x, indices: indices)
         return downProj(lfm2Swiglu(gate, up), indices: indices)

@@ -92,6 +92,7 @@ public final class LlamaContext: @unchecked Sendable {
         temperature: Float = 1.0,
         topP: Float = 0.95,
         topK: Int32 = 40,
+        minP: Float = 0,
         seed: UInt32 = 1234
     ) async throws -> LlamaContext {
         llama_backend_init()
@@ -127,7 +128,13 @@ public final class LlamaContext: @unchecked Sendable {
         }
 
         let llamaContext = LlamaContext(model: model, context: context)
-        llamaContext.configureSampler(temperature: temperature, topP: topP, topK: topK, seed: seed)
+        llamaContext.configureSampler(
+            temperature: temperature,
+            topP: topP,
+            topK: topK,
+            minP: minP,
+            seed: seed
+        )
         return llamaContext
     }
 
@@ -136,6 +143,7 @@ public final class LlamaContext: @unchecked Sendable {
         temperature: Float = 1.0,
         topP: Float = 0.95,
         topK: Int32 = 40,
+        minP: Float = 0,
         seed: UInt32 = 1234
     ) {
         queue.sync {
@@ -144,6 +152,9 @@ public final class LlamaContext: @unchecked Sendable {
             sampling = llama_sampler_chain_init(sparams)
             llama_sampler_chain_add(sampling, llama_sampler_init_top_k(topK))
             llama_sampler_chain_add(sampling, llama_sampler_init_top_p(topP, 1))
+            if minP > 0 {
+                llama_sampler_chain_add(sampling, llama_sampler_init_min_p(minP, 1))
+            }
             llama_sampler_chain_add(sampling, llama_sampler_init_temp(temperature))
             llama_sampler_chain_add(sampling, llama_sampler_init_dist(seed))
         }
