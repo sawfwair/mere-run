@@ -4,6 +4,69 @@ All notable changes to this public repository will be documented in this file.
 
 The format is based on Keep a Changelog.
 
+## 0.28.0 - 2026-07-28
+
+This release turns the optional macOS Studio into a complete, first-class
+creative and operations client over the public `mere.run` CLI while preserving
+the headless runtime and Relay/node ownership boundaries.
+
+### Added
+
+- added dedicated Studio workspaces for image editing, adapters, Magenta RT2
+  realtime music, SCAIL-2 subject continuity, 3D creation, advanced vision,
+  voice and voice cloning, SFX/Foley, model and adapter training, and structured
+  text/image utility workflows. Each surface uses typed CLI contracts, durable
+  Library jobs, artifact previews, and copyable commands instead of reimplementing
+  inference in the app.
+- added a complete SCAIL-2 subject workflow with multi-subject references and
+  selectors, SAM preview/full-video tracking, immutable correction keyframes,
+  before/after playback, continuity controls, and durable output inspection.
+- added native 3D creation experiences for TripoSR, TRELLIS.2 PBR
+  reconstruction, and ordered InstantMesh multiview input, including
+  engine-specific controls, immutable run directories, manifest statistics,
+  and embedded Quick Look model previews.
+- added an Advanced Vision Lab for face and pose overlays, optical-flow vectors,
+  live tracking and depth-video review, geometry point clouds, and preservation
+  of JSON, EXR, mask, camera, and 3D sidecars.
+- added production Voice, SFX, Training, Music Tools, and Utility labs with
+  recording and reusable voice profiles, streaming feedback, transcription,
+  Foley conditioning, CLAP scoring, waveform inspection, ACE-Step analysis,
+  MuScriptor piano-roll review, LoRA/LoKr dataset previews and live metrics,
+  vector comparison, and protected-PII review.
+- added a top-level Serving & Agents console with API preflight and lifecycle,
+  external-server reconnection, LAN/auth safety, model residency and runtime
+  policy, memory/CPU/Metal/thermal telemetry, request/cache/batching activity,
+  and typed Pi agent readiness, installation, configuration, and sessions.
+- added a top-level Runs & Operations workspace for local durable runs and Relay
+  jobs, including polling, inspection, artifact fetch, reveal, cancellation,
+  immutable retry, Relay profile setup, and device sign-in.
+- added a first-class Plugin Manager with catalog search, channel selection,
+  installed version/path and manifest verification, copyable pinned commands,
+  confirmed install/update, reveal, doctor, and custom catalog support.
+- added Model Health & Repair with structured manifest audits, confirmed repair
+  of missing known manifests, correctness/performance quality suites, and
+  durable JSON reports.
+- added structured CLI data needed by these thin clients: runtime process and
+  model-pool telemetry, agent status, enriched `plugin list --json`
+  installation/verification state, and `model repair-manifests --json`
+  preview/apply reports.
+
+### Changed
+
+- expanded Studio command coverage and inverse contract tests so every public
+  CLI capability has an app-owned typed or utility path and every Studio option
+  remains accepted by ArgumentParser.
+- expanded the VitePress workflow, plugin, model-management, serving, image,
+  video, music, speech, SFX, text, and vision documentation to cover the new
+  first-class paths and their CLI/runtime contracts.
+- kept Studio creator-facing and local: Relay and its node app continue to own
+  node identity, fleet placement and scheduling, worker lifecycle, model
+  distribution, inventory, and hardware telemetry. World/Cosmos authoring
+  remains in the separate Diorama product rather than being duplicated.
+- expanded the packaged app's camera and microphone permission/entitlement
+  coverage for first-class live vision, recording, transcription, and voice
+  reference workflows.
+
 ## 0.27.1 - 2026-07-27
 
 ### Added
