@@ -4,6 +4,18 @@ All notable changes to this public repository will be documented in this file.
 
 The format is based on Keep a Changelog.
 
+## 0.28.1 - 2026-07-28
+
+### Fixed
+
+- fixed native LTX video generation on async Swift executors by carrying both
+  CPU and GPU MLX streams across task suspension, preventing the
+  `There is no Stream(cpu, ...) in current thread` crash introduced by the
+  MLX 0.32.1 runtime refresh.
+- scoped text-to-video, unified audio/video, and audio-to-video execution to the
+  executor-safe MLX stream context while preserving validation-before-runtime
+  CLI behavior.
+
 ## 0.28.0 - 2026-07-28
 
 This release turns the optional macOS Studio into a complete, first-class

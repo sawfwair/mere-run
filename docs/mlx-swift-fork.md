@@ -17,7 +17,7 @@ the core quantized helper headers. The source marker
 without either marker compile from the unchanged default header set. The
 embedded MLX core revision is `9bee51623d5a34806821e0f414fae293f90dda19`;
 the mlx-swift revision pinned by mere.run is
-`0c63032c7deeec3cb0600aa933cb0b50d16addb6`.
+`a9485c38b82b8e0cee76e8f1f5a3e5bf6f36d543`.
 
 A separate measured one-line compiled-call optimization exists on staging
 branches but is **deliberately not included in the pin**. The rest of this

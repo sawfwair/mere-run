@@ -469,26 +469,29 @@ struct VideoGenerate: AsyncParsableCommand {
         try validateProductSelection(modelRoot: resolvedRootURL)
         if let sourceAudioURL {
             try validateNativeAudioToVideoModelRoot(resolvedRootURL)
-            try await runNativeAudioToVideoGenerate(
-                prompt: trimmedPrompt,
-                negativePrompt: negativePrompt,
-                audioURL: sourceAudioURL,
-                audioStartTime: audioStartTime,
-                width: resolvedWidth,
-                height: resolvedHeight,
-                numFrames: resolvedNumFrames,
-                fps: fps,
-                seed: seed ?? 42,
-                inferenceSteps: a2vSteps,
-                a2vGuidanceScale: a2vGuidanceScale,
-                videoCFGGuidanceScale: videoCFGGuidanceScale,
-                sourceImageURL: sourceImageURL,
-                imageStrength: imageStrength,
-                endImageURL: endImageURL,
-                endImageStrength: endImageStrength,
-                modelRoot: resolvedRootURL,
-                outputURL: outputURL
-            )
+            try MLXBundleSupport.ensureAvailable(quiet: quiet)
+            try await Stream.withNewDefaultStream {
+                try await runNativeAudioToVideoGenerate(
+                    prompt: trimmedPrompt,
+                    negativePrompt: negativePrompt,
+                    audioURL: sourceAudioURL,
+                    audioStartTime: audioStartTime,
+                    width: resolvedWidth,
+                    height: resolvedHeight,
+                    numFrames: resolvedNumFrames,
+                    fps: fps,
+                    seed: seed ?? 42,
+                    inferenceSteps: a2vSteps,
+                    a2vGuidanceScale: a2vGuidanceScale,
+                    videoCFGGuidanceScale: videoCFGGuidanceScale,
+                    sourceImageURL: sourceImageURL,
+                    imageStrength: imageStrength,
+                    endImageURL: endImageURL,
+                    endImageStrength: endImageStrength,
+                    modelRoot: resolvedRootURL,
+                    outputURL: outputURL
+                )
+            }
             return
         }
         if isWan2ModelRoot(resolvedRootURL) {
@@ -557,27 +560,39 @@ struct VideoGenerate: AsyncParsableCommand {
             }
         }
 
-        try await runNativeGenerate(
-            prompt: trimmedPrompt,
-            width: resolvedWidth,
-            height: resolvedHeight,
-            numFrames: resolvedNumFrames,
-            fps: fps,
-            seed: seed ?? 42,
-            outputMode: effectiveOutputMode,
-            negativePrompt: negativePrompt,
-            inferenceSteps: a2vSteps,
-            videoCFGGuidanceScale: videoCFGGuidanceScale,
-            audioToVideoGuidanceScale: a2vGuidanceScale,
-            audioCFGGuidanceScale: audioCFGGuidanceScale,
-            videoToAudioGuidanceScale: v2aGuidanceScale,
-            sourceImageURL: sourceImageURL,
-            imageStrength: imageStrength,
-            endImageURL: endImageURL,
-            endImageStrength: endImageStrength,
-            modelRoot: resolvedModelRoot,
-            outputURL: outputURL
+        let nativeRoute = resolveLTXVideoGenerationRoute(
+            variant: variant,
+            modelRoot: resolvedRootURL
         )
+        if (timings || timingsOutput != nil), !nativeRoute.supportsPhaseTimings {
+            throw ValidationError(
+                "--timings and --timings-output require an LTX 2.3 split model, --quality final, --output-mode audio-video, or --audio."
+            )
+        }
+        try MLXBundleSupport.ensureAvailable(quiet: quiet)
+        try await Stream.withNewDefaultStream {
+            try await runNativeGenerate(
+                prompt: trimmedPrompt,
+                width: resolvedWidth,
+                height: resolvedHeight,
+                numFrames: resolvedNumFrames,
+                fps: fps,
+                seed: seed ?? 42,
+                outputMode: effectiveOutputMode,
+                negativePrompt: negativePrompt,
+                inferenceSteps: a2vSteps,
+                videoCFGGuidanceScale: videoCFGGuidanceScale,
+                audioToVideoGuidanceScale: a2vGuidanceScale,
+                audioCFGGuidanceScale: audioCFGGuidanceScale,
+                videoToAudioGuidanceScale: v2aGuidanceScale,
+                sourceImageURL: sourceImageURL,
+                imageStrength: imageStrength,
+                endImageURL: endImageURL,
+                endImageStrength: endImageStrength,
+                modelRoot: resolvedModelRoot,
+                outputURL: outputURL
+            )
+        }
     }
 
     private func validateProductSelection(modelRoot: URL) throws {
