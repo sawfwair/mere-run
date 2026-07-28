@@ -31,6 +31,8 @@ export interface MereProductDocsThemeOptions {
   pluginsHref?: string
   referenceHref?: string
   cliHref?: string
+  /** Override the generic four-plane atlas with product-specific copy. */
+  planes?: MereAtlasPlane[]
 }
 
 export function createMereDocsTheme(config: MereDocsThemeUserConfig = {}): Theme {
@@ -54,10 +56,10 @@ export function createMereProductDocsTheme(options: MereProductDocsThemeOptions)
   const operationsHref = options.operationsHref ?? guideHref
   const workflowsHref = options.workflowsHref ?? guideHref
   const runtimeHref = options.runtimeHref ?? architectureHref
-  const pluginsHref = options.pluginsHref ?? referenceHref
   const referenceHref = options.referenceHref ?? guideHref
+  const pluginsHref = options.pluginsHref ?? referenceHref
   const cliHref = options.cliHref ?? referenceHref
-  const planes: MereAtlasPlane[] = [
+  const planes: MereAtlasPlane[] = options.planes ?? [
     {
       name: `${options.productName} CLI`,
       signal: 'Complete command tree, setup paths, and practical cookbooks',

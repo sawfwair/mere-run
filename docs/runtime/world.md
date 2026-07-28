@@ -9,14 +9,14 @@ instead of inventing a new room on the way back.
 It runs as a long-lived local HTTP server, loopback-first, on either of two
 native Swift/MLX backends:
 
+- `dreamx`: Wan 2.2 TI2V resources plus a converted DreamX causal checkpoint
+- `cosmos3`: the official Cosmos3-Edge checkpoint with learned action
+  conditioning and the `camera_pose` action domain
+
 The macOS Studio app exposes the same resident server in Advanced → Operations
 with typed backend, model, state-directory, warmup, host, port, and
 authentication controls. API keys are injected with `MERERUN_API_KEY` so they
 do not appear in the child process argument list.
-
-- `dreamx`: Wan 2.2 TI2V resources plus a converted DreamX causal checkpoint
-- `cosmos3`: the official Cosmos3-Edge checkpoint with learned action
-  conditioning and the `camera_pose` action domain
 
 ## Commands
 
