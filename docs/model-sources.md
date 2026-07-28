@@ -51,6 +51,7 @@ from the runtime catalog used by `mere.run model list`,
 | `vision-chat` | `vision-chat-gemma4-12b` |
 | `text-chat` | `text-chat-gemma4-nano` |
 | `text-chat` | `text-chat-gemma4-max` |
+| `text-chat` | `text-chat-laguna-s-2-1` |
 | `text-chat` | `text-chat-q36-nano` |
 | `text-chat` | `text-chat-bonsai-27b-1bit` |
 | `text-chat` | `text-chat-bonsai-27b-2bit` |

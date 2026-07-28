@@ -25,6 +25,45 @@ with the new upstream source, version or commit when known, and license data.
 
 ## Binary package runtime dependencies
 
+### NVIDIA CUTLASS CUDA JIT headers
+
+- purpose: Linux CUDA packages bundle the CUTLASS and CuTe headers required by
+  MLX native quantized kernels at NVRTC compile time
+- upstream project: [`NVIDIA/cutlass`](https://github.com/NVIDIA/cutlass),
+  version `4.4.2`; BSD-3-Clause
+- package location: `include/cute`, `include/cutlass`, and
+  `include/CUTLASS-LICENSE.txt`; the Python CuTe DSL subtree is not bundled
+
+```text
+Copyright (c) 2017 - 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.
+SPDX-License-Identifier: BSD-3-Clause
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+this list of conditions and the following disclaimer in the documentation
+and/or other materials provided with the distribution.
+
+3. Neither the name of the copyright holder nor the names of its
+contributors may be used to endorse or promote products derived from
+this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+```
+
 ### ONNX Runtime for macOS face analysis
 
 - purpose: executes the managed Buffalo-L detector and ArcFace recognizer
@@ -342,9 +381,13 @@ SOFTWARE.
 ### `vendor/mlx-swift_Cmlx.bundle`
 
 - purpose: bundled MLX Metal shader resources used by MLX-backed runtime paths
-- upstream project: [`ml-explore/mlx-swift`](https://github.com/ml-explore/mlx-swift)
-- pinned package version: `0.31.2`
-- pinned package revision: `2512c5bebfd801c817b5d07828cbfdc44c76fab4`
+- source project: [`sawfwair/mlx-swift`](https://github.com/sawfwair/mlx-swift),
+  based on upstream [`ml-explore/mlx-swift`](https://github.com/ml-explore/mlx-swift)
+  0.32.1
+- pinned package revision: `0c63032c7deeec3cb0600aa933cb0b50d16addb6`
+- embedded MLX revision: `9bee51623d5a34806821e0f414fae293f90dda19`
+- generated-kernel source SHA-256:
+  `4e8781e7bbfd64810b7e23f870c647f561e9e7f1d1867183291778ef43b9d12e`
 - license: MIT
 
 ```

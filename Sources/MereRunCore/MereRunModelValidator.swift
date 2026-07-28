@@ -137,7 +137,8 @@ public enum MereRunModelValidator {
             textEncoderDir = nil
             vaeDir = nil
             tokenizerDir = nil
-        } else if spec?.validationKind == .gemma4MTPAssistant {
+        } else if spec?.validationKind == .gemma4MTPAssistant
+            || spec?.validationKind == .lagunaDFlash {
             errors.append(contentsOf: spec?.validationMessages(in: rootURL, fileManager: fileManager) ?? [])
             transformerDir = nil
             textEncoderDir = nil
@@ -378,6 +379,8 @@ public enum MereRunModelValidator {
                 warnings.append("Manifest engine mismatch: family=gemma expects gemma-4.")
             case .liquid where engine != .lfm2:
                 warnings.append("Manifest engine mismatch: family=liquid expects lfm2.")
+            case .laguna where engine != .laguna:
+                warnings.append("Manifest engine mismatch: family=laguna expects laguna.")
             case .qwen where engine != .qwen35HybridMoE:
                 warnings.append("Manifest engine mismatch: family=qwen expects qwen3.5-hybrid-moe.")
             case .sam where engine != .samSegmentation:
@@ -472,7 +475,8 @@ public enum MereRunModelValidator {
                 || manifest.family == .falcon
         }()
         let skipsComponentValidation = {
-            if ManagedModelCatalog.spec(for: manifest.id)?.validationKind == .gemma4MTPAssistant {
+            if ManagedModelCatalog.spec(for: manifest.id)?.validationKind == .gemma4MTPAssistant
+                || ManagedModelCatalog.spec(for: manifest.id)?.validationKind == .lagunaDFlash {
                 return true
             }
             switch manifest.engine {
@@ -516,7 +520,7 @@ public enum MereRunModelValidator {
 
     private static func manifestRequiresInlineQuantization(_ manifest: MereRunModelManifest) -> Bool {
         switch manifest.engine {
-        case .flux2Klein?, .zimageTurbo?, .ideogram4?, .qwen35HybridMoE?:
+        case .flux2Klein?, .zimageTurbo?, .ideogram4?, .qwen35HybridMoE?, .laguna?:
             return true
         default:
             return false
@@ -529,6 +533,7 @@ public enum MereRunModelValidator {
         if modelId.hasPrefix("image-hidream-") { return .hidream }
         if modelId.hasPrefix("image-krea2-") { return .krea }
         if modelId.hasPrefix("image-ideogram4-") { return .ideogram }
+        if modelId.hasPrefix("text-chat-laguna-") { return .laguna }
         if modelId.hasPrefix("vision-segment-") { return .sam }
         if modelId.hasPrefix("vision-ground-") { return .falcon }
         if modelId.hasPrefix("vision-face-") { return .face }

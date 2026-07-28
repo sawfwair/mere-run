@@ -9,6 +9,8 @@ public struct GenerationConfig: Sendable {
     public var temperature: Float
     public var topK: Int
     public var topP: Float
+    /// Minimum token probability relative to the most likely token. Zero disables it.
+    public var minP: Float
     public var repetitionPenalty: Float?
     public var repetitionContextSize: Int
     /// Token ids that must never be sampled. Applied as a -inf logit mask.
@@ -22,6 +24,7 @@ public struct GenerationConfig: Sendable {
         temperature: Float = 0.7,
         topK: Int = 0,
         topP: Float = 0.9,
+        minP: Float = 0,
         repetitionPenalty: Float? = 1.05,
         repetitionContextSize: Int = 20,
         bannedTokens: [Int] = [],
@@ -31,6 +34,7 @@ public struct GenerationConfig: Sendable {
         self.temperature = temperature
         self.topK = topK
         self.topP = topP
+        self.minP = minP
         self.repetitionPenalty = repetitionPenalty
         self.repetitionContextSize = repetitionContextSize
         self.bannedTokens = bannedTokens
@@ -163,8 +167,9 @@ public func sampledTokenArray(
 
     let useTopK = config.topK > 0 && config.topK < logits.dim(-1)
     let useTopP = config.topP > 0 && config.topP < 1
+    let useMinP = config.minP > 0 && config.minP <= 1
 
-    if useTopK || useTopP, logits.dtype == .bfloat16 {
+    if useTopK || useTopP || useMinP, logits.dtype == .bfloat16 {
         logits = logits.asType(.float32)
     }
 
@@ -191,17 +196,35 @@ public func sampledTokenArray(
         let sortedIndices = argSort(probs, axis: -1)
         let sortedProbs = probs.take(sortedIndices, axis: -1)
         let cumulativeProbs = cumsum(sortedProbs, axis: -1)
-        let topProbs = MLX.where(
+        var topProbs = MLX.where(
             cumulativeProbs .> (1 - config.topP),
             sortedProbs,
             MLXArray.zeros(like: sortedProbs)
         )
-        let sortedToken = categorical(MLX.log(topProbs + 1e-10))
+        if useMinP {
+            topProbs = applyingMinP(
+                probabilities: topProbs,
+                minP: config.minP
+            )
+        }
+        let sortedToken = categorical(categoricalLogits(probabilities: topProbs))
         let chosen = sortedIndices[sortedToken]
         if let candidateIndices {
             return candidateIndices[chosen].asType(.int32)
         }
         return chosen.asType(.int32)
+    }
+
+    if useMinP {
+        let scaledLogits = logits / config.temperature
+        let threshold = scaledLogits.max(axis: -1, keepDims: true)
+            + MLXArray(log(config.minP))
+        let filtered = MLX.where(
+            scaledLogits .>= threshold,
+            scaledLogits,
+            MLXArray(-Float.infinity)
+        )
+        return categorical(filtered).asType(.int32)
     }
 
     return categorical(logits / config.temperature).asType(.int32)
@@ -248,7 +271,12 @@ public func greedySampleTokenArray(
     return argMax(logits, axis: -1).asType(.int32)
 }
 
-public func topPSample(logits: MLXArray, temperature: Float, topP: Float) -> Int {
+public func topPSample(
+    logits: MLXArray,
+    temperature: Float,
+    topP: Float,
+    minP: Float = 0
+) -> Int {
     var logits = logits
     if logits.dtype == .bfloat16 {
         logits = logits.asType(.float32)
@@ -259,14 +287,39 @@ public func topPSample(logits: MLXArray, temperature: Float, topP: Float) -> Int
     let sortedProbs = probs.take(sortedIndices, axis: -1)
     let cumulativeProbs = cumsum(sortedProbs, axis: -1)
 
-    let topProbs = MLX.where(
+    var topProbs = MLX.where(
         cumulativeProbs .> (1 - topP),
         sortedProbs,
         MLXArray.zeros(like: sortedProbs)
     )
+    if minP > 0 && minP <= 1 {
+        topProbs = applyingMinP(probabilities: topProbs, minP: minP)
+    }
 
-    let sortedToken = categorical(MLX.log(topProbs + 1e-10))
+    let sortedToken = categorical(categoricalLogits(probabilities: topProbs))
     return sortedIndices[sortedToken].item(Int.self)
+}
+
+/// Keeps tokens whose probability is at least `minP` times the most likely
+/// token's probability. The caller owns normalization, so this composes with
+/// top-p without changing the already-selected nucleus.
+func applyingMinP(probabilities: MLXArray, minP: Float) -> MLXArray {
+    guard minP > 0, minP <= 1 else { return probabilities }
+    let threshold = probabilities.max(axis: -1, keepDims: true) * minP
+    return MLX.where(
+        probabilities .>= threshold,
+        probabilities,
+        MLXArray.zeros(like: probabilities)
+    )
+}
+
+public func minPSample(logits: MLXArray, temperature: Float, minP: Float) -> Int {
+    var logits = logits
+    if logits.dtype == .bfloat16 {
+        logits = logits.asType(.float32)
+    }
+    let probs = softmax(logits / temperature, axis: -1)
+    return sampleToken(probabilities: applyingMinP(probabilities: probs, minP: minP))
 }
 
 public func categoricalSample(logits: MLXArray, temperature: Float) -> Int {
@@ -348,6 +401,7 @@ public func sampleToken(
 
     let useTopK = config.topK > 0
     let useTopP = config.topP > 0 && config.topP < 1
+    let useMinP = config.minP > 0 && config.minP <= 1
 
     if useTopK {
         // Preserve the legacy top-k + top-p boundary in the source dtype;
@@ -358,12 +412,34 @@ public func sampleToken(
         }
         logits = applyingTopK(logits, topK: config.topK)
         if useTopP {
-            return topPSample(logits: logits, temperature: config.temperature, topP: config.topP)
+            return topPSample(
+                logits: logits,
+                temperature: config.temperature,
+                topP: config.topP,
+                minP: config.minP
+            )
+        } else if useMinP {
+            return minPSample(
+                logits: logits,
+                temperature: config.temperature,
+                minP: config.minP
+            )
         } else {
             return categoricalSample(logits: logits, temperature: config.temperature)
         }
     } else if useTopP {
-        return topPSample(logits: logits, temperature: config.temperature, topP: config.topP)
+        return topPSample(
+            logits: logits,
+            temperature: config.temperature,
+            topP: config.topP,
+            minP: config.minP
+        )
+    } else if useMinP {
+        return minPSample(
+            logits: logits,
+            temperature: config.temperature,
+            minP: config.minP
+        )
     } else {
         return categoricalSample(logits: logits, temperature: config.temperature)
     }
@@ -412,9 +488,24 @@ public func samplingProbabilities(
         probs = MLX.where(probs .>= threshold, probs, MLXArray.zeros(like: probs))
         probs = probs / probs.sum(axis: -1, keepDims: true)
     }
+    if config.minP > 0 && config.minP <= 1 {
+        probs = applyingMinP(probabilities: probs, minP: config.minP)
+        probs = probs / probs.sum(axis: -1, keepDims: true)
+    }
     return probs
 }
 
 public func sampleToken(probabilities: MLXArray) -> Int {
-    categorical(MLX.log(probabilities + 1e-10)).item(Int.self)
+    categorical(categoricalLogits(probabilities: probabilities)).item(Int.self)
+}
+
+/// Converts a normalized distribution to categorical logits without assigning
+/// any mass to filtered tokens. At least one caller-provided probability must
+/// be positive.
+func categoricalLogits(probabilities: MLXArray) -> MLXArray {
+    MLX.where(
+        probabilities .> 0,
+        MLX.log(probabilities),
+        MLXArray(-Float.infinity)
+    )
 }

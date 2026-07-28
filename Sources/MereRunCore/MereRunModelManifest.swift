@@ -28,6 +28,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case gemma4 = "gemma-4"
         /// LiquidAI LFM2 family via the native Swift runtime.
         case lfm2 = "lfm2"
+        /// Poolside Laguna family via the native Swift runtime.
+        case laguna = "laguna"
         /// Q35 family (Qwen3.5 hybrid MoE + hybrid attention).
         case qwen35HybridMoE = "qwen3.5-hybrid-moe"
         /// SAM image segmentation family.
@@ -94,6 +96,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case ideogram
         case gemma
         case liquid
+        case laguna
         case qwen
         case sam
         case falcon
@@ -893,6 +896,36 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [],
                 components: nil,
                 upstreamRepoId: Gemma4MTPResources.upstreamModelId,
+                createdAt: createdAt
+            )
+        case .lagunaS21:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .laguna,
+                family: .laguna,
+                tier: .max,
+                variant: .standard,
+                precision: .int4,
+                quantization: Quantization(bits: 4, groupSize: 16, scheme: "mlx-nvfp4"),
+                defaults: nil,
+                supports: [.chat, .codeGeneration],
+                components: genericTextComponents,
+                upstreamRepoId: "\(LagunaResources.upstreamModelID)@\(LagunaResources.upstreamRevision)",
+                createdAt: createdAt
+            )
+        case .lagunaS21DFlash:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .laguna,
+                family: .laguna,
+                tier: .small,
+                variant: .standard,
+                precision: .bf16,
+                defaults: nil,
+                supports: [],
+                components: nil,
+                upstreamRepoId:
+                    "\(LagunaResources.dflashUpstreamModelID)@\(LagunaResources.dflashUpstreamRevision)",
                 createdAt: createdAt
             )
         case .q36Nano:

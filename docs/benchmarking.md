@@ -64,6 +64,12 @@ The default sampling is deterministic: `--temperature 0 --top-p 1`. Scoring uses
 deterministic checks such as required phrases, forbidden phrases, regexes, JSON
 keys, and bullet counts.
 
+For stochastic evaluation, the chat, tool-call, and code lanes expose
+`--top-k` and `--min-p` in addition to temperature and top-p. A positive min-p
+removes tokens below that fraction of the most likely token's probability and
+is recorded in the result plan. Keep all controls but min-p fixed when
+measuring its effect, and use repeated runs for quality or diversity claims.
+
 Use a narrow slice while debugging:
 
 ```bash
@@ -136,6 +142,101 @@ Reasoning-model output is split before scoring. Visible code is executed, while
 captured `<think>...</think>` content is reported as reasoning metadata. A second
 generated reasoning block is reported as `reasoning_reopened=true`; treat that as
 a loop or phase-restart warning, not an automatic correctness failure.
+
+### Laguna S 2.1 Evaluation
+
+Laguna S 2.1 is available as the opt-in managed model
+`text-chat-laguna-s-2-1`. Pull it once with
+`mere.run model pull text-chat-laguna-s-2-1 --accept-model-license`; the
+official DFlash companion is installed automatically. The chat, tool-call, and
+code benchmarks resolve the managed checkpoints by default. `--laguna-path`
+and `--laguna-dflash-path` remain available as explicit checkpoint overrides;
+`--laguna-dflash-tokens` controls the proposal length and defaults to the
+measured value of `12`. The Laguna benchmark default is `--min-p 0.02`,
+selected by the
+[M4 Max quality and richness gate](./benchmarks/laguna-min-p-m4-max.md).
+Pass `--min-p 0` to reproduce Poolside's published control. Managed-model
+defaults for models other than Laguna remain unchanged.
+`--laguna-dflash-min-tokens` controls the output-budget router and defaults to
+`32`. Requests below the threshold skip DFlash prompt-context projection and
+decode. Routed requests fall back losslessly when acceptance is below `0.25`
+after one speculative round or below `0.60` after two rounds. Reports count
+routed, bypassed, and fallback requests. The companion's
+setup/context-projection cost can outweigh speculative savings on short or
+low-acceptance outputs, so compare the phase timings on the workload you
+intend to run.
+
+```bash
+swift run mere.run model benchmark chat \
+  --laguna-dflash-tokens 12 \
+  --laguna-dflash-min-tokens 32 \
+  --min-p 0.02 \
+  --cases MereChat/0,MereChat/3 \
+  --log-responses
+```
+
+Use the resident-process crossover command for timing decisions. It loads the
+target and draft once, rotates target-only, forced DFlash, and automatic order,
+requires exact decode lengths, and records MLX active, cache, and peak memory:
+
+```bash
+swift build -c release
+.build/release/mere.run model benchmark laguna-dflash \
+  --laguna-path /path/to/Laguna-S-2.1-NVFP4-mlx \
+  --laguna-dflash-path /path/to/Laguna-S-2.1-DFlash \
+  --fixture code-completion \
+  --decode-token-values 32,48,64,96 \
+  --repetitions 3 \
+  --include-automatic \
+  --temperature 1 \
+  --top-p 1 \
+  --top-k 20 \
+  --min-p 0.02 \
+  --json
+```
+
+Add `--concurrency-values 1,2,4 --mixed-fixtures` to run an unmeasured warmup
+at each sorted concurrency level followed by resident target-only, forced
+DFlash, and optional automatic groups. Mixed groups rotate deterministic prose,
+grounded email, and code prompts while also rotating the requested decode
+lengths. The report includes aggregate tokens per second, p50/p95 latency and
+time to first token, per-row decode-throughput fairness, physical same- and
+variable-position batch steps, maximum batch size, memory, DFlash acceptance,
+and stable output fingerprints. `byte_exact_target_equivalent` is true only
+when every DFlash or automatic row matches the deterministic target output and
+repeated target rows remain internally consistent. The official NVFP4 target
+can select different but coherent greedy continuations at different sequence
+or batch shapes, so a false byte-exact result is a hard signal to inspect the
+logged responses and workload quality checks, not by itself proof of semantic
+corruption. Set `--warmup-repetitions 0` only when deliberately measuring cold
+graph compilation.
+
+The chat benchmark's `--concurrency` option runs cases in fixed-size waves.
+Values above one enable Laguna's ragged target continuous-batching scheduler.
+The DFlash batch kernel is retained for forced evaluation, but automatic
+DFlash uses the acceptance-aware serial coordinator. Text and JSON reports
+include physical batch-step counts, same- versus variable-position steps,
+maximum observed batch size, DFlash acceptance, and target verification,
+recovery, and fallback forward counts. Compare concurrency on identical
+fixtures; fewer physical forwards do not by themselves establish a wall-time
+speedup.
+
+The Laguna target sorts routed-expert work by expert for prompt prefill and
+multi-token DFlash verification when a forward contains at least 64 routes.
+Single-token target decode remains unsorted. This improves NVFP4 grouped-matmul
+locality without changing the checkpoint or public benchmark contract. Set
+`MERERUN_LAGUNA_SORTED_MOE=0` to run the reference routing order during a
+controlled comparison or rollback.
+
+The measured M4 Max/macOS 26 BF16 NVFP4 prefill path additionally fuses sorted
+gate/up projection and SwiGLU behind
+`MERERUN_LAGUNA_FUSED_SORTED_NVFP4_MOE`. It retains the native sorted down
+projection, weighting, and reduction. Set the flag to `0` for a portable-path
+A/B or rollback. `MERERUN_LAGUNA_FAST_SORTED_INVERSE=0` independently restores
+the reference second route sort.
+
+These flags are an evaluation boundary, not a pull or serving contract. Do not
+infer catalog support from a successful local checkpoint run.
 
 ### VLM
 

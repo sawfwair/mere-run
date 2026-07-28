@@ -67,6 +67,29 @@ final class ManagedModelSupportTests: XCTestCase {
         XCTAssertEqual(report.reasons, [])
     }
 
+    func testLagunaRequiresNinetySixGBAndRecommendsOneTwentyEightGB() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: LagunaResources.modelID))
+        let undersized = MereRunMachineProfile(
+            physicalMemoryBytes: 64 * 1_073_741_824,
+            processorName: "M4 Max",
+            isAppleSiliconMac: true
+        )
+        let supported = MereRunMachineProfile(
+            physicalMemoryBytes: 128 * 1_073_741_824,
+            processorName: "M4 Max",
+            isAppleSiliconMac: true
+        )
+
+        let rejected = ManagedModelCapabilityCatalog.support(for: spec, on: undersized)
+        let accepted = ManagedModelCapabilityCatalog.support(for: spec, on: supported)
+
+        XCTAssertFalse(rejected.isSupported)
+        XCTAssertTrue(rejected.reasons.joined(separator: " ").contains("Requires at least 96 GB"))
+        XCTAssertTrue(accepted.isSupported)
+        XCTAssertTrue(accepted.meetsRecommendedMemory)
+        XCTAssertEqual(accepted.descriptor.recommendedUnifiedMemoryGB, 128)
+    }
+
     func testQ36NanoIsSupportedOnThirtyTwoGB() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Q35Resources.q36NanoModelId))
         let machine = MereRunMachineProfile(

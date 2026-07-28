@@ -40,7 +40,8 @@ public actor Psi3ChatGenerator: ChatGenerator {
             messages: request.messages,
             maxNewTokens: request.maxTokens,
             temperature: Float(request.temperature),
-            topP: Float(request.topP)
+            topP: Float(request.topP),
+            minP: Float(request.minP)
         )
 
         return ChatResponse(
@@ -73,7 +74,8 @@ public actor Psi3ChatGenerator: ChatGenerator {
             messages: request.messages,
             maxNewTokens: request.maxTokens,
             temperature: Float(request.temperature),
-            topP: Float(request.topP)
+            topP: Float(request.topP),
+            minP: Float(request.minP)
         )
 
         return ChatResponse(

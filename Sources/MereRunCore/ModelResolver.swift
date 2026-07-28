@@ -35,6 +35,8 @@ public struct ModelResolver {
         case gemma4TwelveB4Bit = "text-chat-gemma4-12b-4bit"
         case gemma4VisionTwelveB = "vision-chat-gemma4-12b"
         case gemma4TwelveBMTP = "text-chat-gemma4-12b-mtp"
+        case lagunaS21 = "text-chat-laguna-s-2-1"
+        case lagunaS21DFlash = "text-chat-laguna-s-2-1-dflash"
         case ltxGemma3TwelveB4Bit = "text-encoder-ltx-gemma3-12b-4bit"
         case q36Nano = "text-chat-q36-nano"
         case bonsai27B1Bit = "text-chat-bonsai-27b-1bit"

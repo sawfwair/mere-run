@@ -62,6 +62,7 @@ public actor DeepseekV4FlashGenerator: ChatGenerator {
             messages: request.messages.map { OpenAIChatMessage(role: $0.role.rawValue, content: $0.content) },
             temperature: request.temperature,
             top_p: request.topP,
+            min_p: request.minP,
             max_tokens: request.maxTokens,
             stream: false
         )

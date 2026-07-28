@@ -146,6 +146,7 @@ final class StatusCommandTests: XCTestCase {
                     maxTokens: 512,
                     temperature: 0.4,
                     topP: 0.8,
+                    minP: 0.05,
                     engineOverride: nil,
                     kvCacheMode: .auto,
                     prefixKVCache: Gemma4PrefixKVCacheStats(

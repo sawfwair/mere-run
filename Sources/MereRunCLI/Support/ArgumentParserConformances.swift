@@ -21,3 +21,5 @@ extension ModelResolver.ModelID: ExpressibleByArgument {
         self.init(rawValue: argument)
     }
 }
+
+extension LagunaDFlashRoutingMode: ExpressibleByArgument {}

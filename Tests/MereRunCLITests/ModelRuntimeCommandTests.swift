@@ -25,6 +25,7 @@ final class ModelRuntimeCommandTests: XCTestCase {
             "--max-tokens", "512",
             "--temperature", "0.4",
             "--top-p", "0.8",
+            "--min-p", "0.05",
             "--engine", "text-chat-gemma4",
             "--kv-cache-mode", "auto",
             "--json",
@@ -38,6 +39,7 @@ final class ModelRuntimeCommandTests: XCTestCase {
         XCTAssertEqual(cmd.maxTokens, 512)
         XCTAssertEqual(cmd.temperature, 0.4)
         XCTAssertEqual(cmd.topP, 0.8)
+        XCTAssertEqual(cmd.minP, 0.05)
         XCTAssertEqual(cmd.engine, .textChatGemma4)
         XCTAssertEqual(cmd.kvCacheMode, .auto)
         XCTAssertTrue(cmd.json)

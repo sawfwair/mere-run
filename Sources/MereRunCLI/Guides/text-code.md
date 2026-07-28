@@ -35,6 +35,7 @@ mere.run text code --help
 - `--max-tokens`: output budget.
 - `--temperature`: default `1.0`.
 - `--top-p`: default `0.95`.
+- `--min-p`: relative probability floor; `0` disables it.
 - `--model`, `-m`: GGUF path, or omit for managed default.
 - `--stats`: print timing and tokens/sec to stderr.
 - `--quiet`, `-q`: suppress progress.

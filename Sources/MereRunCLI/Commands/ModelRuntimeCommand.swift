@@ -54,6 +54,7 @@ struct ModelRuntimeGet: ParsableCommand {
         print("  maxTokens: \(settings.maxTokens.map(String.init) ?? "none")")
         print("  temperature: \(settings.temperature.map { String($0) } ?? "none")")
         print("  topP: \(settings.topP.map { String($0) } ?? "none")")
+        print("  minP: \(settings.minP.map { String($0) } ?? "none")")
         print("  engineOverride: \(settings.engineOverride?.rawValue ?? "none")")
         print("  kvCacheMode: \(settings.kvCacheMode?.rawValue ?? "none")")
     }
@@ -110,6 +111,12 @@ struct ModelRuntimeSet: ParsableCommand {
     @Flag(name: [.long], help: "Clear the default top_p.")
     var clearTopP: Bool = false
 
+    @Option(name: [.long], help: "Set the default min_p.")
+    var minP: Double?
+
+    @Flag(name: [.long], help: "Clear the default min_p.")
+    var clearMinP: Bool = false
+
     @Option(name: [.long], help: "Set an engine override after catalog compatibility checks.")
     var engine: RuntimeServingEngine?
 
@@ -154,6 +161,7 @@ struct ModelRuntimeSet: ParsableCommand {
             settings.temperature = temperature
         }
         if clearTopP { settings.topP = nil } else if let topP { settings.topP = topP }
+        if clearMinP { settings.minP = nil } else if let minP { settings.minP = minP }
         if clearEngine { settings.engineOverride = nil } else if let engine { settings.engineOverride = engine }
         if clearKVCacheMode {
             settings.kvCacheMode = nil
@@ -198,6 +206,9 @@ struct ModelRuntimeSet: ParsableCommand {
         }
         if topP != nil && clearTopP {
             throw ValidationError("Use either --top-p or --clear-top-p, not both.")
+        }
+        if minP != nil && clearMinP {
+            throw ValidationError("Use either --min-p or --clear-min-p, not both.")
         }
         if engine != nil && clearEngine {
             throw ValidationError("Use either --engine or --clear-engine, not both.")

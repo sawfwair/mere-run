@@ -33,6 +33,9 @@ struct TextCode: AsyncParsableCommand {
     @Option(name: [.long], help: "Top-p (default 0.95).")
     var topP: Double = 0.95
 
+    @Option(name: [.customLong("min-p")], help: "Min-p cutoff relative to the most likely token.")
+    var minP: Double = 0
+
     @Option(name: [.customShort("m"), .long], help: "Path to GGUF model file.")
     var model: String?
 
@@ -60,7 +63,8 @@ struct TextCode: AsyncParsableCommand {
             messages: messages,
             maxTokens: maxTokens,
             temperature: temperature,
-            topP: topP
+            topP: topP,
+            minP: minP
         )
 
         let progressHandler: (@Sendable (ChatProgress) -> Void)?

@@ -52,6 +52,9 @@ struct APIServe: AsyncParsableCommand {
           # Start an LFM2.5 text-chat server
           mere.run api serve --engine text-chat-lfm2
 
+          # Start a Laguna S 2.1 server with automatic DFlash
+          mere.run api serve --engine text-chat-laguna --model text-chat-laguna-s-2-1
+
           # Start the DeepSeek V4 Flash OpenAI-compatible server
           mere.run api serve --engine text-chat-deepseek-v4-flash
 
@@ -136,10 +139,10 @@ struct APIServe: AsyncParsableCommand {
     @Option(name: [.long], help: "Host to bind to.")
     var host: String = "127.0.0.1"
 
-    @Option(name: [.customShort("m"), .long, .customLong("model-path")], help: "Model path. For --engine text-code, pass a GGUF file. For --engine text-chat-klein, pass a Klein-root text chat model. For --engine text-chat-gemma4, pass a Gemma 4 model root or repo ID. For --engine text-chat-q36, pass a Qwen3.6 text chat model root. For --engine text-chat-lfm2, pass an LFM2 MLX model root or repo ID. For --engine text-chat-deepseek-v4-flash, pass a DS4 GGUF file or managed model root.")
+    @Option(name: [.customShort("m"), .long, .customLong("model-path")], help: "Model path. For --engine text-code, pass a GGUF file. For --engine text-chat-klein, pass a Klein-root text chat model. For --engine text-chat-gemma4, pass a Gemma 4 model root or repo ID. For --engine text-chat-laguna, pass text-chat-laguna-s-2-1 or an installed Laguna MLX root. For --engine text-chat-q36, pass a Qwen3.6 text chat model root. For --engine text-chat-lfm2, pass an LFM2 MLX model root or repo ID. For --engine text-chat-deepseek-v4-flash, pass a DS4 GGUF file or managed model root.")
     var model: String?
 
-    @Option(name: [.long], help: "Serving engine: text-chat-q36 (default; serves text-chat-q36-nano), text-code, text-chat-klein, text-chat-gemma4, text-chat-lfm2, or text-chat-deepseek-v4-flash.")
+    @Option(name: [.long], help: "Serving engine: text-chat-q36 (default; serves text-chat-q36-nano), text-code, text-chat-klein, text-chat-gemma4, text-chat-laguna, text-chat-lfm2, or text-chat-deepseek-v4-flash.")
     var engine: APIEngine = .textChatQ36
 
     @Option(name: [.long], help: "Default cataloged adapter id or local LoRA path for all requests.")
@@ -232,6 +235,8 @@ struct APIServe: AsyncParsableCommand {
             return ModelResolver.ModelID.mebot.rawValue
         case .textChatGemma4:
             return ModelResolver.ModelID.gemma4.rawValue
+        case .textChatLaguna:
+            return LagunaResources.modelID
         case .textChatQ36, .textChatQ35:
             return ModelResolver.ModelID.q36Nano.rawValue
         case .textChatLFM2:
@@ -274,6 +279,30 @@ struct APIServe: AsyncParsableCommand {
                 return resolved.rootURL.path
             }
             return nil
+        case .textChatLaguna:
+            if let explicit = model {
+                if LagunaResources.isManagedIdentifier(explicit) {
+                    guard let installed = ManagedModelResolver.resolveInstalledModel(
+                        id: LagunaResources.modelID
+                    ) else {
+                        throw ValidationError(
+                            "Model '\(LagunaResources.modelID)' is not installed. Run "
+                                + "'mere.run model pull \(LagunaResources.modelID) --accept-model-license' first."
+                        )
+                    }
+                    return installed.path
+                }
+                return explicit
+            }
+            guard let installed = ManagedModelResolver.resolveInstalledModel(
+                id: LagunaResources.modelID
+            ) else {
+                throw ValidationError(
+                    "Model '\(LagunaResources.modelID)' is not installed. Run "
+                        + "'mere.run model pull \(LagunaResources.modelID) --accept-model-license' first."
+                )
+            }
+            return installed.path
         case .textChatQ36, .textChatQ35:
             if let explicit = model {
                 return explicit
@@ -428,6 +457,7 @@ enum APIEngine: String, ExpressibleByArgument {
     case textCode = "text-code"
     case textChatKlein = "text-chat-klein"
     case textChatGemma4 = "text-chat-gemma4"
+    case textChatLaguna = "text-chat-laguna"
     case textChatQ36 = "text-chat-q36"
     case textChatQ35 = "text-chat-q35"
     case textChatLFM2 = "text-chat-lfm2"
@@ -441,6 +471,8 @@ enum APIEngine: String, ExpressibleByArgument {
             return .textChatKlein
         case .textChatGemma4:
             return .textChatGemma4
+        case .textChatLaguna:
+            return .textChatLaguna
         case .textChatQ36:
             return .textChatQ36
         case .textChatQ35:
@@ -487,6 +519,12 @@ struct APIEngineCapabilities: Equatable, Sendable {
     static let localTextWithTools = APIEngineCapabilities(
         supportsTools: true,
         supportsToolChoice: true
+    )
+
+    static let localTextWithToolsAndStopSequences = APIEngineCapabilities(
+        supportsTools: true,
+        supportsToolChoice: true,
+        supportsStopSequences: true
     )
 
     static let localTextWithToolsAndStructuredJSON = APIEngineCapabilities(
@@ -2250,6 +2288,7 @@ enum APIServerContract {
         )
         let temperature = try validateTemperature(openaiRequest.temperature)
         let topP = try validateTopP(openaiRequest.top_p)
+        let minP = try validateMinP(openaiRequest.min_p)
         let tools = try toolDefinitions(from: openaiRequest, capabilities: capabilities)
         let requiresJSON = try requiresJSONResponseFormat(
             openaiRequest.response_format,
@@ -2272,18 +2311,28 @@ enum APIServerContract {
         // applies only when the client did not set explicit sampling.
         let laneModelID = servedModelID ?? ""
         let recommendedSampling = Q35Resources.recommendedSampling(forModelId: laneModelID)
-        let usesExplicitSampling = openaiRequest.temperature != nil || openaiRequest.top_p != nil
+        let isLaguna = LagunaResources.handles(modelSpec: laneModelID)
+        let usesExplicitSampling = openaiRequest.temperature != nil
+            || openaiRequest.top_p != nil
+            || openaiRequest.min_p != nil
 
         return ChatRequest(
             messages: messages,
             maxTokens: maxTokens,
             temperature: openaiRequest.temperature == nil
-                ? recommendedSampling?.temperature ?? temperature
+                ? (isLaguna ? LagunaResources.recommendedTemperature : recommendedSampling?.temperature)
+                    ?? temperature
                 : temperature,
             topP: openaiRequest.top_p == nil
-                ? recommendedSampling?.topP ?? topP
+                ? (isLaguna ? LagunaResources.recommendedTopP : recommendedSampling?.topP)
+                    ?? topP
                 : topP,
-            topK: usesExplicitSampling ? nil : recommendedSampling?.topK,
+            topK: isLaguna
+                ? LagunaResources.recommendedTopK
+                : (usesExplicitSampling ? nil : recommendedSampling?.topK),
+            minP: openaiRequest.min_p == nil && isLaguna
+                ? LagunaResources.recommendedMinP
+                : minP,
             showThinking: requiresJSON ? false : Q35Resources.thinkingDefault(forModelId: laneModelID),
             lora: lora,
             requiresJSON: requiresJSON,
@@ -2658,6 +2707,14 @@ enum APIServerContract {
         let value = rawValue ?? 0.95
         guard value.isFinite, (0...1).contains(value) else {
             throw APIRequestValidationError.invalidField("top_p", "must be between 0 and 1")
+        }
+        return value
+    }
+
+    private static func validateMinP(_ rawValue: Double?) throws -> Double {
+        let value = rawValue ?? 0
+        guard value.isFinite, (0...1).contains(value) else {
+            throw APIRequestValidationError.invalidField("min_p", "must be between 0 and 1")
         }
         return value
     }
@@ -3323,6 +3380,7 @@ actor CodeGenServer {
             settingsStore: RuntimeModelSettingsStore(url: settingsURL),
             gemma4KVCacheQuantization: gemma4KVCacheQuantization,
             gemma4ContinuousBatchingEnabled: batching.gemma4,
+            lagunaContinuousBatchingEnabled: batching.laguna,
             q35ContinuousBatchingEnabled: batching.q35,
             lfm2ContinuousBatchingEnabled: batching.lfm2,
             memoryPressurePolicy: memoryPressurePolicy
@@ -4518,7 +4576,7 @@ actor CodeGenServer {
                 modelPath: resolved.rootURL.path,
                 request: request
             )
-        case .gemma, .liquid, .qwen, .sam, .falcon, .face, .geometry, .depth, .threeD,
+        case .gemma, .laguna, .liquid, .qwen, .sam, .falcon, .face, .geometry, .depth, .threeD,
              .tts, .asr, .embed, .code, .ocr, .music, .sfx, .video, .psi, .privacy, .deepseek, nil:
             throw APIRequestValidationError.invalidField(
                 "model",

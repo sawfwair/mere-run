@@ -1,11 +1,23 @@
 # mlx-swift fork policy and compiled-call overhead
 
-mere-run pins the public `sawfwair/mlx-swift` fork based on upstream 0.31.6.
+mere-run pins the public `sawfwair/mlx-swift` fork based on upstream 0.32.1.
 That fork carries the Linux package bridge and Prism low-bit compatibility
 needed by this repository. Its embedded `sawfwair/mlx` revision also provides
-native affine 1-bit CUDA quantize, dequantize, and QMV execution. Changes stay
-scoped to their bit width, group size, quantization mode, and backend so stock
-2-bit and wider models keep their existing paths.
+native affine 1-bit CUDA quantize, dequantize, and QMV execution, plus the
+Metal affine 1-bit path and the generation-17 NAX correctness gate. The fork
+retains upstream's NVFP4 split-K fix and drops the old duplicate `qmv_wide`
+implementation now supplied upstream. Changes stay scoped to their bit width,
+group size, quantization mode, and backend so stock 2-bit and wider models keep
+their existing paths.
+
+The current pin also lets an MLXFast custom Metal kernel explicitly request
+the core quantized helper headers. The source marker
+`MLX_INCLUDE_FP_QUANTIZED_HEADERS` exposes the NVFP4 helpers, while
+`MLX_INCLUDE_AFFINE_QUANTIZED_HEADERS` exposes the affine helpers. Kernels
+without either marker compile from the unchanged default header set. The
+embedded MLX core revision is `9bee51623d5a34806821e0f414fae293f90dda19`;
+the mlx-swift revision pinned by mere.run is
+`0c63032c7deeec3cb0600aa933cb0b50d16addb6`.
 
 A separate measured one-line compiled-call optimization exists on staging
 branches but is **deliberately not included in the pin**. The rest of this
@@ -83,5 +95,9 @@ Do **not** upstream or re-pin the lock removal alone.
   the perf PR matches stock-dependency runs.
 - The Linux/CUDA prebuilt path builds the exact embedded MLX revision selected
   by this pin; do not replace it with a floating checkout.
+- The vendored Metal library is accepted only when its stamp matches the exact
+  mlx-swift revision, MLX core version, and generated-kernel source hash
+  compiled into `mere.run`. `scripts/check.sh` recomputes the same provenance
+  from the clean pinned checkout.
 - Never edit `.build/checkouts/` to change dependency behavior — checkout
   edits silently vanish on the next `swift package resolve/update`.

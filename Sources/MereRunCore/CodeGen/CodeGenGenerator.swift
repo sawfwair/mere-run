@@ -41,7 +41,8 @@ public actor CodeGenGenerator: ChatGenerator {
                 path: modelURL.path,
                 contextSize: CodeGenResources.contextSize(for: modelId),
                 temperature: Float(request.temperature),
-                topP: Float(request.topP)
+                topP: Float(request.topP),
+                minP: Float(request.minP)
             )
             loadedModelPath = modelURL.path
         }
@@ -53,7 +54,8 @@ public actor CodeGenGenerator: ChatGenerator {
         // Configure sampling parameters for this request
         ctx.configureSampler(
             temperature: Float(request.temperature),
-            topP: Float(request.topP)
+            topP: Float(request.topP),
+            minP: Float(request.minP)
         )
 
         // Set max tokens
@@ -95,7 +97,8 @@ public actor CodeGenGenerator: ChatGenerator {
                 path: modelURL.path,
                 contextSize: CodeGenResources.contextSize(for: modelId),
                 temperature: Float(request.temperature),
-                topP: Float(request.topP)
+                topP: Float(request.topP),
+                minP: Float(request.minP)
             )
             loadedModelPath = modelURL.path
         }
@@ -107,7 +110,8 @@ public actor CodeGenGenerator: ChatGenerator {
         // Configure sampling parameters for this request
         ctx.configureSampler(
             temperature: Float(request.temperature),
-            topP: Float(request.topP)
+            topP: Float(request.topP),
+            minP: Float(request.minP)
         )
 
         // Set max tokens
