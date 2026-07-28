@@ -517,6 +517,8 @@ private struct CommandEditor: View {
             SetupOptions()
         case .agentOnboard:
             AgentOptions()
+        case .agentStatus:
+            AgentStatusOptions()
         case .agentInstallPi:
             AgentInstallOptions()
         case .agentStart:
@@ -637,6 +639,7 @@ private struct CommandEditor: View {
 
     private var showsModelField: Bool {
         ![
+            .agentStatus,
             .agentInstallPi,
             .imageDatasetDiscover,
             .imageRunPlan,
@@ -4450,6 +4453,21 @@ private struct AgentInstallOptions: View {
     var body: some View {
         EditorSection("Install") {
             Toggle("Force reinstall", isOn: $controller.draft.force)
+        }
+    }
+}
+
+private struct AgentStatusOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("Inspection") {
+            PathField(
+                path: $controller.draft.piPath,
+                placeholder: "Pi executable override (optional)",
+                mode: .openFile([.executable])
+            )
+            Toggle("JSON", isOn: $controller.draft.json)
         }
     }
 }

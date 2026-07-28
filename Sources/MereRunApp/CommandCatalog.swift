@@ -21,6 +21,7 @@ enum CommandCategory: String, CaseIterable, Identifiable {
 enum CommandTemplateID: String, CaseIterable, Codable {
     case setup
     case agentOnboard
+    case agentStatus
     case agentInstallPi
     case agentStart
     case modelList
@@ -112,6 +113,7 @@ enum CommandTemplateID: String, CaseIterable, Codable {
         switch self {
         case .setup: return "setup"
         case .agentOnboard: return "agent.onboard"
+        case .agentStatus: return "agent.status"
         case .agentInstallPi: return "agent.install-pi"
         case .agentStart: return "agent.start"
         case .modelList: return "model.list"
@@ -1249,6 +1251,11 @@ struct CommandTemplate: Identifiable, Equatable {
             if !draft.model.isBlank { args += ["--model", draft.model] }
             args += ["--host", draft.host, "--port", String(draft.port)]
             if draft.quiet { args.append("--quiet") }
+
+        case .agentStatus:
+            args = ["agent", "status"]
+            if !draft.piPath.isBlank { args += ["--pi-path", draft.piPath] }
+            if draft.json { args.append("--json") }
 
         case .agentInstallPi:
             args = ["agent", "install-pi"]
@@ -2828,6 +2835,7 @@ extension CommandTemplate {
 
         case .setup,
              .agentOnboard,
+             .agentStatus,
              .agentInstallPi,
              .agentStart,
              .modelList,
@@ -2907,6 +2915,13 @@ enum CommandCatalog {
             subtitle: "Check local readiness and prepare Pi integration",
             systemImage: "person.crop.circle.badge.gearshape",
             defaultModel: StudioCodeDefaults.fallbackModelID
+        ),
+        CommandTemplate(
+            id: .agentStatus,
+            category: .setup,
+            title: "Agent status",
+            subtitle: "Inspect Pi, provider, and local agent readiness",
+            systemImage: "person.crop.circle.badge.checkmark"
         ),
         CommandTemplate(
             id: .agentInstallPi,

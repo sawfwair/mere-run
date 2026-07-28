@@ -9,10 +9,11 @@ When `/runtime/status` is available, the snapshot also includes runtime pool
 entries, active request counts, request admission queue depth, memory pressure,
 runtime capability flags, aggregate cache stats, per-model prefix KV cache
 stats, per-model decode batching stats when enabled, embedding/image/TTS/ASR sidecar
-residency and readiness, and the settings file path. In JSON, `loaded` is the
+residency and readiness, the settings file path, and additive process/device
+telemetry where supported. In JSON, `loaded` is the
 backward-compatible resident-object signal; additive `ready: false` means a text
 model is still preparing or a sidecar's first operation is loading or failed.
-Older payloads may omit `ready`.
+Older payloads may omit `ready` and `process`.
 
 ## Required Models
 
@@ -50,13 +51,16 @@ mere.run guide status
   JSON status also includes admitted, completed, cancelled, pressure, and
   whether admission is currently paused by the memory guard.
 - Use `memory` to see the active memory guard tier, pressure level, current
-  resident usage, and the computed soft/hard/ceiling limits.
+  resident usage, host-available estimate, and computed soft/hard/ceiling limits.
+- Use `process` to inspect server uptime, sampled process CPU, macOS
+  thermal/low-power state, and Metal allocation/working-set values. Metal
+  allocation is not presented as a GPU-utilization percentage.
 - Use `continuous batching` and `prefix KV reuse` to see which scheduler/cache
   features are actually enabled instead of assuming they are active.
 - Use `cache stats` to check aggregate prefix hits, reused tokens, and batched
   decode steps across loaded models, including same-position versus
   variable-position decode batches when the selected engine can report them.
-- Use `benchmark stats` to compare completed request counts, generated tokens,
+- Use `traffic stats` to inspect completed request counts, generated tokens,
   and average load/prefill/decode timings while cache and batching flags are on.
 - Use `sidecar residency` to distinguish an unloaded lane, a `resident (not
   ready)` generator, and a ready image, speech, or transcription runtime. The

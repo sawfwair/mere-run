@@ -44,12 +44,53 @@ final class RuntimeModelPoolTests: XCTestCase {
             JSONSerialization.jsonObject(with: encoded) as? [String: Any]
         )
         object.removeValue(forKey: "sidecars")
+        object.removeValue(forKey: "process")
 
         let legacyPayload = try JSONSerialization.data(withJSONObject: object)
         let decoded = try JSONDecoder().decode(RuntimeModelPoolStatus.self, from: legacyPayload)
 
         XCTAssertNil(decoded.sidecars)
+        XCTAssertNil(decoded.process)
         XCTAssertEqual(decoded.defaultModel, status.defaultModel)
+    }
+
+    func testProcessTelemetryRoundTripsAndMemoryAvailabilityIsAdditive() throws {
+        let telemetry = RuntimeProcessTelemetry(
+            processID: 42,
+            startedAt: Date(timeIntervalSince1970: 100),
+            uptimeSeconds: 12.5,
+            cpuPercent: 18.25,
+            thermalState: "nominal",
+            lowPowerModeEnabled: false,
+            metalDeviceName: "Apple Test GPU",
+            metalCurrentAllocatedBytes: 2 * gib,
+            metalRecommendedMaxWorkingSetBytes: 8 * gib,
+            metalHasUnifiedMemory: true
+        )
+        let memory = RuntimeMemorySnapshot(
+            physicalBytes: 16 * gib,
+            residentBytes: 4 * gib,
+            currentBytes: 5 * gib,
+            availableBytes: 9 * gib,
+            activeRequests: 1,
+            activeModelCount: 1,
+            pressure: "nominal"
+        )
+
+        XCTAssertEqual(
+            try JSONDecoder().decode(
+                RuntimeProcessTelemetry.self,
+                from: JSONEncoder().encode(telemetry)
+            ),
+            telemetry
+        )
+        XCTAssertEqual(
+            try JSONDecoder().decode(
+                RuntimeMemorySnapshot.self,
+                from: JSONEncoder().encode(memory)
+            ).availableBytes,
+            9 * gib
+        )
     }
 
     func testRuntimeModelEntryDecodesOlderPayloadWithoutReadyField() async throws {

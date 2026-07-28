@@ -313,6 +313,10 @@ final class StudioTypesTests: XCTestCase {
                 $0.stream = true
                 $0.quiet = true
             }),
+            (.agentStatus, "agent.status", {
+                $0.piPath = "/tmp/pi"
+                $0.json = true
+            }),
             (.agentInstallPi, "agent.install-pi", { $0.force = true }),
             (.agentStart, "agent.start", {
                 $0.piPath = "/tmp/pi"

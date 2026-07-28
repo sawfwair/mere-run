@@ -180,6 +180,7 @@ Public tree:
 - [`mere.run setup`](/getting-started) — Choose a guided, BYOA, or manual mere.run setup path.
 - [`mere.run agent`](/getting-started) — Install and start the optional guided local setup agent.
   - `mere.run agent onboard` — Summarize this machine's model capabilities and prepare the optional Pi agent.
+  - `mere.run agent status` — Inspect local agent, Pi, provider, and model readiness.
   - `mere.run agent install-pi` — Install the latest Pi coding-agent release for use with mere.run.
   - `mere.run agent start` — Start Pi against a local mere.run setup-agent API server.
 <!-- END GENERATED: CLI TREE -->
@@ -2619,6 +2620,22 @@ swift run mere.run agent onboard --configure-pi --model text-agent-deepseek-v4-f
 swift run mere.run agent onboard --configure-pi --model text-code-north-mini --port 8080
 swift run mere.run agent onboard --configure-pi --model text-agent-ornith-9b --port 8080
 ```
+
+### `mere.run agent status`
+
+Inspect the current machine, Pi install, generated provider extension, selected
+provider endpoint/model, recommended setup tier, and every startable agent
+model without mutating the setup.
+
+```bash
+swift run mere.run agent status
+swift run mere.run agent status --json
+swift run mere.run agent status --pi-path /path/to/pi --json
+```
+
+The JSON shape is the readiness contract used by the macOS Serving & Agents
+Console. Dates use ISO 8601 and paths identify the provider configuration and
+extension that the CLI will actually use.
 
 ### `mere.run agent install-pi`
 

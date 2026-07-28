@@ -65,6 +65,7 @@ import Testing
         "model.runtime.set",
         "setup",
         "agent.onboard",
+        "agent.status",
         "agent.install-pi",
         "agent.start",
         "model.list",
@@ -96,7 +97,7 @@ import Testing
         "config.get",
         "config.unset"
     ])
-    #expect(document.commands.count == 89)
+    #expect(document.commands.count == 90)
 
     let data = try JSONEncoder().encode(document)
     let decoded = try JSONDecoder().decode(MereRunCapabilityDocument.self, from: data)

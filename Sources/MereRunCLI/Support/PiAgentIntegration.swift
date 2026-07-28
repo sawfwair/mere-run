@@ -227,12 +227,13 @@ enum PiAgentIntegration {
         persistConfiguration: Bool = true,
         fileManager: FileManager = .default
     ) throws -> URL {
-        let home = homeDirectory ?? fileManager.homeDirectoryForCurrentUser
-        let extensionDir = home
-            .appendingPathComponent(".pi/agent/extensions", isDirectory: true)
+        let extensionURL = localProviderExtensionURL(
+            homeDirectory: homeDirectory,
+            fileManager: fileManager
+        )
+        let extensionDir = extensionURL.deletingLastPathComponent()
         try fileManager.createDirectory(at: extensionDir, withIntermediateDirectories: true)
 
-        let extensionURL = extensionDir.appendingPathComponent("mere-run-local-provider.ts", isDirectory: false)
         let baseURL = "http://\(host):\(port)/v1"
         let content = renderPiProviderExtension(model: model, baseURL: baseURL, apiKey: apiKey)
         try content.write(to: extensionURL, atomically: true, encoding: .utf8)
@@ -341,6 +342,16 @@ enum PiAgentIntegration {
         return try? decoder.decode(ProviderConfiguration.self, from: data)
     }
 
+    static func localProviderExtensionURL(
+        homeDirectory: URL? = nil,
+        fileManager: FileManager = .default
+    ) -> URL {
+        let home = homeDirectory ?? fileManager.homeDirectoryForCurrentUser
+        return home
+            .appendingPathComponent(".pi/agent/extensions", isDirectory: true)
+            .appendingPathComponent("mere-run-local-provider.ts", isDirectory: false)
+    }
+
     static func findPiExecutable(explicitPath: String? = nil) -> URL? {
         if let explicitPath, !explicitPath.isEmpty {
             let url = URL(fileURLWithPath: (explicitPath as NSString).expandingTildeInPath)
@@ -360,6 +371,20 @@ enum PiAgentIntegration {
         return findPiBinary(in: current)
     }
 
+    static func installedPiVersion() -> String? {
+        guard let root = try? piInstallRoot(),
+              let binary = installedPiBinaryURL()?.resolvingSymlinksInPath() else {
+            return nil
+        }
+        let rootComponents = root.standardizedFileURL.pathComponents
+        let binaryComponents = binary.standardizedFileURL.pathComponents
+        guard binaryComponents.count > rootComponents.count,
+              Array(binaryComponents.prefix(rootComponents.count)) == rootComponents else {
+            return nil
+        }
+        return binaryComponents[rootComponents.count]
+    }
+
     private static func writeProviderConfiguration(
         _ configuration: ProviderConfiguration,
         fileManager: FileManager
@@ -376,7 +401,7 @@ enum PiAgentIntegration {
         try data.write(to: url, options: .atomic)
     }
 
-    private static func providerConfigurationURL() -> URL {
+    static func providerConfigurationURL() -> URL {
         MereRunModelPaths.applicationSupportBase
             .appendingPathComponent("agent", isDirectory: true)
             .appendingPathComponent("provider.json", isDirectory: false)

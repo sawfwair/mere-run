@@ -633,6 +633,27 @@ final class MereRunController: ObservableObject {
         }
     }
 
+    func isRequestRunning(_ requestID: UUID) -> Bool {
+        sessions.contains {
+            $0.spec.requestID == requestID
+                && $0.process != nil
+                && $0.exitCode == nil
+        }
+    }
+
+    func runningRequestID(for templateID: CommandTemplateID) -> UUID? {
+        sessions.first {
+            $0.spec.template.id == templateID
+                && $0.spec.requestID != nil
+                && $0.process != nil
+                && $0.exitCode == nil
+        }?.spec.requestID
+    }
+
+    func logs(for requestID: UUID) -> [LogLine] {
+        sessions.first { $0.spec.requestID == requestID }?.logs ?? []
+    }
+
     init(
         processRunner: MereRunProcessRunning = FoundationMereRunProcessRunner(),
         fileSystem: MereRunFileProbing = FileManager.default,
@@ -1317,6 +1338,19 @@ final class MereRunController: ObservableObject {
         guard let session = foregroundSession, session.process != nil else { return }
         session.process?.terminate()
         append("Termination requested.", stream: .system, to: session)
+    }
+
+    @discardableResult
+    func cancel(requestID: UUID) -> Bool {
+        guard let session = sessions.first(where: {
+            $0.spec.requestID == requestID && $0.process != nil && $0.exitCode == nil
+        }) else {
+            return false
+        }
+        session.process?.terminate()
+        append("Termination requested.", stream: .system, to: session)
+        mirrorForeground(session)
+        return true
     }
 
     @discardableResult

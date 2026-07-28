@@ -76,6 +76,16 @@ typed per-model runtime policy. Server credentials are passed through
 policy stay in their canonical products: the app links directly to Graph
 Studio and the Node/Relay console instead of reimplementing those surfaces.
 
+Serving is also a top-level first-class destination. **Serving & Agents**
+owns API preflight/start/stop/restart, external-server reconnection, LAN/auth
+safety, text and sidecar residency, load/unload and runtime policy, unified
+memory/process CPU/Metal/thermal telemetry, observed request and cache/batching
+traffic, typed Pi readiness/install/configure/session actions, copyable client
+setup, and sanitized lifecycle activity. It polls the authenticated
+`/runtime/status` contract and tolerates older payloads with missing additive
+fields. App-owned servers and agent sessions remain durable Library runs; the
+CLI/runtime remains the behavioral source of truth.
+
 Voice Studio is the first-class path for styled or cloned synthesis, reusable
 profiles, reference recording, streaming feedback, A/B playback, file/live
 transcription, and transcript editing. SFX Lab covers text generation, video

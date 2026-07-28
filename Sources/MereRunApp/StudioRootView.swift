@@ -14,6 +14,7 @@ struct StudioRootView: View {
     @State private var draft = StudioDraft()
     @State private var showOptions = false
     @State private var showModels = false
+    @State private var showServing = false
     @State private var showAdapters = false
     @State private var showRealtimeMusic = false
     @State private var showSCAIL = false
@@ -152,6 +153,7 @@ struct StudioRootView: View {
                     StudioSidebarRail(
                         mode: $mode,
                         modeCapabilities: modeCapabilities,
+                        onShowServing: { showServing = true },
                         onShowModels: { showModels = true },
                         onShowHelp: { showHelp = true }
                     )
@@ -201,6 +203,7 @@ struct StudioRootView: View {
             modeCapabilities: modeCapabilities,
             serverStatus: controller.serverStatus,
             resolvedCLI: controller.resolvedCLI,
+            onShowServing: { showServing = true },
             onShowModels: { showModels = true },
             onShowHelp: { showHelp = true }
         )
@@ -446,6 +449,11 @@ struct StudioRootView: View {
 
     private var sheetedShell: some View {
         shell
+            .sheet(isPresented: $showServing) {
+                StudioServingConsoleSheet()
+                    .environmentObject(controller)
+                    .environmentObject(library)
+            }
             .sheet(isPresented: $showModels) {
                 StudioModelsSheet(onModelsChanged: {
                     refreshReadiness()

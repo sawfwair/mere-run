@@ -104,7 +104,7 @@ final class StatusCommandTests: XCTestCase {
     }
 
     func testFormatterUsesRuntimeStatusWhenAvailable() {
-        let runtime = RuntimeModelPoolStatus(
+        var runtime = RuntimeModelPoolStatus(
             object: "runtime.status",
             defaultModel: "text-chat-gemma4",
             settingsPath: "/tmp/models/.mere-run/runtime-model-settings.json",
@@ -262,6 +262,18 @@ final class StatusCommandTests: XCTestCase {
                 ]
             )
         )
+        runtime.process = RuntimeProcessTelemetry(
+            processID: 42,
+            startedAt: Date(timeIntervalSince1970: 10),
+            uptimeSeconds: 90,
+            cpuPercent: 12.5,
+            thermalState: "nominal",
+            lowPowerModeEnabled: false,
+            metalDeviceName: "Apple Test GPU",
+            metalCurrentAllocatedBytes: 512 * 1024 * 1024,
+            metalRecommendedMaxWorkingSetBytes: 8 * 1024 * 1024 * 1024,
+            metalHasUnifiedMemory: true
+        )
         let snapshot = StatusSnapshot(
             server: StatusServerSnapshot(
                 url: "http://127.0.0.1:8080",
@@ -287,6 +299,8 @@ final class StatusCommandTests: XCTestCase {
         XCTAssertTrue(output.contains("loaded models: image-zimage-nano, text-chat-gemma4"))
         XCTAssertTrue(output.contains("active requests: 2"))
         XCTAssertTrue(output.contains("request admission: 1/1 active, 1 queued"))
+        XCTAssertTrue(output.contains("process: pid 42, uptime 90s, CPU 12.5%, thermal nominal"))
+        XCTAssertTrue(output.contains("Metal "))
         XCTAssertTrue(output.contains("continuous batching: enabled"))
         XCTAssertTrue(output.contains("prefix KV reuse: enabled"))
         let aggregateCacheLine = "cache stats: prefix 1/4 entries, 2 hits, 256 reused tokens; "

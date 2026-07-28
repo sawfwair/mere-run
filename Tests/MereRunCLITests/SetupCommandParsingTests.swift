@@ -202,6 +202,67 @@ final class SetupCommandParsingTests: XCTestCase {
         XCTAssertNil(command.model)
     }
 
+    func testAgentStatusParsesMachineReadableInspection() throws {
+        let command = try AgentStatus.parse([
+            "--pi-path", "/tmp/pi",
+            "--json",
+        ])
+
+        XCTAssertEqual(command.piPath, "/tmp/pi")
+        XCTAssertTrue(command.json)
+    }
+
+    func testAgentStatusSnapshotRoundTrips() throws {
+        let snapshot = AgentStatusSnapshot(
+            machine: AgentStatusMachine(
+                processor: "M4 Max",
+                unifiedMemoryGB: 128,
+                appleSiliconMac: true,
+                linux: false
+            ),
+            pi: AgentStatusPi(
+                installed: true,
+                managedInstall: true,
+                autoInstallSupported: true,
+                path: "/tmp/pi",
+                version: "v1.2.3"
+            ),
+            provider: AgentStatusProvider(
+                configured: true,
+                host: "127.0.0.1",
+                port: 8080,
+                modelID: "text-agent-deepseek-v4-flash",
+                updatedAt: Date(timeIntervalSince1970: 10),
+                configurationPath: "/tmp/provider.json",
+                extensionPath: "/tmp/provider.ts"
+            ),
+            recommendedModelID: "text-agent-deepseek-v4-flash",
+            models: [
+                AgentStatusModel(
+                    id: "text-agent-deepseek-v4-flash",
+                    displayName: "DeepSeek V4 Flash",
+                    summary: "Premier local agent.",
+                    minimumUnifiedMemoryGB: 96,
+                    recommendedUnifiedMemoryGB: 128,
+                    servingEngine: "deepseek-v4-flash",
+                    startableByMereRun: true,
+                    sourceConfigurationRequired: false,
+                    installed: true,
+                    reason: nil
+                ),
+            ]
+        )
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+
+        XCTAssertEqual(
+            try decoder.decode(AgentStatusSnapshot.self, from: encoder.encode(snapshot)),
+            snapshot
+        )
+    }
+
     func testAgentStartParsesSelectedModel() throws {
         let command = try AgentStart.parse([
             "--model",

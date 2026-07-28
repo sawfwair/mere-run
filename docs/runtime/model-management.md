@@ -186,6 +186,12 @@ Reads and updates typed per-model API runtime settings — how a model behaves
 when served by `mere.run api serve`. `get` prints the stored settings for one
 managed model id or configured alias; `set` updates them:
 
+The macOS Studio's top-level **Serving & Agents → Model Pool** view uses these
+same settings for both text models and managed sidecars. Text rows additionally
+support explicit HTTP load/unload. Sidecars load on first request and expose
+their lifecycle, readiness, queue, replacement, failure, and eviction state;
+their managed pin/TTL controls continue to go through `model runtime set`.
+
 ```bash
 mere.run model runtime get text-chat-gemma4
 mere.run model runtime set text-chat-gemma4 \

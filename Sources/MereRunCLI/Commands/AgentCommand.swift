@@ -8,11 +8,169 @@ struct Agent: ParsableCommand {
         abstract: "Install and start the optional guided local setup agent.",
         subcommands: [
             AgentOnboard.self,
+            AgentStatus.self,
             AgentInstallPi.self,
             AgentStart.self,
         ],
         defaultSubcommand: AgentOnboard.self
     )
+}
+
+struct AgentStatus: ParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "status",
+        abstract: "Inspect local agent, Pi, provider, and model readiness."
+    )
+
+    @Option(name: [.long], help: "Optional Pi executable override to inspect.")
+    var piPath: String?
+
+    @Flag(name: [.long], help: "Emit a machine-readable readiness snapshot.")
+    var json: Bool = false
+
+    func run() throws {
+        let snapshot = AgentStatusSnapshot.current(piPath: piPath)
+        if json {
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            print(String(decoding: try encoder.encode(snapshot), as: UTF8.self))
+            return
+        }
+
+        print("mere.run agent status")
+        print("  machine: \(snapshot.machine.processor), \(snapshot.machine.unifiedMemoryGB) GB")
+        if snapshot.pi.installed {
+            let version = snapshot.pi.version.map { " \($0)" } ?? ""
+            print("  Pi: installed\(version) at \(snapshot.pi.path ?? "unknown path")")
+        } else {
+            print("  Pi: not installed")
+        }
+        if snapshot.provider.configured {
+            print(
+                "  provider: \(snapshot.provider.modelID ?? "unknown") at "
+                    + "\(snapshot.provider.host ?? "127.0.0.1"):\(snapshot.provider.port ?? 8080)"
+            )
+        } else {
+            print("  provider: not configured")
+        }
+        if let recommendedModelID = snapshot.recommendedModelID {
+            print("  recommended agent: \(recommendedModelID)")
+        } else {
+            print("  recommended agent: unavailable")
+        }
+        for model in snapshot.models {
+            let install = model.installed ? "installed" : "not installed"
+            print("    \(model.id): \(install), \(model.servingEngine)")
+        }
+    }
+}
+
+struct AgentStatusSnapshot: Codable, Equatable {
+    let machine: AgentStatusMachine
+    let pi: AgentStatusPi
+    let provider: AgentStatusProvider
+    let recommendedModelID: String?
+    let models: [AgentStatusModel]
+
+    static func current(
+        piPath: String?,
+        fileManager: FileManager = .default
+    ) -> AgentStatusSnapshot {
+        let machine = MereRunMachineProfile.current
+        let piURL = PiAgentIntegration.findPiExecutable(explicitPath: piPath)
+        let managedPiURL = PiAgentIntegration.installedPiBinaryURL()?.standardizedFileURL
+        let provider = PiAgentIntegration.readProviderConfiguration(fileManager: fileManager)
+        let extensionURL = PiAgentIntegration.localProviderExtensionURL(
+            homeDirectory: PiAgentIntegration.mereRunPiHomeDirectory(),
+            fileManager: fileManager
+        )
+        let models = MereRunAgentModelCatalog.allTierRecommendations(on: machine).map {
+            AgentStatusModel(
+                id: $0.id,
+                displayName: $0.displayName,
+                summary: $0.summary,
+                minimumUnifiedMemoryGB: $0.minimumUnifiedMemoryGB,
+                recommendedUnifiedMemoryGB: $0.recommendedUnifiedMemoryGB,
+                servingEngine: $0.servingEngine.rawValue,
+                startableByMereRun: $0.isStartableByMereRun,
+                sourceConfigurationRequired: $0.sourceConfigurationRequired,
+                installed: $0.managedModelID
+                    .flatMap { ManagedModelCatalog.spec(for: $0) }?
+                    .managedRuntimeURL(fileManager: fileManager) != nil,
+                reason: $0.reason
+            )
+        }
+        return AgentStatusSnapshot(
+            machine: AgentStatusMachine(
+                processor: machine.processorName,
+                unifiedMemoryGB: machine.unifiedMemoryGB,
+                appleSiliconMac: machine.isAppleSiliconMac,
+                linux: machine.isLinux
+            ),
+            pi: AgentStatusPi(
+                installed: piURL != nil,
+                managedInstall: piURL?.standardizedFileURL == managedPiURL,
+                autoInstallSupported: PiAgentIntegration.canInstallLatestRelease,
+                path: piURL?.path,
+                version: piURL?.standardizedFileURL == managedPiURL
+                    ? PiAgentIntegration.installedPiVersion()
+                    : nil
+            ),
+            provider: AgentStatusProvider(
+                configured: provider != nil
+                    && fileManager.fileExists(atPath: extensionURL.path),
+                host: provider?.host,
+                port: provider?.port,
+                modelID: provider?.modelID,
+                updatedAt: provider?.updatedAt,
+                configurationPath: PiAgentIntegration.providerConfigurationURL().path,
+                extensionPath: extensionURL.path
+            ),
+            recommendedModelID: MereRunAgentModelCatalog
+                .fallbackStartableRecommendation(on: machine)?
+                .id,
+            models: models
+        )
+    }
+}
+
+struct AgentStatusMachine: Codable, Equatable {
+    let processor: String
+    let unifiedMemoryGB: Int
+    let appleSiliconMac: Bool
+    let linux: Bool
+}
+
+struct AgentStatusPi: Codable, Equatable {
+    let installed: Bool
+    let managedInstall: Bool
+    let autoInstallSupported: Bool
+    let path: String?
+    let version: String?
+}
+
+struct AgentStatusProvider: Codable, Equatable {
+    let configured: Bool
+    let host: String?
+    let port: Int?
+    let modelID: String?
+    let updatedAt: Date?
+    let configurationPath: String
+    let extensionPath: String
+}
+
+struct AgentStatusModel: Codable, Equatable {
+    let id: String
+    let displayName: String
+    let summary: String
+    let minimumUnifiedMemoryGB: Int
+    let recommendedUnifiedMemoryGB: Int
+    let servingEngine: String
+    let startableByMereRun: Bool
+    let sourceConfigurationRequired: Bool
+    let installed: Bool
+    let reason: String?
 }
 
 struct AgentOnboard: AsyncParsableCommand {

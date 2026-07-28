@@ -213,6 +213,7 @@ public enum MereRunCapabilityCatalog {
             modelRuntimeSet,
             setup,
             agentOnboard,
+            agentStatus,
             agentInstallPi,
             agentStart,
             modelList,
@@ -1694,6 +1695,18 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--port", label: "API port", kind: .integer),
             .init(flag: "--model", label: "Model", kind: .string),
             .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let agentStatus = MereRunCommandCapability(
+        id: "agent.status",
+        command: ["agent", "status"],
+        title: "Agent status",
+        summary: "Inspect Pi, provider, machine, and local agent-model readiness.",
+        options: [
+            .init(flag: "--pi-path", label: "Pi executable", kind: .file),
+            .init(flag: "--json", label: "JSON", kind: .boolean)
         ],
         output: .init(kind: .text)
     )

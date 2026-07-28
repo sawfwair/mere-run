@@ -327,6 +327,9 @@ enum StatusFormatter {
                     lines.append("  benchmark stats: \(benchmarkStats)")
                 }
                 lines.append("  memory: \(memoryText(runtime.memory))")
+                if let process = runtime.process {
+                    lines.append("  process: \(processText(process))")
+                }
                 if let sidecars = runtime.sidecars {
                     lines.append(
                         "  sidecar residency: \(sidecars.loadedCount)/\(sidecars.residents.count) loaded, "
@@ -403,12 +406,38 @@ enum StatusFormatter {
         } else {
             limitsText = ""
         }
+        let availableText = memory.availableBytes.map {
+            let available = ByteCountFormatter.string(fromByteCount: Int64($0), countStyle: .memory)
+            return ", \(available) available"
+        } ?? ""
         if let residentBytes = memory.residentBytes {
             let resident = ByteCountFormatter.string(fromByteCount: Int64(residentBytes), countStyle: .memory)
             return "\(memory.pressure) pressure, \(guardText), \(memory.activeModelCount) active model(s), "
-                + "\(resident) resident, \(physical) physical\(limitsText)"
+                + "\(resident) resident, \(physical) physical\(availableText)\(limitsText)"
         }
-        return "\(memory.pressure) pressure, \(guardText), \(memory.activeModelCount) active model(s), \(physical) physical\(limitsText)"
+        return "\(memory.pressure) pressure, \(guardText), \(memory.activeModelCount) active model(s), "
+            + "\(physical) physical\(availableText)\(limitsText)"
+    }
+
+    private static func processText(_ process: RuntimeProcessTelemetry) -> String {
+        var parts = [
+            "pid \(process.processID)",
+            "uptime \(Int(process.uptimeSeconds.rounded(.down)))s",
+        ]
+        if let cpuPercent = process.cpuPercent {
+            parts.append(String(format: "CPU %.1f%%", cpuPercent))
+        }
+        if let thermalState = process.thermalState {
+            parts.append("thermal \(thermalState)")
+        }
+        if let metalCurrentAllocatedBytes = process.metalCurrentAllocatedBytes {
+            let allocated = ByteCountFormatter.string(
+                fromByteCount: Int64(metalCurrentAllocatedBytes),
+                countStyle: .memory
+            )
+            parts.append("Metal \(allocated)")
+        }
+        return parts.joined(separator: ", ")
     }
 
     private static func sidecarText(_ resident: RuntimeSidecarResidentSnapshot) -> String {

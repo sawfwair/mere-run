@@ -325,6 +325,35 @@ final class MereRunControllerTests: XCTestCase {
         XCTAssertEqual(runner.processes[0].standardInputs, ["temp 0.8\n"])
     }
 
+    func testServiceRunCanBeRediscoveredLoggedAndCancelledByRequestID() async throws {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        let template = try XCTUnwrap(CommandCatalog.template(id: .apiServe))
+        var draft = template.defaultDraft()
+        draft.prompt = "http://127.0.0.1:8080"
+        let request = StudioRunRequest(
+            mode: .chat,
+            templateID: .apiServe,
+            template: template,
+            draft: draft
+        )
+
+        XCTAssertTrue(controller.run(studio: request))
+        XCTAssertTrue(controller.isRequestRunning(request.id))
+        XCTAssertEqual(controller.runningRequestID(for: .apiServe), request.id)
+
+        runner.starts[0].stderr("Starting local API service\n")
+        await Task.yield()
+        XCTAssertTrue(controller.logs(for: request.id).contains {
+            $0.text.contains("Starting local API service")
+        })
+
+        XCTAssertTrue(controller.cancel(requestID: request.id))
+        XCTAssertEqual(runner.processes[0].terminateCallCount, 1)
+        XCTAssertFalse(controller.cancel(requestID: UUID()))
+    }
+
     func testStudioRunsExecuteConcurrentlyUpToCapThenQueue() async throws {
         let runner = RecordingProcessRunner()
         let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)

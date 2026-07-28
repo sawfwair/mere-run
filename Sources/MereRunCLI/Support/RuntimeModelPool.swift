@@ -68,6 +68,8 @@ struct RuntimeModelPoolStatus: Codable, Equatable, Sendable {
     let cacheStats: RuntimeCacheStatsSummary
     let benchmarkStats: RuntimeBenchmarkStatsSummary?
     var sidecars: RuntimeSidecarPoolStatus? = nil
+    /// Additive process/device telemetry. Older servers omit it and older clients ignore it.
+    var process: RuntimeProcessTelemetry? = nil
 }
 
 enum RuntimeSidecarKind: String, Codable, Equatable, Sendable {
@@ -402,6 +404,7 @@ struct RuntimeMemorySnapshot: Codable, Equatable, Sendable {
     let physicalBytes: UInt64
     let residentBytes: UInt64?
     let currentBytes: UInt64?
+    let availableBytes: UInt64?
     let ceilingBytes: UInt64?
     let softLimitBytes: UInt64?
     let hardLimitBytes: UInt64?
@@ -414,6 +417,7 @@ struct RuntimeMemorySnapshot: Codable, Equatable, Sendable {
         physicalBytes: UInt64,
         residentBytes: UInt64? = nil,
         currentBytes: UInt64? = nil,
+        availableBytes: UInt64? = nil,
         ceilingBytes: UInt64? = nil,
         softLimitBytes: UInt64? = nil,
         hardLimitBytes: UInt64? = nil,
@@ -425,6 +429,7 @@ struct RuntimeMemorySnapshot: Codable, Equatable, Sendable {
         self.physicalBytes = physicalBytes
         self.residentBytes = residentBytes
         self.currentBytes = currentBytes
+        self.availableBytes = availableBytes
         self.ceilingBytes = ceilingBytes
         self.softLimitBytes = softLimitBytes
         self.hardLimitBytes = hardLimitBytes
@@ -438,6 +443,7 @@ struct RuntimeMemorySnapshot: Codable, Equatable, Sendable {
         case physicalBytes
         case residentBytes
         case currentBytes
+        case availableBytes
         case ceilingBytes
         case softLimitBytes
         case hardLimitBytes
@@ -452,6 +458,7 @@ struct RuntimeMemorySnapshot: Codable, Equatable, Sendable {
         physicalBytes = try container.decode(UInt64.self, forKey: .physicalBytes)
         residentBytes = try container.decodeIfPresent(UInt64.self, forKey: .residentBytes)
         currentBytes = try container.decodeIfPresent(UInt64.self, forKey: .currentBytes)
+        availableBytes = try container.decodeIfPresent(UInt64.self, forKey: .availableBytes)
         ceilingBytes = try container.decodeIfPresent(UInt64.self, forKey: .ceilingBytes)
         softLimitBytes = try container.decodeIfPresent(UInt64.self, forKey: .softLimitBytes)
         hardLimitBytes = try container.decodeIfPresent(UInt64.self, forKey: .hardLimitBytes)
@@ -1054,6 +1061,7 @@ actor RuntimeModelPool {
                 physicalBytes: memorySample.physicalBytes,
                 residentBytes: memorySample.residentBytes,
                 currentBytes: memoryPressurePolicy.currentBytes(for: memorySample),
+                availableBytes: memorySample.availableBytes,
                 ceilingBytes: memoryLimits?.ceiling,
                 softLimitBytes: memoryLimits?.soft,
                 hardLimitBytes: memoryLimits?.hard,
