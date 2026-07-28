@@ -1,15 +1,21 @@
 # Video Runtime
 
-This page covers the native video-generation path exposed through `mere.run video`.
+Generate a clip from a prompt. With a unified A/V checkpoint, the model writes
+the soundtrack in the same pass rather than layering it on afterwards. Anchor
+the clip to a start frame, steer it toward an end frame, or condition the motion
+on a song you already have. Recast a performer in an existing shot. Keep the
+checkpoint resident and render take after take without paying for the reload.
 
-## Public surface
+## Commands
 
-- `mere.run video generate`
-- `mere.run video cosmos3`
-- `mere.run video animate`
-- `mere.run video prepare-masks`
-- `mere.run video session`
-- `mere.run video export-latents`
+| Command | What it does |
+| --- | --- |
+| `mere.run video generate` | Generate MP4 video with native Swift/MLX video models. |
+| `mere.run video cosmos3` | Run native NVIDIA Cosmos3-Edge generation and action modes. |
+| `mere.run video animate` | Animate or replace a masked subject with native Swift/MLX SCAIL-2. |
+| `mere.run video prepare-masks` | Prepare reviewable, palette-safe SCAIL-2 masks with native SAM 3.1. |
+| `mere.run video session` | Keep an LTX 2.3 runtime resident for JSONL generation requests. |
+| `mere.run video export-latents` | Run native Swift/MLX distilled LTX denoising and export final latents. |
 
 ## macOS Studio
 

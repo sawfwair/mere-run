@@ -1,15 +1,20 @@
 # Text Runtime
 
-This page covers the text-facing command families: chat, code generation,
-embeddings, PII anonymization, and native text LoRA preparation.
+Local chat that can actually do things: stream tokens, run a sandboxed tool
+loop, take an image alongside the prompt, hold a grammar-checked JSON object to
+the last brace, and fine-tune on your own conversations. Alongside it sits a
+separate GGUF path for code, an embedding model for local search, and a PII
+redactor that never sends the text it is redacting anywhere.
 
-## Public surface
+## Commands
 
-- `mere.run text chat`
-- `mere.run text code`
-- `mere.run text embed`
-- `mere.run text anonymize`
-- `mere.run text train-lora`
+| Command | What it does |
+| --- | --- |
+| `mere.run text chat` | Run local chat with text chat models. |
+| `mere.run text code` | Run local code generation with GGUF models via llama.cpp. |
+| `mere.run text embed` | Generate text embeddings using native Qwen3-Embedding-0.6B. |
+| `mere.run text anonymize` | Detect and redact PII using OpenAI Privacy Filter. |
+| `mere.run text train-lora` | Train a native text LoRA adapter from chat-style SFT JSONL. |
 
 ## macOS Studio
 

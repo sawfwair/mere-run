@@ -1,7 +1,8 @@
 # Configuration
 
-These are the persisted CLI settings and public runtime environment variables
-that matter in the OSS repo.
+There are two ways to change how `mere.run` behaves: settings that persist
+across shells, and environment variables you set for a single run. This page
+covers both, and marks which ones hold secrets.
 
 ## Persisted settings: `mere.run config`
 

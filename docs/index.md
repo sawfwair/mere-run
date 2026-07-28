@@ -3,8 +3,8 @@ layout: home
 
 hero:
   name: mere.run
-  text: Local inference from one machine to a portable fleet
-  tagline: A public Swift package and CLI for multimodal inference, persistent worlds, typed workflow graphs, local APIs, an optional macOS studio, and headless Linux executors.
+  text: Create anything. Locally.
+  tagline: Image, text, video, music, sound, speech, vision, 3D, and persistent worlds in one Swift CLI, on hardware you already own. No inference API key. No upload. No venv.
   actions:
     - theme: brand
       text: Get Started
@@ -20,24 +20,45 @@ hero:
       link: /linux-quickstart
 
 features:
-  - title: Multimodal by design
-    details: Run image, text, speech, vision, 3D, music, sound-effect, video, and persistent-world workloads from one typed CLI.
-  - title: Portable workflow graphs
-    details: Validate once, materialize immutable job bundles, and run the same graph locally, over SSH, or through a relay executor.
-  - title: Live and resident runtimes
-    details: Stream microphone transcription, keep text and video models warm, and preserve causal world state across requests.
-  - title: Managed models and adapters
-    details: Inspect machine capabilities, pull pinned model snapshots and verified LoRAs, configure runtimes, and run deterministic quality gates.
-  - title: Local APIs and companions
-    details: Serve OpenAI-compatible chat, embeddings, images, speech, and transcription; connect Open WebUI or install official companion plugins.
-  - title: Mac-first, headless when needed
-    details: Use the native macOS studio on Apple Silicon or install CLI-only Linux packages for compatible CPU and CUDA hosts.
+  - title: Everything. Actually everything.
+    details: Score a track. With a unified A/V model, render a clip and its soundtrack in the same pass. Clone a voice. Follow an object through a video. Turn a photo into a textured mesh. Same CLI, same afternoon.
+  - title: No venv. Ever.
+    details: Core model paths run through Swift and MLX, with llama.cpp for explicit GGUF models — no Python worker, torch install, wheels to resolve, or environment to activate. Clone it and swift build.
+  - title: Nothing leaves
+    details: Weights live in a store you control. During local inference, prompts, photos, and audio stay on your disk. Nothing is metered or uploaded unless you explicitly use a networked action.
+  - title: Workflow runs keep their receipts
+    details: Portable workflow runs write a durable directory — plan, events, artifacts, SHA-256 manifests. Kill one halfway and resume it. Hand the immutable bundle to another executor with the same resolved inputs and fingerprints.
+  - title: Already speaks OpenAI
+    details: Serve chat, embeddings, images, speech, and transcription on localhost. Point your editor, your scripts, or Open WebUI at it. Change the base URL; change nothing else.
+  - title: One laptop now, a fleet later
+    details: The same immutable bundle runs here, over SSH to a GPU box, or across a relay fleet — with the same resolved seeds, fingerprints, and validation contract.
 ---
 
-## Current public command surface
+## Six commands, six kinds of thing
 
-This inventory is generated from the CLI configuration. Each command links to
-the page that owns its public documentation.
+Install a signed build from [mere.run/releases](https://mere.run/releases), or
+`swift build` from a clone. Then:
+
+```bash
+mere.run image generate --prompt "a ceramic mug in morning light" --output mug.png
+mere.run music generate "arena rock anthem, stacked vocals" --output anthem.wav
+mere.run speech synthesize "Hello from mere.run" --output hello.wav
+mere.run sfx generate "a ceramic mug shattering on tile" --output smash.wav
+mere.run video generate "a drone flight over snowy peaks" --output flight.mp4
+mere.run vision image-to-3d-trellis2 ./mug.png --output ./mug-3d
+```
+
+Same binary. Same grammar. No inference API key in any of them.
+
+Start with `mere.run model capabilities` — it reads your hardware and tells you
+which models this machine can actually run before you spend a gigabyte finding
+out.
+
+## The full command surface
+
+All of it ships in that one executable. The table below is generated from the
+CLI itself, so it cannot drift from what your copy really does — and every row
+links to the page that owns that command.
 
 <!-- BEGIN GENERATED: CLI TOP LEVEL -->
 | Command | Purpose |
@@ -69,36 +90,43 @@ the page that owns its public documentation.
 
 ## Choose a path
 
-### Install and run locally
+### Get it running
+
+Install, pull a first model, and make something in the next ten minutes.
 
 - [Getting Started](/getting-started)
 - [Linux QuickStart](/linux-quickstart)
 - [CLI Reference](/cli)
-- [Offline Cookbooks](/cookbooks)
+- [Offline Cookbooks](/cookbooks) — `mere.run guide` works without a network
 - [Configuration](/configuration)
 - [Model Sources](/model-sources)
 
-### Automate and operate
+### Make things
+
+Each family is its own page: what it generates, which model to pull, and the
+flags that actually change the output.
+
+- [Image](/runtime/image) — text-to-image, edits, and local LoRA training
+- [Text](/runtime/text) — chat, code, embeddings, tool use, PII redaction
+- [Speech](/runtime/speech) — synthesis, voice cloning, live transcription
+- [Vision and 3D](/runtime/vision) — caption, segment, track, depth, mesh, OCR
+- [Music](/runtime/music) — generation, covers, realtime MIDI, transcription
+- [Sound Effects](/runtime/sfx) — Foley from text or from a silent video
+- [Video](/runtime/video) — clips with synchronized audio, subject animation
+- [Persistent Worlds](/runtime/world) — a scene that remembers where you walked
+
+### Put it to work
+
+Serve it, schedule it, measure it, and keep it honest.
 
 - [Portable Workflows, Executors, and Run Artifacts](/workflows)
 - [Model and Adapter Management](/runtime/model-management)
 - [Local API Server and Open WebUI](/runtime/api-server)
 - [Official Companion Plugins](/plugins)
-- [Quality Gate](/gate)
+- [Quality Gate](/gate) — the check that catches a bad build before you do
 - [Benchmarking](/benchmarking)
 
-### Explore runtime families
-
-- [Image](/runtime/image)
-- [Text](/runtime/text)
-- [Speech](/runtime/speech)
-- [Vision and 3D](/runtime/vision)
-- [Music](/runtime/music)
-- [Sound Effects](/runtime/sfx)
-- [Video](/runtime/video)
-- [Persistent Worlds](/runtime/world)
-
-### Contribute to the repo
+### Work on the code
 
 - [Repository Tour](/repository-tour)
 - [Development Workflow](/development-workflow)

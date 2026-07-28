@@ -1,8 +1,10 @@
 # Companion Plugins
 
-Official mere.run plugins are separate executables distributed outside the
-Swift package. They can add operational integrations and typed workflow graph
-providers without loading third-party code into the `mere.run` process.
+Extend `mere.run` without letting anything into its process. Official plugins
+are separate executables shipped outside the Swift package: they can add
+operational integrations and typed workflow-graph nodes, but they run
+out-of-process and speak one fixed protocol. A plugin manifest cannot inject a
+shell command into your workflow bundle.
 
 ## Discover plugins
 
@@ -52,8 +54,8 @@ verbs: catalog, preflight, and execute. The core runtime validates typed
 requests and events; plugin manifests cannot inject arbitrary shell commands
 into workflow bundles.
 
-See [Portable Workflows](./workflows.md#graph-v1) for the graph ABI and
-[CLI Reference](./cli.md) for every plugin option.
+See [Portable Workflows](./workflows.md#graph-v2-runtime-and-v1-contract) for
+the graph ABI and [CLI Reference](./cli.md) for every plugin option.
 
 ## Source boundary
 
