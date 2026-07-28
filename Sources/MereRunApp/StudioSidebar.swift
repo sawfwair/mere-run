@@ -9,6 +9,9 @@ struct StudioSidebar: View {
     let modeCapabilities: [StudioMode: StudioModelCapability]
     let serverStatus: StudioServerStatus?
     let resolvedCLI: String
+    let onShowServing: () -> Void
+    let onShowOperations: () -> Void
+    let onShowPlugins: () -> Void
     let onShowModels: () -> Void
     let onShowHelp: () -> Void
 
@@ -89,8 +92,33 @@ struct StudioSidebar: View {
             StudioStatusCluster(
                 serverStatus: serverStatus,
                 resolvedCLI: resolvedCLI,
+                onShowServing: onShowServing,
                 onShowModels: onShowModels
             )
+
+            Button(action: onShowServing) {
+                Label("Serving & Agents", systemImage: "network")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.merePrimary)
+            .keyboardShortcut("s", modifiers: [.command, .shift])
+            .help("Operate serving, models, resources, agents, and clients (⇧⌘S)")
+
+            HStack(spacing: 8) {
+                Button(action: onShowOperations) {
+                    Label("Runs", systemImage: "list.bullet.rectangle.portrait")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.mereSecondary)
+                .help("Open Runs & Operations (⌃⌘R)")
+
+                Button(action: onShowPlugins) {
+                    Label("Plugins", systemImage: "puzzlepiece.extension")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.mereSecondary)
+                .help("Discover and manage plugins (⇧⌘P)")
+            }
 
             HStack(spacing: 8) {
                 Button(action: onShowModels) {
@@ -179,6 +207,9 @@ private struct StudioSidebarRow: View {
 struct StudioSidebarRail: View {
     @Binding var mode: StudioMode
     let modeCapabilities: [StudioMode: StudioModelCapability]
+    let onShowServing: () -> Void
+    let onShowOperations: () -> Void
+    let onShowPlugins: () -> Void
     let onShowModels: () -> Void
     let onShowHelp: () -> Void
 
@@ -232,6 +263,9 @@ struct StudioSidebarRail: View {
             Spacer(minLength: 0)
 
             VStack(spacing: 4) {
+                railAction(system: "network", help: "Serving & Agents (⇧⌘S)", label: "Serving & Agents", action: onShowServing)
+                railAction(system: "list.bullet.rectangle.portrait", help: "Runs & Operations (⌃⌘R)", label: "Runs & Operations", action: onShowOperations)
+                railAction(system: "puzzlepiece.extension", help: "Plugins (⇧⌘P)", label: "Plugins", action: onShowPlugins)
                 railAction(system: "shippingbox", help: "Models (⇧⌘M)", label: "Models", action: onShowModels)
                 railAction(system: "questionmark.circle", help: "Guide", label: "Guide", action: onShowHelp)
             }
@@ -335,6 +369,7 @@ struct StudioModeShortcut: ViewModifier {
 private struct StudioStatusCluster: View {
     let serverStatus: StudioServerStatus?
     let resolvedCLI: String
+    let onShowServing: () -> Void
     let onShowModels: () -> Void
 
     @State private var showDetails = false
@@ -376,6 +411,10 @@ private struct StudioStatusCluster: View {
             StudioStatusDetails(
                 serverStatus: serverStatus,
                 resolvedCLI: resolvedCLI,
+                onShowServing: {
+                    showDetails = false
+                    onShowServing()
+                },
                 onShowModels: {
                     showDetails = false
                     onShowModels()
@@ -384,7 +423,7 @@ private struct StudioStatusCluster: View {
         }
         .accessibilityLabel("Machine status")
         .accessibilityValue(summary)
-        .accessibilityHint("Shows local server, models, and CLI details")
+        .accessibilityHint("Shows local server details and opens the Serving and Agents console")
     }
 
     private var summary: String {
@@ -405,6 +444,7 @@ private struct StudioStatusCluster: View {
 private struct StudioStatusDetails: View {
     let serverStatus: StudioServerStatus?
     let resolvedCLI: String
+    let onShowServing: () -> Void
     let onShowModels: () -> Void
 
     @State private var copiedCLI = false
@@ -417,6 +457,14 @@ private struct StudioStatusDetails: View {
                 value: serverValue,
                 valueColor: serverStatus?.isReachable == true ? MereRunTheme.green : MereRunTheme.textSecondary
             )
+
+            Button {
+                onShowServing()
+            } label: {
+                Label("Open Serving & Agents", systemImage: "network")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.merePrimary)
 
             HStack(alignment: .firstTextBaseline) {
                 detailRow(

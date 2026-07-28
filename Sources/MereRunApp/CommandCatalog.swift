@@ -18,9 +18,10 @@ enum CommandCategory: String, CaseIterable, Identifiable {
     var id: String { rawValue }
 }
 
-enum CommandTemplateID: String, CaseIterable {
+enum CommandTemplateID: String, CaseIterable, Codable {
     case setup
     case agentOnboard
+    case agentStatus
     case agentInstallPi
     case agentStart
     case modelList
@@ -112,6 +113,7 @@ enum CommandTemplateID: String, CaseIterable {
         switch self {
         case .setup: return "setup"
         case .agentOnboard: return "agent.onboard"
+        case .agentStatus: return "agent.status"
         case .agentInstallPi: return "agent.install-pi"
         case .agentStart: return "agent.start"
         case .modelList: return "model.list"
@@ -319,11 +321,15 @@ enum StudioCodeDefaults {
     }
 }
 
-struct CommandDraft: Equatable {
+struct CommandDraft: Equatable, Codable {
     var prompt = ""
     var secondaryText = ""
     var model = ""
     var inputPath = ""
+    /// Optional so Library rows written before mask editing still decode through synthesized Codable.
+    var imageMaskPath: String?
+    var imageOutpaint: String?
+    var imageMaskFeather: Int?
     var outputPath = ""
     var width = 1024
     var height = 1024
@@ -375,6 +381,8 @@ struct CommandDraft: Equatable {
     var baseQuantizationBits = ""
     var excludePreviewImages = false
     var checkpointInterval = 0
+    /// Optional preserves Library decoding for rows written before checkpoint resume was exposed.
+    var trainingResumePath: String?
     var maxResolution = 0
     var progressive = false
     var lowRAM = false
@@ -417,6 +425,11 @@ struct CommandDraft: Equatable {
     var alreadyFramed = false
     var noVertexColors = false
     var camerasPath = ""
+    /// Optional so Library rows written before the first-class TRELLIS.2 workspace keep decoding.
+    var trellisTextureSeed: String?
+    var trellisNoRemesh: Bool?
+    var trellisRemeshBand: Double?
+    var trellisSealRadius: Int?
     var durationSeconds = 10.0
     // Music production workspace. Empty strings intentionally mean "let the CLI quality
     // preset choose" for optional numeric overrides.
@@ -653,6 +666,9 @@ struct CommandDraft: Equatable {
     var referenceMaskPath = ""
     var drivingVideoPath = ""
     var drivingMaskPath = ""
+    /// One mask path per newline-delimited additional SCAIL reference image.
+    /// Optional preserves synthesized Codable compatibility with older Library rows.
+    var scailAdditionalReferenceMaskPaths: String?
     var videoTaskMode = "animation"
     var renderProfile = "fast"
     var sampler = "unipc"
@@ -859,6 +875,10 @@ struct CommandTemplate: Identifiable, Equatable {
             draft.reconstructionResolution = 256
         case .imageReconstruct3DTrellis2:
             draft.seed = "42"
+            draft.trellisTextureSeed = "42"
+            draft.trellisNoRemesh = false
+            draft.trellisRemeshBand = 1
+            draft.trellisSealRadius = 12
             draft.maxTokens = 2_097_152
         case .imageReconstruct3DMultiview:
             draft.reconstructionResolution = 128
@@ -912,6 +932,9 @@ struct CommandTemplate: Identifiable, Equatable {
         case .musicServe:
             draft.port = 8081
         case .adapterList:
+            draft.json = true
+        case .modelRepairManifests:
+            draft.force = true
             draft.json = true
         case .runList:
             draft.json = true
@@ -1186,6 +1209,14 @@ struct CommandTemplate: Identifiable, Equatable {
             if draft.drivingMaskPath.isBlank {
                 return "Driving mask path is required."
             }
+            let additionalReferences = pathList(draft.referenceImagePaths)
+            let additionalMasks = pathList(draft.scailAdditionalReferenceMaskPaths ?? "")
+            if additionalReferences.count != additionalMasks.count {
+                return "Each additional SCAIL reference needs one matching reference mask."
+            }
+            if additionalReferences.count > 5 {
+                return "SCAIL supports at most six subjects total."
+            }
         case .videoPrepareMasks:
             if draft.outputPath.isBlank {
                 return "Output directory is required."
@@ -1223,6 +1254,11 @@ struct CommandTemplate: Identifiable, Equatable {
             if !draft.model.isBlank { args += ["--model", draft.model] }
             args += ["--host", draft.host, "--port", String(draft.port)]
             if draft.quiet { args.append("--quiet") }
+
+        case .agentStatus:
+            args = ["agent", "status"]
+            if !draft.piPath.isBlank { args += ["--pi-path", draft.piPath] }
+            if draft.json { args.append("--json") }
 
         case .agentInstallPi:
             args = ["agent", "install-pi"]
@@ -1275,6 +1311,7 @@ struct CommandTemplate: Identifiable, Equatable {
         case .modelRepairManifests:
             args = ["model", "repair-manifests"]
             if draft.force { args.append("--dry-run") }
+            if draft.json { args.append("--json") }
 
         case .imageGenerate:
             args = ["image", "generate", "--prompt", draft.prompt, "--output", draft.outputPath]
@@ -1287,6 +1324,11 @@ struct CommandTemplate: Identifiable, Equatable {
             if !draft.seed.isBlank { args += ["--seed", draft.seed] }
             if !draft.inputPath.isBlank {
                 args += ["--input", draft.inputPath, "--strength", format(draft.strength)]
+            }
+            if let mask = draft.imageMaskPath, !mask.isBlank { args += ["--mask", mask] }
+            if let outpaint = draft.imageOutpaint, !outpaint.isBlank { args += ["--outpaint", outpaint] }
+            if let feather = draft.imageMaskFeather, feather != 8 {
+                args += ["--mask-feather", String(feather)]
             }
             for path in pathList(draft.referenceImagePaths) {
                 args += ["--ref-image", path]
@@ -1355,6 +1397,9 @@ struct CommandTemplate: Identifiable, Equatable {
             if draft.excludePreviewImages { args.append("--exclude-preview-images") }
             if emitsRecipeOverrides, draft.checkpointInterval > 0 {
                 args += ["--checkpoint-interval", String(draft.checkpointInterval)]
+            }
+            if let resumePath = draft.trainingResumePath, !resumePath.isBlank {
+                args += ["--resume-from", resumePath]
             }
             if emitsRecipeOverrides, draft.maxResolution > 0 {
                 args += ["--max-resolution", String(draft.maxResolution)]
@@ -1457,8 +1502,18 @@ struct CommandTemplate: Identifiable, Equatable {
             if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
             if !draft.model.isBlank { args += ["--model", draft.model] }
             if !draft.seed.isBlank { args += ["--seed", draft.seed] }
+            if let textureSeed = draft.trellisTextureSeed, !textureSeed.isBlank {
+                args += ["--texture-seed", textureSeed]
+            }
             args += ["--max-tokens", String(draft.maxTokens)]
             if draft.alreadyFramed { args.append("--already-framed") }
+            if draft.trellisNoRemesh == true { args.append("--no-remesh") }
+            if let remeshBand = draft.trellisRemeshBand {
+                args += ["--remesh-band", format(remeshBand)]
+            }
+            if let sealRadius = draft.trellisSealRadius {
+                args += ["--seal-radius", String(sealRadius)]
+            }
             if draft.dryRun { args.append("--dry-run") }
             if draft.json { args.append("--json") }
 
@@ -1533,7 +1588,10 @@ struct CommandTemplate: Identifiable, Equatable {
             if draft.quiet { args.append("--quiet") }
 
         case .textEmbed:
-            args = ["text", "embed", draft.prompt]
+            let embeddingTexts = draft.prompt
+                .components(separatedBy: .newlines)
+                .filter { !$0.isBlank }
+            args = ["text", "embed"] + (embeddingTexts.isEmpty ? [draft.prompt] : embeddingTexts)
             if !draft.model.isBlank { args += ["--model", draft.model] }
             if draft.maxTokens > 0 { args += ["--max-tokens", String(draft.maxTokens)] }
             if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
@@ -2083,6 +2141,18 @@ struct CommandTemplate: Identifiable, Equatable {
             ]
             if !draft.model.isBlank { args += ["--model", draft.model] }
             if !draft.modelRoot.isBlank { args += ["--model-root", draft.modelRoot] }
+            let additionalReferences = pathList(draft.referenceImagePaths)
+            let additionalMasks = pathList(draft.scailAdditionalReferenceMaskPaths ?? "")
+            for (reference, mask) in zip(additionalReferences, additionalMasks) {
+                args += ["--additional-reference", reference]
+                args += ["--additional-reference-mask", mask]
+            }
+            if !draft.loraPath.isBlank {
+                args += [
+                    "--distilled-adapter", draft.loraPath,
+                    "--distilled-adapter-strength", format(draft.loraScale)
+                ]
+            }
             if !draft.secondaryText.isBlank { args += ["--negative-prompt", draft.secondaryText] }
             if draft.renderProfile == "quality" {
                 args += [
@@ -2689,6 +2759,124 @@ struct CommandTemplate: Identifiable, Equatable {
     }
 }
 
+extension CommandTemplate {
+    /// The primary Studio workspace that owns this command's durable Library entry.
+    ///
+    /// Advanced exposes specialist commands without adding dozens of modes to the main sidebar.
+    /// Mapping them into the nearest creative workspace lets every run use the same queue,
+    /// progress, history, and result canvas while `StudioLibraryItem.templateID` preserves the
+    /// precise command identity and title.
+    var libraryMode: StudioMode {
+        switch id {
+        case .imageGenerate,
+             .imageTrainLoRA,
+             .imageValidate,
+             .imageDatasetDiscover,
+             .imageRunPlan,
+             .imageVisualizeRun,
+             .imageReconstruct3D,
+             .imageReconstruct3DTrellis2,
+             .imageReconstruct3DMultiview:
+            return .createImage
+
+        case .textChat, .textEmbed, .textAnonymize, .textTrainLoRA:
+            return .chat
+        case .textCode:
+            return .code
+
+        case .speechSynthesize,
+             .speechProfileList,
+             .speechProfileCreate,
+             .speechProfileDelete:
+            return .speak
+        case .speechTranscribe:
+            return .listen
+
+        case .visionGround:
+            return .findObjects
+        case .visionSegment:
+            return .segment
+        case .visionTrack, .visionTrackLive:
+            return .track
+        case .visionInspect,
+             .visionCaption,
+             .visionOCR,
+             .visionFaceDetect,
+             .visionFaceEmbed,
+             .visionFaceCompare,
+             .visionFaceBatch,
+             .visionPose,
+             .visionFlow,
+             .visionDepthVideo,
+             .visionGeometry,
+             .visionGeometryMultiview:
+            return .readImage
+
+        case .musicGenerate,
+             .musicAnalyze,
+             .musicTranscribe,
+             .musicRealtime,
+             .musicTrainAdapter,
+             .musicServe:
+            return .music
+
+        case .videoGenerate,
+             .videoAnimate,
+             .videoCosmos3,
+             .videoPrepareMasks,
+             .videoExportLatents,
+             .videoSession,
+             .worldServe:
+            return .video
+
+        case .sfxGenerate,
+             .sfxVideo,
+             .sfxAEEncode,
+             .sfxAEDecode,
+             .sfxClapScore,
+             .sfxConditionText:
+            return .sfx
+
+        case .setup,
+             .agentOnboard,
+             .agentStatus,
+             .agentInstallPi,
+             .agentStart,
+             .modelList,
+             .modelCapabilities,
+             .modelPull,
+             .modelInfo,
+             .modelRemove,
+             .modelRepairManifests,
+             .adapterList,
+             .adapterPull,
+             .runList,
+             .runInspect,
+             .runWatch,
+             .runFetch,
+             .runCancel,
+             .runRetry,
+             .statusSnapshot,
+             .qualityGate,
+             .modelStorage,
+             .modelGarbageCollect,
+             .modelRuntimeGet,
+             .modelRuntimeSet,
+             .graphStudio,
+             .nodeConsole,
+             .modelBenchmark,
+             .modelBenchmarkLagunaDFlash,
+             .pluginList,
+             .pluginInstall,
+             .pluginDoctor,
+             .openWebui,
+             .apiServe,
+             .custom:
+            return .chat
+        }
+    }
+}
+
 enum CommandLaunchEnvironment {
     static let apiKeyEnvironmentKey = "MERERUN_API_KEY"
     static let openWebUIAdminPasswordEnvironmentKey = "MERERUN_OPEN_WEBUI_ADMIN_PASSWORD"
@@ -2731,6 +2919,13 @@ enum CommandCatalog {
             subtitle: "Check local readiness and prepare Pi integration",
             systemImage: "person.crop.circle.badge.gearshape",
             defaultModel: StudioCodeDefaults.fallbackModelID
+        ),
+        CommandTemplate(
+            id: .agentStatus,
+            category: .setup,
+            title: "Agent status",
+            subtitle: "Inspect Pi, provider, and local agent readiness",
+            systemImage: "person.crop.circle.badge.checkmark"
         ),
         CommandTemplate(
             id: .agentInstallPi,

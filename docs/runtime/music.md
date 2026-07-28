@@ -18,13 +18,16 @@ while it is still generating.
 | `mere.run music realtime` | Run Magenta RealTime 2 music generation, steerable from stdin or CoreMIDI. |
 | `mere.run music transcribe` | Transcribe a full music mix into instrument-separated MIDI with MuScriptor. |
 
-The macOS Studio app exposes the same six workflows through typed forms backed
-by `MereRunContract`. Its primary Music composer covers the normal production
-loop—create or edit, source/reference audio, quality and LM planning, ranked
-candidates, adapter stacks, stems, LRC, recipes, and DAW export—while Advanced
-contains every specialist generation, analysis, transcription, realtime MIDI,
-training, and resident-server control. App-to-CLI tests reject any emitted flag
-that is absent from the machine-readable `mere.run catalog --json` contract.
+The macOS Studio app exposes the same six workflows through first-class
+workspaces backed by `MereRunContract`. Its primary Music composer covers the
+normal production loop—create or edit, source/reference audio, quality and LM
+planning, ranked candidates, adapter stacks, stems, LRC, recipes, and DAW
+export. **Music Tools** provides structured audio analysis, MuScriptor controls
+and an embedded MIDI piano roll, plus resident-server start/stop and health.
+**Realtime** owns Magenta playback and MIDI steering. **Training Studio** owns
+LoRA/LoKr dataset inspection, launch, metrics, and run comparison. Advanced
+remains available for raw command-level control. App-to-CLI tests reject any
+emitted flag absent from `mere.run catalog --json`.
 
 ## Model family
 
@@ -203,7 +206,9 @@ files stack and may use one shared or per-adapter scale. LoKr uses factored
 Kronecker evaluation instead of materializing full decoder deltas. Train either
 format with `music train-adapter`; its objective matches ACE-Step flow
 matching, and its output is directly reloadable by `music generate` or the
-resident server.
+resident server. Adapter training writes the same durable `run_started`,
+per-step loss/progress, `run_finished`, and `run_failed` event stream used by
+Training Studio, so a music run has live feedback and survives app relaunch.
 
 `music serve` holds the complete pipeline and its adapters in memory. It
 provides `GET /health`, `POST /v1/audio/music`, and serialized

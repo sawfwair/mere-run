@@ -83,6 +83,28 @@ final class PluginCommandTests: XCTestCase {
         )
     }
 
+    func testCatalogSnapshotAddsVerifiedInstallationStateWithoutDroppingCatalogFields() throws {
+        let catalog = try PluginCatalogClient.load(catalogURL: writeCatalog().path)
+
+        let snapshot = PluginCatalogSnapshot.make(catalog: catalog) { plugin in
+            PluginInstallationInspection(
+                installed: true,
+                verified: true,
+                version: "1.2.3",
+                path: "/usr/local/bin/\(plugin.entrypoint)",
+                error: nil
+            )
+        }
+
+        XCTAssertEqual(snapshot.contractVersion, catalog.contractVersion)
+        XCTAssertEqual(snapshot.defaultChannel, "main")
+        XCTAssertEqual(snapshot.plugins.first?.id, "mere-runpod")
+        XCTAssertEqual(snapshot.plugins.first?.installedVersion, "1.2.3")
+        XCTAssertEqual(snapshot.plugins.first?.installedPath, "/usr/local/bin/mere-runpod")
+        XCTAssertTrue(snapshot.plugins.first?.verified == true)
+        XCTAssertTrue(snapshot.plugins.first?.installCommand?.contains("pipx install") == true)
+    }
+
     func testUnknownPluginErrorListsKnownPlugins() throws {
         let catalogURL = try writeCatalog()
         let catalog = try PluginCatalogClient.load(catalogURL: catalogURL.path)

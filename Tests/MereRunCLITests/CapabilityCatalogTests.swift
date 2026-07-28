@@ -64,6 +64,7 @@ import Testing
         "model.runtime.set": ModelRuntimeSet.helpMessage(),
         "setup": Setup.helpMessage(),
         "agent.onboard": AgentOnboard.helpMessage(),
+        "agent.status": AgentStatus.helpMessage(),
         "agent.install-pi": AgentInstallPi.helpMessage(),
         "agent.start": AgentStart.helpMessage(),
         "model.list": ModelList.helpMessage(),

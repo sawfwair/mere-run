@@ -5,11 +5,14 @@ import SwiftUI
 /// (arrows move, Space previews), with Quick Look surfacing on hover.
 struct StudioLibraryPanel: View {
     let items: [StudioLibraryItem]
+    let progressByID: [UUID: StudioRunProgress]
     @Binding var selectedID: UUID?
     @Binding var isVisible: Bool
     let onDelete: (UUID) -> Void
     let onRename: (UUID, String) -> Void
     let onQuickLook: (URL) -> Void
+    let onRetry: (StudioLibraryItem) -> Void
+    let onEdit: (StudioLibraryItem) -> Void
 
     @State private var searchText = ""
     @State private var renamingID: UUID?
@@ -20,7 +23,7 @@ struct StudioLibraryPanel: View {
         guard !query.isEmpty else { return items }
         return items.filter { item in
             item.displayTitle.lowercased().contains(query)
-                || item.mode.title.lowercased().contains(query)
+                || item.displayKindTitle.lowercased().contains(query)
                 || item.prompt.lowercased().contains(query)
         }
     }
@@ -165,6 +168,7 @@ struct StudioLibraryPanel: View {
                     ForEach(section.items) { item in
                         StudioLibraryRow(
                             item: item,
+                            progress: progressByID[item.id],
                             isSelected: selectedID == item.id,
                             onQuickLook: item.outputURL.map { url in { onQuickLook(url) } }
                         ) {
@@ -173,6 +177,10 @@ struct StudioLibraryPanel: View {
                         .contextMenu {
                             if let url = item.outputURL {
                                 Button("Quick Look") { onQuickLook(url) }
+                            }
+                            if item.commandDraft != nil, item.templateID != nil {
+                                Button("Run again") { onRetry(item) }
+                                Button("Edit in Advanced") { onEdit(item) }
                             }
                             Button("Rename") {
                                 renameText = item.displayTitle
@@ -216,6 +224,7 @@ struct StudioLibraryPanel: View {
 
 private struct StudioLibraryRow: View {
     let item: StudioLibraryItem
+    let progress: StudioRunProgress?
     let isSelected: Bool
     let onQuickLook: (() -> Void)?
     let action: () -> Void
@@ -253,6 +262,13 @@ private struct StudioLibraryRow: View {
                             .foregroundStyle(MereRunTheme.textMuted)
                             .lineLimit(1)
                     }
+                    if item.status == .running, let progress {
+                        ProgressView(value: progress.fractionCompleted)
+                            .progressViewStyle(.linear)
+                            .tint(MereRunTheme.accent)
+                            .accessibilityLabel(progress.label)
+                            .accessibilityValue(progressAccessibilityValue(progress))
+                    }
                 }
 
                 Spacer(minLength: 0)
@@ -289,7 +305,7 @@ private struct StudioLibraryRow: View {
         .onHover { hovering = $0 }
         .animation(MereRunTheme.Motion.quick, value: hovering)
         .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(item.mode.title), \(item.status.rawValue), \(item.displayTitle)")
+        .accessibilityLabel("\(item.displayKindTitle), \(item.status.rawValue), \(item.displayTitle)")
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 
@@ -301,9 +317,9 @@ private struct StudioLibraryRow: View {
 
     private var subtitle: String {
         if item.status == .completed {
-            return "\(item.mode.title) · \(Self.timeFormatter.string(from: item.createdAt))"
+            return "\(item.displayKindTitle) · \(Self.timeFormatter.string(from: item.createdAt))"
         }
-        return "\(item.mode.title) · \(item.status.rawValue)"
+        return "\(item.displayKindTitle) · \(item.status.rawValue)"
     }
 
     private var statusColor: Color {
@@ -315,6 +331,12 @@ private struct StudioLibraryRow: View {
         }
     }
 
+    private func progressAccessibilityValue(_ progress: StudioRunProgress) -> String {
+        if let detail = progress.detail { return detail }
+        guard let fraction = progress.fractionCompleted else { return "In progress" }
+        return "\(Int((fraction * 100).rounded())) percent"
+    }
+
     @ViewBuilder
     private var thumbnail: some View {
         if let url = item.outputURL, StudioOutputFileKind.classify(url) == .image {
@@ -322,10 +344,10 @@ private struct StudioLibraryRow: View {
                 url: url,
                 maxPixelSize: 180,
                 contentMode: .fill,
-                fallbackSystemImage: item.mode.systemImage
+                fallbackSystemImage: item.displaySystemImage
             )
         } else {
-            Image(systemName: item.mode.systemImage)
+            Image(systemName: item.displaySystemImage)
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundStyle(MereRunTheme.accent)
         }

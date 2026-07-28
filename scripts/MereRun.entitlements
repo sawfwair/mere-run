@@ -16,12 +16,15 @@
 
 	  - device.camera: the app calls AVCaptureDevice.requestAccess(for: .video) to grant the
 	    camera before launching `vision track-live`; pairs with NSCameraUsageDescription.
-	    (No audio-input: nothing records the microphone in-app — add it when that ships.)
+	  - device.audio-input: Voice Studio records local references and transcription input;
+	    pairs with NSMicrophoneUsageDescription.
 
 	  Ad-hoc local builds use MereRunDebug.entitlements because ad-hoc signatures
 	  have no shared Team ID with the separately signed Sparkle framework.
 	-->
 	<key>com.apple.security.device.camera</key>
+	<true/>
+	<key>com.apple.security.device.audio-input</key>
 	<true/>
 </dict>
 </plist>

@@ -213,6 +213,7 @@ public enum MereRunCapabilityCatalog {
             modelRuntimeSet,
             setup,
             agentOnboard,
+            agentStatus,
             agentInstallPi,
             agentStart,
             modelList,
@@ -403,6 +404,9 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--seed", label: "Seed", kind: .integer),
             .init(flag: "--model", label: "Model", kind: .string),
             .init(flag: "--input", label: "Input image", kind: .file),
+            .init(flag: "--mask", label: "Edit mask", kind: .file),
+            .init(flag: "--outpaint", label: "Outpaint padding", kind: .string),
+            .init(flag: "--mask-feather", label: "Mask feather", kind: .integer),
             .init(flag: "--ref-image", label: "Reference image", kind: .file, repeatable: true),
             .init(flag: "--keep-original-aspect", label: "Keep original aspect", kind: .boolean),
             .init(flag: "--strength", label: "Edit strength", kind: .number),
@@ -454,6 +458,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--base-quantization-bits", label: "Base quantization", kind: .choice, choices: ["4", "8"]),
             .init(flag: "--exclude-preview-images", label: "Exclude preview images", kind: .boolean),
             .init(flag: "--checkpoint-interval", label: "Checkpoint interval", kind: .integer),
+            .init(flag: "--resume-from", label: "Resume checkpoint", kind: .file),
             .init(flag: "--max-resolution", label: "Max resolution", kind: .integer),
             .init(flag: "--progressive", label: "Progressive resolution", kind: .boolean),
             .init(flag: "--low-ram", label: "Low RAM", kind: .boolean),
@@ -615,8 +620,12 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--output", label: "Output", kind: .directory),
             .init(flag: "--model", label: "Model", kind: .string),
             .init(flag: "--seed", label: "Seed", kind: .integer),
+            .init(flag: "--texture-seed", label: "Texture seed", kind: .integer),
             .init(flag: "--max-tokens", label: "Maximum sparse tokens", kind: .integer),
             .init(flag: "--already-framed", label: "Already framed", kind: .boolean),
+            .init(flag: "--no-remesh", label: "Skip remeshing", kind: .boolean),
+            .init(flag: "--remesh-band", label: "Remesh band", kind: .number),
+            .init(flag: "--seal-radius", label: "Seal radius", kind: .integer),
             .init(flag: "--dry-run", label: "Dry run", kind: .boolean),
             .init(flag: "--json", label: "JSON", kind: .boolean)
         ],
@@ -1690,6 +1699,18 @@ public enum MereRunCapabilityCatalog {
         output: .init(kind: .text)
     )
 
+    public static let agentStatus = MereRunCommandCapability(
+        id: "agent.status",
+        command: ["agent", "status"],
+        title: "Agent status",
+        summary: "Inspect Pi, provider, machine, and local agent-model readiness.",
+        options: [
+            .init(flag: "--pi-path", label: "Pi executable", kind: .file),
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
     public static let agentInstallPi = MereRunCommandCapability(
         id: "agent.install-pi",
         command: ["agent", "install-pi"],
@@ -1799,7 +1820,8 @@ public enum MereRunCapabilityCatalog {
         title: "Repair manifests",
         summary: "Restore missing manifests for known local models.",
         options: [
-            .init(flag: "--dry-run", label: "Dry run", kind: .boolean)
+            .init(flag: "--dry-run", label: "Dry run", kind: .boolean),
+            .init(flag: "--json", label: "JSON", kind: .boolean)
         ],
         output: .init(kind: .text)
     )

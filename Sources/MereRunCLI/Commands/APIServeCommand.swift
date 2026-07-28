@@ -3343,6 +3343,7 @@ actor CodeGenServer {
     private let pool: RuntimeModelPool
     private let sidecarPool: APISidecarModelPool
     private let artifactCleanupScheduler: APIArtifactDirectoryCleanupScheduler
+    private var processTelemetrySampler = RuntimeProcessTelemetrySampler()
 
     init(
         defaultModelID: String,
@@ -4775,9 +4776,9 @@ actor CodeGenServer {
         }
         let admission = await requestAdmission.snapshot()
         let sidecars = await sidecarPool.status()
-        let data = try JSONEncoder().encode(
-            await pool.status(admission: admission, sidecars: sidecars)
-        )
+        var status = await pool.status(admission: admission, sidecars: sidecars)
+        status.process = processTelemetrySampler.snapshot()
+        let data = try JSONEncoder().encode(status)
         return Response(
             status: .ok,
             headers: [.contentType: "application/json"],

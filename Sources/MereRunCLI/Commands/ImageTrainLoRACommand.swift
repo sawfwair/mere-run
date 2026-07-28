@@ -109,6 +109,12 @@ struct ImageTrainLoRA: AsyncParsableCommand {
     )
     var checkpointInterval: Int?
 
+    @Option(
+        name: [.customLong("resume-from")],
+        help: "Resume FLUX.2 Klein training from a .safetensors checkpoint or checkpoint archive."
+    )
+    var resumeFrom: String?
+
     @Option(name: [.customLong("max-resolution")], help: "Klein adaptive source-image bucket limit; preserves aspect ratio up to this max side.")
     var maxResolution: Int?
 
@@ -315,6 +321,12 @@ struct ImageTrainLoRA: AsyncParsableCommand {
         if let checkpointInterval = resolvedOptions.checkpointInterval, checkpointInterval < 1 {
             throw ValidationError("--checkpoint-interval must be >= 1")
         }
+        if let resumeFrom {
+            let resumeURL = URL(fileURLWithPath: resumeFrom).standardizedFileURL
+            guard FileManager.default.fileExists(atPath: resumeURL.path) else {
+                throw ValidationError("--resume-from checkpoint not found: \(resumeURL.path)")
+            }
+        }
         if let maxResolution = resolvedOptions.maxResolution, maxResolution < 1 {
             throw ValidationError("--max-resolution must be >= 1")
         }
@@ -481,6 +493,9 @@ struct ImageTrainLoRA: AsyncParsableCommand {
         }
         if let checkpointInterval {
             args += ["--checkpoint-interval", String(checkpointInterval)]
+        }
+        if let resumeFrom {
+            args += ["--resume-from", resumeFrom]
         }
         if let maxResolution {
             args += ["--max-resolution", String(maxResolution)]
@@ -775,6 +790,7 @@ struct ImageTrainLoRA: AsyncParsableCommand {
             examples: examples,
             outputURL: outputURL,
             config: config,
+            resumeFromLoRA: resumeFrom.map { URL(fileURLWithPath: $0).standardizedFileURL },
             progressHandler: progressHandler,
             sampleHandler: sampleHandler
         )
@@ -1189,6 +1205,7 @@ struct ImageTrainLoRA: AsyncParsableCommand {
 
     private func hasKleinOnlyTrainingOptions(options: ResolvedLoRATrainingOptions) -> Bool {
         options.maxResolution != nil ||
+            resumeFrom != nil ||
             progressive ||
             options.lowRam ||
             gradientCheckpointing ||

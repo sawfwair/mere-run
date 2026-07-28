@@ -639,6 +639,13 @@ enum GuideRegistry {
             resourceName: "agent-onboard.md"
         ),
         GuideTopic(
+            topic: "agent-status",
+            title: "Agent Status",
+            commandPaths: [["agent", "status"]],
+            models: [],
+            resourceName: "agent-status.md"
+        ),
+        GuideTopic(
             topic: "agent-install-pi",
             title: "Agent Install Pi",
             commandPaths: [["agent", "install-pi"]],

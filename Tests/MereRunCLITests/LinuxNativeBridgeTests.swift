@@ -194,6 +194,8 @@ final class LinuxNativeBridgeTests: XCTestCase {
         XCTAssertTrue(script.contains("SUEnableAutomaticChecks"))
         XCTAssertTrue(script.contains("SUVerifyUpdateBeforeExtraction"))
         XCTAssertTrue(script.contains("SURequireSignedFeed"))
+        XCTAssertTrue(script.contains("NSMicrophoneUsageDescription"))
+        XCTAssertTrue(script.contains("local voice references and transcription input"))
         XCTAssertTrue(script.contains("MereRunDebug.entitlements"))
         XCTAssertTrue(script.contains(#"if [[ "$identity" == "-" ]]"#))
         XCTAssertTrue(script.contains("--preserve-metadata=entitlements"))
@@ -201,6 +203,18 @@ final class LinuxNativeBridgeTests: XCTestCase {
         XCTAssertTrue(script.contains("XPCServices/Downloader.xpc"))
         XCTAssertTrue(script.contains(#""${sparkle_version_root}/Autoupdate""#))
         XCTAssertTrue(script.contains(#""${sparkle_version_root}/Updater.app""#))
+
+        for entitlementsPath in [
+            "scripts/MereRun.entitlements",
+            "scripts/MereRunDebug.entitlements",
+            "scripts/MereRunCLI.entitlements",
+        ] {
+            let entitlements = try readRepositoryFile(entitlementsPath)
+            XCTAssertTrue(
+                entitlements.contains("com.apple.security.device.audio-input"),
+                "\(entitlementsPath) must authorize microphone capture"
+            )
+        }
     }
 
     private func readRepositoryFile(_ relativePath: String) throws -> String {

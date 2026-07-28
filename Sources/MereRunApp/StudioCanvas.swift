@@ -25,6 +25,8 @@ struct StudioCanvas: View {
     let onNewChat: () -> Void
     let onCopy: (String) -> Void
     let onRetry: () -> Void
+    let onRerunItem: (StudioLibraryItem) -> Void
+    let onEditRun: (StudioLibraryItem) -> Void
     let onEdit: (UUID) -> Void
     let onStop: () -> Void
     let onUseExample: (String) -> Void
@@ -46,9 +48,13 @@ struct StudioCanvas: View {
         !isRunning && (readiness.blocksRun || error != nil)
     }
 
+    private var showsConversation: Bool {
+        mode.isConversational && (item == nil || item?.isConversation == true)
+    }
+
     var body: some View {
         ZStack {
-            if mode.isConversational {
+            if showsConversation {
                 StudioConversationView(
                     item: conversationItem,
                     liveText: conversationLiveText,
@@ -68,7 +74,9 @@ struct StudioCanvas: View {
                     onOpen: onOpen,
                     onReveal: onReveal,
                     onQuickLook: onQuickLook,
-                    onCopy: onCopy
+                    onCopy: onCopy,
+                    onRerun: { onRerunItem(item) },
+                    onEdit: { onEditRun(item) }
                 )
                 .padding(isCompact ? MereRunTheme.Spacing.md : MereRunTheme.Spacing.xxxl)
                 .transition(.opacity.combined(with: .scale(scale: 0.985)))
@@ -82,7 +90,7 @@ struct StudioCanvas: View {
                 .padding(isCompact ? MereRunTheme.Spacing.md : MereRunTheme.Spacing.xxxl)
             }
 
-            if isRunning && visibleLiveOutputText == nil && !mode.isConversational {
+            if isRunning && visibleLiveOutputText == nil && !showsConversation {
                 StudioRunningOverlay(
                     mode: mode,
                     status: status,
@@ -458,8 +466,34 @@ struct StudioOutputView: View {
     let onReveal: () -> Void
     let onQuickLook: () -> Void
     var onCopy: ((String) -> Void)?
+    var onRerun: (() -> Void)?
+    var onEdit: (() -> Void)?
 
     @State private var copied = false
+    @State private var selectedArtifactURL: URL?
+
+    private var activeArtifactURL: URL? {
+        if let selectedArtifactURL, item.allArtifactURLs.contains(selectedArtifactURL) {
+            return selectedArtifactURL
+        }
+        let files = item.allArtifactURLs.filter {
+            (try? $0.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true
+        }
+        if let outputURL = item.outputURL, files.contains(outputURL) {
+            return outputURL
+        }
+        let preferredKinds: [StudioOutputFileKind] = [.video, .image, .model3D, .audio, .text]
+        for kind in preferredKinds {
+            if let artifact = files.first(where: { StudioOutputFileKind.classify($0) == kind }) {
+                return artifact
+            }
+        }
+        if let outputURL = item.outputURL,
+           (try? outputURL.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true {
+            return outputURL
+        }
+        return files.first
+    }
 
     var body: some View {
         VStack(spacing: MereRunTheme.Spacing.md) {
@@ -473,13 +507,17 @@ struct StudioOutputView: View {
                 }
                 .contextMenu { previewContextMenu }
 
+            if item.allArtifactURLs.count > 1 {
+                artifactStrip
+            }
+
             HStack(spacing: MereRunTheme.Spacing.sm) {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(item.displayTitle)
                         .font(.system(size: 15, weight: .semibold))
                         .lineLimit(1)
                     HStack(spacing: 5) {
-                        Text(item.mode.title)
+                        Text(item.displayKindTitle)
                         Text("·")
                         Text(item.updatedAt, format: .relative(presentation: .named))
                     }
@@ -506,9 +544,13 @@ struct StudioOutputView: View {
                     .accessibilityLabel("Copy output")
                 }
 
-                if item.outputURL != nil {
+                if activeArtifactURL != nil {
                     Button {
-                        onQuickLook()
+                        if let activeArtifactURL {
+                            QuickLookCoordinator.shared.preview(activeArtifactURL)
+                        } else {
+                            onQuickLook()
+                        }
                     } label: {
                         Image(systemName: "eye")
                             .font(.system(size: 13, weight: .semibold))
@@ -519,7 +561,11 @@ struct StudioOutputView: View {
                     .accessibilityLabel("Quick Look")
 
                     Button {
-                        onReveal()
+                        if let activeArtifactURL {
+                            NSWorkspace.shared.activateFileViewerSelecting([activeArtifactURL])
+                        } else {
+                            onReveal()
+                        }
                     } label: {
                         Image(systemName: "folder")
                             .font(.system(size: 13, weight: .semibold))
@@ -529,7 +575,30 @@ struct StudioOutputView: View {
                     .help("Reveal in Finder")
                     .accessibilityLabel("Reveal in Finder")
 
-                    Button("Open", action: onOpen)
+                    Button("Open") {
+                        if let activeArtifactURL {
+                            NSWorkspace.shared.open(activeArtifactURL)
+                        } else {
+                            onOpen()
+                        }
+                    }
+                        .buttonStyle(.mereSecondary)
+                }
+
+                if let onRerun {
+                    Button {
+                        onRerun()
+                    } label: {
+                        Image(systemName: "arrow.clockwise")
+                            .font(.system(size: 13, weight: .semibold))
+                            .frame(width: 30, height: 30)
+                    }
+                    .buttonStyle(.mereIcon)
+                    .help("Run again")
+                }
+
+                if let onEdit {
+                    Button("Edit", action: onEdit)
                         .buttonStyle(.mereSecondary)
                 }
             }
@@ -542,10 +611,12 @@ struct StudioOutputView: View {
 
     @ViewBuilder
     private var previewContextMenu: some View {
-        if item.outputURL != nil {
-            Button("Open") { onOpen() }
-            Button("Quick Look") { onQuickLook() }
-            Button("Reveal in Finder") { onReveal() }
+        if let activeArtifactURL {
+            Button("Open") { NSWorkspace.shared.open(activeArtifactURL) }
+            Button("Quick Look") { QuickLookCoordinator.shared.preview(activeArtifactURL) }
+            Button("Reveal in Finder") {
+                NSWorkspace.shared.activateFileViewerSelecting([activeArtifactURL])
+            }
             if canCopy {
                 Button("Copy") { copyOutput() }
             }
@@ -556,7 +627,7 @@ struct StudioOutputView: View {
 
     @ViewBuilder
     private var outputPreview: some View {
-        if let url = item.outputURL {
+        if let url = activeArtifactURL {
             filePreview(url)
                 .onDrag { NSItemProvider(contentsOf: url) ?? NSItemProvider() }
         } else if let text = liveOutputText ?? item.outputText,
@@ -580,6 +651,39 @@ struct StudioOutputView: View {
         }
     }
 
+    private var artifactStrip: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(item.allArtifactURLs, id: \.self) { url in
+                    Button {
+                        selectedArtifactURL = url
+                    } label: {
+                        HStack(spacing: 6) {
+                            Image(systemName: iconName(for: url))
+                                .font(.system(size: 11, weight: .semibold))
+                            Text(url.lastPathComponent)
+                                .font(MereRunTheme.captionFont)
+                                .lineLimit(1)
+                        }
+                        .foregroundStyle(activeArtifactURL == url ? MereRunTheme.accent : MereRunTheme.textSecondary)
+                        .padding(.horizontal, 10)
+                        .frame(height: 30)
+                        .background {
+                            Capsule()
+                                .fill(activeArtifactURL == url ? MereRunTheme.accentSoft : MereRunTheme.surface)
+                                .overlay {
+                                    Capsule().strokeBorder(MereRunTheme.border.opacity(0.6), lineWidth: 1)
+                                }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .help(url.path)
+                }
+            }
+        }
+        .accessibilityLabel("Run artifacts")
+    }
+
     @ViewBuilder
     private func filePreview(_ url: URL) -> some View {
         switch StudioOutputFileKind.classify(url) {
@@ -597,6 +701,8 @@ struct StudioOutputView: View {
             StudioVideoPlayerView(url: url)
         case .text:
             StudioTextFilePreview(url: url)
+        case .model3D:
+            StudioEmbeddedQuickLookPreview(url: url)
         case .other:
             filePlaceholder(for: url)
         }
@@ -640,7 +746,7 @@ struct StudioOutputView: View {
     }
 
     private var canCopy: Bool {
-        if let url = item.outputURL {
+        if let url = activeArtifactURL {
             let kind = StudioOutputFileKind.classify(url)
             return kind == .image || kind == .text
         }
@@ -652,7 +758,7 @@ struct StudioOutputView: View {
     private func copyOutput() {
         let pasteboard = NSPasteboard.general
         pasteboard.clearContents()
-        if let url = item.outputURL {
+        if let url = activeArtifactURL {
             pasteboard.writeObjects([url as NSURL])
         } else if let text = liveOutputText ?? item.outputText {
             pasteboard.setString(text, forType: .string)
@@ -669,6 +775,7 @@ struct StudioOutputView: View {
         case "wav", "mp3", "m4a": return "waveform"
         case "mp4", "mov": return "film"
         case "json": return "curlybraces"
+        case "glb", "gltf", "obj", "ply", "stl", "usdz": return "cube.transparent"
         case "safetensors": return "shippingbox"
         default: return "doc"
         }

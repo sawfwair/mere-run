@@ -47,10 +47,18 @@ nineteen commands, every one of them running on your own machine.
 | `mere.run vision image-to-3d-multiview` | VFX alias for native 4/6-view InstantMesh reconstruction. |
 
 The macOS Studio app exposes the same surface through its shared capability
-contract. Read Image remains the fast caption/inspection entry point; Advanced
-provides typed forms for every VLM, OCR, grounding, segmentation, tracking,
-face, pose, flow, depth, and geometry command above. Image-to-3D commands live
-in the Image workspace so the app has one canonical reconstruction flow.
+contract. Read Image remains the fast caption/inspection entry point. Its
+**Vision Lab** button (also present in Find, Segment, and Track) opens a
+first-class workspace for live camera tracking; Buffalo-L detection, embedding,
+comparison, and batch analysis; native pose and optical flow; video depth; and
+single/multi-view geometry. The Lab draws native face/pose overlays and
+direction-colored flow vectors, plays annotated/depth video, embeds orbitable
+point clouds, reports request-scoped progress, and preserves structured and
+visual sidecars in Library.
+
+Advanced retains typed forms for every command and raw-argument escape hatches.
+Image-to-3D commands live in the Image workspace so the app has one canonical
+reconstruction flow.
 
 ## Model family
 

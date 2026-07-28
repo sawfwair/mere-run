@@ -97,6 +97,17 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertEqual(StudioMode.video.defaultTemplateID, .videoGenerate)
     }
 
+    func testRealtimeMusicSurfaceDoesNotReuseAnACEStepModel() {
+        XCTAssertEqual(
+            StudioRealtimeMusicSheet.preferredModel(from: "music-acestep-xl-turbo"),
+            "music-magenta-rt2-small"
+        )
+        XCTAssertEqual(
+            StudioRealtimeMusicSheet.preferredModel(from: "music-magenta-rt2-medium"),
+            "music-magenta-rt2-medium"
+        )
+    }
+
     func testCodeStudioDefaultsUsePublicModelID() throws {
         let codeTemplate = try XCTUnwrap(CommandCatalog.template(id: .textCode))
         XCTAssertEqual(codeTemplate.defaultModel, StudioCodeDefaults.fallbackModelID)
@@ -301,6 +312,10 @@ final class StudioTypesTests: XCTestCase {
                 $0.all = true
                 $0.stream = true
                 $0.quiet = true
+            }),
+            (.agentStatus, "agent.status", {
+                $0.piPath = "/tmp/pi"
+                $0.json = true
             }),
             (.agentInstallPi, "agent.install-pi", { $0.force = true }),
             (.agentStart, "agent.start", {
@@ -896,6 +911,7 @@ final class StudioTypesTests: XCTestCase {
         draft.height = 768
         draft.steps = 1200
         draft.seed = "7"
+        draft.trainingResumePath = "/tmp/checkpoint-step750.safetensors"
 
         XCTAssertEqual(template.inputKind, .directory)
         XCTAssertEqual(template.defaultModel, "image-krea2-raw")
@@ -915,6 +931,7 @@ final class StudioTypesTests: XCTestCase {
                 "--max-text-length", "512",
                 "--scheduler-steps", "1000",
                 "--seed", "7",
+                "--resume-from", "/tmp/checkpoint-step750.safetensors",
             ]
         )
     }
@@ -1020,6 +1037,24 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertTrue(args.contains("--preflight"))
         XCTAssertTrue(args.contains("--json"))
         XCTAssertTrue(args.contains("--progress-json"))
+    }
+
+    func testImageStudioMapsVisualMaskAndOutpaintContract() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .createImage)
+        draft.prompt = "replace the painted sign and extend the street"
+        draft.inputPath = "/tmp/source.png"
+        draft.imageMaskPath = "/tmp/mask.png"
+        draft.imageOutpaintTop = 64
+        draft.imageOutpaintRight = 128
+        draft.imageOutpaintBottom = 64
+        draft.imageMaskFeather = 24
+
+        let request = try StudioCommandAdapter.makeRequest(mode: .createImage, draft: draft)
+        let args = request.template.arguments(from: request.draft)
+        assertPair(args, "--mask", "/tmp/mask.png")
+        assertPair(args, "--outpaint", "64,128,64,0")
+        assertPair(args, "--mask-feather", "24")
     }
 
     func testImageAppArgumentsAreDeclaredBySharedCapabilityContract() throws {
@@ -1188,6 +1223,40 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertEqual(generation?.fractionCompleted ?? -1, 0.75, accuracy: 0.001)
         XCTAssertEqual(generation?.detail, "Step 3 of 4")
 
+        let training = StudioProgressParser.parse("Training (42/100) loss 0.123456")
+        XCTAssertEqual(training?.label, "Training")
+        XCTAssertEqual(training?.fractionCompleted ?? -1, 0.42, accuracy: 0.001)
+        XCTAssertEqual(training?.detail, "Step 42 of 100 · loss 0.123456")
+
+        let musicTraining = StudioProgressParser.parse("ACE-Step adapter step 30/100 loss=0.543210")
+        XCTAssertEqual(musicTraining?.label, "Training")
+        XCTAssertEqual(musicTraining?.fractionCompleted ?? -1, 0.30, accuracy: 0.001)
+
+        let scail = StudioProgressParser.parse("Denoising 3/4")
+        XCTAssertEqual(scail?.label, "Denoising")
+        XCTAssertEqual(scail?.fractionCompleted ?? -1, 0.75, accuracy: 0.001)
+
+        let realtime = StudioProgressParser.parse("Realtime frame 125/500")
+        XCTAssertEqual(realtime?.label, "Realtime music")
+        XCTAssertEqual(realtime?.fractionCompleted ?? -1, 0.25, accuracy: 0.001)
+
+        let trellis = StudioProgressParser.parse("Sampling PBR texture latent 8/16")
+        XCTAssertEqual(trellis?.label, "PBR texture")
+        XCTAssertEqual(trellis?.fractionCompleted ?? -1, 0.5, accuracy: 0.001)
+
+        let temporalDepth = StudioProgressParser.parse("[depth-video] Running temporal window 3 of 9")
+        XCTAssertEqual(temporalDepth?.label, "Temporal depth")
+        XCTAssertEqual(temporalDepth?.fractionCompleted ?? -1, 1.0 / 3.0, accuracy: 0.001)
+
+        let geometryStage = StudioProgressParser.parse("[geometry] Exporting point cloud")
+        XCTAssertEqual(geometryStage?.label, "Geometry")
+        XCTAssertNil(geometryStage?.fractionCompleted)
+        XCTAssertEqual(geometryStage?.detail, "Exporting point cloud")
+
+        let scailStage = StudioProgressParser.parse("encodingReferenceImages")
+        XCTAssertEqual(scailStage?.label, "Encoding references")
+        XCTAssertNil(scailStage?.fractionCompleted)
+
         // Non-progress lines are not misclassified.
         XCTAssertNil(StudioProgressParser.parse("just a normal log line"))
         XCTAssertNil(StudioProgressParser.parse("[info] starting up"))
@@ -1197,6 +1266,62 @@ final class StudioTypesTests: XCTestCase {
         // Media commands print only the artifact path on stdout (diagnostics go to stderr).
         let stdout = "/Users/me/Documents/render.png\n"
         XCTAssertEqual(StudioResultParser.outputPaths(fromStdout: stdout), ["/Users/me/Documents/render.png"])
+    }
+
+    func testMusicArtifactDiscoveryIncludesCandidatesStemsSidecarsAndDAWFiles() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("studio-music-artifacts-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let daw = root.appendingPathComponent("daw", isDirectory: true)
+        try FileManager.default.createDirectory(at: daw, withIntermediateDirectories: true)
+        let primary = root.appendingPathComponent("song.wav")
+        let expectedFiles = [
+            primary,
+            root.appendingPathComponent("song.candidate-2.seed-44.wav"),
+            root.appendingPathComponent("song.stem-vocals.wav"),
+            root.appendingPathComponent("song.recipe.json"),
+            root.appendingPathComponent("song.lrc"),
+            daw.appendingPathComponent("song.rpp"),
+        ]
+        for url in expectedFiles {
+            try Data("x".utf8).write(to: url)
+        }
+        var draft = CommandDraft()
+        draft.musicDAWBundle = daw.path
+
+        let artifacts = StudioArtifactDiscovery.urls(
+            templateID: .musicGenerate,
+            draft: draft,
+            primaryOutput: primary
+        )
+
+        let expected = expectedFiles + [daw]
+        XCTAssertEqual(Set(artifacts.map(\.standardizedFileURL)), Set(expected.map(\.standardizedFileURL)))
+        XCTAssertEqual(artifacts.first, primary)
+    }
+
+    func testTrainingArtifactDiscoveryIncludesLossAndPreviewSamples() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("studio-training-artifacts-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let samples = root.appendingPathComponent("samples", isDirectory: true)
+        try FileManager.default.createDirectory(at: samples, withIntermediateDirectories: true)
+        let output = root.appendingPathComponent("portrait.safetensors")
+        let loss = root.appendingPathComponent("portrait.loss.csv")
+        let sample = samples.appendingPathComponent("portrait-step50-sample.png")
+        for url in [output, loss, sample] {
+            try Data("x".utf8).write(to: url)
+        }
+
+        let artifacts = StudioArtifactDiscovery.urls(
+            templateID: .imageTrainLoRA,
+            draft: CommandDraft(),
+            primaryOutput: output
+        )
+
+        let paths = Set(artifacts.map { $0.standardizedFileURL.path })
+        XCTAssertTrue(paths.contains(loss.standardizedFileURL.path), "\(artifacts)")
+        XCTAssertTrue(paths.contains(sample.standardizedFileURL.path), "\(artifacts)")
     }
 
     func testStudioResultParserReturnsMostRecentPathFirst() {
@@ -1518,6 +1643,89 @@ final class StudioTypesTests: XCTestCase {
                 )
             }
         }
+    }
+
+    func testSCAILArgumentsPreserveEveryConditioningPairAndAdapter() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .videoAnimate))
+        var draft = template.defaultDraft()
+        draft.prompt = "a dancer"
+        draft.inputPath = "/tmp/reference.png"
+        draft.referenceMaskPath = "/tmp/reference-mask.png"
+        draft.drivingVideoPath = "/tmp/driving.mp4"
+        draft.drivingMaskPath = "/tmp/driving-mask.mp4"
+        draft.referenceImagePaths = "/tmp/second.png\n/tmp/third.png"
+        draft.scailAdditionalReferenceMaskPaths = "/tmp/second-mask.png\n/tmp/third-mask.png"
+        draft.loraPath = "/tmp/scail-lightx2v.safetensors"
+        draft.loraScale = 0.8
+
+        XCTAssertNil(template.validationMessage(for: draft))
+        let arguments = template.arguments(from: draft)
+        XCTAssertEqual(arguments.filter { $0 == "--additional-reference" }.count, 2)
+        XCTAssertEqual(arguments.filter { $0 == "--additional-reference-mask" }.count, 2)
+        assertPair(arguments, "--distilled-adapter", "/tmp/scail-lightx2v.safetensors")
+        assertPair(arguments, "--distilled-adapter-strength", "0.8")
+
+        draft.scailAdditionalReferenceMaskPaths = "/tmp/second-mask.png"
+        XCTAssertEqual(
+            template.validationMessage(for: draft),
+            "Each additional SCAIL reference needs one matching reference mask."
+        )
+    }
+
+    func testTrellis2ArgumentsExposeTextureAndRemeshControls() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .imageReconstruct3DTrellis2))
+        var draft = template.defaultDraft()
+        draft.inputPath = "/tmp/object.png"
+        draft.trellisTextureSeed = "99"
+        draft.trellisNoRemesh = false
+        draft.trellisRemeshBand = 1.5
+        draft.trellisSealRadius = 16
+
+        let arguments = template.arguments(from: draft)
+        assertPair(arguments, "--texture-seed", "99")
+        assertPair(arguments, "--remesh-band", "1.5")
+        assertPair(arguments, "--seal-radius", "16")
+        XCTAssertFalse(arguments.contains("--no-remesh"))
+
+        let capability = try XCTUnwrap(
+            MereRunCapabilityCatalog.command(id: "image.reconstruct-3d-trellis2")
+        )
+        let declared = Set(capability.options.map(\.flag))
+        XCTAssertTrue(["--texture-seed", "--no-remesh", "--remesh-band", "--seal-radius"].allSatisfy(declared.contains))
+    }
+
+    func testVisionArtifactDiscoveryKeepsExplicitOverlayAndBatchSidecars() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("studio-vision-artifacts-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let overlay = root.appendingPathComponent("result.json")
+        let batch = root.appendingPathComponent("faces.jsonl")
+        try Data("{}".utf8).write(to: overlay)
+        try Data("{}\n".utf8).write(to: batch)
+
+        var faceDraft = CommandDraft()
+        faceDraft.visionJSONOutputPath = overlay.path
+        XCTAssertEqual(
+            StudioArtifactDiscovery.urls(
+                templateID: .visionFaceDetect,
+                draft: faceDraft,
+                primaryOutput: nil
+            ),
+            [overlay]
+        )
+
+        var batchDraft = CommandDraft()
+        batchDraft.visionJSONLOutput = batch.path
+        XCTAssertEqual(
+            StudioArtifactDiscovery.urls(
+                templateID: .visionFaceBatch,
+                draft: batchDraft,
+                primaryOutput: nil
+            ),
+            [batch]
+        )
     }
 
     func testSchemaDefaultsMatchTemplateDraftSoSurfacesDoNotDrift() {

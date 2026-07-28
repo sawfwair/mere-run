@@ -32,7 +32,7 @@ struct PluginList: ParsableCommand {
     func run() throws {
         let catalog = try PluginCatalogClient.load(catalogURL: catalogURL)
         if json {
-            print(try PluginCatalogClient.renderJSON(catalog))
+            print(try PluginCatalogClient.renderJSON(PluginCatalogSnapshot.make(catalog: catalog)))
             return
         }
 
@@ -41,7 +41,11 @@ struct PluginList: ParsableCommand {
         print("")
         for plugin in catalog.plugins {
             let install = try plugin.install(channel: catalog.defaultChannel)
-            print("\(plugin.id)")
+            let installation = PluginInstallationInspection.inspect(plugin)
+            let status = installation.installed
+                ? installation.verified ? "installed \(installation.version ?? "unknown")" : "installed, verification failed"
+                : "not installed"
+            print("\(plugin.id) [\(status)]")
             print("  \(plugin.description)")
             print("  command: \(plugin.entrypoint)")
             print("  install: \(PluginInstallCommand.render(install: install))")
@@ -215,10 +219,116 @@ struct PluginCatalogEntry: Codable {
     }
 }
 
-struct PluginCatalogInstall: Codable {
+struct PluginCatalogInstall: Codable, Equatable {
     let manager: String
     let spec: String
     let ref: String?
+}
+
+struct PluginCatalogSnapshot: Codable, Equatable {
+    let contractVersion: String
+    let updatedAt: String
+    let defaultChannel: String
+    let source: String
+    let plugins: [PluginCatalogSnapshotEntry]
+
+    static func make(
+        catalog: PluginCatalog,
+        inspect: (PluginCatalogEntry) -> PluginInstallationInspection = PluginInstallationInspection.inspect
+    ) -> PluginCatalogSnapshot {
+        PluginCatalogSnapshot(
+            contractVersion: catalog.contractVersion,
+            updatedAt: catalog.updatedAt,
+            defaultChannel: catalog.defaultChannel,
+            source: catalog.source,
+            plugins: catalog.plugins.map { plugin in
+                let installation = inspect(plugin)
+                let install = try? plugin.install(channel: catalog.defaultChannel)
+                return PluginCatalogSnapshotEntry(
+                    id: plugin.id,
+                    name: plugin.name,
+                    description: plugin.description,
+                    repo: plugin.repo,
+                    package: plugin.package,
+                    subdirectory: plugin.subdirectory,
+                    entrypoint: plugin.entrypoint,
+                    capabilities: plugin.capabilities,
+                    channels: plugin.channels,
+                    installed: installation.installed,
+                    verified: installation.verified,
+                    installedVersion: installation.version,
+                    installedPath: installation.path,
+                    verificationError: installation.error,
+                    installCommand: install.map(PluginInstallCommand.render)
+                )
+            }
+        )
+    }
+}
+
+struct PluginCatalogSnapshotEntry: Codable, Equatable {
+    let id: String
+    let name: String
+    let description: String
+    let repo: String
+    let package: String
+    let subdirectory: String
+    let entrypoint: String
+    let capabilities: [String]
+    let channels: [String: PluginCatalogInstall]
+    let installed: Bool
+    let verified: Bool
+    let installedVersion: String?
+    let installedPath: String?
+    let verificationError: String?
+    let installCommand: String?
+}
+
+struct PluginInstallationInspection: Equatable {
+    let installed: Bool
+    let verified: Bool
+    let version: String?
+    let path: String?
+    let error: String?
+
+    static func inspect(_ plugin: PluginCatalogEntry) -> PluginInstallationInspection {
+        guard let executable = PluginProcess.which(plugin.entrypoint) else {
+            return PluginInstallationInspection(
+                installed: false,
+                verified: false,
+                version: nil,
+                path: nil,
+                error: nil
+            )
+        }
+        do {
+            let manifest = try PluginVerifier.verify(entrypoint: executable.path)
+            guard manifest.name == plugin.id else {
+                return PluginInstallationInspection(
+                    installed: true,
+                    verified: false,
+                    version: manifest.version,
+                    path: executable.path,
+                    error: "Manifest name mismatch: expected \(plugin.id), got \(manifest.name)"
+                )
+            }
+            return PluginInstallationInspection(
+                installed: true,
+                verified: true,
+                version: manifest.version,
+                path: executable.path,
+                error: nil
+            )
+        } catch {
+            return PluginInstallationInspection(
+                installed: true,
+                verified: false,
+                version: nil,
+                path: executable.path,
+                error: String(describing: error)
+            )
+        }
+    }
 }
 
 struct PluginManifest: Decodable {
@@ -446,13 +556,18 @@ enum PluginProcess {
         process.executableURL = url
         process.arguments = arguments
         let output = Pipe()
+        let errors = Pipe()
         process.standardOutput = output
-        process.standardError = FileHandle.standardError
+        process.standardError = errors
         try process.run()
         process.waitUntilExit()
         let data = output.fileHandleForReading.readDataToEndOfFile()
+        let errorData = errors.fileHandleForReading.readDataToEndOfFile()
         guard process.terminationStatus == 0 else {
-            throw ValidationError("\(executable) exited with status \(process.terminationStatus)")
+            let detail = String(decoding: errorData, as: UTF8.self)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            let suffix = detail.isEmpty ? "" : ": \(String(detail.prefix(500)))"
+            throw ValidationError("\(executable) exited with status \(process.terminationStatus)\(suffix)")
         }
         return data
     }

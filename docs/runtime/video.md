@@ -32,10 +32,18 @@ offset and modality guidance, duration or frame-count targeting, negative
 prompts, Wan controls, preflight, and timing receipts. Attaching source audio
 selects final quality plus synchronized audio-video output automatically.
 
-The Advanced Video category adds guided SCAIL-2 animation/replacement, Cosmos3
-generation and action modes, SAM 3.1 mask-plan preparation, LTX latent export,
-and resident LTX sessions. Raw arguments remain an escape hatch, not the
-capability contract.
+Video's **SCAIL** button opens a first-class Subject Studio. It authors one to
+six reference subjects with text, box, and point selectors; previews palette-safe
+SAM 3.1 masks; tracks the complete driving clip; accepts immutable keyframe
+corrections or painted binary masks; and shows reference, driving, contact-sheet,
+and result playback together. Animation/replacement semantics, trim range,
+dimensions, profile, adapter, seed, segmentation/overlap, tail, audio, output,
+and preflight controls map directly to the public CLI contract. Every mask and
+animation run remains live and restartable in Library.
+
+Advanced Video remains the typed home for Cosmos3 generation/action modes, raw
+mask-plan execution, LTX latent export, and resident LTX sessions. Raw arguments
+are an escape hatch, not the capability contract.
 
 ## Model family
 

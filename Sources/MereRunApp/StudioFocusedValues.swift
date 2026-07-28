@@ -6,6 +6,8 @@ import SwiftUI
 private struct ShowLibraryKey: FocusedValueKey { typealias Value = Binding<Bool> }
 private struct ShowAdvancedKey: FocusedValueKey { typealias Value = Binding<Bool> }
 private struct ShowModelsKey: FocusedValueKey { typealias Value = Binding<Bool> }
+private struct ShowOperationsKey: FocusedValueKey { typealias Value = Binding<Bool> }
+private struct ShowPluginsKey: FocusedValueKey { typealias Value = Binding<Bool> }
 
 extension FocusedValues {
     var showLibrary: Binding<Bool>? {
@@ -21,5 +23,15 @@ extension FocusedValues {
     var showModels: Binding<Bool>? {
         get { self[ShowModelsKey.self] }
         set { self[ShowModelsKey.self] = newValue }
+    }
+
+    var showOperations: Binding<Bool>? {
+        get { self[ShowOperationsKey.self] }
+        set { self[ShowOperationsKey.self] = newValue }
+    }
+
+    var showPlugins: Binding<Bool>? {
+        get { self[ShowPluginsKey.self] }
+        set { self[ShowPluginsKey.self] = newValue }
     }
 }

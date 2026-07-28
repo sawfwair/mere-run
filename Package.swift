@@ -445,7 +445,7 @@ targets.append(contentsOf: [
   ),
   .testTarget(
     name: "MereRunCLITests",
-    dependencies: ["MereRunCLI"],
+    dependencies: ["MereRunCLI", "MediaIO"],
     path: "Tests/MereRunCLITests",
     resources: [
       .copy("Fixtures")

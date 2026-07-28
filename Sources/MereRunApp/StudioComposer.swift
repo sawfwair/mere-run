@@ -21,6 +21,8 @@ struct StudioComposer: View {
     let onAttach: () -> Void
     let onPaste: () -> Void
     let onShowModels: () -> Void
+    let onShowAdapters: () -> Void
+    let onShowRealtimeMusic: () -> Void
 
     /// Whether the clipboard currently holds an image, so the paste affordance only
     /// appears when it can actually do something (refreshed on appear + on focus).
@@ -222,7 +224,12 @@ struct StudioComposer: View {
         .help("Options")
         .accessibilityLabel("Options")
         .popover(isPresented: $showOptions, arrowEdge: .top) {
-            StudioOptionsPanel(mode: mode, draft: $draft)
+            StudioOptionsPanel(
+                mode: mode,
+                draft: $draft,
+                onShowAdapters: onShowAdapters,
+                onShowRealtimeMusic: onShowRealtimeMusic
+            )
         }
     }
 
@@ -413,8 +420,11 @@ struct StudioComposer: View {
 struct StudioOptionsPanel: View {
     let mode: StudioMode
     @Binding var draft: StudioDraft
+    let onShowAdapters: () -> Void
+    let onShowRealtimeMusic: () -> Void
     @EnvironmentObject private var controller: MereRunController
     @State private var voiceProfiles: [StudioVoiceProfile] = []
+    @State private var showImageEditor = false
 
     var body: some View {
         ScrollView {
@@ -525,6 +535,21 @@ struct StudioOptionsPanel: View {
         .foregroundStyle(MereRunTheme.textPrimary)
         .task {
             if mode == .speak { voiceProfiles = await controller.loadVoiceProfiles() }
+        }
+        .sheet(isPresented: $showImageEditor) {
+            if !draft.inputPath.isBlank {
+                StudioImageEditor(
+                    inputURL: URL(fileURLWithPath: draft.inputPath),
+                    outputWidth: draft.width,
+                    outputHeight: draft.height,
+                    maskPath: $draft.imageMaskPath,
+                    outpaintTop: $draft.imageOutpaintTop,
+                    outpaintRight: $draft.imageOutpaintRight,
+                    outpaintBottom: $draft.imageOutpaintBottom,
+                    outpaintLeft: $draft.imageOutpaintLeft,
+                    feather: $draft.imageMaskFeather
+                )
+            }
         }
     }
 
@@ -662,6 +687,8 @@ struct StudioOptionsPanel: View {
         HStack(spacing: MereRunTheme.Spacing.sm) {
             TextField("Catalog LoRA id or file", text: $draft.loraPath)
                 .mereField()
+            Button("Catalog…", action: onShowAdapters)
+                .controlSize(.small)
             Button("Browse…") {
                 let panel = NSOpenPanel()
                 panel.allowedContentTypes = [.data]
@@ -751,6 +778,28 @@ struct StudioOptionsPanel: View {
 
     @ViewBuilder
     private var imageOptions: some View {
+        if !draft.inputPath.isBlank {
+            HStack(spacing: MereRunTheme.Spacing.sm) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(draft.imageMaskPath.isBlank && !hasImageOutpaint ? "Whole-image transform" : "Masked image edit")
+                        .font(.system(size: 12.5, weight: .medium))
+                    Text(draft.imageMaskPath.isBlank
+                        ? (hasImageOutpaint ? "Outpaint edges are editable" : "Paint a mask or expand the canvas")
+                        : URL(fileURLWithPath: draft.imageMaskPath).lastPathComponent)
+                        .font(MereRunTheme.captionFont)
+                        .foregroundStyle(MereRunTheme.textMuted)
+                }
+                Spacer()
+                Button("Edit canvas…") { showImageEditor = true }
+                    .controlSize(.small)
+            }
+            .padding(MereRunTheme.Spacing.sm)
+            .background {
+                RoundedRectangle(cornerRadius: MereRunTheme.Radius.lg)
+                    .fill(MereRunTheme.accentSoft.opacity(0.55))
+            }
+        }
+
         HStack(spacing: MereRunTheme.Spacing.sm) {
             Text(draft.referenceImagePaths.isBlank
                 ? "No extra references"
@@ -783,6 +832,8 @@ struct StudioOptionsPanel: View {
                 .lineLimit(1)
             Spacer()
             Button("LoRA…", action: chooseImageLoRA)
+                .controlSize(.small)
+            Button("Catalog…", action: onShowAdapters)
                 .controlSize(.small)
         }
         TextField("LoRA catalog id or local path", text: $draft.loraPath)
@@ -832,6 +883,31 @@ struct StudioOptionsPanel: View {
 
     @ViewBuilder
     private var musicOptions: some View {
+        Button {
+            onShowRealtimeMusic()
+        } label: {
+            HStack {
+                Image(systemName: "waveform.path.ecg")
+                    .foregroundStyle(MereRunTheme.accent)
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Open realtime performance")
+                        .font(.system(size: 12.5, weight: .semibold))
+                    Text("Live playback, recording, MIDI, and prompt steering")
+                        .font(MereRunTheme.captionFont)
+                        .foregroundStyle(MereRunTheme.textMuted)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .foregroundStyle(MereRunTheme.textMuted)
+            }
+            .padding(MereRunTheme.Spacing.sm)
+            .background {
+                RoundedRectangle(cornerRadius: MereRunTheme.Radius.lg)
+                    .fill(MereRunTheme.accentSoft.opacity(0.55))
+            }
+        }
+        .buttonStyle(.plain)
+
         Picker("Quality", selection: $draft.musicQuality) {
             Text("Draft").tag("draft")
             Text("Song").tag("song")
@@ -917,6 +993,8 @@ struct StudioOptionsPanel: View {
                         .foregroundStyle(MereRunTheme.textMuted)
                     Spacer()
                     Button("Adapters…", action: chooseMusicAdapters)
+                        .controlSize(.small)
+                    Button("Catalog…", action: onShowAdapters)
                         .controlSize(.small)
                 }
                 Picker("Adapter kind", selection: $draft.musicAdapterKind) {
@@ -1004,6 +1082,15 @@ struct StudioOptionsPanel: View {
 
     private var musicAdapterPaths: [String] {
         separatedPaths(draft.musicAdapterPaths)
+    }
+
+    private var hasImageOutpaint: Bool {
+        [
+            draft.imageOutpaintTop,
+            draft.imageOutpaintRight,
+            draft.imageOutpaintBottom,
+            draft.imageOutpaintLeft,
+        ].contains(where: { $0 > 0 })
     }
 
     private func separatedPaths(_ raw: String) -> [String] {

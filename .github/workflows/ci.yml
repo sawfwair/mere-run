@@ -46,6 +46,11 @@ jobs:
             exit 1
           fi
           /usr/libexec/PlistBuddy -c 'Print :NSCameraUsageDescription' "${bundle}/Contents/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :NSMicrophoneUsageDescription' "${bundle}/Contents/Info.plist"
+          codesign -d --entitlements :- "${bundle}/Contents/MacOS/mere.run.app" 2>&1 \
+            | grep -q 'com.apple.security.device.audio-input'
+          codesign -d --entitlements :- "${bundle}/Contents/Helpers/mere.run" 2>&1 \
+            | grep -q 'com.apple.security.device.audio-input'
           codesign --verify --strict --verbose=2 "$bundle"
 
   linux-cli-compatibility-docs:

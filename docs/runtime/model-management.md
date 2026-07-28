@@ -177,14 +177,35 @@ install links, or `--force --json` for structured automation.
 
 ### `mere.run model repair-manifests`
 
-Repairs manifest metadata in the local store when that metadata is missing or
-stale.
+Repairs missing manifest metadata for known models in the local store. Preview
+the exact writes and consume a typed report with:
+
+```bash
+mere.run model repair-manifests --dry-run --json
+mere.run model repair-manifests --json
+```
+
+The report identifies healthy manifests, proposed or completed writes, absent
+model directories, and write errors without treating models that were never
+installed as damaged.
+
+In macOS Studio, open **Models → Health**. The workspace presents the structured
+manifest audit, confirms repair before writing, and runs `mere.run gate` suites
+as durable Library jobs. Correctness suites can be selected independently,
+strict performance thresholds are opt-in, and baseline replacement requires a
+separate warning confirmation. Every gate writes a JSON report.
 
 ### `mere.run model runtime`
 
 Reads and updates typed per-model API runtime settings — how a model behaves
 when served by `mere.run api serve`. `get` prints the stored settings for one
 managed model id or configured alias; `set` updates them:
+
+The macOS Studio's top-level **Serving & Agents → Model Pool** view uses these
+same settings for both text models and managed sidecars. Text rows additionally
+support explicit HTTP load/unload. Sidecars load on first request and expose
+their lifecycle, readiness, queue, replacement, failure, and eviction state;
+their managed pin/TTL controls continue to go through `model runtime set`.
 
 ```bash
 mere.run model runtime get text-chat-gemma4

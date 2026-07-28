@@ -13,6 +13,32 @@ your setup changes except where the weights live — and where your prompts stop
 | `mere.run model runtime set` | Update typed API runtime settings for a managed model. |
 | `mere.run status` | Show local server, loaded model, and installed model status. |
 
+## macOS Serving & Agents Console
+
+MereRun Studio exposes this control plane as a top-level **Serving & Agents**
+destination (or `Shift-Command-S`). It is an operational client of the public
+CLI and HTTP contracts, not a second runtime. The console provides:
+
+- API preflight, app-owned start/stop/restart, and reconnection to a server
+  started outside Studio
+- explicit loopback/LAN authentication safety; Studio blocks a non-loopback
+  app-owned launch until an API key is configured
+- the live text and image/speech/transcription/embedding sidecar pools,
+  readiness, activity, queues, pinning, TTLs, aliases, model settings, and
+  text-model load/unload controls
+- unified-memory guard pressure, process CPU, honest Metal allocation and
+  recommended working set, and macOS thermal/power state where available
+- observed request totals, failures, tokens, latency/throughput, prefix reuse,
+  decode batching, and MTP counters
+- typed Pi readiness/install/configure/start flows plus copyable OpenAI SDK,
+  curl, BYOA, and Open WebUI connection setup
+- a sanitized lifecycle/activity feed that excludes prompts, messages, media,
+  and generated content
+
+Server launches and agent setup sessions use the normal Studio Library
+lifecycle. API keys still cross the process boundary only through
+`MERERUN_API_KEY`.
+
 ## HTTP routes
 
 - `POST /v1/chat/completions`
@@ -317,7 +343,11 @@ The control endpoints use the same bearer-token behavior as `/v1/models`,
   request admission state, runtime capability flags, memory snapshot, settings
   path, aggregate cache stats, per-model prefix KV cache stats, per-model decode
   batching stats when enabled, text/sidecar residency and readiness, and
-  aggregate benchmark stats measured from completed native chat requests.
+  aggregate traffic stats measured from completed native chat requests.
+  Newer servers also include additive `process` telemetry: PID, start time,
+  uptime, sampled process CPU, macOS thermal/low-power state, Metal device,
+  current Metal allocation, recommended maximum working set, and unified-memory
+  capability. Older clients ignore it and older servers may omit it.
 - `POST /runtime/models/{id}/load`: explicitly load an installed API-capable
   text-pool catalog model.
 - `POST /runtime/models/{id}/unload`: unload a text-pool model; returns `409`

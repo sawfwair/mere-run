@@ -15,7 +15,8 @@
 	  - disable-library-validation: the CLI loads its co-located llama.framework, the mlx bundle,
 	    and the vendored ds4-server (third-party signatures, not the app's Team ID).
 	  - device.camera: `vision track-live` opens an AVCaptureSession in this process.
-	    (No audio-input: nothing captures the microphone yet — add it when that ships.)
+	  - device.audio-input: `speech listen` and realtime audio workflows may capture a
+	    microphone directly in this process.
 	-->
 	<key>com.apple.security.cs.allow-jit</key>
 	<true/>
@@ -24,6 +25,8 @@
 	<key>com.apple.security.cs.disable-library-validation</key>
 	<true/>
 	<key>com.apple.security.device.camera</key>
+	<true/>
+	<key>com.apple.security.device.audio-input</key>
 	<true/>
 </dict>
 </plist>

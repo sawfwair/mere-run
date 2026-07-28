@@ -14,6 +14,25 @@ struct StudioRootView: View {
     @State private var draft = StudioDraft()
     @State private var showOptions = false
     @State private var showModels = false
+    @State private var showServing = false
+    @State private var showOperations = false
+    @State private var showPlugins = false
+    @State private var showAdapters = false
+    @State private var showRealtimeMusic = false
+    @State private var showSCAIL = false
+    @State private var show3DCreation = false
+    @State private var showVisionLab = false
+    @State private var showVoiceStudio = false
+    @State private var voiceTask: StudioVoiceTask = .synthesize
+    @State private var showSFXLab = false
+    @State private var showTraining = false
+    @State private var trainingKind: StudioTrainingKind = .image
+    @State private var showMusicTools = false
+    @State private var musicTool: StudioMusicTool = .analyze
+    @State private var openTrainingAfterMusicTools = false
+    @State private var openRealtimeAfterMusicTools = false
+    @State private var showUtilityLab = false
+    @State private var utilityTask: StudioUtilityTask = .embeddings
     @State private var showHelp = false
     @State private var advancedWidth: CGFloat = 560
     @State private var advancedDragStartWidth: CGFloat?
@@ -36,6 +55,10 @@ struct StudioRootView: View {
     private var selectedItem: StudioLibraryItem? {
         if let selectedLibraryID, let found = library.items.first(where: { $0.id == selectedLibraryID }) {
             return found
+        }
+        if mode.isConversational {
+            guard let activeConversationID else { return nil }
+            return library.items.first { $0.id == activeConversationID && $0.isConversation }
         }
         // Fall back to the most recent run for the active mode so switching modes never
         // leaves an unrelated mode's output on the canvas.
@@ -132,6 +155,9 @@ struct StudioRootView: View {
                     StudioSidebarRail(
                         mode: $mode,
                         modeCapabilities: modeCapabilities,
+                        onShowServing: { showServing = true },
+                        onShowOperations: { showOperations = true },
+                        onShowPlugins: { showPlugins = true },
                         onShowModels: { showModels = true },
                         onShowHelp: { showHelp = true }
                     )
@@ -181,6 +207,9 @@ struct StudioRootView: View {
             modeCapabilities: modeCapabilities,
             serverStatus: controller.serverStatus,
             resolvedCLI: controller.resolvedCLI,
+            onShowServing: { showServing = true },
+            onShowOperations: { showOperations = true },
+            onShowPlugins: { showPlugins = true },
             onShowModels: { showModels = true },
             onShowHelp: { showHelp = true }
         )
@@ -190,11 +219,14 @@ struct StudioRootView: View {
     private var regularLibrary: some View {
         StudioLibraryPanel(
             items: library.items,
+            progressByID: controller.progressByRequestID,
             selectedID: $selectedLibraryID,
             isVisible: $showLibrary,
             onDelete: deleteLibraryItem,
             onRename: library.rename,
-            onQuickLook: { QuickLookCoordinator.shared.preview($0) }
+            onQuickLook: { QuickLookCoordinator.shared.preview($0) },
+            onRetry: retryLibraryItem,
+            onEdit: editLibraryItem
         )
         .frame(width: StudioLayoutPolicy.libraryWidth)
     }
@@ -202,11 +234,14 @@ struct StudioRootView: View {
     private func compactLibraryPanel(availableWidth: CGFloat) -> some View {
         StudioLibraryPanel(
             items: library.items,
+            progressByID: controller.progressByRequestID,
             selectedID: compactLibrarySelection,
             isVisible: $showCompactLibrary,
             onDelete: deleteLibraryItem,
             onRename: library.rename,
-            onQuickLook: { QuickLookCoordinator.shared.preview($0) }
+            onQuickLook: { QuickLookCoordinator.shared.preview($0) },
+            onRetry: retryLibraryItem,
+            onEdit: editLibraryItem
         )
         .frame(
             width: StudioLayoutPolicy.compactPanelWidth(
@@ -235,6 +270,7 @@ struct StudioRootView: View {
                     docked: true,
                     onClose: { showAdvanced = false }
                 )
+                    .environmentObject(library)
                     .frame(
                         width: StudioLayoutPolicy.compactPanelWidth(
                             availableWidth: availableWidth,
@@ -250,6 +286,7 @@ struct StudioRootView: View {
                         onDetach: { advancedDetached = true },
                         onClose: { showAdvanced = false }
                     )
+                        .environmentObject(library)
                         .frame(width: advancedWidth)
                         .clipped()
                 }
@@ -370,7 +407,8 @@ struct StudioRootView: View {
             error: studioError,
             logs: controller.logs,
             liveOutputText: controller.liveOutputText,
-            progress: controller.currentProgress,
+            progress: selectedItem.flatMap { controller.progressByRequestID[$0.id] }
+                ?? controller.currentProgress,
             onOpen: openSelectedOutput,
             onReveal: revealSelectedOutput,
             onQuickLook: {
@@ -381,6 +419,8 @@ struct StudioRootView: View {
             onNewChat: startNewConversation,
             onCopy: copyToClipboard,
             onRetry: retryLastTurn,
+            onRerunItem: retryLibraryItem,
+            onEditRun: editLibraryItem,
             onEdit: editMessage,
             onStop: controller.cancel,
             onUseExample: useExamplePrompt,
@@ -404,18 +444,109 @@ struct StudioRootView: View {
             onStop: controller.cancel,
             onAttach: chooseAttachment,
             onPaste: pasteImageFromClipboard,
-            onShowModels: { showModels = true }
+            onShowModels: { showModels = true },
+            onShowAdapters: { showAdapters = true },
+            onShowRealtimeMusic: {
+                showOptions = false
+                showRealtimeMusic = true
+            }
         )
     }
 
     private var sheetedShell: some View {
         shell
+            .sheet(isPresented: $showServing) {
+                StudioServingConsoleSheet()
+                    .environmentObject(controller)
+                    .environmentObject(library)
+            }
+            .sheet(isPresented: $showOperations) {
+                StudioOperationsCenterSheet()
+                    .environmentObject(controller)
+            }
+            .sheet(isPresented: $showPlugins) {
+                StudioPluginsSheet()
+                    .environmentObject(controller)
+            }
             .sheet(isPresented: $showModels) {
                 StudioModelsSheet(onModelsChanged: {
                     refreshReadiness()
                     refreshInstalledModels()
                 })
                 .environmentObject(controller)
+                .environmentObject(library)
+            }
+            .sheet(isPresented: $showAdapters) {
+                StudioAdaptersSheet(
+                    activeModelID: draft.model,
+                    onUse: applyAdapter,
+                    onUseLocal: applyLocalAdapter,
+                    onTrain: openAdvancedTraining
+                )
+                .environmentObject(controller)
+                .environmentObject(library)
+            }
+            .sheet(isPresented: $showRealtimeMusic) {
+                StudioRealtimeMusicSheet(initialDraft: draft)
+                    .environmentObject(controller)
+                    .environmentObject(library)
+            }
+            .sheet(isPresented: $showSCAIL) {
+                StudioSCAILSheet()
+                    .environmentObject(controller)
+                    .environmentObject(library)
+            }
+            .sheet(isPresented: $show3DCreation) {
+                Studio3DCreationSheet()
+                    .environmentObject(controller)
+                    .environmentObject(library)
+            }
+            .sheet(isPresented: $showVisionLab) {
+                StudioVisionLabSheet()
+                    .environmentObject(controller)
+                    .environmentObject(library)
+            }
+            .sheet(isPresented: $showVoiceStudio) {
+                StudioVoiceSheet(initialTask: voiceTask, initialDraft: draft)
+                    .environmentObject(controller)
+                    .environmentObject(library)
+            }
+            .sheet(isPresented: $showSFXLab) {
+                StudioSFXLabSheet(initialTask: .generate, initialDraft: draft)
+                    .environmentObject(controller)
+                    .environmentObject(library)
+            }
+            .sheet(isPresented: $showTraining) {
+                StudioTrainingSheet(initialKind: trainingKind)
+                    .environmentObject(controller)
+                    .environmentObject(library)
+            }
+            .sheet(isPresented: $showMusicTools, onDismiss: {
+                if openTrainingAfterMusicTools {
+                    openTrainingAfterMusicTools = false
+                    trainingKind = .music
+                    showTraining = true
+                } else if openRealtimeAfterMusicTools {
+                    openRealtimeAfterMusicTools = false
+                    showRealtimeMusic = true
+                }
+            }) {
+                StudioMusicToolsSheet(
+                    initialTool: musicTool,
+                    onOpenTraining: {
+                        openTrainingAfterMusicTools = true
+                    },
+                    onOpenRealtime: {
+                        openRealtimeAfterMusicTools = true
+                    }
+                )
+                .environmentObject(controller)
+                .environmentObject(library)
+            }
+            .sheet(isPresented: $showUtilityLab) {
+                StudioUtilityLabSheet(initialTask: utilityTask)
+                    .environmentObject(controller)
+                    .environmentObject(library)
             }
             .sheet(isPresented: $showWelcome) {
                 StudioWelcomeSheet(
@@ -451,6 +582,7 @@ struct StudioRootView: View {
                 }
                 .frame(width: 1_260, height: 780)
                 .environmentObject(controller)
+                .environmentObject(library)
             }
             .alert(
                 "Acknowledge third-party model terms",
@@ -476,6 +608,8 @@ struct StudioRootView: View {
             .focusedSceneValue(\.showLibrary, visibleLibraryBinding)
             .focusedSceneValue(\.showAdvanced, $showAdvanced)
             .focusedSceneValue(\.showModels, $showModels)
+            .focusedSceneValue(\.showOperations, $showOperations)
+            .focusedSceneValue(\.showPlugins, $showPlugins)
     }
 
     private var lifecycleShell: some View {
@@ -628,7 +762,8 @@ struct StudioRootView: View {
                     exitCode: result.exitCode,
                     outputURL: result.outputURL,
                     outputText: result.outputText,
-                    commandPreview: result.commandPreview.maskingAPIKeyValue()
+                    commandPreview: result.commandPreview.maskingAPIKeyValue(),
+                    artifactURLs: result.artifactURLs
                 )
                 selectedLibraryID = requestID
             }
@@ -683,6 +818,106 @@ struct StudioRootView: View {
 
             Spacer()
 
+            if mode == .video {
+                Button {
+                    showSCAIL = true
+                } label: {
+                    Label("SCAIL", systemImage: "figure.run.square.stack")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("Open first-class SCAIL subject animation")
+            }
+
+            if mode == .speak || mode == .listen {
+                Button {
+                    voiceTask = mode == .listen ? .transcribe : .synthesize
+                    showVoiceStudio = true
+                } label: {
+                    Label("Voice Studio", systemImage: "waveform.badge.mic")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("Open synthesis, voice cloning, profiles, recording, and transcription")
+            }
+
+            if mode == .sfx {
+                Button {
+                    showSFXLab = true
+                } label: {
+                    Label("SFX Lab", systemImage: "waveform.badge.plus")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("Open generation, video Foley, conditioning, codec, and CLAP tools")
+            }
+
+            if mode == .music {
+                Button {
+                    musicTool = .analyze
+                    showMusicTools = true
+                } label: {
+                    Label("Music Tools", systemImage: "music.note.list")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("Open analysis, MIDI transcription, resident serving, and adapter training")
+            }
+
+            if mode == .createImage || mode == .chat || mode == .code {
+                Button {
+                    trainingKind = mode == .createImage ? .image : .text
+                    showTraining = true
+                } label: {
+                    Label("Training", systemImage: "chart.xyaxis.line")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("Open the first-class image, text, and music Training Studio")
+            }
+
+            if mode == .createImage || mode == .chat {
+                Button {
+                    utilityTask = mode == .createImage ? .imageValidation : .embeddings
+                    showUtilityLab = true
+                } label: {
+                    Label("Utilities", systemImage: "wrench.and.screwdriver")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("Explore embeddings, PII redaction, validation, datasets, and saved plans")
+            }
+
+            if mode == .createImage {
+                Button {
+                    show3DCreation = true
+                } label: {
+                    Label("Create 3D", systemImage: "cube.transparent")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("Open 3D Creation")
+            }
+
+            if [.readImage, .findObjects, .segment, .track].contains(mode) {
+                Button {
+                    showVisionLab = true
+                } label: {
+                    Label("Vision Lab", systemImage: "viewfinder.circle")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("Open Advanced Vision Lab")
+            }
+
             Button {
                 withAnimation(MereRunTheme.Motion.standard) {
                     toggleLibrary(isCompact: isCompact)
@@ -700,6 +935,18 @@ struct StudioRootView: View {
             .buttonStyle(.mereIcon)
             .help(libraryIsVisible(isCompact: isCompact) ? "Hide library (⌃⌘L)" : "Show library (⌃⌘L)")
             .accessibilityLabel(libraryIsVisible(isCompact: isCompact) ? "Hide library" : "Show library")
+
+            Button {
+                showAdapters = true
+            } label: {
+                Image(systemName: "square.stack.3d.up")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(MereRunTheme.textSecondary)
+                    .frame(width: 30, height: 30)
+            }
+            .buttonStyle(.mereIcon)
+            .help("Browse adapters")
+            .accessibilityLabel("Browse adapters")
 
             Button {
                 withAnimation(MereRunTheme.Motion.standard) {
@@ -853,6 +1100,43 @@ struct StudioRootView: View {
         }
     }
 
+    private func retryLibraryItem(_ item: StudioLibraryItem) {
+        guard let templateID = item.templateID,
+              let commandDraft = item.commandDraft,
+              let template = CommandCatalog.template(id: templateID) else {
+            studioError = "This older Library item does not include a replayable command."
+            return
+        }
+        let request = StudioRunRequest(
+            mode: item.mode,
+            templateID: templateID,
+            template: template,
+            draft: commandDraft
+        )
+        let preview = controller.commandPreview(template: template, draft: commandDraft, masksSecrets: true)
+        let status: StudioLibraryStatus = controller.isRunning || controller.queuedRunCount > 0
+            ? .queued
+            : .running
+        library.start(request: request, commandPreview: preview, status: status)
+        selectedLibraryID = request.id
+        _ = controller.run(studio: request)
+    }
+
+    private func editLibraryItem(_ item: StudioLibraryItem) {
+        guard let templateID = item.templateID,
+              let commandDraft = item.commandDraft,
+              let template = CommandCatalog.template(id: templateID) else {
+            studioError = "This older Library item does not include editable command settings."
+            return
+        }
+        showAdvanced = true
+        Task { @MainActor in
+            await Task.yield()
+            controller.select(template)
+            controller.draft = commandDraft
+        }
+    }
+
     /// A draggable divider that resizes the docked Advanced column. The panel is on the right, so
     /// dragging left widens it; width is clamped to a usable range.
     private var advancedResizeHandle: some View {
@@ -879,6 +1163,56 @@ struct StudioRootView: View {
     /// current task without silently reverting edits.
     private func syncAdvancedToStudio() {
         controller.syncAdvanced(to: mode, from: draft)
+    }
+
+    private func applyAdapter(_ adapter: StudioAdapterRow) {
+        let reference = adapter.path ?? adapter.id
+        switch mode {
+        case .music:
+            let existing = draft.musicAdapterPaths
+                .components(separatedBy: .newlines)
+                .filter { !$0.isBlank }
+            if !existing.contains(reference) {
+                draft.musicAdapterPaths = (existing + [reference]).joined(separator: "\n")
+            }
+        case .createImage, .chat, .code:
+            draft.loraPath = reference
+        default:
+            // Specialist adapters (for example SCAIL-2) are applied from their typed Advanced
+            // workflow, which this opens with the catalog id already visible in the command.
+            showAdvanced = true
+        }
+    }
+
+    private func applyLocalAdapter(_ path: String) {
+        switch mode {
+        case .music:
+            let existing = draft.musicAdapterPaths
+                .components(separatedBy: .newlines)
+                .filter { !$0.isBlank }
+            if !existing.contains(path) {
+                draft.musicAdapterPaths = (existing + [path]).joined(separator: "\n")
+            }
+        case .createImage, .chat, .code:
+            draft.loraPath = path
+        default:
+            showAdvanced = true
+        }
+    }
+
+    private func openAdvancedTraining(_ templateID: CommandTemplateID) {
+        switch templateID {
+        case .imageTrainLoRA:
+            trainingKind = .image
+        case .textTrainLoRA:
+            trainingKind = .text
+        case .musicTrainAdapter:
+            trainingKind = .music
+        default:
+            showAdvanced = true
+            return
+        }
+        showTraining = true
     }
 
     private func freshDraft(for mode: StudioMode) -> StudioDraft {

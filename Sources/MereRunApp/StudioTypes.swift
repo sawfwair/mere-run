@@ -318,6 +318,12 @@ struct StudioDraft: Codable, Equatable {
     var cfgScale = 1.0
     var strength = 0.75
     var sigmaShift = 0.0
+    var imageMaskPath = ""
+    var imageOutpaintTop = 0
+    var imageOutpaintRight = 0
+    var imageOutpaintBottom = 0
+    var imageOutpaintLeft = 0
+    var imageMaskFeather = 8
     var referenceImagePaths = ""
     var keepOriginalAspect = false
     var structuredPrompt = false
@@ -420,6 +426,12 @@ struct StudioDraft: Codable, Equatable {
         cfgScale = base?.cfgScale ?? 1.0
         strength = base?.strength ?? 0.75
         sigmaShift = base?.sigmaShift ?? 0
+        imageMaskPath = ""
+        imageOutpaintTop = 0
+        imageOutpaintRight = 0
+        imageOutpaintBottom = 0
+        imageOutpaintLeft = 0
+        imageMaskFeather = 8
         referenceImagePaths = ""
         keepOriginalAspect = false
         structuredPrompt = false
@@ -637,6 +649,21 @@ enum StudioCommandAdapter {
             draft.cfgScale = studioDraft.cfgScale
             draft.strength = studioDraft.strength
             draft.sigmaShift = studioDraft.sigmaShift
+            draft.imageMaskPath = studioDraft.imageMaskPath
+            if [
+                studioDraft.imageOutpaintTop,
+                studioDraft.imageOutpaintRight,
+                studioDraft.imageOutpaintBottom,
+                studioDraft.imageOutpaintLeft,
+            ].contains(where: { $0 > 0 }) {
+                draft.imageOutpaint = [
+                    studioDraft.imageOutpaintTop,
+                    studioDraft.imageOutpaintRight,
+                    studioDraft.imageOutpaintBottom,
+                    studioDraft.imageOutpaintLeft,
+                ].map(String.init).joined(separator: ",")
+            }
+            draft.imageMaskFeather = studioDraft.imageMaskFeather
             draft.referenceImagePaths = studioDraft.referenceImagePaths
             draft.keepOriginalAspect = studioDraft.keepOriginalAspect
             draft.structuredPrompt = studioDraft.structuredPrompt
@@ -945,6 +972,14 @@ struct StudioLibraryItem: Codable, Identifiable, Equatable {
     var commandPreview: String
     var outputText: String?
     var customTitle: String?
+    /// Exact command identity for specialist/Advanced runs. Legacy Studio rows decode as nil.
+    var templateID: CommandTemplateID? = nil
+    /// A durable, typed retry/edit snapshot. This intentionally stores app state rather than
+    /// reparsing the masked command preview.
+    var commandDraft: CommandDraft? = nil
+    /// Every materialized artifact associated with the run. `outputURL` remains the primary item
+    /// for backward compatibility and Quick Look.
+    var artifactURLs: [URL]? = nil
     // Conversation channel — non-nil only for .chat / .code threads. Optional + additive so
     // legacy library.json rows (which lack these keys) decode unchanged with nil.
     var messages: [StudioMessage]? = nil
@@ -960,6 +995,25 @@ struct StudioLibraryItem: Codable, Identifiable, Equatable {
         let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         if !trimmed.isEmpty { return trimmed }
         return mode.title
+    }
+
+    var displayKindTitle: String {
+        guard let templateID, let template = CommandCatalog.template(id: templateID) else {
+            return mode.title
+        }
+        return template.title
+    }
+
+    var displaySystemImage: String {
+        guard let templateID, let template = CommandCatalog.template(id: templateID) else {
+            return mode.systemImage
+        }
+        return template.systemImage
+    }
+
+    var allArtifactURLs: [URL] {
+        var seen = Set<URL>()
+        return ([outputURL].compactMap { $0 } + (artifactURLs ?? [])).filter { seen.insert($0).inserted }
     }
 
     var isConversation: Bool {
@@ -1258,6 +1312,10 @@ enum StudioProgressParser {
             return generation
         }
 
+        if let task = parseTaskProgressLine(line) {
+            return task
+        }
+
         return parseDownloadLine(line)
     }
 
@@ -1291,6 +1349,84 @@ enum StudioProgressParser {
             label: "Generating",
             fractionCompleted: Double(current) / Double(progress.totalSteps),
             detail: "Step \(current) of \(progress.totalSteps)"
+        )
+    }
+
+    /// Specialist workflows use concise human progress lines rather than the image-generation
+    /// JSON stream. Recognize their stable step ratios so Advanced and Library runs get the same
+    /// determinate feedback as the primary canvas.
+    private static func parseTaskProgressLine(_ line: String) -> StudioRunProgress? {
+        let descriptors: [(marker: String, label: String)] = [
+            ("Training (", "Training"),
+            ("ACE-Step adapter step ", "Training"),
+            ("Denoising ", "Denoising"),
+            ("Encoding dataset (", "Encoding dataset"),
+            ("Realtime frame ", "Realtime music"),
+            ("Sampling sparse structure ", "Sparse structure"),
+            ("Sampling O-Voxel shape latent ", "Shape"),
+            ("Sampling PBR texture latent ", "PBR texture"),
+            ("Running temporal window ", "Temporal depth"),
+        ]
+        if let descriptor = descriptors.first(where: { line.contains($0.marker) }),
+           let markerRange = line.range(of: descriptor.marker) {
+            let tail = line[markerRange.upperBound...]
+            let separatorRange = tail.range(of: "/") ?? tail.range(of: " of ")
+            if let separatorRange {
+                let stepDigits = tail[..<separatorRange.lowerBound].reversed().prefix { $0.isNumber }.reversed()
+                let totalDigits = tail[separatorRange.upperBound...].prefix { $0.isNumber }
+                if let step = Int(String(stepDigits)),
+                   let total = Int(String(totalDigits)),
+                   total > 0 {
+                    let current = min(max(step, 0), total)
+                    var detail = "Step \(current) of \(total)"
+                    if let lossRange = line.range(of: "loss", options: .caseInsensitive) {
+                        let loss = line[lossRange.lowerBound...]
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !loss.isEmpty { detail += " · \(loss)" }
+                    }
+                    return StudioRunProgress(
+                        label: descriptor.label,
+                        fractionCompleted: Double(current) / Double(total),
+                        detail: detail
+                    )
+                }
+            }
+        }
+
+        return parseSpecialistStage(line)
+    }
+
+    private static func parseSpecialistStage(_ line: String) -> StudioRunProgress? {
+        let scailStages: [String: String] = [
+            "loadingModel": "Loading model",
+            "loadingEncoder": "Loading encoder",
+            "encodingText": "Encoding prompt",
+            "encodingReferenceImages": "Encoding references",
+            "loadingVAE": "Loading VAE",
+            "loadingTransformer": "Loading transformer",
+            "loadingLoRA": "Loading adapter",
+            "decoding": "Decoding video",
+            "saving": "Saving output",
+        ]
+        if let label = scailStages[line] {
+            return StudioRunProgress(label: label, fractionCompleted: nil, detail: nil)
+        }
+
+        let prefixes: [(String, String)] = [
+            ("[image-to-3d]", "TripoSR"),
+            ("[image-to-3d-trellis2]", "TRELLIS.2"),
+            ("[image-to-3d-multiview]", "InstantMesh"),
+            ("[depth-video]", "Video depth"),
+            ("[geometry]", "Geometry"),
+            ("[geometry-multiview]", "Multi-view geometry"),
+        ]
+        guard let entry = prefixes.first(where: { line.hasPrefix($0.0) }) else { return nil }
+        let detail = line.dropFirst(entry.0.count)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        return StudioRunProgress(
+            label: entry.1,
+            fractionCompleted: nil,
+            detail: detail.isEmpty ? nil : detail
         )
     }
 
@@ -1358,6 +1494,126 @@ enum StudioResultParser {
     /// True when a line is an absolute or tilde-rooted filesystem path rather than prose.
     static func isPathLike(_ candidate: String) -> Bool {
         candidate.hasPrefix("/") || candidate.hasPrefix("~/")
+    }
+}
+
+enum StudioArtifactDiscovery {
+    /// Discovers deterministic sidecars and bundles produced by one typed run. The primary output
+    /// stays first, followed by related files in stable filename order.
+    static func urls(
+        templateID: CommandTemplateID,
+        draft: CommandDraft,
+        primaryOutput: URL?,
+        reportedOutputs: [URL] = [],
+        fileManager: FileManager = .default
+    ) -> [URL] {
+        var candidates = [URL]()
+        if let primaryOutput { candidates.append(primaryOutput) }
+        candidates.append(contentsOf: reportedOutputs)
+
+        if [
+            .visionGround, .visionSegment, .visionTrack, .visionTrackLive,
+            .visionFaceDetect, .visionFaceEmbed, .visionFaceCompare,
+            .visionPose, .visionFlow,
+        ].contains(templateID) {
+            appendPath(draft.visionJSONOutputPath, to: &candidates)
+        }
+        if templateID == .visionFaceBatch {
+            appendPath(draft.visionJSONLOutput, to: &candidates)
+        }
+        if templateID == .visionSegment || templateID == .visionTrack {
+            appendDirectory(
+                draft.visionMaskOutputDirectory,
+                to: &candidates,
+                fileManager: fileManager
+            )
+        }
+
+        if templateID == .musicGenerate, let primaryOutput {
+            let directory = primaryOutput.deletingLastPathComponent()
+            let stem = primaryOutput.deletingPathExtension().lastPathComponent
+            if let siblings = try? fileManager.contentsOfDirectory(
+                at: directory,
+                includingPropertiesForKeys: [.isRegularFileKey],
+                options: [.skipsHiddenFiles]
+            ) {
+                candidates.append(contentsOf: siblings.filter { url in
+                    let name = url.lastPathComponent
+                    return name.hasPrefix("\(stem).candidate-")
+                        || name.hasPrefix("\(stem).stem-")
+                        || name == "\(stem).recipe.json"
+                        || name == "\(stem).lrc"
+                })
+            }
+            appendPath(draft.musicRecipeOutput, to: &candidates)
+            appendPath(draft.musicLRCOutput, to: &candidates)
+            appendDirectory(draft.musicDAWBundle, to: &candidates, fileManager: fileManager)
+        }
+
+        if [.imageTrainLoRA, .textTrainLoRA, .musicTrainAdapter].contains(templateID),
+           let primaryOutput {
+            let directory = primaryOutput.deletingLastPathComponent()
+            let stem = primaryOutput.deletingPathExtension().lastPathComponent
+            if let siblings = try? fileManager.contentsOfDirectory(
+                at: directory,
+                includingPropertiesForKeys: [.isRegularFileKey],
+                options: [.skipsHiddenFiles]
+            ) {
+                candidates.append(contentsOf: siblings.filter {
+                    $0.deletingPathExtension().lastPathComponent.hasPrefix(stem)
+                        || $0.lastPathComponent.hasPrefix(stem)
+                })
+            }
+            appendDirectory(
+                directory.appendingPathComponent("samples", isDirectory: true).path,
+                to: &candidates,
+                fileManager: fileManager
+            )
+        }
+
+        if let primaryOutput,
+           (try? primaryOutput.resourceValues(forKeys: [.isDirectoryKey]).isDirectory) == true {
+            appendDirectory(primaryOutput.path, to: &candidates, fileManager: fileManager)
+        }
+
+        var seen = Set<String>()
+        return candidates
+            .filter { fileManager.fileExists(atPath: $0.path) }
+            .filter { seen.insert($0.standardizedFileURL.path).inserted }
+            .sorted { lhs, rhs in
+                if lhs == primaryOutput { return true }
+                if rhs == primaryOutput { return false }
+                return lhs.lastPathComponent.localizedStandardCompare(rhs.lastPathComponent) == .orderedAscending
+            }
+    }
+
+    private static func appendPath(_ path: String, to urls: inout [URL]) {
+        guard !path.isBlank else { return }
+        urls.append(URL(fileURLWithPath: NSString(string: path).expandingTildeInPath))
+    }
+
+    private static func appendDirectory(
+        _ path: String,
+        to urls: inout [URL],
+        fileManager: FileManager
+    ) {
+        guard !path.isBlank else { return }
+        let directory = URL(
+            fileURLWithPath: NSString(string: path).expandingTildeInPath,
+            isDirectory: true
+        )
+        guard fileManager.fileExists(atPath: directory.path) else { return }
+        urls.append(directory)
+        guard let enumerator = fileManager.enumerator(
+            at: directory,
+            includingPropertiesForKeys: [.isRegularFileKey],
+            options: [.skipsHiddenFiles]
+        ) else { return }
+        for case let url as URL in enumerator.prefix(200) {
+            if (try? url.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true {
+                urls.append(url)
+            }
+        }
     }
 }
 

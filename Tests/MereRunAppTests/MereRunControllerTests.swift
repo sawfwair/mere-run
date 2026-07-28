@@ -302,6 +302,58 @@ final class MereRunControllerTests: XCTestCase {
         XCTAssertTrue(controller.canSubmitVideoSessionRequest)
     }
 
+    func testRealtimeMusicKeepsInputOpenAndAcceptsTargetedLiveControls() throws {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        let template = try XCTUnwrap(CommandCatalog.template(id: .musicRealtime))
+        var draft = template.defaultDraft()
+        draft.prompt = "ambient glass percussion"
+        draft.durationSeconds = 60
+        draft.musicInteractive = true
+        let request = StudioRunRequest(
+            mode: .music,
+            templateID: .musicRealtime,
+            template: template,
+            draft: draft
+        )
+
+        XCTAssertTrue(controller.run(studio: request))
+        XCTAssertTrue(runner.starts[0].configuration.keepsStandardInputOpen)
+        XCTAssertTrue(controller.canSteerRealtimeMusic(requestID: request.id))
+        XCTAssertTrue(controller.submitRealtimeMusicCommand("temp 0.8", requestID: request.id))
+        XCTAssertEqual(runner.processes[0].standardInputs, ["temp 0.8\n"])
+    }
+
+    func testServiceRunCanBeRediscoveredLoggedAndCancelledByRequestID() async throws {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        let template = try XCTUnwrap(CommandCatalog.template(id: .apiServe))
+        var draft = template.defaultDraft()
+        draft.prompt = "http://127.0.0.1:8080"
+        let request = StudioRunRequest(
+            mode: .chat,
+            templateID: .apiServe,
+            template: template,
+            draft: draft
+        )
+
+        XCTAssertTrue(controller.run(studio: request))
+        XCTAssertTrue(controller.isRequestRunning(request.id))
+        XCTAssertEqual(controller.runningRequestID(for: .apiServe), request.id)
+
+        runner.starts[0].stderr("Starting local API service\n")
+        await Task.yield()
+        XCTAssertTrue(controller.logs(for: request.id).contains {
+            $0.text.contains("Starting local API service")
+        })
+
+        XCTAssertTrue(controller.cancel(requestID: request.id))
+        XCTAssertEqual(runner.processes[0].terminateCallCount, 1)
+        XCTAssertFalse(controller.cancel(requestID: UUID()))
+    }
+
     func testStudioRunsExecuteConcurrentlyUpToCapThenQueue() async throws {
         let runner = RecordingProcessRunner()
         let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
@@ -340,6 +392,36 @@ final class MereRunControllerTests: XCTestCase {
         XCTAssertEqual(controller.queuedRunCount, 0)
         XCTAssertEqual(runner.starts.count, 3)
         XCTAssertEqual(runner.starts[2].configuration.arguments, ["third"])
+    }
+
+    func testBackgroundStudioRunPublishesProgressByRequestID() async throws {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        let template = try XCTUnwrap(CommandCatalog.template(id: .custom))
+        func request(_ arg: String) -> StudioRunRequest {
+            var draft = template.defaultDraft()
+            draft.extraArguments = arg
+            return StudioRunRequest(mode: .createImage, templateID: .custom, template: template, draft: draft)
+        }
+        let background = request("background")
+        let foreground = request("foreground")
+
+        XCTAssertTrue(controller.run(studio: background))
+        XCTAssertTrue(controller.run(studio: foreground))
+        runner.starts[0].stderr("Training (2/4) loss 0.123456\n")
+        await Task.yield()
+
+        let progress = try XCTUnwrap(controller.progressByRequestID[background.id])
+        XCTAssertEqual(progress.label, "Training")
+        XCTAssertEqual(progress.fractionCompleted, 0.5)
+        XCTAssertTrue(progress.detail?.contains("loss 0.123456") == true)
+        XCTAssertNil(controller.currentProgress)
+
+        runner.starts[0].termination(0)
+        await Task.yield()
+        await Task.yield()
+        XCTAssertNil(controller.progressByRequestID[background.id])
     }
 
     func testQueuedConversationTurnIsTrackedInFlightAtSubmission() throws {
@@ -706,6 +788,34 @@ final class MereRunControllerTests: XCTestCase {
 
         XCTAssertTrue(controller.isRunning)
         XCTAssertEqual(controller.lastOutputURL?.path, output.path)
+    }
+
+    func testUtilityCommandCanStreamProgressWhileStillReturningCapturedOutput() async {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        var streamed: [String] = []
+
+        let pending = Task {
+            await controller.utilityCommandResult(
+                args: ["executor", "login", "relay:fleet", "--json"],
+                onOutput: { streamed.append($0) }
+            )
+        }
+        while runner.starts.isEmpty {
+            await Task.yield()
+        }
+        XCTAssertEqual(runner.starts.count, 1)
+
+        runner.starts[0].stderr("Open https://relay.example/device and enter code MERE-42.\n")
+        runner.starts[0].stdout(#"{"executor":"relay:fleet"}"#)
+        runner.starts[0].termination(0)
+        let result = await pending.value
+        await Task.yield()
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertTrue(result.stdout.contains("relay:fleet"))
+        XCTAssertTrue(streamed.joined().contains("https://relay.example/device"))
     }
 }
 

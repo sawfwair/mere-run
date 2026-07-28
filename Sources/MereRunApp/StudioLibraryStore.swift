@@ -62,7 +62,9 @@ final class StudioLibraryStore: ObservableObject {
             status: status,
             exitCode: nil,
             commandPreview: commandPreview,
-            outputText: nil
+            outputText: nil,
+            templateID: request.templateID,
+            commandDraft: request.draft
         )
         upsert(item)
         return item
@@ -86,12 +88,22 @@ final class StudioLibraryStore: ObservableObject {
         save()
     }
 
+    func updateArtifacts(id: UUID, artifactURLs: [URL]) {
+        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
+        var item = items[index]
+        item.artifactURLs = artifactURLs.isEmpty ? nil : artifactURLs
+        item.updatedAt = Date()
+        items[index] = item
+        save()
+    }
+
     func complete(
         id: UUID,
         exitCode: Int32,
         outputURL: URL?,
         outputText: String?,
-        commandPreview: String
+        commandPreview: String,
+        artifactURLs: [URL] = []
     ) {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
         var item = items[index]
@@ -101,6 +113,9 @@ final class StudioLibraryStore: ObservableObject {
         item.commandPreview = commandPreview
         if let outputURL {
             item.outputURL = outputURL
+        }
+        if !artifactURLs.isEmpty {
+            item.artifactURLs = artifactURLs
         }
         item.outputText = outputText
 

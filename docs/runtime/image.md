@@ -28,7 +28,20 @@ sampling, edit strength, HiDream aspect preservation, structured-prompt
 expansion, LoRA catalog IDs or local safetensors, Krea conditioning and
 quantization controls, preflight JSON, and JSON progress events.
 
-Advanced → Image exposes the entire public family as guided forms:
+Create Image's **Create 3D** button opens the first-class reconstruction
+workspace. It provides single-image TripoSR and TRELLIS.2 PBR flows, ordered and
+reorderable 4/6-view InstantMesh inputs, every engine-specific runtime control,
+preflight, immutable output directories, manifest statistics, and embedded
+orbitable GLB/OBJ/PLY previews. Progress and every mesh, texture, voxel, and
+manifest artifact remain in Library.
+
+Create Image's **Training** button opens the unified Training Studio with
+image-caption previews, Krea/Klein recipes, memory and schedule controls,
+preflight, launch/resume, live loss charts, samples, checkpoints, history, and
+run comparison. **Utilities** opens deterministic validation, dataset discovery
+candidate cards, and saved-plan preflight/materialization with durable paths.
+
+Advanced → Image also exposes the entire public family as guided forms:
 
 - generation/editing with repeatable references, structured prompts, and LoRAs;
 - Krea 2 and FLUX.2 Klein LoRA training, recipes, memory controls, checkpoints,
@@ -137,11 +150,17 @@ Core `train-lora` hyperparameters and their defaults:
 - `--rank`: LoRA rank; default `16`
 - `--alpha`: LoRA alpha; defaults to the rank
 - `--seed`: random seed; defaults to wall-clock time when omitted or zero
+- `--resume-from`: continue a FLUX.2 Klein run from a saved adapter checkpoint
 
 `--recipe` presets set curated values for steps, learning rate, rank, and
 alpha; an explicit flag always wins over the recipe. `swift run mere.run image
 train-lora --help` and the [CLI Reference](../cli.md) list the full flag
 surface.
+
+Klein resume restores the selected adapter checkpoint before the next optimizer
+step. Krea 2 rejects `--resume-from` explicitly rather than silently starting a
+new run. Training Studio discovers checkpoint artifacts beside a prior output
+and sends the same public flag.
 
 ```bash
 swift run mere.run model pull image-klein-base-9b --accept-model-license

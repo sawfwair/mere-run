@@ -40,6 +40,11 @@ mere.run guide image generate --model image-zimage-nano
 - `--model`, `-m`: model id or local model root.
 - `--input`, `-i`: source image for image-to-image. For FLUX.2 Klein, this is
   treated as a single reference image.
+- `--mask`: black/white edit mask used with `--input`. White pixels may be
+  regenerated; black pixels are restored exactly from the source after generation.
+- `--outpaint`: editable padding as `top,right,bottom,left`, placed inside the
+  requested `--width`/`--height`. Requires `--input`.
+- `--mask-feather`: blend radius at mask and outpaint boundaries. Defaults to 8 pixels.
 - `--ref-image`: repeatable reference image for FLUX.2 Klein or HiDream O1
   editing/personalization.
 - `--strength`, `--str`: image-to-image/reference change strength from `0.0` to
@@ -101,6 +106,9 @@ stream.
 - For Bonsai binary or ternary, start with four steps at 512 or 1024 square; the manifest applies its native FlowMatch sigma shift.
 - For Krea 2 Turbo, start with the managed default: 1024 square, 8 steps, CFG 0.0, and no reference or input image. Raw-trained Krea 2 LoRAs can be loaded with `--lora`.
 - Use `--input` plus `--strength 0.25` to preserve layout; use `0.65` or higher for stronger reinterpretation.
+- For a surgical edit, paint white only over the target region in a black mask.
+  The backend receives the complete image context, then mere.run restores every
+  protected pixel and feathers only the edit boundary.
 
 ## Examples
 
@@ -129,6 +137,29 @@ mere.run image generate \
   --strength 0.45 \
   --prompt "architectural watercolor rendering of the same cabin, pine forest, late afternoon light" \
   --output ./cabin-watercolor.png
+```
+
+```bash
+# Replace only the white area of mask.png.
+mere.run image generate \
+  --model image-klein-max \
+  --input ./storefront.png \
+  --mask ./sign-mask.png \
+  --mask-feather 12 \
+  --prompt "replace the painted sign with a navy enamel sign reading NIGHT MARKET" \
+  --width 1024 --height 768 \
+  --output ./storefront-edited.png
+```
+
+```bash
+# Add 128 px on each side while preserving the original center.
+mere.run image generate \
+  --model image-klein-max \
+  --input ./portrait.png \
+  --outpaint 0,128,0,128 \
+  --prompt "continue the studio backdrop and soft rim lighting naturally" \
+  --width 1280 --height 1024 \
+  --output ./portrait-wide.png
 ```
 
 ```bash
