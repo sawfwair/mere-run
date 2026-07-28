@@ -30,6 +30,7 @@ final class OpenWebUICommandTests: XCTestCase {
         XCTAssertEqual(command.ttsModel, Qwen3TTSResources.defaultModelId)
         XCTAssertEqual(command.sttModel, ParakeetResources.defaultModelId)
         XCTAssertEqual(command.ttsFormat, "wav")
+        XCTAssertNil(command.adminPassword)
         XCTAssertFalse(command.pull)
         XCTAssertFalse(command.acceptModelLicense)
         XCTAssertFalse(command.skipServer)
@@ -146,6 +147,27 @@ final class OpenWebUICommandTests: XCTestCase {
         XCTAssertEqual(
             OpenWebUIQuickstart.resolvedAPIKey(explicit: "", environment: [:]),
             "change-me"
+        )
+    }
+
+    func testResolvedAdminPasswordPrefersExplicitThenEnvironmentThenLocalDefault() {
+        XCTAssertEqual(
+            OpenWebUIQuickstart.resolvedAdminPassword(
+                explicit: " explicit ",
+                environment: [OpenWebUIQuickstart.adminPasswordEnvironmentKey: "env"]
+            ),
+            "explicit"
+        )
+        XCTAssertEqual(
+            OpenWebUIQuickstart.resolvedAdminPassword(
+                explicit: nil,
+                environment: [OpenWebUIQuickstart.adminPasswordEnvironmentKey: " env "]
+            ),
+            "env"
+        )
+        XCTAssertEqual(
+            OpenWebUIQuickstart.resolvedAdminPassword(explicit: "", environment: [:]),
+            "admin"
         )
     }
 }

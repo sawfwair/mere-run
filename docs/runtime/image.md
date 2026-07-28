@@ -1,19 +1,45 @@
 # Image Runtime
 
-This page covers the image-generation part of `mere.run`: what commands exist, what
-model families are supported, and how the code is organized.
+Generate an image from a prompt — then keep going. Train a LoRA on your own
+pictures without renting a GPU, replay any generation from a saved plan, or
+lift a single photo into a textured 3D mesh. Eight model families are
+supported, from compact ZImage checkpoints up to FLUX.2 Klein, HiDream O1,
+Krea 2, and Ideogram 4.
 
-## Public surface
+## Commands
 
-- `mere.run image dataset`
-- `mere.run image generate`
-- `mere.run image reconstruct-3d`
-- `mere.run image reconstruct-3d-trellis2`
-- `mere.run image reconstruct-3d-multiview`
-- `mere.run image run-plan`
-- `mere.run image train-lora`
-- `mere.run image visualize-run`
-- `mere.run image validate`
+| Command | What it does |
+| --- | --- |
+| `mere.run image generate` | Generate images with local image models. |
+| `mere.run image train-lora` | Train a local image LoRA adapter. |
+| `mere.run image visualize-run` | Open a local LoRA training run viewer to watch loss while it trains. |
+| `mere.run image dataset` | Inspect image training datasets, and discover candidates under a root. |
+| `mere.run image run-plan` | Run a saved image workflow plan. |
+| `mere.run image validate` | Run advanced deterministic validation for local image model families. |
+| `mere.run image reconstruct-3d` | Reconstruct a colored object mesh from one image with native TripoSR. |
+| `mere.run image reconstruct-3d-trellis2` | Reconstruct a 512-resolution PBR O-Voxel mesh with native MLX TRELLIS.2. |
+| `mere.run image reconstruct-3d-multiview` | Reconstruct a colored mesh from 4 or 6 user-supplied views with native InstantMesh. |
+
+## macOS Studio
+
+The primary Create Image workspace covers text-to-image, image-to-image, and
+multi-reference editing. Its options include negative prompts, size and
+sampling, edit strength, HiDream aspect preservation, structured-prompt
+expansion, LoRA catalog IDs or local safetensors, Krea conditioning and
+quantization controls, preflight JSON, and JSON progress events.
+
+Advanced → Image exposes the entire public family as guided forms:
+
+- generation/editing with repeatable references, structured prompts, and LoRAs;
+- Krea 2 and FLUX.2 Klein LoRA training, recipes, memory controls, checkpoints,
+  preview samples, schedules, benchmarks, and the live dashboard;
+- dataset discovery, saved workflow preflight/materialization/execution, and
+  durable-run visualization;
+- deterministic image-stack validation; and
+- TripoSR, TRELLIS.2, and four/six-view InstantMesh reconstruction.
+
+The app launches the public CLI for all work. `mere.run catalog --json` and the
+shared contract tests keep every form flag aligned with ArgumentParser help.
 
 ## Model families
 

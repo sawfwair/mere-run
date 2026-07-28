@@ -1,4 +1,5 @@
 import Foundation
+import MereRunContract
 import UniformTypeIdentifiers
 
 enum CommandCategory: String, CaseIterable, Identifiable {
@@ -10,6 +11,7 @@ enum CommandCategory: String, CaseIterable, Identifiable {
     case vision = "Vision"
     case media = "Music & Video"
     case sfx = "Sound FX"
+    case operations = "Operations"
     case server = "Server"
     case custom = "Custom"
 
@@ -30,10 +32,17 @@ enum CommandTemplateID: String, CaseIterable {
     case imageGenerate
     case imageTrainLoRA
     case imageValidate
+    case imageDatasetDiscover
+    case imageRunPlan
+    case imageVisualizeRun
+    case imageReconstruct3D
+    case imageReconstruct3DTrellis2
+    case imageReconstruct3DMultiview
     case textChat
     case textCode
     case textEmbed
     case textAnonymize
+    case textTrainLoRA
     case speechSynthesize
     case speechTranscribe
     case speechProfileList
@@ -46,12 +55,44 @@ enum CommandTemplateID: String, CaseIterable {
     case visionSegment
     case visionTrack
     case visionTrackLive
+    case visionFaceDetect
+    case visionFaceEmbed
+    case visionFaceCompare
+    case visionFaceBatch
+    case visionPose
+    case visionFlow
+    case visionDepthVideo
+    case visionGeometry
+    case visionGeometryMultiview
     case musicGenerate
     case musicAnalyze
     case musicTranscribe
     case musicRealtime
+    case musicTrainAdapter
+    case musicServe
     case videoGenerate
+    case videoAnimate
+    case videoCosmos3
+    case videoPrepareMasks
     case videoExportLatents
+    case videoSession
+    case adapterList
+    case adapterPull
+    case runList
+    case runInspect
+    case runWatch
+    case runFetch
+    case runCancel
+    case runRetry
+    case worldServe
+    case statusSnapshot
+    case qualityGate
+    case modelStorage
+    case modelGarbageCollect
+    case modelRuntimeGet
+    case modelRuntimeSet
+    case graphStudio
+    case nodeConsole
     case sfxGenerate
     case sfxVideo
     case sfxAEEncode
@@ -59,12 +100,104 @@ enum CommandTemplateID: String, CaseIterable {
     case sfxClapScore
     case sfxConditionText
     case modelBenchmark
+    case modelBenchmarkLagunaDFlash
     case pluginList
     case pluginInstall
     case pluginDoctor
     case openWebui
     case apiServe
     case custom
+
+    var capabilityID: String? {
+        switch self {
+        case .setup: return "setup"
+        case .agentOnboard: return "agent.onboard"
+        case .agentInstallPi: return "agent.install-pi"
+        case .agentStart: return "agent.start"
+        case .modelList: return "model.list"
+        case .modelCapabilities: return "model.capabilities"
+        case .modelPull: return "model.pull"
+        case .modelInfo: return "model.info"
+        case .modelRemove: return "model.remove"
+        case .modelRepairManifests: return "model.repair-manifests"
+        case .imageGenerate: return "image.generate"
+        case .imageTrainLoRA: return "image.train-lora"
+        case .imageValidate: return "image.validate"
+        case .imageDatasetDiscover: return "image.dataset.discover"
+        case .imageRunPlan: return "image.run-plan"
+        case .imageVisualizeRun: return "image.visualize-run"
+        case .imageReconstruct3D: return "image.reconstruct-3d"
+        case .imageReconstruct3DTrellis2: return "image.reconstruct-3d-trellis2"
+        case .imageReconstruct3DMultiview: return "image.reconstruct-3d-multiview"
+        case .textChat: return "text.chat"
+        case .textCode: return "text.code"
+        case .textEmbed: return "text.embed"
+        case .textAnonymize: return "text.anonymize"
+        case .textTrainLoRA: return "text.train-lora"
+        case .speechSynthesize: return "speech.synthesize"
+        case .speechTranscribe: return "speech.transcribe"
+        case .speechProfileList: return "speech.profile.list"
+        case .speechProfileCreate: return "speech.profile.create"
+        case .speechProfileDelete: return "speech.profile.delete"
+        case .visionInspect: return "vision.inspect"
+        case .visionCaption: return "vision.caption"
+        case .visionOCR: return "vision.ocr"
+        case .visionGround: return "vision.ground"
+        case .visionSegment: return "vision.segment"
+        case .visionTrack: return "vision.track"
+        case .visionTrackLive: return "vision.track-live"
+        case .visionFaceDetect: return "vision.face.detect"
+        case .visionFaceEmbed: return "vision.face.embed"
+        case .visionFaceCompare: return "vision.face.compare"
+        case .visionFaceBatch: return "vision.face.batch"
+        case .visionPose: return "vision.pose"
+        case .visionFlow: return "vision.flow"
+        case .visionDepthVideo: return "vision.depth-video"
+        case .visionGeometry: return "vision.geometry"
+        case .visionGeometryMultiview: return "vision.geometry-multiview"
+        case .musicGenerate: return "music.generate"
+        case .musicAnalyze: return "music.analyze"
+        case .musicTranscribe: return "music.transcribe"
+        case .musicRealtime: return "music.realtime"
+        case .musicTrainAdapter: return "music.train-adapter"
+        case .musicServe: return "music.serve"
+        case .videoGenerate: return "video.generate"
+        case .videoAnimate: return "video.animate"
+        case .videoCosmos3: return "video.cosmos3"
+        case .videoPrepareMasks: return "video.prepare-masks"
+        case .videoExportLatents: return "video.export-latents"
+        case .videoSession: return "video.session"
+        case .adapterList: return "adapter.list"
+        case .adapterPull: return "adapter.pull"
+        case .runList: return "run.list"
+        case .runInspect: return "run.inspect"
+        case .runWatch: return "run.watch"
+        case .runFetch: return "run.fetch"
+        case .runCancel: return "run.cancel"
+        case .runRetry: return "run.retry"
+        case .worldServe: return "world.serve"
+        case .statusSnapshot: return "status"
+        case .qualityGate: return "gate"
+        case .modelStorage: return "model.storage"
+        case .modelGarbageCollect: return "model.gc"
+        case .modelRuntimeGet: return "model.runtime.get"
+        case .modelRuntimeSet: return "model.runtime.set"
+        case .graphStudio, .nodeConsole, .custom: return nil
+        case .sfxGenerate: return "sfx.generate"
+        case .sfxVideo: return "sfx.video.generate"
+        case .sfxAEEncode: return "sfx.ae.encode"
+        case .sfxAEDecode: return "sfx.ae.decode"
+        case .sfxClapScore: return "sfx.clap.score"
+        case .sfxConditionText: return "sfx.condition.text"
+        case .modelBenchmark: return "model.benchmark.q36-mtp"
+        case .modelBenchmarkLagunaDFlash: return "model.benchmark.laguna-dflash"
+        case .pluginList: return "plugin.list"
+        case .pluginInstall: return "plugin.install"
+        case .pluginDoctor: return "plugin.doctor"
+        case .openWebui: return "open-webui.quickstart"
+        case .apiServe: return "api.serve"
+        }
+    }
 }
 
 enum CommandInputKind: Equatable {
@@ -119,6 +252,9 @@ enum StudioChatDefaults {
         }
         if normalized.contains("q36") || normalized.contains("q35") {
             return "text-chat-q36"
+        }
+        if normalized.contains("laguna") {
+            return "text-chat-laguna"
         }
         if normalized.contains("lfm") {
             return "text-chat-lfm2"
@@ -195,17 +331,341 @@ struct CommandDraft: Equatable {
     var seed = ""
     var cfgScale = 1.0
     var strength = 0.75
+    var sigmaShift = 0.0
+    var referenceImagePaths = ""
+    var keepOriginalAspect = false
+    var structuredPrompt = false
+    var structuredPromptModel = "text-chat-gemma4-12b-4bit"
+    var structuredPromptModelRoot = ""
+    var structuredPromptMaxTokens = 2048
+    var structuredPromptOutputPath = ""
+    var kreaConditioningMultiplier = 0.0
+    var kreaConditioningLayerWeights = ""
+    var kreaBaseQuantizationBits = ""
+    var progressJSON = false
     var maxTokens = 2048
+    var contextSize = 0
     var temperature = 0.7
     var topP = 0.9
+    var topK = 0
+    var minP = 0.0
+    var kvBits = 0
+    var kvQuantScheme = ""
+    var kvGroupSize = 0
+    var quantizedKVStart = 0
+    var responseFormat: TextResponseFormat = .text
+    var thinkingMode: TextThinkingMode = .automatic
+    var loraPath = ""
+    var loraScale = 1.0
+    var replacement = "[{label}]"
+    var evalPath = ""
+    var adapterName = "local-assistant"
+    var batchSize = 1
+    var learningRate = 0.0001
+    var rank = 16
+    var alpha = 0.0
+    var maxSequenceLength = 4096
+    var targetModules = "q_proj,k_proj,v_proj,o_proj"
+    var dryRun = false
+    var visualize = false
+    var visualizePort = 8787
+    var schedulerSteps = 1_000
+    var captionDropout = 0.0
+    var trainingLite = false
+    var baseQuantizationBits = ""
+    var excludePreviewImages = false
+    var checkpointInterval = 0
+    var maxResolution = 0
+    var progressive = false
+    var lowRAM = false
+    var disableCompile = false
+    var gradientCheckpointing = false
+    var trainingRecipe = ""
+    var overrideTrainingRecipe = false
+    var benchmarkSteps = 0
+    var benchmarkWarmupSteps = 5
+    var sampleInterval = 0
+    var samplePrompt = ""
+    var sampleModel = ""
+    var sampleSteps = 8
+    var sampleCFG = 1.0
+    var sampleLoRAScale = 1.0
+    var sampleSeed = ""
+    var loraTargetRanks = ""
+    var loraRankPreset = ""
+    var loraTargetPreset = ""
+    var loraTargetMode = ""
+    var timestepSampling = ""
+    var timestepLossWeighting = ""
+    var lossWeighting = ""
+    var timestepLow = 0
+    var timestepHigh = 0
+    var lrWarmupSteps = 0
+    var disableCosineScheduler = false
+    var lrMinFactor = 0.0
+    var adamWeightDecay = 0.0
+    var syntheticSamples = 0
+    var maxDepth = 4
+    var minUsablePairs = 1
+    var trainingOutputRoot = ""
+    var trainingModel = ""
+    var materializePath = ""
+    var referenceDirectoryPath = ""
+    var reconstructionResolution = 256
+    var densityThreshold = 25.0
+    var foregroundRatio = 0.85
+    var alreadyFramed = false
+    var noVertexColors = false
+    var camerasPath = ""
     var durationSeconds = 10.0
+    // Music production workspace. Empty strings intentionally mean "let the CLI quality
+    // preset choose" for optional numeric overrides.
+    var musicLyricsFile = ""
+    var musicLRCFile = ""
+    var musicLRCOutput = ""
+    var musicExportFormat = "pcm24"
+    var musicNormalization = "peak"
+    var musicTargetPeakDB = -1.0
+    var musicFadeInMS = 5.0
+    var musicFadeOutMS = 20.0
+    var musicNoDither = false
+    var musicRecipeOutput = ""
+    var musicNoRecipe = false
+    var musicDAWBundle = ""
+    var musicStems = ""
+    var musicAdapterPaths = ""
+    var musicAdapterKind = "auto"
+    var musicAdapterScales = ""
+    var musicCheckpointsRoot = ""
+    var musicDecoderSubdirectory = "acestep-v15-turbo"
+    var musicVAESubdirectory = "vae"
+    var musicLMSubdirectory = ""
+    var musicTextSubdirectory = ""
+    var musicLMMode = "auto"
+    var musicAnalyzeSourceAudio = false
+    var musicQuality = "song"
+    var musicOverrideSteps = false
+    var musicShift = ""
+    var musicInferMethod = ""
+    var musicSampler = ""
+    var musicGuidanceScale = ""
+    var musicGuidanceMode = ""
+    var musicCFGIntervalStart = ""
+    var musicCFGIntervalEnd = ""
+    var musicVelocityNormThreshold = ""
+    var musicVelocityEMAFactor = ""
+    var musicCandidates = 0
+    var musicKeepCandidates = false
+    var musicCoverStrength = 1.0
+    var musicCoverNoiseStrength = 0.0
+    var musicRetakeSeed = ""
+    var musicRetakeVariance = 0.0
+    var musicVocalLanguage = "en"
+    var musicInstruction = "Fill the audio semantic mask based on the given conditions:"
+    var musicTask = "text2music"
+    var musicSourceAudio = ""
+    var musicReferenceAudioPaths = ""
+    var musicTrackName = ""
+    var musicCompleteTrackClasses = ""
+    var musicNonCover = false
+    var musicRepaintStart = 0.0
+    var musicRepaintEnd = -1.0
+    var musicChunkMaskMode = "auto"
+    var musicRepaintMode = "balanced"
+    var musicRepaintStrength = 0.5
+    var musicFlowEdit = false
+    var musicSourceCaption = ""
+    var musicSourceLyrics = ""
+    var musicFlowEditNMin = 0.0
+    var musicFlowEditNMax = 1.0
+    var musicFlowEditNAverage = 1
+    var musicBPM = ""
+    var musicKey = ""
+    var musicTimeSignature = ""
+    var musicLMTopK = 0
+    var musicLMTopP = 0.9
+    var musicMetadataDuration = ""
+    var musicMetadataLanguage = ""
+    var musicNoTiledVAE = false
+    var musicVAEChunkSize = 512
+    var musicVAEOverlap = 64
+    var musicStyleConditioning = "streaming"
+    var musicTemperature = 1.0
+    var musicTopK = 100
+    var musicCFGMusicCoCa = 3.0
+    var musicCFGNotes = 5.0
+    var musicCFGDrums = 1.0
+    var musicDrumless = false
+    var musicUnmaskWidth = 0
+    var musicSeedRotation = 0
+    var musicPrefillSilence = false
+    var musicPrefillDuration = 1.64
+    var musicIncludeRawLM = false
+    var musicIncludeAudioCodes = false
+    var musicAnalysisMaxTokens = 2048
+    var musicAnalysisTemperature = 0.3
+    var musicTranscribeModelPath = ""
+    var musicTranscribeVariant = ""
+    var musicTranscribeFormat = "midi"
+    var musicInstruments = ""
+    var musicListInstruments = false
+    var musicSampling = false
+    var musicMaxTokensPerChunk = 2_000
+    var musicStrictEOS = false
+    var musicBeamSize = 1
+    var musicChunkBatchSize = 4
+    var musicDType = "bfloat16"
+    var musicNoMusicalContext = false
+    var musicContextOutput = ""
+    var musicPlay = true
+    var musicInteractive = false
+    var musicListMIDIInputs = false
+    var musicMIDIMonitor = false
+    var musicMIDILogEvents = false
+    var musicMIDILogRaw = false
+    var musicMIDIInput = ""
+    var musicMIDIChannel = "all"
+    var musicMIDINoteOffset = 0
+    var musicMIDICCMappings = ""
+    var musicTrainingKind = "lora"
+    var musicTrainingFactor = -1
+    var musicTrainingWeightDecay = 0.0001
+    var musicTrainingMaxDuration = 30.0
+    var musicTrainingLogEvery = 10
+    // Vision and VFX analysis controls.
+    var visionAdditionalInputs = ""
+    var visionSecondInputPath = ""
+    var visionPromptFile = ""
+    var visionFocus = ""
+    var visionTriggerToken = ""
+    var visionJSONOutputPath = ""
+    var visionMaskOutputDirectory = ""
+    var visionBoxPrompts = ""
+    var visionPointPrompts = ""
+    var visionThreshold = 0.05
+    var visionResolution = 1008
+    var visionMultimask = false
+    var visionInitFrame = 0
+    var visionEndFrame = ""
+    var visionShowLabels = false
+    var visionCamera = 0
+    var visionSeedSearchFrames = 30
+    var visionGLMOCRCLI = "glmocr"
+    var visionGLMConfig = ""
+    var visionInfinityRuntime = "native"
+    var visionInfinityParserCLI = "parser"
+    var visionInfinityModel = "vision-ocr-infinity-flash"
+    var visionInfinityBackend = "vllm-server"
+    var visionInfinityAPIURL = "http://localhost:8000/v1/chat/completions"
+    var visionInfinityAPIKey = "EMPTY"
+    var visionInfinityTask = "doc2json"
+    var visionInfinityPrompt = ""
+    var visionInfinityOutputFormat = "md"
+    var visionInfinityBatchSize = 1
+    var visionInfinityModelCacheDirectory = ""
+    var visionInfinityMinPixels = 2_048
+    var visionInfinityMaxPixels = 16_777_216
+    var visionPoseBody = true
+    var visionPoseHands = true
+    var visionPoseFace = true
+    var visionMaxHands = 2
+    var visionMinimumConfidence = 0.1
+    var visionFlowAccuracy = "high"
+    var visionInputSize = 518
+    var visionMaxFrames = 240
+    var visionResolutionLevel = 9
+    var visionTokenCount = 0
+    var visionMaxPoints = 0
+    var visionProcessResolution = 504
+    var visionReferenceView = "saddle-balanced"
+    var visionConfidencePercentile = 40.0
+    var visionFaceScoreThreshold = 0.65
+    var visionExecutionProvider = "auto"
+    var visionMaxFaces = 0
+    var visionIncludeEmbeddings = false
+    var visionFaceIndex = ""
+    var visionReferenceFaceIndex = ""
+    var visionCandidateFaceIndex = ""
+    var visionInputList = ""
+    var visionJSONLOutput = ""
+    var visionFailFast = false
+    // Operations, durable workflow runs, runtime diagnostics, and world sessions.
+    var operationsReference = ""
+    var operationsRoot = ""
+    var operationsExecutor = ""
+    var operationsArtifacts = ""
+    var operationsLimit = 50
+    var operationsPollInterval = 2.0
+    var operationsTimeoutSeconds = 1.0
+    var operationsAllArtifacts = false
+    var operationsJSONStream = false
+    var operationsGateSuite = "all"
+    var operationsUpdateBaselines = false
+    var operationsStrictPerformance = false
+    var operationsListOnly = false
+    var operationsWorldBackend = "dreamx"
+    var operationsBaseModel = "video-wan22-ti2v-5b-mlx"
+    var operationsStateDirectory = ""
+    var operationsPrepare = false
+    var operationsRuntimeAlias = ""
+    var operationsRuntimeTTL = ""
+    var operationsRuntimeContext = ""
+    var operationsRuntimeMaxTokens = ""
+    var operationsRuntimeTemperature = ""
+    var operationsRuntimeTopP = ""
+    var operationsRuntimeMinP = ""
+    var operationsRuntimeEngine = ""
+    var operationsRuntimeKVCacheMode = ""
+    var operationsClearAlias = false
+    var operationsPinned = false
+    var operationsUnpinned = false
+    var operationsClearTTL = false
+    var operationsClearContext = false
+    var operationsClearMaxTokens = false
+    var operationsClearTemperature = false
+    var operationsClearTopP = false
+    var operationsClearMinP = false
+    var operationsClearEngine = false
+    var operationsClearKVCacheMode = false
     var fps = 24
     var numFrames = 65
+    var useDuration = false
     var host = "127.0.0.1"
     var port = 8080
     var apiKey = ""
     var engine = StudioChatDefaults.fallbackServingEngine
-    var variant = "distilled"
+    var videoQuality: LTXVideoQuality = .final
+    var videoOutputMode: LTXVideoOutputMode = .videoOnly
+    var audioPath = ""
+    var audioStartTime = 0.0
+    var endImagePath = ""
+    var endImageStrength = 1.0
+    var scheduleShift = 5.0
+    var a2vGuidanceScale = 3.0
+    var videoCFGGuidanceScale = 3.0
+    var audioCFGGuidanceScale = 7.0
+    var v2aGuidanceScale = 3.0
+    var a2vSteps = 30
+    var preflight = false
+    var timings = false
+    var timingsOutputPath = ""
+    var modelRoot = ""
+    var referenceMaskPath = ""
+    var drivingVideoPath = ""
+    var drivingMaskPath = ""
+    var videoTaskMode = "animation"
+    var renderProfile = "fast"
+    var sampler = "unipc"
+    var segmentLength = 81
+    var segmentOverlap = 5
+    var tailPolicy = "drop"
+    var audioSource = "none"
+    var cosmosMode = "text-to-video"
+    var cosmosImagePath = ""
+    var cosmosVideoPath = ""
+    var actionsOutputPath = ""
+    var schedule = "nvidia"
+    var previewFrame = ""
     var backend = "auto"
     var task = "transcribe"
     var language = "auto"
@@ -215,14 +675,74 @@ struct CommandDraft: Equatable {
     var refAudioPath = ""
     var refText = ""
     var saveProfileName = ""
+    var speechStreamChunkTokens = 25
+    var speechStreamChunkMS = 200
+    var speechStreamDecodeMS = 2_000
+    var speechInputFormat = ""
+    var speechSampleRate = 16_000
+    var speechJSONL = false
     // Vision chat (vision-capable chat models) and the agentic tool loop for `text chat`.
     var imagePath = ""
     var tools = ""
     var toolLoop = false
     var allowShellExec = false
+    var allowAbsoluteToolPaths = false
+    var autoApproveTools = false
+    var requireInstalled = false
     var sandboxDir = ""
     var setupMode = "agent"
     var agentModel = "tier"
+    var piPath = ""
+    var noBootstrap = false
+    var modelKeepCache = false
+    var modelRemovalJSON = false
+    var benchmarkPromptFile = ""
+    var benchmarkPromptRepeat = 150
+    var benchmarkPromptRepeatValues = ""
+    var benchmarkDecodeTokens = 32
+    var benchmarkDecodeTokenValues = ""
+    var benchmarkTemperatureValues = ""
+    var benchmarkMTPBlockSize = ""
+    var benchmarkForcedMTPMinPromptTokens = 1
+    var benchmarkRepetitions = 3
+    var benchmarkLagunaDFlashTokens = 12
+    var benchmarkFixture = "deterministic-prose"
+    var benchmarkConcurrencyValues = ""
+    var benchmarkWarmupRepetitions = 1
+    var benchmarkMixedFixtures = false
+    var benchmarkIncludeAutomatic = false
+    var benchmarkLogResponses = false
+    var sfxRenoise = ""
+    var sfxSynchformerModel = "sfx-woosh-synchformer"
+    var sfxSyncBatchSize = 1
+    var sfxClipBatchSize = 4
+    var pluginCatalogURL = ""
+    var pluginChannel = ""
+    var openWebUIHost = "127.0.0.1"
+    var openWebUIPort = 3_000
+    var openWebUIContainerName = "open-webui-mere-run"
+    var openWebUIVolumeName = "open-webui-mere-run"
+    var openWebUIImage = "ghcr.io/open-webui/open-webui:main"
+    var openWebUIVisionModel = "vision-chat-gemma4-12b"
+    var openWebUIEmbeddingModel = "text-embed-qwen3-0.6b"
+    var openWebUIImageModel = "image-zimage-nano"
+    var openWebUITTSModel = "speech-tts-qwen3-nano"
+    var openWebUISTTModel = "speech-asr-parakeet"
+    var openWebUITTSFormat = "wav"
+    var openWebUIAdminEmail = "admin@localhost"
+    var openWebUIAdminPassword = "admin"
+    var openWebUIWaitSeconds = 180
+    var openWebUIPull = false
+    var openWebUISkipServer = false
+    var openWebUISkipDocker = false
+    var openWebUISkipConfigure = false
+    var openWebUIReset = false
+    var apiLoRA = ""
+    var apiRateLimitPerMinute = 60
+    var apiMaxActiveRequests = 1
+    var apiMemoryGuard = "balanced"
+    var apiMemoryGuardCustomCeilingGB = ""
+    var variant = "zimage"
     var quiet = false
     var force = false
     var all = false
@@ -246,6 +766,7 @@ struct CommandTemplate: Identifiable, Equatable {
     let defaultSecondaryText: String
     let defaultModel: String
     let defaultExtraArguments: String
+    let externalURL: URL?
 
     init(
         id: CommandTemplateID,
@@ -260,7 +781,8 @@ struct CommandTemplate: Identifiable, Equatable {
         defaultPrompt: String = "",
         defaultSecondaryText: String = "",
         defaultModel: String = "",
-        defaultExtraArguments: String = ""
+        defaultExtraArguments: String = "",
+        externalURL: URL? = nil
     ) {
         self.id = id
         self.category = category
@@ -275,6 +797,7 @@ struct CommandTemplate: Identifiable, Equatable {
         self.defaultSecondaryText = defaultSecondaryText
         self.defaultModel = defaultModel
         self.defaultExtraArguments = defaultExtraArguments
+        self.externalURL = externalURL
     }
 
     func defaultDraft() -> CommandDraft {
@@ -291,11 +814,25 @@ struct CommandTemplate: Identifiable, Equatable {
             draft.temperature = 1.0
             draft.topP = 0.95
             draft.stream = true
+        case .textTrainLoRA:
+            draft.steps = 600
+            draft.seed = "42"
         case .visionCaption, .visionOCR:
             draft.maxTokens = id == .visionCaption ? 96 : 4096
             draft.temperature = id == .visionCaption ? 0.2 : 0.2
+            if id == .visionOCR { draft.backend = "lighton" }
+        case .visionDepthVideo:
+            draft.dryRun = true
+        case .visionGeometry, .visionGeometryMultiview:
+            draft.dryRun = true
+        case .visionFaceDetect, .visionFaceEmbed, .visionFaceCompare, .visionFaceBatch:
+            draft.json = true
         case .apiServe:
             draft.engine = StudioChatDefaults.fallbackServingEngine
+            draft.port = 8080
+            draft.contextSize = 32_768
+        case .openWebui:
+            draft.host = "0.0.0.0"
             draft.port = 8080
         case .setup:
             draft.setupMode = "agent"
@@ -306,12 +843,49 @@ struct CommandTemplate: Identifiable, Equatable {
         case .imageValidate:
             draft.backend = "all"
             draft.variant = "zimage"
+        case .imageGenerate:
+            draft.maxSequenceLength = 512
         case .imageTrainLoRA:
             draft.steps = 1000
+            draft.maxSequenceLength = 512
+        case .imageDatasetDiscover:
+            draft.json = true
+        case .imageRunPlan:
+            draft.preflight = true
+            draft.json = true
+        case .imageVisualizeRun:
+            draft.port = 8787
+        case .imageReconstruct3D:
+            draft.reconstructionResolution = 256
+        case .imageReconstruct3DTrellis2:
+            draft.seed = "42"
+            draft.maxTokens = 2_097_152
+        case .imageReconstruct3DMultiview:
+            draft.reconstructionResolution = 128
         case .videoGenerate:
             draft.width = 768
             draft.height = 512
+            draft.steps = 40
+            draft.cfgScale = 5
+            draft.videoQuality = .final
+            draft.videoOutputMode = .videoOnly
+        case .videoAnimate:
+            draft.width = 832
+            draft.height = 480
+            draft.steps = 40
+            draft.cfgScale = 5
+            draft.scheduleShift = 3
+            draft.fps = 16
+            draft.seed = "42"
+        case .videoCosmos3:
+            draft.width = 1280
+            draft.height = 720
+            draft.numFrames = 189
             draft.steps = 0
+            draft.cfgScale = 0
+            draft.scheduleShift = 0
+            draft.fps = 0
+            draft.seed = "0"
         case .videoExportLatents:
             draft.width = 768
             draft.height = 512
@@ -320,15 +894,59 @@ struct CommandTemplate: Identifiable, Equatable {
         case .musicGenerate:
             draft.steps = 8
             draft.durationSeconds = 10
+            draft.useDuration = false
+            draft.musicOverrideSteps = false
+        case .musicAnalyze:
+            draft.useDuration = false
+        case .musicTranscribe:
+            draft.temperature = 1
+        case .musicRealtime:
+            draft.durationSeconds = 30
+            draft.musicPlay = true
+        case .musicTrainAdapter:
+            draft.steps = 1_000
+            draft.rank = 8
+            draft.alpha = 16
+            draft.learningRate = 0.0001
+            draft.seed = "42"
+        case .musicServe:
+            draft.port = 8081
+        case .adapterList:
+            draft.json = true
+        case .runList:
+            draft.json = true
+        case .runInspect, .runFetch, .runCancel, .runRetry:
+            draft.json = true
+        case .worldServe:
+            draft.port = 8791
+            draft.model = "video-dreamx-world-5b-ar-mlx"
+        case .statusSnapshot, .modelStorage, .modelGarbageCollect,
+             .modelRuntimeGet, .modelRuntimeSet:
+            draft.json = true
+        case .qualityGate:
+            draft.operationsGateSuite = "all"
         case .sfxGenerate, .sfxVideo:
             draft.steps = 4
             draft.durationSeconds = 8
+            draft.cfgScale = id == .sfxVideo ? 3 : 4.5
         case .speechTranscribe:
             draft.backend = "auto"
             draft.maxTokens = 448
             draft.task = "transcribe"
             draft.language = "auto"
             draft.timestamps = true
+        case .modelBenchmark:
+            draft.temperature = 0
+            draft.topP = 0.9
+            draft.contextSize = 16_384
+        case .modelBenchmarkLagunaDFlash:
+            draft.benchmarkDecodeTokenValues = "8,12,16,24,32,48"
+            draft.temperature = 0
+            draft.topP = 1
+            draft.topK = 0
+            draft.minP = 0.02
+            draft.contextSize = 4_096
+            draft.json = true
         default:
             break
         }
@@ -346,11 +964,22 @@ struct CommandTemplate: Identifiable, Equatable {
     }
 
     func validationMessage(for draft: CommandDraft) -> String? {
-        if promptLabel != nil && id != .custom && draft.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+        if promptLabel != nil
+            && id != .custom
+            && id != .musicRealtime
+            && id != .visionSegment
+            && id != .visionTrack
+            && draft.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return "\(promptLabel ?? "Prompt") is required."
         }
 
-        let optionalInputs: Set<CommandTemplateID> = [.imageGenerate, .videoGenerate]
+        let optionalInputs: Set<CommandTemplateID> = [
+            .imageGenerate,
+            .imageTrainLoRA,
+            .videoGenerate,
+            .musicTranscribe,
+            .visionFaceBatch
+        ]
         if inputKind != .none
             && !optionalInputs.contains(id)
             && draft.inputPath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -358,9 +987,177 @@ struct CommandTemplate: Identifiable, Equatable {
         }
 
         switch id {
+        case .visionSegment, .visionTrack:
+            if draft.prompt.isBlank && draft.visionBoxPrompts.isBlank
+                && draft.visionPointPrompts.isBlank {
+                return "Add a text, box, or point prompt."
+            }
+        case .visionFaceCompare, .visionFlow:
+            if draft.visionSecondInputPath.isBlank {
+                return "A second image is required."
+            }
+        case .visionFaceBatch:
+            if draft.inputPath.isBlank && draft.visionAdditionalInputs.isBlank
+                && draft.visionInputList.isBlank {
+                return "Choose images or an input-list file."
+            }
+        case .visionGeometryMultiview:
+            let images = ([draft.inputPath] + pathList(draft.visionAdditionalInputs))
+                .filter { !$0.isBlank }
+            if images.count < 2 {
+                return "Add at least two ordered views."
+            }
+        case .musicGenerate:
+            if !draft.musicLRCFile.isBlank
+                && (!draft.secondaryText.isBlank || !draft.musicLyricsFile.isBlank) {
+                return "Use synchronized LRC or plain lyrics, not both."
+            }
+            let sourceTasks = ["repaint", "cover", "cover-nofsq", "extract", "lego", "complete"]
+            if (sourceTasks.contains(draft.musicTask) || draft.musicFlowEdit)
+                && draft.musicSourceAudio.isBlank {
+                return "Source audio is required for \(draft.musicTask) and flow-edit workflows."
+            }
+        case .musicTranscribe:
+            if draft.inputPath.isBlank && !draft.musicListInstruments {
+                return "Audio path is required unless listing instruments."
+            }
+        case .musicRealtime:
+            if draft.prompt.isBlank && !draft.musicListMIDIInputs && !draft.musicMIDIMonitor {
+                return "A prompt is required unless listing or monitoring MIDI inputs."
+            }
+            if !draft.musicPlay && draft.outputPath.isBlank && !draft.musicListMIDIInputs
+                && !draft.musicMIDIMonitor {
+                return "Enable playback or choose an output file."
+            }
+        case .musicTrainAdapter:
+            if draft.inputPath.isBlank {
+                return "Dataset manifest is required."
+            }
+            if draft.outputPath.isBlank {
+                return "Adapter output is required."
+            }
+        case .musicServe:
+            if draft.host != "127.0.0.1" && draft.host != "localhost"
+                && draft.host != "::1" && draft.apiKey.isBlank {
+                return "An API key is required for non-loopback music servers."
+            }
+        case .adapterPull:
+            if draft.prompt.isBlank {
+                return "Adapter id is required."
+            }
+        case .runList:
+            if draft.operationsRoot.isBlank == draft.operationsExecutor.isBlank {
+                return "Choose exactly one local root or remote executor."
+            }
+            if !draft.operationsExecutor.isBlank && !(1...500).contains(draft.operationsLimit) {
+                return "Remote result limit must be between 1 and 500."
+            }
+            if draft.operationsExecutor.isBlank && draft.maxDepth < 0 {
+                return "Scan depth must be zero or greater."
+            }
+        case .runInspect, .runWatch, .runCancel, .runRetry:
+            if draft.operationsReference.isBlank {
+                return "Run path or remote reference is required."
+            }
+            if id == .runWatch && draft.operationsPollInterval < 0.25 {
+                return "Polling interval must be at least 0.25 seconds."
+            }
+            if id == .runWatch && draft.operationsJSONStream && draft.json {
+                return "Choose streaming events or one final JSON object, not both."
+            }
+        case .runFetch:
+            if draft.operationsReference.isBlank {
+                return "Remote run reference is required."
+            }
+            if draft.outputPath.isBlank {
+                return "Destination run directory is required."
+            }
+            if draft.operationsAllArtifacts && !lineList(draft.operationsArtifacts).isEmpty {
+                return "Choose all artifacts or named artifacts, not both."
+            }
+        case .worldServe:
+            if draft.model.isBlank || draft.operationsBaseModel.isBlank {
+                return "Base and world model ids are required."
+            }
+            if !(1...65_535).contains(draft.port) {
+                return "Port must be between 1 and 65535."
+            }
+            if draft.host != "127.0.0.1" && draft.host != "localhost"
+                && draft.host != "::1" && draft.apiKey.isBlank {
+                return "An API key is required for non-loopback world servers."
+            }
+        case .statusSnapshot:
+            if !(1...65_535).contains(draft.port) {
+                return "Port must be between 1 and 65535."
+            }
+            if draft.operationsTimeoutSeconds <= 0 {
+                return "Probe timeout must be greater than zero."
+            }
+        case .qualityGate:
+            let validSuites = Set(["text", "speech", "vision", "image", "embed"])
+            let selectedSuites = Set(
+                draft.operationsGateSuite
+                    .split(separator: ",")
+                    .map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() }
+            )
+            if draft.operationsGateSuite.lowercased() != "all"
+                && (selectedSuites.isEmpty || !selectedSuites.isSubset(of: validSuites)) {
+                return "Suites must be all or a comma-separated set of text, speech, vision, image, and embed."
+            }
+        case .modelRuntimeGet, .modelRuntimeSet:
+            if draft.model.isBlank {
+                return "Managed model id or alias is required."
+            }
+            if draft.operationsPinned && draft.operationsUnpinned {
+                return "Choose pinned or unpinned, not both."
+            }
+            let conflictingRuntimeValues = [
+                (!draft.operationsRuntimeAlias.isBlank, draft.operationsClearAlias, "alias"),
+                (!draft.operationsRuntimeTTL.isBlank, draft.operationsClearTTL, "TTL"),
+                (!draft.operationsRuntimeContext.isBlank, draft.operationsClearContext, "context"),
+                (!draft.operationsRuntimeMaxTokens.isBlank, draft.operationsClearMaxTokens, "max tokens"),
+                (!draft.operationsRuntimeTemperature.isBlank, draft.operationsClearTemperature, "temperature"),
+                (!draft.operationsRuntimeTopP.isBlank, draft.operationsClearTopP, "top-p"),
+                (!draft.operationsRuntimeMinP.isBlank, draft.operationsClearMinP, "min-p"),
+                (!draft.operationsRuntimeEngine.isBlank, draft.operationsClearEngine, "engine"),
+                (!draft.operationsRuntimeKVCacheMode.isBlank, draft.operationsClearKVCacheMode, "KV cache")
+            ]
+            if let conflict = conflictingRuntimeValues.first(where: { $0.0 && $0.1 }) {
+                return "Set or clear \(conflict.2), not both."
+            }
+        case .modelBenchmarkLagunaDFlash:
+            if draft.modelRoot.isBlank {
+                return "Laguna model path is required."
+            }
+            if draft.secondaryText.isBlank {
+                return "Laguna DFlash model path is required."
+            }
+        case .imageTrainLoRA:
+            if draft.inputPath.isBlank && draft.syntheticSamples <= 0 {
+                return "A dataset directory is required unless synthetic samples are enabled."
+            }
         case .modelPull:
             if !draft.all && draft.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 return "Choose a model id, or enable All."
+            }
+        case .setup, .agentOnboard, .agentStart, .apiServe, .openWebui:
+            if !(1...65_535).contains(draft.port) {
+                return "Port must be between 1 and 65535."
+            }
+            if id == .openWebui && !(1...65_535).contains(draft.openWebUIPort) {
+                return "Open WebUI port must be between 1 and 65535."
+            }
+            if id == .apiServe && draft.apiMemoryGuard == "custom"
+                && draft.apiMemoryGuardCustomCeilingGB.isBlank {
+                return "A custom memory ceiling is required for the custom guard."
+            }
+        case .speechSynthesize:
+            if draft.stream && draft.speechStreamChunkTokens < 1 {
+                return "Streaming chunk tokens must be greater than zero."
+            }
+        case .speechTranscribe:
+            if draft.stream && (draft.speechStreamChunkMS < 1 || draft.speechStreamDecodeMS < 1) {
+                return "Streaming feed and decode intervals must be greater than zero."
             }
         case .modelRemove:
             if draft.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -369,6 +1166,29 @@ struct CommandTemplate: Identifiable, Equatable {
         case .modelInfo:
             if draft.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 return "Model id or local model path is required."
+            }
+        case .videoGenerate:
+            if !draft.endImagePath.isBlank && draft.inputPath.isBlank {
+                return "A start image is required when an end keyframe is selected."
+            }
+        case .imageReconstruct3DMultiview:
+            let views = pathList(draft.referenceImagePaths)
+            if views.count != 4 && views.count != 6 {
+                return "Add exactly 4 or 6 ordered source views."
+            }
+        case .videoAnimate:
+            if draft.referenceMaskPath.isBlank {
+                return "Reference mask path is required."
+            }
+            if draft.drivingVideoPath.isBlank {
+                return "Driving video path is required."
+            }
+            if draft.drivingMaskPath.isBlank {
+                return "Driving mask path is required."
+            }
+        case .videoPrepareMasks:
+            if draft.outputPath.isBlank {
+                return "Output directory is required."
             }
         case .custom:
             if ShellWords.split(draft.extraArguments).isEmpty {
@@ -389,6 +1209,9 @@ struct CommandTemplate: Identifiable, Equatable {
             args = ["setup", "--mode", draft.setupMode, "--agent-model", draft.agentModel]
             if draft.force { args.append("--install") }
             if draft.stream { args.append("--start") }
+            if draft.dryRun { args.append("--dry-run") }
+            args += ["--host", draft.host, "--port", String(draft.port)]
+            if !draft.piPath.isBlank { args += ["--pi-path", draft.piPath] }
             if draft.quiet { args.append("--quiet") }
 
         case .agentOnboard:
@@ -407,10 +1230,13 @@ struct CommandTemplate: Identifiable, Equatable {
 
         case .agentStart:
             args = ["agent", "start", "--host", draft.host, "--port", String(draft.port)]
+            if !draft.piPath.isBlank { args += ["--pi-path", draft.piPath] }
             if !draft.prompt.isBlank { args += ["--prompt", draft.prompt] }
             if !draft.model.isBlank { args += ["--model", draft.model] }
             if draft.stream { args.append("--skip-server") }
             if draft.force { args.append("--allow-unsupported") }
+            if draft.noBootstrap { args.append("--no-bootstrap") }
+            if draft.quiet { args.append("--quiet") }
 
         case .modelList:
             args = ["model", "list"]
@@ -432,6 +1258,8 @@ struct CommandTemplate: Identifiable, Equatable {
             if draft.stream { args.append("--allow-unsupported") }
             if draft.quiet { args.append("--quiet") }
             if draft.acceptModelLicense { args.append("--accept-model-license") }
+            if draft.preflight { args.append("--preflight") }
+            if draft.preflight, draft.json { args.append("--json") }
 
         case .modelInfo:
             args = ["model", "info", draft.model]
@@ -441,6 +1269,8 @@ struct CommandTemplate: Identifiable, Equatable {
         case .modelRemove:
             args = ["model", "remove", draft.model]
             if draft.force { args.append("--force") }
+            if draft.modelKeepCache { args.append("--keep-cache") }
+            if draft.modelRemovalJSON { args.append("--json") }
 
         case .modelRepairManifests:
             args = ["model", "repair-manifests"]
@@ -453,18 +1283,128 @@ struct CommandTemplate: Identifiable, Equatable {
             if !draft.model.isBlank { args += ["--model", draft.model] }
             if !draft.secondaryText.isBlank { args += ["--negative-prompt", draft.secondaryText] }
             if draft.cfgScale != 1.0 { args += ["--cfg", format(draft.cfgScale)] }
+            if draft.sigmaShift > 0 { args += ["--sigma-shift", format(draft.sigmaShift)] }
             if !draft.seed.isBlank { args += ["--seed", draft.seed] }
             if !draft.inputPath.isBlank {
                 args += ["--input", draft.inputPath, "--strength", format(draft.strength)]
             }
+            for path in pathList(draft.referenceImagePaths) {
+                args += ["--ref-image", path]
+            }
+            if draft.keepOriginalAspect { args.append("--keep-original-aspect") }
+            if draft.inputPath.isBlank, !draft.referenceImagePaths.isBlank, draft.strength != 0 {
+                args += ["--strength", format(draft.strength)]
+            }
+            if draft.maxSequenceLength != 512 {
+                args += ["--max-sequence-length", String(draft.maxSequenceLength)]
+            }
+            if draft.structuredPrompt {
+                args.append("--structured-prompt")
+                if !draft.structuredPromptModel.isBlank {
+                    args += ["--structured-prompt-model", draft.structuredPromptModel]
+                }
+                if !draft.structuredPromptModelRoot.isBlank {
+                    args += ["--structured-prompt-model-root", draft.structuredPromptModelRoot]
+                }
+                args += ["--structured-prompt-max-tokens", String(draft.structuredPromptMaxTokens)]
+                if !draft.structuredPromptOutputPath.isBlank {
+                    args += ["--structured-prompt-output", draft.structuredPromptOutputPath]
+                }
+            }
+            if !draft.loraPath.isBlank {
+                args += ["--lora", draft.loraPath, "--lora-scale", format(draft.loraScale)]
+            }
+            if draft.kreaConditioningMultiplier > 0 {
+                args += ["--krea-conditioning-multiplier", format(draft.kreaConditioningMultiplier)]
+            }
+            if !draft.kreaConditioningLayerWeights.isBlank {
+                args += ["--krea-conditioning-layer-weights", draft.kreaConditioningLayerWeights]
+            }
+            if !draft.kreaBaseQuantizationBits.isBlank {
+                args += ["--krea-base-quantization-bits", draft.kreaBaseQuantizationBits]
+            }
+            if draft.preflight { args.append("--preflight") }
+            if draft.preflight, draft.json { args.append("--json") }
+            if draft.progressJSON { args.append("--progress-json") }
             if draft.quiet { args.append("--quiet") }
 
         case .imageTrainLoRA:
-            args = ["image", "train-lora", "--data", draft.inputPath, "--output", draft.outputPath]
-            args += ["--width", String(draft.width), "--height", String(draft.height)]
-            args += ["--training-steps", String(draft.steps)]
-            if !draft.model.isBlank { args += ["--model", draft.model] }
+            args = ["image", "train-lora", "--output", draft.outputPath]
+            if !draft.inputPath.isBlank { args += ["--data", draft.inputPath] }
+            if !draft.trainingRecipe.isBlank { args += ["--recipe", draft.trainingRecipe] }
+            let emitsRecipeOverrides = draft.trainingRecipe.isBlank || draft.overrideTrainingRecipe
+            if emitsRecipeOverrides {
+                args += ["--width", String(draft.width), "--height", String(draft.height)]
+                args += ["--training-steps", String(draft.steps)]
+                if !draft.model.isBlank { args += ["--model", draft.model] }
+                args += ["--learning-rate", format(draft.learningRate)]
+                args += ["--rank", String(draft.rank)]
+                if draft.alpha > 0 { args += ["--alpha", format(draft.alpha)] }
+                if draft.captionDropout > 0 {
+                    args += ["--caption-dropout", format(draft.captionDropout)]
+                }
+            }
+            args += ["--batch-size", String(draft.batchSize)]
+            args += ["--max-text-length", String(draft.maxSequenceLength)]
+            args += ["--scheduler-steps", String(draft.schedulerSteps)]
             if !draft.seed.isBlank { args += ["--seed", draft.seed] }
+            if draft.trainingLite { args.append("--lite") }
+            if !draft.baseQuantizationBits.isBlank {
+                args += ["--base-quantization-bits", draft.baseQuantizationBits]
+            }
+            if draft.excludePreviewImages { args.append("--exclude-preview-images") }
+            if emitsRecipeOverrides, draft.checkpointInterval > 0 {
+                args += ["--checkpoint-interval", String(draft.checkpointInterval)]
+            }
+            if emitsRecipeOverrides, draft.maxResolution > 0 {
+                args += ["--max-resolution", String(draft.maxResolution)]
+            }
+            if draft.progressive { args.append("--progressive") }
+            if emitsRecipeOverrides, draft.lowRAM { args.append("--low-ram") }
+            if emitsRecipeOverrides, draft.disableCompile { args.append("--no-compile") }
+            if draft.gradientCheckpointing { args.append("--gradient-checkpointing") }
+            if draft.benchmarkSteps > 0 { args += ["--benchmark-steps", String(draft.benchmarkSteps)] }
+            if draft.benchmarkSteps > 0 {
+                args += ["--benchmark-warmup-steps", String(draft.benchmarkWarmupSteps)]
+            }
+            if draft.sampleInterval > 0 {
+                args += ["--sample-interval", String(draft.sampleInterval)]
+                if !draft.samplePrompt.isBlank { args += ["--sample-prompt", draft.samplePrompt] }
+                if !draft.sampleModel.isBlank { args += ["--sample-model", draft.sampleModel] }
+                args += ["--sample-steps", String(draft.sampleSteps)]
+                args += ["--sample-cfg", format(draft.sampleCFG)]
+                args += ["--sample-lora-scale", format(draft.sampleLoRAScale)]
+                if !draft.sampleSeed.isBlank { args += ["--sample-seed", draft.sampleSeed] }
+            }
+            if draft.visualize {
+                args += ["--visualize", "--visualize-port", String(draft.visualizePort)]
+            }
+            if draft.preflight { args.append("--preflight") }
+            if draft.preflight, draft.json { args.append("--json") }
+            if !draft.loraTargetRanks.isBlank { args += ["--lora-target-ranks", draft.loraTargetRanks] }
+            if !draft.loraRankPreset.isBlank { args += ["--lora-rank-preset", draft.loraRankPreset] }
+            if emitsRecipeOverrides, !draft.loraTargetPreset.isBlank {
+                args += ["--lora-target-preset", draft.loraTargetPreset]
+            }
+            if !draft.loraTargetMode.isBlank { args += ["--lora-target-mode", draft.loraTargetMode] }
+            if !draft.timestepSampling.isBlank { args += ["--timestep-sampling", draft.timestepSampling] }
+            if !draft.timestepLossWeighting.isBlank {
+                args += ["--timestep-loss-weighting", draft.timestepLossWeighting]
+            }
+            if !draft.lossWeighting.isBlank { args += ["--loss-weighting", draft.lossWeighting] }
+            if draft.timestepLow > 0 { args += ["--timestep-low", String(draft.timestepLow)] }
+            if draft.timestepHigh > 0 { args += ["--timestep-high", String(draft.timestepHigh)] }
+            if emitsRecipeOverrides, draft.lrWarmupSteps > 0 {
+                args += ["--lr-warmup-steps", String(draft.lrWarmupSteps)]
+            }
+            if draft.disableCosineScheduler { args.append("--no-cosine-scheduler") }
+            if emitsRecipeOverrides, draft.lrMinFactor > 0 {
+                args += ["--lr-min-factor", format(draft.lrMinFactor)]
+            }
+            if draft.adamWeightDecay > 0 {
+                args += ["--adam-weight-decay", format(draft.adamWeightDecay)]
+            }
+            if draft.syntheticSamples > 0 { args += ["--synthetic-samples", String(draft.syntheticSamples)] }
             if draft.quiet { args.append("--quiet") }
 
         case .imageValidate:
@@ -472,26 +1412,121 @@ struct CommandTemplate: Identifiable, Equatable {
             if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
             if draft.force { args.append("--save-reference") }
             if draft.all { args.append("--compare") }
+            if !draft.referenceDirectoryPath.isBlank {
+                args += ["--reference-dir", draft.referenceDirectoryPath]
+            }
+
+        case .imageDatasetDiscover:
+            args = [
+                "image", "dataset", "discover",
+                "--root", draft.inputPath,
+                "--max-depth", String(draft.maxDepth),
+                "--min-usable-pairs", String(draft.minUsablePairs)
+            ]
+            if !draft.trainingOutputRoot.isBlank {
+                args += ["--training-output-root", draft.trainingOutputRoot]
+            }
+            if !draft.trainingModel.isBlank { args += ["--training-model", draft.trainingModel] }
+            if !draft.trainingRecipe.isBlank { args += ["--training-recipe", draft.trainingRecipe] }
+            if draft.excludePreviewImages { args.append("--exclude-preview-images") }
+            if draft.json { args.append("--json") }
+
+        case .imageRunPlan:
+            args = ["image", "run-plan", draft.inputPath]
+            if draft.preflight { args.append("--preflight") }
+            if !draft.materializePath.isBlank { args += ["--materialize", draft.materializePath] }
+            if draft.json { args.append("--json") }
+
+        case .imageVisualizeRun:
+            args = ["image", "visualize-run", draft.inputPath, "--port", String(draft.port)]
+
+        case .imageReconstruct3D:
+            args = ["image", "reconstruct-3d", draft.inputPath]
+            if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            args += ["--resolution", String(draft.reconstructionResolution)]
+            args += ["--density-threshold", format(draft.densityThreshold)]
+            args += ["--foreground-ratio", format(draft.foregroundRatio)]
+            if draft.alreadyFramed { args.append("--already-framed") }
+            if draft.noVertexColors { args.append("--no-vertex-colors") }
+            if draft.dryRun { args.append("--dry-run") }
+            if draft.json { args.append("--json") }
+
+        case .imageReconstruct3DTrellis2:
+            args = ["image", "reconstruct-3d-trellis2", draft.inputPath]
+            if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            if !draft.seed.isBlank { args += ["--seed", draft.seed] }
+            args += ["--max-tokens", String(draft.maxTokens)]
+            if draft.alreadyFramed { args.append("--already-framed") }
+            if draft.dryRun { args.append("--dry-run") }
+            if draft.json { args.append("--json") }
+
+        case .imageReconstruct3DMultiview:
+            args = ["image", "reconstruct-3d-multiview"]
+            for path in pathList(draft.referenceImagePaths) {
+                args += ["--view", path]
+            }
+            if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            if !draft.camerasPath.isBlank { args += ["--cameras", draft.camerasPath] }
+            args += ["--resolution", String(draft.reconstructionResolution)]
+            if draft.noVertexColors { args.append("--no-vertex-colors") }
+            if draft.dryRun { args.append("--dry-run") }
+            if draft.json { args.append("--json") }
 
         case .textChat:
             args = ["text", "chat", "--prompt", draft.prompt]
             if !draft.secondaryText.isBlank { args += ["--system", draft.secondaryText] }
             if !draft.imagePath.isBlank { args += ["--image", draft.imagePath] }
-            args += ["--max-tokens", String(draft.maxTokens), "--temperature", format(draft.temperature), "--top-p", format(draft.topP)]
+            args += [
+                "--max-tokens", String(draft.maxTokens),
+                "--temperature", format(draft.temperature),
+                "--top-p", format(draft.topP)
+            ]
+            if draft.contextSize > 0 { args += ["--context-size", String(draft.contextSize)] }
+            if draft.topK > 0 { args += ["--top-k", String(draft.topK)] }
+            if draft.minP > 0 { args += ["--min-p", format(draft.minP)] }
+            if draft.kvBits > 0 { args += ["--kv-bits", String(draft.kvBits)] }
+            if !draft.kvQuantScheme.isBlank { args += ["--kv-quant-scheme", draft.kvQuantScheme] }
+            if draft.kvGroupSize > 0 { args += ["--kv-group-size", String(draft.kvGroupSize)] }
+            if draft.quantizedKVStart > 0 {
+                args += ["--quantized-kv-start", String(draft.quantizedKVStart)]
+            }
+            if !draft.modelRoot.isBlank { args += ["--model-root", draft.modelRoot] }
             if !draft.model.isBlank { args += ["--model", draft.model] }
+            if draft.responseFormat != .text {
+                args += ["--response-format", draft.responseFormat.rawValue]
+            }
+            if !draft.loraPath.isBlank {
+                args += ["--lora", draft.loraPath, "--lora-scale", format(draft.loraScale)]
+            }
+            switch draft.thinkingMode {
+            case .automatic:
+                break
+            case .show:
+                args.append("--thinking")
+            case .hide:
+                args.append("--no-thinking")
+            }
             if !draft.tools.isBlank { args += ["--tools", draft.tools] }
             if draft.toolLoop { args.append("--tool-loop") }
             if draft.allowShellExec { args.append("--allow-shell-exec") }
+            if draft.allowAbsoluteToolPaths { args.append("--allow-absolute-tool-paths") }
+            if draft.autoApproveTools { args.append("--auto-approve-tools") }
             if !draft.sandboxDir.isBlank { args += ["--sandbox-dir", draft.sandboxDir] }
             if draft.stream { args.append("--stream") }
-            if draft.all { args.append("--thinking") }
             if draft.force { args.append("--stats") }
             if draft.quiet { args.append("--quiet") }
+            if draft.preflight { args.append("--preflight") }
+            if draft.preflight, draft.json { args.append("--json") }
+            if draft.requireInstalled { args.append("--require-installed") }
 
         case .textCode:
             args = ["text", "code", "--prompt", draft.prompt]
             if !draft.secondaryText.isBlank { args += ["--system", draft.secondaryText] }
             args += ["--max-tokens", String(draft.maxTokens), "--temperature", format(draft.temperature), "--top-p", format(draft.topP)]
+            if draft.minP > 0 { args += ["--min-p", format(draft.minP)] }
             if !draft.model.isBlank { args += ["--model", draft.model] }
             if draft.stream { args.append("--stream") }
             if draft.force { args.append("--stats") }
@@ -508,9 +1543,36 @@ struct CommandTemplate: Identifiable, Equatable {
             args = ["text", "anonymize", draft.prompt]
             if !draft.model.isBlank { args += ["--model", draft.model] }
             if draft.maxTokens > 0 { args += ["--max-tokens", String(draft.maxTokens)] }
+            if draft.replacement != "[{label}]" {
+                args += ["--replacement", draft.replacement]
+            }
             if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
             if draft.all { args.append("--json") }
             if draft.force { args.append("--pretty") }
+
+        case .textTrainLoRA:
+            args = [
+                "text", "train-lora",
+                "--data", draft.inputPath,
+                "--output", draft.outputPath,
+                "--model", draft.model,
+                "--adapter-name", draft.adapterName,
+                "--training-steps", String(draft.steps),
+                "--batch-size", String(draft.batchSize),
+                "--learning-rate", format(draft.learningRate),
+                "--rank", String(draft.rank),
+                "--max-sequence-length", String(draft.maxSequenceLength),
+                "--seed", draft.seed,
+                "--target-modules", draft.targetModules
+            ]
+            if !draft.modelRoot.isBlank { args += ["--model-path", draft.modelRoot] }
+            if !draft.evalPath.isBlank { args += ["--eval", draft.evalPath] }
+            if draft.alpha > 0 { args += ["--alpha", format(draft.alpha)] }
+            if draft.dryRun { args.append("--dry-run") }
+            if draft.visualize {
+                args += ["--visualize", "--visualize-port", String(draft.visualizePort)]
+            }
+            if draft.json { args.append("--json") }
 
         case .speechSynthesize:
             args = ["speech", "synthesize", draft.prompt, "--output", draft.outputPath]
@@ -523,7 +1585,9 @@ struct CommandTemplate: Identifiable, Equatable {
             if !draft.saveProfileName.isBlank { args += ["--save-profile", draft.saveProfileName] }
             if !draft.language.isBlank, draft.language != "auto" { args += ["--language", draft.language] }
             args += ["--temperature", format(draft.temperature)]
-            if draft.stream { args.append("--stream") }
+            if draft.stream {
+                args += ["--stream", "--stream-chunk-tokens", String(draft.speechStreamChunkTokens)]
+            }
             if draft.quiet { args.append("--quiet") }
 
         case .speechTranscribe:
@@ -532,7 +1596,20 @@ struct CommandTemplate: Identifiable, Equatable {
             if !draft.model.isBlank { args += ["--model", draft.model] }
             args += ["--backend", draft.backend, "--task", draft.task, "--max-tokens", String(draft.maxTokens)]
             if !draft.language.isBlank, draft.language != "auto" { args += ["--language", draft.language] }
-            if draft.stream { args.append("--stream") }
+            if draft.stream {
+                args += [
+                    "--stream",
+                    "--stream-chunk-ms", String(draft.speechStreamChunkMS),
+                    "--stream-decode-ms", String(draft.speechStreamDecodeMS)
+                ]
+            }
+            if !draft.speechInputFormat.isBlank {
+                args += ["--input-format", draft.speechInputFormat]
+            }
+            if draft.speechSampleRate != 16_000 {
+                args += ["--sample-rate", String(draft.speechSampleRate)]
+            }
+            if draft.speechJSONL { args.append("--jsonl") }
             if !draft.timestamps { args.append("--no-timestamps") }
             if draft.quiet { args.append("--quiet") }
 
@@ -549,65 +1626,513 @@ struct CommandTemplate: Identifiable, Equatable {
             args = ["speech", "profile", "delete", "--id", draft.prompt]
 
         case .visionInspect:
-            args = ["vision", "inspect", draft.inputPath, draft.prompt]
+            args = ["vision", "inspect", draft.inputPath, "--prompt", draft.prompt]
             if !draft.model.isBlank { args += ["--model", draft.model] }
             args += ["--max-tokens", String(draft.maxTokens), "--temperature", format(draft.temperature), "--top-p", format(draft.topP)]
 
         case .visionCaption:
-            args = ["vision", "caption", draft.inputPath]
+            args = ["vision", "caption"]
+            if !draft.inputPath.isBlank { args.append(draft.inputPath) }
+            args.append(contentsOf: pathList(draft.visionAdditionalInputs))
             if !draft.model.isBlank { args += ["--model", draft.model] }
             if !draft.outputPath.isBlank { args += ["--output-dir", draft.outputPath] }
-            args += ["--prompt", draft.prompt, "--max-tokens", String(draft.maxTokens), "--temperature", format(draft.temperature)]
+            if !draft.prompt.isBlank { args += ["--prompt", draft.prompt] }
+            if !draft.visionPromptFile.isBlank { args += ["--prompt-file", draft.visionPromptFile] }
+            for focus in lineList(draft.visionFocus) { args += ["--focus", focus] }
+            if !draft.visionTriggerToken.isBlank {
+                args += ["--trigger-token", draft.visionTriggerToken]
+            }
+            args += [
+                "--max-tokens", String(draft.maxTokens),
+                "--temperature", format(draft.temperature),
+                "--top-p", format(draft.topP)
+            ]
 
         case .visionOCR:
-            args = ["vision", "ocr", draft.inputPath, "--backend", draft.backend]
+            args = ["vision", "ocr"]
+            if !draft.inputPath.isBlank { args.append(draft.inputPath) }
+            args.append(contentsOf: pathList(draft.visionAdditionalInputs))
+            args += ["--backend", draft.backend]
             if !draft.model.isBlank { args += ["--model", draft.model] }
-            if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            if !draft.outputPath.isBlank { args += ["--output-dir", draft.outputPath] }
             args += ["--max-tokens", String(draft.maxTokens), "--temperature", format(draft.temperature)]
             if draft.all { args.append("--compare") }
+            if !draft.visionGLMOCRCLI.isBlank { args += ["--glmocr-cli", draft.visionGLMOCRCLI] }
+            if !draft.visionGLMConfig.isBlank { args += ["--glm-config", draft.visionGLMConfig] }
+            args += [
+                "--infinity-runtime", draft.visionInfinityRuntime,
+                "--infinity-parser-cli", draft.visionInfinityParserCLI,
+                "--infinity-model", draft.visionInfinityModel,
+                "--infinity-backend", draft.visionInfinityBackend,
+                "--infinity-api-url", draft.visionInfinityAPIURL,
+                "--infinity-api-key", draft.visionInfinityAPIKey,
+                "--infinity-task", draft.visionInfinityTask,
+                "--infinity-output-format", draft.visionInfinityOutputFormat,
+                "--infinity-batch-size", String(draft.visionInfinityBatchSize),
+                "--infinity-min-pixels", String(draft.visionInfinityMinPixels),
+                "--infinity-max-pixels", String(draft.visionInfinityMaxPixels)
+            ]
+            if !draft.visionInfinityPrompt.isBlank {
+                args += ["--infinity-prompt", draft.visionInfinityPrompt]
+            }
+            if !draft.visionInfinityModelCacheDirectory.isBlank {
+                args += ["--infinity-model-cache-dir", draft.visionInfinityModelCacheDirectory]
+            }
             if draft.quiet { args.append("--quiet") }
 
         case .visionGround:
-            args = ["vision", "ground", draft.inputPath, "--query", draft.prompt]
+            args = ["vision", "ground", draft.inputPath]
+            for query in lineList(draft.prompt) { args += ["--query", query] }
             if !draft.model.isBlank { args += ["--model", draft.model] }
             if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            if !draft.visionJSONOutputPath.isBlank {
+                args += ["--json-output", draft.visionJSONOutputPath]
+            }
+            if !draft.visionMaskOutputDirectory.isBlank {
+                args += ["--mask-output-dir", draft.visionMaskOutputDirectory]
+            }
 
         case .visionSegment:
-            args = ["vision", "segment", draft.inputPath, "--prompt", draft.prompt]
+            args = ["vision", "segment", draft.inputPath]
+            for prompt in lineList(draft.prompt) { args += ["--prompt", prompt] }
+            for box in lineList(draft.visionBoxPrompts) { args += ["--box", box] }
+            for point in lineList(draft.visionPointPrompts) { args += ["--point", point] }
             if !draft.model.isBlank { args += ["--model", draft.model] }
             if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            if !draft.visionJSONOutputPath.isBlank {
+                args += ["--json-output", draft.visionJSONOutputPath]
+            }
+            if !draft.visionMaskOutputDirectory.isBlank {
+                args += ["--mask-output-dir", draft.visionMaskOutputDirectory]
+            }
+            args += [
+                "--threshold", format(draft.visionThreshold),
+                "--resolution", String(draft.visionResolution)
+            ]
             if draft.force { args.append("--show-boxes") }
+            if draft.visionMultimask { args.append("--multimask") }
 
         case .visionTrack:
-            args = ["vision", "track", draft.inputPath, "--prompt", draft.prompt]
+            args = ["vision", "track", draft.inputPath]
+            for prompt in lineList(draft.prompt) { args += ["--prompt", prompt] }
+            for box in lineList(draft.visionBoxPrompts) { args += ["--box", box] }
+            for point in lineList(draft.visionPointPrompts) { args += ["--point", point] }
             if !draft.model.isBlank { args += ["--model", draft.model] }
             if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            if !draft.visionJSONOutputPath.isBlank {
+                args += ["--json-output", draft.visionJSONOutputPath]
+            }
+            if !draft.visionMaskOutputDirectory.isBlank {
+                args += ["--mask-output-dir", draft.visionMaskOutputDirectory]
+            }
+            args += [
+                "--init-frame", String(draft.visionInitFrame),
+                "--threshold", format(draft.visionThreshold),
+                "--resolution", String(draft.visionResolution)
+            ]
+            if !draft.visionEndFrame.isBlank { args += ["--end-frame", draft.visionEndFrame] }
             if draft.force { args.append("--show-boxes") }
+            if draft.visionShowLabels { args.append("--show-labels") }
+            if draft.preflight {
+                args.append("--preflight")
+                if draft.json { args.append("--json") }
+            }
 
         case .visionTrackLive:
-            args = ["vision", "track-live", "--prompt", draft.prompt]
+            args = ["vision", "track-live"]
+            for prompt in lineList(draft.prompt) { args += ["--prompt", prompt] }
             if !draft.model.isBlank { args += ["--model", draft.model] }
             if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
-            args += ["--duration-seconds", format(draft.durationSeconds)]
+            if !draft.visionJSONOutputPath.isBlank {
+                args += ["--json-output", draft.visionJSONOutputPath]
+            }
+            args += [
+                "--camera", String(draft.visionCamera),
+                "--duration-seconds", format(draft.durationSeconds),
+                "--init-frame", String(draft.visionInitFrame),
+                "--seed-search-frames", String(draft.visionSeedSearchFrames),
+                "--threshold", format(draft.visionThreshold),
+                "--resolution", String(draft.visionResolution)
+            ]
             if draft.force { args.append("--show-boxes") }
+            if draft.visionShowLabels { args.append("--show-labels") }
+
+        case .visionFaceDetect:
+            args = ["vision", "face", "detect", draft.inputPath]
+            appendFaceOptions(to: &args, draft: draft)
+            if draft.visionMaxFaces > 0 { args += ["--max-faces", String(draft.visionMaxFaces)] }
+            if draft.visionIncludeEmbeddings { args.append("--include-embeddings") }
+
+        case .visionFaceEmbed:
+            args = ["vision", "face", "embed", draft.inputPath]
+            appendFaceOptions(to: &args, draft: draft)
+            if !draft.visionFaceIndex.isBlank { args += ["--face-index", draft.visionFaceIndex] }
+
+        case .visionFaceCompare:
+            args = ["vision", "face", "compare", draft.inputPath, draft.visionSecondInputPath]
+            appendFaceOptions(to: &args, draft: draft)
+            if !draft.visionReferenceFaceIndex.isBlank {
+                args += ["--reference-face-index", draft.visionReferenceFaceIndex]
+            }
+            if !draft.visionCandidateFaceIndex.isBlank {
+                args += ["--candidate-face-index", draft.visionCandidateFaceIndex]
+            }
+
+        case .visionFaceBatch:
+            args = ["vision", "face", "batch"]
+            if !draft.inputPath.isBlank { args.append(draft.inputPath) }
+            args.append(contentsOf: pathList(draft.visionAdditionalInputs))
+            if !draft.visionInputList.isBlank { args += ["--input-list", draft.visionInputList] }
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            args += [
+                "--score-threshold", format(draft.visionFaceScoreThreshold),
+                "--execution-provider", draft.visionExecutionProvider
+            ]
+            if draft.visionMaxFaces > 0 { args += ["--max-faces", String(draft.visionMaxFaces)] }
+            if draft.visionIncludeEmbeddings { args.append("--include-embeddings") }
+            if !draft.visionJSONLOutput.isBlank {
+                args += ["--jsonl-output", draft.visionJSONLOutput]
+            }
+            if draft.visionFailFast { args.append("--fail-fast") }
+
+        case .visionPose:
+            args = ["vision", "pose", draft.inputPath]
+            if !draft.visionJSONOutputPath.isBlank {
+                args += ["--json-output", draft.visionJSONOutputPath]
+            }
+            if !draft.visionPoseBody { args.append("--no-body") }
+            if !draft.visionPoseHands { args.append("--no-hands") }
+            if !draft.visionPoseFace { args.append("--no-face") }
+            args += [
+                "--max-hands", String(draft.visionMaxHands),
+                "--minimum-confidence", format(draft.visionMinimumConfidence)
+            ]
+            if draft.json { args.append("--json") }
+
+        case .visionFlow:
+            args = ["vision", "flow", draft.inputPath, draft.visionSecondInputPath]
+            if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            if !draft.visionJSONOutputPath.isBlank {
+                args += ["--json-output", draft.visionJSONOutputPath]
+            }
+            args += ["--accuracy", draft.visionFlowAccuracy]
+            if draft.json { args.append("--json") }
+
+        case .visionDepthVideo:
+            args = ["vision", "depth-video", draft.inputPath]
+            if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            args += [
+                "--input-size", String(draft.visionInputSize),
+                "--max-frames", String(draft.visionMaxFrames)
+            ]
+            if draft.dryRun { args.append("--dry-run") }
+            if draft.json { args.append("--json") }
+
+        case .visionGeometry:
+            args = ["vision", "geometry", draft.inputPath]
+            if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            args += ["--resolution-level", String(draft.visionResolutionLevel)]
+            if draft.visionTokenCount > 0 {
+                args += ["--token-count", String(draft.visionTokenCount)]
+            }
+            if draft.visionMaxPoints > 0 {
+                args += ["--max-points", String(draft.visionMaxPoints)]
+            }
+            if draft.dryRun { args.append("--dry-run") }
+            if draft.json { args.append("--json") }
+
+        case .visionGeometryMultiview:
+            args = ["vision", "geometry-multiview"]
+            if !draft.inputPath.isBlank { args.append(draft.inputPath) }
+            args.append(contentsOf: pathList(draft.visionAdditionalInputs))
+            if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            if !draft.camerasPath.isBlank { args += ["--cameras", draft.camerasPath] }
+            args += [
+                "--process-resolution", String(draft.visionProcessResolution),
+                "--reference-view", draft.visionReferenceView,
+                "--confidence-percentile", format(draft.visionConfidencePercentile)
+            ]
+            if draft.visionMaxPoints > 0 {
+                args += ["--max-points", String(draft.visionMaxPoints)]
+            }
+            if draft.dryRun { args.append("--dry-run") }
+            if draft.json { args.append("--json") }
 
         case .musicGenerate:
             args = ["music", "generate", draft.prompt]
             if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
             if !draft.model.isBlank { args += ["--model", draft.model] }
             if !draft.secondaryText.isBlank { args += ["--lyrics", draft.secondaryText] }
-            args += ["--duration", format(draft.durationSeconds), "--steps", String(draft.steps)]
+            if !draft.musicLyricsFile.isBlank { args += ["--lyrics-file", draft.musicLyricsFile] }
+            if !draft.musicLRCFile.isBlank { args += ["--lrc-file", draft.musicLRCFile] }
+            if !draft.musicLRCOutput.isBlank { args += ["--lrc-output", draft.musicLRCOutput] }
+            args += [
+                "--export-format", draft.musicExportFormat,
+                "--normalize", draft.musicNormalization,
+                "--target-peak-db", format(draft.musicTargetPeakDB),
+                "--fade-in-ms", format(draft.musicFadeInMS),
+                "--fade-out-ms", format(draft.musicFadeOutMS)
+            ]
+            if draft.musicNoDither { args.append("--no-dither") }
+            if !draft.musicRecipeOutput.isBlank { args += ["--recipe-output", draft.musicRecipeOutput] }
+            if draft.musicNoRecipe { args.append("--no-recipe") }
+            if !draft.musicDAWBundle.isBlank { args += ["--daw-bundle", draft.musicDAWBundle] }
+            if !draft.musicStems.isBlank { args += ["--stems", draft.musicStems] }
+            for path in pathList(draft.musicAdapterPaths) {
+                args += ["--adapter", path]
+            }
+            if !draft.musicAdapterPaths.isBlank {
+                args += ["--adapter-kind", draft.musicAdapterKind]
+                for scale in pathList(draft.musicAdapterScales) {
+                    args += ["--adapter-scale", scale]
+                }
+            }
+            if !draft.musicCheckpointsRoot.isBlank {
+                args += ["--checkpoints-root", draft.musicCheckpointsRoot]
+            }
+            if !draft.musicDecoderSubdirectory.isBlank {
+                args += ["--decoder-subdirectory", draft.musicDecoderSubdirectory]
+            }
+            if !draft.musicVAESubdirectory.isBlank {
+                args += ["--vae-subdirectory", draft.musicVAESubdirectory]
+            }
+            if !draft.musicLMSubdirectory.isBlank {
+                args += ["--lm-subdirectory", draft.musicLMSubdirectory]
+            }
+            if !draft.musicTextSubdirectory.isBlank {
+                args += ["--text-subdirectory", draft.musicTextSubdirectory]
+            }
+            if draft.musicLMMode == "use" { args.append("--use-lm") }
+            if draft.musicLMMode == "disable" { args.append("--no-lm") }
+            if draft.musicAnalyzeSourceAudio { args.append("--analyze-source-audio") }
+            if draft.useDuration { args += ["--duration", format(draft.durationSeconds)] }
+            args += ["--quality", draft.musicQuality]
+            if draft.musicOverrideSteps { args += ["--steps", String(draft.steps)] }
+            if !draft.musicShift.isBlank { args += ["--shift", draft.musicShift] }
+            if !draft.musicInferMethod.isBlank { args += ["--infer-method", draft.musicInferMethod] }
+            if !draft.musicSampler.isBlank { args += ["--sampler", draft.musicSampler] }
+            if !draft.musicGuidanceScale.isBlank { args += ["--guidance-scale", draft.musicGuidanceScale] }
+            if !draft.musicGuidanceMode.isBlank { args += ["--guidance-mode", draft.musicGuidanceMode] }
+            if !draft.musicCFGIntervalStart.isBlank {
+                args += ["--cfg-interval-start", draft.musicCFGIntervalStart]
+            }
+            if !draft.musicCFGIntervalEnd.isBlank {
+                args += ["--cfg-interval-end", draft.musicCFGIntervalEnd]
+            }
+            if !draft.musicVelocityNormThreshold.isBlank {
+                args += ["--velocity-norm-threshold", draft.musicVelocityNormThreshold]
+            }
+            if !draft.musicVelocityEMAFactor.isBlank {
+                args += ["--velocity-ema-factor", draft.musicVelocityEMAFactor]
+            }
             if !draft.seed.isBlank { args += ["--seed", draft.seed] }
+            if draft.musicCandidates > 0 { args += ["--candidates", String(draft.musicCandidates)] }
+            if draft.musicKeepCandidates { args.append("--keep-candidates") }
+            args += [
+                "--audio-cover-strength", format(draft.musicCoverStrength),
+                "--cover-noise-strength", format(draft.musicCoverNoiseStrength),
+                "--retake-variance", format(draft.musicRetakeVariance),
+                "--vocal-language", draft.musicVocalLanguage,
+                "--instruction", draft.musicInstruction,
+                "--task-type", draft.musicTask
+            ]
+            if !draft.musicRetakeSeed.isBlank { args += ["--retake-seed", draft.musicRetakeSeed] }
+            if !draft.musicSourceAudio.isBlank { args += ["--source-audio", draft.musicSourceAudio] }
+            for path in pathList(draft.musicReferenceAudioPaths) {
+                args += ["--reference-audio", path]
+            }
+            if !draft.musicTrackName.isBlank { args += ["--track-name", draft.musicTrackName] }
+            if !draft.musicCompleteTrackClasses.isBlank {
+                args += ["--complete-track-classes", draft.musicCompleteTrackClasses]
+            }
+            if draft.musicNonCover { args.append("--non-cover") }
+            if ["repaint", "lego"].contains(draft.musicTask) {
+                args += [
+                    "--repaint-start", format(draft.musicRepaintStart),
+                    "--repaint-end", format(draft.musicRepaintEnd),
+                    "--chunk-mask-mode", draft.musicChunkMaskMode,
+                    "--repaint-mode", draft.musicRepaintMode,
+                    "--repaint-strength", format(draft.musicRepaintStrength)
+                ]
+            }
+            if draft.musicFlowEdit {
+                args += [
+                    "--flow-edit",
+                    "--flow-edit-n-min", format(draft.musicFlowEditNMin),
+                    "--flow-edit-n-max", format(draft.musicFlowEditNMax),
+                    "--flow-edit-n-average", String(draft.musicFlowEditNAverage)
+                ]
+                if !draft.musicSourceCaption.isBlank {
+                    args += ["--source-caption", draft.musicSourceCaption]
+                }
+                if !draft.musicSourceLyrics.isBlank {
+                    args += ["--source-lyrics", draft.musicSourceLyrics]
+                }
+            }
+            if !draft.musicBPM.isBlank { args += ["--bpm", draft.musicBPM] }
+            if !draft.musicKey.isBlank { args += ["--keyscale", draft.musicKey] }
+            if !draft.musicTimeSignature.isBlank {
+                args += ["--timesignature", draft.musicTimeSignature]
+            }
+            args += [
+                "--lm-top-k", String(draft.musicLMTopK),
+                "--lm-top-p", format(draft.musicLMTopP)
+            ]
+            if !draft.musicMetadataDuration.isBlank {
+                args += ["--metadata-duration", draft.musicMetadataDuration]
+            }
+            if !draft.musicMetadataLanguage.isBlank {
+                args += ["--metadata-language", draft.musicMetadataLanguage]
+            }
+            if draft.musicNoTiledVAE { args.append("--no-tiled-vae") }
+            args += [
+                "--vae-chunk-size", String(draft.musicVAEChunkSize),
+                "--vae-overlap", String(draft.musicVAEOverlap)
+            ]
+            if draft.model.localizedCaseInsensitiveContains("magenta") {
+                args += [
+                    "--temperature", format(draft.musicTemperature),
+                    "--style-conditioning", draft.musicStyleConditioning,
+                    "--top-k", String(draft.musicTopK),
+                    "--cfg-musiccoca", format(draft.musicCFGMusicCoCa),
+                    "--cfg-notes", format(draft.musicCFGNotes),
+                    "--cfg-drums", format(draft.musicCFGDrums),
+                    "--unmask-width", String(draft.musicUnmaskWidth),
+                    "--seed-rotation", String(draft.musicSeedRotation),
+                    "--prefill-duration", format(draft.musicPrefillDuration)
+                ]
+                if draft.musicDrumless { args.append("--drumless") }
+                if draft.musicPrefillSilence { args.append("--prefill-silence") }
+            }
             if draft.quiet { args.append("--quiet") }
 
         case .videoGenerate:
             args = ["video", "generate", draft.prompt]
             if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
             if !draft.model.isBlank { args += ["--model", draft.model] }
-            args += ["--variant", draft.variant, "--width", String(draft.width), "--height", String(draft.height)]
-            args += ["--num-frames", String(draft.numFrames), "--fps", String(draft.fps)]
+            let isWan = draft.model.localizedCaseInsensitiveContains("wan")
+            if !isWan {
+                let quality = draft.audioPath.isBlank ? draft.videoQuality : .final
+                let outputMode = draft.audioPath.isBlank ? draft.videoOutputMode : .audioVideo
+                args += ["--quality", quality.rawValue, "--output-mode", outputMode.rawValue]
+            }
+            args += ["--width", String(draft.width), "--height", String(draft.height)]
+            if draft.useDuration {
+                args += ["--duration", format(draft.durationSeconds)]
+            } else {
+                args += ["--num-frames", String(draft.numFrames)]
+            }
+            args += ["--fps", String(draft.fps)]
             if !draft.seed.isBlank { args += ["--seed", draft.seed] }
+            if !draft.secondaryText.isBlank { args += ["--negative-prompt", draft.secondaryText] }
+            if isWan {
+                args += [
+                    "--steps", String(draft.steps),
+                    "--guidance-scale", format(draft.cfgScale),
+                    "--shift", format(draft.scheduleShift)
+                ]
+            }
+            if !draft.audioPath.isBlank {
+                args += [
+                    "--audio", draft.audioPath,
+                    "--audio-start-time", format(draft.audioStartTime),
+                    "--a2v-guidance-scale", format(draft.a2vGuidanceScale),
+                    "--video-cfg-guidance-scale", format(draft.videoCFGGuidanceScale),
+                    "--audio-cfg-guidance-scale", format(draft.audioCFGGuidanceScale),
+                    "--v2a-guidance-scale", format(draft.v2aGuidanceScale),
+                    "--a2v-steps", String(draft.a2vSteps)
+                ]
+            }
             if !draft.inputPath.isBlank { args += ["--image", draft.inputPath, "--image-strength", format(draft.strength)] }
+            if !draft.endImagePath.isBlank {
+                args += [
+                    "--end-image", draft.endImagePath,
+                    "--end-image-strength", format(draft.endImageStrength)
+                ]
+            }
+            if draft.preflight {
+                args.append("--preflight")
+                if draft.json { args.append("--json") }
+            }
+            if draft.timings { args.append("--timings") }
+            if !draft.timingsOutputPath.isBlank {
+                args += ["--timings-output", draft.timingsOutputPath]
+            }
+            if draft.quiet { args.append("--quiet") }
+
+        case .videoAnimate:
+            args = [
+                "video", "animate", draft.prompt,
+                "--reference", draft.inputPath,
+                "--reference-mask", draft.referenceMaskPath,
+                "--driving-video", draft.drivingVideoPath,
+                "--driving-mask", draft.drivingMaskPath,
+                "--output", draft.outputPath,
+                "--mode", draft.videoTaskMode,
+                "--profile", draft.renderProfile,
+                "--width", String(draft.width),
+                "--height", String(draft.height),
+                "--fps", String(draft.fps),
+                "--segment-length", String(draft.segmentLength),
+                "--segment-overlap", String(draft.segmentOverlap),
+                "--tail-policy", draft.tailPolicy,
+                "--audio-source", draft.audioSource
+            ]
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            if !draft.modelRoot.isBlank { args += ["--model-root", draft.modelRoot] }
+            if !draft.secondaryText.isBlank { args += ["--negative-prompt", draft.secondaryText] }
+            if draft.renderProfile == "quality" {
+                args += [
+                    "--steps", String(draft.steps),
+                    "--guidance-scale", format(draft.cfgScale),
+                    "--shift", format(draft.scheduleShift),
+                    "--sampler", draft.sampler
+                ]
+            }
+            if !draft.seed.isBlank { args += ["--seed", draft.seed] }
+            if draft.preflight {
+                args.append("--preflight")
+                if draft.json { args.append("--json") }
+            }
+            if draft.quiet { args.append("--quiet") }
+
+        case .videoCosmos3:
+            args = [
+                "video", "cosmos3", draft.prompt,
+                "--mode", draft.cosmosMode,
+                "--output", draft.outputPath,
+                "--width", String(draft.width),
+                "--height", String(draft.height),
+                "--num-frames", String(draft.numFrames),
+                "--schedule", draft.schedule
+            ]
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            if !draft.cosmosImagePath.isBlank { args += ["--image", draft.cosmosImagePath] }
+            if !draft.cosmosVideoPath.isBlank { args += ["--video", draft.cosmosVideoPath] }
+            if !draft.actionsOutputPath.isBlank { args += ["--actions-output", draft.actionsOutputPath] }
+            if !draft.secondaryText.isBlank { args += ["--negative-prompt", draft.secondaryText] }
+            if draft.steps > 0 { args += ["--steps", String(draft.steps)] }
+            if draft.cfgScale > 0 { args += ["--guidance-scale", format(draft.cfgScale)] }
+            if draft.scheduleShift > 0 { args += ["--shift", format(draft.scheduleShift)] }
+            if draft.fps > 0 { args += ["--fps", String(draft.fps)] }
+            if !draft.seed.isBlank { args += ["--seed", draft.seed] }
+            if draft.quiet { args.append("--quiet") }
+
+        case .videoPrepareMasks:
+            args = [
+                "video", "prepare-masks",
+                "--plan", draft.inputPath,
+                "--output-dir", draft.outputPath
+            ]
+            if !draft.previewFrame.isBlank { args += ["--preview-frame", draft.previewFrame] }
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            if draft.preflight {
+                args.append("--preflight")
+                if draft.json { args.append("--json") }
+            }
             if draft.quiet { args.append("--quiet") }
 
         case .videoExportLatents:
@@ -619,45 +2144,330 @@ struct CommandTemplate: Identifiable, Equatable {
             if !draft.seed.isBlank { args += ["--seed", draft.seed] }
             if draft.quiet { args.append("--quiet") }
 
+        case .videoSession:
+            args = ["video", "session"]
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            if !draft.modelRoot.isBlank { args += ["--model-root", draft.modelRoot] }
+            if draft.quiet { args.append("--quiet") }
+
         case .sfxGenerate:
             args = ["sfx", "generate", draft.prompt]
+            if !draft.secondaryText.isBlank {
+                args += ["--negative-prompt", draft.secondaryText]
+            }
             if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
             if !draft.model.isBlank { args += ["--model", draft.model] }
             args += ["--duration", format(draft.durationSeconds), "--steps", String(draft.steps)]
             if draft.cfgScale != 1.0 { args += ["--cfg", format(draft.cfgScale)] }
             if !draft.seed.isBlank { args += ["--seed", draft.seed] }
+            if !draft.sfxRenoise.isBlank { args += ["--renoise", draft.sfxRenoise] }
             if draft.quiet { args.append("--quiet") }
 
         case .sfxVideo:
             args = ["sfx", "video", "generate", draft.prompt, draft.inputPath]
+            if !draft.secondaryText.isBlank {
+                args += ["--negative-prompt", draft.secondaryText]
+            }
             if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
             if !draft.model.isBlank { args += ["--model", draft.model] }
             args += ["--duration", format(draft.durationSeconds), "--steps", String(draft.steps)]
+            if draft.cfgScale > 0 { args += ["--cfg", format(draft.cfgScale)] }
             if !draft.seed.isBlank { args += ["--seed", draft.seed] }
+            if !draft.sfxRenoise.isBlank { args += ["--renoise", draft.sfxRenoise] }
+            if !draft.sfxSynchformerModel.isBlank {
+                args += ["--synchformer-model", draft.sfxSynchformerModel]
+            }
+            args += [
+                "--sync-batch-size", String(draft.sfxSyncBatchSize),
+                "--clip-batch-size", String(draft.sfxClipBatchSize)
+            ]
+            if draft.preflight { args.append("--preflight") }
+            if draft.preflight, draft.json { args.append("--json") }
             if draft.quiet { args.append("--quiet") }
 
         case .musicAnalyze:
             args = ["music", "analyze", draft.inputPath]
             if !draft.model.isBlank { args += ["--model", draft.model] }
-            if draft.all { args.append("--include-raw-lm") }
+            if !draft.musicCheckpointsRoot.isBlank {
+                args += ["--checkpoints-root", draft.musicCheckpointsRoot]
+            }
+            if !draft.musicDecoderSubdirectory.isBlank {
+                args += ["--decoder-subdirectory", draft.musicDecoderSubdirectory]
+            }
+            if !draft.musicVAESubdirectory.isBlank {
+                args += ["--vae-subdirectory", draft.musicVAESubdirectory]
+            }
+            if !draft.musicLMSubdirectory.isBlank {
+                args += ["--lm-subdirectory", draft.musicLMSubdirectory]
+            }
+            if draft.useDuration { args += ["--duration", format(draft.durationSeconds)] }
+            args += [
+                "--max-new-tokens", String(draft.musicAnalysisMaxTokens),
+                "--lm-temperature", format(draft.musicAnalysisTemperature),
+                "--lm-top-k", String(draft.musicLMTopK),
+                "--lm-top-p", format(draft.musicLMTopP)
+            ]
+            if draft.musicIncludeRawLM { args.append("--include-raw-lm") }
+            if draft.musicIncludeAudioCodes { args.append("--include-audio-codes") }
             if draft.quiet { args.append("--quiet") }
 
         case .musicTranscribe:
-            args = ["music", "transcribe", draft.inputPath]
+            args = ["music", "transcribe"]
+            if !draft.inputPath.isBlank { args.append(draft.inputPath) }
             if !draft.model.isBlank { args += ["--model", draft.model] }
+            if !draft.musicTranscribeModelPath.isBlank {
+                args += ["--model-path", draft.musicTranscribeModelPath]
+            }
+            if !draft.musicTranscribeVariant.isBlank {
+                args += ["--variant", draft.musicTranscribeVariant]
+            }
             if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            args += ["--format", draft.musicTranscribeFormat]
+            if !draft.musicInstruments.isBlank {
+                args += ["--instruments", draft.musicInstruments]
+            }
+            if draft.musicListInstruments { args.append("--list-instruments") }
+            if draft.musicSampling { args.append("--sampling") }
+            args += [
+                "--temperature", format(draft.temperature),
+                "--max-tokens-per-chunk", String(draft.musicMaxTokensPerChunk),
+                "--beam-size", String(draft.musicBeamSize),
+                "--chunk-batch-size", String(draft.musicChunkBatchSize),
+                "--dtype", draft.musicDType
+            ]
+            if draft.musicStrictEOS { args.append("--strict-eos") }
+            if draft.musicNoMusicalContext { args.append("--no-musical-context") }
+            if !draft.musicContextOutput.isBlank {
+                args += ["--context-output", draft.musicContextOutput]
+            }
             if draft.quiet { args.append("--quiet") }
 
         case .musicRealtime:
-            args = ["music", "realtime", draft.prompt]
+            args = ["music", "realtime"]
+            if !draft.prompt.isBlank { args.append(draft.prompt) }
             if !draft.model.isBlank { args += ["--model", draft.model] }
             args += ["--duration", format(draft.durationSeconds)]
             if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
-            // GUI subprocesses have no audio device contract or stdin TTY, so capture to the
-            // output WAV without live playback; interactive steering stays CLI-only.
-            args.append("--no-play")
+            if !draft.musicPlay { args.append("--no-play") }
+            args += [
+                "--style-conditioning", draft.musicStyleConditioning,
+                "--temperature", format(draft.musicTemperature),
+                "--top-k", String(draft.musicTopK),
+                "--cfg-musiccoca", format(draft.musicCFGMusicCoCa),
+                "--cfg-notes", format(draft.musicCFGNotes),
+                "--cfg-drums", format(draft.musicCFGDrums),
+                "--unmask-width", String(draft.musicUnmaskWidth),
+                "--seed-rotation", String(draft.musicSeedRotation),
+                "--prefill-duration", format(draft.musicPrefillDuration),
+                "--midi-channel", draft.musicMIDIChannel,
+                "--midi-note-offset", String(draft.musicMIDINoteOffset)
+            ]
+            if draft.musicDrumless { args.append("--drumless") }
+            if draft.musicPrefillSilence { args.append("--prefill-silence") }
+            if draft.musicInteractive { args.append("--interactive") }
+            if draft.musicListMIDIInputs { args.append("--list-midi-inputs") }
+            if draft.musicMIDIMonitor { args.append("--midi-monitor") }
+            if draft.musicMIDILogEvents { args.append("--midi-log-events") }
+            if draft.musicMIDILogRaw { args.append("--midi-log-raw") }
+            if !draft.musicMIDIInput.isBlank { args += ["--midi-input", draft.musicMIDIInput] }
+            for mapping in pathList(draft.musicMIDICCMappings) {
+                args += ["--midi-cc", mapping]
+            }
             if draft.quiet { args.append("--quiet") }
 
+        case .musicTrainAdapter:
+            args = [
+                "music", "train-adapter",
+                "--dataset", draft.inputPath,
+                "--output", draft.outputPath,
+                "--kind", draft.musicTrainingKind,
+                "--rank", String(draft.rank),
+                "--alpha", format(draft.alpha),
+                "--factor", String(draft.musicTrainingFactor),
+                "--steps", String(draft.steps),
+                "--learning-rate", format(draft.learningRate),
+                "--weight-decay", format(draft.musicTrainingWeightDecay),
+                "--seed", draft.seed,
+                "--max-duration", format(draft.musicTrainingMaxDuration),
+                "--decoder-subdirectory", draft.musicDecoderSubdirectory,
+                "--vae-subdirectory", draft.musicVAESubdirectory,
+                "--log-every", String(draft.musicTrainingLogEvery)
+            ]
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            if !draft.musicCheckpointsRoot.isBlank {
+                args += ["--checkpoints-root", draft.musicCheckpointsRoot]
+            }
+            if !draft.musicTextSubdirectory.isBlank {
+                args += ["--text-subdirectory", draft.musicTextSubdirectory]
+            }
+
+        case .musicServe:
+            args = [
+                "music", "serve",
+                "--host", draft.host,
+                "--port", String(draft.port)
+            ]
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            if !draft.musicCheckpointsRoot.isBlank {
+                args += ["--checkpoints-root", draft.musicCheckpointsRoot]
+            }
+            if !draft.musicDecoderSubdirectory.isBlank {
+                args += ["--decoder-subdirectory", draft.musicDecoderSubdirectory]
+            }
+            if !draft.musicVAESubdirectory.isBlank {
+                args += ["--vae-subdirectory", draft.musicVAESubdirectory]
+            }
+            if !draft.musicLMSubdirectory.isBlank {
+                args += ["--lm-subdirectory", draft.musicLMSubdirectory]
+            }
+            if !draft.musicTextSubdirectory.isBlank {
+                args += ["--text-subdirectory", draft.musicTextSubdirectory]
+            }
+            for path in pathList(draft.musicAdapterPaths) {
+                args += ["--adapter", path]
+            }
+            if !draft.musicAdapterPaths.isBlank {
+                args += ["--adapter-kind", draft.musicAdapterKind]
+                for scale in pathList(draft.musicAdapterScales) {
+                    args += ["--adapter-scale", scale]
+                }
+            }
+
+        case .adapterList:
+            args = ["adapter", "list"]
+            if draft.json { args.append("--json") }
+
+        case .adapterPull:
+            args = ["adapter", "pull", draft.prompt]
+            if draft.force { args.append("--force") }
+            if draft.quiet { args.append("--quiet") }
+
+        case .runList:
+            args = ["run", "list"]
+            if !draft.operationsRoot.isBlank { args += ["--root", draft.operationsRoot] }
+            if !draft.operationsExecutor.isBlank {
+                args += ["--executor", draft.operationsExecutor]
+                args += ["--limit", String(draft.operationsLimit)]
+            } else {
+                args += ["--max-depth", String(draft.maxDepth)]
+            }
+            if draft.json { args.append("--json") }
+
+        case .runInspect:
+            args = ["run", "inspect", draft.operationsReference]
+            if draft.json { args.append("--json") }
+
+        case .runWatch:
+            args = [
+                "run", "watch", draft.operationsReference,
+                "--poll-interval", format(draft.operationsPollInterval)
+            ]
+            if draft.operationsJSONStream { args.append("--json-stream") }
+            if draft.json { args.append("--json") }
+
+        case .runFetch:
+            args = ["run", "fetch", draft.operationsReference, "--into", draft.outputPath]
+            if draft.operationsAllArtifacts { args.append("--all-artifacts") }
+            for artifact in lineList(draft.operationsArtifacts) {
+                args += ["--artifact", artifact]
+            }
+            if draft.json { args.append("--json") }
+
+        case .runCancel:
+            args = ["run", "cancel", draft.operationsReference]
+            if draft.json { args.append("--json") }
+
+        case .runRetry:
+            args = ["run", "retry", draft.operationsReference]
+            if draft.json { args.append("--json") }
+
+        case .worldServe:
+            args = [
+                "world", "serve",
+                "--host", draft.host,
+                "--port", String(draft.port),
+                "--backend", draft.operationsWorldBackend,
+                "--base-model", draft.operationsBaseModel,
+                "--model", draft.model
+            ]
+            if !draft.operationsStateDirectory.isBlank {
+                args += ["--state-directory", draft.operationsStateDirectory]
+            }
+            if draft.operationsPrepare { args.append("--prepare") }
+
+        case .statusSnapshot:
+            args = [
+                "status",
+                "--host", draft.host,
+                "--port", String(draft.port),
+                "--timeout-seconds", format(draft.operationsTimeoutSeconds)
+            ]
+            if draft.json { args.append("--json") }
+
+        case .qualityGate:
+            args = ["gate", "--suite", draft.operationsGateSuite]
+            if draft.operationsUpdateBaselines { args.append("--update-baselines") }
+            if draft.operationsStrictPerformance { args.append("--strict-perf") }
+            if !draft.outputPath.isBlank { args += ["--json-output", draft.outputPath] }
+            if draft.operationsListOnly { args.append("--list") }
+
+        case .modelStorage:
+            args = ["model", "storage"]
+            if draft.json { args.append("--json") }
+
+        case .modelGarbageCollect:
+            args = ["model", "gc"]
+            if draft.force { args.append("--force") }
+            if draft.json { args.append("--json") }
+
+        case .modelRuntimeGet:
+            args = ["model", "runtime", "get", draft.model]
+            if draft.json { args.append("--json") }
+
+        case .modelRuntimeSet:
+            args = ["model", "runtime", "set", draft.model]
+            if !draft.operationsRuntimeAlias.isBlank {
+                args += ["--alias", draft.operationsRuntimeAlias]
+            }
+            if draft.operationsClearAlias { args.append("--clear-alias") }
+            if draft.operationsPinned { args.append("--pinned") }
+            if draft.operationsUnpinned { args.append("--unpinned") }
+            if !draft.operationsRuntimeTTL.isBlank {
+                args += ["--ttl-seconds", draft.operationsRuntimeTTL]
+            }
+            if draft.operationsClearTTL { args.append("--clear-ttl") }
+            if !draft.operationsRuntimeContext.isBlank {
+                args += ["--max-context-tokens", draft.operationsRuntimeContext]
+            }
+            if draft.operationsClearContext { args.append("--clear-max-context-tokens") }
+            if !draft.operationsRuntimeMaxTokens.isBlank {
+                args += ["--max-tokens", draft.operationsRuntimeMaxTokens]
+            }
+            if draft.operationsClearMaxTokens { args.append("--clear-max-tokens") }
+            if !draft.operationsRuntimeTemperature.isBlank {
+                args += ["--temperature", draft.operationsRuntimeTemperature]
+            }
+            if draft.operationsClearTemperature { args.append("--clear-temperature") }
+            if !draft.operationsRuntimeTopP.isBlank {
+                args += ["--top-p", draft.operationsRuntimeTopP]
+            }
+            if draft.operationsClearTopP { args.append("--clear-top-p") }
+            if !draft.operationsRuntimeMinP.isBlank {
+                args += ["--min-p", draft.operationsRuntimeMinP]
+            }
+            if draft.operationsClearMinP { args.append("--clear-min-p") }
+            if !draft.operationsRuntimeEngine.isBlank {
+                args += ["--engine", draft.operationsRuntimeEngine]
+            }
+            if draft.operationsClearEngine { args.append("--clear-engine") }
+            if !draft.operationsRuntimeKVCacheMode.isBlank {
+                args += ["--kv-cache-mode", draft.operationsRuntimeKVCacheMode]
+            }
+            if draft.operationsClearKVCacheMode { args.append("--clear-kv-cache-mode") }
+            if draft.json { args.append("--json") }
+
+        case .graphStudio, .nodeConsole:
+            return []
         case .sfxAEEncode:
             args = ["sfx", "ae", "encode", draft.inputPath]
             if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
@@ -684,27 +2494,142 @@ struct CommandTemplate: Identifiable, Equatable {
         case .modelBenchmark:
             args = ["model", "benchmark", "q36-mtp"]
             if !draft.model.isBlank { args += ["--model", draft.model] }
-            if draft.all { args.append("--json") }
+            if !draft.modelRoot.isBlank { args += ["--model-root", draft.modelRoot] }
+            if !draft.prompt.isBlank { args += ["--prompt", draft.prompt] }
+            if !draft.benchmarkPromptFile.isBlank {
+                args += ["--prompt-file", draft.benchmarkPromptFile]
+            }
+            args += [
+                "--prompt-repeat", String(draft.benchmarkPromptRepeat),
+                "--decode-tokens", String(draft.benchmarkDecodeTokens),
+                "--temperature", format(draft.temperature),
+                "--top-p", format(draft.topP),
+                "--context-size", String(draft.contextSize),
+                "--forced-mtp-min-prompt-tokens",
+                String(draft.benchmarkForcedMTPMinPromptTokens)
+            ]
+            if !draft.benchmarkPromptRepeatValues.isBlank {
+                args += ["--prompt-repeat-values", draft.benchmarkPromptRepeatValues]
+            }
+            if !draft.benchmarkDecodeTokenValues.isBlank {
+                args += ["--decode-token-values", draft.benchmarkDecodeTokenValues]
+            }
+            if !draft.benchmarkTemperatureValues.isBlank {
+                args += ["--temperature-values", draft.benchmarkTemperatureValues]
+            }
+            if !draft.benchmarkMTPBlockSize.isBlank {
+                args += ["--mtp-block-size", draft.benchmarkMTPBlockSize]
+            }
+            if draft.json { args.append("--json") }
+
+        case .modelBenchmarkLagunaDFlash:
+            args = [
+                "model", "benchmark", "laguna-dflash",
+                "--laguna-path", draft.modelRoot,
+                "--laguna-dflash-path", draft.secondaryText,
+                "--decode-token-values", draft.benchmarkDecodeTokenValues,
+                "--repetitions", String(draft.benchmarkRepetitions),
+                "--laguna-dflash-tokens", String(draft.benchmarkLagunaDFlashTokens),
+                "--temperature", format(draft.temperature),
+                "--top-p", format(draft.topP),
+                "--top-k", String(draft.topK),
+                "--min-p", format(draft.minP),
+                "--fixture", draft.benchmarkFixture,
+                "--context-size", String(draft.contextSize),
+                "--warmup-repetitions", String(draft.benchmarkWarmupRepetitions)
+            ]
+            if !draft.prompt.isBlank { args += ["--prompt", draft.prompt] }
+            if !draft.benchmarkPromptFile.isBlank {
+                args += ["--prompt-file", draft.benchmarkPromptFile]
+            }
+            if !draft.benchmarkConcurrencyValues.isBlank {
+                args += ["--concurrency-values", draft.benchmarkConcurrencyValues]
+            }
+            if draft.benchmarkMixedFixtures { args.append("--mixed-fixtures") }
+            if draft.benchmarkIncludeAutomatic { args.append("--include-automatic") }
+            if draft.benchmarkLogResponses { args.append("--log-responses") }
+            if draft.json { args.append("--json") }
 
         case .pluginList:
             args = ["plugin", "list"]
-            if draft.all { args.append("--json") }
+            if !draft.pluginCatalogURL.isBlank {
+                args += ["--catalog-url", draft.pluginCatalogURL]
+            }
+            if draft.json { args.append("--json") }
 
         case .pluginInstall:
             args = ["plugin", "install", draft.prompt]
-            if draft.force { args.append("--yes") }
+            if !draft.pluginCatalogURL.isBlank {
+                args += ["--catalog-url", draft.pluginCatalogURL]
+            }
+            if !draft.pluginChannel.isBlank { args += ["--channel", draft.pluginChannel] }
+            if draft.all { args.append("--yes") }
+            if draft.force { args.append("--force") }
 
         case .pluginDoctor:
             args = ["plugin", "doctor", draft.prompt]
+            if !draft.pluginCatalogURL.isBlank {
+                args += ["--catalog-url", draft.pluginCatalogURL]
+            }
 
         case .openWebui:
             args = ["open-webui", "quickstart", "--host", draft.host, "--port", String(draft.port)]
+            if !draft.engine.isBlank { args += ["--engine", draft.engine] }
+            args += [
+                "--webui-host", draft.openWebUIHost,
+                "--webui-port", String(draft.openWebUIPort),
+                "--container-name", draft.openWebUIContainerName,
+                "--volume-name", draft.openWebUIVolumeName,
+                "--image", draft.openWebUIImage
+            ]
             if !draft.model.isBlank { args += ["--text-model", draft.model] }
-            if !draft.apiKey.isBlank { args += ["--api-key", draft.apiKey] }
+            args += [
+                "--vision-model", draft.openWebUIVisionModel,
+                "--embedding-model", draft.openWebUIEmbeddingModel,
+                "--image-model", draft.openWebUIImageModel,
+                "--tts-model", draft.openWebUITTSModel,
+                "--stt-model", draft.openWebUISTTModel,
+                "--tts-format", draft.openWebUITTSFormat,
+                "--admin-email", draft.openWebUIAdminEmail,
+                "--wait-seconds", String(draft.openWebUIWaitSeconds)
+            ]
+            if draft.openWebUIPull { args.append("--pull") }
+            if draft.acceptModelLicense { args.append("--accept-model-license") }
+            if draft.openWebUISkipServer { args.append("--skip-server") }
+            if draft.openWebUISkipDocker { args.append("--skip-docker") }
+            if draft.openWebUISkipConfigure { args.append("--skip-configure") }
+            if draft.openWebUIReset { args.append("--reset") }
+            if draft.dryRun { args.append("--dry-run") }
+            if draft.quiet { args.append("--quiet") }
 
         case .apiServe:
             args = ["api", "serve", "--host", draft.host, "--port", String(draft.port), "--engine", draft.engine]
             if !draft.model.isBlank { args += ["--model", draft.model] }
+            if !draft.apiLoRA.isBlank { args += ["--lora", draft.apiLoRA] }
+            args += [
+                "--rate-limit-per-minute", String(draft.apiRateLimitPerMinute),
+                "--max-active-requests", String(draft.apiMaxActiveRequests),
+                "--memory-guard", draft.apiMemoryGuard,
+                "--context-size", String(draft.contextSize)
+            ]
+            if !draft.apiMemoryGuardCustomCeilingGB.isBlank {
+                args += [
+                    "--memory-guard-custom-ceiling-gb",
+                    draft.apiMemoryGuardCustomCeilingGB
+                ]
+            }
+            if draft.kvBits > 0 { args += ["--kv-bits", String(draft.kvBits)] }
+            if !draft.kvQuantScheme.isBlank {
+                args += ["--kv-quant-scheme", draft.kvQuantScheme]
+            }
+            if draft.kvGroupSize > 0 {
+                args += ["--kv-group-size", String(draft.kvGroupSize)]
+            }
+            if draft.quantizedKVStart > 0 {
+                args += ["--quantized-kv-start", String(draft.quantizedKVStart)]
+            }
+            if draft.preflight { args.append("--preflight") }
+            if draft.preflight, draft.json { args.append("--json") }
 
         case .custom:
             return ShellWords.split(draft.extraArguments)
@@ -737,16 +2662,56 @@ struct CommandTemplate: Identifiable, Equatable {
     private func format(_ value: Double) -> String {
         String(format: "%.4g", value)
     }
+
+    private func appendFaceOptions(to args: inout [String], draft: CommandDraft) {
+        if !draft.model.isBlank { args += ["--model", draft.model] }
+        args += [
+            "--score-threshold", format(draft.visionFaceScoreThreshold),
+            "--execution-provider", draft.visionExecutionProvider
+        ]
+        if !draft.visionJSONOutputPath.isBlank {
+            args += ["--json-output", draft.visionJSONOutputPath]
+        }
+        if draft.json { args.append("--json") }
+    }
+
+    private func lineList(_ raw: String) -> [String] {
+        raw.components(separatedBy: .newlines)
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
+
+    private func pathList(_ raw: String) -> [String] {
+        raw.components(separatedBy: .newlines)
+            .flatMap { $0.split(separator: ",", omittingEmptySubsequences: true) }
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+    }
 }
 
 enum CommandLaunchEnvironment {
     static let apiKeyEnvironmentKey = "MERERUN_API_KEY"
+    static let openWebUIAdminPasswordEnvironmentKey = "MERERUN_OPEN_WEBUI_ADMIN_PASSWORD"
 
     static func overrides(templateID: CommandTemplateID, draft: CommandDraft) -> [String: String] {
-        guard templateID == .apiServe else { return [:] }
+        guard templateID == .apiServe
+            || templateID == .openWebui
+            || templateID == .musicServe
+            || templateID == .worldServe
+            || templateID == .statusSnapshot else { return [:] }
+        var overrides: [String: String] = [:]
         let apiKey = draft.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !apiKey.isEmpty else { return [:] }
-        return [apiKeyEnvironmentKey: apiKey]
+        if !apiKey.isEmpty {
+            overrides[apiKeyEnvironmentKey] = apiKey
+        }
+        if templateID == .openWebui {
+            let adminPassword = draft.openWebUIAdminPassword
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if !adminPassword.isEmpty {
+                overrides[openWebUIAdminPasswordEnvironmentKey] = adminPassword
+            }
+        }
+        return overrides
     }
 }
 
@@ -792,8 +2757,8 @@ enum CommandCatalog {
         CommandTemplate(
             id: .imageGenerate,
             category: .image,
-            title: "Generate image",
-            subtitle: "Text-to-image and image-to-image",
+            title: "Generate or edit",
+            subtitle: "Text, image, multi-reference, structured prompt, and LoRA",
             systemImage: "photo",
             promptLabel: "Prompt",
             secondaryLabel: "Negative prompt",
@@ -806,7 +2771,7 @@ enum CommandCatalog {
             id: .imageTrainLoRA,
             category: .image,
             title: "Train LoRA",
-            subtitle: "Train Krea 2 Raw adapters",
+            subtitle: "Krea 2 and FLUX.2 Klein recipes, previews, and dashboards",
             systemImage: "slider.horizontal.3",
             inputKind: .directory,
             outputKind: .file("safetensors"),
@@ -819,6 +2784,59 @@ enum CommandCatalog {
             subtitle: "Run deterministic image runtime checks",
             systemImage: "checkmark.seal",
             outputKind: .directory
+        ),
+        CommandTemplate(
+            id: .imageDatasetDiscover,
+            category: .image,
+            title: "Discover datasets",
+            subtitle: "Find trainable image-caption folders",
+            systemImage: "folder.badge.questionmark",
+            inputKind: .directory
+        ),
+        CommandTemplate(
+            id: .imageRunPlan,
+            category: .image,
+            title: "Run workflow plan",
+            subtitle: "Preflight, materialize, or execute a saved image plan",
+            systemImage: "list.bullet.clipboard",
+            inputKind: .file([.json])
+        ),
+        CommandTemplate(
+            id: .imageVisualizeRun,
+            category: .image,
+            title: "Training dashboard",
+            subtitle: "Open a durable LoRA run viewer",
+            systemImage: "chart.xyaxis.line",
+            inputKind: .directory
+        ),
+        CommandTemplate(
+            id: .imageReconstruct3D,
+            category: .image,
+            title: "TripoSR 3D",
+            subtitle: "Reconstruct a colored mesh from one image",
+            systemImage: "cube.transparent",
+            inputKind: .image,
+            outputKind: .directory,
+            defaultModel: "image-3d-triposr"
+        ),
+        CommandTemplate(
+            id: .imageReconstruct3DTrellis2,
+            category: .image,
+            title: "TRELLIS.2 PBR 3D",
+            subtitle: "Build a 512-resolution PBR O-Voxel asset",
+            systemImage: "cube.fill",
+            inputKind: .image,
+            outputKind: .directory,
+            defaultModel: "image-3d-trellis2-4b"
+        ),
+        CommandTemplate(
+            id: .imageReconstruct3DMultiview,
+            category: .image,
+            title: "InstantMesh multiview",
+            subtitle: "Reconstruct from four or six ordered views",
+            systemImage: "square.3.layers.3d",
+            outputKind: .directory,
+            defaultModel: "image-3d-instantmesh-base"
         ),
         CommandTemplate(
             id: .textChat,
@@ -863,6 +2881,16 @@ enum CommandCatalog {
             outputKind: .file("txt"),
             defaultPrompt: "My name is Alice Smith and my email is alice@example.com",
             defaultModel: "text-anonymize-privacy-filter"
+        ),
+        CommandTemplate(
+            id: .textTrainLoRA,
+            category: .text,
+            title: "Train text LoRA",
+            subtitle: "Fine-tune from chat SFT JSONL",
+            systemImage: "text.badge.plus",
+            inputKind: .file([.json, .plainText]),
+            outputKind: .file("safetensors"),
+            defaultModel: "text-chat-gemma4-12b-4bit"
         ),
         CommandTemplate(
             id: .speechSynthesize,
@@ -985,6 +3013,89 @@ enum CommandCatalog {
             defaultModel: "vision-segment-sam31"
         ),
         CommandTemplate(
+            id: .visionFaceDetect,
+            category: .vision,
+            title: "Detect faces",
+            subtitle: "Buffalo-L boxes, landmarks, and optional embeddings",
+            systemImage: "face.dashed",
+            inputKind: .image,
+            defaultModel: "vision-face-buffalo-l"
+        ),
+        CommandTemplate(
+            id: .visionFaceEmbed,
+            category: .vision,
+            title: "Embed face",
+            subtitle: "Create a normalized ArcFace identity vector",
+            systemImage: "person.crop.square",
+            inputKind: .image,
+            defaultModel: "vision-face-buffalo-l"
+        ),
+        CommandTemplate(
+            id: .visionFaceCompare,
+            category: .vision,
+            title: "Compare faces",
+            subtitle: "Cosine similarity between two selected faces",
+            systemImage: "person.2",
+            inputKind: .image,
+            defaultModel: "vision-face-buffalo-l"
+        ),
+        CommandTemplate(
+            id: .visionFaceBatch,
+            category: .vision,
+            title: "Batch face analysis",
+            subtitle: "Warm-session detection and embeddings to JSONL",
+            systemImage: "person.3.sequence",
+            inputKind: .image,
+            defaultModel: "vision-face-buffalo-l"
+        ),
+        CommandTemplate(
+            id: .visionPose,
+            category: .vision,
+            title: "Pose landmarks",
+            subtitle: "Native body, hand, and face landmarks",
+            systemImage: "figure.stand",
+            inputKind: .image
+        ),
+        CommandTemplate(
+            id: .visionFlow,
+            category: .vision,
+            title: "Optical flow",
+            subtitle: "Dense motion between two equal-size images",
+            systemImage: "arrow.triangle.2.circlepath",
+            inputKind: .image,
+            outputKind: .file("flo")
+        ),
+        CommandTemplate(
+            id: .visionDepthVideo,
+            category: .vision,
+            title: "Video depth",
+            subtitle: "Temporally consistent native VDA-S depth",
+            systemImage: "square.3.layers.3d",
+            inputKind: .video,
+            outputKind: .directory,
+            defaultModel: "vision-depth-vda-small"
+        ),
+        CommandTemplate(
+            id: .visionGeometry,
+            category: .vision,
+            title: "Metric geometry",
+            subtitle: "MoGe-2 depth, normals, camera, and point cloud",
+            systemImage: "rotate.3d",
+            inputKind: .image,
+            outputKind: .directory,
+            defaultModel: "vision-geometry-moge2-small"
+        ),
+        CommandTemplate(
+            id: .visionGeometryMultiview,
+            category: .vision,
+            title: "Multi-view geometry",
+            subtitle: "DA3 cameras, confidence, and colored point cloud",
+            systemImage: "view.3d",
+            inputKind: .image,
+            outputKind: .directory,
+            defaultModel: "vision-geometry-da3-small"
+        ),
+        CommandTemplate(
             id: .musicGenerate,
             category: .media,
             title: "Generate music",
@@ -1000,13 +3111,49 @@ enum CommandCatalog {
             id: .videoGenerate,
             category: .media,
             title: "Generate video",
-            subtitle: "Native LTX draft or unified AV generation",
+            subtitle: "LTX or Wan text, image, keyframe, and audio generation",
             systemImage: "film",
             promptLabel: "Prompt",
+            secondaryLabel: "Negative prompt",
             inputKind: .image,
             outputKind: .file("mp4"),
             defaultPrompt: "a cinematic drone flythrough over snowy mountains",
-            defaultModel: "video-ltx23-av-mlx"
+            defaultModel: "video-ltx23-full-mlx"
+        ),
+        CommandTemplate(
+            id: .videoAnimate,
+            category: .media,
+            title: "Animate subject",
+            subtitle: "SCAIL-2 animation and replacement",
+            systemImage: "figure.walk.motion",
+            promptLabel: "Prompt",
+            secondaryLabel: "Negative prompt",
+            inputKind: .image,
+            outputKind: .file("mp4"),
+            defaultPrompt: "a dancer in a red silk dress",
+            defaultModel: "video-scail2-14b-mlx"
+        ),
+        CommandTemplate(
+            id: .videoCosmos3,
+            category: .media,
+            title: "Cosmos3",
+            subtitle: "Generation, dynamics, policy, and reasoning",
+            systemImage: "sparkles.tv",
+            promptLabel: "Prompt or action task",
+            secondaryLabel: "Negative prompt",
+            outputKind: .file("mp4"),
+            defaultPrompt: "a cinematic rover crossing a windswept alien plain",
+            defaultModel: "video-cosmos3-edge-mlx"
+        ),
+        CommandTemplate(
+            id: .videoPrepareMasks,
+            category: .media,
+            title: "Prepare SCAIL-2 masks",
+            subtitle: "SAM 3.1 mask-plan preparation",
+            systemImage: "square.stack.3d.up",
+            inputKind: .file([.json]),
+            outputKind: .directory,
+            defaultModel: "vision-segment-sam31"
         ),
         CommandTemplate(
             id: .videoExportLatents,
@@ -1020,14 +3167,152 @@ enum CommandCatalog {
             defaultModel: "video-ltx-av"
         ),
         CommandTemplate(
+            id: .videoSession,
+            category: .media,
+            title: "Resident LTX session",
+            subtitle: "Keep LTX 2.3 warm for JSONL requests",
+            systemImage: "bolt.horizontal.circle",
+            defaultModel: "video-ltx23-full-mlx"
+        ),
+        CommandTemplate(
+            id: .adapterList,
+            category: .operations,
+            title: "Browse adapters",
+            subtitle: "Verified LoRA catalog and install state",
+            systemImage: "square.stack.3d.up"
+        ),
+        CommandTemplate(
+            id: .adapterPull,
+            category: .operations,
+            title: "Pull adapter",
+            subtitle: "Download and verify a cataloged LoRA",
+            systemImage: "arrow.down.circle",
+            promptLabel: "Adapter ID",
+            defaultPrompt: "mere-platform-assistant"
+        ),
+        CommandTemplate(
+            id: .runList,
+            category: .operations,
+            title: "Browse runs",
+            subtitle: "Find local reports or remote jobs",
+            systemImage: "clock.arrow.circlepath"
+        ),
+        CommandTemplate(
+            id: .runInspect,
+            category: .operations,
+            title: "Inspect run",
+            subtitle: "Read a durable run, report, plan, or remote job",
+            systemImage: "doc.text.magnifyingglass"
+        ),
+        CommandTemplate(
+            id: .runWatch,
+            category: .operations,
+            title: "Watch remote run",
+            subtitle: "Stream SSH or Relay worker events",
+            systemImage: "dot.radiowaves.left.and.right"
+        ),
+        CommandTemplate(
+            id: .runFetch,
+            category: .operations,
+            title: "Fetch remote run",
+            subtitle: "Verify and materialize remote artifacts locally",
+            systemImage: "square.and.arrow.down",
+            outputKind: .directory
+        ),
+        CommandTemplate(
+            id: .runCancel,
+            category: .operations,
+            title: "Cancel run",
+            subtitle: "Request local or remote cancellation",
+            systemImage: "stop.circle"
+        ),
+        CommandTemplate(
+            id: .runRetry,
+            category: .operations,
+            title: "Retry Relay run",
+            subtitle: "Retry the same immutable job bundle",
+            systemImage: "arrow.clockwise.circle"
+        ),
+        CommandTemplate(
+            id: .worldServe,
+            category: .operations,
+            title: "World session",
+            subtitle: "Serve a warm DreamX or Cosmos3 world",
+            systemImage: "globe.americas.fill",
+            defaultModel: "video-dreamx-world-5b-ar-mlx"
+        ),
+        CommandTemplate(
+            id: .statusSnapshot,
+            category: .operations,
+            title: "Status snapshot",
+            subtitle: "Server, loaded models, and local inventory",
+            systemImage: "waveform.path.ecg"
+        ),
+        CommandTemplate(
+            id: .qualityGate,
+            category: .operations,
+            title: "Quality gate",
+            subtitle: "Installed-model correctness and performance",
+            systemImage: "checkmark.shield",
+            outputKind: .file("json")
+        ),
+        CommandTemplate(
+            id: .modelStorage,
+            category: .operations,
+            title: "Model storage",
+            subtitle: "Physical storage, sharing, and reclaimable bytes",
+            systemImage: "internaldrive"
+        ),
+        CommandTemplate(
+            id: .modelGarbageCollect,
+            category: .operations,
+            title: "Storage cleanup",
+            subtitle: "Dry-run or execute safe garbage collection",
+            systemImage: "trash.slash"
+        ),
+        CommandTemplate(
+            id: .modelRuntimeGet,
+            category: .operations,
+            title: "Read runtime policy",
+            subtitle: "Inspect API residency and generation defaults",
+            systemImage: "gearshape.2",
+            defaultModel: StudioChatDefaults.fallbackModelID
+        ),
+        CommandTemplate(
+            id: .modelRuntimeSet,
+            category: .operations,
+            title: "Set runtime policy",
+            subtitle: "Pin, expire, alias, and tune resident models",
+            systemImage: "slider.horizontal.3",
+            defaultModel: StudioChatDefaults.fallbackModelID
+        ),
+        CommandTemplate(
+            id: .graphStudio,
+            category: .operations,
+            title: "Open Graph Studio",
+            subtitle: "Author and execute portable Graph v2 workflows",
+            systemImage: "point.3.connected.trianglepath.dotted",
+            externalURL: URL(string: "https://studio.mere.run/app")
+        ),
+        CommandTemplate(
+            id: .nodeConsole,
+            category: .operations,
+            title: "Manage Nodes & Relay",
+            subtitle: "Pair GPUs, schedule fleet work, and inspect nodes",
+            systemImage: "server.rack",
+            externalURL: URL(string: "https://relay.mere.run")
+        ),
+        CommandTemplate(
             id: .sfxGenerate,
             category: .sfx,
             title: "Generate sound effect",
-            subtitle: "Woosh text-to-audio sound effects",
+            subtitle: "Woosh or MMAudio text-to-audio",
             systemImage: "speaker.wave.2",
             promptLabel: "Prompt",
+            secondaryLabel: "Negative prompt",
             outputKind: .file("wav"),
-            defaultPrompt: "a heavy wooden door creaking open"
+            defaultPrompt: "a heavy wooden door creaking open",
+            defaultModel: "sfx-woosh-dflow"
         ),
         CommandTemplate(
             id: .sfxVideo,
@@ -1036,9 +3321,11 @@ enum CommandCatalog {
             subtitle: "Generate sound effects from a video",
             systemImage: "video.badge.waveform",
             promptLabel: "Prompt",
+            secondaryLabel: "Negative prompt",
             inputKind: .video,
             outputKind: .file("wav"),
-            defaultPrompt: "footsteps on gravel"
+            defaultPrompt: "footsteps on gravel",
+            defaultModel: "sfx-woosh-dvflow-8s"
         ),
         CommandTemplate(
             id: .musicAnalyze,
@@ -1063,11 +3350,30 @@ enum CommandCatalog {
             id: .musicRealtime,
             category: .media,
             title: "Realtime music",
-            subtitle: "Magenta RT2 capture to WAV",
+            subtitle: "Magenta RT2 playback, capture, and MIDI steering",
             systemImage: "dot.radiowaves.left.and.right",
             promptLabel: "Prompt",
             outputKind: .file("wav"),
-            defaultPrompt: "warm ambient pads with a slow build"
+            defaultPrompt: "warm ambient pads with a slow build",
+            defaultModel: "music-magenta-rt2-small"
+        ),
+        CommandTemplate(
+            id: .musicTrainAdapter,
+            category: .media,
+            title: "Train music adapter",
+            subtitle: "Native ACE-Step LoRA or LoKr training",
+            systemImage: "tuningfork",
+            inputKind: .file([.json]),
+            outputKind: .file("safetensors"),
+            defaultModel: "music-acestep"
+        ),
+        CommandTemplate(
+            id: .musicServe,
+            category: .media,
+            title: "Resident music API",
+            subtitle: "Keep ACE-Step, LM, and adapters warm",
+            systemImage: "server.rack",
+            defaultModel: "music-acestep"
         ),
         CommandTemplate(
             id: .sfxAEEncode,
@@ -1076,7 +3382,8 @@ enum CommandCatalog {
             subtitle: "Audio → Woosh latents (.npy)",
             systemImage: "arrow.down.doc",
             inputKind: .audio,
-            outputKind: .file("npy")
+            outputKind: .file("npy"),
+            defaultModel: "sfx-woosh-dflow"
         ),
         CommandTemplate(
             id: .sfxAEDecode,
@@ -1085,7 +3392,8 @@ enum CommandCatalog {
             subtitle: "Woosh latents (.npy) → audio",
             systemImage: "arrow.up.doc",
             inputKind: .file([.data]),
-            outputKind: .file("wav")
+            outputKind: .file("wav"),
+            defaultModel: "sfx-woosh-dflow"
         ),
         CommandTemplate(
             id: .sfxClapScore,
@@ -1095,7 +3403,8 @@ enum CommandCatalog {
             systemImage: "checkmark.seal",
             promptLabel: "Prompt",
             inputKind: .audio,
-            defaultPrompt: "a heavy wooden door creaking open"
+            defaultPrompt: "a heavy wooden door creaking open",
+            defaultModel: "sfx-woosh-clap"
         ),
         CommandTemplate(
             id: .sfxConditionText,
@@ -1105,15 +3414,23 @@ enum CommandCatalog {
             systemImage: "function",
             promptLabel: "Prompt",
             outputKind: .file("safetensors"),
-            defaultPrompt: "a heavy wooden door creaking open"
+            defaultPrompt: "a heavy wooden door creaking open",
+            defaultModel: "sfx-woosh-dflow"
         ),
         CommandTemplate(
             id: .modelBenchmark,
             category: .models,
-            title: "Benchmark",
+            title: "Qwen3.6 benchmark",
             subtitle: "Focused Qwen3.6 MTP benchmark",
             systemImage: "speedometer",
             defaultModel: "text-chat-q36-nano"
+        ),
+        CommandTemplate(
+            id: .modelBenchmarkLagunaDFlash,
+            category: .models,
+            title: "Laguna benchmark",
+            subtitle: "Target-only, fixed DFlash, and adaptive routing",
+            systemImage: "bolt.horizontal.circle"
         ),
         CommandTemplate(
             id: .pluginList,

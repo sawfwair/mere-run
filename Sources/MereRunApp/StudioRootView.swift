@@ -536,6 +536,9 @@ struct StudioRootView: View {
                 selectedLibraryID = library.items.first { $0.mode == newMode }?.id
             }
             draft = nextDraft
+            if showAdvanced {
+                controller.syncAdvanced(to: newMode, from: nextDraft)
+            }
             controller.checkReadiness(for: newMode, draft: draft)
             if newMode != .listen { promptFocused = true }
         }
@@ -875,24 +878,7 @@ struct StudioRootView: View {
     /// the composer already holds — including the shared depth fields — so Advanced deepens the
     /// current task without silently reverting edits.
     private func syncAdvancedToStudio() {
-        if let template = CommandCatalog.template(id: mode.defaultTemplateID) {
-            controller.select(template)
-        }
-        controller.draft.prompt = draft.prompt
-        if !draft.model.isBlank { controller.draft.model = draft.model }
-        if !draft.inputPath.isBlank { controller.draft.inputPath = draft.inputPath }
-        // Shared schema depth (WS-3.5): keep the two surfaces aligned after live edits, not only
-        // at defaults.
-        controller.draft.temperature = draft.temperature
-        controller.draft.maxTokens = draft.maxTokens
-        controller.draft.cfgScale = draft.cfgScale
-        controller.draft.strength = draft.strength
-        controller.draft.language = draft.language
-        controller.draft.backend = draft.backend
-        controller.draft.timestamps = draft.timestamps
-        controller.draft.fps = draft.fps
-        controller.draft.numFrames = draft.numFrames
-        controller.draft.variant = draft.variant
+        controller.syncAdvanced(to: mode, from: draft)
     }
 
     private func freshDraft(for mode: StudioMode) -> StudioDraft {

@@ -1,30 +1,56 @@
 # Vision Runtime
 
-This page covers captioning, inspection, face analysis, grounding, segmentation, tracking,
-pose extraction, optical flow, video depth, single- and multi-view geometry,
-image-to-3D reconstruction, and OCR.
+The widest surface in `mere.run`. Ask a question about a photo, cut out any
+object you can name, follow it through a video, read a document, recover metric
+depth and camera intrinsics from a single frame, or reconstruct a PBR mesh —
+nineteen commands, every one of them running on your own machine.
 
-## Public surface
+## Commands
 
-- `mere.run vision caption`
-- `mere.run vision inspect`
-- `mere.run vision face detect`
-- `mere.run vision face embed`
-- `mere.run vision face compare`
-- `mere.run vision face batch`
-- `mere.run vision ground`
-- `mere.run vision segment`
-- `mere.run vision track`
-- `mere.run vision track-live`
-- `mere.run vision pose`
-- `mere.run vision flow`
-- `mere.run vision depth-video`
-- `mere.run vision geometry`
-- `mere.run vision geometry-multiview`
-- `mere.run vision image-to-3d`
-- `mere.run vision image-to-3d-trellis2`
-- `mere.run vision image-to-3d-multiview`
-- `mere.run vision ocr`
+**Understand and read**
+
+| Command | What it does |
+| --- | --- |
+| `mere.run vision inspect` | Describe or answer questions about an image using Qwen3-VL. |
+| `mere.run vision caption` | Generate training-friendly captions for images. |
+| `mere.run vision ocr` | Extract text from images using LightOnOCR, GLM-OCR, or Infinity-Parser2. |
+
+**Find, isolate, and follow**
+
+| Command | What it does |
+| --- | --- |
+| `mere.run vision ground` | Ground text queries in an image with the native Falcon Perception runtime. |
+| `mere.run vision segment` | Segment prompted objects in an image with the native SAM 3.1 runtime. |
+| `mere.run vision track` | Track prompted objects through a video with the native SAM 3.1 runtime. |
+| `mere.run vision track-live` | Capture from a camera and track text-prompted objects with native SAM 3.1. |
+
+**Faces**
+
+| Command | What it does |
+| --- | --- |
+| `mere.run vision face detect` | Detect faces and five-point landmarks in an image. |
+| `mere.run vision face embed` | Create a normalized ArcFace embedding for one face in an image. |
+| `mere.run vision face compare` | Compare one face from each of two images with cosine similarity. |
+| `mere.run vision face batch` | Analyze many images with one warm detector/recognizer session and emit JSONL. |
+
+**Measure, reconstruct, and move**
+
+| Command | What it does |
+| --- | --- |
+| `mere.run vision pose` | Detect body, hand, and face landmarks with the native platform runtime. |
+| `mere.run vision flow` | Generate dense optical flow between two equal-size images. |
+| `mere.run vision depth-video` | Generate temporally consistent relative or metric video depth with native VDA-S. |
+| `mere.run vision geometry` | Generate metric depth, normals, camera intrinsics, and a point cloud with native MoGe-2. |
+| `mere.run vision geometry-multiview` | Solve native DA3-Small multi-view relative geometry, confidence, and cameras. |
+| `mere.run vision image-to-3d` | Reconstruct a colored object mesh from one image with native TripoSR. |
+| `mere.run vision image-to-3d-trellis2` | Reconstruct a 512-resolution PBR O-Voxel mesh with native MLX TRELLIS.2. |
+| `mere.run vision image-to-3d-multiview` | VFX alias for native 4/6-view InstantMesh reconstruction. |
+
+The macOS Studio app exposes the same surface through its shared capability
+contract. Read Image remains the fast caption/inspection entry point; Advanced
+provides typed forms for every VLM, OCR, grounding, segmentation, tracking,
+face, pose, flow, depth, and geometry command above. Image-to-3D commands live
+in the Image workspace so the app has one canonical reconstruction flow.
 
 ## Model family
 

@@ -1,12 +1,13 @@
 # Benchmarking
 
-`mere.run` has several benchmark lanes. They are intentionally small, local, and
-repeatable. Use them to compare installed models on this machine, verify runtime
-changes, and catch regressions before claiming support. They are not full public
-leaderboards.
+Small, local, repeatable lanes that answer one question: on *this* machine, is
+this model better than the alternative? Use them to compare installed models,
+verify a runtime change, and catch a regression before you claim support for
+something.
 
-For command syntax, see the generated [CLI Reference](./cli.md). This page is
-the decision guide for which benchmark to run and how to read the result.
+They are not public leaderboards and do not try to be. For command syntax, see
+the generated [CLI Reference](./cli.md); this page is the decision guide for
+picking a lane and reading what it tells you.
 
 ## Benchmark Map
 

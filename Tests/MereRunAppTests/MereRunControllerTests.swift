@@ -162,6 +162,28 @@ final class MereRunControllerTests: XCTestCase {
         XCTAssertEqual(controller.readinessByMode[.readImage], .ready)
     }
 
+    func testSavingHuggingFaceTokenKeepsSecretOutOfProcessArguments() async {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+
+        let task = Task { await controller.saveHuggingFaceToken(" hf_secret ") }
+        await Task.yield()
+
+        XCTAssertEqual(runner.starts.count, 1)
+        let configuration = runner.starts[0].configuration
+        XCTAssertEqual(
+            Array(configuration.arguments.suffix(5)),
+            ["config", "set", "hf-token", "--from-env", "MERERUN_CONFIG_VALUE"]
+        )
+        XCTAssertFalse(configuration.arguments.contains("hf_secret"))
+        XCTAssertEqual(configuration.environment["MERERUN_CONFIG_VALUE"], "hf_secret")
+
+        runner.starts[0].termination(0)
+        let didSave = await task.value
+        XCTAssertTrue(didSave)
+    }
+
     func testFailedRunResultIncludesStderrWhenStdoutIsEmpty() async throws {
         let runner = RecordingProcessRunner()
         let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
@@ -237,6 +259,47 @@ final class MereRunControllerTests: XCTestCase {
             runner.starts.first?.configuration.arguments,
             ["model", "pull", "image-zimage-nano"]
         )
+    }
+
+    func testResidentVideoSessionKeepsInputOpenAndPublishesEachResult() async throws {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        let template = try XCTUnwrap(CommandCatalog.template(id: .videoSession))
+        controller.select(template)
+        controller.draft.prompt = "A paper kite crossing a storm front"
+        controller.draft.outputPath = "/tmp/resident-kite.mp4"
+        controller.draft.imagePath = "/tmp/start.png"
+        controller.draft.endImagePath = "/tmp/end.png"
+        controller.draft.seed = "73"
+
+        XCTAssertTrue(controller.run())
+        XCTAssertEqual(runner.starts.count, 1)
+        XCTAssertTrue(runner.starts[0].configuration.keepsStandardInputOpen)
+
+        runner.starts[0].stderr("LTX video session ready: /tmp/model\n")
+        await Task.yield()
+        XCTAssertEqual(controller.status, "Resident session ready")
+        XCTAssertTrue(controller.canSubmitVideoSessionRequest)
+        XCTAssertTrue(controller.submitVideoSessionRequest())
+
+        let input = try XCTUnwrap(runner.processes[0].standardInputs.first)
+        let payload = try XCTUnwrap(input.data(using: .utf8))
+        let json = try XCTUnwrap(JSONSerialization.jsonObject(with: payload) as? [String: Any])
+        XCTAssertEqual(json["prompt"] as? String, "A paper kite crossing a storm front")
+        XCTAssertEqual(json["output"] as? String, "/tmp/resident-kite.mp4")
+        XCTAssertEqual(json["image"] as? String, "/tmp/start.png")
+        XCTAssertEqual(json["end_image"] as? String, "/tmp/end.png")
+        XCTAssertEqual(json["seed"] as? Int, 73)
+
+        runner.starts[0].stdout(#"{"output":"/tmp/resident-kite.mp4","status":"res"#)
+        runner.starts[0].stdout("ult\"}\n")
+        await Task.yield()
+        await Task.yield()
+
+        XCTAssertEqual(controller.lastOutputURL?.path, "/tmp/resident-kite.mp4")
+        XCTAssertEqual(controller.status, "Generated: resident-kite.mp4")
+        XCTAssertTrue(controller.canSubmitVideoSessionRequest)
     }
 
     func testStudioRunsExecuteConcurrentlyUpToCapThenQueue() async throws {
@@ -549,6 +612,31 @@ final class MereRunControllerTests: XCTestCase {
         XCTAssertNil(controller.runtimeAuthorizationHeader)
     }
 
+    func testAdvancedSurfaceFollowsStudioModeChanges() {
+        let controller = MereRunController(processRunner: RecordingProcessRunner(), resolvesCLIOnInit: false)
+        var imageDraft = StudioDraft()
+        imageDraft.reset(for: .createImage)
+        imageDraft.prompt = "an image prompt"
+        controller.syncAdvanced(to: .createImage, from: imageDraft)
+
+        XCTAssertEqual(controller.selectedTemplate.id, .imageGenerate)
+        XCTAssertEqual(controller.draft.prompt, "an image prompt")
+
+        var videoDraft = StudioDraft()
+        videoDraft.reset(for: .video)
+        videoDraft.prompt = "a video prompt"
+        videoDraft.inputPath = "/tmp/start.png"
+        videoDraft.audioPath = "/tmp/song.wav"
+        videoDraft.videoOutputMode = .audioVideo
+        controller.syncAdvanced(to: .video, from: videoDraft)
+
+        XCTAssertEqual(controller.selectedTemplate.id, .videoGenerate)
+        XCTAssertEqual(controller.draft.prompt, "a video prompt")
+        XCTAssertEqual(controller.draft.inputPath, "/tmp/start.png")
+        XCTAssertEqual(controller.draft.audioPath, "/tmp/song.wav")
+        XCTAssertEqual(controller.draft.videoOutputMode, .audioVideo)
+    }
+
     func testDetectOutputURLPrefersStdoutContractPath() {
         let probe = StubFileProbe()
         probe.existingPaths = ["/out/render.png"]
@@ -714,9 +802,14 @@ private final class RecordingProcessRunner: MereRunProcessRunning {
 
 private final class RecordingProcess: MereRunRunningProcess {
     private(set) var terminateCallCount = 0
+    private(set) var standardInputs: [String] = []
 
     func terminate() {
         terminateCallCount += 1
+    }
+
+    func sendStandardInput(_ text: String) throws {
+        standardInputs.append(text)
     }
 }
 

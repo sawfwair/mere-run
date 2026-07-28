@@ -1,5 +1,6 @@
 import Foundation
 import ArgumentParser
+import MereRunContract
 import MereRunCore
 
 struct VideoGenerationPreflightInput {

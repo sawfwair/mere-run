@@ -19,6 +19,8 @@ struct OpenWebUI: ParsableCommand {
 }
 
 struct OpenWebUIQuickstart: AsyncParsableCommand {
+    static let adminPasswordEnvironmentKey = "MERERUN_OPEN_WEBUI_ADMIN_PASSWORD"
+
     static let configuration = CommandConfiguration(
         commandName: "quickstart",
         abstract: "Start mere.run, run the official Open WebUI Docker image, and configure the connection."
@@ -75,8 +77,11 @@ struct OpenWebUIQuickstart: AsyncParsableCommand {
     @Option(name: [.long], help: "Open WebUI no-auth signin email used while configuring the fresh container.")
     var adminEmail: String = "admin@localhost"
 
-    @Option(name: [.long], help: "Open WebUI no-auth signin password used while configuring the fresh container.")
-    var adminPassword: String = "admin"
+    @Option(
+        name: [.long],
+        help: "Open WebUI no-auth signin password. Defaults to MERERUN_OPEN_WEBUI_ADMIN_PASSWORD or admin."
+    )
+    var adminPassword: String?
 
     @Option(name: [.long], help: "Seconds to wait for mere.run and Open WebUI health checks.")
     var waitSeconds: Int = 180
@@ -175,6 +180,19 @@ struct OpenWebUIQuickstart: AsyncParsableCommand {
             return fromEnvironment
         }
         return "change-me"
+    }
+
+    static func resolvedAdminPassword(
+        explicit: String?,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> String {
+        if let explicit = normalized(explicit) {
+            return explicit
+        }
+        if let fromEnvironment = normalized(environment[adminPasswordEnvironmentKey]) {
+            return fromEnvironment
+        }
+        return "admin"
     }
 
     func makePlan(apiKey: String) throws -> OpenWebUIQuickstartPlan {
@@ -497,7 +515,10 @@ struct OpenWebUIQuickstart: AsyncParsableCommand {
     }
 
     private func fetchOpenWebUIToken() async throws -> String {
-        let payload = OpenWebUIAuthSigninRequest(email: adminEmail, password: adminPassword)
+        let payload = OpenWebUIAuthSigninRequest(
+            email: adminEmail,
+            password: Self.resolvedAdminPassword(explicit: adminPassword)
+        )
         let response: OpenWebUIAuthSigninResponse = try await postOpenWebUIJSON(
             path: "/api/v1/auths/signin",
             token: nil,

@@ -1,6 +1,10 @@
 import ArgumentParser
+import MereRunContract
 import MereRunCore
 
+extension LTXVideoVariant: ExpressibleByArgument {}
+extension LTXVideoQuality: ExpressibleByArgument {}
+extension LTXVideoOutputMode: ExpressibleByArgument {}
 extension ACEStepTask: ExpressibleByArgument {}
 extension ACEStepChunkMaskMode: ExpressibleByArgument {}
 extension ACEStepRepaintMode: ExpressibleByArgument {}

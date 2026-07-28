@@ -254,10 +254,26 @@ struct MereRunProcessConfiguration: Equatable {
     let arguments: [String]
     let currentDirectoryURL: URL
     let environment: [String: String]
+    let keepsStandardInputOpen: Bool
+}
+
+enum MereRunProcessInputError: LocalizedError {
+    case unavailable
+
+    var errorDescription: String? {
+        "This command does not accept interactive input."
+    }
 }
 
 protocol MereRunRunningProcess: AnyObject {
     func terminate()
+    func sendStandardInput(_ text: String) throws
+}
+
+extension MereRunRunningProcess {
+    func sendStandardInput(_ text: String) throws {
+        throw MereRunProcessInputError.unavailable
+    }
 }
 
 protocol MereRunProcessRunning: AnyObject {
@@ -279,20 +295,31 @@ extension FileManager: MereRunFileProbing {}
 
 private final class FoundationRunningProcess: MereRunRunningProcess, @unchecked Sendable {
     private let process: Process
+    private let stdinPipe: Pipe?
     private let stdoutPipe: Pipe
     private let stderrPipe: Pipe
 
-    init(process: Process, stdoutPipe: Pipe, stderrPipe: Pipe) {
+    init(process: Process, stdinPipe: Pipe?, stdoutPipe: Pipe, stderrPipe: Pipe) {
         self.process = process
+        self.stdinPipe = stdinPipe
         self.stdoutPipe = stdoutPipe
         self.stderrPipe = stderrPipe
     }
 
     func terminate() {
+        try? stdinPipe?.fileHandleForWriting.close()
         process.terminate()
     }
 
+    func sendStandardInput(_ text: String) throws {
+        guard let stdinPipe else {
+            throw MereRunProcessInputError.unavailable
+        }
+        try stdinPipe.fileHandleForWriting.write(contentsOf: Data(text.utf8))
+    }
+
     func cleanup() {
+        try? stdinPipe?.fileHandleForWriting.close()
         stdoutPipe.fileHandleForReading.readabilityHandler = nil
         stderrPipe.fileHandleForReading.readabilityHandler = nil
     }
@@ -317,13 +344,16 @@ private final class FoundationMereRunProcessRunner: MereRunProcessRunning {
         process.currentDirectoryURL = configuration.currentDirectoryURL
         process.environment = configuration.environment
 
+        let stdinPipe = configuration.keepsStandardInputOpen ? Pipe() : nil
         let stdoutPipe = Pipe()
         let stderrPipe = Pipe()
+        process.standardInput = stdinPipe
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
 
         let runningProcess = FoundationRunningProcess(
             process: process,
+            stdinPipe: stdinPipe,
             stdoutPipe: stdoutPipe,
             stderrPipe: stderrPipe
         )
@@ -425,6 +455,27 @@ struct MereRunUtilityCommandResult: Equatable {
         if trimmedStderr.isEmpty { return trimmedStdout }
         return "\(trimmedStdout)\n\nSTDERR\n\(trimmedStderr)"
     }
+}
+
+private struct StudioVideoSessionRequest: Encodable {
+    let id: String
+    let prompt: String
+    let output: String
+    let width: Int
+    let height: Int
+    let numFrames: Int
+    let fps: Int
+    let seed: Int?
+    let image: String?
+    let imageStrength: Double?
+    let endImage: String?
+    let endImageStrength: Double?
+}
+
+private struct StudioVideoSessionResponse: Decodable {
+    let status: String
+    let output: String?
+    let error: String?
 }
 
 @MainActor
@@ -559,6 +610,13 @@ final class MereRunController: ObservableObject {
         commandPreview(template: selectedTemplate, draft: draft, masksSecrets: false)
     }
 
+    var canSubmitVideoSessionRequest: Bool {
+        guard let session = foregroundSession else { return false }
+        return session.spec.template.id == .videoSession
+            && session.process != nil
+            && session.exitCode == nil
+    }
+
     init(
         processRunner: MereRunProcessRunning = FoundationMereRunProcessRunner(),
         fileSystem: MereRunFileProbing = FileManager.default,
@@ -622,6 +680,75 @@ final class MereRunController: ObservableObject {
         default:
             break
         }
+    }
+
+    /// Selects the active Studio mode's canonical command and carries the quick composer's typed
+    /// values into Advanced. Keeping this transition in the controller makes opening Advanced and
+    /// switching modes while it is already open follow the same tested path.
+    func syncAdvanced(to mode: StudioMode, from studioDraft: StudioDraft) {
+        guard let template = CommandCatalog.template(id: mode.defaultTemplateID) else { return }
+        select(template)
+        draft.prompt = studioDraft.prompt
+        if !studioDraft.model.isBlank { draft.model = studioDraft.model }
+        if !studioDraft.inputPath.isBlank { draft.inputPath = studioDraft.inputPath }
+        draft.temperature = studioDraft.temperature
+        draft.topP = studioDraft.topP
+        draft.minP = studioDraft.minP
+        draft.maxTokens = studioDraft.maxTokens
+        draft.contextSize = studioDraft.contextSize
+        draft.topK = studioDraft.topK
+        draft.kvBits = studioDraft.kvBits
+        draft.kvQuantScheme = studioDraft.kvQuantScheme
+        draft.kvGroupSize = studioDraft.kvGroupSize
+        draft.quantizedKVStart = studioDraft.quantizedKVStart
+        draft.responseFormat = studioDraft.responseFormat
+        draft.thinkingMode = studioDraft.thinkingMode
+        draft.loraPath = studioDraft.loraPath
+        draft.loraScale = studioDraft.loraScale
+        draft.force = studioDraft.stats
+        draft.tools = studioDraft.tools
+        draft.toolLoop = studioDraft.toolLoop
+        draft.allowShellExec = studioDraft.allowShellExec
+        draft.allowAbsoluteToolPaths = studioDraft.allowAbsoluteToolPaths
+        draft.autoApproveTools = studioDraft.autoApproveTools
+        draft.sandboxDir = studioDraft.sandboxDir
+        draft.requireInstalled = studioDraft.requireInstalled
+        draft.json = studioDraft.preflightJSON
+        draft.cfgScale = studioDraft.cfgScale
+        draft.strength = studioDraft.strength
+        draft.sigmaShift = studioDraft.sigmaShift
+        draft.referenceImagePaths = studioDraft.referenceImagePaths
+        draft.keepOriginalAspect = studioDraft.keepOriginalAspect
+        draft.structuredPrompt = studioDraft.structuredPrompt
+        draft.structuredPromptModel = studioDraft.structuredPromptModel
+        draft.structuredPromptMaxTokens = studioDraft.structuredPromptMaxTokens
+        draft.maxSequenceLength = studioDraft.imageMaxSequenceLength
+        draft.kreaConditioningMultiplier = studioDraft.kreaConditioningMultiplier
+        draft.kreaConditioningLayerWeights = studioDraft.kreaConditioningLayerWeights
+        draft.kreaBaseQuantizationBits = studioDraft.kreaBaseQuantizationBits
+        draft.progressJSON = studioDraft.progressJSON
+        draft.language = studioDraft.language
+        draft.backend = studioDraft.backend
+        draft.timestamps = studioDraft.timestamps
+        draft.fps = studioDraft.fps
+        draft.numFrames = studioDraft.numFrames
+        draft.useDuration = studioDraft.useDuration
+        draft.durationSeconds = studioDraft.durationSeconds
+        draft.videoQuality = studioDraft.videoQuality
+        draft.videoOutputMode = studioDraft.videoOutputMode
+        draft.audioPath = studioDraft.audioPath
+        draft.audioStartTime = studioDraft.audioStartTime
+        draft.endImagePath = studioDraft.endImagePath
+        draft.endImageStrength = studioDraft.endImageStrength
+        draft.scheduleShift = studioDraft.scheduleShift
+        draft.a2vGuidanceScale = studioDraft.a2vGuidanceScale
+        draft.videoCFGGuidanceScale = studioDraft.videoCFGGuidanceScale
+        draft.audioCFGGuidanceScale = studioDraft.audioCFGGuidanceScale
+        draft.v2aGuidanceScale = studioDraft.v2aGuidanceScale
+        draft.a2vSteps = studioDraft.a2vSteps
+        draft.preflight = studioDraft.preflight
+        draft.timings = studioDraft.timings
+        draft.timingsOutputPath = studioDraft.timingsOutputPath
     }
 
     private func applyRecommendedChatDefaultsToCurrentDraft(replacing oldRecommendation: String?) {
@@ -724,8 +851,11 @@ final class MereRunController: ObservableObject {
         let trimmed = token.trimmingCharacters(in: .whitespacesAndNewlines)
         let args = trimmed.isEmpty
             ? ["config", "unset", "hf-token"]
-            : ["config", "set", "hf-token", trimmed]
-        let result = await utilityCommandResult(args: args)
+            : ["config", "set", "hf-token", "--from-env", "MERERUN_CONFIG_VALUE"]
+        let result = await utilityCommandResult(
+            args: args,
+            environmentOverrides: trimmed.isEmpty ? [:] : ["MERERUN_CONFIG_VALUE": trimmed]
+        )
         return result.exitCode == 0
     }
 
@@ -793,7 +923,11 @@ final class MereRunController: ObservableObject {
         return launch.displayCommand(for: masksSecrets ? args.maskingSecrets() : args)
     }
 
-    func utilityCommandResult(args: [String], masksSecrets: Bool = true) async -> MereRunUtilityCommandResult {
+    func utilityCommandResult(
+        args: [String],
+        masksSecrets: Bool = true,
+        environmentOverrides: [String: String] = [:]
+    ) async -> MereRunUtilityCommandResult {
         let launch = cliResolve(cliPath)
         let cliArgs: [String]
         if !modelsRoot.isBlank {
@@ -813,7 +947,8 @@ final class MereRunController: ObservableObject {
                         launch: launch,
                         args: cliArgs,
                         environmentTemplateID: .custom,
-                        environmentDraft: CommandDraft()
+                        environmentDraft: CommandDraft(),
+                        environmentOverrides: environmentOverrides
                     ),
                     stdout: { text in output.append(text) },
                     stderr: { text in errors.append(text) },
@@ -878,6 +1013,7 @@ final class MereRunController: ObservableObject {
         var lastOutputURL: URL?
         var exitCode: Int32?
         var status: String
+        var interactiveOutputBuffer = ""
         var outputWatchTask: Task<Void, Never>?
 
         init(spec: RunSpec, preview: String, expectedOutput: URL?, status: String) {
@@ -1156,6 +1292,70 @@ final class MereRunController: ObservableObject {
         guard let session = foregroundSession, session.process != nil else { return }
         session.process?.terminate()
         append("Termination requested.", stream: .system, to: session)
+    }
+
+    @discardableResult
+    func submitVideoSessionRequest() -> Bool {
+        guard let session = foregroundSession,
+              session.spec.template.id == .videoSession,
+              let process = session.process,
+              session.exitCode == nil else {
+            status = "Start the resident session first"
+            append("Start the resident LTX session before submitting a render.", stream: .stderr)
+            return false
+        }
+
+        let prompt = draft.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !prompt.isEmpty else {
+            status = "Prompt required"
+            append("Enter a prompt for the resident render.", stream: .stderr, to: session)
+            return false
+        }
+        guard !draft.outputPath.isBlank else {
+            status = "Output required"
+            append("Choose an output MP4 path for the resident render.", stream: .stderr, to: session)
+            return false
+        }
+
+        let output = NSString(string: draft.outputPath).expandingTildeInPath
+        do {
+            try FileManager.default.createDirectory(
+                at: URL(fileURLWithPath: output).deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            let request = StudioVideoSessionRequest(
+                id: UUID().uuidString,
+                prompt: prompt,
+                output: output,
+                width: draft.width,
+                height: draft.height,
+                numFrames: draft.numFrames,
+                fps: draft.fps,
+                seed: Int(draft.seed),
+                image: expandedOptionalPath(draft.imagePath),
+                imageStrength: draft.imagePath.isBlank ? nil : draft.strength,
+                endImage: expandedOptionalPath(draft.endImagePath),
+                endImageStrength: draft.endImagePath.isBlank ? nil : draft.endImageStrength
+            )
+            let encoder = JSONEncoder()
+            encoder.keyEncodingStrategy = .convertToSnakeCase
+            encoder.outputFormatting = [.sortedKeys]
+            let data = try encoder.encode(request)
+            guard let line = String(data: data, encoding: .utf8) else {
+                throw CocoaError(.fileWriteInapplicableStringEncoding)
+            }
+            try process.sendStandardInput(line + "\n")
+            session.status = "Rendering resident request"
+            session.lastOutputURL = nil
+            append("Submitted resident render → \(output)", stream: .system, to: session)
+            mirrorForeground(session)
+            return true
+        } catch {
+            session.status = "Session submission failed"
+            append(error.localizedDescription, stream: .stderr, to: session)
+            mirrorForeground(session)
+            return false
+        }
     }
 
     /// Resets the published console fields to reflect `session` as the run the single-pane
@@ -1466,6 +1666,9 @@ final class MereRunController: ObservableObject {
     /// that session is the foreground one.
     private func append(_ text: String, stream: LogStream, to session: RunSession) {
         if stream == .stdout {
+            if session.spec.template.id == .videoSession {
+                consumeVideoSessionOutput(text, session: session)
+            }
             session.stdoutBuffer += text
             session.stdoutBuffer = Self.trimmed(session.stdoutBuffer, toByteLimit: Self.stdoutBufferByteLimit)
             session.liveOutputText = session.stdoutBuffer.replacingOccurrences(of: "\0", with: "")
@@ -1491,6 +1694,10 @@ final class MereRunController: ObservableObject {
         } else if stream == .stderr {
             session.stderrBuffer += text
             session.stderrBuffer = Self.trimmed(session.stderrBuffer, toByteLimit: Self.stderrBufferByteLimit)
+            if session.spec.template.id == .videoSession,
+               text.localizedCaseInsensitiveContains("session ready") {
+                session.status = "Resident session ready"
+            }
         }
 
         let normalized = text
@@ -1513,6 +1720,42 @@ final class MereRunController: ObservableObject {
             session.logs.removeFirst(session.logs.count - Self.logLineLimit)
         }
         mirrorForeground(session)
+    }
+
+    private func consumeVideoSessionOutput(_ text: String, session: RunSession) {
+        session.interactiveOutputBuffer += text
+        let lines = session.interactiveOutputBuffer.components(separatedBy: .newlines)
+        session.interactiveOutputBuffer = lines.last ?? ""
+
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+        for line in lines.dropLast() {
+            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty,
+                  let data = trimmed.data(using: .utf8),
+                  let response = try? decoder.decode(StudioVideoSessionResponse.self, from: data) else {
+                continue
+            }
+
+            if response.status == "result", let output = response.output {
+                let url = URL(fileURLWithPath: output)
+                session.lastOutputURL = url
+                session.status = "Generated: \(url.lastPathComponent)"
+                if session.id == foregroundSessionID {
+                    lastOutputURL = url
+                }
+            } else if response.status == "error" {
+                session.status = "Resident render failed"
+                if let error = response.error, !error.isBlank {
+                    session.logs.append(LogLine(stream: .stderr, text: error))
+                }
+            }
+        }
+    }
+
+    private func expandedOptionalPath(_ path: String) -> String? {
+        guard !path.isBlank else { return nil }
+        return NSString(string: path).expandingTildeInPath
     }
 
     /// Appends a controller-level message (install, camera, queue notices) directly to the
@@ -1652,7 +1895,8 @@ final class MereRunController: ObservableObject {
         launch: MereRunLaunch,
         args: [String],
         environmentTemplateID: CommandTemplateID? = nil,
-        environmentDraft: CommandDraft? = nil
+        environmentDraft: CommandDraft? = nil,
+        environmentOverrides: [String: String] = [:]
     ) -> MereRunProcessConfiguration {
         let processArgs: [String]
         if case .executable(let url) = launch, url.path == "/usr/bin/env" {
@@ -1663,11 +1907,16 @@ final class MereRunController: ObservableObject {
         let templateID = environmentTemplateID ?? selectedTemplate.id
         let environmentDraft = environmentDraft ?? draft
 
+        var environment = processEnvironment(templateID: templateID, draft: environmentDraft)
+        for (key, value) in environmentOverrides {
+            environment[key] = value
+        }
         return MereRunProcessConfiguration(
             executableURL: launch.executableURL,
             arguments: processArgs,
             currentDirectoryURL: workingDirectoryURL(),
-            environment: processEnvironment(templateID: templateID, draft: environmentDraft)
+            environment: environment,
+            keepsStandardInputOpen: templateID == .videoSession
         )
     }
 
@@ -1699,7 +1948,9 @@ extension Array where Element == String {
         var masked = self
         var index = masked.startIndex
         while index < masked.endIndex {
-            if masked[index] == "--api-key" || masked[index] == "hf-token" {
+            if masked[index] == "--api-key"
+                || masked[index] == "--infinity-api-key"
+                || masked[index] == "hf-token" {
                 let valueIndex = masked.index(after: index)
                 if valueIndex < masked.endIndex {
                     masked[valueIndex] = "••••••••"

@@ -1,4 +1,5 @@
 import Foundation
+import MereRunContract
 import UniformTypeIdentifiers
 
 enum StudioMode: String, CaseIterable, Codable, Identifiable {
@@ -292,15 +293,90 @@ struct StudioDraft: Codable, Equatable {
     // Advanced depth shared with the Advanced surface (see StudioOptionSchema). Defaults are
     // seeded from the matching template's CommandDraft so the two surfaces never drift.
     var temperature = 0.7
+    var topP = 0.9
+    var minP = 0.0
     var maxTokens = 2048
+    var contextSize = 0
+    var topK = 0
+    var kvBits = 0
+    var kvQuantScheme = ""
+    var kvGroupSize = 0
+    var quantizedKVStart = 0
+    var responseFormat: TextResponseFormat = .text
+    var thinkingMode: TextThinkingMode = .automatic
+    var loraPath = ""
+    var loraScale = 1.0
+    var stats = false
+    var tools = ""
+    var toolLoop = false
+    var allowShellExec = false
+    var allowAbsoluteToolPaths = false
+    var autoApproveTools = false
+    var sandboxDir = ""
+    var requireInstalled = false
+    var preflightJSON = false
     var cfgScale = 1.0
     var strength = 0.75
+    var sigmaShift = 0.0
+    var referenceImagePaths = ""
+    var keepOriginalAspect = false
+    var structuredPrompt = false
+    var structuredPromptModel = "text-chat-gemma4-12b-4bit"
+    var structuredPromptMaxTokens = 2048
+    var imageMaxSequenceLength = 512
+    var kreaConditioningMultiplier = 0.0
+    var kreaConditioningLayerWeights = ""
+    var kreaBaseQuantizationBits = ""
+    var progressJSON = false
+    var musicQuality = "song"
+    var musicTask = "text2music"
+    var musicSourceAudio = ""
+    var musicReferenceAudioPaths = ""
+    var musicLRCFile = ""
+    var musicLMMode = "auto"
+    var musicAnalyzeSourceAudio = false
+    var musicOverrideSteps = false
+    var musicCandidates = 0
+    var musicKeepCandidates = false
+    var musicCoverStrength = 1.0
+    var musicCoverNoiseStrength = 0.0
+    var musicRetakeSeed = ""
+    var musicRetakeVariance = 0.0
+    var musicRepaintStart = 0.0
+    var musicRepaintEnd = -1.0
+    var musicRepaintMode = "balanced"
+    var musicRepaintStrength = 0.5
+    var musicFlowEdit = false
+    var musicSourceCaption = ""
+    var musicSourceLyrics = ""
+    var musicAdapterPaths = ""
+    var musicAdapterKind = "auto"
+    var musicAdapterScales = ""
+    var musicStems = ""
+    var musicDAWBundle = ""
+    var musicExportFormat = "pcm24"
+    var musicNoRecipe = false
     var language = "auto"
     var timestamps = true
     var backend = "auto"
     var fps = 24
     var numFrames = 65
-    var variant = "distilled"
+    var useDuration = false
+    var videoQuality: LTXVideoQuality = .final
+    var videoOutputMode: LTXVideoOutputMode = .videoOnly
+    var audioPath = ""
+    var audioStartTime = 0.0
+    var endImagePath = ""
+    var endImageStrength = 1.0
+    var scheduleShift = 5.0
+    var a2vGuidanceScale = 3.0
+    var videoCFGGuidanceScale = 3.0
+    var audioCFGGuidanceScale = 7.0
+    var v2aGuidanceScale = 3.0
+    var a2vSteps = 30
+    var preflight = false
+    var timings = false
+    var timingsOutputPath = ""
 
     mutating func reset(for mode: StudioMode) {
         let base = CommandCatalog.template(id: mode.defaultTemplateID)?.defaultDraft()
@@ -310,7 +386,7 @@ struct StudioDraft: Codable, Equatable {
         model = CommandCatalog.template(id: mode.defaultTemplateID)?.defaultModel ?? ""
         width = mode == .video ? 768 : 1024
         height = mode == .video ? 512 : 1024
-        steps = mode == .music ? 8 : 4
+        steps = mode == .music ? 8 : mode == .video ? 40 : 4
         seed = ""
         durationSeconds = 10
         readImageAction = .inspect
@@ -319,15 +395,90 @@ struct StudioDraft: Codable, Equatable {
         refAudioPath = ""
         saveProfileName = ""
         temperature = base?.temperature ?? 0.7
+        topP = base?.topP ?? 0.9
+        minP = base?.minP ?? 0
         maxTokens = base?.maxTokens ?? 2048
+        contextSize = base?.contextSize ?? 0
+        topK = base?.topK ?? 0
+        kvBits = base?.kvBits ?? 0
+        kvQuantScheme = base?.kvQuantScheme ?? ""
+        kvGroupSize = base?.kvGroupSize ?? 0
+        quantizedKVStart = base?.quantizedKVStart ?? 0
+        responseFormat = base?.responseFormat ?? .text
+        thinkingMode = base?.thinkingMode ?? .automatic
+        loraPath = ""
+        loraScale = base?.loraScale ?? 1
+        stats = false
+        tools = ""
+        toolLoop = false
+        allowShellExec = false
+        allowAbsoluteToolPaths = false
+        autoApproveTools = false
+        sandboxDir = ""
+        requireInstalled = false
+        preflightJSON = false
         cfgScale = base?.cfgScale ?? 1.0
         strength = base?.strength ?? 0.75
+        sigmaShift = base?.sigmaShift ?? 0
+        referenceImagePaths = ""
+        keepOriginalAspect = false
+        structuredPrompt = false
+        structuredPromptModel = base?.structuredPromptModel ?? "text-chat-gemma4-12b-4bit"
+        structuredPromptMaxTokens = base?.structuredPromptMaxTokens ?? 2048
+        imageMaxSequenceLength = base?.maxSequenceLength ?? 512
+        kreaConditioningMultiplier = 0
+        kreaConditioningLayerWeights = ""
+        kreaBaseQuantizationBits = ""
+        progressJSON = false
+        musicQuality = "song"
+        musicTask = "text2music"
+        musicSourceAudio = ""
+        musicReferenceAudioPaths = ""
+        musicLRCFile = ""
+        musicLMMode = "auto"
+        musicAnalyzeSourceAudio = false
+        musicOverrideSteps = false
+        musicCandidates = 0
+        musicKeepCandidates = false
+        musicCoverStrength = 1
+        musicCoverNoiseStrength = 0
+        musicRetakeSeed = ""
+        musicRetakeVariance = 0
+        musicRepaintStart = 0
+        musicRepaintEnd = -1
+        musicRepaintMode = "balanced"
+        musicRepaintStrength = 0.5
+        musicFlowEdit = false
+        musicSourceCaption = ""
+        musicSourceLyrics = ""
+        musicAdapterPaths = ""
+        musicAdapterKind = "auto"
+        musicAdapterScales = ""
+        musicStems = ""
+        musicDAWBundle = ""
+        musicExportFormat = "pcm24"
+        musicNoRecipe = false
         language = base?.language ?? "auto"
         timestamps = base?.timestamps ?? true
         backend = base?.backend ?? "auto"
         fps = base?.fps ?? 24
         numFrames = base?.numFrames ?? 65
-        variant = base?.variant ?? "distilled"
+        useDuration = base?.useDuration ?? false
+        videoQuality = base?.videoQuality ?? .final
+        videoOutputMode = base?.videoOutputMode ?? .videoOnly
+        audioPath = ""
+        audioStartTime = base?.audioStartTime ?? 0
+        endImagePath = ""
+        endImageStrength = base?.endImageStrength ?? 1
+        scheduleShift = base?.scheduleShift ?? 5
+        a2vGuidanceScale = base?.a2vGuidanceScale ?? 3
+        videoCFGGuidanceScale = base?.videoCFGGuidanceScale ?? 3
+        audioCFGGuidanceScale = base?.audioCFGGuidanceScale ?? 7
+        v2aGuidanceScale = base?.v2aGuidanceScale ?? 3
+        a2vSteps = base?.a2vSteps ?? 30
+        preflight = false
+        timings = false
+        timingsOutputPath = ""
     }
 
     private func modeDefaultPrompt(_ mode: StudioMode) -> String {
@@ -366,12 +517,20 @@ enum StudioOptionSchema {
         case .chat, .code:
             return [
                 StudioOptionField(id: "temperature", label: "Temperature", control: .double(\.temperature)),
+                StudioOptionField(id: "topP", label: "Top-p", control: .double(\.topP)),
+                StudioOptionField(id: "minP", label: "Min-p (0 = model default)", control: .double(\.minP)),
                 StudioOptionField(id: "maxTokens", label: "Max tokens", control: .int(\.maxTokens, range: 1...32_768, step: 64)),
             ]
         case .createImage:
             return [
                 StudioOptionField(id: "cfg", label: "CFG scale", control: .double(\.cfgScale)),
                 StudioOptionField(id: "strength", label: "Img2img strength", control: .double(\.strength)),
+                StudioOptionField(id: "sigmaShift", label: "Sigma shift", control: .double(\.sigmaShift)),
+                StudioOptionField(
+                    id: "maxSequence",
+                    label: "Max sequence",
+                    control: .int(\.imageMaxSequenceLength, range: 64...8_192, step: 64)
+                ),
             ]
         case .listen:
             return [
@@ -381,7 +540,6 @@ enum StudioOptionSchema {
             ]
         case .video:
             return [
-                StudioOptionField(id: "variant", label: "Variant", control: .text(\.variant, placeholder: "distilled")),
                 StudioOptionField(id: "fps", label: "Frames per second", control: .int(\.fps, range: 1...60, step: 1)),
                 StudioOptionField(id: "numFrames", label: "Frames", control: .int(\.numFrames, range: 1...600, step: 1)),
                 StudioOptionField(id: "strength", label: "Image strength", control: .double(\.strength)),
@@ -478,13 +636,52 @@ enum StudioCommandAdapter {
             draft.seed = studioDraft.seed
             draft.cfgScale = studioDraft.cfgScale
             draft.strength = studioDraft.strength
+            draft.sigmaShift = studioDraft.sigmaShift
+            draft.referenceImagePaths = studioDraft.referenceImagePaths
+            draft.keepOriginalAspect = studioDraft.keepOriginalAspect
+            draft.structuredPrompt = studioDraft.structuredPrompt
+            draft.structuredPromptModel = studioDraft.structuredPromptModel
+            draft.structuredPromptMaxTokens = studioDraft.structuredPromptMaxTokens
+            draft.maxSequenceLength = studioDraft.imageMaxSequenceLength
+            draft.loraPath = studioDraft.loraPath
+            draft.loraScale = studioDraft.loraScale
+            draft.kreaConditioningMultiplier = studioDraft.kreaConditioningMultiplier
+            draft.kreaConditioningLayerWeights = studioDraft.kreaConditioningLayerWeights
+            draft.kreaBaseQuantizationBits = studioDraft.kreaBaseQuantizationBits
+            draft.preflight = studioDraft.preflight
+            draft.json = studioDraft.preflightJSON
+            draft.progressJSON = studioDraft.progressJSON
 
         case .chat, .code:
             draft.prompt = prompt
             draft.secondaryText = secondary
             draft.model = studioDraft.model.isBlank ? draft.model : studioDraft.model
             draft.temperature = studioDraft.temperature
+            draft.topP = studioDraft.topP
+            draft.minP = studioDraft.minP
             draft.maxTokens = studioDraft.maxTokens
+            if mode == .chat {
+                draft.contextSize = studioDraft.contextSize
+                draft.topK = studioDraft.topK
+                draft.kvBits = studioDraft.kvBits
+                draft.kvQuantScheme = studioDraft.kvQuantScheme
+                draft.kvGroupSize = studioDraft.kvGroupSize
+                draft.quantizedKVStart = studioDraft.quantizedKVStart
+                draft.responseFormat = studioDraft.responseFormat
+                draft.thinkingMode = studioDraft.thinkingMode
+                draft.loraPath = studioDraft.loraPath
+                draft.loraScale = studioDraft.loraScale
+                draft.force = studioDraft.stats
+                draft.tools = studioDraft.tools
+                draft.toolLoop = studioDraft.toolLoop
+                draft.allowShellExec = studioDraft.allowShellExec
+                draft.allowAbsoluteToolPaths = studioDraft.allowAbsoluteToolPaths
+                draft.autoApproveTools = studioDraft.autoApproveTools
+                draft.sandboxDir = studioDraft.sandboxDir
+                draft.preflight = studioDraft.preflight
+                draft.json = studioDraft.preflightJSON
+                draft.requireInstalled = studioDraft.requireInstalled
+            }
             // Conversation turns stream so the canvas renders tokens live; the reply is
             // accumulated and think-stripped app-side.
             if conversationID != nil { draft.stream = true }
@@ -526,18 +723,64 @@ enum StudioCommandAdapter {
             draft.durationSeconds = studioDraft.durationSeconds
             draft.steps = studioDraft.steps
             draft.seed = studioDraft.seed
+            draft.useDuration = studioDraft.useDuration
+            draft.musicQuality = studioDraft.musicQuality
+            draft.musicTask = studioDraft.musicTask
+            draft.musicSourceAudio = studioDraft.musicSourceAudio
+            draft.musicReferenceAudioPaths = studioDraft.musicReferenceAudioPaths
+            draft.musicLRCFile = studioDraft.musicLRCFile
+            draft.musicLMMode = studioDraft.musicLMMode
+            draft.musicAnalyzeSourceAudio = studioDraft.musicAnalyzeSourceAudio
+            draft.musicOverrideSteps = studioDraft.musicOverrideSteps
+            draft.musicCandidates = studioDraft.musicCandidates
+            draft.musicKeepCandidates = studioDraft.musicKeepCandidates
+            draft.musicCoverStrength = studioDraft.musicCoverStrength
+            draft.musicCoverNoiseStrength = studioDraft.musicCoverNoiseStrength
+            draft.musicRetakeSeed = studioDraft.musicRetakeSeed
+            draft.musicRetakeVariance = studioDraft.musicRetakeVariance
+            draft.musicRepaintStart = studioDraft.musicRepaintStart
+            draft.musicRepaintEnd = studioDraft.musicRepaintEnd
+            draft.musicRepaintMode = studioDraft.musicRepaintMode
+            draft.musicRepaintStrength = studioDraft.musicRepaintStrength
+            draft.musicFlowEdit = studioDraft.musicFlowEdit
+            draft.musicSourceCaption = studioDraft.musicSourceCaption
+            draft.musicSourceLyrics = studioDraft.musicSourceLyrics
+            draft.musicAdapterPaths = studioDraft.musicAdapterPaths
+            draft.musicAdapterKind = studioDraft.musicAdapterKind
+            draft.musicAdapterScales = studioDraft.musicAdapterScales
+            draft.musicStems = studioDraft.musicStems
+            draft.musicDAWBundle = studioDraft.musicDAWBundle
+            draft.musicExportFormat = studioDraft.musicExportFormat
+            draft.musicNoRecipe = studioDraft.musicNoRecipe
 
         case .video:
             draft.prompt = prompt
+            draft.secondaryText = secondary
             draft.inputPath = studioDraft.inputPath
             draft.model = studioDraft.model.isBlank ? draft.model : studioDraft.model
             draft.width = studioDraft.width
             draft.height = studioDraft.height
             draft.seed = studioDraft.seed
-            draft.variant = studioDraft.variant
             draft.fps = studioDraft.fps
             draft.numFrames = studioDraft.numFrames
+            draft.useDuration = studioDraft.useDuration
+            draft.durationSeconds = studioDraft.durationSeconds
             draft.strength = studioDraft.strength
+            draft.videoQuality = studioDraft.videoQuality
+            draft.videoOutputMode = studioDraft.videoOutputMode
+            draft.audioPath = studioDraft.audioPath
+            draft.audioStartTime = studioDraft.audioStartTime
+            draft.endImagePath = studioDraft.endImagePath
+            draft.endImageStrength = studioDraft.endImageStrength
+            draft.scheduleShift = studioDraft.scheduleShift
+            draft.a2vGuidanceScale = studioDraft.a2vGuidanceScale
+            draft.videoCFGGuidanceScale = studioDraft.videoCFGGuidanceScale
+            draft.audioCFGGuidanceScale = studioDraft.audioCFGGuidanceScale
+            draft.v2aGuidanceScale = studioDraft.v2aGuidanceScale
+            draft.a2vSteps = studioDraft.a2vSteps
+            draft.preflight = studioDraft.preflight
+            draft.timings = studioDraft.timings
+            draft.timingsOutputPath = studioDraft.timingsOutputPath
 
         case .sfx:
             draft.prompt = prompt
@@ -622,6 +865,13 @@ enum StudioCommandAdapter {
         if mode == .speak, draft.voiceMode == "clone",
            draft.voiceProfile.isBlank, draft.refAudioPath.isBlank {
             throw StudioCommandError.missingPrompt("A saved voice profile or reference audio")
+        }
+        if mode == .music {
+            let sourceTasks = ["repaint", "cover", "cover-nofsq", "extract", "lego", "complete"]
+            if (sourceTasks.contains(draft.musicTask) || draft.musicFlowEdit)
+                && draft.musicSourceAudio.isBlank {
+                throw StudioCommandError.missingInput("source audio")
+            }
         }
 
         let promptRequired: Bool

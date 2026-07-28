@@ -1,11 +1,16 @@
 # mere.run CLI
 
-`mere.run` is the public command-line interface for the OSS `mere.run`
-package. It exposes a modality-first command tree for image, text, speech,
-vision, geometry, 3D, music, SFX, video, persistent worlds, model and adapter
-management, local status snapshots, and local API serving.
+The complete command tree, generated from the binary itself. Commands are
+organized by what you want to make — `image`, `text`, `speech`, `vision`,
+`music`, `sfx`, `video`, `world` — with separate families for portable graphs,
+executors, run artifacts, models, adapters, serving, and status.
 
-If you are looking for the broader docs set, start at [mere.run Documentation](/).
+Every path on this page is real: a test in the repo fails if the docs and the
+CLI ever disagree. For per-command advice — prompting patterns, which flags
+matter, troubleshooting — read the offline [cookbooks](/cookbooks) with
+`mere.run guide <command path>`.
+
+New here? Start at [mere.run Documentation](/).
 
 ## Overview
 
@@ -17,6 +22,7 @@ Public tree:
 
 <!-- BEGIN GENERATED: CLI TREE -->
 - [`mere.run guide`](/cookbooks) — Read offline mere.run command cookbooks.
+- [`mere.run catalog`](/cli) — Inspect the machine-readable command capability contract.
 - [`mere.run image`](/runtime/image) — Generate and validate image models.
   - `mere.run image dataset` — Inspect image training datasets.
     - `mere.run image dataset discover` — Find image-caption dataset candidates under a root directory.

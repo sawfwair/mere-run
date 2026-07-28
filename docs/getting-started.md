@@ -1,21 +1,27 @@
 # Getting Started
 
-This guide gets a fresh clone to the point where you can build the package,
-inspect the command tree, configure model sources, and run a first local
-workflow.
+By the end of this page you will have built the package from source, pulled a
+model, and generated your first image, paragraph, and spoken line — all on your
+own machine, with nothing leaving it.
 
-## What this repo contains
+If you only want to use the app, install a signed build from
+[mere.run/releases](https://mere.run/releases) instead and jump straight to
+[Pull a model](#pull-a-model). Everything below is the from-source path.
 
-`mere-run` is a Swift package with:
+## What you are building
 
+`mere-run` is one Swift package that produces:
+
+- the public `mere.run` executable — the CLI that does all the actual work
+- `mere.run.app`, an optional macOS studio that drives that same CLI rather
+  than a separate backend
 - reusable inference libraries in `Sources/MereRunCore`, `Sources/AudioCore`,
   `Sources/AudioCodecs`, `Sources/AudioSTT`, and `Sources/AudioTTS`
-- a public executable product named `mere.run`
-- an optional macOS SwiftUI studio named `mere.run.app` that wraps the public
-  CLI
-- tests and smoke harnesses for the package and CLI surfaces
+- tests and smoke harnesses for both surfaces
 
-It does not include hosted-service, billing, or private-deployment surfaces.
+There is no hosted inference service behind it. Inference stays local; network
+access happens only for explicit operations such as model downloads,
+installation and update checks, or Relay.
 
 ## Prerequisites
 
@@ -63,8 +69,8 @@ app_path="$(./scripts/build_mere_run_app.sh debug)"
 open "$app_path"
 ```
 
-That confirms the package graph, CLI product, optional app product, app bundle,
-and basic command parsing are all working.
+If all five succeed, the package resolves, the CLI builds and parses, and the
+Mac app bundles and opens. That is the whole toolchain proven in one pass.
 
 On Linux compatibility branches, keep the first pass headless and stop at the
 CLI surface:
@@ -77,10 +83,10 @@ The macOS app product is intentionally outside the Linux target.
 
 ## Launch the macOS studio
 
-The app is a user-facing local studio backed by the public CLI. It opens to a
-unified canvas and prompt bar, keeps generated outputs in a local library, and
-keeps command previews and logs in Advanced details. Launch it from a checkout
-with:
+The studio is a prompt-first face on the same CLI you just built — one canvas,
+one prompt bar, and a local library of everything you have made. The exact
+command behind each generation is always one click away under Advanced. Launch
+it from a checkout with:
 
 ```bash
 app_path="$(./scripts/build_mere_run_app.sh debug)"
@@ -120,14 +126,16 @@ packages are local smoke artifacts, not useful release targets.
 
 ## Understand the command tree
 
-The public CLI is modality-first, with separate operational families for
-portable graphs, executors, run artifacts, models, adapters, serving, and
-extensions. This inventory is generated from the CLI configuration:
+Commands are organized by what you want to make — `image`, `text`, `speech`,
+`vision`, `music`, `sfx`, `video`, `world` — with separate families for running
+graphs, managing models, and serving. This table is generated from the CLI
+itself, so it always matches the binary you just built:
 
 <!-- BEGIN GENERATED: CLI TOP LEVEL -->
 | Command | Purpose |
 | --- | --- |
 | [`mere.run guide`](/cookbooks) | Read offline mere.run command cookbooks. |
+| [`mere.run catalog`](/cli) | Inspect the machine-readable command capability contract. |
 | [`mere.run image`](/runtime/image) | Generate and validate image models. |
 | [`mere.run text`](/runtime/text) | Run local chat, code, embedding, and anonymization workflows. |
 | [`mere.run speech`](/runtime/speech) | Synthesize, transcribe, and manage voice profiles. |
@@ -192,10 +200,12 @@ swift run mere.run status --json
 
 ## Pull a model
 
-Managed downloads use cataloged Hugging Face repos. No private model-source host
-or R2 credentials are required.
+Models come from cataloged Hugging Face repos into a local store you own. There
+is no private mere.run model host or inference credential to buy. An upstream
+repository can still require terms acceptance and a Hugging Face token.
 
-Example:
+Ask the machine what it can actually run before spending gigabytes on a
+download:
 
 ```bash
 swift run mere.run model capabilities
@@ -243,7 +253,10 @@ Face and auto-installs Pi; pass `--no-bootstrap` to refuse both. Other
 `start` flags include `--model`, `--prompt`, `--skip-server`,
 `--allow-unsupported`, and `--pi-path`.
 
-## Run a first workflow
+## Make something
+
+Each of these writes a real file to disk, and none of them depend on the
+others. Start wherever you are curious.
 
 ### Image generation
 
@@ -312,7 +325,7 @@ swift run mere.run vision track-live --output ./live.mp4 --prompt "a person"
 
 ## Validate your local environment
 
-Run the repo validation script:
+Before you open a pull request, run the same script CI does:
 
 ```bash
 ./scripts/check.sh

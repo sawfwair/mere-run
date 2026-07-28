@@ -65,7 +65,22 @@ notarize() {
   fi
 }
 
-# Assemble a DMG with an /Applications drop target.
+# Notarize and staple the app BEFORE copying it into the DMG. A DMG can have
+# its own valid notarization ticket while still containing an unstapled app;
+# creating the image first would therefore fail offline Gatekeeper validation
+# after install.
+if [[ "$identity" != "-" ]]; then
+  rm -f "$app_zip_path"
+  ditto -c -k --keepParent "$bundle" "$app_zip_path"
+  notarize "$app_zip_path"
+  xcrun stapler staple "$bundle"
+  xcrun stapler validate "$bundle"
+  spctl --assess --type execute --verbose=4 "$bundle"
+  rm -f "$app_zip_path"
+fi
+
+# Assemble a DMG with an /Applications drop target from the already-stapled
+# app, then sign, notarize, and staple the outer image.
 rm -rf "$staging" "$dmg_path"
 mkdir -p "$staging"
 cp -R "$bundle" "$staging/"
@@ -80,20 +95,11 @@ rm -rf "$staging"
 
 if [[ "$identity" != "-" ]]; then
   codesign --force --timestamp --sign "$identity" "$dmg_path"
-fi
-
-if [[ "$identity" != "-" ]]; then
-  rm -f "$app_zip_path"
-  ditto -c -k --keepParent "$bundle" "$app_zip_path"
-  if notarize "$app_zip_path"; then
-    xcrun stapler staple "$bundle"
-  fi
-  rm -f "$app_zip_path"
-  if notarize "$dmg_path"; then
-    xcrun stapler staple "$dmg_path"
-  fi
+  notarize "$dmg_path"
+  xcrun stapler staple "$dmg_path"
+  xcrun stapler validate "$dmg_path"
   echo "Gatekeeper assessment:"
-  spctl --assess --type open --context context:primary-signature --verbose=4 "$dmg_path" || true
+  spctl --assess --type open --context context:primary-signature --verbose=4 "$dmg_path"
 fi
 
 echo "$dmg_path"

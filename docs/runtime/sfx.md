@@ -1,15 +1,19 @@
 # SFX Runtime
 
-This page covers the native sound-effect runtime exposed through `mere.run sfx`.
+Foley from a sentence — or from a silent video. Describe the sound you want and
+get a WAV back, or hand the runtime a clip and let it watch the footage and
+place the hits in sync with what is on screen.
 
-## Public surface
+## Commands
 
-- `mere.run sfx generate`
-- `mere.run sfx ae encode`
-- `mere.run sfx ae decode`
-- `mere.run sfx clap score`
-- `mere.run sfx condition text`
-- `mere.run sfx video generate`
+| Command | What it does |
+| --- | --- |
+| `mere.run sfx generate` | Generate a sound effect from a text prompt. |
+| `mere.run sfx video generate` | Generate an 8-second sound effect from a video or Synchformer features. |
+| `mere.run sfx clap score` | Score a text prompt against an audio file, to rank takes. |
+| `mere.run sfx condition text` | Encode a prompt with the Woosh text conditioner. |
+| `mere.run sfx ae encode` | Encode audio into normalized Woosh-AE latents. |
+| `mere.run sfx ae decode` | Decode normalized Woosh-AE latents into audio. |
 
 ## Model family
 

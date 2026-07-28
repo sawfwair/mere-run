@@ -4,10 +4,29 @@ All notable changes to this public repository will be documented in this file.
 
 The format is based on Keep a Changelog.
 
-## Unreleased
+## 0.27.0 - 2026-07-27
+
+This release brings the macOS Studio to full public CLI capability coverage,
+adds the production ACE-Step music workflow, promotes Laguna S 2.1 to managed
+chat and serving with validated DFlash acceleration, and refreshes the public
+VitePress documentation.
 
 ### Added
 
+- added a machine-readable, shared 89-command CLI capability contract emitted by
+  `mere.run catalog --json`, plus executable CLI-help, App-to-contract, and
+  inverse contract-to-App drift tests.
+- expanded the macOS Studio into typed Text, Image, Video, Music, Speech, SFX,
+  Vision/VFX, adapter, durable-run, world, setup, model, plugin, Open WebUI, and
+  API workspaces. Graph Studio and Node remain explicit deep-linked product
+  boundaries rather than duplicated orchestration surfaces.
+- added first-class LTX text/image/audio-to-video and start/end-keyframe
+  conditioning, Wan TI2V, SCAIL-2, Cosmos3, mask preparation, latent export,
+  and resident video sessions to the macOS app.
+- added production ACE-Step cover/repaint/flow-edit/retake, candidate ranking,
+  stems, recipes, LRC/DAW export, adapter training, and resident serving controls
+  to the macOS app, alongside full image LoRA/edit/3D, text JSON/LoRA/KV, and
+  Vision/VFX workflows.
 - added typed ACE-Step task and checkpoint capability routing for text-to-music,
   repaint, cover, cover-nofsq, extract, lego, and complete. Invalid tasks now
   fail during CLI parsing, and Base-only operations fail before checkpoint
@@ -49,6 +68,11 @@ The format is based on Keep a Changelog.
   `text chat` and `api serve --engine text-chat-laguna` enable the validated
   sampling recipe and automatic DFlash routing without making the 74 GB pair
   a setup or machine default.
+- added complete macOS Studio access to Laguna: model-aware API and Open WebUI
+  routing, first-class min-p controls in Chat and Code, persistent min-p runtime
+  policy in both model editors, and a typed target/DFlash benchmark workspace
+  with checkpoint, decode, fixture, concurrency, adaptive-routing, response-log,
+  and JSON controls.
 - added lossless Laguna target verification, ragged continuous batching, and
   machine-readable acceptance, recovery, batching, prefill, and decode
   metrics. A length-aware output-budget router bypasses DFlash work for short
@@ -97,6 +121,12 @@ The format is based on Keep a Changelog.
 
 ### Fixed
 
+- fixed macOS packaging so the inner app is notarized, stapled, and
+  Gatekeeper-validated before the DMG is assembled; a notarized outer image can
+  no longer conceal an unstapled app.
+- fixed the open Advanced Studio surface so switching creation modes also
+  switches to the matching typed command and carries over its quick-composer
+  values.
 - fixed ACE-Step prompt, unconditional, and automatic repaint chunk masks to
   match upstream boolean-mask semantics. The runtime previously supplied
   `2.0` where upstream converts that value to boolean `true` (`1.0`), causing

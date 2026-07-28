@@ -1,13 +1,20 @@
 # Local API Server
 
-This page covers `mere.run api serve`, the local API surface exposed by the package.
+The rest of `mere.run`, behind an OpenAI-compatible endpoint on localhost.
+Point an existing client, your editor, or Open WebUI at it and nothing about
+your setup changes except where the weights live — and where your prompts stop.
 
-## Public surface
+## Commands
 
-- `mere.run api serve`
-- `mere.run model runtime get`
-- `mere.run model runtime set`
-- `mere.run status`
+| Command | What it does |
+| --- | --- |
+| `mere.run api serve` | Start an OpenAI-compatible API server for supported local text, image, vision, and audio models. |
+| `mere.run model runtime get` | Print typed API runtime settings for a managed model. |
+| `mere.run model runtime set` | Update typed API runtime settings for a managed model. |
+| `mere.run status` | Show local server, loaded model, and installed model status. |
+
+## HTTP routes
+
 - `POST /v1/chat/completions`
 - `POST /v1/embeddings`
 - `POST /v1/images/generations`
@@ -22,19 +29,18 @@ This page covers `mere.run api serve`, the local API surface exposed by the pack
 
 ## What it is for
 
-The API server lets you expose supported local engines through a local process
-instead of shelling out to the CLI for every request. It is useful for:
+Serving beats shelling out to the CLI once you are making more than one request
+— the model stays loaded between them. It suits:
 
-- local automation
-- editor tooling
-- local RAG and knowledge-base embeddings
-- local image generation
-- local text-to-speech and speech-to-text
-- simple local integrations
-- experimenting with the runtime through HTTP
+- editor tooling and local automation
+- RAG and knowledge-base embeddings over private documents
+- image generation, speech, and transcription from an existing OpenAI client
+- trying the runtime out over HTTP before wiring anything permanent
 
-It is not a hosted-service or relay layer. This repo keeps the server local and
-package-scoped.
+It is not a hosted service or a relay layer. The server binds to loopback by
+default. For remote jobs, prefer [portable workflows](../workflows.md); when
+you deliberately bind the API server to a non-loopback address, configure its
+bearer token and rate limit first.
 
 ## Runtime entrypoints
 
@@ -573,6 +579,11 @@ live-smoke path. Preview the exact commands with:
 ```bash
 mere.run open-webui quickstart --dry-run
 ```
+
+The macOS Studio passes `MERERUN_API_KEY` and
+`MERERUN_OPEN_WEBUI_ADMIN_PASSWORD` in the child environment so neither secret
+appears in the process argument list. CLI users may use the same variables;
+explicit `--api-key` and `--admin-password` values still take precedence.
 
 Repeatable smoke harness:
 

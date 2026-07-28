@@ -1,7 +1,8 @@
 # Configuration
 
-These are the persisted CLI settings and public runtime environment variables
-that matter in the OSS repo.
+There are two ways to change how `mere.run` behaves: settings that persist
+across shells, and environment variables you set for a single run. This page
+covers both, and marks which ones hold secrets.
 
 ## Persisted settings: `mere.run config`
 
@@ -22,6 +23,16 @@ swift run mere.run config set hf-token hf_xxxxxxxx
 swift run mere.run config get hf-token --reveal
 swift run mere.run config list
 ```
+
+For scripts and GUI launchers, keep the token out of process arguments:
+
+```bash
+export MERERUN_CONFIG_VALUE=hf_xxxxxxxx
+swift run mere.run config set hf-token --from-env MERERUN_CONFIG_VALUE
+unset MERERUN_CONFIG_VALUE
+```
+
+The macOS Studio Settings screen uses this environment-backed path.
 
 Environment variables take precedence over the config file: the HF token
 resolves from `HF_TOKEN` (then `HUGGING_FACE_HUB_TOKEN`) before falling back to

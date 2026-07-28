@@ -1,13 +1,15 @@
 # Graph Studio
 
-Mere Graph Studio is the visual authoring and operations surface for the
-current `mere.run` Graph v2 runtime. Use the hosted app at
-[studio.mere.run](https://studio.mere.run/) or run the cross-platform Tauri 2
-desktop app on macOS, Windows, or Linux.
+Build workflows on a canvas instead of by hand in JSON. Mere Graph Studio is
+the visual authoring and operations surface for the current `mere.run` Graph v2
+runtime — either the hosted app at
+[studio.mere.run](https://studio.mere.run/) or the cross-platform Tauri 2
+desktop build for macOS, Windows, and Linux.
 
-Studio is a client of the portable graph system, not a separate workflow
-engine. It authors the same typed graph, inputs, and immutable job bundle that
-the CLI validates and executes locally, over SSH, or through Relay.
+Studio is a client, not a second engine. It authors exactly the typed graph,
+inputs, and immutable job bundle that the CLI validates and executes locally,
+over SSH, or through Relay — so anything you draw there runs headless
+everywhere else, unchanged.
 
 ## Graph v2 versus `schema_version: 1`
 
@@ -20,7 +22,7 @@ Two version labels describe different layers:
 
 Do not change a workflow to `schema_version: 2`. Graph v2 intentionally keeps
 the version-1 document contract so the CLI, desktop Studio, hosted Studio,
-Relay, and paired Nodes execute the same bytes.
+Relay, and paired Nodes execute the same immutable bundle bytes.
 
 ## Choose a Studio surface
 

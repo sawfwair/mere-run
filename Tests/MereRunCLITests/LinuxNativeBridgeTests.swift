@@ -160,6 +160,26 @@ final class LinuxNativeBridgeTests: XCTestCase {
         XCTAssertTrue(packageTest.contains("MERERUN_LINUX_ALLOW_ARM64_CPU_PACKAGE=1"))
     }
 
+    func testMacOSPackageEmbedsTheStapledAppBeforeCreatingTheDMG() throws {
+        let script = try readRepositoryFile("scripts/package-macos.sh")
+        let appNotarize = try XCTUnwrap(script.range(of: "notarize \"$app_zip_path\""))
+        let appStaple = try XCTUnwrap(script.range(of: "xcrun stapler staple \"$bundle\""))
+        let appValidate = try XCTUnwrap(script.range(of: "xcrun stapler validate \"$bundle\""))
+        let bundleCopy = try XCTUnwrap(script.range(of: "cp -R \"$bundle\" \"$staging/\""))
+        let imageCreate = try XCTUnwrap(script.range(of: "hdiutil create"))
+        let imageNotarize = try XCTUnwrap(script.range(of: "notarize \"$dmg_path\""))
+        let imageValidate = try XCTUnwrap(script.range(of: "xcrun stapler validate \"$dmg_path\""))
+
+        XCTAssertLessThan(appNotarize.lowerBound, appStaple.lowerBound)
+        XCTAssertLessThan(appStaple.lowerBound, appValidate.lowerBound)
+        XCTAssertLessThan(appValidate.lowerBound, bundleCopy.lowerBound)
+        XCTAssertLessThan(bundleCopy.lowerBound, imageCreate.lowerBound)
+        XCTAssertLessThan(imageCreate.lowerBound, imageNotarize.lowerBound)
+        XCTAssertLessThan(imageNotarize.lowerBound, imageValidate.lowerBound)
+        XCTAssertFalse(script.contains("if notarize \"$app_zip_path\""))
+        XCTAssertFalse(script.contains("if notarize \"$dmg_path\""))
+    }
+
     private func readRepositoryFile(_ relativePath: String) throws -> String {
         let url = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
             .appendingPathComponent(relativePath, isDirectory: false)

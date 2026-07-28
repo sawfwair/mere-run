@@ -38,4 +38,14 @@ final class WorldCommandTests: XCTestCase {
         XCTAssertEqual(command.backend, .cosmos3)
         XCTAssertEqual(command.model, Cosmos3Resources.modelID)
     }
+
+    func testWorldServeReadsAPIKeyFromEnvironmentWithoutRequiringProcessArgument() throws {
+        let command = try WorldServe.parse(["--host", "0.0.0.0"])
+
+        XCTAssertEqual(
+            command.resolvedAPIKey(environment: ["MERERUN_API_KEY": " world-secret "]),
+            "world-secret"
+        )
+        XCTAssertNil(command.apiKey)
+    }
 }

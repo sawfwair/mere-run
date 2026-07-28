@@ -1,15 +1,41 @@
 # Video Runtime
 
-This page covers the native video-generation path exposed through `mere.run video`.
+Generate a clip from a prompt. With a unified A/V checkpoint, the model writes
+the soundtrack in the same pass rather than layering it on afterwards. Anchor
+the clip to a start frame, steer it toward an end frame, or condition the motion
+on a song you already have. Recast a performer in an existing shot. Keep the
+checkpoint resident and render take after take without paying for the reload.
 
-## Public surface
+## Commands
 
-- `mere.run video generate`
-- `mere.run video cosmos3`
-- `mere.run video animate`
-- `mere.run video prepare-masks`
-- `mere.run video session`
-- `mere.run video export-latents`
+| Command | What it does |
+| --- | --- |
+| `mere.run video generate` | Generate MP4 video with native Swift/MLX video models. |
+| `mere.run video cosmos3` | Run native NVIDIA Cosmos3-Edge generation and action modes. |
+| `mere.run video animate` | Animate or replace a masked subject with native Swift/MLX SCAIL-2. |
+| `mere.run video prepare-masks` | Prepare reviewable, palette-safe SCAIL-2 masks with native SAM 3.1. |
+| `mere.run video session` | Keep an LTX 2.3 runtime resident for JSONL generation requests. |
+| `mere.run video export-latents` | Run native Swift/MLX distilled LTX denoising and export final latents. |
+
+## macOS Studio
+
+The optional macOS app compiles against the same typed capability contract
+emitted by:
+
+```bash
+mere.run catalog video.generate --json
+```
+
+The primary Video composer exposes independent quality and output choices,
+text-to-video, a start image, an end keyframe, source-audio A2V with segment
+offset and modality guidance, duration or frame-count targeting, negative
+prompts, Wan controls, preflight, and timing receipts. Attaching source audio
+selects final quality plus synchronized audio-video output automatically.
+
+The Advanced Video category adds guided SCAIL-2 animation/replacement, Cosmos3
+generation and action modes, SAM 3.1 mask-plan preparation, LTX latent export,
+and resident LTX sessions. Raw arguments remain an escape hatch, not the
+capability contract.
 
 ## Model family
 

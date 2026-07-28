@@ -1,21 +1,27 @@
 # Portable Workflows
 
-`mere.run` workflows are immutable, headless job graphs that use the same
-contract locally, over SSH, and through a relay-managed GPU fleet. A future
-canvas can author this document, but it does not own execution behavior.
+Describe a job once as a typed graph, and the same bundle runs on your laptop,
+over SSH to a GPU box, or across a relay fleet — with the same resolved seeds,
+the same fingerprints, and the same execution contract at the other end.
+
+Workflows are immutable and headless. Nothing about *where* a job runs is baked
+into it: executor profiles, tokens, URLs, and machine paths never enter the
+bundle. Visual editors such as [Graph Studio](./graph/studio.md) author these
+documents, but execution behavior is defined here, not on the canvas.
 
 ## Graph v2 runtime and v1 contract
 
-The current execution system is the second-generation graph runtime: immutable
-job bundles, typed provider catalogs, executor preflight, resumable runs,
-parallel scheduling, and one execution contract across local, SSH, and Relay.
-That product/runtime generation is called **Graph v2**.
+Two different things carry version numbers here, and mixing them up causes real
+bugs.
 
-The serialized workflow ABI remains deliberately stable at version 1. Graph v2
-therefore still reads and writes `mere.run/workflow-graph` documents with
-`schema_version: 1`; the runtime name is not a request to emit a
-`schema_version: 2` document. See [Graph Studio](./graph/studio.md) for the
-visual authoring surfaces built on this contract.
+**Graph v2** is the current runtime generation: immutable job bundles, typed
+provider catalogs, executor preflight, resumable runs, parallel scheduling, and
+one execution contract shared by local, SSH, and Relay.
+
+The serialized workflow ABI is a separate thing, and it stays deliberately
+pinned at version 1. Graph v2 still reads and writes `mere.run/workflow-graph`
+documents with `schema_version: 1`. The runtime name is not a request to emit a
+`schema_version: 2` document.
 
 Every graph uses `schema_version: 1` and `kind: "mere.run/workflow-graph"`.
 Identifiers match `[a-z][a-z0-9-]{0,63}`. Supported graph input types are
@@ -402,6 +408,13 @@ Queued relay jobs include a typed placement report in `run inspect --json`.
 It identifies every connected device and reports concrete blockers such as a
 legacy worker, fleet policy, busy state, contract or worker version, missing
 node kind or model, accelerator backend or memory, and available disk.
+
+The macOS Studio app exposes these durable run controls in Advanced →
+Operations, including local/remote listing, inspection, event watching,
+verified fetch, cancellation, and immutable Relay retry. Graph authoring opens
+the canonical Graph Studio product, while device pairing and fleet policy open
+the Node/Relay console; the macOS inference app does not keep parallel graph or
+fleet schemas.
 
 ## Schemas
 

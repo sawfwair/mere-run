@@ -1,7 +1,88 @@
 @testable import MereRunApp
+import MereRunContract
 import XCTest
 
 final class StudioTypesTests: XCTestCase {
+    func testEveryLocalAdvancedTemplateIsBackedByTheSharedCLIContract() throws {
+        for template in CommandCatalog.templates {
+            if template.externalURL != nil || template.id == .custom {
+                XCTAssertNil(template.id.capabilityID)
+                continue
+            }
+            let capabilityID = try XCTUnwrap(
+                template.id.capabilityID,
+                "\(template.id) must declare a shared capability id"
+            )
+            let capability = try XCTUnwrap(
+                MereRunCapabilityCatalog.command(id: capabilityID),
+                "\(template.id) references missing capability \(capabilityID)"
+            )
+            let arguments = template.arguments(from: template.defaultDraft())
+            XCTAssertEqual(
+                Array(arguments.prefix(capability.command.count)),
+                capability.command,
+                "\(template.id) command path drifted"
+            )
+            let declared = Set(capability.options.map(\.flag))
+            for flag in arguments where flag.hasPrefix("--") {
+                XCTAssertTrue(
+                    declared.contains(flag),
+                    "\(template.id) emits undeclared default flag \(flag)"
+                )
+            }
+        }
+    }
+
+    func testAppUtilityCommandsAreBackedByTheSharedCLIContract() throws {
+        let fixtures: [(String, [String])] = [
+            ("guide", ["guide", "--list", "--json"]),
+            ("guide", ["guide", "music", "generate", "--json"]),
+            (
+                "config.set",
+                ["config", "set", "hf-token", "--from-env", "MERERUN_CONFIG_VALUE"]
+            ),
+            ("config.get", ["config", "get", "hf-endpoint", "--reveal"]),
+            ("config.unset", ["config", "unset", "hf-token"]),
+        ]
+
+        for (capabilityID, arguments) in fixtures {
+            let capability = try XCTUnwrap(MereRunCapabilityCatalog.command(id: capabilityID))
+            XCTAssertEqual(Array(arguments.prefix(capability.command.count)), capability.command)
+            let declared = Set(capability.options.map(\.flag))
+            for flag in arguments where flag.hasPrefix("--") {
+                XCTAssertTrue(
+                    declared.contains(flag),
+                    "\(capabilityID) app utility emits undeclared flag \(flag)"
+                )
+            }
+        }
+    }
+
+    func testEverySharedCLICapabilityHasAnAppOwnedSurface() {
+        let templateCapabilityIDs = Set(
+            CommandCatalog.templates.compactMap(\.id.capabilityID)
+        )
+        let appUtilityCapabilityIDs: Set<String> = [
+            "guide",
+            "config.set",
+            "config.get",
+            "config.unset",
+        ]
+        let appCapabilityIDs = templateCapabilityIDs.union(appUtilityCapabilityIDs)
+        let sharedCapabilityIDs = Set(
+            MereRunCapabilityCatalog.document.commands.map(\.id)
+        )
+
+        XCTAssertEqual(
+            appCapabilityIDs,
+            sharedCapabilityIDs,
+            """
+            The shared CLI/App contract drifted. Add a typed App surface for every new shared \
+            capability, and remove stale App mappings when a capability is retired.
+            """
+        )
+    }
+
     func testStudioModesMapToPublicTemplates() {
         XCTAssertEqual(StudioMode.createImage.defaultTemplateID, .imageGenerate)
         XCTAssertEqual(StudioMode.chat.defaultTemplateID, .textChat)
@@ -57,6 +138,87 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertFalse(args.contains("--tools"))
         XCTAssertFalse(args.contains("--tool-loop"))
         XCTAssertFalse(args.contains("--allow-shell-exec"))
+        XCTAssertFalse(args.contains("--min-p"), "Omitting min-p preserves managed-model defaults")
+    }
+
+    func testChatBuildsJSONLoRAKVPreflightAndToolPermissionFlags() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .textChat))
+        var draft = template.defaultDraft()
+        draft.responseFormat = .jsonObject
+        draft.thinkingMode = .hide
+        draft.contextSize = 262_144
+        draft.topK = 20
+        draft.kvBits = 4
+        draft.kvQuantScheme = "polar"
+        draft.kvGroupSize = 64
+        draft.quantizedKVStart = 1_024
+        draft.modelRoot = "/tmp/model"
+        draft.loraPath = "adapter-assistant"
+        draft.loraScale = 0.75
+        draft.allowAbsoluteToolPaths = true
+        draft.autoApproveTools = true
+        draft.preflight = true
+        draft.json = true
+        draft.requireInstalled = true
+
+        let args = template.arguments(from: draft)
+        assertPair(args, "--response-format", "json_object")
+        assertPair(args, "--context-size", "262144")
+        assertPair(args, "--top-k", "20")
+        assertPair(args, "--kv-bits", "4")
+        assertPair(args, "--kv-quant-scheme", "polar")
+        assertPair(args, "--kv-group-size", "64")
+        assertPair(args, "--quantized-kv-start", "1024")
+        assertPair(args, "--model-root", "/tmp/model")
+        assertPair(args, "--lora", "adapter-assistant")
+        assertPair(args, "--lora-scale", "0.75")
+        XCTAssertTrue(args.contains("--no-thinking"))
+        XCTAssertTrue(args.contains("--allow-absolute-tool-paths"))
+        XCTAssertTrue(args.contains("--auto-approve-tools"))
+        XCTAssertTrue(args.contains("--preflight"))
+        XCTAssertTrue(args.contains("--json"))
+        XCTAssertTrue(args.contains("--require-installed"))
+        XCTAssertFalse(args.contains("--thinking"))
+    }
+
+    func testTextAppArgumentsAreDeclaredBySharedCapabilityContract() throws {
+        let fixtures: [(CommandTemplateID, String, (inout CommandDraft) -> Void)] = [
+            (.textChat, "text.chat", {
+                $0.responseFormat = .jsonObject
+                $0.thinkingMode = .show
+                $0.minP = 0.02
+                $0.loraPath = "/tmp/chat.safetensors"
+                $0.preflight = true
+                $0.json = true
+            }),
+            (.textCode, "text.code", { $0.minP = 0.05 }),
+            (.textEmbed, "text.embed", { _ in }),
+            (.textAnonymize, "text.anonymize", {
+                $0.replacement = "<{label}:{index}>"
+                $0.all = true
+            }),
+            (.textTrainLoRA, "text.train-lora", {
+                $0.inputPath = "/tmp/train.jsonl"
+                $0.evalPath = "/tmp/eval.jsonl"
+                $0.dryRun = true
+                $0.visualize = true
+                $0.json = true
+            })
+        ]
+
+        for (templateID, capabilityID, mutate) in fixtures {
+            let template = try XCTUnwrap(CommandCatalog.template(id: templateID))
+            var draft = template.defaultDraft()
+            mutate(&draft)
+            XCTAssertNil(template.validationMessage(for: draft), "\(templateID) should validate")
+            let arguments = template.arguments(from: draft)
+            let capability = try XCTUnwrap(MereRunCapabilityCatalog.command(id: capabilityID))
+            XCTAssertEqual(Array(arguments.prefix(capability.command.count)), capability.command)
+            let declared = Set(capability.options.map(\.flag))
+            for flag in arguments where flag.hasPrefix("--") {
+                XCTAssertTrue(declared.contains(flag), "\(templateID) emitted undeclared flag \(flag)")
+            }
+        }
     }
 
     func testNewAdvancedTemplatesBuildExpectedCommands() throws {
@@ -69,16 +231,604 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertEqual(try args(.musicAnalyze) { $0.inputPath = "/a.wav" }.prefix(3).map { $0 }, ["music", "analyze", "/a.wav"])
         XCTAssertEqual(try args(.musicTranscribe) { $0.inputPath = "/a.wav" }.prefix(3).map { $0 }, ["music", "transcribe", "/a.wav"])
         XCTAssertEqual(try args(.musicRealtime).prefix(2).map { $0 }, ["music", "realtime"])
-        XCTAssertTrue(try args(.musicRealtime).contains("--no-play"))
+        XCTAssertFalse(try args(.musicRealtime).contains("--no-play"))
+        XCTAssertTrue(try args(.musicRealtime) { $0.musicPlay = false }.contains("--no-play"))
+        XCTAssertEqual(
+            try args(.musicTrainAdapter) {
+                $0.inputPath = "/dataset.jsonl"
+                $0.outputPath = "/adapter.safetensors"
+            }.prefix(2).map { $0 },
+            ["music", "train-adapter"]
+        )
+        XCTAssertEqual(try args(.musicServe).prefix(2).map { $0 }, ["music", "serve"])
         XCTAssertEqual(try args(.sfxAEEncode) { $0.inputPath = "/a.wav" }.prefix(3).map { $0 }, ["sfx", "ae", "encode"])
         XCTAssertEqual(try args(.sfxAEDecode) { $0.inputPath = "/a.npy" }.prefix(3).map { $0 }, ["sfx", "ae", "decode"])
         XCTAssertEqual(try args(.sfxClapScore) { $0.prompt = "door"; $0.inputPath = "/a.wav" }.prefix(3).map { $0 }, ["sfx", "clap", "score"])
         XCTAssertEqual(try args(.sfxConditionText) { $0.prompt = "door" }.prefix(3).map { $0 }, ["sfx", "condition", "text"])
         XCTAssertEqual(try args(.modelBenchmark).prefix(3).map { $0 }, ["model", "benchmark", "q36-mtp"])
+        XCTAssertEqual(
+            try args(.modelBenchmarkLagunaDFlash).prefix(3).map { $0 },
+            ["model", "benchmark", "laguna-dflash"]
+        )
         XCTAssertEqual(try args(.pluginList).prefix(2).map { $0 }, ["plugin", "list"])
-        XCTAssertEqual(try args(.pluginInstall) { $0.prompt = "mere-runpod"; $0.force = true }, ["plugin", "install", "mere-runpod", "--yes"])
+        XCTAssertEqual(
+            try args(.pluginInstall) {
+                $0.prompt = "mere-runpod"
+                $0.all = true
+                $0.force = true
+            },
+            ["plugin", "install", "mere-runpod", "--yes", "--force"]
+        )
         XCTAssertEqual(try args(.pluginDoctor) { $0.prompt = "mere-runpod" }, ["plugin", "doctor", "mere-runpod"])
         XCTAssertEqual(try args(.openWebui).prefix(2).map { $0 }, ["open-webui", "quickstart"])
+    }
+
+    func testLagunaSurfacesUseManagedEngineAndValidateBenchmarkCheckpoints() throws {
+        XCTAssertEqual(
+            StudioChatDefaults.servingEngine(for: "text-chat-laguna-s-2-1"),
+            "text-chat-laguna"
+        )
+
+        for id in [CommandTemplateID.apiServe, .openWebui] {
+            let template = try XCTUnwrap(CommandCatalog.template(id: id))
+            var draft = template.defaultDraft()
+            draft.engine = "text-chat-laguna"
+            assertPair(template.arguments(from: draft), "--engine", "text-chat-laguna")
+        }
+
+        let benchmark = try XCTUnwrap(CommandCatalog.template(id: .modelBenchmarkLagunaDFlash))
+        var draft = benchmark.defaultDraft()
+        XCTAssertNotNil(benchmark.validationMessage(for: draft))
+        draft.modelRoot = "/tmp/laguna"
+        XCTAssertNotNil(benchmark.validationMessage(for: draft))
+        draft.secondaryText = "/tmp/laguna-dflash"
+        XCTAssertNil(benchmark.validationMessage(for: draft))
+        let arguments = benchmark.arguments(from: draft)
+        assertPair(arguments, "--laguna-path", "/tmp/laguna")
+        assertPair(arguments, "--laguna-dflash-path", "/tmp/laguna-dflash")
+        assertPair(arguments, "--min-p", "0.02")
+        XCTAssertTrue(arguments.contains("--json"))
+    }
+
+    func testSetupModelsSpeechSFXAndServerArgumentsAreContractDeclared() throws {
+        let fixtures: [(CommandTemplateID, String, (inout CommandDraft) -> Void)] = [
+            (.setup, "setup", {
+                $0.dryRun = true
+                $0.piPath = "/tmp/pi"
+            }),
+            (.agentOnboard, "agent.onboard", {
+                $0.force = true
+                $0.all = true
+                $0.stream = true
+                $0.quiet = true
+            }),
+            (.agentInstallPi, "agent.install-pi", { $0.force = true }),
+            (.agentStart, "agent.start", {
+                $0.piPath = "/tmp/pi"
+                $0.stream = true
+                $0.force = true
+                $0.noBootstrap = true
+                $0.quiet = true
+            }),
+            (.modelList, "model.list", { _ in }),
+            (.modelCapabilities, "model.capabilities", {
+                $0.all = true
+                $0.force = true
+                $0.json = true
+            }),
+            (.modelPull, "model.pull", {
+                $0.preflight = true
+                $0.json = true
+                $0.acceptModelLicense = true
+            }),
+            (.modelInfo, "model.info", {
+                $0.all = true
+                $0.force = true
+            }),
+            (.modelRemove, "model.remove", {
+                $0.force = true
+                $0.modelKeepCache = true
+                $0.modelRemovalJSON = true
+            }),
+            (.modelRepairManifests, "model.repair-manifests", { $0.force = true }),
+            (.modelBenchmark, "model.benchmark.q36-mtp", {
+                $0.modelRoot = "/tmp/model"
+                $0.prompt = "Benchmark"
+                $0.benchmarkPromptFile = "/tmp/prompt.txt"
+                $0.benchmarkPromptRepeatValues = "50,150"
+                $0.benchmarkDecodeTokenValues = "32,128"
+                $0.benchmarkTemperatureValues = "0,0.7"
+                $0.benchmarkMTPBlockSize = "4"
+                $0.json = true
+            }),
+            (.modelBenchmarkLagunaDFlash, "model.benchmark.laguna-dflash", {
+                $0.modelRoot = "/tmp/laguna"
+                $0.secondaryText = "/tmp/laguna-dflash"
+                $0.prompt = "Benchmark"
+                $0.benchmarkPromptFile = "/tmp/prompt.txt"
+                $0.benchmarkConcurrencyValues = "1,2,4"
+                $0.benchmarkMixedFixtures = true
+                $0.benchmarkIncludeAutomatic = true
+                $0.benchmarkLogResponses = true
+            }),
+            (.speechSynthesize, "speech.synthesize", {
+                $0.stream = true
+                $0.voiceMode = "clone"
+                $0.voiceProfile = "narrator"
+            }),
+            (.speechTranscribe, "speech.transcribe", {
+                $0.inputPath = "/tmp/voice.wav"
+                $0.stream = true
+                $0.speechInputFormat = "pcm-s16le"
+                $0.speechSampleRate = 22_050
+                $0.speechJSONL = true
+            }),
+            (.speechProfileList, "speech.profile.list", { _ in }),
+            (.speechProfileCreate, "speech.profile.create", {
+                $0.inputPath = "/tmp/voice.wav"
+                $0.secondaryText = "Transcript"
+                $0.quiet = true
+            }),
+            (.speechProfileDelete, "speech.profile.delete", {
+                $0.prompt = "00000000-0000-0000-0000-000000000001"
+            }),
+            (.sfxGenerate, "sfx.generate", {
+                $0.secondaryText = "speech"
+                $0.sfxRenoise = "0.2,0.1"
+            }),
+            (.sfxVideo, "sfx.video.generate", {
+                $0.inputPath = "/tmp/video.mp4"
+                $0.secondaryText = "music"
+                $0.sfxRenoise = "0.15"
+                $0.preflight = true
+                $0.json = true
+            }),
+            (.sfxAEEncode, "sfx.ae.encode", { $0.inputPath = "/tmp/audio.wav" }),
+            (.sfxAEDecode, "sfx.ae.decode", { $0.inputPath = "/tmp/latents.npy" }),
+            (.sfxClapScore, "sfx.clap.score", { $0.inputPath = "/tmp/audio.wav" }),
+            (.sfxConditionText, "sfx.condition.text", { _ in }),
+            (.pluginList, "plugin.list", {
+                $0.pluginCatalogURL = "/tmp/catalog.json"
+                $0.json = true
+            }),
+            (.pluginInstall, "plugin.install", {
+                $0.pluginCatalogURL = "/tmp/catalog.json"
+                $0.pluginChannel = "stable"
+                $0.all = true
+                $0.force = true
+            }),
+            (.pluginDoctor, "plugin.doctor", {
+                $0.pluginCatalogURL = "/tmp/catalog.json"
+            }),
+            (.openWebui, "open-webui.quickstart", {
+                $0.openWebUIPull = true
+                $0.acceptModelLicense = true
+                $0.openWebUISkipServer = true
+                $0.openWebUISkipDocker = true
+                $0.openWebUISkipConfigure = true
+                $0.openWebUIReset = true
+                $0.dryRun = true
+                $0.quiet = true
+            }),
+            (.apiServe, "api.serve", {
+                $0.apiLoRA = "adapter-assistant"
+                $0.kvBits = 4
+                $0.kvQuantScheme = "polar"
+                $0.kvGroupSize = 64
+                $0.quantizedKVStart = 1_024
+                $0.preflight = true
+                $0.json = true
+            })
+        ]
+
+        for (templateID, capabilityID, mutate) in fixtures {
+            let template = try XCTUnwrap(CommandCatalog.template(id: templateID))
+            var draft = template.defaultDraft()
+            mutate(&draft)
+            XCTAssertNil(template.validationMessage(for: draft), "\(templateID) should validate")
+            let arguments = template.arguments(from: draft)
+            let capability = try XCTUnwrap(MereRunCapabilityCatalog.command(id: capabilityID))
+            XCTAssertEqual(Array(arguments.prefix(capability.command.count)), capability.command)
+            let declared = Set(capability.options.map(\.flag))
+            for flag in arguments where flag.hasPrefix("--") {
+                XCTAssertTrue(declared.contains(flag), "\(templateID) emitted undeclared flag \(flag)")
+            }
+        }
+    }
+
+    func testMusicAppArgumentsAreDeclaredBySharedCapabilityContract() throws {
+        let fixtures: [(CommandTemplateID, String, (inout CommandDraft) -> Void)] = [
+            (.musicGenerate, "music.generate", {
+                $0.musicTask = "repaint"
+                $0.musicSourceAudio = "/tmp/source.wav"
+                $0.musicReferenceAudioPaths = "/tmp/voice.wav\n/tmp/timbre.wav"
+                $0.musicLRCFile = "/tmp/lyrics.lrc"
+                $0.musicLRCOutput = "/tmp/out.lrc"
+                $0.musicAdapterPaths = "/tmp/a.safetensors\n/tmp/b.safetensors"
+                $0.musicAdapterScales = "0.5\n0.75"
+                $0.musicStems = "Drums,Bass,Vocals"
+                $0.musicDAWBundle = "/tmp/session"
+                $0.musicLMMode = "use"
+                $0.musicAnalyzeSourceAudio = true
+                $0.musicOverrideSteps = true
+                $0.useDuration = true
+                $0.musicCandidates = 3
+                $0.musicKeepCandidates = true
+                $0.musicRetakeSeed = "99"
+                $0.musicFlowEdit = true
+                $0.musicSourceCaption = "original demo"
+                $0.musicSourceLyrics = "old words"
+                $0.musicBPM = "122"
+                $0.musicKey = "D minor"
+                $0.musicTimeSignature = "4"
+                $0.musicNoTiledVAE = true
+                $0.musicNoRecipe = true
+            }),
+            (.musicAnalyze, "music.analyze", {
+                $0.inputPath = "/tmp/song.wav"
+                $0.useDuration = true
+                $0.musicIncludeRawLM = true
+                $0.musicIncludeAudioCodes = true
+            }),
+            (.musicTranscribe, "music.transcribe", {
+                $0.inputPath = "/tmp/song.wav"
+                $0.musicSampling = true
+                $0.musicStrictEOS = true
+                $0.musicContextOutput = "/tmp/context.json"
+            }),
+            (.musicRealtime, "music.realtime", {
+                $0.musicPlay = false
+                $0.musicInteractive = true
+                $0.musicMIDIInput = "OP-1"
+                $0.musicMIDICCMappings = "1=temp:0.2:1.4"
+            }),
+            (.musicTrainAdapter, "music.train-adapter", {
+                $0.inputPath = "/tmp/dataset.jsonl"
+                $0.outputPath = "/tmp/music.safetensors"
+                $0.musicTrainingKind = "lokr"
+            }),
+            (.musicServe, "music.serve", {
+                $0.musicAdapterPaths = "/tmp/music.safetensors"
+                $0.musicAdapterScales = "0.8"
+            })
+        ]
+
+        for (templateID, capabilityID, mutate) in fixtures {
+            let template = try XCTUnwrap(CommandCatalog.template(id: templateID))
+            var draft = template.defaultDraft()
+            mutate(&draft)
+            let arguments = template.arguments(from: draft)
+            let capability = try XCTUnwrap(MereRunCapabilityCatalog.command(id: capabilityID))
+            XCTAssertEqual(Array(arguments.prefix(capability.command.count)), capability.command)
+            let declared = Set(capability.options.map(\.flag))
+            for flag in arguments where flag.hasPrefix("--") {
+                XCTAssertTrue(declared.contains(flag), "\(templateID) emitted undeclared flag \(flag)")
+            }
+        }
+    }
+
+    func testMusicGenerateBuildsCompleteProductionWorkflow() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .musicGenerate))
+        var draft = template.defaultDraft()
+        draft.prompt = "dream-pop vocals over live drums"
+        draft.secondaryText = "[verse]\nwe rise"
+        draft.musicQuality = "final"
+        draft.musicTask = "repaint"
+        draft.musicSourceAudio = "/tmp/demo.wav"
+        draft.musicReferenceAudioPaths = "/tmp/vocal.wav\n/tmp/band.wav"
+        draft.musicLMMode = "use"
+        draft.musicAnalyzeSourceAudio = true
+        draft.useDuration = true
+        draft.durationSeconds = 42
+        draft.musicOverrideSteps = true
+        draft.steps = 50
+        draft.musicCandidates = 4
+        draft.musicKeepCandidates = true
+        draft.musicAdapterPaths = "/tmp/style.safetensors\n/tmp/singer.safetensors"
+        draft.musicAdapterScales = "0.6\n0.8"
+        draft.musicStems = "Drums,Bass,Vocals"
+        draft.musicDAWBundle = "/tmp/session"
+        draft.musicFlowEdit = true
+        draft.musicSourceCaption = "rough acoustic demo"
+        draft.musicSourceLyrics = "old lyric"
+
+        let args = template.arguments(from: draft)
+        assertPair(args, "--quality", "final")
+        assertPair(args, "--task-type", "repaint")
+        assertPair(args, "--source-audio", "/tmp/demo.wav")
+        XCTAssertEqual(args.filter { $0 == "--reference-audio" }.count, 2)
+        XCTAssertEqual(args.filter { $0 == "--adapter" }.count, 2)
+        XCTAssertEqual(args.filter { $0 == "--adapter-scale" }.count, 2)
+        assertPair(args, "--duration", "42")
+        assertPair(args, "--steps", "50")
+        assertPair(args, "--candidates", "4")
+        assertPair(args, "--stems", "Drums,Bass,Vocals")
+        assertPair(args, "--daw-bundle", "/tmp/session")
+        XCTAssertTrue(args.contains("--use-lm"))
+        XCTAssertTrue(args.contains("--analyze-source-audio"))
+        XCTAssertTrue(args.contains("--keep-candidates"))
+        XCTAssertTrue(args.contains("--flow-edit"))
+    }
+
+    func testMusicStudioMapsProductionWorkflow() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .music)
+        draft.prompt = "cinematic art-pop single"
+        draft.secondaryText = "[chorus]\nwe are alive"
+        draft.musicQuality = "final"
+        draft.musicTask = "cover"
+        draft.musicSourceAudio = "/tmp/source.wav"
+        draft.musicReferenceAudioPaths = "/tmp/timbre.wav"
+        draft.musicLMMode = "use"
+        draft.musicAnalyzeSourceAudio = true
+        draft.useDuration = true
+        draft.durationSeconds = 60
+        draft.musicOverrideSteps = true
+        draft.steps = 50
+        draft.musicCandidates = 4
+        draft.musicKeepCandidates = true
+        draft.musicAdapterPaths = "/tmp/artist.safetensors"
+        draft.musicAdapterScales = "0.7"
+        draft.musicStems = "Drums,Bass,Vocals"
+        draft.musicDAWBundle = "/tmp/daw"
+
+        let request = try StudioCommandAdapter.makeRequest(mode: .music, draft: draft)
+        let args = request.template.arguments(from: request.draft)
+        assertPair(args, "--quality", "final")
+        assertPair(args, "--task-type", "cover")
+        assertPair(args, "--source-audio", "/tmp/source.wav")
+        assertPair(args, "--duration", "60")
+        assertPair(args, "--steps", "50")
+        assertPair(args, "--candidates", "4")
+        assertPair(args, "--adapter", "/tmp/artist.safetensors")
+        assertPair(args, "--adapter-scale", "0.7")
+        assertPair(args, "--stems", "Drums,Bass,Vocals")
+        assertPair(args, "--daw-bundle", "/tmp/daw")
+        XCTAssertTrue(args.contains("--use-lm"))
+        XCTAssertTrue(args.contains("--analyze-source-audio"))
+        XCTAssertTrue(args.contains("--keep-candidates"))
+    }
+
+    func testMusicEditingRequiresSourceAudioInStudioAndAdvanced() throws {
+        var studio = StudioDraft()
+        studio.reset(for: .music)
+        studio.prompt = "new arrangement"
+        studio.musicTask = "repaint"
+        XCTAssertThrowsError(try StudioCommandAdapter.makeRequest(mode: .music, draft: studio))
+
+        let template = try XCTUnwrap(CommandCatalog.template(id: .musicGenerate))
+        var advanced = template.defaultDraft()
+        advanced.musicTask = "cover"
+        XCTAssertNotNil(template.validationMessage(for: advanced))
+        advanced.musicSourceAudio = "/tmp/source.wav"
+        XCTAssertNil(template.validationMessage(for: advanced))
+    }
+
+    func testMusicServerInjectsAPIKeyOutsideProcessArguments() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .musicServe))
+        var draft = template.defaultDraft()
+        draft.host = "0.0.0.0"
+        draft.apiKey = "music-secret"
+
+        let arguments = template.arguments(from: draft)
+        XCTAssertFalse(arguments.contains("--api-key"))
+        XCTAssertFalse(arguments.contains("music-secret"))
+        XCTAssertEqual(
+            CommandLaunchEnvironment.overrides(templateID: .musicServe, draft: draft),
+            ["MERERUN_API_KEY": "music-secret"]
+        )
+        XCTAssertNil(template.validationMessage(for: draft))
+    }
+
+    func testVisionAndVFXArgumentsAreDeclaredBySharedCapabilityContract() throws {
+        let fixtures: [(CommandTemplateID, String, (inout CommandDraft) -> Void)] = [
+            (.visionInspect, "vision.inspect", { $0.inputPath = "/tmp/a.png" }),
+            (.visionCaption, "vision.caption", {
+                $0.inputPath = "/tmp/a.png"
+                $0.visionAdditionalInputs = "/tmp/b.png"
+                $0.visionPromptFile = "/tmp/prompt.txt"
+                $0.visionFocus = "printed title\ncard border"
+            }),
+            (.visionOCR, "vision.ocr", {
+                $0.inputPath = "/tmp/a.png"
+                $0.backend = "infinity"
+                $0.visionInfinityTask = "custom"
+                $0.visionInfinityPrompt = "Return a table."
+            }),
+            (.visionGround, "vision.ground", { $0.inputPath = "/tmp/a.png" }),
+            (.visionSegment, "vision.segment", {
+                $0.inputPath = "/tmp/a.png"
+                $0.visionBoxPrompts = "1,2,30,40,person"
+                $0.visionPointPrompts = "10,20,positive,face"
+                $0.visionMultimask = true
+            }),
+            (.visionTrack, "vision.track", {
+                $0.inputPath = "/tmp/a.mp4"
+                $0.preflight = true
+                $0.json = true
+            }),
+            (.visionTrackLive, "vision.track-live", { _ in }),
+            (.visionFaceDetect, "vision.face.detect", {
+                $0.inputPath = "/tmp/a.png"
+                $0.visionIncludeEmbeddings = true
+            }),
+            (.visionFaceEmbed, "vision.face.embed", {
+                $0.inputPath = "/tmp/a.png"
+                $0.visionFaceIndex = "1"
+            }),
+            (.visionFaceCompare, "vision.face.compare", {
+                $0.inputPath = "/tmp/a.png"
+                $0.visionSecondInputPath = "/tmp/b.png"
+            }),
+            (.visionFaceBatch, "vision.face.batch", {
+                $0.inputPath = "/tmp/a.png"
+                $0.visionAdditionalInputs = "/tmp/b.png"
+                $0.visionIncludeEmbeddings = true
+            }),
+            (.visionPose, "vision.pose", {
+                $0.inputPath = "/tmp/a.png"
+                $0.visionPoseHands = false
+            }),
+            (.visionFlow, "vision.flow", {
+                $0.inputPath = "/tmp/a.png"
+                $0.visionSecondInputPath = "/tmp/b.png"
+            }),
+            (.visionDepthVideo, "vision.depth-video", { $0.inputPath = "/tmp/a.mp4" }),
+            (.visionGeometry, "vision.geometry", { $0.inputPath = "/tmp/a.png" }),
+            (.visionGeometryMultiview, "vision.geometry-multiview", {
+                $0.inputPath = "/tmp/a.png"
+                $0.visionAdditionalInputs = "/tmp/b.png"
+            })
+        ]
+
+        for (templateID, capabilityID, mutate) in fixtures {
+            let template = try XCTUnwrap(CommandCatalog.template(id: templateID))
+            var draft = template.defaultDraft()
+            mutate(&draft)
+            XCTAssertNil(template.validationMessage(for: draft), "\(templateID) should validate")
+            let arguments = template.arguments(from: draft)
+            let capability = try XCTUnwrap(MereRunCapabilityCatalog.command(id: capabilityID))
+            XCTAssertEqual(Array(arguments.prefix(capability.command.count)), capability.command)
+            let declared = Set(capability.options.map(\.flag))
+            for flag in arguments where flag.hasPrefix("--") {
+                XCTAssertTrue(declared.contains(flag), "\(templateID) emitted undeclared flag \(flag)")
+            }
+        }
+    }
+
+    func testVisionGeometryAndPromptBuildersPreserveOrderedInputsAndCommaCoordinates() throws {
+        let segment = try XCTUnwrap(CommandCatalog.template(id: .visionSegment))
+        var segmentDraft = segment.defaultDraft()
+        segmentDraft.inputPath = "/tmp/a.png"
+        segmentDraft.prompt = ""
+        segmentDraft.visionBoxPrompts = "1,2,30,40,person"
+        segmentDraft.visionPointPrompts = "10,20,positive,face"
+        let segmentArgs = segment.arguments(from: segmentDraft)
+        assertPair(segmentArgs, "--box", "1,2,30,40,person")
+        assertPair(segmentArgs, "--point", "10,20,positive,face")
+
+        let geometry = try XCTUnwrap(CommandCatalog.template(id: .visionGeometryMultiview))
+        var geometryDraft = geometry.defaultDraft()
+        geometryDraft.inputPath = "/tmp/front.png"
+        geometryDraft.visionAdditionalInputs = "/tmp/left.png\n/tmp/right.png"
+        let geometryArgs = geometry.arguments(from: geometryDraft)
+        XCTAssertEqual(
+            Array(geometryArgs.prefix(5)),
+            ["vision", "geometry-multiview", "/tmp/front.png", "/tmp/left.png", "/tmp/right.png"]
+        )
+    }
+
+    func testVisionOCRDefaultsToARealCLIBackend() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .visionOCR))
+        var draft = template.defaultDraft()
+        draft.inputPath = "/tmp/page.png"
+        XCTAssertEqual(draft.backend, "lighton")
+        assertPair(template.arguments(from: draft), "--backend", "lighton")
+    }
+
+    func testOperationsArgumentsAreDeclaredBySharedCapabilityContract() throws {
+        let fixtures: [(CommandTemplateID, String, (inout CommandDraft) -> Void)] = [
+            (.adapterList, "adapter.list", { _ in }),
+            (.adapterPull, "adapter.pull", {
+                $0.prompt = "mere-platform-assistant"
+                $0.force = true
+            }),
+            (.runList, "run.list", {
+                $0.operationsExecutor = "relay:fleet"
+                $0.operationsLimit = 25
+            }),
+            (.runInspect, "run.inspect", {
+                $0.operationsReference = "relay://fleet/job-1"
+            }),
+            (.runWatch, "run.watch", {
+                $0.operationsReference = "relay://fleet/job-1"
+                $0.operationsJSONStream = true
+            }),
+            (.runFetch, "run.fetch", {
+                $0.operationsReference = "relay://fleet/job-1"
+                $0.operationsArtifacts = "preview\nfinal"
+            }),
+            (.runCancel, "run.cancel", {
+                $0.operationsReference = "/tmp/runs/job-1"
+            }),
+            (.runRetry, "run.retry", {
+                $0.operationsReference = "relay://fleet/job-1"
+            }),
+            (.worldServe, "world.serve", {
+                $0.operationsPrepare = true
+                $0.operationsStateDirectory = "/tmp/world"
+            }),
+            (.statusSnapshot, "status", { _ in }),
+            (.qualityGate, "gate", {
+                $0.operationsGateSuite = "text,vision"
+                $0.operationsStrictPerformance = true
+            }),
+            (.modelStorage, "model.storage", { _ in }),
+            (.modelGarbageCollect, "model.gc", { $0.force = true }),
+            (.modelRuntimeGet, "model.runtime.get", { _ in }),
+            (.modelRuntimeSet, "model.runtime.set", {
+                $0.operationsRuntimeAlias = "assistant"
+                $0.operationsPinned = true
+                $0.operationsRuntimeTTL = "900"
+                $0.operationsRuntimeContext = "32768"
+                $0.operationsRuntimeMaxTokens = "2048"
+                $0.operationsRuntimeTemperature = "0.4"
+                $0.operationsRuntimeTopP = "0.9"
+                $0.operationsRuntimeMinP = "0.02"
+                $0.operationsRuntimeEngine = "text-chat-laguna"
+                $0.operationsRuntimeKVCacheMode = "auto"
+            })
+        ]
+
+        for (templateID, capabilityID, mutate) in fixtures {
+            let template = try XCTUnwrap(CommandCatalog.template(id: templateID))
+            var draft = template.defaultDraft()
+            mutate(&draft)
+            XCTAssertNil(template.validationMessage(for: draft), "\(templateID) should validate")
+            let arguments = template.arguments(from: draft)
+            let capability = try XCTUnwrap(MereRunCapabilityCatalog.command(id: capabilityID))
+            XCTAssertEqual(Array(arguments.prefix(capability.command.count)), capability.command)
+            let declared = Set(capability.options.map(\.flag))
+            for flag in arguments where flag.hasPrefix("--") {
+                XCTAssertTrue(declared.contains(flag), "\(templateID) emitted undeclared flag \(flag)")
+            }
+        }
+    }
+
+    func testRunFetchRejectsConflictingArtifactSelections() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .runFetch))
+        var draft = template.defaultDraft()
+        draft.operationsReference = "relay://fleet/job-1"
+        draft.operationsAllArtifacts = true
+        draft.operationsArtifacts = "preview"
+
+        XCTAssertNotNil(template.validationMessage(for: draft))
+    }
+
+    func testWorldAndStatusAPIKeysUseEnvironmentNotProcessArguments() throws {
+        for id in [CommandTemplateID.worldServe, .statusSnapshot] {
+            let template = try XCTUnwrap(CommandCatalog.template(id: id))
+            var draft = template.defaultDraft()
+            draft.host = "0.0.0.0"
+            draft.apiKey = " operator-secret "
+
+            XCTAssertFalse(template.arguments(from: draft).contains("operator-secret"))
+            XCTAssertEqual(
+                CommandLaunchEnvironment.overrides(templateID: id, draft: draft),
+                ["MERERUN_API_KEY": "operator-secret"]
+            )
+            XCTAssertNil(template.validationMessage(for: draft))
+        }
+    }
+
+    func testGraphAndFleetStayExternalProductBoundaries() throws {
+        let graph = try XCTUnwrap(CommandCatalog.template(id: .graphStudio))
+        let node = try XCTUnwrap(CommandCatalog.template(id: .nodeConsole))
+
+        XCTAssertEqual(graph.externalURL?.absoluteString, "https://studio.mere.run/app")
+        XCTAssertEqual(node.externalURL?.absoluteString, "https://relay.mere.run")
+        XCTAssertTrue(graph.arguments(from: graph.defaultDraft()).isEmpty)
+        XCTAssertTrue(node.arguments(from: node.defaultDraft()).isEmpty)
     }
 
     func testStudioServerStatusParsesSnapshot() {
@@ -153,15 +903,189 @@ final class StudioTypesTests: XCTestCase {
             template.arguments(from: draft),
             [
                 "image", "train-lora",
-                "--data", "/tmp/krea-dataset",
                 "--output", "/tmp/krea-style.safetensors",
+                "--data", "/tmp/krea-dataset",
                 "--width", "768",
                 "--height", "768",
                 "--training-steps", "1200",
                 "--model", "image-krea2-raw",
+                "--learning-rate", "0.0001",
+                "--rank", "16",
+                "--batch-size", "1",
+                "--max-text-length", "512",
+                "--scheduler-steps", "1000",
                 "--seed", "7",
             ]
         )
+    }
+
+    func testImageTrainingRecipeIsNotSilentlyOverriddenByFormDefaults() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .imageTrainLoRA))
+        var draft = template.defaultDraft()
+        draft.inputPath = "/tmp/style"
+        draft.trainingRecipe = "krea-fast-style"
+
+        let recipeArgs = template.arguments(from: draft)
+        assertPair(recipeArgs, "--recipe", "krea-fast-style")
+        XCTAssertFalse(recipeArgs.contains("--model"))
+        XCTAssertFalse(recipeArgs.contains("--width"))
+        XCTAssertFalse(recipeArgs.contains("--height"))
+        XCTAssertFalse(recipeArgs.contains("--training-steps"))
+        XCTAssertFalse(recipeArgs.contains("--learning-rate"))
+        XCTAssertFalse(recipeArgs.contains("--rank"))
+
+        draft.overrideTrainingRecipe = true
+        let overrideArgs = template.arguments(from: draft)
+        XCTAssertTrue(overrideArgs.contains("--model"))
+        XCTAssertTrue(overrideArgs.contains("--width"))
+        XCTAssertTrue(overrideArgs.contains("--training-steps"))
+        XCTAssertTrue(overrideArgs.contains("--learning-rate"))
+        XCTAssertTrue(overrideArgs.contains("--rank"))
+    }
+
+    func testImageGenerateBuildsMultiReferenceStructuredPromptLoRAAndKreaControls() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .imageGenerate))
+        var draft = template.defaultDraft()
+        draft.referenceImagePaths = "/tmp/face.png\n/tmp/style.png"
+        draft.keepOriginalAspect = true
+        draft.strength = 0.4
+        draft.structuredPrompt = true
+        draft.structuredPromptModel = "text-chat-q36-nano"
+        draft.structuredPromptModelRoot = "/tmp/q36"
+        draft.structuredPromptMaxTokens = 1024
+        draft.structuredPromptOutputPath = "/tmp/caption.json"
+        draft.loraPath = "adapter-portrait"
+        draft.loraScale = 0.75
+        draft.sigmaShift = 8
+        draft.kreaConditioningMultiplier = 1.25
+        draft.kreaConditioningLayerWeights = "1,1,2.5"
+        draft.kreaBaseQuantizationBits = "8"
+        draft.preflight = true
+        draft.json = true
+        draft.progressJSON = true
+
+        let args = template.arguments(from: draft)
+        XCTAssertEqual(args.filter { $0 == "--ref-image" }.count, 2)
+        assertPair(args, "--structured-prompt-model", "text-chat-q36-nano")
+        assertPair(args, "--structured-prompt-model-root", "/tmp/q36")
+        assertPair(args, "--structured-prompt-max-tokens", "1024")
+        assertPair(args, "--structured-prompt-output", "/tmp/caption.json")
+        assertPair(args, "--lora", "adapter-portrait")
+        assertPair(args, "--lora-scale", "0.75")
+        assertPair(args, "--sigma-shift", "8")
+        assertPair(args, "--krea-conditioning-multiplier", "1.25")
+        assertPair(args, "--krea-conditioning-layer-weights", "1,1,2.5")
+        assertPair(args, "--krea-base-quantization-bits", "8")
+        XCTAssertTrue(args.contains("--keep-original-aspect"))
+        XCTAssertTrue(args.contains("--structured-prompt"))
+        XCTAssertTrue(args.contains("--preflight"))
+        XCTAssertTrue(args.contains("--json"))
+        XCTAssertTrue(args.contains("--progress-json"))
+    }
+
+    func testImageStudioMapsReferenceLoRAStructuredPromptAndPreflightControls() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .createImage)
+        draft.prompt = "editorial portrait"
+        draft.referenceImagePaths = "/tmp/person.png\n/tmp/wardrobe.png"
+        draft.keepOriginalAspect = true
+        draft.structuredPrompt = true
+        draft.structuredPromptModel = "text-chat-q36-nano"
+        draft.structuredPromptMaxTokens = 1024
+        draft.imageMaxSequenceLength = 768
+        draft.loraPath = "adapter-editorial"
+        draft.loraScale = 0.6
+        draft.sigmaShift = 8
+        draft.kreaConditioningMultiplier = 1.2
+        draft.kreaConditioningLayerWeights = "1,1,2"
+        draft.kreaBaseQuantizationBits = "4"
+        draft.preflight = true
+        draft.preflightJSON = true
+        draft.progressJSON = true
+
+        let request = try StudioCommandAdapter.makeRequest(mode: .createImage, draft: draft)
+        let args = request.template.arguments(from: request.draft)
+        XCTAssertEqual(args.filter { $0 == "--ref-image" }.count, 2)
+        assertPair(args, "--structured-prompt-model", "text-chat-q36-nano")
+        assertPair(args, "--structured-prompt-max-tokens", "1024")
+        assertPair(args, "--max-sequence-length", "768")
+        assertPair(args, "--lora", "adapter-editorial")
+        assertPair(args, "--lora-scale", "0.6")
+        assertPair(args, "--sigma-shift", "8")
+        assertPair(args, "--krea-conditioning-multiplier", "1.2")
+        assertPair(args, "--krea-conditioning-layer-weights", "1,1,2")
+        assertPair(args, "--krea-base-quantization-bits", "4")
+        XCTAssertTrue(args.contains("--keep-original-aspect"))
+        XCTAssertTrue(args.contains("--structured-prompt"))
+        XCTAssertTrue(args.contains("--preflight"))
+        XCTAssertTrue(args.contains("--json"))
+        XCTAssertTrue(args.contains("--progress-json"))
+    }
+
+    func testImageAppArgumentsAreDeclaredBySharedCapabilityContract() throws {
+        let fixtures: [(CommandTemplateID, String, (inout CommandDraft) -> Void)] = [
+            (.imageGenerate, "image.generate", {
+                $0.referenceImagePaths = "/tmp/a.png\n/tmp/b.png"
+                $0.structuredPrompt = true
+                $0.loraPath = "adapter-style"
+                $0.preflight = true
+                $0.json = true
+            }),
+            (.imageTrainLoRA, "image.train-lora", {
+                $0.inputPath = "/tmp/dataset"
+                $0.trainingRecipe = "klein-fast-style"
+                $0.sampleInterval = 100
+                $0.visualize = true
+                $0.preflight = true
+                $0.json = true
+            }),
+            (.imageValidate, "image.validate", {
+                $0.all = true
+                $0.referenceDirectoryPath = "/tmp/reference"
+            }),
+            (.imageDatasetDiscover, "image.dataset.discover", {
+                $0.inputPath = "/tmp/datasets"
+                $0.trainingOutputRoot = "/tmp/runs"
+            }),
+            (.imageRunPlan, "image.run-plan", {
+                $0.inputPath = "/tmp/plan.json"
+                $0.preflight = true
+            }),
+            (.imageVisualizeRun, "image.visualize-run", {
+                $0.inputPath = "/tmp/run"
+            }),
+            (.imageReconstruct3D, "image.reconstruct-3d", {
+                $0.inputPath = "/tmp/object.png"
+                $0.dryRun = true
+                $0.json = true
+            }),
+            (.imageReconstruct3DTrellis2, "image.reconstruct-3d-trellis2", {
+                $0.inputPath = "/tmp/object.png"
+                $0.dryRun = true
+                $0.json = true
+            }),
+            (.imageReconstruct3DMultiview, "image.reconstruct-3d-multiview", {
+                $0.referenceImagePaths = [
+                    "/tmp/front.png", "/tmp/right.png", "/tmp/back.png", "/tmp/left.png"
+                ].joined(separator: "\n")
+                $0.dryRun = true
+                $0.json = true
+            })
+        ]
+
+        for (templateID, capabilityID, mutate) in fixtures {
+            let template = try XCTUnwrap(CommandCatalog.template(id: templateID))
+            var draft = template.defaultDraft()
+            mutate(&draft)
+            XCTAssertNil(template.validationMessage(for: draft), "\(templateID) should validate")
+            let arguments = template.arguments(from: draft)
+            let capability = try XCTUnwrap(MereRunCapabilityCatalog.command(id: capabilityID))
+            XCTAssertEqual(Array(arguments.prefix(capability.command.count)), capability.command)
+            let declared = Set(capability.options.map(\.flag))
+            for flag in arguments where flag.hasPrefix("--") {
+                XCTAssertTrue(declared.contains(flag), "\(templateID) emitted undeclared flag \(flag)")
+            }
+        }
     }
 
     func testReadImageVariantsResolveToDistinctTemplates() throws {
@@ -387,11 +1311,62 @@ final class StudioTypesTests: XCTestCase {
         draft.reset(for: .chat)
         draft.prompt = "hi"
         draft.temperature = 0.3
+        draft.minP = 0.02
         draft.maxTokens = 1234
         let request = try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft)
         let args = request.template.arguments(from: request.draft)
         assertPair(args, "--temperature", "0.3")
+        assertPair(args, "--min-p", "0.02")
         assertPair(args, "--max-tokens", "1234")
+    }
+
+    func testChatStudioMapsJSONLoRAKVAndPermissionControls() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .chat)
+        draft.prompt = "Return one JSON object."
+        draft.responseFormat = .jsonObject
+        draft.thinkingMode = .hide
+        draft.contextSize = 32_768
+        draft.topK = 20
+        draft.minP = 0.02
+        draft.kvBits = 8
+        draft.kvQuantScheme = "turboquant"
+        draft.kvGroupSize = 64
+        draft.quantizedKVStart = 512
+        draft.loraPath = "adapter-assistant"
+        draft.loraScale = 0.5
+        draft.tools = "write_file,shell_exec"
+        draft.toolLoop = true
+        draft.allowShellExec = true
+        draft.allowAbsoluteToolPaths = true
+        draft.autoApproveTools = true
+        draft.sandboxDir = "/tmp/tools"
+        draft.stats = true
+        draft.preflight = true
+        draft.preflightJSON = true
+        draft.requireInstalled = true
+
+        let request = try StudioCommandAdapter.makeRequest(mode: .chat, draft: draft)
+        let args = request.template.arguments(from: request.draft)
+
+        assertPair(args, "--response-format", "json_object")
+        assertPair(args, "--context-size", "32768")
+        assertPair(args, "--top-k", "20")
+        assertPair(args, "--min-p", "0.02")
+        assertPair(args, "--kv-bits", "8")
+        assertPair(args, "--kv-quant-scheme", "turboquant")
+        assertPair(args, "--lora", "adapter-assistant")
+        assertPair(args, "--lora-scale", "0.5")
+        assertPair(args, "--sandbox-dir", "/tmp/tools")
+        XCTAssertTrue(args.contains("--no-thinking"))
+        XCTAssertTrue(args.contains("--tool-loop"))
+        XCTAssertTrue(args.contains("--allow-shell-exec"))
+        XCTAssertTrue(args.contains("--allow-absolute-tool-paths"))
+        XCTAssertTrue(args.contains("--auto-approve-tools"))
+        XCTAssertTrue(args.contains("--stats"))
+        XCTAssertTrue(args.contains("--preflight"))
+        XCTAssertTrue(args.contains("--json"))
+        XCTAssertTrue(args.contains("--require-installed"))
     }
 
     func testImageSchemaExposesCfgAndStrength() throws {
@@ -421,18 +1396,128 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertTrue(args.contains("--no-timestamps"))
     }
 
-    func testVideoSchemaExposesVariantFpsFrames() throws {
+    func testVideoSchemaUsesTypedProductSelectionAndNeverLegacyVariant() throws {
         var draft = StudioDraft()
         draft.reset(for: .video)
         draft.prompt = "a wave"
-        draft.variant = "full"
+        draft.videoQuality = .final
+        draft.videoOutputMode = .videoOnly
         draft.fps = 30
         draft.numFrames = 120
         let request = try StudioCommandAdapter.makeRequest(mode: .video, draft: draft)
         let args = request.template.arguments(from: request.draft)
-        assertPair(args, "--variant", "full")
+        assertPair(args, "--quality", "final")
+        assertPair(args, "--output-mode", "video-only")
         assertPair(args, "--fps", "30")
         assertPair(args, "--num-frames", "120")
+        XCTAssertFalse(args.contains("--variant"))
+    }
+
+    func testVideoStudioBuildsNativeAudioAndEndKeyframeConditioning() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .video)
+        draft.prompt = "a kinetic live performance"
+        draft.inputPath = "/tmp/start.png"
+        draft.endImagePath = "/tmp/end.png"
+        draft.endImageStrength = 0.8
+        draft.audioPath = "/tmp/song.wav"
+        draft.audioStartTime = 30
+        draft.useDuration = true
+        draft.durationSeconds = 5
+
+        let request = try StudioCommandAdapter.makeRequest(mode: .video, draft: draft)
+        let args = request.template.arguments(from: request.draft)
+
+        assertPair(args, "--quality", "final")
+        assertPair(args, "--output-mode", "audio-video")
+        assertPair(args, "--audio", "/tmp/song.wav")
+        assertPair(args, "--audio-start-time", "30")
+        assertPair(args, "--image", "/tmp/start.png")
+        assertPair(args, "--end-image", "/tmp/end.png")
+        assertPair(args, "--end-image-strength", "0.8")
+        assertPair(args, "--duration", "5")
+        XCTAssertFalse(args.contains("--num-frames"))
+    }
+
+    func testVideoWanRequestOmitsLTXProductSelectors() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .video)
+        draft.prompt = "the camera walks forward"
+        draft.model = "video-wan22-ti2v-5b-mlx"
+        draft.inputPath = "/tmp/frame.png"
+        draft.steps = 40
+        draft.cfgScale = 5
+        draft.scheduleShift = 5
+
+        let request = try StudioCommandAdapter.makeRequest(mode: .video, draft: draft)
+        let args = request.template.arguments(from: request.draft)
+
+        XCTAssertFalse(args.contains("--quality"))
+        XCTAssertFalse(args.contains("--output-mode"))
+        assertPair(args, "--steps", "40")
+        assertPair(args, "--guidance-scale", "5")
+        assertPair(args, "--shift", "5")
+    }
+
+    func testVideoAppArgumentsAreDeclaredBySharedCapabilityContract() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .video)
+        draft.prompt = "a performance"
+        draft.inputPath = "/tmp/start.png"
+        draft.endImagePath = "/tmp/end.png"
+        draft.audioPath = "/tmp/song.wav"
+        draft.preflight = true
+        draft.timings = true
+        draft.timingsOutputPath = "/tmp/timings.json"
+
+        let request = try StudioCommandAdapter.makeRequest(mode: .video, draft: draft)
+        let args = request.template.arguments(from: request.draft)
+        let declared = Set(MereRunCapabilityCatalog.videoGenerate.options.map(\.flag))
+
+        for flag in args where flag.hasPrefix("--") {
+            XCTAssertTrue(declared.contains(flag), "App emitted undeclared Video flag \(flag)")
+        }
+    }
+
+    func testGuidedAdvancedVideoWorkflowsBuildContractDeclaredCommands() throws {
+        let fixtures: [(CommandTemplateID, String, (inout CommandDraft) -> Void)] = [
+            (.videoAnimate, "video.animate", {
+                $0.prompt = "a dancer"
+                $0.inputPath = "/tmp/reference.png"
+                $0.referenceMaskPath = "/tmp/reference-mask.png"
+                $0.drivingVideoPath = "/tmp/driving.mp4"
+                $0.drivingMaskPath = "/tmp/driving-mask.mp4"
+            }),
+            (.videoCosmos3, "video.cosmos3", {
+                $0.prompt = "a rover"
+                $0.cosmosMode = "image-to-video"
+                $0.cosmosImagePath = "/tmp/rover.png"
+            }),
+            (.videoPrepareMasks, "video.prepare-masks", {
+                $0.inputPath = "/tmp/plan.json"
+            }),
+            (.videoExportLatents, "video.export-latents", {
+                $0.prompt = "a landscape"
+            }),
+            (.videoSession, "video.session", { _ in })
+        ]
+
+        for (templateID, capabilityID, mutate) in fixtures {
+            let template = try XCTUnwrap(CommandCatalog.template(id: templateID))
+            var draft = template.defaultDraft()
+            mutate(&draft)
+            XCTAssertNil(template.validationMessage(for: draft), "\(templateID) should validate")
+            let arguments = template.arguments(from: draft)
+            let capability = try XCTUnwrap(MereRunCapabilityCatalog.command(id: capabilityID))
+            XCTAssertEqual(Array(arguments.prefix(capability.command.count)), capability.command)
+            let declared = Set(capability.options.map(\.flag))
+            for flag in arguments where flag.hasPrefix("--") {
+                XCTAssertTrue(
+                    declared.contains(flag),
+                    "\(templateID) emitted undeclared flag \(flag)"
+                )
+            }
+        }
     }
 
     func testSchemaDefaultsMatchTemplateDraftSoSurfacesDoNotDrift() {
@@ -440,7 +1525,11 @@ final class StudioTypesTests: XCTestCase {
         draft.reset(for: .chat)
         let base = CommandCatalog.template(id: StudioMode.chat.defaultTemplateID)?.defaultDraft()
         XCTAssertEqual(draft.temperature, base?.temperature)
+        XCTAssertEqual(draft.topP, base?.topP)
+        XCTAssertEqual(draft.minP, base?.minP)
         XCTAssertEqual(draft.maxTokens, base?.maxTokens)
+        XCTAssertEqual(draft.responseFormat, base?.responseFormat)
+        XCTAssertEqual(draft.thinkingMode, base?.thinkingMode)
     }
 
     func testLegacyLibraryItemDecodesWithoutConversationFields() throws {
@@ -589,7 +1678,8 @@ final class StudioTypesTests: XCTestCase {
           "maxTokens": 512,
           "temperature": 0.4,
           "topP": 0.8,
-          "engineOverride": "text-chat-gemma4"
+          "minP": 0.02,
+          "engineOverride": "text-chat-laguna"
         }
         """.data(using: .utf8)!
 
@@ -602,7 +1692,8 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertEqual(settings.maxTokens, 512)
         XCTAssertEqual(settings.temperature, 0.4)
         XCTAssertEqual(settings.topP, 0.8)
-        XCTAssertEqual(settings.engineOverride, "text-chat-gemma4")
+        XCTAssertEqual(settings.minP, 0.02)
+        XCTAssertEqual(settings.engineOverride, "text-chat-laguna")
     }
 
     func testModelReadinessParserFindsInstalledMissingAndUnknown() {
@@ -736,5 +1827,22 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertFalse(args.contains("--api-key"))
         XCTAssertFalse(args.contains("secret-token"))
         XCTAssertEqual(env["MERERUN_API_KEY"], "secret-token")
+    }
+
+    func testOpenWebUISecretsUseEnvironmentInsteadOfArguments() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .openWebui))
+        var draft = template.defaultDraft()
+        draft.apiKey = " secret-token "
+        draft.openWebUIAdminPassword = " admin-secret "
+
+        let args = template.arguments(from: draft)
+        let env = CommandLaunchEnvironment.overrides(templateID: template.id, draft: draft)
+
+        XCTAssertFalse(args.contains("--api-key"))
+        XCTAssertFalse(args.contains("--admin-password"))
+        XCTAssertFalse(args.contains("secret-token"))
+        XCTAssertFalse(args.contains("admin-secret"))
+        XCTAssertEqual(env["MERERUN_API_KEY"], "secret-token")
+        XCTAssertEqual(env["MERERUN_OPEN_WEBUI_ADMIN_PASSWORD"], "admin-secret")
     }
 }
