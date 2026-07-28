@@ -4,7 +4,12 @@ All notable changes to this public repository will be documented in this file.
 
 The format is based on Keep a Changelog.
 
-## Unreleased
+## 0.27.0 - 2026-07-27
+
+This release brings the macOS Studio to full public CLI capability coverage,
+adds the production ACE-Step music workflow, promotes Laguna S 2.1 to managed
+chat and serving with validated DFlash acceleration, and refreshes the public
+VitePress documentation.
 
 ### Added
 
