@@ -231,7 +231,11 @@ struct VideoAnimate: AsyncParsableCommand {
             ? outputURL.deletingLastPathComponent()
                 .appendingPathComponent(".\(outputURL.deletingPathExtension().lastPathComponent)-\(UUID().uuidString).mp4")
             : outputURL
-        let options = try makeOptions(prompt: trimmedPrompt, outputURL: generatedVideoURL)
+        let options = try makeOptions(
+            prompt: trimmedPrompt,
+            outputURL: generatedVideoURL,
+            forPreflight: preflight
+        )
 
         if preflight {
             let report = makePreflightReport(options: options, modelRootURL: runtimeRoot)
@@ -305,13 +309,19 @@ struct VideoAnimate: AsyncParsableCommand {
         print(outputURL.path)
     }
 
-    func makeOptions(prompt: String, outputURL: URL) throws -> SCAIL2GenerationOptions {
+    func makeOptions(
+        prompt: String,
+        outputURL: URL,
+        forPreflight: Bool = false,
+        adaptersRoot: URL = MereRunModelPaths.adaptersDir
+    ) throws -> SCAIL2GenerationOptions {
         let effectiveAdapterReference = profile == .fast
             ? distilledAdapter ?? ManagedAdapterCatalog.scail2LightX2VFourStepID
             : distilledAdapter
-        let resolvedDistilledAdapter = try ManagedAdapterArgumentResolver.resolve(
+        let resolvedDistilledAdapter = try resolveDistilledAdapter(
             effectiveAdapterReference,
-            baseModelID: SCAIL2Resources.modelID
+            forPreflight: forPreflight,
+            adaptersRoot: adaptersRoot
         )
         let effectiveSteps = profile == .fast ? 4 : (steps ?? 40)
         let effectiveGuidanceScale: Float = profile == .fast ? 1 : (guidanceScale ?? 5)
@@ -356,9 +366,34 @@ struct VideoAnimate: AsyncParsableCommand {
         )
     }
 
+    private func resolveDistilledAdapter(
+        _ reference: String?,
+        forPreflight: Bool,
+        adaptersRoot: URL
+    ) throws -> String? {
+        if forPreflight,
+           let reference,
+           let spec = ManagedAdapterCatalog.spec(for: reference) {
+            guard spec.baseModelID == SCAIL2Resources.modelID else {
+                throw ManagedAdapterResolutionError.incompatibleBaseModel(
+                    adapterID: spec.id,
+                    expected: spec.baseModelID,
+                    actual: SCAIL2Resources.modelID
+                )
+            }
+            return spec.installedFileURL(adaptersRoot: adaptersRoot).path
+        }
+        return try ManagedAdapterArgumentResolver.resolve(
+            reference,
+            baseModelID: SCAIL2Resources.modelID,
+            adaptersRoot: adaptersRoot
+        )
+    }
+
     func makePreflightReport(
         options: SCAIL2GenerationOptions,
-        modelRootURL: URL?
+        modelRootURL: URL?,
+        adaptersRoot: URL = MereRunModelPaths.adaptersDir
     ) -> SCAIL2AnimationPreflightReport {
         let inputs = [
             options.reference.imageURL,
@@ -367,7 +402,19 @@ struct VideoAnimate: AsyncParsableCommand {
             options.drivingMaskVideoURL,
         ] + options.additionalReferences.flatMap { [$0.imageURL, $0.maskURL] }
             + (options.distilledAdapterURL.map { [$0] } ?? [])
-        let missingInputs = inputs.filter { !FileManager.default.fileExists(atPath: $0.path) }
+        let effectiveAdapterReference = profile == .fast
+            ? distilledAdapter ?? ManagedAdapterCatalog.scail2LightX2VFourStepID
+            : distilledAdapter
+        let managedAdapterSpec = effectiveAdapterReference.flatMap {
+            ManagedAdapterCatalog.spec(for: $0)
+        }
+        let missingInputs = inputs.filter { input in
+            if input == options.distilledAdapterURL,
+               let managedAdapterSpec {
+                return !managedAdapterSpec.isInstalled(adaptersRoot: adaptersRoot)
+            }
+            return !FileManager.default.fileExists(atPath: input.path)
+        }
         let missingModels = modelRootURL.map { SCAIL2Resources(rootURL: $0).validate() } ?? []
         let installed = modelRootURL != nil && missingModels.isEmpty
         return SCAIL2AnimationPreflightReport(
