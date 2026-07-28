@@ -7,15 +7,19 @@
 	  of the notarized (non-sandboxed) Developer ID build. Mac App Store / App Sandbox is
 	  intentionally out of scope for this OSS distribution.
 
-	  The app target links only system frameworks (Package.swift: MereRunApp dependencies = [])
-	  and does no JIT, executable-memory, or unsigned-library loading itself — all inference and
-	  the AVCaptureSession capture run in the bundled `mere.run` CLI child, which carries those
-	  entitlements on its own signature (see scripts/MereRunCLI.entitlements). So the app needs
-	  only the camera entitlement:
+	  The app target links Sparkle, which is signed with the same Developer ID
+	  Team as the app for distribution. It does no JIT, executable-memory, or
+	  unsigned-library loading itself — all inference and the AVCaptureSession
+	  capture run in the bundled `mere.run` CLI child, which carries those
+	  entitlements on its own signature (see scripts/MereRunCLI.entitlements).
+	  The release app therefore keeps library validation enabled and needs only:
 
 	  - device.camera: the app calls AVCaptureDevice.requestAccess(for: .video) to grant the
 	    camera before launching `vision track-live`; pairs with NSCameraUsageDescription.
 	    (No audio-input: nothing records the microphone in-app — add it when that ships.)
+
+	  Ad-hoc local builds use MereRunDebug.entitlements because ad-hoc signatures
+	  have no shared Team ID with the separately signed Sparkle framework.
 	-->
 	<key>com.apple.security.device.camera</key>
 	<true/>

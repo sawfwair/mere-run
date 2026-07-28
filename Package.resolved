@@ -1,5 +1,5 @@
 {
-  "originHash" : "efc91ee4a1505bb1e2465ba4f0c144ff7a05be4c204ecbe28d5c9fdc05463446",
+  "originHash" : "982c34170678d1836c16a60a3f310e687db874202fb65477b499667081b85a2e",
   "pins" : [
     {
       "identity" : "async-http-client",
@@ -34,6 +34,15 @@
       "location" : "https://github.com/sawfwair/mlx-swift",
       "state" : {
         "revision" : "0c63032c7deeec3cb0600aa933cb0b50d16addb6"
+      }
+    },
+    {
+      "identity" : "sparkle",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/sparkle-project/Sparkle",
+      "state" : {
+        "revision" : "6276ba2b404829d139c45ff98427cf90e2efc59b",
+        "version" : "2.9.2"
       }
     },
     {

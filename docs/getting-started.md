@@ -106,6 +106,12 @@ The studio is macOS-only. Linux users and Linux CI should exercise the CLI and
 local API surfaces directly rather than trying to build or launch
 `mere.run.app`.
 
+MereRun 0.27.1 and newer checks the stable signed update feed once per day and
+also exposes **MereRun > Check for Updates…**. Updates replace the whole signed
+app bundle atomically, so the Studio and its embedded CLI stay on the same
+version. Releases older than 0.27.1 do not contain the updater and need one
+final manual DMG install before future updates can arrive in-app.
+
 ## Build Linux package artifacts
 
 Linux package artifacts are headless CLI-only. They install the `mere.run` CLI

@@ -1,9 +1,11 @@
+import Sparkle
 import SwiftUI
 
 /// Top-level menu bar commands. View-toggle commands (Library/Advanced/Models) are
 /// installed by `StudioRootView` via focused scene values once the UI state is shared.
 struct MereRunCommands: Commands {
     @ObservedObject var controller: MereRunController
+    let updater: SPUUpdater
 
     @FocusedValue(\.showLibrary) private var showLibrary: Binding<Bool>?
     @FocusedValue(\.showAdvanced) private var showAdvanced: Binding<Bool>?
@@ -12,6 +14,10 @@ struct MereRunCommands: Commands {
     var body: some Commands {
         // Single-window studio: remove the default "New" item rather than spawn windows.
         CommandGroup(replacing: .newItem) {}
+
+        CommandGroup(after: .appInfo) {
+            MereRunCheckForUpdatesView(updater: updater)
+        }
 
         // View toggles act on whichever Studio window is key (via focused scene values). When no
         // Studio window holds focus all three are nil, so the group (and its divider) stay empty.
