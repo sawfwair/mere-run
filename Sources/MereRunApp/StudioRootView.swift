@@ -16,6 +16,9 @@ struct StudioRootView: View {
     @State private var showModels = false
     @State private var showAdapters = false
     @State private var showRealtimeMusic = false
+    @State private var showSCAIL = false
+    @State private var show3DCreation = false
+    @State private var showVisionLab = false
     @State private var showHelp = false
     @State private var advancedWidth: CGFloat = 560
     @State private var advancedDragStartWidth: CGFloat?
@@ -454,6 +457,21 @@ struct StudioRootView: View {
                     .environmentObject(controller)
                     .environmentObject(library)
             }
+            .sheet(isPresented: $showSCAIL) {
+                StudioSCAILSheet()
+                    .environmentObject(controller)
+                    .environmentObject(library)
+            }
+            .sheet(isPresented: $show3DCreation) {
+                Studio3DCreationSheet()
+                    .environmentObject(controller)
+                    .environmentObject(library)
+            }
+            .sheet(isPresented: $showVisionLab) {
+                StudioVisionLabSheet()
+                    .environmentObject(controller)
+                    .environmentObject(library)
+            }
             .sheet(isPresented: $showWelcome) {
                 StudioWelcomeSheet(
                     resolvedCLI: controller.resolvedCLI,
@@ -721,6 +739,42 @@ struct StudioRootView: View {
             }
 
             Spacer()
+
+            if mode == .video {
+                Button {
+                    showSCAIL = true
+                } label: {
+                    Label("SCAIL", systemImage: "figure.run.square.stack")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("Open first-class SCAIL subject animation")
+            }
+
+            if mode == .createImage {
+                Button {
+                    show3DCreation = true
+                } label: {
+                    Label("Create 3D", systemImage: "cube.transparent")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("Open 3D Creation")
+            }
+
+            if [.readImage, .findObjects, .segment, .track].contains(mode) {
+                Button {
+                    showVisionLab = true
+                } label: {
+                    Label("Vision Lab", systemImage: "viewfinder.circle")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("Open Advanced Vision Lab")
+            }
 
             Button {
                 withAnimation(MereRunTheme.Motion.standard) {

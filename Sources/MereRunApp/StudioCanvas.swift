@@ -476,7 +476,23 @@ struct StudioOutputView: View {
         if let selectedArtifactURL, item.allArtifactURLs.contains(selectedArtifactURL) {
             return selectedArtifactURL
         }
-        return item.outputURL ?? item.allArtifactURLs.first
+        let files = item.allArtifactURLs.filter {
+            (try? $0.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true
+        }
+        if let outputURL = item.outputURL, files.contains(outputURL) {
+            return outputURL
+        }
+        let preferredKinds: [StudioOutputFileKind] = [.video, .image, .model3D, .audio, .text]
+        for kind in preferredKinds {
+            if let artifact = files.first(where: { StudioOutputFileKind.classify($0) == kind }) {
+                return artifact
+            }
+        }
+        if let outputURL = item.outputURL,
+           (try? outputURL.resourceValues(forKeys: [.isRegularFileKey]).isRegularFile) == true {
+            return outputURL
+        }
+        return files.first
     }
 
     var body: some View {
@@ -685,6 +701,8 @@ struct StudioOutputView: View {
             StudioVideoPlayerView(url: url)
         case .text:
             StudioTextFilePreview(url: url)
+        case .model3D:
+            StudioEmbeddedQuickLookPreview(url: url)
         case .other:
             filePlaceholder(for: url)
         }
@@ -757,6 +775,7 @@ struct StudioOutputView: View {
         case "wav", "mp3", "m4a": return "waveform"
         case "mp4", "mov": return "film"
         case "json": return "curlybraces"
+        case "glb", "gltf", "obj", "ply", "stl", "usdz": return "cube.transparent"
         case "safetensors": return "shippingbox"
         default: return "doc"
         }

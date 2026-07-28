@@ -39,4 +39,13 @@ final class StudioMediaPreviewTests: XCTestCase {
         XCTAssertEqual(StudioOutputFileKind.classify(URL(fileURLWithPath: "/tmp/a.mp3")), .audio)
         XCTAssertEqual(StudioOutputFileKind.classify(URL(fileURLWithPath: "/tmp/a.mov")), .video)
     }
+
+    func test3DAssetsAreClassifiedForEmbeddedQuickLook() {
+        for pathExtension in ["glb", "gltf", "obj", "ply", "stl", "usdz"] {
+            XCTAssertEqual(
+                StudioOutputFileKind.classify(URL(fileURLWithPath: "/tmp/asset.\(pathExtension)")),
+                .model3D
+            )
+        }
+    }
 }

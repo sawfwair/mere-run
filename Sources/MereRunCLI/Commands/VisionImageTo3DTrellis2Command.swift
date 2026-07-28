@@ -107,8 +107,12 @@ struct VisionImageTo3DTrellis2: AsyncParsableCommand {
                 inputHeight: size.height,
                 checkpoint: checkpoint,
                 seed: seed,
+                textureSeed: textureSeed,
                 maximumSparseTokens: maxTokens,
-                foregroundPolicy: alreadyFramed ? "already-framed" : "transparent-alpha"
+                foregroundPolicy: alreadyFramed ? "already-framed" : "transparent-alpha",
+                remeshEnabled: !noRemesh,
+                remeshBand: remeshBand,
+                sealRadius: sealRadius
             )))
             return
         }
@@ -177,8 +181,12 @@ struct Trellis2PlanPayload: Codable, Equatable {
     let conditioningLicense: String
     let pipelineResolution: Int
     let seed: UInt64
+    let textureSeed: UInt64?
     let maximumSparseTokens: Int
     let foregroundPolicy: String
+    let remeshEnabled: Bool
+    let remeshBand: Float
+    let sealRadius: Int
     let inferenceBackend: String
     let outputKinds: [String]
 
@@ -191,8 +199,12 @@ struct Trellis2PlanPayload: Codable, Equatable {
         inputHeight: Int,
         checkpoint: Trellis2Checkpoint,
         seed: UInt64,
+        textureSeed: UInt64?,
         maximumSparseTokens: Int,
-        foregroundPolicy: String
+        foregroundPolicy: String,
+        remeshEnabled: Bool,
+        remeshBand: Float,
+        sealRadius: Int
     ) {
         self.schemaVersion = schemaVersion
         self.status = status
@@ -210,8 +222,12 @@ struct Trellis2PlanPayload: Codable, Equatable {
         self.conditioningLicense = "DINOv3 License"
         self.pipelineResolution = 512
         self.seed = seed
+        self.textureSeed = textureSeed
         self.maximumSparseTokens = maximumSparseTokens
         self.foregroundPolicy = foregroundPolicy
+        self.remeshEnabled = remeshEnabled
+        self.remeshBand = remeshBand
+        self.sealRadius = sealRadius
         self.inferenceBackend = "mere.run-native-mlx"
         self.outputKinds = [
             "mesh-obj", "mesh-ply", "mesh-glb", "pbr-voxels",

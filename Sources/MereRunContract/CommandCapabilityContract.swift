@@ -618,8 +618,12 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--output", label: "Output", kind: .directory),
             .init(flag: "--model", label: "Model", kind: .string),
             .init(flag: "--seed", label: "Seed", kind: .integer),
+            .init(flag: "--texture-seed", label: "Texture seed", kind: .integer),
             .init(flag: "--max-tokens", label: "Maximum sparse tokens", kind: .integer),
             .init(flag: "--already-framed", label: "Already framed", kind: .boolean),
+            .init(flag: "--no-remesh", label: "Skip remeshing", kind: .boolean),
+            .init(flag: "--remesh-band", label: "Remesh band", kind: .number),
+            .init(flag: "--seal-radius", label: "Seal radius", kind: .integer),
             .init(flag: "--dry-run", label: "Dry run", kind: .boolean),
             .init(flag: "--json", label: "JSON", kind: .boolean)
         ],

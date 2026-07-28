@@ -1362,29 +1362,71 @@ enum StudioProgressParser {
             ("Denoising ", "Denoising"),
             ("Encoding dataset (", "Encoding dataset"),
             ("Realtime frame ", "Realtime music"),
+            ("Sampling sparse structure ", "Sparse structure"),
+            ("Sampling O-Voxel shape latent ", "Shape"),
+            ("Sampling PBR texture latent ", "PBR texture"),
+            ("Running temporal window ", "Temporal depth"),
         ]
-        guard let descriptor = descriptors.first(where: { line.contains($0.marker) }),
-              let markerRange = line.range(of: descriptor.marker) else { return nil }
-        let tail = line[markerRange.upperBound...]
-        guard let slash = tail.firstIndex(of: "/") else { return nil }
-
-        let stepDigits = tail[..<slash].reversed().prefix { $0.isNumber }.reversed()
-        let totalDigits = tail[tail.index(after: slash)...].prefix { $0.isNumber }
-        guard let step = Int(String(stepDigits)),
-              let total = Int(String(totalDigits)),
-              total > 0 else { return nil }
-
-        let current = min(max(step, 0), total)
-        var detail = "Step \(current) of \(total)"
-        if let lossRange = line.range(of: "loss", options: .caseInsensitive) {
-            let loss = line[lossRange.lowerBound...]
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            if !loss.isEmpty { detail += " · \(loss)" }
+        if let descriptor = descriptors.first(where: { line.contains($0.marker) }),
+           let markerRange = line.range(of: descriptor.marker) {
+            let tail = line[markerRange.upperBound...]
+            let separatorRange = tail.range(of: "/") ?? tail.range(of: " of ")
+            if let separatorRange {
+                let stepDigits = tail[..<separatorRange.lowerBound].reversed().prefix { $0.isNumber }.reversed()
+                let totalDigits = tail[separatorRange.upperBound...].prefix { $0.isNumber }
+                if let step = Int(String(stepDigits)),
+                   let total = Int(String(totalDigits)),
+                   total > 0 {
+                    let current = min(max(step, 0), total)
+                    var detail = "Step \(current) of \(total)"
+                    if let lossRange = line.range(of: "loss", options: .caseInsensitive) {
+                        let loss = line[lossRange.lowerBound...]
+                            .trimmingCharacters(in: .whitespacesAndNewlines)
+                        if !loss.isEmpty { detail += " · \(loss)" }
+                    }
+                    return StudioRunProgress(
+                        label: descriptor.label,
+                        fractionCompleted: Double(current) / Double(total),
+                        detail: detail
+                    )
+                }
+            }
         }
+
+        return parseSpecialistStage(line)
+    }
+
+    private static func parseSpecialistStage(_ line: String) -> StudioRunProgress? {
+        let scailStages: [String: String] = [
+            "loadingModel": "Loading model",
+            "loadingEncoder": "Loading encoder",
+            "encodingText": "Encoding prompt",
+            "encodingReferenceImages": "Encoding references",
+            "loadingVAE": "Loading VAE",
+            "loadingTransformer": "Loading transformer",
+            "loadingLoRA": "Loading adapter",
+            "decoding": "Decoding video",
+            "saving": "Saving output",
+        ]
+        if let label = scailStages[line] {
+            return StudioRunProgress(label: label, fractionCompleted: nil, detail: nil)
+        }
+
+        let prefixes: [(String, String)] = [
+            ("[image-to-3d]", "TripoSR"),
+            ("[image-to-3d-trellis2]", "TRELLIS.2"),
+            ("[image-to-3d-multiview]", "InstantMesh"),
+            ("[depth-video]", "Video depth"),
+            ("[geometry]", "Geometry"),
+            ("[geometry-multiview]", "Multi-view geometry"),
+        ]
+        guard let entry = prefixes.first(where: { line.hasPrefix($0.0) }) else { return nil }
+        let detail = line.dropFirst(entry.0.count)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
         return StudioRunProgress(
-            label: descriptor.label,
-            fractionCompleted: Double(current) / Double(total),
-            detail: detail
+            label: entry.1,
+            fractionCompleted: nil,
+            detail: detail.isEmpty ? nil : detail
         )
     }
 
@@ -1468,6 +1510,24 @@ enum StudioArtifactDiscovery {
         var candidates = [URL]()
         if let primaryOutput { candidates.append(primaryOutput) }
         candidates.append(contentsOf: reportedOutputs)
+
+        if [
+            .visionGround, .visionSegment, .visionTrack, .visionTrackLive,
+            .visionFaceDetect, .visionFaceEmbed, .visionFaceCompare,
+            .visionPose, .visionFlow,
+        ].contains(templateID) {
+            appendPath(draft.visionJSONOutputPath, to: &candidates)
+        }
+        if templateID == .visionFaceBatch {
+            appendPath(draft.visionJSONLOutput, to: &candidates)
+        }
+        if templateID == .visionSegment || templateID == .visionTrack {
+            appendDirectory(
+                draft.visionMaskOutputDirectory,
+                to: &candidates,
+                fileManager: fileManager
+            )
+        }
 
         if templateID == .musicGenerate, let primaryOutput {
             let directory = primaryOutput.deletingLastPathComponent()

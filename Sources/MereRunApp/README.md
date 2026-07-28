@@ -19,7 +19,10 @@ The primary Video surface uses `--quality` and `--output-mode`; it must never
 emit the legacy `--variant` compatibility selector. Its attachment workflow
 supports a start image, end keyframe, and source audio. Advanced Video contains
 guided SCAIL-2, Cosmos3, mask-preparation, latent-export, and resident-session
-workflows.
+workflows. Video also opens a first-class SCAIL Subject Studio with multi-subject
+reference/selector authoring, preview and full-video SAM tracking, immutable
+keyframe corrections, before/after playback, complete continuity/profile controls,
+and durable Library jobs.
 
 Text uses the same contract for native/MLX chat, code, embeddings,
 anonymization, and text-LoRA training. Chat exposes typed text/JSON response
@@ -33,6 +36,10 @@ TRELLIS.2, and InstantMesh. The primary Studio surface includes multi-reference
 editing, structured prompts, LoRA catalog IDs or local adapters, Krea tuning,
 preflight, and machine-readable progress; Advanced exposes every specialist
 workflow and training control.
+Create Image opens a first-class 3D Creation workspace for TripoSR, native
+TRELLIS.2 PBR reconstruction, and ordered 4/6-view InstantMesh. It includes
+engine-specific controls, immutable output directories, embedded orbitable
+Quick Look models, manifest statistics, and the shared progress/Library lifecycle.
 
 Music is a production workspace, not a prompt-only wrapper. Studio exposes
 quality planning, covers/repaint/flow edits, source and timbre-reference audio,
@@ -51,6 +58,10 @@ DA3 ordered multiview reconstruction. Coordinates remain typed, ordered CLI
 arguments; machine-readable results and mask directories use explicit output
 pickers. Image-to-3D workflows share the Image workspace instead of being
 duplicated.
+Every vision-oriented Studio mode also opens the first-class Advanced Vision Lab.
+It renders face/pose overlays and dense optical-flow vectors, plays live tracking
+and depth review videos, embeds geometry point clouds, and preserves every JSON,
+EXR, mask, camera, and 3D sidecar as a durable Library artifact.
 
 Operations covers the verified adapter catalog, durable local/SSH/Relay run
 listing and lifecycle, DreamX/Cosmos3 world sessions, server status, installed

@@ -8,6 +8,7 @@ enum StudioOutputFileKind: Equatable {
     case audio
     case video
     case text
+    case model3D
     case other
 
     static func classify(_ url: URL) -> StudioOutputFileKind {
@@ -23,6 +24,9 @@ enum StudioOutputFileKind: Equatable {
         }
         if knownTextExtensions.contains(pathExtension) {
             return .text
+        }
+        if knownModel3DExtensions.contains(pathExtension) {
+            return .model3D
         }
 
         guard let type = UTType(filenameExtension: pathExtension) else {
@@ -59,6 +63,10 @@ enum StudioOutputFileKind: Equatable {
         "bash", "c", "cc", "conf", "cpp", "css", "csv", "h", "hpp", "htm", "html", "ini", "js",
         "json", "jsonl", "log", "m", "markdown", "md", "mm", "py", "rb", "sh", "swift", "toml",
         "ts", "tsx", "txt", "xml", "yaml", "yml", "zsh"
+    ]
+
+    private static let knownModel3DExtensions: Set<String> = [
+        "3mf", "dae", "glb", "gltf", "obj", "ply", "stl", "usdz"
     ]
 }
 

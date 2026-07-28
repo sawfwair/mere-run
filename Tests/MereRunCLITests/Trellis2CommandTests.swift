@@ -34,9 +34,27 @@ final class Trellis2CommandTests: XCTestCase {
     func testImageCommandUsesMatchingDefaults() throws {
         let command = try ImageReconstruct3DTrellis2.parse(["/tmp/chair.png"])
         XCTAssertEqual(command.seed, 42)
+        XCTAssertNil(command.textureSeed)
         XCTAssertEqual(command.maxTokens, 2_097_152)
         XCTAssertFalse(command.alreadyFramed)
+        XCTAssertFalse(command.noRemesh)
+        XCTAssertEqual(command.remeshBand, 1)
+        XCTAssertEqual(command.sealRadius, 12)
         XCTAssertFalse(command.dryRun)
+    }
+
+    func testImageCommandParsesTextureAndRemeshControls() throws {
+        let command = try ImageReconstruct3DTrellis2.parse([
+            "/tmp/chair.png",
+            "--texture-seed", "99",
+            "--no-remesh",
+            "--remesh-band", "1.5",
+            "--seal-radius", "8",
+        ])
+        XCTAssertEqual(command.textureSeed, 99)
+        XCTAssertTrue(command.noRemesh)
+        XCTAssertEqual(command.remeshBand, 1.5)
+        XCTAssertEqual(command.sealRadius, 8)
     }
 
     func testDefaultOutputUsesTrellis2SpecificDirectory() {

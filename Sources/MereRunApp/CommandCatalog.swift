@@ -421,6 +421,11 @@ struct CommandDraft: Equatable, Codable {
     var alreadyFramed = false
     var noVertexColors = false
     var camerasPath = ""
+    /// Optional so Library rows written before the first-class TRELLIS.2 workspace keep decoding.
+    var trellisTextureSeed: String?
+    var trellisNoRemesh: Bool?
+    var trellisRemeshBand: Double?
+    var trellisSealRadius: Int?
     var durationSeconds = 10.0
     // Music production workspace. Empty strings intentionally mean "let the CLI quality
     // preset choose" for optional numeric overrides.
@@ -657,6 +662,9 @@ struct CommandDraft: Equatable, Codable {
     var referenceMaskPath = ""
     var drivingVideoPath = ""
     var drivingMaskPath = ""
+    /// One mask path per newline-delimited additional SCAIL reference image.
+    /// Optional preserves synthesized Codable compatibility with older Library rows.
+    var scailAdditionalReferenceMaskPaths: String?
     var videoTaskMode = "animation"
     var renderProfile = "fast"
     var sampler = "unipc"
@@ -863,6 +871,10 @@ struct CommandTemplate: Identifiable, Equatable {
             draft.reconstructionResolution = 256
         case .imageReconstruct3DTrellis2:
             draft.seed = "42"
+            draft.trellisTextureSeed = "42"
+            draft.trellisNoRemesh = false
+            draft.trellisRemeshBand = 1
+            draft.trellisSealRadius = 12
             draft.maxTokens = 2_097_152
         case .imageReconstruct3DMultiview:
             draft.reconstructionResolution = 128
@@ -1190,6 +1202,14 @@ struct CommandTemplate: Identifiable, Equatable {
             if draft.drivingMaskPath.isBlank {
                 return "Driving mask path is required."
             }
+            let additionalReferences = pathList(draft.referenceImagePaths)
+            let additionalMasks = pathList(draft.scailAdditionalReferenceMaskPaths ?? "")
+            if additionalReferences.count != additionalMasks.count {
+                return "Each additional SCAIL reference needs one matching reference mask."
+            }
+            if additionalReferences.count > 5 {
+                return "SCAIL supports at most six subjects total."
+            }
         case .videoPrepareMasks:
             if draft.outputPath.isBlank {
                 return "Output directory is required."
@@ -1466,8 +1486,18 @@ struct CommandTemplate: Identifiable, Equatable {
             if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
             if !draft.model.isBlank { args += ["--model", draft.model] }
             if !draft.seed.isBlank { args += ["--seed", draft.seed] }
+            if let textureSeed = draft.trellisTextureSeed, !textureSeed.isBlank {
+                args += ["--texture-seed", textureSeed]
+            }
             args += ["--max-tokens", String(draft.maxTokens)]
             if draft.alreadyFramed { args.append("--already-framed") }
+            if draft.trellisNoRemesh == true { args.append("--no-remesh") }
+            if let remeshBand = draft.trellisRemeshBand {
+                args += ["--remesh-band", format(remeshBand)]
+            }
+            if let sealRadius = draft.trellisSealRadius {
+                args += ["--seal-radius", String(sealRadius)]
+            }
             if draft.dryRun { args.append("--dry-run") }
             if draft.json { args.append("--json") }
 
@@ -2092,6 +2122,18 @@ struct CommandTemplate: Identifiable, Equatable {
             ]
             if !draft.model.isBlank { args += ["--model", draft.model] }
             if !draft.modelRoot.isBlank { args += ["--model-root", draft.modelRoot] }
+            let additionalReferences = pathList(draft.referenceImagePaths)
+            let additionalMasks = pathList(draft.scailAdditionalReferenceMaskPaths ?? "")
+            for (reference, mask) in zip(additionalReferences, additionalMasks) {
+                args += ["--additional-reference", reference]
+                args += ["--additional-reference-mask", mask]
+            }
+            if !draft.loraPath.isBlank {
+                args += [
+                    "--distilled-adapter", draft.loraPath,
+                    "--distilled-adapter-strength", format(draft.loraScale)
+                ]
+            }
             if !draft.secondaryText.isBlank { args += ["--negative-prompt", draft.secondaryText] }
             if draft.renderProfile == "quality" {
                 args += [

@@ -28,7 +28,14 @@ sampling, edit strength, HiDream aspect preservation, structured-prompt
 expansion, LoRA catalog IDs or local safetensors, Krea conditioning and
 quantization controls, preflight JSON, and JSON progress events.
 
-Advanced → Image exposes the entire public family as guided forms:
+Create Image's **Create 3D** button opens the first-class reconstruction
+workspace. It provides single-image TripoSR and TRELLIS.2 PBR flows, ordered and
+reorderable 4/6-view InstantMesh inputs, every engine-specific runtime control,
+preflight, immutable output directories, manifest statistics, and embedded
+orbitable GLB/OBJ/PLY previews. Progress and every mesh, texture, voxel, and
+manifest artifact remain in Library.
+
+Advanced → Image also exposes the entire public family as guided forms:
 
 - generation/editing with repeatable references, structured prompts, and LoRAs;
 - Krea 2 and FLUX.2 Klein LoRA training, recipes, memory controls, checkpoints,
