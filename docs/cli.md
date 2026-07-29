@@ -40,9 +40,10 @@ Public tree:
   - `mere.run text embed` — Generate text embeddings using native Qwen3-Embedding-0.6B.
   - `mere.run text anonymize` — Detect and redact PII using OpenAI Privacy Filter.
   - `mere.run text train-lora` — Train a native text LoRA adapter from chat-style SFT JSONL.
-- [`mere.run speech`](/runtime/speech) — Synthesize, transcribe, and manage voice profiles.
+- [`mere.run speech`](/runtime/speech) — Synthesize, transcribe, diarize, and manage voice profiles.
   - `mere.run speech synthesize` — Generate speech from text using Qwen3-TTS.
   - `mere.run speech transcribe` — Transcribe or translate speech to text using native ASR backends.
+  - `mere.run speech diarize` — Identify who spoke when in an audio file with native MLX Sortformer.
   - `mere.run speech listen` — Transcribe a macOS microphone with live Qwen ASR.
   - `mere.run speech profile` — Manage saved voice clone profiles.
     - `mere.run speech profile list` — List saved speech voice profiles.

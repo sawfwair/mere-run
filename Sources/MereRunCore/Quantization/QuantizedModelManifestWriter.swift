@@ -32,6 +32,7 @@ public enum QuantizedModelManifestWriter {
             if id.hasPrefix("vision-geometry-") { return .geometry }
             if id.hasPrefix("vision-depth-") { return .depth }
             if id.hasPrefix("image-3d-") { return .threeD }
+            if id.hasPrefix("speech-diarization-") { return .asr }
             if id.hasPrefix("text-code-north-mini") { return .code }
             return nil
         }
@@ -63,6 +64,7 @@ public enum QuantizedModelManifestWriter {
             case .tripoSR, .instantMesh, .trellis2: return .threeD
             case .qwen3TTS: return .tts
             case .qwen3ASR, .parakeetASR: return .asr
+            case .sortformer: return .asr
             case .qwen3Embedding: return .embed
             case .openAIPrivacyFilter: return .privacy
             case .qwen3Coder, .northMiniCode: return .code
@@ -136,6 +138,8 @@ public enum QuantizedModelManifestWriter {
                     return [.speechSynthesis]
                 case .qwen3ASR, .parakeetASR:
                     return [.speechRecognition]
+                case .sortformer:
+                    return [.speakerDiarization]
                 case .qwen3Embedding:
                     return [.textEmbedding]
                 case .openAIPrivacyFilter:
@@ -231,7 +235,7 @@ public enum QuantizedModelManifestWriter {
             case .samSegmentation, .falconPerception, .insightFace, .moge2, .videoDepthAnything, .depthAnything3,
                  .tripoSR, .instantMesh, .trellis2:
                 break
-            case .qwen3TTS, .qwen3ASR, .parakeetASR, .qwen3Embedding, .openAIPrivacyFilter,
+            case .qwen3TTS, .qwen3ASR, .parakeetASR, .sortformer, .qwen3Embedding, .openAIPrivacyFilter,
                  .qwen3Coder, .northMiniCode, .lightOnOCR, .woosh, .mmaudio, .psiChat, .deepseekV4Flash,
                  .muScriptor:
                 break

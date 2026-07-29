@@ -226,6 +226,7 @@ public enum MereRunCapabilityCatalog {
             modelBenchmarkLagunaDFlash,
             speechSynthesize,
             speechTranscribe,
+            speechDiarize,
             speechProfileList,
             speechProfileCreate,
             speechProfileDelete,
@@ -1936,6 +1937,26 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--quiet", label: "Quiet", kind: .boolean)
         ],
         output: .init(kind: .file)
+    )
+
+    public static let speechDiarize = MereRunCommandCapability(
+        id: "speech.diarize",
+        command: ["speech", "diarize"],
+        title: "Diarize speech",
+        summary: "Identify speaker activity in a local audio file as JSON or RTTM.",
+        arguments: [
+            .init(name: "audio", label: "Audio", kind: .file, required: true)
+        ],
+        options: [
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--format", label: "Format", kind: .choice, choices: ["json", "rttm"]),
+            .init(flag: "--output", label: "Output", kind: .file),
+            .init(flag: "--threshold", label: "Threshold", kind: .number),
+            .init(flag: "--min-duration", label: "Minimum duration", kind: .number),
+            .init(flag: "--merge-gap", label: "Merge gap", kind: .number),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+        ],
+        output: .init(kind: .text)
     )
 
     public static let speechProfileList = MereRunCommandCapability(
