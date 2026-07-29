@@ -1056,6 +1056,78 @@ final class LagunaModelTests: MereRunCoreTestCase {
         XCTAssertEqual(maximumDifference, 0)
     }
 
+    func testRankedLagunaPrefillRouteStagingMatchesNativeGathers() throws {
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip("Ranked Laguna route staging requires a GPU.")
+        }
+        MLXRandom.seed(43)
+        let tokenCount = 512
+        let hiddenSize = 2_048
+        let topK = 8
+        let routeCount = tokenCount * topK
+        let input = MLXRandom.uniform(
+            low: -1,
+            high: 1,
+            [tokenCount, hiddenSize]
+        ).asType(.bfloat16)
+        let flatIndices = MLXArray(
+            (0..<routeCount).map {
+                UInt32(($0 * 73 + $0 / topK * 11) % 256)
+            }
+        )
+        let order = argSort(flatIndices, axis: 0)
+        let referenceInput = input
+            .take(order.floorDivide(topK), axis: 0)
+            .reshaped([routeCount, 1, hiddenSize])
+        let referenceIndices = flatIndices.take(order, axis: 0)
+        let referenceInverse = argSort(order, axis: 0)
+        let actual = try XCTUnwrap(
+            RoutedMoERouting.stageRankedLagunaPrefillRoute(
+                input,
+                flatIndices: flatIndices,
+                order: order,
+                topK: topK
+            )
+        )
+        MLX.eval(
+            referenceInput,
+            referenceIndices,
+            referenceInverse,
+            actual.sortedInput,
+            actual.sortedIndices,
+            actual.inverseOrder
+        )
+
+        XCTAssertEqual(actual.sortedInput.shape, referenceInput.shape)
+        XCTAssertEqual(
+            MLX.max(
+                MLX.abs(
+                    actual.sortedInput.asType(.float32)
+                        - referenceInput.asType(.float32)
+                )
+            ).item(Float.self),
+            0
+        )
+        XCTAssertEqual(
+            MLX.max(
+                MLX.abs(
+                    actual.sortedIndices.asType(.int32)
+                        - referenceIndices.asType(.int32)
+                )
+            ).item(Int32.self),
+            0
+        )
+        XCTAssertEqual(
+            MLX.max(
+                MLX.abs(
+                    actual.inverseOrder.asType(.int32)
+                        - referenceInverse.asType(.int32)
+                )
+            ).item(Int32.self),
+            0
+        )
+    }
+
     func testSortedMoERoutingMatchesUnsortedRouting() throws {
         MLXRandom.seed(41)
         let switchGLU = LagunaSwitchGLU(config: try makeConfig())

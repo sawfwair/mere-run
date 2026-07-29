@@ -126,6 +126,55 @@ enum RoutedMoERouting {
         #endif
     }
 
+    /// Replaces the ranked Laguna prefill route gathers with fixed-shape
+    /// byte copies and constructs both metadata permutations directly.
+    /// Every other model, shape, dtype, and route count falls back to MLX.
+    static func stageRankedLagunaPrefillRoute(
+        _ input: MLXArray,
+        flatIndices: MLXArray,
+        order: MLXArray,
+        topK: Int
+    ) -> (
+        sortedInput: MLXArray,
+        sortedIndices: MLXArray,
+        inverseOrder: MLXArray
+    )? {
+        #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
+        let tokenCount = 512
+        let hiddenSize = 2_048
+        let rankedTopK = 8
+        let routeCount = tokenCount * rankedTopK
+        guard Device.defaultDevice().deviceType == .gpu,
+              input.dtype == .bfloat16,
+              input.shape == [tokenCount, hiddenSize],
+              topK == rankedTopK,
+              flatIndices.dtype == .uint32,
+              flatIndices.shape == [routeCount],
+              order.dtype == .uint32,
+              order.shape == [routeCount] else {
+            return nil
+        }
+
+        let sortedInput = rankedPrefillRowCopyKernel(
+            [input, order],
+            grid: (hiddenSize / 8, routeCount, 1),
+            threadGroup: (256, 1, 1),
+            outputShapes: [[routeCount, 1, hiddenSize]],
+            outputDTypes: [.bfloat16]
+        )[0]
+        let metadata = rankedPrefillRouteMetadataKernel(
+            [flatIndices, order],
+            grid: (routeCount, 1, 1),
+            threadGroup: (256, 1, 1),
+            outputShapes: [[routeCount], [routeCount]],
+            outputDTypes: [.uint32, .uint32]
+        )
+        return (sortedInput, metadata[0], metadata[1])
+        #else
+        return nil
+        #endif
+    }
+
     /// Runs the two sorted NVFP4 expert projections in one classic matrix
     /// dispatch and applies SwiGLU before the intermediate leaves the kernel.
     static func fusedSortedNVFP4SwiGLU(
@@ -416,6 +465,41 @@ enum RoutedMoERouting {
             if (index < COUNT) {
                 inverse[uint(order[index])] = IndexT(index);
             }
+        """,
+        ensureRowContiguous: true
+    )
+
+    private static let rankedPrefillRowCopyKernel = MLXFast.metalKernel(
+        name: "mere_laguna_ranked_prefill_row_copy_bf16_512x8_v1",
+        inputNames: ["source", "order"],
+        outputNames: ["sorted"],
+        source: """
+            constexpr uint hidden_vectors = 2048 / 8;
+            constexpr uint experts_per_token = 8;
+
+            uint vector_index = thread_position_in_grid.x;
+            uint sorted_row = thread_position_in_grid.y;
+            uint original_row = order[sorted_row];
+            uint source_row = original_row / experts_per_token;
+            const device uint4* source_vectors =
+                reinterpret_cast<const device uint4*>(source);
+            device uint4* sorted_vectors =
+                reinterpret_cast<device uint4*>(sorted);
+            sorted_vectors[sorted_row * hidden_vectors + vector_index] =
+                source_vectors[source_row * hidden_vectors + vector_index];
+        """,
+        ensureRowContiguous: true
+    )
+
+    private static let rankedPrefillRouteMetadataKernel = MLXFast.metalKernel(
+        name: "mere_laguna_ranked_prefill_route_metadata_u32_4096_v1",
+        inputNames: ["flat_indices", "order"],
+        outputNames: ["sorted_indices", "inverse_order"],
+        source: """
+            uint sorted_row = thread_position_in_grid.x;
+            uint original_row = order[sorted_row];
+            sorted_indices[sorted_row] = flat_indices[original_row];
+            inverse_order[original_row] = sorted_row;
         """,
         ensureRowContiguous: true
     )

@@ -17,6 +17,10 @@ enum LagunaMoEAccelerationPolicy {
         "MERERUN_LAGUNA_FAST_SORTED_INVERSE",
         default: true
     )
+    static let rankedPrefillRouteStagingEnabled = booleanEnvironment(
+        "MERERUN_LAGUNA_RANKED_PREFILL_ROUTE_STAGING",
+        default: true
+    )
     static let fusedSortedNVFP4MoEEnabled = booleanEnvironment(
         "MERERUN_LAGUNA_FUSED_SORTED_NVFP4_MOE",
         default: true
@@ -838,11 +842,30 @@ final class LagunaSwitchGLU: Module {
         let inputDimensions = x.dim(-1)
         let flatIndices = indices.reshaped([routeCount])
         let order = argSort(flatIndices, axis: 0)
-        let sortedIndices = flatIndices.take(order, axis: 0)
-        let tokenOrder = order.floorDivide(topK)
-        let flatInput = x.reshaped([tokenCount, inputDimensions])
-            .take(tokenOrder, axis: 0)
-            .reshaped([routeCount, 1, inputDimensions])
+        let stagedRoute =
+            LagunaMoEAccelerationPolicy.rankedPrefillRouteStagingEnabled
+                ? RoutedMoERouting.stageRankedLagunaPrefillRoute(
+                    x.reshaped([tokenCount, inputDimensions]),
+                    flatIndices: flatIndices,
+                    order: order,
+                    topK: topK
+                )
+                : nil
+        let sortedIndices: MLXArray
+        let flatInput: MLXArray
+        let stagedInverseOrder: MLXArray?
+        if let stagedRoute {
+            sortedIndices = stagedRoute.sortedIndices
+            flatInput = stagedRoute.sortedInput
+            stagedInverseOrder = stagedRoute.inverseOrder
+        } else {
+            sortedIndices = flatIndices.take(order, axis: 0)
+            let tokenOrder = order.floorDivide(topK)
+            flatInput = x.reshaped([tokenCount, inputDimensions])
+                .take(tokenOrder, axis: 0)
+                .reshaped([routeCount, 1, inputDimensions])
+            stagedInverseOrder = nil
+        }
         let activated: MLXArray
         if LagunaMoEAccelerationPolicy.fusedSortedNVFP4MoEEnabled,
            sequenceLength >= LagunaMoEAccelerationPolicy.fusedSortedMinimumSequenceLength,
@@ -900,9 +923,12 @@ final class LagunaSwitchGLU: Module {
                 sortedIndices: true
             )
         }
-        let inverseOrder = LagunaMoEAccelerationPolicy.fastSortedInverseEnabled
-            ? RoutedMoERouting.invertPermutation(order) ?? argSort(order, axis: 0)
-            : argSort(order, axis: 0)
+        let inverseOrder = stagedInverseOrder
+            ?? (
+                LagunaMoEAccelerationPolicy.fastSortedInverseEnabled
+                    ? RoutedMoERouting.invertPermutation(order) ?? argSort(order, axis: 0)
+                    : argSort(order, axis: 0)
+            )
         return sortedOutput.take(inverseOrder, axis: 0)
             .reshaped([batch, sequenceLength, topK, sortedOutput.dim(-1)])
     }
