@@ -4,7 +4,7 @@ All notable changes to this public repository will be documented in this file.
 
 The format is based on Keep a Changelog.
 
-## 0.28.2 - 2026-07-28
+## Unreleased
 
 ### Added
 
@@ -33,9 +33,9 @@ The format is based on Keep a Changelog.
 
 ### Known issues
 
-- `vision-ocr-infinity-flash` is explicitly quarantined from the 0.28.2 release
+- `vision-ocr-infinity-flash` may be explicitly quarantined from a release
   smoke because its native Qwen3.5 path diverges from the reference runtime.
-  The release evidence records it as skipped; Infinity Pro and LightOn OCR
+  Quarantine evidence records it as skipped; Infinity Pro and LightOn OCR
   remain covered by true inference.
 
 ## 0.28.1 - 2026-07-28
