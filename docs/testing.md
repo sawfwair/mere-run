@@ -9,10 +9,10 @@ This repo has three layers of validation:
 Use the smallest layer that covers your change, then scale up before opening a
 PR.
 
-Linux CLI compatibility uses a narrower fixture boundary: headless CLI behavior,
-media-tool discovery, and CPU MLX-sized checks for hosted x86 CI. Linux arm64 is
-different: CPU-only packages are smoke artifacts, and release-worthy arm64
-packages must exercise the CUDA lane on real arm64 CUDA hardware.
+Linux CLI compatibility uses a narrower fixture boundary for hosted CI:
+headless CLI behavior and media-tool discovery. There is no CPU-only Linux
+release. Every release-worthy Linux package must exercise its CUDA lane on
+matching real CUDA hardware.
 
 ## Fast validation
 
@@ -116,13 +116,16 @@ the path.
 Linux release packaging has its own artifact check:
 
 ```bash
-scripts/package-linux.sh --version 0.23.0
+MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.23.0
 test -s dist/linux/SHA256SUMS
 tar -tzf dist/linux/mere-run-*-linux-*.tar.gz | grep '/mere.run$'
 tar -tzf dist/linux/mere-run-*-linux-*.tar.gz | grep '/install.sh$'
 dpkg-deb --info dist/linux/mere-run_*_*.deb
 dpkg-deb --contents dist/linux/mere-run_*_*.deb | grep 'usr/bin/mere.run'
 ```
+
+These release checks are CUDA-only. CPU builds in the packaging test suite are
+fixtures for archive and dependency logic, not publishable artifacts.
 
 The x86_64 CUDA release artifact uses a suffix and can be built on a CPU-only
 Linux builder with CUDA development packages:
@@ -224,8 +227,9 @@ This runs a smaller, stable subset of real workflows. Use it when you touched:
 ./scripts/e2e_smoke.sh --installed
 ```
 
-This runs the full installed-model matrix against the local model store. Use it
-when you changed:
+This runs the established cross-modality installed-model subset against the
+local model store. It is useful for broad development feedback, but it is not a
+claim that every installed checkpoint ran. Use it when you changed:
 
 - image generation
 - speech generation or transcription
@@ -233,6 +237,40 @@ when you changed:
 - music or video generation
 - SAM segmentation or tracking behavior
 - manifest handling or installed model discovery
+
+### Strict pre-release video generation
+
+```bash
+/path/to/extracted/mere.run gate \
+  --suite video \
+  --require-all \
+  --json-output ./video-gate.json
+```
+
+This is the release-blocking video contract. It runs true native generation for
+the LTX 2.3 draft, full generated-audio, and source-audio A2Vid routes; decodes
+the written MP4; and requires non-silent audio for the two audio-bearing paths.
+Run it from the exact packaged binary. A missing required model is a failure,
+not a skip.
+
+The final packaged candidate runs the exhaustive installed-model matrix:
+
+```bash
+/path/to/extracted/mere.run gate \
+  --all-installed \
+  --require-all \
+  --json-output ./release-gate.json
+```
+
+That produces one result per installed model ID, including every image model;
+TripoSR, InstantMesh, and TRELLIS.2; music and SFX; OCR, SAM, grounding, face,
+geometry, and depth; speech, embeddings, privacy, text, and every video/world
+backend. Component-only entries must be consumed by a named true companion run.
+An installed model with no recipe fails closed.
+
+If a release owner explicitly quarantines a known-broken installed model, add
+`--skip-model <installed-id>`. The evidence retains it as a `skipped` row
+rather than claiming a pass; invalid quarantine IDs fail closed.
 
 ## What each layer catches
 
@@ -242,7 +280,9 @@ when you changed:
 | `swift test` | unit and integration regressions covered by tests |
 | `./scripts/check.sh` | public CLI regressions, docs hygiene issues, command-tree drift |
 | `./scripts/e2e_smoke.sh --core` | common runtime-path failures against real models |
-| `./scripts/e2e_smoke.sh --installed` | installed-model breakage across the full local matrix |
+| `./scripts/e2e_smoke.sh --installed` | broad installed-model subset across common local workflows |
+| `mere.run gate --suite video --require-all` | packaged LTX draft/full/A2Vid generation, MP4 decode, and promised audio |
+| `mere.run gate --all-installed --require-all` | exhaustive packaged true-inference matrix with one result per installed model ID |
 | Linux CLI fixture | headless CLI/media compatibility without macOS app or CUDA assumptions |
 
 ## Recommended combinations
@@ -282,6 +322,17 @@ swift test
 ./scripts/check.sh
 ./scripts/e2e_smoke.sh --installed
 ```
+
+### Video runtime, MLX stream, or release candidate change
+
+```bash
+./scripts/check.sh
+/path/to/extracted/mere.run gate --suite video --require-all \
+  --json-output ./video-gate.json
+```
+
+Do not substitute `--preflight`, model validation, or a source-built binary for
+the packaged true-generation command.
 
 ### Linux CLI compatibility docs or fixtures
 

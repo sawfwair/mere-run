@@ -4,6 +4,40 @@ All notable changes to this public repository will be documented in this file.
 
 The format is based on Keep a Changelog.
 
+## 0.28.2 - 2026-07-28
+
+### Added
+
+- added `gate --all-installed`, a fail-closed release smoke that discovers the
+  exact installed catalog inventory and runs real inference for every text,
+  code, image, speech, vision, SAM, grounding, face, geometry/depth, image-to-3D,
+  music, SFX, video, and world model. Component checkpoints must be consumed by
+  a named companion generation, and reports validate decoded artifacts,
+  non-silent audio, and semantic outputs.
+- added packaged-release JSON evidence and explicit quarantine reporting through
+  `--skip-model`; quarantined entries remain visible as skips and are never
+  counted as passes.
+- added a macOS executor regression contract covering concurrent MLX CPU/GPU
+  graphs and executor hops.
+
+### Fixed
+
+- fixed the gate subprocess runner so chatty Metal/compiler output cannot fill a
+  pipe and deadlock, and fast child processes cannot race termination-handler
+  registration.
+- fixed managed inventory validation so missing or broken checkpoint weights
+  cannot be reported as installed merely because a manifest exists.
+- fixed exact managed MoGe model IDs being interpreted as filesystem paths.
+- made ASR, audio, video, SCAIL, and component-checkpoint smokes exercise their
+  real production inputs and reject undecodable, silent, or incomplete output.
+
+### Known issues
+
+- `vision-ocr-infinity-flash` is explicitly quarantined from the 0.28.2 release
+  smoke because its native Qwen3.5 path diverges from the reference runtime.
+  The release evidence records it as skipped; Infinity Pro and LightOn OCR
+  remain covered by true inference.
+
 ## 0.28.1 - 2026-07-28
 
 ### Fixed

@@ -145,29 +145,19 @@ public actor MoGe2Generator {
     }
 
     private func loadModelIfNeeded(requestedModel: String?) async throws -> MoGe2Model {
-        let modelURL: URL
-        if let requestedModel, !requestedModel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            let explicit = URL(fileURLWithPath: requestedModel).standardizedFileURL
-            var isDirectory: ObjCBool = false
-            guard FileManager.default.fileExists(atPath: explicit.path, isDirectory: &isDirectory) else {
-                throw MoGe2GeneratorError.modelFileNotFound(explicit.path)
-            }
-            modelURL = isDirectory.boolValue ? explicit.appendingPathComponent("model.onnx") : explicit
-        } else {
-            let resolved = try await ManagedModelResolver.resolveForRuntime(
-                requestedModel: nil,
-                defaultModelID: ModelResolver.ModelID.visionGeometryMoGe2Small.rawValue,
-                allowAutoDownload: true
-            )
-            var isDirectory: ObjCBool = false
-            let exists = FileManager.default.fileExists(
-                atPath: resolved.url.path,
-                isDirectory: &isDirectory
-            )
-            modelURL = exists && isDirectory.boolValue
-                ? resolved.url.appendingPathComponent("model.onnx")
-                : resolved.url
-        }
+        let resolved = try await ManagedModelResolver.resolveForRuntime(
+            requestedModel: requestedModel,
+            defaultModelID: ModelResolver.ModelID.visionGeometryMoGe2Small.rawValue,
+            allowAutoDownload: true
+        )
+        var isDirectory: ObjCBool = false
+        let exists = FileManager.default.fileExists(
+            atPath: resolved.url.path,
+            isDirectory: &isDirectory
+        )
+        let modelURL = exists && isDirectory.boolValue
+            ? resolved.url.appendingPathComponent("model.onnx")
+            : resolved.url
         guard FileManager.default.fileExists(atPath: modelURL.path) else {
             throw MoGe2GeneratorError.modelFileNotFound(modelURL.path)
         }

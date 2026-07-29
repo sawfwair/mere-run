@@ -29,6 +29,9 @@ enum ModelInventory {
 
             let flatDir = MereRunModelPaths.modelDir(id)
             let flatInstalled = isNonEmptyDirectory(flatDir, fileManager: fileManager)
+            let hasManagedManifest = fileManager.fileExists(
+                atPath: flatDir.appendingPathComponent(MereRunModelManifest.filename).path
+            )
             let gemmaAliasInstall = gemmaAliasInstallURL(for: id, fileManager: fileManager)
 
             if let spec, spec.usesPinnedGeometryArtifacts {
@@ -61,8 +64,19 @@ enum ModelInventory {
                 status = "installed"
                 let bytes = FileSystemHelper.directorySize(at: gemmaAliasInstall)
                 size = ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
-            } else if flatInstalled || spec?.managedRuntimeURL(fileManager: fileManager) != nil {
+            } else if let spec,
+                      ManagedModelResolver.isManagedInstallComplete(
+                          spec: spec,
+                          at: flatDir,
+                          fileManager: fileManager
+                      ) || spec.managedRuntimeURL(fileManager: fileManager) != nil {
                 status = "installed"
+                let bytes = FileSystemHelper.directorySize(at: flatDir)
+                size = ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+            } else if flatInstalled {
+                // Preserve manifest-less legacy roots, but never let a managed
+                // manifest paper over broken links or missing runtime assets.
+                status = hasManagedManifest ? "invalid" : "installed"
                 let bytes = FileSystemHelper.directorySize(at: flatDir)
                 size = ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
             } else {

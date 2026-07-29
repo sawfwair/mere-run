@@ -62,8 +62,9 @@ Environment:
                               MERERUN_LINUX_ACCEL=cuda.
   MERERUN_SKIP_MLX_CUDA_EXAMPLE=1
                               Build the mlx-swift CUDA bridge but skip running
-                              the GPU example. Use this for CPU-only release
-                              builders with CUDA development packages.
+                              the GPU example. Use this for GPU-less builders
+                              that have CUDA development packages and produce
+                              CUDA release artifacts.
   MERERUN_MLX_SWIFT_LINKAGE=cuda-prebuilt
                               Package.swift mode that consumes CMake-built
                               mlx-swift CUDA artifacts instead of SwiftPM mlx.

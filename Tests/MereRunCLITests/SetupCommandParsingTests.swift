@@ -457,7 +457,7 @@ final class SetupCommandParsingTests: XCTestCase {
         let modelRoot = root.appendingPathComponent(ModelResolver.ModelID.ideogram4SDNQUInt4.rawValue, isDirectory: true)
         try FileManager.default.createDirectory(at: target, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: modelRoot, withIntermediateDirectories: true)
-        try Data(repeating: 1, count: 13).write(to: modelRoot.appendingPathComponent("mererun_model.json"))
+        try Data(repeating: 1, count: 13).write(to: modelRoot.appendingPathComponent("legacy-metadata.bin"))
         try Data(repeating: 1, count: 29).write(to: target.appendingPathComponent("diffusion_pytorch_model.safetensors"))
         try FileManager.default.createSymbolicLink(
             at: modelRoot.appendingPathComponent("transformer", isDirectory: true),
@@ -486,6 +486,30 @@ final class SetupCommandParsingTests: XCTestCase {
         try Data([0]).write(to: modelRoot.appendingPathComponent("model.onnx"))
         try MereRunModelManifest.template(for: modelID, createdAt: Date(timeIntervalSince1970: 0))
             .write(to: modelRoot)
+
+        let row = try XCTUnwrap(ModelInventory.rows().first { $0.id == modelID.rawValue })
+        XCTAssertEqual(row.status, "invalid")
+        XCTAssertFalse(row.isInstalled)
+    }
+
+    func testModelInventoryMarksManagedRootWithBrokenWeightLinksInvalid() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mere-run-broken-inventory-\(UUID().uuidString)", isDirectory: true)
+        defer {
+            MereRunModelPaths.setProcessModelsDirOverride(nil)
+            try? FileManager.default.removeItem(at: root)
+        }
+        MereRunModelPaths.setProcessModelsDirOverride(root)
+
+        let modelID = ModelResolver.ModelID.ornith35BMLX
+        let modelRoot = root.appendingPathComponent(modelID.rawValue, isDirectory: true)
+        try FileManager.default.createDirectory(at: modelRoot, withIntermediateDirectories: true)
+        try MereRunModelManifest.template(for: modelID, createdAt: Date(timeIntervalSince1970: 0))
+            .write(to: modelRoot)
+        try FileManager.default.createSymbolicLink(
+            at: modelRoot.appendingPathComponent("model-00001-of-00004.safetensors"),
+            withDestinationURL: root.appendingPathComponent("missing-model-shard.safetensors")
+        )
 
         let row = try XCTUnwrap(ModelInventory.rows().first { $0.id == modelID.rawValue })
         XCTAssertEqual(row.status, "invalid")

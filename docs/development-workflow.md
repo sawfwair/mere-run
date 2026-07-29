@@ -84,6 +84,35 @@ If the change affects installed-model behavior, also run:
 MERERUN_RUN_E2E=installed ./scripts/check.sh
 ```
 
+For video runtime or MLX stream changes, the release candidate must also run
+true generation from the exact packaged binary:
+
+```bash
+/path/to/extracted/mere.run gate --suite video --require-all \
+  --json-output ./video-gate.json
+```
+
+This separately exercises LTX 2.3 draft, full generated audio/video, and
+source-audio A2Vid. It decodes the resulting MP4s and fails if promised audio
+is missing or silent.
+
+Before publishing a packaged candidate, run the exhaustive installed-model
+smoke from that same extracted binary:
+
+```bash
+/path/to/extracted/mere.run gate --all-installed --require-all \
+  --json-output ./release-gate.json
+```
+
+This creates one result for every `installed` row in `model list`, including
+image-to-3D, music/SFX, OCR, SAM, grounding, face, geometry/depth, and every
+video/world backend. Unmapped installed entries and missing required companion
+models fail closed.
+
+Exceptional, release-owner-approved quarantines use
+`--skip-model <installed-id>` and remain visible as `skipped` rows in the JSON
+report. They are not passes.
+
 ### Linux CLI compatibility change
 
 Keep this scope to the headless CLI, local API, and test fixtures. Do not move
@@ -94,14 +123,12 @@ SwiftUI, app bundle, installer, or DMG behavior into the Linux target.
 swift run mere.run --help
 ```
 
-Linux CI should use CPU MLX-compatible fixtures and mocked or tiny media I/O
-inputs. The Linux gate runs the hidden `MediaIOSmoke` executable against
-`ffmpeg`/`ffprobe` so image, audio, MP4, mux, and frame extraction paths stay
-covered without model checkpoints. CUDA setup belongs in local runtime
-documentation or manual smoke notes, not in the default pull-request gate.
-CUDA validation is limited to the exact hosts that have run the CUDA package and
-smoke path. Linux arm64 packages are only meaningful with CUDA; CPU-only arm64
-packages are local smoke artifacts, not support claims.
+Hosted Linux CI uses mocked or tiny media I/O inputs. The Linux gate runs the
+hidden `MediaIOSmoke` executable against `ffmpeg`/`ffprobe` so image, audio,
+MP4, mux, and frame extraction paths stay covered without model checkpoints.
+This is test-fixture coverage, not a CPU runtime or package. There is no
+CPU-only Linux release. CUDA validation is limited to the exact hosts that
+have run the CUDA package and smoke path.
 
 ### Linux release packaging change
 
@@ -110,16 +137,17 @@ artifacts. Build package artifacts locally on the Linux host class you intend to
 validate:
 
 ```bash
-scripts/package-linux.sh --version 0.23.0
+MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.23.0
 ls dist/linux/
 ```
 
 The package script builds
 `dist/linux/mere-run-<version>-linux-<arch>.tar.gz`,
 `dist/linux/mere-run_<version>_<deb-arch>.deb`, and
-`dist/linux/SHA256SUMS`. It must run on Linux.
+`dist/linux/SHA256SUMS`. It must run on Linux with CUDA. There is no CPU-only
+Linux release; CPU package builds are test fixtures only.
 
-CUDA variants use a suffix so they can ship beside the CPU artifacts:
+The x86_64 CUDA lane uses a suffix to identify its accelerator contract:
 
 ```bash
 MERERUN_LINUX_ACCEL=cuda MERERUN_SKIP_MLX_CUDA_EXAMPLE=1 \
