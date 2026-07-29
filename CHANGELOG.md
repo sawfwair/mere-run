@@ -6,8 +6,13 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.29.0 - 2026-07-29
+
 ### Added
 
+- added native MLX Streaming Sortformer speaker diarization on Apple Metal and
+  NVIDIA CUDA, with managed model installation, JSON/RTTM output, runtime
+  capability discovery, and a durable real-audio A → B → A checkpoint.
 - added `gate --all-installed`, a fail-closed release smoke that discovers the
   exact installed catalog inventory and runs real inference for every text,
   code, image, speech, vision, SAM, grounding, face, geometry/depth, image-to-3D,
