@@ -21,6 +21,17 @@ enum RoutedMoERouting {
         }
     }
 
+    private static var supportsExpertAlignedNVFP4Metal: Bool {
+        #if os(macOS)
+        let architecture = GPU.deviceInfo().architecture
+        return Device.defaultDevice().deviceType == .gpu
+            && ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 26
+            && (architecture == "applegpu_g16s" || architecture == "applegpu_g17s")
+        #else
+        return false
+        #endif
+    }
+
     /// Computes an unsorted NVFP4 gate/up gather-GEMV and SwiGLU activation.
     ///
     /// One threadgroup runs the gate and up projections concurrently for one
@@ -128,10 +139,7 @@ enum RoutedMoERouting {
         bits: Int
     ) -> MLXArray? {
         #if os(macOS)
-        let operatingSystem = ProcessInfo.processInfo.operatingSystemVersion
-        guard Device.defaultDevice().deviceType == .gpu,
-              operatingSystem.majorVersion >= 26,
-              GPU.deviceInfo().architecture == "applegpu_g16s",
+        guard supportsExpertAlignedNVFP4Metal,
               sortedInput.dtype == .bfloat16,
               gateWeight.dtype == .uint32,
               upWeight.dtype == .uint32,
@@ -208,6 +216,98 @@ enum RoutedMoERouting {
                 ("INPUT_DIMENSIONS", inputDimensions),
             ],
             grid: (outputTiles * 32, maximumRouteTiles * 2, 1),
+            threadGroup: (32, 2, 1),
+            outputShapes: [[routeCount, 1, outputDimensions]],
+            outputDTypes: [sortedInput.dtype]
+        )[0]
+        #else
+        return nil
+        #endif
+    }
+
+    /// Runs one sorted NVFP4 expert projection with the same expert-aligned
+    /// tile schedule used by the fused gate/up prefill path. Laguna uses this
+    /// for the routed down projection after SwiGLU, avoiding the generic
+    /// gather-QMM run loop while preserving each output row's MMA order.
+    static func sortedNVFP4Projection(
+        _ sortedInput: MLXArray,
+        weight: MLXArray,
+        scales: MLXArray,
+        sortedExpertIndices: MLXArray,
+        groupSize: Int,
+        bits: Int
+    ) -> MLXArray? {
+        #if os(macOS)
+        guard supportsExpertAlignedNVFP4Metal,
+              sortedInput.dtype == .bfloat16,
+              weight.dtype == .uint32,
+              scales.dtype == .uint8,
+              sortedExpertIndices.dtype == .int32
+                || sortedExpertIndices.dtype == .uint32,
+              sortedInput.ndim == 3,
+              sortedInput.dim(1) == 1,
+              weight.dim(0) == scales.dim(0),
+              weight.dim(0) > 0,
+              weight.dim(0) <= 256,
+              weight.dim(1) == scales.dim(1),
+              sortedInput.dim(0) == sortedExpertIndices.size,
+              groupSize == 16,
+              bits == 4 else {
+            return nil
+        }
+
+        let routeCount = sortedInput.dim(0)
+        let outputDimensions = weight.dim(1)
+        let inputDimensions = sortedInput.dim(2)
+        guard routeCount >= 64,
+              outputDimensions.isMultiple(of: 64),
+              inputDimensions.isMultiple(of: 64),
+              weight.dim(2) == inputDimensions / 8,
+              scales.dim(2) == inputDimensions / groupSize else {
+            return nil
+        }
+
+        let maximumRouteTiles =
+            (routeCount + 15) / 16
+                + min(weight.dim(0), routeCount)
+                - 1
+        let schedule = sortedExpertTileScheduleKernel(
+            [sortedExpertIndices],
+            template: [
+                ("IndexT", sortedExpertIndices.dtype),
+                ("ROUTE_COUNT", routeCount),
+                ("EXPERT_COUNT", weight.dim(0)),
+                ("TILE_COUNT", maximumRouteTiles),
+            ],
+            grid: (weight.dim(0), 1, 1),
+            threadGroup: (weight.dim(0), 1, 1),
+            outputShapes: [
+                [maximumRouteTiles],
+                [maximumRouteTiles],
+                [maximumRouteTiles],
+            ],
+            outputDTypes: [
+                sortedExpertIndices.dtype,
+                sortedExpertIndices.dtype,
+                sortedExpertIndices.dtype,
+            ]
+        )
+        return sortedNVFP4ProjectionKernel(
+            [
+                sortedInput,
+                weight,
+                scales,
+                schedule[0],
+                schedule[1],
+                schedule[2],
+                Int32(routeCount),
+            ],
+            template: [
+                ("DataT", sortedInput.dtype),
+                ("OUTPUT_DIMENSIONS", outputDimensions),
+                ("INPUT_DIMENSIONS", inputDimensions),
+            ],
+            grid: ((outputDimensions / 32) * 32, maximumRouteTiles * 2, 1),
             threadGroup: (32, 2, 1),
             outputShapes: [[routeCount, 1, outputDimensions]],
             outputDTypes: [sortedInput.dtype]
@@ -563,6 +663,139 @@ enum RoutedMoERouting {
                     OUTPUT_DIMENSIONS);
             } else {
                 gate_mma.store_result_safe(
+                    tile_output,
+                    OUTPUT_DIMENSIONS,
+                    short2(BN, tile_rows));
+            }
+        """,
+        header: "// MLX_INCLUDE_FP_QUANTIZED_HEADERS\n",
+        ensureRowContiguous: true
+    )
+
+    private static let sortedNVFP4ProjectionKernel = MLXFast.metalKernel(
+        name: "mere_routed_moe_sorted_nvfp4_projection",
+        inputNames: [
+            "x",
+            "weight",
+            "scales",
+            "tile_starts",
+            "scheduled_tile_rows",
+            "tile_experts",
+            "route_count",
+        ],
+        outputNames: ["output"],
+        source: """
+            constexpr int BM = 16;
+            constexpr int BN = 32;
+            constexpr int BK = 32;
+            constexpr int WM = 1;
+            constexpr int WN = 2;
+            constexpr int GROUP_SIZE = 16;
+            constexpr int BITS = 4;
+            constexpr int PACK_FACTOR = get_pack_factor<8, BITS>();
+            constexpr int BYTES_PER_PACK = get_bytes_per_pack();
+            constexpr int BK_PADDED = BK + 16 / sizeof(DataT);
+            constexpr int K_WEIGHT =
+                INPUT_DIMENSIONS * BYTES_PER_PACK / PACK_FACTOR;
+            constexpr int K_SCALE = INPUT_DIMENSIONS / GROUP_SIZE;
+            constexpr int K_ITERATIONS = INPUT_DIMENSIONS / BK;
+            constexpr size_t WEIGHT_EXPERT_STRIDE =
+                size_t(OUTPUT_DIMENSIONS) * K_WEIGHT;
+            constexpr size_t SCALE_EXPERT_STRIDE =
+                size_t(OUTPUT_DIMENSIONS) * K_SCALE;
+
+            using mma_t = mlx::steel::BlockMMA<
+                DataT,
+                DataT,
+                BM,
+                BN,
+                BK,
+                WM,
+                WN,
+                false,
+                true,
+                BK_PADDED,
+                BK_PADDED>;
+            using input_loader_t = mlx::steel::BlockLoader<
+                DataT,
+                BM,
+                BK,
+                BK_PADDED,
+                1,
+                WM * WN * SIMD_SIZE>;
+            using weight_loader_t = QuantizedBlockLoader<
+                DataT,
+                BN,
+                BK,
+                BK_PADDED,
+                true,
+                WM * WN * SIMD_SIZE,
+                GROUP_SIZE,
+                BITS>;
+
+            threadgroup DataT input_tile[BM * BK_PADDED];
+            threadgroup DataT weight_tile[BN * BK_PADDED];
+
+            const uint3 tile = threadgroup_position_in_grid;
+            const uint simd_group = simdgroup_index_in_threadgroup;
+            const uint simd_lane = thread_index_in_simdgroup;
+            const int output_row = int(tile_starts[tile.y]);
+            if (output_row >= int(route_count)) {
+                return;
+            }
+            const int output_column = int(tile.x) * BN;
+            const short tile_rows = short(scheduled_tile_rows[tile.y]);
+            const uint expert = uint(tile_experts[tile.y]);
+
+            const device DataT* tile_input =
+                x + size_t(output_row) * INPUT_DIMENSIONS;
+            device DataT* tile_output =
+                output
+                    + size_t(output_row) * OUTPUT_DIMENSIONS
+                    + output_column;
+            const device uint8_t* weight_bytes =
+                reinterpret_cast<const device uint8_t*>(weight)
+                    + size_t(output_column) * K_WEIGHT
+                    + size_t(expert) * WEIGHT_EXPERT_STRIDE;
+            const device uint8_t* scale_bytes =
+                scales
+                    + size_t(output_column) * K_SCALE
+                    + size_t(expert) * SCALE_EXPERT_STRIDE;
+
+            thread mma_t mma(simd_group, simd_lane);
+            thread input_loader_t input_loader(
+                tile_input,
+                INPUT_DIMENSIONS,
+                input_tile,
+                simd_group,
+                simd_lane);
+            thread weight_loader_t weight_loader(
+                weight_bytes,
+                scale_bytes,
+                INPUT_DIMENSIONS,
+                weight_tile,
+                simd_group,
+                simd_lane);
+
+            for (int k = 0; k < K_ITERATIONS; ++k) {
+                threadgroup_barrier(mem_flags::mem_threadgroup);
+                if (tile_rows == BM) {
+                    input_loader.load_unsafe();
+                } else {
+                    input_loader.load_safe(short2(BK, tile_rows));
+                }
+                weight_loader.load_unsafe();
+                threadgroup_barrier(mem_flags::mem_threadgroup);
+                mma.mma(input_tile, weight_tile);
+
+                input_loader.next();
+                weight_loader.next();
+            }
+
+            if (tile_rows == BM) {
+                mma.store_result(tile_output, OUTPUT_DIMENSIONS);
+            } else {
+                mma.store_result_safe(
                     tile_output,
                     OUTPUT_DIMENSIONS,
                     short2(BN, tile_rows));

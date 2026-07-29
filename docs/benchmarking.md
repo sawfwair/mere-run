@@ -231,10 +231,21 @@ controlled comparison or rollback.
 
 The measured M4 Max/macOS 26 BF16 NVFP4 prefill path additionally fuses sorted
 gate/up projection and SwiGLU behind
-`MERERUN_LAGUNA_FUSED_SORTED_NVFP4_MOE`. It retains the native sorted down
-projection, weighting, and reduction. Set the flag to `0` for a portable-path
-A/B or rollback. `MERERUN_LAGUNA_FAST_SORTED_INVERSE=0` independently restores
-the reference second route sort.
+`MERERUN_LAGUNA_FUSED_SORTED_NVFP4_MOE`. The matching expert-aligned down
+projection is controlled independently by
+`MERERUN_LAGUNA_FUSED_SORTED_NVFP4_DOWN`; weighting and reduction retain the
+native operation order. Set either flag to `0` for a portable-path A/B or
+rollback. `MERERUN_LAGUNA_FAST_SORTED_INVERSE=0` independently restores the
+reference second route sort. The guarded kernels recognize both M4 Max
+`applegpu_g16s` and M5 Max `applegpu_g17s` on macOS 26.
+
+Graph-level prefill controls are independently reversible. Shared full and
+sliding masks default on and can be disabled with
+`MERERUN_LAGUNA_SHARED_ATTENTION_MASKS=0`. The default eight-layer evaluation
+ladder can be changed or disabled with `MERERUN_LAGUNA_PREFILL_ASYNC_LADDER`.
+Exact fused residual/RMSNorm and QK-norm/RoPE kernels default on only for M5
+Max; use `MERERUN_LAGUNA_PREFILL_FUSED_RESIDUAL_RMSNORM` and
+`MERERUN_LAGUNA_PREFILL_QK_NORM_ROPE` for explicit A/Bs on either architecture.
 
 These flags are an evaluation boundary, not a pull or serving contract. Do not
 infer catalog support from a successful local checkpoint run.

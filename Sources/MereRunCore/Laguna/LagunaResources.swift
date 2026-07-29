@@ -32,15 +32,13 @@ public enum LagunaResources {
         "model.safetensors",
     ]
 
-    private static let requiredFiles = [
+    private static let requiredMetadataFiles = [
         "config.json",
         "tokenizer.json",
         "tokenizer_config.json",
         "chat_template.jinja",
         "model.safetensors.index.json",
-    ] + (1...14).map {
-        String(format: "model-%05d-of-00014.safetensors", $0)
-    }
+    ]
 
     private static let requiredDFlashFiles = [
         "config.json",
@@ -64,9 +62,31 @@ public enum LagunaResources {
         rootURL: URL,
         fileManager: FileManager = .default
     ) -> [URL] {
-        requiredFiles
+        var missing = requiredMetadataFiles
             .map { rootURL.appendingPathComponent($0) }
             .filter { !fileManager.fileExists(atPath: $0.path) }
+
+        let indexURL = rootURL.appendingPathComponent("model.safetensors.index.json")
+        guard fileManager.fileExists(atPath: indexURL.path) else {
+            return missing
+        }
+
+        do {
+            let index = try JSONDecoder().decode(
+                HFSafetensorsIndex.self,
+                from: Data(contentsOf: indexURL)
+            )
+            guard !index.shardFilenames.isEmpty else {
+                missing.append(indexURL)
+                return missing
+            }
+            missing.append(contentsOf: index.shardFilenames
+                .map { rootURL.appendingPathComponent($0) }
+                .filter { !fileManager.fileExists(atPath: $0.path) })
+        } catch {
+            missing.append(indexURL)
+        }
+        return missing
     }
 
     public static func missingDFlashFiles(
@@ -84,6 +104,12 @@ public enum LagunaResources {
 
     static func validateDFlash(rootURL: URL) -> [String] {
         missingDFlashFiles(rootURL: rootURL).map(\.lastPathComponent)
+    }
+
+    static func hasQuantizedSharedExperts(_ index: HFSafetensorsIndex) -> Bool {
+        index.weightMap.keys.contains {
+            $0.hasSuffix(".mlp.shared_expert.gate_proj.scales")
+        }
     }
 
     public static func installedDFlashPath() -> String? {

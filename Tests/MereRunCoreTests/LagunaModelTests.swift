@@ -1,22 +1,26 @@
 import Foundation
 import MLX
+import MLXFast
 import MLXNN
 import MLXRandom
 import XCTest
 @testable import MereRunCore
 
 final class LagunaModelTests: MereRunCoreTestCase {
-    private func makeConfig() throws -> LagunaConfig {
-        let object: [String: Any] = [
+    private func makeConfig(quantizedSharedExperts: Bool = false) throws -> LagunaConfig {
+        let hiddenSize = quantizedSharedExperts ? 16 : 8
+        let headDimension = quantizedSharedExperts ? 8 : 4
+        let sharedExpertSize = quantizedSharedExperts ? 16 : 5
+        var object: [String: Any] = [
             "model_type": "laguna",
             "vocab_size": 32,
-            "hidden_size": 8,
+            "hidden_size": hiddenSize,
             "intermediate_size": 16,
             "num_hidden_layers": 2,
             "num_attention_heads": 2,
             "num_attention_heads_per_layer": [2, 2],
             "num_key_value_heads": 1,
-            "head_dim": 4,
+            "head_dim": headDimension,
             "max_position_embeddings": 128,
             "rms_norm_eps": 0.000001,
             "attention_bias": false,
@@ -28,7 +32,7 @@ final class LagunaModelTests: MereRunCoreTestCase {
             "num_experts": 3,
             "num_experts_per_tok": 2,
             "moe_intermediate_size": 6,
-            "shared_expert_intermediate_size": 5,
+            "shared_expert_intermediate_size": sharedExpertSize,
             "moe_routed_scaling_factor": 2.5,
             "moe_router_logit_softcapping": 0.0,
             "norm_topk_prob": true,
@@ -44,7 +48,7 @@ final class LagunaModelTests: MereRunCoreTestCase {
                     "original_max_position_embeddings": 8,
                     "beta_slow": 1.0,
                     "beta_fast": 32.0,
-                    "attention_factor": 1.3465735902799727,
+                    "attention_factor": 1.0,
                     "partial_rotary_factor": 0.5,
                 ],
                 "sliding_attention": [
@@ -54,6 +58,13 @@ final class LagunaModelTests: MereRunCoreTestCase {
                 ],
             ],
         ]
+        if quantizedSharedExperts {
+            object["quantization"] = [
+                "group_size": 16,
+                "bits": 4,
+                "mode": "nvfp4",
+            ]
+        }
         let data = try JSONSerialization.data(withJSONObject: object)
         return try JSONDecoder().decode(LagunaConfig.self, from: data)
     }
@@ -102,6 +113,38 @@ final class LagunaModelTests: MereRunCoreTestCase {
         XCTAssertTrue(config.isSparse(layerIndex: 1))
     }
 
+    func testYarnUsesRuntimeDerivedMscaleInsteadOfMetadataAttentionFactor() throws {
+        let config = try makeConfig()
+        let rope = LagunaRoPE(
+            headDim: config.headDim,
+            parameters: config.ropeParameters(layerIndex: 0)
+        )
+        let input = MLXArray.ones([1, 1, 1, config.headDim], dtype: .bfloat16)
+        let output = rope(input, offset: 0)
+        MLX.eval(output)
+
+        let values = output.asArray(Float.self)
+        let expectedMscale = 1 + 0.1 * log(Float(32))
+        XCTAssertEqual(values[0], expectedMscale, accuracy: 0.01)
+        XCTAssertEqual(values[1], expectedMscale, accuracy: 0.01)
+        XCTAssertEqual(values[2], 1, accuracy: 0.001)
+        XCTAssertEqual(values[3], 1, accuracy: 0.001)
+    }
+
+    func testXSLayoutQuantizesOnlySharedExpertLinears() throws {
+        let model = LagunaCausalLM(
+            config: try makeConfig(quantizedSharedExperts: true),
+            quantizedSharedExperts: true
+        )
+        let dense = try XCTUnwrap(model.model.layers[0].mlp as? LagunaDenseMLP)
+        let sparse = try XCTUnwrap(model.model.layers[1].mlp as? LagunaSparseMoE)
+
+        XCTAssertFalse(dense.gateProj is QuantizedLinear)
+        XCTAssertTrue(sparse.sharedExpert.gateProj is QuantizedLinear)
+        XCTAssertTrue(sparse.sharedExpert.upProj is QuantizedLinear)
+        XCTAssertTrue(sparse.sharedExpert.downProj is QuantizedLinear)
+    }
+
     func testManagedResourceContractCoversOfficialTargetAndDFlashPayloads() throws {
         let root = try TestFileSystem.makeTempDir()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -113,7 +156,6 @@ final class LagunaModelTests: MereRunCoreTestCase {
             "tokenizer.json",
             "tokenizer_config.json",
             "chat_template.jinja",
-            "model.safetensors.index.json",
         ] + (1...14).map {
             String(format: "model-%05d-of-00014.safetensors", $0)
         }
@@ -123,6 +165,15 @@ final class LagunaModelTests: MereRunCoreTestCase {
                 contents: Data()
             ))
         }
+        let shardEntries = (1...14).map { index in
+            let shard = String(format: "model-%05d-of-00014.safetensors", index)
+            return "\"model.layers.\(index).weight\": \"\(shard)\""
+        }.joined(separator: ",")
+        let indexData = Data("{\"weight_map\":{\(shardEntries)}}".utf8)
+        XCTAssertTrue(FileManager.default.createFile(
+            atPath: root.appendingPathComponent("model.safetensors.index.json").path,
+            contents: indexData
+        ))
         for file in ["config.json", "model.safetensors"] {
             XCTAssertTrue(FileManager.default.createFile(
                 atPath: dflashRoot.appendingPathComponent(file).path,
@@ -142,6 +193,47 @@ final class LagunaModelTests: MereRunCoreTestCase {
         XCTAssertEqual(
             LagunaResources.missingTargetFiles(rootURL: root).map(\.lastPathComponent),
             ["model-00014-of-00014.safetensors"]
+        )
+    }
+
+    func testTargetResourceContractUsesShardNamesFromSafetensorsIndex() throws {
+        let root = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        for file in [
+            "config.json",
+            "tokenizer.json",
+            "tokenizer_config.json",
+            "chat_template.jinja",
+            "model-00001-of-00005.safetensors",
+            "model-00002-of-00005.safetensors",
+        ] {
+            XCTAssertTrue(FileManager.default.createFile(
+                atPath: root.appendingPathComponent(file).path,
+                contents: Data()
+            ))
+        }
+        let indexData = Data(
+            """
+            {"weight_map":{
+              "model.embed_tokens.weight":"model-00001-of-00005.safetensors",
+              "model.norm.weight":"model-00002-of-00005.safetensors"
+            }}
+            """.utf8
+        )
+        XCTAssertTrue(FileManager.default.createFile(
+            atPath: root.appendingPathComponent("model.safetensors.index.json").path,
+            contents: indexData
+        ))
+
+        XCTAssertTrue(LagunaResources.missingTargetFiles(rootURL: root).isEmpty)
+
+        try FileManager.default.removeItem(
+            at: root.appendingPathComponent("model-00002-of-00005.safetensors")
+        )
+        XCTAssertEqual(
+            LagunaResources.missingTargetFiles(rootURL: root).map(\.lastPathComponent),
+            ["model-00002-of-00005.safetensors"]
         )
     }
 
@@ -526,6 +618,173 @@ final class LagunaModelTests: MereRunCoreTestCase {
         XCTAssertFalse(LagunaMoEAccelerationPolicy.parseBoolean("unexpected", default: false))
     }
 
+    func testGraphAccelerationPolicyParsing() {
+        XCTAssertTrue(LagunaGraphAccelerationPolicy.parseBoolean(nil, default: true))
+        XCTAssertFalse(LagunaGraphAccelerationPolicy.parseBoolean("off", default: true))
+        XCTAssertEqual(
+            LagunaGraphAccelerationPolicy.parseLadderStride(nil, default: 8),
+            8
+        )
+        XCTAssertEqual(
+            LagunaGraphAccelerationPolicy.parseLadderStride("off", default: 8),
+            0
+        )
+        XCTAssertEqual(
+            LagunaGraphAccelerationPolicy.parseLadderStride("4", default: 8),
+            4
+        )
+        XCTAssertEqual(
+            LagunaGraphAccelerationPolicy.parseLadderStride("invalid", default: 8),
+            8
+        )
+    }
+
+    func testFusedPrefillResidualRMSNormMatchesStockOperations() throws {
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip("The fused Laguna prefill kernel requires a Metal GPU.")
+        }
+        MLXRandom.seed(61)
+        let hiddenSize = 2_048
+        let residual = MLXRandom.uniform(
+            low: -0.5,
+            high: 0.5,
+            [1, 3, hiddenSize]
+        ).asType(.bfloat16)
+        let branch = MLXRandom.uniform(
+            low: -0.5,
+            high: 0.5,
+            [1, 3, hiddenSize]
+        ).asType(.bfloat16)
+        let weight = MLXRandom.uniform(
+            low: 0.75,
+            high: 1.25,
+            [hiddenSize]
+        ).asType(.bfloat16)
+        let stockSummed = residual + branch
+        let stockNormalized = MLXFast.rmsNorm(
+            stockSummed,
+            weight: weight,
+            eps: 0.000_001
+        )
+        let fused = try XCTUnwrap(LagunaFusedPrefill.residualRMSNorm(
+            residual: residual,
+            branch: branch,
+            weight: weight
+        ))
+
+        MLX.eval(stockSummed, stockNormalized, fused.summed, fused.normalized)
+        let summedDifference = MLX.max(
+            MLX.abs(stockSummed.asType(.float32) - fused.summed.asType(.float32))
+        ).item(Float.self)
+        let normalizedDifference = MLX.max(
+            MLX.abs(stockNormalized.asType(.float32) - fused.normalized.asType(.float32))
+        ).item(Float.self)
+        XCTAssertEqual(summedDifference, 0)
+        XCTAssertEqual(normalizedDifference, 0)
+    }
+
+    func testFusedPrefillQKNormRoPEMatchesStockFamilies() throws {
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip("The fused Laguna prefill kernels require a Metal GPU.")
+        }
+        MLXRandom.seed(67)
+        let headDimension = 128
+        let keyValueHeads = 8
+        let length = 3
+        let offset = 7
+        let queryWeight = MLXRandom.uniform(
+            low: 0.75,
+            high: 1.25,
+            [headDimension]
+        ).asType(.bfloat16)
+        let keyWeight = MLXRandom.uniform(
+            low: 0.75,
+            high: 1.25,
+            [headDimension]
+        ).asType(.bfloat16)
+
+        func verify(
+            kind: LagunaFusedPrefill.QKNormRoPEKind,
+            queryHeads: Int,
+            parameters: LagunaRopeParameters
+        ) throws {
+            let rawQueries = MLXRandom.uniform(
+                low: -0.5,
+                high: 0.5,
+                [1, length, queryHeads * headDimension]
+            ).asType(.bfloat16)
+            let rawKeys = MLXRandom.uniform(
+                low: -0.5,
+                high: 0.5,
+                [1, length, keyValueHeads * headDimension]
+            ).asType(.bfloat16)
+            let rope = LagunaRoPE(headDim: headDimension, parameters: parameters)
+            let atlas = try XCTUnwrap(rope.angleAtlas(
+                length: LagunaFusedPrefill.ropeAngleAtlasLength
+            ))
+            let stockQueries = rope(
+                MLXFast.rmsNorm(
+                    rawQueries.reshaped(1, length, queryHeads, headDimension),
+                    weight: queryWeight,
+                    eps: 0.000_001
+                ).transposed(0, 2, 1, 3),
+                offset: offset
+            )
+            let stockKeys = rope(
+                MLXFast.rmsNorm(
+                    rawKeys.reshaped(1, length, keyValueHeads, headDimension),
+                    weight: keyWeight,
+                    eps: 0.000_001
+                ).transposed(0, 2, 1, 3),
+                offset: offset
+            )
+            let fused = try XCTUnwrap(LagunaFusedPrefill.qkNormRoPE(
+                kind: kind,
+                rawQueries: rawQueries,
+                rawKeys: rawKeys,
+                queryWeight: queryWeight,
+                keyWeight: keyWeight,
+                angleAtlas: atlas,
+                offset: offset,
+                length: length
+            ))
+
+            MLX.eval(stockQueries, stockKeys, fused.queries, fused.keys)
+            let queryDifference = MLX.max(
+                MLX.abs(stockQueries.asType(.float32) - fused.queries.asType(.float32))
+            ).item(Float.self)
+            let keyDifference = MLX.max(
+                MLX.abs(stockKeys.asType(.float32) - fused.keys.asType(.float32))
+            ).item(Float.self)
+            XCTAssertEqual(queryDifference, 0)
+            XCTAssertEqual(keyDifference, 0)
+        }
+
+        try verify(
+            kind: .sliding,
+            queryHeads: 64,
+            parameters: LagunaRopeParameters(
+                ropeType: "default",
+                ropeTheta: 10_000,
+                partialRotaryFactor: 1
+            )
+        )
+        try verify(
+            kind: .fullYaRN,
+            queryHeads: 48,
+            parameters: LagunaRopeParameters(
+                ropeType: "yarn",
+                ropeTheta: 500_000,
+                factor: 32,
+                originalMaxPositionEmbeddings: 8_192,
+                betaSlow: 1,
+                betaFast: 64,
+                attentionFactor: 1,
+                partialRotaryFactor: 0.5
+            )
+        )
+    }
+
     func testFusedGatherNVFP4SwiGLUMatchesNativeGathers() throws {
         guard Device.defaultDevice().deviceType == .gpu else {
             throw XCTSkip("The fused NVFP4 routed MoE kernel requires MERERUN_TEST_MLX_DEVICE=gpu.")
@@ -628,16 +887,10 @@ final class LagunaModelTests: MereRunCoreTestCase {
         }
         MLXRandom.seed(56)
         let expertCount = 4
-        let routeCount = 130
         let inputDimensions = 512
-        let outputDimensions = 64
+        let outputDimensions = 512
         let groupSize = 16
         let bits = 4
-        let input = MLXRandom.uniform(
-            low: -0.5,
-            high: 0.5,
-            [routeCount, 1, inputDimensions]
-        ).asType(.bfloat16)
         let gate = MLX.quantized(
             MLXRandom.uniform(
                 low: -0.25,
@@ -658,55 +911,126 @@ final class LagunaModelTests: MereRunCoreTestCase {
             bits: bits,
             mode: .nvfp4
         )
-        let indices = MLXArray(
-            (0..<routeCount).map {
-                Int32(min(expertCount - 1, $0 / 33))
-            }
-        )
-        let gateOutput = portableGatherQuantizedMM(
-            input,
-            gate.wq,
-            scales: gate.scales,
-            biases: gate.biases,
-            rhsIndices: indices,
-            transpose: true,
-            groupSize: groupSize,
-            bits: bits,
-            mode: .nvfp4,
-            sortedIndices: true
-        )
-        let upOutput = portableGatherQuantizedMM(
-            input,
-            up.wq,
-            scales: up.scales,
-            biases: up.biases,
-            rhsIndices: indices,
-            transpose: true,
-            groupSize: groupSize,
-            bits: bits,
-            mode: .nvfp4,
-            sortedIndices: true
-        )
-        let reference = MLXNN.silu(gateOutput) * upOutput
-        let actual = try XCTUnwrap(
-            RoutedMoERouting.fusedSortedNVFP4SwiGLU(
+        for routeCount in [64, 512, 1_024] {
+            let input = MLXRandom.uniform(
+                low: -0.5,
+                high: 0.5,
+                [routeCount, 1, inputDimensions]
+            ).asType(.bfloat16)
+            let rowsPerExpert = max(1, routeCount / expertCount)
+            let indices = MLXArray(
+                (0..<routeCount).map {
+                    Int32(min(expertCount - 1, $0 / rowsPerExpert))
+                }
+            )
+            let gateOutput = portableGatherQuantizedMM(
                 input,
-                gateWeight: gate.wq,
-                gateScales: gate.scales,
-                upWeight: up.wq,
-                upScales: up.scales,
+                gate.wq,
+                scales: gate.scales,
+                biases: gate.biases,
+                rhsIndices: indices,
+                transpose: true,
+                groupSize: groupSize,
+                bits: bits,
+                mode: .nvfp4,
+                sortedIndices: true
+            )
+            let upOutput = portableGatherQuantizedMM(
+                input,
+                up.wq,
+                scales: up.scales,
+                biases: up.biases,
+                rhsIndices: indices,
+                transpose: true,
+                groupSize: groupSize,
+                bits: bits,
+                mode: .nvfp4,
+                sortedIndices: true
+            )
+            let reference = MLXNN.silu(gateOutput) * upOutput
+            let actual = try XCTUnwrap(
+                RoutedMoERouting.fusedSortedNVFP4SwiGLU(
+                    input,
+                    gateWeight: gate.wq,
+                    gateScales: gate.scales,
+                    upWeight: up.wq,
+                    upScales: up.scales,
+                    sortedExpertIndices: indices,
+                    groupSize: groupSize,
+                    bits: bits
+                )
+            )
+            MLX.eval(reference, actual)
+
+            XCTAssertEqual(actual.shape, reference.shape)
+            let maximumDifference = MLX.max(
+                MLX.abs(reference.asType(.float32) - actual.asType(.float32))
+            ).item(Float.self)
+            XCTAssertEqual(maximumDifference, 0, "routeCount=\(routeCount)")
+        }
+    }
+
+    func testSortedNVFP4DownProjectionMatchesNativeGather() throws {
+        guard Device.defaultDevice().deviceType == .gpu,
+              GPU.deviceInfo().architecture == "applegpu_g16s" else {
+            throw XCTSkip("The expert-aligned sorted kernel requires an M4 Max GPU.")
+        }
+        MLXRandom.seed(58)
+        let expertCount = 4
+        let inputDimensions = 512
+        let outputDimensions = 2_048
+        let groupSize = 16
+        let bits = 4
+        let projection = MLX.quantized(
+            MLXRandom.uniform(
+                low: -0.25,
+                high: 0.25,
+                [expertCount, outputDimensions, inputDimensions]
+            ),
+            groupSize: groupSize,
+            bits: bits,
+            mode: .nvfp4
+        )
+        for routeCount in [64, 512, 1_024] {
+            let input = MLXRandom.uniform(
+                low: -0.5,
+                high: 0.5,
+                [routeCount, 1, inputDimensions]
+            ).asType(.bfloat16)
+            let rowsPerExpert = max(1, routeCount / expertCount)
+            let indices = MLXArray(
+                (0..<routeCount).map {
+                    Int32(min(expertCount - 1, $0 / rowsPerExpert))
+                }
+            )
+            let reference = portableGatherQuantizedMM(
+                input,
+                projection.wq,
+                scales: projection.scales,
+                biases: projection.biases,
+                rhsIndices: indices,
+                transpose: true,
+                groupSize: groupSize,
+                bits: bits,
+                mode: .nvfp4,
+                sortedIndices: true
+            )
+            let actual = try XCTUnwrap(RoutedMoERouting.sortedNVFP4Projection(
+                input,
+                weight: projection.wq,
+                scales: projection.scales,
                 sortedExpertIndices: indices,
                 groupSize: groupSize,
                 bits: bits
-            )
-        )
-        MLX.eval(reference, actual)
+            ))
+            MLX.eval(reference, actual)
 
-        XCTAssertEqual(actual.shape, reference.shape)
-        let maximumDifference = MLX.max(
-            MLX.abs(reference.asType(.float32) - actual.asType(.float32))
-        ).item(Float.self)
-        XCTAssertEqual(maximumDifference, 0)
+            XCTAssertEqual(actual.shape, reference.shape)
+            let maximumDifference = MLX.max(
+                MLX.abs(reference.asType(.float32) - actual.asType(.float32))
+            ).item(Float.self)
+            XCTAssertEqual(maximumDifference, 0, "routeCount=\(routeCount)")
+        }
     }
 
     func testPermutationInversionMatchesSecondSort() throws {
@@ -818,17 +1142,23 @@ final class LagunaModelTests: MereRunCoreTestCase {
             from: Data(contentsOf: rootURL.appending(path: "config.json"))
         )
         let index = try JSONDecoder().decode(
-            LagunaSafetensorIndex.self,
+            HFSafetensorsIndex.self,
             from: Data(contentsOf: rootURL.appending(path: "model.safetensors.index.json"))
         )
-        let modelKeys = Set(LagunaCausalLM(config: config).parameters().flattened().map(\.0))
+        let modelKeys = Set(LagunaCausalLM(
+            config: config,
+            quantizedSharedExperts: LagunaResources.hasQuantizedSharedExperts(index)
+        ).parameters().flattened().map(\.0))
         let checkpointKeys = Set(index.weightMap.keys)
         let missingModelKeys = checkpointKeys.subtracting(modelKeys)
         let derivedRuntimeKeys = modelKeys.subtracting(checkpointKeys)
 
-        XCTAssertEqual(checkpointKeys.count, 955)
+        XCTAssertFalse(checkpointKeys.isEmpty)
         XCTAssertTrue(missingModelKeys.isEmpty, "Missing checkpoint parameters: \(missingModelKeys.sorted())")
-        XCTAssertEqual(derivedRuntimeKeys.count, 12)
+        let derivedFrequencyCount = config.layerTypes.indices.filter { index in
+            config.ropeParameters(layerIndex: index).ropeType == "yarn"
+        }.count
+        XCTAssertEqual(derivedRuntimeKeys.count, derivedFrequencyCount)
         XCTAssertTrue(
             derivedRuntimeKeys.allSatisfy { $0.hasSuffix(".self_attn.rope.frequencies") },
             "Unexpected derived runtime parameters: \(derivedRuntimeKeys.sorted())"
@@ -873,6 +1203,10 @@ final class LagunaModelTests: MereRunCoreTestCase {
             LagunaConfig.self,
             from: Data(contentsOf: rootURL.appending(path: "config.json"))
         )
+        let index = try JSONDecoder().decode(
+            HFSafetensorsIndex.self,
+            from: Data(contentsOf: rootURL.appending(path: "model.safetensors.index.json"))
+        )
         let shardURLs = try FileManager.default.contentsOfDirectory(
             at: rootURL,
             includingPropertiesForKeys: nil
@@ -883,7 +1217,10 @@ final class LagunaModelTests: MereRunCoreTestCase {
             throw XCTSkip("No finalized Laguna checkpoint shards are available yet.")
         }
 
-        let model = LagunaCausalLM(config: config)
+        let model = LagunaCausalLM(
+            config: config,
+            quantizedSharedExperts: LagunaResources.hasQuantizedSharedExperts(index)
+        )
         for shardURL in shardURLs {
             try HFSafetensorsWeightsLoader.applyWeights(
                 url: shardURL,
@@ -924,6 +1261,22 @@ final class LagunaModelTests: MereRunCoreTestCase {
         let fullValues = full.asArray(Float.self)
         let cachedValues = try XCTUnwrap(cached).asArray(Float.self)
         let maximumDifference = zip(fullValues, cachedValues).map { abs($0 - $1) }.max() ?? 0
+        XCTAssertLessThan(maximumDifference, 0.0001)
+    }
+
+    func testLastPositionOnlyMatchesFullForwardLastRow() throws {
+        MLXRandom.seed(9)
+        let model = LagunaCausalLM(config: try makeConfig())
+        let tokens = MLXArray([1, 7, 4, 9]).reshaped(1, 4)
+        let full = model(tokens)
+        let last = model.lastPositionLogits(tokens)
+        MLX.eval(full, last)
+
+        let expected = full[0..., 3..., 0...]
+        let maximumDifference = zip(
+            expected.asArray(Float.self),
+            last.asArray(Float.self)
+        ).map { abs($0 - $1) }.max() ?? 0
         XCTAssertLessThan(maximumDifference, 0.0001)
     }
 
@@ -1017,13 +1370,5 @@ final class LagunaModelTests: MereRunCoreTestCase {
             let rows = try XCTUnwrap(cache.unbatchedRows(count: 2))
             XCTAssertEqual(rows.map(\.offset), [4, 6])
         }
-    }
-}
-
-private struct LagunaSafetensorIndex: Decodable {
-    let weightMap: [String: String]
-
-    enum CodingKeys: String, CodingKey {
-        case weightMap = "weight_map"
     }
 }

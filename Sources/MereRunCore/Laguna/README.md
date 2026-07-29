@@ -2,7 +2,11 @@
 
 Native Swift/MLX support for Poolside's official
 `Laguna-S-2.1-NVFP4-mlx` checkpoint and DFlash companion. The validated pair
-is available as the opt-in managed model `text-chat-laguna-s-2-1`.
+is available as the opt-in managed model `text-chat-laguna-s-2-1`. The same
+typed runtime also accepts the official five-shard `Laguna-XS-2.1-NVFP4-mlx`
+checkpoint through an explicit local path; shard discovery comes from the
+safetensors index, and shared-expert quantization is derived from that index
+rather than assumed from the S layout.
 
 ## Files
 
@@ -80,11 +84,25 @@ On macOS 26 and the measured M4 Max GPU, BF16 sorted NVFP4 forwards of at
 least 64 tokens fuse the gate and up projections with SwiGLU. An
 expert-aligned 16-row schedule avoids recomputing tiles that cross expert
 boundaries, while separate gate/up threadgroup tiles reduce synchronization.
-The native sorted down projection, route weighting, and top-k reduction remain
-unchanged. Set `MERERUN_LAGUNA_FUSED_SORTED_NVFP4_MOE=0` to restore the
-portable sorted gate/up path. Set `MERERUN_LAGUNA_FAST_SORTED_INVERSE=0` to
-restore the second route sort instead of the linear permutation inversion.
-Unsupported hardware, dtypes, quantization, or shapes fall back automatically.
+The down projection uses the same expert-aligned schedule; route weighting and
+top-k reduction retain their native MLX order. The guarded kernels support the
+measured M4 Max (`applegpu_g16s`) and M5 Max (`applegpu_g17s`) architectures.
+Set `MERERUN_LAGUNA_FUSED_SORTED_NVFP4_MOE=0` to restore the portable sorted
+gate/up path, `MERERUN_LAGUNA_FUSED_SORTED_NVFP4_DOWN=0` to restore the native
+sorted down projection, or `MERERUN_LAGUNA_FAST_SORTED_INVERSE=0` to restore
+the second route sort instead of the linear permutation inversion. Unsupported
+hardware, dtypes, quantization, or shapes fall back automatically.
+
+Prompt prefill also reuses one full-attention mask and one sliding-window mask
+across the 40 layers and evaluates the graph in an eight-layer asynchronous
+ladder. `MERERUN_LAGUNA_SHARED_ATTENTION_MASKS=0` restores per-layer masks;
+set `MERERUN_LAGUNA_PREFILL_ASYNC_LADDER=0` to disable the ladder or choose a
+stride from 1 through 40. Exact fused residual/RMSNorm and QK-norm/RoPE kernels
+are enabled by default on M5 Max and remain opt-in elsewhere. Their independent
+controls are `MERERUN_LAGUNA_PREFILL_FUSED_RESIDUAL_RMSNORM` and
+`MERERUN_LAGUNA_PREFILL_QK_NORM_ROPE`. The final prompt row is sliced before
+the output norm and language-model head; decode math and cache layout are
+unchanged.
 
 Single-token target decode fuses the NVFP4 gate and up gather-GEMVs with
 SwiGLU, then keeps the native down projection. The fused path is enabled by

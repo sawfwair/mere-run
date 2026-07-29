@@ -18,22 +18,35 @@ projection remains the native MLX gather operation.
 Laguna's separate prefill specialization first creates expert-aligned 16-row
 tiles, then runs both sorted NVFP4 projections and SwiGLU in one matrix kernel.
 Separate gate/up threadgroup tiles halve the projection synchronization
-barriers. The native sorted down projection, route weighting, and top-k
-reduction retain their original arithmetic and dispatches.
+barriers. The sorted down projection reuses that expert-aligned schedule;
+route weighting and top-k reduction retain their original arithmetic and
+dispatches.
 
 The decode path is enabled by default only when running on an Apple GPU with
 BF16/FP16 activations, input width divisible by 512, output width divisible by
 8, matching gate/up shapes, and the exact quantization contract above. The
-prefill path is narrower: macOS 26, M4 Max `applegpu_g16s`, BF16, group-16
-NVFP4, aligned projection dimensions, and at least 64 sequence tokens. A
-failed guard returns to the portable path. The explicit rollback controls are:
+prefill path is narrower: macOS 26, M4 Max `applegpu_g16s` or M5 Max
+`applegpu_g17s`, BF16, group-16 NVFP4, aligned projection dimensions, and at
+least 64 sequence tokens. A failed guard returns to the portable path. The
+explicit rollback controls are:
 
 ```bash
 MERERUN_LAGUNA_FUSED_NVFP4_MOE=0
 MERERUN_LAGUNA_FUSED_SORTED_NVFP4_MOE=0
+MERERUN_LAGUNA_FUSED_SORTED_NVFP4_DOWN=0
 MERERUN_LAGUNA_FAST_SORTED_INVERSE=0
+MERERUN_LAGUNA_SHARED_ATTENTION_MASKS=0
+MERERUN_LAGUNA_PREFILL_ASYNC_LADDER=0
+MERERUN_LAGUNA_PREFILL_FUSED_RESIDUAL_RMSNORM=0
+MERERUN_LAGUNA_PREFILL_QK_NORM_ROPE=0
 MERERUN_LFM2_FUSED_AFFINE8_MOE=0
 ```
+
+The shared-mask graph and eight-layer evaluation ladder are architecture-
+independent defaults. The exact residual/RMSNorm and QK-norm/RoPE fusions are
+M5 Max defaults and remain explicit opt-ins on M4 Max. Final-position slicing
+before the output norm and language-model head avoids projecting prompt rows
+that generation never consumes.
 
 On an AC-powered M4 Max with 128 GB unified memory and no thermal warning, the
 official Laguna target's resident eight-token decode median moved from about
@@ -50,6 +63,14 @@ runs, versus about 430 tok/s before this kernel. Target and DFlash rows retained
 the exact `842e1f47e005b09c` fingerprint. Background display/GPU contention
 produced slower outliers, so these are controlled-run medians rather than a
 claim of continuous physical saturation.
+
+On the Laguna XS checkpoint, shared masks plus the evaluation ladder improved
+clean local prompt prefills by about 7-9%. Enabling the expert-aligned down
+projection on top produced 2.8-5.4% on two resolved prompts; a tiny third case
+was below timing resolution and varied by -1.8%. Decode time was flat and all
+three generated outputs were byte-identical. These M4 Max measurements are
+directional for the M5 defaults and do not substitute for a paired target-
+hardware run.
 
 The generic-tail NVFP4/GELU experiment on Gemma Turbo, custom counting sort,
 fused down projection plus weighted reduction, schedule packing, alternate
