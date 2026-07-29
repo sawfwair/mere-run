@@ -1,6 +1,7 @@
 import ArgumentParser
 import Crypto
 import Foundation
+import MereRunCore
 
 #if canImport(CoreGraphics)
 import CoreGraphics
@@ -23,11 +24,15 @@ struct Gate: AsyncParsableCommand {
         discussion: """
         Each check shells out to this executable's real subcommands (text
         chat, speech synthesize/transcribe, vision ocr, image generate, text
-        embed) at temperature 0, hashes the output, and runs twice to prove
-        determinism. Correctness failures (hash mismatch vs baseline,
-        nondeterminism, roundtrip failures) exit nonzero; performance
-        regressions warn unless --strict-perf is set. Checks whose models are
-        not installed are skipped and reported.
+        embed, and video generate). Deterministic checks run twice and compare
+        hashes. Video release smokes run one minimum valid native generation,
+        then decode the MP4 and promised audio. Correctness failures exit
+        nonzero; performance regressions warn unless --strict-perf is set.
+        Checks whose models are not installed are skipped unless --require-all
+        is set. `--all-installed` replaces the fixed regression set with one
+        true inference check for every model reported as installed by
+        `mere.run model list`. An installed catalog entry without an explicit
+        direct or companion-consumption recipe fails closed.
 
         First run on a machine: `mere.run gate --update-baselines` records
         the baseline hashes and timings. Re-run after intentional
@@ -35,8 +40,35 @@ struct Gate: AsyncParsableCommand {
         """
     )
 
-    @Option(name: [.customLong("suite")], help: "Comma-separated suites: text, speech, vision, image, embed (default: all).")
+    @Option(
+        name: [.customLong("suite")],
+        help: """
+        Comma-separated fixed suites: text, speech, vision, image, embed, video.
+        With --all-installed, use managed model category names (default: all).
+        """
+    )
     var suite: String = "all"
+
+    @Flag(
+        name: [.customLong("require-all")],
+        help: "Fail when a selected check's model is not installed instead of reporting a skip."
+    )
+    var requireAll: Bool = false
+
+    @Flag(
+        name: [.customLong("all-installed")],
+        help: "Run a fail-closed true-inference smoke for every installed managed model."
+    )
+    var allInstalled: Bool = false
+
+    @Option(
+        name: [.customLong("skip-model")],
+        help: """
+        Comma-separated installed model IDs to record as explicit quarantined skips.
+        Valid only with --all-installed; unknown or non-installed IDs fail closed.
+        """
+    )
+    var skipModel: String = ""
 
     @Flag(name: [.customLong("update-baselines")], help: "Record current outputs and timings as the new baselines.")
     var updateBaselines: Bool = false
@@ -51,10 +83,55 @@ struct Gate: AsyncParsableCommand {
     var listOnly: Bool = false
 
     func run() async throws {
-        let checks = GateChecks.all
+        let skippedModelIDs = Set(
+            skipModel.split(separator: ",")
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+        )
+        if !skippedModelIDs.isEmpty && !allInstalled {
+            throw ValidationError("--skip-model is valid only with --all-installed.")
+        }
+
+        let checks: [GateCheck]
+        if allInstalled {
+            let installedIDs = Set(
+                ModelInventory.rows()
+                    .filter(\.isInstalled)
+                    .map(\.id)
+            )
+            guard !installedIDs.isEmpty else {
+                throw ValidationError("--all-installed found no installed managed models.")
+            }
+            let invalidSkips = skippedModelIDs.subtracting(installedIDs)
+            guard invalidSkips.isEmpty else {
+                throw ValidationError(
+                    "--skip-model IDs are not installed managed models: "
+                        + invalidSkips.sorted().joined(separator: ", ")
+                )
+            }
+            let installedSpecs = ManagedModelCatalog.allSpecs.filter { installedIDs.contains($0.id) }
+            let unmapped = installedSpecs.filter {
+                InstalledModelSmokePlans.plan(for: $0, installedIDs: installedIDs) == nil
+            }
+            guard unmapped.isEmpty else {
+                throw ValidationError(
+                    "Installed models have no release smoke recipe: "
+                        + unmapped.map(\.id).sorted().joined(separator: ", ")
+                )
+            }
+            checks = installedSpecs.compactMap {
+                InstalledModelSmokePlans.plan(for: $0, installedIDs: installedIDs)?.check
+            }
+        } else {
+            checks = GateChecks.all
+        }
         if listOnly {
             for check in checks {
-                print("\(check.id)  [\(check.suite)]  requires: \(check.requiredModels.joined(separator: ", "))")
+                print(
+                    "\(check.id)  [\(check.suite)]  requires: "
+                        + check.requiredModels.joined(separator: ", ")
+                        + "  \(check.successDetail)"
+                )
             }
             return
         }
@@ -77,10 +154,23 @@ struct Gate: AsyncParsableCommand {
         var results: [GateResult] = []
 
         for check in checks where selectedSuites.contains(check.suite) {
+            if allInstalled,
+               check.id.hasPrefix("installed-"),
+               skippedModelIDs.contains(String(check.id.dropFirst("installed-".count))) {
+                results.append(GateResult(
+                    id: check.id,
+                    status: .skipped,
+                    detail: "explicit release quarantine via --skip-model",
+                    observation: nil
+                ))
+                continue
+            }
             guard check.requiredModels.allSatisfy(GateRunner.modelInstalled) else {
                 results.append(GateResult(
-                    id: check.id, status: .skipped,
-                    detail: "missing model: \(check.requiredModels.joined(separator: ", "))",
+                    id: check.id,
+                    status: requireAll ? .failed : .skipped,
+                    detail: "\(requireAll ? "required model missing" : "missing model"): "
+                        + check.requiredModels.joined(separator: ", "),
                     observation: nil
                 ))
                 continue
@@ -95,7 +185,8 @@ struct Gate: AsyncParsableCommand {
                     strictPerf: strictPerf
                 )
                 results.append(result)
-                if updateBaselines || (baselines.entries[check.id] == nil && result.status != .failed) {
+                if check.comparesBaseline,
+                   updateBaselines || (baselines.entries[check.id] == nil && result.status != .failed) {
                     baselines.entries[check.id] = GateBaseline(
                         hash: observation.hash,
                         wallSeconds: observation.wallSeconds,
@@ -147,6 +238,14 @@ struct Gate: AsyncParsableCommand {
         }
         if let semantic = observation.semanticFailure {
             return GateResult(id: check.id, status: .failed, detail: semantic, observation: observation)
+        }
+        guard check.comparesBaseline else {
+            return GateResult(
+                id: check.id,
+                status: .passed,
+                detail: check.successDetail,
+                observation: observation
+            )
         }
         guard let baseline else {
             return GateResult(

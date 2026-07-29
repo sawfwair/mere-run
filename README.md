@@ -193,15 +193,8 @@ export MERERUN_FFPROBE=/usr/bin/ffprobe
 swift run mere.run --help
 ```
 
-To build Linux release packages from a Linux x86_64 Swift toolchain host:
-
-```bash
-scripts/package-linux.sh --version 0.23.0
-ls dist/linux/
-```
-
-To build the x86_64 CUDA release package on a CUDA development host or CPU-only
-builder with CUDA development packages:
+To build the x86_64 CUDA release package on a CUDA development host or a
+GPU-less builder with CUDA development packages:
 
 ```bash
 MERERUN_LINUX_ACCEL=cuda MERERUN_SKIP_MLX_CUDA_EXAMPLE=1 \
@@ -217,7 +210,8 @@ MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.23.0
 
 Do not use the app bundle commands on Linux. `mere.run.app`, SwiftUI studio
 flows, and DMG packaging stay macOS-only. Linux release packaging is for the
-headless CLI tarball and `.deb` only.
+headless CUDA CLI tarball and `.deb` only; no CPU-only Linux artifact is
+published.
 
 ## Quick start
 

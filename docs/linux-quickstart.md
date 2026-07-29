@@ -3,9 +3,9 @@
 Installing or building the headless `mere.run` CLI on Linux.
 
 Be clear about what you are getting. The Linux path is real but deliberately
-narrow: CLI only, Ubuntu-style hosts, x86_64 CPU and CUDA package manifests,
-and CUDA-gated arm64 work. There is no studio app here, and macOS remains the
-primary development and runtime-validation environment for this repo.
+narrow: CLI only, Ubuntu-style hosts, and CUDA on x86_64 or arm64. There is no
+CPU-only Linux release and no studio app here; macOS remains the primary
+development and runtime-validation environment for this repo.
 
 Nothing is treated as supported until it has been built and smoke-tested on the
 host class it targets — CUDA artifacts on real CUDA hardware, never a
@@ -19,8 +19,8 @@ cross-build taken on faith.
 - CUDA package validation must include a real CUDA GPU host.
 - Linux packages do not include `MereRun.app`, the SwiftUI studio, the macOS
   installer UI, or the DMG layout.
-- Linux arm64 package builds must use `MERERUN_LINUX_ACCEL=cuda`; CPU arm64
-  packages are only local smoke-test artifacts.
+- Published Linux package builds must use `MERERUN_LINUX_ACCEL=cuda` on both
+  x86_64 and arm64. CPU builds are test fixtures, not release artifacts.
 - NVIDIA GB10/DGX Spark is a valid arm64 CUDA target when the package is built
   and smoke-tested on matching hardware.
 - Current CUDA validation should be treated as limited to the exact hosts that
@@ -34,11 +34,12 @@ Use this path on Debian or Ubuntu-style systems after building a matching
 ```bash
 version=0.23.0
 case "$(uname -m)" in
-  x86_64|amd64) deb_arch=amd64 ;;
-  *) echo "use the arm64 CUDA package path for Linux arm64" >&2; exit 1 ;;
+  x86_64|amd64) package="./dist/linux/mere-run-cuda_${version}_amd64.deb" ;;
+  aarch64|arm64) package="./dist/linux/mere-run_${version}_arm64.deb" ;;
+  *) echo "unsupported Linux CUDA architecture" >&2; exit 1 ;;
 esac
 
-sudo apt install "./dist/linux/mere-run_${version}_${deb_arch}.deb"
+sudo apt install "$package"
 mere.run --version
 mere.run status
 ```
@@ -54,12 +55,13 @@ attached to a release:
 ```bash
 version=0.23.0
 case "$(uname -m)" in
-  x86_64|amd64) linux_arch=x86_64 ;;
-  *) echo "use the arm64 CUDA package path for Linux arm64" >&2; exit 1 ;;
+  x86_64|amd64) archive="mere-run-${version}-linux-x86_64-cuda.tar.gz" ;;
+  aarch64|arm64) archive="mere-run-${version}-linux-arm64.tar.gz" ;;
+  *) echo "unsupported Linux CUDA architecture" >&2; exit 1 ;;
 esac
 
-tar -xzf "./dist/linux/mere-run-${version}-linux-${linux_arch}.tar.gz"
-cd "mere-run-${version}-linux-${linux_arch}"
+tar -xzf "./dist/linux/$archive"
+cd "${archive%.tar.gz}"
 ./install.sh
 mere.run --version
 mere.run status
@@ -90,6 +92,7 @@ mere.run status
 
 The CUDA tarball is the right build pack for companion remote-runner plugins.
 It is not a source/bootstrap archive and should not compile on paid GPU time.
+No CPU-only tarball is published.
 
 ## First commands
 

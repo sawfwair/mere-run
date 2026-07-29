@@ -1,5 +1,7 @@
 import Crypto
 import Foundation
+import MediaIO
+import MereRunCore
 
 #if canImport(Darwin)
 import Darwin
@@ -89,7 +91,25 @@ struct GateCheck: Sendable {
     let id: String
     let suite: String
     let requiredModels: [String]
+    let comparesBaseline: Bool
+    let successDetail: String
     let run: @Sendable (GateRunner) async throws -> GateObservation
+
+    init(
+        id: String,
+        suite: String,
+        requiredModels: [String],
+        comparesBaseline: Bool = true,
+        successDetail: String = "true generation completed and decoded",
+        run: @escaping @Sendable (GateRunner) async throws -> GateObservation
+    ) {
+        self.id = id
+        self.suite = suite
+        self.requiredModels = requiredModels
+        self.comparesBaseline = comparesBaseline
+        self.successDetail = successDetail
+        self.run = run
+    }
 }
 
 enum GateChecks {
@@ -101,7 +121,8 @@ enum GateChecks {
         count: 90
     )
 
-    static let all: [GateCheck] = textChecks + speechChecks + visionChecks + imageChecks + embedChecks
+    static let all: [GateCheck] =
+        textChecks + speechChecks + visionChecks + imageChecks + embedChecks + videoChecks
 
     private static let textModels: [(label: String, id: String)] = [
         ("gemma", "text-chat-gemma4-12b-4bit"),
@@ -256,6 +277,62 @@ enum GateChecks {
             }
         ]
     }
+
+    private static var videoChecks: [GateCheck] {
+        [
+            GateCheck(
+                id: "video-ltx23-draft",
+                suite: "video",
+                requiredModels: ["video-ltx23-av-mlx"],
+                comparesBaseline: false
+            ) { runner in
+                try await runner.videoCheck(
+                    id: "ltx23-draft",
+                    model: "video-ltx23-av-mlx",
+                    arguments: [
+                        "--quality", "draft",
+                        "--output-mode", "video-only",
+                    ],
+                    requireAudio: false
+                )
+            },
+            GateCheck(
+                id: "video-ltx23-full-av",
+                suite: "video",
+                requiredModels: ["video-ltx23-full-mlx"],
+                comparesBaseline: false
+            ) { runner in
+                try await runner.videoCheck(
+                    id: "ltx23-full-av",
+                    model: "video-ltx23-full-mlx",
+                    arguments: [
+                        "--quality", "final",
+                        "--output-mode", "audio-video",
+                        "--a2v-steps", "4",
+                    ],
+                    requireAudio: true
+                )
+            },
+            GateCheck(
+                id: "video-ltx23-a2vid",
+                suite: "video",
+                requiredModels: ["video-ltx23-a2vid-mlx"],
+                comparesBaseline: false
+            ) { runner in
+                let audioURL = runner.workDirectory.appendingPathComponent("gate-a2vid-source.wav")
+                try GateRunner.writeSineWaveFixture(to: audioURL)
+                return try await runner.videoCheck(
+                    id: "ltx23-a2vid",
+                    model: "video-ltx23-a2vid-mlx",
+                    arguments: [
+                        "--audio", audioURL.path,
+                        "--a2v-steps", "1",
+                    ],
+                    requireAudio: true
+                )
+            },
+        ]
+    }
 }
 
 // MARK: - Runner
@@ -264,6 +341,7 @@ enum GateError: Error, LocalizedError {
     case commandFailed(String, exitCode: Int32, stderr: String)
     case timedOut(String)
     case unsupportedPlatform(String)
+    case invalidArtifact(String)
 
     var errorDescription: String? {
         switch self {
@@ -273,6 +351,8 @@ enum GateError: Error, LocalizedError {
             return "`\(command)` timed out"
         case .unsupportedPlatform(let reason):
             return reason
+        case .invalidArtifact(let reason):
+            return reason
         }
     }
 }
@@ -280,6 +360,11 @@ enum GateError: Error, LocalizedError {
 private final class GateProcessBox: @unchecked Sendable {
     let process: Process
     init(_ process: Process) { self.process = process }
+}
+
+private final class GateFileHandleBox: @unchecked Sendable {
+    let fileHandle: FileHandle
+    init(_ fileHandle: FileHandle) { self.fileHandle = fileHandle }
 }
 
 struct GateRunner: Sendable {
@@ -301,25 +386,41 @@ struct GateRunner: Sendable {
         let stderr = Pipe()
         process.standardOutput = stdout
         process.standardError = stderr
+        let terminationEvents = AsyncStream<Void> { continuation in
+            process.terminationHandler = { _ in
+                continuation.yield()
+                continuation.finish()
+            }
+        }
 
         let start = Date()
         try process.run()
+        try? stdout.fileHandleForWriting.close()
+        try? stderr.fileHandleForWriting.close()
 
         let box = GateProcessBox(process)
+        let stdoutBox = GateFileHandleBox(stdout.fileHandleForReading)
+        let stderrBox = GateFileHandleBox(stderr.fileHandleForReading)
+        let stdoutTask = Task.detached {
+            stdoutBox.fileHandle.readDataToEndOfFile()
+        }
+        let stderrTask = Task.detached {
+            stderrBox.fileHandle.readDataToEndOfFile()
+        }
         let watchdog = Task.detached {
             try? await Task.sleep(nanoseconds: UInt64(timeout * 1_000_000_000))
             if box.process.isRunning {
                 box.process.terminate()
             }
         }
-        await withCheckedContinuation { (continuation: CheckedContinuation<Void, Never>) in
-            process.terminationHandler = { _ in continuation.resume() }
+        for await _ in terminationEvents {
+            break
         }
         watchdog.cancel()
         let wall = Date().timeIntervalSince(start)
         let timedOut = wall >= timeout
-        let outData = stdout.fileHandleForReading.readDataToEndOfFile()
-        let errData = stderr.fileHandleForReading.readDataToEndOfFile()
+        let outData = await stdoutTask.value
+        let errData = await stderrTask.value
         let outText = String(decoding: outData, as: UTF8.self)
         let errText = String(decoding: errData, as: UTF8.self)
 
@@ -365,11 +466,112 @@ struct GateRunner: Sendable {
         )
     }
 
+    func videoCheck(
+        id: String,
+        model: String,
+        arguments: [String],
+        requireAudio: Bool
+    ) async throws -> GateObservation {
+        let outputURL = workDirectory.appendingPathComponent("gate-\(id).mp4")
+        let run = try await exec(
+            [
+                "video", "generate", "A red cube rotates slowly on a neutral background.",
+                "--model", model,
+                "--width", "512",
+                "--height", "320",
+                "--num-frames", "9",
+                "--fps", "24",
+                "--seed", "7",
+                "--output", outputURL.path,
+                "--quiet",
+            ] + arguments,
+            timeout: 1_800
+        )
+        let bytes = try Data(contentsOf: outputURL)
+        let semanticFailure = try validateVideoArtifact(outputURL, requireAudio: requireAudio)
+        return GateObservation(
+            hash: Self.sha256(bytes),
+            secondRunHash: nil,
+            wallSeconds: run.wallSeconds,
+            decodeTps: nil,
+            semanticFailure: semanticFailure
+        )
+    }
+
+    func validateVideoArtifact(_ url: URL, requireAudio: Bool) throws -> String? {
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        let byteCount = (attributes[.size] as? NSNumber)?.intValue ?? 0
+        guard byteCount > 1_024 else {
+            return "MP4 suspiciously small (\(byteCount) bytes)"
+        }
+
+        let framesURL = workDirectory.appendingPathComponent(
+            "decoded-\(url.deletingPathExtension().lastPathComponent)",
+            isDirectory: true
+        )
+        let sequence = try MediaVideoIO.extractFrames(from: url, into: framesURL, endFrame: 1)
+        guard !sequence.frameURLs.isEmpty,
+              sequence.frameWidth > 0,
+              sequence.frameHeight > 0 else {
+            return "MP4 did not decode a video frame"
+        }
+        guard requireAudio else { return nil }
+        guard MediaVideoIO.hasAudioTrack(url) else {
+            return "MP4 has no audio track"
+        }
+
+        let audio = try MediaAudioIO.decodeSegment(
+            url,
+            startTime: 0,
+            duration: 0.25,
+            targetSampleRate: 16_000,
+            channels: 2
+        )
+        guard !audio.samples.isEmpty else {
+            return "MP4 audio track decoded no samples"
+        }
+        let meanSquare = audio.samples.reduce(0.0) { partial, sample in
+            partial + Double(sample) * Double(sample)
+        } / Double(audio.samples.count)
+        return meanSquare.squareRoot() > 0.000_01 ? nil : "MP4 audio track is silent"
+    }
+
+    static func writeSineWaveFixture(to url: URL) throws {
+        let sampleRate = 24_000
+        let channels = 2
+        let frameCount = sampleRate
+        let samples = (0..<frameCount).flatMap { frame -> [Float] in
+            let value = Float(sin(2 * Double.pi * 440 * Double(frame) / Double(sampleRate)) * 0.2)
+            return [value, value]
+        }
+        try MediaAudioIO.writeFloatWAV(
+            samples: samples,
+            sampleRate: sampleRate,
+            channels: channels,
+            to: url
+        )
+    }
+
     static func modelInstalled(_ id: String) -> Bool {
         let root = ProcessInfo.processInfo.environment["MERERUN_MODELS_DIR"]
             .map { URL(fileURLWithPath: $0) }
             ?? GateBaselineStore.applicationSupport.appendingPathComponent("models", isDirectory: true)
-        return FileManager.default.fileExists(atPath: root.appendingPathComponent(id).path)
+        return modelInstalled(id, root: root)
+    }
+
+    static func modelInstalled(_ id: String, root: URL) -> Bool {
+        let directURL = root.appendingPathComponent(id, isDirectory: true)
+        if FileManager.default.fileExists(atPath: directURL.path) {
+            return true
+        }
+        guard let spec = ManagedModelCatalog.spec(for: id) else {
+            return false
+        }
+        return spec.resolutionFallbackIDs.contains { fallbackID in
+            FileManager.default.fileExists(
+                atPath: root.appendingPathComponent(fallbackID, isDirectory: true).path
+            )
+        }
     }
 
     static func hardwareModel() -> String {
