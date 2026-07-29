@@ -18,6 +18,11 @@ One public CLI covers image, text, speech, vision, music, sound, video, 3D,
 worlds, training, and local API serving. The optional macOS Studio uses that
 same CLI, model store, and run history rather than a separate backend.
 
+<p align="center">
+  <img src="docs/media/demo-inline.gif" alt="One terminal session: local chat, image generation, grounding, image-to-3D, SFX, music, TTS and ASR, video, an OpenAI-compatible API, and a workflow graph — rendered inline, all on one machine." />
+</p>
+<p align="center"><sub>One real terminal session on an M4 Max — chat, image, grounding, image→3D, SFX, music, speech round-trip, video, API serving, and a typed workflow graph. Everything local.</sub></p>
+
 ## Start here
 
 Install a signed release from [mere.run/downloads](https://mere.run/releases),
