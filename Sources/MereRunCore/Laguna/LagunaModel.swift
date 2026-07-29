@@ -5,6 +5,15 @@ import MLXNN
 import MLXRandom
 
 enum LagunaMoEAccelerationPolicy {
+    private static let m5MaxDefaultsEnabled: Bool = {
+        #if os(macOS)
+        Device.defaultDevice().deviceType == .gpu
+            && GPU.deviceInfo().architecture == "applegpu_g17s"
+        #else
+        false
+        #endif
+    }()
+
     private static let defaultDecodeNVFP4RowsPerSIMDGroup: Int = {
         #if os(macOS)
         defaultDecodeRowsPerSIMDGroup(
@@ -40,6 +49,10 @@ enum LagunaMoEAccelerationPolicy {
     static let fusedSortedNVFP4DownEnabled = booleanEnvironment(
         "MERERUN_LAGUNA_FUSED_SORTED_NVFP4_DOWN",
         default: true
+    )
+    static let fusedRoutedSharedDownResidualEnabled = booleanEnvironment(
+        "MERERUN_LAGUNA_FUSED_ROUTED_SHARED_DOWN_RESIDUAL",
+        default: m5MaxDefaultsEnabled
     )
     static let decodeNVFP4RowsPerSIMDGroup = decodeRowsPerSIMDGroup(
         ProcessInfo.processInfo.environment[
@@ -125,6 +138,16 @@ enum LagunaGraphAccelerationPolicy {
         ProcessInfo.processInfo.environment["MERERUN_LAGUNA_PREFILL_QK_NORM_ROPE"],
         default: m5MaxDefaultsEnabled
     )
+    static let nativeAffineQKVEnabled = parseBoolean(
+        ProcessInfo.processInfo.environment["MERERUN_LAGUNA_NATIVE_AFFINE_QKV"],
+        default: m5MaxDefaultsEnabled
+    )
+    static let nativeAffineQKVLayerCount = nativeAffineQKVEnabled
+        ? parseLayerCount(
+            ProcessInfo.processInfo.environment["MERERUN_LAGUNA_NATIVE_AFFINE_QKV_LAYERS"],
+            default: 28
+        )
+        : 0
 
     static func parseBoolean(_ raw: String?, default defaultValue: Bool) -> Bool {
         LagunaMoEAccelerationPolicy.parseBoolean(raw, default: defaultValue)
@@ -141,6 +164,48 @@ enum LagunaGraphAccelerationPolicy {
         }
         return value
     }
+
+    static func parseLayerCount(_ raw: String?, default defaultValue: Int) -> Int {
+        guard let raw,
+              let value = Int(raw.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+            return defaultValue
+        }
+        return min(max(value, 0), 40)
+    }
+
+    static func usesNativeAffineQKV(layerIndex: Int) -> Bool {
+        layerIndex >= 0 && layerIndex < nativeAffineQKVLayerCount
+    }
+}
+
+struct LagunaNativeAffineWeight {
+    let packedCodes: MLXArray
+    let scales: MLXArray
+    let biases: MLXArray
+    let originalShape: [Int]
+
+    var arrays: [MLXArray] { [packedCodes, scales, biases] }
+}
+
+func lagunaNativeAffineWeight(_ weight: MLXArray) -> LagunaNativeAffineWeight? {
+    guard weight.dtype == .bfloat16,
+          weight.ndim == 2,
+          weight.dim(1).isMultiple(of: 32) else {
+        return nil
+    }
+    let quantizedWeight = MLX.quantized(
+        weight,
+        groupSize: 32,
+        bits: 8,
+        mode: .affine
+    )
+    guard let biases = quantizedWeight.biases else { return nil }
+    return LagunaNativeAffineWeight(
+        packedCodes: quantizedWeight.wq,
+        scales: quantizedWeight.scales,
+        biases: biases,
+        originalShape: weight.shape
+    )
 }
 
 enum LagunaFusedPrefill {
@@ -745,6 +810,52 @@ final class LagunaDenseMLP: LagunaFeedForward {
     override func callAsFunction(_ x: MLXArray) -> MLXArray {
         downProj(MLXNN.silu(gateProj(x)) * upProj(x))
     }
+
+    func lagunaXSDecodeDownInputs(
+        _ x: MLXArray
+    ) -> (activated: MLXArray, weight: MLXArray, scales: MLXArray)? {
+        guard x.dtype == .bfloat16,
+              x.shape == [1, 1, 2_048],
+              (type(of: gateProj) == QuantizedLinear.self
+                || type(of: gateProj) == PortableQuantizedLinear.self),
+              (type(of: upProj) == QuantizedLinear.self
+                || type(of: upProj) == PortableQuantizedLinear.self),
+              (type(of: downProj) == QuantizedLinear.self
+                || type(of: downProj) == PortableQuantizedLinear.self),
+              let gate = gateProj as? QuantizedLinear,
+              let up = upProj as? QuantizedLinear,
+              let down = downProj as? QuantizedLinear,
+              gate.mode == .nvfp4,
+              up.mode == .nvfp4,
+              down.mode == .nvfp4,
+              gate.groupSize == 16,
+              up.groupSize == 16,
+              down.groupSize == 16,
+              gate.bits == 4,
+              up.bits == 4,
+              down.bits == 4,
+              gate.bias == nil,
+              up.bias == nil,
+              down.bias == nil,
+              gate.biases == nil,
+              up.biases == nil,
+              down.biases == nil,
+              gate.weight.shape == [512, 256],
+              up.weight.shape == [512, 256],
+              down.weight.shape == [2_048, 64],
+              gate.scales.shape == [512, 128],
+              up.scales.shape == [512, 128],
+              down.scales.shape == [2_048, 32],
+              down.weight.dtype == .uint32,
+              down.scales.dtype == .uint8 else {
+            return nil
+        }
+        return (
+            MLXNN.silu(gate(x)) * up(x),
+            down.weight,
+            down.scales
+        )
+    }
 }
 
 final class LagunaSwitchLinear: Module {
@@ -994,7 +1105,28 @@ final class LagunaSwitchGLU: Module {
         let batch = x.dim(0)
         let sequenceLength = x.dim(1)
         let topK = indices.dim(2)
-        if LagunaMoEAccelerationPolicy.fusedNVFP4MoEEnabled,
+        if let fused = lagunaXSDecodeActivation(x, indices: indices) {
+            return downProj(
+                fused.reshaped([
+                    batch,
+                    sequenceLength,
+                    topK,
+                    fused.dim(-1),
+                ]),
+                indices: indices
+            )
+        }
+        let gate = gateProj(x, indices: indices)
+        let up = upProj(x, indices: indices)
+        return downProj(MLXNN.silu(gate) * up, indices: indices)
+    }
+
+    func lagunaXSDecodeActivation(
+        _ x: MLXArray,
+        indices: MLXArray
+    ) -> MLXArray? {
+        let topK = indices.dim(2)
+        guard LagunaMoEAccelerationPolicy.fusedNVFP4MoEEnabled,
            gateProj.mode == .nvfp4,
            upProj.mode == .nvfp4,
            gateProj.groupSize == upProj.groupSize,
@@ -1014,20 +1146,25 @@ final class LagunaSwitchGLU: Module {
                groupSize: gateProj.groupSize,
                bits: gateProj.bits,
                rowsPerSIMDGroup: decodeNVFP4RowsPerSIMDGroup
-           ) {
-            return downProj(
-                fused.reshaped([
-                    batch,
-                    sequenceLength,
-                    topK,
-                    fused.dim(-1),
-                ]),
-                indices: indices
-            )
+           ) else {
+            return nil
         }
-        let gate = gateProj(x, indices: indices)
-        let up = upProj(x, indices: indices)
-        return downProj(MLXNN.silu(gate) * up, indices: indices)
+        return fused
+    }
+
+    func lagunaXSDecodeDownInputs() -> (weight: MLXArray, scales: MLXArray)? {
+        guard downProj.mode == .nvfp4,
+              downProj.groupSize == 16,
+              downProj.bits == 4,
+              downProj.biases == nil,
+              let scales = downProj.scales,
+              downProj.weight.dtype == .uint32,
+              downProj.weight.shape == [256, 2_048, 64],
+              scales.dtype == .uint8,
+              scales.shape == [256, 2_048, 32] else {
+            return nil
+        }
+        return (downProj.weight, scales)
     }
 
     func prepareSortedDownWarmUp() -> MLXArray? {
@@ -1108,7 +1245,33 @@ final class LagunaSparseMoE: LagunaFeedForward {
     }
 
     override func callAsFunction(_ x: MLXArray) -> MLXArray {
+        callAsFunction(x, residual: nil)
+    }
+
+    func callAsFunction(_ x: MLXArray, residual: MLXArray?) -> MLXArray {
         let routed = gate(x)
+        if LagunaMoEAccelerationPolicy.fusedRoutedSharedDownResidualEnabled,
+           let residual,
+           scalingFactor == 2.5,
+           let routedActivated = switchMLP.lagunaXSDecodeActivation(
+               x,
+               indices: routed.indices
+           ),
+           let routedDown = switchMLP.lagunaXSDecodeDownInputs(),
+           let sharedDown = sharedExpert.lagunaXSDecodeDownInputs(x),
+           let fused = RoutedMoERouting.fusedLagunaXSRoutedSharedDownResidual(
+               routedActivated: routedActivated,
+               routedDownWeight: routedDown.weight,
+               routedDownScales: routedDown.scales,
+               indices: routed.indices,
+               routerWeights: routed.weights,
+               sharedActivated: sharedDown.activated,
+               sharedDownWeight: sharedDown.weight,
+               sharedDownScales: sharedDown.scales,
+               residual: residual
+           ) {
+            return fused
+        }
         var expertOutput = switchMLP(x, indices: routed.indices)
         expertOutput = (
             expertOutput * MLX.expandedDimensions(routed.weights, axis: routed.weights.ndim)
@@ -1116,7 +1279,8 @@ final class LagunaSparseMoE: LagunaFeedForward {
         if scalingFactor != 1 {
             expertOutput = expertOutput * scalingFactor
         }
-        return expertOutput + sharedExpert(x)
+        let branch = expertOutput + sharedExpert(x)
+        return residual.map { $0 + branch } ?? branch
     }
 
     func preparePrefillAcceleration() -> MLXArray? {
@@ -1140,8 +1304,11 @@ final class LagunaAttention: Module {
     private let slidingWindow: Int?
     private let gatePerHead: Bool
     private let rope: LagunaRoPE
+    private let layerIndex: Int
+    private var _nativeAffineQKV: LagunaNativeAffineWeight?
 
     init(config: LagunaConfig, layerIndex: Int) {
+        self.layerIndex = layerIndex
         self.headCount = config.attentionHeads(layerIndex: layerIndex)
         self.keyValueHeadCount = config.numKeyValueHeads
         self.headDim = config.headDim
@@ -1182,6 +1349,42 @@ final class LagunaAttention: Module {
         super.init()
     }
 
+    func prepareNativeAffineQKV() -> [MLXArray] {
+        guard _nativeAffineQKV == nil,
+              LagunaGraphAccelerationPolicy.usesNativeAffineQKV(layerIndex: layerIndex),
+              headDim == 128,
+              keyValueHeadCount == 8,
+              headCount == 48 || headCount == 64,
+              type(of: qProj) == Linear.self,
+              type(of: kProj) == Linear.self,
+              type(of: vProj) == Linear.self,
+              qProj.bias == nil,
+              kProj.bias == nil,
+              vProj.bias == nil,
+              qProj.weight.shape == [headCount * headDim, 2_048],
+              kProj.weight.shape == [keyValueHeadCount * headDim, 2_048],
+              vProj.weight.shape == [keyValueHeadCount * headDim, 2_048],
+              let query = lagunaNativeAffineWeight(qProj.weight),
+              let key = lagunaNativeAffineWeight(kProj.weight),
+              let value = lagunaNativeAffineWeight(vProj.weight) else {
+            return []
+        }
+        let fused = LagunaNativeAffineWeight(
+            packedCodes: concatenated(
+                [query.packedCodes, key.packedCodes, value.packedCodes],
+                axis: 0
+            ),
+            scales: concatenated([query.scales, key.scales, value.scales], axis: 0),
+            biases: concatenated([query.biases, key.biases, value.biases], axis: 0),
+            originalShape: [
+                qProj.weight.dim(0) + kProj.weight.dim(0) + vProj.weight.dim(0),
+                qProj.weight.dim(1),
+            ]
+        )
+        _nativeAffineQKV = fused
+        return fused.arrays
+    }
+
     func callAsFunction(
         _ x: MLXArray,
         cache: Gemma4AttentionCache?,
@@ -1194,9 +1397,46 @@ final class LagunaAttention: Module {
         let positionOffsets = (cache as? LagunaRaggedKVCache)?.positionOffsets
             ?? Array(repeating: offset, count: batch)
 
-        let rawQueries = qProj(x)
-        let rawKeys = kProj(x)
-        var values = vProj(x).reshaped(batch, sequenceLength, keyValueHeadCount, headDim)
+        let rawQueries: MLXArray
+        let rawKeys: MLXArray
+        var values: MLXArray
+        let queryDimensions = headCount * headDim
+        let keyValueDimensions = keyValueHeadCount * headDim
+        if batch == 1,
+           sequenceLength == 1,
+           x.dtype == .bfloat16,
+           x.shape == [1, 1, 2_048],
+           let affine = _nativeAffineQKV,
+           affine.originalShape == [queryDimensions + 2 * keyValueDimensions, 2_048] {
+            let qkv = MLX.quantizedMM(
+                x,
+                affine.packedCodes,
+                scales: affine.scales,
+                biases: affine.biases,
+                transpose: true,
+                groupSize: 32,
+                bits: 8,
+                mode: .affine
+            )
+            rawQueries = qkv[.ellipsis, 0..<queryDimensions]
+            rawKeys = qkv[
+                .ellipsis,
+                queryDimensions..<(queryDimensions + keyValueDimensions)
+            ]
+            values = qkv[
+                .ellipsis,
+                (queryDimensions + keyValueDimensions)...
+            ].reshaped(batch, sequenceLength, keyValueHeadCount, headDim)
+        } else {
+            rawQueries = qProj(x)
+            rawKeys = kProj(x)
+            values = vProj(x).reshaped(
+                batch,
+                sequenceLength,
+                keyValueHeadCount,
+                headDim
+            )
+        }
         var queries: MLXArray
         var keys: MLXArray
         let fusedQK: (queries: MLXArray, keys: MLXArray)? =
@@ -1403,6 +1643,11 @@ final class LagunaDecoderLayer: Module {
             attended = x + attentionBranch
             normalized = postAttentionLayerNorm(attended)
         }
+        if normalized.dim(0) == 1,
+           normalized.dim(1) == 1,
+           let sparse = mlp as? LagunaSparseMoE {
+            return sparse(normalized, residual: attended)
+        }
         return attended + mlp(normalized)
     }
 }
@@ -1551,6 +1796,14 @@ final class LagunaLanguageModel: Module {
         }
         return arrays
     }
+
+    func prepareRuntimeAcceleration() -> [MLXArray] {
+        var arrays = preparePrefillAcceleration()
+        for layer in layers {
+            arrays.append(contentsOf: layer.selfAttention.prepareNativeAffineQKV())
+        }
+        return arrays
+    }
 }
 
 struct LagunaForwardOutput {
@@ -1632,5 +1885,9 @@ final class LagunaCausalLM: Module {
 
     func preparePrefillAcceleration() -> [MLXArray] {
         model.preparePrefillAcceleration()
+    }
+
+    func prepareRuntimeAcceleration() -> [MLXArray] {
+        model.prepareRuntimeAcceleration()
     }
 }

@@ -112,6 +112,65 @@ enum RoutedMoERouting {
         #endif
     }
 
+    /// Fuses Laguna XS single-token routed and shared NVFP4 down projections,
+    /// the ordered BF16 route reduction, the fixed 2.5 routed scale, and the
+    /// decoder residual add. The one-row SIMD retile is the paired-M5-ranked
+    /// layout; all non-XS shapes and quantization layouts fall back to MLX.
+    static func fusedLagunaXSRoutedSharedDownResidual(
+        routedActivated: MLXArray,
+        routedDownWeight: MLXArray,
+        routedDownScales: MLXArray,
+        indices: MLXArray,
+        routerWeights: MLXArray,
+        sharedActivated: MLXArray,
+        sharedDownWeight: MLXArray,
+        sharedDownScales: MLXArray,
+        residual: MLXArray
+    ) -> MLXArray? {
+        #if os(macOS)
+        guard supportsExpertAlignedNVFP4Metal,
+              routedActivated.dtype == .bfloat16,
+              routedActivated.shape == [8, 1, 512],
+              routedDownWeight.dtype == .uint32,
+              routedDownWeight.shape == [256, 2_048, 64],
+              routedDownScales.dtype == .uint8,
+              routedDownScales.shape == [256, 2_048, 32],
+              indices.dtype == .uint32,
+              indices.shape == [1, 1, 8],
+              routerWeights.dtype == .bfloat16,
+              routerWeights.shape == [1, 1, 8],
+              sharedActivated.dtype == .bfloat16,
+              sharedActivated.shape == [1, 1, 512],
+              sharedDownWeight.dtype == .uint32,
+              sharedDownWeight.shape == [2_048, 64],
+              sharedDownScales.dtype == .uint8,
+              sharedDownScales.shape == [2_048, 32],
+              residual.dtype == .bfloat16,
+              residual.shape == [1, 1, 2_048] else {
+            return nil
+        }
+        return lagunaXSRoutedSharedDownResidualKernel(
+            [
+                routedActivated,
+                routedDownWeight,
+                routedDownScales,
+                indices,
+                routerWeights,
+                sharedActivated,
+                sharedDownWeight,
+                sharedDownScales,
+                residual,
+            ],
+            grid: (2_048 * 288, 1, 1),
+            threadGroup: (288, 1, 1),
+            outputShapes: [[1, 1, 2_048]],
+            outputDTypes: [.bfloat16]
+        )[0]
+        #else
+        return nil
+        #endif
+    }
+
     /// Inverts a one-dimensional permutation without paying for a second sort.
     static func invertPermutation(_ order: MLXArray) -> MLXArray? {
         #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
@@ -894,6 +953,165 @@ enum RoutedMoERouting {
             }
         """,
         header: "// MLX_INCLUDE_FP_QUANTIZED_HEADERS\n",
+        ensureRowContiguous: true
+    )
+
+    private static let lagunaXSDownHeader = """
+        static inline float mere_laguna_nvfp4_scale(uint8_t bits) {
+            ushort raw = ushort(bits & 127) << 7;
+            half converted = as_type<half>(raw);
+            half signed_value = (bits & 128) ? -converted : converted;
+            return float(signed_value) * 4194304.0f;
+        }
+
+        static inline float mere_laguna_nvfp4_qdot_codes_16(
+            uint2 codes,
+            const thread float* input,
+            float scale
+        ) {
+            float accum = 0.0f;
+            for (uint j = 0; j < 2; ++j) {
+                const uint c = (j == 0) ? codes.x : codes.y;
+                const uint p0 =
+                    ((c & 0x00070007u) << 9) | ((c & 0x00080008u) << 12);
+                const uint p1 =
+                    ((c & 0x00700070u) << 5) | ((c & 0x00800080u) << 8);
+                const uint p2 =
+                    ((c & 0x07000700u) << 1) | ((c & 0x08000800u) << 4);
+                const uint p3 =
+                    ((c & 0x70007000u) >> 3) | (c & 0x80008000u);
+                const float2 v04 = float2(as_type<half2>(p0));
+                const float2 v15 = float2(as_type<half2>(p1));
+                const float2 v26 = float2(as_type<half2>(p2));
+                const float2 v37 = float2(as_type<half2>(p3));
+                accum +=
+                    (input[8 * j] * v04.x
+                     + input[8 * j + 1] * v15.x
+                     + input[8 * j + 2] * v26.x
+                     + input[8 * j + 3] * v37.x);
+                accum +=
+                    (input[8 * j + 4] * v04.y
+                     + input[8 * j + 5] * v15.y
+                     + input[8 * j + 6] * v26.y
+                     + input[8 * j + 7] * v37.y);
+            }
+            return scale * accum;
+        }
+
+        static inline float mere_laguna_nvfp4_qdot_16(
+            const device uint8_t* weight,
+            const thread float* input,
+            float scale
+        ) {
+            const device uint2* packed = (const device uint2*)weight;
+            return mere_laguna_nvfp4_qdot_codes_16(packed[0], input, scale);
+        }
+        """
+
+    private static let lagunaXSRoutedSharedDownResidualKernel = MLXFast.metalKernel(
+        name: "mere_laguna_xs_routed_shared_nvfp4_down_residual_bf16_r1_v1",
+        inputNames: [
+            "routed_activated",
+            "routed_down_weight",
+            "routed_down_scales",
+            "indices",
+            "router_weights",
+            "shared_activated",
+            "shared_down_weight",
+            "shared_down_scales",
+            "residual",
+        ],
+        outputNames: ["output"],
+        source: """
+            constexpr uint input_width = 512;
+            constexpr uint output_width = 2048;
+            constexpr uint routed_experts = 8;
+            constexpr uint shared_slot = 8;
+            constexpr uint outputs_per_simd = 1;
+            constexpr uint values_per_lane = 16;
+            constexpr uint packed_row_bytes = 256;
+            constexpr uint scale_row_bytes = 32;
+            constexpr uint packed_expert_bytes =
+                output_width * packed_row_bytes;
+            constexpr uint scale_expert_bytes =
+                output_width * scale_row_bytes;
+
+            uint tile = threadgroup_position_in_grid.x;
+            uint slot = simdgroup_index_in_threadgroup;
+            uint lane = thread_index_in_simdgroup;
+            uint first_row = tile * outputs_per_simd;
+            bool is_shared = slot == shared_slot;
+            uint expert = is_shared ? 0 : uint(indices[slot]);
+
+            const device bfloat* expert_input = is_shared
+                ? shared_activated
+                : routed_activated + slot * input_width;
+            const device uint8_t* expert_weight = is_shared
+                ? (const device uint8_t*)shared_down_weight
+                : (const device uint8_t*)routed_down_weight
+                    + expert * packed_expert_bytes;
+            const device uint8_t* expert_scales = is_shared
+                ? shared_down_scales
+                : routed_down_scales + expert * scale_expert_bytes;
+
+            thread float input_values[values_per_lane];
+            const device vec<bfloat, 4>* input_vectors =
+                (const device vec<bfloat, 4>*) (
+                    expert_input + lane * values_per_lane);
+            for (uint i = 0; i < values_per_lane / 4; ++i) {
+                const vec<bfloat, 4> values = input_vectors[i];
+                input_values[4 * i] = values[0];
+                input_values[4 * i + 1] = values[1];
+                input_values[4 * i + 2] = values[2];
+                input_values[4 * i + 3] = values[3];
+            }
+
+            thread float result[outputs_per_simd] = {0.0f};
+            for (uint row = 0; row < outputs_per_simd; ++row) {
+                uint output_row = first_row + row;
+                const device uint8_t* weight =
+                    expert_weight + output_row * packed_row_bytes + lane * 8;
+                const device uint8_t* scale =
+                    expert_scales + output_row * scale_row_bytes + lane;
+                result[row] = mere_laguna_nvfp4_qdot_16(
+                    weight,
+                    input_values,
+                    mere_laguna_nvfp4_scale(scale[0]));
+                result[row] = simd_sum(result[row]);
+            }
+
+            threadgroup bfloat down_outputs[
+                (routed_experts + 1) * outputs_per_simd
+            ];
+            if (lane == 0) {
+                for (uint row = 0; row < outputs_per_simd; ++row) {
+                    down_outputs[slot * outputs_per_simd + row] =
+                        bfloat(result[row]);
+                }
+            }
+            threadgroup_barrier(mem_flags::mem_threadgroup);
+
+            if (slot == 0 && lane < outputs_per_simd) {
+                bfloat routed_total = bfloat(0);
+                for (uint routed_slot = 0;
+                     routed_slot < routed_experts;
+                     ++routed_slot) {
+                    bfloat route_weight = router_weights[routed_slot];
+                    bfloat product = bfloat(
+                        down_outputs[
+                            routed_slot * outputs_per_simd + lane
+                        ] * route_weight);
+                    routed_total = bfloat(product + routed_total);
+                }
+                bfloat routed = bfloat(routed_total * bfloat(2.5f));
+                bfloat shared =
+                    down_outputs[shared_slot * outputs_per_simd + lane];
+                bfloat branch = bfloat(routed + shared);
+                output[first_row + lane] =
+                    bfloat(residual[first_row + lane] + branch);
+            }
+        """,
+        header: lagunaXSDownHeader,
         ensureRowContiguous: true
     )
 

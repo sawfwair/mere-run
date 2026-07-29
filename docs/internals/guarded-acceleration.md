@@ -12,8 +12,10 @@ theoretically faster.
 `RoutedMoERouting` fuses the gate and up gather-GEMVs with SwiGLU for two
 measured decode layouts: Laguna NVFP4 (group 16, 4-bit) and LFM2 affine
 (group 64, 8-bit). The input token is read directly for each route, so the
-kernel avoids materializing the repeated top-k activation tensor. The down
-projection remains the native MLX gather operation.
+kernel avoids materializing the repeated top-k activation tensor. Laguna XS
+on M5 Max then uses its paired-ranked one-row SIMD kernel to combine routed
+and shared down projections, the ordered BF16 reduction, fixed routed scale,
+and residual add; other layouts keep the native MLX down operations.
 
 Laguna's separate prefill specialization first creates expert-aligned 16-row
 tiles, then runs both sorted NVFP4 projections and SwiGLU in one matrix kernel.
@@ -35,6 +37,10 @@ MERERUN_LAGUNA_FUSED_NVFP4_MOE=0
 MERERUN_LAGUNA_FUSED_SORTED_NVFP4_MOE=0
 MERERUN_LAGUNA_FUSED_SORTED_NVFP4_DOWN=0
 MERERUN_LAGUNA_FAST_SORTED_INVERSE=0
+MERERUN_LAGUNA_RANKED_PREFILL_ROUTE_STAGING=0
+MERERUN_LAGUNA_FUSED_ROUTED_SHARED_DOWN_RESIDUAL=0
+MERERUN_LAGUNA_NATIVE_AFFINE_QKV=0
+MERERUN_LAGUNA_NATIVE_AFFINE_QKV_LAYERS=28
 MERERUN_LAGUNA_SHARED_ATTENTION_MASKS=0
 MERERUN_LAGUNA_PREFILL_ASYNC_LADDER=0
 MERERUN_LAGUNA_PREFILL_FUSED_RESIDUAL_RMSNORM=0
@@ -47,6 +53,15 @@ independent defaults. The exact residual/RMSNorm and QK-norm/RoPE fusions are
 M5 Max defaults and remain explicit opt-ins on M4 Max. Final-position slicing
 before the output norm and language-model head avoids projecting prompt rows
 that generation never consumes.
+
+The M5 Max default also prepares a decode-only group-32 affine INT8 Q/K/V side
+layout for the first 28 Laguna XS layers. It leaves checkpoint parameters,
+prefill, multi-token verification, and batched decode on their original BF16
+paths. This changes projection precision, so it is promoted only on the exact
+28-layer slice that passed paired M5 public, hidden, semantic, and token gates;
+other Apple GPU generations require an explicit opt-in. The XS layer pattern
+retains a bounded 598.5 MiB for that side layout. Preparation is idempotent,
+and repeated one-token calls do not retain per-token MLX buffers.
 
 On an AC-powered M4 Max with 128 GB unified memory and no thermal warning, the
 official Laguna target's resident eight-token decode median moved from about

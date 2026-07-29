@@ -383,9 +383,9 @@ public actor LagunaGenerator: ChatGenerator {
                 ))
             }
         )
-        let prefillAccelerationArrays = model.preparePrefillAcceleration()
-        if !prefillAccelerationArrays.isEmpty {
-            MLX.eval(prefillAccelerationArrays)
+        let runtimeAccelerationArrays = model.prepareRuntimeAcceleration()
+        if !runtimeAccelerationArrays.isEmpty {
+            MLX.eval(runtimeAccelerationArrays)
         }
 
         self.model = model

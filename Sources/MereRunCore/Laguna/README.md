@@ -93,6 +93,11 @@ sorted down projection, or `MERERUN_LAGUNA_FAST_SORTED_INVERSE=0` to restore
 the second route sort instead of the linear permutation inversion. Unsupported
 hardware, dtypes, quantization, or shapes fall back automatically.
 
+The ranked 512-token XS prefill shape also stages each sorted route row and
+constructs the sorted expert IDs plus inverse permutation with fixed-shape
+Metal copies. `MERERUN_LAGUNA_RANKED_PREFILL_ROUTE_STAGING=0` restores the
+native gathers and second sort.
+
 Prompt prefill also reuses one full-attention mask and one sliding-window mask
 across the 40 layers and evaluates the graph in an eight-layer asynchronous
 ladder. `MERERUN_LAGUNA_SHARED_ATTENTION_MASKS=0` restores per-layer masks;
@@ -112,6 +117,26 @@ BF16/FP16 activations, NVFP4 group size 16, 4-bit weights, an input width
 divisible by 512, and an output width divisible by 8. Every other layout falls
 back to MLX's portable gather path. Prefill and multi-token verification keep
 the measured expert-sorted implementation above.
+
+On M5 Max, the exact Laguna XS single-token layout additionally combines the
+eight routed down projections, shared-expert down projection, ordered BF16
+route reduction, fixed 2.5 scale, and decoder residual add in one dispatch.
+This is the one-output-row-per-SIMD layout validated in the paired MLX Fast M5
+run. Set `MERERUN_LAGUNA_FUSED_ROUTED_SHARED_DOWN_RESIDUAL=0` to restore the
+native projection/reduction chain; set it to `1` to opt in on a supported M4
+Max. Any non-XS shape, dtype, quantization layout, or unquantized shared expert
+falls back automatically.
+
+The same M5-ranked runtime uses a retained group-32 affine INT8 side layout for
+Q/K/V on the first 28 layers of one-token decode. Prefill, batched decode, and
+the original BF16 checkpoint parameters are unchanged. Disable it with
+`MERERUN_LAGUNA_NATIVE_AFFINE_QKV=0`, opt in on other hardware with `=1`, or
+set `MERERUN_LAGUNA_NATIVE_AFFINE_QKV_LAYERS=0...40` for a bounded rollout.
+The official XS head pattern makes the default 28-layer side layout 598.5 MiB;
+preparation is idempotent and decode retains no additional buffer per token.
+The default remains 28 because that exact slice passed the public, hidden,
+semantic, and paired-timing M5 gates; the prepared 40-layer continuation is
+not a production default until it receives the same validation.
 
 Example:
 

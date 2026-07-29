@@ -100,6 +100,50 @@ final class LagunaModelTests: MereRunCoreTestCase {
         return try JSONDecoder().decode(LagunaDFlashConfig.self, from: data)
     }
 
+    private func makeXSAttentionConfig() throws -> LagunaConfig {
+        let object: [String: Any] = [
+            "model_type": "laguna",
+            "vocab_size": 32,
+            "hidden_size": 2_048,
+            "intermediate_size": 16,
+            "num_hidden_layers": 1,
+            "num_attention_heads": 64,
+            "num_attention_heads_per_layer": [64],
+            "num_key_value_heads": 8,
+            "head_dim": 128,
+            "max_position_embeddings": 128,
+            "rms_norm_eps": 0.000001,
+            "attention_bias": false,
+            "gating": "per-head",
+            "layer_types": ["sliding_attention"],
+            "sliding_window": 8,
+            "mlp_layer_types": ["dense"],
+            "mlp_only_layers": [0],
+            "num_experts": 256,
+            "num_experts_per_tok": 8,
+            "moe_intermediate_size": 512,
+            "shared_expert_intermediate_size": 512,
+            "moe_routed_scaling_factor": 2.5,
+            "moe_router_logit_softcapping": 0.0,
+            "norm_topk_prob": true,
+            "decoder_sparse_step": 1,
+            "moe_apply_router_weight_on_input": false,
+            "tie_word_embeddings": false,
+            "eos_token_id": [2],
+            "rope_parameters": [
+                "sliding_attention": [
+                    "rope_type": "default",
+                    "rope_theta": 10_000.0,
+                    "partial_rotary_factor": 1.0,
+                ],
+            ],
+        ]
+        return try JSONDecoder().decode(
+            LagunaConfig.self,
+            from: JSONSerialization.data(withJSONObject: object)
+        )
+    }
+
     func testOfficialConfigurationFieldsDecode() throws {
         let config = try makeConfig()
 
@@ -940,6 +984,257 @@ final class LagunaModelTests: MereRunCoreTestCase {
             LagunaMoEAccelerationPolicy.decodeRowsPerSIMDGroup("3", default: 4),
             4
         )
+    }
+
+    func testNativeAffineQKVLayerCountParsing() {
+        XCTAssertEqual(
+            LagunaGraphAccelerationPolicy.parseLayerCount(nil, default: 28),
+            28
+        )
+        XCTAssertEqual(
+            LagunaGraphAccelerationPolicy.parseLayerCount("16", default: 28),
+            16
+        )
+        XCTAssertEqual(
+            LagunaGraphAccelerationPolicy.parseLayerCount("-1", default: 28),
+            0
+        )
+        XCTAssertEqual(
+            LagunaGraphAccelerationPolicy.parseLayerCount("41", default: 28),
+            40
+        )
+        XCTAssertEqual(
+            LagunaGraphAccelerationPolicy.parseLayerCount("bad", default: 28),
+            28
+        )
+    }
+
+    func testNativeAffineWeightBuildsGroup32SideLayout() throws {
+        MLXRandom.seed(61)
+        let weight = MLXRandom.uniform(
+            low: -0.25,
+            high: 0.25,
+            [64, 32]
+        ).asType(.bfloat16)
+        let affine = try XCTUnwrap(lagunaNativeAffineWeight(weight))
+        MLX.eval(affine.arrays)
+
+        XCTAssertEqual(affine.originalShape, [64, 32])
+        XCTAssertEqual(affine.packedCodes.shape, [64, 8])
+        XCTAssertEqual(affine.scales.shape, [64, 1])
+        XCTAssertEqual(affine.biases.shape, [64, 1])
+        XCTAssertEqual(affine.packedCodes.dtype, .uint32)
+        XCTAssertEqual(affine.scales.dtype, .bfloat16)
+        XCTAssertEqual(affine.biases.dtype, .bfloat16)
+    }
+
+    func testNativeAffineQKVPreparesAndRunsXSDecodeShape() throws {
+        guard LagunaGraphAccelerationPolicy.nativeAffineQKVEnabled else {
+            throw XCTSkip("Set MERERUN_LAGUNA_NATIVE_AFFINE_QKV=1 to exercise the side layout.")
+        }
+        MLXRandom.seed(64)
+        let attention = LagunaAttention(config: try makeXSAttentionConfig(), layerIndex: 0)
+        attention.update(parameters: attention.parameters().mapValues {
+            $0.asType(.bfloat16)
+        })
+        let prepared = attention.prepareNativeAffineQKV()
+        guard prepared.count == 3 else {
+            XCTFail("Expected one packed QKV side layout.")
+            return
+        }
+        MLX.eval(prepared)
+
+        XCTAssertEqual(prepared[0].shape, [10_240, 512])
+        XCTAssertEqual(prepared[1].shape, [10_240, 64])
+        XCTAssertEqual(prepared[2].shape, [10_240, 64])
+
+        XCTAssertTrue(
+            attention.prepareNativeAffineQKV().isEmpty,
+            "Preparation must retain exactly one side layout per attention layer."
+        )
+
+        let input = MLXRandom.uniform(
+            low: -0.5,
+            high: 0.5,
+            [1, 1, 2_048]
+        ).asType(.bfloat16)
+        let output = attention(input, cache: nil)
+        MLX.eval(output)
+        XCTAssertEqual(output.shape, [1, 1, 2_048])
+        XCTAssertTrue(output.asArray(Float.self).allSatisfy(\.isFinite))
+
+        for _ in 0..<4 {
+            autoreleasepool {
+                MLX.eval(attention(input, cache: nil))
+            }
+        }
+        Memory.clearCache()
+        let activeBefore = Memory.activeMemory
+        for _ in 0..<32 {
+            autoreleasepool {
+                MLX.eval(attention(input, cache: nil))
+            }
+        }
+        Memory.clearCache()
+        XCTAssertLessThanOrEqual(
+            Memory.activeMemory,
+            activeBefore + 1_048_576,
+            "Repeated affine-QKV decode must not retain per-token MLX buffers."
+        )
+    }
+
+    func testLagunaXSFusedDownResidualPreservesZeroBranch() throws {
+        #if os(macOS)
+        let architecture = GPU.deviceInfo().architecture
+        guard Device.defaultDevice().deviceType == .gpu,
+              ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 26,
+              architecture == "applegpu_g16s" || architecture == "applegpu_g17s" else {
+            throw XCTSkip("The Laguna XS fused down kernel requires M4 Max or M5 Max on macOS 26.")
+        }
+        MLXRandom.seed(62)
+        let residual = MLXRandom.uniform(
+            low: -1,
+            high: 1,
+            [1, 1, 2_048]
+        ).asType(.bfloat16)
+        let actual = try XCTUnwrap(
+            RoutedMoERouting.fusedLagunaXSRoutedSharedDownResidual(
+                routedActivated: MLXArray.zeros([8, 1, 512], dtype: .bfloat16),
+                routedDownWeight: MLXArray.zeros(
+                    [256, 2_048, 64],
+                    dtype: .uint32
+                ),
+                routedDownScales: MLXArray.zeros(
+                    [256, 2_048, 32],
+                    dtype: .uint8
+                ),
+                indices: MLXArray((0..<8).map(UInt32.init)).reshaped([1, 1, 8]),
+                routerWeights: MLXArray.ones([1, 1, 8], dtype: .bfloat16),
+                sharedActivated: MLXArray.zeros([1, 1, 512], dtype: .bfloat16),
+                sharedDownWeight: MLXArray.zeros([2_048, 64], dtype: .uint32),
+                sharedDownScales: MLXArray.zeros([2_048, 32], dtype: .uint8),
+                residual: residual
+            )
+        )
+        MLX.eval(residual, actual)
+
+        XCTAssertEqual(actual.shape, residual.shape)
+        XCTAssertEqual(
+            MLX.max(
+                MLX.abs(actual.asType(.float32) - residual.asType(.float32))
+            ).item(Float.self),
+            0
+        )
+        #else
+        throw XCTSkip("The Laguna XS fused down kernel is Metal-only.")
+        #endif
+    }
+
+    func testLagunaXSFusedDownResidualMatchesNativeOperations() throws {
+        #if os(macOS)
+        let architecture = GPU.deviceInfo().architecture
+        guard Device.defaultDevice().deviceType == .gpu,
+              ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 26,
+              architecture == "applegpu_g16s" || architecture == "applegpu_g17s" else {
+            throw XCTSkip("The Laguna XS fused down kernel requires M4 Max or M5 Max on macOS 26.")
+        }
+        MLXRandom.seed(63)
+        let routedBase = MLX.quantized(
+            MLXRandom.uniform(
+                low: -0.2,
+                high: 0.2,
+                [1, 2_048, 512]
+            ),
+            groupSize: 16,
+            bits: 4,
+            mode: .nvfp4
+        )
+        let routedWeight = MLX.repeated(routedBase.wq, count: 256, axis: 0)
+        let routedScales = MLX.repeated(routedBase.scales, count: 256, axis: 0)
+        let shared = MLX.quantized(
+            MLXRandom.uniform(
+                low: -0.2,
+                high: 0.2,
+                [2_048, 512]
+            ),
+            groupSize: 16,
+            bits: 4,
+            mode: .nvfp4
+        )
+        let routedActivated = MLXRandom.uniform(
+            low: -0.5,
+            high: 0.5,
+            [8, 1, 512]
+        ).asType(.bfloat16)
+        let sharedActivated = MLXRandom.uniform(
+            low: -0.5,
+            high: 0.5,
+            [1, 1, 512]
+        ).asType(.bfloat16)
+        let indices = MLXArray((0..<8).map(UInt32.init)).reshaped([1, 1, 8])
+        let routerWeights = MLXRandom.uniform(
+            low: 0.01,
+            high: 0.3,
+            [1, 1, 8]
+        ).asType(.bfloat16)
+        let residual = MLXRandom.uniform(
+            low: -1,
+            high: 1,
+            [1, 1, 2_048]
+        ).asType(.bfloat16)
+
+        let routedRows = portableGatherQuantizedMM(
+            routedActivated,
+            routedWeight,
+            scales: routedScales,
+            biases: nil,
+            rhsIndices: indices.reshaped([8]),
+            transpose: true,
+            groupSize: 16,
+            bits: 4,
+            mode: .nvfp4,
+            sortedIndices: false
+        ).reshaped([1, 1, 8, 2_048])
+        let routed = (
+            routedRows
+                * MLX.expandedDimensions(routerWeights, axis: routerWeights.ndim)
+        ).sum(axis: -2) * Float(2.5)
+        let sharedOutput = MLX.quantizedMM(
+            sharedActivated,
+            shared.wq,
+            scales: shared.scales,
+            biases: nil,
+            transpose: true,
+            groupSize: 16,
+            bits: 4,
+            mode: .nvfp4
+        )
+        let reference = residual + (routed + sharedOutput)
+        let actual = try XCTUnwrap(
+            RoutedMoERouting.fusedLagunaXSRoutedSharedDownResidual(
+                routedActivated: routedActivated,
+                routedDownWeight: routedWeight,
+                routedDownScales: routedScales,
+                indices: indices,
+                routerWeights: routerWeights,
+                sharedActivated: sharedActivated,
+                sharedDownWeight: shared.wq,
+                sharedDownScales: shared.scales,
+                residual: residual
+            )
+        )
+        MLX.eval(reference, actual)
+
+        XCTAssertEqual(actual.shape, reference.shape)
+        XCTAssertEqual(
+            MLX.max(
+                MLX.abs(actual.asType(.float32) - reference.asType(.float32))
+            ).item(Float.self),
+            0
+        )
+        #else
+        throw XCTSkip("The Laguna XS fused down kernel is Metal-only.")
+        #endif
     }
 
     func testFusedSortedNVFP4SwiGLUMatchesNativeGathers() throws {
