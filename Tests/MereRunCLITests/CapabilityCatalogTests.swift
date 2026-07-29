@@ -77,6 +77,7 @@ import Testing
         "model.benchmark.laguna-dflash": ModelBenchmarkLagunaDFlash.helpMessage(),
         "speech.synthesize": SpeechSynthesize.helpMessage(),
         "speech.transcribe": SpeechTranscribe.helpMessage(),
+        "speech.diarize": SpeechDiarize.helpMessage(),
         "speech.profile.list": SpeechProfileList.helpMessage(),
         "speech.profile.create": SpeechProfileCreate.helpMessage(),
         "speech.profile.delete": SpeechProfileDelete.helpMessage(),

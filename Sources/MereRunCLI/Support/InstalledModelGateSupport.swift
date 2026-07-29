@@ -119,6 +119,28 @@ private struct InstalledGateJSONDocument: Decodable {
     }
 }
 
+private struct InstalledDiarizationDocument: Decodable {
+    struct Segment: Decodable {
+        let speaker: String
+        let startSeconds: Double
+        let endSeconds: Double
+
+        enum CodingKeys: String, CodingKey {
+            case speaker
+            case startSeconds = "start_seconds"
+            case endSeconds = "end_seconds"
+        }
+    }
+
+    let speakerCount: Int
+    let segments: [Segment]
+
+    enum CodingKeys: String, CodingKey {
+        case speakerCount = "speaker_count"
+        case segments
+    }
+}
+
 /// One explicit release-smoke recipe per managed runtime kind. The release
 /// lane builds checks from the installed inventory, so catalog additions
 /// cannot disappear behind a representative "family" check.
@@ -198,6 +220,19 @@ enum InstalledModelSmokePlans {
                 route: "speech transcribe of generated speech"
             ) { runner, fixtureModel in
                 try await runner.installedASRCheck(
+                    model: spec.id,
+                    fixtureModel: fixtureModel
+                )
+            }
+
+        case .sortformer:
+            return companion(
+                spec,
+                installedIDs: installedIDs,
+                candidates: ["speech-tts-qwen3-nano"],
+                route: "speech diarize of a generated two-speaker fixture"
+            ) { runner, fixtureModel in
+                try await runner.installedDiarizationCheck(
                     model: spec.id,
                     fixtureModel: fixtureModel
                 )
@@ -590,6 +625,76 @@ extension GateRunner {
                     format: "ASR transcript lost the spoken fixture (%.0f%% word overlap)",
                     overlap * 100
                 )
+        )
+    }
+
+    func installedDiarizationCheck(
+        model: String,
+        fixtureModel: String
+    ) async throws -> GateObservation {
+        let firstVoice = workDirectory.appendingPathComponent("installed-diarization-first.wav")
+        let secondVoice = workDirectory.appendingPathComponent("installed-diarization-second.wav")
+        if !FileManager.default.fileExists(atPath: firstVoice.path) {
+            _ = try await exec(
+                [
+                    "speech", "synthesize",
+                    "Welcome to the speaker diarization release smoke.",
+                    "--model", fixtureModel,
+                    "--voice", "A bright female voice with clear pronunciation",
+                    "--output", firstVoice.path,
+                    "--temperature", "0",
+                    "--quiet",
+                ],
+                timeout: 1_800
+            )
+        }
+        if !FileManager.default.fileExists(atPath: secondVoice.path) {
+            _ = try await exec(
+                [
+                    "speech", "synthesize",
+                    "The second speaker confirms that the runtime can separate voices.",
+                    "--model", fixtureModel,
+                    "--voice", "A deep male voice with measured delivery",
+                    "--output", secondVoice.path,
+                    "--temperature", "0",
+                    "--quiet",
+                ],
+                timeout: 1_800
+            )
+        }
+
+        let first = try MediaAudioIO.decode(firstVoice, targetSampleRate: 16_000, channels: 1)
+        let second = try MediaAudioIO.decode(secondVoice, targetSampleRate: 16_000, channels: 1)
+        let silence = [Float](repeating: 0, count: 12_000)
+        let fixture = workDirectory.appendingPathComponent("installed-diarization-two-speaker.wav")
+        try MediaAudioIO.writeFloatWAV(
+            samples: first.samples + silence + second.samples,
+            sampleRate: 16_000,
+            channels: 1,
+            to: fixture
+        )
+
+        let run = try await exec(
+            [
+                "speech", "diarize", fixture.path,
+                "--model", model,
+                "--format", "json",
+                "--quiet",
+            ],
+            timeout: 1_800
+        )
+        let data = Data(run.stdout.utf8)
+        let document = try JSONDecoder().decode(InstalledDiarizationDocument.self, from: data)
+        let speakerIDs = Set(document.segments.map(\.speaker))
+        let hasValidSegments = document.segments.allSatisfy { $0.startSeconds >= 0 && $0.endSeconds > $0.startSeconds }
+        return GateObservation(
+            hash: Self.sha256(data),
+            secondRunHash: nil,
+            wallSeconds: run.wallSeconds,
+            decodeTps: nil,
+            semanticFailure: document.speakerCount >= 2 && speakerIDs.count >= 2 && hasValidSegments
+                ? nil
+                : "diarization did not identify two valid speaker tracks"
         )
     }
 

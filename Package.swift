@@ -401,7 +401,8 @@ targets.append(contentsOf: [
     exclude: [
       "Parakeet/README.md",
       "Qwen3ASR/Model/README.md",
-      "Qwen3ASR/README.md"
+      "Qwen3ASR/README.md",
+      "Sortformer/README.md"
     ],
     swiftSettings: commonSwiftSettings
   ),

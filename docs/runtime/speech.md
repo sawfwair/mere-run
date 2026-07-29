@@ -1,9 +1,9 @@
 # Speech Runtime
 
 Read text aloud, clone a voice from a short reference clip and save it for
-reuse, and transcribe either a file or a live microphone. Two ASR backends are
-available and the CLI picks between them by task — none of the audio leaves the
-machine in either direction.
+reuse, transcribe either a file or a live microphone, and identify who spoke
+when in a recording. Two ASR backends and one speaker-diarization backend are
+available — none of the audio leaves the machine.
 
 ## Commands
 
@@ -11,6 +11,7 @@ machine in either direction.
 | --- | --- |
 | `mere.run speech synthesize` | Generate speech from text using Qwen3-TTS. |
 | `mere.run speech transcribe` | Transcribe or translate speech to text using native ASR backends. |
+| `mere.run speech diarize` | Identify speaker time ranges as versioned JSON or RTTM using native MLX Sortformer. |
 | `mere.run speech listen` | Transcribe a macOS microphone with live Qwen ASR. |
 | `mere.run speech profile create` | Create a reusable voice profile from reference audio. |
 | `mere.run speech profile list` | List saved speech voice profiles. |
@@ -28,6 +29,10 @@ machine in either direction.
 - `speech-asr-qwen3`
 - `speech-asr-parakeet`
 
+### Speaker diarization
+
+- `speech-diarization-sortformer` (NVIDIA Streaming Sortformer v2.1, up to four speakers)
+
 ## macOS Voice Studio
 
 The Speak and Listen workspaces expose **Voice Studio** as the purpose-built
@@ -40,6 +45,9 @@ durable artifact. Runs use the public CLI contract and stay in Library.
 The packaged app declares `NSMicrophoneUsageDescription` and signs both the app
 and embedded CLI with the audio-input entitlement. Recording is local; granting
 microphone access does not enable a network upload path.
+
+The app's Advanced command catalog also exposes **Diarize speakers** with an
+audio picker, managed Sortformer default, and durable JSON output in Library.
 
 ## Typical workflows
 
@@ -73,6 +81,42 @@ swift run mere.run speech listen --device <core-audio-uid>
 ```
 
 `speech listen` remains the Qwen-backed macOS microphone convenience command.
+
+### Identify speakers
+
+Install the pinned Sortformer checkpoint after reviewing NVIDIA's model terms:
+
+```bash
+mere.run model pull speech-diarization-sortformer --accept-model-license
+mere.run speech diarize ./meeting.wav --output ./meeting.json
+mere.run speech diarize ./meeting.wav --format rttm --output ./meeting.rttm
+```
+
+JSON output uses a versioned schema and anonymous, recording-local speaker
+labels:
+
+```json
+{
+  "schema_version": 1,
+  "speaker_count": 2,
+  "segments": [
+    {
+      "speaker": "speaker_0",
+      "speaker_index": 0,
+      "start_seconds": 0,
+      "end_seconds": 4.8,
+      "duration_seconds": 4.8
+    }
+  ]
+}
+```
+
+Sortformer answers “who spoke when”; it does not transcribe the words or infer
+real identities. Labels such as `speaker_0` are stable within one recording
+but are not identities that carry between recordings. The v2.1 checkpoint has
+four output channels, so recordings with more than four distinct speakers are
+outside this model's supported range. This first runtime is offline/file-based;
+streaming diarization is not exposed yet.
 
 ### Manage voice profiles
 
@@ -116,6 +160,7 @@ sets the chunk interval (default 25).
 
 - `Sources/MereRunCLI/Commands/SpeechSynthesizeCommand.swift`
 - `Sources/MereRunCLI/Commands/SpeechTranscribeCommand.swift`
+- `Sources/MereRunCLI/Commands/SpeechDiarizeCommand.swift`
 - `Sources/MereRunCLI/Commands/SpeechListenCommand.swift`
 - `Sources/MereRunCLI/Commands/SpeechProfileCommand.swift` (the `list`, `create`, and `delete` profile subcommands)
 
@@ -139,6 +184,12 @@ Tokenizer internals:
 - `Sources/AudioSTT/Parakeet/ParakeetGenerator.swift`
 - `Sources/AudioSTT/Parakeet/ParakeetASRLiveSession.swift`
 
+### Diarization runtime
+
+- `Sources/AudioSTT/Sortformer/SortformerDiarizer.swift`
+- `Sources/AudioSTT/Sortformer/SortformerModel.swift`
+- `Sources/AudioSTT/Sortformer/SortformerFeatures.swift`
+
 ## How speech synthesis flows
 
 At a high level:
@@ -161,6 +212,15 @@ not by itself make every synthesis model incremental.
 2. the selected backend loads its model components
 3. the backend produces a transcript
 4. the CLI prints or writes the output
+
+## How diarization flows
+
+1. audio input is decoded and resampled to 16 kHz mono
+2. the MLX feature extractor produces NeMo-compatible mel features
+3. Sortformer predicts activity independently across four speaker channels
+4. thresholding, minimum-duration filtering, and same-speaker gap merging
+   produce time segments
+5. the CLI emits versioned JSON or standard RTTM text
 
 ## Notes for contributors
 

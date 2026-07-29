@@ -378,6 +378,11 @@ final class StudioTypesTests: XCTestCase {
                 $0.speechSampleRate = 22_050
                 $0.speechJSONL = true
             }),
+            (.speechDiarize, "speech.diarize", {
+                $0.inputPath = "/tmp/meeting.wav"
+                $0.outputPath = "/tmp/meeting.json"
+                $0.quiet = true
+            }),
             (.speechProfileList, "speech.profile.list", { _ in }),
             (.speechProfileCreate, "speech.profile.create", {
                 $0.inputPath = "/tmp/voice.wav"

@@ -144,7 +144,7 @@ itself, so it always matches the binary you just built:
 | [`mere.run catalog`](/cli) | Inspect the machine-readable command capability contract. |
 | [`mere.run image`](/runtime/image) | Generate and validate image models. |
 | [`mere.run text`](/runtime/text) | Run local chat, code, embedding, and anonymization workflows. |
-| [`mere.run speech`](/runtime/speech) | Synthesize, transcribe, and manage voice profiles. |
+| [`mere.run speech`](/runtime/speech) | Synthesize, transcribe, diarize, and manage voice profiles. |
 | [`mere.run vision`](/runtime/vision) | Caption, inspect, face-analyze, segment, track, pose, depth, geometry, optical flow, and OCR visual media. |
 | [`mere.run music`](/runtime/music) | Generate music locally. |
 | [`mere.run sfx`](/runtime/sfx) | Generate sound effects locally. |

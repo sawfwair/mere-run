@@ -56,6 +56,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case qwen3ASR = "qwen3-asr"
         /// Parakeet ASR family.
         case parakeetASR = "parakeet-asr"
+        /// NVIDIA Sortformer speaker diarization family.
+        case sortformer = "sortformer"
         /// Qwen3 embeddings family.
         case qwen3Embedding = "qwen3-embedding"
         /// OpenAI Privacy Filter token-classification family.
@@ -157,6 +159,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case textAnonymization = "text_anonymization"
         case speechSynthesis = "speech_synthesis"
         case speechRecognition = "speech_recognition"
+        case speakerDiarization = "speaker_diarization"
         case visionChat = "vision_chat"
         case visionOCR = "vision_ocr"
         case musicGeneration = "music_generation"
@@ -1473,6 +1476,20 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.speechRecognition],
                 components: genericTextComponents,
                 upstreamRepoId: "mlx-community/parakeet-tdt-0.6b-v3",
+                createdAt: createdAt
+            )
+        case .sortformerDiarization:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .sortformer,
+                family: .asr,
+                tier: .latest,
+                variant: .standard,
+                precision: .fp16,
+                defaults: nil,
+                supports: [.speakerDiarization],
+                components: nil,
+                upstreamRepoId: "mlx-community/diar_streaming_sortformer_4spk-v2.1-fp16",
                 createdAt: createdAt
             )
         case .qwen3Code:

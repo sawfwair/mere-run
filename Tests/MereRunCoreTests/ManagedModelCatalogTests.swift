@@ -74,6 +74,7 @@ final class ManagedModelCatalogTests: XCTestCase {
             "sfx-woosh-vflow-8s",
             "sfx-woosh-dvflow-8s",
             "sfx-mmaudio-large-44k-v2",
+            ModelResolver.ModelID.sortformerDiarization.rawValue,
             "video-ltx-av",
             "video-ltx23-av-mlx",
             "video-ltx23-full-mlx",

@@ -145,6 +145,7 @@ public enum MereRunModelValidator {
             vaeDir = nil
             tokenizerDir = nil
         } else if spec?.validationKind == .aceStep
+            || spec?.validationKind == .sortformer
             || spec?.validationKind == .magentaRT2
             || spec?.validationKind == .muScriptor
             || spec?.validationKind == .woosh
@@ -391,8 +392,8 @@ public enum MereRunModelValidator {
                 warnings.append("Manifest engine mismatch: family=face expects insightface.")
             case .tts where engine != .qwen3TTS:
                 warnings.append("Manifest engine mismatch: family=tts expects qwen3-tts.")
-            case .asr where engine != .qwen3ASR && engine != .parakeetASR:
-                warnings.append("Manifest engine mismatch: family=asr expects qwen3-asr or parakeet-asr.")
+            case .asr where engine != .qwen3ASR && engine != .parakeetASR && engine != .sortformer:
+                warnings.append("Manifest engine mismatch: family=asr expects qwen3-asr, parakeet-asr, or sortformer.")
             case .embed where engine != .qwen3Embedding:
                 warnings.append("Manifest engine mismatch: family=embed expects qwen3-embedding.")
             case .privacy where engine != .openAIPrivacyFilter:
@@ -482,7 +483,7 @@ public enum MereRunModelValidator {
             switch manifest.engine {
             case .qwen3Coder?, .northMiniCode?, .aceStep?, .magentaRT2?, .muScriptor?, .woosh?, .mmaudio?, .ltxVideo?,
                  .wanVideo?, .moge2?, .videoDepthAnything?, .depthAnything3?, .tripoSR?, .instantMesh?, .trellis2?,
-                 .insightFace?:
+                 .insightFace?, .sortformer?:
                 return true
             default:
                 return false
@@ -542,6 +543,7 @@ public enum MereRunModelValidator {
         if modelId.hasPrefix("image-3d-") { return .threeD }
         if modelId.hasPrefix("speech-tts-") { return .tts }
         if modelId.hasPrefix("speech-asr-") { return .asr }
+        if modelId.hasPrefix("speech-diarization-") { return .asr }
         if modelId.hasPrefix("text-embed-") { return .embed }
         if modelId.hasPrefix("text-anonymize-") { return .privacy }
         if modelId.hasPrefix("text-code-") { return .code }

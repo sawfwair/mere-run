@@ -78,6 +78,7 @@ import Testing
         "model.benchmark.laguna-dflash",
         "speech.synthesize",
         "speech.transcribe",
+        "speech.diarize",
         "speech.profile.list",
         "speech.profile.create",
         "speech.profile.delete",
@@ -97,7 +98,7 @@ import Testing
         "config.get",
         "config.unset"
     ])
-    #expect(document.commands.count == 90)
+    #expect(document.commands.count == 91)
 
     let data = try JSONEncoder().encode(document)
     let decoded = try JSONDecoder().decode(MereRunCapabilityDocument.self, from: data)
