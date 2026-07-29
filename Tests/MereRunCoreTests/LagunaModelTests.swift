@@ -858,26 +858,88 @@ final class LagunaModelTests: MereRunCoreTestCase {
             sortedIndices: false
         )
         let reference = MLXNN.silu(gateOutput) * upOutput
-        let actual = try XCTUnwrap(
-            RoutedMoERouting.fusedGatherNVFP4SwiGLU(
-                input,
-                gateWeight: gate.wq,
-                gateScales: gate.scales,
-                upWeight: up.wq,
-                upScales: up.scales,
-                expertIndices: indices,
-                topK: topK,
-                groupSize: groupSize,
-                bits: bits
+        let variants = try [1, 2, 4].map { rowsPerSIMDGroup in
+            (
+                rowsPerSIMDGroup,
+                try XCTUnwrap(
+                    RoutedMoERouting.fusedGatherNVFP4SwiGLU(
+                        input,
+                        gateWeight: gate.wq,
+                        gateScales: gate.scales,
+                        upWeight: up.wq,
+                        upScales: up.scales,
+                        expertIndices: indices,
+                        topK: topK,
+                        groupSize: groupSize,
+                        bits: bits,
+                        rowsPerSIMDGroup: rowsPerSIMDGroup
+                    )
+                )
             )
-        )
-        MLX.eval(reference, actual)
+        }
+        MLX.eval(reference)
 
-        XCTAssertEqual(actual.shape, reference.shape)
-        let maximumDifference = MLX.max(
-            MLX.abs(reference.asType(.float32) - actual.asType(.float32))
-        ).item(Float.self)
-        XCTAssertEqual(maximumDifference, 0)
+        for (rowsPerSIMDGroup, actual) in variants {
+            MLX.eval(actual)
+            XCTAssertEqual(actual.shape, reference.shape)
+            let maximumDifference = MLX.max(
+                MLX.abs(reference.asType(.float32) - actual.asType(.float32))
+            ).item(Float.self)
+            XCTAssertEqual(
+                maximumDifference,
+                0,
+                "rowsPerSIMDGroup=\(rowsPerSIMDGroup)"
+            )
+        }
+    }
+
+    func testDecodeNVFP4RowsPerSIMDGroupParsing() {
+        XCTAssertEqual(
+            LagunaMoEAccelerationPolicy.defaultDecodeRowsPerSIMDGroup(
+                architecture: "applegpu_g17s"
+            ),
+            2
+        )
+        XCTAssertEqual(
+            LagunaMoEAccelerationPolicy.defaultDecodeRowsPerSIMDGroup(
+                architecture: "applegpu_g16s"
+            ),
+            4
+        )
+        XCTAssertEqual(
+            LagunaMoEAccelerationPolicy.decodeRowsPerSIMDGroup(
+                hiddenSize: 2_048,
+                intermediateSize: 512,
+                topK: 8,
+                xsCandidate: 2
+            ),
+            2
+        )
+        XCTAssertEqual(
+            LagunaMoEAccelerationPolicy.decodeRowsPerSIMDGroup(
+                hiddenSize: 3_072,
+                intermediateSize: 1_024,
+                topK: 8,
+                xsCandidate: 2
+            ),
+            4
+        )
+        XCTAssertEqual(
+            LagunaMoEAccelerationPolicy.decodeRowsPerSIMDGroup("1", default: 4),
+            1
+        )
+        XCTAssertEqual(
+            LagunaMoEAccelerationPolicy.decodeRowsPerSIMDGroup("2", default: 4),
+            2
+        )
+        XCTAssertEqual(
+            LagunaMoEAccelerationPolicy.decodeRowsPerSIMDGroup("4", default: 2),
+            4
+        )
+        XCTAssertEqual(
+            LagunaMoEAccelerationPolicy.decodeRowsPerSIMDGroup("3", default: 4),
+            4
+        )
     }
 
     func testFusedSortedNVFP4SwiGLUMatchesNativeGathers() throws {

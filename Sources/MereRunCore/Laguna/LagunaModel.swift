@@ -5,6 +5,18 @@ import MLXNN
 import MLXRandom
 
 enum LagunaMoEAccelerationPolicy {
+    private static let defaultDecodeNVFP4RowsPerSIMDGroup: Int = {
+        #if os(macOS)
+        defaultDecodeRowsPerSIMDGroup(
+            architecture: Device.defaultDevice().deviceType == .gpu
+                ? GPU.deviceInfo().architecture
+                : nil
+        )
+        #else
+        4
+        #endif
+    }()
+
     static let sortedRoutingEnabled = booleanEnvironment(
         "MERERUN_LAGUNA_SORTED_MOE",
         default: true
@@ -29,6 +41,12 @@ enum LagunaMoEAccelerationPolicy {
         "MERERUN_LAGUNA_FUSED_SORTED_NVFP4_DOWN",
         default: true
     )
+    static let decodeNVFP4RowsPerSIMDGroup = decodeRowsPerSIMDGroup(
+        ProcessInfo.processInfo.environment[
+            "MERERUN_LAGUNA_DECODE_NVFP4_ROWS_PER_SIMDGROUP"
+        ],
+        default: defaultDecodeNVFP4RowsPerSIMDGroup
+    )
     static let fusedSortedMinimumSequenceLength = 64
 
     static func parseBoolean(_ raw: String?, default defaultValue: Bool) -> Bool {
@@ -48,6 +66,36 @@ enum LagunaMoEAccelerationPolicy {
         default defaultValue: Bool
     ) -> Bool {
         parseBoolean(ProcessInfo.processInfo.environment[name], default: defaultValue)
+    }
+
+    static func decodeRowsPerSIMDGroup(
+        _ raw: String?,
+        default defaultValue: Int
+    ) -> Int {
+        guard let raw,
+              let value = Int(raw.trimmingCharacters(in: .whitespacesAndNewlines)),
+              value == 1 || value == 2 || value == 4 else {
+            return defaultValue
+        }
+        return value
+    }
+
+    static func defaultDecodeRowsPerSIMDGroup(architecture: String?) -> Int {
+        architecture == "applegpu_g17s" ? 2 : 4
+    }
+
+    static func decodeRowsPerSIMDGroup(
+        hiddenSize: Int,
+        intermediateSize: Int,
+        topK: Int,
+        xsCandidate: Int
+    ) -> Int {
+        guard hiddenSize == 2_048,
+              intermediateSize == 512,
+              topK == 8 else {
+            return 4
+        }
+        return xsCandidate
     }
 }
 
@@ -802,8 +850,17 @@ final class LagunaSwitchGLU: Module {
     @ModuleInfo(key: "gate_proj") var gateProj: LagunaSwitchLinear
     @ModuleInfo(key: "up_proj") var upProj: LagunaSwitchLinear
     @ModuleInfo(key: "down_proj") var downProj: LagunaSwitchLinear
+    private let decodeNVFP4RowsPerSIMDGroup: Int
 
     init(config: LagunaConfig) {
+        self.decodeNVFP4RowsPerSIMDGroup =
+            LagunaMoEAccelerationPolicy.decodeRowsPerSIMDGroup(
+                hiddenSize: config.hiddenSize,
+                intermediateSize: config.moeIntermediateSize,
+                topK: config.numExpertsPerToken,
+                xsCandidate:
+                    LagunaMoEAccelerationPolicy.decodeNVFP4RowsPerSIMDGroup
+            )
         self._gateProj.wrappedValue = LagunaSwitchLinear(
             inputDimensions: config.hiddenSize,
             outputDimensions: config.moeIntermediateSize,
@@ -955,7 +1012,8 @@ final class LagunaSwitchGLU: Module {
                expertIndices: indices,
                topK: topK,
                groupSize: gateProj.groupSize,
-               bits: gateProj.bits
+               bits: gateProj.bits,
+               rowsPerSIMDGroup: decodeNVFP4RowsPerSIMDGroup
            ) {
             return downProj(
                 fused.reshaped([

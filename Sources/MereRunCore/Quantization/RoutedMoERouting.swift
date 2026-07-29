@@ -35,8 +35,10 @@ enum RoutedMoERouting {
     /// Computes an unsorted NVFP4 gate/up gather-GEMV and SwiGLU activation.
     ///
     /// One threadgroup runs the gate and up projections concurrently for one
-    /// expert route and one eight-column output tile. The input token is read
-    /// directly from `x`, avoiding the repeated top-k route tensor.
+    /// expert route and one output tile. The M5 tile halves each SIMD group's
+    /// live result accumulators while preserving each output row's reduction
+    /// order. The input token is read directly from `x`, avoiding the repeated
+    /// top-k route tensor.
     static func fusedGatherNVFP4SwiGLU(
         _ x: MLXArray,
         gateWeight: MLXArray,
@@ -46,7 +48,8 @@ enum RoutedMoERouting {
         expertIndices: MLXArray,
         topK: Int,
         groupSize: Int,
-        bits: Int
+        bits: Int,
+        rowsPerSIMDGroup: Int = 4
     ) -> MLXArray? {
         #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
         guard Device.defaultDevice().deviceType == .gpu,
@@ -64,13 +67,17 @@ enum RoutedMoERouting {
               topK > 0,
               expertIndices.size == x.dim(0) * x.dim(1) * topK,
               groupSize == 16,
-              bits == 4 else {
+              bits == 4,
+              rowsPerSIMDGroup == 1
+                || rowsPerSIMDGroup == 2
+                || rowsPerSIMDGroup == 4 else {
             return nil
         }
 
         let routeCount = expertIndices.size
         let outputDimensions = gateWeight.dim(1)
         let inputDimensions = x.dim(2)
+        let outputTileWidth = 2 * rowsPerSIMDGroup
         guard routeCount > 0,
               outputDimensions.isMultiple(of: outputTileWidth),
               inputDimensions.isMultiple(of: inputBlockWidth),
@@ -89,6 +96,7 @@ enum RoutedMoERouting {
                 ("ROUTE_COUNT", routeCount),
                 ("OUTPUT_DIMENSIONS", outputDimensions),
                 ("INPUT_DIMENSIONS", inputDimensions),
+                ("RESULTS_PER_SIMDGROUP", rowsPerSIMDGroup),
             ],
             grid: (
                 simdWidth,
@@ -902,8 +910,9 @@ enum RoutedMoERouting {
         outputNames: ["output"],
         source: """
             constexpr int packs_per_thread = 2;
-            constexpr int results_per_simdgroup = 4;
-            constexpr int outputs_per_threadgroup = 8;
+            constexpr int results_per_simdgroup = RESULTS_PER_SIMDGROUP;
+            constexpr int outputs_per_threadgroup =
+                2 * results_per_simdgroup;
             constexpr int pack_factor = get_pack_factor<32, BITS>();
             constexpr int bytes_per_pack = get_bytes_per_pack<32>();
             constexpr int values_per_thread = pack_factor * packs_per_thread;
