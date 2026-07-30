@@ -46,6 +46,13 @@ The format is based on Keep a Changelog.
   Cosmos3-Edge, and the hidden Gemma 3 companion while retaining genuine
   access-gated, non-commercial, research-only, and revenue-limited gates.
 
+### Fixed
+
+- fixed persistent-world HTTP transition decoding so documented snake-case
+  overrides such as `num_frames`, `guidance_scale`, and
+  `model_space_actions` reach the DreamX and Cosmos3 runtimes instead of
+  silently falling back to session defaults.
+
 ## 0.29.1 - 2026-07-29
 
 ### Changed

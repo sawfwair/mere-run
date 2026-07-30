@@ -48,4 +48,47 @@ final class WorldCommandTests: XCTestCase {
         )
         XCTAssertNil(command.apiKey)
     }
+
+    func testWorldTransitionPayloadDecodesDocumentedHTTPOverrides() throws {
+        let data = Data(#"""
+        {
+          "prompt": "turn through the same station",
+          "camera": {
+            "motion": "yawRight",
+            "translationMeters": [0, 0, 0],
+            "rotationDegrees": [0, 15, 0]
+          },
+          "sourceImage": "/tmp/vesper.png",
+          "output": "/tmp/vesper-right.mp4",
+          "width": 320,
+          "height": 176,
+          "num_frames": 61,
+          "steps": 30,
+          "guidance_scale": 1.5,
+          "shift": 3,
+          "seed": 7,
+          "fps": 30,
+          "model_space_actions": [[0, 0, 0, 1, 0, 0, 0, 1, 0]]
+        }
+        """#.utf8)
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+
+        let payload = try decoder.decode(WorldTransitionPayload.self, from: data)
+
+        XCTAssertEqual(payload.prompt, "turn through the same station")
+        XCTAssertEqual(payload.camera.motion, .yawRight)
+        XCTAssertEqual(payload.camera.rotationDegrees, [0, 15, 0])
+        XCTAssertEqual(payload.sourceImage, "/tmp/vesper.png")
+        XCTAssertEqual(payload.output, "/tmp/vesper-right.mp4")
+        XCTAssertEqual(payload.width, 320)
+        XCTAssertEqual(payload.height, 176)
+        XCTAssertEqual(payload.numFrames, 61)
+        XCTAssertEqual(payload.steps, 30)
+        XCTAssertEqual(payload.guidanceScale, 1.5)
+        XCTAssertEqual(payload.shift, 3)
+        XCTAssertEqual(payload.seed, 7)
+        XCTAssertEqual(payload.fps, 30)
+        XCTAssertEqual(payload.modelSpaceActions, [[0, 0, 0, 1, 0, 0, 0, 1, 0]])
+    }
 }
