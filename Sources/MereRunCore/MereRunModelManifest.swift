@@ -1085,14 +1085,13 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 upstreamRepoId: "unsloth/Qwen3.6-35B-A3B-GGUF@main",
                 createdAt: createdAt
             )
-        case .infinityParser2Flash, .infinityParser2Pro, .infinityParser2ProInt8:
-            let isPro = modelID != .infinityParser2Flash
+        case .infinityParser2Pro, .infinityParser2ProInt8:
             let isProInt8 = modelID == .infinityParser2ProInt8
             return MereRunModelManifest(
                 id: modelID.rawValue,
                 engine: .qwen35HybridMoE,
                 family: .ocr,
-                tier: isPro ? .max : .nano,
+                tier: .max,
                 variant: .standard,
                 precision: isProInt8 ? .int8 : .bf16,
                 quantization: isProInt8
@@ -1103,9 +1102,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 components: q35TextComponents,
                 upstreamRepoId: isProInt8
                     ? "\(Q35Resources.infinityParser2ProInt8UpstreamRepoId)@\(Q35Resources.infinityParser2ProInt8UpstreamRevision)"
-                    : isPro
-                    ? "\(Q35Resources.infinityParser2ProUpstreamRepoId)@\(Q35Resources.infinityParser2ProUpstreamRevision)"
-                    : "\(Q35Resources.infinityParser2FlashUpstreamRepoId)@\(Q35Resources.infinityParser2FlashUpstreamRevision)",
+                    : "\(Q35Resources.infinityParser2ProUpstreamRepoId)@\(Q35Resources.infinityParser2ProUpstreamRevision)",
                 createdAt: createdAt
             )
         case .deepseekV4Flash:

@@ -10,12 +10,12 @@ final class GateSupportTests: XCTestCase {
             "--all-installed",
             "--require-all",
             "--skip-model",
-            "vision-ocr-infinity-flash",
+            "vision-ocr-lighton",
         ])
 
         XCTAssertTrue(gate.allInstalled)
         XCTAssertTrue(gate.requireAll)
-        XCTAssertEqual(gate.skipModel, "vision-ocr-infinity-flash")
+        XCTAssertEqual(gate.skipModel, "vision-ocr-lighton")
     }
 
     func testGateRunnerDrainsChattyChildPipesWithoutDeadlocking() async throws {

@@ -217,8 +217,8 @@ are:
 - Text anonymize: `text-anonymize-privacy-filter`
 - Speech TTS: `speech-tts-qwen3-nano`, `speech-tts-qwen3-customvoice`
 - Speech ASR: `speech-asr-qwen3`, `speech-asr-parakeet`
-- Vision OCR: `vision-ocr-lighton`, `vision-ocr-infinity-flash`,
-  `vision-ocr-infinity-pro-int8`, `vision-ocr-infinity-pro`
+- Vision OCR: `vision-ocr-lighton`, `vision-ocr-infinity-pro-int8`,
+  `vision-ocr-infinity-pro`
 - Vision segmentation / tracking: `vision-segment-sam31`
 - Vision grounding: `vision-ground-falcon-perception`
 - Face detection and identity embeddings: `vision-face-buffalo-l`
@@ -1262,7 +1262,6 @@ Examples:
 
 ```bash
 swift run mere.run model pull vision-ocr-lighton
-swift run mere.run model pull vision-ocr-infinity-flash
 swift run mere.run model pull vision-ocr-infinity-pro-int8
 swift run mere.run vision ocr ./page.png --backend lighton --model ~/Library/Application\ Support/MereRun/models/vision-ocr-lighton
 swift run mere.run vision ocr ./page.png --backend glm

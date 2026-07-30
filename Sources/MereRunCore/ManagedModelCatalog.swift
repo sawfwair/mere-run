@@ -1371,17 +1371,6 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["text anonymize"]
         ),
         ManagedModelSpec(
-            id: Q35Resources.infinityParser2FlashModelId,
-            category: .visionOCR,
-            installShape: .directoryRoot,
-            hubFallback: Q35Resources.profile(for: Q35Resources.infinityParser2FlashModelId)?.hubFallbackConfig,
-            upstreamRepoId: Q35Resources.infinityParser2FlashUpstreamRepoId,
-            upstreamRevision: Q35Resources.infinityParser2FlashUpstreamRevision,
-            validationKind: .q35,
-            estimatedDownloadBytes: 5 * 1_073_741_824,
-            defaultCLICommands: ["vision ocr"]
-        ),
-        ManagedModelSpec(
             id: Q35Resources.infinityParser2ProModelId,
             category: .visionOCR,
             installShape: .directoryRoot,

@@ -653,17 +653,6 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.defaultRuntimeServingEngine, .textChatQ36)
     }
 
-    func testInfinityParser2FlashUsesNativeQ35VisionOCRSpec() throws {
-        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Q35Resources.infinityParser2FlashModelId))
-
-        XCTAssertEqual(spec.category, .visionOCR)
-        XCTAssertEqual(spec.hubFallback?.repoId, Q35Resources.infinityParser2FlashUpstreamRepoId)
-        XCTAssertEqual(spec.hubFallback?.revision, Q35Resources.infinityParser2FlashUpstreamRevision)
-        XCTAssertEqual(spec.validationKind, .q35)
-        XCTAssertTrue(spec.runtimeAutoDownloadAllowed)
-        XCTAssertEqual(spec.defaultCLICommands, ["vision ocr"])
-    }
-
     func testInfinityParser2ProRequiresExplicitPull() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Q35Resources.infinityParser2ProModelId))
 

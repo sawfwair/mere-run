@@ -569,7 +569,7 @@ struct CommandDraft: Equatable, Codable {
     var visionGLMConfig = ""
     var visionInfinityRuntime = "native"
     var visionInfinityParserCLI = "parser"
-    var visionInfinityModel = "vision-ocr-infinity-flash"
+    var visionInfinityModel = "vision-ocr-infinity-pro-int8"
     var visionInfinityBackend = "vllm-server"
     var visionInfinityAPIURL = "http://localhost:8000/v1/chat/completions"
     var visionInfinityAPIKey = "EMPTY"

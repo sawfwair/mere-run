@@ -74,7 +74,6 @@ from the runtime catalog used by `mere.run model list`,
 | `text-code` | `text-code-qwen3` |
 | `text-embed` | `text-embed-qwen3-0.6b` |
 | `text-anonymize` | `text-anonymize-privacy-filter` |
-| `vision-ocr` | `vision-ocr-infinity-flash` |
 | `vision-ocr` | `vision-ocr-infinity-pro` |
 | `vision-ocr` | `vision-ocr-infinity-pro-int8` |
 | `vision-ocr` | `vision-ocr-lighton` |

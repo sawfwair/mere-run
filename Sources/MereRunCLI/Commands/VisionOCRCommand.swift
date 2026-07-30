@@ -46,9 +46,9 @@ struct VisionOCR: AsyncParsableCommand {
           https://github.com/zai-org/GLM-OCR
 
         Infinity-Parser2 uses the native Qwen-family Swift runtime by default
-        with managed model id `vision-ocr-infinity-flash`. Use
-        --infinity-model vision-ocr-infinity-pro-int8 for heavyweight quality
-        evals that can tolerate higher latency and memory use. Use
+        with managed model id `vision-ocr-infinity-pro-int8`. The unquantized
+        `vision-ocr-infinity-pro` model remains available for heavyweight quality
+        evals that can tolerate substantially higher memory use. Use
         --infinity-runtime external only when comparing against the upstream
         `infinity_parser2` Python CLI or an already-started vLLM server.
         """
@@ -79,7 +79,7 @@ struct VisionOCR: AsyncParsableCommand {
     var infinityParserCLI: String = "parser"
 
     @Option(name: [.long], help: "Infinity-Parser2 managed model id or local path for native runs; upstream model/server id for external runs.")
-    var infinityModel: String = Q35Resources.infinityParser2FlashModelId
+    var infinityModel: String = Q35Resources.infinityParser2ProInt8ModelId
 
     @Option(name: [.long], help: "External Infinity-Parser2 backend: transformers | vllm-engine | vllm-server.")
     var infinityBackend: InfinityParserBackend = .vllmServer
@@ -289,7 +289,7 @@ struct VisionOCR: AsyncParsableCommand {
 
         let resolvedModelID = ModelResolver.ModelID(rawValue: infinityModel)
         let generator = Q35Generator(
-            modelId: resolvedModelID?.rawValue ?? Q35Resources.infinityParser2FlashModelId,
+            modelId: resolvedModelID?.rawValue ?? Q35Resources.infinityParser2ProInt8ModelId,
             visionMinPixels: infinityMinPixels,
             visionMaxPixels: infinityMaxPixels
         )

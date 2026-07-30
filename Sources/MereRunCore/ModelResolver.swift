@@ -58,7 +58,6 @@ public struct ModelResolver {
         case qwen3Embedding = "text-embed-qwen3-0.6b"
         case privacyFilter = "text-anonymize-privacy-filter"
         case lightOnOCR = "vision-ocr-lighton"
-        case infinityParser2Flash = "vision-ocr-infinity-flash"
         case infinityParser2Pro = "vision-ocr-infinity-pro"
         case infinityParser2ProInt8 = "vision-ocr-infinity-pro-int8"
         case visionSegmentSAM31 = "vision-segment-sam31"
