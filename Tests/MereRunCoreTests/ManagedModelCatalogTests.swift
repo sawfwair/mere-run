@@ -59,8 +59,6 @@ final class ManagedModelCatalogTests: XCTestCase {
             "image-krea2-raw",
             "image-krea2-turbo",
             "image-ideogram4-sdnq-uint4",
-            LagunaResources.modelID,
-            LagunaResources.xsModelID,
             "text-chat-lfm25-a1b-8bit",
             "vision-segment-sam31",
             "vision-face-buffalo-l",
@@ -573,7 +571,8 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(target.estimatedDownloadBytes, LagunaResources.estimatedDownloadBytes)
         XCTAssertEqual(target.companionModelIDs, [LagunaResources.dflashModelID])
         XCTAssertFalse(target.runtimeAutoDownloadAllowed)
-        XCTAssertNotNil(target.usageRestriction)
+        XCTAssertNil(target.usageRestriction)
+        XCTAssertTrue(LagunaResources.snapshotPatterns.contains("LICENSE*"))
 
         XCTAssertFalse(ManagedModelCatalog.allSpecs.contains { $0.id == companion.id })
         XCTAssertEqual(companion.hubFallback?.repoId, LagunaResources.dflashUpstreamModelID)
@@ -598,8 +597,8 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(target.estimatedDownloadBytes, LagunaResources.xsEstimatedDownloadBytes)
         XCTAssertEqual(target.companionModelIDs, [])
         XCTAssertFalse(target.runtimeAutoDownloadAllowed)
-        XCTAssertTrue(target.usageRestriction?.summary.contains("commercial") == true)
-        XCTAssertTrue(target.usageRestriction?.summary.contains("testing-only") == false)
+        XCTAssertNil(target.usageRestriction)
+        XCTAssertTrue(LagunaResources.snapshotPatterns.contains("LICENSE*"))
     }
 
     func testQ36NanoUsesOptiQHubSource() throws {

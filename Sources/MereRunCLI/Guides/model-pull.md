@@ -45,7 +45,8 @@ mere.run model pull image-zimage-nano --accept-model-license --preflight --json
 ```bash
 mere.run model pull text-chat-gemma4-nano
 mere.run model pull text-chat-lfm25-a1b-8bit --accept-model-license
-mere.run model pull text-chat-laguna-s-2-1 --accept-model-license
+mere.run model pull text-chat-laguna-s-2-1
+mere.run model pull text-chat-laguna-xs-2-1
 ```
 
 ```bash

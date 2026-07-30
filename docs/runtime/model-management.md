@@ -121,12 +121,12 @@ acknowledgement. mere.run does not determine whether a user's intended use is
 permitted. The complete inventory is in
 [`model-sources.md`](../model-sources.md#restricted-model-downloads).
 
-For example, Laguna XS 2.1 is released under OpenMDW-1.1 for commercial and
-non-commercial use. Its custom open-model terms still require explicit
-acknowledgement before the pinned MLX serialization is installed:
+Laguna XS 2.1 is released under the permissive OpenMDW-1.1 license, and its
+public Hugging Face repository is not gated. It therefore installs without a
+separate acknowledgement flag while retaining the upstream license file:
 
 ```bash
-mere.run model pull text-chat-laguna-xs-2-1 --accept-model-license
+mere.run model pull text-chat-laguna-xs-2-1
 mere.run text chat --model text-chat-laguna-xs-2-1 --prompt "Hello"
 ```
 

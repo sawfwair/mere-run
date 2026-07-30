@@ -108,11 +108,11 @@ attention and short-conv cache proves compatibility.
 
 `text-chat-laguna-s-2-1` is an opt-in 96 GB-and-up Apple Silicon lane and is
 never selected by setup or hardware-aware defaults. Its roughly 72 GB target
-and 2.2 GB DFlash companion use immutable official Poolside revisions and
-require explicit OpenMDW-1.1 acceptance:
+and 2.2 GB DFlash companion use immutable official Poolside revisions. The
+public OpenMDW-1.1 repositories are not gated:
 
 ```bash
-swift run mere.run model pull text-chat-laguna-s-2-1 --accept-model-license
+swift run mere.run model pull text-chat-laguna-s-2-1
 swift run mere.run text chat \
   --model text-chat-laguna-s-2-1 \
   --prompt "Implement a bounded Swift actor queue and explain its invariants." \
@@ -128,13 +128,13 @@ when acceptance is poor. Longer requests can use ragged continuous batching in
 `text-chat-laguna-xs-2-1` is the smaller 36 GB-minimum / 48 GB-recommended
 lane. It pins Poolside's five-shard `Laguna-XS-2.1-NVFP4-mlx` revision and
 uses the same native runtime with the XS-validated M5 decode and terminal
-prefill accelerations. Poolside publishes this NVFP4 build for experimental
-testing only and advises against production use. The managed entry therefore
-requires explicit OpenMDW-1.1 acceptance, never auto-downloads, and does not
-attach the S DFlash checkpoint:
+prefill accelerations, traced back to Poolside's canonical released
+`Laguna-XS-2.1-NVFP4` model. The public repository is not gated; the managed
+entry retains its OpenMDW-1.1 license file, never auto-downloads because of its
+size, and does not attach the S DFlash checkpoint:
 
 ```bash
-swift run mere.run model pull text-chat-laguna-xs-2-1 --accept-model-license
+swift run mere.run model pull text-chat-laguna-xs-2-1
 swift run mere.run text chat \
   --model text-chat-laguna-xs-2-1 \
   --prompt "Implement a bounded Swift actor queue and explain its invariants." \

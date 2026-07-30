@@ -540,22 +540,6 @@ public enum ManagedModelCatalog {
         licenseURL: "https://huggingface.co/\(Cosmos3Resources.officialRepoID)/blob/\(Cosmos3Resources.officialRevision)/LICENSE"
     )
 
-    private static let lagunaUsageRestriction = usageRestriction(
-        summary: "Laguna S 2.1 is distributed under OpenMDW-1.1; its attribution and acceptable-use conditions apply.",
-        license: "OpenMDW-1.1",
-        sourceRepoId: LagunaResources.upstreamModelID,
-        sourceRevision: LagunaResources.upstreamRevision,
-        licenseURL: "https://huggingface.co/poolside/Laguna-S-2.1/blob/main/LICENSE.md"
-    )
-
-    private static let lagunaXSUsageRestriction = usageRestriction(
-        summary: "Laguna XS 2.1 is released under OpenMDW-1.1 for commercial and non-commercial use; Poolside's attribution and acceptable-use conditions apply to this pinned MLX serialization.",
-        license: "OpenMDW-1.1",
-        sourceRepoId: LagunaResources.xsUpstreamModelID,
-        sourceRevision: LagunaResources.xsUpstreamRevision,
-        licenseURL: "https://huggingface.co/\(LagunaResources.xsUpstreamModelID)/blob/\(LagunaResources.xsUpstreamRevision)/LICENSE.md"
-    )
-
     public static let allSpecs: [ManagedModelSpec] = [
         ManagedModelSpec(
             id: "image-klein-nano",
@@ -1047,7 +1031,6 @@ public enum ManagedModelCatalog {
             ),
             upstreamRepoId: LagunaResources.upstreamModelID,
             upstreamRevision: LagunaResources.upstreamRevision,
-            usageRestriction: lagunaUsageRestriction,
             validationKind: .laguna,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: LagunaResources.estimatedDownloadBytes,
@@ -1065,7 +1048,6 @@ public enum ManagedModelCatalog {
             ),
             upstreamRepoId: LagunaResources.xsUpstreamModelID,
             upstreamRevision: LagunaResources.xsUpstreamRevision,
-            usageRestriction: lagunaXSUsageRestriction,
             validationKind: .laguna,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: LagunaResources.xsEstimatedDownloadBytes,

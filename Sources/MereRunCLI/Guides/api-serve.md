@@ -276,7 +276,7 @@ mere.run api serve --engine text-chat-lfm2 --port 11434
 ```
 
 ```bash
-mere.run model pull text-chat-laguna-s-2-1 --accept-model-license
+mere.run model pull text-chat-laguna-s-2-1
 mere.run api serve --engine text-chat-laguna --max-active-requests 2 --port 11434
 ```
 

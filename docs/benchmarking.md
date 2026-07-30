@@ -148,7 +148,7 @@ a loop or phase-restart warning, not an automatic correctness failure.
 
 Laguna S 2.1 is available as the opt-in managed model
 `text-chat-laguna-s-2-1`. Pull it once with
-`mere.run model pull text-chat-laguna-s-2-1 --accept-model-license`; the
+`mere.run model pull text-chat-laguna-s-2-1`; the
 official DFlash companion is installed automatically. The chat, tool-call, and
 code benchmarks resolve the managed checkpoints by default. `--laguna-path`
 and `--laguna-dflash-path` remain available as explicit checkpoint overrides;

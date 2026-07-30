@@ -52,7 +52,7 @@ has been a particularly useful—and fun—public proving ground for the runtime
 Pulling the target installs both immutable checkpoint revisions:
 
 ```bash
-mere.run model pull text-chat-laguna-s-2-1 --accept-model-license
+mere.run model pull text-chat-laguna-s-2-1
 mere.run text chat \
   --model text-chat-laguna-s-2-1 \
   --prompt "Write a bounded Swift actor queue." \
@@ -63,7 +63,7 @@ mere.run api serve --engine text-chat-laguna --max-active-requests 2
 For the smaller XS target:
 
 ```bash
-mere.run model pull text-chat-laguna-xs-2-1 --accept-model-license
+mere.run model pull text-chat-laguna-xs-2-1
 mere.run text chat \
   --model text-chat-laguna-xs-2-1 \
   --prompt "Write a bounded Swift actor queue." \

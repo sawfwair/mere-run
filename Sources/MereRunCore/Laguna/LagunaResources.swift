@@ -20,6 +20,7 @@ public enum LagunaResources {
     public static let recommendedMinP = 0.02
 
     public static let snapshotPatterns = [
+        "LICENSE*",
         "README.md",
         "chat_template.jinja",
         "config.json",

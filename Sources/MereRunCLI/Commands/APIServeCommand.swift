@@ -289,7 +289,7 @@ struct APIServe: AsyncParsableCommand {
                     ) else {
                         throw ValidationError(
                             "Model '\(requestedID)' is not installed. Run "
-                                + "'mere.run model pull \(requestedID) --accept-model-license' first."
+                                + "'mere.run model pull \(requestedID)' first."
                         )
                     }
                     return installed.path
@@ -301,7 +301,7 @@ struct APIServe: AsyncParsableCommand {
             ) else {
                 throw ValidationError(
                     "Model '\(LagunaResources.modelID)' is not installed. Run "
-                        + "'mere.run model pull \(LagunaResources.modelID) --accept-model-license' first."
+                        + "'mere.run model pull \(LagunaResources.modelID)' first."
                 )
             }
             return installed.path

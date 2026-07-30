@@ -21,8 +21,8 @@ ternary checkpoint's additional weight capacity is worth the memory cost.
 `text-agent-ornith-35b-mlx` is the local converted Ornith 1.0 35B Q4 MLX coding-agent target; it also uses the native Qwen-family runtime.
 `text-chat-lfm25-a1b-8bit` is the managed LiquidAI LFM2.5 8B-A1B MLX 8-bit snapshot and runs through the native Swift LFM2 runtime.
 `text-chat-laguna-s-2-1` is the opt-in managed Poolside 118B-A8B NVFP4 target
-for 96 GB-and-up Apple Silicon. Pulling it with `--accept-model-license`
-installs the pinned DFlash companion; generation defaults to the validated
+for 96 GB-and-up Apple Silicon. Pulling it installs the pinned DFlash
+companion; generation defaults to the validated
 temperature 1, top-p 1, top-k 20, and min-p 0.02 recipe.
 `text-chat-laguna-xs-2-1` is Poolside's released 33B-A3B Laguna XS 2.1 model
 for 36 GB-and-up Apple Silicon, installed from its pinned NVFP4 MLX
@@ -42,8 +42,8 @@ serialization. It is opt-in and does not use the Laguna S DFlash companion.
 ```bash
 mere.run model capabilities
 mere.run model pull text-chat-gemma4-12b-4bit
-mere.run model pull text-chat-laguna-s-2-1 --accept-model-license
-mere.run model pull text-chat-laguna-xs-2-1 --accept-model-license
+mere.run model pull text-chat-laguna-s-2-1
+mere.run model pull text-chat-laguna-xs-2-1
 mere.run text chat --help
 ```
 

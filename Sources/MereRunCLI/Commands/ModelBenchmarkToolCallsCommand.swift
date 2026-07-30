@@ -177,7 +177,7 @@ struct ModelBenchmarkToolCalls: AsyncParsableCommand {
                 return ToolBenchmarkModelResult.missing(
                     model: modelID,
                     reason: "Model is not installed. Run "
-                        + "`mere.run model pull \(managedID) --accept-model-license` first."
+                        + "`mere.run model pull \(managedID)` first."
                 )
             }
             let resolvedDFlashPath = lagunaDflashPath

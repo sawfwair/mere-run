@@ -28,6 +28,20 @@ final class ModelPullCommandParsingTests: XCTestCase {
         XCTAssertNil(accepted.licenseAcceptanceMessage(for: restricted))
     }
 
+    func testPublicLagunaPullsDoNotRequireLicenseAcceptance() throws {
+        for modelID in [LagunaResources.modelID, LagunaResources.xsModelID] {
+            let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: modelID))
+            let command = try ModelPull.parse([modelID])
+
+            XCTAssertNil(spec.usageRestriction)
+            XCTAssertNil(command.licenseAcceptanceMessage(for: spec))
+            XCTAssertFalse(
+                CLICommandDisplay.modelPullCommand(for: modelID)
+                    .contains("--accept-model-license")
+            )
+        }
+    }
+
     func testModelListReportsBuffaloLUsageTerms() {
         let lines = ModelList.usageRestrictionLines()
 

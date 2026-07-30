@@ -198,12 +198,9 @@ struct TextChat: AsyncParsableCommand {
         }
         if requireInstalled {
             guard installedModelPath != nil else {
-                let acceptance = isLagunaModelID(normalizedModelId)
-                    ? " --accept-model-license"
-                    : ""
                 throw ValidationError(
                     "Model '\(normalizedModelId)' is not installed. Run "
-                        + "'mere.run model pull \(normalizedModelId)\(acceptance)' explicitly."
+                        + "'mere.run model pull \(normalizedModelId)' explicitly."
                 )
             }
         }
@@ -325,7 +322,7 @@ struct TextChat: AsyncParsableCommand {
                         ?? normalizedModelId
                     throw ValidationError(
                         "Model '\(requestedID)' is not installed. Run "
-                            + "'mere.run model pull \(requestedID) --accept-model-license' first."
+                            + "'mere.run model pull \(requestedID)' first."
                     )
                 }
                 guard let generator = lagunaGenerator else {
@@ -487,10 +484,6 @@ struct TextChat: AsyncParsableCommand {
             return FileManager.default.fileExists(atPath: url.path) ? url.path : nil
         }
         return ManagedModelResolver.resolveInstalledModel(id: modelID)?.path
-    }
-
-    private func isLagunaModelID(_ modelID: String) -> Bool {
-        LagunaResources.isManagedIdentifier(modelID)
     }
 
     private func emitPreflight(modelID: String, installedModelPath: String?) throws {

@@ -311,8 +311,8 @@ SOFTWARE.
 - managed MLX-native Laguna XS source:
   `poolside/Laguna-XS-2.1-NVFP4-mlx` revision
   `841778bda563a36104dd521e37d99218e46f4f25`
-- license: OpenMDW License Agreement 1.1; managed downloads require explicit
-  acceptance and retain the checkpoint's license and attribution files
+- license: OpenMDW License Agreement 1.1; managed downloads retain the
+  checkpoint's license and attribution files
 - permitted use: OpenMDW-1.1 allows commercial and non-commercial use subject
   to its attribution and acceptable-use terms
 

@@ -105,7 +105,7 @@ For the opt-in Laguna S 2.1 target with its automatically installed DFlash
 companion:
 
 ```bash
-swift run mere.run model pull text-chat-laguna-s-2-1 --accept-model-license
+swift run mere.run model pull text-chat-laguna-s-2-1
 swift run mere.run api serve \
   --engine text-chat-laguna \
   --max-active-requests 2
@@ -120,7 +120,7 @@ To serve the smaller experimental XS checkpoint instead, select it explicitly;
 the server will not attach the S DFlash companion:
 
 ```bash
-swift run mere.run model pull text-chat-laguna-xs-2-1 --accept-model-license
+swift run mere.run model pull text-chat-laguna-xs-2-1
 swift run mere.run api serve \
   --engine text-chat-laguna \
   --model text-chat-laguna-xs-2-1
