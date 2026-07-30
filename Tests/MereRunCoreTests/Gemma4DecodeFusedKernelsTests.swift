@@ -163,6 +163,19 @@ final class Gemma4DecodeFusedKernelsTests: MereRunCoreTestCase {
             XCTFail("expected fusion to succeed for uniform QuantizedLinear projections")
             return
         }
+        XCTAssertTrue(fused.matches(projections))
+
+        // Gemma and Q35 retain this concatenated projection outside the module
+        // tree. Replacing even one source with its production LoRA wrapper must
+        // invalidate the retained layout and must not silently drop the delta by
+        // building a new fusion over the wrapper.
+        let adapted: [Linear?] = [
+            LoRAQuantizedLinear(base: projections[0], rank: 2),
+            projections[1],
+            projections[2],
+        ]
+        XCTAssertFalse(fused.matches(adapted))
+        XCTAssertNil(Gemma4FusedQuantizedProjection.fuse(adapted))
 
         let x = MLXRandom.normal([2, 1, input]).asType(.float16)
         let fusedParts = fused.callSplit(x)
