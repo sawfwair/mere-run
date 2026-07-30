@@ -7,27 +7,34 @@ import XCTest
 @testable import MereRunCore
 
 final class LagunaModelTests: MereRunCoreTestCase {
-    private func makeConfig(quantizedSharedExperts: Bool = false) throws -> LagunaConfig {
+    private func makeConfig(
+        quantizedSharedExperts: Bool = false,
+        numHiddenLayers: Int = 2
+    ) throws -> LagunaConfig {
         let hiddenSize = quantizedSharedExperts ? 16 : 8
         let headDimension = quantizedSharedExperts ? 8 : 4
         let sharedExpertSize = quantizedSharedExperts ? 16 : 5
+        let layerTypes = (0..<numHiddenLayers).map {
+            $0.isMultiple(of: 2) ? "full_attention" : "sliding_attention"
+        }
+        let mlpLayerTypes = (0..<numHiddenLayers).map { $0 == 0 ? "dense" : "sparse" }
         var object: [String: Any] = [
             "model_type": "laguna",
             "vocab_size": 32,
             "hidden_size": hiddenSize,
             "intermediate_size": 16,
-            "num_hidden_layers": 2,
+            "num_hidden_layers": numHiddenLayers,
             "num_attention_heads": 2,
-            "num_attention_heads_per_layer": [2, 2],
+            "num_attention_heads_per_layer": Array(repeating: 2, count: numHiddenLayers),
             "num_key_value_heads": 1,
             "head_dim": headDimension,
             "max_position_embeddings": 128,
             "rms_norm_eps": 0.000001,
             "attention_bias": false,
             "gating": "per-head",
-            "layer_types": ["full_attention", "sliding_attention"],
+            "layer_types": layerTypes,
             "sliding_window": 8,
-            "mlp_layer_types": ["dense", "sparse"],
+            "mlp_layer_types": mlpLayerTypes,
             "mlp_only_layers": [0],
             "num_experts": 3,
             "num_experts_per_tok": 2,
@@ -1754,6 +1761,44 @@ final class LagunaModelTests: MereRunCoreTestCase {
             MLX.sum(MLX.abs($0.loraUp)).item(Float.self) > 0
         }
         XCTAssertFalse(updatedLayers.isEmpty)
+    }
+
+    func testNativeLagunaTrainerDisablesInferenceAsyncLadderDuringGradientTrace() throws {
+        MLXRandom.seed(761)
+        let model = LagunaCausalLM(config: try makeConfig(numHiddenLayers: 8))
+        let layers = try LagunaTextLoRAInjector.inject(
+            into: model,
+            rank: 2
+        )
+
+        let report = try TextLoRATrainer.train(
+            model: model,
+            loraLayers: layers,
+            examples: [
+                TextSFTTokenizedExample(
+                    inputTokenIds: [1, 2, 3],
+                    labelTokenIds: [2, 3, 4],
+                    lossMask: [0, 1, 1]
+                ),
+            ],
+            config: TextLoRATrainingConfig(
+                trainingSteps: 1,
+                batchSize: 1,
+                learningRate: 0.01
+            ),
+            gatheredForward: { model, inputIDs, positions in
+                model.trainingLogits(
+                    inputIDs: inputIDs,
+                    flatTargetPositions: positions
+                )
+            }
+        ) { model, inputIDs in
+            model(inputIDs)
+        }
+
+        XCTAssertEqual(report.steps, 1)
+        XCTAssertEqual(report.layerCount, 32)
+        XCTAssertTrue(report.finalLoss?.isFinite == true)
     }
 
     func testNativeLagunaTrainerCrossesQuantizedSharedExpertPath() throws {

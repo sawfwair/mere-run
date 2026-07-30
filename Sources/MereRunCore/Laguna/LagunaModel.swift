@@ -1882,7 +1882,8 @@ final class LagunaLanguageModel: Module {
         cache: [Gemma4AttentionCache]? = nil,
         captureLayerIndices: Set<Int> = [],
         lastPositionOnly: Bool = false,
-        terminalPrefillRowEnabled: Bool? = nil
+        terminalPrefillRowEnabled: Bool? = nil,
+        prefillAsyncLadderEnabled: Bool = true
     ) -> LagunaLanguageModelOutput {
         var hidden = embedTokens(inputIDs)
         var capturedHiddenStates: [Int: MLXArray] = [:]
@@ -1955,7 +1956,9 @@ final class LagunaLanguageModel: Module {
             if captureLayerIndices.contains(index) {
                 capturedHiddenStates[index] = hidden
             }
-            let ladderStride = LagunaGraphAccelerationPolicy.prefillAsyncLadderStride
+            let ladderStride = prefillAsyncLadderEnabled
+                ? LagunaGraphAccelerationPolicy.prefillAsyncLadderStride
+                : 0
             if ladderStride > 0,
                sequenceLength > 1,
                (index + 1).isMultiple(of: ladderStride) {
@@ -2070,7 +2073,10 @@ final class LagunaCausalLM: Module, @unchecked Sendable {
         inputIDs: MLXArray,
         flatTargetPositions: MLXArray
     ) -> MLXArray {
-        let hidden = model(inputIDs)
+        let hidden = model.forward(
+            inputIDs,
+            prefillAsyncLadderEnabled: false
+        ).hidden
         let flattened = hidden.reshaped([-1, hidden.dim(-1)])
         let selected = take(
             flattened,

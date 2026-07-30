@@ -71,6 +71,9 @@ struct TextTrainLoRA: AsyncParsableCommand {
     func run() async throws {
         try validateOptions()
         let family = try resolvedTrainingFamily()
+        if !dryRun {
+            try MLXBundleSupport.ensureAvailable(quiet: json)
+        }
 
         let dataURL = URL(fileURLWithPath: data).standardizedFileURL
         let outputURL = URL(fileURLWithPath: output).standardizedFileURL

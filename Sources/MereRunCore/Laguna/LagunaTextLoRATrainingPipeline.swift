@@ -1,4 +1,5 @@
 import Foundation
+import MLX
 
 public struct LagunaTextLoRATrainingPipelineRequest: Sendable {
     public let modelId: String
@@ -42,6 +43,20 @@ public enum LagunaTextLoRATrainingPipeline {
         _ request: LagunaTextLoRATrainingPipelineRequest,
         progressHandler: (@Sendable (ChatProgress) -> Void)? = nil,
         trainingProgressHandler: (@Sendable (TextLoRATrainingProgress) -> Void)? = nil
+    ) async throws -> TextLoRATrainingReport {
+        try await Stream.withNewDefaultStream {
+            try await trainOnCurrentStream(
+                request,
+                progressHandler: progressHandler,
+                trainingProgressHandler: trainingProgressHandler
+            )
+        }
+    }
+
+    private static func trainOnCurrentStream(
+        _ request: LagunaTextLoRATrainingPipelineRequest,
+        progressHandler: (@Sendable (ChatProgress) -> Void)?,
+        trainingProgressHandler: (@Sendable (TextLoRATrainingProgress) -> Void)?
     ) async throws -> TextLoRATrainingReport {
         guard LagunaResources.managedModelID(for: request.modelId)
             == LagunaResources.xsModelID else {

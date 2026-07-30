@@ -1,4 +1,5 @@
 import Foundation
+import MLX
 
 public struct Gemma4TextLoRATrainingPipelineRequest: Sendable {
     public let modelId: String
@@ -42,6 +43,20 @@ public enum Gemma4TextLoRATrainingPipeline {
         _ request: Gemma4TextLoRATrainingPipelineRequest,
         progressHandler: (@Sendable (ChatProgress) -> Void)? = nil,
         trainingProgressHandler: (@Sendable (TextLoRATrainingProgress) -> Void)? = nil
+    ) async throws -> TextLoRATrainingReport {
+        try await Stream.withNewDefaultStream {
+            try await trainOnCurrentStream(
+                request,
+                progressHandler: progressHandler,
+                trainingProgressHandler: trainingProgressHandler
+            )
+        }
+    }
+
+    private static func trainOnCurrentStream(
+        _ request: Gemma4TextLoRATrainingPipelineRequest,
+        progressHandler: (@Sendable (ChatProgress) -> Void)?,
+        trainingProgressHandler: (@Sendable (TextLoRATrainingProgress) -> Void)?
     ) async throws -> TextLoRATrainingReport {
         let loaded = try await Gemma4TextModelLoader.load(
             modelId: request.modelId,
