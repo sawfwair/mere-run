@@ -17,9 +17,11 @@ The format is based on Keep a Changelog.
 - ported production-safe wins from the MLX Fast Laguna XS 2.1 challenge,
   where submission `493f1ee1` reached first place with score `1.8435177465`,
   including the terminal-prefill row specialization and exact
-  `[Q; gate]` / `[K; V]` projection banks to the guarded M5 runtime while
-  retaining full-path fallbacks for DFlash captures, batches, and unsupported
-  model shapes.
+  `[Q; gate]` / `[K; V]` projection banks as a backend-neutral MLX graph path
+  that defaults on for M5 Max while retaining full-path fallbacks for DFlash
+  captures, batches, and unsupported model shapes. A resident DGX Spark GB10
+  CUDA A/B reduced the matched 568-token prefill from 2.102 to 1.689 seconds;
+  Metal-native ranked kernels remain separately hardware-guarded.
 - audited managed-model acknowledgement policy and removed false-positive
   `--accept-model-license` gates from public Z-Image Nano, Sortformer,
   Cosmos3-Edge, and the hidden Gemma 3 companion while retaining genuine
