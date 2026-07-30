@@ -584,7 +584,7 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertFalse(companion.runtimeAutoDownloadAllowed)
     }
 
-    func testLagunaXSUsesPinnedExperimentalTargetWithoutSCompanion() throws {
+    func testLagunaXSUsesPinnedReleasedTargetWithoutSCompanion() throws {
         let target = try XCTUnwrap(ManagedModelCatalog.spec(for: LagunaResources.xsModelID))
 
         XCTAssertEqual(target.category, .textChat)
@@ -598,7 +598,8 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(target.estimatedDownloadBytes, LagunaResources.xsEstimatedDownloadBytes)
         XCTAssertEqual(target.companionModelIDs, [])
         XCTAssertFalse(target.runtimeAutoDownloadAllowed)
-        XCTAssertTrue(target.usageRestriction?.summary.contains("experimental") == true)
+        XCTAssertTrue(target.usageRestriction?.summary.contains("commercial") == true)
+        XCTAssertTrue(target.usageRestriction?.summary.contains("testing-only") == false)
     }
 
     func testQ36NanoUsesOptiQHubSource() throws {

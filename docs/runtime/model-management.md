@@ -121,8 +121,9 @@ acknowledgement. mere.run does not determine whether a user's intended use is
 permitted. The complete inventory is in
 [`model-sources.md`](../model-sources.md#restricted-model-downloads).
 
-For example, Laguna XS 2.1 is an experimental, testing-only checkpoint and
-must be selected explicitly:
+For example, Laguna XS 2.1 is released under OpenMDW-1.1 for commercial and
+non-commercial use. Its custom open-model terms still require explicit
+acknowledgement before the pinned MLX serialization is installed:
 
 ```bash
 mere.run model pull text-chat-laguna-xs-2-1 --accept-model-license

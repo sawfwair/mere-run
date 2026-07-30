@@ -100,6 +100,15 @@ The ranked Laguna XS work contains both reusable execution ideas and kernels
 whose correctness depends on that checkpoint's exact shapes. Promotion across
 the catalog follows the matrix below; sharing an operator name is not enough.
 
+This work originated in the public [MLX Fast Laguna XS 2.1
+challenge](https://mlx.fast/). Submission
+[`493f1ee1-38d8-4152-86a4-d8489d082727`](https://github.com/Layr-Labs/mlxfast-challenge/commit/612df0387708114f6cc625dbdad270f7ea9d68b3)
+was promoted on July 30, 2026 with score `1.8435177465`, decode
+`7.089954 ms/token`, and prefill `0.240295 ms/token`, taking first place at
+the time of promotion under the official paired M5 Max validation. The
+production port retains only mechanisms compatible with mere.run's broader
+sampling, serving, capture, and concurrency contracts.
+
 | Ranked mechanism | Production status | Portability boundary |
 | --- | --- | --- |
 | Last-position terminal prefill | Shipped for guarded Laguna XS M5 execution | The graph idea can apply to decoder-only models whose caller consumes only the final logit row. Each engine must separately preserve every K/V row, cache offset, batch behavior, multimodal inputs, speculative/DFlash captures, and requested hidden states. |

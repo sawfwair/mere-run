@@ -3,10 +3,28 @@
 Native Swift/MLX support for Poolside's official
 `Laguna-S-2.1-NVFP4-mlx` checkpoint and DFlash companion. The validated pair
 is available as the opt-in managed model `text-chat-laguna-s-2-1`. Poolside's
-experimental five-shard `Laguna-XS-2.1-NVFP4-mlx` testing checkpoint is the
-distinct opt-in managed model `text-chat-laguna-xs-2-1`; shard discovery comes
-from the safetensors index, and shared-expert quantization is derived from that
-index rather than assumed from the S layout.
+[released Laguna XS 2.1 model](https://huggingface.co/poolside/Laguna-XS-2.1-NVFP4)
+is available through the five-shard
+`Laguna-XS-2.1-NVFP4-mlx` serialization as the distinct opt-in managed model
+`text-chat-laguna-xs-2-1`; shard discovery comes from the safetensors index,
+and shared-expert quantization is derived from that index rather than assumed
+from the S layout.
+
+## MLX Fast lineage
+
+The guarded XS acceleration work was developed through the public
+[MLX Fast Laguna challenge](https://mlx.fast/). On July 30, 2026, submission
+[`493f1ee1-38d8-4152-86a4-d8489d082727`](https://github.com/Layr-Labs/mlxfast-challenge/commit/612df0387708114f6cc625dbdad270f7ea9d68b3)
+was promoted at score `1.8435177465`, with `7.089954 ms/token` decode and
+`0.240295 ms/token` prefill, taking first place at the time of promotion on
+the official paired M5 Max benchmark.
+
+mere.run brings back the production-safe graph, layout, and kernel wins from
+that campaign with hardware, shape, capture, batch, and rollback guards. The
+challenge's greedy-only language-head pruning and benchmark-specific vendored
+runtime changes are deliberately excluded because mere.run also supports
+sampling, structured output, DFlash, and general local serving. The challenge
+has been a particularly useful—and fun—public proving ground for the runtime.
 
 ## Files
 
@@ -42,7 +60,7 @@ mere.run text chat \
 mere.run api serve --engine text-chat-laguna --max-active-requests 2
 ```
 
-For the smaller experimental XS target:
+For the smaller XS target:
 
 ```bash
 mere.run model pull text-chat-laguna-xs-2-1 --accept-model-license
@@ -55,10 +73,11 @@ mere.run api serve \
   --model text-chat-laguna-xs-2-1
 ```
 
-XS requires at least 36 GB unified memory and recommends 48 GB. Poolside marks
-the pinned NVFP4 snapshot as experimental, for testing only, and not validated
-for production use. It never auto-downloads and does not attach the Laguna S
-DFlash companion.
+XS requires at least 36 GB unified memory and recommends 48 GB. Laguna XS 2.1
+is released under OpenMDW-1.1 for commercial and non-commercial use. mere.run
+pins Poolside's MLX-native NVFP4 serialization, requires acknowledgement of
+the upstream license and acceptable-use terms, never auto-downloads it, and
+does not attach the Laguna S DFlash companion.
 
 Laguna requires at least 96 GB unified memory and is not a setup or
 hardware-aware default. The normal chat and serving routes use temperature

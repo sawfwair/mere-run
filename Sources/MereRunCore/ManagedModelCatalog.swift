@@ -549,7 +549,7 @@ public enum ManagedModelCatalog {
     )
 
     private static let lagunaXSUsageRestriction = usageRestriction(
-        summary: "Laguna XS 2.1 NVFP4 MLX is an experimental testing-only checkpoint distributed under OpenMDW-1.1; Poolside's attribution, acceptable-use, and testing-only conditions apply.",
+        summary: "Laguna XS 2.1 is released under OpenMDW-1.1 for commercial and non-commercial use; Poolside's attribution and acceptable-use conditions apply to this pinned MLX serialization.",
         license: "OpenMDW-1.1",
         sourceRepoId: LagunaResources.xsUpstreamModelID,
         sourceRevision: LagunaResources.xsUpstreamRevision,

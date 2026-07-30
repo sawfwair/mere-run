@@ -145,6 +145,7 @@ validates all configured models before downloading any; both accept the same
 | `image-krea2-raw`, `image-krea2-turbo` | Krea 2 Community License; commercial use is limited to entities below USD 1M trailing annual revenue, plus use/distribution conditions |
 | `image-ideogram4-sdnq-uint4` | Ideogram Non-Commercial Model Agreement |
 | `text-chat-lfm25-a1b-8bit` | LFM Open License v1.0; commercial use by entities at or above USD 10M annual revenue is excluded |
+| `text-chat-laguna-s-2-1`, `text-chat-laguna-xs-2-1` | OpenMDW-1.1; commercial and non-commercial use is permitted subject to attribution and Poolside's acceptable-use terms |
 | `vision-segment-sam31` | Meta SAM License custom use, trade-control, attribution, and redistribution conditions |
 | `vision-face-buffalo-l` | InsightFace pretrained weights; non-commercial research use |
 | `image-3d-trellis2-4b` | the mounted DINOv3 encoder is gated under Meta's custom DINOv3 License |

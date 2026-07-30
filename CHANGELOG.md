@@ -8,10 +8,13 @@ The format is based on Keep a Changelog.
 
 ### Changed
 
-- added Poolside's pinned experimental Laguna XS 2.1 NVFP4 checkpoint as the
+- added Poolside's released Laguna XS 2.1 NVFP4 model through its pinned
+  MLX-native serialization as the
   opt-in managed model `text-chat-laguna-xs-2-1`, with variant-safe CLI/API
   resolution and no implicit Laguna S DFlash attachment.
-- ported the ranked Laguna XS terminal-prefill row specialization and exact
+- ported production-safe wins from the MLX Fast Laguna XS 2.1 challenge,
+  where submission `493f1ee1` reached first place with score `1.8435177465`,
+  including the terminal-prefill row specialization and exact
   `[Q; gate]` / `[K; V]` projection banks to the guarded M5 runtime while
   retaining full-path fallbacks for DFlash captures, batches, and unsupported
   model shapes.

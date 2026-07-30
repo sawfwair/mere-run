@@ -24,9 +24,9 @@ ternary checkpoint's additional weight capacity is worth the memory cost.
 for 96 GB-and-up Apple Silicon. Pulling it with `--accept-model-license`
 installs the pinned DFlash companion; generation defaults to the validated
 temperature 1, top-p 1, top-k 20, and min-p 0.02 recipe.
-`text-chat-laguna-xs-2-1` is Poolside's experimental testing-only 33B-A3B
-NVFP4 checkpoint for 36 GB-and-up Apple Silicon. It is pinned, opt-in, and
-does not use the Laguna S DFlash companion.
+`text-chat-laguna-xs-2-1` is Poolside's released 33B-A3B Laguna XS 2.1 model
+for 36 GB-and-up Apple Silicon, installed from its pinned NVFP4 MLX
+serialization. It is opt-in and does not use the Laguna S DFlash companion.
 
 ## Chat Winners By RAM Band
 

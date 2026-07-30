@@ -52,7 +52,7 @@ struct APIServe: AsyncParsableCommand {
           # Start an LFM2.5 text-chat server
           mere.run api serve --engine text-chat-lfm2
 
-          # Start an experimental Laguna XS 2.1 server
+          # Start a Laguna XS 2.1 server
           mere.run api serve --engine text-chat-laguna --model text-chat-laguna-xs-2-1
 
           # Start the DeepSeek V4 Flash OpenAI-compatible server

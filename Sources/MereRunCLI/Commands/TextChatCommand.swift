@@ -37,7 +37,7 @@ struct TextChat: AsyncParsableCommand {
           - text-chat-gemma4-max (Gemma 4 31B native Swift runtime)
           - text-chat-gemma4-nano (Gemma 4 4B native Swift runtime)
           - text-chat-laguna-s-2-1 (Poolside Laguna S 2.1 118B-A8B NVFP4 with DFlash)
-          - text-chat-laguna-xs-2-1 (experimental Poolside Laguna XS 2.1 33B-A3B NVFP4)
+          - text-chat-laguna-xs-2-1 (Poolside Laguna XS 2.1 33B-A3B NVFP4)
           - text-chat-lfm25-a1b-8bit (LiquidAI LFM2.5 8B-A1B MLX 8-bit native Swift runtime)
           - text-chat-psi-agent
         Models are cached under ~/Library/Application Support/MereRun/models/<model-id>.
