@@ -6,6 +6,13 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Changed
+
+- ported the ranked Laguna XS terminal-prefill row specialization and exact
+  `[Q; gate]` / `[K; V]` projection banks to the guarded M5 runtime while
+  retaining full-path fallbacks for DFlash captures, batches, and unsupported
+  model shapes.
+
 ## 0.29.1 - 2026-07-29
 
 ### Changed

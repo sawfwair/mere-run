@@ -109,6 +109,17 @@ controls are `MERERUN_LAGUNA_PREFILL_FUSED_RESIDUAL_RMSNORM` and
 the output norm and language-model head; decode math and cache layout are
 unchanged.
 
+On M5 Max, last-position-only prefill also commits every terminal-layer K/V
+row while carrying only the final query and residual row through attention
+output and the MLP. The Laguna XS terminal layer additionally retains exact
+BF16 `[Q; gate]` and `[K; V]` projection banks, reducing four bias-free
+projections to two without changing any row's contraction. Final-layer DFlash
+captures, batches, decode, unsupported shapes, and non-last-position forwards
+keep the full path. Set `MERERUN_LAGUNA_TERMINAL_PREFILL_ROW=0` to restore the
+full terminal layer or `MERERUN_LAGUNA_TERMINAL_PREFILL_PROJECTION_BANKS=0` to
+keep row elision while restoring the four projections. Both paths remain
+opt-in on non-M5 hardware.
+
 Single-token target decode fuses the NVFP4 gate and up gather-GEMVs with
 SwiGLU, then keeps the native down projection. The fused path is enabled by
 default and can be disabled with `MERERUN_LAGUNA_FUSED_NVFP4_MOE=0` for a

@@ -138,6 +138,16 @@ enum LagunaGraphAccelerationPolicy {
         ProcessInfo.processInfo.environment["MERERUN_LAGUNA_PREFILL_QK_NORM_ROPE"],
         default: m5MaxDefaultsEnabled
     )
+    static let terminalPrefillRowEnabled = parseBoolean(
+        ProcessInfo.processInfo.environment["MERERUN_LAGUNA_TERMINAL_PREFILL_ROW"],
+        default: m5MaxDefaultsEnabled
+    )
+    static let terminalPrefillProjectionBanksEnabled = parseBoolean(
+        ProcessInfo.processInfo.environment[
+            "MERERUN_LAGUNA_TERMINAL_PREFILL_PROJECTION_BANKS"
+        ],
+        default: m5MaxDefaultsEnabled
+    )
     static let nativeAffineQKVEnabled = parseBoolean(
         ProcessInfo.processInfo.environment["MERERUN_LAGUNA_NATIVE_AFFINE_QKV"],
         default: m5MaxDefaultsEnabled
@@ -1305,7 +1315,10 @@ final class LagunaAttention: Module {
     private let gatePerHead: Bool
     private let rope: LagunaRoPE
     private let layerIndex: Int
+    private let isTerminalLayer: Bool
     private var _nativeAffineQKV: LagunaNativeAffineWeight?
+    private var _terminalPrefillQGateWeight: MLXArray?
+    private var _terminalPrefillKVWeight: MLXArray?
 
     init(config: LagunaConfig, layerIndex: Int) {
         self.layerIndex = layerIndex
@@ -1317,6 +1330,7 @@ final class LagunaAttention: Module {
             ? config.slidingWindow
             : nil
         self.gatePerHead = config.gating == "per-head"
+        self.isTerminalLayer = layerIndex == config.numHiddenLayers - 1
         self.rope = LagunaRoPE(
             headDim: config.headDim,
             parameters: config.ropeParameters(layerIndex: layerIndex)
@@ -1383,6 +1397,52 @@ final class LagunaAttention: Module {
         )
         _nativeAffineQKV = fused
         return fused.arrays
+    }
+
+    /// Retain two bias-free BF16 side banks for the terminal XS prefill layer.
+    /// The final query row and per-head gate share one input, while K/V still
+    /// consume every supplied row so the cache advances normally. Concatenating
+    /// output rows does not change any contraction or reduction order.
+    func prepareTerminalPrefillProjectionWeights(enabled: Bool? = nil) -> [MLXArray] {
+        let enabled = enabled
+            ?? (
+                LagunaGraphAccelerationPolicy.terminalPrefillRowEnabled
+                    && LagunaGraphAccelerationPolicy.terminalPrefillProjectionBanksEnabled
+            )
+        guard enabled,
+              _terminalPrefillQGateWeight == nil,
+              _terminalPrefillKVWeight == nil,
+              isTerminalLayer,
+              slidingWindow != nil,
+              gatePerHead,
+              headDim == 128,
+              keyValueHeadCount == 8,
+              headCount == 48 || headCount == 64,
+              let gProj,
+              type(of: qProj) == Linear.self,
+              type(of: kProj) == Linear.self,
+              type(of: vProj) == Linear.self,
+              type(of: gProj) == Linear.self,
+              qProj.bias == nil,
+              kProj.bias == nil,
+              vProj.bias == nil,
+              gProj.bias == nil,
+              qProj.weight.dtype == .bfloat16,
+              kProj.weight.dtype == .bfloat16,
+              vProj.weight.dtype == .bfloat16,
+              gProj.weight.dtype == .bfloat16,
+              qProj.weight.shape == [headCount * headDim, 2_048],
+              kProj.weight.shape == [keyValueHeadCount * headDim, 2_048],
+              vProj.weight.shape == [keyValueHeadCount * headDim, 2_048],
+              gProj.weight.shape == [headCount, 2_048] else {
+            return []
+        }
+
+        let queryGate = concatenated([qProj.weight, gProj.weight], axis: 0)
+        let keyValue = concatenated([kProj.weight, vProj.weight], axis: 0)
+        _terminalPrefillQGateWeight = queryGate
+        _terminalPrefillKVWeight = keyValue
+        return [queryGate, keyValue]
     }
 
     func callAsFunction(
@@ -1504,6 +1564,109 @@ final class LagunaAttention: Module {
             }
         }
         return oProj(output.reshaped(batch, sequenceLength, -1))
+    }
+
+    /// Final-layer multi-token specialization for callers that consume only
+    /// the last hidden row. All K/V rows are produced and committed; Q,
+    /// attention output, gating, and O projection run only for the final row.
+    func callLastPrefillRow(
+        _ x: MLXArray,
+        cache: Gemma4AttentionCache?,
+        useProjectionBanks: Bool? = nil
+    ) -> MLXArray {
+        let batch = x.dim(0)
+        let sequenceLength = x.dim(1)
+        precondition(batch == 1 && sequenceLength > 1)
+
+        let offset = cache?.offset ?? 0
+        let lastInput = x[0..., (sequenceLength - 1)..., 0...]
+        let queryDimensions = headCount * headDim
+        let keyValueDimensions = keyValueHeadCount * headDim
+
+        let rawQueries: MLXArray
+        let rawKeys: MLXArray
+        var values: MLXArray
+        let bankedGate: MLXArray?
+        let useProjectionBanks = useProjectionBanks
+            ?? LagunaGraphAccelerationPolicy.terminalPrefillProjectionBanksEnabled
+        if useProjectionBanks,
+           let queryGateWeight = _terminalPrefillQGateWeight,
+           let keyValueWeight = _terminalPrefillKVWeight,
+           x.dtype == .bfloat16,
+           lastInput.dtype == .bfloat16,
+           queryGateWeight.dtype == .bfloat16,
+           keyValueWeight.dtype == .bfloat16,
+           queryGateWeight.shape == [queryDimensions + headCount, 2_048],
+           keyValueWeight.shape == [2 * keyValueDimensions, 2_048] {
+            let queryGate = matmul(lastInput, queryGateWeight.T)
+            rawQueries = queryGate[.ellipsis, 0..<queryDimensions]
+            bankedGate = queryGate[
+                .ellipsis,
+                queryDimensions..<(queryDimensions + headCount)
+            ]
+
+            let keyValue = matmul(x, keyValueWeight.T)
+            rawKeys = keyValue[.ellipsis, 0..<keyValueDimensions]
+            values = keyValue[
+                .ellipsis,
+                keyValueDimensions..<(2 * keyValueDimensions)
+            ].reshaped(batch, sequenceLength, keyValueHeadCount, headDim)
+        } else {
+            rawQueries = qProj(lastInput)
+            rawKeys = kProj(x)
+            values = vProj(x).reshaped(
+                batch,
+                sequenceLength,
+                keyValueHeadCount,
+                headDim
+            )
+            bankedGate = nil
+        }
+
+        var queries = qNorm(
+            rawQueries.reshaped(batch, 1, headCount, headDim)
+        ).transposed(0, 2, 1, 3)
+        var keys = kNorm(
+            rawKeys.reshaped(batch, sequenceLength, keyValueHeadCount, headDim)
+        ).transposed(0, 2, 1, 3)
+        values = values.transposed(0, 2, 1, 3)
+        queries = rope(queries, offset: offset + sequenceLength - 1)
+        keys = rope(keys, offset: offset)
+
+        var keyLengths: [Int]?
+        if let cache {
+            let state = cache.attentionState(appending: keys, values: values)
+            keys = state!.0
+            values = state!.1
+            keyLengths = (cache as? LagunaRaggedKVCache)?.lastAttentionKeyLengths
+        }
+        let queryOffset = offset + sequenceLength - 1
+        let mask = attentionMask(
+            queryLength: 1,
+            queryOffsets: [queryOffset],
+            keyLengths: keyLengths ?? [keys.dim(2)],
+            keyLength: keys.dim(2),
+            dtype: x.dtype
+        )
+        var output = MLXFast.scaledDotProductAttention(
+            queries: queries,
+            keys: keys,
+            values: values,
+            scale: scale,
+            mask: mask
+        ).transposed(0, 2, 1, 3)
+
+        if let gProj {
+            let projectedGate = bankedGate ?? gProj(lastInput)
+            let gate = MLXNN.softplus(projectedGate.asType(.float32)).asType(output.dtype)
+            if gatePerHead {
+                output = output * MLX.expandedDimensions(gate, axis: gate.ndim)
+            } else {
+                output = output.reshaped(batch, 1, -1) * gate
+                return oProj(output)
+            }
+        }
+        return oProj(output.reshaped(batch, 1, -1))
     }
 
     func prefillMask(
@@ -1650,6 +1813,21 @@ final class LagunaDecoderLayer: Module {
         }
         return attended + mlp(normalized)
     }
+
+    /// Preserve every terminal-layer K/V row while carrying only the consumed
+    /// final residual row through attention output and the MLP.
+    func callLastPrefillRow(
+        _ x: MLXArray,
+        cache: Gemma4AttentionCache?
+    ) -> MLXArray {
+        let normalized = inputLayerNorm(x)
+        let attentionBranch = selfAttention.callLastPrefillRow(
+            normalized,
+            cache: cache
+        )
+        let attended = x[0..., (x.dim(1) - 1)..., 0...] + attentionBranch
+        return attended + mlp(postAttentionLayerNorm(attended))
+    }
 }
 
 struct LagunaLanguageModelOutput {
@@ -1687,7 +1865,8 @@ final class LagunaLanguageModel: Module {
         _ inputIDs: MLXArray,
         cache: [Gemma4AttentionCache]? = nil,
         captureLayerIndices: Set<Int> = [],
-        lastPositionOnly: Bool = false
+        lastPositionOnly: Bool = false,
+        terminalPrefillRowEnabled: Bool? = nil
     ) -> LagunaLanguageModelOutput {
         var hidden = embedTokens(inputIDs)
         var capturedHiddenStates: [Int: MLXArray] = [:]
@@ -1737,12 +1916,26 @@ final class LagunaLanguageModel: Module {
             let ropeAtlas = config.layerTypes[index] == "full_attention"
                 ? fullAtlas
                 : slidingAtlas
-            hidden = layer(
-                hidden,
-                cache: cache?[index],
-                precomputedMask: mask,
-                precomputedRoPEAtlas: ropeAtlas
-            )
+            let useTerminalPrefillRow =
+                (
+                    terminalPrefillRowEnabled
+                        ?? LagunaGraphAccelerationPolicy.terminalPrefillRowEnabled
+                )
+                    && lastPositionOnly
+                    && hidden.dim(0) == 1
+                    && hidden.dim(1) > 1
+                    && index == layers.count - 1
+                    && !captureLayerIndices.contains(index)
+            if useTerminalPrefillRow {
+                hidden = layer.callLastPrefillRow(hidden, cache: cache?[index])
+            } else {
+                hidden = layer(
+                    hidden,
+                    cache: cache?[index],
+                    precomputedMask: mask,
+                    precomputedRoPEAtlas: ropeAtlas
+                )
+            }
             if captureLayerIndices.contains(index) {
                 capturedHiddenStates[index] = hidden
             }
@@ -1801,6 +1994,9 @@ final class LagunaLanguageModel: Module {
         var arrays = preparePrefillAcceleration()
         for layer in layers {
             arrays.append(contentsOf: layer.selfAttention.prepareNativeAffineQKV())
+            arrays.append(
+                contentsOf: layer.selfAttention.prepareTerminalPrefillProjectionWeights()
+            )
         }
         return arrays
     }
@@ -1850,13 +2046,15 @@ final class LagunaCausalLM: Module {
         _ inputIDs: MLXArray,
         cache: [Gemma4AttentionCache]? = nil,
         captureLayerIndices: Set<Int> = [],
-        lastPositionOnly: Bool = false
+        lastPositionOnly: Bool = false,
+        terminalPrefillRowEnabled: Bool? = nil
     ) -> LagunaForwardOutput {
         let output = model.forward(
             inputIDs,
             cache: cache,
             captureLayerIndices: captureLayerIndices,
-            lastPositionOnly: lastPositionOnly
+            lastPositionOnly: lastPositionOnly,
+            terminalPrefillRowEnabled: terminalPrefillRowEnabled
         )
         return LagunaForwardOutput(
             logits: lmHead?(output.hidden) ?? model.embedTokens.asLinear(output.hidden),

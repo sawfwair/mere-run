@@ -1083,6 +1083,82 @@ final class LagunaModelTests: MereRunCoreTestCase {
         )
     }
 
+    func testTerminalPrefillProjectionBanksPreserveLastAttentionRow() throws {
+        MLXRandom.seed(65)
+        let attention = LagunaAttention(config: try makeXSAttentionConfig(), layerIndex: 0)
+        attention.update(parameters: attention.parameters().mapValues {
+            $0.asType(.bfloat16)
+        })
+        let prepared = attention.prepareTerminalPrefillProjectionWeights(enabled: true)
+        guard prepared.count == 2 else {
+            XCTFail("Expected terminal [Q; gate] and [K; V] side banks.")
+            return
+        }
+        MLX.eval(prepared)
+
+        XCTAssertEqual(prepared[0].shape, [8_256, 2_048])
+        XCTAssertEqual(prepared[1].shape, [2_048, 2_048])
+        XCTAssertTrue(
+            attention.prepareTerminalPrefillProjectionWeights(enabled: true).isEmpty,
+            "Preparation must retain exactly one terminal projection-bank pair."
+        )
+
+        let input = MLXRandom.uniform(
+            low: -0.25,
+            high: 0.25,
+            [1, 4, 2_048]
+        ).asType(.bfloat16)
+        let fullCache = Gemma4SlidingKVCache(maxSize: 8)
+        let terminalReferenceCache = Gemma4SlidingKVCache(maxSize: 8)
+        let terminalBankedCache = Gemma4SlidingKVCache(maxSize: 8)
+        let full = attention(input, cache: fullCache)[0..., 3..., 0...]
+        let terminalReference = attention.callLastPrefillRow(
+            input,
+            cache: terminalReferenceCache,
+            useProjectionBanks: false
+        )
+        let terminalBanked = attention.callLastPrefillRow(
+            input,
+            cache: terminalBankedCache,
+            useProjectionBanks: true
+        )
+        MLX.eval(full, terminalReference, terminalBanked)
+
+        XCTAssertEqual(fullCache.offset, 4)
+        XCTAssertEqual(terminalReferenceCache.offset, 4)
+        XCTAssertEqual(terminalBankedCache.offset, 4)
+        XCTAssertEqual(full.shape, terminalBanked.shape)
+        let bankDifference = MLX.max(
+            MLX.abs(
+                terminalReference.asType(.float32)
+                    - terminalBanked.asType(.float32)
+            )
+        ).item(Float.self)
+        XCTAssertEqual(bankDifference, 0)
+        let terminalDifference = MLX.max(
+            MLX.abs(full.asType(.float32) - terminalBanked.asType(.float32))
+        ).item(Float.self)
+        XCTAssertLessThanOrEqual(terminalDifference, 0.0005)
+
+        Memory.clearCache()
+        let activeBefore = Memory.activeMemory
+        for _ in 0..<8 {
+            autoreleasepool {
+                MLX.eval(attention.callLastPrefillRow(
+                    input,
+                    cache: nil,
+                    useProjectionBanks: true
+                ))
+            }
+        }
+        Memory.clearCache()
+        XCTAssertLessThanOrEqual(
+            Memory.activeMemory,
+            activeBefore + 1_048_576,
+            "Terminal prefill must not retain per-forward MLX buffers."
+        )
+    }
+
     func testLagunaXSFusedDownResidualPreservesZeroBranch() throws {
         #if os(macOS)
         let architecture = GPU.deviceInfo().architecture
@@ -1698,7 +1774,11 @@ final class LagunaModelTests: MereRunCoreTestCase {
         let model = LagunaCausalLM(config: try makeConfig())
         let tokens = MLXArray([1, 7, 4, 9]).reshaped(1, 4)
         let full = model(tokens)
-        let last = model.lastPositionLogits(tokens)
+        let last = model.forward(
+            tokens,
+            lastPositionOnly: true,
+            terminalPrefillRowEnabled: true
+        ).logits
         MLX.eval(full, last)
 
         let expected = full[0..., 3..., 0...]
@@ -1740,16 +1820,38 @@ final class LagunaModelTests: MereRunCoreTestCase {
         let tokens = MLXArray([1, 4, 7]).reshaped(1, 3)
         let baseline = model(tokens)
         let captured = model.forward(tokens, captureLayerIndices: [0, 1])
-        MLX.eval([baseline, captured.logits] + Array(captured.capturedHiddenStates.values))
+        let forcedTerminalWithFinalCapture = model.forward(
+            tokens,
+            captureLayerIndices: [1],
+            lastPositionOnly: true,
+            terminalPrefillRowEnabled: true
+        )
+        MLX.eval(
+            [baseline, captured.logits, forcedTerminalWithFinalCapture.logits]
+                + Array(captured.capturedHiddenStates.values)
+                + Array(forcedTerminalWithFinalCapture.capturedHiddenStates.values)
+        )
 
         XCTAssertEqual(captured.capturedHiddenStates.keys.sorted(), [0, 1])
         XCTAssertEqual(captured.capturedHiddenStates[0]?.shape, [1, 3, 8])
         XCTAssertEqual(captured.capturedHiddenStates[1]?.shape, [1, 3, 8])
+        XCTAssertEqual(
+            forcedTerminalWithFinalCapture.capturedHiddenStates[1]?.shape,
+            [1, 3, 8]
+        )
         let maximumDifference = zip(
             baseline.asArray(Float.self),
             captured.logits.asArray(Float.self)
         ).map { abs($0 - $1) }.max() ?? 0
         XCTAssertLessThan(maximumDifference, 0.0001)
+        let expectedLast = baseline[0..., 2..., 0...]
+        let forcedDifference = MLX.max(
+            MLX.abs(
+                expectedLast.asType(.float32)
+                    - forcedTerminalWithFinalCapture.logits.asType(.float32)
+            )
+        ).item(Float.self)
+        XCTAssertLessThan(forcedDifference, 0.0001)
     }
 
     func testRaggedDecodeBatchMatchesIndependentRows() throws {
