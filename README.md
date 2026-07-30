@@ -18,6 +18,11 @@ One public CLI covers image, text, speech, vision, music, sound, video, 3D,
 worlds, training, and local API serving. The optional macOS Studio uses that
 same CLI, model store, and run history rather than a separate backend.
 
+<p align="center">
+  <img src="docs/media/demo-inline.gif" alt="One terminal session: local chat, image generation, grounding, image-to-3D, SFX, music, TTS and ASR, video, an OpenAI-compatible API, and a workflow graph — rendered inline, all on one machine." />
+</p>
+<p align="center"><sub>One real terminal session on an M4 Max — chat, image, grounding, image→3D, SFX, music, speech round-trip, video, API serving, and a typed workflow graph. Everything local.</sub></p>
+
 ## Start here
 
 Install a signed release from [mere.run/downloads](https://mere.run/releases),
@@ -53,7 +58,7 @@ current flags.
 | Depth, geometry, and 3D | `vision depth-video`, `geometry`, `geometry-multiview`, `image-to-3d*`; `image reconstruct-3d*` | Video Depth Anything, MoGe-2, Depth Anything 3, TripoSR, InstantMesh, and TRELLIS.2; depth/confidence EXRs, cameras, point clouds, 3DGS initialization, OBJ, PLY, GLB, and PBR voxel artifacts |
 | Video and worlds | `video generate`, `video cosmos3`, `video prepare-masks`, `video animate`, `video session`, `video export-latents`, `world serve` | LTX video, synchronized LTX 2.3 audio/video, resident distilled and full-dev LTX workers, Wan 2.2 TI2V, native Cosmos3-Edge generation/reasoning/action dynamics, native SAM 3.1 mask preparation, native SCAIL-2 subject animation/replacement, and warm DreamX or Cosmos3 world sessions |
 | Music and sound | `music analyze`, `generate`, `realtime`, `transcribe`; `sfx generate`, `sfx video generate` | ACE-Step generation, analysis, and covers; Magenta RT2 realtime MIDI performance; MuScriptor full-mix MIDI transcription; Woosh and native MMAudio text/video-conditioned sound |
-| Speech | `speech synthesize`, `speech transcribe`, `speech listen`, `speech profile` | Qwen3 TTS, saved voice profiles, Qwen3 live ASR, and Parakeet batch transcription |
+| Speech | `speech synthesize`, `speech transcribe`, `speech diarize`, `speech listen`, `speech profile` | Qwen3 TTS, saved voice profiles, Qwen3 live ASR, Parakeet transcription, and native MLX Sortformer speaker diarization |
 | Serving and operations | `api serve`, `open-webui quickstart`, `status`, `run`, `model runtime`, `gate` | OpenAI-compatible chat, embeddings, images, TTS, and STT; resident model pooling, TTL/pinning, memory guards, durable run inspection, and installed-model quality gates |
 | Automation | `--preflight --json`, `--progress-json`, `image run-plan`, `guide` | Typed preflight actions, machine-readable progress, replayable plans, durable run directories, checksums, and offline command cookbooks |
 | Portable workflows | `graph catalog`, `graph preflight`, `graph submit`, `executor`, `run watch`, `run fetch` | Immutable typed graphs and content-addressed bundles that run locally or through configured SSH and relay executors with the same events, diagnostics, and run directory |

@@ -46,6 +46,7 @@ enum CommandTemplateID: String, CaseIterable, Codable {
     case textTrainLoRA
     case speechSynthesize
     case speechTranscribe
+    case speechDiarize
     case speechProfileList
     case speechProfileCreate
     case speechProfileDelete
@@ -138,6 +139,7 @@ enum CommandTemplateID: String, CaseIterable, Codable {
         case .textTrainLoRA: return "text.train-lora"
         case .speechSynthesize: return "speech.synthesize"
         case .speechTranscribe: return "speech.transcribe"
+        case .speechDiarize: return "speech.diarize"
         case .speechProfileList: return "speech.profile.list"
         case .speechProfileCreate: return "speech.profile.create"
         case .speechProfileDelete: return "speech.profile.delete"
@@ -567,7 +569,7 @@ struct CommandDraft: Equatable, Codable {
     var visionGLMConfig = ""
     var visionInfinityRuntime = "native"
     var visionInfinityParserCLI = "parser"
-    var visionInfinityModel = "vision-ocr-infinity-flash"
+    var visionInfinityModel = "vision-ocr-infinity-pro-int8"
     var visionInfinityBackend = "vllm-server"
     var visionInfinityAPIURL = "http://localhost:8000/v1/chat/completions"
     var visionInfinityAPIKey = "EMPTY"
@@ -958,6 +960,8 @@ struct CommandTemplate: Identifiable, Equatable {
             draft.task = "transcribe"
             draft.language = "auto"
             draft.timestamps = true
+        case .speechDiarize:
+            draft.quiet = true
         case .modelBenchmark:
             draft.temperature = 0
             draft.topP = 0.9
@@ -1669,6 +1673,12 @@ struct CommandTemplate: Identifiable, Equatable {
             }
             if draft.speechJSONL { args.append("--jsonl") }
             if !draft.timestamps { args.append("--no-timestamps") }
+            if draft.quiet { args.append("--quiet") }
+
+        case .speechDiarize:
+            args = ["speech", "diarize", draft.inputPath]
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
             if draft.quiet { args.append("--quiet") }
 
         case .speechProfileList:
@@ -2789,7 +2799,7 @@ extension CommandTemplate {
              .speechProfileCreate,
              .speechProfileDelete:
             return .speak
-        case .speechTranscribe:
+        case .speechTranscribe, .speechDiarize:
             return .listen
 
         case .visionGround:
@@ -3108,6 +3118,16 @@ enum CommandCatalog {
             systemImage: "captions.bubble",
             inputKind: .audio,
             outputKind: .file("txt")
+        ),
+        CommandTemplate(
+            id: .speechDiarize,
+            category: .speech,
+            title: "Diarize speakers",
+            subtitle: "Identify who spoke when",
+            systemImage: "person.2.fill",
+            inputKind: .audio,
+            outputKind: .file("json"),
+            defaultModel: "speech-diarization-sortformer"
         ),
         CommandTemplate(id: .speechProfileList, category: .speech, title: "Voice profiles", subtitle: "List saved clone profiles", systemImage: "person.wave.2"),
         CommandTemplate(

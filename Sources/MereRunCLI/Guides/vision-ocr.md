@@ -9,9 +9,8 @@ or external comparison CLIs, with optional backend comparison.
 
 Default managed LightOn id: `vision-ocr-lighton`.
 
-Default native Infinity id: `vision-ocr-infinity-flash`. Use
-`vision-ocr-infinity-pro-int8` as the quality-focused Pro eval option when
-latency and memory are acceptable. The full BF16 leaderboard Pro model remains
+Default native Infinity id: `vision-ocr-infinity-pro-int8`. The full BF16
+leaderboard Pro model remains
 available as `vision-ocr-infinity-pro`, but it is large enough that it requires
 an explicit pull and should be treated as a heavyweight compatibility target.
 
@@ -24,7 +23,6 @@ checks against an upstream Transformers/vLLM run.
 
 ```bash
 mere.run model pull vision-ocr-lighton
-mere.run model pull vision-ocr-infinity-flash
 mere.run model pull vision-ocr-infinity-pro-int8
 mere.run vision ocr --help
 ```
@@ -58,9 +56,7 @@ mere.run vision ocr --help
 ## Usage Patterns
 
 - Use `--backend lighton` for the small managed OCR path.
-- Use `--backend infinity` for native Infinity-Parser2 Flash.
-- Use `--backend infinity --infinity-model vision-ocr-infinity-pro-int8` for
-  quality-focused Pro comparisons on representative document samples.
+- Use `--backend infinity` for the native Infinity-Parser2 Pro int8 model.
 - Use `--quiet` for shell pipelines.
 - Use `--compare --backend infinity` when evaluating Infinity-Parser2 against
   the managed LightOn path on a new document type.
@@ -108,8 +104,8 @@ mere.run vision ocr ./page.png \
 ## Troubleshooting
 
 - GLM backend fails: confirm `glmocr` is installed and on PATH, or pass `--glmocr-cli`.
-- Native Infinity model missing: run `mere.run model pull vision-ocr-infinity-flash`.
-  For Pro int8, run `mere.run model pull vision-ocr-infinity-pro-int8`.
+- Native Infinity model missing: run
+  `mere.run model pull vision-ocr-infinity-pro-int8`.
 - External Infinity fails: confirm `parser` is installed and the selected vLLM
   server or CUDA backend is reachable.
 - LightOn model missing: run `mere.run model pull vision-ocr-lighton`.

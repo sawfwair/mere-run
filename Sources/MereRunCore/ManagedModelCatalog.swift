@@ -8,6 +8,7 @@ public enum ManagedModelCategory: String, CaseIterable, Hashable, Sendable {
     case textAnonymize = "text-anonymize"
     case speechTTS = "speech-tts"
     case speechASR = "speech-asr"
+    case speechDiarization = "speech-diarization"
     case visionOCR = "vision-ocr"
     case visionChat = "vision-chat"
     case visionSegment = "vision-segment"
@@ -44,6 +45,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case qwen3TTS
     case qwen3ASR
     case parakeet
+    case sortformer
     case qwen3Embedding
     case privacyFilter
     case codegenGGUF
@@ -257,6 +259,8 @@ public enum ManagedModelCatalog {
     private static let bonsaiTernaryUpstreamRepoId = "prism-ml/bonsai-image-ternary-4B-mlx-2bit"
     private static let magentaRT2UpstreamRepoId = "google/magenta-realtime-2"
     private static let magentaRT2UpstreamRevision = "010aa0dcb0dfd27b24f0ad07b4dad63e8f9521cc"
+    private static let sortformerUpstreamRevision = "e23e6404bd9859e93edbf94a740eb1c7fc58f12e"
+    private static let sortformerSourceRevision = "fafaab5faa1617a0ca52d38dd3dc4bd636800d3d"
     private static let aceStepSharedRevision = "19671f406d603126926c1b7e2adc169acbcade22"
     private static let aceStepXLBaseRevision = "220c1166efbdd9583eafcb12eb160594bbfcb241"
     private static let aceStepXLSFTRevision = "d06de46b4622f781cf07f4a013a67d591ca52819"
@@ -1285,6 +1289,39 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["speech transcribe"]
         ),
         ManagedModelSpec(
+            id: ModelResolver.ModelID.sortformerDiarization.rawValue,
+            category: .speechDiarization,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: "mlx-community/diar_streaming_sortformer_4spk-v2.1-fp16",
+                revision: sortformerUpstreamRevision,
+                patterns: [
+                    "README.md",
+                    "config.json",
+                    "model.safetensors",
+                ]
+            ),
+            upstreamRepoId: "mlx-community/diar_streaming_sortformer_4spk-v2.1-fp16",
+            upstreamRevision: sortformerUpstreamRevision,
+            usageRestriction: ManagedModelUsageRestriction(
+                summary: "The Sortformer weights are governed by the NVIDIA Open Model License.",
+                terms: [
+                    ManagedModelUsageTerm(
+                        component: "NVIDIA Streaming Sortformer 4-speaker v2.1 weights",
+                        license: "NVIDIA Open Model License",
+                        summary: "Use and redistribution require compliance with NVIDIA's model license and notices.",
+                        sourceRepoId: "nvidia/diar_streaming_sortformer_4spk-v2.1",
+                        sourceRevision: sortformerSourceRevision,
+                        licenseURL: "https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-license/"
+                    ),
+                ]
+            ),
+            validationKind: .sortformer,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 236_108_132,
+            defaultCLICommands: ["speech diarize"]
+        ),
+        ManagedModelSpec(
             id: "text-code-qwen3",
             category: .textCode,
             installShape: .singleFile(relativePath: CodeGenResources.managedRelativePath),
@@ -1332,17 +1369,6 @@ public enum ManagedModelCatalog {
             validationKind: .privacyFilter,
             estimatedDownloadBytes: 2_826_861_317,
             defaultCLICommands: ["text anonymize"]
-        ),
-        ManagedModelSpec(
-            id: Q35Resources.infinityParser2FlashModelId,
-            category: .visionOCR,
-            installShape: .directoryRoot,
-            hubFallback: Q35Resources.profile(for: Q35Resources.infinityParser2FlashModelId)?.hubFallbackConfig,
-            upstreamRepoId: Q35Resources.infinityParser2FlashUpstreamRepoId,
-            upstreamRevision: Q35Resources.infinityParser2FlashUpstreamRevision,
-            validationKind: .q35,
-            estimatedDownloadBytes: 5 * 1_073_741_824,
-            defaultCLICommands: ["vision ocr"]
         ),
         ManagedModelSpec(
             id: Q35Resources.infinityParser2ProModelId,
@@ -2441,6 +2467,8 @@ public extension ManagedModelSpec {
             return Self.missingQwen3ASRPaths(in: rootURL, fileManager: fileManager)
         case .parakeet:
             return Self.missingParakeetPaths(in: rootURL, fileManager: fileManager)
+        case .sortformer:
+            return Self.missingSortformerPaths(in: rootURL, fileManager: fileManager)
         case .qwen3Embedding:
             return Qwen3EmbeddingResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .privacyFilter:
@@ -2835,6 +2863,14 @@ public extension ManagedModelSpec {
             || fileManager.fileExists(atPath: vocabTxt.path)
         if !hasTokenizer { missing.append(tokenizerModel) }
         return missing
+    }
+
+    private static func missingSortformerPaths(in rootURL: URL, fileManager: FileManager) -> [URL] {
+        Self.missingFiles(
+            ["config.json", "model.safetensors"],
+            in: rootURL,
+            fileManager: fileManager
+        )
     }
 
     private static func missingHFTextRootPaths(in rootURL: URL, fileManager: FileManager) -> [URL] {

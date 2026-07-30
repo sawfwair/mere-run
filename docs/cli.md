@@ -40,9 +40,10 @@ Public tree:
   - `mere.run text embed` — Generate text embeddings using native Qwen3-Embedding-0.6B.
   - `mere.run text anonymize` — Detect and redact PII using OpenAI Privacy Filter.
   - `mere.run text train-lora` — Train a native text LoRA adapter from chat-style SFT JSONL.
-- [`mere.run speech`](/runtime/speech) — Synthesize, transcribe, and manage voice profiles.
+- [`mere.run speech`](/runtime/speech) — Synthesize, transcribe, diarize, and manage voice profiles.
   - `mere.run speech synthesize` — Generate speech from text using Qwen3-TTS.
   - `mere.run speech transcribe` — Transcribe or translate speech to text using native ASR backends.
+  - `mere.run speech diarize` — Identify who spoke when in an audio file with native MLX Sortformer.
   - `mere.run speech listen` — Transcribe a macOS microphone with live Qwen ASR.
   - `mere.run speech profile` — Manage saved voice clone profiles.
     - `mere.run speech profile list` — List saved speech voice profiles.
@@ -216,8 +217,8 @@ are:
 - Text anonymize: `text-anonymize-privacy-filter`
 - Speech TTS: `speech-tts-qwen3-nano`, `speech-tts-qwen3-customvoice`
 - Speech ASR: `speech-asr-qwen3`, `speech-asr-parakeet`
-- Vision OCR: `vision-ocr-lighton`, `vision-ocr-infinity-flash`,
-  `vision-ocr-infinity-pro-int8`, `vision-ocr-infinity-pro`
+- Vision OCR: `vision-ocr-lighton`, `vision-ocr-infinity-pro-int8`,
+  `vision-ocr-infinity-pro`
 - Vision segmentation / tracking: `vision-segment-sam31`
 - Vision grounding: `vision-ground-falcon-perception`
 - Face detection and identity embeddings: `vision-face-buffalo-l`
@@ -1261,7 +1262,6 @@ Examples:
 
 ```bash
 swift run mere.run model pull vision-ocr-lighton
-swift run mere.run model pull vision-ocr-infinity-flash
 swift run mere.run model pull vision-ocr-infinity-pro-int8
 swift run mere.run vision ocr ./page.png --backend lighton --model ~/Library/Application\ Support/MereRun/models/vision-ocr-lighton
 swift run mere.run vision ocr ./page.png --backend glm

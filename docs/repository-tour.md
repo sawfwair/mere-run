@@ -102,10 +102,11 @@ on Apple media frameworks.
 
 ### `Sources/AudioSTT`
 
-Speech-to-text backends.
+Speech-to-text and speaker-diarization backends.
 
 - `Qwen3ASR/`: native Qwen3 ASR path
 - `Parakeet/`: Parakeet transcription path
+- `Sortformer/`: native MLX Sortformer offline speaker diarization
 
 ### `Sources/AudioTTS`
 

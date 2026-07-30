@@ -42,10 +42,11 @@ stubs or tiny generated files in tests, not real model checkpoints.
 
 ### `AudioSTT`
 
-Speech-to-text backends.
+Speech-to-text and speaker-diarization backends.
 
 - `Parakeet/`
 - `Qwen3ASR/`
+- `Sortformer/`
 
 ### `AudioTTS`
 

@@ -119,6 +119,28 @@ private struct InstalledGateJSONDocument: Decodable {
     }
 }
 
+private struct InstalledDiarizationDocument: Decodable {
+    struct Segment: Decodable {
+        let speaker: String
+        let startSeconds: Double
+        let endSeconds: Double
+
+        enum CodingKeys: String, CodingKey {
+            case speaker
+            case startSeconds = "start_seconds"
+            case endSeconds = "end_seconds"
+        }
+    }
+
+    let speakerCount: Int
+    let segments: [Segment]
+
+    enum CodingKeys: String, CodingKey {
+        case speakerCount = "speaker_count"
+        case segments
+    }
+}
+
 /// One explicit release-smoke recipe per managed runtime kind. The release
 /// lane builds checks from the installed inventory, so catalog additions
 /// cannot disappear behind a representative "family" check.
@@ -201,6 +223,11 @@ enum InstalledModelSmokePlans {
                     model: spec.id,
                     fixtureModel: fixtureModel
                 )
+            }
+
+        case .sortformer:
+            return direct(spec, route: "speech diarize of a real A-B-A fixture") { runner in
+                try await runner.installedDiarizationCheck(model: spec.id)
             }
 
         case .qwen3Embedding:
@@ -590,6 +617,51 @@ extension GateRunner {
                     format: "ASR transcript lost the spoken fixture (%.0f%% word overlap)",
                     overlap * 100
                 )
+        )
+    }
+
+    func installedDiarizationCheck(model: String) async throws -> GateObservation {
+        guard let fixturePath = ProcessInfo.processInfo.environment["MERERUN_SORTFORMER_AUDIO"],
+              !fixturePath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw GateError.invalidArtifact(
+                "MERERUN_SORTFORMER_AUDIO must point to the required real A-B-A speaker fixture"
+            )
+        }
+        let fixture = URL(fileURLWithPath: fixturePath).standardizedFileURL
+        guard FileManager.default.fileExists(atPath: fixture.path) else {
+            throw GateError.invalidArtifact(
+                "MERERUN_SORTFORMER_AUDIO fixture was not found at \(fixture.path)"
+            )
+        }
+
+        let run = try await exec(
+            [
+                "speech", "diarize", fixture.path,
+                "--model", model,
+                "--format", "json",
+                "--quiet",
+            ],
+            timeout: 1_800
+        )
+        let data = Data(run.stdout.utf8)
+        let document = try JSONDecoder().decode(InstalledDiarizationDocument.self, from: data)
+        let speakerIDs = document.segments.map(\.speaker)
+        let distinctSpeakerIDs = Set(speakerIDs)
+        let hasValidSegments = document.segments.allSatisfy { $0.startSeconds >= 0 && $0.endSeconds > $0.startSeconds }
+        let firstSpeakerReidentified = speakerIDs.count >= 3
+            && speakerIDs.first == speakerIDs.last
+            && speakerIDs.dropFirst().dropLast().contains { $0 != speakerIDs.first }
+        return GateObservation(
+            hash: Self.sha256(data),
+            secondRunHash: nil,
+            wallSeconds: run.wallSeconds,
+            decodeTps: nil,
+            semanticFailure: document.speakerCount >= 2
+                && distinctSpeakerIDs.count >= 2
+                && hasValidSegments
+                && firstSpeakerReidentified
+                ? nil
+                : "diarization did not preserve the required A-B-A speaker sequence"
         )
     }
 

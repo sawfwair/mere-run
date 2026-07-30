@@ -506,7 +506,7 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         XCTAssertEqual(config.textConfig.numExperts, 256)
     }
 
-    func testQ35ConfigAllowsDenseInfinityParser2FlashLayout() throws {
+    func testQ35ConfigAllowsDenseQwen35VisionLayout() throws {
         var configObject = makeBaseConfig()
         configObject["model_type"] = "qwen3_5"
         configObject["architectures"] = ["Qwen3_5ForConditionalGeneration"]

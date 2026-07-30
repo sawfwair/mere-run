@@ -300,6 +300,43 @@ SOFTWARE.
 
 ## Source-derived runtime implementations
 
+### Sortformer speaker-diarization runtime
+
+- purpose: native Swift/MLX implementation of the Sortformer model graph,
+  feature extraction, checkpoint loading, and diarization post-processing; no
+  model weights are vendored in this repository
+- adapted source: [`Blaizzy/mlx-audio-swift`](https://github.com/Blaizzy/mlx-audio-swift)
+  commit `4266f988d170a83017d1e82e2e4654602f277f1d`; MIT License
+- converted model: [`mlx-community/diar_streaming_sortformer_4spk-v2.1-fp16`](https://huggingface.co/mlx-community/diar_streaming_sortformer_4spk-v2.1-fp16)
+  revision `e23e6404bd9859e93edbf94a740eb1c7fc58f12e`; installed separately
+- source model: [`nvidia/diar_streaming_sortformer_4spk-v2.1`](https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1),
+  revision `fafaab5faa1617a0ca52d38dd3dc4bd636800d3d`; governed by the NVIDIA
+  Open Model License and explicit managed-pull terms acceptance
+
+```text
+MIT License
+
+Copyright (c) 2025 Prince Canuma
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 ### Cosmos3-Edge native omnimodal runtime
 
 - purpose: native Swift/MLX implementation of the Cosmos3-Edge transformer,

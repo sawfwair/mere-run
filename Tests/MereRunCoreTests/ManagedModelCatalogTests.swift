@@ -74,6 +74,7 @@ final class ManagedModelCatalogTests: XCTestCase {
             "sfx-woosh-vflow-8s",
             "sfx-woosh-dvflow-8s",
             "sfx-mmaudio-large-44k-v2",
+            ModelResolver.ModelID.sortformerDiarization.rawValue,
             "video-ltx-av",
             "video-ltx23-av-mlx",
             "video-ltx23-full-mlx",
@@ -650,17 +651,6 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
         XCTAssertEqual(spec.estimatedDownloadBytes, Q35Resources.ornith35BMLXEstimatedDownloadBytes)
         XCTAssertEqual(spec.defaultRuntimeServingEngine, .textChatQ36)
-    }
-
-    func testInfinityParser2FlashUsesNativeQ35VisionOCRSpec() throws {
-        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Q35Resources.infinityParser2FlashModelId))
-
-        XCTAssertEqual(spec.category, .visionOCR)
-        XCTAssertEqual(spec.hubFallback?.repoId, Q35Resources.infinityParser2FlashUpstreamRepoId)
-        XCTAssertEqual(spec.hubFallback?.revision, Q35Resources.infinityParser2FlashUpstreamRevision)
-        XCTAssertEqual(spec.validationKind, .q35)
-        XCTAssertTrue(spec.runtimeAutoDownloadAllowed)
-        XCTAssertEqual(spec.defaultCLICommands, ["vision ocr"])
     }
 
     func testInfinityParser2ProRequiresExplicitPull() throws {

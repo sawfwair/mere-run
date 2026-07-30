@@ -480,6 +480,13 @@ public enum ManagedModelCapabilityCatalog {
                 setup: true
             ),
             descriptor(
+                ModelResolver.ModelID.sortformerDiarization.rawValue,
+                "Speaker diarization",
+                "Identifies up to four speakers and their active time ranges with native MLX Sortformer.",
+                minimum: 8,
+                recommended: 16
+            ),
+            descriptor(
                 "text-code-qwen3",
                 "Qwen3-Coder Next",
                 "Runs the GGUF Qwen3-Coder Next model through llama.cpp for local coding and agent sessions.",
@@ -518,13 +525,6 @@ public enum ManagedModelCapabilityCatalog {
                 minimum: 8,
                 recommended: 16,
                 setup: true
-            ),
-            descriptor(
-                Q35Resources.infinityParser2FlashModelId,
-                "Infinity-Parser2 Flash OCR",
-                "Parses document images with the native Qwen-family Infinity-Parser2 Flash runtime.",
-                minimum: 24,
-                recommended: 32
             ),
             descriptor(
                 Q35Resources.infinityParser2ProModelId,

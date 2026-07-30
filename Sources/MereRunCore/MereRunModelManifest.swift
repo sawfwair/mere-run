@@ -56,6 +56,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case qwen3ASR = "qwen3-asr"
         /// Parakeet ASR family.
         case parakeetASR = "parakeet-asr"
+        /// NVIDIA Sortformer speaker diarization family.
+        case sortformer = "sortformer"
         /// Qwen3 embeddings family.
         case qwen3Embedding = "qwen3-embedding"
         /// OpenAI Privacy Filter token-classification family.
@@ -157,6 +159,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case textAnonymization = "text_anonymization"
         case speechSynthesis = "speech_synthesis"
         case speechRecognition = "speech_recognition"
+        case speakerDiarization = "speaker_diarization"
         case visionChat = "vision_chat"
         case visionOCR = "vision_ocr"
         case musicGeneration = "music_generation"
@@ -1082,14 +1085,13 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 upstreamRepoId: "unsloth/Qwen3.6-35B-A3B-GGUF@main",
                 createdAt: createdAt
             )
-        case .infinityParser2Flash, .infinityParser2Pro, .infinityParser2ProInt8:
-            let isPro = modelID != .infinityParser2Flash
+        case .infinityParser2Pro, .infinityParser2ProInt8:
             let isProInt8 = modelID == .infinityParser2ProInt8
             return MereRunModelManifest(
                 id: modelID.rawValue,
                 engine: .qwen35HybridMoE,
                 family: .ocr,
-                tier: isPro ? .max : .nano,
+                tier: .max,
                 variant: .standard,
                 precision: isProInt8 ? .int8 : .bf16,
                 quantization: isProInt8
@@ -1100,9 +1102,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 components: q35TextComponents,
                 upstreamRepoId: isProInt8
                     ? "\(Q35Resources.infinityParser2ProInt8UpstreamRepoId)@\(Q35Resources.infinityParser2ProInt8UpstreamRevision)"
-                    : isPro
-                    ? "\(Q35Resources.infinityParser2ProUpstreamRepoId)@\(Q35Resources.infinityParser2ProUpstreamRevision)"
-                    : "\(Q35Resources.infinityParser2FlashUpstreamRepoId)@\(Q35Resources.infinityParser2FlashUpstreamRevision)",
+                    : "\(Q35Resources.infinityParser2ProUpstreamRepoId)@\(Q35Resources.infinityParser2ProUpstreamRevision)",
                 createdAt: createdAt
             )
         case .deepseekV4Flash:
@@ -1473,6 +1473,20 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.speechRecognition],
                 components: genericTextComponents,
                 upstreamRepoId: "mlx-community/parakeet-tdt-0.6b-v3",
+                createdAt: createdAt
+            )
+        case .sortformerDiarization:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .sortformer,
+                family: .asr,
+                tier: .latest,
+                variant: .standard,
+                precision: .fp16,
+                defaults: nil,
+                supports: [.speakerDiarization],
+                components: nil,
+                upstreamRepoId: "mlx-community/diar_streaming_sortformer_4spk-v2.1-fp16",
                 createdAt: createdAt
             )
         case .qwen3Code:

@@ -473,8 +473,8 @@ swift run mere.run vision ocr ./page.png \
 
 LightOnOCR uses the dedicated LightOn runtime and remains the default `vision ocr`
 backend. Native Infinity-Parser2 uses the Q35 text runtime plus the Qwen-family
-vision tower, with `vision-ocr-infinity-flash` as the default Infinity model,
-`vision-ocr-infinity-pro-int8` as the quality-focused Pro eval option, and
+vision tower, with `vision-ocr-infinity-pro-int8` as the default native
+Infinity model and
 `vision-ocr-infinity-pro` as the full BF16 heavyweight compatibility target.
 
 GLM-OCR remains an external CLI adapter that shells out to `glmocr`. Infinity can

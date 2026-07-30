@@ -92,6 +92,12 @@ Speech transcription:
   - `Sources/AudioSTT/Qwen3ASR/Qwen3ASRGenerator.swift`
   - `Sources/AudioSTT/Parakeet/ParakeetGenerator.swift`
 
+Speaker diarization:
+
+- CLI: `Sources/MereRunCLI/Commands/SpeechDiarizeCommand.swift`
+- Runtime root: `Sources/AudioSTT/Sortformer/SortformerDiarizer.swift`
+- Model and feature stack: `Sources/AudioSTT/Sortformer/SortformerModel.swift`
+
 ## OCR and vision
 
 OCR:

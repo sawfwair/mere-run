@@ -153,6 +153,23 @@ MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.23.0
 Run Linux package and manifest checks on the affected Linux host class. CUDA
 artifacts need a matching CUDA host for meaningful runtime smoke coverage.
 
+For the speaker-diarization CUDA checkpoint, use a real recording whose first
+speaker returns after a different middle speaker. The gate requires a visible
+NVIDIA GPU, confirms that MLX reports its GPU device, validates timed segments,
+and verifies the A-B-A speaker sequence:
+
+```bash
+MERERUN_SORTFORMER_BIN=/path/to/mere.run \
+MERERUN_SORTFORMER_MODEL_DIR=/path/to/sortformer-model \
+MERERUN_SORTFORMER_AUDIO=/path/to/two-speaker-a-b-a.wav \
+MERERUN_SORTFORMER_OUTPUT=./sortformer-cuda-result.json \
+  scripts/check-sortformer-diarization.sh --require-cuda
+```
+
+The model directory must come from a license-acknowledged managed installation
+or an equivalent local checkpoint. A CUDA build without this real-audio GPU and
+speaker-reidentification result is not diarization runtime proof.
+
 For a real GB10/DGX Spark model sweep, use the installed CUDA binary and record
 the quantized-kernel choice alongside artifacts and throughput:
 
@@ -256,7 +273,8 @@ not a skip.
 The final packaged candidate runs the exhaustive installed-model matrix:
 
 ```bash
-/path/to/extracted/mere.run gate \
+MERERUN_SORTFORMER_AUDIO=/path/to/two-speaker-a-b-a.wav \
+  /path/to/extracted/mere.run gate \
   --all-installed \
   --require-all \
   --json-output ./release-gate.json
@@ -266,7 +284,9 @@ That produces one result per installed model ID, including every image model;
 TripoSR, InstantMesh, and TRELLIS.2; music and SFX; OCR, SAM, grounding, face,
 geometry, and depth; speech, embeddings, privacy, text, and every video/world
 backend. Component-only entries must be consumed by a named true companion run.
-An installed model with no recipe fails closed.
+An installed model with no recipe fails closed. When Sortformer is installed,
+`MERERUN_SORTFORMER_AUDIO` is required and must identify a real fixture whose
+first speaker returns after a different middle speaker.
 
 If a release owner explicitly quarantines a known-broken installed model, add
 `--skip-model <installed-id>`. The evidence retains it as a `skipped` row

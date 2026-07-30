@@ -70,10 +70,10 @@ from the runtime catalog used by `mere.run model list`,
 | `speech-tts` | `speech-tts-qwen3-customvoice` |
 | `speech-asr` | `speech-asr-qwen3` |
 | `speech-asr` | `speech-asr-parakeet` |
+| `speech-diarization` | `speech-diarization-sortformer` |
 | `text-code` | `text-code-qwen3` |
 | `text-embed` | `text-embed-qwen3-0.6b` |
 | `text-anonymize` | `text-anonymize-privacy-filter` |
-| `vision-ocr` | `vision-ocr-infinity-flash` |
 | `vision-ocr` | `vision-ocr-infinity-pro` |
 | `vision-ocr` | `vision-ocr-infinity-pro-int8` |
 | `vision-ocr` | `vision-ocr-lighton` |
@@ -151,6 +151,7 @@ validates all configured models before downloading any; both accept the same
 | `sfx-woosh-*` | CC BY-NC 4.0 Woosh or MMAudio Synchformer weights |
 | `sfx-mmaudio-large-44k-v2` | CC BY-NC 4.0 MMAudio checkpoints plus Apple's research-only DFN5B encoder terms |
 | `video-ltx-av`, `video-ltx23-av-mlx`, `video-ltx23-full-mlx`, `video-ltx23-a2vid-mlx` | LTX-2 Community License; entities at or above USD 10M annual revenue need a paid commercial license, plus acceptable-use conditions. The 2.3 MLX paths also install a hidden Gemma 3 text encoder under Google's Gemma Terms and Prohibited Use Policy. |
+| `speech-diarization-sortformer` | NVIDIA Open Model License; use and redistribution require compliance with NVIDIA's model terms and notices |
 
 The catalog pins every restricted download source to an immutable commit. New
 managed installs write those repository revisions, every applicable
@@ -158,6 +159,13 @@ model/component license and URL, and the acknowledgement result into schema 3
 of `mererun_model.json`. `mere.run model info MODEL` displays the same record.
 Pre-existing installs remain usable and are not retroactively treated as an
 acknowledgement.
+
+`speech-diarization-sortformer` installs the fp16 conversion from
+`mlx-community/diar_streaming_sortformer_4spk-v2.1-fp16` at immutable revision
+`e23e6404bd9859e93edbf94a740eb1c7fc58f12e`. Its source checkpoint is NVIDIA's
+`diar_streaming_sortformer_4spk-v2.1`, referenced at immutable revision
+`fafaab5faa1617a0ca52d38dd3dc4bd636800d3d`; the weights are installed
+separately and are not vendored in this repository.
 
 Most catalog IDs have managed Hugging Face sources and can be installed with
 `mere.run model pull`. A small number of legacy/local catalog IDs remain so
