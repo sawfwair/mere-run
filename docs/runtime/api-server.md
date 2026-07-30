@@ -148,7 +148,7 @@ curl http://127.0.0.1:8080/v1/embeddings \
 Image generation and editing return base64 PNG JSON by default:
 
 ```bash
-swift run mere.run model pull image-zimage-nano --accept-model-license
+swift run mere.run model pull image-zimage-nano
 curl http://127.0.0.1:8080/v1/images/generations \
   -H "Content-Type: application/json" \
   --data '{

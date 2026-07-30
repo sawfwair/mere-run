@@ -20,6 +20,10 @@ The format is based on Keep a Changelog.
   `[Q; gate]` / `[K; V]` projection banks to the guarded M5 runtime while
   retaining full-path fallbacks for DFlash captures, batches, and unsupported
   model shapes.
+- audited managed-model acknowledgement policy and removed false-positive
+  `--accept-model-license` gates from public Z-Image Nano, Sortformer,
+  Cosmos3-Edge, and the hidden Gemma 3 companion while retaining genuine
+  access-gated, non-commercial, research-only, and revenue-limited gates.
 
 ## 0.29.1 - 2026-07-29
 

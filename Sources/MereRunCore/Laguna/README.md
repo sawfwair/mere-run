@@ -75,9 +75,9 @@ mere.run api serve \
 
 XS requires at least 36 GB unified memory and recommends 48 GB. Laguna XS 2.1
 is released under OpenMDW-1.1 for commercial and non-commercial use. mere.run
-pins Poolside's MLX-native NVFP4 serialization, requires acknowledgement of
-the upstream license and acceptable-use terms, never auto-downloads it, and
-does not attach the Laguna S DFlash companion.
+pins Poolside's public MLX-native NVFP4 serialization, retains the upstream
+license file without adding a separate acknowledgement gate, never
+auto-downloads it, and does not attach the Laguna S DFlash companion.
 
 Laguna requires at least 96 GB unified memory and is not a setup or
 hardware-aware default. The normal chat and serving routes use temperature
@@ -106,7 +106,7 @@ remains a forced evaluation path because fewer physical batch forwards did not
 produce lower wall time on the measured two-row workload.
 
 The checkpoint is a catalog model but remains explicitly opt-in: it is never
-selected by default, requires acceptance of its published usage terms, and
+selected by default, retains its published license and source provenance, and
 keeps explicit checkpoint overrides for evaluation and rollback.
 
 Laguna's routed experts sort prefill and multi-token verification routes by

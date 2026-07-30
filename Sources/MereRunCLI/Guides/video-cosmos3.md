@@ -12,12 +12,13 @@ The runtime does not launch Python, PyTorch, Diffusers, or a remote service.
 ## Required Model
 
 ```bash
-mere.run model pull video-cosmos3-edge-mlx --accept-model-license
+mere.run model pull video-cosmos3-edge-mlx
 ```
 
 The managed model pins `nvidia/Cosmos3-Edge` at revision
 `6f58f6b4c91288838e60b6bcb2cc45d997e961de`. The model is governed by
-OpenMDW-1.1; review the reported usage terms before accepting them.
+OpenMDW-1.1. The public pull retains `LICENSE.md` and does not add a separate
+mere.run acknowledgement gate.
 
 ## Generation Modes
 

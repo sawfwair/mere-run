@@ -12,7 +12,7 @@ No model is required before running pull, but the target id must exist in the ma
 
 ```bash
 mere.run model capabilities
-mere.run model pull image-zimage-nano --accept-model-license
+mere.run model pull image-zimage-nano
 mere.run status
 mere.run model list
 ```
@@ -39,7 +39,7 @@ mere.run model list
 ## Examples
 
 ```bash
-mere.run model pull image-zimage-nano --accept-model-license --preflight --json
+mere.run model pull image-zimage-nano --preflight --json
 ```
 
 ```bash

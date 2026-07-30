@@ -55,7 +55,6 @@ final class ManagedModelCatalogTests: XCTestCase {
         let expected = Set([
             "image-klein-9b",
             "image-klein-base-9b",
-            "image-zimage-nano",
             "image-krea2-raw",
             "image-krea2-turbo",
             "image-ideogram4-sdnq-uint4",
@@ -73,12 +72,10 @@ final class ManagedModelCatalogTests: XCTestCase {
             "sfx-woosh-vflow-8s",
             "sfx-woosh-dvflow-8s",
             "sfx-mmaudio-large-44k-v2",
-            ModelResolver.ModelID.sortformerDiarization.rawValue,
             "video-ltx-av",
             "video-ltx23-av-mlx",
             "video-ltx23-full-mlx",
             "video-ltx23-a2vid-mlx",
-            "video-cosmos3-edge-mlx",
         ])
         let visibleAndCompanionSpecs = ManagedModelCatalog.allSpecs
             + ManagedModelCatalog.allSpecs
@@ -89,11 +86,7 @@ final class ManagedModelCatalogTests: XCTestCase {
                 .filter { $0.usageRestriction != nil }
                 .map(\.id)
         )
-        let expectedWithCompanions = expected.union([
-            ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue,
-        ])
-
-        XCTAssertEqual(restricted, expectedWithCompanions)
+        XCTAssertEqual(restricted, expected)
         for spec in visibleAndCompanionSpecs where spec.usageRestriction != nil {
             XCTAssertFalse(spec.runtimeAutoDownloadAllowed, "Restricted model \(spec.id) must never auto-download.")
             let terms = try XCTUnwrap(spec.usageRestriction?.terms)
@@ -200,6 +193,7 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.hubFallback?.patterns.contains("tokenizer/added_tokens.json"), true)
         XCTAssertEqual(spec.hubFallback?.patterns.contains("transformer/model.safetensors.index.json"), true)
         XCTAssertEqual(spec.hubFallback?.patterns.contains("tokenizer/*"), false)
+        XCTAssertNil(spec.usageRestriction)
     }
 
     func testGeometryAnd3DModelsUsePinnedAuthoritativeSources() throws {
@@ -1389,7 +1383,7 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertTrue(spec.canBePulledWithoutConfiguration)
         XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
         XCTAssertEqual(spec.estimatedDownloadBytes, 9_200_000_000)
-        XCTAssertEqual(spec.usageRestriction?.terms.first?.license, "OpenMDW-1.1")
+        XCTAssertNil(spec.usageRestriction)
         XCTAssertEqual(spec.defaultCLICommands, [
             "video cosmos3",
             "video cosmos3 --mode reasoner",
@@ -1399,6 +1393,7 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertTrue(Cosmos3Resources.snapshotPatterns.contains("vae/*"))
         XCTAssertTrue(Cosmos3Resources.snapshotPatterns.contains("vision_encoder/*"))
         XCTAssertTrue(Cosmos3Resources.snapshotPatterns.contains("model-*.safetensors"))
+        XCTAssertTrue(Cosmos3Resources.snapshotPatterns.contains("LICENSE*"))
 
         let manifest = MereRunModelManifest.template(
             for: .cosmos3EdgeMLX,
@@ -1426,7 +1421,8 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.upstreamRevision, "14d891e009084901c434304fe93a86fd9013e84c")
         XCTAssertEqual(spec.validationKind, .hfTextChat)
         XCTAssertEqual(spec.runtimeAutoDownloadAllowed, false)
-        XCTAssertEqual(spec.usageRestriction?.terms.first?.license, "Gemma Terms of Use")
+        XCTAssertNil(spec.usageRestriction)
+        XCTAssertEqual(spec.hubFallback?.patterns.contains("README.md"), true)
     }
 
     func testHFTextRootValidationRequiresShardsNamedByIndex() throws {

@@ -215,7 +215,7 @@ download:
 
 ```bash
 swift run mere.run model capabilities
-swift run mere.run model pull image-zimage-nano --accept-model-license
+swift run mere.run model pull image-zimage-nano
 # Optional compact FLUX.2 Klein path:
 swift run mere.run model pull image-bonsai-binary
 ```

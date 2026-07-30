@@ -42,10 +42,10 @@ Cosmos3 uses one complete managed snapshot:
 - `video-cosmos3-edge-mlx` supplies the generation/understanding transformer,
   Wan VAE, tokenizer, scheduler, packed SigLIP2 vision encoder, and projector.
 
-Install it explicitly after reviewing the OpenMDW-1.1 terms:
+Install it explicitly from NVIDIA's public OpenMDW-1.1 repository:
 
 ```bash
-mere.run model pull video-cosmos3-edge-mlx --accept-model-license
+mere.run model pull video-cosmos3-edge-mlx
 ```
 
 ## Start a session

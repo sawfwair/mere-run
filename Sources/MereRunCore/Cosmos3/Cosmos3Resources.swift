@@ -297,7 +297,7 @@ public struct Cosmos3Resources: Hashable, Sendable {
     public static let officialRepoID = "nvidia/Cosmos3-Edge"
     public static let officialRevision = "6f58f6b4c91288838e60b6bcb2cc45d997e961de"
     public static let snapshotPatterns = [
-        "LICENSE",
+        "LICENSE*",
         "README.md",
         "config.json",
         "model_index.json",

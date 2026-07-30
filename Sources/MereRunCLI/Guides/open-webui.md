@@ -67,7 +67,7 @@ Pull the models you want Open WebUI to see:
 mere.run model pull text-chat-gemma4-12b
 mere.run model pull vision-chat-gemma4-12b
 mere.run model pull text-embed-qwen3-0.6b
-mere.run model pull image-zimage-nano --accept-model-license
+mere.run model pull image-zimage-nano
 mere.run model pull speech-tts-qwen3-nano
 mere.run model pull speech-asr-parakeet
 mere.run model list
