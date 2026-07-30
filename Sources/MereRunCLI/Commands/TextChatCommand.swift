@@ -37,6 +37,7 @@ struct TextChat: AsyncParsableCommand {
           - text-chat-gemma4-max (Gemma 4 31B native Swift runtime)
           - text-chat-gemma4-nano (Gemma 4 4B native Swift runtime)
           - text-chat-laguna-s-2-1 (Poolside Laguna S 2.1 118B-A8B NVFP4 with DFlash)
+          - text-chat-laguna-xs-2-1 (Poolside Laguna XS 2.1 33B-A3B NVFP4)
           - text-chat-lfm25-a1b-8bit (LiquidAI LFM2.5 8B-A1B MLX 8-bit native Swift runtime)
           - text-chat-psi-agent
         Models are cached under ~/Library/Application Support/MereRun/models/<model-id>.
@@ -129,7 +130,7 @@ struct TextChat: AsyncParsableCommand {
         return NativeMLXRuntime.backendDescription
     }
 
-    @Option(name: [.long], help: "Canonical model id. Default: text-chat-gemma4-12b-4bit (Apple Silicon) / text-chat-q36-nano-gguf (Linux CUDA). Others: text-chat-laguna-s-2-1, text-chat-bonsai-27b-1bit, text-chat-bonsai-27b-2bit, text-chat-q36-nano, text-agent-ornith-9b, text-agent-ornith-35b-mlx, text-chat-gemma4[-12b|-12b-4bit|-turbo|-max|-nano], text-chat-lfm25-a1b-8bit, text-chat-psi-agent.")
+    @Option(name: [.long], help: "Canonical model id. Default: text-chat-gemma4-12b-4bit (Apple Silicon) / text-chat-q36-nano-gguf (Linux CUDA). Others: text-chat-laguna-s-2-1, text-chat-laguna-xs-2-1, text-chat-bonsai-27b-1bit, text-chat-bonsai-27b-2bit, text-chat-q36-nano, text-agent-ornith-9b, text-agent-ornith-35b-mlx, text-chat-gemma4[-12b|-12b-4bit|-turbo|-max|-nano], text-chat-lfm25-a1b-8bit, text-chat-psi-agent.")
     var model: String = TextChat.defaultChatModelId
 
     @Option(
@@ -197,12 +198,9 @@ struct TextChat: AsyncParsableCommand {
         }
         if requireInstalled {
             guard installedModelPath != nil else {
-                let acceptance = isLagunaModelID(normalizedModelId)
-                    ? " --accept-model-license"
-                    : ""
                 throw ValidationError(
                     "Model '\(normalizedModelId)' is not installed. Run "
-                        + "'mere.run model pull \(normalizedModelId)\(acceptance)' explicitly."
+                        + "'mere.run model pull \(normalizedModelId)' explicitly."
                 )
             }
         }
@@ -297,7 +295,11 @@ struct TextChat: AsyncParsableCommand {
         var lastGemma4MTPStats: Gemma4MTPStats?
         var lastLagunaDFlashStats: LagunaDFlashStats?
         let lagunaGenerator = isLaguna
-            ? LagunaGenerator(dflashModelPath: LagunaResources.installedDFlashPath())
+            ? LagunaGenerator(
+                dflashModelPath: LagunaResources.installedDFlashPath(
+                    for: normalizedModelId
+                )
+            )
             : nil
 
         let chatOnce: (ChatRequest) async throws -> ChatResponse = { req in
@@ -316,9 +318,11 @@ struct TextChat: AsyncParsableCommand {
                 return response
             } else if LagunaResources.handles(modelSpec: normalizedModelId) {
                 guard let lagunaModelPath = self.modelRoot ?? installedModelPath else {
+                    let requestedID = LagunaResources.managedModelID(for: normalizedModelId)
+                        ?? normalizedModelId
                     throw ValidationError(
-                        "Model '\(LagunaResources.modelID)' is not installed. Run "
-                            + "'mere.run model pull \(LagunaResources.modelID) --accept-model-license' first."
+                        "Model '\(requestedID)' is not installed. Run "
+                            + "'mere.run model pull \(requestedID)' first."
                     )
                 }
                 guard let generator = lagunaGenerator else {
@@ -480,10 +484,6 @@ struct TextChat: AsyncParsableCommand {
             return FileManager.default.fileExists(atPath: url.path) ? url.path : nil
         }
         return ManagedModelResolver.resolveInstalledModel(id: modelID)?.path
-    }
-
-    private func isLagunaModelID(_ modelID: String) -> Bool {
-        LagunaResources.isManagedIdentifier(modelID)
     }
 
     private func emitPreflight(modelID: String, installedModelPath: String?) throws {

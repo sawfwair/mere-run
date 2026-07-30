@@ -60,7 +60,7 @@ final class SortformerDiarizationTests: XCTestCase {
         XCTAssertEqual(Set(report.manifest?.supports ?? []), [.speakerDiarization])
     }
 
-    func testManagedSortformerSpecIsPinnedAndLicenseGated() throws {
+    func testManagedSortformerSpecIsPinnedAndPubliclyPullable() throws {
         let spec = try XCTUnwrap(
             ManagedModelCatalog.spec(for: ModelResolver.ModelID.sortformerDiarization.rawValue)
         )
@@ -69,7 +69,7 @@ final class SortformerDiarizationTests: XCTestCase {
         XCTAssertEqual(spec.validationKind, .sortformer)
         XCTAssertEqual(spec.upstreamRevision, "e23e6404bd9859e93edbf94a740eb1c7fc58f12e")
         XCTAssertEqual(spec.hubFallback?.patterns, ["README.md", "config.json", "model.safetensors"])
-        XCTAssertNotNil(spec.usageRestriction)
+        XCTAssertNil(spec.usageRestriction)
         XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
     }
 }

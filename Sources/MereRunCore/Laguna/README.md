@@ -1,8 +1,30 @@
-# Laguna S 2.1
+# Laguna 2.1
 
 Native Swift/MLX support for Poolside's official
 `Laguna-S-2.1-NVFP4-mlx` checkpoint and DFlash companion. The validated pair
-is available as the opt-in managed model `text-chat-laguna-s-2-1`.
+is available as the opt-in managed model `text-chat-laguna-s-2-1`. Poolside's
+[released Laguna XS 2.1 model](https://huggingface.co/poolside/Laguna-XS-2.1-NVFP4)
+is available through the five-shard
+`Laguna-XS-2.1-NVFP4-mlx` serialization as the distinct opt-in managed model
+`text-chat-laguna-xs-2-1`; shard discovery comes from the safetensors index,
+and shared-expert quantization is derived from that index rather than assumed
+from the S layout.
+
+## MLX Fast lineage
+
+The guarded XS acceleration work was developed through the public
+[MLX Fast Laguna challenge](https://mlx.fast/). On July 30, 2026, submission
+[`493f1ee1-38d8-4152-86a4-d8489d082727`](https://github.com/Layr-Labs/mlxfast-challenge/commit/612df0387708114f6cc625dbdad270f7ea9d68b3)
+was promoted at score `1.8435177465`, with `7.089954 ms/token` decode and
+`0.240295 ms/token` prefill, taking first place at the time of promotion on
+the official paired M5 Max benchmark.
+
+mere.run brings back the production-safe graph, layout, and kernel wins from
+that campaign with hardware, shape, capture, batch, and rollback guards. The
+challenge's greedy-only language-head pruning and benchmark-specific vendored
+runtime changes are deliberately excluded because mere.run also supports
+sampling, structured output, DFlash, and general local serving. The challenge
+has been a particularly useful—and fun—public proving ground for the runtime.
 
 ## Files
 
@@ -30,13 +52,32 @@ is available as the opt-in managed model `text-chat-laguna-s-2-1`.
 Pulling the target installs both immutable checkpoint revisions:
 
 ```bash
-mere.run model pull text-chat-laguna-s-2-1 --accept-model-license
+mere.run model pull text-chat-laguna-s-2-1
 mere.run text chat \
   --model text-chat-laguna-s-2-1 \
   --prompt "Write a bounded Swift actor queue." \
   --stats
 mere.run api serve --engine text-chat-laguna --max-active-requests 2
 ```
+
+For the smaller XS target:
+
+```bash
+mere.run model pull text-chat-laguna-xs-2-1
+mere.run text chat \
+  --model text-chat-laguna-xs-2-1 \
+  --prompt "Write a bounded Swift actor queue." \
+  --stats
+mere.run api serve \
+  --engine text-chat-laguna \
+  --model text-chat-laguna-xs-2-1
+```
+
+XS requires at least 36 GB unified memory and recommends 48 GB. Laguna XS 2.1
+is released under OpenMDW-1.1 for commercial and non-commercial use. mere.run
+pins Poolside's public MLX-native NVFP4 serialization, retains the upstream
+license file without adding a separate acknowledgement gate, never
+auto-downloads it, and does not attach the Laguna S DFlash companion.
 
 Laguna requires at least 96 GB unified memory and is not a setup or
 hardware-aware default. The normal chat and serving routes use temperature
@@ -65,7 +106,7 @@ remains a forced evaluation path because fewer physical batch forwards did not
 produce lower wall time on the measured two-row workload.
 
 The checkpoint is a catalog model but remains explicitly opt-in: it is never
-selected by default, requires acceptance of its published usage terms, and
+selected by default, retains its published license and source provenance, and
 keeps explicit checkpoint overrides for evaluation and rollback.
 
 Laguna's routed experts sort prefill and multi-token verification routes by
@@ -80,11 +121,41 @@ On macOS 26 and the measured M4 Max GPU, BF16 sorted NVFP4 forwards of at
 least 64 tokens fuse the gate and up projections with SwiGLU. An
 expert-aligned 16-row schedule avoids recomputing tiles that cross expert
 boundaries, while separate gate/up threadgroup tiles reduce synchronization.
-The native sorted down projection, route weighting, and top-k reduction remain
-unchanged. Set `MERERUN_LAGUNA_FUSED_SORTED_NVFP4_MOE=0` to restore the
-portable sorted gate/up path. Set `MERERUN_LAGUNA_FAST_SORTED_INVERSE=0` to
-restore the second route sort instead of the linear permutation inversion.
-Unsupported hardware, dtypes, quantization, or shapes fall back automatically.
+The down projection uses the same expert-aligned schedule; route weighting and
+top-k reduction retain their native MLX order. The guarded kernels support the
+measured M4 Max (`applegpu_g16s`) and M5 Max (`applegpu_g17s`) architectures.
+Set `MERERUN_LAGUNA_FUSED_SORTED_NVFP4_MOE=0` to restore the portable sorted
+gate/up path, `MERERUN_LAGUNA_FUSED_SORTED_NVFP4_DOWN=0` to restore the native
+sorted down projection, or `MERERUN_LAGUNA_FAST_SORTED_INVERSE=0` to restore
+the second route sort instead of the linear permutation inversion. Unsupported
+hardware, dtypes, quantization, or shapes fall back automatically.
+
+The ranked 512-token XS prefill shape also stages each sorted route row and
+constructs the sorted expert IDs plus inverse permutation with fixed-shape
+Metal copies. `MERERUN_LAGUNA_RANKED_PREFILL_ROUTE_STAGING=0` restores the
+native gathers and second sort.
+
+Prompt prefill also reuses one full-attention mask and one sliding-window mask
+across the 40 layers and evaluates the graph in an eight-layer asynchronous
+ladder. `MERERUN_LAGUNA_SHARED_ATTENTION_MASKS=0` restores per-layer masks;
+set `MERERUN_LAGUNA_PREFILL_ASYNC_LADDER=0` to disable the ladder or choose a
+stride from 1 through 40. Exact fused residual/RMSNorm and QK-norm/RoPE kernels
+are enabled by default on M5 Max and remain opt-in elsewhere. Their independent
+controls are `MERERUN_LAGUNA_PREFILL_FUSED_RESIDUAL_RMSNORM` and
+`MERERUN_LAGUNA_PREFILL_QK_NORM_ROPE`. The final prompt row is sliced before
+the output norm and language-model head; decode math and cache layout are
+unchanged.
+
+On M5 Max, last-position-only prefill also commits every terminal-layer K/V
+row while carrying only the final query and residual row through attention
+output and the MLP. The Laguna XS terminal layer additionally retains exact
+BF16 `[Q; gate]` and `[K; V]` projection banks, reducing four bias-free
+projections to two without changing any row's contraction. Final-layer DFlash
+captures, batches, decode, unsupported shapes, and non-last-position forwards
+keep the full path. Set `MERERUN_LAGUNA_TERMINAL_PREFILL_ROW=0` to restore the
+full terminal layer or `MERERUN_LAGUNA_TERMINAL_PREFILL_PROJECTION_BANKS=0` to
+keep row elision while restoring the four projections. Both paths remain
+opt-in on non-M5 hardware.
 
 Single-token target decode fuses the NVFP4 gate and up gather-GEMVs with
 SwiGLU, then keeps the native down projection. The fused path is enabled by
@@ -94,6 +165,26 @@ BF16/FP16 activations, NVFP4 group size 16, 4-bit weights, an input width
 divisible by 512, and an output width divisible by 8. Every other layout falls
 back to MLX's portable gather path. Prefill and multi-token verification keep
 the measured expert-sorted implementation above.
+
+On M5 Max, the exact Laguna XS single-token layout additionally combines the
+eight routed down projections, shared-expert down projection, ordered BF16
+route reduction, fixed 2.5 scale, and decoder residual add in one dispatch.
+This is the one-output-row-per-SIMD layout validated in the paired MLX Fast M5
+run. Set `MERERUN_LAGUNA_FUSED_ROUTED_SHARED_DOWN_RESIDUAL=0` to restore the
+native projection/reduction chain; set it to `1` to opt in on a supported M4
+Max. Any non-XS shape, dtype, quantization layout, or unquantized shared expert
+falls back automatically.
+
+The same M5-ranked runtime uses a retained group-32 affine INT8 side layout for
+Q/K/V on the first 28 layers of one-token decode. Prefill, batched decode, and
+the original BF16 checkpoint parameters are unchanged. Disable it with
+`MERERUN_LAGUNA_NATIVE_AFFINE_QKV=0`, opt in on other hardware with `=1`, or
+set `MERERUN_LAGUNA_NATIVE_AFFINE_QKV_LAYERS=0...40` for a bounded rollout.
+The official XS head pattern makes the default 28-layer side layout 598.5 MiB;
+preparation is idempotent and decode retains no additional buffer per token.
+The default remains 28 because that exact slice passed the public, hidden,
+semantic, and paired-timing M5 gates; the prepared 40-layer continuation is
+not a production default until it receives the same validation.
 
 Example:
 

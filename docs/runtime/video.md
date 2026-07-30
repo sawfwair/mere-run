@@ -74,7 +74,7 @@ are an escape hatch, not the capability contract.
 ### Cosmos3 generation, actions, and reasoning
 
 ```bash
-mere.run model pull video-cosmos3-edge-mlx --accept-model-license
+mere.run model pull video-cosmos3-edge-mlx
 
 mere.run video cosmos3 "the camera enters the open doorway" \
   --mode image-to-video \

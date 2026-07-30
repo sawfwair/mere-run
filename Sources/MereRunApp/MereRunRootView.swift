@@ -4591,7 +4591,7 @@ private struct ModelPullOptions: View {
                     Toggle("JSON", isOn: $controller.draft.json)
                         .disabled(!controller.draft.preflight)
                 }
-                Text("Required for new downloads whose owners publish non-commercial, research-only, gated, revenue-limited, or custom acceptable-use terms. The command output lists the exact model/component terms. Mere does not determine whether your intended use is permitted; you are responsible for compliance.")
+                Text("Required for access-gated downloads and models with material non-commercial, research-only, or revenue-limited terms. A custom license alone does not trigger this acknowledgement. The command output lists the exact model/component terms. Mere does not determine whether your intended use is permitted; you are responsible for compliance.")
                     .font(MereRunTheme.captionFont)
                     .foregroundStyle(MereRunTheme.textMuted)
             }

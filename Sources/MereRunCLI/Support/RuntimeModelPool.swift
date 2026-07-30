@@ -1601,7 +1601,9 @@ actor RuntimeModelPool {
             return .textChatLaguna(
                 LagunaGenerator(
                     continuousBatchingEnabled: lagunaContinuousBatchingEnabled,
-                    dflashModelPath: LagunaResources.installedDFlashPath()
+                    dflashModelPath: LagunaResources.installedDFlashPath(
+                        for: resolved.id
+                    )
                 ),
                 modelPath: resolved.installPath
             )

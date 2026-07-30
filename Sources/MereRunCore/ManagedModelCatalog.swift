@@ -260,7 +260,6 @@ public enum ManagedModelCatalog {
     private static let magentaRT2UpstreamRepoId = "google/magenta-realtime-2"
     private static let magentaRT2UpstreamRevision = "010aa0dcb0dfd27b24f0ad07b4dad63e8f9521cc"
     private static let sortformerUpstreamRevision = "e23e6404bd9859e93edbf94a740eb1c7fc58f12e"
-    private static let sortformerSourceRevision = "fafaab5faa1617a0ca52d38dd3dc4bd636800d3d"
     private static let aceStepSharedRevision = "19671f406d603126926c1b7e2adc169acbcade22"
     private static let aceStepXLBaseRevision = "220c1166efbdd9583eafcb12eb160594bbfcb241"
     private static let aceStepXLSFTRevision = "d06de46b4622f781cf07f4a013a67d591ca52819"
@@ -379,6 +378,7 @@ public enum ManagedModelCatalog {
     private static let ltxGemma3TextEncoderRepoId = "mlx-community/gemma-3-12b-it-4bit"
     private static let ltxGemma3TextEncoderRevision = "14d891e009084901c434304fe93a86fd9013e84c"
     private static let ltxGemma3TextEncoderSnapshotPatterns = [
+        "README.md",
         "config.json",
         "model.safetensors.index.json",
         "model-*.safetensors",
@@ -525,27 +525,6 @@ public enum ManagedModelCatalog {
         sourceRepoId: ltxGemma3TextEncoderRepoId,
         sourceRevision: ltxGemma3TextEncoderRevision,
         licenseURL: "https://ai.google.dev/gemma/terms"
-    )
-
-    private static let ltxGemmaTextEncoderUsageRestriction = ManagedModelUsageRestriction(
-        summary: "The LTX 2.3 Gemma text-encoder companion uses Google's custom Gemma Terms of Use and Prohibited Use Policy.",
-        terms: [ltxGemmaTextEncoderUsageTerm]
-    )
-
-    private static let cosmos3EdgeUsageRestriction = usageRestriction(
-        summary: "Cosmos3-Edge is distributed under NVIDIA Open Model Development and Use License 1.1; its use, redistribution, attribution, and acceptable-use conditions apply.",
-        license: "OpenMDW-1.1",
-        sourceRepoId: Cosmos3Resources.officialRepoID,
-        sourceRevision: Cosmos3Resources.officialRevision,
-        licenseURL: "https://huggingface.co/\(Cosmos3Resources.officialRepoID)/blob/\(Cosmos3Resources.officialRevision)/LICENSE"
-    )
-
-    private static let lagunaUsageRestriction = usageRestriction(
-        summary: "Laguna S 2.1 is distributed under OpenMDW-1.1; its attribution and acceptable-use conditions apply.",
-        license: "OpenMDW-1.1",
-        sourceRepoId: LagunaResources.upstreamModelID,
-        sourceRevision: LagunaResources.upstreamRevision,
-        licenseURL: "https://huggingface.co/poolside/Laguna-S-2.1/blob/main/LICENSE.md"
     )
 
     public static let allSpecs: [ManagedModelSpec] = [
@@ -750,13 +729,6 @@ public enum ManagedModelCatalog {
             ),
             upstreamRepoId: zImageNanoUpstreamRepoId,
             upstreamRevision: zImageNanoUpstreamRevision,
-            usageRestriction: usageRestriction(
-                summary: "This quantized mirror declares the Tongyi Qianwen license even though its Z-Image-Turbo base model is Apache 2.0; review the mirror's declared terms before use.",
-                license: "Tongyi Qianwen License (mirror declaration)",
-                sourceRepoId: zImageNanoUpstreamRepoId,
-                sourceRevision: zImageNanoUpstreamRevision,
-                licenseURL: "https://huggingface.co/filipstrand/Z-Image-Turbo-mflux-4bit#license"
-            ),
             validationKind: .zimageTurbo,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 20_538_488_559,
@@ -1039,12 +1011,27 @@ public enum ManagedModelCatalog {
             ),
             upstreamRepoId: LagunaResources.upstreamModelID,
             upstreamRevision: LagunaResources.upstreamRevision,
-            usageRestriction: lagunaUsageRestriction,
             validationKind: .laguna,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: LagunaResources.estimatedDownloadBytes,
             defaultCLICommands: ["text chat", "api serve", "model benchmark chat"],
             companionModelIDs: [LagunaResources.dflashModelID]
+        ),
+        ManagedModelSpec(
+            id: LagunaResources.xsModelID,
+            category: .textChat,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: LagunaResources.xsUpstreamModelID,
+                revision: LagunaResources.xsUpstreamRevision,
+                patterns: LagunaResources.snapshotPatterns
+            ),
+            upstreamRepoId: LagunaResources.xsUpstreamModelID,
+            upstreamRevision: LagunaResources.xsUpstreamRevision,
+            validationKind: .laguna,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: LagunaResources.xsEstimatedDownloadBytes,
+            defaultCLICommands: ["text chat", "api serve", "model benchmark chat"]
         ),
         ManagedModelSpec(
             id: Q35Resources.q36NanoModelId,
@@ -1303,19 +1290,6 @@ public enum ManagedModelCatalog {
             ),
             upstreamRepoId: "mlx-community/diar_streaming_sortformer_4spk-v2.1-fp16",
             upstreamRevision: sortformerUpstreamRevision,
-            usageRestriction: ManagedModelUsageRestriction(
-                summary: "The Sortformer weights are governed by the NVIDIA Open Model License.",
-                terms: [
-                    ManagedModelUsageTerm(
-                        component: "NVIDIA Streaming Sortformer 4-speaker v2.1 weights",
-                        license: "NVIDIA Open Model License",
-                        summary: "Use and redistribution require compliance with NVIDIA's model license and notices.",
-                        sourceRepoId: "nvidia/diar_streaming_sortformer_4spk-v2.1",
-                        sourceRevision: sortformerSourceRevision,
-                        licenseURL: "https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-license/"
-                    ),
-                ]
-            ),
             validationKind: .sortformer,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 236_108_132,
@@ -2234,7 +2208,6 @@ public enum ManagedModelCatalog {
             ),
             upstreamRepoId: Cosmos3Resources.officialRepoID,
             upstreamRevision: Cosmos3Resources.officialRevision,
-            usageRestriction: cosmos3EdgeUsageRestriction,
             validationKind: .cosmos3EdgeMLX,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 9_200_000_000,
@@ -2336,7 +2309,6 @@ private extension ManagedModelCatalog {
                 ),
                 upstreamRepoId: ltxGemma3TextEncoderRepoId,
                 upstreamRevision: ltxGemma3TextEncoderRevision,
-                usageRestriction: ltxGemmaTextEncoderUsageRestriction,
                 validationKind: .hfTextChat,
                 runtimeAutoDownloadAllowed: false,
                 estimatedDownloadBytes: 8 * 1_073_741_824

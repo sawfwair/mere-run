@@ -245,7 +245,7 @@ swift run mere.run model list
 swift run mere.run status
 swift run mere.run model capabilities
 swift run mere.run model runtime get text-chat-gemma4
-swift run mere.run model pull image-zimage-nano --accept-model-license
+swift run mere.run model pull image-zimage-nano
 swift run mere.run model info image-zimage-nano
 ```
 
@@ -1627,7 +1627,7 @@ Run the complete pinned `nvidia/Cosmos3-Edge` checkpoint through native
 Swift/MLX:
 
 ```bash
-mere.run model pull video-cosmos3-edge-mlx --accept-model-license
+mere.run model pull video-cosmos3-edge-mlx
 
 mere.run video cosmos3 \
   "continue forward through the same corridor" \
@@ -2033,8 +2033,8 @@ the model capability catalog and available disk space before downloading so unsu
 machines do not pull models they cannot run and tight disks fail with a useful cache path.
 
 ```bash
-swift run mere.run model pull image-zimage-nano --accept-model-license
-swift run mere.run model pull image-zimage-nano --accept-model-license --preflight --json
+swift run mere.run model pull image-zimage-nano
+swift run mere.run model pull image-zimage-nano --preflight --json
 swift run mere.run model pull --all
 ```
 
@@ -2045,8 +2045,9 @@ exits nonzero after printing JSON when hard blockers are present.
 
 Use `--allow-unsupported` only when you intentionally accept the runtime risk.
 
-Models with non-commercial, research-only, gated, revenue-limited, or custom
-acceptable-use terms require `--accept-model-license` before a new download.
+Models that are access-gated or carry material non-commercial, research-only,
+or revenue-limited terms require `--accept-model-license` before a new
+download. A custom license alone does not trigger the flag.
 The preflight reports the exact component terms and blocks without
 acknowledgement; `--all` skips restricted entries unless the flag is present.
 mere.run records the immutable source revisions and acknowledged term URLs in

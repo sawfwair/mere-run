@@ -52,8 +52,8 @@ struct APIServe: AsyncParsableCommand {
           # Start an LFM2.5 text-chat server
           mere.run api serve --engine text-chat-lfm2
 
-          # Start a Laguna S 2.1 server with automatic DFlash
-          mere.run api serve --engine text-chat-laguna --model text-chat-laguna-s-2-1
+          # Start a Laguna XS 2.1 server
+          mere.run api serve --engine text-chat-laguna --model text-chat-laguna-xs-2-1
 
           # Start the DeepSeek V4 Flash OpenAI-compatible server
           mere.run api serve --engine text-chat-deepseek-v4-flash
@@ -139,7 +139,7 @@ struct APIServe: AsyncParsableCommand {
     @Option(name: [.long], help: "Host to bind to.")
     var host: String = "127.0.0.1"
 
-    @Option(name: [.customShort("m"), .long, .customLong("model-path")], help: "Model path. For --engine text-code, pass a GGUF file. For --engine text-chat-klein, pass a Klein-root text chat model. For --engine text-chat-gemma4, pass a Gemma 4 model root or repo ID. For --engine text-chat-laguna, pass text-chat-laguna-s-2-1 or an installed Laguna MLX root. For --engine text-chat-q36, pass a Qwen3.6 text chat model root. For --engine text-chat-lfm2, pass an LFM2 MLX model root or repo ID. For --engine text-chat-deepseek-v4-flash, pass a DS4 GGUF file or managed model root.")
+    @Option(name: [.customShort("m"), .long, .customLong("model-path")], help: "Model path. For --engine text-code, pass a GGUF file. For --engine text-chat-klein, pass a Klein-root text chat model. For --engine text-chat-gemma4, pass a Gemma 4 model root or repo ID. For --engine text-chat-laguna, pass text-chat-laguna-s-2-1, text-chat-laguna-xs-2-1, or an installed Laguna MLX root. For --engine text-chat-q36, pass a Qwen3.6 text chat model root. For --engine text-chat-lfm2, pass an LFM2 MLX model root or repo ID. For --engine text-chat-deepseek-v4-flash, pass a DS4 GGUF file or managed model root.")
     var model: String?
 
     @Option(name: [.long], help: "Serving engine: text-chat-q36 (default; serves text-chat-q36-nano), text-code, text-chat-klein, text-chat-gemma4, text-chat-laguna, text-chat-lfm2, or text-chat-deepseek-v4-flash.")
@@ -282,12 +282,14 @@ struct APIServe: AsyncParsableCommand {
         case .textChatLaguna:
             if let explicit = model {
                 if LagunaResources.isManagedIdentifier(explicit) {
+                    let requestedID = LagunaResources.managedModelID(for: explicit)
+                        ?? LagunaResources.modelID
                     guard let installed = ManagedModelResolver.resolveInstalledModel(
-                        id: LagunaResources.modelID
+                        id: requestedID
                     ) else {
                         throw ValidationError(
-                            "Model '\(LagunaResources.modelID)' is not installed. Run "
-                                + "'mere.run model pull \(LagunaResources.modelID) --accept-model-license' first."
+                            "Model '\(requestedID)' is not installed. Run "
+                                + "'mere.run model pull \(requestedID)' first."
                         )
                     }
                     return installed.path
@@ -299,7 +301,7 @@ struct APIServe: AsyncParsableCommand {
             ) else {
                 throw ValidationError(
                     "Model '\(LagunaResources.modelID)' is not installed. Run "
-                        + "'mere.run model pull \(LagunaResources.modelID) --accept-model-license' first."
+                        + "'mere.run model pull \(LagunaResources.modelID)' first."
                 )
             }
             return installed.path

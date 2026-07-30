@@ -6,6 +6,25 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Changed
+
+- added Poolside's released Laguna XS 2.1 NVFP4 model through its pinned
+  MLX-native serialization as the
+  opt-in managed model `text-chat-laguna-xs-2-1`, with variant-safe CLI/API
+  resolution, no license-acceptance gate, and no implicit Laguna S DFlash
+  attachment. Both public Laguna 2.1 pulls retain their OpenMDW-1.1 license
+  files.
+- ported production-safe wins from the MLX Fast Laguna XS 2.1 challenge,
+  where submission `493f1ee1` reached first place with score `1.8435177465`,
+  including the terminal-prefill row specialization and exact
+  `[Q; gate]` / `[K; V]` projection banks to the guarded M5 runtime while
+  retaining full-path fallbacks for DFlash captures, batches, and unsupported
+  model shapes.
+- audited managed-model acknowledgement policy and removed false-positive
+  `--accept-model-license` gates from public Z-Image Nano, Sortformer,
+  Cosmos3-Edge, and the hidden Gemma 3 companion while retaining genuine
+  access-gated, non-commercial, research-only, and revenue-limited gates.
+
 ## 0.29.1 - 2026-07-29
 
 ### Changed

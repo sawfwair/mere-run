@@ -916,6 +916,22 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 upstreamRepoId: "\(LagunaResources.upstreamModelID)@\(LagunaResources.upstreamRevision)",
                 createdAt: createdAt
             )
+        case .lagunaXS21:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .laguna,
+                family: .laguna,
+                tier: .small,
+                variant: .standard,
+                precision: .int4,
+                quantization: Quantization(bits: 4, groupSize: 16, scheme: "mlx-nvfp4"),
+                defaults: nil,
+                supports: [.chat, .codeGeneration],
+                components: genericTextComponents,
+                upstreamRepoId:
+                    "\(LagunaResources.xsUpstreamModelID)@\(LagunaResources.xsUpstreamRevision)",
+                createdAt: createdAt
+            )
         case .lagunaS21DFlash:
             return MereRunModelManifest(
                 id: modelID.rawValue,

@@ -37,7 +37,7 @@ mere.run guide --list
 For a small first image workflow:
 
 ```bash
-mere.run model pull image-zimage-nano --accept-model-license
+mere.run model pull image-zimage-nano
 mere.run image generate \
   --model image-zimage-nano \
   --prompt "a ceramic mug in soft morning light" \
@@ -261,10 +261,11 @@ swift run mere.run model capabilities --recommended
 swift run mere.run setup
 
 # Pull a Hugging Face-backed model into the local model store
-swift run mere.run model pull image-zimage-nano --accept-model-license
-swift run mere.run model pull image-zimage-nano --accept-model-license --preflight --json
+swift run mere.run model pull image-zimage-nano
+swift run mere.run model pull image-zimage-nano --preflight --json
 swift run mere.run model pull text-chat-lfm25-a1b-8bit --accept-model-license
-swift run mere.run model pull text-chat-laguna-s-2-1 --accept-model-license
+swift run mere.run model pull text-chat-laguna-s-2-1
+swift run mere.run model pull text-chat-laguna-xs-2-1
 swift run mere.run model pull text-chat-bonsai-27b-1bit
 swift run mere.run model pull text-chat-bonsai-27b-2bit
 swift run mere.run model pull text-code-north-mini

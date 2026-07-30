@@ -98,7 +98,7 @@ final class OpenWebUICommandTests: XCTestCase {
         XCTAssertTrue(command.quiet)
     }
 
-    func testQuickstartRequiresTermsAcknowledgementBeforeItsDefaultRestrictedImagePull() throws {
+    func testQuickstartDefaultPublicImagePullNeedsNoTermsAcknowledgement() throws {
         let modelsRoot = FileManager.default.temporaryDirectory
             .appendingPathComponent("mere-run-open-webui-terms-\(UUID().uuidString)", isDirectory: true)
         defer {
@@ -107,10 +107,8 @@ final class OpenWebUICommandTests: XCTestCase {
         }
         MereRunModelPaths.setProcessModelsDirOverride(modelsRoot)
 
-        let blocked = try OpenWebUIQuickstart.parse(["--pull"])
-        let message = try XCTUnwrap(blocked.unacknowledgedUsageTermsMessage())
-        XCTAssertTrue(message.contains("image-zimage-nano"))
-        XCTAssertTrue(message.contains("--accept-model-license"))
+        let publicPull = try OpenWebUIQuickstart.parse(["--pull"])
+        XCTAssertNil(publicPull.unacknowledgedUsageTermsMessage())
 
         let accepted = try OpenWebUIQuickstart.parse(["--pull", "--accept-model-license"])
         XCTAssertNil(accepted.unacknowledgedUsageTermsMessage())

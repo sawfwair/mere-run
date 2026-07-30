@@ -19,7 +19,7 @@ Use one installed image model:
 
 ```bash
 mere.run model capabilities
-mere.run model pull image-zimage-nano --accept-model-license
+mere.run model pull image-zimage-nano
 mere.run model pull image-bonsai-binary
 mere.run model pull image-bonsai-ternary
 mere.run model pull image-krea2-turbo --accept-model-license

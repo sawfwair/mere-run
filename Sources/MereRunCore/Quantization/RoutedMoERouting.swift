@@ -21,11 +21,24 @@ enum RoutedMoERouting {
         }
     }
 
+    private static var supportsExpertAlignedNVFP4Metal: Bool {
+        #if os(macOS)
+        let architecture = GPU.deviceInfo().architecture
+        return Device.defaultDevice().deviceType == .gpu
+            && ProcessInfo.processInfo.operatingSystemVersion.majorVersion >= 26
+            && (architecture == "applegpu_g16s" || architecture == "applegpu_g17s")
+        #else
+        return false
+        #endif
+    }
+
     /// Computes an unsorted NVFP4 gate/up gather-GEMV and SwiGLU activation.
     ///
     /// One threadgroup runs the gate and up projections concurrently for one
-    /// expert route and one eight-column output tile. The input token is read
-    /// directly from `x`, avoiding the repeated top-k route tensor.
+    /// expert route and one output tile. The M5 tile halves each SIMD group's
+    /// live result accumulators while preserving each output row's reduction
+    /// order. The input token is read directly from `x`, avoiding the repeated
+    /// top-k route tensor.
     static func fusedGatherNVFP4SwiGLU(
         _ x: MLXArray,
         gateWeight: MLXArray,
@@ -35,7 +48,8 @@ enum RoutedMoERouting {
         expertIndices: MLXArray,
         topK: Int,
         groupSize: Int,
-        bits: Int
+        bits: Int,
+        rowsPerSIMDGroup: Int = 4
     ) -> MLXArray? {
         #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
         guard Device.defaultDevice().deviceType == .gpu,
@@ -53,13 +67,17 @@ enum RoutedMoERouting {
               topK > 0,
               expertIndices.size == x.dim(0) * x.dim(1) * topK,
               groupSize == 16,
-              bits == 4 else {
+              bits == 4,
+              rowsPerSIMDGroup == 1
+                || rowsPerSIMDGroup == 2
+                || rowsPerSIMDGroup == 4 else {
             return nil
         }
 
         let routeCount = expertIndices.size
         let outputDimensions = gateWeight.dim(1)
         let inputDimensions = x.dim(2)
+        let outputTileWidth = 2 * rowsPerSIMDGroup
         guard routeCount > 0,
               outputDimensions.isMultiple(of: outputTileWidth),
               inputDimensions.isMultiple(of: inputBlockWidth),
@@ -78,6 +96,7 @@ enum RoutedMoERouting {
                 ("ROUTE_COUNT", routeCount),
                 ("OUTPUT_DIMENSIONS", outputDimensions),
                 ("INPUT_DIMENSIONS", inputDimensions),
+                ("RESULTS_PER_SIMDGROUP", rowsPerSIMDGroup),
             ],
             grid: (
                 simdWidth,
@@ -87,6 +106,65 @@ enum RoutedMoERouting {
             threadGroup: (simdWidth, parallelSIMDGroups, 1),
             outputShapes: [[routeCount, 1, outputDimensions]],
             outputDTypes: [x.dtype]
+        )[0]
+        #else
+        return nil
+        #endif
+    }
+
+    /// Fuses Laguna XS single-token routed and shared NVFP4 down projections,
+    /// the ordered BF16 route reduction, the fixed 2.5 routed scale, and the
+    /// decoder residual add. The one-row SIMD retile is the paired-M5-ranked
+    /// layout; all non-XS shapes and quantization layouts fall back to MLX.
+    static func fusedLagunaXSRoutedSharedDownResidual(
+        routedActivated: MLXArray,
+        routedDownWeight: MLXArray,
+        routedDownScales: MLXArray,
+        indices: MLXArray,
+        routerWeights: MLXArray,
+        sharedActivated: MLXArray,
+        sharedDownWeight: MLXArray,
+        sharedDownScales: MLXArray,
+        residual: MLXArray
+    ) -> MLXArray? {
+        #if os(macOS)
+        guard supportsExpertAlignedNVFP4Metal,
+              routedActivated.dtype == .bfloat16,
+              routedActivated.shape == [8, 1, 512],
+              routedDownWeight.dtype == .uint32,
+              routedDownWeight.shape == [256, 2_048, 64],
+              routedDownScales.dtype == .uint8,
+              routedDownScales.shape == [256, 2_048, 32],
+              indices.dtype == .uint32,
+              indices.shape == [1, 1, 8],
+              routerWeights.dtype == .bfloat16,
+              routerWeights.shape == [1, 1, 8],
+              sharedActivated.dtype == .bfloat16,
+              sharedActivated.shape == [1, 1, 512],
+              sharedDownWeight.dtype == .uint32,
+              sharedDownWeight.shape == [2_048, 64],
+              sharedDownScales.dtype == .uint8,
+              sharedDownScales.shape == [2_048, 32],
+              residual.dtype == .bfloat16,
+              residual.shape == [1, 1, 2_048] else {
+            return nil
+        }
+        return lagunaXSRoutedSharedDownResidualKernel(
+            [
+                routedActivated,
+                routedDownWeight,
+                routedDownScales,
+                indices,
+                routerWeights,
+                sharedActivated,
+                sharedDownWeight,
+                sharedDownScales,
+                residual,
+            ],
+            grid: (2_048 * 288, 1, 1),
+            threadGroup: (288, 1, 1),
+            outputShapes: [[1, 1, 2_048]],
+            outputDTypes: [.bfloat16]
         )[0]
         #else
         return nil
@@ -115,6 +193,55 @@ enum RoutedMoERouting {
         #endif
     }
 
+    /// Replaces the ranked Laguna prefill route gathers with fixed-shape
+    /// byte copies and constructs both metadata permutations directly.
+    /// Every other model, shape, dtype, and route count falls back to MLX.
+    static func stageRankedLagunaPrefillRoute(
+        _ input: MLXArray,
+        flatIndices: MLXArray,
+        order: MLXArray,
+        topK: Int
+    ) -> (
+        sortedInput: MLXArray,
+        sortedIndices: MLXArray,
+        inverseOrder: MLXArray
+    )? {
+        #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
+        let tokenCount = 512
+        let hiddenSize = 2_048
+        let rankedTopK = 8
+        let routeCount = tokenCount * rankedTopK
+        guard Device.defaultDevice().deviceType == .gpu,
+              input.dtype == .bfloat16,
+              input.shape == [tokenCount, hiddenSize],
+              topK == rankedTopK,
+              flatIndices.dtype == .uint32,
+              flatIndices.shape == [routeCount],
+              order.dtype == .uint32,
+              order.shape == [routeCount] else {
+            return nil
+        }
+
+        let sortedInput = rankedPrefillRowCopyKernel(
+            [input, order],
+            grid: (hiddenSize / 8, routeCount, 1),
+            threadGroup: (256, 1, 1),
+            outputShapes: [[routeCount, 1, hiddenSize]],
+            outputDTypes: [.bfloat16]
+        )[0]
+        let metadata = rankedPrefillRouteMetadataKernel(
+            [flatIndices, order],
+            grid: (routeCount, 1, 1),
+            threadGroup: (256, 1, 1),
+            outputShapes: [[routeCount], [routeCount]],
+            outputDTypes: [.uint32, .uint32]
+        )
+        return (sortedInput, metadata[0], metadata[1])
+        #else
+        return nil
+        #endif
+    }
+
     /// Runs the two sorted NVFP4 expert projections in one classic matrix
     /// dispatch and applies SwiGLU before the intermediate leaves the kernel.
     static func fusedSortedNVFP4SwiGLU(
@@ -128,10 +255,7 @@ enum RoutedMoERouting {
         bits: Int
     ) -> MLXArray? {
         #if os(macOS)
-        let operatingSystem = ProcessInfo.processInfo.operatingSystemVersion
-        guard Device.defaultDevice().deviceType == .gpu,
-              operatingSystem.majorVersion >= 26,
-              GPU.deviceInfo().architecture == "applegpu_g16s",
+        guard supportsExpertAlignedNVFP4Metal,
               sortedInput.dtype == .bfloat16,
               gateWeight.dtype == .uint32,
               upWeight.dtype == .uint32,
@@ -208,6 +332,98 @@ enum RoutedMoERouting {
                 ("INPUT_DIMENSIONS", inputDimensions),
             ],
             grid: (outputTiles * 32, maximumRouteTiles * 2, 1),
+            threadGroup: (32, 2, 1),
+            outputShapes: [[routeCount, 1, outputDimensions]],
+            outputDTypes: [sortedInput.dtype]
+        )[0]
+        #else
+        return nil
+        #endif
+    }
+
+    /// Runs one sorted NVFP4 expert projection with the same expert-aligned
+    /// tile schedule used by the fused gate/up prefill path. Laguna uses this
+    /// for the routed down projection after SwiGLU, avoiding the generic
+    /// gather-QMM run loop while preserving each output row's MMA order.
+    static func sortedNVFP4Projection(
+        _ sortedInput: MLXArray,
+        weight: MLXArray,
+        scales: MLXArray,
+        sortedExpertIndices: MLXArray,
+        groupSize: Int,
+        bits: Int
+    ) -> MLXArray? {
+        #if os(macOS)
+        guard supportsExpertAlignedNVFP4Metal,
+              sortedInput.dtype == .bfloat16,
+              weight.dtype == .uint32,
+              scales.dtype == .uint8,
+              sortedExpertIndices.dtype == .int32
+                || sortedExpertIndices.dtype == .uint32,
+              sortedInput.ndim == 3,
+              sortedInput.dim(1) == 1,
+              weight.dim(0) == scales.dim(0),
+              weight.dim(0) > 0,
+              weight.dim(0) <= 256,
+              weight.dim(1) == scales.dim(1),
+              sortedInput.dim(0) == sortedExpertIndices.size,
+              groupSize == 16,
+              bits == 4 else {
+            return nil
+        }
+
+        let routeCount = sortedInput.dim(0)
+        let outputDimensions = weight.dim(1)
+        let inputDimensions = sortedInput.dim(2)
+        guard routeCount >= 64,
+              outputDimensions.isMultiple(of: 64),
+              inputDimensions.isMultiple(of: 64),
+              weight.dim(2) == inputDimensions / 8,
+              scales.dim(2) == inputDimensions / groupSize else {
+            return nil
+        }
+
+        let maximumRouteTiles =
+            (routeCount + 15) / 16
+                + min(weight.dim(0), routeCount)
+                - 1
+        let schedule = sortedExpertTileScheduleKernel(
+            [sortedExpertIndices],
+            template: [
+                ("IndexT", sortedExpertIndices.dtype),
+                ("ROUTE_COUNT", routeCount),
+                ("EXPERT_COUNT", weight.dim(0)),
+                ("TILE_COUNT", maximumRouteTiles),
+            ],
+            grid: (weight.dim(0), 1, 1),
+            threadGroup: (weight.dim(0), 1, 1),
+            outputShapes: [
+                [maximumRouteTiles],
+                [maximumRouteTiles],
+                [maximumRouteTiles],
+            ],
+            outputDTypes: [
+                sortedExpertIndices.dtype,
+                sortedExpertIndices.dtype,
+                sortedExpertIndices.dtype,
+            ]
+        )
+        return sortedNVFP4ProjectionKernel(
+            [
+                sortedInput,
+                weight,
+                scales,
+                schedule[0],
+                schedule[1],
+                schedule[2],
+                Int32(routeCount),
+            ],
+            template: [
+                ("DataT", sortedInput.dtype),
+                ("OUTPUT_DIMENSIONS", outputDimensions),
+                ("INPUT_DIMENSIONS", inputDimensions),
+            ],
+            grid: ((outputDimensions / 32) * 32, maximumRouteTiles * 2, 1),
             threadGroup: (32, 2, 1),
             outputShapes: [[routeCount, 1, outputDimensions]],
             outputDTypes: [sortedInput.dtype]
@@ -316,6 +532,41 @@ enum RoutedMoERouting {
             if (index < COUNT) {
                 inverse[uint(order[index])] = IndexT(index);
             }
+        """,
+        ensureRowContiguous: true
+    )
+
+    private static let rankedPrefillRowCopyKernel = MLXFast.metalKernel(
+        name: "mere_laguna_ranked_prefill_row_copy_bf16_512x8_v1",
+        inputNames: ["source", "order"],
+        outputNames: ["sorted"],
+        source: """
+            constexpr uint hidden_vectors = 2048 / 8;
+            constexpr uint experts_per_token = 8;
+
+            uint vector_index = thread_position_in_grid.x;
+            uint sorted_row = thread_position_in_grid.y;
+            uint original_row = order[sorted_row];
+            uint source_row = original_row / experts_per_token;
+            const device uint4* source_vectors =
+                reinterpret_cast<const device uint4*>(source);
+            device uint4* sorted_vectors =
+                reinterpret_cast<device uint4*>(sorted);
+            sorted_vectors[sorted_row * hidden_vectors + vector_index] =
+                source_vectors[source_row * hidden_vectors + vector_index];
+        """,
+        ensureRowContiguous: true
+    )
+
+    private static let rankedPrefillRouteMetadataKernel = MLXFast.metalKernel(
+        name: "mere_laguna_ranked_prefill_route_metadata_u32_4096_v1",
+        inputNames: ["flat_indices", "order"],
+        outputNames: ["sorted_indices", "inverse_order"],
+        source: """
+            uint sorted_row = thread_position_in_grid.x;
+            uint original_row = order[sorted_row];
+            sorted_indices[sorted_row] = flat_indices[original_row];
+            inverse_order[original_row] = sorted_row;
         """,
         ensureRowContiguous: true
     )
@@ -572,6 +823,298 @@ enum RoutedMoERouting {
         ensureRowContiguous: true
     )
 
+    private static let sortedNVFP4ProjectionKernel = MLXFast.metalKernel(
+        name: "mere_routed_moe_sorted_nvfp4_projection",
+        inputNames: [
+            "x",
+            "weight",
+            "scales",
+            "tile_starts",
+            "scheduled_tile_rows",
+            "tile_experts",
+            "route_count",
+        ],
+        outputNames: ["output"],
+        source: """
+            constexpr int BM = 16;
+            constexpr int BN = 32;
+            constexpr int BK = 32;
+            constexpr int WM = 1;
+            constexpr int WN = 2;
+            constexpr int GROUP_SIZE = 16;
+            constexpr int BITS = 4;
+            constexpr int PACK_FACTOR = get_pack_factor<8, BITS>();
+            constexpr int BYTES_PER_PACK = get_bytes_per_pack();
+            constexpr int BK_PADDED = BK + 16 / sizeof(DataT);
+            constexpr int K_WEIGHT =
+                INPUT_DIMENSIONS * BYTES_PER_PACK / PACK_FACTOR;
+            constexpr int K_SCALE = INPUT_DIMENSIONS / GROUP_SIZE;
+            constexpr int K_ITERATIONS = INPUT_DIMENSIONS / BK;
+            constexpr size_t WEIGHT_EXPERT_STRIDE =
+                size_t(OUTPUT_DIMENSIONS) * K_WEIGHT;
+            constexpr size_t SCALE_EXPERT_STRIDE =
+                size_t(OUTPUT_DIMENSIONS) * K_SCALE;
+
+            using mma_t = mlx::steel::BlockMMA<
+                DataT,
+                DataT,
+                BM,
+                BN,
+                BK,
+                WM,
+                WN,
+                false,
+                true,
+                BK_PADDED,
+                BK_PADDED>;
+            using input_loader_t = mlx::steel::BlockLoader<
+                DataT,
+                BM,
+                BK,
+                BK_PADDED,
+                1,
+                WM * WN * SIMD_SIZE>;
+            using weight_loader_t = QuantizedBlockLoader<
+                DataT,
+                BN,
+                BK,
+                BK_PADDED,
+                true,
+                WM * WN * SIMD_SIZE,
+                GROUP_SIZE,
+                BITS>;
+
+            threadgroup DataT input_tile[BM * BK_PADDED];
+            threadgroup DataT weight_tile[BN * BK_PADDED];
+
+            const uint3 tile = threadgroup_position_in_grid;
+            const uint simd_group = simdgroup_index_in_threadgroup;
+            const uint simd_lane = thread_index_in_simdgroup;
+            const int output_row = int(tile_starts[tile.y]);
+            if (output_row >= int(route_count)) {
+                return;
+            }
+            const int output_column = int(tile.x) * BN;
+            const short tile_rows = short(scheduled_tile_rows[tile.y]);
+            const uint expert = uint(tile_experts[tile.y]);
+
+            const device DataT* tile_input =
+                x + size_t(output_row) * INPUT_DIMENSIONS;
+            device DataT* tile_output =
+                output
+                    + size_t(output_row) * OUTPUT_DIMENSIONS
+                    + output_column;
+            const device uint8_t* weight_bytes =
+                reinterpret_cast<const device uint8_t*>(weight)
+                    + size_t(output_column) * K_WEIGHT
+                    + size_t(expert) * WEIGHT_EXPERT_STRIDE;
+            const device uint8_t* scale_bytes =
+                scales
+                    + size_t(output_column) * K_SCALE
+                    + size_t(expert) * SCALE_EXPERT_STRIDE;
+
+            thread mma_t mma(simd_group, simd_lane);
+            thread input_loader_t input_loader(
+                tile_input,
+                INPUT_DIMENSIONS,
+                input_tile,
+                simd_group,
+                simd_lane);
+            thread weight_loader_t weight_loader(
+                weight_bytes,
+                scale_bytes,
+                INPUT_DIMENSIONS,
+                weight_tile,
+                simd_group,
+                simd_lane);
+
+            for (int k = 0; k < K_ITERATIONS; ++k) {
+                threadgroup_barrier(mem_flags::mem_threadgroup);
+                if (tile_rows == BM) {
+                    input_loader.load_unsafe();
+                } else {
+                    input_loader.load_safe(short2(BK, tile_rows));
+                }
+                weight_loader.load_unsafe();
+                threadgroup_barrier(mem_flags::mem_threadgroup);
+                mma.mma(input_tile, weight_tile);
+
+                input_loader.next();
+                weight_loader.next();
+            }
+
+            if (tile_rows == BM) {
+                mma.store_result(tile_output, OUTPUT_DIMENSIONS);
+            } else {
+                mma.store_result_safe(
+                    tile_output,
+                    OUTPUT_DIMENSIONS,
+                    short2(BN, tile_rows));
+            }
+        """,
+        header: "// MLX_INCLUDE_FP_QUANTIZED_HEADERS\n",
+        ensureRowContiguous: true
+    )
+
+    private static let lagunaXSDownHeader = """
+        static inline float mere_laguna_nvfp4_scale(uint8_t bits) {
+            ushort raw = ushort(bits & 127) << 7;
+            half converted = as_type<half>(raw);
+            half signed_value = (bits & 128) ? -converted : converted;
+            return float(signed_value) * 4194304.0f;
+        }
+
+        static inline float mere_laguna_nvfp4_qdot_codes_16(
+            uint2 codes,
+            const thread float* input,
+            float scale
+        ) {
+            float accum = 0.0f;
+            for (uint j = 0; j < 2; ++j) {
+                const uint c = (j == 0) ? codes.x : codes.y;
+                const uint p0 =
+                    ((c & 0x00070007u) << 9) | ((c & 0x00080008u) << 12);
+                const uint p1 =
+                    ((c & 0x00700070u) << 5) | ((c & 0x00800080u) << 8);
+                const uint p2 =
+                    ((c & 0x07000700u) << 1) | ((c & 0x08000800u) << 4);
+                const uint p3 =
+                    ((c & 0x70007000u) >> 3) | (c & 0x80008000u);
+                const float2 v04 = float2(as_type<half2>(p0));
+                const float2 v15 = float2(as_type<half2>(p1));
+                const float2 v26 = float2(as_type<half2>(p2));
+                const float2 v37 = float2(as_type<half2>(p3));
+                accum +=
+                    (input[8 * j] * v04.x
+                     + input[8 * j + 1] * v15.x
+                     + input[8 * j + 2] * v26.x
+                     + input[8 * j + 3] * v37.x);
+                accum +=
+                    (input[8 * j + 4] * v04.y
+                     + input[8 * j + 5] * v15.y
+                     + input[8 * j + 6] * v26.y
+                     + input[8 * j + 7] * v37.y);
+            }
+            return scale * accum;
+        }
+
+        static inline float mere_laguna_nvfp4_qdot_16(
+            const device uint8_t* weight,
+            const thread float* input,
+            float scale
+        ) {
+            const device uint2* packed = (const device uint2*)weight;
+            return mere_laguna_nvfp4_qdot_codes_16(packed[0], input, scale);
+        }
+        """
+
+    private static let lagunaXSRoutedSharedDownResidualKernel = MLXFast.metalKernel(
+        name: "mere_laguna_xs_routed_shared_nvfp4_down_residual_bf16_r1_v1",
+        inputNames: [
+            "routed_activated",
+            "routed_down_weight",
+            "routed_down_scales",
+            "indices",
+            "router_weights",
+            "shared_activated",
+            "shared_down_weight",
+            "shared_down_scales",
+            "residual",
+        ],
+        outputNames: ["output"],
+        source: """
+            constexpr uint input_width = 512;
+            constexpr uint output_width = 2048;
+            constexpr uint routed_experts = 8;
+            constexpr uint shared_slot = 8;
+            constexpr uint outputs_per_simd = 1;
+            constexpr uint values_per_lane = 16;
+            constexpr uint packed_row_bytes = 256;
+            constexpr uint scale_row_bytes = 32;
+            constexpr uint packed_expert_bytes =
+                output_width * packed_row_bytes;
+            constexpr uint scale_expert_bytes =
+                output_width * scale_row_bytes;
+
+            uint tile = threadgroup_position_in_grid.x;
+            uint slot = simdgroup_index_in_threadgroup;
+            uint lane = thread_index_in_simdgroup;
+            uint first_row = tile * outputs_per_simd;
+            bool is_shared = slot == shared_slot;
+            uint expert = is_shared ? 0 : uint(indices[slot]);
+
+            const device bfloat* expert_input = is_shared
+                ? shared_activated
+                : routed_activated + slot * input_width;
+            const device uint8_t* expert_weight = is_shared
+                ? (const device uint8_t*)shared_down_weight
+                : (const device uint8_t*)routed_down_weight
+                    + expert * packed_expert_bytes;
+            const device uint8_t* expert_scales = is_shared
+                ? shared_down_scales
+                : routed_down_scales + expert * scale_expert_bytes;
+
+            thread float input_values[values_per_lane];
+            const device vec<bfloat, 4>* input_vectors =
+                (const device vec<bfloat, 4>*) (
+                    expert_input + lane * values_per_lane);
+            for (uint i = 0; i < values_per_lane / 4; ++i) {
+                const vec<bfloat, 4> values = input_vectors[i];
+                input_values[4 * i] = values[0];
+                input_values[4 * i + 1] = values[1];
+                input_values[4 * i + 2] = values[2];
+                input_values[4 * i + 3] = values[3];
+            }
+
+            thread float result[outputs_per_simd] = {0.0f};
+            for (uint row = 0; row < outputs_per_simd; ++row) {
+                uint output_row = first_row + row;
+                const device uint8_t* weight =
+                    expert_weight + output_row * packed_row_bytes + lane * 8;
+                const device uint8_t* scale =
+                    expert_scales + output_row * scale_row_bytes + lane;
+                result[row] = mere_laguna_nvfp4_qdot_16(
+                    weight,
+                    input_values,
+                    mere_laguna_nvfp4_scale(scale[0]));
+                result[row] = simd_sum(result[row]);
+            }
+
+            threadgroup bfloat down_outputs[
+                (routed_experts + 1) * outputs_per_simd
+            ];
+            if (lane == 0) {
+                for (uint row = 0; row < outputs_per_simd; ++row) {
+                    down_outputs[slot * outputs_per_simd + row] =
+                        bfloat(result[row]);
+                }
+            }
+            threadgroup_barrier(mem_flags::mem_threadgroup);
+
+            if (slot == 0 && lane < outputs_per_simd) {
+                bfloat routed_total = bfloat(0);
+                for (uint routed_slot = 0;
+                     routed_slot < routed_experts;
+                     ++routed_slot) {
+                    bfloat route_weight = router_weights[routed_slot];
+                    bfloat product = bfloat(
+                        down_outputs[
+                            routed_slot * outputs_per_simd + lane
+                        ] * route_weight);
+                    routed_total = bfloat(product + routed_total);
+                }
+                bfloat routed = bfloat(routed_total * bfloat(2.5f));
+                bfloat shared =
+                    down_outputs[shared_slot * outputs_per_simd + lane];
+                bfloat branch = bfloat(routed + shared);
+                output[first_row + lane] =
+                    bfloat(residual[first_row + lane] + branch);
+            }
+        """,
+        header: lagunaXSDownHeader,
+        ensureRowContiguous: true
+    )
+
     private static let fusedGatherNVFP4SwiGLUKernel = MLXFast.metalKernel(
         name: "mere_routed_moe_gather_nvfp4_swiglu",
         inputNames: [
@@ -585,8 +1128,9 @@ enum RoutedMoERouting {
         outputNames: ["output"],
         source: """
             constexpr int packs_per_thread = 2;
-            constexpr int results_per_simdgroup = 4;
-            constexpr int outputs_per_threadgroup = 8;
+            constexpr int results_per_simdgroup = RESULTS_PER_SIMDGROUP;
+            constexpr int outputs_per_threadgroup =
+                2 * results_per_simdgroup;
             constexpr int pack_factor = get_pack_factor<32, BITS>();
             constexpr int bytes_per_pack = get_bytes_per_pack<32>();
             constexpr int values_per_thread = pack_factor * packs_per_thread;

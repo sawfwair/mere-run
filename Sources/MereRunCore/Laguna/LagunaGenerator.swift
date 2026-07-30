@@ -354,6 +354,11 @@ public actor LagunaGenerator: ChatGenerator {
         progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Laguna config"))
         let configData = try Data(contentsOf: rootURL.appending(path: "config.json"))
         let config = try JSONDecoder().decode(LagunaConfig.self, from: configData)
+        let weightsIndexURL = rootURL.appending(path: "model.safetensors.index.json")
+        let weightsIndex = try JSONDecoder().decode(
+            HFSafetensorsIndex.self,
+            from: Data(contentsOf: weightsIndexURL)
+        )
 
         progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Laguna tokenizer"))
         let tokenizer = try await LagunaTokenizerAndTemplate.load(
@@ -362,9 +367,12 @@ public actor LagunaGenerator: ChatGenerator {
         )
 
         progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Laguna weights"))
-        let model = LagunaCausalLM(config: config)
+        let model = LagunaCausalLM(
+            config: config,
+            quantizedSharedExperts: LagunaResources.hasQuantizedSharedExperts(weightsIndex)
+        )
         try HFSafetensorsWeightsLoader.applyShardedWeights(
-            indexURL: rootURL.appending(path: "model.safetensors.index.json"),
+            indexURL: weightsIndexURL,
             to: model,
             dtype: nil,
             verify: .shapeMismatch,
@@ -375,6 +383,10 @@ public actor LagunaGenerator: ChatGenerator {
                 ))
             }
         )
+        let runtimeAccelerationArrays = model.prepareRuntimeAcceleration()
+        if !runtimeAccelerationArrays.isEmpty {
+            MLX.eval(runtimeAccelerationArrays)
+        }
 
         self.model = model
         self.tokenizerAndTemplate = tokenizer

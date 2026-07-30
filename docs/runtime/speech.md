@@ -84,10 +84,10 @@ swift run mere.run speech listen --device <core-audio-uid>
 
 ### Identify speakers
 
-Install the pinned Sortformer checkpoint after reviewing NVIDIA's model terms:
+Install the pinned public Sortformer checkpoint:
 
 ```bash
-mere.run model pull speech-diarization-sortformer --accept-model-license
+mere.run model pull speech-diarization-sortformer
 mere.run speech diarize ./meeting.wav --output ./meeting.json
 mere.run speech diarize ./meeting.wav --format rttm --output ./meeting.rttm
 ```

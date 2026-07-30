@@ -7,6 +7,7 @@ final class MereRunModelManifestTests: MereRunCoreTestCase {
     func testLagunaTemplatesPinTheValidatedTargetAndDFlashRevisions() {
         let createdAt = Date(timeIntervalSince1970: 0)
         let target = MereRunModelManifest.template(for: .lagunaS21, createdAt: createdAt)
+        let xs = MereRunModelManifest.template(for: .lagunaXS21, createdAt: createdAt)
         let dflash = MereRunModelManifest.template(for: .lagunaS21DFlash, createdAt: createdAt)
 
         XCTAssertEqual(target.id, LagunaResources.modelID)
@@ -20,6 +21,20 @@ final class MereRunModelManifestTests: MereRunCoreTestCase {
         XCTAssertEqual(
             target.upstreamRepoId,
             "\(LagunaResources.upstreamModelID)@\(LagunaResources.upstreamRevision)"
+        )
+
+        XCTAssertEqual(xs.id, LagunaResources.xsModelID)
+        XCTAssertEqual(xs.engine, .laguna)
+        XCTAssertEqual(xs.family, .laguna)
+        XCTAssertEqual(xs.tier, .small)
+        XCTAssertEqual(xs.precision, .int4)
+        XCTAssertEqual(xs.quantization?.bits, 4)
+        XCTAssertEqual(xs.quantization?.groupSize, 16)
+        XCTAssertEqual(xs.quantization?.scheme, "mlx-nvfp4")
+        XCTAssertEqual(xs.supports, [.chat, .codeGeneration])
+        XCTAssertEqual(
+            xs.upstreamRepoId,
+            "\(LagunaResources.xsUpstreamModelID)@\(LagunaResources.xsUpstreamRevision)"
         )
 
         XCTAssertEqual(dflash.id, LagunaResources.dflashModelID)

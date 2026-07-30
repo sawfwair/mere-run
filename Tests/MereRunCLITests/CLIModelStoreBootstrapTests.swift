@@ -6,8 +6,26 @@ import MereRunCore
 final class CLIModelStoreBootstrapTests: XCTestCase {
     private var defaultsSuites: [String] = []
     private let legacyModelsDirEnvironmentKey = ["ZE", "RO", "MODELS", "DIR"].joined(separator: "_")
+    private var originalModelsDirEnvironmentValue: String?
+
+    override func setUp() {
+        super.setUp()
+        originalModelsDirEnvironmentValue = ProcessInfo.processInfo.environment[
+            MereRunModelPaths.modelsDirEnvironmentKey
+        ]
+    }
 
     override func tearDown() {
+        MereRunModelPaths.setProcessModelsDirOverride(nil)
+        if let originalModelsDirEnvironmentValue {
+            setenv(
+                MereRunModelPaths.modelsDirEnvironmentKey,
+                originalModelsDirEnvironmentValue,
+                1
+            )
+        } else {
+            unsetenv(MereRunModelPaths.modelsDirEnvironmentKey)
+        }
         for suite in defaultsSuites {
             UserDefaults.standard.removePersistentDomain(forName: suite)
         }
@@ -67,6 +85,24 @@ final class CLIModelStoreBootstrapTests: XCTestCase {
     func testMereRunCLIExposesGlobalModelsRootOptionInHelp() {
         let help = MereRunCLI.helpMessage(for: MereRunCLI.self, includeHidden: true)
         XCTAssertTrue(help.contains("--models-root <models-root>"))
+    }
+
+    func testRootValidationAppliesParsedModelsRootOption() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        var command = MereRunCLI()
+        command.modelsRoot = root.path
+
+        try command.validate()
+
+        XCTAssertEqual(
+            MereRunModelPaths.modelsDir.standardizedFileURL.path,
+            root.standardizedFileURL.path
+        )
+        XCTAssertEqual(
+            ProcessInfo.processInfo.environment[MereRunModelPaths.modelsDirEnvironmentKey],
+            root.standardizedFileURL.path
+        )
     }
 
     func testMereRunCLIExposesReleaseVersion() {

@@ -204,9 +204,10 @@ Face model weights are downloaded separately by `mere.run model pull` and are
 not vendored in this repository.
 
 The same separation applies to every managed model: mere.run ships model
-runtime code and source-level notices, not model weights. Managed models with
-non-commercial, research-only, gated, revenue-limited, or custom acceptable-
-use terms require explicit user acknowledgement before a new download. Their
+runtime code and source-level notices, not model weights. Managed models that
+are access-gated or carry material non-commercial, research-only, or revenue-
+limited terms require explicit user acknowledgement before a new download. A
+custom license alone does not trigger the mere.run gate. Their
 exact source revisions and component-level license URLs are preserved in the
 installed `mererun_model.json`; the authoritative inventory is in
 [`docs/model-sources.md`](./docs/model-sources.md#restricted-model-downloads).
@@ -300,6 +301,22 @@ SOFTWARE.
 
 ## Source-derived runtime implementations
 
+### Poolside Laguna 2.1 native runtime
+
+- purpose: native Swift/MLX loading, attention, routed-MoE, tokenizer/template,
+  tool parsing, DFlash, and guarded acceleration support for Poolside Laguna
+  2.1 checkpoints; no model weights are vendored in this repository
+- managed Laguna S source: `poolside/Laguna-S-2.1-NVFP4-mlx` revision
+  `e6a961c3bbebfffd8fa5b42f243e375504f41edd`
+- canonical released Laguna XS model: `poolside/Laguna-XS-2.1-NVFP4`
+- managed MLX-native Laguna XS source:
+  `poolside/Laguna-XS-2.1-NVFP4-mlx` revision
+  `841778bda563a36104dd521e37d99218e46f4f25`
+- license: OpenMDW License Agreement 1.1; managed downloads retain the
+  checkpoint's license and attribution files
+- permitted use: OpenMDW-1.1 allows commercial and non-commercial use subject
+  to its attribution and acceptable-use terms
+
 ### Sortformer speaker-diarization runtime
 
 - purpose: native Swift/MLX implementation of the Sortformer model graph,
@@ -311,7 +328,8 @@ SOFTWARE.
   revision `e23e6404bd9859e93edbf94a740eb1c7fc58f12e`; installed separately
 - source model: [`nvidia/diar_streaming_sortformer_4spk-v2.1`](https://huggingface.co/nvidia/diar_streaming_sortformer_4spk-v2.1),
   revision `fafaab5faa1617a0ca52d38dd3dc4bd636800d3d`; governed by the NVIDIA
-  Open Model License and explicit managed-pull terms acceptance
+  Open Model License; the public, ungated managed pull retains source
+  provenance and does not add a separate mere.run acceptance gate
 
 ```text
 MIT License
@@ -350,7 +368,9 @@ SOFTWARE.
   `Copyright (c) 2026 NVIDIA CORPORATION & AFFILIATES. All rights reserved.`
 - official model: [`nvidia/Cosmos3-Edge`](https://huggingface.co/nvidia/Cosmos3-Edge)
   revision `6f58f6b4c91288838e60b6bcb2cc45d997e961de`; installed separately
-  through the managed model store and guarded by explicit terms acceptance
+  through the managed model store, including its `LICENSE.md`; OpenMDW-1.1
+  acceptance occurs by exercising the licensed rights, without a separate
+  mere.run acceptance gate
 - VAE and scheduler behavioral reference:
   [`huggingface/diffusers`](https://github.com/huggingface/diffusers) v0.39.0,
   commit `a3608b512ed7248499a44c61d954965ed9bdae4d`; Apache License 2.0
@@ -547,10 +567,10 @@ SOFTWARE.
 - source project: [`sawfwair/mlx-swift`](https://github.com/sawfwair/mlx-swift),
   based on upstream [`ml-explore/mlx-swift`](https://github.com/ml-explore/mlx-swift)
   0.32.1
-- pinned package revision: `a9485c38b82b8e0cee76e8f1f5a3e5bf6f36d543`
-- embedded MLX revision: `9bee51623d5a34806821e0f414fae293f90dda19`
+- pinned package revision: `009a42f024a04e50bb50bb6ce90d0a3e396c1760`
+- embedded MLX revision: `6398fb307f8b6f19d8319a0744a510602c2b818e`
 - generated-kernel source SHA-256:
-  `4e8781e7bbfd64810b7e23f870c647f561e9e7f1d1867183291778ef43b9d12e`
+  `a4a91e902e4a3c196ba45f3c6ee65c769c26b5825ae3b72d8b93ca233db2d93f`
 - license: MIT
 
 ```

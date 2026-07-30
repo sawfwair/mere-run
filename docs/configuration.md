@@ -67,7 +67,7 @@ location to move when large downloaded weights need to live on another disk.
 
 ```bash
 export MERERUN_HUB_CACHE=/Volumes/Models/huggingface
-swift run mere.run model pull image-zimage-nano --accept-model-license
+swift run mere.run model pull image-zimage-nano
 ```
 
 Managed pulls use cataloged Hugging Face repos only. Private archive hosts and

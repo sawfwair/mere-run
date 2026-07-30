@@ -13,8 +13,9 @@ Supported engines:
 - `text-code`: GGUF code models such as `text-code-qwen3`,
   `text-code-north-mini`, and `text-agent-ornith-35b`.
 - `text-chat-gemma4`: Gemma text chat models, including `text-chat-gemma4-12b`.
-- `text-chat-laguna`: managed Laguna S 2.1 target with automatic DFlash;
-  defaults to `text-chat-laguna-s-2-1`.
+- `text-chat-laguna`: managed Laguna S 2.1 target with automatic DFlash or
+  the released Laguna XS 2.1 target without DFlash; defaults to
+  `text-chat-laguna-s-2-1`.
 - `vision-chat-gemma4-12b`: Gemma 4 12B vision chat over the Gemma4 API serving engine.
 - `text-chat-q36`: Qwen-family serving engine; defaults to `text-chat-q36-nano`
   and also serves `text-chat-bonsai-27b-1bit`, `text-chat-bonsai-27b-2bit`,
@@ -36,7 +37,7 @@ Supported engines:
 ```bash
 mere.run model capabilities
 mere.run model pull text-agent-deepseek-v4-flash
-mere.run model pull image-zimage-nano --accept-model-license
+mere.run model pull image-zimage-nano
 mere.run model pull speech-tts-qwen3-nano
 mere.run model pull speech-asr-parakeet
 mere.run model runtime get text-chat-gemma4
@@ -275,7 +276,7 @@ mere.run api serve --engine text-chat-lfm2 --port 11434
 ```
 
 ```bash
-mere.run model pull text-chat-laguna-s-2-1 --accept-model-license
+mere.run model pull text-chat-laguna-s-2-1
 mere.run api serve --engine text-chat-laguna --max-active-requests 2 --port 11434
 ```
 

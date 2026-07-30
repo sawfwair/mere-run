@@ -49,7 +49,7 @@ swift run mere.run --models-root /path/to/models model list
 Examples:
 
 - images: `image-klein-nano`, `image-bonsai-binary`, `image-bonsai-ternary`, `image-zimage-nano`, `image-klein-max`, `image-zimage-max`
-- text: `text-chat-gemma4`, `text-chat-laguna-s-2-1`, `text-chat-q36-nano`, `text-chat-bonsai-27b-1bit`, `text-chat-bonsai-27b-2bit`, `text-chat-lfm25-a1b-8bit`, `text-agent-deepseek-v4-flash`, `text-agent-qwen35-9b`, `text-agent-ornith-9b`, `text-agent-ornith-35b-mlx`, `text-agent-ornith-35b`, `text-code-north-mini`, `text-code-qwen3`, `text-embed-qwen3-0.6b`
+- text: `text-chat-gemma4`, `text-chat-laguna-s-2-1`, `text-chat-laguna-xs-2-1`, `text-chat-q36-nano`, `text-chat-bonsai-27b-1bit`, `text-chat-bonsai-27b-2bit`, `text-chat-lfm25-a1b-8bit`, `text-agent-deepseek-v4-flash`, `text-agent-qwen35-9b`, `text-agent-ornith-9b`, `text-agent-ornith-35b-mlx`, `text-agent-ornith-35b`, `text-code-north-mini`, `text-code-qwen3`, `text-embed-qwen3-0.6b`
 - speech: `speech-tts-qwen3-nano`, `speech-asr-parakeet`
 - vision: `vision-ocr-lighton`
 - music: `music-acestep`, `music-acestep-xl-turbo`, `music-acestep-xl-turbo-lm4b`, `music-acestep-xl-sft`, `music-acestep-xl-base`, `music-magenta-rt2-small`, `music-magenta-rt2-base`
@@ -113,13 +113,24 @@ checked against the managed capability catalog before download so low-memory
 machines do not fetch models they cannot run. Pass `--allow-unsupported` only
 when you intentionally accept that risk or are using external hardware.
 
-Restricted or custom-terms models require `--accept-model-license` for new
-downloads and never auto-download at runtime. The CLI and macOS app show the
+Access-gated models and models with material non-commercial, research-only, or
+revenue-limited terms require `--accept-model-license` for new downloads and
+never auto-download at runtime. A custom license alone does not trigger the
+flag. The CLI and macOS app show the
 applicable model/component terms before acceptance; schema 3 of the installed
 `mererun_model.json` records the immutable source revisions, term URLs, and
 acknowledgement. mere.run does not determine whether a user's intended use is
 permitted. The complete inventory is in
 [`model-sources.md`](../model-sources.md#restricted-model-downloads).
+
+Laguna XS 2.1 is released under the permissive OpenMDW-1.1 license, and its
+public Hugging Face repository is not gated. It therefore installs without a
+separate acknowledgement flag while retaining the upstream license file:
+
+```bash
+mere.run model pull text-chat-laguna-xs-2-1
+mere.run text chat --model text-chat-laguna-xs-2-1 --prompt "Hello"
+```
 
 ### `mere.run adapter list` and `mere.run adapter pull`
 

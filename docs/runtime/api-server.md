@@ -105,7 +105,7 @@ For the opt-in Laguna S 2.1 target with its automatically installed DFlash
 companion:
 
 ```bash
-swift run mere.run model pull text-chat-laguna-s-2-1 --accept-model-license
+swift run mere.run model pull text-chat-laguna-s-2-1
 swift run mere.run api serve \
   --engine text-chat-laguna \
   --max-active-requests 2
@@ -115,6 +115,16 @@ Laguna uses its validated `1/1/20/0.02` temperature, top-p, top-k, and min-p
 recipe when a request does not override sampling. The server automatically
 routes output budgets of at least 32 tokens through DFlash and falls back
 losslessly when measured draft acceptance is poor.
+
+To serve the smaller experimental XS checkpoint instead, select it explicitly;
+the server will not attach the S DFlash companion:
+
+```bash
+swift run mere.run model pull text-chat-laguna-xs-2-1
+swift run mere.run api serve \
+  --engine text-chat-laguna \
+  --model text-chat-laguna-xs-2-1
+```
 
 In another terminal, confirm that the server is reachable and which model it
 reports:
@@ -138,7 +148,7 @@ curl http://127.0.0.1:8080/v1/embeddings \
 Image generation and editing return base64 PNG JSON by default:
 
 ```bash
-swift run mere.run model pull image-zimage-nano --accept-model-license
+swift run mere.run model pull image-zimage-nano
 curl http://127.0.0.1:8080/v1/images/generations \
   -H "Content-Type: application/json" \
   --data '{

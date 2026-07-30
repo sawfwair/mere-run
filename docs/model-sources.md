@@ -55,6 +55,7 @@ from the runtime catalog used by `mere.run model list`,
 | `text-chat` | `text-chat-gemma4-nano` |
 | `text-chat` | `text-chat-gemma4-max` |
 | `text-chat` | `text-chat-laguna-s-2-1` |
+| `text-chat` | `text-chat-laguna-xs-2-1` |
 | `text-chat` | `text-chat-q36-nano` |
 | `text-chat` | `text-chat-bonsai-27b-1bit` |
 | `text-chat` | `text-chat-bonsai-27b-2bit` |
@@ -119,9 +120,9 @@ from the runtime catalog used by `mere.run model list`,
 mere.run is free and open source, but model and component licenses remain the
 terms of their respective owners. mere.run does not bundle these weights,
 decide whether a user's intended use qualifies, or police use after install.
-For every new download with non-commercial, research-only, gated, revenue-
-limited, or custom acceptable-use terms, the user must review the listed terms
-and pass `--accept-model-license`:
+For every new download that is access-gated or carries a material use limit—
+such as non-commercial, research-only, or revenue-limited terms—the user must
+review the listed terms and pass `--accept-model-license`:
 
 ```bash
 mere.run model pull vision-face-buffalo-l --accept-model-license
@@ -140,7 +141,6 @@ validates all configured models before downloading any; both accept the same
 | Models | Upstream terms that require acknowledgement |
 | --- | --- |
 | `image-klein-9b`, `image-klein-base-9b` | FLUX Non-Commercial License v2.1; non-commercial, non-production use |
-| `image-zimage-nano` | the quantized mirror declares the Tongyi Qianwen License; the official Z-Image-Turbo base is Apache 2.0 |
 | `image-krea2-raw`, `image-krea2-turbo` | Krea 2 Community License; commercial use is limited to entities below USD 1M trailing annual revenue, plus use/distribution conditions |
 | `image-ideogram4-sdnq-uint4` | Ideogram Non-Commercial Model Agreement |
 | `text-chat-lfm25-a1b-8bit` | LFM Open License v1.0; commercial use by entities at or above USD 10M annual revenue is excluded |
@@ -151,7 +151,6 @@ validates all configured models before downloading any; both accept the same
 | `sfx-woosh-*` | CC BY-NC 4.0 Woosh or MMAudio Synchformer weights |
 | `sfx-mmaudio-large-44k-v2` | CC BY-NC 4.0 MMAudio checkpoints plus Apple's research-only DFN5B encoder terms |
 | `video-ltx-av`, `video-ltx23-av-mlx`, `video-ltx23-full-mlx`, `video-ltx23-a2vid-mlx` | LTX-2 Community License; entities at or above USD 10M annual revenue need a paid commercial license, plus acceptable-use conditions. The 2.3 MLX paths also install a hidden Gemma 3 text encoder under Google's Gemma Terms and Prohibited Use Policy. |
-| `speech-diarization-sortformer` | NVIDIA Open Model License; use and redistribution require compliance with NVIDIA's model terms and notices |
 
 The catalog pins every restricted download source to an immutable commit. New
 managed installs write those repository revisions, every applicable
@@ -159,6 +158,19 @@ model/component license and URL, and the acknowledgement result into schema 3
 of `mererun_model.json`. `mere.run model info MODEL` displays the same record.
 Pre-existing installs remain usable and are not retroactively treated as an
 acknowledgement.
+
+The flag is not a generic click-through for every custom model license. Public,
+ungated downloads whose licenses grant commercial use by exercising the
+licensed rights do not require it. This includes Poolside Laguna S/XS 2.1 and
+NVIDIA Cosmos3-Edge under OpenMDW-1.1, NVIDIA Sortformer under the NVIDIA Open
+Model License, and the hidden Gemma 3 companion under the Gemma Terms of Use.
+Their terms still apply. Managed downloads retain the available license,
+README, attribution, and immutable source provenance.
+
+`image-zimage-nano` also does not require acknowledgement. Its canonical
+`Tongyi-MAI/Z-Image-Turbo` base is Apache-2.0; the pinned mflux conversion's
+model-card license label is inconsistent with that canonical source and is not
+treated as a new restriction on the converted weights.
 
 `speech-diarization-sortformer` installs the fp16 conversion from
 `mlx-community/diar_streaming_sortformer_4spk-v2.1-fp16` at immutable revision
@@ -426,7 +438,7 @@ when you want large models on an external disk:
 
 ```bash
 export MERERUN_HUB_CACHE=/Volumes/Models/huggingface
-swift run mere.run model pull image-zimage-nano --accept-model-license
+swift run mere.run model pull image-zimage-nano
 ```
 
 Model pulls are resumable at the file level through the Hugging Face snapshot
@@ -462,7 +474,7 @@ Examples:
 
 ```bash
 # Pull into the default model store
-swift run mere.run model pull image-zimage-nano --accept-model-license
+swift run mere.run model pull image-zimage-nano
 
 # Pull into a custom SSD-backed store
 MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull text-chat-q36-nano
@@ -787,13 +799,15 @@ projector. The Swift/MLX runtime loads these official safetensors directly; it
 does not invoke Python, PyTorch, or Diffusers during inference.
 
 ```bash
-mere.run model pull video-cosmos3-edge-mlx --accept-model-license
+mere.run model pull video-cosmos3-edge-mlx
 mere.run guide video-cosmos3
 ```
 
 The checkpoint is governed by NVIDIA Open Model Development and Use License
-1.1 (`OpenMDW-1.1`). The managed catalog exposes the pinned license URL,
-requires explicit acceptance, and disables runtime auto-download.
+1.1 (`OpenMDW-1.1`). Exercising the licensed rights constitutes acceptance;
+the public, ungated pull does not require mere.run's acknowledgement flag.
+The managed snapshot retains `LICENSE.md`, and runtime auto-download remains
+disabled.
 
 Numerical parity fixtures are generated against NVIDIA's Cosmos framework
 commit `ed8287fd7477113f8ac4f6b84290514d55cf0cdc`; the VAE/scheduler reference is
