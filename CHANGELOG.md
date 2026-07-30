@@ -6,6 +6,22 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.29.1 - 2026-07-29
+
+### Changed
+
+- removed `vision-ocr-infinity-flash` from the managed catalog, model resolver,
+  Studio defaults, documentation, and exhaustive release inventory; native
+  Infinity OCR now defaults to the validated Pro int8 model.
+- made the exhaustive Sortformer release check consume the same required real
+  A → B → A speaker fixture used by the dedicated Metal and CUDA checkpoints,
+  replacing the unreliable generated two-voice approximation.
+
+### Fixed
+
+- fixed the packaged macOS helper missing SwiftPM resource bundles required by
+  Gemma-family inference.
+
 ## 0.29.0 - 2026-07-29
 
 ### Added
@@ -35,13 +51,6 @@ The format is based on Keep a Changelog.
 - fixed exact managed MoGe model IDs being interpreted as filesystem paths.
 - made ASR, audio, video, SCAIL, and component-checkpoint smokes exercise their
   real production inputs and reject undecodable, silent, or incomplete output.
-
-### Known issues
-
-- `vision-ocr-infinity-flash` may be explicitly quarantined from a release
-  smoke because its native Qwen3.5 path diverges from the reference runtime.
-  Quarantine evidence records it as skipped; Infinity Pro and LightOn OCR
-  remain covered by true inference.
 
 ## 0.28.1 - 2026-07-28
 

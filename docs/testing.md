@@ -273,7 +273,8 @@ not a skip.
 The final packaged candidate runs the exhaustive installed-model matrix:
 
 ```bash
-/path/to/extracted/mere.run gate \
+MERERUN_SORTFORMER_AUDIO=/path/to/two-speaker-a-b-a.wav \
+  /path/to/extracted/mere.run gate \
   --all-installed \
   --require-all \
   --json-output ./release-gate.json
@@ -283,7 +284,9 @@ That produces one result per installed model ID, including every image model;
 TripoSR, InstantMesh, and TRELLIS.2; music and SFX; OCR, SAM, grounding, face,
 geometry, and depth; speech, embeddings, privacy, text, and every video/world
 backend. Component-only entries must be consumed by a named true companion run.
-An installed model with no recipe fails closed.
+An installed model with no recipe fails closed. When Sortformer is installed,
+`MERERUN_SORTFORMER_AUDIO` is required and must identify a real fixture whose
+first speaker returns after a different middle speaker.
 
 If a release owner explicitly quarantines a known-broken installed model, add
 `--skip-model <installed-id>`. The evidence retains it as a `skipped` row

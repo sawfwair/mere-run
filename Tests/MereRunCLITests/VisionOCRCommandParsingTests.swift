@@ -13,7 +13,7 @@ final class VisionOCRCommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.model, ModelResolver.ModelID.lightOnOCR.rawValue)
         XCTAssertEqual(cmd.infinityRuntime, .native)
         XCTAssertEqual(cmd.infinityParserCLI, "parser")
-        XCTAssertEqual(cmd.infinityModel, Q35Resources.infinityParser2FlashModelId)
+        XCTAssertEqual(cmd.infinityModel, Q35Resources.infinityParser2ProInt8ModelId)
         XCTAssertEqual(cmd.infinityBackend, .vllmServer)
         XCTAssertEqual(cmd.infinityTask, .doc2json)
         XCTAssertEqual(cmd.infinityOutputFormat, .md)
@@ -59,7 +59,7 @@ final class VisionOCRCommandParsingTests: XCTestCase {
             "--backend", "infinity",
             "--infinity-runtime", "external",
             "--infinity-parser-cli", "/opt/bin/parser",
-            "--infinity-model", "infly/Infinity-Parser2-Flash",
+            "--infinity-model", "infly/Infinity-Parser2-Pro",
             "--infinity-backend", "vllm-engine",
             "--infinity-api-url", "http://127.0.0.1:8000/v1/chat/completions",
             "--infinity-api-key", "test-key",
@@ -74,7 +74,7 @@ final class VisionOCRCommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.backend, .infinity)
         XCTAssertEqual(cmd.infinityRuntime, .external)
         XCTAssertEqual(cmd.infinityParserCLI, "/opt/bin/parser")
-        XCTAssertEqual(cmd.infinityModel, "infly/Infinity-Parser2-Flash")
+        XCTAssertEqual(cmd.infinityModel, "infly/Infinity-Parser2-Pro")
         XCTAssertEqual(cmd.infinityBackend, .vllmEngine)
         XCTAssertEqual(cmd.infinityAPIURL, "http://127.0.0.1:8000/v1/chat/completions")
         XCTAssertEqual(cmd.infinityAPIKey, "test-key")

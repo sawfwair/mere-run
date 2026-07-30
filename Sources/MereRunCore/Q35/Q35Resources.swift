@@ -30,7 +30,6 @@ public struct Q35Resources: Sendable, Hashable {
     public static let bonsai27B2BitModelId = "text-chat-bonsai-27b-2bit"
     public static let ornith9BModelId = "text-agent-ornith-9b"
     public static let ornith35BMLXModelId = "text-agent-ornith-35b-mlx"
-    public static let infinityParser2FlashModelId = "vision-ocr-infinity-flash"
     public static let infinityParser2ProModelId = "vision-ocr-infinity-pro"
     public static let infinityParser2ProInt8ModelId = "vision-ocr-infinity-pro-int8"
     public static let defaultModelId = q36NanoModelId
@@ -90,8 +89,6 @@ public struct Q35Resources: Sendable, Hashable {
     public static let ornith35BMLXUpstreamRepoId = "deepreinforce-ai/Ornith-1.0-35B"
     public static let ornith35BMLXUpstreamRevision = "5df2ed3f675c7beaa490328cc70bb573b65fb660"
     public static let ornith35BMLXEstimatedDownloadBytes: Int64 = 18 * 1_073_741_824
-    public static let infinityParser2FlashUpstreamRepoId = "infly/Infinity-Parser2-Flash"
-    public static let infinityParser2FlashUpstreamRevision = "30f02aca5ee7c32d22a962cbece5c19611147c9e"
     public static let infinityParser2ProUpstreamRepoId = "infly/Infinity-Parser2-Pro"
     public static let infinityParser2ProUpstreamRevision = "1d070df7db5acca0ffa75596229070a047704f89"
     public static let infinityParser2ProInt8UpstreamRepoId = "Sawfwair/Infinity-Parser2-Pro-Int8"
@@ -122,11 +119,6 @@ public struct Q35Resources: Sendable, Hashable {
             modelId: ornith35BMLXModelId,
             upstreamRepoId: ornith35BMLXUpstreamRepoId,
             upstreamRevision: ornith35BMLXUpstreamRevision
-        ),
-        infinityParser2FlashModelId: Profile(
-            modelId: infinityParser2FlashModelId,
-            upstreamRepoId: infinityParser2FlashUpstreamRepoId,
-            upstreamRevision: infinityParser2FlashUpstreamRevision
         ),
         infinityParser2ProModelId: Profile(
             modelId: infinityParser2ProModelId,

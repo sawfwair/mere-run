@@ -226,16 +226,8 @@ enum InstalledModelSmokePlans {
             }
 
         case .sortformer:
-            return companion(
-                spec,
-                installedIDs: installedIDs,
-                candidates: ["speech-tts-qwen3-nano"],
-                route: "speech diarize of a generated two-speaker fixture"
-            ) { runner, fixtureModel in
-                try await runner.installedDiarizationCheck(
-                    model: spec.id,
-                    fixtureModel: fixtureModel
-                )
+            return direct(spec, route: "speech diarize of a real A-B-A fixture") { runner in
+                try await runner.installedDiarizationCheck(model: spec.id)
             }
 
         case .qwen3Embedding:
@@ -628,51 +620,19 @@ extension GateRunner {
         )
     }
 
-    func installedDiarizationCheck(
-        model: String,
-        fixtureModel: String
-    ) async throws -> GateObservation {
-        let firstVoice = workDirectory.appendingPathComponent("installed-diarization-first.wav")
-        let secondVoice = workDirectory.appendingPathComponent("installed-diarization-second.wav")
-        if !FileManager.default.fileExists(atPath: firstVoice.path) {
-            _ = try await exec(
-                [
-                    "speech", "synthesize",
-                    "Welcome to the speaker diarization release smoke.",
-                    "--model", fixtureModel,
-                    "--voice", "A bright female voice with clear pronunciation",
-                    "--output", firstVoice.path,
-                    "--temperature", "0",
-                    "--quiet",
-                ],
-                timeout: 1_800
+    func installedDiarizationCheck(model: String) async throws -> GateObservation {
+        guard let fixturePath = ProcessInfo.processInfo.environment["MERERUN_SORTFORMER_AUDIO"],
+              !fixturePath.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw GateError.invalidArtifact(
+                "MERERUN_SORTFORMER_AUDIO must point to the required real A-B-A speaker fixture"
             )
         }
-        if !FileManager.default.fileExists(atPath: secondVoice.path) {
-            _ = try await exec(
-                [
-                    "speech", "synthesize",
-                    "The second speaker confirms that the runtime can separate voices.",
-                    "--model", fixtureModel,
-                    "--voice", "A deep male voice with measured delivery",
-                    "--output", secondVoice.path,
-                    "--temperature", "0",
-                    "--quiet",
-                ],
-                timeout: 1_800
+        let fixture = URL(fileURLWithPath: fixturePath).standardizedFileURL
+        guard FileManager.default.fileExists(atPath: fixture.path) else {
+            throw GateError.invalidArtifact(
+                "MERERUN_SORTFORMER_AUDIO fixture was not found at \(fixture.path)"
             )
         }
-
-        let first = try MediaAudioIO.decode(firstVoice, targetSampleRate: 16_000, channels: 1)
-        let second = try MediaAudioIO.decode(secondVoice, targetSampleRate: 16_000, channels: 1)
-        let silence = [Float](repeating: 0, count: 12_000)
-        let fixture = workDirectory.appendingPathComponent("installed-diarization-two-speaker.wav")
-        try MediaAudioIO.writeFloatWAV(
-            samples: first.samples + silence + second.samples,
-            sampleRate: 16_000,
-            channels: 1,
-            to: fixture
-        )
 
         let run = try await exec(
             [
@@ -685,16 +645,23 @@ extension GateRunner {
         )
         let data = Data(run.stdout.utf8)
         let document = try JSONDecoder().decode(InstalledDiarizationDocument.self, from: data)
-        let speakerIDs = Set(document.segments.map(\.speaker))
+        let speakerIDs = document.segments.map(\.speaker)
+        let distinctSpeakerIDs = Set(speakerIDs)
         let hasValidSegments = document.segments.allSatisfy { $0.startSeconds >= 0 && $0.endSeconds > $0.startSeconds }
+        let firstSpeakerReidentified = speakerIDs.count >= 3
+            && speakerIDs.first == speakerIDs.last
+            && speakerIDs.dropFirst().dropLast().contains { $0 != speakerIDs.first }
         return GateObservation(
             hash: Self.sha256(data),
             secondRunHash: nil,
             wallSeconds: run.wallSeconds,
             decodeTps: nil,
-            semanticFailure: document.speakerCount >= 2 && speakerIDs.count >= 2 && hasValidSegments
+            semanticFailure: document.speakerCount >= 2
+                && distinctSpeakerIDs.count >= 2
+                && hasValidSegments
+                && firstSpeakerReidentified
                 ? nil
-                : "diarization did not identify two valid speaker tracks"
+                : "diarization did not preserve the required A-B-A speaker sequence"
         )
     }
 
