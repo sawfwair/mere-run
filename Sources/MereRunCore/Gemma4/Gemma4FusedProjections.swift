@@ -35,6 +35,18 @@ enum Gemma4FusedProjectionPolicy {
             .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         return raw == "1" || raw == "true" || raw == "on"
     }()
+
+    /// Opt-in A/B path: carry only the consumed final row through the final
+    /// text-transformer layer while still appending every K/V row. Installed
+    /// checkpoints show a repeatable prefill win and greedy parity, but the
+    /// logits are not bit-identical, so sampled-distribution validation still
+    /// blocks enabling this by default.
+    static let terminalPrefillRowEnabled: Bool = {
+        let raw = ProcessInfo.processInfo.environment[
+            "MERERUN_GEMMA4_TERMINAL_PREFILL_ROW"
+        ]?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return raw == "1" || raw == "true" || raw == "on"
+    }()
 }
 
 /// An MLX-compiled decode segment plus the identity fingerprint of every module

@@ -8,6 +8,11 @@ The format is based on Keep a Changelog.
 
 ### Changed
 
+- added an opt-in Gemma 4 terminal text-prefill A/B path, derived from the
+  Laguna XS 2.1 final-row specialization. Installed BF16, affine-4, and
+  NVFP4/MoE checkpoints measured roughly 2.0-3.4% lower prefill time with
+  matched tested greedy responses; it remains off by default because the
+  single-query attention graph is not full-logit bit-identical.
 - added Poolside's released Laguna XS 2.1 NVFP4 model through its pinned
   MLX-native serialization as the
   opt-in managed model `text-chat-laguna-xs-2-1`, with variant-safe CLI/API

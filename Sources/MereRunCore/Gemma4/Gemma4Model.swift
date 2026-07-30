@@ -993,6 +993,60 @@ final class Gemma4Attention: Module {
         return oProj(reshaped)
     }
 
+    /// Final-layer text-prefill path for callers that consume only the final
+    /// hidden row. Every K/V row is normalized, rotated, and committed to the
+    /// cache; only Q and the attention output are restricted to the final row.
+    func callLastPrefillRow(
+        _ x: MLXArray,
+        cache: Gemma4AttentionCache?
+    ) -> MLXArray {
+        let batchSize = x.dim(0)
+        let sequenceLength = x.dim(1)
+        precondition(batchSize == 1 && sequenceLength > 1)
+        precondition(layerType == "full_attention" && !isKVSharedLayer)
+
+        let offset = cache?.offset ?? 0
+        let lastInput = x[0..., (sequenceLength - 1)..., 0...]
+        let rawQueries = qProj(lastInput)
+        let rawKeys = kProj(x)
+        let rawValues = useKeyEqualsValue ? rawKeys : vProj!(x)
+
+        var queries = qNorm(
+            rawQueries.reshaped(batchSize, 1, numHeads, headDim)
+        ).transposed(0, 2, 1, 3)
+        var keys = kNorm(
+            rawKeys.reshaped(batchSize, sequenceLength, numKVHeads, headDim)
+        ).transposed(0, 2, 1, 3)
+        var values = gemma4RMSNormNoScale(
+            rawValues.reshaped(batchSize, sequenceLength, numKVHeads, headDim),
+            eps: rmsNormEps
+        ).transposed(0, 2, 1, 3)
+
+        queries = rope(queries, offset: offset + sequenceLength - 1)
+        keys = rope(keys, offset: offset)
+        if let cache {
+            guard let state = cache.attentionState(appending: keys, values: values) else {
+                preconditionFailure("Gemma 4 terminal prefill cache must expose appended K/V state.")
+            }
+            keys = state.0
+            values = state.1
+        }
+
+        let attended = MLXFast.scaledDotProductAttention(
+            queries: queries,
+            keys: keys,
+            values: values,
+            scale: 1.0,
+            mask: .none
+        )
+        let reshaped = attended.transposed(0, 2, 1, 3).reshaped(
+            batchSize,
+            1,
+            numHeads * headDim
+        )
+        return oProj(reshaped)
+    }
+
     private func resolvedFusedQKV() -> Gemma4FusedQuantizedProjection? {
         guard Gemma4FusedProjectionPolicy.enabled else { return nil }
         let sources: [Linear?] = useKeyEqualsValue ? [qProj, kProj] : [qProj, kProj, vProj]
@@ -1234,6 +1288,48 @@ final class Gemma4DecoderLayer: Module {
             hidden = gateResidual + gate
         }
 
+        return hidden * layerScalar
+    }
+
+    /// Preserve final-layer K/V cache semantics while avoiding prompt-row work
+    /// whose hidden states are discarded immediately before the language head.
+    func callLastPrefillRow(
+        _ x: MLXArray,
+        cache: Gemma4AttentionCache?
+    ) -> MLXArray {
+        let sequenceLength = x.dim(1)
+        precondition(x.dim(0) == 1 && sequenceLength > 1)
+        precondition(!hasPerLayerInput)
+        let attentionOutput = selfAttention.callLastPrefillRow(
+            inputLayerNorm(x),
+            cache: cache
+        )
+
+        let attentionResidual = x[0..., (sequenceLength - 1)..., 0...]
+        var hidden = postAttentionLayerNorm(attentionOutput)
+        hidden = attentionResidual + hidden
+
+        let mlpResidual = hidden
+        if let router,
+           let experts,
+           let preFeedforwardLayerNorm2,
+           let postFeedforwardLayerNorm1,
+           let postFeedforwardLayerNorm2 {
+            var dense = preFeedforwardLayerNorm(hidden)
+            dense = mlp(dense)
+            dense = postFeedforwardLayerNorm1(dense)
+
+            let route = router(hidden)
+            var sparse = preFeedforwardLayerNorm2(hidden)
+            sparse = experts(sparse, indices: route.indices, weights: route.weights)
+            sparse = postFeedforwardLayerNorm2(sparse)
+            hidden = dense + sparse
+        } else {
+            hidden = preFeedforwardLayerNorm(hidden)
+            hidden = mlp(hidden)
+        }
+        hidden = postFeedforwardLayerNorm(hidden)
+        hidden = mlpResidual + hidden
         return hidden * layerScalar
     }
 
@@ -1482,7 +1578,43 @@ final class Gemma4LanguageModel: Module {
     /// Logits for the final position only. Prefill chunks never read the other
     /// positions' logits, and skipping them avoids a [seq, 262k] lm_head matmul
     /// plus its materialization per chunk.
-    func lastPositionLogits(_ inputIds: MLXArray, cache: [Gemma4AttentionCache]? = nil) -> MLXArray {
+    func lastPositionLogits(
+        _ inputIds: MLXArray,
+        cache: [Gemma4AttentionCache]? = nil,
+        terminalPrefillRowEnabled: Bool? = nil
+    ) -> MLXArray {
+        let terminalEnabled = terminalPrefillRowEnabled
+            ?? Gemma4FusedProjectionPolicy.terminalPrefillRowEnabled
+        if terminalEnabled,
+           inputIds.dim(0) == 1,
+           inputIds.dim(1) > 1,
+           config.hiddenSizePerLayerInput == 0,
+           config.numKVSharedLayers == 0,
+           config.layerTypes.last == "full_attention" {
+            var tokenIds = inputIds
+            if tokenIds.dtype != .int32 {
+                tokenIds = tokenIds.asType(.int32)
+            }
+            var hidden = embeddings(inputIds: tokenIds)
+            let caches = cache ?? makeCache()
+            for index in layers.indices.dropLast() {
+                let cacheIndex = layerIndexToCacheIndex[index]
+                hidden = layers[index](
+                    hidden,
+                    cache: cacheIndex < caches.count ? caches[cacheIndex] : nil,
+                    perLayerInput: nil
+                )
+            }
+            if let lastIndex = layers.indices.last {
+                let cacheIndex = layerIndexToCacheIndex[lastIndex]
+                let last = layers[lastIndex].callLastPrefillRow(
+                    hidden,
+                    cache: cacheIndex < caches.count ? caches[cacheIndex] : nil
+                )
+                return embedTokens.asLinear(norm(last))
+            }
+        }
+
         var hidden = self(inputIds, cache: cache)
         let sequenceLength = hidden.dim(1)
         if sequenceLength > 1 {
@@ -1812,7 +1944,11 @@ public final class Gemma4UnifiedCausalLM: Module, Gemma4CausalModel, @unchecked 
     }
 
     func prefillStep(inputIds: MLXArray, cache: [Gemma4AttentionCache]?) -> MLXArray {
-        applyFinalSoftcap(languageModel.lastPositionLogits(inputIds, cache: cache))
+        applyFinalSoftcap(languageModel.lastPositionLogits(
+            inputIds,
+            cache: cache,
+            terminalPrefillRowEnabled: false
+        ))
     }
 
     func forwardForSpeculation(inputIds: MLXArray, cache: [Gemma4AttentionCache]? = nil) -> Gemma4ForwardOutput {

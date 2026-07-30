@@ -137,6 +137,36 @@ This is why the catalog addition makes Laguna XS selectable without enabling
 its M5-ranked paths on unrelated models or hardware. Catalog support and
 acceleration promotion are separate decisions.
 
+### Installed-model portability A/B
+
+The Laguna portability audit was exercised only against autoregressive models
+already installed on the July 30, 2026 M5 Max development machine. No model was
+downloaded for this work, and every comparison reused the shared Swift build
+cache. Values below are within-row comparisons; prompts and harnesses differ
+between rows, so absolute times are not cross-model rankings.
+
+| Installed model/runtime | Candidate | Directional result | Decision |
+| --- | --- | --- | --- |
+| Gemma 4 Turbo (native MLX NVFP4/MoE) | Terminal final-row text prefill | `0.5305s` to `0.5124s` warm mean, about 3.4% lower | Keep opt-in; tested greedy response matched. |
+| Gemma 4 12B 4-bit (native MLX affine-4) | Terminal final-row text prefill | `0.6112s` to `0.5978s` warm mean, about 2.2% lower | Keep opt-in; tested greedy response matched. |
+| Gemma 4 12B BF16 (native MLX dense) | Terminal final-row text prefill | `0.8660s` to `0.8492s` resident mean, about 2.0% lower | Keep opt-in; three greedy behavior responses matched, but full logits differed by up to 0.25. |
+| Bonsai 27B 1-bit (native Q35) | Terminal final-row prefill plus fused K/V | `2.1814s` to `2.2035s`, about 1.0% slower | Reject. |
+| Bonsai 27B 2-bit (native Q35) | Terminal final-row prefill plus fused K/V | `2.4252s` to `2.4107s`, about 0.6% lower | Reject as noise-sized and inconsistent with 1-bit. |
+| Ornith 9B OptiQ (native Q35) | Terminal final-row prefill plus fused K/V | about 4.5% lower in a process-bracketed screen | Reject because the greedy grounded-email sequence changed. |
+| LFM2.5 A1B 8-bit (native MLX) | Its existing affine-8 routed-MoE fusion | about 1.2% decode improvement in the existing real-checkpoint gate | Already shipped behind its independent exact guards. |
+
+The installed unified Gemma vision checkpoint intentionally bypasses the new
+terminal text path because multimodal embedding and position contracts differ.
+Installed North Mini, Ornith 35B GGUF, and DeepSeek V4 Flash lanes use external
+engines whose kernels cannot be changed by the Swift MLX graph. Diffusion,
+audio, embedding, OCR, and other non-autoregressive installed models have
+different execution graphs and were outside this text-decoder mechanism audit.
+
+Use `MERERUN_GEMMA4_TERMINAL_PREFILL_ROW=1` to continue the Gemma experiment.
+It is not a default until seeded sampled-distribution, batch/concurrency, and
+larger behavior-corpus gates demonstrate that the bounded logit movement is
+acceptable.
+
 ### Shared autoregressive pipeline saturation
 
 The shared decode loop confirms the first sampled token before opening its

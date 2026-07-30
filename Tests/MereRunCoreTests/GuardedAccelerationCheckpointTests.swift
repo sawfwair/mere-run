@@ -1,4 +1,5 @@
 import Foundation
+import MLX
 import XCTest
 @testable import MereRunCore
 
@@ -20,6 +21,86 @@ private final class LockedGeneratedText: @unchecked Sendable {
 }
 
 final class GuardedAccelerationCheckpointTests: MereRunCoreTestCase {
+    func testInstalledGemmaTwelveBTerminalPrefillRowAB() async throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard environment["MERERUN_TEST_GUARDED_ACCELERATION_CHECKPOINTS"] == "1" else {
+            throw XCTSkip("Set MERERUN_TEST_GUARDED_ACCELERATION_CHECKPOINTS=1 to run real-checkpoint parity.")
+        }
+        let modelId = Gemma4Resources.twelveBModelId
+        guard let modelRoot = ManagedModelResolver.resolveInstalledModel(id: modelId) else {
+            throw XCTSkip("Install \(modelId) to run terminal-prefill parity.")
+        }
+
+        let loaded = try await Gemma4TextModelLoader.load(
+            modelId: modelId,
+            modelPath: modelRoot.path,
+            maxContextLength: 512
+        )
+        let passage = """
+        Local inference performance depends on memory bandwidth, cache layout,
+        kernel launch count, and exact output verification. A valid optimization
+        must preserve the target model's answer while reducing measured cost.
+        """
+        let prompt = Array(repeating: passage, count: 12).joined(separator: "\n")
+            + "\nReturn exactly one word that summarizes the passage."
+        let tokens = try loaded.tokenizerAndTemplate.encodeForGeneration(
+            messages: [ChatMessage(role: .user, content: prompt)],
+            addGenerationPrompt: true,
+            includeThinking: false,
+            maxLength: 512
+        )
+        let input = MLXArray(tokens.map(Int32.init)).reshaped(1, tokens.count)
+
+        struct Measurement {
+            let seconds: Double
+            let token: Int
+            let logits: MLXArray
+        }
+        func measure(_ enabled: Bool) -> Measurement {
+            let cache = loaded.model.languageModel.makeCache()
+            let started = Date()
+            let logits = loaded.model.languageModel.lastPositionLogits(
+                input,
+                cache: cache,
+                terminalPrefillRowEnabled: enabled
+            )
+            MLX.eval(logits)
+            let seconds = Date().timeIntervalSince(started)
+            let token = argMax(logits[0, -1, 0...]).item(Int.self)
+            return Measurement(seconds: seconds, token: token, logits: logits)
+        }
+
+        let measurements = [false, true, false, true, true, false].map(measure)
+        let reference = measurements[2]
+        for measurement in measurements {
+            XCTAssertEqual(measurement.token, reference.token)
+        }
+        let maximumDifference = measurements.map { measurement in
+            MLX.max(
+                MLX.abs(
+                    measurement.logits.asType(.float32)
+                        - reference.logits.asType(.float32)
+                )
+            ).item(Float.self)
+        }.max() ?? 0
+        // The single-query SDPA path may choose a different reduction kernel
+        // from the full-query graph. Keep the observed numerical class bounded
+        // while requiring the consumed greedy token to remain identical.
+        XCTAssertLessThanOrEqual(maximumDifference, 0.5)
+
+        let baseline = [measurements[2].seconds, measurements[5].seconds]
+        let candidate = [measurements[3].seconds, measurements[4].seconds]
+        let baselineMean = baseline.reduce(0, +) / Double(baseline.count)
+        let candidateMean = candidate.reduce(0, +) / Double(candidate.count)
+        print(
+            "[guarded-acceleration] gemma_terminal_prefill model=\(modelId) "
+                + "prompt_tokens=\(tokens.count) baseline_s=\(baseline) "
+                + "candidate_s=\(candidate) baseline_mean_s=\(baselineMean) "
+                + "candidate_mean_s=\(candidateMean) ratio=\(baselineMean / candidateMean) "
+                + "max_abs_diff=\(maximumDifference)"
+        )
+    }
+
     func testInstalledLFM2AffineEightGreedyParity() async throws {
         let environment = ProcessInfo.processInfo.environment
         guard environment["MERERUN_TEST_GUARDED_ACCELERATION_CHECKPOINTS"] == "1" else {

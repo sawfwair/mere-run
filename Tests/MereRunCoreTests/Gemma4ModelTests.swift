@@ -316,6 +316,79 @@ final class Gemma4ModelTests: MereRunCoreTestCase {
         XCTAssertEqual(output.shape, [1, 2, config.hiddenSize])
     }
 
+    func testTerminalPrefillRowPreservesFinalLogitsAndCacheOffsets() throws {
+        MLXRandom.seed(17)
+        var configObject = makeBaseConfig()
+        configObject["hidden_size_per_layer_input"] = 0
+        configObject["num_kv_shared_layers"] = 0
+        let config = try decodeTextConfig(configObject)
+        let model = Gemma4TextCausalLM(config: config)
+        let tokens = MLXArray([Int32(3), Int32(4), Int32(5), Int32(6)]).reshaped(1, 4)
+        let fullCaches = model.makeAttentionCache(quantization: nil)
+        let terminalCaches = model.makeAttentionCache(quantization: nil)
+
+        let full = model.languageModel.lastPositionLogits(
+            tokens,
+            cache: fullCaches,
+            terminalPrefillRowEnabled: false
+        )
+        let terminal = model.languageModel.lastPositionLogits(
+            tokens,
+            cache: terminalCaches,
+            terminalPrefillRowEnabled: true
+        )
+        MLX.eval(full, terminal)
+
+        XCTAssertEqual(full.shape, terminal.shape)
+        XCTAssertEqual(fullCaches.map(\.offset), terminalCaches.map(\.offset))
+        XCTAssertEqual(terminalCaches.map(\.offset), [4, 4])
+        let maximumDifference = MLX.max(
+            MLX.abs(full.asType(.float32) - terminal.asType(.float32))
+        ).item(Float.self)
+        XCTAssertLessThanOrEqual(maximumDifference, 0.001)
+        XCTAssertEqual(MLX.argMax(full, axis: -1).item(Int.self),
+                       MLX.argMax(terminal, axis: -1).item(Int.self))
+
+        let cachedFull = model.makeAttentionCache(quantization: nil)
+        let cachedTerminal = model.makeAttentionCache(quantization: nil)
+        let prefix = MLXArray([Int32(3), Int32(4)]).reshaped(1, 2)
+        let suffix = MLXArray([Int32(5), Int32(6)]).reshaped(1, 2)
+        MLX.eval(
+            model.languageModel.lastPositionLogits(
+                prefix,
+                cache: cachedFull,
+                terminalPrefillRowEnabled: false
+            ),
+            model.languageModel.lastPositionLogits(
+                prefix,
+                cache: cachedTerminal,
+                terminalPrefillRowEnabled: false
+            )
+        )
+        let cachedFullLogits = model.languageModel.lastPositionLogits(
+            suffix,
+            cache: cachedFull,
+            terminalPrefillRowEnabled: false
+        )
+        let cachedTerminalLogits = model.languageModel.lastPositionLogits(
+            suffix,
+            cache: cachedTerminal,
+            terminalPrefillRowEnabled: true
+        )
+        MLX.eval(cachedFullLogits, cachedTerminalLogits)
+        XCTAssertEqual(cachedFull.map(\.offset), cachedTerminal.map(\.offset))
+        XCTAssertEqual(cachedTerminal.map(\.offset), [4, 4])
+        let cachedDifference = MLX.max(
+            MLX.abs(
+                cachedFullLogits.asType(.float32)
+                    - cachedTerminalLogits.asType(.float32)
+            )
+        ).item(Float.self)
+        XCTAssertLessThanOrEqual(cachedDifference, 0.001)
+        XCTAssertEqual(MLX.argMax(cachedFullLogits, axis: -1).item(Int.self),
+                       MLX.argMax(cachedTerminalLogits, axis: -1).item(Int.self))
+    }
+
     func testMoEDecoderLayerInstallsRouterAndExperts() throws {
         var configObject = makeBaseConfig()
         configObject["enable_moe_block"] = true
