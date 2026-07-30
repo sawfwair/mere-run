@@ -39,6 +39,7 @@ help in the repository gate.
 - `text-chat-gemma4-12b-4bit` (managed MLX 4-bit Gemma 4 12B-it snapshot)
 - `text-chat-gemma4-turbo` (managed MLX NVFP4 Gemma 4 26B-A4B MoE snapshot)
 - `text-chat-laguna-s-2-1` (managed Poolside Laguna S 2.1 118B-A8B NVFP4 target plus DFlash)
+- `text-chat-laguna-xs-2-1` (managed experimental Poolside Laguna XS 2.1 33B-A3B NVFP4 target)
 - `text-chat-q36-nano`
 - `text-chat-bonsai-27b-1bit` (managed packed 1-bit dense Qwen3.6 27B vision/reasoning snapshot)
 - `text-chat-bonsai-27b-2bit` (managed packed 2-bit ternary dense Qwen3.6 27B vision/reasoning snapshot)
@@ -123,6 +124,22 @@ and the measured min-p `0.02`. Automatic DFlash proposes 12 tokens for output
 budgets of at least 32 tokens and falls back losslessly to target-only decode
 when acceptance is poor. Longer requests can use ragged continuous batching in
 `api serve` when `--max-active-requests` is above `1`.
+
+`text-chat-laguna-xs-2-1` is the smaller 36 GB-minimum / 48 GB-recommended
+lane. It pins Poolside's five-shard `Laguna-XS-2.1-NVFP4-mlx` revision and
+uses the same native runtime with the XS-validated M5 decode and terminal
+prefill accelerations. Poolside publishes this NVFP4 build for experimental
+testing only and advises against production use. The managed entry therefore
+requires explicit OpenMDW-1.1 acceptance, never auto-downloads, and does not
+attach the S DFlash checkpoint:
+
+```bash
+swift run mere.run model pull text-chat-laguna-xs-2-1 --accept-model-license
+swift run mere.run text chat \
+  --model text-chat-laguna-xs-2-1 \
+  --prompt "Implement a bounded Swift actor queue and explain its invariants." \
+  --stats
+```
 
 Per-model API-serving KV behavior is set with `mere.run model runtime
 --kv-cache-mode` (see [Model Management](./model-management.md)); it is not a

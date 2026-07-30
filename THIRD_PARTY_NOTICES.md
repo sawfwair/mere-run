@@ -300,6 +300,21 @@ SOFTWARE.
 
 ## Source-derived runtime implementations
 
+### Poolside Laguna 2.1 native runtime
+
+- purpose: native Swift/MLX loading, attention, routed-MoE, tokenizer/template,
+  tool parsing, DFlash, and guarded acceleration support for Poolside Laguna
+  2.1 checkpoints; no model weights are vendored in this repository
+- managed Laguna S source: `poolside/Laguna-S-2.1-NVFP4-mlx` revision
+  `e6a961c3bbebfffd8fa5b42f243e375504f41edd`
+- managed experimental Laguna XS source:
+  `poolside/Laguna-XS-2.1-NVFP4-mlx` revision
+  `841778bda563a36104dd521e37d99218e46f4f25`
+- license: OpenMDW License Agreement 1.1; managed downloads require explicit
+  acceptance and retain the checkpoint's license and attribution files
+- XS checkpoint status: Poolside publishes the NVFP4 build for experimental
+  testing only and advises against production use
+
 ### Sortformer speaker-diarization runtime
 
 - purpose: native Swift/MLX implementation of the Sortformer model graph,

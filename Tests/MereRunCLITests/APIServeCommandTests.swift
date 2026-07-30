@@ -386,6 +386,19 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(cmd.defaultRuntimeModelID(modelPath: nil), LagunaResources.modelID)
     }
 
+    func testAPIServePreservesExplicitLagunaXSManagedID() throws {
+        let cmd = try APIServe.parse([
+            "--engine", "text-chat-laguna",
+            "--model", LagunaResources.xsModelID,
+        ])
+
+        XCTAssertEqual(cmd.engine, .textChatLaguna)
+        XCTAssertEqual(
+            cmd.defaultRuntimeModelID(modelPath: nil),
+            LagunaResources.xsModelID
+        )
+    }
+
     func testAPIServeLagunaAcceptsExplicitLocalCheckpointPath() throws {
         let path = "/tmp/Laguna-S-2.1-NVFP4-mlx"
         let cmd = try APIServe.parse([

@@ -548,6 +548,14 @@ public enum ManagedModelCatalog {
         licenseURL: "https://huggingface.co/poolside/Laguna-S-2.1/blob/main/LICENSE.md"
     )
 
+    private static let lagunaXSUsageRestriction = usageRestriction(
+        summary: "Laguna XS 2.1 NVFP4 MLX is an experimental testing-only checkpoint distributed under OpenMDW-1.1; Poolside's attribution, acceptable-use, and testing-only conditions apply.",
+        license: "OpenMDW-1.1",
+        sourceRepoId: LagunaResources.xsUpstreamModelID,
+        sourceRevision: LagunaResources.xsUpstreamRevision,
+        licenseURL: "https://huggingface.co/\(LagunaResources.xsUpstreamModelID)/blob/\(LagunaResources.xsUpstreamRevision)/LICENSE.md"
+    )
+
     public static let allSpecs: [ManagedModelSpec] = [
         ManagedModelSpec(
             id: "image-klein-nano",
@@ -1045,6 +1053,23 @@ public enum ManagedModelCatalog {
             estimatedDownloadBytes: LagunaResources.estimatedDownloadBytes,
             defaultCLICommands: ["text chat", "api serve", "model benchmark chat"],
             companionModelIDs: [LagunaResources.dflashModelID]
+        ),
+        ManagedModelSpec(
+            id: LagunaResources.xsModelID,
+            category: .textChat,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: LagunaResources.xsUpstreamModelID,
+                revision: LagunaResources.xsUpstreamRevision,
+                patterns: LagunaResources.snapshotPatterns
+            ),
+            upstreamRepoId: LagunaResources.xsUpstreamModelID,
+            upstreamRevision: LagunaResources.xsUpstreamRevision,
+            usageRestriction: lagunaXSUsageRestriction,
+            validationKind: .laguna,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: LagunaResources.xsEstimatedDownloadBytes,
+            defaultCLICommands: ["text chat", "api serve", "model benchmark chat"]
         ),
         ManagedModelSpec(
             id: Q35Resources.q36NanoModelId,

@@ -6,7 +6,7 @@ Run a local chat-style text model for answers, drafting, analysis, or lightweigh
 
 ## Required Models
 
-Supported native managed ids include `text-chat-gemma4`, `text-chat-gemma4-12b`, `text-chat-gemma4-12b-4bit`, `text-chat-gemma4-turbo`, `text-chat-gemma4-nano`, `text-chat-gemma4-max`, `text-chat-laguna-s-2-1`, `text-chat-q36-nano`, `text-chat-bonsai-27b-1bit`, `text-chat-bonsai-27b-2bit`, `text-agent-ornith-9b`, `text-agent-ornith-35b-mlx`, `text-chat-lfm25-a1b-8bit`, and `text-chat-psi-agent`.
+Supported native managed ids include `text-chat-gemma4`, `text-chat-gemma4-12b`, `text-chat-gemma4-12b-4bit`, `text-chat-gemma4-turbo`, `text-chat-gemma4-nano`, `text-chat-gemma4-max`, `text-chat-laguna-s-2-1`, `text-chat-laguna-xs-2-1`, `text-chat-q36-nano`, `text-chat-bonsai-27b-1bit`, `text-chat-bonsai-27b-2bit`, `text-agent-ornith-9b`, `text-agent-ornith-35b-mlx`, `text-chat-lfm25-a1b-8bit`, and `text-chat-psi-agent`.
 `text-chat-gemma4-12b` is the managed dense Google Gemma 4 12B-it checkpoint, routed through the native Swift Gemma 4 runtime for text chat.
 Pulling `text-chat-gemma4-12b` or `vision-chat-gemma4-12b` also installs the managed `text-chat-gemma4-12b-mtp` assistant; greedy serial Gemma 12B decode uses it for verified decode-tail MTP when the prompt is above the configured threshold.
 `text-chat-gemma4-turbo` is the managed MLX NVFP4 Gemma 4 26B-A4B-it MoE tier for 32 GB Apple Silicon Macs.
@@ -24,6 +24,9 @@ ternary checkpoint's additional weight capacity is worth the memory cost.
 for 96 GB-and-up Apple Silicon. Pulling it with `--accept-model-license`
 installs the pinned DFlash companion; generation defaults to the validated
 temperature 1, top-p 1, top-k 20, and min-p 0.02 recipe.
+`text-chat-laguna-xs-2-1` is Poolside's experimental testing-only 33B-A3B
+NVFP4 checkpoint for 36 GB-and-up Apple Silicon. It is pinned, opt-in, and
+does not use the Laguna S DFlash companion.
 
 ## Chat Winners By RAM Band
 
@@ -40,6 +43,7 @@ temperature 1, top-p 1, top-k 20, and min-p 0.02 recipe.
 mere.run model capabilities
 mere.run model pull text-chat-gemma4-12b-4bit
 mere.run model pull text-chat-laguna-s-2-1 --accept-model-license
+mere.run model pull text-chat-laguna-xs-2-1 --accept-model-license
 mere.run text chat --help
 ```
 

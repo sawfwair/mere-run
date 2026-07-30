@@ -12,6 +12,14 @@ struct MereRunCLI: AsyncParsableCommand {
     )
     var modelsRoot: String?
 
+    mutating func validate() throws {
+        if let modelsRoot, !modelsRoot.isEmpty {
+            CLIModelStoreBootstrap.applyOverridePath(modelsRoot)
+        } else {
+            _ = _mereRunCLIModelStoreBootstrap
+        }
+    }
+
     static let configuration = CommandConfiguration(
         commandName: "mere.run",
         abstract: "Run local inference workflows with MereRunCore.",

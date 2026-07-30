@@ -230,6 +230,14 @@ final class LagunaModelTests: MereRunCoreTestCase {
         XCTAssertTrue(LagunaResources.handles(modelSpec: LagunaResources.modelID))
         XCTAssertTrue(LagunaResources.handles(modelSpec: LagunaResources.upstreamModelID))
         XCTAssertTrue(LagunaResources.handles(modelSpec: "/tmp/Laguna-S-2.1-NVFP4-mlx"))
+        XCTAssertTrue(LagunaResources.handles(modelSpec: LagunaResources.xsModelID))
+        XCTAssertTrue(LagunaResources.handles(modelSpec: LagunaResources.xsUpstreamModelID))
+        XCTAssertTrue(LagunaResources.handles(modelSpec: "/tmp/Laguna-XS-2.1-NVFP4-mlx"))
+        XCTAssertEqual(
+            LagunaResources.managedModelID(for: LagunaResources.xsUpstreamModelID),
+            LagunaResources.xsModelID
+        )
+        XCTAssertNil(LagunaResources.installedDFlashPath(for: LagunaResources.xsModelID))
 
         try FileManager.default.removeItem(
             at: root.appendingPathComponent("model-00014-of-00014.safetensors")

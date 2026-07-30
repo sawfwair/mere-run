@@ -265,6 +265,7 @@ swift run mere.run model pull image-zimage-nano --accept-model-license
 swift run mere.run model pull image-zimage-nano --accept-model-license --preflight --json
 swift run mere.run model pull text-chat-lfm25-a1b-8bit --accept-model-license
 swift run mere.run model pull text-chat-laguna-s-2-1 --accept-model-license
+swift run mere.run model pull text-chat-laguna-xs-2-1 --accept-model-license
 swift run mere.run model pull text-chat-bonsai-27b-1bit
 swift run mere.run model pull text-chat-bonsai-27b-2bit
 swift run mere.run model pull text-code-north-mini

@@ -94,6 +94,40 @@ regressive real-checkpoint measurements. These results establish a measured
 runtime/checkpoint win, not a claim that shader ALUs or unified-memory
 bandwidth are at their physical limit.
 
+### Laguna XS 2.1 portability matrix
+
+The ranked Laguna XS work contains both reusable execution ideas and kernels
+whose correctness depends on that checkpoint's exact shapes. Promotion across
+the catalog follows the matrix below; sharing an operator name is not enough.
+
+| Ranked mechanism | Production status | Portability boundary |
+| --- | --- | --- |
+| Last-position terminal prefill | Shipped for guarded Laguna XS M5 execution | The graph idea can apply to decoder-only models whose caller consumes only the final logit row. Each engine must separately preserve every K/V row, cache offset, batch behavior, multimodal inputs, speculative/DFlash captures, and requested hidden states. |
+| Exact `[Q; gate]` and `[K; V]` projection banks | Shipped for the terminal Laguna XS BF16 layer | Combining independent output rows is generally valid for bias-free projections, but the current side banks require Laguna's 2,048-wide input, per-head gate, 128 head dimension, eight K/V heads, and 48/64 query-head layouts. Other engines need their own retained-memory and kernel-selection measurements. |
+| Retained affine INT8 Q/K/V side layout | Shipped for the officially validated first 28 XS decode layers on M5 Max | This changes projection precision and retains about 598.5 MiB. It is not an automatic catalog-wide optimization. Every new checkpoint, layer mask, and hardware generation needs token/behavior gates, quality evidence, bounded-memory proof, and paired timing. |
+| Fused routed/shared down projection and residual | Shipped only behind exact XS shape, dtype, quantization, scaling, and M5-default guards | The implementation assumes hidden width 2,048, expert intermediate width 512, top-8 routing, group-16 NVFP4, 256 experts, fixed 2.5 scaling, and the existing BF16 reduction order. Other MoE models need model-specific kernels rather than relaxed guards. |
+| Fused NVFP4 gate/up plus SwiGLU | Shipped for guarded Laguna layouts; LFM2 has a separate affine-8 implementation | The reusable idea is avoiding repeated routed activations. Quantization codes, scales, group size, tile geometry, activation dtype, and output alignment remain engine-specific. |
+| Sorted expert routing, fast inverse scatter, and expert-aligned prefill tiles | Shipped for Laguna with portable fallbacks | The ordering/locality idea is reusable across MoE runtimes. It must be benchmarked per route count and expert geometry; short verification and concurrent decode can lose more to sorting than they gain from locality. |
+| Shared masks, bounded asynchronous evaluation, residual/RMSNorm, and QK-norm/RoPE fusion | Shipped within Laguna under independent controls | These are the broadest graph-level candidates. A cross-engine port still must preserve mask semantics, RoPE offsets, materialization/cast boundaries, capture behavior, and the engine's own scheduling break-even point. |
+| Challenge expert-gather threadgroup expansion | Not transplanted literally | Production Laguna already assigns actual sorted expert tiles independently. The ranked change lived in the challenge's pinned MLX/vendor path; this repository does not modify vendored runtime code merely to copy its launch constant. |
+| Certified/approximate lm-head pruning and packing | Deliberately excluded | The challenge only had to preserve the greedy winner. mere.run exposes temperature, top-k, min-p, structured output, and DFlash paths that consume the logit distribution. Approximating non-winning logits would change public sampling semantics. |
+
+An additional rollout is allowed only after the same revision, prompt corpus,
+seed, and token budget pass the portable fallback and candidate paths with:
+
+1. exact intermediate parity where the transformation claims arithmetic
+   identity, or an explicitly bounded and quality-gated numerical contract;
+2. greedy token and sampled-distribution/quality evaluation;
+3. cache, batch, capture, multimodal, speculation, and server-concurrency tests;
+4. idempotent preparation plus no per-forward retained-memory growth;
+5. release-mode, thermally controlled prefill/decode/TTFT measurements on the
+   target hardware; and
+6. the repository's complete `./scripts/check.sh` gate and rollback control.
+
+This is why the catalog addition makes Laguna XS selectable without enabling
+its M5-ranked paths on unrelated models or hardware. Catalog support and
+acceleration promotion are separate decisions.
+
 ### Shared autoregressive pipeline saturation
 
 The shared decode loop confirms the first sampled token before opening its

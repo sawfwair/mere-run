@@ -13,8 +13,9 @@ Supported engines:
 - `text-code`: GGUF code models such as `text-code-qwen3`,
   `text-code-north-mini`, and `text-agent-ornith-35b`.
 - `text-chat-gemma4`: Gemma text chat models, including `text-chat-gemma4-12b`.
-- `text-chat-laguna`: managed Laguna S 2.1 target with automatic DFlash;
-  defaults to `text-chat-laguna-s-2-1`.
+- `text-chat-laguna`: managed Laguna S 2.1 target with automatic DFlash or
+  explicit experimental Laguna XS 2.1 target without DFlash; defaults to
+  `text-chat-laguna-s-2-1`.
 - `vision-chat-gemma4-12b`: Gemma 4 12B vision chat over the Gemma4 API serving engine.
 - `text-chat-q36`: Qwen-family serving engine; defaults to `text-chat-q36-nano`
   and also serves `text-chat-bonsai-27b-1bit`, `text-chat-bonsai-27b-2bit`,

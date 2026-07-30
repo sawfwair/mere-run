@@ -1,12 +1,12 @@
-# Laguna S 2.1
+# Laguna 2.1
 
 Native Swift/MLX support for Poolside's official
 `Laguna-S-2.1-NVFP4-mlx` checkpoint and DFlash companion. The validated pair
-is available as the opt-in managed model `text-chat-laguna-s-2-1`. The same
-typed runtime also accepts the official five-shard `Laguna-XS-2.1-NVFP4-mlx`
-checkpoint through an explicit local path; shard discovery comes from the
-safetensors index, and shared-expert quantization is derived from that index
-rather than assumed from the S layout.
+is available as the opt-in managed model `text-chat-laguna-s-2-1`. Poolside's
+experimental five-shard `Laguna-XS-2.1-NVFP4-mlx` testing checkpoint is the
+distinct opt-in managed model `text-chat-laguna-xs-2-1`; shard discovery comes
+from the safetensors index, and shared-expert quantization is derived from that
+index rather than assumed from the S layout.
 
 ## Files
 
@@ -41,6 +41,24 @@ mere.run text chat \
   --stats
 mere.run api serve --engine text-chat-laguna --max-active-requests 2
 ```
+
+For the smaller experimental XS target:
+
+```bash
+mere.run model pull text-chat-laguna-xs-2-1 --accept-model-license
+mere.run text chat \
+  --model text-chat-laguna-xs-2-1 \
+  --prompt "Write a bounded Swift actor queue." \
+  --stats
+mere.run api serve \
+  --engine text-chat-laguna \
+  --model text-chat-laguna-xs-2-1
+```
+
+XS requires at least 36 GB unified memory and recommends 48 GB. Poolside marks
+the pinned NVFP4 snapshot as experimental, for testing only, and not validated
+for production use. It never auto-downloads and does not attach the Laguna S
+DFlash companion.
 
 Laguna requires at least 96 GB unified memory and is not a setup or
 hardware-aware default. The normal chat and serving routes use temperature

@@ -15,6 +15,10 @@ enum CLIModelStoreBootstrap {
             return
         }
 
+        applyOverridePath(rawPath)
+    }
+
+    static func applyOverridePath(_ rawPath: String) {
         let expanded = (rawPath as NSString).expandingTildeInPath
         let url = URL(fileURLWithPath: expanded).standardizedFileURL
         MereRunModelPaths.setProcessModelsDirOverride(url)

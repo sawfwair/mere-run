@@ -374,6 +374,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 128
             ),
             descriptor(
+                LagunaResources.xsModelID,
+                "Laguna XS 2.1 experimental agentic chat",
+                "Runs Poolside's experimental 33B-A3B Laguna XS 2.1 NVFP4 testing checkpoint through the native Swift runtime.",
+                minimum: 36,
+                recommended: 48
+            ),
+            descriptor(
                 Q35Resources.q36NanoModelId,
                 "Qwen3.6 A3B chat nano",
                 "Runs the Qwen3.6 35B-A3B OptiQ 4-bit MLX/MTP snapshot through the native Qwen-family runtime.",

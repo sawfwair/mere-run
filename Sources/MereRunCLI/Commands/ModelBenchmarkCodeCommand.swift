@@ -211,16 +211,19 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
     }
 
     private func runModel(_ modelID: String, tasks: [CodeBenchmarkTask]) async throws -> CodeBenchmarkModelResult {
-        if modelID == LagunaResources.modelID {
+        if LagunaResources.handles(modelSpec: modelID) {
+            let managedID = LagunaResources.managedModelID(for: modelID)
+                ?? LagunaResources.modelID
             guard let resolvedLagunaPath = lagunaPath
-                ?? ManagedModelResolver.resolveInstalledModel(id: LagunaResources.modelID)?.path else {
+                ?? ManagedModelResolver.resolveInstalledModel(id: managedID)?.path else {
                 return CodeBenchmarkModelResult.missing(
                     model: modelID,
                     reason: "Model is not installed. Run "
-                        + "`mere.run model pull \(LagunaResources.modelID) --accept-model-license` first."
+                        + "`mere.run model pull \(managedID) --accept-model-license` first."
                 )
             }
-            let resolvedDFlashPath = lagunaDflashPath ?? LagunaResources.installedDFlashPath()
+            let resolvedDFlashPath = lagunaDflashPath
+                ?? LagunaResources.installedDFlashPath(for: managedID)
             let generator = LagunaGenerator(
                 dflashModelPath: resolvedDFlashPath,
                 dflashSpeculativeTokens: lagunaDflashTokens,
@@ -400,7 +403,9 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
     }
 
     var resolvedMinP: Double {
-        let includesLaguna = (try? selectedModelIDs().contains(LagunaResources.modelID)) == true
+        let includesLaguna = (try? selectedModelIDs().contains {
+            LagunaResources.handles(modelSpec: $0)
+        }) == true
         return minP ?? (includesLaguna ? LagunaResources.recommendedMinP : 0)
     }
 
@@ -413,7 +418,7 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
     }
 
     private static func requiresMLXBundle(modelID: String) -> Bool {
-        modelID == LagunaResources.modelID
+        LagunaResources.handles(modelSpec: modelID)
             || ManagedModelCatalog.spec(for: modelID)?.validationKind == .q35
     }
 
