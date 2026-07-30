@@ -2,7 +2,10 @@ import Foundation
 
 public struct TextLoRATrainingManifest: Codable, Sendable, Hashable {
     public static let schemaVersion = 1
-    public static let format = "mererun.gemma4.text-lora"
+    public static let gemma4Format = "mererun.gemma4.text-lora"
+    public static let lagunaFormat = "mererun.laguna.text-lora"
+    /// Compatibility alias for the first native text adapter format.
+    public static let format = gemma4Format
 
     public struct Training: Codable, Sendable, Hashable {
         public let trainingSteps: Int
@@ -54,6 +57,7 @@ public struct TextLoRATrainingManifest: Codable, Sendable, Hashable {
 
     public init(
         createdAt: Date = Date(),
+        format: String = Self.format,
         baseModel: String,
         outputFile: String,
         adapterName: String,
@@ -64,7 +68,7 @@ public struct TextLoRATrainingManifest: Codable, Sendable, Hashable {
     ) {
         self.schemaVersion = Self.schemaVersion
         self.createdAt = createdAt
-        self.format = Self.format
+        self.format = format
         self.baseModel = baseModel
         self.outputFile = outputFile
         self.adapterName = adapterName

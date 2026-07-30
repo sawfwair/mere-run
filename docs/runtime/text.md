@@ -318,10 +318,11 @@ messages use the same `system`, `user`, and `assistant` roles as the local chat
 runtime. `--dry-run` validates the dataset, fingerprints it, counts optional
 eval prompts, and writes a `.manifest.json` next to the requested adapter path.
 
-Without `--dry-run`, the command resolves the Gemma4 text model through the same
-managed model store as chat, applies the Gemma chat template to each example,
-masks loss to assistant tokens, injects native LoRA layers into attention
-projections, and writes a `.safetensors` adapter plus manifest. Add
+Without `--dry-run`, the command resolves a supported Gemma 4 text model or
+`text-chat-laguna-xs-2-1` through the same managed model store as chat, applies
+that family's released chat template, masks loss to assistant tokens, injects
+native LoRA layers into attention projections, and writes a `.safetensors`
+adapter plus a family-specific manifest. Add
 `--visualize` to start the same loopback LoRA training dashboard used by image
 training; text runs write `run.json`, `*.events.jsonl`, `*.loss.csv`, and
 `*.loss.html` beside the adapter so loss and training events can be inspected
@@ -372,6 +373,26 @@ swift run mere.run text chat \
   --lora ./local-assistant.safetensors \
   --prompt "What should this local assistant know?"
 ```
+
+Laguna XS uses the same dataset and hyperparameter surface:
+
+```bash
+swift run mere.run text train-lora \
+  --data ./pairs.seed.jsonl \
+  --output ./laguna-xs-assistant.safetensors \
+  --model text-chat-laguna-xs-2-1
+
+swift run mere.run text chat \
+  --model text-chat-laguna-xs-2-1 \
+  --lora ./laguna-xs-assistant.safetensors \
+  --prompt "What should this local assistant know?"
+```
+
+Laguna training defaults to q/k/v/o attention projections and writes
+`mererun.laguna.text-lora` in its manifest. At inference time, applying an
+adapter discards retained base-only QKV side layouts before generation so the
+LoRA cannot be bypassed. Switching or removing an adapter reloads the base
+model and is rejected while a continuous batch is active.
 
 ## Runtime entrypoints
 
@@ -434,9 +455,9 @@ plain redacted text or structured JSON spans.
 
 ### `mere.run text train-lora`
 
-Use this to prepare and train Gemma-family text LoRA adapters from reviewed chat
-SFT data. The first supported target lane is `text-chat-gemma4-12b-4bit` for
-local assistant tuning.
+Use this to prepare and train Gemma-family or Laguna XS 2.1 text LoRA adapters
+from reviewed chat SFT data. The Laguna lane is
+`text-chat-laguna-xs-2-1`; Laguna S and DFlash are inference-only here.
 
 ## Reading the code
 

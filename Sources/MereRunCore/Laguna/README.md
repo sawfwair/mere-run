@@ -73,6 +73,40 @@ mere.run api serve \
   --model text-chat-laguna-xs-2-1
 ```
 
+### Native XS SFT and LoRA inference
+
+Laguna XS 2.1 supports native chat-style supervised fine-tuning through the
+shared `text train-lora` command. Each JSONL line must include `sources` and an
+ordered `messages` array ending in an assistant response. The released Laguna
+chat template constructs the prompt; loss applies only to the assistant target
+and its closing token.
+
+```json
+{"id":"queue-1","sources":["reviewed-example"],"messages":[{"role":"system","content":"You are a concise Swift assistant."},{"role":"user","content":"What makes an actor queue bounded?"},{"role":"assistant","content":"A fixed capacity plus backpressure prevents unbounded growth."}]}
+```
+
+```bash
+mere.run text train-lora \
+  --model text-chat-laguna-xs-2-1 \
+  --data ./laguna-xs-sft.jsonl \
+  --output ./laguna-xs-assistant.safetensors \
+  --rank 16 \
+  --training-steps 600
+
+mere.run text chat \
+  --model text-chat-laguna-xs-2-1 \
+  --lora ./laguna-xs-assistant.safetensors \
+  --prompt "Explain the queue invariant."
+```
+
+The default trainable surfaces are the bias-free attention `q_proj`, `k_proj`,
+`v_proj`, and `o_proj` layers. Loading an adapter invalidates retained native
+affine QKV and terminal projection-bank side layouts, because those layouts
+contain base weights and would otherwise bypass the LoRA contribution. Removing
+or switching an adapter reloads the base model; active batched generation must
+finish before an adapter switch. Laguna S 2.1 and DFlash training are not part
+of this first native SFT lane.
+
 XS requires at least 36 GB unified memory and recommends 48 GB. Laguna XS 2.1
 is released under OpenMDW-1.1 for commercial and non-commercial use. mere.run
 pins Poolside's public MLX-native NVFP4 serialization, retains the upstream

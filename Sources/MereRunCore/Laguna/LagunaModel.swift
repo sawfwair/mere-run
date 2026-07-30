@@ -1227,7 +1227,15 @@ final class LagunaRouter: Module {
         let scores = sigmoid(logits)
         let selectionScores = scores + correctionBias.asType(scores.dtype)
         let count = min(topK, selectionScores.dim(-1))
-        let indices = argPartition(-selectionScores, kth: count - 1, axis: -1)[.ellipsis, ..<count]
+        // Hard expert selection is discrete. Keep gradients through the
+        // selected score values, but do not ask gather kernels for an
+        // undefined VJP with respect to their integer indices.
+        let indices = stopGradient(
+            argPartition(-selectionScores, kth: count - 1, axis: -1)[
+                .ellipsis,
+                ..<count,
+            ]
+        )
         var weights = takeAlong(scores, indices, axis: -1)
         if normalize {
             weights = weights / weights.sum(axis: -1, keepDims: true)
@@ -1443,6 +1451,14 @@ final class LagunaAttention: Module {
         _terminalPrefillQGateWeight = queryGate
         _terminalPrefillKVWeight = keyValue
         return [queryGate, keyValue]
+    }
+
+    /// LoRA-wrapped projections must remain the only source of Q/K/V/O values.
+    /// Discard retained base-weight layouts that would otherwise bypass them.
+    func invalidateTextLoRAUnsafeAcceleration() {
+        _nativeAffineQKV = nil
+        _terminalPrefillQGateWeight = nil
+        _terminalPrefillKVWeight = nil
     }
 
     func callAsFunction(
@@ -2000,6 +2016,12 @@ final class LagunaLanguageModel: Module {
         }
         return arrays
     }
+
+    func invalidateTextLoRAUnsafeAcceleration() {
+        for layer in layers {
+            layer.selfAttention.invalidateTextLoRAUnsafeAcceleration()
+        }
+    }
 }
 
 struct LagunaForwardOutput {
@@ -2007,7 +2029,7 @@ struct LagunaForwardOutput {
     let capturedHiddenStates: [Int: MLXArray]
 }
 
-final class LagunaCausalLM: Module {
+final class LagunaCausalLM: Module, @unchecked Sendable {
     @ModuleInfo(key: "model") var model: LagunaLanguageModel
     @ModuleInfo(key: "lm_head") var lmHead: Linear?
 
@@ -2040,6 +2062,22 @@ final class LagunaCausalLM: Module {
 
     func callAsFunction(_ inputIDs: MLXArray, cache: [Gemma4AttentionCache]? = nil) -> MLXArray {
         forward(inputIDs, cache: cache).logits
+    }
+
+    /// Project only loss-bearing flattened token positions through the large
+    /// vocabulary head while retaining the full hidden-state training graph.
+    func trainingLogits(
+        inputIDs: MLXArray,
+        flatTargetPositions: MLXArray
+    ) -> MLXArray {
+        let hidden = model(inputIDs)
+        let flattened = hidden.reshaped([-1, hidden.dim(-1)])
+        let selected = take(
+            flattened,
+            flatTargetPositions.asType(.int32),
+            axis: 0
+        )
+        return logits(from: selected)
     }
 
     func forward(
@@ -2087,5 +2125,9 @@ final class LagunaCausalLM: Module {
 
     func prepareRuntimeAcceleration() -> [MLXArray] {
         model.prepareRuntimeAcceleration()
+    }
+
+    func invalidateTextLoRAUnsafeAcceleration() {
+        model.invalidateTextLoRAUnsafeAcceleration()
     }
 }

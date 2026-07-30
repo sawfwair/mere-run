@@ -550,6 +550,22 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.runtimeAutoDownloadAllowed, false)
     }
 
+    func testNativeTextSFTModelsAdvertiseTrainingCommand() throws {
+        let gemma = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: Gemma4Resources.twelveB4BitModelId)
+        )
+        let lagunaXS = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: LagunaResources.xsModelID)
+        )
+        let lagunaS = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: LagunaResources.modelID)
+        )
+
+        XCTAssertTrue(gemma.defaultCLICommands.contains("text train-lora"))
+        XCTAssertTrue(lagunaXS.defaultCLICommands.contains("text train-lora"))
+        XCTAssertFalse(lagunaS.defaultCLICommands.contains("text train-lora"))
+    }
+
     func testLagunaUsesPinnedOfficialTargetAndCompanion() throws {
         let target = try XCTUnwrap(ManagedModelCatalog.spec(for: LagunaResources.modelID))
         let companion = try XCTUnwrap(ManagedModelCatalog.spec(for: LagunaResources.dflashModelID))

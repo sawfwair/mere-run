@@ -914,7 +914,7 @@ public enum ManagedModelCatalog {
             validationKind: .gemma4,
             resolutionFallbackIDs: ["text-chat-gemma4-max", "text-chat-gemma4-nano"],
             estimatedDownloadBytes: 62_578_654_199,
-            defaultCLICommands: ["api serve"]
+            defaultCLICommands: ["text chat", "text train-lora", "api serve"]
         ),
         ManagedModelSpec(
             id: Gemma4Resources.turboModelId,
@@ -928,7 +928,7 @@ public enum ManagedModelCatalog {
             validationKind: .gemma4,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 31 * 1_073_741_824,
-            defaultCLICommands: ["text chat", "api serve"]
+            defaultCLICommands: ["text chat", "text train-lora", "api serve"]
         ),
         ManagedModelSpec(
             id: Gemma4Resources.twelveBModelId,
@@ -941,7 +941,7 @@ public enum ManagedModelCatalog {
             upstreamRepoId: Gemma4Resources.twelveBUpstreamModelId,
             validationKind: .gemma4,
             estimatedDownloadBytes: 25 * 1_073_741_824,
-            defaultCLICommands: ["text chat", "api serve"],
+            defaultCLICommands: ["text chat", "text train-lora", "api serve"],
             companionModelIDs: [Gemma4MTPResources.modelId]
         ),
         ManagedModelSpec(
@@ -957,7 +957,7 @@ public enum ManagedModelCatalog {
             upstreamRevision: Gemma4Resources.twelveB4BitUpstreamRevision,
             validationKind: .gemma4,
             estimatedDownloadBytes: 6_773_374_762,
-            defaultCLICommands: ["text chat", "api serve"],
+            defaultCLICommands: ["text chat", "text train-lora", "api serve"],
             companionModelIDs: [Gemma4MTPResources.modelId]
         ),
         ManagedModelSpec(
@@ -985,7 +985,7 @@ public enum ManagedModelCatalog {
             upstreamRepoId: Gemma4Resources.nanoUpstreamModelId,
             validationKind: .gemma4,
             estimatedDownloadBytes: 16_024_791_983,
-            defaultCLICommands: ["api serve"]
+            defaultCLICommands: ["text chat", "text train-lora", "api serve"]
         ),
         ManagedModelSpec(
             id: "text-chat-gemma4-max",
@@ -998,7 +998,7 @@ public enum ManagedModelCatalog {
             upstreamRepoId: Gemma4Resources.maxUpstreamModelId,
             validationKind: .gemma4,
             estimatedDownloadBytes: 62_578_654_199,
-            defaultCLICommands: ["api serve"]
+            defaultCLICommands: ["text chat", "text train-lora", "api serve"]
         ),
         ManagedModelSpec(
             id: LagunaResources.modelID,
@@ -1031,7 +1031,12 @@ public enum ManagedModelCatalog {
             validationKind: .laguna,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: LagunaResources.xsEstimatedDownloadBytes,
-            defaultCLICommands: ["text chat", "api serve", "model benchmark chat"]
+            defaultCLICommands: [
+                "text chat",
+                "text train-lora",
+                "api serve",
+                "model benchmark chat",
+            ]
         ),
         ManagedModelSpec(
             id: Q35Resources.q36NanoModelId,

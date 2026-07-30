@@ -31,7 +31,7 @@ final class LagunaModelTests: MereRunCoreTestCase {
             "mlp_only_layers": [0],
             "num_experts": 3,
             "num_experts_per_tok": 2,
-            "moe_intermediate_size": 6,
+            "moe_intermediate_size": quantizedSharedExperts ? 16 : 6,
             "shared_expert_intermediate_size": sharedExpertSize,
             "moe_routed_scaling_factor": 2.5,
             "moe_router_logit_softcapping": 0.0,
@@ -1608,6 +1608,264 @@ final class LagunaModelTests: MereRunCoreTestCase {
         MLX.eval(logits)
         XCTAssertEqual(logits.shape, [1, 3, config.vocabSize])
         XCTAssertTrue(logits.asArray(Float.self).allSatisfy(\.isFinite))
+    }
+
+    func testTrainingLogitsMatchFullVocabularyProjectionAtSelectedPositions() throws {
+        MLXRandom.seed(74)
+        let model = LagunaCausalLM(config: try makeConfig())
+        let input = MLXArray([1, 2, 3, 4, 5, 6]).reshaped(2, 3)
+        let positions = MLXArray([Int32(1), Int32(3), Int32(5)])
+        let full = model(input).reshaped(-1, model.config.vocabSize)
+        let expected = take(full, positions, axis: 0)
+        let gathered = model.trainingLogits(
+            inputIDs: input,
+            flatTargetPositions: positions
+        )
+        MLX.eval(expected, gathered)
+
+        XCTAssertEqual(gathered.shape, [3, model.config.vocabSize])
+        XCTAssertEqual(
+            MLX.max(MLX.abs(expected - gathered)).item(Float.self),
+            0,
+            accuracy: 1e-6
+        )
+    }
+
+    func testNativeLagunaAdapterWeightsRoundTripIntoRuntimePaths() async throws {
+        MLXRandom.seed(75)
+        let source = LagunaCausalLM(config: try makeConfig())
+        let sourceLayers = try LagunaTextLoRAInjector.inject(
+            into: source,
+            rank: 2,
+            alpha: 4
+        )
+        for layer in sourceLayers.values {
+            layer.loraDown = MLXArray.ones(like: layer.loraDown) * 0.125
+            layer.loraUp = MLXArray.ones(like: layer.loraUp) * 0.25
+        }
+
+        let directory = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let adapterURL = directory.appendingPathComponent("laguna.safetensors")
+        try LoRASafetensorsWriter.save(
+            loraLayers: sourceLayers,
+            to: adapterURL,
+            metadata: ["format": TextLoRATrainingManifest.lagunaFormat]
+        )
+
+        MLXRandom.seed(75)
+        let target = LagunaCausalLM(config: try makeConfig())
+        let baseline = target(MLXArray([1, 2, 3]).reshaped(1, 3))
+        MLX.eval(baseline)
+        let report = try await LagunaTextLoRAAdapter.apply(
+            .local(path: adapterURL.path, scale: 1),
+            to: target
+        )
+        let adapted = target(MLXArray([1, 2, 3]).reshaped(1, 3))
+        MLX.eval(adapted)
+
+        XCTAssertEqual(report.matchedLayerCount, sourceLayers.count)
+        XCTAssertEqual(report.injectedLayerCount, sourceLayers.count)
+        XCTAssertGreaterThan(
+            MLX.max(MLX.abs(adapted - baseline)).item(Float.self),
+            0
+        )
+    }
+
+    func testNativeLagunaAdapterDerivesNonDefaultTargetPaths() async throws {
+        MLXRandom.seed(751)
+        let source = LagunaCausalLM(config: try makeConfig())
+        let sourceLayers = try LagunaTextLoRAInjector.inject(
+            into: source,
+            rank: 2,
+            alpha: 4,
+            targetSuffixes: ["lm_head"]
+        )
+        for layer in sourceLayers.values {
+            layer.loraDown = MLXArray.ones(like: layer.loraDown) * 0.125
+            layer.loraUp = MLXArray.ones(like: layer.loraUp) * 0.25
+        }
+
+        let directory = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let adapterURL = directory.appendingPathComponent("laguna-lm-head.safetensors")
+        try LoRASafetensorsWriter.save(
+            loraLayers: sourceLayers,
+            to: adapterURL,
+            metadata: ["format": TextLoRATrainingManifest.lagunaFormat]
+        )
+
+        MLXRandom.seed(751)
+        let target = LagunaCausalLM(config: try makeConfig())
+        let input = MLXArray([1, 2, 3]).reshaped(1, 3)
+        let baseline = target(input)
+        MLX.eval(baseline)
+        let report = try await LagunaTextLoRAAdapter.apply(
+            .local(path: adapterURL.path, scale: 1),
+            to: target
+        )
+        let adapted = target(input)
+        MLX.eval(adapted)
+
+        XCTAssertEqual(report.matchedLayerCount, 1)
+        XCTAssertEqual(report.injectedLayerCount, 1)
+        XCTAssertGreaterThan(
+            MLX.max(MLX.abs(adapted - baseline)).item(Float.self),
+            0
+        )
+    }
+
+    func testNativeLagunaTrainerUpdatesAttentionLoRA() throws {
+        MLXRandom.seed(76)
+        let model = LagunaCausalLM(config: try makeConfig())
+        let layers = try LagunaTextLoRAInjector.inject(
+            into: model,
+            rank: 2
+        )
+        let report = try TextLoRATrainer.train(
+            model: model,
+            loraLayers: layers,
+            examples: [
+                TextSFTTokenizedExample(
+                    inputTokenIds: [1, 2, 3],
+                    labelTokenIds: [2, 3, 4],
+                    lossMask: [0, 1, 1]
+                ),
+            ],
+            config: TextLoRATrainingConfig(
+                trainingSteps: 1,
+                batchSize: 1,
+                learningRate: 0.01
+            ),
+            gatheredForward: { model, inputIDs, positions in
+                model.trainingLogits(
+                    inputIDs: inputIDs,
+                    flatTargetPositions: positions
+                )
+            }
+        ) { model, inputIDs in
+            model(inputIDs)
+        }
+
+        XCTAssertEqual(report.steps, 1)
+        XCTAssertEqual(report.layerCount, 8)
+        XCTAssertNotNil(report.finalLoss)
+        let updatedLayers = layers.values.filter {
+            MLX.sum(MLX.abs($0.loraUp)).item(Float.self) > 0
+        }
+        XCTAssertFalse(updatedLayers.isEmpty)
+    }
+
+    func testNativeLagunaTrainerCrossesQuantizedSharedExpertPath() throws {
+        MLXRandom.seed(77)
+        let model = LagunaCausalLM(
+            config: try makeConfig(quantizedSharedExperts: true),
+            quantizedSharedExperts: true
+        )
+        let sparse = try XCTUnwrap(model.model.layers[1].mlp as? LagunaSparseMoE)
+        for projection in [
+            sparse.switchMLP.gateProj,
+            sparse.switchMLP.upProj,
+            sparse.switchMLP.downProj,
+        ] {
+            try projection.update(
+                parameters: ModuleParameters.unflattened([
+                    (
+                        "scales",
+                        MLXArray.ones(
+                            projection.scales?.shape ?? [],
+                            dtype: .uint8
+                        )
+                    ),
+                ]),
+                verify: .none
+            )
+        }
+        sparse.sharedExpert.update(
+            modules: ModuleChildren.unflattened([
+                (
+                    "gate_proj",
+                    makePackedNVFP4Linear(
+                        inputDimensions: 16,
+                        outputDimensions: 16
+                    )
+                ),
+                (
+                    "up_proj",
+                    makePackedNVFP4Linear(
+                        inputDimensions: 16,
+                        outputDimensions: 16
+                    )
+                ),
+                (
+                    "down_proj",
+                    makePackedNVFP4Linear(
+                        inputDimensions: 16,
+                        outputDimensions: 16
+                    )
+                ),
+            ])
+        )
+        XCTAssertTrue(sparse.sharedExpert.gateProj is QuantizedLinear)
+        XCTAssertTrue(sparse.sharedExpert.upProj is QuantizedLinear)
+        XCTAssertTrue(sparse.sharedExpert.downProj is QuantizedLinear)
+
+        let layers = try LagunaTextLoRAInjector.inject(
+            into: model,
+            rank: 2
+        )
+        let report = try TextLoRATrainer.train(
+            model: model,
+            loraLayers: layers,
+            examples: [
+                TextSFTTokenizedExample(
+                    inputTokenIds: [1, 2, 3],
+                    labelTokenIds: [2, 3, 4],
+                    lossMask: [0, 1, 1]
+                ),
+            ],
+            config: TextLoRATrainingConfig(
+                trainingSteps: 1,
+                batchSize: 1,
+                learningRate: 0.01
+            ),
+            gatheredForward: { model, inputIDs, positions in
+                model.trainingLogits(
+                    inputIDs: inputIDs,
+                    flatTargetPositions: positions
+                )
+            }
+        ) { model, inputIDs in
+            model(inputIDs)
+        }
+
+        XCTAssertEqual(report.steps, 1)
+        XCTAssertNotNil(report.finalLoss)
+        XCTAssertTrue(report.finalLoss?.isFinite == true)
+        XCTAssertTrue(layers.values.contains {
+            MLX.sum(MLX.abs($0.loraUp)).item(Float.self) > 0
+        })
+    }
+
+    private func makePackedNVFP4Linear(
+        inputDimensions: Int,
+        outputDimensions: Int
+    ) -> QuantizedLinear {
+        QuantizedLinear(
+            weight: MLXArray.zeros(
+                [outputDimensions, inputDimensions * 4 / 32],
+                dtype: .uint32
+            ),
+            bias: nil,
+            scales: MLXArray.ones(
+                [outputDimensions, inputDimensions / 16],
+                dtype: .uint8
+            ),
+            biases: nil,
+            groupSize: 16,
+            bits: 4,
+            mode: .nvfp4
+        )
     }
 
     func testToolParserConvertsLagunaMarkup() {

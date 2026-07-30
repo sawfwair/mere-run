@@ -8,6 +8,10 @@ The format is based on Keep a Changelog.
 
 ### Changed
 
+- extended native `text train-lora` SFT and `text chat --lora` inference to
+  `text-chat-laguna-xs-2-1`, with the released Laguna chat template,
+  assistant-only loss, q/k/v/o attention adapters, family-specific manifests,
+  and correctness-safe invalidation of retained base-only projection layouts.
 - added Poolside's released Laguna XS 2.1 NVFP4 model through its pinned
   MLX-native serialization as the
   opt-in managed model `text-chat-laguna-xs-2-1`, with variant-safe CLI/API
