@@ -421,7 +421,7 @@ final class InklingSparseMoE: InklingFeedForward {
         let logProbabilities = -MLX.logAddExp(MLXArray.zeros(like: selected), -selected)
         let weights = MLX.exp(
             logProbabilities - logSumExp(logProbabilities, axis: -1, keepDims: true)
-        ) * routeScale * globalScale.asType(.float32)
+        ) * MLXArray(routeScale).asType(.float32) * globalScale.asType(.float32)
 
         let routedWeights = weights[.ellipsis, ..<topK].asType(x.dtype)
         let sharedWeights = weights[.ellipsis, topK...].asType(x.dtype)
