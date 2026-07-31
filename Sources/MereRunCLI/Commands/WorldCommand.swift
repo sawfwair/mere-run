@@ -161,7 +161,7 @@ private struct WorldRequestContext: RequestContext, RemoteAddressRequestContext 
     }
 }
 
-private struct WorldTransitionPayload: Codable, Sendable {
+struct WorldTransitionPayload: Codable, Sendable {
     let prompt: String
     let camera: Wan2WorldCameraControl
     let sourceImage: String?
@@ -176,7 +176,7 @@ private struct WorldTransitionPayload: Codable, Sendable {
     let fps: Int?
     let modelSpaceActions: [[Float]]?
 
-    func request(defaults: WorldTransitionDefaults) -> WorldTransitionRuntimeRequest {
+    fileprivate func request(defaults: WorldTransitionDefaults) -> WorldTransitionRuntimeRequest {
         return WorldTransitionRuntimeRequest(
             base: Wan2WorldTransitionRequest(
                 prompt: prompt,
@@ -185,7 +185,7 @@ private struct WorldTransitionPayload: Codable, Sendable {
                 outputURL: output.map { URL(fileURLWithPath: $0).standardizedFileURL },
                 width: width ?? defaults.width,
                 height: height ?? defaults.height,
-            numFrames: numFrames ?? defaults.numFrames,
+                numFrames: numFrames ?? defaults.numFrames,
                 steps: steps ?? defaults.steps,
                 guidanceScale: guidanceScale ?? defaults.guidanceScale,
                 shift: shift ?? defaults.shift,
@@ -196,13 +196,6 @@ private struct WorldTransitionPayload: Codable, Sendable {
         )
     }
 
-    enum CodingKeys: String, CodingKey {
-        case prompt, camera, output, width, height, steps, shift, seed, fps
-        case sourceImage = "sourceImage"
-        case numFrames = "num_frames"
-        case guidanceScale = "guidance_scale"
-        case modelSpaceActions = "model_space_actions"
-    }
 }
 
 private struct WorldTransitionRuntimeRequest: Sendable {
