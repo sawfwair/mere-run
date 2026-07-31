@@ -88,6 +88,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case psiChat = "psi-chat"
         /// DeepSeek V4 Flash family, served by the bundled `ds4-server` subprocess.
         case deepseekV4Flash = "deepseek-v4-flash"
+        /// Thinking Machines Lab Inkling family via the native Swift/MLX runtime.
+        case inkling
     }
 
     public enum Family: String, Codable, CaseIterable, Hashable, Sendable {
@@ -117,6 +119,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case video
         case psi
         case deepseek
+        case inkling
     }
 
     public enum Tier: String, Codable, CaseIterable, Hashable, Sendable {
@@ -945,6 +948,25 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 components: nil,
                 upstreamRepoId:
                     "\(LagunaResources.dflashUpstreamModelID)@\(LagunaResources.dflashUpstreamRevision)",
+                createdAt: createdAt
+            )
+        case .inklingSmall:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .inkling,
+                family: .inkling,
+                tier: .small,
+                variant: .standard,
+                precision: .int2,
+                quantization: Quantization(
+                    bits: 2,
+                    groupSize: 128,
+                    scheme: "affine-routed-experts"
+                ),
+                defaults: nil,
+                supports: [.chat, .codeGeneration],
+                components: nil,
+                upstreamRepoId: "\(InklingResources.artifactRepoID)@\(InklingResources.artifactRevision)",
                 createdAt: createdAt
             )
         case .q36Nano:

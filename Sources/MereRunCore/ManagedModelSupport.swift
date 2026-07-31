@@ -381,6 +381,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 48
             ),
             descriptor(
+                InklingResources.modelID,
+                "Inkling-Small 276B-A12B",
+                "Runs Inkling-Small through native Swift/MLX with affine 2-bit/group-128 routed experts and BF16 non-routed weights.",
+                minimum: 128,
+                recommended: 128
+            ),
+            descriptor(
                 Q35Resources.q36NanoModelId,
                 "Qwen3.6 A3B chat nano",
                 "Runs the Qwen3.6 35B-A3B OptiQ 4-bit MLX/MTP snapshot through the native Qwen-family runtime.",

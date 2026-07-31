@@ -170,6 +170,40 @@ public actor HubSnapshot {
         )
     }
 
+    /// Returns a materialized snapshot already present for the requested
+    /// revision without contacting the Hub or trusting an unverified receipt.
+    public static func cachedMaterializedSnapshotURL(
+        options: HubSnapshotOptions,
+        fileManager: FileManager = .default
+    ) throws -> URL? {
+        let downloadBase = try resolveDownloadBase(
+            requested: options.cacheDirectory,
+            fileManager: fileManager
+        )
+        let repositoryRoot = downloadBase
+            .appending(path: "snapshots")
+            .appending(path: options.repoType.rawValue)
+            .appending(path: options.repoId)
+        let referenceURL = downloadBase
+            .appending(path: "refs")
+            .appending(path: options.repoType.rawValue)
+            .appending(path: options.repoId)
+            .appending(path: revisionKey(options.revision) + ".ref")
+
+        if let data = try? Data(contentsOf: referenceURL),
+           let resolved = String(data: data, encoding: .utf8)?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !resolved.isEmpty {
+            let referenced = repositoryRoot.appending(path: revisionKey(resolved))
+            if fileManager.fileExists(atPath: referenced.path) {
+                return referenced
+            }
+        }
+
+        let requested = repositoryRoot.appending(path: revisionKey(options.revision))
+        return fileManager.fileExists(atPath: requested.path) ? requested : nil
+    }
+
     private static func resolveDownloadBase(
         requested: URL?,
         fileManager: FileManager

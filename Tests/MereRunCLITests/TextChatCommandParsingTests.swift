@@ -97,6 +97,21 @@ final class TextChatCommandParsingTests: XCTestCase {
         XCTAssertTrue(backend.contains("native MLX"))
     }
 
+    func testInklingParsesAsNativeMLXWithOperationalContext() throws {
+        let command = try TextChat.parse([
+            "--model", InklingResources.modelID,
+            "--context-size", "32768",
+            "--prompt", "Plan a migration",
+        ])
+
+        XCTAssertEqual(command.model, InklingResources.modelID)
+        XCTAssertEqual(command.contextSize, InklingResources.defaultContextLength)
+        XCTAssertTrue(TextChat.backendDescription(for: command.model).contains("native MLX"))
+        XCTAssertThrowsError(
+            try TextChat.validate(responseFormat: .jsonObject, modelID: command.model)
+        )
+    }
+
     func testTextChatBackendDescriptionIdentifiesGGUFModels() {
         let backend = TextChat.backendDescription(for: ModelResolver.ModelID.q36NanoGGUF.rawValue)
 

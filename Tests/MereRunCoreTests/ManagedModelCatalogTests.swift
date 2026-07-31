@@ -714,6 +714,60 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.validationKind, .codegenGGUF)
     }
 
+    func testInklingSmallUsesPinnedNativeMLXSource() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: InklingResources.modelID))
+
+        XCTAssertEqual(spec.category, .textChat)
+        XCTAssertEqual(spec.installShape, .directoryRoot)
+        XCTAssertEqual(spec.hubFallback?.repoId, InklingResources.artifactRepoID)
+        XCTAssertEqual(spec.hubFallback?.revision, InklingResources.artifactRevision)
+        XCTAssertEqual(spec.hubFallback?.patterns, InklingResources.snapshotPatterns)
+        XCTAssertNil(spec.hubFallback?.filePath)
+        XCTAssertEqual(spec.upstreamRepoId, InklingResources.artifactRepoID)
+        XCTAssertEqual(spec.upstreamRevision, InklingResources.artifactRevision)
+        XCTAssertEqual(spec.validationKind, .inkling)
+        XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
+        XCTAssertEqual(spec.estimatedDownloadBytes, InklingResources.estimatedDownloadBytes)
+        XCTAssertNil(spec.defaultRuntimeServingEngine)
+    }
+
+    func testInklingSmallRequiresNativeMLXRootFiles() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: InklingResources.modelID))
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let missing = spec.missingPaths(in: root, fileManager: .default)
+        XCTAssertEqual(Set(missing.map(\.lastPathComponent)), [
+            "config.json",
+            "tokenizer.json",
+            "tokenizer_config.json",
+            "model.safetensors.index.json",
+        ])
+
+        for filename in [
+            "config.json",
+            "tokenizer.json",
+            "tokenizer_config.json",
+        ] {
+            XCTAssertTrue(FileManager.default.createFile(
+                atPath: root.appendingPathComponent(filename).path,
+                contents: Data()
+            ))
+        }
+        let index = #"{"weight_map":{"language_model.model.embed_tokens.weight":"model-00001-of-00001.safetensors"}}"#
+        XCTAssertTrue(FileManager.default.createFile(
+            atPath: root.appendingPathComponent("model.safetensors.index.json").path,
+            contents: Data(index.utf8)
+        ))
+        XCTAssertTrue(FileManager.default.createFile(
+            atPath: root.appendingPathComponent("model-00001-of-00001.safetensors").path,
+            contents: Data()
+        ))
+
+        XCTAssertTrue(spec.missingPaths(in: root, fileManager: .default).isEmpty)
+        XCTAssertTrue(spec.validateRuntimeURL(root, fileManager: .default).isEmpty)
+    }
+
     func testNorthMiniCodeUsesPinnedHubSource() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: NorthMiniCodeResources.modelId))
 

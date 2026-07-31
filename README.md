@@ -266,6 +266,7 @@ swift run mere.run model pull image-zimage-nano --preflight --json
 swift run mere.run model pull text-chat-lfm25-a1b-8bit --accept-model-license
 swift run mere.run model pull text-chat-laguna-s-2-1
 swift run mere.run model pull text-chat-laguna-xs-2-1
+swift run mere.run model pull text-chat-inkling-small
 swift run mere.run model pull text-chat-bonsai-27b-1bit
 swift run mere.run model pull text-chat-bonsai-27b-2bit
 swift run mere.run model pull text-code-north-mini
@@ -277,6 +278,12 @@ swift run mere.run model pull text-agent-ornith-35b
 swift run mere.run text chat \
   --model text-chat-bonsai-27b-1bit \
   --prompt "Explain unified memory for local inference."
+
+# Inkling-Small is an explicit mixed-precision native MLX pull for 128 GB machines.
+swift run mere.run text chat \
+  --model text-chat-inkling-small \
+  --context-size 32768 \
+  --prompt "Plan a recovery-safe repository migration."
 
 # Pull and apply the promoted Mere Platform Assistant adapter
 swift run mere.run model pull text-chat-gemma4-12b-4bit

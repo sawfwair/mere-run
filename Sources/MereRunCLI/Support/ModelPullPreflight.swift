@@ -149,7 +149,14 @@ struct ModelPullPreflightAnalyzer {
         let specs = selectedSpecs(diagnostics: &diagnostics)
         let hubCache = resolvedHubCache(diagnostics: &diagnostics)
         let modelStore = (modelStoreURL ?? MereRunModelPaths.modelsDir).standardizedFileURL
-        let models = specs.map { modelSummary(for: $0, modelStore: modelStore, diagnostics: &diagnostics) }
+        let models = specs.map {
+            modelSummary(
+                for: $0,
+                modelStore: modelStore,
+                hubCache: hubCache,
+                diagnostics: &diagnostics
+            )
+        }
         appendAggregateDiskDiagnostics(
             models: models,
             hubCache: hubCache,
@@ -232,6 +239,7 @@ struct ModelPullPreflightAnalyzer {
     private func modelSummary(
         for spec: ManagedModelSpec,
         modelStore: URL,
+        hubCache: URL,
         diagnostics: inout [PreflightDiagnostic]
     ) -> ModelPullModelPreflightSummary {
         let support = ManagedModelCapabilityCatalog.support(for: spec)
@@ -250,6 +258,12 @@ struct ModelPullPreflightAnalyzer {
             from: installPath,
             fileManager: fileManager
         ))?.usageTermsAcknowledged == true
+        let estimatedDownloadBytes = ModelPullDiskPreflight.estimatedDownloadBytes(
+            for: spec,
+            force: input.force,
+            hubCacheURL: hubCache,
+            fileManager: fileManager
+        )
         let willDownload = selected && hasSource && !blockedBySupport && !blockedByUsageTerms && (input.force || !installed)
         let status = Self.modelStatus(
             selected: selected,
@@ -324,8 +338,10 @@ struct ModelPullPreflightAnalyzer {
             runtimePath: runtimeURL?.path,
             upstreamRepoID: spec.upstreamRepoId,
             hubRepoIDs: hubRepoIDs(for: spec),
-            estimatedDownloadBytes: spec.estimatedDownloadBytes,
-            estimatedRequiredBytes: ModelPullDiskPreflight.requiredBytes(estimatedDownloadBytes: spec.estimatedDownloadBytes),
+            estimatedDownloadBytes: estimatedDownloadBytes,
+            estimatedRequiredBytes: ModelPullDiskPreflight.requiredBytes(
+                estimatedDownloadBytes: estimatedDownloadBytes
+            ),
             companionModelIDs: spec.companionModelIDs,
             usageTerms: spec.usageRestriction?.terms ?? [],
             usageTermsAcknowledged: spec.usageRestriction != nil

@@ -38,6 +38,7 @@ struct TextChat: AsyncParsableCommand {
           - text-chat-gemma4-nano (Gemma 4 4B native Swift runtime)
           - text-chat-laguna-s-2-1 (Poolside Laguna S 2.1 118B-A8B NVFP4 with DFlash)
           - text-chat-laguna-xs-2-1 (Poolside Laguna XS 2.1 33B-A3B NVFP4)
+          - text-chat-inkling-small (Inkling-Small 276B-A12B mixed MLX: routed-expert q2, non-routed BF16)
           - text-chat-lfm25-a1b-8bit (LiquidAI LFM2.5 8B-A1B MLX 8-bit native Swift runtime)
           - text-chat-psi-agent
         Models are cached under ~/Library/Application Support/MereRun/models/<model-id>.
@@ -60,7 +61,10 @@ struct TextChat: AsyncParsableCommand {
     @Option(name: [.long], help: "Max new tokens.")
     var maxTokens: Int = 2048
 
-    @Option(name: [.customLong("context-size")], help: "Maximum prompt plus generation context. Bonsai 27B supports up to 262144 tokens.")
+    @Option(
+        name: [.customLong("context-size")],
+        help: "Maximum prompt plus generation context. Bonsai supports 262144 tokens; Inkling-Small advertises 1048576 and defaults to 32768."
+    )
     var contextSize: Int?
 
     @Option(name: [.long], help: "Temperature. Default: 0.7, or the model's published value where one exists (Laguna/Ornith: 1.0).")
@@ -130,7 +134,7 @@ struct TextChat: AsyncParsableCommand {
         return NativeMLXRuntime.backendDescription
     }
 
-    @Option(name: [.long], help: "Canonical model id. Default: text-chat-gemma4-12b-4bit (Apple Silicon) / text-chat-q36-nano-gguf (Linux CUDA). Others: text-chat-laguna-s-2-1, text-chat-laguna-xs-2-1, text-chat-bonsai-27b-1bit, text-chat-bonsai-27b-2bit, text-chat-q36-nano, text-agent-ornith-9b, text-agent-ornith-35b-mlx, text-chat-gemma4[-12b|-12b-4bit|-turbo|-max|-nano], text-chat-lfm25-a1b-8bit, text-chat-psi-agent.")
+    @Option(name: [.long], help: "Canonical model id. Default: text-chat-gemma4-12b-4bit (Apple Silicon) / text-chat-q36-nano-gguf (Linux CUDA). Others: text-chat-laguna-s-2-1, text-chat-laguna-xs-2-1, text-chat-inkling-small, text-chat-bonsai-27b-1bit, text-chat-bonsai-27b-2bit, text-chat-q36-nano, text-agent-ornith-9b, text-agent-ornith-35b-mlx, text-chat-gemma4[-12b|-12b-4bit|-turbo|-max|-nano], text-chat-lfm25-a1b-8bit, text-chat-psi-agent.")
     var model: String = TextChat.defaultChatModelId
 
     @Option(
@@ -340,6 +344,9 @@ struct TextChat: AsyncParsableCommand {
                 // `text code` uses). On Linux CUDA this is the GB10-optimized
                 // llama.cpp runtime, which has fast quantized-MoE kernels MLX lacks.
                 let generator = CodeGenGenerator(modelId: normalizedModelId)
+                return try await generator.chat(req, modelPath: runtimeModelRoot, progressHandler: progressHandler)
+            } else if InklingResources.handles(modelSpec: normalizedModelId) {
+                let generator = InklingGenerator(modelID: normalizedModelId)
                 return try await generator.chat(req, modelPath: runtimeModelRoot, progressHandler: progressHandler)
             } else if LFM2Resources.handles(modelSpec: normalizedModelId) {
                 let effectiveModelId = normalizedModelId.isEmpty ? LFM2Resources.defaultModelId : normalizedModelId
@@ -565,7 +572,9 @@ struct TextChat: AsyncParsableCommand {
                 "--response-format json_object is not yet supported by the llama.cpp/GGUF chat runtime; use the native MLX text-chat-q36-nano model."
             )
         }
-        if modelID == Psi3ChatResources.defaultModelId || LFM2Resources.handles(modelSpec: modelID) {
+        if modelID == Psi3ChatResources.defaultModelId
+            || LFM2Resources.handles(modelSpec: modelID)
+            || InklingResources.handles(modelSpec: modelID) {
             throw ValidationError(
                 "--response-format json_object is supported by native Gemma4 and Qwen-family MLX chat models."
             )

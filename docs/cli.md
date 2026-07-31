@@ -763,8 +763,8 @@ Key options:
 
 ### `mere.run text chat`
 
-Run local text chat with the Gemma 4, Laguna 2.1, Qwen3.6/Bonsai, LFM2, or Psi
-family.
+Run local text chat with the Gemma 4, Laguna 2.1, Inkling-Small, Qwen3.6/Bonsai,
+LFM2, or Psi family.
 
 ```bash
 swift run mere.run text chat --prompt "<text>" [options]
@@ -778,7 +778,9 @@ Key options:
 - `--model-root`: explicit local model root
 - `--max-tokens`
 - `--context-size`: maximum prompt plus generation context. Bonsai 27B uses
-  its published 262,144-token limit by default.
+  its published 262,144-token limit by default. Inkling-Small advertises
+  1,048,576 tokens but uses a 32,768-token operational default because KV
+  residency grows with context.
 - `--temperature`: defaults to 0.7, or the model's published value where one
   exists (Bonsai: 0.7; Ornith lanes: 1.0)
 - `--top-p`: defaults to 0.9, or the model's published value (Bonsai/Ornith: 0.95)
@@ -813,6 +815,7 @@ Examples:
 swift run mere.run text chat --prompt "What is classifier-free guidance?"
 swift run mere.run text chat --model text-chat-bonsai-27b-1bit --context-size 262144 --kv-bits 4 --prompt "Plan a long-context repository review."
 swift run mere.run text chat --model text-chat-bonsai-27b-2bit --context-size 262144 --kv-bits 4 --prompt "Compare two repository migration plans."
+swift run mere.run text chat --model text-chat-inkling-small --context-size 32768 --prompt "Plan a recovery-safe repository migration."
 swift run mere.run text chat --model text-chat-q36-nano --prompt "Explain speculative decoding."
 swift run mere.run text chat --model text-chat-q36-nano --response-format json_object --prompt 'Return an object with a name and an array of tags.'
 swift run mere.run text chat --model text-agent-ornith-9b --prompt "Write a compact Swift slugify helper."

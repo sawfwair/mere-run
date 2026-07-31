@@ -74,6 +74,7 @@ public enum QuantizedModelManifestWriter {
             case .ltxVideo, .wanVideo, .cosmos3Edge: return .video
             case .psiChat: return .psi
             case .deepseekV4Flash: return .deepseek
+            case .inkling: return .inkling
             }
         }()
 
@@ -164,6 +165,8 @@ public enum QuantizedModelManifestWriter {
                     return [.chat]
                 case .deepseekV4Flash:
                     return [.chat]
+                case .inkling:
+                    return [.chat, .codeGeneration]
                 }
             }()
             return baseline.filter { $0 != .loraTraining }
@@ -237,7 +240,7 @@ public enum QuantizedModelManifestWriter {
                 break
             case .qwen3TTS, .qwen3ASR, .parakeetASR, .sortformer, .qwen3Embedding, .openAIPrivacyFilter,
                  .qwen3Coder, .northMiniCode, .lightOnOCR, .woosh, .mmaudio, .psiChat, .deepseekV4Flash,
-                 .muScriptor:
+                 .muScriptor, .inkling:
                 break
             case .aceStep, .magentaRT2, .ltxVideo:
                 manifest.defaults = MereRunModelManifest.Defaults(steps: 8, cfg: 1.0)

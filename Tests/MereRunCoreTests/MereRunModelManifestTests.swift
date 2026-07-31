@@ -64,6 +64,27 @@ final class MereRunModelManifestTests: MereRunCoreTestCase {
         )
     }
 
+    func testInklingSmallTemplatePinsTheNativeMLXConversion() {
+        let manifest = MereRunModelManifest.template(
+            for: .inklingSmall,
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+
+        XCTAssertEqual(manifest.id, InklingResources.modelID)
+        XCTAssertEqual(manifest.engine, .inkling)
+        XCTAssertEqual(manifest.family, .inkling)
+        XCTAssertEqual(manifest.tier, .small)
+        XCTAssertEqual(manifest.precision, .int2)
+        XCTAssertEqual(manifest.quantization?.bits, 2)
+        XCTAssertEqual(manifest.quantization?.groupSize, 128)
+        XCTAssertEqual(manifest.quantization?.scheme, "affine-routed-experts")
+        XCTAssertEqual(Set(manifest.supports ?? []), Set([.chat, .codeGeneration]))
+        XCTAssertEqual(
+            manifest.upstreamRepoId,
+            "\(InklingResources.artifactRepoID)@\(InklingResources.artifactRevision)"
+        )
+    }
+
     func testTemplateRoundTrip() throws {
         let temp = try TestFileSystem.makeTempDir()
         defer { try? FileManager.default.removeItem(at: temp) }

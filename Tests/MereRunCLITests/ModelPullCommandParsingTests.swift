@@ -438,6 +438,104 @@ final class ModelPullCommandParsingTests: XCTestCase {
         XCTAssertNil(ModelPullDiskPreflight.requiredBytes(estimatedDownloadBytes: nil))
     }
 
+    func testDiskPreflightDoesNotRequireModelBytesForCompleteCachedSnapshot() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let cache = root.appendingPathComponent("hub", isDirectory: true)
+        let revision = "0123456789abcdef0123456789abcdef01234567"
+        let revisionKey = "deb87fabd17715bb31ad4cf4ffb9494eeb15f8d33d85b031a301c64ab3417eaa"
+        let repoID = "example/large-text-model"
+        let snapshot = cache
+            .appendingPathComponent("snapshots/models", isDirectory: true)
+            .appendingPathComponent(repoID, isDirectory: true)
+            .appendingPathComponent(revisionKey, isDirectory: true)
+        try FileManager.default.createDirectory(at: snapshot, withIntermediateDirectories: true)
+        for filename in ["config.json", "model.safetensors", "tokenizer.json", "tokenizer_config.json"] {
+            try Data().write(to: snapshot.appendingPathComponent(filename))
+        }
+        let spec = ManagedModelSpec(
+            id: "text-chat-large-cached-test",
+            category: .textChat,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: repoID,
+                revision: revision,
+                patterns: ["*.json", "*.safetensors"]
+            ),
+            validationKind: .hfTextChat,
+            estimatedDownloadBytes: 1_000 * ModelPullDiskPreflight.bytesPerGiB
+        )
+
+        XCTAssertNoThrow(
+            try ModelPullDiskPreflight.check(
+                spec: spec,
+                modelDir: root.appendingPathComponent("models/text-chat-large-cached-test"),
+                hubCacheURL: cache,
+                warn: { _ in }
+            )
+        )
+    }
+
+    func testStructuredPreflightUsesCompleteCachedInklingSnapshotUnlessForced() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let cache = root.appendingPathComponent("hub", isDirectory: true)
+        let modelStore = root.appendingPathComponent("models", isDirectory: true)
+        let revisionKey = "c7e23256263a36e914737a8334ee351882fe3de586fc44865a5a54f163fed8eb"
+        let snapshot = cache
+            .appendingPathComponent("snapshots/models", isDirectory: true)
+            .appendingPathComponent(InklingResources.artifactRepoID, isDirectory: true)
+            .appendingPathComponent(revisionKey, isDirectory: true)
+        try FileManager.default.createDirectory(at: snapshot, withIntermediateDirectories: true)
+        for filename in ["config.json", "tokenizer.json", "tokenizer_config.json"] {
+            try Data("{}".utf8).write(to: snapshot.appendingPathComponent(filename))
+        }
+        let shard = "model-00001-of-00001.safetensors"
+        try Data().write(to: snapshot.appendingPathComponent(shard))
+        let index = #"{"weight_map":{"language_model.model.embed_tokens.weight":"model-00001-of-00001.safetensors"}}"#
+        try Data(index.utf8).write(
+            to: snapshot.appendingPathComponent("model.safetensors.index.json")
+        )
+
+        let cached = try ModelPull.parse([
+            InklingResources.modelID,
+            "--allow-unsupported",
+            "--preflight",
+            "--json",
+        ]).makePreflightEnvelope(
+            hubCacheURL: cache,
+            modelStoreURL: modelStore,
+            diskAvailableBytes: { _ in 3 * ModelPullDiskPreflight.bytesPerGiB }
+        )
+
+        XCTAssertNotEqual(cached.status, .blocked)
+        XCTAssertEqual(cached.result.models.first?.estimatedDownloadBytes, 0)
+        XCTAssertEqual(
+            cached.result.models.first?.estimatedRequiredBytes,
+            ModelPullDiskPreflight.safetyMarginBytes
+        )
+        XCTAssertFalse(cached.diagnostics.contains { $0.id == "hub_cache_space_insufficient" })
+
+        let forced = try ModelPull.parse([
+            InklingResources.modelID,
+            "--allow-unsupported",
+            "--force",
+            "--preflight",
+            "--json",
+        ]).makePreflightEnvelope(
+            hubCacheURL: cache,
+            modelStoreURL: modelStore,
+            diskAvailableBytes: { _ in 3 * ModelPullDiskPreflight.bytesPerGiB }
+        )
+
+        XCTAssertEqual(forced.status, .blocked)
+        XCTAssertEqual(
+            forced.result.models.first?.estimatedDownloadBytes,
+            InklingResources.estimatedDownloadBytes
+        )
+        XCTAssertTrue(forced.diagnostics.contains { $0.id == "hub_cache_space_insufficient" })
+    }
+
     private func makeTemporaryDirectory() throws -> URL {
         let temp = FileManager.default.temporaryDirectory
             .appendingPathComponent("mere-run-model-pull-preflight-\(UUID().uuidString)", isDirectory: true)

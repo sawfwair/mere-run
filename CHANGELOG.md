@@ -6,6 +6,16 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Added
+
+- added Thinking Machines Lab's released Inkling-Small as the opt-in managed
+  `text-chat-inkling-small` model through a pinned mixed-precision native MLX
+  conversion. The routed experts use affine 2-bit/group-128 weights while
+  attention, embeddings, routers, shared experts, and dense MLPs retain BF16.
+  The validated 84.56 GB artifact is text-only in mere.run, requires an
+  explicit pull, and defaults to a 32K operational context for 128 GB
+  unified-memory Macs.
+
 ### Changed
 
 - made text LoRA `--eval` measure held-out assistant-token loss before and
