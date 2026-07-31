@@ -315,8 +315,9 @@ swift run mere.run text train-lora \
 `text train-lora` is the native MereRun entrypoint for chat-style SFT JSONL.
 The data format is one JSON object per line with `sources` and `messages`;
 messages use the same `system`, `user`, and `assistant` roles as the local chat
-runtime. `--dry-run` validates the dataset, fingerprints it, counts optional
-eval prompts, and writes a `.manifest.json` next to the requested adapter path.
+runtime. `--dry-run` validates the dataset, fingerprints it, validates and
+counts an optional held-out SFT dataset, and writes a `.manifest.json` next to
+the requested adapter path.
 
 Without `--dry-run`, the command resolves a supported Gemma 4 text model or
 `text-chat-laguna-xs-2-1` through the same managed model store as chat, applies
@@ -329,6 +330,12 @@ training; text runs write `run.json`, `*.events.jsonl`, `*.loss.csv`, and
 while the optimizer runs. Keep local text fine-tuning in `mere.run` so the same
 model ids, manifests, runtime constraints, and eval artifacts remain under the
 MereRun command plane.
+
+When `--eval` is supplied for a real training run, mere.run tokenizes that
+held-out SFT JSONL with the same model chat template and reports assistant-token
+negative log-likelihood immediately before and after optimization. The held-out
+examples never enter the training order. The machine-readable training report
+includes both losses plus the evaluated example and assistant-token counts.
 
 Core hyperparameters (defaults are tuned for local Gemma4 SFT):
 

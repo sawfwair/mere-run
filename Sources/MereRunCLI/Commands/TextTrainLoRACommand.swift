@@ -26,7 +26,10 @@ struct TextTrainLoRA: AsyncParsableCommand {
     @Option(name: [.customLong("model-path")], help: "Optional explicit base model directory.")
     var modelPath: String?
 
-    @Option(name: [.customLong("eval")], help: "Optional eval prompts JSONL path.")
+    @Option(
+        name: [.customLong("eval")],
+        help: "Optional held-out SFT JSONL path for before/after assistant-token loss."
+    )
     var eval: String?
 
     @Option(name: [.customLong("adapter-name")], help: "Adapter display name.")
@@ -78,8 +81,13 @@ struct TextTrainLoRA: AsyncParsableCommand {
         let dataURL = URL(fileURLWithPath: data).standardizedFileURL
         let outputURL = URL(fileURLWithPath: output).standardizedFileURL
         let examples = try TextSFTDataset.load(from: dataURL)
+        let evaluationExamples = try eval.map {
+            try TextSFTDataset.load(
+                from: URL(fileURLWithPath: $0).standardizedFileURL
+            )
+        } ?? []
         let summary = TextSFTDataset.summarize(examples)
-        let evalCount = try eval.map { try Self.countJSONLLines(URL(fileURLWithPath: $0).standardizedFileURL) }
+        let evalCount = eval == nil ? nil : evaluationExamples.count
         try FileManager.default.createDirectory(
             at: outputURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
@@ -112,6 +120,7 @@ struct TextTrainLoRA: AsyncParsableCommand {
                             modelId: model,
                             modelPath: modelPath,
                             examples: examples,
+                            evaluationExamples: evaluationExamples,
                             outputURL: outputURL,
                             trainingConfig: config,
                             maxSequenceLength: maxSequenceLength,
@@ -129,6 +138,7 @@ struct TextTrainLoRA: AsyncParsableCommand {
                             modelId: model,
                             modelPath: modelPath,
                             examples: examples,
+                            evaluationExamples: evaluationExamples,
                             outputURL: outputURL,
                             trainingConfig: config,
                             maxSequenceLength: maxSequenceLength,
@@ -204,6 +214,14 @@ struct TextTrainLoRA: AsyncParsableCommand {
             if let report {
                 let finalLoss = report.finalLoss.map { String($0) } ?? "n/a"
                 print("Training: \(report.steps) steps, \(report.layerCount) LoRA layers, final loss \(finalLoss)")
+                if let initialEvaluationLoss = report.initialEvaluationLoss,
+                   let finalEvaluationLoss = report.finalEvaluationLoss {
+                    print(
+                        "Evaluation: \(report.evaluationExampleCount) examples, "
+                            + "\(report.evaluationTargetTokenCount) assistant tokens, "
+                            + "loss \(initialEvaluationLoss) -> \(finalEvaluationLoss)"
+                    )
+                }
             }
         }
     }
@@ -290,11 +308,6 @@ struct TextTrainLoRA: AsyncParsableCommand {
         throw ValidationError(
             "--model must be a supported Gemma 4 text model or \(LagunaResources.xsModelID)."
         )
-    }
-
-    private static func countJSONLLines(_ url: URL) throws -> Int {
-        let text = String(decoding: try Data(contentsOf: url), as: UTF8.self)
-        return text.split(whereSeparator: \.isNewline).filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count
     }
 
     private func startVisualizationIfNeeded(

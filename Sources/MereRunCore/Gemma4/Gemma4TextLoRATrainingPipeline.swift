@@ -5,6 +5,7 @@ public struct Gemma4TextLoRATrainingPipelineRequest: Sendable {
     public let modelId: String
     public let modelPath: String?
     public let examples: [TextSFTExample]
+    public let evaluationExamples: [TextSFTExample]
     public let outputURL: URL
     public let trainingConfig: TextLoRATrainingConfig
     public let maxSequenceLength: Int
@@ -17,6 +18,7 @@ public struct Gemma4TextLoRATrainingPipelineRequest: Sendable {
         modelId: String,
         modelPath: String? = nil,
         examples: [TextSFTExample],
+        evaluationExamples: [TextSFTExample] = [],
         outputURL: URL,
         trainingConfig: TextLoRATrainingConfig,
         maxSequenceLength: Int,
@@ -28,6 +30,7 @@ public struct Gemma4TextLoRATrainingPipelineRequest: Sendable {
         self.modelId = modelId
         self.modelPath = modelPath
         self.examples = examples
+        self.evaluationExamples = evaluationExamples
         self.outputURL = outputURL
         self.trainingConfig = trainingConfig
         self.maxSequenceLength = maxSequenceLength
@@ -71,6 +74,11 @@ public enum Gemma4TextLoRATrainingPipeline {
             tokenizerAndTemplate: loaded.tokenizerAndTemplate,
             maxSequenceLength: request.maxSequenceLength
         )
+        let tokenizedEvaluation = try Gemma4TextSFTTokenizer.tokenize(
+            request.evaluationExamples,
+            tokenizerAndTemplate: loaded.tokenizerAndTemplate,
+            maxSequenceLength: request.maxSequenceLength
+        )
 
         progressHandler?(ChatProgress(stage: .loadingModel, message: "Injecting Gemma4 LoRA layers"))
         let loraLayers = try Gemma4TextLoRAInjector.inject(
@@ -91,6 +99,7 @@ public enum Gemma4TextLoRATrainingPipeline {
             model: loaded.model,
             loraLayers: loraLayers,
             examples: tokenized,
+            evaluationExamples: tokenizedEvaluation,
             config: request.trainingConfig,
             outputURL: request.outputURL,
             metadata: metadata,

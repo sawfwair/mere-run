@@ -1729,18 +1729,20 @@ final class LagunaModelTests: MereRunCoreTestCase {
             into: model,
             rank: 2
         )
+        let inputTokenIds = (0..<40).map { ($0 % 8) + 1 }
+        let labelTokenIds = Array(inputTokenIds.dropFirst()) + [1]
         let report = try TextLoRATrainer.train(
             model: model,
             loraLayers: layers,
             examples: [
                 TextSFTTokenizedExample(
-                    inputTokenIds: [1, 2, 3],
-                    labelTokenIds: [2, 3, 4],
-                    lossMask: [0, 1, 1]
+                    inputTokenIds: inputTokenIds,
+                    labelTokenIds: labelTokenIds,
+                    lossMask: [0] + Array(repeating: 1, count: 39)
                 ),
             ],
             config: TextLoRATrainingConfig(
-                trainingSteps: 1,
+                trainingSteps: 2,
                 batchSize: 1,
                 learningRate: 0.01
             ),
@@ -1754,7 +1756,7 @@ final class LagunaModelTests: MereRunCoreTestCase {
             model(inputIDs)
         }
 
-        XCTAssertEqual(report.steps, 1)
+        XCTAssertEqual(report.steps, 2)
         XCTAssertEqual(report.layerCount, 8)
         XCTAssertNotNil(report.finalLoss)
         let updatedLayers = layers.values.filter {

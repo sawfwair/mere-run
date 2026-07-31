@@ -37,6 +37,10 @@ public struct TextLoRATrainingReport: Sendable, Hashable, Codable {
     public let steps: Int
     public let initialLoss: Float?
     public let finalLoss: Float?
+    public let initialEvaluationLoss: Float?
+    public let finalEvaluationLoss: Float?
+    public let evaluationExampleCount: Int
+    public let evaluationTargetTokenCount: Int
     public let layerCount: Int
     public let outputPath: String?
 }
@@ -113,6 +117,7 @@ public enum TextLoRATrainer {
         model: Model,
         loraLayers: [String: TrainableLoRALayer],
         examples: [TextSFTTokenizedExample],
+        evaluationExamples: [TextSFTTokenizedExample] = [],
         config: TextLoRATrainingConfig,
         outputURL: URL? = nil,
         metadata: [String: String] = [:],
@@ -133,6 +138,7 @@ public enum TextLoRATrainer {
             .sorted { $0.path < $1.path }
 
         let useGatheredLoss = gatheredForward != nil && TextLoRATrainingEnvironment.gatheredLossEnabled
+        let evaluationTargetTokenCount = targetTokenCount(in: evaluationExamples)
         let lossAndGrad: (Model, [MLXArray]) -> ([MLXArray], ModuleParameters)
         if useGatheredLoss, let gatheredForward {
             lossAndGrad = valueAndGrad(model: model) { model, arrays in
@@ -166,6 +172,18 @@ public enum TextLoRATrainer {
         let oneMinusLrWd = MLXArray(1 - (config.learningRate * config.weightDecay))
         var initialLoss: Float?
         var finalLoss: Float?
+        let initialEvaluationLoss = try evaluationLoss(
+            model: model,
+            examples: evaluationExamples,
+            batchSize: config.batchSize,
+            gatheredForward: useGatheredLoss ? gatheredForward : nil,
+            forward: forward
+        )
+        if let initialEvaluationLoss {
+            FileHandle.standardError.write(Data(
+                "[text-lora-train] eval_initial_loss=\(initialEvaluationLoss) eval_examples=\(evaluationExamples.count) eval_target_tokens=\(evaluationTargetTokenCount)\n".utf8
+            ))
+        }
         if let outputURL {
             try FileManager.default.createDirectory(
                 at: outputURL.deletingLastPathComponent(),
@@ -269,6 +287,18 @@ public enum TextLoRATrainer {
         }
 
         progressHandler?(TextLoRATrainingProgress(stage: .saving))
+        let finalEvaluationLoss = try evaluationLoss(
+            model: model,
+            examples: evaluationExamples,
+            batchSize: config.batchSize,
+            gatheredForward: useGatheredLoss ? gatheredForward : nil,
+            forward: forward
+        )
+        if let finalEvaluationLoss {
+            FileHandle.standardError.write(Data(
+                "[text-lora-train] eval_final_loss=\(finalEvaluationLoss) eval_examples=\(evaluationExamples.count) eval_target_tokens=\(evaluationTargetTokenCount)\n".utf8
+            ))
+        }
         if let outputURL {
             try LoRASafetensorsWriter.save(
                 loraLayers: loraLayers,
@@ -286,9 +316,64 @@ public enum TextLoRATrainer {
             steps: config.trainingSteps,
             initialLoss: initialLoss,
             finalLoss: finalLoss,
+            initialEvaluationLoss: initialEvaluationLoss,
+            finalEvaluationLoss: finalEvaluationLoss,
+            evaluationExampleCount: evaluationExamples.count,
+            evaluationTargetTokenCount: evaluationTargetTokenCount,
             layerCount: loraLayers.count,
             outputPath: outputURL?.path
         )
+    }
+
+    static func evaluationLoss<Model: Module>(
+        model: Model,
+        examples: [TextSFTTokenizedExample],
+        batchSize: Int,
+        gatheredForward: ((Model, MLXArray, MLXArray) -> MLXArray)?,
+        forward: (Model, MLXArray) -> MLXArray
+    ) throws -> Float? {
+        guard !examples.isEmpty else { return nil }
+        let chunkSize = max(batchSize, 1)
+        var weightedLoss = 0.0
+        var totalTargets = 0
+
+        for start in stride(from: 0, to: examples.count, by: chunkSize) {
+            let end = min(start + chunkSize, examples.count)
+            let chunk = Array(examples[start..<end])
+            let chunkTargets = targetTokenCount(in: chunk)
+            guard chunkTargets > 0 else { continue }
+
+            let loss: MLXArray
+            if let gatheredForward {
+                let batch = try TextSFTTrainingBatchBuilder.makeGatheredBatch(chunk)
+                let logits = gatheredForward(model, batch.inputIds, batch.targetPositions)
+                loss = TextSFTTrainingLoss.gatheredNextTokenCrossEntropy(
+                    logits: logits,
+                    labels: batch.targetLabels
+                )
+            } else {
+                let batch = try TextSFTTrainingBatchBuilder.makeBatch(chunk)
+                loss = TextSFTTrainingLoss.maskedNextTokenCrossEntropy(
+                    logits: forward(model, batch.inputIds),
+                    labels: batch.labels,
+                    lossMask: batch.lossMask
+                )
+            }
+            eval(loss)
+            weightedLoss += Double(loss.item(Float.self)) * Double(chunkTargets)
+            totalTargets += chunkTargets
+        }
+
+        guard totalTargets > 0 else { return nil }
+        return Float(weightedLoss / Double(totalTargets))
+    }
+
+    static func targetTokenCount(in examples: [TextSFTTokenizedExample]) -> Int {
+        examples.reduce(into: 0) { total, example in
+            total += example.lossMask.reduce(into: 0) { count, value in
+                if value > 0 { count += 1 }
+            }
+        }
     }
 
     static func initializeAdamStateIfNeeded(for loraLayers: [String: TrainableLoRALayer]) {

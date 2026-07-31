@@ -1003,15 +1003,31 @@ final class LagunaSwitchGLU: Module {
         super.init()
     }
 
-    func callAsFunction(_ x: MLXArray, indices: MLXArray) -> MLXArray {
+    func callAsFunction(
+        _ x: MLXArray,
+        indices: MLXArray,
+        useCustomKernels: Bool = true
+    ) -> MLXArray {
         let routeCount = x.dim(0) * x.dim(1) * indices.dim(2)
         if LagunaMoEAccelerationPolicy.sortedRoutingEnabled, routeCount >= 64 {
-            return sorted(x, indices: indices)
+            return sorted(
+                x,
+                indices: indices,
+                useCustomKernels: useCustomKernels
+            )
         }
-        return unsorted(x, indices: indices)
+        return unsorted(
+            x,
+            indices: indices,
+            useCustomKernels: useCustomKernels
+        )
     }
 
-    func sorted(_ x: MLXArray, indices: MLXArray) -> MLXArray {
+    func sorted(
+        _ x: MLXArray,
+        indices: MLXArray,
+        useCustomKernels: Bool = true
+    ) -> MLXArray {
         let batch = x.dim(0)
         let sequenceLength = x.dim(1)
         let tokenCount = batch * sequenceLength
@@ -1021,7 +1037,8 @@ final class LagunaSwitchGLU: Module {
         let flatIndices = indices.reshaped([routeCount])
         let order = argSort(flatIndices, axis: 0)
         let stagedRoute =
-            LagunaMoEAccelerationPolicy.rankedPrefillRouteStagingEnabled
+            useCustomKernels
+                && LagunaMoEAccelerationPolicy.rankedPrefillRouteStagingEnabled
                 ? RoutedMoERouting.stageRankedLagunaPrefillRoute(
                     x.reshaped([tokenCount, inputDimensions]),
                     flatIndices: flatIndices,
@@ -1045,7 +1062,8 @@ final class LagunaSwitchGLU: Module {
             stagedInverseOrder = nil
         }
         let activated: MLXArray
-        if LagunaMoEAccelerationPolicy.fusedSortedNVFP4MoEEnabled,
+        if useCustomKernels,
+           LagunaMoEAccelerationPolicy.fusedSortedNVFP4MoEEnabled,
            sequenceLength >= LagunaMoEAccelerationPolicy.fusedSortedMinimumSequenceLength,
            gateProj.mode == .nvfp4,
            upProj.mode == .nvfp4,
@@ -1080,7 +1098,8 @@ final class LagunaSwitchGLU: Module {
             activated = MLXNN.silu(gate) * up
         }
         let sortedOutput: MLXArray
-        if LagunaMoEAccelerationPolicy.fusedSortedNVFP4DownEnabled,
+        if useCustomKernels,
+           LagunaMoEAccelerationPolicy.fusedSortedNVFP4DownEnabled,
            sequenceLength >= LagunaMoEAccelerationPolicy.fusedSortedMinimumSequenceLength,
            downProj.mode == .nvfp4,
            downProj.biases == nil,
@@ -1103,7 +1122,8 @@ final class LagunaSwitchGLU: Module {
         }
         let inverseOrder = stagedInverseOrder
             ?? (
-                LagunaMoEAccelerationPolicy.fastSortedInverseEnabled
+                useCustomKernels
+                    && LagunaMoEAccelerationPolicy.fastSortedInverseEnabled
                     ? RoutedMoERouting.invertPermutation(order) ?? argSort(order, axis: 0)
                     : argSort(order, axis: 0)
             )
@@ -1111,11 +1131,16 @@ final class LagunaSwitchGLU: Module {
             .reshaped([batch, sequenceLength, topK, sortedOutput.dim(-1)])
     }
 
-    func unsorted(_ x: MLXArray, indices: MLXArray) -> MLXArray {
+    func unsorted(
+        _ x: MLXArray,
+        indices: MLXArray,
+        useCustomKernels: Bool = true
+    ) -> MLXArray {
         let batch = x.dim(0)
         let sequenceLength = x.dim(1)
         let topK = indices.dim(2)
-        if let fused = lagunaXSDecodeActivation(x, indices: indices) {
+        if useCustomKernels,
+           let fused = lagunaXSDecodeActivation(x, indices: indices) {
             return downProj(
                 fused.reshaped([
                     batch,
@@ -1233,7 +1258,7 @@ final class LagunaRouter: Module {
         let indices = stopGradient(
             argPartition(-selectionScores, kth: count - 1, axis: -1)[
                 .ellipsis,
-                ..<count,
+                ..<count
             ]
         )
         var weights = takeAlong(scores, indices, axis: -1)
@@ -1266,9 +1291,14 @@ final class LagunaSparseMoE: LagunaFeedForward {
         callAsFunction(x, residual: nil)
     }
 
-    func callAsFunction(_ x: MLXArray, residual: MLXArray?) -> MLXArray {
+    func callAsFunction(
+        _ x: MLXArray,
+        residual: MLXArray?,
+        useCustomKernels: Bool = true
+    ) -> MLXArray {
         let routed = gate(x)
-        if LagunaMoEAccelerationPolicy.fusedRoutedSharedDownResidualEnabled,
+        if useCustomKernels,
+           LagunaMoEAccelerationPolicy.fusedRoutedSharedDownResidualEnabled,
            let residual,
            scalingFactor == 2.5,
            let routedActivated = switchMLP.lagunaXSDecodeActivation(
@@ -1290,7 +1320,11 @@ final class LagunaSparseMoE: LagunaFeedForward {
            ) {
             return fused
         }
-        var expertOutput = switchMLP(x, indices: routed.indices)
+        var expertOutput = switchMLP(
+            x,
+            indices: routed.indices,
+            useCustomKernels: useCustomKernels
+        )
         expertOutput = (
             expertOutput * MLX.expandedDimensions(routed.weights, axis: routed.weights.ndim)
         ).sum(axis: -2)
@@ -1465,7 +1499,8 @@ final class LagunaAttention: Module {
         _ x: MLXArray,
         cache: Gemma4AttentionCache?,
         precomputedMask: MLXFast.ScaledDotProductAttentionMaskMode? = nil,
-        precomputedRoPEAtlas: MLXArray? = nil
+        precomputedRoPEAtlas: MLXArray? = nil,
+        useCustomKernels: Bool = true
     ) -> MLXArray {
         let batch = x.dim(0)
         let sequenceLength = x.dim(1)
@@ -1478,7 +1513,8 @@ final class LagunaAttention: Module {
         var values: MLXArray
         let queryDimensions = headCount * headDim
         let keyValueDimensions = keyValueHeadCount * headDim
-        if batch == 1,
+        if useCustomKernels,
+           batch == 1,
            sequenceLength == 1,
            x.dtype == .bfloat16,
            x.shape == [1, 1, 2_048],
@@ -1516,7 +1552,8 @@ final class LagunaAttention: Module {
         var queries: MLXArray
         var keys: MLXArray
         let fusedQK: (queries: MLXArray, keys: MLXArray)? =
-            LagunaGraphAccelerationPolicy.prefillQKNormRoPEEnabled
+            useCustomKernels
+                && LagunaGraphAccelerationPolicy.prefillQKNormRoPEEnabled
             ? rope.prefillFusionKind.flatMap { kind in
                 guard let precomputedRoPEAtlas,
                       batch == 1,
@@ -1800,17 +1837,20 @@ final class LagunaDecoderLayer: Module {
         _ x: MLXArray,
         cache: Gemma4AttentionCache?,
         precomputedMask: MLXFast.ScaledDotProductAttentionMaskMode? = nil,
-        precomputedRoPEAtlas: MLXArray? = nil
+        precomputedRoPEAtlas: MLXArray? = nil,
+        useCustomKernels: Bool = true
     ) -> MLXArray {
         let attentionBranch = selfAttention(
             inputLayerNorm(x),
             cache: cache,
             precomputedMask: precomputedMask,
-            precomputedRoPEAtlas: precomputedRoPEAtlas
+            precomputedRoPEAtlas: precomputedRoPEAtlas,
+            useCustomKernels: useCustomKernels
         )
         let attended: MLXArray
         let normalized: MLXArray
-        if LagunaGraphAccelerationPolicy.prefillFusedResidualRMSNormEnabled,
+        if useCustomKernels,
+           LagunaGraphAccelerationPolicy.prefillFusedResidualRMSNormEnabled,
            let fused = LagunaFusedPrefill.residualRMSNorm(
                residual: x,
                branch: attentionBranch,
@@ -1825,7 +1865,18 @@ final class LagunaDecoderLayer: Module {
         if normalized.dim(0) == 1,
            normalized.dim(1) == 1,
            let sparse = mlp as? LagunaSparseMoE {
-            return sparse(normalized, residual: attended)
+            return sparse(
+                normalized,
+                residual: attended,
+                useCustomKernels: useCustomKernels
+            )
+        }
+        if let sparse = mlp as? LagunaSparseMoE {
+            return attended + sparse(
+                normalized,
+                residual: nil,
+                useCustomKernels: useCustomKernels
+            )
         }
         return attended + mlp(normalized)
     }
@@ -1883,7 +1934,8 @@ final class LagunaLanguageModel: Module {
         captureLayerIndices: Set<Int> = [],
         lastPositionOnly: Bool = false,
         terminalPrefillRowEnabled: Bool? = nil,
-        prefillAsyncLadderEnabled: Bool = true
+        prefillAsyncLadderEnabled: Bool = true,
+        useCustomKernels: Bool = true
     ) -> LagunaLanguageModelOutput {
         var hidden = embedTokens(inputIDs)
         var capturedHiddenStates: [Int: MLXArray] = [:]
@@ -1907,7 +1959,8 @@ final class LagunaLanguageModel: Module {
                 dtype: hidden.dtype
             )
         } : nil
-        let usesPrefillRoPEAtlas = LagunaGraphAccelerationPolicy.prefillQKNormRoPEEnabled
+        let usesPrefillRoPEAtlas = useCustomKernels
+            && LagunaGraphAccelerationPolicy.prefillQKNormRoPEEnabled
             && hidden.dim(0) == 1
             && sequenceLength > 1
         let fullAtlas: MLXArray? = usesPrefillRoPEAtlas ? fullLayerIndex.flatMap { index in
@@ -1950,7 +2003,8 @@ final class LagunaLanguageModel: Module {
                     hidden,
                     cache: cache?[index],
                     precomputedMask: mask,
-                    precomputedRoPEAtlas: ropeAtlas
+                    precomputedRoPEAtlas: ropeAtlas,
+                    useCustomKernels: useCustomKernels
                 )
             }
             if captureLayerIndices.contains(index) {
@@ -2075,7 +2129,8 @@ final class LagunaCausalLM: Module, @unchecked Sendable {
     ) -> MLXArray {
         let hidden = model.forward(
             inputIDs,
-            prefillAsyncLadderEnabled: false
+            prefillAsyncLadderEnabled: false,
+            useCustomKernels: false
         ).hidden
         let flattened = hidden.reshaped([-1, hidden.dim(-1)])
         let selected = take(
@@ -2084,6 +2139,17 @@ final class LagunaCausalLM: Module, @unchecked Sendable {
             axis: 0
         )
         return logits(from: selected)
+    }
+
+    /// Full-vocabulary fallback for training configurations that disable the
+    /// gathered loss. Inference-only custom kernels do not define VJPs.
+    func trainingForward(_ inputIDs: MLXArray) -> MLXArray {
+        let hidden = model.forward(
+            inputIDs,
+            prefillAsyncLadderEnabled: false,
+            useCustomKernels: false
+        ).hidden
+        return logits(from: hidden)
     }
 
     func forward(

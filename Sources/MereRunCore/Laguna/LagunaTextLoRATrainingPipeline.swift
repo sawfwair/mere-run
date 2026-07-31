@@ -5,6 +5,7 @@ public struct LagunaTextLoRATrainingPipelineRequest: Sendable {
     public let modelId: String
     public let modelPath: String?
     public let examples: [TextSFTExample]
+    public let evaluationExamples: [TextSFTExample]
     public let outputURL: URL
     public let trainingConfig: TextLoRATrainingConfig
     public let maxSequenceLength: Int
@@ -17,6 +18,7 @@ public struct LagunaTextLoRATrainingPipelineRequest: Sendable {
         modelId: String,
         modelPath: String? = nil,
         examples: [TextSFTExample],
+        evaluationExamples: [TextSFTExample] = [],
         outputURL: URL,
         trainingConfig: TextLoRATrainingConfig,
         maxSequenceLength: Int,
@@ -28,6 +30,7 @@ public struct LagunaTextLoRATrainingPipelineRequest: Sendable {
         self.modelId = modelId
         self.modelPath = modelPath
         self.examples = examples
+        self.evaluationExamples = evaluationExamples
         self.outputURL = outputURL
         self.trainingConfig = trainingConfig
         self.maxSequenceLength = maxSequenceLength
@@ -76,6 +79,11 @@ public enum LagunaTextLoRATrainingPipeline {
             tokenizerAndTemplate: loaded.tokenizerAndTemplate,
             maxSequenceLength: request.maxSequenceLength
         )
+        let tokenizedEvaluation = try LagunaTextSFTTokenizer.tokenize(
+            request.evaluationExamples,
+            tokenizerAndTemplate: loaded.tokenizerAndTemplate,
+            maxSequenceLength: request.maxSequenceLength
+        )
         progressHandler?(ChatProgress(stage: .loadingModel, message: "Injecting Laguna LoRA layers"))
         let layers = try LagunaTextLoRAInjector.inject(
             into: loaded.model,
@@ -94,6 +102,7 @@ public enum LagunaTextLoRATrainingPipeline {
             model: loaded.model,
             loraLayers: layers,
             examples: tokenized,
+            evaluationExamples: tokenizedEvaluation,
             config: request.trainingConfig,
             outputURL: request.outputURL,
             metadata: metadata,
@@ -105,7 +114,7 @@ public enum LagunaTextLoRATrainingPipeline {
                 )
             }
         ) { model, inputIDs in
-            model(inputIDs)
+            model.trainingForward(inputIDs)
         }
     }
 }
