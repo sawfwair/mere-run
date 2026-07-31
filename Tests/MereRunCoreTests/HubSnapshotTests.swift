@@ -53,4 +53,42 @@ final class HubSnapshotTests: XCTestCase {
         XCTAssertEqual(next?.absoluteString, "https://huggingface.co/api/models/org/repo/tree/main?cursor=abc")
         XCTAssertNil(HubSnapshot.nextPageURL(from: nil, relativeTo: source))
     }
+
+    func testPayloadIdentityAcceptsHubLFSAndGitBlobETags() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mere-run-hub-etag-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let payload = root.appendingPathComponent("payload.bin")
+        try Data("abc".utf8).write(to: payload)
+
+        XCTAssertTrue(try HubSnapshot.payloadMatchesETag(
+            at: payload,
+            etag: "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+            byteCount: 3
+        ))
+        XCTAssertTrue(try HubSnapshot.payloadMatchesETag(
+            at: payload,
+            etag: "f2ba8f84ab5c1bce84a7b441cb1959cfc7093b7f",
+            byteCount: 3
+        ))
+    }
+
+    func testPayloadIdentityRejectsMismatchedOrOpaqueETags() throws {
+        let payload = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mere-run-hub-etag-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: payload) }
+        try Data("abc".utf8).write(to: payload)
+
+        XCTAssertFalse(try HubSnapshot.payloadMatchesETag(
+            at: payload,
+            etag: String(repeating: "0", count: 64),
+            byteCount: 3
+        ))
+        XCTAssertFalse(try HubSnapshot.payloadMatchesETag(
+            at: payload,
+            etag: "opaque-etag",
+            byteCount: 3
+        ))
+    }
 }
