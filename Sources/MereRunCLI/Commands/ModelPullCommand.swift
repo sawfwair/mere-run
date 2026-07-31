@@ -151,7 +151,7 @@ struct ModelPull: AsyncParsableCommand {
             }
             stderr("  You are responsible for determining whether your use complies with these terms.")
         }
-        try ModelPullDiskPreflight.check(spec: spec, modelDir: modelDir) { warning in
+        try ModelPullDiskPreflight.check(spec: spec, modelDir: modelDir, force: force) { warning in
             guard !quiet else { return }
             stderr("  warning: \(warning)")
         }
@@ -338,19 +338,56 @@ struct ModelPullDiskPreflight {
         return estimatedDownloadBytes + max(safetyMarginBytes, estimatedDownloadBytes / 5)
     }
 
+    static func estimatedDownloadBytes(
+        for spec: ManagedModelSpec,
+        force: Bool,
+        hubCacheURL: URL,
+        fileManager: FileManager = .default
+    ) -> Int64? {
+        guard !force,
+              spec.mountedHubFallbacks.isEmpty,
+              let config = spec.hubFallback,
+              let cachedSnapshot = try? HubSnapshot.cachedMaterializedSnapshotURL(
+                options: HubSnapshotOptions(
+                    repoId: config.repoId,
+                    revision: config.revision,
+                    patterns: config.patterns,
+                    cacheDirectory: hubCacheURL,
+                    offline: true
+                ),
+                fileManager: fileManager
+              ),
+              spec.missingPaths(in: cachedSnapshot, fileManager: fileManager).isEmpty else {
+            return spec.estimatedDownloadBytes
+        }
+        return 0
+    }
+
     static func check(
         spec: ManagedModelSpec,
         modelDir: URL,
+        force: Bool = false,
+        hubCacheURL: URL? = nil,
         fileManager: FileManager = .default,
         warn: (String) -> Void
     ) throws {
-        let hubCache = try HubSnapshot.resolvedDownloadBase(fileManager: fileManager)
+        let hubCache = try HubSnapshot.resolvedDownloadBase(
+            requested: hubCacheURL,
+            fileManager: fileManager
+        )
         let modelStoreParent = modelDir.deletingLastPathComponent()
         try? fileManager.createDirectory(at: modelStoreParent, withIntermediateDirectories: true)
 
+        let estimatedDownloadBytes = estimatedDownloadBytes(
+            for: spec,
+            force: force,
+            hubCacheURL: hubCache,
+            fileManager: fileManager
+        )
+
         let warnings = try evaluate(
             modelID: spec.id,
-            estimatedDownloadBytes: spec.estimatedDownloadBytes,
+            estimatedDownloadBytes: estimatedDownloadBytes,
             hubCacheURL: hubCache,
             hubCacheAvailableBytes: availableBytes(onFileSystemContaining: hubCache, fileManager: fileManager),
             modelStoreURL: modelStoreParent,

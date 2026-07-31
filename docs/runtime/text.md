@@ -141,6 +141,40 @@ swift run mere.run text chat \
   --stats
 ```
 
+`text-chat-inkling-small` installs mere.run's immutable native MLX conversion
+of Thinking Machines Lab's released Inkling-Small checkpoint. The 256 routed
+experts in each sparse layer use MLX affine 2-bit quantization with group size
+128. Attention, embeddings, routers, shared experts, dense MLPs, and norms
+retain the released BF16 precision. Because it is still a very large artifact,
+it never auto-downloads from an inference command; pull it explicitly on a
+128 GB unified-memory machine.
+
+The released model is a 276B-total / 12B-active multimodal MoE with a
+1,048,576-token architecture limit. This first mere.run lane loads only the
+`language_model.*` weights in native Swift/MLX; image and audio towers are not
+claimed here. The operational context defaults to
+32,768 tokens to leave room for weights, KV cache, and macOS on a 128 GB Mac.
+Larger `--context-size` values are accepted when the host has the additional
+memory.
+
+This mixed recipe replaces the rejected blanket 2-bit experiment, which was
+degraded and repetitive even on a basic arithmetic prompt. Keeping every
+non-routed path at BF16 deliberately spends more memory to protect model
+quality. The managed snapshot is 84.56 GB (78.75 GiB). A full CUDA load used
+84.53 GB of active MLX memory and peaked at 84.77 GB on an H200; greedy checks
+correctly answered `2 + 2`, the "all but 9" sheep question, and generated a
+valid Swift `isEven` function. That is artifact and CUDA-runtime proof; the
+native Apple Silicon generation smoke remains a separate gate.
+
+```bash
+swift run mere.run model pull text-chat-inkling-small
+swift run mere.run text chat \
+  --model text-chat-inkling-small \
+  --context-size 32768 \
+  --prompt "Design a recovery-safe migration plan for a large Swift service." \
+  --stats
+```
+
 Per-model API-serving KV behavior is set with `mere.run model runtime
 --kv-cache-mode` (see [Model Management](./model-management.md)); it is not a
 flag on `text chat` or `api serve`. For Gemma4, Qwen-family, and LFM2 models

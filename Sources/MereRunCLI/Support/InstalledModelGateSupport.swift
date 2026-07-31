@@ -174,7 +174,7 @@ enum InstalledModelSmokePlans {
                 try await runner.installedTextCheck(model: spec.id)
             }
 
-        case .laguna, .lfm2, .codegenGGUF, .hfTextChat:
+        case .laguna, .lfm2, .inkling, .codegenGGUF, .hfTextChat:
             return direct(spec, route: "text chat") { runner in
                 try await runner.installedTextCheck(model: spec.id)
             }

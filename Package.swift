@@ -330,6 +330,7 @@ targets.append(contentsOf: [
       "Geometry/README.md",
       "HiDreamO1/README.md",
       "Ideogram4/README.md",
+      "Inkling/README.md",
       "InstantMesh/README.md",
       "Krea2/README.md",
       "Laguna/README.md",

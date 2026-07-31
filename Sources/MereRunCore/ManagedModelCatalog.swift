@@ -42,6 +42,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case lagunaDFlash
     case q35
     case lfm2
+    case inkling
     case qwen3TTS
     case qwen3ASR
     case parakeet
@@ -1037,6 +1038,18 @@ public enum ManagedModelCatalog {
                 "api serve",
                 "model benchmark chat",
             ]
+        ),
+        ManagedModelSpec(
+            id: InklingResources.modelID,
+            category: .textChat,
+            installShape: .directoryRoot,
+            hubFallback: InklingResources.hubFallbackConfig,
+            upstreamRepoId: InklingResources.artifactRepoID,
+            upstreamRevision: InklingResources.artifactRevision,
+            validationKind: .inkling,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: InklingResources.estimatedDownloadBytes,
+            defaultCLICommands: ["text chat"]
         ),
         ManagedModelSpec(
             id: Q35Resources.q36NanoModelId,
@@ -2421,6 +2434,8 @@ public extension ManagedModelSpec {
             return Q35Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .lfm2:
             return LFM2Resources(rootURL: rootURL).validate(fileManager: fileManager)
+        case .inkling:
+            return InklingResources.validate(rootURL: rootURL, fileManager: fileManager)
         case .sam31:
             return SAM31Resources(modelRootURL: rootURL).missingRequiredPaths(fileManager: fileManager)
         case .falconPerception:
