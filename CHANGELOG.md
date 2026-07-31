@@ -6,8 +6,27 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.30.0 - 2026-07-31
+
+This release is the complete public product delta since `v0.29.1`: native
+Laguna XS 2.1 inference and adapter training, a 128 GB Inkling-Small lane,
+production-safe Laguna acceleration, corrected model-license policy, and a
+persistent-world HTTP contract repair.
+
 ### Added
 
+- added Poolside's released Laguna XS 2.1 NVFP4 model through its pinned
+  MLX-native serialization as the opt-in managed model
+  `text-chat-laguna-xs-2-1`, with variant-safe CLI/API resolution, no implicit
+  Laguna S DFlash attachment, a 36 GB minimum / 48 GB recommended memory tier,
+  and retained OpenMDW-1.1 license files.
+- added native `text train-lora` SFT and `text chat --lora` support for
+  `text-chat-laguna-xs-2-1`, including the released chat template,
+  assistant-only loss, q/k/v/o attention adapters, family-specific manifests,
+  task-scoped GPU streams, verified MLX Metal initialization, and
+  correctness-safe invalidation of retained base-only projection layouts.
+  `--eval` now measures held-out assistant-token loss before and after
+  optimization instead of merely counting JSONL records.
 - added Thinking Machines Lab's released Inkling-Small as the opt-in managed
   `text-chat-inkling-small` model through a pinned mixed-precision native MLX
   conversion. The routed experts use affine 2-bit/group-128 weights while
@@ -18,36 +37,35 @@ The format is based on Keep a Changelog.
 
 ### Changed
 
-- made text LoRA `--eval` measure held-out assistant-token loss before and
-  after optimization instead of only counting JSONL records.
-- extended native `text train-lora` SFT and `text chat --lora` inference to
-  `text-chat-laguna-xs-2-1`, with the released Laguna chat template,
-  assistant-only loss, q/k/v/o attention adapters, family-specific manifests,
-  and correctness-safe invalidation of retained base-only projection layouts.
-  Text training now initializes the verified MLX Metal artifact, uses
-  task-scoped GPU streams, and excludes Laguna's inference-only asynchronous
-  prefill ladder from differentiable graphs.
-- added Poolside's released Laguna XS 2.1 NVFP4 model through its pinned
-  MLX-native serialization as the
-  opt-in managed model `text-chat-laguna-xs-2-1`, with variant-safe CLI/API
-  resolution, no license-acceptance gate, and no implicit Laguna S DFlash
-  attachment. Both public Laguna 2.1 pulls retain their OpenMDW-1.1 license
-  files.
 - ported production-safe wins from the MLX Fast Laguna XS 2.1 challenge,
-  where submission `493f1ee1` reached first place with score `1.8435177465`,
-  including the terminal-prefill row specialization and exact
+  where submission `493f1ee1` reached first place on July 30, 2026 with score
+  `1.8435177465`, including the terminal-prefill row specialization and exact
   `[Q; gate]` / `[K; V]` projection banks as a backend-neutral MLX graph path
   that defaults on for M5 Max while retaining full-path fallbacks for DFlash
   captures, batches, and unsupported model shapes. A resident DGX Spark GB10
   CUDA A/B reduced the matched 568-token prefill from 2.102 to 1.689 seconds;
   Metal-native ranked kernels remain separately hardware-guarded.
+- advanced the pinned `mlx-swift` fork and bundled metallib provenance to the
+  exact revision carrying those production Laguna graph optimizations, while
+  retaining startup refusal for stale or mismatched Metal kernel bundles.
+- made live pulls and structured `model pull --preflight --json` reuse a
+  complete immutable Hub snapshot without requiring enough free space for a
+  redundant full download; `--force` continues to require full redownload
+  headroom.
 - audited managed-model acknowledgement policy and removed false-positive
-  `--accept-model-license` gates from public Z-Image Nano, Sortformer,
-  Cosmos3-Edge, and the hidden Gemma 3 companion while retaining genuine
-  access-gated, non-commercial, research-only, and revenue-limited gates.
+  `--accept-model-license` gates from public Laguna S/XS 2.1, Z-Image Nano,
+  Sortformer, Cosmos3-Edge, and the hidden Gemma 3 companion while retaining
+  genuine access-gated, non-commercial, research-only, and revenue-limited
+  gates.
 
 ### Fixed
 
+- fixed live managed pulls redownloading complete externally reconstructed Hub
+  snapshots when Hugging Face sidecar metadata was absent. Exact-size payloads
+  are now adopted only after their pinned LFS SHA-256 or Git-blob SHA-1 ETag is
+  verified, and the local metadata plus immutable receipt are rebuilt.
+- fixed root `--models-root` handling so the parsed override initializes the
+  model store deterministically instead of depending on lazy global access.
 - fixed persistent-world HTTP transition decoding so documented snake-case
   overrides such as `num_frames`, `guidance_scale`, and
   `model_space_actions` reach the DreamX and Cosmos3 runtimes instead of

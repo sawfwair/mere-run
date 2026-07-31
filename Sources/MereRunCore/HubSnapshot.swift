@@ -340,6 +340,27 @@ public actor HubSnapshot {
                         + "expected \(resolvedRevision), found \(remote.commitHash)"
                 )
             }
+            if let adopted = try adoptExistingPayload(
+                expectedBytes: expectedBytes,
+                destination: destination,
+                metadataDestination: metadataDestination,
+                remote: remote
+            ) {
+                completedBytes += max(expectedBytes, Self.fileSize(at: destination))
+                receiptFiles.append(
+                    HubSnapshotReceipt.File(
+                        path: entry.path,
+                        size: Self.fileSize(at: destination),
+                        commit: adopted.commitHash,
+                        etag: adopted.etag
+                    )
+                )
+                progressHandler?(HubSnapshotProgress(
+                    completedUnitCount: min(completedBytes, totalBytes),
+                    totalUnitCount: totalBytes
+                ))
+                continue
+            }
             let startedAt = Date()
             let completedBeforeDownload = completedBytes
             let delegate = HubSnapshotDownloadDelegate { written, _, _ in
@@ -578,6 +599,40 @@ public actor HubSnapshot {
         return metadata
     }
 
+    /// Adopt an exact payload reconstructed by an external resumable
+    /// downloader. Size alone is not sufficient: bind the bytes to the pinned
+    /// Hub revision by validating its content-addressed ETag before writing the
+    /// local metadata and receipt used by subsequent offline pulls.
+    private func adoptExistingPayload(
+        expectedBytes: Int64,
+        destination: URL,
+        metadataDestination: URL,
+        remote: HubSnapshotRemoteFile
+    ) throws -> HubSnapshotDownloadMetadata? {
+        guard Self.fileExists(at: destination, expectedBytes: expectedBytes),
+              let etag = remote.etag,
+              try Self.payloadMatchesETag(at: destination, etag: etag, byteCount: expectedBytes) else {
+            return nil
+        }
+
+        let blobURL = contentBlobURL(etag: etag)
+        try FileManager.default.createDirectory(
+            at: blobURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        if FileManager.default.fileExists(atPath: blobURL.path) {
+            guard Self.fileSize(at: blobURL) == expectedBytes else {
+                throw Hub.HubClientError.downloadError(
+                    "Hub blob identity collision for \(etag)"
+                )
+            }
+        } else {
+            try FileManager.default.linkItem(at: destination, to: blobURL)
+        }
+        try writeDownloadMetadata(remote, to: metadataDestination)
+        return HubSnapshotDownloadMetadata(commitHash: remote.commitHash, etag: etag)
+    }
+
     private func writeSnapshotReceipt(_ receipt: HubSnapshotReceipt, to snapshotURL: URL) throws {
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
@@ -718,6 +773,32 @@ public actor HubSnapshot {
 
     static func revisionKey(_ revision: String) -> String {
         SHA256.hash(data: Data(revision.utf8)).map { String(format: "%02x", $0) }.joined()
+    }
+
+    static func payloadMatchesETag(
+        at url: URL,
+        etag: String,
+        byteCount: Int64
+    ) throws -> Bool {
+        let expected = etag.lowercased()
+        guard expected.allSatisfy({ $0.isHexDigit }) else { return false }
+
+        if expected.count == 64 {
+            return try ModelArtifactPin.fileSHA256(url) == expected
+        }
+        guard expected.count == 40 else { return false }
+
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+        var hasher = Insecure.SHA1()
+        hasher.update(data: Data("blob \(byteCount)\0".utf8))
+        while true {
+            let chunk = try handle.read(upToCount: 1_048_576) ?? Data()
+            if chunk.isEmpty { break }
+            hasher.update(data: chunk)
+        }
+        let actual = hasher.finalize().map { String(format: "%02x", $0) }.joined()
+        return actual == expected
     }
 
     private static func contentKey(_ etag: String) -> String {
