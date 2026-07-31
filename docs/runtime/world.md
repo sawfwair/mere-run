@@ -136,9 +136,10 @@ Omitted sampling fields use backend-specific recipes. DreamX defaults to
 512x320, 17 frames, 40 steps, CFG 5, shift 5, seed 42, and 24 fps. Cosmos3
 uses 320x176, 17 frames, 30 steps, CFG 1, shift 3, seed 0, and 30 fps. Every
 interactive camera primitive uses NVIDIA's default 16-action cadence and the
-same pinned per-action translation and rotation rates. This keeps each
-generative chunk local enough to preserve scene identity. Explicit `num_frames`
-still overrides the default. Each continued chunk uses `base_seed + chunk_index`,
+same pinned translation-magnitude envelope. Rotation intent is divided into a
+constant per-frame pose delta. This keeps each generative chunk local enough to
+preserve scene identity. Explicit `num_frames` still overrides the default.
+Each continued chunk uses `base_seed + chunk_index`,
 matching NVIDIA's autoregressive sampling policy. Cosmos3 frame counts must be
 `4n+1`.
 
@@ -149,10 +150,16 @@ generation depth. Repeated backtracking can therefore traverse multiple parent
 edges without spending stochastic chunks or compounding avoidable scene drift.
 
 For Cosmos3, the semantic camera request selects a normalized model-space
-trajectory. Forward motion uses the exact 60x9 NVIDIA reference sequence;
-rotations are emitted in the published column-based rotation-6D form. These
-values are not meters or per-frame physical deltas. A caller that already has
-a normalized trajectory can provide it directly as `model_space_actions`.
+trajectory. NVIDIA defines every 9D `camera_pose` row as the relative pose delta
+between consecutive visual states: XYZ translation plus column-based
+rotation-6D. The released 60x9 trajectory is retained byte-for-byte as a parity
+fixture, but it is an arbitrary camera sample rather than a canonical forward
+path. Semantic translation controls preserve that sample's per-step magnitude
+envelope while placing each delta on the requested camera-relative axis;
+stationary and yaw controls use zero translation. Request translation values
+scale the normalized envelope and are not a calibrated physical displacement.
+A caller that already has a normalized trajectory can provide it directly as
+`model_space_actions`.
 The server validates nine finite values per row, fits the sequence to the
 requested frame count without renormalizing it, and reports `action_space`,
 `action_domain`, and `model_space_actions` in the receipt (`raw_actions`
@@ -180,8 +187,9 @@ extended by repeating its final row; a longer list is truncated to
 The generated terminal frame seeds the next transition, so a second request
 can omit `sourceImage` and continue moving through the same world. The runtime
 follows NVIDIA's autoregressive recipe: it extracts the public terminal frame,
-re-encodes that image at the start of the next chunk, and continues the
-normalized translation trajectory from the prior terminal action. It does not
+re-encodes that image at the start of the next chunk, and compiles a fresh
+relative-delta trajectory for the next request. It does not accumulate the
+prior chunk's final delta as though it were an absolute pose, and does not
 transplant the terminal latent from the end of one causal VAE timeline into
 frame zero of another. The exact prior public state image is also placed at
 frame zero of the next clip for a pixel-stable player handoff.

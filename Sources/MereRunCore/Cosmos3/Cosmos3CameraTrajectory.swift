@@ -2,10 +2,11 @@ import Foundation
 
 /// Normalized `camera_pose` actions consumed directly by Cosmos3-Edge.
 ///
-/// These values are model-space poses, not meters or per-frame physical deltas.
-/// The reference path is NVIDIA's released 60x9 camera trajectory at the pinned
-/// Cosmos3-Edge revision. Keeping the fixture intact gives the native Swift
-/// runtime an exact parity input and avoids inventing a camera normalization.
+/// NVIDIA defines each row as the relative 9D pose delta between consecutive
+/// visual states: translation plus column-based rotation-6D. The bundled
+/// 60x9 trajectory is an exact upstream parity sample, not a canonical forward
+/// path. Semantic controls preserve its per-step translation magnitudes while
+/// compiling explicit camera-relative axes.
 public enum Cosmos3CameraModelSpaceTrajectory {
     public static let nvidiaFrameworkRevision =
         "ed8287fd7477113f8ac4f6b84290514d55cf0cdc"
@@ -34,41 +35,38 @@ public enum Cosmos3CameraModelSpaceTrajectory {
         }
     }()
 
-    /// NVIDIA's autoregressive camera canary continues translation by the
-    /// average displacement of the complete published path. The divisor is
-    /// the action count (60), because the next chunk starts one action after
-    /// the terminal pose and spans another 60 actions.
-    public static let forwardContinuationTranslation: [Float] = {
-        let first = forwardReference[0]
-        let last = forwardReference[forwardReference.count - 1]
-        return (0..<3).map {
-            (last[$0] - first[$0]) / Float(forwardReference.count)
-        }
-    }()
+    public static let identityRotation6D: [Float] = [1, 0, 0, 0, 1, 0]
 
-    /// Returns the published path at its original cadence. Short chunks use a
-    /// prefix, matching NVIDIA's 16-action camera canary. Longer chunks continue
-    /// the final translation trend while keeping the terminal rotation.
+    /// Compiles the semantic forward axis while retaining the exact magnitude
+    /// envelope of NVIDIA's published camera-pose sample.
     public static func forward(actionCount: Int) -> [[Float]] {
-        precondition(actionCount > 0)
-        let reference = forwardReference
-        guard actionCount > reference.count else {
-            return Array(reference.prefix(actionCount))
-        }
+        translated(direction: [0, 0, 1], scale: 1, actionCount: actionCount)
+    }
 
-        var result = reference
-        let first = reference[0]
-        let last = reference[reference.count - 1]
-        let denominator = Float(reference.count - 1)
-        let delta = (0..<3).map { (last[$0] - first[$0]) / denominator }
-        while result.count < actionCount {
-            var next = result[result.count - 1]
-            for axis in 0..<3 {
-                next[axis] += delta[axis]
-            }
-            result.append(next)
+    public static func translated(
+        direction: [Float],
+        scale: Float,
+        actionCount: Int
+    ) -> [[Float]] {
+        precondition(direction.count == 3)
+        precondition(actionCount > 0)
+        precondition(scale.isFinite && scale >= 0)
+        let length = sqrt(direction.reduce(Float.zero) { $0 + $1 * $1 })
+        precondition(length > 0)
+        let unit = direction.map { $0 / length }
+        let reference = fitted(forwardReference, actionCount: actionCount)
+        return reference.map { action in
+            let magnitude = sqrt(action[0] * action[0] + action[1] * action[1] + action[2] * action[2])
+            return unit.map { $0 * magnitude * scale } + identityRotation6D
         }
-        return result
+    }
+
+    public static func stationary(actionCount: Int) -> [[Float]] {
+        precondition(actionCount > 0)
+        return Array(
+            repeating: [0, 0, 0] + identityRotation6D,
+            count: actionCount
+        )
     }
 
     public static func fitted(_ actions: [[Float]], actionCount: Int) -> [[Float]] {

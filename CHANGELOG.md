@@ -6,6 +6,15 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Fixed
+
+- fixed Cosmos3 semantic camera controls to compile true frame-relative 9D
+  pose deltas. Forward/backward and left/right now use explicit opposing
+  camera-relative axes, hold and yaw no longer inherit translation from
+  NVIDIA's arbitrary parity sample, rotations use constant per-frame deltas,
+  and continued chunks no longer accumulate the previous relative delta as an
+  absolute pose.
+
 ## 0.30.0 - 2026-07-31
 
 This release is the complete public product delta since `v0.29.1`: native
