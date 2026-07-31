@@ -62,4 +62,15 @@ final class TextTrainLoRACommandParsingTests: XCTestCase {
         XCTAssertTrue(cmd.dryRun)
         XCTAssertTrue(cmd.json)
     }
+
+    func testTrainLoRAParsesLagunaXSModel() throws {
+        let cmd = try TextTrainLoRA.parse([
+            "--data", "pairs.jsonl",
+            "--output", "laguna-support.safetensors",
+            "--model", LagunaResources.xsModelID,
+        ])
+
+        XCTAssertEqual(cmd.model, LagunaResources.xsModelID)
+        XCTAssertEqual(cmd.targetModules, "q_proj,k_proj,v_proj,o_proj")
+    }
 }

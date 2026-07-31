@@ -63,6 +63,10 @@ mere.run text train-lora \
   --json
 ```
 
+For a real run, `--eval` is a held-out SFT JSONL dataset. It is validated and
+tokenized with the same model template, but never enters the training order;
+the result reports assistant-token loss before and after optimization.
+
 The native optimizer path is intentionally part of `mere.run`; keep local
 fine-tune workflows in the same command plane as model resolution and runtime
 metadata. Drop `--dry-run` when the dataset is reviewed and you are ready for

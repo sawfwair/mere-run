@@ -37,6 +37,7 @@ public final class LagunaTokenizerAndTemplate: @unchecked Sendable {
     public func encodeForGeneration(
         messages: [ChatMessage],
         tools: [ToolDefinition]? = nil,
+        addGenerationPrompt: Bool = true,
         includeThinking: Bool,
         maxLength: Int
     ) throws -> [Int] {
@@ -44,7 +45,7 @@ public final class LagunaTokenizerAndTemplate: @unchecked Sendable {
         var encoded = try tokenizer.applyChatTemplate(
             messages: messages.map(Self.renderMessage),
             chatTemplate: nil,
-            addGenerationPrompt: true,
+            addGenerationPrompt: addGenerationPrompt,
             truncation: false,
             maxLength: nil,
             tools: toolSpecs,
@@ -58,6 +59,10 @@ public final class LagunaTokenizerAndTemplate: @unchecked Sendable {
             encoded = Array(encoded.suffix(limit))
         }
         return encoded
+    }
+
+    public func encodeRaw(_ text: String, addSpecialTokens: Bool = false) -> [Int] {
+        tokenizer.encode(text: text, addSpecialTokens: addSpecialTokens)
     }
 
     public func decode(tokens: [Int]) -> String {

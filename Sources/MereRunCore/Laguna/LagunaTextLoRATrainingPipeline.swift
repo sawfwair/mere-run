@@ -1,7 +1,7 @@
 import Foundation
 import MLX
 
-public struct Gemma4TextLoRATrainingPipelineRequest: Sendable {
+public struct LagunaTextLoRATrainingPipelineRequest: Sendable {
     public let modelId: String
     public let modelPath: String?
     public let examples: [TextSFTExample]
@@ -41,9 +41,9 @@ public struct Gemma4TextLoRATrainingPipelineRequest: Sendable {
     }
 }
 
-public enum Gemma4TextLoRATrainingPipeline {
+public enum LagunaTextLoRATrainingPipeline {
     public static func train(
-        _ request: Gemma4TextLoRATrainingPipelineRequest,
+        _ request: LagunaTextLoRATrainingPipelineRequest,
         progressHandler: (@Sendable (ChatProgress) -> Void)? = nil,
         trainingProgressHandler: (@Sendable (TextLoRATrainingProgress) -> Void)? = nil
     ) async throws -> TextLoRATrainingReport {
@@ -57,58 +57,64 @@ public enum Gemma4TextLoRATrainingPipeline {
     }
 
     private static func trainOnCurrentStream(
-        _ request: Gemma4TextLoRATrainingPipelineRequest,
+        _ request: LagunaTextLoRATrainingPipelineRequest,
         progressHandler: (@Sendable (ChatProgress) -> Void)?,
         trainingProgressHandler: (@Sendable (TextLoRATrainingProgress) -> Void)?
     ) async throws -> TextLoRATrainingReport {
-        let loaded = try await Gemma4TextModelLoader.load(
+        guard LagunaResources.managedModelID(for: request.modelId)
+            == LagunaResources.xsModelID else {
+            throw LagunaError.generationFailed(
+                "Native Laguna text LoRA training currently supports Laguna XS 2.1."
+            )
+        }
+        let loaded = try await LagunaTextModelLoader.load(
             modelId: request.modelId,
             modelPath: request.modelPath,
             maxContextLength: request.maxSequenceLength,
             progressHandler: progressHandler
         )
-
-        progressHandler?(ChatProgress(stage: .encoding, message: "Tokenizing SFT examples"))
-        let tokenized = try Gemma4TextSFTTokenizer.tokenize(
+        progressHandler?(ChatProgress(stage: .encoding, message: "Tokenizing Laguna SFT examples"))
+        let tokenized = try LagunaTextSFTTokenizer.tokenize(
             request.examples,
             tokenizerAndTemplate: loaded.tokenizerAndTemplate,
             maxSequenceLength: request.maxSequenceLength
         )
-        let tokenizedEvaluation = try Gemma4TextSFTTokenizer.tokenize(
+        let tokenizedEvaluation = try LagunaTextSFTTokenizer.tokenize(
             request.evaluationExamples,
             tokenizerAndTemplate: loaded.tokenizerAndTemplate,
             maxSequenceLength: request.maxSequenceLength
         )
-
-        progressHandler?(ChatProgress(stage: .loadingModel, message: "Injecting Gemma4 LoRA layers"))
-        let loraLayers = try Gemma4TextLoRAInjector.inject(
+        progressHandler?(ChatProgress(stage: .loadingModel, message: "Injecting Laguna LoRA layers"))
+        let layers = try LagunaTextLoRAInjector.inject(
             into: loaded.model,
             rank: request.rank,
             alpha: request.alpha,
             targetSuffixes: request.targetSuffixes
         )
-
         var metadata = request.metadata
         metadata["base_model"] = request.modelId
         metadata["model_root"] = loaded.rootURL.path
-        metadata["format"] = "mererun.gemma4.text-lora"
+        metadata["format"] = TextLoRATrainingManifest.lagunaFormat
         metadata["max_sequence_length"] = String(request.maxSequenceLength)
 
-        progressHandler?(ChatProgress(stage: .generating, message: "Training Gemma4 LoRA adapter"))
+        progressHandler?(ChatProgress(stage: .generating, message: "Training Laguna LoRA adapter"))
         return try TextLoRATrainer.train(
             model: loaded.model,
-            loraLayers: loraLayers,
+            loraLayers: layers,
             examples: tokenized,
             evaluationExamples: tokenizedEvaluation,
             config: request.trainingConfig,
             outputURL: request.outputURL,
             metadata: metadata,
             progressHandler: trainingProgressHandler,
-            gatheredForward: { model, inputIds, targetPositions in
-                model.trainingLogits(inputIds: inputIds, flatTargetPositions: targetPositions)
+            gatheredForward: { model, inputIDs, targetPositions in
+                model.trainingLogits(
+                    inputIDs: inputIDs,
+                    flatTargetPositions: targetPositions
+                )
             }
-        ) { model, inputIds in
-            model(inputIds)
+        ) { model, inputIDs in
+            model.trainingForward(inputIDs)
         }
     }
 }

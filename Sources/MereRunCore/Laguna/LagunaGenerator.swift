@@ -6,6 +6,7 @@ public enum LagunaError: LocalizedError {
     case missingFiles([String])
     case dflashIncompatible(String)
     case modelNotLoaded
+    case adapterSwitchDuringActiveGeneration
     case generationFailed(String)
 
     public var errorDescription: String? {
@@ -18,6 +19,8 @@ public enum LagunaError: LocalizedError {
             return "Laguna DFlash checkpoint is incompatible: \(message)"
         case .modelNotLoaded:
             return "Laguna model is not loaded."
+        case .adapterSwitchDuringActiveGeneration:
+            return "Laguna cannot switch text LoRA adapters while batched generation is active."
         case .generationFailed(let message):
             return "Laguna generation failed: \(message)"
         }
@@ -173,6 +176,7 @@ public actor LagunaGenerator: ChatGenerator {
     private var dflashConfig: LagunaDFlashConfig?
     private var loadedModelPath: String?
     private var loadedDFlashPath: String?
+    private var loadedTextLoRASignature: String?
     private let continuousBatchingEnabled: Bool
     private let configuredDFlashPath: String?
     private let dflashSpeculativeTokens: Int
@@ -250,7 +254,18 @@ public actor LagunaGenerator: ChatGenerator {
         try await Stream.withNewDefaultStream {
             let rootURL = URL(fileURLWithPath: modelPath).standardizedFileURL
             let loadStart = Date()
+            let requestedLoRASignature = Self.loraSignature(request.lora)
+            if loadedTextLoRASignature != requestedLoRASignature {
+                guard !hasActiveGeneration else {
+                    throw LagunaError.adapterSwitchDuringActiveGeneration
+                }
+                resetLoadedModel()
+            }
             try await ensureLoaded(rootURL: rootURL, progressHandler: progressHandler)
+            try await applyTextLoRAIfNeeded(
+                request.lora,
+                progressHandler: progressHandler
+            )
             let loadSeconds = Date().timeIntervalSince(loadStart)
 
             var response = try await generate(
@@ -289,6 +304,11 @@ public actor LagunaGenerator: ChatGenerator {
     }
 
     public func unload() {
+        guard !hasActiveGeneration else { return }
+        resetLoadedModel()
+    }
+
+    private func resetLoadedModel() {
         model = nil
         tokenizerAndTemplate = nil
         config = nil
@@ -296,7 +316,17 @@ public actor LagunaGenerator: ChatGenerator {
         dflashConfig = nil
         loadedModelPath = nil
         loadedDFlashPath = nil
+        loadedTextLoRASignature = nil
         Memory.clearCache()
+    }
+
+    private var hasActiveGeneration: Bool {
+        decodeLoopRunning
+            || dflashDecodeLoopRunning
+            || !decodeQueue.isEmpty
+            || !activeDecodeRows.isEmpty
+            || !dflashDecodeQueue.isEmpty
+            || !activeDFlashDecodeRows.isEmpty
     }
 
     public func continuousBatchingStats() -> LagunaContinuousBatchingStats {
@@ -392,6 +422,7 @@ public actor LagunaGenerator: ChatGenerator {
         self.tokenizerAndTemplate = tokenizer
         self.config = config
         self.loadedModelPath = rootURL.path
+        self.loadedTextLoRASignature = nil
 
         if let configuredDFlashPath {
             let dflashRootURL = URL(fileURLWithPath: configuredDFlashPath)
@@ -434,6 +465,37 @@ public actor LagunaGenerator: ChatGenerator {
             dflashModel = nil
             dflashConfig = nil
             loadedDFlashPath = nil
+        }
+    }
+
+    private func applyTextLoRAIfNeeded(
+        _ lora: LoRA?,
+        progressHandler: (@Sendable (ChatProgress) -> Void)?
+    ) async throws {
+        guard let lora else {
+            loadedTextLoRASignature = nil
+            return
+        }
+        let signature = Self.loraSignature(lora)
+        guard loadedTextLoRASignature != signature else { return }
+        guard let model else {
+            throw LagunaError.modelNotLoaded
+        }
+        progressHandler?(ChatProgress(
+            stage: .loadingModel,
+            message: "Loading Laguna text LoRA"
+        ))
+        _ = try await LagunaTextLoRAAdapter.apply(lora, to: model)
+        loadedTextLoRASignature = signature
+    }
+
+    private static func loraSignature(_ lora: LoRA?) -> String? {
+        guard let lora else { return nil }
+        switch lora {
+        case .local(let path, let scale):
+            return "local:\(URL(fileURLWithPath: path).standardizedFileURL.path):\(scale)"
+        case .remote(let reference, let scale):
+            return "remote:\(reference):\(scale)"
         }
     }
 

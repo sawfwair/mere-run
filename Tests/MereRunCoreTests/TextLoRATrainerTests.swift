@@ -102,6 +102,41 @@ final class TextLoRATrainerTests: MereRunCoreTestCase {
         XCTAssertTrue(recorder.savingSeen)
     }
 
+    func testNativeTrainerReportsBeforeAndAfterEvaluationLoss() throws {
+        MLXRandom.seed(31)
+        let model = TinyCausalLM()
+        let layers = try Gemma4TextLoRAInjector.inject(
+            into: model,
+            rank: 2,
+            targetSuffixes: ["proj"]
+        )
+        let example = TextSFTTokenizedExample(
+            inputTokenIds: [0, 1, 2],
+            labelTokenIds: [1, 2, 3],
+            lossMask: [0, 1, 1]
+        )
+
+        let report = try TextLoRATrainer.train(
+            model: model,
+            loraLayers: layers,
+            examples: [example],
+            evaluationExamples: [example],
+            config: TextLoRATrainingConfig(
+                trainingSteps: 20,
+                batchSize: 1,
+                learningRate: 0.05
+            )
+        ) { model, inputIds in
+            model(inputIds)
+        }
+
+        let initial = try XCTUnwrap(report.initialEvaluationLoss)
+        let final = try XCTUnwrap(report.finalEvaluationLoss)
+        XCTAssertEqual(report.evaluationExampleCount, 1)
+        XCTAssertEqual(report.evaluationTargetTokenCount, 2)
+        XCTAssertLessThan(final, initial)
+    }
+
     func testNativeTrainerRunsOnTinyGemma4TextModel() throws {
         let config = try tinyGemma4TextConfig()
         let model = Gemma4TextCausalLM(config: config)

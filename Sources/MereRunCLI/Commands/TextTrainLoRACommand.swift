@@ -8,7 +8,8 @@ struct TextTrainLoRA: AsyncParsableCommand {
         abstract: "Train a native text LoRA adapter from chat-style SFT JSONL.",
         discussion: """
         This is the native mere.run text fine-tuning entrypoint. It accepts OpenAI-style chat
-        JSONL records with system/user/assistant messages and writes MereRun adapter metadata.
+        JSONL records with system/user/assistant messages and trains Gemma 4 or Laguna XS 2.1.
+        It writes a model-family-specific MereRun adapter manifest beside the safetensors file.
         Use --dry-run to validate data, create manifests, and prepare a reproducible run.
         """
     )
@@ -25,7 +26,10 @@ struct TextTrainLoRA: AsyncParsableCommand {
     @Option(name: [.customLong("model-path")], help: "Optional explicit base model directory.")
     var modelPath: String?
 
-    @Option(name: [.customLong("eval")], help: "Optional eval prompts JSONL path.")
+    @Option(
+        name: [.customLong("eval")],
+        help: "Optional held-out SFT JSONL path for before/after assistant-token loss."
+    )
     var eval: String?
 
     @Option(name: [.customLong("adapter-name")], help: "Adapter display name.")
@@ -69,15 +73,21 @@ struct TextTrainLoRA: AsyncParsableCommand {
 
     func run() async throws {
         try validateOptions()
-        guard Gemma4Resources.handles(modelSpec: model) else {
-            throw ValidationError("--model must be a Gemma4 text model id for native text LoRA training.")
+        let family = try resolvedTrainingFamily()
+        if !dryRun {
+            try MLXBundleSupport.ensureAvailable(quiet: json)
         }
 
         let dataURL = URL(fileURLWithPath: data).standardizedFileURL
         let outputURL = URL(fileURLWithPath: output).standardizedFileURL
         let examples = try TextSFTDataset.load(from: dataURL)
+        let evaluationExamples = try eval.map {
+            try TextSFTDataset.load(
+                from: URL(fileURLWithPath: $0).standardizedFileURL
+            )
+        } ?? []
         let summary = TextSFTDataset.summarize(examples)
-        let evalCount = try eval.map { try Self.countJSONLLines(URL(fileURLWithPath: $0).standardizedFileURL) }
+        let evalCount = eval == nil ? nil : evaluationExamples.count
         try FileManager.default.createDirectory(
             at: outputURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
@@ -93,30 +103,58 @@ struct TextTrainLoRA: AsyncParsableCommand {
         var report: TextLoRATrainingReport?
         do {
             if !dryRun {
-                report = try await Gemma4TextLoRATrainingPipeline.train(
-                    Gemma4TextLoRATrainingPipelineRequest(
-                        modelId: model,
-                        modelPath: modelPath,
-                        examples: examples,
-                        outputURL: outputURL,
-                        trainingConfig: TextLoRATrainingConfig(
-                            trainingSteps: trainingSteps,
-                            batchSize: batchSize,
-                            learningRate: learningRate,
-                            seed: seed
-                        ),
-                        maxSequenceLength: maxSequenceLength,
-                        rank: rank,
-                        alpha: alpha ?? Float(rank),
-                        targetSuffixes: resolvedTargetModules(),
-                        metadata: [
-                            "adapter_name": adapterName,
-                            "dataset_fingerprint": summary.fingerprint,
-                        ]
-                    ),
-                    progressHandler: makeChatProgressHandler(eventLogger: visualization?.logger),
-                    trainingProgressHandler: makeTrainingProgressHandler(eventLogger: visualization?.logger)
+                let config = TextLoRATrainingConfig(
+                    trainingSteps: trainingSteps,
+                    batchSize: batchSize,
+                    learningRate: learningRate,
+                    seed: seed
                 )
+                let metadata = [
+                    "adapter_name": adapterName,
+                    "dataset_fingerprint": summary.fingerprint,
+                ]
+                switch family {
+                case .gemma4:
+                    report = try await Gemma4TextLoRATrainingPipeline.train(
+                        Gemma4TextLoRATrainingPipelineRequest(
+                            modelId: model,
+                            modelPath: modelPath,
+                            examples: examples,
+                            evaluationExamples: evaluationExamples,
+                            outputURL: outputURL,
+                            trainingConfig: config,
+                            maxSequenceLength: maxSequenceLength,
+                            rank: rank,
+                            alpha: alpha ?? Float(rank),
+                            targetSuffixes: resolvedTargetModules(),
+                            metadata: metadata
+                        ),
+                        progressHandler: makeChatProgressHandler(eventLogger: visualization?.logger),
+                        trainingProgressHandler: makeTrainingProgressHandler(eventLogger: visualization?.logger)
+                    )
+                case .lagunaXS:
+                    report = try await LagunaTextLoRATrainingPipeline.train(
+                        LagunaTextLoRATrainingPipelineRequest(
+                            modelId: model,
+                            modelPath: modelPath,
+                            examples: examples,
+                            evaluationExamples: evaluationExamples,
+                            outputURL: outputURL,
+                            trainingConfig: config,
+                            maxSequenceLength: maxSequenceLength,
+                            rank: rank,
+                            alpha: alpha ?? Float(rank),
+                            targetSuffixes: resolvedTargetModules(),
+                            metadata: metadata
+                        ),
+                        progressHandler: makeChatProgressHandler(
+                            eventLogger: visualization?.logger
+                        ),
+                        trainingProgressHandler: makeTrainingProgressHandler(
+                            eventLogger: visualization?.logger
+                        )
+                    )
+                }
             }
         } catch {
             try? visualization?.logger.record(
@@ -129,6 +167,7 @@ struct TextTrainLoRA: AsyncParsableCommand {
         }
 
         let manifest = makeManifest(
+            family: family,
             outputURL: outputURL,
             datasetSummary: summary,
             evalPromptCount: evalCount,
@@ -175,6 +214,14 @@ struct TextTrainLoRA: AsyncParsableCommand {
             if let report {
                 let finalLoss = report.finalLoss.map { String($0) } ?? "n/a"
                 print("Training: \(report.steps) steps, \(report.layerCount) LoRA layers, final loss \(finalLoss)")
+                if let initialEvaluationLoss = report.initialEvaluationLoss,
+                   let finalEvaluationLoss = report.finalEvaluationLoss {
+                    print(
+                        "Evaluation: \(report.evaluationExampleCount) examples, "
+                            + "\(report.evaluationTargetTokenCount) assistant tokens, "
+                            + "loss \(initialEvaluationLoss) -> \(finalEvaluationLoss)"
+                    )
+                }
             }
         }
     }
@@ -214,12 +261,14 @@ struct TextTrainLoRA: AsyncParsableCommand {
     }
 
     private func makeManifest(
+        family: NativeTextLoRATrainingFamily,
         outputURL: URL,
         datasetSummary: TextSFTDatasetSummary,
         evalPromptCount: Int?,
         status: String
     ) -> TextLoRATrainingManifest {
         TextLoRATrainingManifest(
+            format: family.manifestFormat,
             baseModel: model,
             outputFile: outputURL.lastPathComponent,
             adapterName: adapterName,
@@ -248,9 +297,17 @@ struct TextTrainLoRA: AsyncParsableCommand {
             .filter { !$0.isEmpty }
     }
 
-    private static func countJSONLLines(_ url: URL) throws -> Int {
-        let text = String(decoding: try Data(contentsOf: url), as: UTF8.self)
-        return text.split(whereSeparator: \.isNewline).filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count
+    private func resolvedTrainingFamily() throws -> NativeTextLoRATrainingFamily {
+        if Gemma4Resources.handles(modelSpec: model),
+           !Gemma4Resources.supportsVision(modelSpec: model) {
+            return .gemma4
+        }
+        if LagunaResources.managedModelID(for: model) == LagunaResources.xsModelID {
+            return .lagunaXS
+        }
+        throw ValidationError(
+            "--model must be a supported Gemma 4 text model or \(LagunaResources.xsModelID)."
+        )
     }
 
     private func startVisualizationIfNeeded(
@@ -315,7 +372,8 @@ struct TextTrainLoRA: AsyncParsableCommand {
         let outputDirectory = outputURL.deletingLastPathComponent()
         let manifestURL = TextLoRATrainingManifest.url(nextTo: outputURL)
         let runManifest = LoRATrainingRunManifest(
-            format: TextLoRATrainingManifest.format,
+            format: (try? resolvedTrainingFamily())?.manifestFormat
+                ?? TextLoRATrainingManifest.format,
             model: model,
             isEdit: false,
             dataRoot: dataURL.path,
@@ -408,6 +466,20 @@ struct TextTrainLoRA: AsyncParsableCommand {
                     fraction: progress.fraction
                 )
             }
+        }
+    }
+}
+
+private enum NativeTextLoRATrainingFamily {
+    case gemma4
+    case lagunaXS
+
+    var manifestFormat: String {
+        switch self {
+        case .gemma4:
+            TextLoRATrainingManifest.gemma4Format
+        case .lagunaXS:
+            TextLoRATrainingManifest.lagunaFormat
         }
     }
 }

@@ -763,7 +763,8 @@ Key options:
 
 ### `mere.run text chat`
 
-Run local text chat with the Gemma 4, Qwen3.6/Bonsai, LFM2, or Psi family.
+Run local text chat with the Gemma 4, Laguna 2.1, Qwen3.6/Bonsai, LFM2, or Psi
+family.
 
 ```bash
 swift run mere.run text chat --prompt "<text>" [options]
@@ -802,6 +803,10 @@ Unless `--quiet` is set, diagnostics on stderr include the selected text
 backend, for example native MLX/Metal for MLX models or llama.cpp/GGUF for GGUF
 models.
 
+`--lora` accepts a compatible local adapter file or cataloged adapter id.
+Native Gemma 4 and Laguna XS 2.1 adapters produced by `text train-lora` load
+directly in their matching runtime; `--lora-scale` scales the adapter.
+
 Examples:
 
 ```bash
@@ -821,6 +826,27 @@ numbers, booleans, and null. It is not JSON Schema or strict structured output.
 The llama.cpp/GGUF Q36 lane used by Linux packages does not yet have a JSON
 grammar and rejects `--response-format json_object`; use native MLX Q36 on
 Apple Silicon for this release.
+
+### `mere.run text train-lora`
+
+Train a native attention LoRA from reviewed chat-style SFT JSONL. Supported
+families are Gemma 4 text models and `text-chat-laguna-xs-2-1`.
+
+```bash
+swift run mere.run text train-lora \
+  --model text-chat-laguna-xs-2-1 \
+  --data ./laguna-xs-sft.jsonl \
+  --output ./laguna-xs-assistant.safetensors \
+  --rank 16 \
+  --training-steps 600
+```
+
+Each non-empty line contains `sources` and at least system, user, and assistant
+messages; the assistant message must be last. `--dry-run --json` validates and
+fingerprints the dataset and writes the family-specific manifest without
+loading the model. The default target modules are
+`q_proj,k_proj,v_proj,o_proj`. See [Text Runtime](/runtime/text) for the full
+dataset, training-artifact, and inference flow.
 
 ### `mere.run text code`
 

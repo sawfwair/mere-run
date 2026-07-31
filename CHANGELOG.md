@@ -8,6 +8,15 @@ The format is based on Keep a Changelog.
 
 ### Changed
 
+- made text LoRA `--eval` measure held-out assistant-token loss before and
+  after optimization instead of only counting JSONL records.
+- extended native `text train-lora` SFT and `text chat --lora` inference to
+  `text-chat-laguna-xs-2-1`, with the released Laguna chat template,
+  assistant-only loss, q/k/v/o attention adapters, family-specific manifests,
+  and correctness-safe invalidation of retained base-only projection layouts.
+  Text training now initializes the verified MLX Metal artifact, uses
+  task-scoped GPU streams, and excludes Laguna's inference-only asynchronous
+  prefill ladder from differentiable graphs.
 - added Poolside's released Laguna XS 2.1 NVFP4 model through its pinned
   MLX-native serialization as the
   opt-in managed model `text-chat-laguna-xs-2-1`, with variant-safe CLI/API
