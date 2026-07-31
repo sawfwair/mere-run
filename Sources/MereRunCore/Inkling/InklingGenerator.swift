@@ -17,6 +17,7 @@ public actor InklingGenerator: ChatGenerator {
     private var tokenizerAndTemplate: InklingTokenizerAndTemplate?
     private var loadedConfig: InklingConfig?
     private var loadedModelPath: String?
+    private var loadedTextLoRASignature: String?
 
     public init(modelID: String = InklingResources.modelID) {
         self.modelID = modelID
@@ -37,7 +38,12 @@ public actor InklingGenerator: ChatGenerator {
         try await Stream.withNewDefaultStream {
             let root = try await resolveModelRoot(modelPath: modelPath, progressHandler: progressHandler)
             let loadStart = Date()
+            let requestedLoRASignature = Self.loraSignature(request.lora)
+            if loadedTextLoRASignature != requestedLoRASignature {
+                resetLoadedModel()
+            }
             try await ensureLoaded(rootURL: root, progressHandler: progressHandler)
+            try await applyTextLoRAIfNeeded(request.lora, progressHandler: progressHandler)
             let loadSeconds = Date().timeIntervalSince(loadStart)
             var response = try await generate(request, progressHandler: progressHandler)
             if var timing = response.timing {
@@ -61,11 +67,16 @@ public actor InklingGenerator: ChatGenerator {
     }
 
     public func unload() {
+        resetLoadedModel()
+        Memory.clearCache()
+    }
+
+    private func resetLoadedModel() {
         model = nil
         tokenizerAndTemplate = nil
         loadedConfig = nil
         loadedModelPath = nil
-        Memory.clearCache()
+        loadedTextLoRASignature = nil
     }
 
     private func ensureLoaded(
@@ -76,72 +87,16 @@ public actor InklingGenerator: ChatGenerator {
         if loadedModelPath == normalized.path, model != nil, tokenizerAndTemplate != nil {
             return
         }
-        let missing = InklingResources.validate(rootURL: normalized)
-        guard missing.isEmpty else {
-            throw InklingError.missingFiles(missing.map(\.path))
-        }
-
-        progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Inkling config"))
-        let config = try JSONDecoder().decode(
-            InklingConfig.self,
-            from: Data(contentsOf: normalized.appendingPathComponent("config.json"))
+        let loaded = try await InklingTextModelLoader.load(
+            rootURL: normalized,
+            maxContextLength: InklingResources.defaultContextLength,
+            progressHandler: progressHandler
         )
-        guard config.quantization?.bits == InklingResources.quantizationBits,
-              config.quantization?.groupSize == InklingResources.quantizationGroupSize,
-              config.quantization?.mode == InklingResources.quantizationMode,
-              config.quantization?.scope == InklingResources.quantizationScope else {
-            throw InklingError.generationFailed(
-                "Inkling artifact must use affine 2-bit/group-128 routed experts with BF16 non-routed weights."
-            )
-        }
-
-        progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Inkling tokenizer"))
-        let tokenizer = try await InklingTokenizerAndTemplate.load(
-            from: normalized,
-            maxLengthOverride: min(
-                InklingResources.defaultContextLength,
-                config.textConfig.modelMaxLength
-            )
-        )
-
-        progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Inkling weights"))
-        let languageModel = InklingLanguageModel(config: config)
-        let index = normalized.appendingPathComponent("model.safetensors.index.json")
-        let single = normalized.appendingPathComponent("model.safetensors")
-        let groupSize = config.quantization?.groupSize ?? InklingResources.quantizationGroupSize
-        let bits = config.quantization?.bits ?? InklingResources.quantizationBits
-        if FileManager.default.fileExists(atPath: index.path) {
-            try HFSafetensorsWeightsLoader.applyQuantizedWeights(
-                indexURL: index,
-                to: languageModel,
-                groupSize: groupSize,
-                bits: bits,
-                keyMapper: InklingResources.mapWeightKey,
-                mapper: InklingResources.mapWeight(key:value:),
-                progressHandler: { progress in
-                    progressHandler?(ChatProgress(
-                        stage: .loadingModel,
-                        message: "Loading Inkling shard \(progress.shardIndex + 1)/\(progress.shardCount)"
-                    ))
-                }
-            )
-        } else {
-            let arrays = try MLX.loadArrays(url: single)
-            try HFSafetensorsWeightsLoader.applyQuantizedWeightsFromArrays(
-                arrays,
-                to: languageModel,
-                groupSize: groupSize,
-                bits: bits,
-                keyMapper: InklingResources.mapWeightKey,
-                mapper: InklingResources.mapWeight(key:value:)
-            )
-        }
-
-        try Task.checkCancellation()
-        model = languageModel
-        tokenizerAndTemplate = tokenizer
-        loadedConfig = config
+        model = loaded.model
+        tokenizerAndTemplate = loaded.tokenizerAndTemplate
+        loadedConfig = loaded.config
         loadedModelPath = normalized.path
+        loadedTextLoRASignature = nil
     }
 
     private func generate(
@@ -150,9 +105,6 @@ public actor InklingGenerator: ChatGenerator {
     ) async throws -> ChatResponse {
         guard let model, let tokenizerAndTemplate, let loadedConfig else {
             throw InklingError.modelNotLoaded
-        }
-        guard request.lora == nil else {
-            throw InklingError.generationFailed("Inkling LoRA loading is not yet supported.")
         }
         guard !request.requiresJSON else {
             throw InklingError.generationFailed("Inkling constrained JSON generation is not yet supported.")
@@ -173,7 +125,7 @@ public actor InklingGenerator: ChatGenerator {
             messages: request.messages,
             tools: request.tools,
             addGenerationPrompt: true,
-            reasoningEffort: 0.9,
+            reasoningEffort: request.reasoningEffort ?? 0.9,
             maxLength: effectiveContext
         )
         if promptTokens.count > effectiveContext {
@@ -340,6 +292,37 @@ public actor InklingGenerator: ChatGenerator {
                 attention = KVCacheSimple(step: 256)
             }
             return InklingLayerCache(attention: attention)
+        }
+    }
+
+    private func applyTextLoRAIfNeeded(
+        _ lora: LoRA?,
+        progressHandler: (@Sendable (ChatProgress) -> Void)?
+    ) async throws {
+        guard let lora else {
+            loadedTextLoRASignature = nil
+            return
+        }
+        let signature = Self.loraSignature(lora)
+        guard loadedTextLoRASignature != signature else { return }
+        guard let model else {
+            throw InklingError.modelNotLoaded
+        }
+        progressHandler?(ChatProgress(
+            stage: .loadingModel,
+            message: "Loading Inkling text LoRA"
+        ))
+        _ = try await InklingTextLoRAAdapter.apply(lora, to: model)
+        loadedTextLoRASignature = signature
+    }
+
+    private static func loraSignature(_ lora: LoRA?) -> String? {
+        guard let lora else { return nil }
+        switch lora {
+        case .local(let path, let scale):
+            return "local:\(URL(fileURLWithPath: path).standardizedFileURL.path):\(scale)"
+        case .remote(let reference, let scale):
+            return "remote:\(reference):\(scale)"
         }
     }
 

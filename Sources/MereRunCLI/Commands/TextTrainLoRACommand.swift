@@ -8,7 +8,8 @@ struct TextTrainLoRA: AsyncParsableCommand {
         abstract: "Train a native text LoRA adapter from chat-style SFT JSONL.",
         discussion: """
         This is the native mere.run text fine-tuning entrypoint. It accepts OpenAI-style chat
-        JSONL records with system/user/assistant messages and trains Gemma 4 or Laguna XS 2.1.
+        JSONL records with system/user/assistant messages and trains Gemma 4, Laguna XS 2.1,
+        or Inkling-Small.
         It writes a model-family-specific MereRun adapter manifest beside the safetensors file.
         Use --dry-run to validate data, create manifests, and prepare a reproducible run.
         """
@@ -53,11 +54,20 @@ struct TextTrainLoRA: AsyncParsableCommand {
     @Option(name: [.customLong("max-sequence-length")], help: "Maximum training sequence length.")
     var maxSequenceLength: Int = 4096
 
+    @Option(
+        name: [.customLong("reasoning-effort")],
+        help: "Inkling-Small renderer effort from 0 through 0.99. Default: 0.9."
+    )
+    var reasoningEffort: Double = 0.9
+
     @Option(name: [.long], help: "Random seed.")
     var seed: UInt64 = 42
 
-    @Option(name: [.customLong("target-modules")], help: "Comma-separated LoRA target suffixes.")
-    var targetModules: String = "q_proj,k_proj,v_proj,o_proj"
+    @Option(
+        name: [.customLong("target-modules")],
+        help: "Comma-separated LoRA target suffixes. Defaults to attention for Gemma/Laguna and attention, MLP, experts, and unembedding for Inkling."
+    )
+    var targetModules: String?
 
     @Flag(name: [.customLong("dry-run")], help: "Validate data and write manifests without optimizer steps.")
     var dryRun: Bool = false
@@ -142,6 +152,29 @@ struct TextTrainLoRA: AsyncParsableCommand {
                             outputURL: outputURL,
                             trainingConfig: config,
                             maxSequenceLength: maxSequenceLength,
+                            rank: rank,
+                            alpha: alpha ?? Float(rank),
+                            targetSuffixes: resolvedTargetModules(),
+                            metadata: metadata
+                        ),
+                        progressHandler: makeChatProgressHandler(
+                            eventLogger: visualization?.logger
+                        ),
+                        trainingProgressHandler: makeTrainingProgressHandler(
+                            eventLogger: visualization?.logger
+                        )
+                    )
+                case .inkling:
+                    report = try await InklingTextLoRATrainingPipeline.train(
+                        InklingTextLoRATrainingPipelineRequest(
+                            modelId: model,
+                            modelPath: modelPath,
+                            examples: examples,
+                            evaluationExamples: evaluationExamples,
+                            outputURL: outputURL,
+                            trainingConfig: config,
+                            maxSequenceLength: maxSequenceLength,
+                            reasoningEffort: reasoningEffort,
                             rank: rank,
                             alpha: alpha ?? Float(rank),
                             targetSuffixes: resolvedTargetModules(),
@@ -247,6 +280,9 @@ struct TextTrainLoRA: AsyncParsableCommand {
         guard maxSequenceLength >= 128 else {
             throw ValidationError("--max-sequence-length must be >= 128")
         }
+        guard (0...0.99).contains(reasoningEffort) else {
+            throw ValidationError("--reasoning-effort must be between 0 and 0.99")
+        }
         guard !resolvedTargetModules().isEmpty else {
             throw ValidationError("--target-modules must include at least one target suffix")
         }
@@ -277,6 +313,7 @@ struct TextTrainLoRA: AsyncParsableCommand {
                 batchSize: batchSize,
                 learningRate: learningRate,
                 maxSequenceLength: maxSequenceLength,
+                reasoningEffort: family == .inkling ? reasoningEffort : nil,
                 seed: seed,
                 dataset: datasetSummary
             ),
@@ -290,11 +327,19 @@ struct TextTrainLoRA: AsyncParsableCommand {
         )
     }
 
-    private func resolvedTargetModules() -> [String] {
-        targetModules
+    func resolvedTargetModules() -> [String] {
+        let value = targetModules ?? Self.defaultTargetModules(for: model).joined(separator: ",")
+        return value
             .split(separator: ",")
             .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty }
+    }
+
+    static func defaultTargetModules(for model: String) -> [String] {
+        if InklingResources.handles(modelSpec: model) {
+            return InklingTextLoRAInjector.defaultTargetSuffixes
+        }
+        return ["q_proj", "k_proj", "v_proj", "o_proj"]
     }
 
     private func resolvedTrainingFamily() throws -> NativeTextLoRATrainingFamily {
@@ -305,8 +350,11 @@ struct TextTrainLoRA: AsyncParsableCommand {
         if LagunaResources.managedModelID(for: model) == LagunaResources.xsModelID {
             return .lagunaXS
         }
+        if InklingResources.handles(modelSpec: model) {
+            return .inkling
+        }
         throw ValidationError(
-            "--model must be a supported Gemma 4 text model or \(LagunaResources.xsModelID)."
+            "--model must be a supported Gemma 4 text model, \(LagunaResources.xsModelID), or \(InklingResources.modelID)."
         )
     }
 
@@ -400,6 +448,7 @@ struct TextTrainLoRA: AsyncParsableCommand {
                 String(rank),
                 String(alpha ?? Float(rank)),
                 String(maxSequenceLength),
+                String(reasoningEffort),
                 resolvedTargetModules().joined(separator: ","),
             ].joined(separator: "\n")),
             configSnapshot: [
@@ -411,6 +460,7 @@ struct TextTrainLoRA: AsyncParsableCommand {
                 "lora_alpha": String(alpha ?? Float(rank)),
                 "lora_rank": String(rank),
                 "max_sequence_length": String(maxSequenceLength),
+                "reasoning_effort": String(reasoningEffort),
                 "status": status,
                 "target_modules": resolvedTargetModules().joined(separator: ","),
                 "training_steps": String(trainingSteps),
@@ -473,6 +523,7 @@ struct TextTrainLoRA: AsyncParsableCommand {
 private enum NativeTextLoRATrainingFamily {
     case gemma4
     case lagunaXS
+    case inkling
 
     var manifestFormat: String {
         switch self {
@@ -480,6 +531,8 @@ private enum NativeTextLoRATrainingFamily {
             TextLoRATrainingManifest.gemma4Format
         case .lagunaXS:
             TextLoRATrainingManifest.lagunaFormat
+        case .inkling:
+            TextLoRATrainingManifest.inklingFormat
         }
     }
 }

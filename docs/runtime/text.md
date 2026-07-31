@@ -353,11 +353,11 @@ runtime. `--dry-run` validates the dataset, fingerprints it, validates and
 counts an optional held-out SFT dataset, and writes a `.manifest.json` next to
 the requested adapter path.
 
-Without `--dry-run`, the command resolves a supported Gemma 4 text model or
-`text-chat-laguna-xs-2-1` through the same managed model store as chat, applies
-that family's released chat template, masks loss to assistant tokens, injects
-native LoRA layers into attention projections, and writes a `.safetensors`
-adapter plus a family-specific manifest. Add
+Without `--dry-run`, the command resolves a supported Gemma 4 text model,
+`text-chat-laguna-xs-2-1`, or `text-chat-inkling-small` through the same managed
+model store as chat, applies that family's released chat template, masks loss
+to assistant tokens, injects native LoRA layers into the family-specific target
+surface, and writes a `.safetensors` adapter plus a family-specific manifest. Add
 `--visualize` to start the same loopback LoRA training dashboard used by image
 training; text runs write `run.json`, `*.events.jsonl`, `*.loss.csv`, and
 `*.loss.html` beside the adapter so loss and training events can be inspected
@@ -379,9 +379,11 @@ Core hyperparameters (defaults are tuned for local Gemma4 SFT):
 - `--rank` — LoRA rank (default `16`)
 - `--alpha` — LoRA alpha (defaults to the rank)
 - `--max-sequence-length` — maximum training sequence length (default `4096`)
+- `--reasoning-effort` — Inkling renderer effort from `0` through `0.99`
+  (default `0.9`; use the same value for inference)
 - `--seed` — random seed (default `42`)
-- `--target-modules` — comma-separated LoRA target suffixes (default
-  `q_proj,k_proj,v_proj,o_proj`)
+- `--target-modules` — comma-separated LoRA target suffixes (Gemma/Laguna
+  default to q/k/v/o attention; Inkling also defaults to MLPs and `lm_head`)
 - `--adapter-name` — adapter display name (default `local-assistant`)
 
 This list is deliberately not exhaustive; run
@@ -434,6 +436,61 @@ Laguna training defaults to q/k/v/o attention projections and writes
 adapter discards retained base-only QKV side layouts before generation so the
 LoRA cannot be bypassed. Switching or removing an adapter reloads the base
 model and is rejected while a continuous batch is active.
+
+Inkling-Small uses the same assistant-only dataset and held-out evaluation
+surface. Its native lane keeps the mixed checkpoint intact: routed experts
+remain affine 2-bit/group-128, non-routed weights remain BF16, and only q/k/v/o
+attention, gate/up/down MLP, and `lm_head` LoRA parameters are optimized. The
+expert adapters use shared-outer factors: the hidden-dimension factor is shared
+across experts while the expert-intermediate factor remains expert-specific.
+
+```bash
+swift run mere.run text train-lora \
+  --data ./pairs.seed.jsonl \
+  --eval ./eval.prompts.jsonl \
+  --output ./inkling-assistant.safetensors \
+  --model text-chat-inkling-small \
+  --reasoning-effort 0.2
+
+swift run mere.run text chat \
+  --model text-chat-inkling-small \
+  --lora ./inkling-assistant.safetensors \
+  --reasoning-effort 0.2 \
+  --prompt "What should this local assistant know?"
+```
+
+Inkling adapters write `mererun.inkling.text-lora` in their manifest. The
+training graph uses a differentiable MLX mask path and treats discrete expert
+selection indices as non-differentiable while retaining gradients through the
+selected router scores and quantized expert computation.
+
+Loss improvement is diagnostic, not a behavioral acceptance gate. The repo
+includes a deterministic codebook task with 32 train examples and four unseen
+paraphrases. The following proven recipe covers 12 complete shuffled epochs
+using balanced batch-4 updates, then requires the adapter to answer all
+held-out cases exactly while improving by at least three cases over the base
+model:
+
+```bash
+swift run mere.run text train-lora \
+  --model text-chat-inkling-small \
+  --data Tests/MereRunCLITests/Fixtures/Inkling/receptivity-train.jsonl \
+  --eval Tests/MereRunCLITests/Fixtures/Inkling/receptivity-eval.jsonl \
+  --output .build/inkling-receptivity.safetensors \
+  --reasoning-effort 0.2 --rank 4 --alpha 4 \
+  --training-steps 96 --batch-size 4 --max-sequence-length 128
+
+scripts/eval-inkling-receptivity.py \
+  --model-root /path/to/Inkling-Small-MLX-Mixed-2bit \
+  --adapter .build/inkling-receptivity.safetensors \
+  --output .build/inkling-receptivity-report.json
+```
+
+The implementation validation on the pinned affine-q2/group-128 artifact used
+that recipe on a 128 GB Apple Silicon machine. It measured a 110.2 GB peak,
+held-out loss `4.4072 -> 0.0302`, and exact behavior `0/4 -> 4/4`. The gate
+report records hashes for the CLI, model config, and adapter; those results
+demonstrate this deterministic receptivity task, not broad downstream quality.
 
 ## Runtime entrypoints
 
@@ -496,9 +553,11 @@ plain redacted text or structured JSON spans.
 
 ### `mere.run text train-lora`
 
-Use this to prepare and train Gemma-family or Laguna XS 2.1 text LoRA adapters
-from reviewed chat SFT data. The Laguna lane is
-`text-chat-laguna-xs-2-1`; Laguna S and DFlash are inference-only here.
+Use this to prepare and train Gemma-family, Laguna XS 2.1, or Inkling-Small text
+LoRA adapters from reviewed chat SFT data. The Laguna lane is
+`text-chat-laguna-xs-2-1`; Laguna S and DFlash are inference-only here. The
+Inkling lane is `text-chat-inkling-small` and trains against its pinned native
+mixed-precision MLX artifact.
 
 ## Reading the code
 

@@ -806,8 +806,9 @@ backend, for example native MLX/Metal for MLX models or llama.cpp/GGUF for GGUF
 models.
 
 `--lora` accepts a compatible local adapter file or cataloged adapter id.
-Native Gemma 4 and Laguna XS 2.1 adapters produced by `text train-lora` load
-directly in their matching runtime; `--lora-scale` scales the adapter.
+Native Gemma 4, Laguna XS 2.1, and Inkling-Small adapters produced by
+`text train-lora` load directly in their matching runtime; `--lora-scale`
+scales the adapter.
 
 Examples:
 
@@ -819,6 +820,7 @@ swift run mere.run text chat --model text-chat-inkling-small --context-size 3276
 swift run mere.run text chat --model text-chat-q36-nano --prompt "Explain speculative decoding."
 swift run mere.run text chat --model text-chat-q36-nano --response-format json_object --prompt 'Return an object with a name and an array of tags.'
 swift run mere.run text chat --model text-agent-ornith-9b --prompt "Write a compact Swift slugify helper."
+swift run mere.run text chat --model text-chat-inkling-small --reasoning-effort 0.2 --prompt "Answer directly."
 swift run mere.run text chat --model text-chat-lfm25-a1b-8bit --prompt "Summarize LFM2 in one paragraph."
 swift run mere.run text chat --stream --prompt "Write a short welcome message."
 swift run mere.run text chat --thinking --stats --prompt "How would you design a tokenizer?"
@@ -832,14 +834,17 @@ Apple Silicon for this release.
 
 ### `mere.run text train-lora`
 
-Train a native attention LoRA from reviewed chat-style SFT JSONL. Supported
-families are Gemma 4 text models and `text-chat-laguna-xs-2-1`.
+Train a native LoRA from reviewed chat-style SFT JSONL. Supported
+families are Gemma 4 text models, `text-chat-laguna-xs-2-1`, and
+`text-chat-inkling-small`.
 
 ```bash
 swift run mere.run text train-lora \
-  --model text-chat-laguna-xs-2-1 \
-  --data ./laguna-xs-sft.jsonl \
-  --output ./laguna-xs-assistant.safetensors \
+  --model text-chat-inkling-small \
+  --data ./inkling-sft.jsonl \
+  --eval ./inkling-heldout.jsonl \
+  --output ./inkling-assistant.safetensors \
+  --reasoning-effort 0.2 \
   --rank 16 \
   --training-steps 600
 ```
@@ -847,9 +852,13 @@ swift run mere.run text train-lora \
 Each non-empty line contains `sources` and at least system, user, and assistant
 messages; the assistant message must be last. `--dry-run --json` validates and
 fingerprints the dataset and writes the family-specific manifest without
-loading the model. The default target modules are
-`q_proj,k_proj,v_proj,o_proj`. See [Text Runtime](/runtime/text) for the full
-dataset, training-artifact, and inference flow.
+loading the model. Gemma 4 and Laguna default to
+`q_proj,k_proj,v_proj,o_proj`. Inkling defaults to those attention projections
+plus `gate_proj,up_proj,down_proj,lm_head`; expert MLPs use shared-outer factors
+to keep the 256-expert adapter tractable. Inkling `--reasoning-effort` accepts
+0 through 0.99 and is recorded in the training manifest. Use the same value for
+inference. See [Text Runtime](/runtime/text) for the full dataset,
+training-artifact, and behavioral validation flow.
 
 ### `mere.run text code`
 

@@ -1049,7 +1049,7 @@ public enum ManagedModelCatalog {
             validationKind: .inkling,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: InklingResources.estimatedDownloadBytes,
-            defaultCLICommands: ["text chat"]
+            defaultCLICommands: ["text chat", "text train-lora"]
         ),
         ManagedModelSpec(
             id: Q35Resources.q36NanoModelId,

@@ -53,6 +53,10 @@ public final class InklingTokenizerAndTemplate: @unchecked Sendable {
         tokenizer.decode(tokens: tokens)
     }
 
+    public func encodeRaw(_ text: String, addSpecialTokens: Bool = false) -> [Int] {
+        tokenizer.encode(text: text, addSpecialTokens: addSpecialTokens)
+    }
+
     public func decode(token: Int) -> String {
         tokenizer.decode(tokens: [token])
     }

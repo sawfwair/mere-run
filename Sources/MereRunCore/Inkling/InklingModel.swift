@@ -78,7 +78,8 @@ private enum InklingBandedMask {
         queryOffset: Int,
         keyLength: Int,
         slidingWindow: Int,
-        relativeExtent: Int
+        relativeExtent: Int,
+        useCustomKernel: Bool = true
     ) -> MLXArray {
         let batch = relative.dim(0)
         let queryLength = relative.dim(1)
@@ -86,7 +87,7 @@ private enum InklingBandedMask {
         let relativeDimensions = relative.dim(3)
 
         #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
-        if Device.defaultDevice().deviceType == .gpu {
+        if useCustomKernel, Device.defaultDevice().deviceType == .gpu {
             let roundUp: (Int, Int) -> Int = { value, multiple in
                 ((value + multiple - 1) / multiple) * multiple
             }
@@ -242,7 +243,11 @@ final class InklingAttention: Module {
         super.init()
     }
 
-    func callAsFunction(_ x: MLXArray, cache: InklingLayerCache?) -> MLXArray {
+    func callAsFunction(
+        _ x: MLXArray,
+        cache: InklingLayerCache?,
+        useCustomMaskKernel: Bool = true
+    ) -> MLXArray {
         let batch = x.dim(0)
         let length = x.dim(1)
         let convolutionCache = cache?.convolution
@@ -267,7 +272,8 @@ final class InklingAttention: Module {
             queryOffset: offset,
             keyLength: keys.dim(2),
             slidingWindow: slidingWindow,
-            relativeExtent: relativeExtent
+            relativeExtent: relativeExtent,
+            useCustomKernel: useCustomMaskKernel
         )
 
         if let logScalingFloor {
@@ -410,7 +416,12 @@ final class InklingSparseMoE: InklingFeedForward {
         let scores = MLX.sigmoid(logits.asType(.float32))
         let routedScores = scores[.ellipsis, ..<routedExpertCount]
             + correctionBias.asType(.float32)
-        let indices = argPartition(-routedScores, kth: topK - 1, axis: -1)[.ellipsis, ..<topK]
+        // Expert selection is discrete. Preserve gradients through the
+        // selected logits, but keep gather kernels from requesting an
+        // undefined gradient with respect to their integer indices.
+        let indices = stopGradient(
+            argPartition(-routedScores, kth: topK - 1, axis: -1)[.ellipsis, ..<topK]
+        )
 
         let routedLogits = logits[.ellipsis, ..<routedExpertCount]
         let sharedLogits = logits[.ellipsis, routedExpertCount...]
@@ -470,8 +481,16 @@ final class InklingDecoderLayer: Module {
         super.init()
     }
 
-    func callAsFunction(_ x: MLXArray, cache: InklingLayerCache?) -> MLXArray {
-        let attentionOutput = attention(inputNorm(x), cache: cache)
+    func callAsFunction(
+        _ x: MLXArray,
+        cache: InklingLayerCache?,
+        useCustomMaskKernel: Bool = true
+    ) -> MLXArray {
+        let attentionOutput = attention(
+            inputNorm(x),
+            cache: cache,
+            useCustomMaskKernel: useCustomMaskKernel
+        )
         let hidden = x + attentionConvolution(attentionOutput, cache: cache?.convolution)
         return hidden + mlpConvolution(mlp(postAttentionNorm(hidden)), cache: cache?.convolution)
     }
@@ -499,7 +518,11 @@ final class InklingTransformer: Module {
         super.init()
     }
 
-    func callAsFunction(_ inputIDs: MLXArray, cache: [InklingLayerCache]?) -> MLXArray {
+    func callAsFunction(
+        _ inputIDs: MLXArray,
+        cache: [InklingLayerCache]?,
+        useCustomMaskKernel: Bool = true
+    ) -> MLXArray {
         var ids = inputIDs
         if ids.dtype != .int32 {
             ids = ids.asType(.int32)
@@ -509,7 +532,11 @@ final class InklingTransformer: Module {
             hidden = embedNorm(hidden)
         }
         for (index, layer) in layers.enumerated() {
-            hidden = layer(hidden, cache: cache?[index])
+            hidden = layer(
+                hidden,
+                cache: cache?[index],
+                useCustomMaskKernel: useCustomMaskKernel
+            )
         }
         return norm(hidden)
     }
@@ -537,8 +564,16 @@ public final class InklingLanguageModel: Module, @unchecked Sendable {
         super.init()
     }
 
-    func forward(_ inputIDs: MLXArray, cache: [InklingLayerCache]?) -> InklingForwardOutput {
-        let hidden = model(inputIDs, cache: cache)
+    func forward(
+        _ inputIDs: MLXArray,
+        cache: [InklingLayerCache]?,
+        useCustomMaskKernel: Bool = true
+    ) -> InklingForwardOutput {
+        let hidden = model(
+            inputIDs,
+            cache: cache,
+            useCustomMaskKernel: useCustomMaskKernel
+        )
         return InklingForwardOutput(hidden: hidden, logits: logits(from: hidden))
     }
 
@@ -552,6 +587,37 @@ public final class InklingLanguageModel: Module, @unchecked Sendable {
 
     public func callAsFunction(_ inputIDs: MLXArray, cache: [InklingLayerCache]?) -> MLXArray {
         forward(inputIDs, cache: cache).logits
+    }
+
+    /// Project only assistant-token positions through the large vocabulary
+    /// head while preserving the full differentiable Inkling graph.
+    func trainingLogits(
+        inputIDs: MLXArray,
+        flatTargetPositions: MLXArray
+    ) -> MLXArray {
+        let hidden = model(
+            inputIDs,
+            cache: nil,
+            useCustomMaskKernel: false
+        )
+        let flattened = hidden.reshaped([-1, hidden.dim(-1)])
+        let selected = take(
+            flattened,
+            flatTargetPositions.asType(.int32),
+            axis: 0
+        )
+        return logits(from: selected)
+    }
+
+    /// Full-vocabulary fallback for training configurations that disable the
+    /// gathered loss. The inference-only Metal mask kernel has no VJP.
+    func trainingForward(_ inputIDs: MLXArray) -> MLXArray {
+        let hidden = model(
+            inputIDs,
+            cache: nil,
+            useCustomMaskKernel: false
+        )
+        return logits(from: hidden)
     }
 
     private func logits(from hidden: MLXArray) -> MLXArray {

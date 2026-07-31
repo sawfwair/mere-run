@@ -21,6 +21,7 @@ final class TextTrainLoRACommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.batchSize, 1)
         XCTAssertEqual(cmd.rank, 16)
         XCTAssertEqual(cmd.maxSequenceLength, 4096)
+        XCTAssertEqual(cmd.reasoningEffort, 0.9)
         XCTAssertFalse(cmd.dryRun)
         XCTAssertFalse(cmd.visualize)
         XCTAssertEqual(cmd.visualizePort, 8787)
@@ -40,6 +41,7 @@ final class TextTrainLoRACommandParsingTests: XCTestCase {
             "--rank", "8",
             "--alpha", "16",
             "--max-sequence-length", "2048",
+            "--reasoning-effort", "0.2",
             "--target-modules", "q_proj,v_proj",
             "--visualize",
             "--visualize-port", "8788",
@@ -57,6 +59,7 @@ final class TextTrainLoRACommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.rank, 8)
         XCTAssertEqual(cmd.alpha, 16)
         XCTAssertEqual(cmd.maxSequenceLength, 2048)
+        XCTAssertEqual(cmd.reasoningEffort, 0.2)
         XCTAssertTrue(cmd.visualize)
         XCTAssertEqual(cmd.visualizePort, 8788)
         XCTAssertTrue(cmd.dryRun)
@@ -71,6 +74,46 @@ final class TextTrainLoRACommandParsingTests: XCTestCase {
         ])
 
         XCTAssertEqual(cmd.model, LagunaResources.xsModelID)
-        XCTAssertEqual(cmd.targetModules, "q_proj,k_proj,v_proj,o_proj")
+        XCTAssertEqual(cmd.resolvedTargetModules(), ["q_proj", "k_proj", "v_proj", "o_proj"])
+    }
+
+    func testTrainLoRAParsesInklingSmallModel() throws {
+        let cmd = try TextTrainLoRA.parse([
+            "--data", "pairs.jsonl",
+            "--output", "inkling-support.safetensors",
+            "--model", InklingResources.modelID,
+        ])
+
+        XCTAssertEqual(cmd.model, InklingResources.modelID)
+        XCTAssertEqual(
+            cmd.resolvedTargetModules(),
+            ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj", "lm_head"]
+        )
+    }
+
+    func testInklingReceptivityFixturesAreHeldOutParaphrases() throws {
+        let fixtureRoot = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent()
+            .appendingPathComponent("Fixtures/Inkling")
+        let training = try TextSFTDataset.load(
+            from: fixtureRoot.appendingPathComponent("receptivity-train.jsonl")
+        )
+        let evaluation = try TextSFTDataset.load(
+            from: fixtureRoot.appendingPathComponent("receptivity-eval.jsonl")
+        )
+        let trainingPrompts = Set(training.compactMap {
+            $0.messages.first(where: { $0.role == .user })?.content
+        })
+        let evaluationPrompts = Set(evaluation.compactMap {
+            $0.messages.first(where: { $0.role == .user })?.content
+        })
+
+        XCTAssertEqual(training.count, 32)
+        XCTAssertEqual(evaluation.count, 4)
+        XCTAssertTrue(trainingPrompts.isDisjoint(with: evaluationPrompts))
+        XCTAssertEqual(
+            Set(evaluation.compactMap { $0.messages.last?.content }),
+            ["KITE-731", "MOSS-284", "LARK-956", "PINE-407"]
+        )
     }
 }
