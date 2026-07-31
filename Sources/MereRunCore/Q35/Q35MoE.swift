@@ -25,7 +25,7 @@ enum Q35FusedSwitchGLUPolicy {
     }()
 }
 
-final class Q35SwitchLinear: Module {
+class Q35SwitchLinear: Module {
     @ModuleInfo(key: "weight") var weight: MLXArray
     @ModuleInfo(key: "scales") var scales: MLXArray?
     @ModuleInfo(key: "biases") var biases: MLXArray?
@@ -70,6 +70,23 @@ final class Q35SwitchLinear: Module {
         if bias {
             self._bias.wrappedValue = MLXArray.zeros([numExperts, outputDims])
         }
+        super.init()
+    }
+
+    init(
+        weight: MLXArray,
+        scales: MLXArray?,
+        biases: MLXArray?,
+        bias: MLXArray?,
+        groupSize: Int,
+        bits: Int
+    ) {
+        self.groupSize = groupSize
+        self.bits = bits
+        self._weight.wrappedValue = weight
+        self._scales.wrappedValue = scales
+        self._biases.wrappedValue = biases
+        self._bias.wrappedValue = bias
         super.init()
     }
 

@@ -1,8 +1,9 @@
 import MLX
+import MLXRandom
 import XCTest
 @testable import MereRunCore
 
-final class InklingTests: XCTestCase {
+final class InklingTests: MereRunCoreTestCase {
     func testConfigDecodesOfficialNestedTextShapeAndAffineQuantization() throws {
         let config = try JSONDecoder().decode(InklingConfig.self, from: Data(Self.configJSON.utf8))
 
@@ -115,11 +116,10 @@ final class InklingTests: XCTestCase {
     }
 
     func testTinySparseModelRunsAffineTwoBitExpertPath() throws {
-        let sparseJSON = Self.configJSON.replacingOccurrences(
-            of: #""dense_mlp_idx": 1"#,
-            with: #""dense_mlp_idx": 0"#
+        let config = try JSONDecoder().decode(
+            InklingConfig.self,
+            from: Data(Self.sparseConfigJSON.utf8)
         )
-        let config = try JSONDecoder().decode(InklingConfig.self, from: Data(sparseJSON.utf8))
         let model = InklingLanguageModel(config: config)
 
         let logits = model(MLXArray([Int32(1)]).reshaped(1, 1), cache: [InklingLayerCache()])
@@ -128,12 +128,197 @@ final class InklingTests: XCTestCase {
         XCTAssertEqual(logits.shape, [1, 1, 32])
     }
 
-    func testSparseModelQuantizesOnlyRoutedExperts() throws {
-        let sparseJSON = Self.configJSON.replacingOccurrences(
-            of: #""dense_mlp_idx": 1"#,
-            with: #""dense_mlp_idx": 0"#
+    func testTrainingLogitsMatchFullProjectionAtSelectedPositions() throws {
+        MLXRandom.seed(74)
+        let config = try JSONDecoder().decode(InklingConfig.self, from: Data(Self.configJSON.utf8))
+        let model = InklingLanguageModel(config: config)
+        let input = MLXArray([Int32(1), 2, 3, 4, 5, 6]).reshaped(2, 3)
+        let positions = MLXArray([Int32(1), Int32(3), Int32(5)])
+        let full = model.trainingForward(input).reshaped(-1, config.textConfig.vocabSize)
+        let expected = take(full, positions, axis: 0)
+        let gathered = model.trainingLogits(
+            inputIDs: input,
+            flatTargetPositions: positions
         )
-        let config = try JSONDecoder().decode(InklingConfig.self, from: Data(sparseJSON.utf8))
+        MLX.eval(expected, gathered)
+
+        XCTAssertEqual(gathered.shape, [3, config.textConfig.vocabSize])
+        XCTAssertEqual(
+            MLX.max(MLX.abs(expected - gathered)).item(Float.self),
+            0,
+            accuracy: 1e-6
+        )
+    }
+
+    func testNativeTrainerUpdatesTinkerParityLoRA() throws {
+        MLXRandom.seed(75)
+        let config = try JSONDecoder().decode(InklingConfig.self, from: Data(Self.configJSON.utf8))
+        let model = InklingLanguageModel(config: config)
+        let layers = try InklingTextLoRAInjector.inject(into: model, rank: 2)
+        let inputTokenIDs = (0..<40).map { ($0 % 8) + 1 }
+        let labelTokenIDs = Array(inputTokenIDs.dropFirst()) + [1]
+
+        let report = try TextLoRATrainer.train(
+            model: model,
+            loraLayers: layers,
+            examples: [
+                TextSFTTokenizedExample(
+                    inputTokenIds: inputTokenIDs,
+                    labelTokenIds: labelTokenIDs,
+                    lossMask: [0] + Array(repeating: 1, count: 39)
+                ),
+            ],
+            config: TextLoRATrainingConfig(
+                trainingSteps: 2,
+                batchSize: 1,
+                learningRate: 0.01
+            ),
+            gatheredForward: { model, inputIDs, positions in
+                model.trainingLogits(
+                    inputIDs: inputIDs,
+                    flatTargetPositions: positions
+                )
+            }
+        ) { model, inputIDs in
+            model.trainingForward(inputIDs)
+        }
+
+        XCTAssertEqual(report.steps, 2)
+        XCTAssertEqual(report.layerCount, 8)
+        XCTAssertTrue(report.finalLoss?.isFinite == true)
+        XCTAssertTrue(layers.values.contains {
+            MLX.sum(MLX.abs($0.loraUp)).item(Float.self) > 0
+        })
+    }
+
+    func testNativeTrainerCrossesAffineTwoBitRoutedExperts() throws {
+        MLXRandom.seed(76)
+        let config = try JSONDecoder().decode(
+            InklingConfig.self,
+            from: Data(Self.sparseConfigJSON.utf8)
+        )
+        let model = InklingLanguageModel(config: config)
+        let layers = try InklingTextLoRAInjector.inject(into: model, rank: 2)
+
+        let report = try TextLoRATrainer.train(
+            model: model,
+            loraLayers: layers,
+            examples: [
+                TextSFTTokenizedExample(
+                    inputTokenIds: [1, 2, 3],
+                    labelTokenIds: [2, 3, 4],
+                    lossMask: [0, 1, 1]
+                ),
+            ],
+            config: TextLoRATrainingConfig(
+                trainingSteps: 1,
+                batchSize: 1,
+                learningRate: 0.01
+            ),
+            gatheredForward: { model, inputIDs, positions in
+                model.trainingLogits(
+                    inputIDs: inputIDs,
+                    flatTargetPositions: positions
+                )
+            }
+        ) { model, inputIDs in
+            model.trainingForward(inputIDs)
+        }
+
+        XCTAssertEqual(report.steps, 1)
+        XCTAssertTrue(report.finalLoss?.isFinite == true)
+        let expertLayers = layers.values.compactMap {
+            $0 as? InklingSharedOuterLoRASwitchLinear
+        }
+        XCTAssertEqual(expertLayers.count, 6)
+        XCTAssertTrue(expertLayers.contains {
+            MLX.sum(MLX.abs($0.loraUp)).item(Float.self) > 0
+        })
+    }
+
+    func testDefaultInjectorCoversAttentionMLPExpertsAndUnembedding() throws {
+        let config = try JSONDecoder().decode(
+            InklingConfig.self,
+            from: Data(Self.sparseConfigJSON.utf8)
+        )
+        let model = InklingLanguageModel(config: config)
+
+        let layers = try InklingTextLoRAInjector.inject(into: model, rank: 2)
+        let paths = Set(layers.keys)
+
+        XCTAssertEqual(layers.count, 11)
+        XCTAssertTrue(paths.contains("model.layers.0.self_attn.q_proj"))
+        XCTAssertTrue(paths.contains("model.layers.0.mlp.switch_mlp.gate_proj"))
+        XCTAssertTrue(paths.contains("model.layers.0.mlp.shared_experts.down_proj"))
+        XCTAssertTrue(paths.contains("lm_head"))
+
+        let routedGate = try XCTUnwrap(
+            layers["model.layers.0.mlp.switch_mlp.gate_proj"]
+                as? InklingSharedOuterLoRASwitchLinear
+        )
+        XCTAssertEqual(routedGate.sharedFactor, .input)
+        XCTAssertEqual(routedGate.loraDown.shape, [2, 128])
+        XCTAssertEqual(routedGate.loraUp.shape, [4, 128, 2])
+
+        let routedDown = try XCTUnwrap(
+            layers["model.layers.0.mlp.switch_mlp.down_proj"]
+                as? InklingSharedOuterLoRASwitchLinear
+        )
+        XCTAssertEqual(routedDown.sharedFactor, .output)
+        XCTAssertEqual(routedDown.loraDown.shape, [4, 2, 128])
+        XCTAssertEqual(routedDown.loraUp.shape, [128, 2])
+    }
+
+    func testNativeAdapterRoundTripsIntoRuntimePaths() async throws {
+        MLXRandom.seed(77)
+        let config = try JSONDecoder().decode(InklingConfig.self, from: Data(Self.configJSON.utf8))
+        let source = InklingLanguageModel(config: config)
+        let sourceLayers = try InklingTextLoRAInjector.inject(
+            into: source,
+            rank: 2,
+            alpha: 4
+        )
+        for layer in sourceLayers.values {
+            layer.loraDown = MLXArray.ones(like: layer.loraDown) * 0.125
+            layer.loraUp = MLXArray.ones(like: layer.loraUp) * 0.25
+        }
+
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("inkling-adapter-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let adapterURL = directory.appendingPathComponent("inkling.safetensors")
+        try LoRASafetensorsWriter.save(
+            loraLayers: sourceLayers,
+            to: adapterURL,
+            metadata: ["format": TextLoRATrainingManifest.inklingFormat]
+        )
+
+        MLXRandom.seed(77)
+        let target = InklingLanguageModel(config: config)
+        let input = MLXArray([Int32(1), 2, 3]).reshaped(1, 3)
+        let baseline = target(input, cache: nil)
+        MLX.eval(baseline)
+        let report = try await InklingTextLoRAAdapter.apply(
+            .local(path: adapterURL.path, scale: 1),
+            to: target
+        )
+        let adapted = target(input, cache: nil)
+        MLX.eval(adapted)
+
+        XCTAssertEqual(report.matchedLayerCount, sourceLayers.count)
+        XCTAssertEqual(report.injectedLayerCount, sourceLayers.count)
+        XCTAssertGreaterThan(
+            MLX.max(MLX.abs(adapted - baseline)).item(Float.self),
+            0
+        )
+    }
+
+    func testSparseModelQuantizesOnlyRoutedExperts() throws {
+        let config = try JSONDecoder().decode(
+            InklingConfig.self,
+            from: Data(Self.sparseConfigJSON.utf8)
+        )
         let moe = InklingSparseMoE(config: config.textConfig, quantization: config.quantization)
 
         XCTAssertNotNil(moe.switchMLP.gateProj.scales)
@@ -258,4 +443,14 @@ final class InklingTests: XCTestCase {
       }
     }
     """#
+
+    private static let sparseConfigJSON = configJSON
+        .replacingOccurrences(of: #""hidden_size": 8"#, with: #""hidden_size": 128"#)
+        .replacingOccurrences(of: #""head_dim": 4"#, with: #""head_dim": 64"#)
+        .replacingOccurrences(
+            of: #""dense_intermediate_size": 16"#,
+            with: #""dense_intermediate_size": 128"#
+        )
+        .replacingOccurrences(of: #""intermediate_size": 4"#, with: #""intermediate_size": 128"#)
+        .replacingOccurrences(of: #""dense_mlp_idx": 1"#, with: #""dense_mlp_idx": 0"#)
 }

@@ -79,6 +79,12 @@ struct TextChat: AsyncParsableCommand {
     @Option(name: [.customLong("min-p")], help: "Min-p cutoff relative to the most likely token. Default: 0 (disabled), or 0.02 for Laguna S 2.1.")
     var minP: Double?
 
+    @Option(
+        name: [.customLong("reasoning-effort")],
+        help: "Inkling-Small reasoning effort from 0 through 0.99. Default: 0.9."
+    )
+    var reasoningEffort: Double?
+
     @Option(name: [.long], help: "Quantize the KV cache to this many bits. Qwen-family supports affine 4 or 8; Gemma4 also supports its model-specific schemes.")
     var kvBits: Double?
 
@@ -195,6 +201,7 @@ struct TextChat: AsyncParsableCommand {
     func run() async throws {
         let normalizedModelId = model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         try Self.validate(responseFormat: responseFormat, modelID: normalizedModelId)
+        try Self.validateReasoningEffort(reasoningEffort, modelID: normalizedModelId)
         let installedModelPath = resolvedInstalledModelPath(modelID: normalizedModelId)
         if preflight {
             try emitPreflight(modelID: normalizedModelId, installedModelPath: installedModelPath)
@@ -271,6 +278,7 @@ struct TextChat: AsyncParsableCommand {
             topK: topK
                 ?? (isLaguna ? LagunaResources.recommendedTopK : recommendedSampling?.topK),
             minP: minP ?? (isLaguna ? LagunaResources.recommendedMinP : 0),
+            reasoningEffort: reasoningEffort,
             showThinking: requiresJSON ? false : (thinking ?? Q35Resources.thinkingDefault(forModelId: model)),
             lora: lora,
             requiresJSON: requiresJSON,
@@ -583,6 +591,16 @@ struct TextChat: AsyncParsableCommand {
             throw ValidationError(
                 "--response-format json_object is not yet supported by the Laguna native runtime."
             )
+        }
+    }
+
+    static func validateReasoningEffort(_ value: Double?, modelID: String) throws {
+        guard let value else { return }
+        guard InklingResources.handles(modelSpec: modelID) else {
+            throw ValidationError("--reasoning-effort is supported only for Inkling-Small.")
+        }
+        guard (0...0.99).contains(value) else {
+            throw ValidationError("--reasoning-effort must be between 0 and 0.99.")
         }
     }
 

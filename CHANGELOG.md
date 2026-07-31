@@ -6,6 +6,16 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Added
+
+- added native `text train-lora` SFT and `text chat --lora` support for
+  `text-chat-inkling-small`, including the released Inkling message format,
+  configurable training-consistent reasoning effort, assistant-only loss,
+  attention/MLP/shared-outer expert/unembedding adapters, held-out loss
+  evaluation, and affine 2-bit routed-expert gradient coverage. Inkling
+  adapters use the family-specific `mererun.inkling.text-lora` manifest format;
+  a deterministic unseen-paraphrase receptivity gate is included.
+
 ## 0.30.0 - 2026-07-31
 
 This release is the complete public product delta since `v0.29.1`: native

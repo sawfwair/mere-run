@@ -112,6 +112,28 @@ final class TextChatCommandParsingTests: XCTestCase {
         )
     }
 
+    func testInklingParsesAndValidatesReasoningEffort() throws {
+        let command = try TextChat.parse([
+            "--model", InklingResources.modelID,
+            "--reasoning-effort", "0.2",
+            "--prompt", "Answer directly",
+        ])
+
+        XCTAssertEqual(command.reasoningEffort, 0.2)
+        XCTAssertNoThrow(
+            try TextChat.validateReasoningEffort(command.reasoningEffort, modelID: command.model)
+        )
+        XCTAssertThrowsError(
+            try TextChat.validateReasoningEffort(1, modelID: command.model)
+        )
+        XCTAssertThrowsError(
+            try TextChat.validateReasoningEffort(
+                command.reasoningEffort,
+                modelID: Gemma4Resources.twelveB4BitModelId
+            )
+        )
+    }
+
     func testTextChatBackendDescriptionIdentifiesGGUFModels() {
         let backend = TextChat.backendDescription(for: ModelResolver.ModelID.q36NanoGGUF.rawValue)
 

@@ -292,6 +292,8 @@ public struct ChatRequest: Sendable, Hashable {
     public var topK: Int?
     /// Min-p sampling cutoff relative to the most likely token; zero disables it.
     public var minP: Double
+    /// Model-specific reasoning budget. Inkling-Small accepts values from 0 through 0.99.
+    public var reasoningEffort: Double?
     public var showThinking: Bool
     public var lora: LoRA?
     public var requiresJSON: Bool
@@ -308,6 +310,7 @@ public struct ChatRequest: Sendable, Hashable {
         topP: Double = 0.9,
         topK: Int? = nil,
         minP: Double = 0,
+        reasoningEffort: Double? = nil,
         showThinking: Bool = true,
         lora: LoRA? = nil,
         requiresJSON: Bool = false,
@@ -323,6 +326,7 @@ public struct ChatRequest: Sendable, Hashable {
         self.topP = topP
         self.topK = topK
         self.minP = minP
+        self.reasoningEffort = reasoningEffort
         self.showThinking = showThinking
         self.lora = lora
         self.requiresJSON = requiresJSON

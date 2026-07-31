@@ -560,10 +560,14 @@ final class ManagedModelCatalogTests: XCTestCase {
         let lagunaS = try XCTUnwrap(
             ManagedModelCatalog.spec(for: LagunaResources.modelID)
         )
+        let inkling = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: InklingResources.modelID)
+        )
 
         XCTAssertTrue(gemma.defaultCLICommands.contains("text train-lora"))
         XCTAssertTrue(lagunaXS.defaultCLICommands.contains("text train-lora"))
         XCTAssertFalse(lagunaS.defaultCLICommands.contains("text train-lora"))
+        XCTAssertTrue(inkling.defaultCLICommands.contains("text train-lora"))
     }
 
     func testLagunaUsesPinnedOfficialTargetAndCompanion() throws {
@@ -729,6 +733,7 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
         XCTAssertEqual(spec.estimatedDownloadBytes, InklingResources.estimatedDownloadBytes)
         XCTAssertNil(spec.defaultRuntimeServingEngine)
+        XCTAssertTrue(spec.defaultCLICommands.contains("text train-lora"))
     }
 
     func testInklingSmallRequiresNativeMLXRootFiles() throws {

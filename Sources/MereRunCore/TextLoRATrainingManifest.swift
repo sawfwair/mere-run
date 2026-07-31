@@ -4,6 +4,7 @@ public struct TextLoRATrainingManifest: Codable, Sendable, Hashable {
     public static let schemaVersion = 1
     public static let gemma4Format = "mererun.gemma4.text-lora"
     public static let lagunaFormat = "mererun.laguna.text-lora"
+    public static let inklingFormat = "mererun.inkling.text-lora"
     /// Compatibility alias for the first native text adapter format.
     public static let format = gemma4Format
 
@@ -12,6 +13,7 @@ public struct TextLoRATrainingManifest: Codable, Sendable, Hashable {
         public let batchSize: Int
         public let learningRate: Float
         public let maxSequenceLength: Int
+        public let reasoningEffort: Double?
         public let seed: UInt64
         public let dataset: TextSFTDatasetSummary
 
@@ -20,6 +22,7 @@ public struct TextLoRATrainingManifest: Codable, Sendable, Hashable {
             batchSize: Int,
             learningRate: Float,
             maxSequenceLength: Int,
+            reasoningEffort: Double? = nil,
             seed: UInt64,
             dataset: TextSFTDatasetSummary
         ) {
@@ -27,6 +30,7 @@ public struct TextLoRATrainingManifest: Codable, Sendable, Hashable {
             self.batchSize = batchSize
             self.learningRate = learningRate
             self.maxSequenceLength = maxSequenceLength
+            self.reasoningEffort = reasoningEffort
             self.seed = seed
             self.dataset = dataset
         }
