@@ -164,7 +164,9 @@ await open(deepLink.toString());
 The target must already exist and be a readable file. MereRun rejects relative
 paths, directories, missing files, duplicate `path` values, and extra query
 parameters. The link opens a preview only; it does not import, move, or modify
-the artifact.
+the artifact. See the [Raycast Integration guide](./docs/raycast.md) for the
+four launcher commands, development installation, preferences, and
+troubleshooting.
 
 Linux package builds are headless CLI-only. They install the `mere.run` CLI plus
 colocated runtime assets; they do not include the macOS SwiftUI studio or DMG

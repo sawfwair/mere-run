@@ -872,6 +872,33 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertTrue(missing.contains { $0.hasSuffix("speech_tokenizer") })
     }
 
+    func testQwen3TTSAcceptsSymlinkedSpeechTokenizerDirectory() throws {
+        let root = try makeTemporaryDirectory()
+        let snapshot = try makeTemporaryDirectory()
+        defer {
+            try? FileManager.default.removeItem(at: root)
+            try? FileManager.default.removeItem(at: snapshot)
+        }
+        try writeMinimalQwen3TTSRootWithoutSpeechTokenizer(at: root, id: .qwen3TTSCustomVoice)
+
+        let tokenizer = snapshot.appendingPathComponent("speech_tokenizer", isDirectory: true)
+        try FileManager.default.createDirectory(at: tokenizer, withIntermediateDirectories: true)
+        for file in ["config.json", "model.safetensors"] {
+            XCTAssertTrue(FileManager.default.createFile(
+                atPath: tokenizer.appendingPathComponent(file).path,
+                contents: Data("{}".utf8)
+            ))
+        }
+        try FileManager.default.createSymbolicLink(
+            at: root.appendingPathComponent("speech_tokenizer", isDirectory: true),
+            withDestinationURL: tokenizer
+        )
+
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: "speech-tts-qwen3-customvoice"))
+        XCTAssertTrue(spec.missingPaths(in: root, fileManager: .default).isEmpty)
+        XCTAssertTrue(spec.isManagedRootComplete(root, fileManager: .default))
+    }
+
     func testZImageNanoAcceptsMFluxLayoutWithoutDiffusersConfigs() throws {
         let root = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }

@@ -2951,7 +2951,11 @@ public extension ManagedModelSpec {
         let hasSingle = fileManager.fileExists(atPath: modelWeightsURL.path)
         if !hasIndex && !hasSingle { missing.append(modelIndexURL) }
         if !fileManager.fileExists(atPath: speechTokenizerConfig.path) { missing.append(speechTokenizerConfig) }
-        let tokenizerWeights = (try? fileManager.contentsOfDirectory(at: speechTokenizerDir, includingPropertiesForKeys: nil))?.filter {
+        let resolvedSpeechTokenizerDir = speechTokenizerDir.resolvingSymlinksInPath()
+        let tokenizerWeights = (try? fileManager.contentsOfDirectory(
+            at: resolvedSpeechTokenizerDir,
+            includingPropertiesForKeys: nil
+        ))?.filter {
             $0.pathExtension == "safetensors"
         } ?? []
         if tokenizerWeights.isEmpty { missing.append(speechTokenizerDir) }

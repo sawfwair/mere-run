@@ -53,6 +53,7 @@ export default defineConfig({
         items: [
           { text: 'Docs Home', link: '/' },
           { text: 'Getting Started', link: '/getting-started' },
+          { text: 'Raycast Integration', link: '/raycast' },
           { text: 'Linux QuickStart', link: '/linux-quickstart' },
           { text: 'CLI Reference', link: '/cli' },
           { text: 'Offline Cookbooks', link: '/cookbooks' },
