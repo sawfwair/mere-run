@@ -43,15 +43,19 @@ private struct MusicSeparationManifest: Codable {
 struct MusicSeparate: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "separate",
-        abstract: "Separate vocals and instrumental audio with ViperX BS-RoFormer.",
+        abstract: "Separate music into stems with native BS-RoFormer models.",
         discussion: """
-        Runs the pinned MIT-licensed ViperX 1297 BS-RoFormer checkpoint entirely
-        locally with native Swift/MLX inference. Output WAVs use 44.1 kHz stereo
-        float samples. A provenance manifest is saved and emitted on stdout.
+        Runs pinned MIT-licensed AEmotion BS-RoFormer checkpoints entirely
+        locally with native Swift/MLX inference. ViperX produces vocals and
+        instrumental; the four-stem model produces drums, bass, other, and
+        vocals. Output WAVs use 44.1 kHz stereo float samples. A provenance
+        manifest is saved and emitted on stdout.
 
         Examples:
           mere.run model pull music-separate-bs-roformer-viperx-1297
           mere.run music separate ./song.mp3
+          mere.run model pull music-separate-bs-roformer-4stem
+          mere.run music separate ./song.wav --model music-separate-bs-roformer-4stem
           mere.run music separate ./song.wav --output-dir ./song-stems --overlap 4
         """
     )
@@ -59,16 +63,16 @@ struct MusicSeparate: ParsableCommand {
     @Argument(help: "Input audio file (WAV, MP3, M4A, FLAC, or another supported format).")
     var audio: String
 
-    @Option(name: [.customShort("m"), .long], help: "Managed ViperX model id or local model directory.")
+    @Option(name: [.customShort("m"), .long], help: "Managed BS-RoFormer model id.")
     var model: String = ModelResolver.ModelID.roFormerViperX1297.rawValue
 
-    @Option(name: [.customLong("model-path")], help: "Explicit local root of the pinned AEmotion model snapshot.")
+    @Option(name: [.customLong("model-path")], help: "Explicit local root of the selected pinned model snapshot.")
     var modelPath: String?
 
     @Option(name: [.customShort("o"), .customLong("output-dir")], help: "Stem output directory. Defaults beside the input.")
     var outputDirectory: String?
 
-    @Option(name: [.long], help: "Chunk overlap count. Must divide 352800; 2 matches the published inference config.")
+    @Option(name: [.long], help: "Chunk overlap count. Must divide the selected model's chunk size.")
     var overlap: Int = 2
 
     @Option(name: [.long], help: "Model compute type: float16 or float32.")
@@ -78,8 +82,17 @@ struct MusicSeparate: ParsableCommand {
     var quiet: Bool = false
 
     func validate() throws {
-        guard overlap > 0, 352_800.isMultiple(of: overlap) else {
-            throw ValidationError("--overlap must be a positive divisor of 352800")
+        let profile: RoFormerModelProfile
+        do {
+            profile = try RoFormerModelProfile.resolve(modelID: model)
+        } catch {
+            throw ValidationError(error.localizedDescription)
+        }
+        let configuration = try RoFormerResources.loadBundledConfiguration(profile: profile)
+        guard overlap > 0, configuration.chunkSize.isMultiple(of: overlap) else {
+            throw ValidationError(
+                "--overlap must be a positive divisor of \(configuration.chunkSize)"
+            )
         }
         guard ["float16", "float32"].contains(dtype.lowercased()) else {
             throw ValidationError("--dtype must be float16 or float32")
@@ -92,7 +105,8 @@ struct MusicSeparate: ParsableCommand {
         guard FileManager.default.fileExists(atPath: inputURL.path) else {
             throw ValidationError("Input audio file not found: \(inputURL.path)")
         }
-        let modelRoot = try resolveModelRoot()
+        let profile = try RoFormerModelProfile.resolve(modelID: model)
+        let modelRoot = try resolveModelRoot(profile: profile)
         let outputRoot = outputDirectory.map(Self.userURL)
             ?? Self.defaultOutputDirectory(for: inputURL)
         try FileManager.default.createDirectory(
@@ -110,10 +124,10 @@ struct MusicSeparate: ParsableCommand {
         )
         let computeType: DType = dtype.lowercased() == "float32" ? .float32 : .float16
         if !quiet {
-            CLIStderr.write("Loading ViperX BS-RoFormer from \(modelRoot.path)\n")
+            CLIStderr.write("Loading \(profile.modelID) from \(modelRoot.path)\n")
         }
         let separator = try RoFormerSeparator.load(
-            resources: RoFormerResources(rootURL: modelRoot),
+            resources: RoFormerResources(rootURL: modelRoot, profile: profile),
             dtype: computeType
         )
         let progress: RoFormerSeparator.ProgressHandler?
@@ -132,20 +146,20 @@ struct MusicSeparate: ParsableCommand {
             progress: progress
         )
 
-        let vocalsURL = outputRoot.appendingPathComponent("vocals.wav")
-        let instrumentalURL = outputRoot.appendingPathComponent("instrumental.wav")
-        try MediaAudioIO.writeFloatWAV(
-            samples: result.vocals,
-            sampleRate: result.sampleRate,
-            channels: result.channels,
-            to: vocalsURL
-        )
-        try MediaAudioIO.writeFloatWAV(
-            samples: result.instrumental,
-            sampleRate: result.sampleRate,
-            channels: result.channels,
-            to: instrumentalURL
-        )
+        let stemArtifacts = try result.stems.map { stem in
+            let outputURL = outputRoot.appendingPathComponent("\(stem.name).wav")
+            try MediaAudioIO.writeFloatWAV(
+                samples: stem.samples,
+                sampleRate: result.sampleRate,
+                channels: result.channels,
+                to: outputURL
+            )
+            return MusicSeparationManifest.Stem(
+                name: stem.name,
+                path: outputURL.path,
+                sha256: try ModelArtifactPin.fileSHA256(outputURL)
+            )
+        }
 
         let manifestURL = outputRoot.appendingPathComponent("separation.json")
         let manifest = MusicSeparationManifest(
@@ -159,29 +173,18 @@ struct MusicSeparate: ParsableCommand {
                 frames: result.frameCount
             ),
             model: .init(
-                id: RoFormerResources.modelID,
+                id: profile.modelID,
                 repository: RoFormerResources.repository,
                 revision: RoFormerResources.revision,
                 license: "MIT",
-                weightsSHA256: RoFormerResources.weightsPin.sha256,
+                weightsSHA256: profile.weightsPin.sha256,
                 computeType: dtype.lowercased()
             ),
             chunkSize: separator.checkpoint.configuration.chunkSize,
             overlap: overlap,
             chunks: result.chunkCount,
             elapsedSeconds: result.elapsedSeconds,
-            stems: [
-                .init(
-                    name: "vocals",
-                    path: vocalsURL.path,
-                    sha256: try ModelArtifactPin.fileSHA256(vocalsURL)
-                ),
-                .init(
-                    name: "instrumental",
-                    path: instrumentalURL.path,
-                    sha256: try ModelArtifactPin.fileSHA256(instrumentalURL)
-                ),
-            ],
+            stems: stemArtifacts,
             manifestPath: manifestURL.path
         )
         let encoder = JSONEncoder()
@@ -193,20 +196,17 @@ struct MusicSeparate: ParsableCommand {
         try FileHandle.standardOutput.write(contentsOf: manifestData)
 
         if !quiet {
-            CLIStderr.write("Saved vocals, instrumental, and manifest to \(outputRoot.path)\n")
+            CLIStderr.write("Saved \(result.stems.count) stems and manifest to \(outputRoot.path)\n")
         }
     }
 
-    private func resolveModelRoot() throws -> URL {
+    private func resolveModelRoot(profile: RoFormerModelProfile) throws -> URL {
         if let modelPath { return Self.userURL(modelPath) }
-        let direct = Self.userURL(model)
-        if FileManager.default.fileExists(atPath: direct.path) { return direct }
-        guard model == ModelResolver.ModelID.roFormerViperX1297.rawValue else {
-            throw ValidationError(
-                "Unsupported separation model '\(model)'; expected \(RoFormerResources.modelID)"
-            )
+        let modelID: ModelResolver.ModelID = switch profile {
+        case .viperX1297: .roFormerViperX1297
+        case .fourStem: .roFormerFourStem
         }
-        return try ModelResolver().resolve(.roFormerViperX1297).rootURL
+        return try ModelResolver().resolve(modelID).rootURL
     }
 
     private static func defaultOutputDirectory(for input: URL) -> URL {

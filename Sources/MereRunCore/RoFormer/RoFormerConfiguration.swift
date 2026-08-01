@@ -12,6 +12,7 @@ public struct RoFormerConfiguration: Codable, Equatable, Sendable {
     public let dim: Int
     public let depth: Int
     public let numStems: Int
+    public let stemNames: [String]
     public let timeTransformerDepth: Int
     public let frequencyTransformerDepth: Int
     public let heads: Int
@@ -23,6 +24,7 @@ public struct RoFormerConfiguration: Codable, Equatable, Sendable {
     public let stftNormalized: Bool
     public let zeroDC: Bool
     public let maskEstimatorDepth: Int
+    public let transformerExpansionFactor: Int
     public let mlpExpansionFactor: Int
     public let frequenciesPerBand: [Int]
 
@@ -30,8 +32,8 @@ public struct RoFormerConfiguration: Codable, Equatable, Sendable {
         frequenciesPerBand.map { $0 * audioChannels * 2 }
     }
 
-    public func validate() throws {
-        guard modelID == RoFormerResources.modelID else {
+    public func validate(profile: RoFormerModelProfile) throws {
+        guard modelID == profile.modelID else {
             throw RoFormerError.invalidConfiguration("unexpected model id \(modelID)")
         }
         guard repository == RoFormerResources.repository, revision == RoFormerResources.revision else {
@@ -40,11 +42,16 @@ public struct RoFormerConfiguration: Codable, Equatable, Sendable {
         guard license == "MIT" else {
             throw RoFormerError.invalidConfiguration("expected MIT model license")
         }
-        guard sampleRate == 44_100, audioChannels == 2, numStems == 1 else {
-            throw RoFormerError.invalidConfiguration("ViperX requires 44.1 kHz stereo audio and one target stem")
+        guard sampleRate == 44_100, audioChannels == 2 else {
+            throw RoFormerError.invalidConfiguration("BS-RoFormer requires 44.1 kHz stereo audio")
         }
-        guard dim == heads * dimHead else {
-            throw RoFormerError.invalidConfiguration("model dimension must equal heads times head dimension")
+        guard numStems > 0, numStems == stemNames.count,
+              stemNames.allSatisfy({ !$0.isEmpty }) else {
+            throw RoFormerError.invalidConfiguration("stem names must match the model output count")
+        }
+        guard dim > 0, heads > 0, dimHead > 0,
+              transformerExpansionFactor > 0, mlpExpansionFactor > 0 else {
+            throw RoFormerError.invalidConfiguration("model and attention dimensions must be positive")
         }
         guard frequenciesPerBand.count == 62,
               frequenciesPerBand.reduce(0, +) == dimensionFrequencies,
@@ -71,6 +78,7 @@ public struct RoFormerConfiguration: Codable, Equatable, Sendable {
         case dim
         case depth
         case numStems = "num_stems"
+        case stemNames = "stem_names"
         case timeTransformerDepth = "time_transformer_depth"
         case frequencyTransformerDepth = "frequency_transformer_depth"
         case heads
@@ -82,6 +90,7 @@ public struct RoFormerConfiguration: Codable, Equatable, Sendable {
         case stftNormalized = "stft_normalized"
         case zeroDC = "zero_dc"
         case maskEstimatorDepth = "mask_estimator_depth"
+        case transformerExpansionFactor = "transformer_expansion_factor"
         case mlpExpansionFactor = "mlp_expansion_factor"
         case frequenciesPerBand = "frequencies_per_band"
     }
@@ -100,17 +109,17 @@ public enum RoFormerError: Error, Equatable, LocalizedError, Sendable {
     public var errorDescription: String? {
         switch self {
         case .missingBundledConfiguration:
-            "Bundled ViperX RoFormer configuration is missing."
+            "Bundled RoFormer configuration is missing."
         case .invalidConfiguration(let detail):
-            "Invalid ViperX RoFormer configuration: \(detail)."
+            "Invalid RoFormer configuration: \(detail)."
         case .invalidCheckpointInventory(let expected, let actual):
-            "ViperX checkpoint contains \(actual) tensors; expected \(expected)."
+            "RoFormer checkpoint contains \(actual) tensors; expected \(expected)."
         case .checkpointKeyMismatch(let missing, let unexpected):
-            "ViperX checkpoint keys do not match the native model (missing: \(missing.joined(separator: ", ")); unexpected: \(unexpected.joined(separator: ", ")))."
+            "RoFormer checkpoint keys do not match the native model (missing: \(missing.joined(separator: ", ")); unexpected: \(unexpected.joined(separator: ", ")))."
         case .checkpointShapeMismatch(let key, let expected, let actual):
-            "ViperX checkpoint tensor \(key) has shape \(actual); expected \(expected)."
+            "RoFormer checkpoint tensor \(key) has shape \(actual); expected \(expected)."
         case .unsupportedAudio(let sampleRate, let channels):
-            "ViperX separation requires 44.1 kHz stereo audio; received \(sampleRate) Hz with \(channels) channels."
+            "RoFormer separation requires 44.1 kHz stereo audio; received \(sampleRate) Hz with \(channels) channels."
         case .invalidOverlap(let overlap):
             "RoFormer overlap must be a positive divisor of 352800; received \(overlap)."
         case .invalidAudioBuffer:

@@ -1,14 +1,22 @@
 import Foundation
 @preconcurrency import MLX
 
+public struct RoFormerStemResult: Sendable {
+    public let name: String
+    public let samples: [Float]
+}
+
 public struct RoFormerSeparationResult: Sendable {
-    public let vocals: [Float]
-    public let instrumental: [Float]
+    public let stems: [RoFormerStemResult]
     public let sampleRate: Int
     public let channels: Int
     public let frameCount: Int
     public let chunkCount: Int
     public let elapsedSeconds: Double
+
+    public func samples(forStem name: String) -> [Float]? {
+        stems.first(where: { $0.name == name })?.samples
+    }
 }
 
 struct RoFormerChunkPlan: Equatable, Sendable {
@@ -102,8 +110,11 @@ public final class RoFormerSeparator {
             : original
         let workingCount = working[0].count
         var accumulated = Array(
-            repeating: [Float](repeating: 0, count: workingCount),
-            count: channels
+            repeating: Array(
+                repeating: [Float](repeating: 0, count: workingCount),
+                count: channels
+            ),
+            count: configuration.numStems
         )
         var weights = [Float](repeating: 0, count: workingCount)
 
@@ -128,7 +139,7 @@ public final class RoFormerSeparator {
             let input = MLXArray(channelMajorChunk)
                 .reshaped(1, channels, configuration.chunkSize)
                 .asType(dtype)
-            let output = model(input)[0, 0].asType(.float32)
+            let output = model(input)[0].asType(.float32)
             MLX.eval(output)
             let separated = output.asArray(Float.self)
             let fade = plan.fadeWindow(chunkSize: configuration.chunkSize, chunkIndex: chunkIndex)
@@ -136,36 +147,52 @@ public final class RoFormerSeparator {
                 let destination = start + offset
                 let weight = fade[offset]
                 weights[destination] += weight
-                for channel in 0..<channels {
-                    let value = separated[channel * configuration.chunkSize + offset]
-                    accumulated[channel][destination] += (value.isFinite ? value : 0) * weight
+                for stem in 0..<configuration.numStems {
+                    for channel in 0..<channels {
+                        let valueIndex = stem * channels * configuration.chunkSize
+                            + channel * configuration.chunkSize
+                            + offset
+                        let value = separated[valueIndex]
+                        accumulated[stem][channel][destination] += (value.isFinite ? value : 0) * weight
+                    }
                 }
             }
             MLX.Memory.clearCache()
             progress?(chunkIndex + 1, plan.starts.count)
         }
 
-        for channel in 0..<channels {
-            for index in 0..<workingCount {
-                accumulated[channel][index] /= max(weights[index], 1e-8)
+        for stem in 0..<configuration.numStems {
+            for channel in 0..<channels {
+                for index in 0..<workingCount {
+                    accumulated[stem][channel][index] /= max(weights[index], 1e-8)
+                }
             }
         }
-        let vocalsByChannel: [[Float]]
-        if plan.usesBorderPadding {
-            vocalsByChannel = accumulated.map { channel in
-                Array(channel[plan.border..<(plan.border + frameCount)])
+
+        var stems = zip(configuration.stemNames, accumulated).map { name, channels in
+            let cropped: [[Float]]
+            if plan.usesBorderPadding {
+                cropped = channels.map { channel in
+                    Array(channel[plan.border..<(plan.border + frameCount)])
+                }
+            } else {
+                cropped = channels.map { Array($0.prefix(frameCount)) }
             }
-        } else {
-            vocalsByChannel = accumulated.map { Array($0.prefix(frameCount)) }
+            return RoFormerStemResult(name: name, samples: Self.interleave(cropped))
         }
-        let vocals = Self.interleave(vocalsByChannel)
-        let instrumental = zip(interleavedSamples, vocals).map { mixture, vocal in
-            mixture - vocal
+
+        if checkpoint.profile.derivesInstrumental,
+           let vocals = stems.first(where: { $0.name == "vocals" })?.samples {
+            stems.append(RoFormerStemResult(
+                name: "instrumental",
+                samples: zip(interleavedSamples, vocals).map { mixture, vocal in
+                    mixture - vocal
+                }
+            ))
         }
         let elapsed = started.duration(to: .now)
         return RoFormerSeparationResult(
-            vocals: vocals,
-            instrumental: instrumental,
+            stems: stems,
             sampleRate: sampleRate,
             channels: channels,
             frameCount: frameCount,

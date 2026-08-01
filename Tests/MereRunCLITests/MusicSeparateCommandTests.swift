@@ -16,4 +16,23 @@ final class MusicSeparateCommandTests: XCTestCase {
         XCTAssertThrowsError(try MusicSeparate.parse(["mix.wav", "--overlap", "11"]))
         XCTAssertThrowsError(try MusicSeparate.parse(["mix.wav", "--dtype", "bfloat16"]))
     }
+
+    func testParsesPinnedFourStemModel() throws {
+        let command = try MusicSeparate.parse([
+            "mix.wav",
+            "--model", ModelResolver.ModelID.roFormerFourStem.rawValue,
+            "--overlap", "4",
+        ])
+        XCTAssertEqual(command.model, ModelResolver.ModelID.roFormerFourStem.rawValue)
+        XCTAssertEqual(command.overlap, 4)
+        XCTAssertNoThrow(try command.validate())
+    }
+
+    func testRejectsOverlapThatDoesNotDivideFourStemChunk() {
+        XCTAssertThrowsError(try MusicSeparate.parse([
+            "mix.wav",
+            "--model", ModelResolver.ModelID.roFormerFourStem.rawValue,
+            "--overlap", "8",
+        ]))
+    }
 }

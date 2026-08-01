@@ -1658,7 +1658,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 upstreamRepoId: "MuScriptor/muscriptor-\(muScriptorVariant.rawValue)",
                 createdAt: createdAt
             )
-        case .roFormerViperX1297:
+        case .roFormerViperX1297, .roFormerFourStem:
             return MereRunModelManifest(
                 id: modelID.rawValue,
                 engine: .roFormer,

@@ -15,6 +15,11 @@ The format is based on Keep a Changelog.
   699-tensor graph; preserves the published ViperX STFT, DC filtering, and
   overlapped chunk semantics; and writes vocal/instrumental WAVs plus a hashed
   provenance manifest.
+- added the pinned MIT-licensed AEmotion four-stem BS-RoFormer checkpoint to
+  the same native runtime. `music separate --model
+  music-separate-bs-roformer-4stem` writes drums, bass, other, and vocal WAVs;
+  its distinct 485,100-sample geometry, 1,355-tensor graph, source config,
+  license, and 527 MB weights are admitted as an immutable model profile.
 
 ## 0.31.0 - 2026-08-01
 

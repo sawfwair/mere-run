@@ -100,6 +100,7 @@ from the runtime catalog used by `mere.run model list`,
 | `music` | `music-muscriptor-medium` |
 | `music` | `music-muscriptor-large` |
 | `music` | `music-separate-bs-roformer-viperx-1297` |
+| `music` | `music-separate-bs-roformer-4stem` |
 | `sfx` | `sfx-woosh-dflow` |
 | `sfx` | `sfx-woosh-flow` |
 | `sfx` | `sfx-woosh-clap` |
@@ -169,11 +170,12 @@ Model License, and the hidden Gemma 3 companion under the Gemma Terms of Use.
 Their terms still apply. Managed downloads retain the available license,
 README, attribution, and immutable source provenance.
 
-`music-separate-bs-roformer-viperx-1297` also does not require acknowledgement.
-The pinned AEmotion Studio model release includes an explicit MIT `LICENSE`
+`music-separate-bs-roformer-viperx-1297` and
+`music-separate-bs-roformer-4stem` also do not require acknowledgement. The
+pinned AEmotion Studio model release includes an explicit MIT `LICENSE`
 and an MIT model-card declaration. The managed install retains both files and
 admits the weights, source configuration, model card, and license only when all
-four match their frozen byte counts and SHA-256 digests.
+four match their model-specific frozen byte counts and SHA-256 digests.
 
 `image-zimage-nano` also does not require acknowledgement. Its canonical
 `Tongyi-MAI/Z-Image-Turbo` base is Apache-2.0; the pinned mflux conversion's

@@ -192,11 +192,15 @@ the original decoded mixture is important for residual closure.
 
 ### Stage 3: multistem and model families
 
-- Add a six-stem BS-RoFormer SW model after verifying its separate license and
-  artifact contract.
-- Evaluate four-stem ZFTurbo models, Mel-RoFormer, SCNet, and MDX families only
-  through separate typed model profiles. Do not hide incompatible graphs
-  behind unchecked configuration dictionaries.
+- The explicitly MIT-licensed AEmotion four-stem BS-RoFormer profile is now
+  implemented and admitted at the same frozen repository revision. Its
+  separately pinned graph has 1,355 tensors and 131,704,612 float32 scalars;
+  its model outputs are ordered as drums, bass, other, and vocals.
+- Do not add the commonly mirrored six-stem BS-RoFormer SW checkpoint unless
+  its separately hosted weights receive an explicit reusable license.
+- Evaluate Mel-RoFormer, SCNet, and MDX families only through separate typed
+  model profiles. Do not hide incompatible graphs behind unchecked
+  configuration dictionaries.
 
 ### Stage 4: workflows and ensembles
 
@@ -250,3 +254,16 @@ not a thermal-controlled performance benchmark or a music-quality result.
 The remaining validation boundary is frozen-reference parity and quality:
 intermediate tensor comparison, a redistributable music fixture, multiple
 chunk boundaries, and the broader impulse/noise/phase corpus described above.
+
+The four-stem follow-on also passed a real managed-model smoke. The downloaded
+526,964,800-byte safetensors artifact independently matched SHA-256
+`14c9079fa428cb0a6d9b8a294a4c80a27276630a53772833c00c416f1f909098`.
+The public command processed a one-second 44.1 kHz stereo synthetic fixture in
+one padded chunk and wrote drums, bass, other, and vocals as finite one-second
+44.1 kHz stereo float WAVs. Each output reported zero NaNs and zero infinities,
+and stdout matched the saved separation manifest byte for byte. The manifest
+recorded 3.054 seconds inside separation; `/usr/bin/time -l` observed 34.35
+seconds including an incremental build and model setup, 2,244,935,680 bytes
+maximum resident size, and 6,626,134,368 bytes peak footprint. This is
+functional smoke evidence, not thermal-controlled performance or music-quality
+evidence.
