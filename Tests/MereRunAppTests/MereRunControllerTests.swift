@@ -261,6 +261,30 @@ final class MereRunControllerTests: XCTestCase {
         )
     }
 
+    func testUtilityCommandCanBeCancelledByStableID() async {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        let commandID = UUID()
+
+        let task = Task {
+            await controller.utilityCommandResult(
+                args: ["model", "pull", "image-klein-nano"],
+                commandID: commandID
+            )
+        }
+        await Task.yield()
+
+        XCTAssertEqual(runner.starts.count, 1)
+        XCTAssertTrue(controller.cancelUtilityCommand(commandID))
+        XCTAssertEqual(runner.processes.first?.terminateCallCount, 1)
+        XCTAssertFalse(controller.cancelUtilityCommand(UUID()))
+
+        runner.starts[0].termination(15)
+        let result = await task.value
+        XCTAssertEqual(result.exitCode, 15)
+    }
+
     func testResidentVideoSessionKeepsInputOpenAndPublishesEachResult() async throws {
         let runner = RecordingProcessRunner()
         let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)

@@ -44,12 +44,29 @@ struct StudioModelInventoryRow: Identifiable, Equatable {
     }
 }
 
+enum StudioModelDownloadCommand {
+    static func arguments(modelID: String, acknowledgingUsageTerms: Bool) -> [String] {
+        var arguments = ["model", "pull", modelID]
+        if acknowledgingUsageTerms {
+            arguments.append("--accept-model-license")
+        }
+        return arguments
+    }
+
+    static func appendingOutput(_ chunk: String, to current: String, limit: Int = 32 * 1024) -> String {
+        let normalized = chunk.replacingOccurrences(of: "\r", with: "\n")
+        return String((current + normalized).suffix(limit))
+    }
+}
+
 private enum StudioModelsAlert: Identifiable {
+    case download(StudioModelInventoryRow)
     case removal(StudioModelInventoryRow)
     case cleanup(StudioModelGarbagePlan)
 
     var id: String {
         switch self {
+        case .download(let row): "download:\(row.id)"
         case .removal(let row): "removal:\(row.id)"
         case .cleanup: "cleanup"
         }
@@ -212,6 +229,9 @@ struct StudioModelsSheet: View {
     @State private var isRefreshing = false
     @State private var loadingInfoID: String?
     @State private var loadingRuntimeID: String?
+    @State private var downloadingID: String?
+    @State private var downloadCommandID: UUID?
+    @State private var cancellingDownloadID: String?
     @State private var removingID: String?
     @State private var pendingAlert: StudioModelsAlert?
     @State private var storageReport: StudioModelStorageReport?
@@ -281,6 +301,15 @@ struct StudioModelsSheet: View {
         }
         .alert(item: $pendingAlert) { pending in
             switch pending {
+            case .download(let row):
+                Alert(
+                    title: Text("Acknowledge third-party model terms"),
+                    message: Text(downloadTermsMessage(row)),
+                    primaryButton: .default(Text("Acknowledge & Download")) {
+                        Task { await download(row, acknowledgingUsageTerms: true) }
+                    },
+                    secondaryButton: .cancel()
+                )
             case .removal(let row):
                 Alert(
                     title: Text("Purge \(row.id)?"),
@@ -334,10 +363,10 @@ struct StudioModelsSheet: View {
             Button {
                 revealStore()
             } label: {
-                Label("Store", systemImage: "folder")
+                Label("Files", systemImage: "folder")
             }
             .buttonStyle(.bordered)
-            .help("Reveal the model store in Finder")
+            .help("Open model storage in Finder")
 
             Button {
                 Task { await previewStorageCleanup() }
@@ -517,75 +546,136 @@ struct StudioModelsSheet: View {
 
                 Spacer()
 
-                if loadingInfoID == row.id || removingID == row.id {
+                if loadingInfoID == row.id || downloadingID == row.id || removingID == row.id {
                     ProgressView()
                         .controlSize(.small)
                 }
             }
 
-            HStack(spacing: 10) {
-                Button {
-                    Task { await runtimeLoad(row) }
-                } label: {
-                    Label("Load", systemImage: "play.fill")
-                }
-                .buttonStyle(.bordered)
-                .disabled(!row.isInstalled || loadingRuntimeID != nil)
-
-                Button {
-                    Task { await runtimeUnload(row) }
-                } label: {
-                    Label("Unload", systemImage: "stop.fill")
-                }
-                .buttonStyle(.bordered)
-                .disabled(!row.isInstalled || loadingRuntimeID != nil)
-
-                Button {
-                    Task { await saveRuntimeSettings(for: row, pinned: true) }
-                } label: {
-                    Label("Pin", systemImage: "pin")
-                }
-                .buttonStyle(.bordered)
-                .disabled(!row.isInstalled || loadingRuntimeID != nil)
-
-                Button {
-                    Task { await saveRuntimeSettings(for: row, pinned: false) }
-                } label: {
-                    Label("Unpin", systemImage: "pin.slash")
-                }
-                .buttonStyle(.bordered)
-                .disabled(!row.isInstalled || loadingRuntimeID != nil)
-            }
-
-            runtimeSettingsEditor(row)
-
-            HStack(spacing: 10) {
-                Button {
-                    Task { await loadInfo(for: row) }
-                } label: {
-                    Label("Inspect", systemImage: "info.circle")
-                }
-                .buttonStyle(.bordered)
-                .disabled(!row.isInstalled || loadingInfoID != nil)
-
-                Button {
-                    Task { await reveal(row) }
-                } label: {
-                    Label("Finder", systemImage: "magnifyingglass")
-                }
-                .buttonStyle(.bordered)
-                .disabled(!row.isInstalled || loadingInfoID != nil)
-                .help("Reveal this model's source folder in Finder")
-
-                Button(role: .destructive) {
-                    pendingAlert = .removal(row)
-                } label: {
-                    Label("Purge", systemImage: "trash")
-                }
-                .buttonStyle(.bordered)
-                .disabled(!row.isInstalled || removingID != nil)
+            if row.isInstalled {
+                installedModelActions(row)
+                runtimeSettingsEditor(row)
+                installedModelFilesActions(row)
+            } else {
+                missingModelActions(row)
             }
         }
+    }
+
+    private func installedModelActions(_ row: StudioModelInventoryRow) -> some View {
+        HStack(spacing: 10) {
+            Button {
+                Task { await runtimeLoad(row) }
+            } label: {
+                Label("Load", systemImage: "play.fill")
+            }
+            .buttonStyle(.bordered)
+            .disabled(loadingRuntimeID != nil)
+
+            Button {
+                Task { await runtimeUnload(row) }
+            } label: {
+                Label("Unload", systemImage: "stop.fill")
+            }
+            .buttonStyle(.bordered)
+            .disabled(loadingRuntimeID != nil)
+
+            Button {
+                Task { await saveRuntimeSettings(for: row, pinned: true) }
+            } label: {
+                Label("Pin", systemImage: "pin")
+            }
+            .buttonStyle(.bordered)
+            .disabled(loadingRuntimeID != nil)
+
+            Button {
+                Task { await saveRuntimeSettings(for: row, pinned: false) }
+            } label: {
+                Label("Unpin", systemImage: "pin.slash")
+            }
+            .buttonStyle(.bordered)
+            .disabled(loadingRuntimeID != nil)
+        }
+    }
+
+    private func installedModelFilesActions(_ row: StudioModelInventoryRow) -> some View {
+        HStack(spacing: 10) {
+            Button {
+                Task { await loadInfo(for: row) }
+            } label: {
+                Label("Inspect", systemImage: "info.circle")
+            }
+            .buttonStyle(.bordered)
+            .disabled(loadingInfoID != nil)
+
+            Button {
+                Task { await reveal(row) }
+            } label: {
+                Label("Finder", systemImage: "magnifyingglass")
+            }
+            .buttonStyle(.bordered)
+            .disabled(loadingInfoID != nil)
+            .help("Reveal this model's source folder in Finder")
+
+            Button(role: .destructive) {
+                pendingAlert = .removal(row)
+            } label: {
+                Label("Purge", systemImage: "trash")
+            }
+            .buttonStyle(.bordered)
+            .disabled(removingID != nil)
+        }
+    }
+
+    private func missingModelActions(_ row: StudioModelInventoryRow) -> some View {
+        VStack(alignment: .leading, spacing: MereRunTheme.Spacing.sm) {
+            Text("Download this model into Mere's managed model storage. The CLI checks hardware, disk space, and the pinned source before transferring weights.")
+                .font(MereRunTheme.bodyFont)
+                .foregroundStyle(MereRunTheme.textSecondary)
+
+            HStack(spacing: MereRunTheme.Spacing.sm) {
+                Button {
+                    requestDownload(row)
+                } label: {
+                    if downloadingID == row.id {
+                        HStack(spacing: 7) {
+                            ProgressView()
+                                .controlSize(.small)
+                            Text(cancellingDownloadID == row.id ? "Cancelling…" : "Downloading…")
+                        }
+                    } else {
+                        Label("Download", systemImage: "arrow.down.circle.fill")
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(MereRunTheme.accent)
+                .disabled(downloadingID != nil || isRefreshing)
+
+                if downloadingID == row.id {
+                    Button("Cancel", role: .cancel) {
+                        cancelDownload()
+                    }
+                    .buttonStyle(.bordered)
+                    .disabled(cancellingDownloadID == row.id)
+                }
+
+                Spacer()
+
+                if row.size != "—" {
+                    Text(row.size)
+                        .font(MereRunTheme.monoFont)
+                        .foregroundStyle(MereRunTheme.textMuted)
+                }
+            }
+
+            if row.usageTerms != nil {
+                Text("Review the linked terms above. Download requires explicit acknowledgement.")
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.yellow)
+            }
+        }
+        .padding(MereRunTheme.Spacing.md)
+        .merePanel()
     }
 
     private func runtimeSettingsEditor(_ row: StudioModelInventoryRow) -> some View {
@@ -665,7 +755,7 @@ struct StudioModelsSheet: View {
 
     private func detailBody(for row: StudioModelInventoryRow) -> String {
         if !row.isInstalled {
-            return "\(row.id) is not downloaded."
+            return detailText.isEmpty ? "\(row.id) is not downloaded." : detailText
         }
         if detailText.isEmpty {
             return "Select Inspect to load manifest, validation, and component paths."
@@ -679,6 +769,83 @@ struct StudioModelsSheet: View {
         guard row.isInstalled else { return }
         Task { await loadInfo(for: row) }
         Task { await loadRuntimeSettings(for: row) }
+    }
+
+    private func requestDownload(_ row: StudioModelInventoryRow) {
+        if row.usageTerms != nil {
+            pendingAlert = .download(row)
+        } else {
+            Task { await download(row, acknowledgingUsageTerms: false) }
+        }
+    }
+
+    @MainActor
+    private func download(_ row: StudioModelInventoryRow, acknowledgingUsageTerms: Bool) async {
+        let modelID = row.id
+        downloadingID = modelID
+        cancellingDownloadID = nil
+        let commandID = UUID()
+        downloadCommandID = commandID
+        statusMessage = "Downloading \(modelID)…"
+        detailText = "Starting managed download for \(modelID)…\n"
+
+        let result = await controller.utilityCommandResult(
+            args: StudioModelDownloadCommand.arguments(
+                modelID: modelID,
+                acknowledgingUsageTerms: acknowledgingUsageTerms
+            ),
+            commandID: commandID,
+            onOutput: { chunk in
+                guard selectedID == modelID else { return }
+                detailText = StudioModelDownloadCommand.appendingOutput(chunk, to: detailText)
+            }
+        )
+
+        let wasCancelled = cancellingDownloadID == modelID
+        downloadCommandID = nil
+        downloadingID = nil
+        cancellingDownloadID = nil
+
+        if selectedID == modelID, !result.outputText.isEmpty {
+            detailText = result.outputText
+        }
+        if wasCancelled {
+            statusMessage = "Cancelled download for \(modelID)"
+            if selectedID == modelID {
+                detailText = StudioModelDownloadCommand.appendingOutput(
+                    "\nDownload cancelled. Its resumable partial payload remains available to the next pull.\n",
+                    to: detailText
+                )
+            }
+            return
+        }
+        guard result.exitCode == 0 else {
+            statusMessage = "Could not download \(modelID)"
+            return
+        }
+
+        let keepSelection = selectedID == modelID
+        onModelsChanged()
+        await refresh()
+        if keepSelection, let installed = rows.first(where: { $0.id == modelID }) {
+            select(installed)
+        }
+        statusMessage = "Downloaded \(modelID)"
+    }
+
+    private func cancelDownload() {
+        guard let commandID = downloadCommandID,
+              let modelID = downloadingID,
+              controller.cancelUtilityCommand(commandID) else {
+            return
+        }
+        cancellingDownloadID = modelID
+        statusMessage = "Cancelling download for \(modelID)…"
+    }
+
+    private func downloadTermsMessage(_ row: StudioModelInventoryRow) -> String {
+        let summary = row.usageTerms?.summary ?? "This model has third-party usage terms."
+        return "\(summary)\n\nMere does not determine whether your intended use is permitted. You are responsible for compliance."
     }
 
     @MainActor

@@ -44,6 +44,15 @@ or:
 swift run mere.run --models-root /path/to/models model list
 ```
 
+## macOS Studio
+
+Open **Models**, switch the scope to **All**, and select any missing model to
+download it directly. Studio streams the underlying `model pull` output, keeps
+cancelled partial downloads resumable, and refreshes the inventory after a
+successful install. Models with restricted third-party terms show their source
+links and require **Acknowledge & Download** before transfer. The **Files**
+button opens the configured model store in Finder; it does not start a download.
+
 ## Canonical model IDs
 
 Examples:
