@@ -6,6 +6,13 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.31.0 - 2026-08-01
+
+This release makes large local-agent workflows safer and Studio model
+management faster: one-click managed downloads, a secure preview deep link,
+native Inkling-Small adapter training, and the official DeepSeek V4 Flash
+0731 Q2 runtime with bounded residency settings.
+
 ### Added
 
 - added one-click managed model downloads to the macOS Studio Models panel,
