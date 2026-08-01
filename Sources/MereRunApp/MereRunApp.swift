@@ -27,6 +27,7 @@ final class MereRunAppDelegate: NSObject, NSApplicationDelegate {
 struct MereRunApp: App {
     @NSApplicationDelegateAdaptor(MereRunAppDelegate.self) private var appDelegate
     @StateObject private var controller = MereRunController()
+    @State private var deepLinkError: String?
     private let updaterController = SPUStandardUpdaterController(
         startingUpdater: true,
         updaterDelegate: nil,
@@ -48,6 +49,18 @@ struct MereRunApp: App {
                         }
                     }
                 }
+                .onOpenURL(perform: openDeepLink)
+                .alert(
+                    "Couldn’t open preview",
+                    isPresented: Binding(
+                        get: { deepLinkError != nil },
+                        set: { if !$0 { deepLinkError = nil } }
+                    )
+                ) {
+                    Button("OK") { deepLinkError = nil }
+                } message: {
+                    Text(deepLinkError ?? "The preview link is invalid.")
+                }
         }
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unified(showsTitle: false))
@@ -64,6 +77,22 @@ struct MereRunApp: App {
             MereRunSettingsView()
                 .environmentObject(controller)
                 .frame(width: 560)
+        }
+    }
+
+    private func openDeepLink(_ url: URL) {
+        do {
+            switch try MereRunDeepLink.parse(url) {
+            case .preview(let artifactURL):
+                NSApplication.shared.activate(ignoringOtherApps: true)
+                guard QuickLookCoordinator.shared.preview(artifactURL) else {
+                    deepLinkError = "Quick Look is unavailable."
+                    return
+                }
+                deepLinkError = nil
+            }
+        } catch {
+            deepLinkError = error.localizedDescription
         }
     }
 }

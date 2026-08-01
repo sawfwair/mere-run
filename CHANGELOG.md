@@ -11,6 +11,9 @@ The format is based on Keep a Changelog.
 - added one-click managed model downloads to the macOS Studio Models panel,
   with live pull output, restricted-model terms acknowledgement, cancellable
   resumable transfers, and automatic inventory refresh after installation.
+- added a `mererun://preview?path=…` macOS Studio deep link for Raycast and
+  other local launchers. The app validates one percent-encoded absolute file
+  path, activates MereRun, and opens the artifact in native Quick Look.
 - added native `text train-lora` SFT and `text chat --lora` support for
   `text-chat-inkling-small`, including the released Inkling message format,
   configurable training-consistent reasoning effort, assistant-only loss,
