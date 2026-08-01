@@ -2,8 +2,9 @@
 
 ## Purpose
 
-Split a finished mix into two or four float WAV stems with native Swift/MLX
-BS-RoFormer inference. No audio is uploaded and no Python runtime is launched.
+Split a finished mix into two or four float WAV stems, remove room reverb, or
+remove broadband noise with native Swift/MLX RoFormer inference. No audio is
+uploaded and no Python runtime is launched.
 
 ## Install
 
@@ -14,6 +15,8 @@ model-card README, and license, so no license-acceptance flag is required.
 ```bash
 mere.run model pull music-separate-bs-roformer-viperx-1297
 mere.run model pull music-separate-bs-roformer-4stem
+mere.run model pull music-separate-mel-roformer-dereverb
+mere.run model pull music-separate-mel-roformer-denoise
 ```
 
 ## Separate
@@ -36,12 +39,28 @@ mere.run music separate ./song.mp3 \
   --output-dir ./song-4stems
 ```
 
-The default overlap of `2` matches both published inference configs. A higher
-divisor of the selected model's chunk size, such as `4`, spends more compute
-on chunk blending:
+The default comes from the selected model: `2` for ViperX, four-stem, and
+dereverb, and `4` for denoise. A higher divisor of the selected model's chunk
+size spends more compute on chunk blending:
 
 ```bash
 mere.run music separate ./song.wav --overlap 4 --dtype float16
+```
+
+For dereverberated audio in `noreverb.wav`:
+
+```bash
+mere.run music separate ./room.wav \
+  --model music-separate-mel-roformer-dereverb \
+  --output-dir ./room-restored
+```
+
+For denoised audio in `dry.wav`:
+
+```bash
+mere.run music separate ./noisy.wav \
+  --model music-separate-mel-roformer-denoise \
+  --output-dir ./noise-restored
 ```
 
 Use `--dtype float32` for full-precision model compute. Inputs are decoded to

@@ -7,7 +7,7 @@ final class MusicSeparateCommandTests: XCTestCase {
         let command = try MusicSeparate.parse(["mix.wav"])
         XCTAssertEqual(command.audio, "mix.wav")
         XCTAssertEqual(command.model, ModelResolver.ModelID.roFormerViperX1297.rawValue)
-        XCTAssertEqual(command.overlap, 2)
+        XCTAssertNil(command.overlap)
         XCTAssertEqual(command.dtype, "float16")
         XCTAssertNoThrow(try command.validate())
     }
@@ -34,5 +34,20 @@ final class MusicSeparateCommandTests: XCTestCase {
             "--model", ModelResolver.ModelID.roFormerFourStem.rawValue,
             "--overlap", "8",
         ]))
+    }
+
+    func testParsesPinnedMelBandRestorationModels() throws {
+        let dereverb = try MusicSeparate.parse([
+            "room.wav",
+            "--model", ModelResolver.ModelID.melRoFormerDereverb.rawValue,
+        ])
+        XCTAssertNoThrow(try dereverb.validate())
+
+        let denoise = try MusicSeparate.parse([
+            "noisy.wav",
+            "--model", ModelResolver.ModelID.melRoFormerDenoise.rawValue,
+        ])
+        XCTAssertNil(denoise.overlap)
+        XCTAssertNoThrow(try denoise.validate())
     }
 }

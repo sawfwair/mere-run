@@ -84,6 +84,8 @@ public struct ModelResolver {
         case muScriptorLarge = "music-muscriptor-large"
         case roFormerViperX1297 = "music-separate-bs-roformer-viperx-1297"
         case roFormerFourStem = "music-separate-bs-roformer-4stem"
+        case melRoFormerDereverb = "music-separate-mel-roformer-dereverb"
+        case melRoFormerDenoise = "music-separate-mel-roformer-denoise"
         case wooshDFlow = "sfx-woosh-dflow"
         case wooshFlow = "sfx-woosh-flow"
         case wooshClap = "sfx-woosh-clap"

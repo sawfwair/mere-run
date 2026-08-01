@@ -709,6 +709,20 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 16
             ),
             descriptor(
+                ModelResolver.ModelID.melRoFormerDereverb.rawValue,
+                "MelBand RoFormer dereverb",
+                "Removes room reverberation from stereo audio locally with native MLX inference.",
+                minimum: 8,
+                recommended: 16
+            ),
+            descriptor(
+                ModelResolver.ModelID.melRoFormerDenoise.rawValue,
+                "MelBand RoFormer denoise",
+                "Removes broadband noise from stereo audio locally with native MLX inference.",
+                minimum: 8,
+                recommended: 16
+            ),
+            descriptor(
                 ModelResolver.ModelID.wooshDFlow.rawValue,
                 "Woosh DFlow",
                 "Generates Foley and sound effects from text prompts with Sony Research Woosh.",

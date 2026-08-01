@@ -75,7 +75,7 @@ Public tree:
   - `mere.run music generate` — Generate audio from a music prompt.
   - `mere.run music realtime` — Run Magenta RealTime 2 music generation.
   - `mere.run music serve` — Start a warm resident ACE-Step music generation API.
-  - `mere.run music separate` — Separate music into stems with native BS-RoFormer models.
+  - `mere.run music separate` — Separate or restore audio with native RoFormer models.
   - `mere.run music train-adapter` — Train a native ACE-Step LoRA or LoKr adapter.
   - `mere.run music transcribe` — Transcribe a full music mix into instrument-separated MIDI with MuScriptor.
 - [`mere.run sfx`](/runtime/sfx) — Generate sound effects locally.
