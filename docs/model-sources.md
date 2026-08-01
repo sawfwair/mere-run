@@ -221,8 +221,15 @@ larger Ornith coding-agent comparisons and uses a 32K runtime context by
 default to keep local evals predictable.
 
 `text-agent-deepseek-v4-flash` is the preferred managed setup-agent tier on
-96 GB+ Apple Silicon Macs. Smaller Qwen setup agents are lower-memory
-alternatives, not upgrades from DeepSeek V4 Flash.
+96 GB+ Apple Silicon Macs, with 128 GB recommended. It pulls the official
+pure-Q2 0731 imatrix GGUF from `antirez/deepseek-v4-gguf` at an immutable
+revision (80.76 GiB, SHA-256
+`ca22ae2f838e14077c22bc1c1417b71b45b5e5a3687bd96c2ac6e17fdb6261c0`).
+Mere keeps one full-resident DS4 server, caps the operational context at 32K,
+uses a 1,024-token prefill chunk, and limits disk KV checkpoints to 8 GiB.
+Smaller Qwen setup agents are lower-memory alternatives, not upgrades from
+DeepSeek V4 Flash. Avoid repeatedly unloading and reloading this tier under
+memory pressure.
 
 `text-chat-q36-nano` uses the public `mlx-community/Qwen3.6-35B-A3B-OptiQ-4bit`
 snapshot. That Hugging Face repo includes an MTP head (`mtp.safetensors`) for

@@ -98,6 +98,12 @@ equally recommended:
 | 64-95 GB | `text-chat-gemma4-12b-4bit` | Keep the proven Gemma assistant lane; spend headroom on context, concurrency, or larger Gemma alternates. |
 | 96+ GB | `text-agent-deepseek-v4-flash` | Premier agent/API chat tier; keep Gemma 12B 4-bit for normal interactive local chat. |
 
+The DeepSeek V4 Flash tier uses the official 80.76 GiB pure-Q2 0731 imatrix
+GGUF. Its persistent DS4 server defaults to a 32K operational context, a
+1,024-token prefill chunk, and an 8 GiB disk-KV budget. A 128 GB Mac is the
+comfortable target; close other memory-heavy workloads before using it on a
+96 GB machine.
+
 `text-chat-lfm25-a1b-8bit` installs `LiquidAI/LFM2.5-8B-A1B-MLX-8bit`
 and runs through the native Swift LFM2 runtime. It is text-only; use
 `--model text-chat-lfm25-a1b-8bit` for CLI chat or `api serve --engine text-chat-lfm2`.

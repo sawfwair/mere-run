@@ -1,7 +1,7 @@
 # vendor/ds4
 
 Prebuilt DwarfStar inference binaries for DeepSeek V4 Flash vendored from
-[antirez/ds4](https://github.com/antirez/ds4.git) at commit `efdadd41e20134af4f3381e1ed90e96fe4faef6f`.
+[antirez/ds4](https://github.com/antirez/ds4.git) at commit `4893e0c40fba03dbc85555faeb035799aa04e0b6`.
 
 Rebuild with:
 

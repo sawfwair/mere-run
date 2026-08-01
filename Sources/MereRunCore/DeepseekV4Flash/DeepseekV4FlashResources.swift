@@ -3,27 +3,33 @@ import Foundation
 /// Resource paths, Hub fallback config, and validation for the
 /// DeepSeek V4 Flash premier agent tier.
 ///
-/// The model is a single ~81 GB GGUF served by the bundled `ds4-server`
+/// The model is a single ~81 GiB GGUF served by the bundled `ds4-server`
 /// inference binary (see `vendor/ds4/`). Unlike the other text-chat
 /// generators in this codebase, the model is **not** loaded in-process:
 /// `DeepseekV4FlashGenerator` spawns the vendored binary as a subprocess
 /// and proxies OpenAI-compatible chat requests over loopback HTTP.
 public struct DeepseekV4FlashResources: Sendable, Hashable {
     public static let defaultModelId = "text-agent-deepseek-v4-flash"
-    public static let defaultRepoId = "jedisct1/DeepSeek-V4-Flash-imatrix-aligned"
-    public static let defaultRevision = "main"
-    public static let defaultContextLength = 65_536
+    public static let defaultRepoId = "antirez/deepseek-v4-gguf"
+    public static let defaultRevision = "1cd7b564460821938add0475a60b942c409295e0"
+    public static let defaultContextLength = 32_768
+    public static let defaultPrefillChunk = 1_024
+    public static let defaultKVDiskSpaceMB = 8_192
     public static let serverStartupTimeoutSeconds: TimeInterval = 300
 
-    /// Imatrix-tuned q2 GGUF with page-aligned tensor offsets: ~81 GB.
-    /// Drop-in replacement for the original `antirez/deepseek-v4-gguf` imatrix
-    /// file, with alignment that enables efficient mmap on Apple Silicon and a
-    /// refreshed calibration corpus.
+    /// Official 0731 imatrix-tuned pure-Q2 GGUF: 80.76 GiB.
+    public static let defaultGGUFByteCount: Int64 = 86_720_111_488
+    public static let defaultGGUFSHA256 =
+        "ca22ae2f838e14077c22bc1c1417b71b45b5e5a3687bd96c2ac6e17fdb6261c0"
     public static let imatrixGGUFFile =
+        "DeepSeek-V4-Flash-IQ2XXS-w2Q2K-AProjQ8-SExpQ8-OutQ8-chat-v2-imatrix-0731.gguf"
+
+    /// Previous page-aligned imatrix filename. Existing installs may still
+    /// point at this file, often through a symlink.
+    public static let previousAlignedImatrixGGUFFile =
         "DeepSeek-V4-Flash-IQ2XXS-w2Q2K-AProjQ8-SExpQ8-OutQ8-chat-v2-imatrix-aligned.gguf"
 
-    /// Previous imatrix filename from the original upstream GGUF. Existing
-    /// installs may still point at this file, often through a symlink.
+    /// Previous imatrix filename from the original upstream GGUF.
     public static let previousImatrixGGUFFile =
         "DeepSeek-V4-Flash-IQ2XXS-w2Q2K-AProjQ8-SExpQ8-OutQ8-chat-v2-imatrix.gguf"
 
@@ -35,6 +41,13 @@ public struct DeepseekV4FlashResources: Sendable, Hashable {
 
     /// Back-compat alias: code that referenced `defaultGGUFFile` keeps working.
     public static let defaultGGUFFile = imatrixGGUFFile
+
+    public static let supportedInstalledGGUFFiles = [
+        imatrixGGUFFile,
+        previousAlignedImatrixGGUFFile,
+        previousImatrixGGUFFile,
+        legacyGGUFFile,
+    ]
 
     public static let managedRelativePath = "\(defaultModelId).gguf"
 
