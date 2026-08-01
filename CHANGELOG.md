@@ -22,6 +22,14 @@ The format is based on Keep a Changelog.
   adapters use the family-specific `mererun.inkling.text-lora` manifest format;
   a deterministic unseen-paraphrase receptivity gate is included.
 
+### Changed
+
+- pinned the DeepSeek V4 Flash premier tier to the official pure-Q2 0731
+  imatrix GGUF and the matching DS4 MXFP4 runtime. Mere now keeps the model in
+  one persistent full-resident server with a 32K operational context, a
+  1,024-token prefill chunk, and an 8 GiB disk-KV budget; existing older
+  imatrix installs remain discoverable.
+
 ## 0.30.0 - 2026-07-31
 
 This release is the complete public product delta since `v0.29.1`: native

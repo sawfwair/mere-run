@@ -299,10 +299,10 @@ public enum MereRunAgentModelCatalog {
     private static func deepseekV4Flash() -> MereRunAgentModelRecommendation {
         MereRunAgentModelRecommendation(
             id: DeepseekV4FlashResources.defaultModelId,
-            displayName: "DeepSeek V4 Flash IQ2 imatrix",
-            summary: "Premier 284B MoE agent tier (~81 GB imatrix-tuned GGUF, the upstream "
-                + "README's preferred quant) for 96 GB and larger Macs. Runs on the bundled "
-                + "ds4-server engine with a 65,536-token configured context.",
+            displayName: "DeepSeek V4 Flash 0731 IQ2 imatrix",
+            summary: "Premier 284B MoE agent tier (80.76 GiB pure-Q2 imatrix GGUF) for "
+                + "96 GB and larger Macs, with 128 GB recommended. Runs persistently on "
+                + "the bundled ds4-server engine with a 32,768-token operational context.",
             minimumUnifiedMemoryGB: 96,
             recommendedUnifiedMemoryGB: 128,
             servingEngine: .deepseekV4Flash,

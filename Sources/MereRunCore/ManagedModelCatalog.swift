@@ -1167,7 +1167,7 @@ public enum ManagedModelCatalog {
             upstreamRepoId: DeepseekV4FlashResources.defaultRepoId,
             upstreamRevision: DeepseekV4FlashResources.defaultRevision,
             validationKind: .deepseekV4FlashIMatrixGGUF,
-            estimatedDownloadBytes: 86_720_111_488,
+            estimatedDownloadBytes: DeepseekV4FlashResources.defaultGGUFByteCount,
             defaultCLICommands: ["api serve", "agent"]
         ),
         ManagedModelSpec(

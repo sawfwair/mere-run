@@ -171,14 +171,11 @@ public actor DeepseekV4FlashGenerator: ChatGenerator {
         // ds4 looks for `metal/*.metal` shader sources relative to cwd, so root
         // the process at vendor/ds4 (binary's parent) where those files live.
         proc.currentDirectoryURL = binary.deletingLastPathComponent()
-        proc.arguments = [
-            "-m", ggufURL.path,
-            "--host", "127.0.0.1",
-            "--port", String(chosenPort),
-            "--ctx", String(DeepseekV4FlashResources.defaultContextLength),
-            "--kv-disk-dir", kvDir.path,
-            "--kv-disk-space-mb", "8192",
-        ]
+        proc.arguments = Self.serverArguments(
+            ggufURL: ggufURL,
+            port: chosenPort,
+            kvDirectory: kvDir
+        )
         // Scope the ds4-server singleton lock to mere.run so it doesn't collide
         // with a user-launched `ds4` on the side. ds4 honors DS4_LOCK_FILE.
         var env = ProcessInfo.processInfo.environment
@@ -206,7 +203,7 @@ public actor DeepseekV4FlashGenerator: ChatGenerator {
 
         progressHandler?(ChatProgress(
             stage: .loadingModel,
-            message: "Starting ds4-server (this loads ~81 GB from disk)"
+            message: "Starting ds4-server (this loads ~81 GiB from disk)"
         ))
         try proc.run()
         process = proc
@@ -218,6 +215,18 @@ public actor DeepseekV4FlashGenerator: ChatGenerator {
             stage: .loadingModel,
             message: "ds4-server ready on 127.0.0.1:\(chosenPort)"
         ))
+    }
+
+    static func serverArguments(ggufURL: URL, port: Int, kvDirectory: URL) -> [String] {
+        [
+            "-m", ggufURL.path,
+            "--host", "127.0.0.1",
+            "--port", String(port),
+            "--ctx", String(DeepseekV4FlashResources.defaultContextLength),
+            "--prefill-chunk", String(DeepseekV4FlashResources.defaultPrefillChunk),
+            "--kv-disk-dir", kvDirectory.path,
+            "--kv-disk-space-mb", String(DeepseekV4FlashResources.defaultKVDiskSpaceMB),
+        ]
     }
 
     private func appendStderr(_ chunk: String) {
@@ -333,20 +342,11 @@ public actor DeepseekV4FlashGenerator: ChatGenerator {
             return aliasURL
         }
 
-        // 2. Try imatrix first (preferred per upstream README), then legacy,
-        //    then any other .gguf in the install dir.
+        // 2. Prefer the pinned 0731 artifact, retain older imatrix installs,
+        //    then accept any other GGUF in the install directory.
         let modelDir = MereRunModelPaths.modelDir(DeepseekV4FlashResources.defaultModelId)
-        let imatrixURL = modelDir.appendingPathComponent(DeepseekV4FlashResources.imatrixGGUFFile)
-        if FileManager.default.fileExists(atPath: imatrixURL.path) {
-            return imatrixURL
-        }
-        let previousImatrixURL = modelDir.appendingPathComponent(DeepseekV4FlashResources.previousImatrixGGUFFile)
-        if FileManager.default.fileExists(atPath: previousImatrixURL.path) {
-            return previousImatrixURL
-        }
-        let legacyURL = modelDir.appendingPathComponent(DeepseekV4FlashResources.legacyGGUFFile)
-        if FileManager.default.fileExists(atPath: legacyURL.path) {
-            return legacyURL
+        if let installed = Self.preferredInstalledGGUF(in: modelDir) {
+            return installed
         }
         if let preferred = Self.preferredGGUF(in: modelDir) {
             return preferred
@@ -368,7 +368,7 @@ public actor DeepseekV4FlashGenerator: ChatGenerator {
                     case .downloading(let percent):
                         progressHandler?(ChatProgress(
                             stage: .loadingModel,
-                            message: "Downloading DS4 GGUF (~81 GB): \(percent)%"
+                            message: "Downloading DS4 GGUF (~81 GiB): \(percent)%"
                         ))
                     case .extracting:
                         progressHandler?(ChatProgress(stage: .loadingModel, message: "Extracting"))
@@ -381,6 +381,19 @@ public actor DeepseekV4FlashGenerator: ChatGenerator {
         } catch {
             throw DeepseekV4FlashError.downloadFailed(error.localizedDescription)
         }
+    }
+
+    static func preferredInstalledGGUF(
+        in directory: URL,
+        fileManager: FileManager = .default
+    ) -> URL? {
+        for filename in DeepseekV4FlashResources.supportedInstalledGGUFFiles {
+            let candidate = directory.appendingPathComponent(filename)
+            if Self.isRegularFileOrSymlinkTarget(candidate, fileManager: fileManager) {
+                return candidate
+            }
+        }
+        return nil
     }
 
     /// Returns the most preferred .gguf in `directory` — files whose name
