@@ -139,6 +139,32 @@ cd /Volumes/mere.run/.mere-run
 The installer copies `mere.run` and its colocated runtime assets to
 `/usr/local/bin/mere.run`, using `sudo` only when the destination requires it.
 
+### Preview artifacts from Raycast and other launchers
+
+The macOS app registers a local `mererun://preview` deep link. Pass one
+percent-encoded absolute artifact path and MereRun opens its native Quick Look
+panel, regardless of whether the output is an image, audio, video, text, or a
+Quick Look-compatible 3D file:
+
+```text
+mererun://preview?path=%2FUsers%2Fme%2FDesktop%2Fresult.png
+```
+
+Raycast extensions can construct the URL without manual escaping:
+
+```typescript
+import { open } from "@raycast/api";
+
+const deepLink = new URL("mererun://preview");
+deepLink.searchParams.set("path", outputPath);
+await open(deepLink.toString());
+```
+
+The target must already exist and be a readable file. MereRun rejects relative
+paths, directories, missing files, duplicate `path` values, and extra query
+parameters. The link opens a preview only; it does not import, move, or modify
+the artifact.
+
 Linux package builds are headless CLI-only. They install the `mere.run` CLI plus
 colocated runtime assets; they do not include the macOS SwiftUI studio or DMG
 layout. See the dedicated [Linux QuickStart](./docs/linux-quickstart.md) for the

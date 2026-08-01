@@ -2,6 +2,11 @@
 
 Optional SwiftUI studio wrapper around the public `mere.run` CLI.
 
+The packaged app registers `mererun://preview?path=…` for local launchers. Keep
+the parser typed and strict: one percent-encoded absolute path to an existing,
+readable file. External preview links may show Quick Look but must not import or
+mutate artifacts.
+
 - `StudioTypes.swift`: user-facing mode, draft, and request types.
 - `CommandCatalog.swift`: mode-to-command templates.
 - `MereRunController.swift`: child-process launching and log capture.

@@ -196,6 +196,8 @@ final class LinuxNativeBridgeTests: XCTestCase {
         XCTAssertTrue(script.contains("SURequireSignedFeed"))
         XCTAssertTrue(script.contains("NSMicrophoneUsageDescription"))
         XCTAssertTrue(script.contains("local voice references and transcription input"))
+        XCTAssertTrue(script.contains("CFBundleURLTypes"))
+        XCTAssertTrue(script.contains(#""CFBundleURLSchemes":["mererun"]"#))
         XCTAssertTrue(script.contains("MereRunDebug.entitlements"))
         XCTAssertTrue(script.contains(#"if [[ "$identity" == "-" ]]"#))
         XCTAssertTrue(script.contains("--preserve-metadata=entitlements"))
