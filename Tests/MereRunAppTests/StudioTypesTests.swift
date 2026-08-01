@@ -1848,6 +1848,33 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertTrue(template.arguments(from: draft).contains("--accept-model-license"))
     }
 
+    func testStudioModelDownloadCommandBuildsOpenAndRestrictedPulls() {
+        XCTAssertEqual(
+            StudioModelDownloadCommand.arguments(
+                modelID: "image-klein-nano",
+                acknowledgingUsageTerms: false
+            ),
+            ["model", "pull", "image-klein-nano"]
+        )
+        XCTAssertEqual(
+            StudioModelDownloadCommand.arguments(
+                modelID: "vision-face-buffalo-l",
+                acknowledgingUsageTerms: true
+            ),
+            ["model", "pull", "vision-face-buffalo-l", "--accept-model-license"]
+        )
+    }
+
+    func testStudioModelDownloadOutputNormalizesProgressAndStaysBounded() {
+        let output = StudioModelDownloadCommand.appendingOutput(
+            "25%\r50%\r",
+            to: "start\n",
+            limit: 12
+        )
+
+        XCTAssertEqual(output, "art\n25%\n50%\n")
+    }
+
     func testAgentOnboardTemplatePropagatesUsageTermsAcceptance() throws {
         let template = try XCTUnwrap(CommandCatalog.template(id: .agentOnboard))
         var draft = template.defaultDraft()

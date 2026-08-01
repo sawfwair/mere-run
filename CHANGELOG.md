@@ -8,6 +8,9 @@ The format is based on Keep a Changelog.
 
 ### Added
 
+- added one-click managed model downloads to the macOS Studio Models panel,
+  with live pull output, restricted-model terms acknowledgement, cancellable
+  resumable transfers, and automatic inventory refresh after installation.
 - added native `text train-lora` SFT and `text chat --lora` support for
   `text-chat-inkling-small`, including the released Inkling message format,
   configurable training-consistent reasoning effort, assistant-only loss,

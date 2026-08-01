@@ -79,12 +79,14 @@ identity, placement, scheduling policy, model distribution, worker lifecycle,
 and fleet telemetry. The app links to the Relay console instead of copying
 those schemas or controls.
 
-Models includes a dedicated Health & Repair workspace. Manifest audit is a
-structured dry run, repair requires confirmation and writes only missing known
-manifests, and installed-model correctness/performance gates run as durable
-Library jobs with JSON reports. Existing model browsing, storage cleanup, and
-runtime policy remain in the Models and Serving destinations rather than being
-duplicated.
+Models includes one-click managed downloads with live CLI output, explicit
+third-party terms acknowledgement, cancellation with resumable partials, and a
+dedicated Health & Repair workspace. Successful downloads refresh the inventory
+without reopening the sheet. Manifest audit is a structured dry run, repair
+requires confirmation and writes only missing known manifests, and
+installed-model correctness/performance gates run as durable Library jobs with
+JSON reports. Existing model browsing, storage cleanup, and runtime policy
+remain in the Models and Serving destinations rather than being duplicated.
 
 Serving is also a top-level first-class destination. **Serving & Agents**
 owns API preflight/start/stop/restart, external-server reconnection, LAN/auth

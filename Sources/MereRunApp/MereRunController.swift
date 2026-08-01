@@ -971,6 +971,7 @@ final class MereRunController: ObservableObject {
 
     func utilityCommandResult(
         args: [String],
+        commandID: UUID = UUID(),
         masksSecrets: Bool = true,
         environmentOverrides: [String: String] = [:],
         onOutput: (@MainActor @Sendable (String) -> Void)? = nil
@@ -985,7 +986,6 @@ final class MereRunController: ObservableObject {
         let display = launch.displayCommand(for: masksSecrets ? cliArgs.maskingSecrets() : cliArgs)
         let output = ReadinessOutputBuffer()
         let errors = ReadinessOutputBuffer()
-        let id = UUID()
 
         return await withCheckedContinuation { continuation in
             do {
@@ -1017,12 +1017,12 @@ final class MereRunController: ObservableObject {
                             stderr: errors.text()
                         )
                         Task { @MainActor in
-                            self?.utilityProcesses[id] = nil
+                            self?.utilityProcesses[commandID] = nil
                             continuation.resume(returning: result)
                         }
                     }
                 )
-                utilityProcesses[id] = process
+                utilityProcesses[commandID] = process
             } catch {
                 continuation.resume(
                     returning: MereRunUtilityCommandResult(
@@ -1034,6 +1034,13 @@ final class MereRunController: ObservableObject {
                 )
             }
         }
+    }
+
+    @discardableResult
+    func cancelUtilityCommand(_ commandID: UUID) -> Bool {
+        guard let process = utilityProcesses[commandID] else { return false }
+        process.terminate()
+        return true
     }
 
     /// A captured snapshot of what to run, decoupled from the live editing state
