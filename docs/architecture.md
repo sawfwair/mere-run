@@ -161,6 +161,15 @@ Music generation:
   - `Sources/MereRunCore/ACEStep/ACEStepPipeline+Prompting.swift`
   - `Sources/MereRunCore/ACEStep/ACEStepPipeline+Generation.swift`
 
+Music source separation:
+
+- CLI: `Sources/MereRunCLI/Commands/MusicSeparateCommand.swift`
+- Runtime entrypoint: `Sources/MereRunCore/RoFormer/RoFormerSeparator.swift`
+- Read next:
+  - `Sources/MereRunCore/RoFormer/RoFormerResources.swift`
+  - `Sources/MereRunCore/RoFormer/BSRoFormer.swift`
+  - `Sources/MereRunCore/RoFormer/RoFormerDSP.swift`
+
 Sound-effect generation:
 
 - CLI: `Sources/MereRunCLI/Commands/SFXGenerateCommand.swift`

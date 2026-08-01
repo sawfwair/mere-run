@@ -305,6 +305,11 @@ enum InstalledModelSmokePlans {
                 try await runner.installedMusicTranscriptionCheck(model: spec.id)
             }
 
+        case .roFormer:
+            return direct(spec, route: "music separate") { runner in
+                try await runner.installedMusicSeparationCheck(model: spec.id)
+            }
+
         case .woosh:
             if spec.id == "sfx-woosh-vflow-8s" || spec.id == "sfx-woosh-dvflow-8s" {
                 return direct(spec, route: "sfx video generate") { runner in
@@ -948,6 +953,29 @@ extension GateRunner {
             timeout: 3_600
         )
         return try jsonFileObservation(output, run: run, label: "music transcription JSON")
+    }
+
+    func installedMusicSeparationCheck(model: String) async throws -> GateObservation {
+        let input = workDirectory.appendingPathComponent("installed-music-source.wav")
+        if !FileManager.default.fileExists(atPath: input.path) {
+            try Self.writeSineWaveFixture(to: input)
+        }
+        let output = artifactURL(model, extension: "stems")
+        let run = try await exec(
+            [
+                "music", "separate", input.path,
+                "--model", model,
+                "--output-dir", output.path,
+                "--quiet",
+            ],
+            timeout: 3_600
+        )
+        let vocals = output.appendingPathComponent("vocals.wav")
+        let instrumental = output.appendingPathComponent("instrumental.wav")
+        let manifest = output.appendingPathComponent("separation.json")
+        _ = try audioObservation(vocals, run: run)
+        _ = try audioObservation(instrumental, run: run)
+        return try jsonFileObservation(manifest, run: run, label: "music separation manifest")
     }
 
     func installedSFXCheck(model: String) async throws -> GateObservation {

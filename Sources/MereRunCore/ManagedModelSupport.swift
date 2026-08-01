@@ -695,6 +695,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 64
             ),
             descriptor(
+                ModelResolver.ModelID.roFormerViperX1297.rawValue,
+                "ViperX vocal separation",
+                "Separates vocals and instrumental audio locally with the native MLX BS-RoFormer runtime.",
+                minimum: 8,
+                recommended: 16
+            ),
+            descriptor(
                 ModelResolver.ModelID.wooshDFlow.rawValue,
                 "Woosh DFlow",
                 "Generates Foley and sound effects from text prompts with Sony Research Woosh.",

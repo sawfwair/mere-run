@@ -70,11 +70,12 @@ Public tree:
   - `mere.run vision image-to-3d-trellis2` — Reconstruct a 512-resolution PBR O-Voxel mesh with native MLX TRELLIS.2.
   - `mere.run vision image-to-3d-multiview` — VFX alias for native 4/6-view InstantMesh reconstruction.
   - `mere.run vision ocr` — Extract text from images using LightOnOCR, GLM-OCR, or Infinity-Parser2.
-- [`mere.run music`](/runtime/music) — Generate music locally.
+- [`mere.run music`](/runtime/music) — Generate, analyze, transcribe, and separate music locally.
   - `mere.run music analyze` — Analyze source audio with ACE-Step audio understanding.
   - `mere.run music generate` — Generate audio from a music prompt.
   - `mere.run music realtime` — Run Magenta RealTime 2 music generation.
   - `mere.run music serve` — Start a warm resident ACE-Step music generation API.
+  - `mere.run music separate` — Separate vocals and instrumental audio with ViperX BS-RoFormer.
   - `mere.run music train-adapter` — Train a native ACE-Step LoRA or LoKr adapter.
   - `mere.run music transcribe` — Transcribe a full music mix into instrument-separated MIDI with MuScriptor.
 - [`mere.run sfx`](/runtime/sfx) — Generate sound effects locally.
