@@ -104,6 +104,7 @@ public enum MereRunModelValidator {
             case .directoryRoot, .structuredRoot:
                 return spec.validationKind != .codegenGGUF
                     && spec.validationKind != .roFormer
+                    && spec.validationKind != .apBWE
                     && spec.validationKind != .deepseekV4FlashIMatrixGGUF
                     && spec.validationKind != .magentaRT2
                     && spec.validationKind != .woosh
@@ -147,6 +148,7 @@ public enum MereRunModelValidator {
             tokenizerDir = nil
         } else if spec?.validationKind == .aceStep
             || spec?.validationKind == .roFormer
+            || spec?.validationKind == .apBWE
             || spec?.validationKind == .sortformer
             || spec?.validationKind == .magentaRT2
             || spec?.validationKind == .muScriptor
@@ -410,6 +412,8 @@ public enum MereRunModelValidator {
                 && engine != .magentaRT2
                 && engine != .muScriptor:
                 warnings.append("Manifest engine mismatch: family=music expects ace-step, bs-roformer, magenta-rt2, or muscriptor.")
+            case .audio where engine != .apBWE:
+                warnings.append("Manifest engine mismatch: family=audio expects ap-bwe.")
             case .sfx where engine != .woosh && engine != .mmaudio:
                 warnings.append("Manifest engine mismatch: family=sfx expects woosh or mmaudio.")
             case .video where engine != .ltxVideo && engine != .wanVideo:
@@ -487,7 +491,7 @@ public enum MereRunModelValidator {
                 return true
             }
             switch manifest.engine {
-            case .qwen3Coder?, .northMiniCode?, .inkling?, .aceStep?, .magentaRT2?, .muScriptor?, .roFormer?, .woosh?, .mmaudio?, .ltxVideo?,
+            case .qwen3Coder?, .northMiniCode?, .inkling?, .aceStep?, .magentaRT2?, .muScriptor?, .roFormer?, .apBWE?, .woosh?, .mmaudio?, .ltxVideo?,
                  .wanVideo?, .moge2?, .videoDepthAnything?, .depthAnything3?, .tripoSR?, .instantMesh?, .trellis2?,
                  .insightFace?, .sortformer?:
                 return true

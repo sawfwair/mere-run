@@ -723,6 +723,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 16
             ),
             descriptor(
+                ModelResolver.ModelID.apBWE16kTo48k.rawValue,
+                "AP-BWE speech bandwidth extension",
+                "Extends 16 kHz narrowband speech to 48 kHz with native MLX inference.",
+                minimum: 8,
+                recommended: 16
+            ),
+            descriptor(
                 ModelResolver.ModelID.wooshDFlow.rawValue,
                 "Woosh DFlow",
                 "Generates Foley and sound effects from text prompts with Sony Research Woosh.",

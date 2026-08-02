@@ -86,6 +86,7 @@ public struct ModelResolver {
         case roFormerFourStem = "music-separate-bs-roformer-4stem"
         case melRoFormerDereverb = "music-separate-mel-roformer-dereverb"
         case melRoFormerDenoise = "music-separate-mel-roformer-denoise"
+        case apBWE16kTo48k = "audio-enhance-ap-bwe-16kto48k"
         case wooshDFlow = "sfx-woosh-dflow"
         case wooshFlow = "sfx-woosh-flow"
         case wooshClap = "sfx-woosh-clap"

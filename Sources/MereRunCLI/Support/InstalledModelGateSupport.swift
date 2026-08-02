@@ -310,6 +310,11 @@ enum InstalledModelSmokePlans {
                 try await runner.installedMusicSeparationCheck(model: spec.id)
             }
 
+        case .apBWE:
+            return direct(spec, route: "audio enhance") { runner in
+                try await runner.installedAudioEnhancementCheck(model: spec.id)
+            }
+
         case .woosh:
             if spec.id == "sfx-woosh-vflow-8s" || spec.id == "sfx-woosh-dvflow-8s" {
                 return direct(spec, route: "sfx video generate") { runner in
@@ -976,6 +981,24 @@ extension GateRunner {
         _ = try audioObservation(vocals, run: run)
         _ = try audioObservation(instrumental, run: run)
         return try jsonFileObservation(manifest, run: run, label: "music separation manifest")
+    }
+
+    func installedAudioEnhancementCheck(model: String) async throws -> GateObservation {
+        let input = workDirectory.appendingPathComponent("installed-audio-enhancement-source.wav")
+        if !FileManager.default.fileExists(atPath: input.path) {
+            try Self.writeSineWaveFixture(to: input)
+        }
+        let output = artifactURL(model, extension: "wav")
+        let run = try await exec(
+            [
+                "audio", "enhance", input.path,
+                "--model", model,
+                "--output", output.path,
+                "--quiet",
+            ],
+            timeout: 3_600
+        )
+        return try audioObservation(output, run: run)
     }
 
     func installedSFXCheck(model: String) async throws -> GateObservation {

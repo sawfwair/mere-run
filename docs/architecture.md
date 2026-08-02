@@ -170,6 +170,15 @@ Music source separation:
   - `Sources/MereRunCore/RoFormer/BSRoFormer.swift`
   - `Sources/MereRunCore/RoFormer/RoFormerDSP.swift`
 
+Speech bandwidth extension:
+
+- CLI: `Sources/MereRunCLI/Commands/AudioEnhanceCommand.swift`
+- Runtime entrypoint: `Sources/MereRunCore/APBWE/APBWEEnhancer.swift`
+- Read next:
+  - `Sources/MereRunCore/APBWE/APBWEResources.swift`
+  - `Sources/MereRunCore/APBWE/APBWEModel.swift`
+  - `docs/architecture/audio-enhancement-ap-bwe-report.md`
+
 Sound-effect generation:
 
 - CLI: `Sources/MereRunCLI/Commands/SFXGenerateCommand.swift`

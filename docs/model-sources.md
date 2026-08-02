@@ -103,6 +103,7 @@ from the runtime catalog used by `mere.run model list`,
 | `music` | `music-separate-bs-roformer-4stem` |
 | `music` | `music-separate-mel-roformer-dereverb` |
 | `music` | `music-separate-mel-roformer-denoise` |
+| `audio` | `audio-enhance-ap-bwe-16kto48k` |
 | `sfx` | `sfx-woosh-dflow` |
 | `sfx` | `sfx-woosh-flow` |
 | `sfx` | `sfx-woosh-clap` |
@@ -182,6 +183,12 @@ admits the weights, source configuration, model card, and license only when all
 four match their model-specific frozen byte counts and SHA-256 digests. The
 MelBand profiles additionally retain separate dereverb and denoise source
 configs and exact 913 MB checkpoint hashes.
+
+`audio-enhance-ap-bwe-16kto48k` does not require acknowledgement. AP-BWE's
+pinned source repository states that both code and pretrained weights are MIT.
+The managed public transport snapshot retains the code and weights license
+files, source config, and the exact official 16→48 kHz checkpoint archive;
+mere.run verifies all four byte counts and SHA-256 digests before loading.
 
 `image-zimage-nano` also does not require acknowledgement. Its canonical
 `Tongyi-MAI/Z-Image-Turbo` base is Apache-2.0; the pinned mflux conversion's

@@ -117,6 +117,7 @@ final class SpeechTranscribeCommandParsingTests: XCTestCase {
             "text",
             "speech",
             "vision",
+            "audio",
             "music",
             "sfx",
             "video",

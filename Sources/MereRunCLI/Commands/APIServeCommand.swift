@@ -4580,7 +4580,7 @@ actor CodeGenServer {
                 request: request
             )
         case .gemma, .laguna, .liquid, .qwen, .sam, .falcon, .face, .geometry, .depth, .threeD,
-             .tts, .asr, .embed, .code, .ocr, .music, .sfx, .video, .psi, .privacy, .deepseek,
+             .tts, .asr, .embed, .code, .ocr, .audio, .music, .sfx, .video, .psi, .privacy, .deepseek,
              .inkling, nil:
             throw APIRequestValidationError.invalidField(
                 "model",

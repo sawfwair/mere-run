@@ -6,6 +6,7 @@ image	/runtime/image
 text	/runtime/text
 speech	/runtime/speech
 vision	/runtime/vision
+audio	/runtime/audio
 music	/runtime/music
 sfx	/runtime/sfx
 video	/runtime/video
