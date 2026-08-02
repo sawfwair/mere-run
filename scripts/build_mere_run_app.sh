@@ -15,7 +15,7 @@ cd "$repo_root"
 
 # Version/build derive from git when not provided, so the bundle has a single source of
 # truth in CI. Fall back to a pinned value when git metadata is unavailable.
-default_version="0.31.0"
+default_version="0.32.0"
 if git_version="$(git describe --tags --exact-match 2>/dev/null)"; then
   default_version="${git_version#v}"
 fi
