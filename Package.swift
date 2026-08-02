@@ -144,6 +144,7 @@ if !isLinuxPackage {
 var targets: [Target] = []
 var mereRunCoreDependencies: [Target.Dependency] = mlxDependency("MLX")
 mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXFast"))
+mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXFFT"))
 mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXNN"))
 mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXOptimizers"))
 mereRunCoreDependencies.append(contentsOf: mlxDependency("MLXRandom"))
@@ -342,6 +343,7 @@ targets.append(contentsOf: [
       "MagentaRT2/README.md",
       "MMAudio/README.md",
       "PrivacyFilter/README.md",
+      "RoFormer/README.md",
       "Pose/README.md",
       "OpticalFlow/README.md",
       "Psi/README.md",

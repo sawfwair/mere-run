@@ -1,11 +1,12 @@
 # Music Runtime
 
 Write a track from a text prompt, cover an existing song in a different genre,
-play a model live from a MIDI controller, or turn a finished mix back into
-instrument-separated MIDI with tempo, meter, and key already filled in.
+play a model live from a MIDI controller, split a mix into vocal and
+instrumental WAVs, or turn it back into instrument-separated MIDI with tempo,
+meter, and key already filled in.
 Generation, analysis, adapter training, resident serving, realtime steering,
-and transcription are native Swift and MLX paths — Magenta RT2 takes CC knobs
-while it is still generating.
+source separation, and transcription are native Swift and MLX paths — Magenta
+RT2 takes CC knobs while it is still generating.
 
 ## Commands
 
@@ -16,9 +17,10 @@ while it is still generating.
 | `mere.run music serve` | Keep an ACE-Step pipeline resident behind the native music API. |
 | `mere.run music train-adapter` | Train a reloadable ACE-Step LoRA or LoKr adapter. |
 | `mere.run music realtime` | Run Magenta RealTime 2 music generation, steerable from stdin or CoreMIDI. |
+| `mere.run music separate` | Separate a mix into vocal and instrumental WAVs with ViperX BS-RoFormer. |
 | `mere.run music transcribe` | Transcribe a full music mix into instrument-separated MIDI with MuScriptor. |
 
-The macOS Studio app exposes the same six workflows through first-class
+The macOS Studio app exposes its music workflows through first-class
 workspaces backed by `MereRunContract`. Its primary Music composer covers the
 normal production loop—create or edit, source/reference audio, quality and LM
 planning, ranked candidates, adapter stacks, stems, LRC, recipes, and DAW
@@ -41,6 +43,7 @@ emitted flag absent from `mere.run catalog --json`.
 - `music-muscriptor-small`
 - `music-muscriptor-medium`
 - `music-muscriptor-large`
+- `music-separate-bs-roformer-viperx-1297`
 
 ## Guides
 
@@ -52,6 +55,7 @@ mere.run guide music generate --model music-acestep
 mere.run guide music generate --model music-acestep-xl-turbo
 mere.run guide music analyze --model music-acestep-xl-turbo-lm4b
 mere.run guide music generate --model music-magenta-rt2-small
+mere.run guide music separate --model music-separate-bs-roformer-viperx-1297
 mere.run guide music transcribe --model music-muscriptor-medium
 ```
 
@@ -110,7 +114,24 @@ swift run mere.run music realtime \
 
 swift run mere.run model pull music-muscriptor-medium --accept-model-license
 swift run mere.run music transcribe ./song.mp3 --output ./song.mid
+
+swift run mere.run model pull music-separate-bs-roformer-viperx-1297
+swift run mere.run music separate ./song.mp3 --output-dir ./song-stems
 ```
+
+`music separate` decodes the source at 44.1 kHz stereo, runs the pinned ViperX
+1297 BS-RoFormer checkpoint, and writes `vocals.wav`, `instrumental.wav`, and
+`separation.json`. The instrumental is computed from the decoded mixture minus
+the vocal estimate, so the two stems close back to the exact working mixture.
+The JSON manifest is also emitted on stdout; progress stays on stderr.
+
+The accepted AEmotion Studio snapshot is explicitly MIT-licensed and pinned at
+revision `d323194290f8488ea51814143806609bfbd7a1e5`. mere.run verifies the exact
+model, upstream YAML, model-card README, and license hashes before loading.
+Inference preserves the published eight-second chunks, centered 2,048-point
+STFT, 441-sample hop, DC filtering, 10% linear fades, and overlap `2` default.
+Use `--overlap 4` for denser chunk blending at additional compute cost, or
+`--dtype float32` for an all-float32 model path.
 
 MuScriptor predicts notes, instruments, and absolute event times. For MIDI
 output, mere.run adds a native musical-context pass that estimates tempo and

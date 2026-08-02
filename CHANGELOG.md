@@ -6,6 +6,16 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Added
+
+- added native Swift/MLX two-stem music source separation through
+  `music separate` and the managed `music-separate-bs-roformer-viperx-1297`
+  model. The runtime pins the AEmotion Studio MIT license, model card, source
+  config, revision, and exact 639 MB safetensors artifact; validates the
+  699-tensor graph; preserves the published ViperX STFT, DC filtering, and
+  overlapped chunk semantics; and writes vocal/instrumental WAVs plus a hashed
+  provenance manifest.
+
 ## 0.31.0 - 2026-08-01
 
 This release makes large local-agent workflows safer and Studio model

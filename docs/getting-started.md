@@ -146,7 +146,7 @@ itself, so it always matches the binary you just built:
 | [`mere.run text`](/runtime/text) | Run local chat, code, embedding, and anonymization workflows. |
 | [`mere.run speech`](/runtime/speech) | Synthesize, transcribe, diarize, and manage voice profiles. |
 | [`mere.run vision`](/runtime/vision) | Caption, inspect, face-analyze, segment, track, pose, depth, geometry, optical flow, and OCR visual media. |
-| [`mere.run music`](/runtime/music) | Generate music locally. |
+| [`mere.run music`](/runtime/music) | Generate, analyze, transcribe, and separate music locally. |
 | [`mere.run sfx`](/runtime/sfx) | Generate sound effects locally. |
 | [`mere.run video`](/runtime/video) | Generate and understand video with native Swift/MLX pipelines. |
 | [`mere.run world`](/runtime/world) | Run persistent local conditioned-video world sessions. |

@@ -89,7 +89,15 @@ final class MusicAnalyzeCommandParsingTests: XCTestCase {
         let commandNames = Set(Music.configuration.subcommands.map { $0.configuration.commandName })
         XCTAssertEqual(
             commandNames,
-            Set(["analyze", "generate", "realtime", "serve", "train-adapter", "transcribe"])
+            Set([
+                "analyze",
+                "generate",
+                "realtime",
+                "separate",
+                "serve",
+                "train-adapter",
+                "transcribe",
+            ])
         )
     }
 }

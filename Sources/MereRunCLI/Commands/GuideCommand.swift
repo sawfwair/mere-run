@@ -443,6 +443,13 @@ enum GuideRegistry {
             resourceName: "music-transcribe.md"
         ),
         GuideTopic(
+            topic: "music-separate",
+            title: "Music Separate",
+            commandPaths: [["music", "separate"]],
+            models: ["music-separate-bs-roformer-viperx-1297"],
+            resourceName: "music-separate.md"
+        ),
+        GuideTopic(
             topic: "sfx-generate",
             title: "SFX Generate",
             commandPaths: [["sfx", "generate"]],

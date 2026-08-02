@@ -74,6 +74,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case magentaRT2 = "magenta-rt2"
         /// MuScriptor multi-instrument audio transcription family.
         case muScriptor = "muscriptor"
+        /// Band-split RoFormer music source-separation family.
+        case roFormer = "bs-roformer"
         /// Sony Research Woosh sound-effect generation family.
         case woosh = "woosh"
         /// MMAudio synchronized video-to-audio and text-to-audio family.
@@ -167,6 +169,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case visionOCR = "vision_ocr"
         case musicGeneration = "music_generation"
         case musicTranscription = "music_transcription"
+        case musicSeparation = "music_separation"
         case videoGeneration = "video_generation"
         case actionGeneration = "action_generation"
         case worldSimulation = "world_simulation"
@@ -1653,6 +1656,20 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.musicTranscription],
                 components: nil,
                 upstreamRepoId: "MuScriptor/muscriptor-\(muScriptorVariant.rawValue)",
+                createdAt: createdAt
+            )
+        case .roFormerViperX1297:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .roFormer,
+                family: .music,
+                tier: .small,
+                variant: .standard,
+                precision: .fp32,
+                defaults: nil,
+                supports: [.musicSeparation],
+                components: nil,
+                upstreamRepoId: "\(RoFormerResources.repository)@\(RoFormerResources.revision)",
                 createdAt: createdAt
             )
         case .wooshDFlow, .wooshFlow, .wooshVFlow8s, .wooshDVFlow8s:
