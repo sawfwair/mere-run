@@ -140,38 +140,33 @@ cd /Volumes/mere.run/.mere-run
 The installer copies `mere.run` and its colocated runtime assets to
 `/usr/local/bin/mere.run`, using `sudo` only when the destination requires it.
 
-### Import or preview artifacts from Raycast and other launchers
+### Open local artifacts through macOS deep links
 
-The Raycast extension imports completed generations into MereRun Library by
-default. MereRun validates a small, versioned JSON receipt, records the artifact
-through its own Library store, activates the matching workspace, reveals
-Library, and selects the imported result. Raycast never edits MereRun's
-`library.json` directly. See the [Raycast Integration guide](./docs/raycast.md)
-for the receipt contract and extension preferences.
+The macOS app registers typed `mererun://` routes so a launcher, automation,
+agent, or another local app can hand a completed artifact back to MereRun. Use
+`mererun://preview` for a non-importing native Quick Look panel, or
+`mererun://library/import` with a small versioned receipt to validate, persist,
+and select a completed result in MereRun Library.
 
-The macOS app registers a local `mererun://preview` deep link. Pass one
-percent-encoded absolute artifact path and MereRun opens its native Quick Look
-panel, regardless of whether the output is an image, audio, video, text, or a
-Quick Look-compatible 3D file:
+Pass `preview` one percent-encoded absolute artifact path. It supports images,
+audio, video, text, and Quick Look-compatible 3D files:
 
 ```text
 mererun://preview?path=%2FUsers%2Fme%2FDesktop%2Fresult.png
 ```
 
-Raycast extensions can construct the URL without manual escaping:
-
-```typescript
-import { open } from "@raycast/api";
-
-const deepLink = new URL("mererun://preview");
-deepLink.searchParams.set("path", outputPath);
-await open(deepLink.toString());
+```bash
+open 'mererun://preview?path=%2FUsers%2Fme%2FDesktop%2Fresult.png'
 ```
 
 The target must already exist and be a readable file. MereRun rejects relative
 paths, directories, missing files, duplicate `path` values, and extra query
 parameters. This route remains an explicit preview-only option; it does not
 import, move, or modify the artifact.
+
+See [macOS Deep Links](./docs/macos-deep-links.md) for both route contracts and
+security boundaries. The separate [Raycast integration](./docs/raycast.md) is
+one example client built on the same public handoff.
 
 Linux package builds are headless CLI-only. They install the `mere.run` CLI plus
 colocated runtime assets; they do not include the macOS SwiftUI studio or DMG

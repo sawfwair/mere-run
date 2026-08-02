@@ -96,7 +96,7 @@ links to the page that owns that command.
 Install, pull a first model, and make something in the next ten minutes.
 
 - [Getting Started](/getting-started)
-- [Raycast Integration](/raycast) — local generation with Library import or Quick Look from the launcher
+- [macOS Deep Links](/macos-deep-links) — preview or import local artifacts from launchers, automations, agents, and apps
 - [Linux QuickStart](/linux-quickstart)
 - [CLI Reference](/cli)
 - [Offline Cookbooks](/cookbooks) — `mere.run guide` works without a network
@@ -123,6 +123,7 @@ Serve it, schedule it, measure it, and keep it honest.
 
 - [Portable Workflows, Executors, and Run Artifacts](/workflows)
 - [Model and Adapter Management](/runtime/model-management)
+- [Raycast Example Integration](/raycast) — one launcher client for the macOS deep-link routes
 - [Local API Server and Open WebUI](/runtime/api-server)
 - [Official Companion Plugins](/plugins)
 - [Quality Gate](/gate) — the check that catches a bad build before you do

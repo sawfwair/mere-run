@@ -34,7 +34,7 @@ CI job, and on `main` it deploys the VitePress output to Pages at
 If you are new to the repo, read these in order:
 
 1. [Getting Started](./getting-started.md)
-2. [Raycast Integration](./raycast.md), if you want launcher-driven local generation on macOS
+2. [macOS Deep Links](./macos-deep-links.md), if a local tool should preview or import artifacts in MereRun
 3. [Linux QuickStart](./linux-quickstart.md), if you are installing the headless CLI on Linux
 4. [CLI Reference](./cli.md)
 5. [Portable Workflows](./workflows.md), if you are automating local or remote jobs
@@ -51,7 +51,7 @@ If you are new to the repo, read these in order:
 ### I want to use `mere.run`
 
 - [Getting Started](./getting-started.md)
-- [Raycast Integration](./raycast.md)
+- [macOS Deep Links](./macos-deep-links.md)
 - [Linux QuickStart](./linux-quickstart.md)
 - [CLI Reference](./cli.md)
 - [Benchmarking](./benchmarking.md)
@@ -89,9 +89,10 @@ If you are new to the repo, read these in order:
 
 - [Getting Started](./getting-started.md): clone, build, first commands, first
   status checks, Linux release artifacts, model pulls, and local setup
-- [Raycast Integration](./raycast.md): install the development extension, run
-  local image/video/music/speech commands, configure paths, preview artifacts,
-  and troubleshoot the macOS handoff
+- [macOS Deep Links](./macos-deep-links.md): preview or import completed local
+  artifacts from launchers, automations, agents, and other macOS apps
+- [Raycast Example Integration](./raycast.md): one launcher client built on the
+  public macOS deep-link surface
 - [Linux QuickStart](./linux-quickstart.md): Linux package install, first
   commands, release asset verification, and CUDA validation boundaries
 - [Cookbooks](./cookbooks.md): `mere.run guide` command topics for practical
