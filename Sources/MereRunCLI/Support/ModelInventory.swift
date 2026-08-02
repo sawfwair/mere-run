@@ -98,7 +98,7 @@ enum ModelInventory {
         guard fileManager.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue else {
             return false
         }
-        return (try? fileManager.contentsOfDirectory(atPath: url.path))?.isEmpty == false
+        return (try? fileManager.contentsOfDirectoryResolvingSymlinks(at: url))?.isEmpty == false
     }
 
     private static func gemmaAliasInstallURL(for id: String, fileManager: FileManager) -> URL? {

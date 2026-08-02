@@ -212,7 +212,7 @@ public struct Q35Resources: Sendable, Hashable {
             return standardized
         }
 
-        if let children = try? fileManager.contentsOfDirectory(
+        if let children = try? fileManager.contentsOfDirectoryResolvingSymlinks(
             at: standardized,
             includingPropertiesForKeys: [.isDirectoryKey],
             options: [.skipsHiddenFiles]

@@ -2131,7 +2131,7 @@ public enum ZImageTurboLoRATrainer {
 
         let entries: [URL]
         do {
-            entries = try fileManager.contentsOfDirectory(
+            entries = try fileManager.contentsOfDirectoryResolvingSymlinks(
                 at: sampleDirectory,
                 includingPropertiesForKeys: [.isRegularFileKey],
                 options: [.skipsHiddenFiles]

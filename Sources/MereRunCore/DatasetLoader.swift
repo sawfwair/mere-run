@@ -38,7 +38,10 @@ public enum DatasetLoader {
             throw DatasetLoaderError.datasetDirectoryNotFound(directory)
         }
 
-        let contents = try fileManager.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+        let contents = try fileManager.contentsOfDirectoryResolvingSymlinks(
+            at: directory,
+            includingPropertiesForKeys: nil
+        )
 
         let imageExts: Set<String> = ["png", "jpg", "jpeg", "webp"]
         let images = contents

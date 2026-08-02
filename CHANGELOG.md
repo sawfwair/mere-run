@@ -43,6 +43,13 @@ The format is based on Keep a Changelog.
   opens the owning workspace with the imported row selected. The existing
   `mererun://preview` route remains a non-importing Quick Look path.
 
+### Fixed
+
+- made model validation, weight discovery, CLI inspection, and training-data
+  discovery consistently traverse symlinked directory roots produced by
+  managed Hub downloads, including Qwen3 TTS speech-tokenizer and
+  speaker-encoder components.
+
 ## 0.31.0 - 2026-08-01
 
 This release makes large local-agent workflows safer and Studio model

@@ -1,4 +1,5 @@
 import Foundation
+import MereRunCore
 
 struct LoRATrainingDatasetInspectionResult: Equatable {
     let summary: LoRATrainingDatasetPreflightSummary
@@ -114,7 +115,7 @@ struct LoRATrainingDatasetInspector {
 
         let contents: [URL]
         do {
-            contents = try fileManager.contentsOfDirectory(
+            contents = try fileManager.contentsOfDirectoryResolvingSymlinks(
                 at: directory,
                 includingPropertiesForKeys: [.isRegularFileKey],
                 options: [.skipsHiddenFiles]
@@ -445,7 +446,7 @@ struct LoRATrainingDatasetDiscoveryAnalyzer {
             guard current.depth < maxDepth else { continue }
             let childDirectories: [URL]
             do {
-                childDirectories = try fileManager.contentsOfDirectory(
+                childDirectories = try fileManager.contentsOfDirectoryResolvingSymlinks(
                     at: current.url,
                     includingPropertiesForKeys: [.isDirectoryKey],
                     options: [.skipsHiddenFiles]

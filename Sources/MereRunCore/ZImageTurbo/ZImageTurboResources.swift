@@ -274,7 +274,7 @@ public struct ZImageTurboResources: Sendable, Hashable {
     }
 
     private static func hasSafetensorsShards(in directoryURL: URL, fileManager: FileManager) -> Bool {
-        guard let urls = try? fileManager.contentsOfDirectory(
+        guard let urls = try? fileManager.contentsOfDirectoryResolvingSymlinks(
             at: directoryURL,
             includingPropertiesForKeys: nil,
             options: [.skipsHiddenFiles]

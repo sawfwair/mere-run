@@ -406,7 +406,7 @@ public enum LoRATrainingResumeArtifacts {
         suffix: String,
         fileManager: FileManager
     ) -> URL? {
-        guard let entries = try? fileManager.contentsOfDirectory(
+        guard let entries = try? fileManager.contentsOfDirectoryResolvingSymlinks(
             at: directory,
             includingPropertiesForKeys: [.isRegularFileKey],
             options: [.skipsHiddenFiles]
@@ -470,7 +470,7 @@ public enum LoRATrainingResumeArtifacts {
         }
 
         let sourceSamplesDirectory = sourceDirectory.appendingPathComponent("samples", isDirectory: true)
-        if let entries = try? fileManager.contentsOfDirectory(
+        if let entries = try? fileManager.contentsOfDirectoryResolvingSymlinks(
             at: sourceSamplesDirectory,
             includingPropertiesForKeys: [.isRegularFileKey],
             options: [.skipsHiddenFiles]
@@ -481,7 +481,7 @@ public enum LoRATrainingResumeArtifacts {
         }
 
         // Zip bundles flatten files, so sample previews may sit beside the checkpoint.
-        if let sourceEntries = try? fileManager.contentsOfDirectory(
+        if let sourceEntries = try? fileManager.contentsOfDirectoryResolvingSymlinks(
             at: sourceDirectory,
             includingPropertiesForKeys: [.isRegularFileKey],
             options: [.skipsHiddenFiles]

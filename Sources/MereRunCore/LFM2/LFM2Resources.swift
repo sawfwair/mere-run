@@ -66,7 +66,7 @@ public struct LFM2Resources: Sendable, Hashable {
         if fileManager.fileExists(atPath: standardized.appendingPathComponent("config.json").path) {
             return standardized
         }
-        if let children = try? fileManager.contentsOfDirectory(
+        if let children = try? fileManager.contentsOfDirectoryResolvingSymlinks(
             at: standardized,
             includingPropertiesForKeys: [.isDirectoryKey],
             options: [.skipsHiddenFiles]

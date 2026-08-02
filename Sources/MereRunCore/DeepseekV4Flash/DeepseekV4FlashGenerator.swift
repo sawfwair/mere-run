@@ -400,7 +400,7 @@ public actor DeepseekV4FlashGenerator: ChatGenerator {
     /// contains "imatrix" win over those that do not, matching the upstream
     /// README's recommendation to prefer the imatrix variant.
     static func preferredGGUF(in directory: URL, fileManager: FileManager = .default) -> URL? {
-        guard let enumerator = fileManager.enumerator(
+        guard let enumerator = fileManager.enumeratorResolvingSymlinks(
             at: directory,
             includingPropertiesForKeys: [.isRegularFileKey],
             options: [.skipsHiddenFiles]

@@ -220,7 +220,7 @@ public enum LoRACheckpointResolver {
 
     private static func findMetadataFile(named name: String, in root: URL) -> URL? {
         let fileManager = FileManager.default
-        guard let enumerator = fileManager.enumerator(
+        guard let enumerator = fileManager.enumeratorResolvingSymlinks(
             at: root,
             includingPropertiesForKeys: [.isRegularFileKey],
             options: [.skipsHiddenFiles]
@@ -239,7 +239,7 @@ public enum LoRACheckpointResolver {
 
     private static func allRegularFiles(in root: URL) -> [URL] {
         let fileManager = FileManager.default
-        guard let enumerator = fileManager.enumerator(
+        guard let enumerator = fileManager.enumeratorResolvingSymlinks(
             at: root,
             includingPropertiesForKeys: [.isRegularFileKey],
             options: [.skipsHiddenFiles]

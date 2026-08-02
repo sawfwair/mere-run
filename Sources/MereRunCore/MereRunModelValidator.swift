@@ -694,8 +694,7 @@ public enum MereRunModelValidator {
     }
 
     private static func hasAnyWeightFiles(in directory: URL, fileManager: FileManager) -> Bool {
-        let directory = directory.resolvingSymlinksInPath()
-        guard let children = try? fileManager.contentsOfDirectory(
+        guard let children = try? fileManager.contentsOfDirectoryResolvingSymlinks(
             at: directory,
             includingPropertiesForKeys: [.isRegularFileKey],
             options: [.skipsHiddenFiles]
@@ -715,8 +714,7 @@ public enum MereRunModelValidator {
     }
 
     private static func containsIncompleteFiles(in rootURL: URL, fileManager: FileManager) -> Bool {
-        let rootURL = rootURL.resolvingSymlinksInPath()
-        guard let e = fileManager.enumerator(
+        guard let e = fileManager.enumeratorResolvingSymlinks(
             at: rootURL,
             includingPropertiesForKeys: [.isRegularFileKey],
             options: [.skipsHiddenFiles, .skipsPackageDescendants]

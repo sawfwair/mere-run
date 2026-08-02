@@ -116,7 +116,7 @@ public struct TrainingDataCache: Sendable {
     public func totalSize() throws -> UInt64 {
         guard FileManager.default.fileExists(atPath: cacheDir.path) else { return 0 }
 
-        let contents = try FileManager.default.contentsOfDirectory(
+        let contents = try FileManager.default.contentsOfDirectoryResolvingSymlinks(
             at: cacheDir,
             includingPropertiesForKeys: [.fileSizeKey]
         )
@@ -133,7 +133,7 @@ public struct TrainingDataCache: Sendable {
     public func itemCount() throws -> Int {
         guard FileManager.default.fileExists(atPath: cacheDir.path) else { return 0 }
 
-        let contents = try FileManager.default.contentsOfDirectory(
+        let contents = try FileManager.default.contentsOfDirectoryResolvingSymlinks(
             at: cacheDir,
             includingPropertiesForKeys: nil
         )

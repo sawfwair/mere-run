@@ -133,6 +133,9 @@ public struct ModelStorageGarbageResult: Codable, Equatable, Sendable {
 /// Model install roots may contain direct files, symlink individual payload files, or be
 /// symlinks themselves. Accounting therefore follows model links for referenced bytes,
 /// but counts file identities only once for physical and reclaimable bytes.
+/// Directory traversal in this type intentionally does not use the runtime's
+/// symlink-resolving helpers: ownership discovery and garbage collection must inspect
+/// link edges without recursively treating their targets as locally owned payloads.
 public final class ModelStorageManager {
     private struct FileIdentity: Hashable {
         let device: UInt64

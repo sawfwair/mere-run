@@ -3,6 +3,7 @@
 import Foundation
 import MLX
 import MLXNN
+import MereRunCore
 
 // MARK: - FastConformer Encoder Components
 
@@ -743,7 +744,7 @@ public class SortformerModel: Module {
         let model = SortformerModel(config)
 
         // Load weights
-        let weightFiles = try FileManager.default.contentsOfDirectory(
+        let weightFiles = try FileManager.default.contentsOfDirectoryResolvingSymlinks(
             at: modelURL, includingPropertiesForKeys: nil
         ).filter { $0.pathExtension == "safetensors" }
 

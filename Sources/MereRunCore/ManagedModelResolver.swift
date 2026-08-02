@@ -492,7 +492,7 @@ public enum ManagedModelResolver {
         materializedDirectoryPaths: Set<String> = [],
         excludedRelativePaths: Set<String> = []
     ) throws {
-        let entries = try fileManager.contentsOfDirectory(
+        let entries = try fileManager.contentsOfDirectoryResolvingSymlinks(
             at: snapshotURL,
             includingPropertiesForKeys: [.isDirectoryKey],
             options: []
