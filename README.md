@@ -463,6 +463,9 @@ MERERUN_GEMMA4_CONTINUOUS_BATCHING=1 swift run mere.run api serve \
 MERERUN_Q35_CONTINUOUS_BATCHING=1 swift run mere.run api serve \
   --max-active-requests 2
 
+# Inspect both the server request queue and machine-wide inference admission
+swift run mere.run status
+
 # Experimental Gemma4 packed PolarKV for memory-pressure and long-context decode testing
 swift run mere.run api serve \
   --engine text-chat-gemma4 \

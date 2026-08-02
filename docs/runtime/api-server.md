@@ -68,6 +68,14 @@ default. For remote jobs, prefer [portable workflows](../workflows.md); when
 you deliberately bind the API server to a non-loopback address, configure its
 bearer token and rate limit first.
 
+The server keeps its existing in-process request admission, resident model
+pool, prefix caches, and continuous batching. In addition, the server process
+holds a weighted machine-wide reservation shared with other `mere.run`
+processes. This prevents a terminal, Studio, Raycast, or a second server from
+blindly loading incompatible working sets while allowing measured concurrency
+inside the resident pool. Standard servers consume two RAM-scaled permits;
+DeepSeek V4 Flash servers run with exclusive machine admission.
+
 ## Runtime entrypoints
 
 ### CLI
@@ -262,6 +270,9 @@ swift run mere.run api serve \
   queued client cancellations are removed from the FIFO instead of being
   admitted later. Explicit runtime model load/unload maintenance shares the
   same queue
+- machine admission complements rather than replaces `--max-active-requests`:
+  the server's local limit controls request and batching concurrency inside its
+  weighted machine reservation
 - Gemma4, Qwen-family, and LFM2 prefills are chunked with cancellation and
   progress checkpoints before decode; this is cooperative single-request
   prefill, not continuous batching

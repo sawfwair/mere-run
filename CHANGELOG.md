@@ -8,6 +8,16 @@ The format is based on Keep a Changelog.
 
 ### Added
 
+- added crash-safe machine-wide inference admission across direct CLI calls,
+  Studio, launchers such as Raycast, scripts, agents, and API-server processes.
+  A RAM-scaled weighted FIFO preserves concurrency for small and standard work
+  while giving video, DeepSeek V4 Flash, and selected models of at least 48 GiB
+  exclusive machine headroom. Admission refuses new allocation-heavy work below the
+  swap-protecting disk floor, pauses behind memory pressure, removes cancelled
+  or dead-process tickets, and is visible through `mere.run status` and
+  `status --json`. API servers retain their existing resident model pools,
+  prefix caches, continuous batching, and `--max-active-requests` concurrency
+  inside the server's machine reservation.
 - added native Swift/MLX two-stem music source separation through
   `music separate` and the managed `music-separate-bs-roformer-viperx-1297`
   model. The runtime pins the AEmotion Studio MIT license, model card, source

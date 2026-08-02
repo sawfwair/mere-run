@@ -18,6 +18,7 @@ struct MereRunCLI: AsyncParsableCommand {
         } else {
             _ = _mereRunCLIModelStoreBootstrap
         }
+        try CLIProcessAdmissionBootstrap.acquireIfNeeded(arguments: CommandLine.arguments)
     }
 
     static let configuration = CommandConfiguration(

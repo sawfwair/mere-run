@@ -158,6 +158,12 @@ download route.
   instead of running later. Raising the limit is an explicit throughput and
   unified-memory tradeoff. Explicit runtime model load/unload maintenance uses
   the same admission queue so it cannot race default-serialized inference.
+- Each API-server process also holds a weighted machine-wide reservation. This
+  coordinates the server with direct CLI calls and other server instances
+  without disabling its resident model pool, prefix reuse, sidecar reuse,
+  continuous batching, or `--max-active-requests` concurrency. Ordinary
+  servers use a standard reservation; DeepSeek V4 Flash servers reserve the
+  full machine capacity.
 - Gemma4, Qwen-family, and LFM2 chat use chunked prefill with
   cancellation/progress checkpoints. This improves long-prompt observability
   without turning prefill itself into continuous batching.

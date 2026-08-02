@@ -206,6 +206,16 @@ struct APIServe: AsyncParsableCommand {
         let resolvedLoraPath = try resolveLoraPath(modelPath: resolvedModelPath)
         let gemma4KVCacheQuantization = try resolveGemma4KVCacheQuantization()
         let memoryPressurePolicy = try resolveMemoryPressurePolicy()
+        let machineAdmissionLease = try await MachineInferenceCoordinator.shared.acquire(
+            CLIInferenceAdmissionClassifier.apiServerRequest(engine: engine, modelID: defaultModelID)
+        ) { snapshot in
+            CLIStderr.write(
+                "API server queued by machine admission "
+                    + "(\(snapshot.activePermits)/\(snapshot.capacityPermits) permits active, "
+                    + "\(snapshot.queued.count) queued).\n"
+            )
+        }
+        defer { machineAdmissionLease.release() }
         let server = try await CodeGenServer(
             defaultModelID: defaultModelID,
             modelPath: resolvedModelPath,
