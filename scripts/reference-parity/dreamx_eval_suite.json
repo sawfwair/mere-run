@@ -34,6 +34,7 @@
     {
       "id": "out_and_back_d3_a3",
       "kind": "revisit",
+      "baseline_scenario_id": "non_revisit_d6",
       "steps": [
         {"action_seq": ["d"], "action_speed_list": [1], "latent_frame_count": 6},
         {"action_seq": ["d"], "action_speed_list": [1], "latent_frame_count": 6},
@@ -43,6 +44,37 @@
         {"action_seq": ["a"], "action_speed_list": [1], "latent_frame_count": 6}
       ],
       "expected_origin_recovery": true
+    },
+    {
+      "id": "non_revisit_d6",
+      "kind": "baseline",
+      "steps": [
+        {"action_seq": ["d"], "action_speed_list": [1], "latent_frame_count": 6},
+        {"action_seq": ["d"], "action_speed_list": [1], "latent_frame_count": 6},
+        {"action_seq": ["d"], "action_speed_list": [1], "latent_frame_count": 6},
+        {"action_seq": ["d"], "action_speed_list": [1], "latent_frame_count": 6},
+        {"action_seq": ["d"], "action_speed_list": [1], "latent_frame_count": 6},
+        {"action_seq": ["d"], "action_speed_list": [1], "latent_frame_count": 6}
+      ]
+    },
+    {
+      "id": "adversarial_104_actions",
+      "kind": "soak",
+      "repeat": 13,
+      "steps": [
+        {"action_seq": ["w"], "action_speed_list": [1], "latent_frame_count": 3},
+        {"action_seq": ["d"], "action_speed_list": [1], "latent_frame_count": 3},
+        {"action_seq": ["s"], "action_speed_list": [1], "latent_frame_count": 3},
+        {"action_seq": ["a"], "action_speed_list": [1], "latent_frame_count": 3},
+        {"action_seq": ["j"], "action_speed_list": [1], "latent_frame_count": 3},
+        {"action_seq": ["l"], "action_speed_list": [1], "latent_frame_count": 3},
+        {"action_seq": ["l"], "action_speed_list": [1], "latent_frame_count": 3},
+        {"action_seq": ["j"], "action_speed_list": [1], "latent_frame_count": 3}
+      ],
+      "expected_action_count": 104,
+      "expected_origin_recovery": true,
+      "periodic_revisit_stride": 8,
+      "minimum_periodic_revisits": 13
     },
     {
       "id": "translation_rotation_w_s_l_r_r_l_l",

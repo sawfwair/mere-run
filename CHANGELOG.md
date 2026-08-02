@@ -6,6 +6,13 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.33.0 - 2026-08-02
+
+This release turns native DreamX into a product-grade local world-session
+runtime: held and composed movement streams causal blocks, exact checkpoints
+fork live history, geometry-guided memory improves revisits, and a pinned
+learned/performance soak gate keeps camera closure separate from visual truth.
+
 ### Added
 
 - added native multi-block DreamX AR rollouts to `world serve` with upstream
@@ -24,15 +31,28 @@ The format is based on Keep a Changelog.
   revisits. A separate global camera chain indexes bounded predicted-clean
   latents by pose, retrieves non-local frames using the paper's temporal-gap,
   2-degree yaw, and 0.1-distance gates, and applies a conservative residual
-  anchor without changing released chunk-relative camera conditioning. Memory,
-  pose, and telemetry fork with exact causal checkpoints. The API labels this
-  path `paper_reconstructed_revisit_anchor`; it is not misrepresented as the
+  anchor without changing released chunk-relative camera conditioning. Exact
+  pose returns restore the first clean latent, deduplicate later generated
+  evidence, and pin the canonical origin through capacity eviction so repeated
+  loops cannot compound character-scale drift. Memory, pose, and telemetry
+  fork with exact causal checkpoints. The API labels this path
+  `paper_reconstructed_revisit_anchor`; it is not misrepresented as the
   unreleased memory-trained paper model.
 - added a paper-aligned DreamX world evaluation manifest and runner covering
   5-second, exact 63-latent/249-frame upstream-versus-native, 30-second,
   D×3/A×3 out-and-back, translation/rotation, and rectangular-loop scenarios
-  with captured receipts, media probes, global-pose closure, scene-memory
-  counts, and explicit unscored visual metrics.
+  plus a 104-action / 13-return adversarial soak, with captured receipts, media
+  probes, global-pose closure, per-step latency, scene-memory counts, and
+  explicitly separated visual metrics.
+- added a pinned learned DreamX revisit gate for LPIPS, DINO-Sim, MutualVPR,
+  SuperPoint+LightGlue matching, and consecutive-frame CLIP-Video. Revisit
+  metrics are scored as gains over a checked-in matched-duration non-revisit
+  path, with exact source revisions and the MutualVPR weight hash recorded in
+  the report; pose closure can no longer satisfy the perceptual gate.
+- added explicit `world serve` controls for disabling or tuning bounded DreamX
+  revisit memory, including recycling strength, capacity, temporal gap, yaw,
+  translation, and exact-return thresholds, so quality experiments are
+  reproducible instead of changing hard-coded runtime constants.
 
 ### Changed
 
@@ -64,7 +84,8 @@ The format is based on Keep a Changelog.
 - added byte-exact downsample and upsample gates against the released DreamX
   Pillow source-image preprocessing path.
 - added global inverse-pose recovery, paper-threshold scene-memory retrieval,
-  bounded-memory checkpoint restoration, and live loop-closure coverage.
+  exact canonical-evidence retention, bounded-memory checkpoint restoration,
+  and live loop-closure coverage.
 
 ## 0.32.2 - 2026-08-02
 

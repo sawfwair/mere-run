@@ -45,11 +45,21 @@ def download(base: str, path: str, token: str | None, output: Path):
 
 
 def wait_for_job(base: str, job_id: str, token: str | None, timeout: float, poll: float):
+    started = time.monotonic()
+    first_chunk = None
+    peak_chunk_count = 0
     deadline = time.monotonic() + timeout
     while time.monotonic() < deadline:
         _, job = request_json(base, "GET", f"/v1/world/jobs/{job_id}", token)
+        peak_chunk_count = max(peak_chunk_count, len(job.get("chunks", [])))
+        if first_chunk is None and peak_chunk_count:
+            first_chunk = time.monotonic() - started
         if job["status"] in {"completed", "failed", "cancelled"}:
-            return job
+            return job, {
+                "time_to_first_chunk_seconds": first_chunk,
+                "total_seconds": time.monotonic() - started,
+                "observed_chunk_count": peak_chunk_count,
+            }
         time.sleep(poll)
     raise TimeoutError(f"DreamX job {job_id} did not finish within {timeout:g}s")
 
@@ -128,7 +138,7 @@ def main():
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--scenario", action="append", help="Run only the named scenario; repeatable")
     parser.add_argument("--timeout", type=float, default=7200)
-    parser.add_argument("--poll", type=float, default=1)
+    parser.add_argument("--poll", type=float, default=0.1)
     parser.add_argument("--token", default=os.environ.get("MERE_RUN_API_KEY"))
     args = parser.parse_args()
 
@@ -152,6 +162,8 @@ def main():
         "suite": str(args.suite.resolve()),
         "scenarios": [],
     }
+    _, runtime_snapshot = request_json(args.base_url, "GET", "/v1/world/session", args.token)
+    report["runtime_snapshot"] = runtime_snapshot
 
     for scenario in scenarios:
         scenario_dir = args.output / scenario["id"]
@@ -160,8 +172,16 @@ def main():
             args.base_url, "POST", "/v1/world/session/source", args.token,
             args.source.read_bytes(), "application/octet-stream",
         )
-        scenario_report = {"id": scenario["id"], "kind": scenario["kind"], "steps": []}
-        for index, step in enumerate(scenario["steps"]):
+        scenario_report = {
+            "id": scenario["id"],
+            "kind": scenario["kind"],
+            "baseline_scenario_id": scenario.get("baseline_scenario_id"),
+            "periodic_revisit_stride": scenario.get("periodic_revisit_stride"),
+            "minimum_periodic_revisits": scenario.get("minimum_periodic_revisits"),
+            "steps": [],
+        }
+        steps = scenario["steps"] * scenario.get("repeat", 1)
+        for index, step in enumerate(steps):
             payload = {
                 "prompt": args.prompt,
                 "action_seq": step["action_seq"],
@@ -177,7 +197,9 @@ def main():
                 args.base_url, "POST", "/v1/world/session/rollouts", args.token, payload
             )
             job_id = accepted["job_id"]
-            job = wait_for_job(args.base_url, job_id, args.token, args.timeout, args.poll)
+            job, performance = wait_for_job(
+                args.base_url, job_id, args.token, args.timeout, args.poll
+            )
             (scenario_dir / f"step-{index + 1:02d}-job.json").write_text(json.dumps(job, indent=2) + "\n")
             if job["status"] != "completed":
                 raise RuntimeError(f"{scenario['id']} step {index + 1} failed: {job.get('error')}")
@@ -190,6 +212,7 @@ def main():
                 "request": payload,
                 "job_id": job_id,
                 "receipt": receipt,
+                "performance": performance,
                 "media_probe": ffprobe(video),
                 "video": str(video.resolve()),
                 "terminal_frame": str(terminal.resolve()),
@@ -208,8 +231,29 @@ def main():
             pose = scenario_report["pose_metrics"]
             if not pose or not pose["paper_revisit_gate_pass"]:
                 errors.append("terminal pose did not satisfy the paper revisit gate")
+        if "expected_action_count" in scenario and len(steps) != scenario["expected_action_count"]:
+            errors.append(
+                f"executed {len(steps)} action requests, expected {scenario['expected_action_count']}"
+            )
         scenario_report["status"] = "passed" if not errors else "failed"
         scenario_report["errors"] = errors
+        completed_steps = [
+            step["performance"] for step in scenario_report["steps"]
+            if step["performance"].get("total_seconds") is not None
+        ]
+        scenario_report["performance"] = {
+            "step_count": len(completed_steps),
+            "mean_total_seconds": (
+                sum(step["total_seconds"] for step in completed_steps) / len(completed_steps)
+                if completed_steps else None
+            ),
+            "mean_time_to_first_chunk_seconds": (
+                sum(step["time_to_first_chunk_seconds"] for step in completed_steps) / len(completed_steps)
+                if completed_steps and all(
+                    step.get("time_to_first_chunk_seconds") is not None for step in completed_steps
+                ) else None
+            ),
+        }
         scenario_report["visual_metrics"] = {
             "status": "not_scored",
             "required": ["PSNR", "SSIM", "LPIPS", "DINO-Sim", "VPR-Sim", "SP-Match", "CLIP-Video"],

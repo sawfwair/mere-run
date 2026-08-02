@@ -90,6 +90,8 @@ public struct Wan2DreamXSceneMemoryPolicy: Codable, Hashable, Sendable {
     public let minimumFrameGap: Int
     public let maximumYawDistanceDegrees: Float
     public let maximumTranslationDistance: Float
+    public let exactRevisitMaximumYawDistanceDegrees: Float
+    public let exactRevisitMaximumTranslationDistance: Float
     public let recyclingStrength: Float
 
     public init(
@@ -98,26 +100,52 @@ public struct Wan2DreamXSceneMemoryPolicy: Codable, Hashable, Sendable {
         minimumFrameGap: Int = 3,
         maximumYawDistanceDegrees: Float = 2,
         maximumTranslationDistance: Float = 0.1,
+        exactRevisitMaximumYawDistanceDegrees: Float = 0.01,
+        exactRevisitMaximumTranslationDistance: Float = 0.001,
         recyclingStrength: Float = 0.08
     ) {
         precondition(maximumFrameCount >= 0)
         precondition(minimumFrameGap >= 0)
         precondition(maximumYawDistanceDegrees.isFinite && maximumYawDistanceDegrees >= 0)
         precondition(maximumTranslationDistance.isFinite && maximumTranslationDistance >= 0)
+        precondition(
+            exactRevisitMaximumYawDistanceDegrees.isFinite
+                && exactRevisitMaximumYawDistanceDegrees >= 0
+                && exactRevisitMaximumYawDistanceDegrees <= maximumYawDistanceDegrees
+        )
+        precondition(
+            exactRevisitMaximumTranslationDistance.isFinite
+                && exactRevisitMaximumTranslationDistance >= 0
+                && exactRevisitMaximumTranslationDistance <= maximumTranslationDistance
+        )
         precondition(recyclingStrength.isFinite && recyclingStrength >= 0 && recyclingStrength <= 1)
         self.mode = mode
         self.maximumFrameCount = maximumFrameCount
         self.minimumFrameGap = minimumFrameGap
         self.maximumYawDistanceDegrees = maximumYawDistanceDegrees
         self.maximumTranslationDistance = maximumTranslationDistance
+        self.exactRevisitMaximumYawDistanceDegrees = exactRevisitMaximumYawDistanceDegrees
+        self.exactRevisitMaximumTranslationDistance = exactRevisitMaximumTranslationDistance
         self.recyclingStrength = recyclingStrength
     }
 
     public static let disabled = Self(
         mode: .disabled,
         maximumFrameCount: 0,
+        maximumYawDistanceDegrees: 0,
+        maximumTranslationDistance: 0,
+        exactRevisitMaximumYawDistanceDegrees: 0,
+        exactRevisitMaximumTranslationDistance: 0,
         recyclingStrength: 0
     )
+
+    func recyclingStrength(for match: Wan2DreamXSceneMemoryMatchMetadata) -> Float {
+        guard match.yawDistanceDegrees <= exactRevisitMaximumYawDistanceDegrees,
+              match.translationDistance <= exactRevisitMaximumTranslationDistance else {
+            return recyclingStrength
+        }
+        return 1
+    }
 }
 
 public struct Wan2DreamXSceneMemoryMatchMetadata: Codable, Hashable, Sendable {
@@ -213,11 +241,20 @@ struct Wan2DreamXSceneMemory: @unchecked Sendable {
         precondition(cleanLatents.ndim == 4)
         precondition(cleanLatents.dim(1) == poses.count)
         for index in poses.indices {
+            // Preserve the first clean evidence for an already-known pose.
+            // Replacing it with a generated revisit feeds small appearance and
+            // character-scale errors back into later memory retrievals.
+            let pose = poses[index]
+            let alreadyCanonical = entries.contains {
+                $0.pose.translationDistance(to: pose) <= policy.exactRevisitMaximumTranslationDistance
+                    && $0.pose.yawDistanceDegrees(to: pose) <= policy.exactRevisitMaximumYawDistanceDegrees
+            }
+            if alreadyCanonical { continue }
             let latent = cleanLatents[0..., index..<(index + 1), 0..., 0...]
             eval(latent)
             entries.append(Wan2DreamXSceneMemoryEntry(
                 frameIndex: frameIndex + index,
-                pose: poses[index],
+                pose: pose,
                 cleanLatent: latent
             ))
         }
@@ -225,8 +262,11 @@ struct Wan2DreamXSceneMemory: @unchecked Sendable {
     }
 
     private mutating func trimToCapacity() {
-        if entries.count > policy.maximumFrameCount {
-            entries.removeFirst(entries.count - policy.maximumFrameCount)
+        while entries.count > policy.maximumFrameCount {
+            // The first latent is the canonical world origin. Pin it while
+            // evicting the oldest non-origin evidence so a long one-way
+            // exploration can still perform an actual visual return home.
+            entries.remove(at: entries.count > 1 ? 1 : 0)
         }
     }
 }

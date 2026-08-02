@@ -14,6 +14,13 @@ final class WorldCommandTests: XCTestCase {
             "--base-model", "/tmp/wan",
             "--model", "/tmp/dreamx",
             "--state-directory", "/tmp/world",
+            "--scene-memory-strength", "0.2",
+            "--scene-memory-max-frames", "144",
+            "--scene-memory-minimum-gap", "6",
+            "--scene-memory-max-yaw", "3",
+            "--scene-memory-max-translation", "0.2",
+            "--scene-memory-exact-yaw", "0.02",
+            "--scene-memory-exact-translation", "0.002",
             "--prepare",
         ])
         XCTAssertEqual(command.port, 9_911)
@@ -21,6 +28,14 @@ final class WorldCommandTests: XCTestCase {
         XCTAssertEqual(command.model, "/tmp/dreamx")
         XCTAssertEqual(command.stateDirectory, "/tmp/world")
         XCTAssertTrue(command.prepare)
+        let memory = try command.resolvedSceneMemoryPolicy()
+        XCTAssertEqual(memory.recyclingStrength, 0.2)
+        XCTAssertEqual(memory.maximumFrameCount, 144)
+        XCTAssertEqual(memory.minimumFrameGap, 6)
+        XCTAssertEqual(memory.maximumYawDistanceDegrees, 3)
+        XCTAssertEqual(memory.maximumTranslationDistance, 0.2)
+        XCTAssertEqual(memory.exactRevisitMaximumYawDistanceDegrees, 0.02)
+        XCTAssertEqual(memory.exactRevisitMaximumTranslationDistance, 0.002)
     }
 
     func testWorldServeDefaultsToNativeManagedModels() throws {
@@ -47,6 +62,23 @@ final class WorldCommandTests: XCTestCase {
             "world-secret"
         )
         XCTAssertNil(command.apiKey)
+    }
+
+    func testWorldServeCanDisableAndValidatesSceneMemory() throws {
+        let disabled = try WorldServe.parse([
+            "--disable-scene-memory",
+            "--scene-memory-strength", "9",
+        ])
+        XCTAssertEqual(try disabled.resolvedSceneMemoryPolicy(), .disabled)
+
+        let invalid = try WorldServe.parse(["--scene-memory-strength", "1.01"])
+        XCTAssertThrowsError(try invalid.resolvedSceneMemoryPolicy())
+
+        let invalidExact = try WorldServe.parse([
+            "--scene-memory-max-yaw", "1",
+            "--scene-memory-exact-yaw", "2",
+        ])
+        XCTAssertThrowsError(try invalidExact.resolvedSceneMemoryPolicy())
     }
 
     func testWorldTransitionPayloadDecodesDocumentedHTTPOverrides() throws {

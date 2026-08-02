@@ -164,7 +164,8 @@ the bounded `retained_latent_frame_count`. DreamX keeps only the three clean
 latents required for the next VAE decode window while its causal attention cache
 continues at the full generated position.
 
-They also expose `current_world_pose`, `scene_memory_mode`,
+They also expose `current_world_pose`, `scene_memory_mode`, the complete
+`scene_memory_policy`,
 `scene_memory_frame_count`, `scene_memory_retrieval_count`, and
 `scene_memory_recycled_frame_count`. Rollout receipts report the terminal pose
 and per-rollout memory counts so clients can distinguish an actual non-local
@@ -179,7 +180,29 @@ latents with their original causal positions. Retrieval requires the paper's
 minimum temporal separation heuristic plus its revisit thresholds: at most 2
 degrees of yaw error and 0.1 model-space translation distance. A retrieved
 latent contributes an 8-percent residual anchor during denoising; movement
-without a qualifying revisit receives no anchor.
+without a qualifying revisit receives no anchor. The index keeps the first
+clean latent observed at each exact pose rather than replacing it with a later
+generated revisit. Matches within 0.01 degrees and 0.001 model-space distance
+restore that canonical latent completely, preventing the causal cache from
+compounding character scale or appearance on repeated loop closure. The first
+origin entry stays pinned while capacity eviction removes the oldest
+non-origin entry.
+
+The default can be reproduced or deliberately swept from the command line:
+
+```bash
+mere.run world serve --prepare \
+  --scene-memory-strength 0.08 \
+  --scene-memory-max-frames 96 \
+  --scene-memory-minimum-gap 3 \
+  --scene-memory-max-yaw 2 \
+  --scene-memory-max-translation 0.1 \
+  --scene-memory-exact-yaw 0.01 \
+  --scene-memory-exact-translation 0.001
+```
+
+`--disable-scene-memory` supplies the no-memory control. Invalid or non-finite
+values fail before model loading instead of tripping a runtime precondition.
 
 The public mode name is `paper_reconstructed_revisit_anchor` on purpose. The
 DreamX 1.0 paper describes training with packed memory/recent/target tokens,
@@ -222,7 +245,8 @@ existing files in the state directory, while the next rollout's
 ## Paper-aligned world evaluation
 
 Run the captured 5-second, exact 63-latent/249-frame parity, approximately
-30-second, out-and-back, translation/rotation, and rectangular-loop suite
+30-second, out-and-back, translation/rotation, rectangular-loop, and
+104-action / 13-return adversarial soak suite
 against a prepared server:
 
 ```bash
@@ -242,9 +266,23 @@ uv run --script scripts/reference-parity/score_dreamx_world_eval.py \
   --report /tmp/dreamx-world-eval/report.json
 ```
 
-LPIPS, DINO-Sim, VPR-Sim, SP-Match, and CLIP-Video remain explicitly unscored
-until their pinned learned-metric lanes are present. A passing pose threshold
-alone is structural evidence, never a quality claim.
+The learned lane rejects unpinned evaluator sources or weights, computes
+matched-baseline revisit gains for LPIPS, DINO-Sim, MutualVPR, and
+SuperPoint+LightGlue, and reports absolute consecutive-frame CLIP-Video:
+
+```bash
+uv run --script scripts/reference-parity/score_dreamx_world_eval_learned.py \
+  --report /tmp/dreamx-world-eval/report.json \
+  --mutual-vpr-root /tmp/MutualVPR \
+  --mutual-vpr-weights /tmp/mutualvpr.pth \
+  --lightglue-root /tmp/LightGlue
+```
+
+On the soak scenario it scores the worst of all 13 exact-pose periodic returns,
+not only the final frame. `verify_dreamx_experience_gate.py` then combines that
+receipt with action count, first-block and total latency, bounded resident
+memory, and macOS thermal state. A passing pose threshold alone remains
+structural evidence, never a quality claim.
 
 ## Queue a transition
 

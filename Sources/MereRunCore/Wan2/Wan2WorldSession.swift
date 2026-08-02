@@ -189,6 +189,7 @@ public struct Wan2WorldSessionSnapshot: Codable, Hashable, Sendable {
     public let causalCheckpointCount: Int
     public let currentWorldPose: Wan2DreamXWorldPose?
     public let sceneMemoryMode: Wan2DreamXSceneMemoryMode
+    public let sceneMemoryPolicy: Wan2DreamXSceneMemoryPolicy
     public let sceneMemoryFrameCount: Int
     public let sceneMemoryRetrievalCount: Int
     public let sceneMemoryRecycledFrameCount: Int
@@ -711,6 +712,7 @@ public actor Wan2WorldSession {
             causalCheckpointCount: causalCheckpoints.count,
             currentWorldPose: causalGenerator?.worldPose,
             sceneMemoryMode: causalGenerator?.sceneMemoryMode ?? .disabled,
+            sceneMemoryPolicy: causalGenerator?.sceneMemoryConfiguration ?? .disabled,
             sceneMemoryFrameCount: causalGenerator?.sceneMemoryFrameCount ?? 0,
             sceneMemoryRetrievalCount: causalGenerator?.sceneMemoryRetrievalCount ?? 0,
             sceneMemoryRecycledFrameCount: causalGenerator?.sceneMemoryRecycledFrameCount ?? 0

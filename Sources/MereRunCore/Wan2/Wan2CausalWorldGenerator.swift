@@ -127,6 +127,7 @@ public final class Wan2CausalWorldGenerator: @unchecked Sendable {
     public var retainedLatentFrameCount: Int { accumulatedLatents?.dim(1) ?? 0 }
     public var worldPose: Wan2DreamXWorldPose { currentWorldPose }
     public var sceneMemoryMode: Wan2DreamXSceneMemoryMode { sceneMemoryPolicy.mode }
+    public var sceneMemoryConfiguration: Wan2DreamXSceneMemoryPolicy { sceneMemoryPolicy }
     public var sceneMemoryFrameCount: Int { sceneMemory.frameCount }
     public var sceneMemoryRetrievalCount: Int { sceneMemoryRetrievals }
     public var sceneMemoryRecycledFrameCount: Int { sceneMemoryRecycledFrames }
@@ -548,7 +549,9 @@ public final class Wan2CausalWorldGenerator: @unchecked Sendable {
         let frames = matches.enumerated().map { index, match -> MLXArray in
             let predicted = clean[0..., index..<(index + 1), 0..., 0...]
             guard let match else { return predicted }
-            return predicted * (1 - strength) + match.cleanLatent.asType(clean.dtype) * strength
+            let effectiveStrength = sceneMemoryPolicy.recyclingStrength(for: match.metadata)
+            return predicted * (1 - effectiveStrength)
+                + match.cleanLatent.asType(clean.dtype) * effectiveStrength
         }
         let anchored = MLX.concatenated(frames, axis: 1)
         eval(anchored)

@@ -51,6 +51,30 @@ struct WorldServe: AsyncParsableCommand {
     @Flag(name: [.long], help: "Load and warm all models before accepting requests.")
     var prepare = false
 
+    @Flag(name: [.long], help: "Disable DreamX geometry-guided revisit memory.")
+    var disableSceneMemory = false
+
+    @Option(name: [.long], help: "Clean-latent recycling strength for DreamX revisits (0...1).")
+    var sceneMemoryStrength: Float = 0.08
+
+    @Option(name: [.long], help: "Maximum DreamX scene-memory latent frames retained in RAM.")
+    var sceneMemoryMaxFrames = 96
+
+    @Option(name: [.long], help: "Minimum latent-frame gap before a DreamX view can be retrieved.")
+    var sceneMemoryMinimumGap = 3
+
+    @Option(name: [.long], help: "Maximum yaw distance in degrees for a DreamX revisit match.")
+    var sceneMemoryMaxYaw: Float = 2
+
+    @Option(name: [.long], help: "Maximum model-space translation distance for a DreamX revisit match.")
+    var sceneMemoryMaxTranslation: Float = 0.1
+
+    @Option(name: [.long], help: "Yaw tolerance in degrees for an exact DreamX latent restore.")
+    var sceneMemoryExactYaw: Float = 0.01
+
+    @Option(name: [.long], help: "Model-space translation tolerance for an exact DreamX latent restore.")
+    var sceneMemoryExactTranslation: Float = 0.001
+
     func run() async throws {
         try MLXBundleSupport.ensureAvailable(quiet: false)
         let resolvedKey = resolvedAPIKey()
@@ -83,7 +107,8 @@ struct WorldServe: AsyncParsableCommand {
             sessionBackend = .dreamx(Wan2WorldSession(
                 resources: baseResources,
                 stateDirectory: stateURL,
-                causalWeightsURL: causalResources.weightsURL
+                causalWeightsURL: causalResources.weightsURL,
+                sceneMemoryPolicy: try resolvedSceneMemoryPolicy()
             ))
         case .cosmos3:
             let requestedModel = model == Wan2DreamXCausalResources.modelID
@@ -124,6 +149,49 @@ struct WorldServe: AsyncParsableCommand {
             return apiKey
         }
         return nil
+    }
+
+    func resolvedSceneMemoryPolicy() throws -> Wan2DreamXSceneMemoryPolicy {
+        if disableSceneMemory { return .disabled }
+        guard sceneMemoryStrength.isFinite,
+              (0...1).contains(sceneMemoryStrength) else {
+            throw ValidationError("--scene-memory-strength must be finite and between 0 and 1.")
+        }
+        guard sceneMemoryMaxFrames >= 0 else {
+            throw ValidationError("--scene-memory-max-frames must be non-negative.")
+        }
+        guard sceneMemoryMinimumGap >= 0 else {
+            throw ValidationError("--scene-memory-minimum-gap must be non-negative.")
+        }
+        guard sceneMemoryMaxYaw.isFinite, sceneMemoryMaxYaw >= 0 else {
+            throw ValidationError("--scene-memory-max-yaw must be finite and non-negative.")
+        }
+        guard sceneMemoryMaxTranslation.isFinite, sceneMemoryMaxTranslation >= 0 else {
+            throw ValidationError("--scene-memory-max-translation must be finite and non-negative.")
+        }
+        guard sceneMemoryExactYaw.isFinite,
+              sceneMemoryExactYaw >= 0,
+              sceneMemoryExactYaw <= sceneMemoryMaxYaw else {
+            throw ValidationError(
+                "--scene-memory-exact-yaw must be finite, non-negative, and no greater than --scene-memory-max-yaw."
+            )
+        }
+        guard sceneMemoryExactTranslation.isFinite,
+              sceneMemoryExactTranslation >= 0,
+              sceneMemoryExactTranslation <= sceneMemoryMaxTranslation else {
+            throw ValidationError(
+                "--scene-memory-exact-translation must be finite, non-negative, and no greater than --scene-memory-max-translation."
+            )
+        }
+        return Wan2DreamXSceneMemoryPolicy(
+            maximumFrameCount: sceneMemoryMaxFrames,
+            minimumFrameGap: sceneMemoryMinimumGap,
+            maximumYawDistanceDegrees: sceneMemoryMaxYaw,
+            maximumTranslationDistance: sceneMemoryMaxTranslation,
+            exactRevisitMaximumYawDistanceDegrees: sceneMemoryExactYaw,
+            exactRevisitMaximumTranslationDistance: sceneMemoryExactTranslation,
+            recyclingStrength: sceneMemoryStrength
+        )
     }
 
     private func resolveRoot(_ value: String) throws -> URL {
@@ -529,6 +597,7 @@ private struct WorldSessionSnapshotPayload: Codable, Sendable {
     let causalCheckpointCount: Int?
     let currentWorldPose: Wan2DreamXWorldPose?
     let sceneMemoryMode: String?
+    let sceneMemoryPolicy: Wan2DreamXSceneMemoryPolicy?
     let sceneMemoryFrameCount: Int?
     let sceneMemoryRetrievalCount: Int?
     let sceneMemoryRecycledFrameCount: Int?
@@ -547,6 +616,7 @@ private struct WorldSessionSnapshotPayload: Codable, Sendable {
         case causalCheckpointCount = "causal_checkpoint_count"
         case currentWorldPose = "current_world_pose"
         case sceneMemoryMode = "scene_memory_mode"
+        case sceneMemoryPolicy = "scene_memory_policy"
         case sceneMemoryFrameCount = "scene_memory_frame_count"
         case sceneMemoryRetrievalCount = "scene_memory_retrieval_count"
         case sceneMemoryRecycledFrameCount = "scene_memory_recycled_frame_count"
@@ -848,6 +918,7 @@ private enum WorldSessionBackend: Sendable {
                 causalCheckpointCount: snapshot.causalCheckpointCount,
                 currentWorldPose: snapshot.currentWorldPose,
                 sceneMemoryMode: snapshot.sceneMemoryMode.rawValue,
+                sceneMemoryPolicy: snapshot.sceneMemoryPolicy,
                 sceneMemoryFrameCount: snapshot.sceneMemoryFrameCount,
                 sceneMemoryRetrievalCount: snapshot.sceneMemoryRetrievalCount,
                 sceneMemoryRecycledFrameCount: snapshot.sceneMemoryRecycledFrameCount
@@ -868,6 +939,7 @@ private enum WorldSessionBackend: Sendable {
                 causalCheckpointCount: nil,
                 currentWorldPose: nil,
                 sceneMemoryMode: nil,
+                sceneMemoryPolicy: nil,
                 sceneMemoryFrameCount: nil,
                 sceneMemoryRetrievalCount: nil,
                 sceneMemoryRecycledFrameCount: nil

@@ -1,3 +1,3 @@
 enum MereRunCLIVersion {
-    static let current = "0.32.2"
+    static let current = "0.33.0"
 }

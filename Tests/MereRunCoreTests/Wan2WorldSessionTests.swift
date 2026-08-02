@@ -47,6 +47,7 @@ final class Wan2WorldSessionTests: MereRunCoreTestCase {
         XCTAssertEqual(revisit?.metadata.memoryFrameIndex, 0)
         XCTAssertEqual(revisit?.metadata.temporalGap, 10)
         XCTAssertEqual(revisit?.metadata.viewOverlapScore ?? 0, 1, accuracy: 1e-6)
+        XCTAssertEqual(memory.policy.recyclingStrength(for: revisit!.metadata), 1)
 
         var translated = Wan2DreamXWorldPose.identity.worldToCamera
         translated[3] = -0.2
@@ -54,6 +55,14 @@ final class Wan2WorldSessionTests: MereRunCoreTestCase {
             for: Wan2DreamXWorldPose(worldToCamera: translated),
             targetFrameIndex: 10
         ))
+
+        var nearby = Wan2DreamXWorldPose.identity.worldToCamera
+        nearby[3] = -0.05
+        let nearbyMatch = memory.retrieve(
+            for: Wan2DreamXWorldPose(worldToCamera: nearby),
+            targetFrameIndex: 10
+        )
+        XCTAssertEqual(memory.policy.recyclingStrength(for: nearbyMatch!.metadata), 0.08)
 
         let yawed = Wan2DreamXWorldTrajectory.compile(
             segments: [.init(action: "j")],
@@ -63,27 +72,58 @@ final class Wan2WorldSessionTests: MereRunCoreTestCase {
     }
 
     func testDreamXSceneMemoryIsBoundedAndCheckpointRestorable() {
+        func translated(_ x: Float) -> Wan2DreamXWorldPose {
+            var matrix = Wan2DreamXWorldPose.identity.worldToCamera
+            matrix[3] = -x
+            return Wan2DreamXWorldPose(worldToCamera: matrix)
+        }
         var memory = Wan2DreamXSceneMemory(policy: .init(
             maximumFrameCount: 3,
             minimumFrameGap: 1
         ))
         memory.record(
             cleanLatents: MLXArray([Float(1), 2, 3]).reshaped(1, 3, 1, 1),
-            poses: [.identity, .identity, .identity],
+            poses: [translated(0), translated(0.2), translated(0.4)],
             startingAt: 0
         )
         let checkpoint = memory.checkpoint()
         memory.record(
             cleanLatents: MLXArray([Float(4), 5, 6]).reshaped(1, 3, 1, 1),
-            poses: [.identity, .identity, .identity],
+            poses: [translated(0.6), translated(0.8), translated(1.0)],
             startingAt: 3
         )
         XCTAssertEqual(memory.frameCount, 3)
-        XCTAssertEqual(memory.retrieve(for: .identity, targetFrameIndex: 10)?.metadata.memoryFrameIndex, 3)
+        XCTAssertEqual(
+            memory.retrieve(for: translated(0.8), targetFrameIndex: 10)?.metadata.memoryFrameIndex,
+            4
+        )
+        XCTAssertEqual(memory.retrieve(for: .identity, targetFrameIndex: 10)?.metadata.memoryFrameIndex, 0)
 
         memory.restore(checkpoint)
         XCTAssertEqual(memory.frameCount, 3)
         XCTAssertEqual(memory.retrieve(for: .identity, targetFrameIndex: 10)?.metadata.memoryFrameIndex, 0)
+    }
+
+    func testDreamXSceneMemoryPreservesFirstCanonicalEvidenceAcrossRevisits() {
+        var memory = Wan2DreamXSceneMemory(policy: .init(
+            maximumFrameCount: 3,
+            minimumFrameGap: 1
+        ))
+        memory.record(
+            cleanLatents: MLXArray([Float(1)]).reshaped(1, 1, 1, 1),
+            poses: [.identity],
+            startingAt: 0
+        )
+        var almostIdentity = Wan2DreamXWorldPose.identity.worldToCamera
+        almostIdentity[3] = -0.0005
+        memory.record(
+            cleanLatents: MLXArray([Float(9)]).reshaped(1, 1, 1, 1),
+            poses: [Wan2DreamXWorldPose(worldToCamera: almostIdentity)],
+            startingAt: 10
+        )
+
+        XCTAssertEqual(memory.frameCount, 1)
+        XCTAssertEqual(memory.retrieve(for: .identity, targetFrameIndex: 20)?.metadata.memoryFrameIndex, 0)
     }
 
     func testArtifactSequenceNeverReusesFilesAcrossLogicalSessionResets() throws {
@@ -283,13 +323,19 @@ final class Wan2WorldSessionTests: MereRunCoreTestCase {
         let session = Wan2WorldSession(
             resources: Wan2Resources(rootURL: root),
             stateDirectory: state,
-            causalWeightsURL: root.appendingPathComponent("causal.safetensors")
+            causalWeightsURL: root.appendingPathComponent("causal.safetensors"),
+            sceneMemoryPolicy: .init(
+                maximumFrameCount: 144,
+                recyclingStrength: 0.25
+            )
         )
         let snapshot = await session.snapshot()
         XCTAssertEqual(snapshot.conditioningMode, .causalCameraLatents)
         XCTAssertFalse(snapshot.keepsModelsWarm)
         XCTAssertFalse(snapshot.keepsTerminalLatent)
         XCTAssertEqual(snapshot.causalCheckpointCount, 0)
+        XCTAssertEqual(snapshot.sceneMemoryPolicy.maximumFrameCount, 144)
+        XCTAssertEqual(snapshot.sceneMemoryPolicy.recyclingStrength, 0.25)
     }
 
     func testCausalCheckpointLocksAndRestoresExactSessionStateWithoutLoadingModels() async throws {

@@ -50,8 +50,11 @@ released model's chunk-relative PRoPE inputs. A bounded scene-memory index keeps
 predicted-clean latents with those global poses. Once a candidate is separated
 by at least `max(3, floor(0.2 * currentFrame))` latent frames, a revisit within
 2 degrees yaw and 0.1 model-space distance can supply a weak clean-latent
-residual anchor. Ordinary forward motion is unchanged because it retrieves no
-candidate. This is an explicitly labeled inference reconstruction of the
+residual anchor. A path returning within 0.01 degrees and 0.001 model-space
+distance restores its first clean latent exactly instead of feeding causal
+appearance drift back into the world. The first origin entry is retained even
+when the bounded index evicts older non-origin views. Ordinary forward motion
+is unchanged because it retrieves no candidate. This is an explicitly labeled inference reconstruction of the
 DreamX 1.0 paper's geometry retrieval and residual-recycling idea. The released
 AR repository and checkpoint do not include the paper's memory-trained packed
 `[memory | recent | target]` pathway, so the native runtime does not claim that
@@ -63,7 +66,7 @@ multi-block `action_seq` rollouts, decoded block media, pollable denoising
 progress, cancellation, reset, unload, receipts, and opaque state IDs:
 
 ```bash
-mere.run world serve --prepare
+mere.run world serve --prepare --scene-memory-strength 0.08
 curl http://127.0.0.1:8791/v1/world/session
 curl -X POST http://127.0.0.1:8791/v1/world/session/transitions \
   -H 'Content-Type: application/json' \
@@ -91,6 +94,14 @@ latent frames produce 249 public frames in 21 three-latent causal blocks.
 Source images follow DreamX's exact fixed-dimension Pillow bilinear resize
 contract rather than an aspect-preserving crop; the native separable path is
 byte-gated against both released downsample and upsample results.
+
+Revisit memory defaults to a conservative `0.08` clean-latent recycling
+strength. `--scene-memory-strength`, `--scene-memory-max-frames`,
+`--scene-memory-minimum-gap`, `--scene-memory-max-yaw`, and
+`--scene-memory-max-translation` tune ordinary retrieval. The
+`--scene-memory-exact-yaw` and `--scene-memory-exact-translation` tolerances
+make the exact-return policy reproducible;
+`--disable-scene-memory` provides the matched no-memory control.
 
 Non-loopback binds require `--api-key`. The converted causal model is a
 local-only managed artifact because the public upstream checkpoint is FP32 and
@@ -122,12 +133,14 @@ upstream implementations:
 - A real two-move causal session with a 1.5-2.2 RGB-level encoded boundary
   difference, plus a clean 512x288 nine-frame quality candidate.
 
-Tiny 128-256 pixel renders are structural tests only. Quality acceptance starts
-at 512x288. On the reference 128 GB Apple Silicon host, one 512x288 move took
-1,012.6 seconds: model passes began at 34.7s, 210.9s, 388.2s, 564.9s, and
-739.4s; decode began at 917.7s. Product navigation must therefore use warm
-sessions, queued graph edges, speculative neighboring moves, and cached clips
-instead of presenting quality generation as an immediate keypress response.
+Tiny renders remain a responsiveness tier rather than the quality tier. On the
+reference M4 Max / 128 GB host, a warm 384x224 three-latent move produced nine
+frames in 6.11 seconds, with the first and only block at 5.91 seconds. A warm
+640x352 six-latent composed forward+yaw move produced 21 frames in 29.31
+seconds, with its first block at 13.40 seconds. These are measured responsive
+local generation results, not realtime playback claims; product clients should
+show immediate input state, stream each completed causal block, and use the
+atlas for already-proved routes.
 
 Live graph locks use `Wan2CausalWorldCheckpoint`, which preserves the bounded
 attention windows, retained clean latents, prompt cross-attention state, and
@@ -144,7 +157,8 @@ terminal-PNG restart seam.
 MP4 and terminal frame, verifies encoded frame counts/geometry with `ffprobe`,
 and applies the paper's revisit pose gate. Run
 `uv run --script scripts/reference-parity/score_dreamx_world_eval.py --report
-<report.json>` for pinned PSNR/SSIM scoring. LPIPS, DINO-Sim, VPR-Sim,
-SP-Match, and CLIP-Video remain explicitly unscored until their pinned learned
-metric lanes evaluate the captured media; pose closure is never presented as
-visual parity.
+<report.json>` for pinned PSNR/SSIM scoring. The learned lane is
+`score_dreamx_world_eval_learned.py`; it requires pinned evaluation-only
+checkouts of MutualVPR and LightGlue plus the hash-pinned MutualVPR checkpoint,
+then scores matched-baseline LPIPS, DINO-Sim, VPR-Sim, SP-Match, and
+CLIP-Video. Pose closure is never presented as visual parity.

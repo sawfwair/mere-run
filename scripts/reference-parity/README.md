@@ -181,7 +181,8 @@ fixture before updating the pinned reference.
 
 `dreamx_eval_suite.json` defines the paper-aligned 5-second, exact
 63-latent/249-frame upstream-versus-native, approximately 30-second, D×3/A×3
-out-and-back, translation/rotation, and rectangular-loop scenarios.
+out-and-back, matched-duration non-revisit baseline, translation/rotation,
+rectangular-loop, and 104-action / 13-return adversarial soak scenarios.
 `run_dreamx_world_eval.py` runs them through a prepared native world server and
 captures receipts, media, `ffprobe` results, global-pose closure, and
 scene-memory telemetry.
@@ -202,8 +203,34 @@ uv run --script scripts/reference-parity/score_dreamx_world_eval.py \
   --report /tmp/dreamx-eval/report.json
 ```
 
-LPIPS, DINO-Sim, VPR-Sim, SP-Match, and CLIP-Video remain explicitly unscored
-until their pinned learned-metric lanes evaluate the captured media.
+Run the learned metric lane against a report that contains both
+`out_and_back_d3_a3` and `non_revisit_d6`:
+
+```bash
+uv run --script scripts/reference-parity/score_dreamx_world_eval_learned.py \
+  --report /tmp/dreamx-eval/report.json \
+  --mutual-vpr-root /tmp/MutualVPR \
+  --mutual-vpr-weights /tmp/mutualvpr.pth \
+  --lightglue-root /tmp/LightGlue
+```
+
+The script rejects unpinned source revisions or a mismatched weight hash. It
+reports DreamX section 5.3 gains over the matched baseline for PSNR, SSIM,
+LPIPS, DINO-Sim, VPR-Sim, and SP-Match, plus absolute consecutive-frame
+CLIP-Video. The external Python implementations are evaluation-only and are
+not linked into or distributed with the native runtime.
+
+For the complete product-experience gate, capture `adversarial_104_actions`,
+run the learned scorer over its 13 periodic return frames, then issue a host,
+latency, memory, thermal, and perceptual receipt:
+
+```bash
+python3 scripts/reference-parity/verify_dreamx_experience_gate.py \
+  --paired-report /tmp/dreamx-paired/report.json \
+  --soak-report /tmp/dreamx-soak/report.json \
+  --runtime-pid "$(pgrep -f 'mere.run world serve')" \
+  --output /tmp/dreamx-experience-gate.json
+```
 
 For the `upstream_native_15s` scenario, run the released PyTorch program with
 the same source, caption, seed 42, `w`/`wj`/`wl` actions, `4`/`6`/`6` weights,
