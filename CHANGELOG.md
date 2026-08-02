@@ -6,6 +6,13 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.32.0 - 2026-08-02
+
+This release makes mixed local workloads safer and broadens native audio
+production: machine-wide inference admission protects system headroom while
+new separation, restoration, and super-resolution models join a durable
+Raycast-to-Library handoff.
+
 ### Added
 
 - added crash-safe machine-wide inference admission across direct CLI calls,
