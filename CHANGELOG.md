@@ -6,6 +6,15 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.32.2 - 2026-08-02
+
+### Fixed
+
+- fixed the exhaustive music-separation gate to require every declared stem to
+  decode and match its manifest hash while requiring the separated set, rather
+  than every individual stem, to contain audible signal. A source without
+  drums can legitimately produce a silent `drums.wav`.
+
 ## 0.32.1 - 2026-08-02
 
 ### Fixed
