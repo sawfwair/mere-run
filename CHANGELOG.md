@@ -20,6 +20,11 @@ The format is based on Keep a Changelog.
   music-separate-bs-roformer-4stem` writes drums, bass, other, and vocal WAVs;
   its distinct 485,100-sample geometry, 1,355-tensor graph, source config,
   license, and 527 MB weights are admitted as an immutable model profile.
+- added native MelBand RoFormer restoration with separately pinned AEmotion
+  dereverb and denoise models. The shared Swift/MLX graph reproduces the
+  upstream 60-band Slaney mel filter bank, overlapping-frequency mask
+  averaging, 684-tensor checkpoint inventory, and published overlap defaults;
+  outputs remain ordinary hashed stems in the separation manifest.
 
 ## 0.31.0 - 2026-08-01
 

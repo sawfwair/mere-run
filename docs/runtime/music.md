@@ -17,7 +17,7 @@ RT2 takes CC knobs while it is still generating.
 | `mere.run music serve` | Keep an ACE-Step pipeline resident behind the native music API. |
 | `mere.run music train-adapter` | Train a reloadable ACE-Step LoRA or LoKr adapter. |
 | `mere.run music realtime` | Run Magenta RealTime 2 music generation, steerable from stdin or CoreMIDI. |
-| `mere.run music separate` | Separate a mix into vocal and instrumental WAVs with ViperX BS-RoFormer. |
+| `mere.run music separate` | Separate stems or restore audio with native BS/MelBand RoFormer models. |
 | `mere.run music transcribe` | Transcribe a full music mix into instrument-separated MIDI with MuScriptor. |
 
 The macOS Studio app exposes its music workflows through first-class
@@ -45,6 +45,8 @@ emitted flag absent from `mere.run catalog --json`.
 - `music-muscriptor-large`
 - `music-separate-bs-roformer-viperx-1297`
 - `music-separate-bs-roformer-4stem`
+- `music-separate-mel-roformer-dereverb`
+- `music-separate-mel-roformer-denoise`
 
 ## Guides
 
@@ -58,6 +60,8 @@ mere.run guide music analyze --model music-acestep-xl-turbo-lm4b
 mere.run guide music generate --model music-magenta-rt2-small
 mere.run guide music separate --model music-separate-bs-roformer-viperx-1297
 mere.run guide music separate --model music-separate-bs-roformer-4stem
+mere.run guide music separate --model music-separate-mel-roformer-dereverb
+mere.run guide music separate --model music-separate-mel-roformer-denoise
 mere.run guide music transcribe --model music-muscriptor-medium
 ```
 
@@ -124,6 +128,16 @@ swift run mere.run model pull music-separate-bs-roformer-4stem
 swift run mere.run music separate ./song.mp3 \
   --model music-separate-bs-roformer-4stem \
   --output-dir ./song-4stems
+
+swift run mere.run model pull music-separate-mel-roformer-dereverb
+swift run mere.run music separate ./room.wav \
+  --model music-separate-mel-roformer-dereverb \
+  --output-dir ./room-restored
+
+swift run mere.run model pull music-separate-mel-roformer-denoise
+swift run mere.run music separate ./noisy.wav \
+  --model music-separate-mel-roformer-denoise \
+  --output-dir ./noise-restored
 ```
 
 `music separate` decodes the source at 44.1 kHz stereo, runs the pinned ViperX
@@ -137,13 +151,20 @@ band-split graph with its separately pinned 384-dimensional, eight-layer
 checkpoint. It writes `drums.wav`, `bass.wav`, `other.wav`, `vocals.wav`, and
 `separation.json` in the checkpoint's published output order.
 
+The MelBand profiles use a distinct 60-band native graph. Dereverb writes
+`noreverb.wav`; denoise writes `dry.wav`. Each mask is scattered back to its
+original STFT bins and averaged where mel bands overlap. The models share an
+exact 684-tensor, 228,203,172-scalar geometry but retain different weight and
+source-config hashes. The dereverb inference config publishes overlap `2`; the
+denoise config publishes overlap `4`.
+
 The accepted AEmotion Studio snapshot is explicitly MIT-licensed and pinned at
 revision `d323194290f8488ea51814143806609bfbd7a1e5`. mere.run verifies the exact
 model, upstream YAML, model-card README, and license hashes before loading.
-Inference preserves the published eight-second chunks, centered 2,048-point
-STFT, 441-sample hop, DC filtering, 10% linear fades, and overlap `2` default.
-Use `--overlap 4` for denser chunk blending at additional compute cost, or
-`--dtype float32` for an all-float32 model path.
+Inference preserves each profile's published chunk geometry, centered
+2,048-point STFT, 441-sample hop, DC filtering, 10% linear fades, and overlap
+default. Use a higher valid `--overlap` for denser chunk blending at additional
+compute cost, or `--dtype float32` for an all-float32 model path.
 
 MuScriptor predicts notes, instruments, and absolute event times. For MIDI
 output, mere.run adds a native musical-context pass that estimates tempo and

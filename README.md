@@ -57,7 +57,7 @@ current flags.
 | Vision understanding | `vision caption`, `inspect`, `face`, `ground`, `segment`, `track`, `track-live`, `pose`, `flow`, `ocr` | Captioning and VQA, local face detection/identity embeddings, LightOn/GLM/Infinity OCR, Falcon grounding, SAM 3.1 segmentation and tracking, body/hand/face landmarks, and dense optical flow |
 | Depth, geometry, and 3D | `vision depth-video`, `geometry`, `geometry-multiview`, `image-to-3d*`; `image reconstruct-3d*` | Video Depth Anything, MoGe-2, Depth Anything 3, TripoSR, InstantMesh, and TRELLIS.2; depth/confidence EXRs, cameras, point clouds, 3DGS initialization, OBJ, PLY, GLB, and PBR voxel artifacts |
 | Video and worlds | `video generate`, `video cosmos3`, `video prepare-masks`, `video animate`, `video session`, `video export-latents`, `world serve` | LTX video, synchronized LTX 2.3 audio/video, resident distilled and full-dev LTX workers, Wan 2.2 TI2V, native Cosmos3-Edge generation/reasoning/action dynamics, native SAM 3.1 mask preparation, native SCAIL-2 subject animation/replacement, and warm DreamX or Cosmos3 world sessions |
-| Music and sound | `music analyze`, `generate`, `realtime`, `separate`, `transcribe`; `sfx generate`, `sfx video generate` | ACE-Step generation, analysis, and covers; Magenta RT2 realtime MIDI performance; native ViperX BS-RoFormer vocal/instrumental separation; MuScriptor full-mix MIDI transcription; Woosh and native MMAudio text/video-conditioned sound |
+| Music and sound | `music analyze`, `generate`, `realtime`, `separate`, `transcribe`; `sfx generate`, `sfx video generate` | ACE-Step generation, analysis, and covers; Magenta RT2 realtime MIDI performance; native RoFormer separation, dereverb, and denoise; MuScriptor full-mix MIDI transcription; Woosh and native MMAudio text/video-conditioned sound |
 | Speech | `speech synthesize`, `speech transcribe`, `speech diarize`, `speech listen`, `speech profile` | Qwen3 TTS, saved voice profiles, Qwen3 live ASR, Parakeet transcription, and native MLX Sortformer speaker diarization |
 | Serving and operations | `api serve`, `open-webui quickstart`, `status`, `run`, `model runtime`, `gate` | OpenAI-compatible chat, embeddings, images, TTS, and STT; resident model pooling, TTL/pinning, memory guards, durable run inspection, and installed-model quality gates |
 | Automation | `--preflight --json`, `--progress-json`, `image run-plan`, `guide` | Typed preflight actions, machine-readable progress, replayable plans, durable run directories, checksums, and offline command cookbooks |
@@ -602,6 +602,17 @@ swift run mere.run model pull music-separate-bs-roformer-4stem
 swift run mere.run music separate ./song.mp3 \
   --model music-separate-bs-roformer-4stem \
   --output-dir ./song-4stems
+
+# Remove room reverb or broadband noise with native MelBand RoFormer
+swift run mere.run model pull music-separate-mel-roformer-dereverb
+swift run mere.run music separate ./room.wav \
+  --model music-separate-mel-roformer-dereverb \
+  --output-dir ./room-restored
+
+swift run mere.run model pull music-separate-mel-roformer-denoise
+swift run mere.run music separate ./noisy.wav \
+  --model music-separate-mel-roformer-denoise \
+  --output-dir ./noise-restored
 
 # Generate a style-transfer cover from a source song
 swift run mere.run music generate \

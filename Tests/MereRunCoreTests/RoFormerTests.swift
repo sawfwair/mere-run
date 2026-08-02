@@ -55,6 +55,40 @@ final class RoFormerTests: MereRunCoreTestCase {
         XCTAssertEqual(parameters["mask_estimators.3.to_freqs.61.0.2.weight"]?.shape, [1_032, 768])
     }
 
+    func testBundledMelBandConfigurationsAndFrequencyLayout() throws {
+        let dereverb = try MelBandRoFormerResources.loadBundledConfiguration(profile: .dereverb)
+        let denoise = try MelBandRoFormerResources.loadBundledConfiguration(profile: .denoise)
+        XCTAssertEqual(dereverb.stemNames, ["noreverb"])
+        XCTAssertEqual(dereverb.overlap, 2)
+        XCTAssertEqual(denoise.stemNames, ["dry"])
+        XCTAssertEqual(denoise.overlap, 4)
+        XCTAssertEqual(dereverb.frequencyLayout.inputDimensions, [
+            28, 24, 24, 24, 24, 24, 24, 24, 24, 24,
+            24, 24, 24, 24, 24, 28, 28, 28, 36, 36,
+            36, 40, 40, 44, 52, 52, 52, 60, 64, 68,
+            76, 80, 80, 88, 96, 104, 112, 116, 124, 132,
+            144, 156, 164, 176, 188, 200, 216, 228, 244, 264,
+            284, 304, 320, 344, 372, 396, 420, 452, 488, 520,
+        ])
+        XCTAssertEqual(dereverb.frequencyLayout.bandsPerFrequency.min(), 1)
+        XCTAssertEqual(dereverb.frequencyLayout.bandsPerFrequency.max(), 2)
+    }
+
+    func testMelBandModelParameterInventoryMatchesCheckpoint() throws {
+        let configuration = try MelBandRoFormerResources.loadBundledConfiguration(profile: .dereverb)
+        let model = MelBandRoFormer(configuration: configuration)
+        let parameters = Dictionary(uniqueKeysWithValues: model.parameters().flattened())
+        XCTAssertEqual(parameters.count, MelBandRoFormerProfile.dereverb.expectedTensorCount)
+        XCTAssertEqual(
+            parameters.values.reduce(0) { $0 + $1.shape.reduce(1, *) },
+            MelBandRoFormerProfile.dereverb.expectedScalarCount
+        )
+        XCTAssertEqual(parameters["band_split.to_features.0.0.gamma"]?.shape, [28])
+        XCTAssertEqual(parameters["layers.0.0.norm.gamma"]?.shape, [384])
+        XCTAssertEqual(parameters["layers.0.0.layers.0.0.to_out.0.weight"]?.shape, [384, 512])
+        XCTAssertEqual(parameters["mask_estimators.0.to_freqs.59.0.4.weight"]?.shape, [1_040, 1_536])
+    }
+
     func testSTFTAndISTFTRoundTrip() {
         let sampleCount = 64
         let left = (0..<sampleCount).map { sin(Float($0) * 0.19) }
@@ -147,6 +181,40 @@ final class RoFormerTests: MereRunCoreTestCase {
                 "README.md",
                 "bs_roformer/multistem/config.yaml",
                 "bs_roformer/multistem/model.safetensors",
+            ]
+        )
+    }
+
+    func testManagedCatalogPinsMITMelBandSnapshots() throws {
+        let dereverb = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: ModelResolver.ModelID.melRoFormerDereverb.rawValue)
+        )
+        XCTAssertEqual(dereverb.category, .music)
+        XCTAssertEqual(dereverb.validationKind, .roFormer)
+        XCTAssertEqual(dereverb.upstreamRepoId, RoFormerResources.repository)
+        XCTAssertEqual(dereverb.upstreamRevision, RoFormerResources.revision)
+        XCTAssertNil(dereverb.usageRestriction)
+        XCTAssertEqual(
+            dereverb.hubFallback?.patterns,
+            [
+                "LICENSE",
+                "README.md",
+                "mel_band_roformer/dereverb/config.yaml",
+                "mel_band_roformer/dereverb/model.safetensors",
+            ]
+        )
+
+        let denoise = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: ModelResolver.ModelID.melRoFormerDenoise.rawValue)
+        )
+        XCTAssertEqual(denoise.validationKind, .roFormer)
+        XCTAssertEqual(
+            denoise.hubFallback?.patterns,
+            [
+                "LICENSE",
+                "README.md",
+                "mel_band_roformer/denoise/config.yaml",
+                "mel_band_roformer/denoise/model.safetensors",
             ]
         )
     }

@@ -1959,6 +1959,46 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["music separate"]
         ),
         ManagedModelSpec(
+            id: ModelResolver.ModelID.melRoFormerDereverb.rawValue,
+            category: .music,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: RoFormerResources.repository,
+                revision: RoFormerResources.revision,
+                patterns: [
+                    "LICENSE",
+                    "README.md",
+                    "mel_band_roformer/dereverb/config.yaml",
+                    "mel_band_roformer/dereverb/model.safetensors",
+                ]
+            ),
+            upstreamRepoId: RoFormerResources.repository,
+            upstreamRevision: RoFormerResources.revision,
+            validationKind: .roFormer,
+            estimatedDownloadBytes: 912_891_178,
+            defaultCLICommands: ["music separate"]
+        ),
+        ManagedModelSpec(
+            id: ModelResolver.ModelID.melRoFormerDenoise.rawValue,
+            category: .music,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: RoFormerResources.repository,
+                revision: RoFormerResources.revision,
+                patterns: [
+                    "LICENSE",
+                    "README.md",
+                    "mel_band_roformer/denoise/config.yaml",
+                    "mel_band_roformer/denoise/model.safetensors",
+                ]
+            ),
+            upstreamRepoId: RoFormerResources.repository,
+            upstreamRevision: RoFormerResources.revision,
+            validationKind: .roFormer,
+            estimatedDownloadBytes: 912_890_953,
+            defaultCLICommands: ["music separate"]
+        ),
+        ManagedModelSpec(
             id: ModelResolver.ModelID.wooshDFlow.rawValue,
             category: .sfx,
             installShape: .structuredRoot,
@@ -2523,10 +2563,13 @@ public extension ManagedModelSpec {
         case .muScriptor:
             return MuScriptorResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .roFormer:
-            guard let resources = try? RoFormerResources(rootURL: rootURL, modelID: id) else {
-                return [rootURL]
+            if let resources = try? RoFormerResources(rootURL: rootURL, modelID: id) {
+                return resources.validate(fileManager: fileManager)
             }
-            return resources.validate(fileManager: fileManager)
+            if let resources = try? MelBandRoFormerResources(rootURL: rootURL, modelID: id) {
+                return resources.validate(fileManager: fileManager)
+            }
+            return [rootURL]
         case .woosh:
             let checkpointsRoot = WooshResources.normalizeRoot(rootURL, fileManager: fileManager)
             let variant = WooshVariant.resolve(model: id, rootURL: checkpointsRoot, fileManager: fileManager) ?? .dflow
@@ -2669,13 +2712,19 @@ public extension ManagedModelSpec {
                 fileManager: fileManager
             ).map { "Missing required Magenta RT2 file: \($0.path)" }
         case .roFormer:
-            guard let resources = try? RoFormerResources(
+            if let resources = try? RoFormerResources(
                 rootURL: normalizedRootURL(rootURL, fileManager: fileManager),
                 modelID: id
-            ) else {
-                return ["Unsupported managed RoFormer model id: \(id)"]
+            ) {
+                return resources.validationMessages(fileManager: fileManager)
             }
-            return resources.validationMessages(fileManager: fileManager)
+            if let resources = try? MelBandRoFormerResources(
+                rootURL: normalizedRootURL(rootURL, fileManager: fileManager),
+                modelID: id
+            ) {
+                return resources.validationMessages(fileManager: fileManager)
+            }
+            return ["Unsupported managed RoFormer model id: \(id)"]
         default:
             return missingPaths(in: rootURL, fileManager: fileManager).map { "Missing required file: \($0.path)" }
         }

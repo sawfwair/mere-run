@@ -190,15 +190,21 @@ the original decoded mixture is important for residual closure.
 - Compare intermediate band-split, transformer, mask, and waveform results
   with the frozen oracle before making parity or quality claims.
 
-### Stage 3: multistem and model families
+### Stage 3: multistem and model families — implemented for admitted models
 
 - The explicitly MIT-licensed AEmotion four-stem BS-RoFormer profile is now
   implemented and admitted at the same frozen repository revision. Its
   separately pinned graph has 1,355 tensors and 131,704,612 float32 scalars;
   its model outputs are ordered as drums, bass, other, and vocals.
+- The AEmotion MelBand RoFormer dereverb and denoise profiles are now separate,
+  typed managed models at the same frozen revision. Their weights share the
+  same 684-tensor, 228,203,172-scalar geometry but have independent source
+  config and artifact hashes. The native layout exactly reproduces the 60
+  Slaney-mel band supports, stereo frequency/channel interleave, transformer
+  output norms, depth-two mask MLPs, scatter-add, and overlap averaging.
 - Do not add the commonly mirrored six-stem BS-RoFormer SW checkpoint unless
   its separately hosted weights receive an explicit reusable license.
-- Evaluate Mel-RoFormer, SCNet, and MDX families only through separate typed
+- Evaluate further Mel-RoFormer, SCNet, and MDX models only through separate typed
   model profiles. Do not hide incompatible graphs behind unchecked
   configuration dictionaries.
 
@@ -267,3 +273,19 @@ seconds including an incremental build and model setup, 2,244,935,680 bytes
 maximum resident size, and 6,626,134,368 bytes peak footprint. This is
 functional smoke evidence, not thermal-controlled performance or music-quality
 evidence.
+
+The two MelBand follow-ons passed exact managed-artifact and real runtime
+smokes. Dereverb independently matched weights SHA-256
+`20af72ee52abdaf215dc5ece0c2b33a8304eff31c7b49a2d6730639f8a4aa75c`;
+denoise matched
+`721e2b13e30e968fcf23d5015f07a5d95dbf5cc5a66a4f8f8bc8f9fc11ffbb93`.
+Both public commands preserved a one-second, 44.1 kHz stereo frame count and
+wrote finite float WAVs with zero NaNs and infinities. Denoise selected its
+published overlap `4` without a CLI override and recorded 0.966 seconds inside
+separation, 3.00 seconds wall time, 3,775,168,512 bytes maximum resident size,
+and 6,732,860,848 bytes peak footprint. Dereverb selected overlap `2`; a
+one-second excerpt from a generated jazz fixture retained normal signal level
+and recorded 1.015 seconds inside separation. Pure steady tones were also
+finite but heavily suppressed by dereverb, so they are not used as a quality
+fixture. These remain functional smoke results, not perceptual quality or
+thermal-controlled performance evidence.

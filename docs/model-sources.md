@@ -101,6 +101,8 @@ from the runtime catalog used by `mere.run model list`,
 | `music` | `music-muscriptor-large` |
 | `music` | `music-separate-bs-roformer-viperx-1297` |
 | `music` | `music-separate-bs-roformer-4stem` |
+| `music` | `music-separate-mel-roformer-dereverb` |
+| `music` | `music-separate-mel-roformer-denoise` |
 | `sfx` | `sfx-woosh-dflow` |
 | `sfx` | `sfx-woosh-flow` |
 | `sfx` | `sfx-woosh-clap` |
@@ -170,12 +172,16 @@ Model License, and the hidden Gemma 3 companion under the Gemma Terms of Use.
 Their terms still apply. Managed downloads retain the available license,
 README, attribution, and immutable source provenance.
 
-`music-separate-bs-roformer-viperx-1297` and
-`music-separate-bs-roformer-4stem` also do not require acknowledgement. The
+`music-separate-bs-roformer-viperx-1297`,
+`music-separate-bs-roformer-4stem`,
+`music-separate-mel-roformer-dereverb`, and
+`music-separate-mel-roformer-denoise` also do not require acknowledgement. The
 pinned AEmotion Studio model release includes an explicit MIT `LICENSE`
 and an MIT model-card declaration. The managed install retains both files and
 admits the weights, source configuration, model card, and license only when all
-four match their model-specific frozen byte counts and SHA-256 digests.
+four match their model-specific frozen byte counts and SHA-256 digests. The
+MelBand profiles additionally retain separate dereverb and denoise source
+configs and exact 913 MB checkpoint hashes.
 
 `image-zimage-nano` also does not require acknowledgement. Its canonical
 `Tongyi-MAI/Z-Image-Turbo` base is Apache-2.0; the pinned mflux conversion's
