@@ -250,9 +250,11 @@ private struct Wan2PoseMatrix: Hashable {
         var output = Array(repeating: Float(0), count: 16)
         for row in 0..<4 {
             for column in 0..<4 {
-                output[row * 4 + column] = (0..<4).reduce(Float(0)) { partial, index in
-                    partial + left.values[row * 4 + index] * right.values[index * 4 + column]
+                var value = Float(0)
+                for index in 0..<4 {
+                    value += left.values[row * 4 + index] * right.values[index * 4 + column]
                 }
+                output[row * 4 + column] = value
             }
         }
         return Self(output)
