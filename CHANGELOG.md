@@ -6,6 +6,15 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.32.1 - 2026-08-02
+
+### Fixed
+
+- fixed the exhaustive installed-model release gate to validate each native
+  RoFormer profile's actual stem set. Four-stem, dereverb, and denoise checks
+  now verify every generated WAV for decodability, non-silence, manifest path,
+  and SHA-256 instead of assuming the ViperX vocal/instrumental filenames.
+
 ## 0.32.0 - 2026-08-02
 
 This release makes mixed local workloads safer and broadens native audio

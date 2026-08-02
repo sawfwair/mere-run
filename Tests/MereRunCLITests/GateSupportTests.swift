@@ -153,4 +153,34 @@ final class GateSupportTests: XCTestCase {
         XCTAssertGreaterThan(decoded.samples.count, 40_000)
         XCTAssertGreaterThan(peak, 0.1)
     }
+
+    func testMusicSeparationGateUsesProfileSpecificStemSets() throws {
+        XCTAssertEqual(
+            try GateRunner.expectedMusicSeparationStemNames(
+                for: ModelResolver.ModelID.roFormerViperX1297.rawValue
+            ),
+            ["vocals", "instrumental"]
+        )
+        XCTAssertEqual(
+            try GateRunner.expectedMusicSeparationStemNames(
+                for: ModelResolver.ModelID.roFormerFourStem.rawValue
+            ),
+            ["drums", "bass", "other", "vocals"]
+        )
+        XCTAssertEqual(
+            try GateRunner.expectedMusicSeparationStemNames(
+                for: ModelResolver.ModelID.melRoFormerDereverb.rawValue
+            ),
+            ["noreverb"]
+        )
+        XCTAssertEqual(
+            try GateRunner.expectedMusicSeparationStemNames(
+                for: ModelResolver.ModelID.melRoFormerDenoise.rawValue
+            ),
+            ["dry"]
+        )
+        XCTAssertThrowsError(
+            try GateRunner.expectedMusicSeparationStemNames(for: "music-separate-unknown")
+        )
+    }
 }
