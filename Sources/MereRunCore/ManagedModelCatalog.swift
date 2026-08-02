@@ -1939,6 +1939,26 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["music separate"]
         ),
         ManagedModelSpec(
+            id: ModelResolver.ModelID.roFormerFourStem.rawValue,
+            category: .music,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: RoFormerResources.repository,
+                revision: RoFormerResources.revision,
+                patterns: [
+                    "LICENSE",
+                    "README.md",
+                    "bs_roformer/multistem/config.yaml",
+                    "bs_roformer/multistem/model.safetensors",
+                ]
+            ),
+            upstreamRepoId: RoFormerResources.repository,
+            upstreamRevision: RoFormerResources.revision,
+            validationKind: .roFormer,
+            estimatedDownloadBytes: 526_973_074,
+            defaultCLICommands: ["music separate"]
+        ),
+        ManagedModelSpec(
             id: ModelResolver.ModelID.wooshDFlow.rawValue,
             category: .sfx,
             installShape: .structuredRoot,
@@ -2503,7 +2523,10 @@ public extension ManagedModelSpec {
         case .muScriptor:
             return MuScriptorResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .roFormer:
-            return RoFormerResources(rootURL: rootURL).validate(fileManager: fileManager)
+            guard let resources = try? RoFormerResources(rootURL: rootURL, modelID: id) else {
+                return [rootURL]
+            }
+            return resources.validate(fileManager: fileManager)
         case .woosh:
             let checkpointsRoot = WooshResources.normalizeRoot(rootURL, fileManager: fileManager)
             let variant = WooshVariant.resolve(model: id, rootURL: checkpointsRoot, fileManager: fileManager) ?? .dflow
@@ -2646,9 +2669,13 @@ public extension ManagedModelSpec {
                 fileManager: fileManager
             ).map { "Missing required Magenta RT2 file: \($0.path)" }
         case .roFormer:
-            return RoFormerResources(
-                rootURL: normalizedRootURL(rootURL, fileManager: fileManager)
-            ).validationMessages(fileManager: fileManager)
+            guard let resources = try? RoFormerResources(
+                rootURL: normalizedRootURL(rootURL, fileManager: fileManager),
+                modelID: id
+            ) else {
+                return ["Unsupported managed RoFormer model id: \(id)"]
+            }
+            return resources.validationMessages(fileManager: fileManager)
         default:
             return missingPaths(in: rootURL, fileManager: fileManager).map { "Missing required file: \($0.path)" }
         }

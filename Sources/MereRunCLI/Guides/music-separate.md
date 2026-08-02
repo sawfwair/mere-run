@@ -2,9 +2,8 @@
 
 ## Purpose
 
-Split a finished mix into vocal and instrumental float WAVs with native
-Swift/MLX BS-RoFormer inference. No audio is uploaded and no Python runtime is
-launched.
+Split a finished mix into two or four float WAV stems with native Swift/MLX
+BS-RoFormer inference. No audio is uploaded and no Python runtime is launched.
 
 ## Install
 
@@ -14,6 +13,7 @@ model-card README, and license, so no license-acceptance flag is required.
 
 ```bash
 mere.run model pull music-separate-bs-roformer-viperx-1297
+mere.run model pull music-separate-bs-roformer-4stem
 ```
 
 ## Separate
@@ -28,8 +28,17 @@ model loading and chunk progress are written to stderr. The manifest records
 input/output hashes, the immutable model revision and weight hash, audio
 geometry, compute type, chunk count, overlap, and elapsed time.
 
-The default overlap of `2` matches the published inference config. A higher
-divisor of 352800, such as `4`, spends more compute on chunk blending:
+For drums, bass, other, and vocals:
+
+```bash
+mere.run music separate ./song.mp3 \
+  --model music-separate-bs-roformer-4stem \
+  --output-dir ./song-4stems
+```
+
+The default overlap of `2` matches both published inference configs. A higher
+divisor of the selected model's chunk size, such as `4`, spends more compute
+on chunk blending:
 
 ```bash
 mere.run music separate ./song.wav --overlap 4 --dtype float16

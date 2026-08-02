@@ -597,6 +597,12 @@ swift run mere.run model pull music-separate-bs-roformer-viperx-1297
 swift run mere.run music separate ./song.mp3 \
   --output-dir ./song-stems
 
+# Separate drums, bass, other, and vocals with native four-stem BS-RoFormer
+swift run mere.run model pull music-separate-bs-roformer-4stem
+swift run mere.run music separate ./song.mp3 \
+  --model music-separate-bs-roformer-4stem \
+  --output-dir ./song-4stems
+
 # Generate a style-transfer cover from a source song
 swift run mere.run music generate \
   "modern reggaeton dance club remix, 96 bpm dembow rhythm, syncopated kick-snare groove, punchy 808 sub bass, bright Latin percussion" \

@@ -702,6 +702,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 16
             ),
             descriptor(
+                ModelResolver.ModelID.roFormerFourStem.rawValue,
+                "Four-stem BS-RoFormer",
+                "Separates drums, bass, other, and vocals locally with native MLX inference.",
+                minimum: 8,
+                recommended: 16
+            ),
+            descriptor(
                 ModelResolver.ModelID.wooshDFlow.rawValue,
                 "Woosh DFlow",
                 "Generates Foley and sound effects from text prompts with Sony Research Woosh.",

@@ -48,8 +48,8 @@ private final class RoFormerRotaryEmbedding: Module {
 private final class RoFormerAttentionOutput: Module {
     @ModuleInfo(key: "0") var projection: Linear
 
-    init(dimensions: Int) {
-        self._projection.wrappedValue = Linear(dimensions, dimensions, bias: false)
+    init(inputDimensions: Int, outputDimensions: Int) {
+        self._projection.wrappedValue = Linear(inputDimensions, outputDimensions, bias: false)
         super.init()
     }
 
@@ -75,7 +75,10 @@ private final class RoFormerAttention: Module {
         self._rotary.wrappedValue = RoFormerRotaryEmbedding(dimensions: headDimension)
         self._qkv.wrappedValue = Linear(dimensions, 3 * heads * headDimension, bias: false)
         self._gates.wrappedValue = Linear(dimensions, heads, bias: true)
-        self._output.wrappedValue = RoFormerAttentionOutput(dimensions: dimensions)
+        self._output.wrappedValue = RoFormerAttentionOutput(
+            inputDimensions: heads * headDimension,
+            outputDimensions: dimensions
+        )
         super.init()
     }
 
@@ -146,7 +149,7 @@ private final class RoFormerTransformerLayer: Module {
         )
         self._feedForward.wrappedValue = RoFormerFeedForward(
             dimensions: configuration.dim,
-            expansionFactor: configuration.mlpExpansionFactor
+            expansionFactor: configuration.transformerExpansionFactor
         )
         super.init()
     }
@@ -319,7 +322,7 @@ public final class BSRoFormer: Module {
 
     public static func load(checkpoint: RoFormerCheckpoint, dtype: DType = .float16) throws -> BSRoFormer {
         let model = BSRoFormer(configuration: checkpoint.configuration)
-        try model.validateCheckpoint(at: checkpoint.weightsURL)
+        try model.validateCheckpoint(checkpoint: checkpoint)
         let arrays = try SafetensorsStreamingLoader.loadArrays(
             url: checkpoint.weightsURL,
             dtype: dtype
@@ -335,11 +338,11 @@ public final class BSRoFormer: Module {
         return model
     }
 
-    public func validateCheckpoint(at url: URL) throws {
-        let metadata = try SafetensorsStreamingLoader.metadata(url: url)
-        guard metadata.count == RoFormerResources.expectedTensorCount else {
+    public func validateCheckpoint(checkpoint: RoFormerCheckpoint) throws {
+        let metadata = try SafetensorsStreamingLoader.metadata(url: checkpoint.weightsURL)
+        guard metadata.count == checkpoint.profile.expectedTensorCount else {
             throw RoFormerError.invalidCheckpointInventory(
-                expected: RoFormerResources.expectedTensorCount,
+                expected: checkpoint.profile.expectedTensorCount,
                 actual: metadata.count
             )
         }
@@ -365,7 +368,7 @@ public final class BSRoFormer: Module {
         let scalars = metadata.values.reduce(0) { count, tensor in
             count + tensor.shape.reduce(1, *)
         }
-        guard scalars == RoFormerResources.expectedScalarCount else {
+        guard scalars == checkpoint.profile.expectedScalarCount else {
             throw RoFormerError.invalidConfiguration("checkpoint scalar count is \(scalars)")
         }
     }

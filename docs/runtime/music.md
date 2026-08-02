@@ -44,6 +44,7 @@ emitted flag absent from `mere.run catalog --json`.
 - `music-muscriptor-medium`
 - `music-muscriptor-large`
 - `music-separate-bs-roformer-viperx-1297`
+- `music-separate-bs-roformer-4stem`
 
 ## Guides
 
@@ -56,6 +57,7 @@ mere.run guide music generate --model music-acestep-xl-turbo
 mere.run guide music analyze --model music-acestep-xl-turbo-lm4b
 mere.run guide music generate --model music-magenta-rt2-small
 mere.run guide music separate --model music-separate-bs-roformer-viperx-1297
+mere.run guide music separate --model music-separate-bs-roformer-4stem
 mere.run guide music transcribe --model music-muscriptor-medium
 ```
 
@@ -117,6 +119,11 @@ swift run mere.run music transcribe ./song.mp3 --output ./song.mid
 
 swift run mere.run model pull music-separate-bs-roformer-viperx-1297
 swift run mere.run music separate ./song.mp3 --output-dir ./song-stems
+
+swift run mere.run model pull music-separate-bs-roformer-4stem
+swift run mere.run music separate ./song.mp3 \
+  --model music-separate-bs-roformer-4stem \
+  --output-dir ./song-4stems
 ```
 
 `music separate` decodes the source at 44.1 kHz stereo, runs the pinned ViperX
@@ -124,6 +131,11 @@ swift run mere.run music separate ./song.mp3 --output-dir ./song-stems
 `separation.json`. The instrumental is computed from the decoded mixture minus
 the vocal estimate, so the two stems close back to the exact working mixture.
 The JSON manifest is also emitted on stdout; progress stays on stderr.
+
+The `music-separate-bs-roformer-4stem` profile uses the same native
+band-split graph with its separately pinned 384-dimensional, eight-layer
+checkpoint. It writes `drums.wav`, `bass.wav`, `other.wav`, `vocals.wav`, and
+`separation.json` in the checkpoint's published output order.
 
 The accepted AEmotion Studio snapshot is explicitly MIT-licensed and pinned at
 revision `d323194290f8488ea51814143806609bfbd7a1e5`. mere.run verifies the exact
