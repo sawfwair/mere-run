@@ -53,7 +53,7 @@ export default defineConfig({
         items: [
           { text: 'Docs Home', link: '/' },
           { text: 'Getting Started', link: '/getting-started' },
-          { text: 'Raycast Integration', link: '/raycast' },
+          { text: 'macOS Deep Links', link: '/macos-deep-links' },
           { text: 'Linux QuickStart', link: '/linux-quickstart' },
           { text: 'CLI Reference', link: '/cli' },
           { text: 'Offline Cookbooks', link: '/cookbooks' },
@@ -67,7 +67,8 @@ export default defineConfig({
           { text: 'Configuration', link: '/configuration' },
           { text: 'Quality Gate', link: '/gate' },
           { text: 'Model Sources', link: '/model-sources' },
-          { text: 'Companion Plugins', link: '/plugins' }
+          { text: 'Companion Plugins', link: '/plugins' },
+          { text: 'Raycast Example', link: '/raycast' }
         ]
       },
       {

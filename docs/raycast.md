@@ -1,5 +1,9 @@
 # Raycast Integration
 
+Raycast is one example client of MereRun's public macOS handoff surface. Read
+[macOS Deep Links](./macos-deep-links.md) for the app-owned route contracts and
+security boundaries independent of any launcher.
+
 Generate an image, video, music track, or spoken-audio file from Raycast, then
 open the completed local artifact as the selected item in MereRun Library. The
 Raycast extension calls the public `mere.run` CLI, writes a small typed receipt,
