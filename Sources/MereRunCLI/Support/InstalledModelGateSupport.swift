@@ -141,6 +141,21 @@ private struct InstalledDiarizationDocument: Decodable {
     }
 }
 
+private struct InstalledMusicSeparationDocument: Decodable {
+    struct Model: Decodable {
+        let id: String
+    }
+
+    struct Stem: Decodable {
+        let name: String
+        let path: String
+        let sha256: String
+    }
+
+    let model: Model
+    let stems: [Stem]
+}
+
 /// One explicit release-smoke recipe per managed runtime kind. The release
 /// lane builds checks from the installed inventory, so catalog additions
 /// cannot disappear behind a representative "family" check.
@@ -975,12 +990,62 @@ extension GateRunner {
             ],
             timeout: 3_600
         )
-        let vocals = output.appendingPathComponent("vocals.wav")
-        let instrumental = output.appendingPathComponent("instrumental.wav")
         let manifest = output.appendingPathComponent("separation.json")
-        _ = try audioObservation(vocals, run: run)
-        _ = try audioObservation(instrumental, run: run)
+        let manifestData = try Data(contentsOf: manifest)
+        let document = try JSONDecoder().decode(
+            InstalledMusicSeparationDocument.self,
+            from: manifestData
+        )
+        let expectedNames = try Self.expectedMusicSeparationStemNames(for: model)
+        guard document.model.id == model else {
+            throw GateError.invalidArtifact(
+                "music separation manifest reported model \(document.model.id), expected \(model)"
+            )
+        }
+        guard document.stems.map(\.name) == expectedNames else {
+            throw GateError.invalidArtifact(
+                "music separation manifest reported stems \(document.stems.map(\.name)), "
+                    + "expected \(expectedNames)"
+            )
+        }
+        for stem in document.stems {
+            let expectedFileName = "\(stem.name).wav"
+            guard URL(fileURLWithPath: stem.path).lastPathComponent == expectedFileName else {
+                throw GateError.invalidArtifact(
+                    "music separation manifest path for \(stem.name) was not \(expectedFileName)"
+                )
+            }
+            let observation = try audioObservation(
+                output.appendingPathComponent(expectedFileName),
+                run: run
+            )
+            if let failure = observation.semanticFailure {
+                throw GateError.invalidArtifact("\(expectedFileName): \(failure)")
+            }
+            guard stem.sha256 == observation.hash else {
+                throw GateError.invalidArtifact(
+                    "music separation manifest hash did not match \(expectedFileName)"
+                )
+            }
+        }
         return try jsonFileObservation(manifest, run: run, label: "music separation manifest")
+    }
+
+    static func expectedMusicSeparationStemNames(for model: String) throws -> [String] {
+        switch model {
+        case ModelResolver.ModelID.roFormerViperX1297.rawValue:
+            ["vocals", "instrumental"]
+        case ModelResolver.ModelID.roFormerFourStem.rawValue:
+            ["drums", "bass", "other", "vocals"]
+        case ModelResolver.ModelID.melRoFormerDereverb.rawValue:
+            ["noreverb"]
+        case ModelResolver.ModelID.melRoFormerDenoise.rawValue:
+            ["dry"]
+        default:
+            throw GateError.invalidArtifact(
+                "unsupported music separation model in installed-model gate: \(model)"
+            )
+        }
     }
 
     func installedAudioEnhancementCheck(model: String) async throws -> GateObservation {
