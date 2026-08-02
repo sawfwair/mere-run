@@ -6,6 +6,87 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.33.0 - 2026-08-02
+
+This release turns native DreamX into a product-grade local world-session
+runtime: held and composed movement streams causal blocks, exact checkpoints
+fork live history, geometry-guided memory improves revisits, and a pinned
+learned/performance soak gate keeps camera closure separate from visual truth.
+
+### Added
+
+- added native multi-block DreamX AR rollouts to `world serve` with upstream
+  `action_seq`/`action_speed_list` semantics, official 1280x704 defaults,
+  63-latent/249-pixel-frame support, composed movement and rotation controls,
+  per-block decoded MP4 emission, browser media endpoints, and CORS-enabled job
+  polling for low-latency product clients. The admitted ceiling follows the
+  current upstream one-minute recipe at 252 latent / 1,005 pixel frames.
+- added exact live DreamX causal checkpoints with create, list, restore,
+  terminal-frame media, and discard endpoints. Locks preserve bounded
+  attention caches, clean latents, and global causal position so a restored
+  state can generate a genuine alternate branch instead of restarting from a
+  PNG. World artifacts use a separate collision-free sequence so reseeding or
+  restoring a logical state cannot overwrite earlier job media.
+- added a paper-reconstructed, geometry-guided DreamX scene memory for exact
+  revisits. A separate global camera chain indexes bounded predicted-clean
+  latents by pose, retrieves non-local frames using the paper's temporal-gap,
+  2-degree yaw, and 0.1-distance gates, and applies a conservative residual
+  anchor without changing released chunk-relative camera conditioning. Exact
+  pose returns restore the first clean latent, deduplicate later generated
+  evidence, and pin the canonical origin through capacity eviction so repeated
+  loops cannot compound character-scale drift. Memory, pose, and telemetry
+  fork with exact causal checkpoints. The API labels this path
+  `paper_reconstructed_revisit_anchor`; it is not misrepresented as the
+  unreleased memory-trained paper model.
+- added a paper-aligned DreamX world evaluation manifest and runner covering
+  5-second, exact 63-latent/249-frame upstream-versus-native, 30-second,
+  D×3/A×3 out-and-back, translation/rotation, and rectangular-loop scenarios
+  plus a 104-action / 13-return adversarial soak, with captured receipts, media
+  probes, global-pose closure, per-step latency, scene-memory counts, and
+  explicitly separated visual metrics.
+- added a pinned learned DreamX revisit gate for LPIPS, DINO-Sim, MutualVPR,
+  SuperPoint+LightGlue matching, and consecutive-frame CLIP-Video. Revisit
+  metrics are scored as gains over a checked-in matched-duration non-revisit
+  path, with exact source revisions and the MutualVPR weight hash recorded in
+  the report; pose closure can no longer satisfy the perceptual gate.
+- added explicit `world serve` controls for disabling or tuning bounded DreamX
+  revisit memory, including recycling strength, capacity, temporal gap, yaw,
+  translation, and exact-return thresholds, so quality experiments are
+  reproducible instead of changing hard-coded runtime constants.
+
+### Changed
+
+- fixed Cosmos3 semantic camera controls to compile true frame-relative 9D
+  pose deltas. Forward/backward and left/right now use explicit opposing
+  camera-relative axes, hold and yaw no longer inherit translation from
+  NVIDIA's arbitrary parity sample, rotations use constant per-frame deltas,
+  and continued chunks no longer accumulate the previous relative delta as an
+  absolute pose. This supersedes the now-conflicting camera-only change in
+  #228.
+- aligned semantic DreamX camera controls with the released fixed 1.5
+  model-space rate instead of scaling trajectories from UI meters or degrees,
+  eliminating oversized turns. Long-lived causal sessions now retain a
+  bounded three-latent VAE decode window while preserving monotonic cache
+  positions and the model's rolling 12-frame attention window.
+- aligned source images with the released fixed-size Pillow/torchvision
+  antialiased bilinear resize, including Pillow's per-axis 8-bit quantization,
+  instead of applying an aspect-preserving center crop.
+- matched DreamX's float64 trajectory accumulation, float32 absolute-pose
+  record boundary, and float64 relative-pose inversion so the complete
+  composed 249-frame camera fixture stays inside the strict parity tolerance.
+
+### Tests
+
+- promoted numeric output from the pinned Apache-2.0 DreamX AR camera source to
+  an always-on composed-action and chunk-relative trajectory parity gate. The
+  MIT model weights remain a separately pinned runtime artifact; upstream
+  source is not imported by the native implementation.
+- added byte-exact downsample and upsample gates against the released DreamX
+  Pillow source-image preprocessing path.
+- added global inverse-pose recovery, paper-threshold scene-memory retrieval,
+  exact canonical-evidence retention, bounded-memory checkpoint restoration,
+  and live loop-closure coverage.
+
 ## 0.32.2 - 2026-08-02
 
 ### Fixed

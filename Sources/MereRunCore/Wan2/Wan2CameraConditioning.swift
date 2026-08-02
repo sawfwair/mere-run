@@ -168,18 +168,20 @@ public enum Wan2DreamXCameraTrajectory {
     }
 }
 
-public struct Wan2DreamXARTrajectorySegment: Hashable, Sendable {
+public struct Wan2DreamXARTrajectorySegment: Codable, Hashable, Sendable {
     public let action: String
     public let weight: Float
 
     public init(action: String, weight: Float = 1) {
-        precondition(weight > 0)
+        precondition(weight.isFinite && weight > 0)
         self.action = action.lowercased()
         self.weight = weight
     }
 }
 
 public enum Wan2DreamXARTrajectory {
+    public static let defaultSpeed: Float = 1.5
+
     public static func segments(for control: Wan2WorldCameraControl) -> [Wan2DreamXARTrajectorySegment] {
         let action: String
         switch control.motion {
@@ -208,54 +210,28 @@ public enum Wan2DreamXARTrajectory {
     public static func compile(
         control: Wan2WorldCameraControl,
         pixelFrameCount: Int,
-        speed: Float? = nil,
+        speed: Float = defaultSpeed,
         chunkRelative: Bool = true
     ) -> Wan2ProjectiveCameraConditioning {
         compile(
             segments: segments(for: control),
             pixelFrameCount: pixelFrameCount,
-            speed: speed ?? physicalSpeed(for: control, pixelFrameCount: pixelFrameCount),
+            speed: speed,
             chunkRelative: chunkRelative
         )
-    }
-
-    private static func physicalSpeed(
-        for control: Wan2WorldCameraControl,
-        pixelFrameCount: Int
-    ) -> Float {
-        precondition(pixelFrameCount > 0)
-        let translation = control.translationMeters.map(abs).max() ?? 0
-        let rotation = control.rotationDegrees.map(abs).max() ?? 0
-        let travelSteps = alignedTravelSteps(pixelFrameCount: pixelFrameCount)
-        switch control.motion {
-        case .hold:
-            return 1.5
-        case .forward, .backward, .strafeLeft, .strafeRight:
-            return max(translation / (0.05 * travelSteps), 0.001)
-        case .yawLeft, .yawRight:
-            return max(rotation / travelSteps, 0.001)
-        case .custom:
-            return max(
-                max(translation / (0.05 * travelSteps), rotation / travelSteps),
-                0.001
-            )
-        }
-    }
-
-    private static func alignedTravelSteps(pixelFrameCount: Int) -> Float {
-        let alignedIndices = [0] + Array(stride(from: 1, to: pixelFrameCount, by: 4))
-        return Float(max((alignedIndices.last ?? 0) - (alignedIndices.first ?? 0), 1))
     }
 
     public static func compile(
         segments: [Wan2DreamXARTrajectorySegment],
         pixelFrameCount: Int,
-        speed: Float = 1.5,
+        speed: Float = defaultSpeed,
         chunkRelative: Bool = true
     ) -> Wan2ProjectiveCameraConditioning {
         precondition(!segments.isEmpty)
         precondition(pixelFrameCount > 0 && (pixelFrameCount - 1).isMultiple(of: 4))
+        precondition(speed.isFinite && speed > 0)
         let totalWeight = segments.reduce(Float(0)) { $0 + $1.weight }
+        precondition(totalWeight.isFinite && totalWeight > 0)
         var allocated = 0
         var weightedSegments: [(String, Int)] = []
         for (index, segment) in segments.enumerated() {
@@ -272,49 +248,53 @@ public enum Wan2DreamXARTrajectory {
             }
         }
 
-        var position = SIMD3<Float>(repeating: 0)
-        var cameraToWorldRotation = Wan2Matrix4.identity
-        var absoluteViews: [Wan2Matrix4] = []
+        // Released DreamX accumulates the NumPy trajectory in float64, casts
+        // each absolute W2C record to float32, then computes chunk-relative
+        // poses through float64 inverses. Keeping those boundaries is material
+        // on a 249-frame composed turn; an all-Float accumulator drifts.
+        var position = SIMD3<Double>(repeating: 0)
+        var cameraToWorldRotation = Wan2DoubleMatrix4.identity
+        var absoluteViews: [Wan2DoubleMatrix4] = []
         absoluteViews.reserveCapacity(pixelFrameCount)
-        let movementStep = speed * 0.05
-        let rotationStep = speed * .pi / 180
+        let movementStep = Double(speed) * 0.05
+        let rotationStep = Double(speed) * .pi / 180
         for (action, frameCount) in weightedSegments {
             for _ in 0..<frameCount {
-                var pitchDelta: Float = 0
-                var yawDelta: Float = 0
+                var pitchDelta: Double = 0
+                var yawDelta: Double = 0
                 if action.contains("i") { pitchDelta += rotationStep }
                 if action.contains("k") { pitchDelta -= rotationStep }
                 if action.contains("j") { yawDelta -= rotationStep }
                 if action.contains("l") { yawDelta += rotationStep }
                 if pitchDelta != 0 || yawDelta != 0 {
                     cameraToWorldRotation = cameraToWorldRotation
-                        * Wan2Matrix4.euler(roll: pitchDelta, pitch: yawDelta, yaw: 0)
+                        * Wan2DoubleMatrix4.euler(roll: pitchDelta, pitch: yawDelta, yaw: 0)
                 }
-                var localMovement = SIMD3<Float>(repeating: 0)
+                var localMovement = SIMD3<Double>(repeating: 0)
                 if action.contains("w") { localMovement.z += movementStep }
                 if action.contains("s") { localMovement.z -= movementStep }
                 if action.contains("a") { localMovement.x -= movementStep }
                 if action.contains("d") { localMovement.x += movementStep }
                 position += cameraToWorldRotation.transformDirection(localMovement)
                 let worldToCameraRotation = cameraToWorldRotation.transposed()
-                absoluteViews.append(
-                    worldToCameraRotation.withTranslation(-worldToCameraRotation.transformDirection(position))
-                )
+                absoluteViews.append(worldToCameraRotation
+                    .withTranslation(-worldToCameraRotation.transformDirection(position))
+                    .quantizedToFloat32())
             }
         }
 
         let alignedIndices = [0] + Array(stride(from: 1, to: pixelFrameCount, by: 4))
         let alignedViews = alignedIndices.map { absoluteViews[$0] }
-        var relativeViews: [Wan2Matrix4] = []
+        var relativeViews: [Wan2DoubleMatrix4] = []
         relativeViews.reserveCapacity(alignedViews.count)
         if chunkRelative {
             for chunkStart in stride(from: 0, to: alignedViews.count, by: 3) {
-                let reference = alignedViews[chunkStart == 0 ? 0 : chunkStart - 1].invertedRigid()
+                let reference = alignedViews[chunkStart == 0 ? 0 : chunkStart - 1].invertedAffine()
                 let chunkEnd = min(chunkStart + 3, alignedViews.count)
                 relativeViews.append(contentsOf: (chunkStart..<chunkEnd).map { alignedViews[$0] * reference })
             }
         } else {
-            let reference = alignedViews[0].invertedRigid()
+            let reference = alignedViews[0].invertedAffine()
             relativeViews = alignedViews.map { $0 * reference }
         }
         let intrinsic: [Float] = [
@@ -324,7 +304,7 @@ public enum Wan2DreamXARTrajectory {
         ]
         return Wan2ProjectiveCameraConditioning(
             frameCount: relativeViews.count,
-            viewMatrices: relativeViews.flatMap(\.values),
+            viewMatrices: relativeViews.flatMap { $0.values.map(Float.init) },
             intrinsics: relativeViews.flatMap { _ in intrinsic }
         )
     }
@@ -591,5 +571,122 @@ private struct Wan2Matrix4: Hashable {
         ])
         let translation = SIMD3(values[3], values[7], values[11])
         return rotationTranspose.withTranslation(-rotationTranspose.transformDirection(translation))
+    }
+}
+
+/// Float64 trajectory math with explicit float32 record boundaries matching
+/// NumPy's released DreamX AR camera path. This remains separate from the
+/// model-facing Float matrix helper so inference tensors are still float32/BF16.
+private struct Wan2DoubleMatrix4 {
+    let values: [Double]
+
+    init(_ values: [Double]) {
+        precondition(values.count == 16)
+        self.values = values
+    }
+
+    static let identity = Wan2DoubleMatrix4([
+        1, 0, 0, 0,
+        0, 1, 0, 0,
+        0, 0, 1, 0,
+        0, 0, 0, 1,
+    ])
+
+    static func euler(roll: Double, pitch: Double, yaw: Double) -> Wan2DoubleMatrix4 {
+        let sineX = sin(roll)
+        let cosineX = cos(roll)
+        let sineY = sin(pitch)
+        let cosineY = cos(pitch)
+        let sineZ = sin(yaw)
+        let cosineZ = cos(yaw)
+        let rotationX = Wan2DoubleMatrix4([
+            1, 0, 0, 0,
+            0, cosineX, -sineX, 0,
+            0, sineX, cosineX, 0,
+            0, 0, 0, 1,
+        ])
+        let rotationY = Wan2DoubleMatrix4([
+            cosineY, 0, sineY, 0,
+            0, 1, 0, 0,
+            -sineY, 0, cosineY, 0,
+            0, 0, 0, 1,
+        ])
+        let rotationZ = Wan2DoubleMatrix4([
+            cosineZ, -sineZ, 0, 0,
+            sineZ, cosineZ, 0, 0,
+            0, 0, 1, 0,
+            0, 0, 0, 1,
+        ])
+        return rotationZ * rotationY * rotationX
+    }
+
+    static func * (left: Wan2DoubleMatrix4, right: Wan2DoubleMatrix4) -> Wan2DoubleMatrix4 {
+        var output = Array(repeating: Double(0), count: 16)
+        for row in 0..<4 {
+            for column in 0..<4 {
+                for index in 0..<4 {
+                    output[row * 4 + column] += left.values[row * 4 + index]
+                        * right.values[index * 4 + column]
+                }
+            }
+        }
+        return Wan2DoubleMatrix4(output)
+    }
+
+    func transposed() -> Wan2DoubleMatrix4 {
+        Wan2DoubleMatrix4((0..<16).map { values[($0 % 4) * 4 + ($0 / 4)] })
+    }
+
+    func withTranslation(_ translation: SIMD3<Double>) -> Wan2DoubleMatrix4 {
+        var output = values
+        output[3] = translation.x
+        output[7] = translation.y
+        output[11] = translation.z
+        return Wan2DoubleMatrix4(output)
+    }
+
+    func transformDirection(_ direction: SIMD3<Double>) -> SIMD3<Double> {
+        SIMD3(
+            values[0] * direction.x + values[1] * direction.y + values[2] * direction.z,
+            values[4] * direction.x + values[5] * direction.y + values[6] * direction.z,
+            values[8] * direction.x + values[9] * direction.y + values[10] * direction.z
+        )
+    }
+
+    func quantizedToFloat32() -> Wan2DoubleMatrix4 {
+        Wan2DoubleMatrix4(values.map { Double(Float($0)) })
+    }
+
+    func invertedAffine() -> Wan2DoubleMatrix4 {
+        let a = values[0], b = values[1], c = values[2]
+        let d = values[4], e = values[5], f = values[6]
+        let g = values[8], h = values[9], i = values[10]
+        let determinant = a * (e * i - f * h)
+            - b * (d * i - f * g)
+            + c * (d * h - e * g)
+        precondition(abs(determinant) > 1e-12)
+        let inverseRotation = [
+            (e * i - f * h) / determinant,
+            (c * h - b * i) / determinant,
+            (b * f - c * e) / determinant,
+            (f * g - d * i) / determinant,
+            (a * i - c * g) / determinant,
+            (c * d - a * f) / determinant,
+            (d * h - e * g) / determinant,
+            (b * g - a * h) / determinant,
+            (a * e - b * d) / determinant,
+        ]
+        let translation = SIMD3(values[3], values[7], values[11])
+        let inverseTranslation = SIMD3(
+            -(inverseRotation[0] * translation.x + inverseRotation[1] * translation.y + inverseRotation[2] * translation.z),
+            -(inverseRotation[3] * translation.x + inverseRotation[4] * translation.y + inverseRotation[5] * translation.z),
+            -(inverseRotation[6] * translation.x + inverseRotation[7] * translation.y + inverseRotation[8] * translation.z)
+        )
+        return Wan2DoubleMatrix4([
+            inverseRotation[0], inverseRotation[1], inverseRotation[2], inverseTranslation.x,
+            inverseRotation[3], inverseRotation[4], inverseRotation[5], inverseTranslation.y,
+            inverseRotation[6], inverseRotation[7], inverseRotation[8], inverseTranslation.z,
+            0, 0, 0, 1,
+        ])
     }
 }

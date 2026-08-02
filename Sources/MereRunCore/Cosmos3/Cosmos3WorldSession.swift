@@ -114,103 +114,59 @@ public enum Cosmos3CameraActionCompiler {
     ) -> [[Float]] {
         precondition(actionCount > 0)
         precondition(startingAction == nil || startingAction?.count == 9)
-        var actions: [[Float]]
-        if let startingAction {
-            actions = continuation(
-                control: control,
-                actionCount: actionCount,
-                startingAction: startingAction
+        // `camera_pose` rows are frame-to-frame deltas. A prior chunk's final
+        // delta is not an absolute pose and must never be accumulated into the
+        // next chunk.
+        _ = startingAction
+        let (direction, scale) = semanticTranslation(for: control)
+        var actions = if let direction {
+            Cosmos3CameraModelSpaceTrajectory.translated(
+                direction: direction,
+                scale: scale,
+                actionCount: actionCount
             )
         } else {
-            switch control.motion {
-            case .hold:
-                let anchor = Cosmos3CameraModelSpaceTrajectory.forwardReference[0]
-                actions = Array(repeating: anchor, count: actionCount)
-            case .backward:
-                actions = Array(
-                    Cosmos3CameraModelSpaceTrajectory.forward(actionCount: actionCount).reversed()
-                )
-            case .strafeLeft:
-                actions = strafe(
-                    Cosmos3CameraModelSpaceTrajectory.forward(actionCount: actionCount),
-                    direction: -1
-                )
-            case .strafeRight:
-                actions = strafe(
-                    Cosmos3CameraModelSpaceTrajectory.forward(actionCount: actionCount),
-                    direction: 1
-                )
-            case .forward, .custom, .yawLeft, .yawRight:
-                // Pure in-place rotation is outside the released camera-pose
-                // canary. Keep turns on the published translation manifold.
-                actions = Cosmos3CameraModelSpaceTrajectory.forward(actionCount: actionCount)
-            }
+            Cosmos3CameraModelSpaceTrajectory.stationary(actionCount: actionCount)
         }
 
         if control.rotationDegrees.contains(where: { abs($0) > 0.0001 }) {
-            let durationScale = min(
-                Float(actionCount) / Float(Cosmos3CameraModelSpaceTrajectory.forwardReference.count),
-                1
+            let radiansPerAction = control.rotationDegrees.map {
+                ($0 / Float(actionCount)) * .pi / 180
+            }
+            let rotation = rotationMatrixXYZ(
+                x: radiansPerAction[0],
+                y: radiansPerAction[1],
+                z: radiansPerAction[2]
             )
+            let deltaRotation = rotation6D(rotation)
             for index in actions.indices {
-                let fraction = Float(index + 1) / Float(actionCount)
-                let radians = control.rotationDegrees.map {
-                    ($0 * durationScale * fraction) * .pi / 180
-                }
-                let rotation = rotationMatrixXYZ(
-                    x: radians[0],
-                    y: radians[1],
-                    z: radians[2]
-                )
-                actions[index].replaceSubrange(3..<9, with: rotation6D(rotation))
+                actions[index].replaceSubrange(3..<9, with: deltaRotation)
             }
         }
         return actions
     }
 
-    private static func continuation(
-        control: Wan2WorldCameraControl,
-        actionCount: Int,
-        startingAction: [Float]
-    ) -> [[Float]] {
-        if control.motion == .hold {
-            return Array(repeating: startingAction, count: actionCount)
-        }
-        var translation = Cosmos3CameraModelSpaceTrajectory.forwardContinuationTranslation
+    private static func semanticTranslation(
+        for control: Wan2WorldCameraControl
+    ) -> (direction: [Float]?, scale: Float) {
+        let requestedMagnitude = sqrt(
+            control.translationMeters.reduce(Float.zero) { $0 + $1 * $1 }
+        )
+        let standardScale = requestedMagnitude > 0.0001 ? requestedMagnitude : 1
         switch control.motion {
+        case .forward:
+            return ([0, 0, 1], standardScale)
         case .backward:
-            translation = translation.map(-)
+            return ([0, 0, -1], standardScale)
         case .strafeLeft:
-            translation = strafeTranslation(translation, direction: -1)
+            return ([-1, 0, 0], standardScale)
         case .strafeRight:
-            translation = strafeTranslation(translation, direction: 1)
-        case .hold, .forward, .custom, .yawLeft, .yawRight:
-            break
+            return ([1, 0, 0], standardScale)
+        case .custom where requestedMagnitude > 0.0001:
+            return (control.translationMeters, requestedMagnitude)
+        case .hold, .custom, .yawLeft, .yawRight:
+            return (nil, 0)
         }
-        return (1...actionCount).map { index in
-            var action = startingAction
-            let fraction = Float(index)
-            for axis in 0..<3 {
-                action[axis] += translation[axis] * fraction
-            }
-            return action
-        }
-    }
-
-    private static func strafe(_ actions: [[Float]], direction: Float) -> [[Float]] {
-        actions.map { action in
-            var transformed = action
-            transformed[0] = direction * action[2]
-            transformed[2] = -direction * action[0]
-            return transformed
-        }
-    }
-
-    private static func strafeTranslation(
-        _ translation: [Float],
-        direction: Float
-    ) -> [Float] {
-        [direction * translation[2], translation[1], -direction * translation[0]]
     }
 
     private static func rotation6D(_ rotation: [[Float]]) -> [Float] {

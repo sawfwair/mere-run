@@ -1,16 +1,44 @@
 import Foundation
+import MediaIO
 import MLX
 import XCTest
 @testable import MereRunCore
 
 final class Wan2DreamXCameraParityTests: MereRunCoreTestCase {
+    func testSourceResizeMatchesReleasedDreamXPillowContract() throws {
+        let source = try patternedImage(width: 7, height: 5)
+        let resized = try Wan2DreamXImagePreprocessor.resized(source, width: 4, height: 3)
+
+        // Exported with Pillow 11.3.0's RGBA/BILINEAR path. DreamX passes a PIL
+        // image through torchvision.transforms.Resize before ToTensor, which
+        // dispatches to this Pillow implementation for the released pipeline.
+        XCTAssertEqual(resized.rgba8, [
+            24, 37, 54, 255, 82, 63, 165, 255, 150, 95, 111, 255, 208, 121, 150, 255,
+            41, 120, 84, 255, 99, 146, 139, 255, 167, 178, 85, 255, 225, 174, 180, 255,
+            58, 203, 114, 255, 116, 189, 153, 255, 184, 115, 99, 255, 166, 84, 210, 255,
+        ])
+
+        let smallSource = try patternedImage(width: 3, height: 2)
+        let upsampled = try Wan2DreamXImagePreprocessor.resized(smallSource, width: 5, height: 4)
+        XCTAssertEqual(upsampled.rgba8, [
+            0, 5, 9, 255, 15, 12, 37, 255, 37, 22, 80, 255, 59, 32, 123, 255, 74, 39, 151, 255,
+            3, 18, 14, 255, 18, 25, 42, 255, 40, 35, 85, 255, 62, 45, 128, 255, 77, 52, 156, 255,
+            8, 45, 23, 255, 23, 52, 51, 255, 45, 62, 94, 255, 67, 72, 137, 255, 82, 79, 165, 255,
+            11, 58, 28, 255, 26, 65, 56, 255, 48, 75, 99, 255, 70, 85, 142, 255, 85, 92, 170, 255,
+        ])
+    }
+
     func testARTrajectoryMatchesDreamXChunkRelativeFixture() throws {
-        guard let path = ProcessInfo.processInfo.environment["MERERUN_DREAMX_AR_CAMERA_FIXTURE"] else {
-            throw XCTSkip("Set MERERUN_DREAMX_AR_CAMERA_FIXTURE to a DreamX AR camera fixture JSON file.")
-        }
+        let fixtureURL = ProcessInfo.processInfo.environment["MERERUN_DREAMX_AR_CAMERA_FIXTURE"]
+            .map { URL(fileURLWithPath: $0) }
+            ?? Bundle.module.url(
+                forResource: "dreamx-ar-camera",
+                withExtension: "json",
+                subdirectory: "Fixtures/DreamX"
+            )!
         let fixture = try JSONDecoder().decode(
             DreamXARCameraFixture.self,
-            from: Data(contentsOf: URL(fileURLWithPath: path))
+            from: Data(contentsOf: fixtureURL)
         )
         let compiled = Wan2DreamXARTrajectory.compile(
             segments: fixture.trajectory.segments.map {
@@ -99,6 +127,20 @@ final class Wan2DreamXCameraParityTests: MereRunCoreTestCase {
         for (index, pair) in zip(actual, expected).enumerated() {
             XCTAssertEqual(pair.0, pair.1, accuracy: tolerance, "Mismatch at index \(index)")
         }
+    }
+
+    private func patternedImage(width: Int, height: Int) throws -> MediaImage {
+        var rgba8: [UInt8] = []
+        rgba8.reserveCapacity(width * height * 4)
+        for y in 0..<height {
+            for x in 0..<width {
+                rgba8.append(UInt8((x * 37 + y * 11) % 256))
+                rgba8.append(UInt8((x * 17 + y * 53 + 5) % 256))
+                rgba8.append(UInt8((x * 71 + y * 19 + 9) % 256))
+                rgba8.append(255)
+            }
+        }
+        return try MediaImage(width: width, height: height, rgba8: rgba8)
     }
 }
 
