@@ -17,6 +17,7 @@ public enum ManagedModelCategory: String, CaseIterable, Hashable, Sendable {
     case visionGeometry = "vision-geometry"
     case visionDepth = "vision-depth"
     case image3D = "image-3d"
+    case audio = "audio"
     case music = "music"
     case sfx = "sfx"
     case video = "video"
@@ -65,6 +66,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case magentaRT2
     case muScriptor
     case roFormer
+    case apBWE
     case woosh
     case wooshClap
     case wooshSynchformer
@@ -1999,6 +2001,21 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["music separate"]
         ),
         ManagedModelSpec(
+            id: ModelResolver.ModelID.apBWE16kTo48k.rawValue,
+            category: .audio,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: APBWEResources.artifactRepository,
+                revision: APBWEResources.artifactRevision,
+                patterns: APBWEResources.pins.map(\.filename)
+            ),
+            upstreamRepoId: APBWEResources.sourceRepository,
+            upstreamRevision: APBWEResources.sourceRevision,
+            validationKind: .apBWE,
+            estimatedDownloadBytes: 119_099_717,
+            defaultCLICommands: ["audio enhance"]
+        ),
+        ManagedModelSpec(
             id: ModelResolver.ModelID.wooshDFlow.rawValue,
             category: .sfx,
             installShape: .structuredRoot,
@@ -2570,6 +2587,8 @@ public extension ManagedModelSpec {
                 return resources.validate(fileManager: fileManager)
             }
             return [rootURL]
+        case .apBWE:
+            return APBWEResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .woosh:
             let checkpointsRoot = WooshResources.normalizeRoot(rootURL, fileManager: fileManager)
             let variant = WooshVariant.resolve(model: id, rootURL: checkpointsRoot, fileManager: fileManager) ?? .dflow
@@ -2725,6 +2744,10 @@ public extension ManagedModelSpec {
                 return resources.validationMessages(fileManager: fileManager)
             }
             return ["Unsupported managed RoFormer model id: \(id)"]
+        case .apBWE:
+            return APBWEResources(
+                rootURL: normalizedRootURL(rootURL, fileManager: fileManager)
+            ).validationMessages(fileManager: fileManager)
         default:
             return missingPaths(in: rootURL, fileManager: fileManager).map { "Missing required file: \($0.path)" }
         }

@@ -407,6 +407,13 @@ enum GuideRegistry {
             resourceName: "vision-ocr.md"
         ),
         GuideTopic(
+            topic: "audio-enhance",
+            title: "Audio Enhance",
+            commandPaths: [["audio", "enhance"]],
+            models: ["audio-enhance-ap-bwe-16kto48k"],
+            resourceName: "audio-enhance.md"
+        ),
+        GuideTopic(
             topic: "music-generate",
             title: "Music Generate",
             commandPaths: [["music", "generate"]],

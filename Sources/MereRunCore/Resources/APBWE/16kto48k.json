@@ -1,0 +1,11 @@
+{
+  "channels": 512,
+  "layers": 8,
+  "n_fft": 1024,
+  "hop_size": 80,
+  "win_size": 320,
+  "high_sample_rate": 48000,
+  "low_sample_rate": 16000,
+  "chunk_size": 96000,
+  "overlap": 2
+}

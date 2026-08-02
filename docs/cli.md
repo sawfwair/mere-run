@@ -70,6 +70,8 @@ Public tree:
   - `mere.run vision image-to-3d-trellis2` — Reconstruct a 512-resolution PBR O-Voxel mesh with native MLX TRELLIS.2.
   - `mere.run vision image-to-3d-multiview` — VFX alias for native 4/6-view InstantMesh reconstruction.
   - `mere.run vision ocr` — Extract text from images using LightOnOCR, GLM-OCR, or Infinity-Parser2.
+- [`mere.run audio`](/runtime/audio) — Enhance general audio locally.
+  - `mere.run audio enhance` — Extend narrowband speech from 16 kHz to 48 kHz with AP-BWE.
 - [`mere.run music`](/runtime/music) — Generate, analyze, transcribe, and separate music locally.
   - `mere.run music analyze` — Analyze source audio with ACE-Step audio understanding.
   - `mere.run music generate` — Generate audio from a music prompt.

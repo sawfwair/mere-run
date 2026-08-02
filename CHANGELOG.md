@@ -25,6 +25,12 @@ The format is based on Keep a Changelog.
   upstream 60-band Slaney mel filter bank, overlapping-frequency mask
   averaging, 684-tensor checkpoint inventory, and published overlap defaults;
   outputs remain ordinary hashed stems in the separation manifest.
+- added native AP-BWE speech bandwidth extension through `audio enhance` and
+  the managed `audio-enhance-ap-bwe-16kto48k` model. The runtime admits the
+  official MIT checkpoint only through an exact byte-identical public
+  transport snapshot, verifies the checkpoint/config/code-license/weights-
+  license hashes, reproduces the paired magnitude/phase ConvNeXt graph, and
+  writes a 48 kHz mono float WAV plus a hashed provenance manifest.
 
 ## 0.31.0 - 2026-08-01
 

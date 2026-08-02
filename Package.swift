@@ -317,6 +317,7 @@ targets.append(contentsOf: [
       "ACEStep/README.md",
       "ACEStep/Model/README.md",
       "ACEStep/VAE/README.md",
+      "APBWE/README.md",
       "Asset3D/README.md",
       "CodeGen/README.md",
       "Cosmos3/README.md",

@@ -479,6 +479,40 @@ or distribute NVIDIA's separately proprietary FlexiCubes or renderer source;
 mesh topology is produced by mere.run's native marching-tetrahedra code and no
 FlexiCubes topology-parity claim is made.
 
+### AP-BWE
+
+- purpose: native Swift/MLX 16 kHz to 48 kHz speech bandwidth extension
+- upstream project: [`yxlu-0102/AP-BWE`](https://github.com/yxlu-0102/AP-BWE)
+- upstream commit used for the port: `751710f22404c27e5bcc983248f8b856a04b8422`
+- code and pretrained-weight license: MIT
+
+The model checkpoint is downloaded separately into the user's model store.
+Managed installs retain and verify the upstream code and weights license files.
+
+```text
+MIT License
+
+Copyright (c) 2023 Ye-Xin Lu
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 ### MuScriptor
 
 - purpose: native MLX audio-to-MIDI model, tokenizer, event decoder, and MIDI behavior
