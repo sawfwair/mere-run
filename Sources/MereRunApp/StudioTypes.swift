@@ -985,6 +985,8 @@ struct StudioLibraryItem: Codable, Identifiable, Equatable {
     var messages: [StudioMessage]? = nil
     var systemPrompt: String? = nil
     var model: String? = nil
+    /// Origin for entries imported by an external local launcher. nil means a Studio-owned run.
+    var source: StudioLibrarySource? = nil
 
     var displayTitle: String {
         if let customTitle, !customTitle.isBlank { return customTitle }

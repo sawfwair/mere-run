@@ -83,14 +83,14 @@ public struct Qwen3TTSResources: Sendable, Hashable {
     }
 
     public var speechTokenizerWeightsURLs: [URL] {
-        return (try? FileManager.default.contentsOfDirectory(
+        return (try? FileManager.default.contentsOfDirectoryResolvingSymlinks(
             at: speechTokenizerDirURL,
             includingPropertiesForKeys: nil
         ))?.filter { $0.pathExtension == "safetensors" } ?? []
     }
 
     public var speakerEncoderWeightsURLs: [URL] {
-        return (try? FileManager.default.contentsOfDirectory(
+        return (try? FileManager.default.contentsOfDirectoryResolvingSymlinks(
             at: speakerEncoderDirURL,
             includingPropertiesForKeys: nil
         ))?.filter { $0.pathExtension == "safetensors" } ?? []
@@ -143,7 +143,7 @@ public struct Qwen3TTSResources: Sendable, Hashable {
             missing.append(speechTokenizerConfigURL)
         }
 
-        let tokenizerWeights = (try? fileManager.contentsOfDirectory(
+        let tokenizerWeights = (try? fileManager.contentsOfDirectoryResolvingSymlinks(
             at: speechTokenizerDirURL,
             includingPropertiesForKeys: nil
         ))?.filter { $0.pathExtension == "safetensors" } ?? []

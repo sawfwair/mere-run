@@ -140,7 +140,14 @@ cd /Volumes/mere.run/.mere-run
 The installer copies `mere.run` and its colocated runtime assets to
 `/usr/local/bin/mere.run`, using `sudo` only when the destination requires it.
 
-### Preview artifacts from Raycast and other launchers
+### Import or preview artifacts from Raycast and other launchers
+
+The Raycast extension imports completed generations into MereRun Library by
+default. MereRun validates a small, versioned JSON receipt, records the artifact
+through its own Library store, activates the matching workspace, reveals
+Library, and selects the imported result. Raycast never edits MereRun's
+`library.json` directly. See the [Raycast Integration guide](./docs/raycast.md)
+for the receipt contract and extension preferences.
 
 The macOS app registers a local `mererun://preview` deep link. Pass one
 percent-encoded absolute artifact path and MereRun opens its native Quick Look
@@ -163,8 +170,8 @@ await open(deepLink.toString());
 
 The target must already exist and be a readable file. MereRun rejects relative
 paths, directories, missing files, duplicate `path` values, and extra query
-parameters. The link opens a preview only; it does not import, move, or modify
-the artifact.
+parameters. This route remains an explicit preview-only option; it does not
+import, move, or modify the artifact.
 
 Linux package builds are headless CLI-only. They install the `mere.run` CLI plus
 colocated runtime assets; they do not include the macOS SwiftUI studio or DMG

@@ -173,7 +173,7 @@ public actor Qwen3VLAutoCaptioner {
             return base
         }
 
-        guard let children = try? fileManager.contentsOfDirectory(
+        guard let children = try? fileManager.contentsOfDirectoryResolvingSymlinks(
             at: base,
             includingPropertiesForKeys: nil,
             options: [.skipsHiddenFiles]
@@ -279,7 +279,10 @@ public actor Qwen3VLAutoCaptioner {
             }
 
             // Link shard files
-            let contents = try fm.contentsOfDirectory(at: sourcePath, includingPropertiesForKeys: nil)
+            let contents = try fm.contentsOfDirectoryResolvingSymlinks(
+                at: sourcePath,
+                includingPropertiesForKeys: nil
+            )
             for file in contents where file.lastPathComponent.hasPrefix("model-") && file.pathExtension == "safetensors" {
                 let targetShard = textEncoderDir.appendingPathComponent(file.lastPathComponent)
                 if !fm.fileExists(atPath: targetShard.path) {

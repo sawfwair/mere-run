@@ -444,7 +444,10 @@ extension Flux2KleinGeneratoriOS {
         }
 
         // Sharded weights
-        let files = try FileManager.default.contentsOfDirectory(at: url, includingPropertiesForKeys: nil)
+        let files = try FileManager.default.contentsOfDirectoryResolvingSymlinks(
+            at: url,
+            includingPropertiesForKeys: nil
+        )
             .filter { $0.pathExtension == "safetensors" }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
 

@@ -453,7 +453,7 @@ public enum Flux2KleinLoRATrainer {
         let textEncoderQuantization = try ModelWeightsLoader.QuantizationParams.fromManifest(textEncoderComponent.sourceManifest)
 
         // 1) Load transformer
-        // Note: resolve symlinks - contentsOfDirectory(at:) doesn't follow symlinks
+        // Shared shard discovery resolves symlinked component directories before listing them.
         let transformerConfig = try loadTransformerConfig(from: transformerComponent.directoryURL)
         let transformer = Flux2Transformer2DModel(config: transformerConfig)
         try loadTransformerWeights(from: transformerComponent.directoryURL, to: transformer, quantization: transformerQuantization)
@@ -2127,7 +2127,7 @@ public enum Flux2KleinLoRATrainer {
 
         let entries: [URL]
         do {
-            entries = try fileManager.contentsOfDirectory(
+            entries = try fileManager.contentsOfDirectoryResolvingSymlinks(
                 at: sampleDirectory,
                 includingPropertiesForKeys: [.isRegularFileKey],
                 options: [.skipsHiddenFiles]

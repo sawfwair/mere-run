@@ -2951,7 +2951,10 @@ public extension ManagedModelSpec {
         let hasSingle = fileManager.fileExists(atPath: modelWeightsURL.path)
         if !hasIndex && !hasSingle { missing.append(modelIndexURL) }
         if !fileManager.fileExists(atPath: speechTokenizerConfig.path) { missing.append(speechTokenizerConfig) }
-        let tokenizerWeights = (try? fileManager.contentsOfDirectory(at: speechTokenizerDir, includingPropertiesForKeys: nil))?.filter {
+        let tokenizerWeights = (try? fileManager.contentsOfDirectoryResolvingSymlinks(
+            at: speechTokenizerDir,
+            includingPropertiesForKeys: nil
+        ))?.filter {
             $0.pathExtension == "safetensors"
         } ?? []
         if tokenizerWeights.isEmpty { missing.append(speechTokenizerDir) }
@@ -3069,9 +3072,8 @@ public extension ManagedModelSpec {
         in rootURL: URL,
         fileManager: FileManager
     ) -> [URL] {
-        let resolved = rootURL.resolvingSymlinksInPath()
-        guard let enumerator = fileManager.enumerator(
-            at: resolved,
+        guard let enumerator = fileManager.enumeratorResolvingSymlinks(
+            at: rootURL,
             includingPropertiesForKeys: [.isRegularFileKey],
             options: [.skipsHiddenFiles]
         ) else {
@@ -3174,7 +3176,11 @@ public extension ManagedModelSpec {
         if !fileManager.fileExists(atPath: textEncoderConfig.path) { missing.append(textEncoderConfig) }
         if !fileManager.fileExists(atPath: textEncoderWeights.path) { missing.append(textEncoderWeights) }
         if !fileManager.fileExists(atPath: tokenizerDir.path) { missing.append(tokenizerDir) }
-        let entries = (try? fileManager.contentsOfDirectory(at: rootURL, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])) ?? []
+        let entries = (try? fileManager.contentsOfDirectoryResolvingSymlinks(
+            at: rootURL,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        )) ?? []
         let hasTransformer = entries.contains { $0.lastPathComponent.hasPrefix("ltx-2-19") && $0.pathExtension == "safetensors" }
         let hasUpsampler = entries.contains { $0.lastPathComponent.hasPrefix("ltx-2-spatial-upscaler") && $0.pathExtension == "safetensors" }
         if !hasTransformer { missing.append(rootURL.appendingPathComponent("ltx-2-19b-distilled.safetensors")) }
@@ -3314,9 +3320,8 @@ public extension ManagedModelSpec {
     }
 
     static func findFirstGGUFFile(in rootURL: URL, fileManager: FileManager = .default) -> URL? {
-        let resolvedRoot = rootURL.resolvingSymlinksInPath()
-        let enumerator = fileManager.enumerator(
-            at: resolvedRoot,
+        let enumerator = fileManager.enumeratorResolvingSymlinks(
+            at: rootURL,
             includingPropertiesForKeys: [.isRegularFileKey],
             options: [.skipsHiddenFiles]
         )

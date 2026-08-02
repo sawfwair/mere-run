@@ -100,7 +100,7 @@ public enum QwenImageEditRepository {
             return base
         }
 
-        guard let children = try? fileManager.contentsOfDirectory(
+        guard let children = try? fileManager.contentsOfDirectoryResolvingSymlinks(
             at: base,
             includingPropertiesForKeys: nil,
             options: [.skipsHiddenFiles]

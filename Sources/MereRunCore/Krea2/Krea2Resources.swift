@@ -73,8 +73,7 @@ public struct Krea2Resources: Sendable, Hashable {
     }
 
     private func hasTransformerShard(fileManager: FileManager) -> Bool {
-        let transformerURL = transformerURL.resolvingSymlinksInPath()
-        guard let children = try? fileManager.contentsOfDirectory(
+        guard let children = try? fileManager.contentsOfDirectoryResolvingSymlinks(
             at: transformerURL,
             includingPropertiesForKeys: nil
         ) else {

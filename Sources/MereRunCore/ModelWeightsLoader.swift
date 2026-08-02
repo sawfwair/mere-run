@@ -195,7 +195,11 @@ public enum ModelWeightsLoader {
     // MARK: - mflux-style shards (0.safetensors, 1.safetensors, ...)
 
     public static func safetensorsShards(in directoryURL: URL, fileManager: FileManager = .default) throws -> [URL] {
-        let urls = try fileManager.contentsOfDirectory(at: directoryURL, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
+        let urls = try fileManager.contentsOfDirectoryResolvingSymlinks(
+            at: directoryURL,
+            includingPropertiesForKeys: nil,
+            options: [.skipsHiddenFiles]
+        )
             .filter { $0.pathExtension == "safetensors" }
             .sorted { $0.lastPathComponent < $1.lastPathComponent }
         return urls

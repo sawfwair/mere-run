@@ -390,7 +390,7 @@ struct ModelInfo: ParsableCommand {
         fileManager: FileManager,
         matches: (String) -> Bool
     ) -> String {
-        let entries = (try? fileManager.contentsOfDirectory(
+        let entries = (try? fileManager.contentsOfDirectoryResolvingSymlinks(
             at: rootURL,
             includingPropertiesForKeys: nil,
             options: [.skipsHiddenFiles]

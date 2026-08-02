@@ -1498,7 +1498,7 @@ extension GateRunner {
     }
 
     private func directoryManifest(_ directory: URL) throws -> [String] {
-        guard let enumerator = FileManager.default.enumerator(
+        guard let enumerator = FileManager.default.enumeratorResolvingSymlinks(
             at: directory,
             includingPropertiesForKeys: [.isRegularFileKey, .fileSizeKey],
             options: [.skipsHiddenFiles]

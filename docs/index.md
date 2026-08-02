@@ -96,6 +96,7 @@ links to the page that owns that command.
 Install, pull a first model, and make something in the next ten minutes.
 
 - [Getting Started](/getting-started)
+- [Raycast Integration](/raycast) — local generation with Library import or Quick Look from the launcher
 - [Linux QuickStart](/linux-quickstart)
 - [CLI Reference](/cli)
 - [Offline Cookbooks](/cookbooks) — `mere.run guide` works without a network

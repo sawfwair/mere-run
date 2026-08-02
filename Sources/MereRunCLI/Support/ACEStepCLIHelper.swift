@@ -195,7 +195,7 @@ enum ACEStepCLIHelper {
             }
         }
 
-        let discovered = (try? fm.contentsOfDirectory(
+        let discovered = (try? fm.contentsOfDirectoryResolvingSymlinks(
             at: root,
             includingPropertiesForKeys: [.isDirectoryKey],
             options: [.skipsHiddenFiles]
@@ -240,7 +240,7 @@ enum ACEStepCLIHelper {
             }
         }
 
-        let discovered = (try? fm.contentsOfDirectory(
+        let discovered = (try? fm.contentsOfDirectoryResolvingSymlinks(
             at: root,
             includingPropertiesForKeys: [.isDirectoryKey],
             options: [.skipsHiddenFiles]

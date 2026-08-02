@@ -184,7 +184,7 @@ public enum Gemma4TextModelLoader {
             guard FileManager.default.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue else {
                 return nil
             }
-            guard (try? FileManager.default.contentsOfDirectory(atPath: url.path))?.isEmpty == false else {
+            guard (try? FileManager.default.contentsOfDirectoryResolvingSymlinks(at: url))?.isEmpty == false else {
                 return nil
             }
             return url.standardizedFileURL

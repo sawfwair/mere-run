@@ -317,7 +317,8 @@ private struct StudioLibraryRow: View {
 
     private var subtitle: String {
         if item.status == .completed {
-            return "\(item.displayKindTitle) · \(Self.timeFormatter.string(from: item.createdAt))"
+            let origin = item.source.map { "\($0.title) · " } ?? ""
+            return "\(origin)\(item.displayKindTitle) · \(Self.timeFormatter.string(from: item.createdAt))"
         }
         return "\(item.displayKindTitle) · \(item.status.rawValue)"
     }

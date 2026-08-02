@@ -37,6 +37,18 @@ The format is based on Keep a Changelog.
   independently, validates the exact 394-tensor ConvNeXt V2 U-Net, reproduces
   the published complex-STFT and flow-matching path for 8/12/16/24 kHz input,
   and records ODE, guidance, seed, license, and artifact provenance.
+- added typed `mererun://library/import?receipt=…` ingestion for local
+  launchers. MereRun validates the versioned receipt and referenced artifact,
+  deduplicates repeated handoffs, records the completed result in Library, and
+  opens the owning workspace with the imported row selected. The existing
+  `mererun://preview` route remains a non-importing Quick Look path.
+
+### Fixed
+
+- made model validation, weight discovery, CLI inspection, and training-data
+  discovery consistently traverse symlinked directory roots produced by
+  managed Hub downloads, including Qwen3 TTS speech-tokenizer and
+  speaker-encoder components.
 
 ## 0.31.0 - 2026-08-01
 

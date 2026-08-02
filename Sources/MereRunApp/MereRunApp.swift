@@ -27,6 +27,8 @@ final class MereRunAppDelegate: NSObject, NSApplicationDelegate {
 struct MereRunApp: App {
     @NSApplicationDelegateAdaptor(MereRunAppDelegate.self) private var appDelegate
     @StateObject private var controller = MereRunController()
+    @StateObject private var library = StudioLibraryStore()
+    @StateObject private var navigation = StudioNavigationCoordinator()
     @State private var deepLinkError: String?
     private let updaterController = SPUStandardUpdaterController(
         startingUpdater: true,
@@ -38,6 +40,8 @@ struct MereRunApp: App {
         WindowGroup {
             MereRunRootView()
                 .environmentObject(controller)
+                .environmentObject(library)
+                .environmentObject(navigation)
                 .frame(
                     minWidth: StudioLayoutPolicy.minimumWindowWidth,
                     minHeight: StudioLayoutPolicy.minimumWindowHeight
@@ -51,7 +55,7 @@ struct MereRunApp: App {
                 }
                 .onOpenURL(perform: openDeepLink)
                 .alert(
-                    "Couldn’t open preview",
+                    "Couldn’t open MereRun link",
                     isPresented: Binding(
                         get: { deepLinkError != nil },
                         set: { if !$0 { deepLinkError = nil } }
@@ -59,7 +63,7 @@ struct MereRunApp: App {
                 ) {
                     Button("OK") { deepLinkError = nil }
                 } message: {
-                    Text(deepLinkError ?? "The preview link is invalid.")
+                    Text(deepLinkError ?? "The MereRun link is invalid.")
                 }
         }
         .windowStyle(.hiddenTitleBar)
@@ -89,6 +93,11 @@ struct MereRunApp: App {
                     deepLinkError = "Quick Look is unavailable."
                     return
                 }
+                deepLinkError = nil
+            case .libraryImport(let receiptURL):
+                let item = try library.importReceipt(at: receiptURL)
+                NSApplication.shared.activate(ignoringOtherApps: true)
+                navigation.openLibraryItem(id: item.id, mode: item.mode)
                 deepLinkError = nil
             }
         } catch {

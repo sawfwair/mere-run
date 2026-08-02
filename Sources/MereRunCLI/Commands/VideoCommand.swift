@@ -1250,7 +1250,7 @@ func validateNativeModelRoot(_ rootURL: URL) throws {
         throw ValidationError("Missing tokenizer directory: \(tokenizer.path)")
     }
 
-    let entries = (try? fm.contentsOfDirectory(
+    let entries = (try? fm.contentsOfDirectoryResolvingSymlinks(
         at: rootURL,
         includingPropertiesForKeys: nil,
         options: [.skipsHiddenFiles]

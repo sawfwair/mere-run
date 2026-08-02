@@ -156,7 +156,7 @@ extension Flux2KleinGenerator {
         let textEncoderQuantization = try ModelWeightsLoader.QuantizationParams.fromManifest(textEncoderComponent.sourceManifest)
 
         // Load transformer
-        // Note: resolve symlinks on each subdir - contentsOfDirectory(at:) doesn't follow symlinks
+        // Shared shard discovery resolves symlinked component directories before listing them.
         progressHandler?(GenerationProgress(stage: .loadingTransformer, stepIndex: 0, totalSteps: 1))
         let transformerConfig = try loadTransformerConfig(from: transformerComponent.directoryURL)
         transformer = Flux2Transformer2DModel(config: transformerConfig)

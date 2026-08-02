@@ -1114,7 +1114,11 @@ private func findLTXTransformerWeights(modelRoot: URL) throws -> URL {
         return model19B
     }
 
-    let entries = try fm.contentsOfDirectory(at: modelRoot, includingPropertiesForKeys: nil, options: [.skipsHiddenFiles])
+    let entries = try fm.contentsOfDirectoryResolvingSymlinks(
+        at: modelRoot,
+        includingPropertiesForKeys: nil,
+        options: [.skipsHiddenFiles]
+    )
     let matches = entries
         .filter { $0.pathExtension == "safetensors" && $0.lastPathComponent.hasPrefix("ltx-2-19") }
         .sorted { $0.lastPathComponent < $1.lastPathComponent }

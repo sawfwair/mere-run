@@ -271,6 +271,197 @@ final class StudioLibraryStoreTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: url.path))
     }
 
+    func testRaycastReceiptImportsPersistsAndDeduplicatesArtifact() throws {
+        let libraryURL = try temporaryLibraryURL()
+        let artifactURL = libraryURL.deletingLastPathComponent().appendingPathComponent("result.png")
+        try Data("image".utf8).write(to: artifactURL)
+        let receipt = StudioLibraryImportReceipt(
+            version: StudioLibraryImportReceipt.currentVersion,
+            id: UUID(),
+            source: .raycast,
+            kind: .image,
+            prompt: "a hand-painted lunar greenhouse",
+            artifactPath: artifactURL.path,
+            createdAt: Date(timeIntervalSince1970: 1_785_593_400)
+        )
+        let receiptURL = try writeReceipt(receipt, beside: libraryURL)
+        let store = StudioLibraryStore(libraryURL: libraryURL)
+
+        let imported = try store.importReceipt(at: receiptURL)
+        let duplicate = try store.importReceipt(at: receiptURL)
+
+        XCTAssertEqual(imported, duplicate)
+        XCTAssertEqual(store.items.count, 1)
+        XCTAssertEqual(imported.id, receipt.id)
+        XCTAssertEqual(imported.mode, .createImage)
+        XCTAssertEqual(imported.prompt, receipt.prompt)
+        XCTAssertEqual(imported.outputURL, artifactURL.standardizedFileURL)
+        XCTAssertEqual(imported.status, .completed)
+        XCTAssertEqual(imported.exitCode, 0)
+        XCTAssertEqual(imported.templateID, .imageGenerate)
+        XCTAssertEqual(imported.source, .raycast)
+        XCTAssertEqual(imported.commandPreview, "mere.run image generate")
+
+        let reloaded = StudioLibraryStore(libraryURL: libraryURL)
+        XCTAssertEqual(reloaded.items.first?.id, imported.id)
+        XCTAssertEqual(reloaded.items.first?.outputURL, imported.outputURL)
+        XCTAssertEqual(reloaded.items.first?.source, .raycast)
+    }
+
+    func testReceiptRejectsArtifactKindMismatch() throws {
+        let libraryURL = try temporaryLibraryURL()
+        let artifactURL = libraryURL.deletingLastPathComponent().appendingPathComponent("result.wav")
+        try Data("audio".utf8).write(to: artifactURL)
+        let receipt = StudioLibraryImportReceipt(
+            version: StudioLibraryImportReceipt.currentVersion,
+            id: UUID(),
+            source: .raycast,
+            kind: .image,
+            prompt: "this claims to be an image",
+            artifactPath: artifactURL.path,
+            createdAt: Date()
+        )
+        let receiptURL = try writeReceipt(receipt, beside: libraryURL)
+        let store = StudioLibraryStore(libraryURL: libraryURL)
+
+        XCTAssertThrowsError(try store.importReceipt(at: receiptURL)) { error in
+            XCTAssertEqual(error as? StudioLibraryImportError, .artifactKindMismatch("image"))
+        }
+        XCTAssertTrue(store.items.isEmpty)
+    }
+
+    func testReceiptIDCannotReplaceAnotherArtifact() throws {
+        let libraryURL = try temporaryLibraryURL()
+        let root = libraryURL.deletingLastPathComponent()
+        let existingURL = root.appendingPathComponent("existing.png")
+        let importedURL = root.appendingPathComponent("imported.png")
+        try Data("one".utf8).write(to: existingURL)
+        try Data("two".utf8).write(to: importedURL)
+        let id = UUID()
+        let store = StudioLibraryStore(libraryURL: libraryURL)
+        store.upsert(StudioLibraryItem(
+            id: id,
+            mode: .createImage,
+            prompt: "existing",
+            inputURL: nil,
+            outputURL: existingURL,
+            createdAt: Date(),
+            updatedAt: Date(),
+            status: .completed,
+            exitCode: 0,
+            commandPreview: "mere.run image generate",
+            outputText: nil
+        ))
+        let receipt = StudioLibraryImportReceipt(
+            version: StudioLibraryImportReceipt.currentVersion,
+            id: id,
+            source: .raycast,
+            kind: .image,
+            prompt: "collision",
+            artifactPath: importedURL.path,
+            createdAt: Date()
+        )
+        let receiptURL = try writeReceipt(receipt, beside: libraryURL)
+
+        XCTAssertThrowsError(try store.importReceipt(at: receiptURL)) { error in
+            XCTAssertEqual(error as? StudioLibraryImportError, .receiptIDConflict(id))
+        }
+        XCTAssertEqual(store.items.count, 1)
+        XCTAssertEqual(store.items.first?.outputURL, existingURL)
+    }
+
+    func testReceiptRejectsUnsupportedVersionAndEmptyPrompt() throws {
+        let libraryURL = try temporaryLibraryURL()
+        let artifactURL = libraryURL.deletingLastPathComponent().appendingPathComponent("result.png")
+        try Data("image".utf8).write(to: artifactURL)
+        let store = StudioLibraryStore(libraryURL: libraryURL)
+
+        for (receipt, expected) in [
+            (
+                StudioLibraryImportReceipt(
+                    version: 99, id: UUID(), source: .raycast, kind: .image,
+                    prompt: "valid", artifactPath: artifactURL.path, createdAt: Date()
+                ),
+                StudioLibraryImportError.unsupportedVersion(99)
+            ),
+            (
+                StudioLibraryImportReceipt(
+                    version: 1, id: UUID(), source: .raycast, kind: .image,
+                    prompt: "   ", artifactPath: artifactURL.path, createdAt: Date()
+                ),
+                StudioLibraryImportError.emptyPrompt
+            ),
+        ] {
+            let receiptURL = try writeReceipt(receipt, beside: libraryURL)
+            XCTAssertThrowsError(try store.importReceipt(at: receiptURL)) { error in
+                XCTAssertEqual(error as? StudioLibraryImportError, expected)
+            }
+        }
+        XCTAssertTrue(store.items.isEmpty)
+    }
+
+    func testRaycastJSONContractImportsWithoutSwiftEncoder() throws {
+        let libraryURL = try temporaryLibraryURL()
+        let artifactURL = libraryURL.deletingLastPathComponent().appendingPathComponent("result.wav")
+        try Data("audio".utf8).write(to: artifactURL)
+        let id = UUID()
+        let json = """
+        {
+          "version": 1,
+          "id": "\(id.uuidString.lowercased())",
+          "source": "raycast",
+          "kind": "speech",
+          "prompt": "Welcome aboard.",
+          "artifactPath": "\(artifactURL.path)",
+          "createdAt": "2026-08-01T18:30:00Z"
+        }
+        """
+        let receiptURL = libraryURL.deletingLastPathComponent().appendingPathComponent("raycast-contract.json")
+        try XCTUnwrap(json.data(using: .utf8)).write(to: receiptURL)
+
+        let imported = try StudioLibraryStore(libraryURL: libraryURL).importReceipt(at: receiptURL)
+
+        XCTAssertEqual(imported.id, id)
+        XCTAssertEqual(imported.mode, .speak)
+        XCTAssertEqual(imported.templateID, .speechSynthesize)
+        XCTAssertEqual(imported.source, .raycast)
+    }
+
+    func testReceiptBoundsAndArtifactPathAreEnforced() throws {
+        let libraryURL = try temporaryLibraryURL()
+        let root = libraryURL.deletingLastPathComponent()
+        let oversizedURL = root.appendingPathComponent("oversized.json")
+        try Data(repeating: 0x20, count: StudioLibraryImportReceipt.maximumByteCount + 1).write(to: oversizedURL)
+        let store = StudioLibraryStore(libraryURL: libraryURL)
+
+        XCTAssertThrowsError(try store.importReceipt(at: oversizedURL)) { error in
+            XCTAssertEqual(error as? StudioLibraryImportError, .receiptTooLarge)
+        }
+
+        let relativeReceipt = StudioLibraryImportReceipt(
+            version: 1,
+            id: UUID(),
+            source: .raycast,
+            kind: .image,
+            prompt: "relative output",
+            artifactPath: "result.png",
+            createdAt: Date()
+        )
+        let relativeReceiptURL = try writeReceipt(relativeReceipt, beside: libraryURL)
+        XCTAssertThrowsError(try store.importReceipt(at: relativeReceiptURL)) { error in
+            XCTAssertEqual(error as? StudioLibraryImportError, .artifactPathMustBeAbsolute)
+        }
+    }
+
+    private func writeReceipt(_ receipt: StudioLibraryImportReceipt, beside libraryURL: URL) throws -> URL {
+        let receiptURL = libraryURL.deletingLastPathComponent()
+            .appendingPathComponent("receipt-\(UUID().uuidString).json")
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        try encoder.encode(receipt).write(to: receiptURL)
+        return receiptURL
+    }
+
     private func temporaryLibraryURL() throws -> URL {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("mere-run-app-tests-\(UUID().uuidString)", isDirectory: true)

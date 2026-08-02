@@ -1,5 +1,6 @@
 import ArgumentParser
 import Foundation
+import MereRunCore
 
 struct GraphDataset: ParsableCommand {
     static let configuration = CommandConfiguration(
@@ -90,7 +91,7 @@ struct WorkflowDatasetDiscoverer {
             throw ValidationError("Dataset discovery root was not found: \(root.path)")
         }
         let keys: [URLResourceKey] = [.isDirectoryKey, .isRegularFileKey, .isSymbolicLinkKey, .fileSizeKey]
-        guard let enumerator = fileManager.enumerator(
+        guard let enumerator = fileManager.enumeratorResolvingSymlinks(
             at: root,
             includingPropertiesForKeys: keys,
             options: [.skipsHiddenFiles, .skipsPackageDescendants]
