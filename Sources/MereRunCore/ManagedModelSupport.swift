@@ -730,6 +730,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 16
             ),
             descriptor(
+                ModelResolver.ModelID.univerSRAudio.rawValue,
+                "UniverSR general audio",
+                "Extends 8, 12, 16, or 24 kHz speech, music, and sound effects to 48 kHz with native MLX inference.",
+                minimum: 8,
+                recommended: 16
+            ),
+            descriptor(
                 ModelResolver.ModelID.wooshDFlow.rawValue,
                 "Woosh DFlow",
                 "Generates Foley and sound effects from text prompts with Sony Research Woosh.",

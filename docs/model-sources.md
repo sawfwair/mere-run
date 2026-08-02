@@ -104,6 +104,7 @@ from the runtime catalog used by `mere.run model list`,
 | `music` | `music-separate-mel-roformer-dereverb` |
 | `music` | `music-separate-mel-roformer-denoise` |
 | `audio` | `audio-enhance-ap-bwe-16kto48k` |
+| `audio` | `audio-enhance-universr-audio` |
 | `sfx` | `sfx-woosh-dflow` |
 | `sfx` | `sfx-woosh-flow` |
 | `sfx` | `sfx-woosh-clap` |
@@ -189,6 +190,13 @@ pinned source repository states that both code and pretrained weights are MIT.
 The managed public transport snapshot retains the code and weights license
 files, source config, and the exact official 16→48 kHz checkpoint archive;
 mere.run verifies all four byte counts and SHA-256 digests before loading.
+
+`audio-enhance-universr-audio` does not require interactive acknowledgement,
+but its two upstream licenses must not be conflated. The native port follows
+the MIT-licensed `woongzip1/UniverSR` source at its pinned commit. The separately
+downloaded official `woongzip1/universr-audio` checkpoint is CC BY 4.0. The
+managed install verifies the checkpoint, source configuration, and model card
+by frozen revision, byte count, and SHA-256 before loading.
 
 `image-zimage-nano` also does not require acknowledgement. Its canonical
 `Tongyi-MAI/Z-Image-Turbo` base is Apache-2.0; the pinned mflux conversion's

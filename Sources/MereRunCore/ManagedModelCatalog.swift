@@ -67,6 +67,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case muScriptor
     case roFormer
     case apBWE
+    case univerSR
     case woosh
     case wooshClap
     case wooshSynchformer
@@ -2016,6 +2017,21 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["audio enhance"]
         ),
         ManagedModelSpec(
+            id: ModelResolver.ModelID.univerSRAudio.rawValue,
+            category: .audio,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: UniverSRResources.artifactRepository,
+                revision: UniverSRResources.artifactRevision,
+                patterns: UniverSRResources.pins.map(\.filename)
+            ),
+            upstreamRepoId: UniverSRResources.sourceRepository,
+            upstreamRevision: UniverSRResources.sourceRevision,
+            validationKind: .univerSR,
+            estimatedDownloadBytes: 229_074_334,
+            defaultCLICommands: ["audio enhance"]
+        ),
+        ManagedModelSpec(
             id: ModelResolver.ModelID.wooshDFlow.rawValue,
             category: .sfx,
             installShape: .structuredRoot,
@@ -2589,6 +2605,8 @@ public extension ManagedModelSpec {
             return [rootURL]
         case .apBWE:
             return APBWEResources(rootURL: rootURL).validate(fileManager: fileManager)
+        case .univerSR:
+            return UniverSRResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .woosh:
             let checkpointsRoot = WooshResources.normalizeRoot(rootURL, fileManager: fileManager)
             let variant = WooshVariant.resolve(model: id, rootURL: checkpointsRoot, fileManager: fileManager) ?? .dflow
@@ -2746,6 +2764,10 @@ public extension ManagedModelSpec {
             return ["Unsupported managed RoFormer model id: \(id)"]
         case .apBWE:
             return APBWEResources(
+                rootURL: normalizedRootURL(rootURL, fileManager: fileManager)
+            ).validationMessages(fileManager: fileManager)
+        case .univerSR:
+            return UniverSRResources(
                 rootURL: normalizedRootURL(rootURL, fileManager: fileManager)
             ).validationMessages(fileManager: fileManager)
         default:

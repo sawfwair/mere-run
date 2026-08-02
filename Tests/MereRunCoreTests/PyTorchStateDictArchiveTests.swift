@@ -66,6 +66,52 @@ final class PyTorchStateDictArchiveTests: XCTestCase {
         XCTAssertEqual(archive.tensors.count, 1)
     }
 
+    func testAcceptsExactModernTorchZIPMetadata() throws {
+        let url = try writeCheckpoint(
+            pickle: stateDictPickle(shape: [1], stride: [1], storageElementCount: 1),
+            storage: floatData([3]),
+            formatVersion: "1",
+            storageAlignment: "64"
+        )
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        XCTAssertEqual(try PyTorchStateDictArchive(url: url).tensors.count, 1)
+    }
+
+    func testRejectsUnknownModernTorchZIPMetadataValues() throws {
+        let url = try writeCheckpoint(
+            pickle: stateDictPickle(shape: [1], stride: [1], storageElementCount: 1),
+            storage: floatData([3]),
+            formatVersion: "2",
+            storageAlignment: "63"
+        )
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        XCTAssertThrowsError(try PyTorchStateDictArchive(url: url)) { error in
+            XCTAssertEqual(
+                error as? PyTorchStateDictError,
+                .malformedZIP("invalid ZIP format version")
+            )
+        }
+    }
+
+    func testRejectsInvalidModernTorchStorageAlignment() throws {
+        let url = try writeCheckpoint(
+            pickle: stateDictPickle(shape: [1], stride: [1], storageElementCount: 1),
+            storage: floatData([3]),
+            formatVersion: "1",
+            storageAlignment: "63"
+        )
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        XCTAssertThrowsError(try PyTorchStateDictArchive(url: url)) { error in
+            XCTAssertEqual(
+                error as? PyTorchStateDictError,
+                .malformedZIP("invalid storage alignment")
+            )
+        }
+    }
+
     func testRejectsNonDecimalModernTorchSerializationIdentifier() throws {
         let url = try writeCheckpoint(
             pickle: stateDictPickle(shape: [1], stride: [1], storageElementCount: 1),
@@ -233,7 +279,9 @@ final class PyTorchStateDictArchiveTests: XCTestCase {
         pickle: Data,
         storage: Data,
         corruptStorageCRC: Bool = false,
-        serializationID: String? = nil
+        serializationID: String? = nil,
+        formatVersion: String? = nil,
+        storageAlignment: String? = nil
     ) throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("state-dict-\(UUID().uuidString).pth")
@@ -247,6 +295,19 @@ final class PyTorchStateDictArchiveTests: XCTestCase {
                 ZIPFixtureEntry(
                     name: "checkpoint/.data/serialization_id",
                     data: Data(serializationID.utf8)
+                )
+            )
+        }
+        if let formatVersion {
+            entries.append(
+                ZIPFixtureEntry(name: "checkpoint/.format_version", data: Data(formatVersion.utf8))
+            )
+        }
+        if let storageAlignment {
+            entries.append(
+                ZIPFixtureEntry(
+                    name: "checkpoint/.storage_alignment",
+                    data: Data(storageAlignment.utf8)
                 )
             )
         }

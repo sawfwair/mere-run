@@ -78,6 +78,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case roFormer = "bs-roformer"
         /// AP-BWE speech bandwidth-extension family.
         case apBWE = "ap-bwe"
+        /// UniverSR flow-matching general-audio super-resolution family.
+        case univerSR = "universr"
         /// Sony Research Woosh sound-effect generation family.
         case woosh = "woosh"
         /// MMAudio synchronized video-to-audio and text-to-audio family.
@@ -1689,6 +1691,20 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.audioEnhancement],
                 components: nil,
                 upstreamRepoId: "\(APBWEResources.sourceRepository)@\(APBWEResources.sourceRevision)",
+                createdAt: createdAt
+            )
+        case .univerSRAudio:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .univerSR,
+                family: .audio,
+                tier: .small,
+                variant: .standard,
+                precision: .fp32,
+                defaults: MereRunModelManifest.Defaults(steps: 4, cfg: 1.5),
+                supports: [.audioEnhancement],
+                components: nil,
+                upstreamRepoId: "\(UniverSRResources.sourceRepository)@\(UniverSRResources.sourceRevision)",
                 createdAt: createdAt
             )
         case .wooshDFlow, .wooshFlow, .wooshVFlow8s, .wooshDVFlow8s:

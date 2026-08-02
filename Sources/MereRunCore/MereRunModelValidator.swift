@@ -105,6 +105,7 @@ public enum MereRunModelValidator {
                 return spec.validationKind != .codegenGGUF
                     && spec.validationKind != .roFormer
                     && spec.validationKind != .apBWE
+                    && spec.validationKind != .univerSR
                     && spec.validationKind != .deepseekV4FlashIMatrixGGUF
                     && spec.validationKind != .magentaRT2
                     && spec.validationKind != .woosh
@@ -149,6 +150,7 @@ public enum MereRunModelValidator {
         } else if spec?.validationKind == .aceStep
             || spec?.validationKind == .roFormer
             || spec?.validationKind == .apBWE
+            || spec?.validationKind == .univerSR
             || spec?.validationKind == .sortformer
             || spec?.validationKind == .magentaRT2
             || spec?.validationKind == .muScriptor
@@ -412,8 +414,8 @@ public enum MereRunModelValidator {
                 && engine != .magentaRT2
                 && engine != .muScriptor:
                 warnings.append("Manifest engine mismatch: family=music expects ace-step, bs-roformer, magenta-rt2, or muscriptor.")
-            case .audio where engine != .apBWE:
-                warnings.append("Manifest engine mismatch: family=audio expects ap-bwe.")
+            case .audio where engine != .apBWE && engine != .univerSR:
+                warnings.append("Manifest engine mismatch: family=audio expects ap-bwe or universr.")
             case .sfx where engine != .woosh && engine != .mmaudio:
                 warnings.append("Manifest engine mismatch: family=sfx expects woosh or mmaudio.")
             case .video where engine != .ltxVideo && engine != .wanVideo:
@@ -491,7 +493,7 @@ public enum MereRunModelValidator {
                 return true
             }
             switch manifest.engine {
-            case .qwen3Coder?, .northMiniCode?, .inkling?, .aceStep?, .magentaRT2?, .muScriptor?, .roFormer?, .apBWE?, .woosh?, .mmaudio?, .ltxVideo?,
+            case .qwen3Coder?, .northMiniCode?, .inkling?, .aceStep?, .magentaRT2?, .muScriptor?, .roFormer?, .apBWE?, .univerSR?, .woosh?, .mmaudio?, .ltxVideo?,
                  .wanVideo?, .moge2?, .videoDepthAnything?, .depthAnything3?, .tripoSR?, .instantMesh?, .trellis2?,
                  .insightFace?, .sortformer?:
                 return true

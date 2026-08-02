@@ -41,10 +41,10 @@ scalar-count, byte-count, and whole-file hash drift.
 
 ## Runtime boundary
 
-`mere.run audio enhance` is a new top-level audio command because the same
-surface can later host general audio super-resolution without conflating it
-with music stem separation. This PR adds only AP-BWE; UniverSR remains a
-separate stacked review.
+`mere.run audio enhance` is a top-level audio command so speech bandwidth
+extension and general-audio super-resolution do not get conflated with music
+stem separation. AP-BWE remains independently reviewable from the stacked
+UniverSR runtime.
 
 The installed-model gate produces a real WAV artifact through the public
 command. The manual checkpoint smoke additionally verifies a 48 kHz mono,
