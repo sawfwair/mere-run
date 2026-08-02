@@ -238,6 +238,43 @@ final class StudioLibraryStore: ObservableObject {
         save()
     }
 
+    /// Imports one completed launcher artifact through MereRun's typed receipt contract. The
+    /// Library remains the only writer of its persisted state; launchers never edit library.json.
+    @discardableResult
+    func importReceipt(at receiptURL: URL) throws -> StudioLibraryItem {
+        let receipt = try StudioLibraryImportReceipt.load(from: receiptURL, fileManager: fileManager)
+        let artifactURL = try receipt.artifactURL(fileManager: fileManager)
+
+        if let existing = items.first(where: { $0.id == receipt.id }) {
+            guard existing.outputURL?.standardizedFileURL == artifactURL else {
+                throw StudioLibraryImportError.receiptIDConflict(receipt.id)
+            }
+            return existing
+        }
+        if let existing = items.first(where: { $0.outputURL?.standardizedFileURL == artifactURL }) {
+            return existing
+        }
+
+        var item = StudioLibraryItem(
+            id: receipt.id,
+            mode: receipt.kind.mode,
+            prompt: receipt.prompt,
+            inputURL: nil,
+            outputURL: artifactURL,
+            createdAt: receipt.createdAt,
+            updatedAt: Date(),
+            status: .completed,
+            exitCode: 0,
+            commandPreview: receipt.kind.commandPreview,
+            outputText: nil,
+            templateID: receipt.kind.mode.defaultTemplateID,
+            artifactURLs: [artifactURL]
+        )
+        item.source = receipt.source
+        upsert(item)
+        return item
+    }
+
     private func shouldKeep(_ item: StudioLibraryItem) -> Bool {
         item.status == .completed
             || item.outputURL != nil

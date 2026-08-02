@@ -2,10 +2,14 @@
 
 Optional SwiftUI studio wrapper around the public `mere.run` CLI.
 
-The packaged app registers `mererun://preview?path=…` for local launchers. Keep
-the parser typed and strict: one percent-encoded absolute path to an existing,
-readable file. External preview links may show Quick Look but must not import or
-mutate artifacts.
+The packaged app registers two typed local-launcher routes. The strict
+`mererun://preview?path=…` route accepts one readable absolute artifact path and
+may show Quick Look but must not import or mutate artifacts. The strict
+`mererun://library/import?receipt=…` route accepts one readable absolute receipt
+path; `StudioLibraryStore` validates the versioned receipt and referenced media,
+owns persistence and deduplication, and publishes navigation through
+`StudioNavigationCoordinator`. External launchers must never edit
+`library.json` directly.
 
 - `StudioTypes.swift`: user-facing mode, draft, and request types.
 - `CommandCatalog.swift`: mode-to-command templates.

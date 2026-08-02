@@ -148,7 +148,7 @@ plutil -insert CFBundleInfoDictionaryVersion -string "6.0" "${contents}/Info.pli
 plutil -insert LSApplicationCategoryType -string "public.app-category.developer-tools" "${contents}/Info.plist"
 plutil -insert NSHumanReadableCopyright -string "© mere.run" "${contents}/Info.plist"
 plutil -insert CFBundleURLTypes -json \
-  '[{"CFBundleTypeRole":"Viewer","CFBundleURLName":"run.mere.preview","CFBundleURLSchemes":["mererun"]}]' \
+  '[{"CFBundleTypeRole":"Viewer","CFBundleURLName":"run.mere.links","CFBundleURLSchemes":["mererun"]}]' \
   "${contents}/Info.plist"
 plutil -insert SUFeedURL -string "$sparkle_feed_url" "${contents}/Info.plist"
 plutil -insert SUPublicEDKey -string "$sparkle_public_ed_key" "${contents}/Info.plist"

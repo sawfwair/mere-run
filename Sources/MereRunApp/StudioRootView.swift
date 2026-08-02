@@ -4,7 +4,8 @@ import UniformTypeIdentifiers
 
 struct StudioRootView: View {
     @EnvironmentObject private var controller: MereRunController
-    @StateObject private var library = StudioLibraryStore()
+    @EnvironmentObject private var library: StudioLibraryStore
+    @EnvironmentObject private var navigation: StudioNavigationCoordinator
     // Persisted per scene so relaunch restores the last mode and panel layout.
     @SceneStorage("studio.mode") private var mode: StudioMode = .createImage
     @SceneStorage("studio.showLibrary") private var showLibrary = true
@@ -323,6 +324,16 @@ struct StudioRootView: View {
     private func deleteLibraryItem(_ id: UUID) {
         library.delete(id: id)
         if selectedLibraryID == id { selectedLibraryID = nil }
+    }
+
+    private func openImportedLibraryItem(_ request: StudioLibraryNavigationRequest) {
+        mode = request.mode
+        selectedLibraryID = request.itemID
+        showLibrary = true
+        showAdvanced = false
+        if layoutClass.isCompact {
+            showCompactLibrary = true
+        }
     }
 
     private func updateLayoutClass(_ nextLayout: StudioLayoutClass) {
@@ -648,6 +659,10 @@ struct StudioRootView: View {
 
     private var navigationObservedShell: some View {
         lifecycleShell
+        .onReceive(navigation.$libraryRequest) { request in
+            guard let request else { return }
+            openImportedLibraryItem(request)
+        }
         .onChange(of: showAdvanced) { _, isShown in
             if isShown {
                 if layoutClass.isCompact { showCompactLibrary = false }

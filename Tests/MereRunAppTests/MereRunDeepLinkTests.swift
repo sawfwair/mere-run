@@ -78,4 +78,41 @@ final class MereRunDeepLinkTests: XCTestCase {
             XCTAssertEqual(error as? MereRunDeepLinkError, .notAFile(directoryURL.path))
         }
     }
+
+    func testLibraryImportLinkResolvesReceiptPath() throws {
+        let receiptURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mere-library-import-\(UUID().uuidString)")
+            .appendingPathExtension("json")
+        try Data("{}".utf8).write(to: receiptURL)
+        defer { try? FileManager.default.removeItem(at: receiptURL) }
+
+        var components = URLComponents()
+        components.scheme = MereRunDeepLink.scheme
+        components.host = "library"
+        components.path = "/import"
+        components.queryItems = [URLQueryItem(name: "receipt", value: receiptURL.path)]
+        let link = try XCTUnwrap(components.url)
+
+        XCTAssertEqual(
+            try MereRunDeepLink.parse(link),
+            .libraryImport(receiptURL.standardizedFileURL)
+        )
+    }
+
+    func testLibraryImportLinkRequiresExactlyOneReceiptParameter() throws {
+        let missing = try XCTUnwrap(URL(string: "mererun://library/import"))
+        let wrong = try XCTUnwrap(URL(string: "mererun://library/import?path=/tmp/receipt.json"))
+        let duplicate = try XCTUnwrap(
+            URL(string: "mererun://library/import?receipt=/tmp/a.json&receipt=/tmp/b.json")
+        )
+
+        XCTAssertThrowsError(try MereRunDeepLink.parse(missing)) { error in
+            XCTAssertEqual(error as? MereRunDeepLinkError, .missingReceipt)
+        }
+        for link in [wrong, duplicate] {
+            XCTAssertThrowsError(try MereRunDeepLink.parse(link)) { error in
+                XCTAssertEqual(error as? MereRunDeepLinkError, .unsupportedParameters)
+            }
+        }
+    }
 }
