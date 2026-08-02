@@ -26,8 +26,10 @@ def main():
         "dreamx_ar_trajectory_processor",
         args.dreamx_root / "utils" / "trajectory_processor.py",
     )
-    segments = [("w", 3), ("j", 5)]
-    pixel_frame_count = 21
+    # This is the same composed 63-latent / 249-pixel-frame trajectory used by
+    # the upstream-versus-native full-resolution release gate.
+    segments = [("w", 4), ("wj", 6), ("wl", 6)]
+    pixel_frame_count = 249
     speed = 1.5
     _, camera_parameters, _ = trajectory.generate_trajectory_from_json(
         trajectory_spec=segments,
@@ -55,7 +57,7 @@ def main():
     intrinsic[:, 1, 2] = 0.5
     intrinsic[:, 2, 2] = 1
     output = {
-        "source_revision": "AMAP-ML/DreamX-World@f2bf6bf",
+        "source_revision": "AMAP-ML/DreamX-World@a1f4c6e",
         "trajectory": {
             "segments": segments,
             "pixel_frame_count": pixel_frame_count,

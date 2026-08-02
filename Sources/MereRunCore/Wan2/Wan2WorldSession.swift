@@ -125,6 +125,50 @@ public struct Wan2WorldTransitionRequest: Hashable, Sendable {
     }
 }
 
+public struct Wan2WorldRolloutRequest: Hashable, Sendable {
+    public let requestID: UUID
+    public let prompt: String
+    public let actionSequence: [Wan2DreamXARTrajectorySegment]
+    public let sourceImageURL: URL?
+    public let outputURL: URL?
+    public let width: Int
+    public let height: Int
+    public let latentFrameCount: Int
+    public let speed: Float
+    public let seed: UInt64
+    public let fps: Int
+
+    public init(
+        requestID: UUID = UUID(),
+        prompt: String,
+        actionSequence: [Wan2DreamXARTrajectorySegment],
+        sourceImageURL: URL? = nil,
+        outputURL: URL? = nil,
+        width: Int = 1_280,
+        height: Int = 704,
+        latentFrameCount: Int = 21,
+        speed: Float = Wan2DreamXARTrajectory.defaultSpeed,
+        seed: UInt64 = 42,
+        fps: Int = 16
+    ) {
+        self.requestID = requestID
+        self.prompt = prompt
+        self.actionSequence = actionSequence
+        self.sourceImageURL = sourceImageURL
+        self.outputURL = outputURL
+        self.width = width
+        self.height = height
+        self.latentFrameCount = latentFrameCount
+        self.speed = speed
+        self.seed = seed
+        self.fps = fps
+    }
+
+    public var expectedPixelFrameCount: Int {
+        (latentFrameCount - 1) * 4 + 1
+    }
+}
+
 public enum Wan2WorldSessionPhase: String, Codable, Hashable, Sendable {
     case cold
     case ready
@@ -140,6 +184,28 @@ public struct Wan2WorldSessionSnapshot: Codable, Hashable, Sendable {
     public let conditioningMode: Wan2WorldConditioningMode
     public let keepsModelsWarm: Bool
     public let keepsTerminalLatent: Bool
+    public let generatedLatentFrameCount: Int
+    public let retainedLatentFrameCount: Int
+    public let causalCheckpointCount: Int
+    public let currentWorldPose: Wan2DreamXWorldPose?
+    public let sceneMemoryMode: Wan2DreamXSceneMemoryMode
+    public let sceneMemoryFrameCount: Int
+    public let sceneMemoryRetrievalCount: Int
+    public let sceneMemoryRecycledFrameCount: Int
+}
+
+public struct Wan2WorldCausalCheckpointReceipt: Codable, Hashable, Sendable {
+    public let checkpointID: UUID
+    public let name: String?
+    public let sessionID: UUID
+    public let stateID: UUID
+    public let currentFrameURL: URL
+    public let transitionIndex: Int
+    public let generatedLatentFrameCount: Int
+    public let retainedLatentFrameCount: Int
+    public let currentWorldPose: Wan2DreamXWorldPose
+    public let sceneMemoryFrameCount: Int
+    public let createdAt: Date
 }
 
 public struct Wan2WorldTransitionReceipt: Codable, Hashable, Sendable {
@@ -151,13 +217,50 @@ public struct Wan2WorldTransitionReceipt: Codable, Hashable, Sendable {
     public let terminalFrameURL: URL
     public let camera: Wan2WorldCameraControl
     public let conditioningMode: Wan2WorldConditioningMode
+    public let terminalWorldPose: Wan2DreamXWorldPose?
+    public let sceneMemoryMode: Wan2DreamXSceneMemoryMode
+    public let sceneMemoryRetrievalCount: Int
+    public let sceneMemoryRecycledFrameCount: Int
     public let seed: UInt64
+}
+
+public struct Wan2WorldRolloutChunkReceipt: Codable, Hashable, Sendable {
+    public let blockIndex: Int
+    public let blockCount: Int
+    public let pixelFrameStart: Int
+    public let pixelFrameCount: Int
+    public let outputURL: URL
+}
+
+public struct Wan2WorldRolloutReceipt: Codable, Hashable, Sendable {
+    public let requestID: UUID
+    public let previousStateID: UUID?
+    public let stateID: UUID
+    public let transitionIndex: Int
+    public let outputURL: URL
+    public let terminalFrameURL: URL
+    public let actionSequence: [Wan2DreamXARTrajectorySegment]
+    public let latentFrameCount: Int
+    public let pixelFrameCount: Int
+    public let speed: Float
+    public let conditioningMode: Wan2WorldConditioningMode
+    public let chunks: [Wan2WorldRolloutChunkReceipt]
+    public let terminalWorldPose: Wan2DreamXWorldPose
+    public let sceneMemoryMode: Wan2DreamXSceneMemoryMode
+    public let sceneMemoryRetrievalCount: Int
+    public let sceneMemoryRecycledFrameCount: Int
+    public let seed: UInt64
+    public let fps: Int
 }
 
 public enum Wan2WorldSessionError: LocalizedError, Sendable {
     case busy
     case sourceImageRequired
     case terminalLatentMissing
+    case causalRolloutRequiresDreamX
+    case causalCheckpointRequiresDreamX
+    case causalCheckpointStateUnavailable
+    case causalCheckpointNotFound(UUID)
 
     public var errorDescription: String? {
         switch self {
@@ -167,6 +270,52 @@ public enum Wan2WorldSessionError: LocalizedError, Sendable {
             return "The first world transition requires a source image."
         case .terminalLatentMissing:
             return "Wan generation did not return the terminal-frame latent required for chaining."
+        case .causalRolloutRequiresDreamX:
+            return "Long causal rollouts require the DreamX autoregressive checkpoint."
+        case .causalCheckpointRequiresDreamX:
+            return "Exact causal checkpoints require the DreamX autoregressive checkpoint."
+        case .causalCheckpointStateUnavailable:
+            return "A causal checkpoint requires an active world state."
+        case .causalCheckpointNotFound(let checkpointID):
+            return "Causal checkpoint not found: \(checkpointID.uuidString)"
+        }
+    }
+}
+
+private struct Wan2StoredCausalCheckpoint: @unchecked Sendable {
+    let receipt: Wan2WorldCausalCheckpointReceipt
+    let runtime: Wan2CausalWorldCheckpoint
+}
+
+struct Wan2WorldArtifactSequence: Sendable {
+    private(set) var lastAllocatedIndex = 0
+
+    mutating func next(in stateDirectory: URL, fileManager: FileManager = .default) -> Int {
+        repeat {
+            lastAllocatedIndex += 1
+        } while Self.hasArtifact(
+            index: lastAllocatedIndex,
+            in: stateDirectory,
+            fileManager: fileManager
+        )
+        return lastAllocatedIndex
+    }
+
+    private static func hasArtifact(
+        index: Int,
+        in stateDirectory: URL,
+        fileManager: FileManager
+    ) -> Bool {
+        let suffix = String(format: "%04d", index)
+        return [
+            "transition-\(suffix).mp4",
+            "rollout-\(suffix).mp4",
+            "rollout-\(suffix).chunks",
+            "state-\(suffix).png",
+        ].contains { name in
+            fileManager.fileExists(
+                atPath: stateDirectory.appendingPathComponent(name).path
+            )
         }
     }
 }
@@ -182,12 +331,15 @@ public actor Wan2WorldSession {
     private var transitionCount = 0
     private var currentStateID: UUID?
     private var currentFrameURL: URL?
+    private var causalCheckpoints: [UUID: Wan2StoredCausalCheckpoint] = [:]
+    private var artifactSequence = Wan2WorldArtifactSequence()
 
     public init(
         resources: Wan2Resources,
         stateDirectory: URL,
         cameraWeightsURL: URL? = nil,
         causalWeightsURL: URL? = nil,
+        sceneMemoryPolicy: Wan2DreamXSceneMemoryPolicy = .init(),
         sessionID: UUID = UUID()
     ) {
         precondition(cameraWeightsURL == nil || causalWeightsURL == nil)
@@ -195,7 +347,9 @@ public actor Wan2WorldSession {
         self.stateDirectory = stateDirectory.standardizedFileURL
         self.sessionID = sessionID
         self.generator = Wan2TI2VGenerator(cameraWeightsURL: cameraWeightsURL)
-        self.causalGenerator = causalWeightsURL.map(Wan2CausalWorldGenerator.init(weightsURL:))
+        self.causalGenerator = causalWeightsURL.map {
+            Wan2CausalWorldGenerator(weightsURL: $0, sceneMemoryPolicy: sceneMemoryPolicy)
+        }
     }
 
     private var conditioningMode: Wan2WorldConditioningMode {
@@ -229,8 +383,9 @@ public actor Wan2WorldSession {
             throw Wan2WorldSessionError.sourceImageRequired
         }
         let nextIndex = transitionCount + 1
+        let artifactIndex = artifactSequence.next(in: stateDirectory)
         let outputURL = request.outputURL ?? stateDirectory
-            .appendingPathComponent(String(format: "transition-%04d.mp4", nextIndex))
+            .appendingPathComponent(String(format: "transition-%04d.mp4", artifactIndex))
         try FileManager.default.createDirectory(
             at: outputURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
@@ -245,13 +400,15 @@ public actor Wan2WorldSession {
                 pixelFrameCount: request.numFrames
             )
             : nil
+        if usesExplicitSource, transitionCount > 0 {
+            causalGenerator?.reset()
+        }
         phase = .generating
         do {
             let result: Wan2VideoGenerationResult
+            let retrievalsBefore = causalGenerator?.sceneMemoryRetrievalCount ?? 0
+            let recycledBefore = causalGenerator?.sceneMemoryRecycledFrameCount ?? 0
             if let causalGenerator {
-                if usesExplicitSource, transitionCount > 0 {
-                    causalGenerator.reset()
-                }
                 result = try await causalGenerator.generateBlock(
                     prompt: request.prompt,
                     camera: request.camera,
@@ -292,7 +449,7 @@ public actor Wan2WorldSession {
             try LTXVideoMP4Writer.writeMP4(frames: result.frames, fps: request.fps, to: outputURL)
 
             let terminalFrameURL = stateDirectory
-                .appendingPathComponent(String(format: "state-%04d.png", nextIndex))
+                .appendingPathComponent(String(format: "state-%04d.png", artifactIndex))
             let terminal = result.frames[0, result.frames.dim(1) - 1]
             eval(terminal)
             let image = try MediaImageIO.imageFromRGBHWC(
@@ -317,12 +474,200 @@ public actor Wan2WorldSession {
                 terminalFrameURL: terminalFrameURL,
                 camera: request.camera,
                 conditioningMode: conditioningMode,
+                terminalWorldPose: causalGenerator?.worldPose,
+                sceneMemoryMode: causalGenerator?.sceneMemoryMode ?? .disabled,
+                sceneMemoryRetrievalCount: (causalGenerator?.sceneMemoryRetrievalCount ?? 0) - retrievalsBefore,
+                sceneMemoryRecycledFrameCount: (causalGenerator?.sceneMemoryRecycledFrameCount ?? 0) - recycledBefore,
                 seed: result.seed
             )
         } catch {
             phase = isWarm ? .ready : .cold
             throw error
         }
+    }
+
+    public func rollout(
+        _ request: Wan2WorldRolloutRequest,
+        progressHandler: (@Sendable (GenerationProgress) -> Void)? = nil,
+        chunkHandler: (@Sendable (Wan2WorldRolloutChunkReceipt) async -> Void)? = nil
+    ) async throws -> Wan2WorldRolloutReceipt {
+        guard phase != .generating else { throw Wan2WorldSessionError.busy }
+        guard let causalGenerator else { throw Wan2WorldSessionError.causalRolloutRequiresDreamX }
+        try FileManager.default.createDirectory(at: stateDirectory, withIntermediateDirectories: true)
+
+        let usesExplicitSource = request.sourceImageURL != nil
+        guard let sourceImageURL = request.sourceImageURL ?? currentFrameURL else {
+            throw Wan2WorldSessionError.sourceImageRequired
+        }
+        if usesExplicitSource, transitionCount > 0 {
+            causalGenerator.reset()
+        }
+
+        let nextIndex = transitionCount + 1
+        let artifactIndex = artifactSequence.next(in: stateDirectory)
+        let outputURL = request.outputURL ?? stateDirectory
+            .appendingPathComponent(String(format: "rollout-%04d.mp4", artifactIndex))
+        try FileManager.default.createDirectory(
+            at: outputURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let chunkDirectory = outputURL.deletingPathExtension()
+            .appendingPathExtension("chunks")
+        try FileManager.default.createDirectory(at: chunkDirectory, withIntermediateDirectories: true)
+
+        phase = .generating
+        do {
+            var chunkReceipts: [Wan2WorldRolloutChunkReceipt] = []
+            let retrievalsBefore = causalGenerator.sceneMemoryRetrievalCount
+            let recycledBefore = causalGenerator.sceneMemoryRecycledFrameCount
+            let result = try await causalGenerator.generateRollout(
+                prompt: request.prompt,
+                actionSequence: request.actionSequence,
+                latentFrameCount: request.latentFrameCount,
+                speed: request.speed,
+                sourceImageURL: causalGenerator.latentFrameCount == 0 ? sourceImageURL : nil,
+                resources: resources,
+                width: request.width,
+                height: request.height,
+                seed: request.seed,
+                progressHandler: progressHandler
+            ) { chunk in
+                let chunkURL = chunkDirectory.appendingPathComponent(
+                    String(format: "chunk-%04d.mp4", chunk.blockIndex + 1)
+                )
+                try LTXVideoMP4Writer.writeMP4(frames: chunk.frames, fps: request.fps, to: chunkURL)
+                let receipt = Wan2WorldRolloutChunkReceipt(
+                    blockIndex: chunk.blockIndex,
+                    blockCount: chunk.blockCount,
+                    pixelFrameStart: chunk.pixelFrameStart,
+                    pixelFrameCount: chunk.frames.dim(1),
+                    outputURL: chunkURL
+                )
+                chunkReceipts.append(receipt)
+                await chunkHandler?(receipt)
+            }
+            guard result.terminalFrameLatent != nil else {
+                throw Wan2WorldSessionError.terminalLatentMissing
+            }
+            try LTXVideoMP4Writer.writeMP4(frames: result.frames, fps: request.fps, to: outputURL)
+
+            let terminalFrameURL = stateDirectory
+                .appendingPathComponent(String(format: "state-%04d.png", artifactIndex))
+            let terminal = result.frames[0, result.frames.dim(1) - 1]
+            eval(terminal)
+            let image = try MediaImageIO.imageFromRGBHWC(
+                terminal.asArray(UInt8.self),
+                width: result.frames.dim(3),
+                height: result.frames.dim(2)
+            )
+            try MediaImageIO.writePNG(image, to: terminalFrameURL)
+
+            let previousStateID = currentStateID
+            let nextStateID = UUID()
+            currentFrameURL = terminalFrameURL
+            currentStateID = nextStateID
+            transitionCount = nextIndex
+            phase = .ready
+            return Wan2WorldRolloutReceipt(
+                requestID: request.requestID,
+                previousStateID: previousStateID,
+                stateID: nextStateID,
+                transitionIndex: nextIndex,
+                outputURL: outputURL,
+                terminalFrameURL: terminalFrameURL,
+                actionSequence: request.actionSequence,
+                latentFrameCount: request.latentFrameCount,
+                pixelFrameCount: result.frames.dim(1),
+                speed: request.speed,
+                conditioningMode: conditioningMode,
+                chunks: chunkReceipts,
+                terminalWorldPose: causalGenerator.worldPose,
+                sceneMemoryMode: causalGenerator.sceneMemoryMode,
+                sceneMemoryRetrievalCount: causalGenerator.sceneMemoryRetrievalCount - retrievalsBefore,
+                sceneMemoryRecycledFrameCount: causalGenerator.sceneMemoryRecycledFrameCount - recycledBefore,
+                seed: result.seed,
+                fps: request.fps
+            )
+        } catch {
+            phase = isWarm ? .ready : .cold
+            throw error
+        }
+    }
+
+    public func createCausalCheckpoint(
+        name: String? = nil,
+        checkpointID: UUID = UUID(),
+        createdAt: Date = Date()
+    ) throws -> Wan2WorldCausalCheckpointReceipt {
+        guard phase != .generating else { throw Wan2WorldSessionError.busy }
+        guard let causalGenerator else {
+            throw Wan2WorldSessionError.causalCheckpointRequiresDreamX
+        }
+        guard let stateID = currentStateID, let currentFrameURL else {
+            throw Wan2WorldSessionError.causalCheckpointStateUnavailable
+        }
+        let runtime = causalGenerator.checkpoint()
+        let receipt = Wan2WorldCausalCheckpointReceipt(
+            checkpointID: checkpointID,
+            name: name,
+            sessionID: sessionID,
+            stateID: stateID,
+            currentFrameURL: currentFrameURL,
+            transitionIndex: transitionCount,
+            generatedLatentFrameCount: runtime.generatedLatentFrameCount,
+            retainedLatentFrameCount: runtime.retainedLatentFrameCount,
+            currentWorldPose: runtime.currentWorldPose,
+            sceneMemoryFrameCount: runtime.sceneMemoryFrameCount,
+            createdAt: createdAt
+        )
+        causalCheckpoints[checkpointID] = Wan2StoredCausalCheckpoint(
+            receipt: receipt,
+            runtime: runtime
+        )
+        return receipt
+    }
+
+    public func restoreCausalCheckpoint(
+        _ checkpointID: UUID
+    ) throws -> Wan2WorldCausalCheckpointReceipt {
+        guard phase != .generating else { throw Wan2WorldSessionError.busy }
+        guard let causalGenerator else {
+            throw Wan2WorldSessionError.causalCheckpointRequiresDreamX
+        }
+        guard let checkpoint = causalCheckpoints[checkpointID] else {
+            throw Wan2WorldSessionError.causalCheckpointNotFound(checkpointID)
+        }
+        causalGenerator.restore(checkpoint.runtime)
+        currentStateID = checkpoint.receipt.stateID
+        currentFrameURL = checkpoint.receipt.currentFrameURL
+        phase = isWarm ? .ready : .cold
+        return checkpoint.receipt
+    }
+
+    public func causalCheckpointReceipts() -> [Wan2WorldCausalCheckpointReceipt] {
+        causalCheckpoints.values.map(\.receipt).sorted { lhs, rhs in
+            if lhs.createdAt == rhs.createdAt {
+                return lhs.checkpointID.uuidString < rhs.checkpointID.uuidString
+            }
+            return lhs.createdAt < rhs.createdAt
+        }
+    }
+
+    public func discardCausalCheckpoint(
+        _ checkpointID: UUID
+    ) throws -> Wan2WorldCausalCheckpointReceipt {
+        guard phase != .generating else { throw Wan2WorldSessionError.busy }
+        guard let checkpoint = causalCheckpoints.removeValue(forKey: checkpointID) else {
+            throw Wan2WorldSessionError.causalCheckpointNotFound(checkpointID)
+        }
+        return checkpoint.receipt
+    }
+
+    public func causalCheckpointFrameURL(_ checkpointID: UUID) throws -> URL {
+        guard let checkpoint = causalCheckpoints[checkpointID] else {
+            throw Wan2WorldSessionError.causalCheckpointNotFound(checkpointID)
+        }
+        return checkpoint.receipt.currentFrameURL
     }
 
     public func reset(sourceImageURL: URL? = nil) throws {
@@ -334,6 +679,7 @@ public actor Wan2WorldSession {
             generator.clearChain()
         }
         currentStateID = sourceImageURL == nil ? nil : UUID()
+        causalCheckpoints.removeAll(keepingCapacity: true)
         transitionCount = 0
         phase = isWarm ? .ready : .cold
     }
@@ -345,6 +691,7 @@ public actor Wan2WorldSession {
         } else {
             generator.unload()
         }
+        causalCheckpoints.removeAll(keepingCapacity: true)
         phase = .cold
     }
 
@@ -358,7 +705,15 @@ public actor Wan2WorldSession {
             conditioningMode: conditioningMode,
             keepsModelsWarm: isWarm,
             keepsTerminalLatent: causalGenerator.map { $0.latentFrameCount > 0 }
-                ?? generator.hasChainedTerminalFrameLatent
+                ?? generator.hasChainedTerminalFrameLatent,
+            generatedLatentFrameCount: causalGenerator?.latentFrameCount ?? 0,
+            retainedLatentFrameCount: causalGenerator?.retainedLatentFrameCount ?? 0,
+            causalCheckpointCount: causalCheckpoints.count,
+            currentWorldPose: causalGenerator?.worldPose,
+            sceneMemoryMode: causalGenerator?.sceneMemoryMode ?? .disabled,
+            sceneMemoryFrameCount: causalGenerator?.sceneMemoryFrameCount ?? 0,
+            sceneMemoryRetrievalCount: causalGenerator?.sceneMemoryRetrievalCount ?? 0,
+            sceneMemoryRecycledFrameCount: causalGenerator?.sceneMemoryRecycledFrameCount ?? 0
         )
     }
 }

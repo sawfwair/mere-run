@@ -91,4 +91,114 @@ final class WorldCommandTests: XCTestCase {
         XCTAssertEqual(payload.fps, 30)
         XCTAssertEqual(payload.modelSpaceActions, [[0, 0, 0, 1, 0, 0, 0, 1, 0]])
     }
+
+    func testWorldRolloutPayloadDecodesOfficialDreamXActionSequence() throws {
+        let data = Data(#"""
+        {
+          "prompt": "move through the same coherent station",
+          "action_seq": ["w", "wj", "wl"],
+          "action_speed_list": [4, 6, 6],
+          "source_image": "/tmp/vesper.png",
+          "output": "/tmp/vesper-rollout.mp4",
+          "width": 1280,
+          "height": 704,
+          "num_output_frames": 63,
+          "speed": 1.5,
+          "seed": 7,
+          "fps": 16
+        }
+        """#.utf8)
+        let decoder = JSONDecoder()
+        decoder.keyDecodingStrategy = .convertFromSnakeCase
+
+        let payload = try decoder.decode(WorldRolloutPayload.self, from: data)
+        let request = try payload.request()
+
+        XCTAssertEqual(payload.actionSeq, ["w", "wj", "wl"])
+        XCTAssertEqual(payload.actionSpeedList, [4, 6, 6])
+        XCTAssertEqual(request.actionSequence.map(\.action), ["w", "wj", "wl"])
+        XCTAssertEqual(request.actionSequence.map(\.weight), [4, 6, 6])
+        XCTAssertEqual(request.latentFrameCount, 63)
+        XCTAssertEqual(request.expectedPixelFrameCount, 249)
+        XCTAssertEqual(request.width, 1_280)
+        XCTAssertEqual(request.height, 704)
+        XCTAssertEqual(request.speed, 1.5)
+        XCTAssertEqual(request.fps, 16)
+    }
+
+    func testWorldRolloutPayloadRejectsMismatchedWeightsAndOpposingControls() throws {
+        let mismatched = WorldRolloutPayload(
+            prompt: "same station",
+            actionSeq: ["w", "j"],
+            actionSpeedList: [1],
+            sourceImage: nil,
+            output: nil,
+            width: nil,
+            height: nil,
+            numOutputFrames: nil,
+            speed: nil,
+            seed: nil,
+            fps: nil
+        )
+        XCTAssertThrowsError(try mismatched.request()) { error in
+            XCTAssertEqual(
+                error as? WorldRolloutValidationError,
+                .mismatchedActionWeights(actions: 2, weights: 1)
+            )
+        }
+
+        let contradictory = WorldRolloutPayload(
+            prompt: "same station",
+            actionSeq: ["ws"],
+            actionSpeedList: nil,
+            sourceImage: nil,
+            output: nil,
+            width: nil,
+            height: nil,
+            numOutputFrames: nil,
+            speed: nil,
+            seed: nil,
+            fps: nil
+        )
+        XCTAssertThrowsError(try contradictory.request()) { error in
+            XCTAssertEqual(error as? WorldRolloutValidationError, .contradictoryAction("ws"))
+        }
+
+        let oversized = WorldRolloutPayload(
+            prompt: "same station",
+            actionSeq: ["w"],
+            actionSpeedList: nil,
+            sourceImage: nil,
+            output: nil,
+            width: 1_312,
+            height: 704,
+            numOutputFrames: 246,
+            speed: nil,
+            seed: nil,
+            fps: nil
+        )
+        XCTAssertThrowsError(try oversized.request()) { error in
+            XCTAssertEqual(
+                error as? WorldRolloutValidationError,
+                .resolutionExceedsMaximum(width: 1_312, height: 704)
+            )
+        }
+
+        let tooLong = WorldRolloutPayload(
+            prompt: "same station",
+            actionSeq: ["w"],
+            actionSpeedList: nil,
+            sourceImage: nil,
+            output: nil,
+            width: nil,
+            height: nil,
+            numOutputFrames: 255,
+            speed: nil,
+            seed: nil,
+            fps: nil
+        )
+        XCTAssertThrowsError(try tooLong.request()) { error in
+            XCTAssertEqual(error as? WorldRolloutValidationError, .latentFrameCountExceedsMaximum(255))
+        }
+    }
 }

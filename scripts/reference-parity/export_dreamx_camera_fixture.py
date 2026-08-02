@@ -85,7 +85,7 @@ def main():
         Ks=intrinsics,
     )
     output = {
-        "source_revision": "AMAP-ML/DreamX-World@f2bf6bf",
+        "source_revision": "AMAP-ML/DreamX-World@a1f4c6e",
         "trajectory": {
             "segments": segments,
             "pixel_frame_count": pixel_frame_count,

@@ -781,26 +781,46 @@ final class Cosmos3EdgeTests: MereRunCoreTestCase {
         XCTAssertEqual(reference[59][8], -0.00047919119242578745, accuracy: 1e-9)
     }
 
-    func testForwardCameraControlUsesPublishedNormalizedModelSpacePrefix() {
-        let actions = Cosmos3CameraActionCompiler.compile(
+    func testSemanticTranslationControlsUseCameraRelativeDeltaAxes() {
+        let forward = Cosmos3CameraActionCompiler.compile(
             control: .forward(meters: 2),
             actionCount: 4
         )
-        XCTAssertEqual(
-            actions,
-            Array(Cosmos3CameraModelSpaceTrajectory.forwardReference.prefix(4))
+        let backward = Cosmos3CameraActionCompiler.compile(
+            control: .backward(meters: 2),
+            actionCount: 4
+        )
+        let left = Cosmos3CameraActionCompiler.compile(
+            control: Wan2WorldCameraControl(
+                motion: .strafeLeft,
+                translationMeters: [-2, 0, 0]
+            ),
+            actionCount: 4
+        )
+        let right = Cosmos3CameraActionCompiler.compile(
+            control: Wan2WorldCameraControl(
+                motion: .strafeRight,
+                translationMeters: [2, 0, 0]
+            ),
+            actionCount: 4
         )
 
-        let yaw = Cosmos3CameraActionCompiler.compile(
-            control: .yawRight(degrees: 90),
-            actionCount: 1
-        )[0]
-        XCTAssertEqual(yaw[3], cos(Float.pi / 120), accuracy: 1e-6)
-        XCTAssertEqual(yaw[4], 0, accuracy: 1e-6)
-        XCTAssertEqual(yaw[5], -sin(Float.pi / 120), accuracy: 1e-6)
-        XCTAssertEqual(yaw[6], 0, accuracy: 1e-6)
-        XCTAssertEqual(yaw[7], 1, accuracy: 1e-6)
-        XCTAssertEqual(yaw[8], 0, accuracy: 1e-6)
+        for index in forward.indices {
+            let reference = Cosmos3CameraModelSpaceTrajectory.forwardReference[index]
+            let magnitude = sqrt(
+                reference[0] * reference[0]
+                    + reference[1] * reference[1]
+                    + reference[2] * reference[2]
+            ) * 2
+            XCTAssertEqual(Array(forward[index][0..<3]), [0, 0, magnitude])
+            XCTAssertEqual(Array(backward[index][0..<3]), [0, 0, -magnitude])
+            XCTAssertEqual(Array(left[index][0..<3]), [-magnitude, 0, 0])
+            XCTAssertEqual(Array(right[index][0..<3]), [magnitude, 0, 0])
+            XCTAssertEqual(
+                Array(forward[index][3..<9]),
+                Cosmos3CameraModelSpaceTrajectory.identityRotation6D
+            )
+        }
     }
 
     func testExplicitModelSpaceTrajectoryFitsChunkWithoutRenormalizing() {
@@ -813,47 +833,55 @@ final class Cosmos3EdgeTests: MereRunCoreTestCase {
         XCTAssertEqual(fitted, [first, second, second, second])
     }
 
-    func testYawCompilerRampsPublishedColumnRot6DInModelSpace() {
+    func testCustomTranslationPreservesRequestedVectorMagnitude() {
+        let actions = Cosmos3CameraActionCompiler.compile(
+            control: Wan2WorldCameraControl(
+                motion: .custom,
+                translationMeters: [3, 0, 4]
+            ),
+            actionCount: 1
+        )
+        let reference = Cosmos3CameraModelSpaceTrajectory.forwardReference[0]
+        let referenceMagnitude = sqrt(
+            reference[0] * reference[0]
+                + reference[1] * reference[1]
+                + reference[2] * reference[2]
+        )
+        XCTAssertEqual(actions[0][0], referenceMagnitude * 3, accuracy: 1e-6)
+        XCTAssertEqual(actions[0][1], 0, accuracy: 1e-6)
+        XCTAssertEqual(actions[0][2], referenceMagnitude * 4, accuracy: 1e-6)
+    }
+
+    func testYawCompilerUsesStationaryConstantPerFramePoseDeltas() {
         let actions = Cosmos3CameraActionCompiler.compile(
             control: .yawRight(degrees: 15),
             actionCount: 60
         )
         let first = actions[0]
         let last = actions[59]
-        XCTAssertEqual(
-            Array(first.prefix(3)),
-            Array(Cosmos3CameraModelSpaceTrajectory.forwardReference[0].prefix(3))
-        )
-        XCTAssertEqual(
-            Array(last.prefix(3)),
-            Array(Cosmos3CameraModelSpaceTrajectory.forwardReference[59].prefix(3))
-        )
-        XCTAssertEqual(last[3], cos(Float.pi / 12), accuracy: 1e-6)
+        XCTAssertEqual(Array(first.prefix(3)), [0, 0, 0])
+        XCTAssertEqual(Array(last.prefix(3)), [0, 0, 0])
+        XCTAssertEqual(first, last)
+        XCTAssertEqual(last[3], cos(Float.pi / 720), accuracy: 1e-6)
         XCTAssertEqual(last[4], 0, accuracy: 1e-6)
-        XCTAssertEqual(last[5], -sin(Float.pi / 12), accuracy: 1e-6)
+        XCTAssertEqual(last[5], -sin(Float.pi / 720), accuracy: 1e-6)
         XCTAssertEqual(last[6], 0, accuracy: 1e-6)
         XCTAssertEqual(last[7], 1, accuracy: 1e-6)
         XCTAssertEqual(last[8], 0, accuracy: 1e-6)
     }
 
-    func testYawContinuationMatchesPinnedCUDAAutoregressiveTrajectory() {
+    func testSemanticContinuationDoesNotAccumulatePriorPoseDelta() {
         let startingAction = Cosmos3CameraModelSpaceTrajectory.forwardReference[59]
-        let actions = Cosmos3CameraActionCompiler.compile(
+        let continued = Cosmos3CameraActionCompiler.compile(
             control: .yawRight(degrees: 15),
             actionCount: 60,
             startingAction: startingAction
         )
-
-        XCTAssertEqual(actions[0][0], -0.6242110331853231, accuracy: 1e-7)
-        XCTAssertEqual(actions[0][1], -0.10683037837346394, accuracy: 1e-7)
-        XCTAssertEqual(actions[0][2], 0.06115144491195679, accuracy: 1e-7)
-        XCTAssertEqual(actions[0][3], 0.9999904807207345, accuracy: 1e-7)
-        XCTAssertEqual(actions[0][5], -0.00436330928474657, accuracy: 1e-7)
-        XCTAssertEqual(actions[59][0], -0.22022724151611328, accuracy: 1e-7)
-        XCTAssertEqual(actions[59][1], -0.17862796783447266, accuracy: 1e-7)
-        XCTAssertEqual(actions[59][2], -0.002110004425048828, accuracy: 1e-7)
-        XCTAssertEqual(actions[59][3], 0.9659258262890683, accuracy: 1e-7)
-        XCTAssertEqual(actions[59][5], -0.25881904510252074, accuracy: 1e-7)
+        let fresh = Cosmos3CameraActionCompiler.compile(
+            control: .yawRight(degrees: 15),
+            actionCount: 60
+        )
+        XCTAssertEqual(continued, fresh)
     }
 
     func testInteractiveYawUsesPinnedCUDARotationRateAtSixteenActions() {
@@ -865,10 +893,9 @@ final class Cosmos3EdgeTests: MereRunCoreTestCase {
         )
 
         XCTAssertEqual(actions.count, 16)
-        XCTAssertEqual(actions[0][3], cos(Float.pi / 720), accuracy: 1e-7)
-        XCTAssertEqual(actions[0][5], -sin(Float.pi / 720), accuracy: 1e-7)
-        XCTAssertEqual(actions[15][3], cos(Float.pi / 45), accuracy: 1e-7)
-        XCTAssertEqual(actions[15][5], -sin(Float.pi / 45), accuracy: 1e-7)
+        XCTAssertEqual(actions[0][3], cos(Float.pi / 192), accuracy: 1e-7)
+        XCTAssertEqual(actions[0][5], -sin(Float.pi / 192), accuracy: 1e-7)
+        XCTAssertEqual(actions[15], actions[0])
     }
 
     func testAutoregressiveSeedSequenceMatchesPinnedCUDAChunkPolicy() {
@@ -939,10 +966,12 @@ final class Cosmos3EdgeTests: MereRunCoreTestCase {
             startingAction: forward[59]
         )
 
-        for axis in 0..<3 {
-            XCTAssertEqual(backward[59][axis], startingAction[axis], accuracy: 1e-6)
+        for index in forward.indices {
+            for axis in 0..<3 {
+                XCTAssertEqual(backward[index][axis], -forward[index][axis], accuracy: 1e-6)
+            }
+            XCTAssertEqual(Array(backward[index][3..<9]), Array(forward[index][3..<9]))
         }
-        XCTAssertEqual(Array(backward[59][3..<9]), Array(forward[59][3..<9]))
     }
 
     func testWorldRejectsMalformedExplicitModelSpaceTrajectoryBeforeLoadingModel() async throws {

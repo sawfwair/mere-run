@@ -8,6 +8,13 @@ public struct Wan2CausalTransformerStateSnapshot: Hashable, Sendable {
     public let sinkFrames: Int
 }
 
+public struct Wan2CausalTransformerCheckpoint: @unchecked Sendable {
+    fileprivate let blocks: [Wan2CausalBlockCheckpoint]
+    public let localAttentionFrames: Int
+    public let sinkFrames: Int
+    public let cachesProjectiveAttention: Bool
+}
+
 public final class Wan2CausalTransformerState: @unchecked Sendable {
     let blocks: [Wan2CausalBlockState]
     public let localAttentionFrames: Int
@@ -49,6 +56,30 @@ public final class Wan2CausalTransformerState: @unchecked Sendable {
             sinkFrames: sinkFrames
         )
     }
+
+    public func checkpoint() -> Wan2CausalTransformerCheckpoint {
+        Wan2CausalTransformerCheckpoint(
+            blocks: blocks.map { $0.checkpoint() },
+            localAttentionFrames: localAttentionFrames,
+            sinkFrames: sinkFrames,
+            cachesProjectiveAttention: cachesProjectiveAttention
+        )
+    }
+
+    public func restore(_ checkpoint: Wan2CausalTransformerCheckpoint) {
+        precondition(checkpoint.blocks.count == blocks.count)
+        precondition(checkpoint.localAttentionFrames == localAttentionFrames)
+        precondition(checkpoint.sinkFrames == sinkFrames)
+        precondition(checkpoint.cachesProjectiveAttention == cachesProjectiveAttention)
+        for (block, saved) in zip(blocks, checkpoint.blocks) {
+            block.restore(saved)
+        }
+    }
+}
+
+private struct Wan2CausalBlockCheckpoint: @unchecked Sendable {
+    let selfAttention: Wan2CausalKVCheckpoint
+    let cameraAttention: Wan2CausalKVCheckpoint
 }
 
 final class Wan2CausalBlockState {
@@ -72,6 +103,25 @@ final class Wan2CausalBlockState {
         selfAttention.reset()
         cameraAttention.reset()
     }
+
+
+    fileprivate func checkpoint() -> Wan2CausalBlockCheckpoint {
+        Wan2CausalBlockCheckpoint(
+            selfAttention: selfAttention.checkpoint(),
+            cameraAttention: cameraAttention.checkpoint()
+        )
+    }
+
+    fileprivate func restore(_ checkpoint: Wan2CausalBlockCheckpoint) {
+        selfAttention.restore(checkpoint.selfAttention)
+        cameraAttention.restore(checkpoint.cameraAttention)
+    }
+}
+
+private struct Wan2CausalKVCheckpoint: @unchecked Sendable {
+    let key: MLXArray?
+    let value: MLXArray?
+    let globalEndToken: Int
 }
 
 struct Wan2CausalCacheWindow {
@@ -99,6 +149,20 @@ final class Wan2CausalKVCache {
         key = nil
         value = nil
         globalEndToken = 0
+    }
+
+    fileprivate func checkpoint() -> Wan2CausalKVCheckpoint {
+        Wan2CausalKVCheckpoint(key: key, value: value, globalEndToken: globalEndToken)
+    }
+
+    fileprivate func restore(_ checkpoint: Wan2CausalKVCheckpoint) {
+        precondition((checkpoint.key == nil) == (checkpoint.value == nil))
+        if let key = checkpoint.key, let value = checkpoint.value {
+            precondition(key.shape == value.shape)
+        }
+        key = checkpoint.key
+        value = checkpoint.value
+        globalEndToken = checkpoint.globalEndToken
     }
 
     func update(

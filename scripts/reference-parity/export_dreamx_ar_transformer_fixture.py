@@ -188,7 +188,7 @@ def main():
         "block0_cache_key": caches[0]["k"][:, :12].float().contiguous(),
         "block0_cache_value": caches[0]["v"][:, :12].float().contiguous(),
     }, args.output, metadata={
-        "source_revision": "AMAP-ML/DreamX-World@f2bf6bf",
+        "source_revision": "AMAP-ML/DreamX-World@a1f4c6e",
         "checkpoint_revision": "67487c4a61466bb7166d30b7187dd465e0ac9f6c",
         "compute_dtype": "bfloat16",
         "local_attention_frames": "12",
