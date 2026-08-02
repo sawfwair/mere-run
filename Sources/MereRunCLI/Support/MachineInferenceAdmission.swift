@@ -445,17 +445,30 @@ struct MachineInferenceCoordinator: Sendable {
 
     private static func currentHostSnapshot() -> MachineInferenceHostSnapshot {
         let memory = RuntimeMemorySample.current()
-        let disk = try? MereRunModelPaths.applicationSupportBase
-            .deletingLastPathComponent()
-            .resourceValues(
-            forKeys: [.volumeAvailableCapacityForImportantUsageKey]
-        ).volumeAvailableCapacityForImportantUsage
+        let disk = availableDiskBytes(
+            at: MereRunModelPaths.applicationSupportBase.deletingLastPathComponent()
+        )
         return MachineInferenceHostSnapshot(
             physicalMemoryBytes: memory.physicalBytes,
             availableMemoryBytes: memory.availableBytes,
             memoryPressure: RuntimeMemoryPressurePolicy.default.pressure(for: memory),
-            availableDiskBytes: disk.flatMap { $0 >= 0 ? UInt64($0) : nil }
+            availableDiskBytes: disk
         )
+    }
+
+    private static func availableDiskBytes(at url: URL) -> UInt64? {
+#if os(Linux)
+        guard let attributes = try? FileManager.default.attributesOfFileSystem(forPath: url.path),
+              let freeBytes = attributes[.systemFreeSize] as? NSNumber else {
+            return nil
+        }
+        return freeBytes.uint64Value
+#else
+        let capacity = try? url.resourceValues(
+            forKeys: [.volumeAvailableCapacityForImportantUsageKey]
+        ).volumeAvailableCapacityForImportantUsage
+        return capacity.flatMap { $0 >= 0 ? UInt64($0) : nil }
+#endif
     }
 
     private static func isProcessAlive(_ processID: Int32) -> Bool {
