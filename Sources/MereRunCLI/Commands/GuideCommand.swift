@@ -410,7 +410,10 @@ enum GuideRegistry {
             topic: "audio-enhance",
             title: "Audio Enhance",
             commandPaths: [["audio", "enhance"]],
-            models: ["audio-enhance-ap-bwe-16kto48k"],
+            models: [
+                "audio-enhance-ap-bwe-16kto48k",
+                "audio-enhance-universr-audio",
+            ],
             resourceName: "audio-enhance.md"
         ),
         GuideTopic(

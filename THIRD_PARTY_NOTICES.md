@@ -513,6 +513,47 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+### UniverSR
+
+- purpose: native Swift/MLX general-audio super-resolution to 48 kHz
+- upstream project: [`woongzip1/UniverSR`](https://github.com/woongzip1/UniverSR)
+- upstream commit used for the port: `26dc21c44e11f9f19e823f02b0d4641dd5ea5af2`
+- source-code license: MIT
+- official checkpoint: [`woongzip1/universr-audio`](https://huggingface.co/woongzip1/universr-audio)
+- checkpoint revision: `1c3294844285af851b6ffa56cbde4e43cd41fc2b`
+- checkpoint license: Creative Commons Attribution 4.0 International (CC BY 4.0)
+
+The model checkpoint is downloaded separately into the user's model store.
+Managed installs retain the official model card and verify it alongside the
+checkpoint and source configuration. The checkpoint license is not MIT; users
+redistributing the weights or adaptations must preserve the CC BY 4.0
+attribution and license notice. See the official license text at
+<https://creativecommons.org/licenses/by/4.0/legalcode>.
+
+```text
+MIT License
+
+Copyright (c) 2026 Woongjib Choi, DSPAI Lab, Yonsei University
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 ### MuScriptor
 
 - purpose: native MLX audio-to-MIDI model, tokenizer, event decoder, and MIDI behavior

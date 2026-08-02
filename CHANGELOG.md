@@ -31,6 +31,12 @@ The format is based on Keep a Changelog.
   transport snapshot, verifies the checkpoint/config/code-license/weights-
   license hashes, reproduces the paired magnitude/phase ConvNeXt graph, and
   writes a 48 kHz mono float WAV plus a hashed provenance manifest.
+- added native UniverSR general-audio super-resolution through the same
+  `audio enhance` surface and the managed `audio-enhance-universr-audio`
+  model. The port pins the MIT source and CC BY 4.0 official checkpoint
+  independently, validates the exact 394-tensor ConvNeXt V2 U-Net, reproduces
+  the published complex-STFT and flow-matching path for 8/12/16/24 kHz input,
+  and records ODE, guidance, seed, license, and artifact provenance.
 
 ## 0.31.0 - 2026-08-01
 

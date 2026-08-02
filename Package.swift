@@ -345,6 +345,7 @@ targets.append(contentsOf: [
       "MMAudio/README.md",
       "PrivacyFilter/README.md",
       "RoFormer/README.md",
+      "UniverSR/README.md",
       "Pose/README.md",
       "OpticalFlow/README.md",
       "Psi/README.md",

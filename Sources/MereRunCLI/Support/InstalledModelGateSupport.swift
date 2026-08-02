@@ -310,7 +310,7 @@ enum InstalledModelSmokePlans {
                 try await runner.installedMusicSeparationCheck(model: spec.id)
             }
 
-        case .apBWE:
+        case .apBWE, .univerSR:
             return direct(spec, route: "audio enhance") { runner in
                 try await runner.installedAudioEnhancementCheck(model: spec.id)
             }
@@ -989,15 +989,16 @@ extension GateRunner {
             try Self.writeSineWaveFixture(to: input)
         }
         let output = artifactURL(model, extension: "wav")
-        let run = try await exec(
-            [
-                "audio", "enhance", input.path,
-                "--model", model,
-                "--output", output.path,
-                "--quiet",
-            ],
-            timeout: 3_600
-        )
+        var arguments = [
+            "audio", "enhance", input.path,
+            "--model", model,
+            "--output", output.path,
+            "--quiet",
+        ]
+        if model == ModelResolver.ModelID.univerSRAudio.rawValue {
+            arguments += ["--input-rate", "16000"]
+        }
+        let run = try await exec(arguments, timeout: 3_600)
         return try audioObservation(output, run: run)
     }
 

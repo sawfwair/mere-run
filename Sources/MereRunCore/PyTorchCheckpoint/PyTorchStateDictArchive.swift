@@ -198,6 +198,30 @@ public final class PyTorchStateDictArchive: @unchecked Sendable {
             }
             allowedNames.insert(serializationIDName)
         }
+        // PyTorch 2.8+ adds two inert root metadata files for its ZIP writer.
+        // Admit only the exact filenames and the currently documented scalar
+        // forms; they do not influence tensor decoding or storage addressing.
+        let formatVersionName = "\(root)/.format_version"
+        if zip.entries[formatVersionName] != nil {
+            let formatVersion = try zip.utf8Entry(named: formatVersionName)
+            guard formatVersion == "1" else {
+                throw PyTorchStateDictError.malformedZIP("invalid ZIP format version")
+            }
+            allowedNames.insert(formatVersionName)
+        }
+        let storageAlignmentName = "\(root)/.storage_alignment"
+        if zip.entries[storageAlignmentName] != nil {
+            let rawAlignment = try zip.utf8Entry(named: storageAlignmentName)
+            guard rawAlignment.utf8.count <= 4,
+                  rawAlignment.utf8.allSatisfy({ (0x30...0x39).contains($0) }),
+                  let alignment = Int(rawAlignment),
+                  alignment > 0,
+                  alignment <= 4_096,
+                  alignment.nonzeroBitCount == 1 else {
+                throw PyTorchStateDictError.malformedZIP("invalid storage alignment")
+            }
+            allowedNames.insert(storageAlignmentName)
+        }
         if let unexpected = zip.entries.keys.first(where: { !allowedNames.contains($0) }) {
             throw PyTorchStateDictError.unsafeArchivePath(unexpected)
         }

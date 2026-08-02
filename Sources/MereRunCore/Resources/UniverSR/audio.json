@@ -1,0 +1,32 @@
+{
+  "seed": 42,
+  "path": { "sigma_min": 0.0001 },
+  "transform": {
+    "window": "hann",
+    "n_fft": 1024,
+    "sampling_rate": 48000,
+    "hop_length": 512,
+    "alpha": 0.2,
+    "beta": 1.0,
+    "compression_epsilon": 0.0001
+  },
+  "model": {
+    "input_channels": 2,
+    "output_channels": 2,
+    "dimensions": [96, 192, 384, 768],
+    "depths": [2, 2, 4, 2],
+    "time_dimension": 256,
+    "conditioning_dimension": 384,
+    "total_frequency_bins": 512,
+    "high_frequency_bins": 432,
+    "conditioning_layers": 4,
+    "input_rate_bins": { "8": 80, "12": 128, "16": 170, "24": 256 }
+  },
+  "inference": {
+    "minimum_samples": 32768,
+    "ode_method": "midpoint",
+    "ode_steps": 4,
+    "guidance_scale": 1.5,
+    "chunk_seconds": 10
+  }
+}
