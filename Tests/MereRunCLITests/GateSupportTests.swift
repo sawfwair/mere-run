@@ -183,4 +183,18 @@ final class GateSupportTests: XCTestCase {
             try GateRunner.expectedMusicSeparationStemNames(for: "music-separate-unknown")
         )
     }
+
+    func testMusicSeparationGateAllowsSilentIndividualStems() {
+        XCTAssertNil(
+            GateRunner.musicSeparationAudibilityFailure(
+                stemPeaks: [0, 0.000_01, 0.02, 0]
+            )
+        )
+        XCTAssertEqual(
+            GateRunner.musicSeparationAudibilityFailure(
+                stemPeaks: [0, 0.000_01, 0.000_1, 0]
+            ),
+            "music separation produced no audible stems"
+        )
+    }
 }

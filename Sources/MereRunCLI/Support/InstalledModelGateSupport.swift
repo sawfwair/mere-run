@@ -1008,6 +1008,7 @@ extension GateRunner {
                     + "expected \(expectedNames)"
             )
         }
+        var stemPeaks: [Float] = []
         for stem in document.stems {
             let expectedFileName = "\(stem.name).wav"
             guard URL(fileURLWithPath: stem.path).lastPathComponent == expectedFileName else {
@@ -1015,10 +1016,12 @@ extension GateRunner {
                     "music separation manifest path for \(stem.name) was not \(expectedFileName)"
                 )
             }
-            let observation = try audioObservation(
+            let artifact = try audioArtifactObservation(
                 output.appendingPathComponent(expectedFileName),
-                run: run
+                run: run,
+                requireAudible: false
             )
+            let observation = artifact.observation
             if let failure = observation.semanticFailure {
                 throw GateError.invalidArtifact("\(expectedFileName): \(failure)")
             }
@@ -1027,8 +1030,18 @@ extension GateRunner {
                     "music separation manifest hash did not match \(expectedFileName)"
                 )
             }
+            stemPeaks.append(artifact.peak)
+        }
+        if let failure = Self.musicSeparationAudibilityFailure(stemPeaks: stemPeaks) {
+            throw GateError.invalidArtifact(failure)
         }
         return try jsonFileObservation(manifest, run: run, label: "music separation manifest")
+    }
+
+    static func musicSeparationAudibilityFailure(stemPeaks: [Float]) -> String? {
+        stemPeaks.contains { $0 > 0.0001 }
+            ? nil
+            : "music separation produced no audible stems"
     }
 
     static func expectedMusicSeparationStemNames(for model: String) throws -> [String] {
@@ -1360,17 +1373,34 @@ extension GateRunner {
     }
 
     private func audioObservation(_ url: URL, run: ExecResult) throws -> GateObservation {
+        try audioArtifactObservation(url, run: run, requireAudible: true).observation
+    }
+
+    private func audioArtifactObservation(
+        _ url: URL,
+        run: ExecResult,
+        requireAudible: Bool
+    ) throws -> (observation: GateObservation, peak: Float) {
         let data = try Data(contentsOf: url)
         let audio = try MediaAudioIO.decode(url, targetSampleRate: 16_000, channels: 2)
         let peak = audio.samples.map(abs).max() ?? 0
-        return GateObservation(
-            hash: Self.sha256(data),
-            secondRunHash: nil,
-            wallSeconds: run.wallSeconds,
-            decodeTps: nil,
-            semanticFailure: audio.samples.isEmpty || data.count <= 1_024 || peak <= 0.0001
-                ? "generated audio did not decode or was silent"
-                : nil
+        let semanticFailure: String?
+        if audio.samples.isEmpty || data.count <= 1_024 {
+            semanticFailure = "generated audio did not decode or was empty"
+        } else if requireAudible && peak <= 0.0001 {
+            semanticFailure = "generated audio was silent"
+        } else {
+            semanticFailure = nil
+        }
+        return (
+            GateObservation(
+                hash: Self.sha256(data),
+                secondRunHash: nil,
+                wallSeconds: run.wallSeconds,
+                decodeTps: nil,
+                semanticFailure: semanticFailure
+            ),
+            peak
         )
     }
 
