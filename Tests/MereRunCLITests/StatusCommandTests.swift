@@ -103,6 +103,65 @@ final class StatusCommandTests: XCTestCase {
         XCTAssertTrue(output.contains("    none"))
     }
 
+    func testFormatterShowsMachineWideAdmission() {
+        let now = Date(timeIntervalSince1970: 100)
+        let snapshot = StatusSnapshot(
+            server: StatusServerSnapshot(
+                url: "http://127.0.0.1:8080",
+                health: "down",
+                detail: nil,
+                loadedModels: [],
+                modelsDetail: nil,
+                runtime: nil,
+                runtimeDetail: nil
+            ),
+            modelStore: StatusModelStoreSnapshot(
+                path: "/tmp/models",
+                source: "default",
+                configuredPath: nil,
+                isFallbackToDefault: false
+            ),
+            knownModelCount: 0,
+            installedModels: [],
+            machineAdmission: MachineInferenceAdmissionSnapshot(
+                capacityPermits: 4,
+                activePermits: 2,
+                active: [
+                    MachineInferenceAdmissionEntrySnapshot(
+                        id: UUID(),
+                        processID: 42,
+                        label: "image generate",
+                        resourceClass: .standard,
+                        permits: 2,
+                        queuedAt: now,
+                        admittedAt: now
+                    ),
+                ],
+                queued: [
+                    MachineInferenceAdmissionEntrySnapshot(
+                        id: UUID(),
+                        processID: 43,
+                        label: "video generate",
+                        resourceClass: .large,
+                        permits: 4,
+                        queuedAt: now,
+                        admittedAt: nil
+                    ),
+                ],
+                memoryPressure: .nominal,
+                availableMemoryBytes: 80 * 1_073_741_824,
+                availableDiskBytes: 100 * 1_073_741_824,
+                minimumDiskBytes: 16 * 1_073_741_824
+            )
+        )
+
+        let output = StatusFormatter.text(snapshot)
+
+        XCTAssertTrue(output.contains("machine admission: 2/4 permits active, 1 running, 1 queued"))
+        XCTAssertTrue(output.contains("active: image generate, pid 42, 2 permit(s), standard"))
+        XCTAssertTrue(output.contains("queued: video generate, pid 43, 4 permit(s), large"))
+    }
+
     func testFormatterUsesRuntimeStatusWhenAvailable() {
         var runtime = RuntimeModelPoolStatus(
             object: "runtime.status",

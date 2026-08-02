@@ -80,6 +80,8 @@ struct StatusSnapshot: Codable, Equatable {
     let knownModelCount: Int
     let installedModels: [StatusInstalledModelSnapshot]
     var capabilities: StatusCapabilitiesSnapshot = .current
+    var machineAdmission: MachineInferenceAdmissionSnapshot? = nil
+    var machineAdmissionDetail: String? = nil
 }
 
 struct StatusCapabilitiesSnapshot: Codable, Equatable {
@@ -136,6 +138,15 @@ struct StatusSnapshotBuilder {
             }
         let modelStore = MereRunModelPaths.modelStoreResolution()
         let server = await serverSnapshot()
+        let machineAdmission: MachineInferenceAdmissionSnapshot?
+        let machineAdmissionDetail: String?
+        do {
+            machineAdmission = try MachineInferenceCoordinator.shared.snapshot()
+            machineAdmissionDetail = nil
+        } catch {
+            machineAdmission = nil
+            machineAdmissionDetail = error.localizedDescription
+        }
 
         return StatusSnapshot(
             server: server,
@@ -146,7 +157,9 @@ struct StatusSnapshotBuilder {
                 isFallbackToDefault: modelStore.isFallbackToDefault
             ),
             knownModelCount: inventoryRows.count,
-            installedModels: installedModels
+            installedModels: installedModels,
+            machineAdmission: machineAdmission,
+            machineAdmissionDetail: machineAdmissionDetail
         )
     }
 
@@ -361,6 +374,27 @@ enum StatusFormatter {
             }
         } else {
             lines.append("  loaded models: unavailable")
+        }
+
+        if let admission = snapshot.machineAdmission {
+            lines.append(
+                "  machine admission: \(admission.activePermits)/\(admission.capacityPermits) permits active, "
+                    + "\(admission.active.count) running, \(admission.queued.count) queued"
+            )
+            for entry in admission.active {
+                lines.append(
+                    "    active: \(entry.label), pid \(entry.processID), "
+                        + "\(entry.permits) permit(s), \(entry.resourceClass.rawValue)"
+                )
+            }
+            for entry in admission.queued {
+                lines.append(
+                    "    queued: \(entry.label), pid \(entry.processID), "
+                        + "\(entry.permits) permit(s), \(entry.resourceClass.rawValue)"
+                )
+            }
+        } else if let detail = snapshot.machineAdmissionDetail {
+            lines.append("  machine admission: unavailable (\(detail))")
         }
 
         lines.append("  model store: \(modelStoreText(snapshot.modelStore))")

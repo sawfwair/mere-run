@@ -162,6 +162,31 @@ prompt lengths differ. The generator samples all rows with one device readback,
 splits typed cache lanes after each step, and immediately removes EOS or
 token-budget-complete rows. `0` keeps the serial pipelined decoder.
 
+### Machine-wide inference admission
+
+Every allocation-heavy direct `mere.run` command joins a crash-safe weighted
+FIFO shared by Studio, terminals, launchers, scripts, and agents. API-server
+processes hold a reservation while preserving their own model-pool and request
+concurrency. Lightweight inspection and management commands such as `status`,
+`model list`, and `--help` do not consume permits.
+
+Capacity scales with physical memory: one permit below 48 GiB, two below 96
+GiB, four below 192 GiB, and six on larger hosts. Speech and lightweight audio
+use one permit; ordinary image, text, music, and vision work use two; video,
+world generation, model training/benchmarks, geometry/3D, and DeepSeek V4 Flash
+use the entire capacity. Any selected catalog model estimated at 48 GiB or
+larger, and an explicit local model file of that size, is also promoted to the
+exclusive class. FIFO ordering prevents a stream of small jobs from starving
+an earlier large job.
+
+Before registration and admission, the coordinator checks reclaimable memory
+and preserves free disk for swap and temporary files. The disk floor is one
+eighth of physical memory, clamped from 8 to 32 GiB. A command below that floor
+fails before loading a model. Cancelled waiters remove their tickets; dead
+processes are pruned automatically. `mere.run status` shows active and queued
+entries, and the typed ledger lives under
+`~/Library/Application Support/MereRun/admission/` without prompts or content.
+
 ### `MERERUN_GEMMA4_MTP`
 
 Gemma 4 12B MTP is enabled by default when the managed

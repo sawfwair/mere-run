@@ -5,6 +5,10 @@
 Show one local snapshot of the mere.run runtime: API server reachability, the
 model currently reported by `/v1/models`, the active model-store path, and the
 managed models installed there.
+The snapshot also reads the machine-wide inference admission ledger even when
+the API server is down. It reports weighted permit capacity, active commands,
+queued commands, process IDs, resource classes, memory pressure, and disk
+headroom without recording prompts or generated content.
 When `/runtime/status` is available, the snapshot also includes runtime pool
 entries, active request counts, request admission queue depth, memory pressure,
 runtime capability flags, aggregate cache stats, per-model prefix KV cache
@@ -50,6 +54,9 @@ mere.run guide status
   requests are running and how many are queued behind `--max-active-requests`.
   JSON status also includes admitted, completed, cancelled, pressure, and
   whether admission is currently paused by the memory guard.
+- During overlapping apps or CLI processes, check `machine admission` to see
+  aggregate work across Studio, Raycast, terminals, scripts, agents, and API
+  servers. This is distinct from the per-server request queue.
 - Use `memory` to see the active memory guard tier, pressure level, current
   resident usage, host-available estimate, and computed soft/hard/ceiling limits.
 - Use `process` to inspect server uptime, sampled process CPU, macOS
@@ -88,6 +95,12 @@ MERERUN_API_KEY=change-me mere.run status --json
   `/v1/models` needs `--api-key` or `MERERUN_API_KEY`.
 - The loaded model list is what the API server reports; it is not a system-wide
   RAM/process scan for every runtime family.
+- Machine admission is system-wide for cooperative `mere.run` processes. Small
+  work uses one weighted permit, standard work uses two, and video/DS4-class
+  work takes the full machine capacity. Capacity scales from one permit below
+  48 GiB to two below 96 GiB, four below 192 GiB, and six thereafter.
+- Admission state contains command families and process IDs only. A process
+  exit removes its ticket; a crash is pruned on the next queue or status read.
 - A sidecar can be resident before it is ready because its generator object is
   created before the first operation finishes model loading. Check the per-lane
   state rather than treating residency alone as request readiness.
@@ -109,4 +122,5 @@ MERERUN_API_KEY=change-me mere.run status --json
 ## Sources
 
 - https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Commands/StatusCommand.swift
+- https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Support/MachineInferenceAdmission.swift
 - https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Support/ModelInventory.swift
