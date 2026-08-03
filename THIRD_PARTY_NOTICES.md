@@ -30,7 +30,7 @@ with the new upstream source, version or commit when known, and license data.
 - purpose: secure discovery, verification, and atomic installation of signed
   MereRun macOS app updates
 - upstream project: [`sparkle-project/Sparkle`](https://github.com/sparkle-project/Sparkle),
-  version `2.9.2`; MIT with the bundled component notices below
+  version `2.9.5`; MIT with the bundled component notices below
 - package location: `MereRun.app/Contents/Frameworks/Sparkle.framework`
 
 ```text
