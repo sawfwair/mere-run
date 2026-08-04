@@ -6,16 +6,15 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
-### Fixed
+## 0.34.0 - 2026-08-04
 
-- made `plugin list` and `plugin doctor` diagnose stale editable `pipx`
-  installations with the missing source path and an exact forced-reinstall
-  command instead of surfacing only a companion executable traceback.
-- updated the macOS auto-updater to Sparkle 2.9.5 for current compatibility and
-  security fixes, and made packaging reject a stale embedded Sparkle framework
-  before signing.
+This release advances the complete local creation stack across five first-class
+surfaces: synchronized video and audio, vision and portable workflows, model
+management and provenance, the macOS Studio and updater, and plugin operations.
+Every path retains the same local CLI, model store, preflight, receipts, and
+artifact contracts instead of becoming a model-specific sidecar.
 
-### Added
+### Video and synchronized audio
 
 - added a native Swift/MLX MiniMax-H3 runtime for the released FL2VA and
   Ref2VA partitions: Qwen3-VL layer-50 multimodal conditioning, the dense 50
@@ -26,6 +25,35 @@ The format is based on Keep a Changelog.
   including 2 fps paired video presentation timestamps, video soundtrack
   conditioning, per-reference spatial grids, shared audio/video rotary clocks,
   and the released reference-count and modality constraints.
+- added adaptive MiniMax-H3 9/16/31-point schedule tiers, explicit
+  `--h3-weight-mode auto|quantized|resident-bf16`, chassis-aware compact Q4
+  defaults for MacBooks, staged resident-BF16 expansion for desktop Macs, and
+  coordinated 50-64 GiB MLX wired-memory residency. Large sequences reuse one
+  staged compiled block runner and exact fused query-chunked attention without
+  growing graph or Metal command-buffer state.
+- fixed the released transformer's per-head-interleaved QKV layout by
+  deinterleaving all 52 affected matrices into the global Q/K/V slabs consumed
+  by the native runtime. The causal video VAE retains its own correct
+  per-head-interleaved layout, eliminating tiled or garbled output without
+  changing the converted transformer's contract.
+
+### Vision and portable workflows
+
+- added `vision.ground` as a first-class portable graph node across local, SSH,
+  and Relay execution. It defaults to the managed Falcon Perception model,
+  accepts an image plus typed query array, and emits verified annotated-image
+  and structured-detection artifacts while explicitly treating candidate
+  geometry as non-authoritative until corroborated.
+- added model-aware `vision ground --preflight --json` and workflow-safe
+  `--quiet` behavior so agents and graph runners can validate placement,
+  inputs, and artifact paths without loading the model or parsing diagnostics.
+- preserved TIFF provider outputs as portable `.tif` artifacts with
+  `image/tiff` metadata throughout workflow materialization, run bundles, and
+  fetched results instead of degrading geospatial rasters to generic binary
+  files.
+
+### Model management and provenance
+
 - added an audited official-source FL2VA release converter that directly
   quantizes MiniMax's pinned BF16 transformer to MLX affine Q4/group-64 and its
   exact 50-layer Qwen3-VL conditioner to Q8/group-64, computes the AdaLN cache
@@ -47,14 +75,53 @@ The format is based on Keep a Changelog.
 - added a streaming MiniMax-H3 affine INT8-to-INT4 transformer requantizer with
   source-bound cache provenance, per-layer error receipts, cache-covered weight
   omission, and a typed mixed-precision config that retains the conditioner at
-  INT8. Large sequences reuse one staged compiled block runner and exact fused
-  query-chunked attention without growing graph or Metal command-buffer state.
-- added adaptive MiniMax-H3 9/16/31-point schedule tiers, explicit
-  `--h3-weight-mode auto|quantized|resident-bf16`, chassis-aware compact Q4
-  defaults for MacBooks, staged resident-BF16 expansion for desktop Macs, and
-  coordinated 50-64 GiB MLX wired-memory residency. Corrected the released
-  video VAE's per-head-interleaved QKV layout while retaining the converted
-  transformer's global Q/K/V slabs.
+  INT8.
+- made every restricted model pull state the actual consent boundary in the
+  CLI, preflight output, macOS Studio, Open WebUI setup, and agent onboarding:
+  continuing with `--accept-model-license` confirms review and acceptance of
+  the listed third-party terms and agreement to comply before transfer begins.
+  The existing fail-closed download gate and typed manifest remain intact.
+
+### Studio and distribution
+
+- made MiniMax-H3 a native macOS Studio workflow instead of an Advanced-form
+  afterthought. Video now switches controls by model family, aligns frames to
+  the released cadence, exposes adaptive or explicit schedules and resident/Q4
+  weight policy, preserves ordered Ref2VA image/video/audio references, and
+  never emits LTX-only quality, output-mode, audio, FPS, or timing flags for H3.
+- added a first-class Audio Lab for AP-BWE and UniverSR enhancement plus ViperX
+  two-stem, four-stem, dereverb, and denoise RoFormer workflows. Native controls
+  cover input bandwidth, ODE method and steps, guidance, chunking, overlap,
+  compute mode, stem output, local playback, manifests, and durable Library
+  artifacts.
+- promoted Laguna XS and Inkling-Small to explicit chat and Training Studio
+  families. Inkling reasoning effort is available in both workflows, and
+  Training Studio no longer overrides Inkling's full attention, MLP, expert,
+  shared-outer, and unembedding target defaults with an attention-only list.
+- added native Sortformer speaker diarization to Voice Studio as **Who Spoke**,
+  with recording/file input, local playback, JSON or RTTM timelines, activity
+  threshold, minimum-segment and merge-gap controls, and Library-backed results.
+- added streamed MiniMax-H3 optimize/rebuild actions to installed models and
+  expanded the shared CLI/App contract to cover `audio enhance`,
+  `music separate`, and `model optimize`. Inverse coverage tests now fail if a
+  shared command ships without an App-owned typed surface or if Studio emits an
+  option the CLI contract does not declare.
+- kept Worlds at its intended product boundary: Diorama remains the first-class
+  app for projects, navigation, exploration, routes, review, and `.diorama`
+  bundles; Studio owns the typed local DreamX/Cosmos3 runtime endpoint, status,
+  authentication, and handoff only.
+- updated the macOS auto-updater to Sparkle 2.9.5 for current compatibility and
+  security fixes, preserved Sparkle's signed helper/XPC layout during app
+  assembly, and made packaging reject a stale embedded framework before the
+  application is signed.
+
+### Plugins and operations
+
+- made `plugin list` and `plugin doctor` verify installed manifests and
+  diagnose stale editable `pipx` installations with the missing source path
+  and an exact forced-reinstall command instead of surfacing only a companion
+  executable traceback. Human-readable diagnostics improve while the JSON
+  contract remains stable.
 
 ## 0.33.0 - 2026-08-02
 

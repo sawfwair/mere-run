@@ -304,6 +304,8 @@ struct StudioDraft: Codable, Equatable {
     var quantizedKVStart = 0
     var responseFormat: TextResponseFormat = .text
     var thinkingMode: TextThinkingMode = .automatic
+    /// Optional preserves saved Studio drafts from before Inkling reasoning effort was exposed.
+    var reasoningEffort: Double?
     var loraPath = ""
     var loraScale = 1.0
     var stats = false
@@ -383,6 +385,10 @@ struct StudioDraft: Codable, Equatable {
     var preflight = false
     var timings = false
     var timingsOutputPath = ""
+    /// Optional fields preserve saved Studio drafts from before MiniMax-H3 support.
+    var h3WeightMode: String?
+    var h3Steps: Int?
+    var h3ReferenceInputs: [String]?
 
     mutating func reset(for mode: StudioMode) {
         let base = CommandCatalog.template(id: mode.defaultTemplateID)?.defaultDraft()
@@ -412,6 +418,7 @@ struct StudioDraft: Codable, Equatable {
         quantizedKVStart = base?.quantizedKVStart ?? 0
         responseFormat = base?.responseFormat ?? .text
         thinkingMode = base?.thinkingMode ?? .automatic
+        reasoningEffort = nil
         loraPath = ""
         loraScale = base?.loraScale ?? 1
         stats = false
@@ -491,6 +498,9 @@ struct StudioDraft: Codable, Equatable {
         preflight = false
         timings = false
         timingsOutputPath = ""
+        h3WeightMode = nil
+        h3Steps = nil
+        h3ReferenceInputs = nil
     }
 
     private func modeDefaultPrompt(_ mode: StudioMode) -> String {
@@ -696,6 +706,7 @@ enum StudioCommandAdapter {
                 draft.quantizedKVStart = studioDraft.quantizedKVStart
                 draft.responseFormat = studioDraft.responseFormat
                 draft.thinkingMode = studioDraft.thinkingMode
+                draft.reasoningEffort = studioDraft.reasoningEffort
                 draft.loraPath = studioDraft.loraPath
                 draft.loraScale = studioDraft.loraScale
                 draft.force = studioDraft.stats
@@ -787,6 +798,8 @@ enum StudioCommandAdapter {
             draft.model = studioDraft.model.isBlank ? draft.model : studioDraft.model
             draft.width = studioDraft.width
             draft.height = studioDraft.height
+            draft.steps = studioDraft.steps
+            draft.cfgScale = studioDraft.cfgScale
             draft.seed = studioDraft.seed
             draft.fps = studioDraft.fps
             draft.numFrames = studioDraft.numFrames
@@ -808,6 +821,9 @@ enum StudioCommandAdapter {
             draft.preflight = studioDraft.preflight
             draft.timings = studioDraft.timings
             draft.timingsOutputPath = studioDraft.timingsOutputPath
+            draft.h3WeightMode = studioDraft.h3WeightMode
+            draft.h3Steps = studioDraft.h3Steps
+            draft.h3ReferenceInputs = studioDraft.h3ReferenceInputs
 
         case .sfx:
             draft.prompt = prompt

@@ -152,6 +152,30 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertFalse(args.contains("--min-p"), "Omitting min-p preserves managed-model defaults")
     }
 
+    func testInklingChatAndTrainingExposeFamilyReasoningWithoutOverridingTargets() throws {
+        let chat = try XCTUnwrap(CommandCatalog.template(id: .textChat))
+        var chatDraft = chat.defaultDraft()
+        chatDraft.model = "text-chat-inkling-small"
+        chatDraft.reasoningEffort = 0.2
+        assertPair(chat.arguments(from: chatDraft), "--reasoning-effort", "0.2")
+
+        let training = try XCTUnwrap(CommandCatalog.template(id: .textTrainLoRA))
+        var trainingDraft = training.defaultDraft()
+        trainingDraft.model = "text-chat-inkling-small"
+        trainingDraft.inputPath = "/tmp/train.jsonl"
+        trainingDraft.outputPath = "/tmp/inkling.safetensors"
+        trainingDraft.reasoningEffort = 0.35
+        let trainingArgs = training.arguments(from: trainingDraft)
+        assertPair(trainingArgs, "--reasoning-effort", "0.35")
+        XCTAssertFalse(
+            trainingArgs.contains("--target-modules"),
+            "The CLI must select Inkling's attention, MLP, expert, shared-outer, and unembedding defaults."
+        )
+
+        trainingDraft.targetModules = "q_proj,v_proj"
+        assertPair(training.arguments(from: trainingDraft), "--target-modules", "q_proj,v_proj")
+    }
+
     func testChatBuildsJSONLoRAKVPreflightAndToolPermissionFlags() throws {
         let template = try XCTUnwrap(CommandCatalog.template(id: .textChat))
         var draft = template.defaultDraft()
@@ -241,6 +265,8 @@ final class StudioTypesTests: XCTestCase {
         }
         XCTAssertEqual(try args(.musicAnalyze) { $0.inputPath = "/a.wav" }.prefix(3).map { $0 }, ["music", "analyze", "/a.wav"])
         XCTAssertEqual(try args(.musicTranscribe) { $0.inputPath = "/a.wav" }.prefix(3).map { $0 }, ["music", "transcribe", "/a.wav"])
+        XCTAssertEqual(try args(.musicSeparate) { $0.inputPath = "/a.wav" }.prefix(3).map { $0 }, ["music", "separate", "/a.wav"])
+        XCTAssertEqual(try args(.audioEnhance) { $0.inputPath = "/a.wav" }.prefix(3).map { $0 }, ["audio", "enhance", "/a.wav"])
         XCTAssertEqual(try args(.musicRealtime).prefix(2).map { $0 }, ["music", "realtime"])
         XCTAssertFalse(try args(.musicRealtime).contains("--no-play"))
         XCTAssertTrue(try args(.musicRealtime) { $0.musicPlay = false }.contains("--no-play"))
@@ -261,6 +287,7 @@ final class StudioTypesTests: XCTestCase {
             try args(.modelBenchmarkLagunaDFlash).prefix(3).map { $0 },
             ["model", "benchmark", "laguna-dflash"]
         )
+        XCTAssertEqual(try args(.modelOptimize).prefix(2).map { $0 }, ["model", "optimize"])
         XCTAssertEqual(try args(.pluginList).prefix(2).map { $0 }, ["plugin", "list"])
         XCTAssertEqual(
             try args(.pluginInstall) {
@@ -346,6 +373,11 @@ final class StudioTypesTests: XCTestCase {
                 $0.modelRemovalJSON = true
             }),
             (.modelRepairManifests, "model.repair-manifests", { $0.force = true }),
+            (.modelOptimize, "model.optimize", {
+                $0.model = "video-minimax-h3-fl2va-mlx"
+                $0.force = true
+                $0.json = true
+            }),
             (.modelBenchmark, "model.benchmark.q36-mtp", {
                 $0.modelRoot = "/tmp/model"
                 $0.prompt = "Benchmark"
@@ -381,6 +413,10 @@ final class StudioTypesTests: XCTestCase {
             (.speechDiarize, "speech.diarize", {
                 $0.inputPath = "/tmp/meeting.wav"
                 $0.outputPath = "/tmp/meeting.json"
+                $0.speechDiarizationFormat = "rttm"
+                $0.speechDiarizationThreshold = 0.42
+                $0.speechDiarizationMinDuration = 0.3
+                $0.speechDiarizationMergeGap = 0.4
                 $0.quiet = true
             }),
             (.speechProfileList, "speech.profile.list", { _ in }),
@@ -495,6 +531,12 @@ final class StudioTypesTests: XCTestCase {
                 $0.musicSampling = true
                 $0.musicStrictEOS = true
                 $0.musicContextOutput = "/tmp/context.json"
+            }),
+            (.musicSeparate, "music.separate", {
+                $0.inputPath = "/tmp/song.wav"
+                $0.model = "music-separate-bs-roformer-4stem"
+                $0.audioOverlap = 4
+                $0.audioDType = "float32"
             }),
             (.musicRealtime, "music.realtime", {
                 $0.musicPlay = false
@@ -841,7 +883,7 @@ final class StudioTypesTests: XCTestCase {
         }
     }
 
-    func testGraphAndFleetStayExternalProductBoundaries() throws {
+    func testGraphFleetAndDioramaStayExternalProductBoundaries() throws {
         let graph = try XCTUnwrap(CommandCatalog.template(id: .graphStudio))
         let node = try XCTUnwrap(CommandCatalog.template(id: .nodeConsole))
 
@@ -849,6 +891,13 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertEqual(node.externalURL?.absoluteString, "https://relay.mere.run")
         XCTAssertTrue(graph.arguments(from: graph.defaultDraft()).isEmpty)
         XCTAssertTrue(node.arguments(from: node.defaultDraft()).isEmpty)
+        XCTAssertEqual(StudioProductBoundary.dioramaURL.absoluteString, "https://diorama.mere.run")
+
+        let worldRuntime = try XCTUnwrap(CommandCatalog.template(id: .worldServe))
+        XCTAssertEqual(
+            Array(worldRuntime.arguments(from: worldRuntime.defaultDraft()).prefix(2)),
+            ["world", "serve"]
+        )
     }
 
     func testStudioServerStatusParsesSnapshot() {
@@ -1587,6 +1636,129 @@ final class StudioTypesTests: XCTestCase {
         assertPair(args, "--steps", "40")
         assertPair(args, "--guidance-scale", "5")
         assertPair(args, "--shift", "5")
+    }
+
+    func testMiniMaxH3FL2VAUsesNativeSynchronizedContract() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .video)
+        draft.prompt = "a brass robot walking through fog"
+        draft.model = "video-minimax-h3-fl2va-mlx"
+        draft.numFrames = 73
+        draft.steps = 40
+        draft.h3Steps = 16
+        draft.h3WeightMode = "quantized"
+        draft.audioPath = "/tmp/should-not-be-used.wav"
+        draft.timings = true
+
+        let request = try StudioCommandAdapter.makeRequest(mode: .video, draft: draft)
+        let args = request.template.arguments(from: request.draft)
+
+        XCTAssertFalse(args.contains("--quality"))
+        XCTAssertFalse(args.contains("--output-mode"))
+        XCTAssertFalse(args.contains("--audio"))
+        XCTAssertFalse(args.contains("--fps"))
+        XCTAssertFalse(args.contains("--timings"))
+        assertPair(args, "--num-frames", "73")
+        assertPair(args, "--steps", "16")
+        assertPair(args, "--h3-weight-mode", "quantized")
+    }
+
+    func testMiniMaxH3Ref2VAPreservesOrderedMultimodalReferences() throws {
+        var draft = StudioDraft()
+        draft.reset(for: .video)
+        draft.prompt = "use this subject, movement, and voice"
+        draft.model = "video-minimax-h3-ref2va-mlx"
+        draft.numFrames = 56
+        draft.h3ReferenceInputs = [
+            "image:/tmp/subject.png",
+            "video:/tmp/motion.mp4",
+            "audio:/tmp/voice.wav",
+        ]
+
+        let request = try StudioCommandAdapter.makeRequest(mode: .video, draft: draft)
+        let args = request.template.arguments(from: request.draft)
+        let values = args.enumerated().compactMap { index, value in
+            value == "--reference" && index + 1 < args.count ? args[index + 1] : nil
+        }
+        XCTAssertEqual(values, draft.h3ReferenceInputs)
+        XCTAssertFalse(args.contains("--image"))
+        XCTAssertFalse(args.contains("--end-image"))
+        XCTAssertFalse(args.contains("--quality"))
+    }
+
+    func testMiniMaxH3GeometryAlignmentUsesExactReleasedCadence() {
+        XCTAssertEqual(StudioVideoModelFamily.alignedMiniMaxH3FrameCount(1), 22)
+        XCTAssertEqual(StudioVideoModelFamily.alignedMiniMaxH3FrameCount(22), 22)
+        XCTAssertEqual(StudioVideoModelFamily.alignedMiniMaxH3FrameCount(23), 39)
+        XCTAssertEqual(StudioVideoModelFamily.alignedMiniMaxH3FrameCount(65), 73)
+    }
+
+    func testAudioEnhancementSeparationAndModelOptimizationAreTyped() throws {
+        let enhance = try XCTUnwrap(CommandCatalog.template(id: .audioEnhance))
+        var enhanceDraft = enhance.defaultDraft()
+        enhanceDraft.inputPath = "/tmp/limited.wav"
+        enhanceDraft.model = "audio-enhance-universr-audio"
+        enhanceDraft.audioInputRate = 12_000
+        enhanceDraft.audioODEMethod = "rk4"
+        enhanceDraft.audioODESteps = 8
+        enhanceDraft.audioGuidanceScale = 1.75
+        enhanceDraft.audioChunkSeconds = 12
+        let enhanceArgs = enhance.arguments(from: enhanceDraft)
+        XCTAssertEqual(Array(enhanceArgs.prefix(3)), ["audio", "enhance", "/tmp/limited.wav"])
+        assertPair(enhanceArgs, "--input-rate", "12000")
+        assertPair(enhanceArgs, "--ode-method", "rk4")
+        assertPair(enhanceArgs, "--ode-steps", "8")
+        assertPair(enhanceArgs, "--guidance-scale", "1.75")
+        let enhanceFlags = Set(try XCTUnwrap(
+            MereRunCapabilityCatalog.command(id: "audio.enhance")
+        ).options.map(\.flag))
+        XCTAssertTrue(enhanceArgs.filter { $0.hasPrefix("--") }.allSatisfy(enhanceFlags.contains))
+
+        let separate = try XCTUnwrap(CommandCatalog.template(id: .musicSeparate))
+        var separateDraft = separate.defaultDraft()
+        separateDraft.inputPath = "/tmp/song.wav"
+        separateDraft.model = "music-separate-bs-roformer-4stem"
+        separateDraft.audioOverlap = 4
+        let separateArgs = separate.arguments(from: separateDraft)
+        XCTAssertEqual(Array(separateArgs.prefix(3)), ["music", "separate", "/tmp/song.wav"])
+        assertPair(separateArgs, "--overlap", "4")
+        let separateFlags = Set(try XCTUnwrap(
+            MereRunCapabilityCatalog.command(id: "music.separate")
+        ).options.map(\.flag))
+        XCTAssertTrue(separateArgs.filter { $0.hasPrefix("--") }.allSatisfy(separateFlags.contains))
+
+        XCTAssertTrue(StudioModelOptimizationCommand.supports(modelID: "video-minimax-h3-fl2va-mlx"))
+        XCTAssertEqual(
+            StudioModelOptimizationCommand.arguments(
+                modelID: "video-minimax-h3-fl2va-mlx",
+                replacing: true
+            ),
+            ["model", "optimize", "video-minimax-h3-fl2va-mlx", "--json", "--force"]
+        )
+    }
+
+    func testSortformerDiarizationOwnsNativeSpeakerControls() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .speechDiarize))
+        var draft = template.defaultDraft()
+        draft.inputPath = "/tmp/meeting.wav"
+        draft.outputPath = "/tmp/meeting.rttm"
+        draft.speechDiarizationFormat = "rttm"
+        draft.speechDiarizationThreshold = 0.42
+        draft.speechDiarizationMinDuration = 0.3
+        draft.speechDiarizationMergeGap = 0.4
+
+        XCTAssertNil(template.validationMessage(for: draft))
+        let arguments = template.arguments(from: draft)
+        assertPair(arguments, "--format", "rttm")
+        assertPair(arguments, "--threshold", "0.42")
+        assertPair(arguments, "--min-duration", "0.3")
+        assertPair(arguments, "--merge-gap", "0.4")
+
+        draft.speechDiarizationThreshold = 1.01
+        XCTAssertEqual(
+            template.validationMessage(for: draft),
+            "Diarization threshold must be between zero and one."
+        )
     }
 
     func testVideoAppArgumentsAreDeclaredBySharedCapabilityContract() throws {

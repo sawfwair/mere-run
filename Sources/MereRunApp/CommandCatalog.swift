@@ -2,6 +2,10 @@ import Foundation
 import MereRunContract
 import UniformTypeIdentifiers
 
+enum StudioProductBoundary {
+    static let dioramaURL = URL(string: "https://diorama.mere.run")!
+}
+
 enum CommandCategory: String, CaseIterable, Identifiable {
     case setup = "Setup"
     case models = "Models"
@@ -30,6 +34,7 @@ enum CommandTemplateID: String, CaseIterable, Codable {
     case modelInfo
     case modelRemove
     case modelRepairManifests
+    case modelOptimize
     case imageGenerate
     case imageTrainLoRA
     case imageValidate
@@ -66,9 +71,11 @@ enum CommandTemplateID: String, CaseIterable, Codable {
     case visionDepthVideo
     case visionGeometry
     case visionGeometryMultiview
+    case audioEnhance
     case musicGenerate
     case musicAnalyze
     case musicTranscribe
+    case musicSeparate
     case musicRealtime
     case musicTrainAdapter
     case musicServe
@@ -123,6 +130,7 @@ enum CommandTemplateID: String, CaseIterable, Codable {
         case .modelInfo: return "model.info"
         case .modelRemove: return "model.remove"
         case .modelRepairManifests: return "model.repair-manifests"
+        case .modelOptimize: return "model.optimize"
         case .imageGenerate: return "image.generate"
         case .imageTrainLoRA: return "image.train-lora"
         case .imageValidate: return "image.validate"
@@ -159,9 +167,11 @@ enum CommandTemplateID: String, CaseIterable, Codable {
         case .visionDepthVideo: return "vision.depth-video"
         case .visionGeometry: return "vision.geometry"
         case .visionGeometryMultiview: return "vision.geometry-multiview"
+        case .audioEnhance: return "audio.enhance"
         case .musicGenerate: return "music.generate"
         case .musicAnalyze: return "music.analyze"
         case .musicTranscribe: return "music.transcribe"
+        case .musicSeparate: return "music.separate"
         case .musicRealtime: return "music.realtime"
         case .musicTrainAdapter: return "music.train-adapter"
         case .musicServe: return "music.serve"
@@ -323,6 +333,33 @@ enum StudioCodeDefaults {
     }
 }
 
+enum StudioVideoModelFamily: Equatable {
+    case ltx
+    case wan
+    case miniMaxH3FL2VA
+    case miniMaxH3Ref2VA
+
+    init(model: String) {
+        let normalized = model.lowercased()
+        if normalized.contains("minimax-h3") || normalized.contains("minimax_h3") {
+            self = normalized.contains("ref2va") ? .miniMaxH3Ref2VA : .miniMaxH3FL2VA
+        } else if normalized.contains("wan") {
+            self = .wan
+        } else {
+            self = .ltx
+        }
+    }
+
+    var isMiniMaxH3: Bool {
+        self == .miniMaxH3FL2VA || self == .miniMaxH3Ref2VA
+    }
+
+    static func alignedMiniMaxH3FrameCount(_ requested: Int) -> Int {
+        let clamped = max(22, requested)
+        return ((clamped - 5 + 16) / 17) * 17 + 5
+    }
+}
+
 struct CommandDraft: Equatable, Codable {
     var prompt = ""
     var secondaryText = ""
@@ -363,6 +400,8 @@ struct CommandDraft: Equatable, Codable {
     var quantizedKVStart = 0
     var responseFormat: TextResponseFormat = .text
     var thinkingMode: TextThinkingMode = .automatic
+    /// Optional preserves Library rows written before Inkling reasoning effort was exposed.
+    var reasoningEffort: Double?
     var loraPath = ""
     var loraScale = 1.0
     var replacement = "[{label}]"
@@ -373,7 +412,7 @@ struct CommandDraft: Equatable, Codable {
     var rank = 16
     var alpha = 0.0
     var maxSequenceLength = 4096
-    var targetModules = "q_proj,k_proj,v_proj,o_proj"
+    var targetModules = ""
     var dryRun = false
     var visualize = false
     var visualizePort = 8787
@@ -547,6 +586,14 @@ struct CommandDraft: Equatable, Codable {
     var musicTrainingWeightDecay = 0.0001
     var musicTrainingMaxDuration = 30.0
     var musicTrainingLogEvery = 10
+    /// Optional fields preserve older Library rows while owning the post-0.31 audio tool wave.
+    var audioOverlap: Int?
+    var audioInputRate: Int?
+    var audioODEMethod: String?
+    var audioODESteps: Int?
+    var audioGuidanceScale: Double?
+    var audioChunkSeconds: Int?
+    var audioDType: String?
     // Vision and VFX analysis controls.
     var visionAdditionalInputs = ""
     var visionSecondInputPath = ""
@@ -664,6 +711,12 @@ struct CommandDraft: Equatable, Codable {
     var preflight = false
     var timings = false
     var timingsOutputPath = ""
+    /// Optional preserves older Library rows before MiniMax-H3 became a Studio-native workflow.
+    var h3WeightMode: String?
+    /// Nil keeps MiniMax-H3's geometry-aware 9/16/31-point adaptive schedule.
+    var h3Steps: Int?
+    /// Ordered `image:path`, `video:path`, and `audio:path` reference specifications.
+    var h3ReferenceInputs: [String]?
     var modelRoot = ""
     var referenceMaskPath = ""
     var drivingVideoPath = ""
@@ -699,6 +752,11 @@ struct CommandDraft: Equatable, Codable {
     var speechInputFormat = ""
     var speechSampleRate = 16_000
     var speechJSONL = false
+    /// Optional fields preserve decoding of Library rows created before native Sortformer controls.
+    var speechDiarizationFormat: String?
+    var speechDiarizationThreshold: Double?
+    var speechDiarizationMinDuration: Double?
+    var speechDiarizationMergeGap: Double?
     // Vision chat (vision-capable chat models) and the agentic tool loop for `text chat`.
     var imagePath = ""
     var tools = ""
@@ -835,6 +893,15 @@ struct CommandTemplate: Identifiable, Equatable {
         case .textTrainLoRA:
             draft.steps = 600
             draft.seed = "42"
+        case .audioEnhance:
+            draft.audioODEMethod = "midpoint"
+            draft.audioODESteps = 4
+            draft.audioGuidanceScale = 1.5
+            draft.audioChunkSeconds = 10
+            draft.audioDType = "float32"
+            draft.seed = "42"
+        case .musicSeparate:
+            draft.audioDType = "float16"
         case .visionCaption, .visionOCR:
             draft.maxTokens = id == .visionCaption ? 96 : 4096
             draft.temperature = id == .visionCaption ? 0.2 : 0.2
@@ -938,6 +1005,8 @@ struct CommandTemplate: Identifiable, Equatable {
         case .modelRepairManifests:
             draft.force = true
             draft.json = true
+        case .modelOptimize:
+            draft.json = true
         case .runList:
             draft.json = true
         case .runInspect, .runFetch, .runCancel, .runRetry:
@@ -961,6 +1030,10 @@ struct CommandTemplate: Identifiable, Equatable {
             draft.language = "auto"
             draft.timestamps = true
         case .speechDiarize:
+            draft.speechDiarizationFormat = "json"
+            draft.speechDiarizationThreshold = 0.5
+            draft.speechDiarizationMinDuration = 0.25
+            draft.speechDiarizationMergeGap = 0.25
             draft.quiet = true
         case .modelBenchmark:
             draft.temperature = 0
@@ -1186,6 +1259,20 @@ struct CommandTemplate: Identifiable, Equatable {
             if draft.stream && (draft.speechStreamChunkMS < 1 || draft.speechStreamDecodeMS < 1) {
                 return "Streaming feed and decode intervals must be greater than zero."
             }
+        case .speechDiarize:
+            let format = draft.speechDiarizationFormat ?? "json"
+            if !["json", "rttm"].contains(format) {
+                return "Diarization format must be JSON or RTTM."
+            }
+            if !(0...1).contains(draft.speechDiarizationThreshold ?? 0.5) {
+                return "Diarization threshold must be between zero and one."
+            }
+            if (draft.speechDiarizationMinDuration ?? 0.25) < 0 {
+                return "Minimum speaker duration must be zero or greater."
+            }
+            if (draft.speechDiarizationMergeGap ?? 0.25) < 0 {
+                return "Speaker merge gap must be zero or greater."
+            }
         case .modelRemove:
             if draft.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 return "Model id is required."
@@ -1194,9 +1281,44 @@ struct CommandTemplate: Identifiable, Equatable {
             if draft.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 return "Model id or local model path is required."
             }
+        case .modelOptimize:
+            if draft.model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                return "MiniMax-H3 model id or local model path is required."
+            }
+        case .audioEnhance:
+            if let overlap = draft.audioOverlap, overlap <= 0 {
+                return "Overlap must be positive."
+            }
+            if draft.model.localizedCaseInsensitiveContains("universr") {
+                if let inputRate = draft.audioInputRate,
+                   ![8_000, 12_000, 16_000, 24_000].contains(inputRate) {
+                    return "UniverSR input bandwidth must be 8000, 12000, 16000, or 24000 Hz."
+                }
+                if (draft.audioODESteps ?? 4) <= 0 {
+                    return "UniverSR ODE steps must be positive."
+                }
+                if (draft.audioChunkSeconds ?? 10) < 3 {
+                    return "UniverSR chunks must be at least 3 seconds."
+                }
+            }
+        case .musicSeparate:
+            if let overlap = draft.audioOverlap, overlap <= 0 {
+                return "Overlap must be positive."
+            }
         case .videoGenerate:
-            if !draft.endImagePath.isBlank && draft.inputPath.isBlank {
+            let family = StudioVideoModelFamily(model: draft.modelRoot.isBlank ? draft.model : draft.modelRoot)
+            if family == .miniMaxH3Ref2VA {
+                if !(draft.inputPath.isBlank && draft.endImagePath.isBlank) {
+                    return "MiniMax-H3 Ref2VA uses ordered image, video, or audio references instead of keyframes."
+                }
+                if (draft.h3ReferenceInputs ?? []).isEmpty {
+                    return "MiniMax-H3 Ref2VA requires at least one ordered reference."
+                }
+            } else if !draft.endImagePath.isBlank && draft.inputPath.isBlank {
                 return "A start image is required when an end keyframe is selected."
+            }
+            if family == .miniMaxH3FL2VA && !(draft.h3ReferenceInputs ?? []).isEmpty {
+                return "MiniMax-H3 FL2VA does not accept ordered references."
             }
         case .imageReconstruct3DMultiview:
             let views = pathList(draft.referenceImagePaths)
@@ -1315,6 +1437,11 @@ struct CommandTemplate: Identifiable, Equatable {
         case .modelRepairManifests:
             args = ["model", "repair-manifests"]
             if draft.force { args.append("--dry-run") }
+            if draft.json { args.append("--json") }
+
+        case .modelOptimize:
+            args = ["model", "optimize", draft.model]
+            if draft.force { args.append("--force") }
             if draft.json { args.append("--json") }
 
         case .imageGenerate:
@@ -1568,6 +1695,9 @@ struct CommandTemplate: Identifiable, Equatable {
             case .hide:
                 args.append("--no-thinking")
             }
+            if let reasoningEffort = draft.reasoningEffort {
+                args += ["--reasoning-effort", format(reasoningEffort)]
+            }
             if !draft.tools.isBlank { args += ["--tools", draft.tools] }
             if draft.toolLoop { args.append("--tool-loop") }
             if draft.allowShellExec { args.append("--allow-shell-exec") }
@@ -1624,12 +1754,17 @@ struct CommandTemplate: Identifiable, Equatable {
                 "--learning-rate", format(draft.learningRate),
                 "--rank", String(draft.rank),
                 "--max-sequence-length", String(draft.maxSequenceLength),
-                "--seed", draft.seed,
-                "--target-modules", draft.targetModules
+                "--seed", draft.seed
             ]
             if !draft.modelRoot.isBlank { args += ["--model-path", draft.modelRoot] }
             if !draft.evalPath.isBlank { args += ["--eval", draft.evalPath] }
             if draft.alpha > 0 { args += ["--alpha", format(draft.alpha)] }
+            if let reasoningEffort = draft.reasoningEffort {
+                args += ["--reasoning-effort", format(reasoningEffort)]
+            }
+            if !draft.targetModules.isBlank {
+                args += ["--target-modules", draft.targetModules]
+            }
             if draft.dryRun { args.append("--dry-run") }
             if draft.visualize {
                 args += ["--visualize", "--visualize-port", String(draft.visualizePort)]
@@ -1678,7 +1813,19 @@ struct CommandTemplate: Identifiable, Equatable {
         case .speechDiarize:
             args = ["speech", "diarize", draft.inputPath]
             if !draft.model.isBlank { args += ["--model", draft.model] }
+            if let outputFormat = draft.speechDiarizationFormat {
+                args += ["--format", outputFormat]
+            }
             if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            if let threshold = draft.speechDiarizationThreshold {
+                args += ["--threshold", format(threshold)]
+            }
+            if let minimumDuration = draft.speechDiarizationMinDuration {
+                args += ["--min-duration", format(minimumDuration)]
+            }
+            if let mergeGap = draft.speechDiarizationMergeGap {
+                args += ["--merge-gap", format(mergeGap)]
+            }
             if draft.quiet { args.append("--quiet") }
 
         case .speechProfileList:
@@ -2081,8 +2228,9 @@ struct CommandTemplate: Identifiable, Equatable {
             args = ["video", "generate", draft.prompt]
             if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
             if !draft.model.isBlank { args += ["--model", draft.model] }
-            let isWan = draft.model.localizedCaseInsensitiveContains("wan")
-            if !isWan {
+            if !draft.modelRoot.isBlank { args += ["--model-root", draft.modelRoot] }
+            let family = StudioVideoModelFamily(model: draft.modelRoot.isBlank ? draft.model : draft.modelRoot)
+            if family == .ltx {
                 let quality = draft.audioPath.isBlank ? draft.videoQuality : .final
                 let outputMode = draft.audioPath.isBlank ? draft.videoOutputMode : .audioVideo
                 args += ["--quality", quality.rawValue, "--output-mode", outputMode.rawValue]
@@ -2093,17 +2241,27 @@ struct CommandTemplate: Identifiable, Equatable {
             } else {
                 args += ["--num-frames", String(draft.numFrames)]
             }
-            args += ["--fps", String(draft.fps)]
+            if !family.isMiniMaxH3 { args += ["--fps", String(draft.fps)] }
             if !draft.seed.isBlank { args += ["--seed", draft.seed] }
-            if !draft.secondaryText.isBlank { args += ["--negative-prompt", draft.secondaryText] }
-            if isWan {
+            if !family.isMiniMaxH3, !draft.secondaryText.isBlank {
+                args += ["--negative-prompt", draft.secondaryText]
+            }
+            if family == .wan {
                 args += [
                     "--steps", String(draft.steps),
                     "--guidance-scale", format(draft.cfgScale),
                     "--shift", format(draft.scheduleShift)
                 ]
             }
-            if !draft.audioPath.isBlank {
+            if family.isMiniMaxH3 {
+                if let h3Steps = draft.h3Steps { args += ["--steps", String(h3Steps)] }
+                if let weightMode = draft.h3WeightMode, !weightMode.isBlank {
+                    args += ["--h3-weight-mode", weightMode]
+                }
+                for reference in draft.h3ReferenceInputs ?? [] where !reference.isBlank {
+                    args += ["--reference", reference]
+                }
+            } else if !draft.audioPath.isBlank {
                 args += [
                     "--audio", draft.audioPath,
                     "--audio-start-time", format(draft.audioStartTime),
@@ -2125,8 +2283,8 @@ struct CommandTemplate: Identifiable, Equatable {
                 args.append("--preflight")
                 if draft.json { args.append("--json") }
             }
-            if draft.timings { args.append("--timings") }
-            if !draft.timingsOutputPath.isBlank {
+            if !family.isMiniMaxH3, draft.timings { args.append("--timings") }
+            if !family.isMiniMaxH3, !draft.timingsOutputPath.isBlank {
                 args += ["--timings-output", draft.timingsOutputPath]
             }
             if draft.quiet { args.append("--quiet") }
@@ -2265,6 +2423,27 @@ struct CommandTemplate: Identifiable, Equatable {
             if draft.preflight, draft.json { args.append("--json") }
             if draft.quiet { args.append("--quiet") }
 
+        case .audioEnhance:
+            args = ["audio", "enhance", draft.inputPath]
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            if !draft.modelRoot.isBlank { args += ["--model-path", draft.modelRoot] }
+            if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            if let overlap = draft.audioOverlap { args += ["--overlap", String(overlap)] }
+            if let inputRate = draft.audioInputRate { args += ["--input-rate", String(inputRate)] }
+            if let method = draft.audioODEMethod, !method.isBlank {
+                args += ["--ode-method", method]
+            }
+            if let steps = draft.audioODESteps { args += ["--ode-steps", String(steps)] }
+            if let guidance = draft.audioGuidanceScale {
+                args += ["--guidance-scale", format(guidance)]
+            }
+            if !draft.seed.isBlank { args += ["--seed", draft.seed] }
+            if let seconds = draft.audioChunkSeconds {
+                args += ["--chunk-seconds", String(seconds)]
+            }
+            if let dtype = draft.audioDType, !dtype.isBlank { args += ["--dtype", dtype] }
+            if draft.quiet { args.append("--quiet") }
+
         case .musicAnalyze:
             args = ["music", "analyze", draft.inputPath]
             if !draft.model.isBlank { args += ["--model", draft.model] }
@@ -2320,6 +2499,15 @@ struct CommandTemplate: Identifiable, Equatable {
             if !draft.musicContextOutput.isBlank {
                 args += ["--context-output", draft.musicContextOutput]
             }
+            if draft.quiet { args.append("--quiet") }
+
+        case .musicSeparate:
+            args = ["music", "separate", draft.inputPath]
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            if !draft.modelRoot.isBlank { args += ["--model-path", draft.modelRoot] }
+            if !draft.outputPath.isBlank { args += ["--output-dir", draft.outputPath] }
+            if let overlap = draft.audioOverlap { args += ["--overlap", String(overlap)] }
+            if let dtype = draft.audioDType, !dtype.isBlank { args += ["--dtype", dtype] }
             if draft.quiet { args.append("--quiet") }
 
         case .musicRealtime:
@@ -2801,6 +2989,8 @@ extension CommandTemplate {
             return .speak
         case .speechTranscribe, .speechDiarize:
             return .listen
+        case .audioEnhance:
+            return .listen
 
         case .visionGround:
             return .findObjects
@@ -2825,6 +3015,7 @@ extension CommandTemplate {
         case .musicGenerate,
              .musicAnalyze,
              .musicTranscribe,
+             .musicSeparate,
              .musicRealtime,
              .musicTrainAdapter,
              .musicServe:
@@ -2858,6 +3049,7 @@ extension CommandTemplate {
              .modelInfo,
              .modelRemove,
              .modelRepairManifests,
+             .modelOptimize,
              .adapterList,
              .adapterPull,
              .runList,
@@ -2959,6 +3151,14 @@ enum CommandCatalog {
         CommandTemplate(id: .modelInfo, category: .models, title: "Model info", subtitle: "Manifest and validation report", systemImage: "info.circle", defaultModel: "image-zimage-nano"),
         CommandTemplate(id: .modelRemove, category: .models, title: "Remove model", subtitle: "Delete a local model install", systemImage: "trash", defaultModel: "image-zimage-nano"),
         CommandTemplate(id: .modelRepairManifests, category: .models, title: "Repair manifests", subtitle: "Write missing known model manifests", systemImage: "wrench.and.screwdriver"),
+        CommandTemplate(
+            id: .modelOptimize,
+            category: .models,
+            title: "Optimize MiniMax-H3",
+            subtitle: "Build or replace the inference-only AdaLN cache",
+            systemImage: "bolt.badge.clock",
+            defaultModel: "video-minimax-h3-fl2va-mlx"
+        ),
         CommandTemplate(
             id: .imageGenerate,
             category: .image,
@@ -3311,6 +3511,16 @@ enum CommandCatalog {
             defaultModel: "vision-geometry-da3-small"
         ),
         CommandTemplate(
+            id: .audioEnhance,
+            category: .media,
+            title: "Enhance audio",
+            subtitle: "AP-BWE speech extension or UniverSR restoration",
+            systemImage: "waveform.badge.plus",
+            inputKind: .audio,
+            outputKind: .file("wav"),
+            defaultModel: "audio-enhance-ap-bwe-16kto48k"
+        ),
+        CommandTemplate(
             id: .musicGenerate,
             category: .media,
             title: "Generate music",
@@ -3326,7 +3536,7 @@ enum CommandCatalog {
             id: .videoGenerate,
             category: .media,
             title: "Generate video",
-            subtitle: "LTX or Wan text, image, keyframe, and audio generation",
+            subtitle: "LTX, Wan, or synchronized MiniMax-H3 generation",
             systemImage: "film",
             promptLabel: "Prompt",
             secondaryLabel: "Negative prompt",
@@ -3560,6 +3770,16 @@ enum CommandCatalog {
             inputKind: .audio,
             outputKind: .file("mid"),
             defaultModel: "music-muscriptor-medium"
+        ),
+        CommandTemplate(
+            id: .musicSeparate,
+            category: .media,
+            title: "Separate or restore",
+            subtitle: "RoFormer stems, dereverb, and denoise",
+            systemImage: "slider.horizontal.3",
+            inputKind: .audio,
+            outputKind: .directory,
+            defaultModel: "music-separate-bs-roformer-viperx-1297"
         ),
         CommandTemplate(
             id: .musicRealtime,

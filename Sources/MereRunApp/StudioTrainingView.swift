@@ -670,6 +670,12 @@ struct StudioTrainingSheet: View {
         VStack(alignment: .leading, spacing: MereRunTheme.Spacing.md) {
             Text("Text training")
                 .font(MereRunTheme.sectionFont)
+            Picker("Base family", selection: $textDraft.model) {
+                Text("Gemma 4").tag("text-chat-gemma4-12b-4bit")
+                Text("Laguna XS 2.1").tag("text-chat-laguna-xs-2-1")
+                Text("Inkling-Small").tag("text-chat-inkling-small")
+            }
+            .pickerStyle(.segmented)
             labeledTextField("Base model", placeholder: "Managed text model", text: $textDraft.model)
             StudioPathField(
                 label: "Local model path",
@@ -687,9 +693,21 @@ struct StudioTrainingSheet: View {
             )
             labeledTextField(
                 "Target modules",
-                placeholder: "q_proj,k_proj,v_proj,o_proj",
+                placeholder: "Model-family defaults",
                 text: $textDraft.targetModules
             )
+            Text("Leave target modules empty for the native family recipe. Inkling includes attention, MLP, routed/shared experts, and unembedding.")
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textMuted)
+            if textDraft.model.localizedCaseInsensitiveContains("inkling") {
+                numberField(
+                    "Reasoning effort",
+                    value: Binding(
+                        get: { textDraft.reasoningEffort ?? 0.9 },
+                        set: { textDraft.reasoningEffort = min(max($0, 0), 0.99) }
+                    )
+                )
+            }
             StudioPathField(
                 label: "Evaluation prompts",
                 placeholder: "Optional eval JSON or JSONL",

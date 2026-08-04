@@ -443,6 +443,8 @@ private struct CommandEditor: View {
             SpeechOptions()
         case .speechTranscribe:
             SpeechTranscribeOptions()
+        case .speechDiarize:
+            SpeechDiarizationOptions()
         case .speechProfileCreate:
             SpeechProfileCreateOptions()
         case .visionSegment, .visionTrack, .visionTrackLive:
@@ -459,12 +461,16 @@ private struct CommandEditor: View {
             VisionGeometryOptions()
         case .visionGeometryMultiview:
             VisionMultiviewOptions()
+        case .audioEnhance:
+            AudioEnhancementOptions()
         case .musicGenerate:
             MusicGenerationOptions()
         case .musicAnalyze:
             MusicAnalysisOptions()
         case .musicTranscribe:
             MusicTranscriptionOptions()
+        case .musicSeparate:
+            MusicSeparationOptions()
         case .musicRealtime:
             MusicRealtimeOptions()
         case .musicTrainAdapter:
@@ -499,6 +505,8 @@ private struct CommandEditor: View {
             QualityGateOptions()
         case .modelStorage, .modelGarbageCollect:
             ModelStorageOptions()
+        case .modelOptimize:
+            ModelOptimizeOptions()
         case .modelRuntimeGet, .modelRuntimeSet:
             ModelRuntimePolicyOptions()
         case .sfxGenerate, .sfxVideo:
@@ -1799,6 +1807,15 @@ private struct TextGenerationOptions: View {
                         Text("Disable").tag(TextThinkingMode.hide)
                     }
                     .pickerStyle(.segmented)
+                    if controller.draft.model.localizedCaseInsensitiveContains("inkling") {
+                        NumberField(
+                            title: "Inkling reasoning effort",
+                            value: Binding(
+                                get: { controller.draft.reasoningEffort ?? 0.9 },
+                                set: { controller.draft.reasoningEffort = min(max($0, 0), 0.99) }
+                            )
+                        )
+                    }
                     AdaptiveControlRow {
                         NumberStepper(
                             title: "Context",
@@ -1900,6 +1917,12 @@ private struct TextLoRATrainingOptions: View {
     var body: some View {
         EditorSection("Training") {
             VStack(spacing: 10) {
+                Picker("Base family", selection: $controller.draft.model) {
+                    Text("Gemma 4 12B").tag("text-chat-gemma4-12b-4bit")
+                    Text("Laguna XS 2.1").tag("text-chat-laguna-xs-2-1")
+                    Text("Inkling-Small").tag("text-chat-inkling-small")
+                }
+                .pickerStyle(.segmented)
                 PathField(
                     path: $controller.draft.modelRoot,
                     placeholder: "Explicit base model directory (optional)",
@@ -1952,6 +1975,18 @@ private struct TextLoRATrainingOptions: View {
                     .textFieldStyle(.plain)
                     .padding(10)
                     .merePanel()
+                Text("Leave target modules empty for the model-family defaults. Inkling includes attention, MLP, routed/shared experts, and unembedding.")
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.textMuted)
+                if controller.draft.model.localizedCaseInsensitiveContains("inkling") {
+                    NumberField(
+                        title: "Reasoning effort",
+                        value: Binding(
+                            get: { controller.draft.reasoningEffort ?? 0.9 },
+                            set: { controller.draft.reasoningEffort = min(max($0, 0), 0.99) }
+                        )
+                    )
+                }
                 AdaptiveControlRow {
                     Toggle("Dry run", isOn: $controller.draft.dryRun)
                     Toggle("Visualize", isOn: $controller.draft.visualize)
@@ -2075,6 +2110,52 @@ private struct SpeechTranscribeOptions: View {
                             step: 1_000
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+private struct SpeechDiarizationOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("Speaker diarization") {
+            VStack(spacing: 10) {
+                Picker(
+                    "Format",
+                    selection: Binding(
+                        get: { controller.draft.speechDiarizationFormat ?? "json" },
+                        set: { controller.draft.speechDiarizationFormat = $0 }
+                    )
+                ) {
+                    Text("JSON").tag("json")
+                    Text("RTTM").tag("rttm")
+                }
+                .pickerStyle(.segmented)
+                AdaptiveControlRow {
+                    NumberField(
+                        title: "Activity threshold",
+                        value: Binding(
+                            get: { controller.draft.speechDiarizationThreshold ?? 0.5 },
+                            set: { controller.draft.speechDiarizationThreshold = $0 }
+                        )
+                    )
+                    NumberField(
+                        title: "Minimum seconds",
+                        value: Binding(
+                            get: { controller.draft.speechDiarizationMinDuration ?? 0.25 },
+                            set: { controller.draft.speechDiarizationMinDuration = $0 }
+                        )
+                    )
+                    NumberField(
+                        title: "Merge gap",
+                        value: Binding(
+                            get: { controller.draft.speechDiarizationMergeGap ?? 0.25 },
+                            set: { controller.draft.speechDiarizationMergeGap = $0 }
+                        )
+                    )
+                    Toggle("Quiet", isOn: $controller.draft.quiet)
                 }
             }
         }
@@ -3276,52 +3357,195 @@ private struct SFXOptions: View {
     }
 }
 
+private struct AudioEnhancementOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    private var isUniverSR: Bool {
+        controller.draft.model.localizedCaseInsensitiveContains("universr")
+    }
+
+    var body: some View {
+        EditorSection("Audio enhancement") {
+            VStack(spacing: 10) {
+                Picker("Workflow", selection: $controller.draft.model) {
+                    Text("Speech · AP-BWE").tag("audio-enhance-ap-bwe-16kto48k")
+                    Text("General audio · UniverSR").tag("audio-enhance-universr-audio")
+                }
+                .pickerStyle(.segmented)
+                PathField(
+                    path: $controller.draft.modelRoot,
+                    placeholder: "Explicit model directory (optional)",
+                    mode: .openDirectory
+                )
+                Picker(
+                    "Compute",
+                    selection: Binding(
+                        get: { controller.draft.audioDType ?? "float32" },
+                        set: { controller.draft.audioDType = $0 }
+                    )
+                ) {
+                    Text("Float 16").tag("float16")
+                    Text("Float 32").tag("float32")
+                }
+                .pickerStyle(.segmented)
+                if isUniverSR {
+                    Picker(
+                        "Input bandwidth",
+                        selection: Binding(
+                            get: { controller.draft.audioInputRate ?? 0 },
+                            set: { controller.draft.audioInputRate = $0 == 0 ? nil : $0 }
+                        )
+                    ) {
+                        Text("Auto").tag(0)
+                        Text("8 kHz").tag(8_000)
+                        Text("12 kHz").tag(12_000)
+                        Text("16 kHz").tag(16_000)
+                        Text("24 kHz").tag(24_000)
+                    }
+                    Picker(
+                        "ODE method",
+                        selection: Binding(
+                            get: { controller.draft.audioODEMethod ?? "midpoint" },
+                            set: { controller.draft.audioODEMethod = $0 }
+                        )
+                    ) {
+                        Text("Euler").tag("euler")
+                        Text("Midpoint").tag("midpoint")
+                        Text("RK4").tag("rk4")
+                    }
+                    .pickerStyle(.segmented)
+                    AdaptiveControlRow {
+                        NumberStepper(
+                            title: "ODE steps",
+                            value: Binding(
+                                get: { controller.draft.audioODESteps ?? 4 },
+                                set: { controller.draft.audioODESteps = $0 }
+                            ),
+                            range: 1...100,
+                            step: 1
+                        )
+                        NumberStepper(
+                            title: "Chunk seconds",
+                            value: Binding(
+                                get: { controller.draft.audioChunkSeconds ?? 10 },
+                                set: { controller.draft.audioChunkSeconds = $0 }
+                            ),
+                            range: 3...600,
+                            step: 1
+                        )
+                        NumberField(
+                            title: "Guidance",
+                            value: Binding(
+                                get: { controller.draft.audioGuidanceScale ?? 1.5 },
+                                set: { controller.draft.audioGuidanceScale = $0 }
+                            )
+                        )
+                    }
+                    TextField("Seed", text: $controller.draft.seed)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
+                } else {
+                    NumberStepper(
+                        title: "Chunk overlap",
+                        value: Binding(
+                            get: { controller.draft.audioOverlap ?? 2 },
+                            set: { controller.draft.audioOverlap = $0 }
+                        ),
+                        range: 1...64,
+                        step: 1
+                    )
+                }
+                Toggle("Quiet", isOn: $controller.draft.quiet)
+            }
+        }
+    }
+}
+
+private struct MusicSeparationOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("Separation and restoration") {
+            VStack(spacing: 10) {
+                Picker("Workflow", selection: $controller.draft.model) {
+                    Text("Vocals + instrumental").tag("music-separate-bs-roformer-viperx-1297")
+                    Text("Four stems").tag("music-separate-bs-roformer-4stem")
+                    Text("Dereverb").tag("music-separate-mel-roformer-dereverb")
+                    Text("Denoise").tag("music-separate-mel-roformer-denoise")
+                }
+                PathField(
+                    path: $controller.draft.modelRoot,
+                    placeholder: "Explicit model directory (optional)",
+                    mode: .openDirectory
+                )
+                AdaptiveControlRow {
+                    NumberStepper(
+                        title: "Chunk overlap",
+                        value: Binding(
+                            get: { controller.draft.audioOverlap ?? 2 },
+                            set: { controller.draft.audioOverlap = $0 }
+                        ),
+                        range: 1...64,
+                        step: 1
+                    )
+                    Picker(
+                        "Compute",
+                        selection: Binding(
+                            get: { controller.draft.audioDType ?? "float16" },
+                            set: { controller.draft.audioDType = $0 }
+                        )
+                    ) {
+                        Text("Float 16").tag("float16")
+                        Text("Float 32").tag("float32")
+                    }
+                }
+                Toggle("Quiet", isOn: $controller.draft.quiet)
+            }
+        }
+    }
+}
+
+private struct ModelOptimizeOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("Optimization") {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Build the MiniMax-H3 inference-only AdaLN cache. The original model remains intact.")
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.textMuted)
+                AdaptiveControlRow {
+                    Toggle("Replace compatible cache", isOn: $controller.draft.force)
+                    Toggle("JSON result", isOn: $controller.draft.json)
+                }
+            }
+        }
+    }
+}
+
 private struct VideoOptions: View {
     @EnvironmentObject private var controller: MereRunController
+
+    private var family: StudioVideoModelFamily {
+        StudioVideoModelFamily(
+            model: controller.draft.modelRoot.isBlank
+                ? controller.draft.model
+                : controller.draft.modelRoot
+        )
+    }
 
     var body: some View {
         EditorSection("Video") {
             VStack(spacing: 10) {
-                Picker("Quality", selection: $controller.draft.videoQuality) {
-                    Text("Draft").tag(LTXVideoQuality.draft)
-                    Text("Final").tag(LTXVideoQuality.final)
-                }
-                .pickerStyle(.segmented)
-                Picker("Output", selection: $controller.draft.videoOutputMode) {
-                    Text("Video").tag(LTXVideoOutputMode.videoOnly)
-                    Text("Audio + Video").tag(LTXVideoOutputMode.audioVideo)
-                }
-                .pickerStyle(.segmented)
-                PathField(
-                    path: $controller.draft.audioPath,
-                    placeholder: "Source audio for A2V (optional)",
-                    mode: .openFile([.audio])
-                )
-                PathField(
-                    path: $controller.draft.endImagePath,
-                    placeholder: "End keyframe (optional)",
-                    mode: .openFile([.image])
-                )
-                AdaptiveControlRow {
-                    NumberStepper(title: "Frames", value: $controller.draft.numFrames, range: 9...257, step: 8)
-                    NumberStepper(title: "FPS", value: $controller.draft.fps, range: 1...60, step: 1)
-                    NumberField(title: "Image strength", value: $controller.draft.strength)
+                if family.isMiniMaxH3 {
+                    miniMaxH3Options
+                } else {
+                    ltxAndWanOptions
                 }
                 Toggle("Use duration instead of frame count", isOn: $controller.draft.useDuration)
                 if controller.draft.useDuration {
                     NumberField(title: "Duration", value: $controller.draft.durationSeconds)
-                }
-                if !controller.draft.audioPath.isBlank {
-                    AdaptiveControlRow {
-                        NumberField(title: "Audio start", value: $controller.draft.audioStartTime)
-                        NumberStepper(title: "A2V steps", value: $controller.draft.a2vSteps, range: 1...100, step: 1)
-                    }
-                    AdaptiveControlRow {
-                        NumberField(title: "A2V", value: $controller.draft.a2vGuidanceScale)
-                        NumberField(title: "Video CFG", value: $controller.draft.videoCFGGuidanceScale)
-                        NumberField(title: "Audio CFG", value: $controller.draft.audioCFGGuidanceScale)
-                        NumberField(title: "V2A", value: $controller.draft.v2aGuidanceScale)
-                    }
                 }
                 if !controller.draft.endImagePath.isBlank {
                     NumberField(title: "End image strength", value: $controller.draft.endImageStrength)
@@ -3334,10 +3558,12 @@ private struct VideoOptions: View {
                     Toggle("Preflight", isOn: $controller.draft.preflight)
                     Toggle("JSON", isOn: $controller.draft.json)
                         .disabled(!controller.draft.preflight)
-                    Toggle("Timings", isOn: $controller.draft.timings)
+                    if !family.isMiniMaxH3 {
+                        Toggle("Timings", isOn: $controller.draft.timings)
+                    }
                     Toggle("Quiet", isOn: $controller.draft.quiet)
                 }
-                if controller.draft.timings {
+                if !family.isMiniMaxH3, controller.draft.timings {
                     PathField(
                         path: $controller.draft.timingsOutputPath,
                         placeholder: "Timing report JSON (optional)",
@@ -3346,6 +3572,203 @@ private struct VideoOptions: View {
                 }
             }
         }
+        .onAppear(perform: normalizeMiniMaxH3Geometry)
+        .onChange(of: controller.draft.model) { _, _ in normalizeMiniMaxH3Geometry() }
+        .onChange(of: controller.draft.modelRoot) { _, _ in normalizeMiniMaxH3Geometry() }
+    }
+
+    @ViewBuilder
+    private var ltxAndWanOptions: some View {
+        if family == .ltx {
+            Picker("Quality", selection: $controller.draft.videoQuality) {
+                Text("Draft").tag(LTXVideoQuality.draft)
+                Text("Final").tag(LTXVideoQuality.final)
+            }
+            .pickerStyle(.segmented)
+            Picker("Output", selection: $controller.draft.videoOutputMode) {
+                Text("Video").tag(LTXVideoOutputMode.videoOnly)
+                Text("Audio + Video").tag(LTXVideoOutputMode.audioVideo)
+            }
+            .pickerStyle(.segmented)
+            PathField(
+                path: $controller.draft.audioPath,
+                placeholder: "Source audio for A2V (optional)",
+                mode: .openFile([.audio])
+            )
+        }
+        PathField(
+            path: $controller.draft.endImagePath,
+            placeholder: "End keyframe (optional)",
+            mode: .openFile([.image])
+        )
+        AdaptiveControlRow {
+            NumberStepper(title: "Frames", value: $controller.draft.numFrames, range: 5...601, step: family == .wan ? 4 : 8)
+            NumberStepper(title: "FPS", value: $controller.draft.fps, range: 1...60, step: 1)
+            NumberField(title: "Image strength", value: $controller.draft.strength)
+        }
+        if family == .wan {
+            AdaptiveControlRow {
+                NumberStepper(title: "Steps", value: $controller.draft.steps, range: 1...100, step: 1)
+                NumberField(title: "Guidance", value: $controller.draft.cfgScale)
+                NumberField(title: "Shift", value: $controller.draft.scheduleShift)
+            }
+        }
+        if family == .ltx, !controller.draft.audioPath.isBlank {
+            AdaptiveControlRow {
+                NumberField(title: "Audio start", value: $controller.draft.audioStartTime)
+                NumberStepper(title: "A2V steps", value: $controller.draft.a2vSteps, range: 1...100, step: 1)
+            }
+            AdaptiveControlRow {
+                NumberField(title: "A2V", value: $controller.draft.a2vGuidanceScale)
+                NumberField(title: "Video CFG", value: $controller.draft.videoCFGGuidanceScale)
+                NumberField(title: "Audio CFG", value: $controller.draft.audioCFGGuidanceScale)
+                NumberField(title: "V2A", value: $controller.draft.v2aGuidanceScale)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var miniMaxH3Options: some View {
+        Text("MiniMax-H3 renders synchronized 24 fps video and 32 kHz stereo audio in one pass.")
+            .font(MereRunTheme.captionFont)
+            .foregroundStyle(MereRunTheme.textMuted)
+        Picker(
+            "Transformer weights",
+            selection: Binding(
+                get: { controller.draft.h3WeightMode ?? "auto" },
+                set: { controller.draft.h3WeightMode = $0 }
+            )
+        ) {
+            Text("Automatic").tag("auto")
+            Text("Quantized").tag("quantized")
+            Text("Resident BF16").tag("resident-bf16")
+        }
+        .pickerStyle(.segmented)
+        Toggle(
+            "Override adaptive 9 / 16 / 31-point schedule",
+            isOn: Binding(
+                get: { controller.draft.h3Steps != nil },
+                set: { controller.draft.h3Steps = $0 ? 31 : nil }
+            )
+        )
+        if controller.draft.h3Steps != nil {
+            NumberStepper(
+                title: "Schedule points",
+                value: Binding(
+                    get: { controller.draft.h3Steps ?? 31 },
+                    set: { controller.draft.h3Steps = $0 }
+                ),
+                range: 1...64,
+                step: 1
+            )
+        }
+        AdaptiveControlRow {
+            NumberStepper(
+                title: "Frames (17n+5)",
+                value: $controller.draft.numFrames,
+                range: 22...600,
+                step: 17
+            )
+            Text("24 fps fixed")
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textMuted)
+            NumberField(title: "Image strength", value: $controller.draft.strength)
+        }
+        if family == .miniMaxH3Ref2VA {
+            MiniMaxH3ReferencesEditor(references: $controller.draft.h3ReferenceInputs)
+        } else {
+            PathField(
+                path: $controller.draft.endImagePath,
+                placeholder: "Optional final keyframe",
+                mode: .openFile([.image])
+            )
+        }
+    }
+
+    private func normalizeMiniMaxH3Geometry() {
+        guard family.isMiniMaxH3 else { return }
+        controller.draft.fps = 24
+        controller.draft.width = max(32, (controller.draft.width / 32) * 32)
+        controller.draft.height = max(32, (controller.draft.height / 32) * 32)
+        controller.draft.numFrames = StudioVideoModelFamily.alignedMiniMaxH3FrameCount(
+            controller.draft.numFrames
+        )
+        controller.draft.audioPath = ""
+        controller.draft.timings = false
+        controller.draft.timingsOutputPath = ""
+        if family == .miniMaxH3Ref2VA {
+            controller.draft.inputPath = ""
+            controller.draft.endImagePath = ""
+        } else {
+            controller.draft.h3ReferenceInputs = []
+        }
+    }
+}
+
+private struct MiniMaxH3ReferencesEditor: View {
+    @Binding var references: [String]?
+
+    private var values: [String] { references ?? [] }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Ordered Ref2VA conditioning")
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textMuted)
+            ForEach(Array(values.enumerated()), id: \.offset) { index, value in
+                HStack(spacing: 6) {
+                    Text(referenceLabel(value))
+                        .font(MereRunTheme.captionFont)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer()
+                    Button { move(index, by: -1) } label: { Image(systemName: "arrow.up") }
+                        .disabled(index == 0)
+                    Button { move(index, by: 1) } label: { Image(systemName: "arrow.down") }
+                        .disabled(index == values.count - 1)
+                    Button(role: .destructive) { remove(index) } label: { Image(systemName: "trash") }
+                }
+                .padding(8)
+                .merePanel()
+            }
+            HStack {
+                Button("Add image") { choose(kind: "image", types: [.image]) }
+                Button("Add video") { choose(kind: "video", types: [.movie, .video]) }
+                Button("Add audio") { choose(kind: "audio", types: [.audio]) }
+            }
+            .buttonStyle(.bordered)
+            Text("Order is semantic and is preserved exactly in repeated --reference arguments.")
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textMuted)
+        }
+    }
+
+    private func choose(kind: String, types: [UTType]) {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = types
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        references = values + ["\(kind):\(url.path)"]
+    }
+
+    private func move(_ index: Int, by offset: Int) {
+        var next = values
+        next.swapAt(index, index + offset)
+        references = next
+    }
+
+    private func remove(_ index: Int) {
+        var next = values
+        next.remove(at: index)
+        references = next
+    }
+
+    private func referenceLabel(_ specification: String) -> String {
+        guard let split = specification.firstIndex(of: ":") else { return specification }
+        let kind = String(specification[..<split]).capitalized
+        let path = String(specification[specification.index(after: split)...])
+        return "\(kind) · \(URL(fileURLWithPath: path).lastPathComponent)"
     }
 }
 
@@ -3781,6 +4204,21 @@ private struct WorldServeOptions: View {
 
     var body: some View {
         Group {
+            EditorSection("Diorama") {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text(
+                        "Diorama is the first-class Worlds app. mere.run Studio configures the local DreamX or Cosmos3 runtime endpoint; Diorama owns world projects, exploration, saved routes, and review."
+                    )
+                    .font(MereRunTheme.bodyFont)
+                    .foregroundStyle(MereRunTheme.textSecondary)
+                    Link(destination: StudioProductBoundary.dioramaURL) {
+                        Label("Open Diorama", systemImage: "arrow.up.right.square")
+                    }
+                }
+                .padding(14)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .merePanel()
+            }
             EditorSection("World runtime") {
                 VStack(spacing: 10) {
                     AdaptiveControlRow {

@@ -24,9 +24,12 @@ two products. `mere.run catalog --json` emits that same contract. App forms must
 use its typed choices, and CLI/App tests must prove that every emitted option is
 both cataloged and accepted by ArgumentParser.
 
-The primary Video surface uses `--quality` and `--output-mode`; it must never
-emit the legacy `--variant` compatibility selector. Its attachment workflow
-supports a start image, end keyframe, and source audio. Advanced Video contains
+The primary Video surface uses model-family-aware controls: LTX uses `--quality`
+and `--output-mode`, while native MiniMax-H3 exposes its exact `17*n+5` frame
+cadence, adaptive or explicit denoising schedule, weight-residency policy, and
+ordered Ref2VA image/video/audio references without emitting incompatible LTX
+flags. Its general attachment workflow supports a start image, end keyframe,
+and source audio. Advanced Video contains
 guided SCAIL-2, Cosmos3, mask-preparation, latent-export, and resident-session
 workflows. Video also opens a first-class SCAIL Subject Studio with multi-subject
 reference/selector authoring, preview and full-video SAM tracking, immutable
@@ -38,7 +41,10 @@ anonymization, and text-LoRA training. Chat exposes typed text/JSON response
 format, reasoning policy, context and KV controls, LoRA application, tool
 permissions, and preflight. The first-class Utility Lab adds vector norms and
 cosine-similarity inspection plus original/protected PII span review. Training
-opens the unified Training Studio rather than a generic form.
+opens the unified Training Studio rather than a generic form. Laguna XS and
+Inkling-Small are explicit model families; Inkling reasoning effort is available
+in chat and training, while omitted target modules preserve the runtime's full
+attention, MLP, expert, shared-outer, and unembedding training defaults.
 
 Image uses the shared contract for generation/editing, LoRA training,
 validation, dataset discovery, durable plans and dashboards, TripoSR,
@@ -61,6 +67,10 @@ results, MuScriptor transcription with an embedded MIDI piano roll, and resident
 server health and lifecycle. Realtime opens the dedicated Magenta RT2 workspace;
 Training opens the shared LoRA/LoKr studio with dataset audio previews and live
 loss events. Advanced retains the complete raw command surface.
+Audio Lab is the first-class restoration workspace for native AP-BWE and
+UniverSR enhancement plus ViperX two-stem, four-stem, dereverb, and denoise
+RoFormer workflows. It exposes model-specific compute/chunk controls, previews
+source and outputs, and preserves manifests and every generated stem in Library.
 The API key is injected through `MERERUN_API_KEY`, never placed in process
 arguments.
 
@@ -88,14 +98,22 @@ identity, placement, scheduling policy, model distribution, worker lifecycle,
 and fleet telemetry. The app links to the Relay console instead of copying
 those schemas or controls.
 
+Diorama is the separate first-class Worlds app and owns durable world projects,
+navigation, exploration, saved routes, review, and `.diorama` bundles. Studio
+owns only the typed local `world serve` runtime endpoint, authentication, model
+selection, status, and the handoff to `https://diorama.mere.run`; it must not
+duplicate Diorama's product experience.
+
 Models includes one-click managed downloads with live CLI output, explicit
-explicit third-party terms acceptance, cancellation with resumable partials, and a
+third-party terms acceptance, cancellation with resumable partials, and a
 dedicated Health & Repair workspace. Successful downloads refresh the inventory
 without reopening the sheet. Manifest audit is a structured dry run, repair
 requires confirmation and writes only missing known manifests, and
 installed-model correctness/performance gates run as durable Library jobs with
 JSON reports. Existing model browsing, storage cleanup, and runtime policy
 remain in the Models and Serving destinations rather than being duplicated.
+Installed MiniMax-H3 models expose a native optimize/rebuild action with streamed
+receipts instead of requiring a terminal round trip.
 
 Serving is also a top-level first-class destination. **Serving & Agents**
 owns API preflight/start/stop/restart, external-server reconnection, LAN/auth
@@ -109,7 +127,8 @@ CLI/runtime remains the behavioral source of truth.
 
 Voice Studio is the first-class path for styled or cloned synthesis, reusable
 profiles, reference recording, streaming feedback, A/B playback, file/live
-transcription, and transcript editing. SFX Lab covers text generation, video
+transcription, transcript editing, and native Sortformer speaker diarization
+with JSON/RTTM timelines and segment-tuning controls. SFX Lab covers text generation, video
 Foley, conditioning, AE encode/decode, CLAP scoring, waveform review, NPY
 metadata, and durable artifacts. The packaged app and embedded CLI carry the
 microphone usage description and audio-input entitlement required by those
