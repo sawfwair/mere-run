@@ -474,4 +474,24 @@ final class SFXGenerateCommandParsingTests: XCTestCase {
             XCTAssertTrue(FileManager.default.createFile(atPath: url.path, contents: Data()))
         }
     }
+
+    func testPeakLevelIgnoresNonFiniteSamples() {
+        let samples: [Float] = [0.2, -0.35, .nan, .infinity, 0.1]
+        XCTAssertEqual(SFXWAVWriter.peakLevel(of: samples), 0.35, accuracy: 0.0001)
+    }
+
+    func testInaudibleThresholdSeparatesObservedWooshOutput() {
+        // Measured on sfx-woosh-dflow, v0.34.0. Generations the model has coverage for
+        // peak well above the threshold; prompts it does not collapse an order of
+        // magnitude below it, with nothing in between.
+        let audible: [Float] = [0.1822, 0.2043, 0.2271, 0.5479, 0.6481, 0.8740, 0.8930]
+        let inaudible: [Float] = [0.0027, 0.0117, 0.0154, 0.0081, 0.0022]
+
+        for peak in audible {
+            XCTAssertGreaterThan(peak, SFXWAVWriter.inaudiblePeakThreshold)
+        }
+        for peak in inaudible {
+            XCTAssertLessThan(peak, SFXWAVWriter.inaudiblePeakThreshold)
+        }
+    }
 }

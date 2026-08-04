@@ -247,7 +247,27 @@ enum SFXMMAudioRuntime {
 }
 
 enum SFXWAVWriter {
+    /// Peak below which a generation is almost certainly inaudible.
+    ///
+    /// Woosh output is bimodal: usable generations peak between roughly 0.18 and 1.0,
+    /// while out-of-distribution prompts collapse to about 0.01. Nothing lands in
+    /// between, so the exact threshold only has to sit in the gap.
+    ///
+    /// The usual cause is prompt style. Woosh trains on caption datasets (AudioCaps,
+    /// WavCaps, Freesound), so "A piano lid closing" peaks at 1.0 while the same words
+    /// as a bare tag list, "grand piano lid closing", peak at 0.015.
+    static let inaudiblePeakThreshold: Float = 0.05
+
+    static func peakLevel(of samples: [Float]) -> Float {
+        var peak: Float = 0
+        for sample in samples where sample.isFinite {
+            peak = max(peak, abs(sample))
+        }
+        return peak
+    }
+
     static func writeMonoPCM16(samples: [Float], to url: URL, sampleRate: Int) throws {
+        warnIfInaudible(samples)
         let normalized = peakNormalized(samples)
         let int16Samples = normalized.map { sample -> Int16 in
             let finiteSample = sample.isFinite ? sample : 0
@@ -280,6 +300,22 @@ enum SFXWAVWriter {
             append(sample, to: &data)
         }
         try data.write(to: url)
+    }
+
+    private static func warnIfInaudible(_ samples: [Float]) {
+        let peak = peakLevel(of: samples)
+        guard peak < inaudiblePeakThreshold else { return }
+        let level = peak > 0
+            ? String(format: "%.4f (%.1f dBFS)", peak, 20 * log10(peak))
+            : "0.0000 (silent)"
+        let message = """
+            Warning: generated audio peaks at \(level) and is likely inaudible. \
+            Woosh is trained on caption-style descriptions, so bare keywords and \
+            comma-separated tags fall out of distribution. Try a natural phrase, \
+            for example "A piano lid closing" rather than "piano lid closing".
+
+            """
+        FileHandle.standardError.write(Data(message.utf8))
     }
 
     private static func peakNormalized(_ samples: [Float]) -> [Float] {
