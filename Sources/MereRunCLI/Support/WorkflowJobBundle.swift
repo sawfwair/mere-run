@@ -702,6 +702,7 @@ struct WorkflowBundleMaterializer {
             switch node.kind {
             case "image.train-lora": return ImageTrainLoRA.defaultManagedModelID.rawValue
             case "image.generate": return ImageGenerate.defaultManagedModelID.rawValue
+            case "vision.ground": return VisionGround.defaultManagedModelID.rawValue
             case "video.generate": return ModelResolver.ModelID.ltxVideo23AVMLX.rawValue
             default: return nil
             }
@@ -1328,6 +1329,30 @@ enum WorkflowNodeCommandBuilder {
                 streamsEvents: false,
                 stdoutOutputName: "text"
             )
+        case "vision.ground":
+            let outputImage = artifacts.appendingPathComponent("image.png")
+            let detections = artifacts.appendingPathComponent("detections.json")
+            var args = [
+                "vision", "ground", try requiredString("image", in: arguments),
+                "--query",
+            ]
+            args.append(contentsOf: try requiredStringArray("queries", in: arguments))
+            appendString("model", flag: "--model", from: arguments, to: &args)
+            args += [
+                "--output", outputImage.path,
+                "--json-output", detections.path,
+            ]
+            return .init(
+                command: ["vision", "ground"],
+                executable: CurrentExecutable.url(),
+                preflightArguments: args + ["--preflight", "--json"],
+                runArguments: args + ["--quiet"],
+                outputs: [
+                    "image": fileOutput(outputImage, contentTypes: ["image/png"]),
+                    "detections": fileOutput(detections, contentTypes: ["application/json"]),
+                ],
+                streamsEvents: false
+            )
         case "image.train-lora":
             let output = artifacts.appendingPathComponent("adapter.safetensors")
             var args = ["image", "train-lora", "--data", try requiredString("data", in: arguments), "--output", output.path]
@@ -1510,6 +1535,20 @@ enum WorkflowNodeCommandBuilder {
             throw ValidationError("Workflow node argument '\(name)' did not resolve to a string.")
         }
         return value
+    }
+
+    private static func requiredStringArray(
+        _ name: String,
+        in arguments: [String: WorkflowValue]
+    ) throws -> [String] {
+        guard case .array(let values)? = arguments[name] else {
+            throw ValidationError("Workflow node argument '\(name)' did not resolve to an array.")
+        }
+        let strings = values.compactMap(\.stringValue)
+        guard strings.count == values.count, !strings.isEmpty, strings.allSatisfy({ !$0.isEmpty }) else {
+            throw ValidationError("Workflow node argument '\(name)' must contain one or more strings.")
+        }
+        return strings
     }
 
     private static func appendString(

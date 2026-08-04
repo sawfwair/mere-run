@@ -830,6 +830,48 @@ enum WorkflowNodeRegistry {
             presentation: .init(style: "material", primaryArgument: "image")
         ),
         WorkflowNodeCatalogEntry(
+            kind: "vision.ground",
+            title: "Ground objects",
+            description: "Locate open-vocabulary candidate regions with Falcon Perception.",
+            category: "vision",
+            inputs: [
+                .init(
+                    name: "image",
+                    type: .asset,
+                    required: true,
+                    acceptedContentTypes: ["image/png", "image/jpeg", "image/webp"]
+                ),
+                .init(
+                    name: "queries",
+                    type: .json,
+                    required: true,
+                    description: "One or more candidate-region expressions.",
+                    valueSchema: .init(type: .array, items: .init(type: .string))
+                ),
+                .init(name: "model", type: .string, required: false),
+            ],
+            outputs: [
+                .init(
+                    name: "image",
+                    type: .asset,
+                    description: "Annotated candidate-region image.",
+                    contentTypes: ["image/png"]
+                ),
+                .init(
+                    name: "detections",
+                    type: .asset,
+                    description: "Structured candidate detections and normalized geometry.",
+                    contentTypes: ["application/json"]
+                ),
+            ],
+            requirements: .init(
+                modelIDs: [],
+                acceleratorBackends: ["metal", "cuda"],
+                minimumAcceleratorMemoryBytes: nil
+            ),
+            presentation: .init(style: "material", primaryArgument: "image")
+        ),
+        WorkflowNodeCatalogEntry(
             kind: "image.train-lora",
             title: "Train image LoRA",
             category: "image",
