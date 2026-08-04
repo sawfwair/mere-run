@@ -126,6 +126,10 @@ public enum ACEStepCheckpointVariant: String, CaseIterable, Codable, Hashable, S
         isTurbo ? 8 : 50
     }
 
+    /// Flow-schedule shift.
+    ///
+    /// Non-turbo is 1.0, matching upstream's `generate_audio(..., shift: float = 1.0)`.
+    /// Third-party docs quote 3.0 for XL-SFT; the reference implementation does not.
     public var defaultShift: Float {
         isTurbo ? 3 : 1
     }
