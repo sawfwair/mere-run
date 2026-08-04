@@ -4343,7 +4343,7 @@ private struct OpenWebUIOptions: View {
                         Toggle("Quiet", isOn: $controller.draft.quiet)
                     }
                     Toggle(
-                        "Acknowledge third-party model terms",
+                        "Accept third-party model terms",
                         isOn: $controller.draft.acceptModelLicense
                     )
                     .toggleStyle(.checkbox)
@@ -4558,7 +4558,7 @@ private struct AgentOptions: View {
                     Toggle("Install Pi", isOn: $controller.draft.all)
                     Toggle("Configure Pi", isOn: $controller.draft.stream)
                 }
-                Toggle("Acknowledge third-party model terms", isOn: $controller.draft.acceptModelLicense)
+                Toggle("Accept third-party model terms", isOn: $controller.draft.acceptModelLicense)
                     .toggleStyle(.checkbox)
                 AdaptiveControlRow {
                     TextField("Host", text: $controller.draft.host)
@@ -4584,14 +4584,20 @@ private struct ModelPullOptions: View {
                     Toggle("Allow unsupported", isOn: $controller.draft.stream)
                     Toggle("Quiet", isOn: $controller.draft.quiet)
                 }
-                Toggle("Acknowledge third-party model terms", isOn: $controller.draft.acceptModelLicense)
+                Toggle("Accept third-party model terms", isOn: $controller.draft.acceptModelLicense)
                     .toggleStyle(.checkbox)
                 AdaptiveControlRow {
                     Toggle("Preflight", isOn: $controller.draft.preflight)
                     Toggle("JSON", isOn: $controller.draft.json)
                         .disabled(!controller.draft.preflight)
                 }
-                Text("Required for access-gated downloads and models with material non-commercial, research-only, or revenue-limited terms. A custom license alone does not trigger this acknowledgement. The command output lists the exact model/component terms. Mere does not determine whether your intended use is permitted; you are responsible for compliance.")
+                Text(
+                    "Required for access-gated downloads and models with material non-commercial, research-only, "
+                        + "or revenue-limited terms. Enabling this option confirms that you reviewed and accept the "
+                        + "listed terms and agree to comply with them. A custom license alone does not trigger this "
+                        + "requirement. Mere does not determine whether your intended use is permitted; you are "
+                        + "responsible for compliance."
+                )
                     .font(MereRunTheme.captionFont)
                     .foregroundStyle(MereRunTheme.textMuted)
             }

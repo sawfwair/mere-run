@@ -24,7 +24,10 @@ final class ModelPullCommandParsingTests: XCTestCase {
         ])
 
         XCTAssertNotNil(restricted.usageRestriction)
-        XCTAssertNotNil(blocked.licenseAcceptanceMessage(for: restricted))
+        let message = try XCTUnwrap(blocked.licenseAcceptanceMessage(for: restricted))
+        XCTAssertTrue(message.contains("reviewed and accept these terms"))
+        XCTAssertTrue(message.contains("agree to comply with them"))
+        XCTAssertTrue(message.contains("Download begins only after this confirmation"))
         XCTAssertNil(accepted.licenseAcceptanceMessage(for: restricted))
     }
 

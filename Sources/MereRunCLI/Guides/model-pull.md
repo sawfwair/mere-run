@@ -24,6 +24,9 @@ mere.run model list
 - `--force`: re-download even if already installed.
 - `--quiet`, `-q`: suppress progress.
 - `--allow-unsupported`: bypass platform and memory support checks.
+- `--accept-model-license`: confirm that you reviewed and accept all listed
+  third-party model/component terms and agree to comply with them before a
+  restricted download begins.
 - `--preflight`: inspect support, source, install state, and disk paths without downloading.
 - `--json`: with `--preflight`, emit a structured report for scripts and apps.
 
@@ -73,6 +76,8 @@ MERERUN_MODELS_DIR=/Volumes/Models/mere.run \
 - Unknown id: run `mere.run model list`.
 - No Hugging Face source: use a local path or choose a pullable model.
 - Unsupported machine: pick a smaller recommended model or pass `--allow-unsupported` only when the user accepts the risk.
+- Restricted model terms: review every listed license URL and pass
+  `--accept-model-license` only to confirm acceptance and agreement to comply.
 - Not enough free disk space: free the reported cache volume, run `mere.run model remove <id>`, or move both the Hugging Face cache and model store:
   `MERERUN_HUB_CACHE=/Volumes/Models/huggingface MERERUN_MODELS_DIR=/Volumes/Models/mere.run mere.run model pull <id>`.
 

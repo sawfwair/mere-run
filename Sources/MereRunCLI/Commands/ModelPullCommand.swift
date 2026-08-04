@@ -25,7 +25,7 @@ struct ModelPull: AsyncParsableCommand {
 
     @Flag(
         name: [.customLong("accept-model-license")],
-        help: "Acknowledge all listed third-party model/component terms before downloading a restricted model."
+        help: "Confirm that you reviewed and accept all listed third-party model/component terms before downloading a restricted model."
     )
     var acceptModelLicense: Bool = false
 
@@ -75,7 +75,10 @@ struct ModelPull: AsyncParsableCommand {
                     ))
                 if requiresUsageTermsAcknowledgement, !acceptModelLicense {
                     if !quiet {
-                        stderr("[\(spec.id)] skipping (pass --accept-model-license to acknowledge its third-party model/component terms)")
+                        stderr(
+                            "[\(spec.id)] skipping (pass --accept-model-license to review and accept its "
+                                + "third-party model/component terms)"
+                        )
                     }
                     continue
                 }
@@ -150,6 +153,10 @@ struct ModelPull: AsyncParsableCommand {
                 stderr("    terms: \(term.licenseURL)")
             }
             stderr("  You are responsible for determining whether your use complies with these terms.")
+            stderr(
+                "  By continuing, you confirm that you reviewed and accept these terms "
+                    + "and agree to comply with them."
+            )
         }
         try ModelPullDiskPreflight.check(spec: spec, modelDir: modelDir, force: force) { warning in
             guard !quiet else { return }
@@ -231,11 +238,13 @@ struct ModelPull: AsyncParsableCommand {
         guard let restriction = spec.usageRestriction, !acceptModelLicense else {
             return nil
         }
+        let confirmation = "Re-run with --accept-model-license to confirm that you reviewed and accept "
+            + "these terms and agree to comply with them. Download begins only after this confirmation."
         return """
         Model \(spec.id) has third-party usage terms: \(restriction.summary)
         \(restriction.terms.map { "- \($0.component): \($0.license)\n  \($0.licenseURL)" }.joined(separator: "\n"))
         Mere does not decide whether your intended use is permitted. You are responsible for compliance.
-        Re-run with --accept-model-license to acknowledge these terms before download.
+        \(confirmation)
         """
     }
 
