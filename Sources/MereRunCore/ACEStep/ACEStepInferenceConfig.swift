@@ -64,8 +64,19 @@ public struct ACEStepInferenceConfig: Codable, Sendable, Hashable {
     public var vaeChunkSize: Int
     public var vaeOverlap: Int
 
-    /// Differential Correction in Wavelet domain. Upstream ACE-Step enables
-    /// native Haar double-band correction by default.
+    /// Differential Correction in Wavelet domain — opt-in, off by default.
+    ///
+    /// Upstream's `generate_audio` signature reads `dcw_enabled: bool = True`, which is
+    /// misleading: the correction runs through `pytorch_wavelets`, an optional dependency
+    /// that is not installed by default. When it is absent upstream logs one warning and
+    /// short-circuits to a no-op, so in practice almost nobody runs DCW. Their own loader
+    /// documents it as "opt-in".
+    ///
+    /// Our Haar transform is native, so enabling it by default made us the only
+    /// implementation that always applies the correction. It compounds per step: harmless
+    /// across turbo's 8 steps, but across the 50 steps a non-turbo checkpoint takes it
+    /// drives the latent norm up monotonically (114 -> 154 on an 8s generation) and the
+    /// output decodes to noise. That is what made `music-acestep-xl-sft` unusable.
     public var dcwEnabled: Bool
     public var dcwMode: ACEStepDCWMode
     public var dcwScaler: Float
@@ -92,7 +103,7 @@ public struct ACEStepInferenceConfig: Codable, Sendable, Hashable {
         useTiledVaeDecode: Bool = true,
         vaeChunkSize: Int = 512,
         vaeOverlap: Int = 64,
-        dcwEnabled: Bool = true,
+        dcwEnabled: Bool = false,
         dcwMode: ACEStepDCWMode = .double,
         dcwScaler: Float = 0.05,
         dcwHighScaler: Float = 0.02,
