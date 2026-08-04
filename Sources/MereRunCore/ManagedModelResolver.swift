@@ -65,7 +65,7 @@ public enum ManagedModelResolver {
             case .autoDownloadDisabled(let id):
                 return "Model \(id) is not installed and does not support auto-download in this command."
             case .usageTermsNotAcknowledged(let id):
-                return "Model \(id) has third-party usage terms that must be acknowledged before download."
+                return "Model \(id) has third-party usage terms that must be reviewed and accepted before download."
             case .unsupportedInstallShape(let id):
                 return "Managed install shape is not supported for \(id)."
             case .downloadFailed(let message):

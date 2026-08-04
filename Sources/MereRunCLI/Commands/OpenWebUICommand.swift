@@ -91,7 +91,7 @@ struct OpenWebUIQuickstart: AsyncParsableCommand {
 
     @Flag(
         name: [.customLong("accept-model-license")],
-        help: "Acknowledge listed third-party model/component terms before downloading restricted configured models."
+        help: "Confirm that you reviewed and accept listed third-party model/component terms before downloading restricted configured models."
     )
     var acceptModelLicense: Bool = false
 
@@ -345,7 +345,8 @@ struct OpenWebUIQuickstart: AsyncParsableCommand {
         Open WebUI --pull includes configured models with third-party usage terms:
         \(details)
         Mere does not determine whether your intended use is permitted. You are responsible for compliance.
-        Review the terms and re-run with --accept-model-license, or pre-install a different model.
+        Re-run with --accept-model-license to confirm that you reviewed and accept these terms and agree to comply with them, \
+        or pre-install a different model.
         """
     }
 

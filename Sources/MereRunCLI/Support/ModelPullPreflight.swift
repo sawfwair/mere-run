@@ -302,8 +302,10 @@ struct ModelPullPreflightAnalyzer {
                 PreflightDiagnostic(
                     id: "model_usage_terms_unacknowledged",
                     severity: .blocker,
-                    title: "Third-party model terms require acknowledgement",
-                    message: "\(restriction.summary) Review the listed terms and pass --accept-model-license to acknowledge them before download."
+                    title: "Third-party model terms require acceptance",
+                    message: restriction.summary
+                        + " Pass --accept-model-license to confirm that you reviewed and accept the listed terms "
+                        + "and agree to comply with them. Download begins only after this confirmation."
                 )
             )
         }

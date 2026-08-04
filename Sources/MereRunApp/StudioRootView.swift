@@ -596,7 +596,7 @@ struct StudioRootView: View {
                 .environmentObject(library)
             }
             .alert(
-                "Acknowledge third-party model terms",
+                "Accept third-party model terms",
                 isPresented: Binding(
                     get: { pendingRestrictedPull != nil },
                     set: { if !$0 { pendingRestrictedPull = nil } }
@@ -606,14 +606,19 @@ struct StudioRootView: View {
                 Button("Cancel", role: .cancel) {
                     pendingRestrictedPull = nil
                 }
-                Button("Acknowledge & Download") {
+                Button("Accept & Download") {
                     pendingRestrictedPull = nil
                     startPull(request, acknowledgingUsageTerms: true)
                 }
             } message: { request in
                 let usageTerms = modelUsageTermsByID[request.draft.model]
                 Text(
-                    "\(usageTerms?.summary ?? "This model has third-party usage terms.")\n\nMere does not determine whether your intended use is permitted. You are responsible for compliance."
+                    """
+                    \(usageTerms?.summary ?? "This model has third-party usage terms.")
+
+                    By continuing, you confirm that you reviewed and accept the listed terms and agree to comply with them. \
+                    Mere does not determine whether your intended use is permitted. You are responsible for compliance.
+                    """
                 )
             }
             .focusedSceneValue(\.showLibrary, visibleLibraryBinding)

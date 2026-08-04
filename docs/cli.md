@@ -2132,9 +2132,11 @@ Models that are access-gated or carry material non-commercial, research-only,
 or revenue-limited terms require `--accept-model-license` before a new
 download. A custom license alone does not trigger the flag.
 The preflight reports the exact component terms and blocks without
-acknowledgement; `--all` skips restricted entries unless the flag is present.
-mere.run records the immutable source revisions and acknowledged term URLs in
-the installed `mererun_model.json`, but the user remains responsible for
+acceptance; `--all` skips restricted entries unless the flag is present.
+Passing `--accept-model-license` and continuing with the download confirms that
+the user reviewed and accepts the listed terms and agrees to comply. mere.run
+records the immutable source revisions and accepted term URLs in the installed
+`mererun_model.json`, but the user remains responsible for
 deciding whether their intended use complies. See
 [`model-sources.md`](./model-sources.md#restricted-model-downloads).
 

@@ -103,7 +103,9 @@ MiniMax-H3 is CFG-distilled, so `--steps` is a schedule-point count without a
 second unconditional model evaluation. The Community License excludes use,
 distribution, and display in the United States, European Union, United
 Kingdom, and Republic of Korea. Read and accept the model terms before pulling,
-converting, using, or redistributing any artifact.
+converting, using, or redistributing any artifact. Passing
+`--accept-model-license` and continuing with the download confirms that you
+accept those terms and agree to comply with them.
 
 The managed package already includes the inference-only AdaLN cache computed
 from the official BF16/F32 projections; no post-pull optimization step is

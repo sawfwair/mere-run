@@ -18,7 +18,7 @@ mere.run model pull video-cosmos3-edge-mlx
 The managed model pins `nvidia/Cosmos3-Edge` at revision
 `6f58f6b4c91288838e60b6bcb2cc45d997e961de`. The model is governed by
 OpenMDW-1.1. The public pull retains `LICENSE.md` and does not add a separate
-mere.run acknowledgement gate.
+mere.run acceptance gate.
 
 ## Generation Modes
 

@@ -407,10 +407,10 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
     /// Exact repositories and requested revisions materialized into this managed install.
     public var sources: [SourceProvenance]?
 
-    /// Third-party model/component terms that required explicit acknowledgement before download.
+    /// Third-party model/component terms that required explicit acceptance before download.
     public var usageTerms: [ManagedModelUsageTerm]?
 
-    /// True only when the managed installer was invoked with explicit acknowledgement.
+    /// True only when the managed installer was invoked with explicit confirmation of acceptance.
     public var usageTermsAcknowledged: Bool?
 
     /// ISO8601 timestamp; informational only.
