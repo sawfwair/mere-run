@@ -2345,14 +2345,14 @@ public enum ManagedModelCatalog {
             hubFallback: HubFallbackConfig(
                 repoId: MiniMaxH3Resources.artifactRepository,
                 revision: MiniMaxH3Resources.artifactRevision,
-                patterns: MiniMaxH3Resources.requiredFiles
+                patterns: MiniMaxH3Resources.compactArtifactFiles
             ),
             upstreamRepoId: MiniMaxH3Resources.artifactRepository,
             upstreamRevision: MiniMaxH3Resources.artifactRevision,
             usageRestriction: miniMaxH3UsageRestriction,
             validationKind: .miniMaxH3MLX,
             runtimeAutoDownloadAllowed: false,
-            estimatedDownloadBytes: 69_284_785_360,
+            estimatedDownloadBytes: 46_250_104_566,
             defaultCLICommands: ["video generate"]
         ),
         ManagedModelSpec(

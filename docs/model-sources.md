@@ -776,11 +776,20 @@ image/video/audio conditioning. It jointly denoises 24-channel video and
 32 kHz stereo audio into one MP4.
 
 The explicit-pull FL2VA root is the flat
-`ddalcu/MiniMax-H3-FL2VA-MLX-Serve-8bit` package pinned at immutable revision
-`32bfc37f1dc8bd331394573859a627bc0aa9822b` (69,284,785,360 bytes). The package
-contains the affine 8-bit/group-64 transformer and Qwen3-VL conditioner,
-float32 video/audio VAEs, tokenizer, configuration, `LICENSE`, `NOTICE`, and
-`MODIFICATIONS.md`. Runtime auto-download is disabled.
+`Sawfwair/MiniMax-H3-FL2VA-MLX-4bit` package pinned at immutable Hub commit
+`e1244ad93d60c737c7e0f065a1c9372f3de7caf8`.
+Every tensor in that package is derived directly from
+`MiniMaxAI/MiniMax-H3@ec19cc6daf5d8add9417c18e86b6b58cc6c55027`; converted or
+quantized third-party weights are not inputs. The transformer core is affine
+Q4/group-64 with dense precision islands, the exact 50-layer Qwen3-VL
+conditioner is affine Q8/group-64, the video VAE is FP16, and the audio VAE has
+its released weight normalization folded for the native runtime. The 14-file
+managed download is exactly 46,250,104,566 bytes and also carries the tokenizer,
+configuration, source manifest, conversion receipt, hashes, `LICENSE`,
+`NOTICE`, and `MODIFICATIONS.md`. Before Q4 packing, all 52 fused transformer
+QKV matrices are deinterleaved from MiniMax's released per-head row order into
+the global Q/K/V slabs consumed by the native runtime. Runtime auto-download is
+disabled.
 
 Ref2VA is conversion-only. The audited converter accepts only
 `minimax_h3_ref2va_int8_convrot.safetensors` from
@@ -794,16 +803,14 @@ runtime validation is 36,024,412,656 bytes with SHA-256
 Stage it as `transformer.safetensors` beside the exact FL conditioner, VAEs,
 tokenizer, notices, and a `config.json` whose `partition` is `ref2va`.
 
-`requantize_minimax_h3_mlx.py` can derive a compact inference-only transformer
-from either verified affine INT8 artifact after `model optimize` creates its
-source-bound AdaLN cache. The streaming converter writes affine INT4/group-64
-active matrices, omits only the cache-covered AdaLN/time-embedding branch, and
-emits both a per-layer error/hash receipt and a mixed-precision config. That
-config is significant: the transformer is INT4 while the unchanged Qwen3-VL
-conditioner remains INT8. Install the transformer, config, receipt, and matching
-cache as one unit. The runtime resamples the cache's exact released 31-point
-modulation curve, so compact roots support arbitrary valid schedule-point
-counts without restoring the omitted inference-redundant branch.
+`convert_minimax_h3_official_mlx.py` creates the managed FL2VA package in one
+audited pass from the official release. It computes the source-bound AdaLN
+cache from the original BF16/F32 projections, directly quantizes the active
+transformer and conditioner matrices once, and emits the cache, weights,
+configuration, receipts, and source manifest as one unit. The runtime resamples
+the cache's exact released 31-point modulation curve, so the package supports
+arbitrary valid schedule-point counts without restoring the omitted
+inference-redundant branch.
 
 The model weights use the MiniMax-H3 Community License, not Apache-2.0. At the
 pinned official source revision

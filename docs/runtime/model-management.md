@@ -99,20 +99,19 @@ keep their backing payloads live.
 
 ### `mere.run model optimize`
 
-For MiniMax-H3 MLX installs, precompute the released 31-point schedule's AdaLN
-modulation tables once:
+For compatible locally converted MiniMax-H3 roots that still contain the full
+AdaLN branch, precompute the released 31-point schedule's modulation tables:
 
 ```bash
-mere.run model optimize video-minimax-h3-fl2va-mlx
+mere.run model optimize ./MiniMax-H3-FL2VA-full-MLX
 ```
 
 The cache is written beside the installed model. Compatible generation runs use
 it to avoid loading the inference-redundant AdaLN/time-embedding weights and
-resample its exact released curve for the selected schedule-point count. A
-compact transformer produced by `requantize_minimax_h3_mlx.py` intentionally
-omits those covered weights while retaining arbitrary valid schedule counts;
-its generated config keeps the transformer at INT4 and the Qwen3-VL
-conditioner at INT8.
+resample its exact released curve for the selected schedule-point count. The
+managed `video-minimax-h3-fl2va-mlx` artifact already bundles a cache computed
+from the official BF16/F32 projections, so it does not require this command
+after pull.
 
 ### `mere.run status`
 

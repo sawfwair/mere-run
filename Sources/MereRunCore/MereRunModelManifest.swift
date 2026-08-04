@@ -1850,8 +1850,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 family: .video,
                 tier: .latest,
                 variant: .distilled,
-                precision: .int8,
-                quantization: Quantization(bits: 8, groupSize: 64, scheme: "mlx-affine"),
+                precision: .int4,
+                quantization: Quantization(bits: 4, groupSize: 64, scheme: "mlx-affine"),
                 defaults: Defaults(steps: 31, cfg: 1.0, sigmaShift: 12.0),
                 supports: [.videoGeneration],
                 components: Components(

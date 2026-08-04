@@ -34,8 +34,16 @@ Kingdom, and Republic of Korea. Managed artifacts are explicit-pull only and
 require the user to acknowledge the model license. Conversion must likewise
 run in an allowed territory. See `scripts/model-conversion/README.md`.
 
-The explicit-pull FL2VA package is pinned to
-`ddalcu/MiniMax-H3-FL2VA-MLX-Serve-8bit@32bfc37f1dc8bd331394573859a627bc0aa9822b`.
+The explicit-pull FL2VA package is published as
+`Sawfwair/MiniMax-H3-FL2VA-MLX-4bit` and pinned to its immutable verified Hub
+commit `e1244ad93d60c737c7e0f065a1c9372f3de7caf8`. It is produced only from
+`MiniMaxAI/MiniMax-H3@ec19cc6daf5d8add9417c18e86b6b58cc6c55027` by
+`scripts/model-conversion/convert_minimax_h3_official_mlx.py`; no converted or
+quantized third-party checkpoint is a weight input. The package includes the
+source manifest and conversion hashes alongside the runtime files. Its 52
+fused transformer QKV matrices are deinterleaved from the released per-head
+rows into the global Q/K/V slabs expected by the native runtime before Q4
+packing.
 Ref2VA is a local conversion lane because this repository does not publish a
 redistributable converted snapshot. Convert the pinned
 `Comfy-Org/MiniMax-H3` ConvRot source with

@@ -72,6 +72,43 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         XCTAssertTrue(configuration.validationIssues().isEmpty)
     }
 
+    func testManagedFL2VAProfileUsesOfficialSourceCompactQ4Artifact() throws {
+        XCTAssertEqual(
+            MiniMaxH3Resources.artifactRepository,
+            "Sawfwair/MiniMax-H3-FL2VA-MLX-4bit"
+        )
+        XCTAssertEqual(
+            MiniMaxH3Resources.sourceRepository,
+            "MiniMaxAI/MiniMax-H3"
+        )
+        XCTAssertEqual(
+            MiniMaxH3Resources.sourceRevision,
+            "ec19cc6daf5d8add9417c18e86b6b58cc6c55027"
+        )
+        XCTAssertTrue(MiniMaxH3Resources.compactArtifactFiles.contains("adaln_cache.safetensors"))
+        XCTAssertTrue(MiniMaxH3Resources.compactArtifactFiles.contains("SOURCE_MANIFEST.json"))
+        XCTAssertTrue(MiniMaxH3Resources.compactArtifactFiles.contains("transformer.conversion.json"))
+        XCTAssertTrue(MiniMaxH3Resources.compactArtifactFiles.contains("SHA256SUMS"))
+
+        let manifest = MereRunModelManifest.template(
+            for: .miniMaxH3FL2VAMLX,
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+        XCTAssertEqual(manifest.precision, .int4)
+        XCTAssertEqual(manifest.quantization?.bits, 4)
+        XCTAssertEqual(manifest.quantization?.groupSize, 64)
+        XCTAssertEqual(manifest.quantization?.scheme, "mlx-affine")
+        XCTAssertEqual(
+            manifest.upstreamRepoId,
+            "\(MiniMaxH3Resources.artifactRepository)@\(MiniMaxH3Resources.artifactRevision)"
+        )
+
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: MiniMaxH3Resources.fl2vaModelID))
+        XCTAssertEqual(spec.hubFallback?.repoId, MiniMaxH3Resources.artifactRepository)
+        XCTAssertEqual(spec.hubFallback?.revision, MiniMaxH3Resources.artifactRevision)
+        XCTAssertEqual(spec.hubFallback?.patterns, MiniMaxH3Resources.compactArtifactFiles)
+    }
+
     func testCompactTransformerPreservesAdaLNCacheSourceIdentity() throws {
         let rootURL = FileManager.default.temporaryDirectory
             .appending(path: "minimax-h3-compact-\(UUID().uuidString)")

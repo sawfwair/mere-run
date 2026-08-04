@@ -1997,18 +1997,21 @@ revision-addressed layout without copying matching payload bytes on a later pull
 
 ### `mere.run model optimize`
 
-Build a reusable inference-only cache for an installed MiniMax-H3 MLX model:
+Build a reusable inference-only cache for a compatible locally converted
+MiniMax-H3 MLX model that still contains the full AdaLN branch:
 
 ```bash
-mere.run model optimize video-minimax-h3-fl2va-mlx
-mere.run model optimize video-minimax-h3-fl2va-mlx --json
+mere.run model optimize ./MiniMax-H3-FL2VA-full-MLX
+mere.run model optimize ./MiniMax-H3-FL2VA-full-MLX --json
 ```
 
 The generated `adaln_cache.safetensors` contains the released 31-point
 video/audio schedule's AdaLN modulation tables. Compatible H3 generations then
 skip loading the 13B-parameter AdaLN/time-embedding branch and resample that
 exact curve for their selected point count. `--force` replaces an existing
-cache atomically after the new cache has been built.
+cache atomically after the new cache has been built. The managed
+`video-minimax-h3-fl2va-mlx` artifact already includes this source-bound cache;
+no post-pull optimization is needed.
 
 ### `mere.run model remove`
 

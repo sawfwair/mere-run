@@ -23,12 +23,21 @@ The format is based on Keep a Changelog.
   including 2 fps paired video presentation timestamps, video soundtrack
   conditioning, per-reference spatial grids, shared audio/video rotary clocks,
   and the released reference-count and modality constraints.
-- added an audited, checksum-pinned ConvRot INT8 to MLX affine INT8/group-64
-  converter for both H3 partitions, including conversion receipts, immutable
+- added an audited official-source FL2VA release converter that directly
+  quantizes MiniMax's pinned BF16 transformer to MLX affine Q4/group-64 and its
+  exact 50-layer Qwen3-VL conditioner to Q8/group-64, computes the AdaLN cache
+  from the original projections, converts both official VAEs, and emits a full
+  source manifest, conversion receipt, license disclosures, and bundle hashes
+  without accepting third-party weight inputs. The converter deinterleaves all
+  52 released per-head fused QKV matrices into the global Q/K/V slabs consumed
+  by the native runtime before quantization.
+- added a checksum-pinned ConvRot INT8 to MLX affine INT8/group-64 converter for
+  the separate local Ref2VA lane, including conversion receipts, immutable
   upstream provenance, explicit license/territory documentation, focused
   architecture/layout tests, and a real synchronized installed-model gate.
-- added `model optimize` for MiniMax-H3 inference-only AdaLN caches. The native
-  runtime can omit the 13B-parameter AdaLN/time-embedding branch at the released
+- added `model optimize` for local MiniMax-H3 roots and bundled the managed
+  FL2VA artifact's inference-only AdaLN cache at pull time. The native runtime
+  can omit the 13B-parameter AdaLN/time-embedding branch at the released
   31-point schedule, resamples that exact modulation curve for arbitrary valid
   schedules, reuses invariant text and RoPE work, and retains eager, compiled,
   and cache parity coverage.

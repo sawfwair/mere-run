@@ -159,8 +159,8 @@ public struct MiniMaxH3Resources: Sendable {
     public static let ref2vaModelID = "video-minimax-h3-ref2va-mlx"
     public static let sourceRepository = "MiniMaxAI/MiniMax-H3"
     public static let sourceRevision = "ec19cc6daf5d8add9417c18e86b6b58cc6c55027"
-    public static let artifactRepository = "ddalcu/MiniMax-H3-FL2VA-MLX-Serve-8bit"
-    public static let artifactRevision = "32bfc37f1dc8bd331394573859a627bc0aa9822b"
+    public static let artifactRepository = "Sawfwair/MiniMax-H3-FL2VA-MLX-4bit"
+    public static let artifactRevision = "e1244ad93d60c737c7e0f065a1c9372f3de7caf8"
     public static let conversionSourceRepository = "Comfy-Org/MiniMax-H3"
     public static let conversionSourceRevision = "fd70b39279d1ae6eb214c903f53e1bec3af19a77"
     public static let ref2vaSourceSHA256 = "9eef934046a0671bc8a5daf87100705e1478419c574cfde70c50fbe6885f76a9"
@@ -177,6 +177,12 @@ public struct MiniMaxH3Resources: Sendable {
         "LICENSE",
         "NOTICE",
         "MODIFICATIONS.md",
+    ]
+    public static let compactArtifactFiles = requiredFiles + [
+        "adaln_cache.safetensors",
+        "SOURCE_MANIFEST.json",
+        "transformer.conversion.json",
+        "SHA256SUMS",
     ]
 
     public let rootURL: URL

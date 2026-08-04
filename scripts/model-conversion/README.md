@@ -56,6 +56,49 @@ uses the cache's exact released 31-point modulation curve. The runtime resamples
 that curve for arbitrary valid schedule-point counts without restoring the
 omitted inference-redundant weights.
 
+`convert_minimax_h3_official_mlx.py` builds the publishable FL2VA bundle from
+MiniMax's official BF16/FP32 release at one immutable revision. It downloads
+and hashes every official input, verifies the MiniMax license bytes, and
+self-tests MLX Q4/Q8 packing against an Apple Silicon byte-level fixture before
+conversion. No converted or quantized third-party checkpoint is accepted.
+
+The transformer core is quantized directly from official BF16 to affine
+Q4/group-64 while precision-sensitive projections remain dense. Before
+quantization, all 52 fused QKV matrices are deinterleaved from MiniMax's raw
+per-head checkpoint rows into the official reference model's
+`[all-q; all-k; all-v]` layout expected by the native runtime. A deterministic
+QKV permutation fixture fails the conversion if that contract changes. The
+Qwen3-VL conditioner is quantized directly from official BF16 to affine
+Q8/group-64. The AdaLN cache is evaluated from the original released
+projections before those inference-redundant weights are omitted. The official
+video VAE is cast to FP16 and the official audio VAE has weight normalization
+folded exactly as required by the native runtime.
+
+```bash
+HF_HOME=/workspace/hf-cache HF_XET_CHUNK_CACHE_SIZE_BYTES=0 \
+  python3 scripts/model-conversion/convert_minimax_h3_official_mlx.py \
+    --cache-dir /workspace/hf-cache \
+    --conversion-location "CA-MTL-3, Canada" \
+    --output /workspace/minimax-h3-sawfwair
+```
+
+The output carries `SOURCE_MANIFEST.json`, conversion metadata, the exact
+upstream license and notices, and SHA-256 receipts for the publishable bundle.
+Run the converter with `--plan` before provisioning storage, or with
+`--self-test-only` to validate MLX's active backend before downloading weights.
+Before publication, run the fail-closed structural and hash gate:
+
+```bash
+python3 scripts/model-conversion/validate_minimax_h3_official_artifact.py \
+  /workspace/minimax-h3-sawfwair \
+  --conversion-location "CA-MTL-3, Canada"
+```
+
+The validator rehashes every distributed file and checks the complete official
+source manifest, license bytes, Q4/Q8 and QKV fixture receipts, component tensor
+counts, dtypes, retained 50-layer conditioner, cache geometry, and forbidden
+omitted branches.
+
 ## Gemma 4 12B MLX 4-bit
 
 `convert_gemma4_12b_mlx.py` verifies Google's exact 23,919,549,408-byte Gemma 4

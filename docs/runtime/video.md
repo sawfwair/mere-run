@@ -47,10 +47,11 @@ are an escape hatch, not the capability contract.
 
 ## Model family
 
-- `video-minimax-h3-fl2va-mlx`: explicit-pull MiniMax-H3 FL2VA affine-INT8
-  package. It generates 24 fps RGB and synchronized 32 kHz stereo audio from
-  text, a first frame, or directed first/last frames. Frame counts follow
-  `17*n+5`; width and height are multiples of 32.
+- `video-minimax-h3-fl2va-mlx`: explicit-pull MiniMax-H3 FL2VA package with a
+  direct-from-official Q4 transformer core, Q8 conditioner, and bundled
+  source-bound AdaLN cache. It generates 24 fps RGB and synchronized 32 kHz
+  stereo audio from text, a first frame, or directed first/last frames. Frame
+  counts follow `17*n+5`; width and height are multiples of 32.
 - `video-minimax-h3-ref2va-mlx`: identifier for a locally converted Ref2VA
   root. Repeated `--reference image:path|video:path|audio:path` options retain
   request order. Video soundtracks are conditioned with their video; a
@@ -85,7 +86,6 @@ are an escape hatch, not the capability contract.
 
 ```bash
 mere.run model pull video-minimax-h3-fl2va-mlx --accept-model-license
-mere.run model optimize video-minimax-h3-fl2va-mlx
 mere.run video generate "a glass marble rolls across wood with a delicate rattle" \
   --model video-minimax-h3-fl2va-mlx \
   --image ./marble.png \
@@ -105,15 +105,18 @@ distribution, and display in the United States, European Union, United
 Kingdom, and Republic of Korea. Read and accept the model terms before pulling,
 converting, using, or redistributing any artifact.
 
-The released 31-point modulation curve supports an inference-only AdaLN cache.
-Run `model optimize` once after pull or conversion; generation then skips
-loading and executing the transformer's 13B-parameter AdaLN/time-embedding
-branch and resamples that exact curve for the selected schedule. By default H3
-uses 9 points through 13,500 packed rows, 16 through 26,000, and 31 above that;
-`--steps` remains an explicit schedule-point override. Compact cache-backed
-INT4 transformers therefore remain correct at arbitrary point counts. MacBooks
-keep Q4 resident by default; desktop Macs may select resident BF16 when memory
-admits it, and `--h3-weight-mode` can force either path.
+The managed package already includes the inference-only AdaLN cache computed
+from the official BF16/F32 projections; no post-pull optimization step is
+required. Generation skips loading and executing the transformer's
+13B-parameter AdaLN/time-embedding branch and resamples its exact released
+31-point curve for the selected schedule. By default H3 uses 9 points through
+13,500 packed rows, 16 through 26,000, and 31 above that; `--steps` remains an
+explicit schedule-point override. Compact cache-backed INT4 transformers
+therefore remain correct at arbitrary point counts. MacBooks keep Q4 resident
+by default; desktop Macs may select resident BF16 when memory admits it, and
+`--h3-weight-mode` can force either path. `model optimize` remains available
+for compatible locally converted roots that still contain the full AdaLN
+branch.
 
 ### Cosmos3 generation, actions, and reasoning
 
