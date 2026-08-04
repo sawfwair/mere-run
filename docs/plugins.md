@@ -62,8 +62,11 @@ mere.run plugin doctor mere-runpod
 ```
 
 The doctor command resolves the catalog entry, verifies that its executable is
-on `PATH`, and invokes the plugin's fixed `doctor` verb. Plugin stdout and exit
-status remain owned by that executable.
+on `PATH`, verifies its manifest, and invokes the plugin's fixed `doctor` verb.
+If the entrypoint cannot start, mere.run diagnoses the installation before
+delegating. A stale editable `pipx` install reports its missing source path and
+the exact forced-reinstall command instead of exposing only a Python traceback.
+Plugin stdout and exit status remain owned by a verified executable.
 
 ## Workflow-provider boundary
 
