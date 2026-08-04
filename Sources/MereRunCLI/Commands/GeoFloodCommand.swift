@@ -25,6 +25,7 @@ struct GeoFlood: AsyncParsableCommand {
     var json = false
 
     mutating func run() async throws {
+        try MLXBundleSupport.ensureAvailable(quiet: json)
         let inputURL = URL(fileURLWithPath: input).standardizedFileURL
         guard FileManager.default.fileExists(atPath: inputURL.path) else {
             throw ValidationError("Input safetensors not found: \(inputURL.path)")

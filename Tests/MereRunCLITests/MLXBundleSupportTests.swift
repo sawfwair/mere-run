@@ -84,4 +84,56 @@ final class MLXBundleSupportTests: XCTestCase {
       ])
     )
   }
+
+  func testConcurrentFirstRunBundleInstallIsIdempotent() throws {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(
+      "mere-run-mlx-bundle-race-\(UUID().uuidString)",
+      isDirectory: true
+    )
+    defer { try? FileManager.default.removeItem(at: root) }
+    let source = root.appendingPathComponent("source/mlx-swift_Cmlx.bundle", isDirectory: true)
+    let resources = source.appendingPathComponent("Contents/Resources", isDirectory: true)
+    try FileManager.default.createDirectory(at: resources, withIntermediateDirectories: true)
+    let metallib = Data("fixture-metallib".utf8)
+    try metallib.write(to: resources.appendingPathComponent("default.metallib"))
+    let destination = root.appendingPathComponent("debug/mlx-swift_Cmlx.bundle", isDirectory: true)
+    try FileManager.default.createDirectory(
+      at: destination.deletingLastPathComponent(),
+      withIntermediateDirectories: true
+    )
+    let results = ConcurrentBundleInstallResults()
+
+    DispatchQueue.concurrentPerform(iterations: 8) { _ in
+      do {
+        try MLXBundleSupport.installBundleIfMissing(from: source, to: destination)
+        results.recordSuccess()
+      } catch {
+        results.recordFailure(error)
+      }
+    }
+
+    XCTAssertEqual(results.successCount, 8)
+    XCTAssertEqual(results.failures, [])
+    XCTAssertEqual(
+      try Data(contentsOf: destination.appendingPathComponent("Contents/Resources/default.metallib")),
+      metallib
+    )
+  }
+}
+
+private final class ConcurrentBundleInstallResults: @unchecked Sendable {
+  private let lock = NSLock()
+  private var successes = 0
+  private var recordedFailures: [String] = []
+
+  var successCount: Int { lock.withLock { successes } }
+  var failures: [String] { lock.withLock { recordedFailures } }
+
+  func recordSuccess() {
+    lock.withLock { successes += 1 }
+  }
+
+  func recordFailure(_ error: Error) {
+    lock.withLock { recordedFailures.append(String(describing: error)) }
+  }
 }
