@@ -81,6 +81,7 @@ from the runtime catalog used by `mere.run model list`,
 | `vision-ocr` | `vision-ocr-lighton` |
 | `vision-segment` | `vision-segment-sam31` |
 | `vision-ground` | `vision-ground-falcon-perception` |
+| `vision-flood` | `vision-flood-terramind-base` |
 | `vision-face` | `vision-face-buffalo-l` |
 | `vision-geometry` | `vision-geometry-moge2-small` |
 | `vision-depth` | `vision-depth-vda-small` |

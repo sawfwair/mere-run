@@ -360,6 +360,7 @@ targets.append(contentsOf: [
       "SCAIL2/README.md",
       "Support/README.md",
       "Trellis2/README.md",
+      "TerraMindFlood/README.md",
       "TripoSR/README.md",
       "VLM/README.md",
       "VideoDepth/README.md",

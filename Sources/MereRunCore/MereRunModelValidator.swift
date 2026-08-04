@@ -395,6 +395,8 @@ public enum MereRunModelValidator {
                 warnings.append("Manifest engine mismatch: family=sam expects sam-segmentation.")
             case .falcon where engine != .falconPerception:
                 warnings.append("Manifest engine mismatch: family=falcon expects falcon-perception.")
+            case .terramind where engine != .terramindFlood:
+                warnings.append("Manifest engine mismatch: family=terramind expects terramind-flood.")
             case .face where engine != .insightFace:
                 warnings.append("Manifest engine mismatch: family=face expects insightface.")
             case .tts where engine != .qwen3TTS:

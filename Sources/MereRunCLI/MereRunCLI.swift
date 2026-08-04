@@ -32,6 +32,7 @@ struct MereRunCLI: AsyncParsableCommand {
             Text.self,
             Speech.self,
             Vision.self,
+            Geo.self,
             Audio.self,
             Music.self,
             SFX.self,

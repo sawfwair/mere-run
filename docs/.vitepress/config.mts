@@ -94,6 +94,7 @@ export default defineConfig({
           { text: 'Text Runtime', link: '/runtime/text' },
           { text: 'Speech Runtime', link: '/runtime/speech' },
           { text: 'Vision Runtime', link: '/runtime/vision' },
+          { text: 'Geospatial Runtime', link: '/runtime/geo' },
           { text: 'Audio Enhancement', link: '/runtime/audio' },
           { text: 'Music Runtime', link: '/runtime/music' },
           { text: 'ACE-Step Validation', link: '/runtime/acestep-validation' },
