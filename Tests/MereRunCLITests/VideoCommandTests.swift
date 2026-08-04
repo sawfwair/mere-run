@@ -326,6 +326,8 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertEqual(cmd.numFrames, 65)
         XCTAssertNil(cmd.duration)
         XCTAssertEqual(cmd.fps, 24)
+        XCTAssertNil(cmd.steps)
+        XCTAssertEqual(cmd.h3WeightMode, .automatic)
         XCTAssertEqual(cmd.imageStrength, 1.0)
         XCTAssertNil(cmd.endImage)
         XCTAssertEqual(cmd.endImageStrength, 1.0)
@@ -334,6 +336,28 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertFalse(cmd.json)
         XCTAssertFalse(cmd.timings)
         XCTAssertNil(cmd.timingsOutput)
+    }
+
+    func testVideoGenerateParsesMiniMaxH3ReferencesAndStepsInOrder() throws {
+        let cmd = try VideoGenerate.parse([
+            "preserve the references",
+            "--model", ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue,
+            "--reference", "image:/tmp/subject.png",
+            "--reference", "video:/tmp/motion.mp4",
+            "--reference", "audio:/tmp/voice.wav",
+            "--steps", "31",
+            "--h3-weight-mode", "resident-bf16",
+        ])
+
+        XCTAssertEqual(cmd.model, ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue)
+        XCTAssertEqual(cmd.steps, 31)
+        XCTAssertEqual(cmd.h3WeightMode, .residentBF16)
+        XCTAssertEqual(cmd.h3WeightMode.generationMode, .residentBF16)
+        XCTAssertEqual(cmd.references, [
+            "image:/tmp/subject.png",
+            "video:/tmp/motion.mp4",
+            "audio:/tmp/voice.wav",
+        ])
     }
 
     func testVideoGenerateSeparatesCheckpointQualityFromOutputMode() throws {

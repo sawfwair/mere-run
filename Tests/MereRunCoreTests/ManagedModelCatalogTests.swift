@@ -76,6 +76,8 @@ final class ManagedModelCatalogTests: XCTestCase {
             "video-ltx23-av-mlx",
             "video-ltx23-full-mlx",
             "video-ltx23-a2vid-mlx",
+            "video-minimax-h3-fl2va-mlx",
+            "video-minimax-h3-ref2va-mlx",
         ])
         let visibleAndCompanionSpecs = ManagedModelCatalog.allSpecs
             + ManagedModelCatalog.allSpecs

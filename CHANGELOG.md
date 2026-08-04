@@ -12,6 +12,47 @@ The format is based on Keep a Changelog.
   security fixes, and made packaging reject a stale embedded Sparkle framework
   before signing.
 
+### Added
+
+- added a native Swift/MLX MiniMax-H3 runtime for the released FL2VA and
+  Ref2VA partitions: Qwen3-VL layer-50 multimodal conditioning, the dense 50
+  layer joint video/audio transformer, causal tiled video VAE, DAC/causal
+  audio encoder, BigVGAN decoder, shifted joint flow schedule, synchronized
+  24 fps MP4 plus 32 kHz stereo output, and exact `17*n+5` frame geometry.
+- added ordered Ref2VA `--reference image:path|video:path|audio:path` inputs,
+  including 2 fps paired video presentation timestamps, video soundtrack
+  conditioning, per-reference spatial grids, shared audio/video rotary clocks,
+  and the released reference-count and modality constraints.
+- added an audited official-source FL2VA release converter that directly
+  quantizes MiniMax's pinned BF16 transformer to MLX affine Q4/group-64 and its
+  exact 50-layer Qwen3-VL conditioner to Q8/group-64, computes the AdaLN cache
+  from the original projections, converts both official VAEs, and emits a full
+  source manifest, conversion receipt, license disclosures, and bundle hashes
+  without accepting third-party weight inputs. The converter deinterleaves all
+  52 released per-head fused QKV matrices into the global Q/K/V slabs consumed
+  by the native runtime before quantization.
+- added a checksum-pinned ConvRot INT8 to MLX affine INT8/group-64 converter for
+  the separate local Ref2VA lane, including conversion receipts, immutable
+  upstream provenance, explicit license/territory documentation, focused
+  architecture/layout tests, and a real synchronized installed-model gate.
+- added `model optimize` for local MiniMax-H3 roots and bundled the managed
+  FL2VA artifact's inference-only AdaLN cache at pull time. The native runtime
+  can omit the 13B-parameter AdaLN/time-embedding branch at the released
+  31-point schedule, resamples that exact modulation curve for arbitrary valid
+  schedules, reuses invariant text and RoPE work, and retains eager, compiled,
+  and cache parity coverage.
+- added a streaming MiniMax-H3 affine INT8-to-INT4 transformer requantizer with
+  source-bound cache provenance, per-layer error receipts, cache-covered weight
+  omission, and a typed mixed-precision config that retains the conditioner at
+  INT8. Large sequences reuse one staged compiled block runner and exact fused
+  query-chunked attention without growing graph or Metal command-buffer state.
+- added adaptive MiniMax-H3 9/16/31-point schedule tiers, explicit
+  `--h3-weight-mode auto|quantized|resident-bf16`, chassis-aware compact Q4
+  defaults for MacBooks, staged resident-BF16 expansion for desktop Macs, and
+  coordinated 50-64 GiB MLX wired-memory residency. Corrected the released
+  video VAE's per-head-interleaved QKV layout while retaining the converted
+  transformer's global Q/K/V slabs.
+
 ## 0.33.0 - 2026-08-02
 
 This release turns native DreamX into a product-grade local world-session

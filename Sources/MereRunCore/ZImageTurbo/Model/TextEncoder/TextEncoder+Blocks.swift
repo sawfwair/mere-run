@@ -436,6 +436,63 @@ public final class QwenEncoder: Module {
     return activationLayers.compactMap { captured[$0] }
   }
 
+  /// Runs the multimodal Qwen stack while injecting Qwen3-VL deepstack
+  /// features into each vision span. The returned activation is captured
+  /// immediately after the requested decoder block and before the final RMS
+  /// norm, which is the representation diffusion conditioners consume.
+  public func forwardMultimodalActivationHiddenState(
+    embeddings: MLXArray,
+    attentionMask: MLXArray?,
+    positionIds: MLXArray,
+    visualTokenRanges: [Range<Int>],
+    deepstackFeatures: [[MLXArray]],
+    activationLayer: Int
+  ) -> MLXArray? {
+    guard layers.indices.contains(activationLayer) else { return nil }
+    let computeDType: DType = configuration.useFloat32Activations ? .float32 : .bfloat16
+    var h = embeddings.dtype == computeDType ? embeddings : embeddings.asType(computeDType)
+    let mask = createAttentionMask(h: h, attentionMask: attentionMask)
+
+    for (index, layer) in layers.enumerated() {
+      h = layer(h, mask: mask, positionIds: positionIds)
+      if index < deepstackFeatures.count {
+        let features = deepstackFeatures[index]
+        precondition(
+          features.count == visualTokenRanges.count,
+          "Qwen3-VL deepstack feature count must match the vision spans"
+        )
+        for (range, feature) in zip(visualTokenRanges, features) {
+          h = Self.applyingVisualFeatures(
+            hiddenStates: h,
+            visualTokenRange: range,
+            visualEmbeds: feature
+          )
+        }
+      }
+      if index == activationLayer { return h }
+    }
+    return nil
+  }
+
+  private static func applyingVisualFeatures(
+    hiddenStates: MLXArray,
+    visualTokenRange: Range<Int>,
+    visualEmbeds: MLXArray
+  ) -> MLXArray {
+    precondition(
+      visualTokenRange.lowerBound >= 0
+        && visualTokenRange.upperBound <= hiddenStates.dim(1)
+        && visualTokenRange.count == visualEmbeds.dim(0),
+      "Qwen3-VL visual features must exactly cover their token span"
+    )
+    let features = visualEmbeds.dtype == hiddenStates.dtype
+      ? visualEmbeds
+      : visualEmbeds.asType(hiddenStates.dtype)
+    let padded = MLXArray.zeros(hiddenStates.shape, dtype: hiddenStates.dtype)
+    padded[0, visualTokenRange, 0...] = features
+    return hiddenStates + padded
+  }
+
   private func createAttentionMask(
     h: MLXArray,
     attentionMask: MLXArray?,

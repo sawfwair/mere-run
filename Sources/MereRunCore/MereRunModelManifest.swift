@@ -88,6 +88,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case ltxVideo = "ltx-video"
         /// Wan2 native video family.
         case wanVideo = "wan-video"
+        /// MiniMax-H3 joint video/audio family.
+        case miniMaxH3 = "minimax-h3"
         /// NVIDIA Cosmos3-Edge native omnimodal world-model family.
         case cosmos3Edge = "cosmos3-edge"
         /// Psi agent chat family.
@@ -1839,6 +1841,48 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                     scheduler: nil
                 ),
                 upstreamRepoId: "\(Wan2Resources.managedRepoID)@\(Wan2Resources.managedRevision)",
+                createdAt: createdAt
+            )
+        case .miniMaxH3FL2VAMLX:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .miniMaxH3,
+                family: .video,
+                tier: .latest,
+                variant: .distilled,
+                precision: .int4,
+                quantization: Quantization(bits: 4, groupSize: 64, scheme: "mlx-affine"),
+                defaults: Defaults(steps: 31, cfg: 1.0, sigmaShift: 12.0),
+                supports: [.videoGeneration],
+                components: Components(
+                    tokenizer: .local(path: "."),
+                    textEncoder: .local(path: "."),
+                    transformer: .local(path: "."),
+                    vae: .local(path: "."),
+                    scheduler: nil
+                ),
+                upstreamRepoId: "\(MiniMaxH3Resources.artifactRepository)@\(MiniMaxH3Resources.artifactRevision)",
+                createdAt: createdAt
+            )
+        case .miniMaxH3Ref2VAMLX:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .miniMaxH3,
+                family: .video,
+                tier: .latest,
+                variant: .distilled,
+                precision: .int8,
+                quantization: Quantization(bits: 8, groupSize: 64, scheme: "mlx-affine"),
+                defaults: Defaults(steps: 31, cfg: 1.0, sigmaShift: 12.0),
+                supports: [.videoGeneration],
+                components: Components(
+                    tokenizer: .local(path: "."),
+                    textEncoder: .local(path: "."),
+                    transformer: .local(path: "."),
+                    vae: .local(path: "."),
+                    scheduler: nil
+                ),
+                upstreamRepoId: "\(MiniMaxH3Resources.conversionSourceRepository)@\(MiniMaxH3Resources.conversionSourceRevision)",
                 createdAt: createdAt
             )
         case .cosmos3EdgeMLX:

@@ -38,6 +38,42 @@ func resolveLTXVideoGenerationRoute(
     }
 }
 
+enum MiniMaxH3CLITransformerWeightMode: String, CaseIterable, ExpressibleByArgument {
+    case automatic = "auto"
+    case quantized
+    case residentBF16 = "resident-bf16"
+
+    var generationMode: MiniMaxH3TransformerWeightMode {
+        switch self {
+        case .automatic: .automatic
+        case .quantized: .quantized
+        case .residentBF16: .residentBF16
+        }
+    }
+}
+
+private struct MiniMaxH3WiredMemoryPolicy: WiredMemoryPolicy, Hashable {
+    func limit(baseline: Int, activeSizes: [Int]) -> Int {
+        max(baseline, activeSizes.max() ?? baseline)
+    }
+}
+
+private func miniMaxH3WiredMemoryTargetBytes() -> Int {
+    let gibibyte = 1_073_741_824
+    let desired = ProcessInfo.processInfo.physicalMemory >= UInt64(96 * gibibyte)
+        ? 64 * gibibyte
+        : 50 * gibibyte
+#if os(macOS)
+    let safetyMargin = 1_048_576
+    guard let recommended = GPU.maxRecommendedWorkingSetBytes() else {
+        return min(desired, Int(ProcessInfo.processInfo.physicalMemory / 2))
+    }
+    return min(desired, max(0, recommended - safetyMargin))
+#else
+    return min(desired, Int(ProcessInfo.processInfo.physicalMemory / 2))
+#endif
+}
+
 func resolveLTXVideoGenerationRoute(
     variant: LTXVideoVariant,
     modelRoot: URL,
@@ -194,6 +230,7 @@ struct VideoGenerate: AsyncParsableCommand {
           swift run mere.run video generate "dialogue with clean background music" --quality final --output-mode audio-video --duration 15 --fps 24
           swift run mere.run video generate "a kinetic live performance" --audio song.wav --audio-start-time 30 --duration 5 --image performer.png
           swift run mere.run video generate "the camera walks forward" --model video-wan22-ti2v-5b-mlx --image frame.png --num-frames 41 --width 1280 --height 704
+          swift run mere.run video generate "use this subject and motion" --model-root ./MiniMax-H3-Ref2VA-MLX --reference image:subject.png --reference video:motion.mp4
         """
     )
 
@@ -215,7 +252,7 @@ struct VideoGenerate: AsyncParsableCommand {
     @Option(name: [.customLong("variant")], help: "Compatibility selector: distilled defaults to draft video-only; unified-av defaults to final audio-video.")
     var legacyVariant: LTXVideoVariant?
 
-    @Option(name: [.customLong("model-root")], help: "Local LTX model root. Takes precedence over --model.")
+    @Option(name: [.customLong("model-root")], help: "Local video model root. Takes precedence over --model.")
     var modelRoot: String?
 
     @Option(name: [.long], help: "Output width (snapped to the selected model's native geometry).")
@@ -236,8 +273,17 @@ struct VideoGenerate: AsyncParsableCommand {
     @Option(name: [.long], help: "Seed value.")
     var seed: Int?
 
-    @Option(name: [.long], help: "Wan denoising steps.")
-    var steps: Int = 40
+    @Option(
+        name: [.long],
+        help: "Denoising schedule points. Defaults to 40 for Wan; MiniMax-H3 selects 9, 16, or 31 from packed geometry."
+    )
+    var steps: Int?
+
+    @Option(
+        name: [.customLong("h3-weight-mode")],
+        help: "MiniMax-H3 transformer compute: auto, quantized, or resident-bf16."
+    )
+    var h3WeightMode: MiniMaxH3CLITransformerWeightMode = .automatic
 
     @Option(name: [.customLong("guidance-scale")], help: "Wan classifier-free guidance scale.")
     var guidanceScale: Float = 5
@@ -277,6 +323,9 @@ struct VideoGenerate: AsyncParsableCommand {
 
     @Option(name: [.customLong("end-image")], help: "Optional end keyframe path; conditions the last frame so the clip interpolates a directed start->end motion. Requires --image.")
     var endImage: String?
+
+    @Option(name: [.customLong("reference")], help: "Ordered MiniMax-H3 Ref2VA input as image:path, video:path, or audio:path. Repeat to preserve semantic order.")
+    var references: [String] = []
 
     @Option(name: [.customLong("end-image-strength")], help: "End keyframe conditioning strength in [0, 1].")
     var endImageStrength: Float = 1.0
@@ -382,7 +431,7 @@ struct VideoGenerate: AsyncParsableCommand {
         guard numFrames >= 5 else {
             throw ValidationError("--num-frames must be >= 5")
         }
-        guard steps > 0 else {
+        if let steps, steps <= 0 {
             throw ValidationError("--steps must be >= 1")
         }
         guard guidanceScale >= 0 else {
@@ -467,6 +516,89 @@ struct VideoGenerate: AsyncParsableCommand {
 
         let resolvedRootURL = URL(fileURLWithPath: resolvedModelRoot).standardizedFileURL
         try validateProductSelection(modelRoot: resolvedRootURL)
+        if isMiniMaxH3ModelRoot(resolvedRootURL) {
+            guard sourceAudioURL == nil else {
+                throw ValidationError("MiniMax-H3 FL2VA generates its own synchronized audio and does not accept --audio.")
+            }
+            if timings || timingsOutput != nil {
+                throw ValidationError("--timings and --timings-output are not available for MiniMax-H3 yet.")
+            }
+            let h3Resources = MiniMaxH3Resources(rootURL: resolvedRootURL)
+            let h3Configuration = try h3Resources.loadConfiguration()
+            let parsedReferences = try parseMiniMaxH3References()
+            if h3Configuration.task == "fl2va", !parsedReferences.isEmpty {
+                throw ValidationError("--reference requires a MiniMax-H3 Ref2VA model root.")
+            }
+            if h3Configuration.task == "ref2va" {
+                guard sourceImageURL == nil, endImageURL == nil else {
+                    throw ValidationError("MiniMax-H3 Ref2VA uses ordered --reference inputs, not --image/--end-image.")
+                }
+                guard !parsedReferences.isEmpty else {
+                    throw ValidationError("MiniMax-H3 Ref2VA requires at least one --reference.")
+                }
+            }
+            let h3Width = max(32, (width / 32) * 32)
+            let h3Height = max(32, (height / 32) * 32)
+            let requestedH3Frames = duration.map { Int(($0 * 24).rounded()) } ?? numFrames
+            let h3Frames = try MiniMaxH3Geometry.alignFrameCount(max(22, requestedH3Frames))
+            if !quiet {
+                CLIStderr.write("Engine: native MiniMax-H3 \(h3Configuration.task.uppercased())\n")
+                CLIStderr.write("Model root: \(resolvedRootURL.path)\n")
+                if h3Width != width || h3Height != height {
+                    CLIStderr.write("Adjusted MiniMax-H3 size to \(h3Width)x\(h3Height) (must be divisible by 32)\n")
+                }
+                if h3Frames != requestedH3Frames {
+                    CLIStderr.write("Adjusted MiniMax-H3 frame count to \(h3Frames) (must have form 17*n+5)\n")
+                }
+            }
+            try MLXBundleSupport.ensureAvailable(quiet: quiet)
+            let h3Options = try MiniMaxH3GenerationOptions(
+                prompt: trimmedPrompt,
+                width: h3Width,
+                height: h3Height,
+                numFrames: h3Frames,
+                steps: steps,
+                seed: UInt64(bitPattern: Int64(seed ?? 42)),
+                transformerWeightMode: h3WeightMode.generationMode,
+                firstFrameURL: sourceImageURL,
+                lastFrameURL: endImageURL,
+                references: parsedReferences
+            )
+            let generator = MiniMaxH3Generator()
+            let reportsProgress = !quiet
+            let wiredMemoryTicket = MiniMaxH3WiredMemoryPolicy().ticket(
+                size: miniMaxH3WiredMemoryTargetBytes()
+            )
+            let result = try await wiredMemoryTicket.withWiredLimit {
+                try Stream.withNewDefaultStream {
+                    try generator.generate(
+                        options: h3Options,
+                        resources: h3Resources,
+                        progressHandler: { progress in
+                            guard reportsProgress else { return }
+                            if progress.stage == .denoising {
+                                CLIStderr.write("Denoising \(progress.stepIndex + 1)/\(progress.totalSteps)\n")
+                            } else {
+                                CLIStderr.write("\(progress.stage.rawValue)\n")
+                            }
+                        }
+                    )
+                }
+            }
+            try LTXVideoMP4Writer.writeMP4(
+                frames: result.frames,
+                fps: MiniMaxH3Geometry.framesPerSecond,
+                to: outputURL,
+                audioWaveform: result.audio,
+                audioSampleRate: MiniMaxH3AudioVAE.samplingRate
+            )
+            if !quiet { CLIStderr.write("Saved: \(outputURL.path)\n") }
+            print(outputURL.path)
+            return
+        }
+        if !references.isEmpty {
+            throw ValidationError("--reference is only supported by MiniMax-H3 Ref2VA model roots.")
+        }
         if let sourceAudioURL {
             try validateNativeAudioToVideoModelRoot(resolvedRootURL)
             try MLXBundleSupport.ensureAvailable(quiet: quiet)
@@ -529,7 +661,7 @@ struct VideoGenerate: AsyncParsableCommand {
                 width: wanWidth,
                 height: wanHeight,
                 numFrames: wanFrames,
-                steps: steps,
+                steps: steps ?? 40,
                 guidanceScale: guidanceScale,
                 shift: shift,
                 fps: fps,
@@ -596,6 +728,12 @@ struct VideoGenerate: AsyncParsableCommand {
     }
 
     private func validateProductSelection(modelRoot: URL) throws {
+        if isMiniMaxH3ModelRoot(modelRoot) {
+            if quality != nil || outputMode != nil || legacyVariant != nil {
+                throw ValidationError("--quality, --output-mode, and --variant select LTX behavior and cannot be combined with MiniMax-H3.")
+            }
+            return
+        }
         if isWan2ModelRoot(modelRoot) {
             if quality != nil || outputMode != nil {
                 throw ValidationError("--quality and --output-mode currently select native LTX generation, not Wan2.2 TI2V.")
@@ -623,6 +761,29 @@ struct VideoGenerate: AsyncParsableCommand {
     private func isWan2ModelRoot(_ rootURL: URL) -> Bool {
         let resources = Wan2Resources(rootURL: rootURL)
         return resources.validate().isEmpty && (try? resources.loadConfiguration()) != nil
+    }
+
+    private func isMiniMaxH3ModelRoot(_ rootURL: URL) -> Bool {
+        let resources = MiniMaxH3Resources(rootURL: rootURL)
+        return resources.validate().isEmpty && (try? resources.loadConfiguration()) != nil
+    }
+
+    private func parseMiniMaxH3References() throws -> [MiniMaxH3ReferenceInput] {
+        try references.map { raw in
+            guard let separator = raw.firstIndex(of: ":") else {
+                throw ValidationError("--reference must be image:path, video:path, or audio:path (got \(raw)).")
+            }
+            let rawKind = String(raw[..<separator]).lowercased()
+            let rawPath = String(raw[raw.index(after: separator)...])
+            guard let kind = MiniMaxH3ReferenceKind(rawValue: rawKind), !rawPath.isEmpty else {
+                throw ValidationError("--reference must be image:path, video:path, or audio:path (got \(raw)).")
+            }
+            let url = URL(fileURLWithPath: rawPath).standardizedFileURL
+            guard FileManager.default.fileExists(atPath: url.path) else {
+                throw ValidationError("Reference file not found: \(url.path)")
+            }
+            return MiniMaxH3ReferenceInput(kind: kind, url: url)
+        }
     }
 
     private func runNativeWanGenerate(
@@ -1121,6 +1282,7 @@ struct VideoGenerate: AsyncParsableCommand {
             imageStrength: imageStrength,
             endImage: endImage,
             endImageStrength: endImageStrength,
+            references: references,
             timings: timings,
             timingsOutput: timingsOutput,
             generationArgv: generationActionArguments(outputURL: outputURL),
@@ -1182,6 +1344,9 @@ struct VideoGenerate: AsyncParsableCommand {
         if let seed {
             args += ["--seed", String(seed)]
         }
+        if let steps {
+            args += ["--steps", String(steps)]
+        }
         if let negativePrompt {
             args += ["--negative-prompt", negativePrompt]
         }
@@ -1205,6 +1370,9 @@ struct VideoGenerate: AsyncParsableCommand {
         }
         if let endImage {
             args += ["--end-image", endImage, "--end-image-strength", String(endImageStrength)]
+        }
+        for reference in references {
+            args += ["--reference", reference]
         }
         if quiet {
             args.append("--quiet")

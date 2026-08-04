@@ -29,6 +29,7 @@ public final class QwenTokenizer {
   public let padTokenId: Int
   public let maxLength: Int
   public let imageTokenId: Int?
+  public let videoTokenId: Int?
   public let visionStartTokenId: Int?
   public let visionEndTokenId: Int?
 
@@ -72,6 +73,7 @@ public final class QwenTokenizer {
     suffixTokens: [Int],
     tokenizer: Tokenizer,
     imageTokenId: Int? = nil,
+    videoTokenId: Int? = nil,
     visionStartTokenId: Int? = nil,
     visionEndTokenId: Int? = nil,
     encode: @escaping @Sendable (String) -> [Int]
@@ -82,6 +84,7 @@ public final class QwenTokenizer {
     self.suffixTokens = suffixTokens
     self.tokenizer = tokenizer
     self.imageTokenId = imageTokenId
+    self.videoTokenId = videoTokenId
     self.visionStartTokenId = visionStartTokenId
     self.visionEndTokenId = visionEndTokenId
     self.encodeFunction = encode
@@ -161,9 +164,10 @@ public final class QwenTokenizer {
       prefixTokens: prefixTokens,
       suffixTokens: suffixTokens,
       tokenizer: tokenizer,
-      imageTokenId: addedTokens["<|image_pad|>"],
-      visionStartTokenId: addedTokens["<|vision_start|>"],
-      visionEndTokenId: addedTokens["<|vision_end|>"]
+      imageTokenId: addedTokens["<|image_pad|>"] ?? tokenizer.convertTokenToId("<|image_pad|>"),
+      videoTokenId: addedTokens["<|video_pad|>"] ?? tokenizer.convertTokenToId("<|video_pad|>"),
+      visionStartTokenId: addedTokens["<|vision_start|>"] ?? tokenizer.convertTokenToId("<|vision_start|>"),
+      visionEndTokenId: addedTokens["<|vision_end|>"] ?? tokenizer.convertTokenToId("<|vision_end|>")
     ) { text in
       tokenizer.encode(text: text)
     }

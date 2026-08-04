@@ -523,6 +523,110 @@ final class DiTShapeBenchTests: XCTestCase {
         }
     }
 
+    /// MiniMax-H3's dominant projections at its practical 512-square and
+    /// 768x448 packed row counts. The cached arm models loading a compact
+    /// checkpoint, dequantizing each projection once, and keeping bf16 weights
+    /// resident for the denoising loop.
+    func testMiniMaxH3QmmVsResidentBF16() throws {
+        try benchGate()
+
+        Stream.withNewDefaultStream {
+
+            func pairedTime(
+                _ label: String,
+                qmm: QuantizedLinear,
+                dense: BenchCachedDenseLinear,
+                input: MLXArray
+            ) {
+                MLX.eval(qmm(input), dense(input))
+                var bestQMM = Double.greatestFiniteMagnitude
+                var bestDense = Double.greatestFiniteMagnitude
+                for _ in 0..<2 {
+                    var start = CFAbsoluteTimeGetCurrent()
+                    MLX.eval(qmm(input))
+                    bestQMM = min(bestQMM, CFAbsoluteTimeGetCurrent() - start)
+                    start = CFAbsoluteTimeGetCurrent()
+                    MLX.eval(dense(input))
+                    bestDense = min(bestDense, CFAbsoluteTimeGetCurrent() - start)
+                }
+                print(String(
+                    format: "[dit-bench] H3 %@ qmm=%.0fms resident-bf16=%.0fms qmm/bf16=%.2fx",
+                    label,
+                    bestQMM * 1_000,
+                    bestDense * 1_000,
+                    bestQMM / bestDense
+                ))
+            }
+
+            for rows in [4_608, 12_925] {
+                for (name, inputDimension, outputDimension) in [
+                    ("qkv", 5_376, 21_504),
+                    ("ff2", 14_336, 5_376),
+                ] {
+                    let input = MLXRandom.normal([1, rows, inputDimension]).asType(.bfloat16)
+                    let qmm = QuantizedLinear(
+                        inputDimension,
+                        outputDimension,
+                        bias: false,
+                        groupSize: 64,
+                        bits: 4
+                    )
+                    MLX.eval(input, qmm.parameters())
+                    pairedTime(
+                        "rows=\(rows) \(name) \(inputDimension)->\(outputDimension)",
+                        qmm: qmm,
+                        dense: BenchCachedDenseLinear(copying: qmm),
+                        input: input
+                    )
+                    MLX.Memory.clearCache()
+                }
+            }
+        }
+    }
+
+    /// Exact dense MiniMax-H3 attention shape for the 768x448, 124-frame
+    /// practical tier. Reports effective QK+AV throughput so attention can be
+    /// separated from the already-qualified dense GEMM ceiling.
+    func testMiniMaxH3PracticalTierSDPA() throws {
+        try benchGate()
+        Stream.withNewDefaultStream {
+            let rows = 12_925
+            let heads = 56
+            let headDimension = 128
+            let query = MLXRandom.normal([1, heads, rows, headDimension]).asType(.bfloat16)
+            let key = MLXRandom.normal([1, heads, rows, headDimension]).asType(.bfloat16)
+            let value = MLXRandom.normal([1, heads, rows, headDimension]).asType(.bfloat16)
+            MLX.eval(query, key, value)
+
+            func attention() -> MLXArray {
+                MLXFast.scaledDotProductAttention(
+                    queries: query,
+                    keys: key,
+                    values: value,
+                    scale: Float(1 / sqrt(Double(headDimension))),
+                    mask: .none
+                )
+            }
+
+            MLX.eval(attention())
+            var best = Double.greatestFiniteMagnitude
+            for _ in 0..<3 {
+                let start = CFAbsoluteTimeGetCurrent()
+                MLX.eval(attention())
+                best = min(best, CFAbsoluteTimeGetCurrent() - start)
+            }
+            let operations = 4 * Double(heads) * Double(rows) * Double(rows) * Double(headDimension)
+            print(String(
+                format: "[dit-bench] H3 SDPA rows=%d heads=%d dim=%d %.0fms %.2fTFLOP/s",
+                rows,
+                heads,
+                headDimension,
+                best * 1_000,
+                operations / best / 1e12
+            ))
+        }
+    }
+
     /// Full-model paired A/B: the same quantized klein-nano forward with the
     /// native qmm kernels versus the large-M dense path (transient dequant)
     /// versus a resident cached-dequant arm. Interleaved in one process.

@@ -253,6 +253,7 @@ if !isLinuxPackage {
   mereRunCoreLinkerSettings.append(.linkedFramework("Vision"))
   mereRunCoreLinkerSettings.append(.linkedFramework("ImageIO"))
   mereRunCoreLinkerSettings.append(.linkedFramework("CoreVideo"))
+  mereRunCoreLinkerSettings.append(.linkedFramework("IOKit"))
 }
 
 var audioCodecsDependencies: [Target.Dependency] = mlxDependency("MLX")
@@ -343,6 +344,7 @@ targets.append(contentsOf: [
       "LoRA/README.md",
       "MagentaRT2/README.md",
       "MMAudio/README.md",
+      "MiniMaxH3/README.md",
       "PrivacyFilter/README.md",
       "RoFormer/README.md",
       "UniverSR/README.md",

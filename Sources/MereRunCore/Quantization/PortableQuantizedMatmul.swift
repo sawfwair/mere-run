@@ -159,6 +159,10 @@ public enum MLXCUDAQuant {
 public final class PortableQuantizedLinear: QuantizedLinear {
     private var cachedDequantizedWeight: MLXArray?
     private var cachedDequantizedWeightDType: DType?
+    /// Retain the dequantized CUDA fallback weight between calls. Large dense
+    /// transformers can disable this and evaluate layerwise to bound residency
+    /// while preserving native quantized kernels when they are available.
+    public var cacheDenseFallbackWeight = true
     /// Training can prefer bounded residency over the native quantized kernel.
     /// The dequantized weight remains part of the current lazy graph only and is
     /// not retained by the module between calls.
@@ -179,7 +183,7 @@ public final class PortableQuantizedLinear: QuantizedLinear {
             case .native:
                 return super.callAsFunction(x)
             case .dense:
-                return denseOutput(x, cacheWeight: true)
+                return denseOutput(x, cacheWeight: cacheDenseFallbackWeight)
             case .probe:
                 let output = super.callAsFunction(x)
                 do {
@@ -200,7 +204,7 @@ public final class PortableQuantizedLinear: QuantizedLinear {
                         quantizationMode: mode,
                         supported: false
                     )
-                    return denseOutput(x, cacheWeight: true)
+                    return denseOutput(x, cacheWeight: cacheDenseFallbackWeight)
                 }
             }
         }

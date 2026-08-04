@@ -339,11 +339,11 @@ final class QwenVisionTower: Module {
 
     // Build output (simplified - no window reordering needed for Qwen3-VL)
     var cuMergedLens: [Int] = [0]
-    for (_, h, w) in gridThw {
+    for (t, h, w) in gridThw {
       let mergedH = h / configuration.spatialMergeSize
       let mergedW = w / configuration.spatialMergeSize
       let mergedPerFrame = mergedH * mergedW
-      for _ in 0..<1 {  // t is always 1 for single images
+      for _ in 0..<t {
         cuMergedLens.append(cuMergedLens.last! + mergedPerFrame)
       }
     }

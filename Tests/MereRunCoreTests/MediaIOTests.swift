@@ -331,6 +331,56 @@ final class MediaIOTests: XCTestCase {
         let audio = try MediaAudioIO.probe(outputURL)
         XCTAssertEqual(decoded.frameURLs.count, frameCount)
         XCTAssertEqual(decoded.fps, Double(fps), accuracy: 0.001)
+        XCTAssertEqual(audio.durationSeconds, duration, accuracy: 0.002)
+        XCTAssertTrue(MediaVideoIO.hasAudioTrack(outputURL))
+    }
+
+    func testVideoAudioMuxDoesNotDropDelayedFramesWhenAudioIsSlightlyShort() throws {
+        guard isExecutableAvailable(MediaTool.ffmpegPath),
+              isExecutableAvailable(MediaTool.ffprobePath) else {
+            throw XCTSkip("ffmpeg and ffprobe are required")
+        }
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mediaio-short-audio-mux-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let frameCount = 56
+        let fps = 24
+        let duration = Double(frameCount) / Double(fps)
+        let silentURL = root.appendingPathComponent("silent.mp4")
+        let audioURL = root.appendingPathComponent("audio.wav")
+        let outputURL = root.appendingPathComponent("muxed.mp4")
+        try MediaVideoIO.writeMP4(
+            rgb24: [UInt8](repeating: 127, count: 32 * 32 * 3 * frameCount),
+            width: 32,
+            height: 32,
+            frameCount: frameCount,
+            fps: fps,
+            to: silentURL
+        )
+        let audioFrameCount = Int(((duration - 0.008) * 32_000).rounded())
+        try MediaAudioIO.writeFloatWAV(
+            samples: [Float](repeating: 0.1, count: audioFrameCount * 2),
+            sampleRate: 32_000,
+            channels: 2,
+            to: audioURL
+        )
+
+        try MediaVideoIO.mux(
+            videoURL: silentURL,
+            audioURL: audioURL,
+            outputURL: outputURL,
+            audioBitRate: 192_000
+        )
+
+        let decoded = try MediaVideoIO.extractFrames(
+            from: outputURL,
+            into: root.appendingPathComponent("decoded", isDirectory: true)
+        )
+        let audio = try MediaAudioIO.probe(outputURL)
+        XCTAssertEqual(decoded.frameURLs.count, frameCount)
+        XCTAssertEqual(decoded.fps, Double(fps), accuracy: 0.001)
         XCTAssertEqual(audio.durationSeconds, duration, accuracy: 0.001)
         XCTAssertTrue(MediaVideoIO.hasAudioTrack(outputURL))
     }

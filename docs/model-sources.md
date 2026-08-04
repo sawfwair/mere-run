@@ -117,6 +117,8 @@ from the runtime catalog used by `mere.run model list`,
 | `video` | `video-ltx23-full-mlx` |
 | `video` | `video-ltx23-a2vid-mlx` |
 | `video` | `video-wan22-ti2v-5b-mlx` |
+| `video` | `video-minimax-h3-fl2va-mlx` |
+| `video` | `video-minimax-h3-ref2va-mlx` |
 | `video` | `video-cosmos3-edge-mlx` |
 | `video` | `video-scail2-14b-mlx` |
 | `video` | `video-dreamx-world-5b-ar-mlx` |
@@ -153,6 +155,7 @@ validates all configured models before downloading any; both accept the same
 | `text-chat-lfm25-a1b-8bit` | LFM Open License v1.0; commercial use by entities at or above USD 10M annual revenue is excluded |
 | `vision-segment-sam31` | Meta SAM License custom use, trade-control, attribution, and redistribution conditions |
 | `vision-face-buffalo-l` | InsightFace pretrained weights; non-commercial research use |
+| `video-minimax-h3-fl2va-mlx`, `video-minimax-h3-ref2va-mlx` | MiniMax-H3 Community License; use, distribution, and display are excluded in the United States, European Union, United Kingdom, and Republic of Korea, with downstream notice and safeguard obligations |
 | `image-3d-trellis2-4b` | the mounted DINOv3 encoder is gated under Meta's custom DINOv3 License |
 | `music-muscriptor-{small,medium,large}` | CC BY-NC 4.0 model weights |
 | `sfx-woosh-*` | CC BY-NC 4.0 Woosh or MMAudio Synchformer weights |
@@ -763,6 +766,62 @@ Its legacy narrow manifest may omit the vocoder, so it can run final-quality
 video-only and source-audio A2Vid but not generated-audio output. Requests for
 either the legacy ID or the new full ID resolve to an already-installed
 compatible root when possible. New pulls should use `video-ltx23-full-mlx`.
+
+### MiniMax-H3 FL2VA and Ref2VA
+
+The native MiniMax-H3 implementation covers both released 33B dense
+partitions: FL2VA text/first/last-frame conditioning and Ref2VA ordered
+image/video/audio conditioning. It jointly denoises 24-channel video and
+32-channel stereo-as-batch audio latents, then decodes 24 fps RGB video and
+32 kHz stereo audio into one MP4.
+
+The explicit-pull FL2VA root is the flat
+`Sawfwair/MiniMax-H3-FL2VA-MLX-4bit` package pinned at immutable Hub commit
+`e1244ad93d60c737c7e0f065a1c9372f3de7caf8`.
+Every tensor in that package is derived directly from
+`MiniMaxAI/MiniMax-H3@ec19cc6daf5d8add9417c18e86b6b58cc6c55027`; converted or
+quantized third-party weights are not inputs. The transformer core is affine
+Q4/group-64 with dense precision islands, the exact 50-layer Qwen3-VL
+conditioner is affine Q8/group-64, the video VAE is FP16, and the audio VAE has
+its released weight normalization folded for the native runtime. The 14-file
+managed download is exactly 46,250,104,566 bytes and also carries the tokenizer,
+configuration, source manifest, conversion receipt, hashes, `LICENSE`,
+`NOTICE`, and `MODIFICATIONS.md`. Before Q4 packing, all 52 fused transformer
+QKV matrices are deinterleaved from MiniMax's released per-head row order into
+the global Q/K/V slabs consumed by the native runtime. Runtime auto-download is
+disabled.
+
+Ref2VA is conversion-only. The audited converter accepts only
+`minimax_h3_ref2va_int8_convrot.safetensors` from
+`Comfy-Org/MiniMax-H3@fd70b39279d1ae6eb214c903f53e1bec3af19a77`, exactly
+34,038,894,550 bytes with SHA-256
+`9eef934046a0671bc8a5daf87100705e1478419c574cfde70c50fbe6885f76a9`.
+It reverses the regular-Hadamard ConvRot basis, reproduces MLX affine INT8
+group-64 packing, and emits a hashed receipt. The verified conversion used for
+runtime validation is 36,024,412,656 bytes with SHA-256
+`c3ddde0dc29503281cd4c03c1f82b9cb640f4670da68caa5f55e3cec8f2045e8`.
+Stage it as `transformer.safetensors` beside the exact FL conditioner, VAEs,
+tokenizer, notices, and a `config.json` whose `partition` is `ref2va`.
+
+`convert_minimax_h3_official_mlx.py` creates the managed FL2VA package in one
+audited pass from the official release. It computes the source-bound AdaLN
+cache from the original BF16/F32 projections, directly quantizes the active
+transformer and conditioner matrices once, and emits the cache, weights,
+configuration, receipts, and source manifest as one unit. The runtime resamples
+the cache's exact released 31-point modulation curve, so the package supports
+arbitrary valid schedule-point counts without restoring the omitted
+inference-redundant branch.
+
+The model weights use the MiniMax-H3 Community License, not Apache-2.0. At the
+pinned official source revision
+`ec19cc6daf5d8add9417c18e86b6b58cc6c55027`, the license excludes use,
+distribution, and display in the United States, European Union, United
+Kingdom, and Republic of Korea and imposes notice, modification-disclosure,
+and safety obligations on downstream distribution. The CLI therefore requires
+explicit license acceptance for the managed FL pull, and conversion must be
+performed only where the model terms permit it. The upstream FL2VA and Ref2VA
+trees are about 144 GB each; the complete upstream repository is roughly
+498 GB, so compile success is not artifact or generation proof.
 
 ### `video-wan22-ti2v-5b-mlx`
 
