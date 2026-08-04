@@ -2087,6 +2087,7 @@ struct WorkflowRunner: @unchecked Sendable {
         case "webp": "image/webp"
         case "mp4": "video/mp4"
         case "wav": "audio/wav"
+        case "tif", "tiff": "image/tiff"
         case "json": "application/json"
         case "txt": "text/plain"
         case "safetensors": "application/x-safetensors"

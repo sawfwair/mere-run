@@ -280,6 +280,17 @@ final class WorkflowGraphTests: XCTestCase {
         ))
     }
 
+    func testPluginTIFFOutputUsesPortableExtension() {
+        XCTAssertEqual(
+            WorkflowNodeCommandBuilder.outputExtension(contentTypes: ["image/tiff"]),
+            ".tif"
+        )
+        XCTAssertEqual(
+            WorkflowNodeCommandBuilder.outputExtension(contentTypes: ["application/json"]),
+            ".json"
+        )
+    }
+
     func testVisionGroundDefaultsManagedModelRequirement() throws {
         let graph = try decodeGraph("""
         {

@@ -789,6 +789,7 @@ struct WorkflowBundleMaterializer {
         case "webp": "image/webp"
         case "mp4": "video/mp4"
         case "wav": "audio/wav"
+        case "tif", "tiff": "image/tiff"
         case "json": "application/json"
         case "txt": "text/plain"
         case "safetensors": "application/x-safetensors"
@@ -1517,13 +1518,14 @@ enum WorkflowNodeCommandBuilder {
         }
     }
 
-    private static func outputExtension(contentTypes: [String]) -> String {
+    static func outputExtension(contentTypes: [String]) -> String {
         switch contentTypes.first {
         case "image/png": ".png"
         case "image/jpeg": ".jpg"
         case "image/webp": ".webp"
         case "video/mp4": ".mp4"
         case "audio/wav": ".wav"
+        case "image/tiff": ".tif"
         case "application/json": ".json"
         case "application/x-safetensors": ".safetensors"
         default: ""
