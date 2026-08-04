@@ -51,6 +51,7 @@ The V1 node catalog contains:
 - `seed.value`, `choice.value`
 - `text.join`, `text.template`
 - `text.enhance`, `image.describe`
+- `vision.ground`
 - `image.train-lora`
 - `image.generate`
 - `video.generate`
@@ -61,6 +62,11 @@ templates execute as native deterministic intrinsics. `text.template` accepts
 strict `{{name}}` identifiers, preserves escaped `\{{name}}` text, and blocks
 missing variables. `text.enhance` and `image.describe` require an explicit
 installed model and never trigger a hidden pull.
+
+`vision.ground` uses the managed `vision-ground-falcon-perception` model by
+default. It emits an annotated image and structured detections JSON as verified
+artifacts. Grounding output is candidate geometry; graph execution does not
+promote it into evidence or findings.
 
 Catalog value schemas recursively describe array items, object properties, and
 additional properties. Editors may expose those nested slots as typed ports

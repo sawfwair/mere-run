@@ -23,6 +23,9 @@ mere.run vision ground --help
 - `--output`, `-o`: annotated image path.
 - `--json-output`: JSON metadata path.
 - `--mask-output-dir`: directory for per-detection mask PNGs.
+- `--preflight --json`: validate inputs, model availability, and artifact paths
+  without loading the model.
+- `--quiet`, `-q`: print only the annotated output image path.
 
 ## Prompting Patterns
 
@@ -45,6 +48,15 @@ mere.run vision ground ./street.jpg \
 - Start broad, then add attributes to reduce false positives.
 - Save masks when downstream compositing or measurement needs exact regions.
 - For crowded scenes, test one query at a time.
+
+## Portable Workflows
+
+Use the built-in `vision.ground` graph node to keep grounding portable across
+local, SSH, and Relay execution. It accepts an image asset and a JSON array of
+queries, defaults to the managed Falcon model, and emits verified annotated
+`image` and structured `detections` artifacts. Treat detections as candidate
+geometry until an authoritative source or human review promotes them. Direct
+CLI runs may additionally request per-detection masks with `--mask-output-dir`.
 
 ## Troubleshooting
 

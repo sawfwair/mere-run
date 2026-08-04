@@ -952,6 +952,7 @@ struct WorkflowGraphRequirements: Equatable {
             switch node.kind {
             case "image.train-lora": return ImageTrainLoRA.defaultManagedModelID.rawValue
             case "image.generate": return ImageGenerate.defaultManagedModelID.rawValue
+            case "vision.ground": return VisionGround.defaultManagedModelID.rawValue
             case "video.generate": return ModelResolver.ModelID.ltxVideo23AVMLX.rawValue
             default: return nil
             }

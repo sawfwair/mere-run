@@ -45,6 +45,30 @@ final class WorkflowGraphTests: XCTestCase {
         )
     }
 
+    func testVisionGroundCatalogExposesCandidateArtifacts() throws {
+        let entry = try XCTUnwrap(WorkflowNodeRegistry.entry(for: "vision.ground"))
+
+        XCTAssertEqual(entry.category, "vision")
+        XCTAssertEqual(entry.presentation?.style, "material")
+        XCTAssertEqual(entry.presentation?.primaryArgument, "image")
+        XCTAssertEqual(
+            entry.inputs.first(where: { $0.name == "queries" })?.valueSchema?.type,
+            .array
+        )
+        XCTAssertEqual(
+            entry.inputs.first(where: { $0.name == "queries" })?.valueSchema?.items?.type,
+            .string
+        )
+        XCTAssertEqual(
+            entry.outputs.map(\.name),
+            ["image", "detections"]
+        )
+        XCTAssertEqual(
+            entry.outputs.first(where: { $0.name == "detections" })?.contentTypes,
+            ["application/json"]
+        )
+    }
+
     func testCreativeMaterialIntrinsicsHaveExactSemantics() throws {
         XCTAssertEqual(
             try WorkflowIntrinsicInvocation(
@@ -200,6 +224,94 @@ final class WorkflowGraphTests: XCTestCase {
         XCTAssertTrue(invocation.runArguments.contains("--require-installed"))
         XCTAssertTrue(invocation.runArguments.contains("--no-thinking"))
         XCTAssertEqual(invocation.stdoutOutputName, "text")
+    }
+
+    func testVisionGroundBuildsPreflightAndArtifactInvocation() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let node = WorkflowNode(
+            id: "ground",
+            kind: "vision.ground",
+            arguments: [
+                "image": .string("/tmp/post-event.png"),
+                "queries": .array([
+                    .string("washed-out roadway"),
+                    .string("debris accumulation"),
+                ]),
+            ],
+            dependsOn: nil
+        )
+
+        let invocation = try WorkflowNodeCommandBuilder.invocation(
+            node: node,
+            arguments: node.arguments,
+            nodeDirectory: root
+        )
+
+        XCTAssertEqual(invocation.command, ["vision", "ground"])
+        XCTAssertTrue(invocation.preflightArguments.suffix(2).elementsEqual(["--preflight", "--json"]))
+        XCTAssertTrue(invocation.runArguments.contains("--quiet"))
+        XCTAssertTrue(invocation.runArguments.contains("washed-out roadway"))
+        XCTAssertTrue(invocation.runArguments.contains("debris accumulation"))
+        XCTAssertEqual(invocation.outputs["image"]?.type, .asset)
+        XCTAssertEqual(invocation.outputs["detections"]?.contentTypes, ["application/json"])
+        XCTAssertTrue(invocation.outputs["image"]?.path?.hasSuffix("/artifacts/image.png") == true)
+        XCTAssertTrue(invocation.outputs["detections"]?.path?.hasSuffix("/artifacts/detections.json") == true)
+        XCTAssertFalse(invocation.runArguments.contains("--mask-output-dir"))
+    }
+
+    func testVisionGroundRequiresAtLeastOneStringQuery() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let node = WorkflowNode(
+            id: "ground",
+            kind: "vision.ground",
+            arguments: [
+                "image": .string("/tmp/post-event.png"),
+                "queries": .array([]),
+            ],
+            dependsOn: nil
+        )
+
+        XCTAssertThrowsError(try WorkflowNodeCommandBuilder.invocation(
+            node: node,
+            arguments: node.arguments,
+            nodeDirectory: root
+        ))
+    }
+
+    func testVisionGroundDefaultsManagedModelRequirement() throws {
+        let graph = try decodeGraph("""
+        {
+          "schema_version": 1,
+          "kind": "mere.run/workflow-graph",
+          "name": "ground-candidates",
+          "inputs": {
+            "image": {"type": "asset", "content_types": ["image/png"]}
+          },
+          "nodes": [
+            {
+              "id": "ground",
+              "kind": "vision.ground",
+              "arguments": {
+                "image": {"$ref": "inputs.image"},
+                "queries": ["road", "debris"]
+              }
+            }
+          ],
+          "outputs": {
+            "detections": {"$ref": "nodes.ground.outputs.detections"}
+          }
+        }
+        """)
+        let requirements = WorkflowGraphRequirements.resolve(
+            graph: graph,
+            inputs: .init(values: ["image": .string("/tmp/post-event.png")])
+        )
+
+        XCTAssertEqual(requirements.nodeKinds, ["vision.ground"])
+        XCTAssertEqual(requirements.modelIDs, ["vision-ground-falcon-perception"])
+        XCTAssertEqual(requirements.acceleratorBackends, ["cuda", "metal"])
     }
 
     func testNVIDIAMemoryProbeParsesLargestGPU() {

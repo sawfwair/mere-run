@@ -3,6 +3,28 @@ import Foundation
 import MereRunCore
 
 struct VisionGround: AsyncParsableCommand {
+    struct PreflightReport: Codable, Equatable {
+        let status: String
+        let capability: String
+        let modelID: String
+        let image: String
+        let queries: [String]
+        let annotatedImage: String
+        let detectionsJSON: String
+        let maskOutputDirectory: String?
+
+        enum CodingKeys: String, CodingKey {
+            case status
+            case capability
+            case modelID = "model_id"
+            case image
+            case queries
+            case annotatedImage = "annotated_image"
+            case detectionsJSON = "detections_json"
+            case maskOutputDirectory = "mask_output_directory"
+        }
+    }
+
     struct ResolvedModel {
         let modelID: String
         let rootURL: URL
@@ -43,15 +65,25 @@ struct VisionGround: AsyncParsableCommand {
     @Option(name: [.customLong("mask-output-dir")], help: "Optional directory for per-detection PNG mask exports.")
     var maskOutputDir: String?
 
+    @Flag(name: [.customLong("preflight")], help: "Validate the image, model, queries, and outputs without loading Falcon Perception.")
+    var preflight: Bool = false
+
+    @Flag(name: [.customLong("json")], help: "With --preflight, emit a structured JSON report.")
+    var json: Bool = false
+
+    @Flag(name: [.short, .long], help: "Print only the annotated output image path.")
+    var quiet: Bool = false
+
     func validate() throws {
         guard !query.isEmpty else {
             throw ValidationError("Provide at least one --query or --prompt value.")
         }
+        if json && !preflight {
+            throw ValidationError("--json is only supported with --preflight for vision ground.")
+        }
     }
 
     func run() async throws {
-        try MLXBundleSupport.ensureAvailable(quiet: false)
-
         let fileManager = FileManager.default
         let imageURL = URL(fileURLWithPath: image).standardizedFileURL
         guard fileManager.fileExists(atPath: imageURL.path) else {
@@ -62,6 +94,36 @@ struct VisionGround: AsyncParsableCommand {
         let outputImageURL = Self.resolveAnnotatedOutputURL(output, inputImageURL: imageURL)
         let outputJSONURL = Self.resolveJSONOutputURL(jsonOutput, inputImageURL: imageURL)
         let maskOutputDirectoryURL = Self.resolveDirectoryURL(maskOutputDir)
+
+        if preflight {
+            let report = PreflightReport(
+                status: "ready",
+                capability: "vision.ground",
+                modelID: resolvedModel.modelID,
+                image: imageURL.path,
+                queries: query,
+                annotatedImage: outputImageURL.path,
+                detectionsJSON: outputJSONURL.path,
+                maskOutputDirectory: maskOutputDirectoryURL?.path
+            )
+            if json {
+                let encoder = JSONEncoder()
+                encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+                print(String(decoding: try encoder.encode(report), as: UTF8.self))
+            } else {
+                print("Ready: \(report.capability) with \(report.modelID)")
+                print("Image: \(report.image)")
+                print("Queries: \(report.queries.joined(separator: ", "))")
+                print("Annotated image: \(report.annotatedImage)")
+                print("Detections JSON: \(report.detectionsJSON)")
+                if let maskOutputDirectory = report.maskOutputDirectory {
+                    print("Masks: \(maskOutputDirectory)")
+                }
+            }
+            return
+        }
+
+        try MLXBundleSupport.ensureAvailable(quiet: quiet)
 
         let grounder = try FalconPerceptionGrounder(
             modelRootURL: resolvedModel.rootURL,
@@ -76,12 +138,16 @@ struct VisionGround: AsyncParsableCommand {
             maskOutputDirectoryURL: maskOutputDirectoryURL
         )
 
-        print("Model: \(result.modelID)")
-        print("Detections: \(result.detections.count)")
-        print("Image: \(result.annotatedImageURL.path)")
-        print("JSON: \(result.jsonOutputURL.path)")
-        if let maskOutputDirectoryURL {
-            print("Masks: \(maskOutputDirectoryURL.path)")
+        if quiet {
+            print(result.annotatedImageURL.path)
+        } else {
+            print("Model: \(result.modelID)")
+            print("Detections: \(result.detections.count)")
+            print("Image: \(result.annotatedImageURL.path)")
+            print("JSON: \(result.jsonOutputURL.path)")
+            if let maskOutputDirectoryURL {
+                print("Masks: \(maskOutputDirectoryURL.path)")
+            }
         }
     }
 

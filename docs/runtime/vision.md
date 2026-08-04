@@ -205,7 +205,15 @@ model store; it also accepts a local Falcon Perception model root directory.
 The annotated image defaults to `<stem>_grounded.<ext>` (`--output`/`-o`
 overrides it), JSON metadata defaults to `<stem>_grounded.json`
 (`--json-output` overrides it), and `--mask-output-dir` exports one PNG mask
-per detection.
+per detection. `--preflight --json` validates the image, installed model,
+queries, and output plan without loading the model; `--quiet` prints only the
+annotated image path.
+
+Portable graphs expose the same runtime as the built-in `vision.ground` node.
+The node accepts an image plus a JSON array of queries and produces a verified
+annotated `image` plus structured `detections` JSON. These outputs are candidate
+geometry, not authoritative evidence. Direct CLI runs may additionally export
+per-detection masks with `--mask-output-dir`.
 
 ### Track objects through a video
 

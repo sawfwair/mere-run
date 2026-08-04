@@ -34,6 +34,33 @@ final class VisionGroundCommandParsingTests: XCTestCase {
         XCTAssertNil(cmd.output)
         XCTAssertNil(cmd.jsonOutput)
         XCTAssertNil(cmd.maskOutputDir)
+        XCTAssertFalse(cmd.preflight)
+        XCTAssertFalse(cmd.json)
+        XCTAssertFalse(cmd.quiet)
+    }
+
+    func testVisionGroundParsesWorkflowFlags() throws {
+        let cmd = try VisionGround.parse([
+            "/tmp/image.png",
+            "--query", "washed-out road", "debris",
+            "--preflight",
+            "--json",
+            "--quiet",
+        ])
+
+        XCTAssertEqual(cmd.query, ["washed-out road", "debris"])
+        XCTAssertTrue(cmd.preflight)
+        XCTAssertTrue(cmd.json)
+        XCTAssertTrue(cmd.quiet)
+        XCTAssertNoThrow(try cmd.validate())
+    }
+
+    func testVisionGroundRejectsJSONOutsidePreflight() throws {
+        XCTAssertThrowsError(try VisionGround.parse([
+            "/tmp/image.png",
+            "--query", "road",
+            "--json",
+        ]))
     }
 
     func testVisionGroundParsesPromptAliasAndOverrides() throws {
