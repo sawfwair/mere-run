@@ -36,6 +36,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case samSegmentation = "sam-segmentation"
         /// Falcon Perception grounded detection and segmentation family.
         case falconPerception = "falcon-perception"
+        /// IBM/ESA TerraMind temporal flood-segmentation family.
+        case terramindFlood = "terramind-flood"
         /// InsightFace Buffalo-L face detection and identity-embedding family.
         case insightFace = "insightface"
         /// MoGe-2 metric monocular geometry family.
@@ -112,6 +114,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case qwen
         case sam
         case falcon
+        case terramind
         case face
         case geometry
         case depth
@@ -186,6 +189,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case loraInference = "lora_inference"
         case loraTraining = "lora_training"
         case visionSegmentation = "vision_segmentation"
+        case floodSegmentation = "flood_segmentation"
         case visionTracking = "vision_tracking"
         case visionGrounding = "vision_grounding"
         case visionDetection = "vision_detection"
@@ -1358,6 +1362,20 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.visionGrounding, .visionDetection, .visionSegmentation],
                 components: falconPerceptionComponents,
                 upstreamRepoId: "tiiuae/Falcon-Perception",
+                createdAt: createdAt
+            )
+        case .visionFloodTerraMindBase:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .terramindFlood,
+                family: .terramind,
+                tier: .base,
+                variant: .standard,
+                precision: .fp32,
+                defaults: nil,
+                supports: [.floodSegmentation],
+                components: nil,
+                upstreamRepoId: "\(TerraMindFloodResources.sourceRepository)@\(TerraMindFloodResources.sourceRevision)",
                 createdAt: createdAt
             )
         case .visionFaceBuffaloL:

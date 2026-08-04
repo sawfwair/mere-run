@@ -569,6 +569,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 24
             ),
             descriptor(
+                ModelResolver.ModelID.visionFloodTerraMindBase.rawValue,
+                "Geospatial flood segmentation",
+                "Runs four-timestep Sentinel-2, Sentinel-1, and DEM flood segmentation with native Swift MLX.",
+                minimum: 16,
+                recommended: 24
+            ),
+            descriptor(
                 FaceAnalysisResources.modelID,
                 "Face analysis",
                 "Detects faces and landmarks, creates identity embeddings, and compares people locally.",
@@ -887,6 +894,10 @@ public enum ManagedModelCapabilityCatalog {
 
         if spec.validationKind == .magentaRT2 && !machine.isAppleSiliconMac {
             reasons.append("Magenta RT2 requires Apple Silicon macOS.")
+        }
+
+        if spec.validationKind == .terramindFlood && !machine.isAppleSiliconMac {
+            reasons.append("TerraMind Flood requires Apple Silicon macOS.")
         }
 
         if machine.unifiedMemoryGB < descriptor.minimumUnifiedMemoryGB {

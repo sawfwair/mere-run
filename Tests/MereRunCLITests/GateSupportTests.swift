@@ -87,6 +87,24 @@ final class GateSupportTests: XCTestCase {
         XCTAssertTrue(plan.check.successDetail.contains("sfx video generate"))
     }
 
+    func testTerraMindFloodHasDirectNativeInferenceSmokePlan() throws {
+        let spec = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: ModelResolver.ModelID.visionFloodTerraMindBase.rawValue)
+        )
+        let plan = try XCTUnwrap(InstalledModelSmokePlans.plan(
+            for: spec,
+            installedIDs: [spec.id]
+        ))
+
+        XCTAssertEqual(plan.check.id, "installed-vision-flood-terramind-base")
+        XCTAssertEqual(plan.check.suite, "vision-flood")
+        XCTAssertEqual(plan.check.requiredModels, [spec.id])
+        XCTAssertEqual(
+            plan.check.successDetail,
+            "direct true inference: geo flood normalized tensor smoke"
+        )
+    }
+
     func testDreamXRequiresWanAndUsesAWorldTransition() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: "video-dreamx-world-5b-ar-mlx"))
 

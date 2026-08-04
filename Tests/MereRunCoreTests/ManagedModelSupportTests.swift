@@ -11,6 +11,32 @@ final class ManagedModelSupportTests: XCTestCase {
         }
     }
 
+    func testTerraMindFloodSupportRequiresAppleSiliconAndSixteenGB() throws {
+        let spec = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: ModelResolver.ModelID.visionFloodTerraMindBase.rawValue)
+        )
+        let appleSilicon = MereRunMachineProfile(
+            physicalMemoryBytes: 16 * 1_073_741_824,
+            processorName: "M2 Pro",
+            isAppleSiliconMac: true
+        )
+        let linux = MereRunMachineProfile(
+            physicalMemoryBytes: 64 * 1_073_741_824,
+            processorName: "Linux",
+            isAppleSiliconMac: false,
+            isLinux: true
+        )
+
+        let supported = ManagedModelCapabilityCatalog.support(for: spec, on: appleSilicon)
+        let rejected = ManagedModelCapabilityCatalog.support(for: spec, on: linux)
+
+        XCTAssertTrue(supported.isSupported)
+        XCTAssertEqual(supported.descriptor.minimumUnifiedMemoryGB, 16)
+        XCTAssertEqual(supported.descriptor.recommendedUnifiedMemoryGB, 24)
+        XCTAssertFalse(rejected.isSupported)
+        XCTAssertEqual(rejected.reasons, ["TerraMind Flood requires Apple Silicon macOS."])
+    }
+
     func testLargeCoderModelIsRejectedBelowMemoryThreshold() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: CodeGenResources.defaultModelId))
         let machine = MereRunMachineProfile(

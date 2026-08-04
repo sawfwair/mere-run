@@ -1,4 +1,5 @@
 import Foundation
+@preconcurrency import MLX
 import MediaIO
 import MereRunCore
 
@@ -268,6 +269,11 @@ enum InstalledModelSmokePlans {
         case .falconPerception:
             return direct(spec, route: "vision ground") { runner in
                 try await runner.installedGroundingCheck(model: spec.id)
+            }
+
+        case .terramindFlood:
+            return direct(spec, route: "geo flood normalized tensor smoke") { runner in
+                try await runner.installedFloodCheck(model: spec.id)
             }
 
         case .insightFaceBuffaloL:
@@ -793,6 +799,47 @@ extension GateRunner {
             timeout: 1_800
         )
         return try jsonFileObservation(json, run: run, label: "grounding JSON")
+    }
+
+    func installedFloodCheck(model: String) async throws -> GateObservation {
+        let input = artifactURL("\(model)-input", extension: "safetensors")
+        let output = artifactURL(model, extension: "safetensors")
+        try MLX.save(
+            arrays: [
+                "S2L2A": MLX.zeros([1, 12, 4, 256, 256], dtype: .float32),
+                "S1RTC": MLX.zeros([1, 2, 4, 256, 256], dtype: .float32),
+                "DEM": MLX.zeros([1, 1, 4, 256, 256], dtype: .float32),
+            ],
+            metadata: ["format": "mere.run/terramind-flood-smoke-v1"],
+            url: input
+        )
+        let run = try await exec(
+            [
+                "geo", "flood", input.path,
+                "--model", model,
+                "--output", output.path,
+                "--json",
+            ],
+            timeout: 1_800
+        )
+        let data = try Data(contentsOf: output)
+        let arrays = try MLX.loadArrays(url: output)
+        guard let logits = arrays["logits"] else {
+            throw GateError.invalidArtifact("TerraMind flood output did not contain logits")
+        }
+        let values = logits.asArray(Float.self)
+        let valid = logits.shape == [1, 2, 256, 256]
+            && values.allSatisfy(\.isFinite)
+            && !values.isEmpty
+        return GateObservation(
+            hash: Self.sha256(data),
+            secondRunHash: nil,
+            wallSeconds: run.wallSeconds,
+            decodeTps: nil,
+            semanticFailure: valid
+                ? nil
+                : "TerraMind flood logits were missing, non-finite, or had the wrong shape"
+        )
     }
 
     func installedFaceCheck(model: String) async throws -> GateObservation {

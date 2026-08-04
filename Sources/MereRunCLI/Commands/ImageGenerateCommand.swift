@@ -387,7 +387,7 @@ struct ImageGenerate: AsyncParsableCommand {
                 let generator = Ideogram4Generator()
                 defer { generator.unload() }
                 result = try await generator.generate(request, progressHandler: progressHandler)
-            case .gemma, .laguna, .liquid, .qwen, .sam, .falcon, .face, .geometry, .depth, .threeD,
+            case .gemma, .laguna, .liquid, .qwen, .sam, .falcon, .terramind, .face, .geometry, .depth, .threeD,
                  .tts, .asr, .embed, .code, .ocr, .audio, .music, .sfx, .video, .psi, .privacy, .deepseek,
                  .inkling, nil:
                 throw ValidationError("Unsupported image model family for `mere.run image generate`: \(manifest.id)")

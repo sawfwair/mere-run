@@ -16,6 +16,11 @@ artifact contracts instead of becoming a model-specific sidecar.
 
 ### Video and synchronized audio
 
+- added `mere.run geo flood`, a native Swift/MLX TerraMind Flood runtime for
+  four-timestep Sentinel-2, Sentinel-1, and DEM tiles, plus a checksum-pinned
+  float32-only converter for the official ImpactMesh checkpoint. Real Helene
+  parity preserves all 126 candidate pixels with mask Jaccard 1.0; unsafe FP16
+  conversions are rejected.
 - added a native Swift/MLX MiniMax-H3 runtime for the released FL2VA and
   Ref2VA partitions: Qwen3-VL layer-50 multimodal conditioning, the dense 50
   layer joint video/audio transformer, causal tiled video VAE, DAC/causal
