@@ -516,7 +516,7 @@ if !isLinuxPackage {
     .package(url: "https://github.com/readdle/swift-onnxruntime.git", exact: "1.20.1")
   )
   packageDependencies.append(
-    .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.9.2")
+    .package(url: "https://github.com/sparkle-project/Sparkle", exact: "2.9.5")
   )
 }
 

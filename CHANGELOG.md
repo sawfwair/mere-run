@@ -6,6 +6,12 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Fixed
+
+- updated the macOS auto-updater to Sparkle 2.9.5 for current compatibility and
+  security fixes, and made packaging reject a stale embedded Sparkle framework
+  before signing.
+
 ## 0.33.0 - 2026-08-02
 
 This release turns native DreamX into a product-grade local world-session

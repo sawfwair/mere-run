@@ -93,6 +93,13 @@ if [[ ! -d "$sparkle_framework" ]]; then
   echo "Sparkle framework not found: ${sparkle_framework}" >&2
   exit 66
 fi
+sparkle_expected_version="2.9.5"
+sparkle_framework_version="$(plutil -extract CFBundleShortVersionString raw \
+  "${sparkle_framework}/Versions/B/Resources/Info.plist")"
+if [[ "$sparkle_framework_version" != "$sparkle_expected_version" ]]; then
+  echo "Expected Sparkle ${sparkle_expected_version}, found ${sparkle_framework_version}" >&2
+  exit 66
+fi
 ditto "$sparkle_framework" "${frameworks}/Sparkle.framework"
 
 if [[ -d "${repo_root}/skills/use-mere-run" ]]; then

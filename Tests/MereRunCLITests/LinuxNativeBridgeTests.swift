@@ -185,7 +185,10 @@ final class LinuxNativeBridgeTests: XCTestCase {
         let script = try readRepositoryFile("scripts/build_mere_run_app.sh")
 
         XCTAssertTrue(package.contains(#".product(name: "Sparkle", package: "Sparkle")"#))
-        XCTAssertTrue(package.contains(#"sparkle-project/Sparkle", exact: "2.9.2""#))
+        XCTAssertTrue(package.contains(#"sparkle-project/Sparkle", exact: "2.9.5""#))
+        XCTAssertTrue(script.contains(#"sparkle_expected_version="2.9.5""#))
+        XCTAssertTrue(script.contains("CFBundleShortVersionString raw"))
+        XCTAssertTrue(script.contains("Expected Sparkle ${sparkle_expected_version}"))
         XCTAssertTrue(script.contains("ditto \"$sparkle_framework\" \"${frameworks}/Sparkle.framework\""))
         XCTAssertTrue(script.contains("SUFeedURL"))
         XCTAssertTrue(script.contains("https://mere.run/releases/appcast.xml"))
