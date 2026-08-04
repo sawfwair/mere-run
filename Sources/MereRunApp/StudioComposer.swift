@@ -520,9 +520,9 @@ struct StudioOptionsPanel: View {
                     }
                 }
 
-                if !StudioOptionSchema.fields(for: mode).isEmpty {
+                if !visibleOptionFields.isEmpty {
                     Divider().overlay(MereRunTheme.border.opacity(0.4))
-                    ForEach(StudioOptionSchema.fields(for: mode)) { field in
+                    ForEach(visibleOptionFields) { field in
                         optionRow(field)
                     }
                 }
@@ -536,6 +536,8 @@ struct StudioOptionsPanel: View {
         .task {
             if mode == .speak { voiceProfiles = await controller.loadVoiceProfiles() }
         }
+        .onAppear(perform: normalizeMiniMaxH3Draft)
+        .onChange(of: draft.model) { _, _ in normalizeMiniMaxH3Draft() }
         .sheet(isPresented: $showImageEditor) {
             if !draft.inputPath.isBlank {
                 StudioImageEditor(
@@ -551,6 +553,16 @@ struct StudioOptionsPanel: View {
                 )
             }
         }
+    }
+
+    private var visibleOptionFields: [StudioOptionField] {
+        let fields = StudioOptionSchema.fields(for: mode)
+        guard mode == .video, videoFamily.isMiniMaxH3 else { return fields }
+        return fields.filter { !["fps", "numFrames"].contains($0.id) }
+    }
+
+    private var videoFamily: StudioVideoModelFamily {
+        StudioVideoModelFamily(model: draft.model)
     }
 
     @ViewBuilder
@@ -645,6 +657,24 @@ struct StudioOptionsPanel: View {
         }
         .pickerStyle(.segmented)
 
+        if draft.model.localizedCaseInsensitiveContains("inkling") {
+            HStack {
+                Text("Reasoning effort")
+                    .font(MereRunTheme.captionFont)
+                Spacer()
+                TextField(
+                    "0.9",
+                    value: Binding(
+                        get: { draft.reasoningEffort ?? 0.9 },
+                        set: { draft.reasoningEffort = min(max($0, 0), 0.99) }
+                    ),
+                    format: .number
+                )
+                .frame(width: 80)
+                .mereField(cornerRadius: MereRunTheme.Radius.sm)
+            }
+        }
+
         Stepper(
             "Context: \(draft.contextSize == 0 ? "model default" : String(draft.contextSize))",
             value: $draft.contextSize,
@@ -730,35 +760,76 @@ struct StudioOptionsPanel: View {
 
     @ViewBuilder
     private var videoOptions: some View {
-        Picker("Quality", selection: $draft.videoQuality) {
-            Text("Draft").tag(LTXVideoQuality.draft)
-            Text("Final").tag(LTXVideoQuality.final)
-        }
-        .pickerStyle(.segmented)
+        if videoFamily.isMiniMaxH3 {
+            Text("Synchronized 24 fps video + 32 kHz stereo audio")
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textMuted)
+            Picker(
+                "Weights",
+                selection: Binding(
+                    get: { draft.h3WeightMode ?? "auto" },
+                    set: { draft.h3WeightMode = $0 }
+                )
+            ) {
+                Text("Auto").tag("auto")
+                Text("Quantized").tag("quantized")
+                Text("BF16").tag("resident-bf16")
+            }
+            .pickerStyle(.segmented)
+            Toggle(
+                "Override adaptive schedule",
+                isOn: Binding(
+                    get: { draft.h3Steps != nil },
+                    set: { draft.h3Steps = $0 ? 31 : nil }
+                )
+            )
+            .font(MereRunTheme.captionFont)
+            if draft.h3Steps != nil {
+                Stepper(
+                    "Schedule points \(draft.h3Steps ?? 31)",
+                    value: Binding(
+                        get: { draft.h3Steps ?? 31 },
+                        set: { draft.h3Steps = $0 }
+                    ),
+                    in: 1...64
+                )
+                .font(MereRunTheme.captionFont)
+            }
+            Stepper("Frames \(draft.numFrames) · 17n+5", value: $draft.numFrames, in: 22...600, step: 17)
+                .font(MereRunTheme.captionFont)
+            Text("Frame rate is fixed at 24 fps.")
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textMuted)
+            if videoFamily == .miniMaxH3Ref2VA {
+                compactH3References
+            } else {
+                videoAssetRow(title: "End keyframe", path: $draft.endImagePath, type: .image)
+            }
+        } else {
+            if videoFamily == .ltx {
+                Picker("Quality", selection: $draft.videoQuality) {
+                    Text("Draft").tag(LTXVideoQuality.draft)
+                    Text("Final").tag(LTXVideoQuality.final)
+                }
+                .pickerStyle(.segmented)
 
-        Picker("Output", selection: $draft.videoOutputMode) {
-            Text("Video").tag(LTXVideoOutputMode.videoOnly)
-            Text("Audio + Video").tag(LTXVideoOutputMode.audioVideo)
-        }
-        .pickerStyle(.segmented)
+                Picker("Output", selection: $draft.videoOutputMode) {
+                    Text("Video").tag(LTXVideoOutputMode.videoOnly)
+                    Text("Audio + Video").tag(LTXVideoOutputMode.audioVideo)
+                }
+                .pickerStyle(.segmented)
 
-        videoAssetRow(
-            title: "Source audio",
-            path: $draft.audioPath,
-            type: .audio
-        )
-        videoAssetRow(
-            title: "End keyframe",
-            path: $draft.endImagePath,
-            type: .image
-        )
+                videoAssetRow(title: "Source audio", path: $draft.audioPath, type: .audio)
+            }
+            videoAssetRow(title: "End keyframe", path: $draft.endImagePath, type: .image)
+        }
 
         Toggle("Use duration instead of frame count", isOn: $draft.useDuration)
             .font(MereRunTheme.captionFont)
         if draft.useDuration {
             numberField("Duration seconds", value: $draft.durationSeconds)
         }
-        if !draft.audioPath.isBlank {
+        if videoFamily == .ltx, !draft.audioPath.isBlank {
             numberField("Audio start seconds", value: $draft.audioStartTime)
             Stepper("A2V steps \(draft.a2vSteps)", value: $draft.a2vSteps, in: 1...100)
                 .font(MereRunTheme.captionFont)
@@ -772,8 +843,40 @@ struct StudioOptionsPanel: View {
         }
         Toggle("Preflight only", isOn: $draft.preflight)
             .font(MereRunTheme.captionFont)
-        Toggle("Capture phase timings", isOn: $draft.timings)
-            .font(MereRunTheme.captionFont)
+        if !videoFamily.isMiniMaxH3 {
+            Toggle("Capture phase timings", isOn: $draft.timings)
+                .font(MereRunTheme.captionFont)
+        }
+    }
+
+    @ViewBuilder
+    private var compactH3References: some View {
+        let references = draft.h3ReferenceInputs ?? []
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Ordered Ref2VA references")
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textMuted)
+            ForEach(Array(references.enumerated()), id: \.offset) { index, reference in
+                HStack(spacing: 5) {
+                    Text(reference)
+                        .font(MereRunTheme.captionFont)
+                        .lineLimit(1)
+                        .truncationMode(.middle)
+                    Spacer()
+                    Button { moveH3Reference(index, by: -1) } label: { Image(systemName: "arrow.up") }
+                        .disabled(index == 0)
+                    Button { moveH3Reference(index, by: 1) } label: { Image(systemName: "arrow.down") }
+                        .disabled(index == references.count - 1)
+                    Button(role: .destructive) { removeH3Reference(index) } label: { Image(systemName: "trash") }
+                }
+            }
+            HStack {
+                Button("Image") { chooseH3Reference(kind: "image", type: .image) }
+                Button("Video") { chooseH3Reference(kind: "video", type: .movie) }
+                Button("Audio") { chooseH3Reference(kind: "audio", type: .audio) }
+            }
+            .controlSize(.small)
+        }
     }
 
     @ViewBuilder
@@ -1067,6 +1170,44 @@ struct StudioOptionsPanel: View {
                 .accessibilityLabel("Remove \(title.lowercased())")
             }
         }
+    }
+
+    private func normalizeMiniMaxH3Draft() {
+        guard mode == .video, videoFamily.isMiniMaxH3 else { return }
+        draft.fps = 24
+        draft.width = max(32, (draft.width / 32) * 32)
+        draft.height = max(32, (draft.height / 32) * 32)
+        draft.numFrames = StudioVideoModelFamily.alignedMiniMaxH3FrameCount(draft.numFrames)
+        draft.audioPath = ""
+        draft.timings = false
+        draft.timingsOutputPath = ""
+        if videoFamily == .miniMaxH3Ref2VA {
+            draft.inputPath = ""
+            draft.endImagePath = ""
+        } else {
+            draft.h3ReferenceInputs = []
+        }
+    }
+
+    private func chooseH3Reference(kind: String, type: UTType) {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [type]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        draft.h3ReferenceInputs = (draft.h3ReferenceInputs ?? []) + ["\(kind):\(url.path)"]
+    }
+
+    private func moveH3Reference(_ index: Int, by offset: Int) {
+        var references = draft.h3ReferenceInputs ?? []
+        references.swapAt(index, index + offset)
+        draft.h3ReferenceInputs = references
+    }
+
+    private func removeH3Reference(_ index: Int) {
+        var references = draft.h3ReferenceInputs ?? []
+        references.remove(at: index)
+        draft.h3ReferenceInputs = references
     }
 
     private var imageReferencePaths: [String] {

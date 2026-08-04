@@ -36,9 +36,11 @@ import Testing
         "vision.depth-video",
         "vision.geometry",
         "vision.geometry-multiview",
+        "audio.enhance",
         "music.generate",
         "music.analyze",
         "music.transcribe",
+        "music.separate",
         "music.realtime",
         "music.train-adapter",
         "music.serve",
@@ -74,6 +76,7 @@ import Testing
         "model.info",
         "model.remove",
         "model.repair-manifests",
+        "model.optimize",
         "model.benchmark.q36-mtp",
         "model.benchmark.laguna-dflash",
         "speech.synthesize",
@@ -98,7 +101,7 @@ import Testing
         "config.get",
         "config.unset"
     ])
-    #expect(document.commands.count == 91)
+    #expect(document.commands.count == 94)
 
     let data = try JSONEncoder().encode(document)
     let decoded = try JSONDecoder().decode(MereRunCapabilityDocument.self, from: data)
@@ -148,4 +151,16 @@ import Testing
     #expect(quality?.choices == LTXVideoQuality.allCases.map(\.rawValue))
     #expect(outputMode?.choices == LTXVideoOutputMode.allCases.map(\.rawValue))
     #expect(!generate.options.contains { $0.flag == "--variant" })
+    #expect(generate.options.first { $0.flag == "--h3-weight-mode" }?.choices == [
+        "auto", "quantized", "resident-bf16"
+    ])
+    #expect(generate.options.first { $0.flag == "--reference" }?.repeatable == true)
+}
+
+@Test func postReleaseCapabilitiesRemainInTheSharedAppContract() {
+    #expect(MereRunCapabilityCatalog.audioEnhance.command == ["audio", "enhance"])
+    #expect(MereRunCapabilityCatalog.musicSeparate.command == ["music", "separate"])
+    #expect(MereRunCapabilityCatalog.modelOptimize.command == ["model", "optimize"])
+    #expect(MereRunCapabilityCatalog.textChat.options.contains { $0.flag == "--reasoning-effort" })
+    #expect(MereRunCapabilityCatalog.textTrainLoRA.options.contains { $0.flag == "--reasoning-effort" })
 }

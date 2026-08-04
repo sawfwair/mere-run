@@ -184,9 +184,11 @@ public enum MereRunCapabilityCatalog {
             visionDepthVideo,
             visionGeometry,
             visionGeometryMultiview,
+            audioEnhance,
             musicGenerate,
             musicAnalyze,
             musicTranscribe,
+            musicSeparate,
             musicRealtime,
             musicTrainAdapter,
             musicServe,
@@ -222,6 +224,7 @@ public enum MereRunCapabilityCatalog {
             modelInfo,
             modelRemove,
             modelRepairManifests,
+            modelOptimize,
             modelBenchmarkQ36MTP,
             modelBenchmarkLagunaDFlash,
             speechSynthesize,
@@ -288,6 +291,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--lora-scale", label: "LoRA scale", kind: .number),
             .init(flag: "--thinking", label: "Show thinking", kind: .boolean),
             .init(flag: "--no-thinking", label: "Disable thinking", kind: .boolean),
+            .init(flag: "--reasoning-effort", label: "Inkling reasoning effort", kind: .number),
             .init(flag: "--stats", label: "Stats", kind: .boolean),
             .init(flag: "--stream", label: "Stream", kind: .boolean),
             .init(flag: "--tools", label: "Tools", kind: .string),
@@ -378,6 +382,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--rank", label: "Rank", kind: .integer),
             .init(flag: "--alpha", label: "Alpha", kind: .number),
             .init(flag: "--max-sequence-length", label: "Sequence length", kind: .integer),
+            .init(flag: "--reasoning-effort", label: "Inkling reasoning effort", kind: .number),
             .init(flag: "--seed", label: "Seed", kind: .integer),
             .init(flag: "--target-modules", label: "Target modules", kind: .string),
             .init(flag: "--dry-run", label: "Dry run", kind: .boolean),
@@ -970,6 +975,41 @@ public enum MereRunCapabilityCatalog {
         output: .init(kind: .directory)
     )
 
+    public static let audioEnhance = MereRunCommandCapability(
+        id: "audio.enhance",
+        command: ["audio", "enhance"],
+        title: "Enhance audio",
+        summary: "Extend speech or general-audio bandwidth to 48 kHz with native AP-BWE or UniverSR.",
+        arguments: [
+            .init(name: "audio", label: "Audio", kind: .file, required: true)
+        ],
+        options: [
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--model-path", label: "Model path", kind: .directory),
+            .init(flag: "--output", label: "Output", kind: .file),
+            .init(flag: "--overlap", label: "AP-BWE overlap", kind: .integer),
+            .init(flag: "--input-rate", label: "Input bandwidth", kind: .integer),
+            .init(
+                flag: "--ode-method",
+                label: "UniverSR ODE method",
+                kind: .choice,
+                choices: ["euler", "midpoint", "rk4"]
+            ),
+            .init(flag: "--ode-steps", label: "UniverSR ODE steps", kind: .integer),
+            .init(flag: "--guidance-scale", label: "UniverSR guidance", kind: .number),
+            .init(flag: "--seed", label: "Seed", kind: .integer),
+            .init(flag: "--chunk-seconds", label: "Chunk seconds", kind: .integer),
+            .init(
+                flag: "--dtype",
+                label: "Compute type",
+                kind: .choice,
+                choices: ["float16", "float32"]
+            ),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+        ],
+        output: .init(kind: .file, fileExtension: "wav")
+    )
+
     public static let musicGenerate = MereRunCommandCapability(
         id: "music.generate",
         command: ["music", "generate"],
@@ -1131,6 +1171,30 @@ public enum MereRunCapabilityCatalog {
         output: .init(kind: .file)
     )
 
+    public static let musicSeparate = MereRunCommandCapability(
+        id: "music.separate",
+        command: ["music", "separate"],
+        title: "Separate or restore music",
+        summary: "Create stems, remove reverb, or denoise audio with native RoFormer models.",
+        arguments: [
+            .init(name: "audio", label: "Audio", kind: .file, required: true)
+        ],
+        options: [
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--model-path", label: "Model path", kind: .directory),
+            .init(flag: "--output-dir", label: "Output directory", kind: .directory),
+            .init(flag: "--overlap", label: "Overlap", kind: .integer),
+            .init(
+                flag: "--dtype",
+                label: "Compute type",
+                kind: .choice,
+                choices: ["float16", "float32"]
+            ),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean)
+        ],
+        output: .init(kind: .directory)
+    )
+
     public static let musicRealtime = MereRunCommandCapability(
         id: "music.realtime",
         command: ["music", "realtime"],
@@ -1222,7 +1286,7 @@ public enum MereRunCapabilityCatalog {
         id: "video.generate",
         command: ["video", "generate"],
         title: "Generate video",
-        summary: "Generate LTX or Wan video from text, images, keyframes, or source audio.",
+        summary: "Generate LTX, Wan, or synchronized MiniMax-H3 video from text and ordered media conditioning.",
         arguments: [
             .init(name: "prompt", label: "Prompt", kind: .string, required: true)
         ],
@@ -1248,7 +1312,13 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--duration", label: "Duration", kind: .number),
             .init(flag: "--fps", label: "Frames per second", kind: .integer),
             .init(flag: "--seed", label: "Seed", kind: .integer),
-            .init(flag: "--steps", label: "Wan steps", kind: .integer),
+            .init(flag: "--steps", label: "Denoising steps", kind: .integer),
+            .init(
+                flag: "--h3-weight-mode",
+                label: "MiniMax-H3 weight mode",
+                kind: .choice,
+                choices: ["auto", "quantized", "resident-bf16"]
+            ),
             .init(flag: "--guidance-scale", label: "Wan guidance", kind: .number),
             .init(flag: "--shift", label: "Wan schedule shift", kind: .number),
             .init(flag: "--negative-prompt", label: "Negative prompt", kind: .string),
@@ -1263,6 +1333,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--image-strength", label: "Start image strength", kind: .number),
             .init(flag: "--end-image", label: "End image", kind: .file),
             .init(flag: "--end-image-strength", label: "End image strength", kind: .number),
+            .init(flag: "--reference", label: "Ordered H3 reference", kind: .string, repeatable: true),
             .init(flag: "--preflight", label: "Preflight", kind: .boolean),
             .init(flag: "--json", label: "JSON", kind: .boolean),
             .init(flag: "--timings", label: "Timings", kind: .boolean),
@@ -1822,6 +1893,21 @@ public enum MereRunCapabilityCatalog {
         summary: "Restore missing manifests for known local models.",
         options: [
             .init(flag: "--dry-run", label: "Dry run", kind: .boolean),
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let modelOptimize = MereRunCommandCapability(
+        id: "model.optimize",
+        command: ["model", "optimize"],
+        title: "Optimize model",
+        summary: "Build inference-only caches for a supported installed model.",
+        arguments: [
+            .init(name: "target", label: "Model or local root", kind: .string, required: true)
+        ],
+        options: [
+            .init(flag: "--force", label: "Replace cache", kind: .boolean),
             .init(flag: "--json", label: "JSON", kind: .boolean)
         ],
         output: .init(kind: .text)

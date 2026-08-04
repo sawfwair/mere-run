@@ -6,6 +6,7 @@ import UniformTypeIdentifiers
 enum StudioVoiceTask: String, CaseIterable, Identifiable {
     case synthesize
     case transcribe
+    case diarize
     case profiles
 
     var id: String { rawValue }
@@ -14,6 +15,7 @@ enum StudioVoiceTask: String, CaseIterable, Identifiable {
         switch self {
         case .synthesize: "Create"
         case .transcribe: "Transcribe"
+        case .diarize: "Who Spoke"
         case .profiles: "Voices"
         }
     }
@@ -22,6 +24,7 @@ enum StudioVoiceTask: String, CaseIterable, Identifiable {
         switch self {
         case .synthesize: "waveform.badge.plus"
         case .transcribe: "text.bubble"
+        case .diarize: "person.2.wave.2"
         case .profiles: "person.wave.2"
         }
     }
@@ -137,6 +140,7 @@ struct StudioVoiceSheet: View {
     @State private var task: StudioVoiceTask
     @State private var synthesisDraft: CommandDraft
     @State private var transcriptionDraft: CommandDraft
+    @State private var diarizationDraft: CommandDraft
     @State private var profileDraft: CommandDraft
     @State private var profiles: [StudioVoiceProfileRecord] = []
     @State private var selectedProfileID: UUID?
@@ -165,6 +169,11 @@ struct StudioVoiceSheet: View {
         transcription.inputPath = initialDraft.inputPath
         transcription.outputPath = Self.timestampedOutput(prefix: "transcript", extension: "txt")
         _transcriptionDraft = State(initialValue: transcription)
+
+        var diarization = CommandCatalog.template(id: .speechDiarize)?.defaultDraft() ?? CommandDraft()
+        diarization.inputPath = initialDraft.inputPath
+        diarization.outputPath = Self.timestampedOutput(prefix: "speakers", extension: "json")
+        _diarizationDraft = State(initialValue: diarization)
 
         let profile = CommandCatalog.template(id: .speechProfileCreate)?.defaultDraft() ?? CommandDraft()
         _profileDraft = State(initialValue: profile)
@@ -198,6 +207,7 @@ struct StudioVoiceSheet: View {
             guard [
                 CommandTemplateID.speechSynthesize,
                 .speechTranscribe,
+                .speechDiarize,
                 .speechProfileCreate,
                 .speechProfileDelete
             ].contains(result.templateID) else { return }
@@ -214,6 +224,7 @@ struct StudioVoiceSheet: View {
             profileDraft.inputPath = url.path
             synthesisDraft.refAudioPath = url.path
             transcriptionDraft.inputPath = url.path
+            diarizationDraft.inputPath = url.path
         }
     }
 
@@ -222,7 +233,7 @@ struct StudioVoiceSheet: View {
             VStack(alignment: .leading, spacing: 3) {
                 Text("Voice Studio")
                     .font(MereRunTheme.titleFont)
-                Text("Record, clone, synthesize, compare, transcribe, and manage reusable voices")
+                Text("Record, clone, synthesize, transcribe, identify speakers, and manage reusable voices")
                     .font(MereRunTheme.captionFont)
                     .foregroundStyle(MereRunTheme.textMuted)
             }
@@ -299,6 +310,8 @@ struct StudioVoiceSheet: View {
                     synthesisControls
                 case .transcribe:
                     transcriptionControls
+                case .diarize:
+                    diarizationControls
                 case .profiles:
                     profileControls
                 }
@@ -456,6 +469,103 @@ struct StudioVoiceSheet: View {
         }
     }
 
+    private var diarizationControls: some View {
+        VStack(alignment: .leading, spacing: MereRunTheme.Spacing.md) {
+            sectionTitle("Conversation")
+            StudioPathField(
+                label: "Audio",
+                placeholder: "Choose or record a meeting, interview, or conversation",
+                path: $diarizationDraft.inputPath,
+                allowedContentTypes: [.audio]
+            )
+            if let url = recorder.lastRecordingURL {
+                Button("Use latest recording") {
+                    diarizationDraft.inputPath = url.path
+                }
+                .buttonStyle(.bordered)
+            }
+
+            sectionTitle("Speaker detection")
+            labeledTextField(
+                "Model",
+                placeholder: "speech-diarization-sortformer",
+                text: $diarizationDraft.model
+            )
+            Picker(
+                "Output",
+                selection: Binding(
+                    get: { diarizationDraft.speechDiarizationFormat ?? "json" },
+                    set: { format in
+                        diarizationDraft.speechDiarizationFormat = format
+                        diarizationDraft.outputPath = Self.replacingExtension(
+                            diarizationDraft.outputPath,
+                            with: format
+                        )
+                    }
+                )
+            ) {
+                Text("JSON timeline").tag("json")
+                Text("RTTM").tag("rttm")
+            }
+            .pickerStyle(.segmented)
+
+            VStack(alignment: .leading, spacing: 5) {
+                Text(
+                    "Activity threshold \(diarizationDraft.speechDiarizationThreshold ?? 0.5, specifier: "%.2f")"
+                )
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textMuted)
+                Slider(
+                    value: Binding(
+                        get: { diarizationDraft.speechDiarizationThreshold ?? 0.5 },
+                        set: { diarizationDraft.speechDiarizationThreshold = $0 }
+                    ),
+                    in: 0...1,
+                    step: 0.01
+                )
+            }
+            HStack {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Minimum segment")
+                        .font(MereRunTheme.captionFont)
+                        .foregroundStyle(MereRunTheme.textMuted)
+                    TextField(
+                        "0.25",
+                        value: Binding(
+                            get: { diarizationDraft.speechDiarizationMinDuration ?? 0.25 },
+                            set: { diarizationDraft.speechDiarizationMinDuration = max(0, $0) }
+                        ),
+                        format: .number.precision(.fractionLength(0...2))
+                    )
+                    .mereField()
+                }
+                VStack(alignment: .leading, spacing: 5) {
+                    Text("Merge gap")
+                        .font(MereRunTheme.captionFont)
+                        .foregroundStyle(MereRunTheme.textMuted)
+                    TextField(
+                        "0.25",
+                        value: Binding(
+                            get: { diarizationDraft.speechDiarizationMergeGap ?? 0.25 },
+                            set: { diarizationDraft.speechDiarizationMergeGap = max(0, $0) }
+                        ),
+                        format: .number.precision(.fractionLength(0...2))
+                    )
+                    .mereField()
+                }
+            }
+            Text("Durations are measured in seconds. Adjacent segments from the same speaker can be merged.")
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textMuted)
+            StudioPathField(
+                label: "Speaker timeline",
+                placeholder: "JSON or RTTM output",
+                path: $diarizationDraft.outputPath
+            )
+            runButton("Identify speakers", symbol: "person.2.wave.2", action: runDiarization)
+        }
+    }
+
     private var profileControls: some View {
         VStack(alignment: .leading, spacing: MereRunTheme.Spacing.md) {
             sectionTitle("Create reusable voice")
@@ -505,6 +615,8 @@ struct StudioVoiceSheet: View {
             synthesisResults
         case .transcribe:
             transcriptionResults
+        case .diarize:
+            diarizationResults
         case .profiles:
             profileDetail
         }
@@ -560,6 +672,26 @@ struct StudioVoiceSheet: View {
             } else {
                 StudioSpecialistResultView(requestID: requestID, preferredKinds: [.text, .audio])
             }
+        }
+        .padding(18)
+    }
+
+    private var diarizationResults: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Speaker timeline")
+                    .font(MereRunTheme.sectionFont)
+                Spacer()
+                Text("Sortformer · local on this Mac")
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.textMuted)
+            }
+            if !diarizationDraft.inputPath.isBlank {
+                StudioAudioPlayerView(url: URL(fileURLWithPath: diarizationDraft.inputPath))
+                    .frame(height: 150)
+                    .merePanel()
+            }
+            StudioSpecialistResultView(requestID: requestID, preferredKinds: [.text, .audio])
         }
         .padding(18)
     }
@@ -709,6 +841,25 @@ struct StudioVoiceSheet: View {
         transcriptText = ""
         transcriptURL = nil
         statusMessage = "Transcription submitted."
+    }
+
+    private func runDiarization() {
+        guard FileManager.default.fileExists(atPath: diarizationDraft.inputPath) else {
+            statusMessage = "Choose a conversation recording first."
+            return
+        }
+        guard !diarizationDraft.outputPath.isBlank else {
+            statusMessage = "Choose a speaker timeline output file."
+            return
+        }
+        requestID = StudioSpecialistRunner.submit(
+            templateID: .speechDiarize,
+            mode: .listen,
+            draft: diarizationDraft,
+            controller: controller,
+            library: library
+        )
+        statusMessage = "Speaker identification submitted."
     }
 
     private func createProfile() {

@@ -59,6 +59,20 @@ enum StudioModelDownloadCommand {
     }
 }
 
+enum StudioModelOptimizationCommand {
+    static func supports(modelID: String) -> Bool {
+        let normalized = modelID.lowercased()
+        return normalized == "video-minimax-h3-fl2va-mlx"
+            || normalized == "video-minimax-h3-ref2va-mlx"
+    }
+
+    static func arguments(modelID: String, replacing: Bool) -> [String] {
+        var arguments = ["model", "optimize", modelID, "--json"]
+        if replacing { arguments.append("--force") }
+        return arguments
+    }
+}
+
 private enum StudioModelsAlert: Identifiable {
     case download(StudioModelInventoryRow)
     case removal(StudioModelInventoryRow)
@@ -233,6 +247,7 @@ struct StudioModelsSheet: View {
     @State private var downloadCommandID: UUID?
     @State private var cancellingDownloadID: String?
     @State private var removingID: String?
+    @State private var optimizingID: String?
     @State private var pendingAlert: StudioModelsAlert?
     @State private var storageReport: StudioModelStorageReport?
     @State private var isCleaningStorage = false
@@ -546,7 +561,8 @@ struct StudioModelsSheet: View {
 
                 Spacer()
 
-                if loadingInfoID == row.id || downloadingID == row.id || removingID == row.id {
+                if loadingInfoID == row.id || downloadingID == row.id || removingID == row.id
+                    || optimizingID == row.id {
                     ProgressView()
                         .controlSize(.small)
                 }
@@ -616,6 +632,27 @@ struct StudioModelsSheet: View {
             .buttonStyle(.bordered)
             .disabled(loadingInfoID != nil)
             .help("Reveal this model's source folder in Finder")
+
+            if StudioModelOptimizationCommand.supports(modelID: row.id) {
+                Button {
+                    Task { await optimize(row, replacing: false) }
+                } label: {
+                    Label("Optimize", systemImage: "bolt.badge.clock")
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(MereRunTheme.accent)
+                .disabled(optimizingID != nil)
+                .help("Build the inference-only MiniMax-H3 AdaLN cache")
+
+                Menu {
+                    Button("Rebuild optimization cache") {
+                        Task { await optimize(row, replacing: true) }
+                    }
+                } label: {
+                    Image(systemName: "ellipsis.circle")
+                }
+                .disabled(optimizingID != nil)
+            }
 
             Button(role: .destructive) {
                 pendingAlert = .removal(row)
@@ -1049,6 +1086,25 @@ struct StudioModelsSheet: View {
         } else {
             statusMessage = "Could not purge \(row.id)"
         }
+    }
+
+    @MainActor
+    private func optimize(_ row: StudioModelInventoryRow, replacing: Bool) async {
+        optimizingID = row.id
+        statusMessage = replacing ? "Rebuilding optimization cache for \(row.id)…" : "Optimizing \(row.id)…"
+        detailText = "Preparing MiniMax-H3 inference cache…\n"
+        let result = await controller.utilityCommandResult(
+            args: StudioModelOptimizationCommand.arguments(modelID: row.id, replacing: replacing),
+            onOutput: { chunk in
+                guard selectedID == row.id else { return }
+                detailText = StudioModelDownloadCommand.appendingOutput(chunk, to: detailText)
+            }
+        )
+        optimizingID = nil
+        detailText = result.outputText.isEmpty ? detailText : result.outputText
+        statusMessage = result.exitCode == 0
+            ? "Optimized \(row.id)"
+            : "Could not optimize \(row.id)"
     }
 
     @MainActor

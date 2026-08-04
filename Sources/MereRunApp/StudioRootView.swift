@@ -30,6 +30,8 @@ struct StudioRootView: View {
     @State private var trainingKind: StudioTrainingKind = .image
     @State private var showMusicTools = false
     @State private var musicTool: StudioMusicTool = .analyze
+    @State private var showAudioTools = false
+    @State private var audioTool: StudioAudioTool = .enhance
     @State private var openTrainingAfterMusicTools = false
     @State private var openRealtimeAfterMusicTools = false
     @State private var showUtilityLab = false
@@ -554,6 +556,11 @@ struct StudioRootView: View {
                 .environmentObject(controller)
                 .environmentObject(library)
             }
+            .sheet(isPresented: $showAudioTools) {
+                StudioAudioToolsSheet(initialTool: audioTool)
+                    .environmentObject(controller)
+                    .environmentObject(library)
+            }
             .sheet(isPresented: $showUtilityLab) {
                 StudioUtilityLabSheet(initialTask: utilityTask)
                     .environmentObject(controller)
@@ -863,6 +870,19 @@ struct StudioRootView: View {
                 .help("Open synthesis, voice cloning, profiles, recording, and transcription")
             }
 
+            if mode == .listen {
+                Button {
+                    audioTool = .enhance
+                    showAudioTools = true
+                } label: {
+                    Label("Audio Lab", systemImage: "waveform.badge.plus")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("Enhance speech or general audio with AP-BWE and UniverSR")
+            }
+
             if mode == .sfx {
                 Button {
                     showSFXLab = true
@@ -876,6 +896,17 @@ struct StudioRootView: View {
             }
 
             if mode == .music {
+                Button {
+                    audioTool = .separate
+                    showAudioTools = true
+                } label: {
+                    Label("Separate", systemImage: "slider.horizontal.3")
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .help("Create stems, remove reverb, or denoise with native RoFormer")
+
                 Button {
                     musicTool = .analyze
                     showMusicTools = true
