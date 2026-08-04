@@ -49,6 +49,15 @@ struct PluginList: ParsableCommand {
             print("  \(plugin.description)")
             print("  command: \(plugin.entrypoint)")
             print("  install: \(PluginInstallCommand.render(install: install))")
+            if installation.installed, !installation.verified {
+                let diagnosis = PluginInstallationFailureDiagnosis.make(
+                    plugin: plugin,
+                    install: install,
+                    inspection: installation
+                )
+                print("  issue: \(diagnosis.summary)")
+                print("  repair: \(diagnosis.repairCommand)")
+            }
             print("")
         }
     }
@@ -163,14 +172,23 @@ struct PluginDoctor: ParsableCommand {
     func run() throws {
         let catalog = try PluginCatalogClient.load(catalogURL: catalogURL)
         let plugin = try catalog.requirePlugin(id)
-        guard PluginProcess.which(plugin.entrypoint) != nil else {
-            let install = try plugin.install(channel: catalog.defaultChannel)
+        let install = try plugin.install(channel: catalog.defaultChannel)
+        let installation = PluginInstallationInspection.inspect(plugin)
+        guard installation.installed else {
             throw ValidationError(
                 """
                 Plugin \(plugin.id) is not installed on PATH.
                 Install it with: \(PluginInstallCommand.render(install: install))
                 """
             )
+        }
+        guard installation.verified else {
+            let diagnosis = PluginInstallationFailureDiagnosis.make(
+                plugin: plugin,
+                install: install,
+                inspection: installation
+            )
+            throw ValidationError(diagnosis.rendered)
         }
         try PluginProcess.runExecutable(plugin.entrypoint, arguments: ["doctor"])
     }

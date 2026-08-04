@@ -105,6 +105,74 @@ final class PluginCommandTests: XCTestCase {
         XCTAssertTrue(snapshot.plugins.first?.installCommand?.contains("pipx install") == true)
     }
 
+    func testBrokenEditableInstallationReportsMissingSourceAndRepairCommand() throws {
+        let catalog = try PluginCatalogClient.load(catalogURL: writeCatalog().path)
+        let plugin = try catalog.requirePlugin("mere-runpod")
+        let install = try plugin.install(channel: catalog.defaultChannel)
+        let metadata = Data(staleEditablePipxJSON.utf8)
+        let missingPath = try PluginPipxInstallationMetadata.missingEditableSourcePath(
+            for: plugin,
+            metadata: metadata,
+            fileExists: { _ in false }
+        )
+        let inspection = PluginInstallationInspection(
+            installed: true,
+            verified: false,
+            version: nil,
+            path: "/Users/test/.local/bin/mere-runpod",
+            error: "ModuleNotFoundError: No module named 'mere_runpod'"
+        )
+
+        let diagnosis = PluginInstallationFailureDiagnosis.make(
+            plugin: plugin,
+            install: install,
+            inspection: inspection,
+            missingEditableSourcePath: missingPath
+        )
+
+        XCTAssertEqual(missingPath, "/Users/test/mere/mere-plugins/packages/mere-runpod")
+        XCTAssertEqual(
+            diagnosis.summary,
+            "editable source path no longer exists: /Users/test/mere/mere-plugins/packages/mere-runpod"
+        )
+        XCTAssertNil(diagnosis.verificationError)
+        XCTAssertEqual(
+            diagnosis.repairCommand,
+            "mere.run plugin install mere-runpod --yes --force"
+        )
+        XCTAssertTrue(diagnosis.rendered.contains("cannot run its doctor"))
+    }
+
+    func testGenericVerificationFailureKeepsConciseErrorAndRepairCommand() throws {
+        let catalog = try PluginCatalogClient.load(catalogURL: writeCatalog().path)
+        let plugin = try catalog.requirePlugin("mere-runpod")
+        let install = try plugin.install(channel: catalog.defaultChannel)
+        let inspection = PluginInstallationInspection(
+            installed: true,
+            verified: false,
+            version: nil,
+            path: "/usr/local/bin/mere-runpod",
+            error: "Traceback (most recent call last):\nModuleNotFoundError: No module named 'mere_runpod'"
+        )
+
+        let diagnosis = PluginInstallationFailureDiagnosis.make(
+            plugin: plugin,
+            install: install,
+            inspection: inspection,
+            missingEditableSourcePath: nil
+        )
+
+        XCTAssertEqual(diagnosis.summary, "plugin manifest verification failed")
+        XCTAssertEqual(
+            diagnosis.verificationError,
+            "ModuleNotFoundError: No module named 'mere_runpod'"
+        )
+        XCTAssertEqual(
+            diagnosis.repairCommand,
+            "mere.run plugin install mere-runpod --yes --force"
+        )
+    }
+
     func testUnknownPluginErrorListsKnownPlugins() throws {
         let catalogURL = try writeCatalog()
         let catalog = try PluginCatalogClient.load(catalogURL: catalogURL.path)
@@ -160,6 +228,23 @@ if [ "$1" = "graph" ] && [ "$2" = "catalog" ]; then
   exit 0
 fi
 exit 2
+"""#
+
+private let staleEditablePipxJSON = #"""
+{
+  "pipx_spec_version": "0.1",
+  "venvs": {
+    "mere-runpod": {
+      "metadata": {
+        "main_package": {
+          "package": "mere-runpod",
+          "package_or_url": "/Users/test/mere/mere-plugins/packages/mere-runpod",
+          "pip_args": ["--editable"]
+        }
+      }
+    }
+  }
+}
 """#
 
 private let catalogJSON = """

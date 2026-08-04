@@ -8,6 +8,9 @@ The format is based on Keep a Changelog.
 
 ### Fixed
 
+- made `plugin list` and `plugin doctor` diagnose stale editable `pipx`
+  installations with the missing source path and an exact forced-reinstall
+  command instead of surfacing only a companion executable traceback.
 - updated the macOS auto-updater to Sparkle 2.9.5 for current compatibility and
   security fixes, and made packaging reject a stale embedded Sparkle framework
   before signing.

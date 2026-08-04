@@ -86,6 +86,10 @@ mere.run plugin list \
   `--catalog-url`.
 - `Executable not found on PATH`: ensure `pipx ensurepath` has been run and
   your shell sees the plugin entrypoint.
+- `Editable source path no longer exists`: the plugin was installed from a
+  local checkout that moved or was removed. Run the exact
+  `mere.run plugin install <id> --yes --force` repair command printed by
+  `plugin list` or `plugin doctor`.
 - Manifest mismatch: the installed command is not the cataloged plugin. Reinstall
   with `--force` or inspect your PATH ordering.
 
