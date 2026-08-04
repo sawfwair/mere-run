@@ -208,6 +208,25 @@ final class MereRunModelManifestTests: MereRunCoreTestCase {
         XCTAssertEqual(manifest.upstreamRepoId, "tiiuae/Falcon-Perception")
     }
 
+    func testTerraMindFloodTemplateHasExpectedNativeMetadata() {
+        let manifest = MereRunModelManifest.template(
+            for: .visionFloodTerraMindBase,
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+
+        XCTAssertEqual(manifest.id, TerraMindFloodResources.defaultModelID)
+        XCTAssertEqual(manifest.engine, .terramindFlood)
+        XCTAssertEqual(manifest.family, .terramind)
+        XCTAssertEqual(manifest.tier, .base)
+        XCTAssertEqual(manifest.precision, .fp32)
+        XCTAssertEqual(manifest.supports, [.floodSegmentation])
+        XCTAssertNil(manifest.components)
+        XCTAssertEqual(
+            manifest.upstreamRepoId,
+            "\(TerraMindFloodResources.sourceRepository)@\(TerraMindFloodResources.sourceRevision)"
+        )
+    }
+
     func testInfinityParser2ProTemplateHasExpectedMetadata() throws {
         let manifest = MereRunModelManifest.template(for: .infinityParser2Pro, createdAt: Date(timeIntervalSince1970: 0))
 

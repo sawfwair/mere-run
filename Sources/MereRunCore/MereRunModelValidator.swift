@@ -171,6 +171,7 @@ public enum MereRunModelValidator {
             || spec?.validationKind == .trellis2
             || spec?.validationKind == .wan22TI2VMLX
             || spec?.validationKind == .dreamXCausalMLX
+            || spec?.validationKind == .terramindFlood
             || spec?.validationKind == .inkling {
             errors.append(contentsOf: spec?.validationMessages(in: rootURL, fileManager: fileManager) ?? [])
             transformerDir = nil
@@ -497,7 +498,7 @@ public enum MereRunModelValidator {
             switch manifest.engine {
             case .qwen3Coder?, .northMiniCode?, .inkling?, .aceStep?, .magentaRT2?, .muScriptor?, .roFormer?, .apBWE?, .univerSR?, .woosh?, .mmaudio?, .ltxVideo?,
                  .wanVideo?, .moge2?, .videoDepthAnything?, .depthAnything3?, .tripoSR?, .instantMesh?, .trellis2?,
-                 .insightFace?, .sortformer?:
+                 .insightFace?, .sortformer?, .terramindFlood?:
                 return true
             default:
                 return false
@@ -551,6 +552,7 @@ public enum MereRunModelValidator {
         if modelId.hasPrefix("text-chat-laguna-") { return .laguna }
         if modelId.hasPrefix("vision-segment-") { return .sam }
         if modelId.hasPrefix("vision-ground-") { return .falcon }
+        if modelId.hasPrefix("vision-flood-") { return .terramind }
         if modelId.hasPrefix("vision-face-") { return .face }
         if modelId.hasPrefix("vision-geometry-") { return .geometry }
         if modelId.hasPrefix("vision-depth-") { return .depth }
