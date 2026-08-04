@@ -131,7 +131,9 @@ terms of their respective owners. mere.run does not bundle these weights,
 decide whether a user's intended use qualifies, or police use after install.
 For every new download that is access-gated or carries a material use limit—
 such as non-commercial, research-only, or revenue-limited terms—the user must
-review the listed terms and pass `--accept-model-license`:
+review the listed terms and pass `--accept-model-license`. Passing the flag and
+continuing with the download confirms that the user accepts those terms and
+agrees to comply with them:
 
 ```bash
 mere.run model pull vision-face-buffalo-l --accept-model-license
@@ -140,14 +142,14 @@ mere.run model pull --all --accept-model-license
 
 Without that flag, a single-model pull and its preflight are blocked; `--all`
 skips restricted models. Restricted models never auto-download from an
-inference command. The macOS app presents the same acknowledgement before a
+inference command. The macOS app presents the same explicit acceptance before a
 download and exposes the term links in its Models and Advanced views.
 Batch downloads through `agent onboard --pull-recommended` skip restricted
-entries without acknowledgement, while `open-webui quickstart --pull`
+entries without acceptance, while `open-webui quickstart --pull`
 validates all configured models before downloading any; both accept the same
 `--accept-model-license` flag.
 
-| Models | Upstream terms that require acknowledgement |
+| Models | Upstream terms that require acceptance |
 | --- | --- |
 | `image-klein-9b`, `image-klein-base-9b` | FLUX Non-Commercial License v2.1; non-commercial, non-production use |
 | `image-krea2-raw`, `image-krea2-turbo` | Krea 2 Community License; commercial use is limited to entities below USD 1M trailing annual revenue, plus use/distribution conditions |
@@ -164,10 +166,10 @@ validates all configured models before downloading any; both accept the same
 
 The catalog pins every restricted download source to an immutable commit. New
 managed installs write those repository revisions, every applicable
-model/component license and URL, and the acknowledgement result into schema 3
+model/component license and URL, and the acceptance result into schema 3
 of `mererun_model.json`. `mere.run model info MODEL` displays the same record.
 Pre-existing installs remain usable and are not retroactively treated as an
-acknowledgement.
+acceptance.
 
 The flag is not a generic click-through for every custom model license. Public,
 ungated downloads whose licenses grant commercial use by exercising the
@@ -180,7 +182,7 @@ README, attribution, and immutable source provenance.
 `music-separate-bs-roformer-viperx-1297`,
 `music-separate-bs-roformer-4stem`,
 `music-separate-mel-roformer-dereverb`, and
-`music-separate-mel-roformer-denoise` also do not require acknowledgement. The
+`music-separate-mel-roformer-denoise` also do not require separate acceptance. The
 pinned AEmotion Studio model release includes an explicit MIT `LICENSE`
 and an MIT model-card declaration. The managed install retains both files and
 admits the weights, source configuration, model card, and license only when all
@@ -188,20 +190,20 @@ four match their model-specific frozen byte counts and SHA-256 digests. The
 MelBand profiles additionally retain separate dereverb and denoise source
 configs and exact 913 MB checkpoint hashes.
 
-`audio-enhance-ap-bwe-16kto48k` does not require acknowledgement. AP-BWE's
+`audio-enhance-ap-bwe-16kto48k` does not require separate acceptance. AP-BWE's
 pinned source repository states that both code and pretrained weights are MIT.
 The managed public transport snapshot retains the code and weights license
 files, source config, and the exact official 16→48 kHz checkpoint archive;
 mere.run verifies all four byte counts and SHA-256 digests before loading.
 
-`audio-enhance-universr-audio` does not require interactive acknowledgement,
+`audio-enhance-universr-audio` does not require interactive acceptance,
 but its two upstream licenses must not be conflated. The native port follows
 the MIT-licensed `woongzip1/UniverSR` source at its pinned commit. The separately
 downloaded official `woongzip1/universr-audio` checkpoint is CC BY 4.0. The
 managed install verifies the checkpoint, source configuration, and model card
 by frozen revision, byte count, and SHA-256 before loading.
 
-`image-zimage-nano` also does not require acknowledgement. Its canonical
+`image-zimage-nano` also does not require separate acceptance. Its canonical
 `Tongyi-MAI/Z-Image-Turbo` base is Apache-2.0; the pinned mflux conversion's
 model-card license label is inconsistent with that canonical source and is not
 treated as a new restriction on the converted weights.
@@ -902,7 +904,7 @@ mere.run guide video-cosmos3
 
 The checkpoint is governed by NVIDIA Open Model Development and Use License
 1.1 (`OpenMDW-1.1`). Exercising the licensed rights constitutes acceptance;
-the public, ungated pull does not require mere.run's acknowledgement flag.
+the public, ungated pull does not require mere.run's acceptance flag.
 The managed snapshot retains `LICENSE.md`, and runtime auto-download remains
 disabled.
 

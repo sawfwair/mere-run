@@ -756,6 +756,8 @@ swift run mere.run video generate \
   --output ./performance.mp4
 
 # MiniMax-H3 text/first-frame to synchronized 24 fps video + 32 kHz stereo
+# Passing --accept-model-license confirms review and acceptance of the listed
+# terms and agreement to comply before the download begins.
 swift run mere.run model pull video-minimax-h3-fl2va-mlx --accept-model-license
 swift run mere.run video generate \
   "the paper bird takes flight with crisp wing sounds" \

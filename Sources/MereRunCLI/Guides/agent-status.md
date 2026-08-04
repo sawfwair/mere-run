@@ -56,7 +56,7 @@ mere.run agent status --pi-path "$HOME/bin/pi" --json
 - Provider not configured: run
   `mere.run agent onboard --configure-pi --model <id>`.
 - Recommended model not installed: run `mere.run model pull <id>` and
-  acknowledge model terms when required.
+  review and accept model terms when required.
 
 ## Sources
 

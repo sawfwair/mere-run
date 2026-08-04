@@ -51,7 +51,8 @@ Open **Models**, switch the scope to **All**, and select any missing model to
 download it directly. Studio streams the underlying `model pull` output, keeps
 cancelled partial downloads resumable, and refreshes the inventory after a
 successful install. Models with restricted third-party terms show their source
-links and require **Acknowledge & Download** before transfer. The **Files**
+links and require **Accept & Download** before transfer. Continuing confirms
+that the user reviewed and accepts the listed terms and agrees to comply. The **Files**
 button opens the configured model store in Finder; it does not start a download.
 
 ## Canonical model IDs
@@ -143,15 +144,17 @@ Access-gated models and models with material non-commercial, research-only, or
 revenue-limited terms require `--accept-model-license` for new downloads and
 never auto-download at runtime. A custom license alone does not trigger the
 flag. The CLI and macOS app show the
-applicable model/component terms before acceptance; schema 3 of the installed
-`mererun_model.json` records the immutable source revisions, term URLs, and
-acknowledgement. mere.run does not determine whether a user's intended use is
+applicable model/component terms before acceptance. Passing the flag or choosing
+**Accept & Download** confirms that the user reviewed and accepts those terms
+and agrees to comply. Schema 3 of the installed `mererun_model.json` records the
+immutable source revisions, term URLs, and acceptance confirmation. mere.run
+does not determine whether a user's intended use is
 permitted. The complete inventory is in
 [`model-sources.md`](../model-sources.md#restricted-model-downloads).
 
 Laguna XS 2.1 is released under the permissive OpenMDW-1.1 license, and its
 public Hugging Face repository is not gated. It therefore installs without a
-separate acknowledgement flag while retaining the upstream license file:
+separate acceptance flag while retaining the upstream license file:
 
 ```bash
 mere.run model pull text-chat-laguna-xs-2-1

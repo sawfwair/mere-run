@@ -25,7 +25,7 @@ mere.run agent onboard --help
 ## Parameters
 
 - `--pull-recommended`: pull supported first-setup model packages.
-- `--accept-model-license`: acknowledge listed third-party terms before restricted recommended-model downloads.
+- `--accept-model-license`: confirm that you reviewed and accept the listed third-party terms and agree to comply with them before restricted recommended-model downloads.
 - `--install-pi`: install the latest Pi coding-agent release.
 - `--configure-pi`: write a Pi extension for the local mere.run API provider.
 - `--host`: local API host for the provider extension.

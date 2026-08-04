@@ -89,7 +89,7 @@ and fleet telemetry. The app links to the Relay console instead of copying
 those schemas or controls.
 
 Models includes one-click managed downloads with live CLI output, explicit
-third-party terms acknowledgement, cancellation with resumable partials, and a
+explicit third-party terms acceptance, cancellation with resumable partials, and a
 dedicated Health & Repair workspace. Successful downloads refresh the inventory
 without reopening the sheet. Manifest audit is a structured dry run, repair
 requires confirmation and writes only missing known manifests, and

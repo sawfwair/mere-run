@@ -303,9 +303,9 @@ struct StudioModelsSheet: View {
             switch pending {
             case .download(let row):
                 Alert(
-                    title: Text("Acknowledge third-party model terms"),
+                    title: Text("Accept third-party model terms"),
                     message: Text(downloadTermsMessage(row)),
-                    primaryButton: .default(Text("Acknowledge & Download")) {
+                    primaryButton: .default(Text("Accept & Download")) {
                         Task { await download(row, acknowledgingUsageTerms: true) }
                     },
                     secondaryButton: .cancel()
@@ -529,7 +529,7 @@ struct StudioModelsSheet: View {
                         .font(MereRunTheme.captionFont)
                         .foregroundStyle(MereRunTheme.textMuted)
                     if let usageTerms = row.usageTerms {
-                        Text("Third-party usage terms · acknowledgement required for new downloads")
+                        Text("Third-party usage terms · acceptance required for new downloads")
                             .font(MereRunTheme.captionFont)
                             .foregroundStyle(MereRunTheme.yellow)
                         Text(usageTerms.summary)
@@ -669,7 +669,7 @@ struct StudioModelsSheet: View {
             }
 
             if row.usageTerms != nil {
-                Text("Review the linked terms above. Download requires explicit acknowledgement.")
+                Text("Review the linked terms above. Download requires explicit acceptance.")
                     .font(MereRunTheme.captionFont)
                     .foregroundStyle(MereRunTheme.yellow)
             }
@@ -845,7 +845,12 @@ struct StudioModelsSheet: View {
 
     private func downloadTermsMessage(_ row: StudioModelInventoryRow) -> String {
         let summary = row.usageTerms?.summary ?? "This model has third-party usage terms."
-        return "\(summary)\n\nMere does not determine whether your intended use is permitted. You are responsible for compliance."
+        return """
+        \(summary)
+
+        By continuing, you confirm that you reviewed and accept the listed terms and agree to comply with them. \
+        Mere does not determine whether your intended use is permitted. You are responsible for compliance.
+        """
     }
 
     @MainActor

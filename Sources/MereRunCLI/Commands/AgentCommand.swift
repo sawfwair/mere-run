@@ -184,7 +184,7 @@ struct AgentOnboard: AsyncParsableCommand {
 
     @Flag(
         name: [.customLong("accept-model-license")],
-        help: "Acknowledge listed third-party model/component terms before downloading restricted recommended models."
+        help: "Confirm that you reviewed and accept listed third-party model/component terms before downloading restricted recommended models."
     )
     var acceptModelLicense: Bool = false
 
@@ -303,7 +303,8 @@ struct AgentOnboard: AsyncParsableCommand {
                !acceptModelLicense {
                 CLIStderr.write(
                     "[\(report.spec.id)] skipping restricted model: \(restriction.summary) "
-                    + "Review \(restriction.terms.map(\.licenseURL).joined(separator: ", ")) and pass --accept-model-license.\n"
+                    + "Review \(restriction.terms.map(\.licenseURL).joined(separator: ", ")) and pass "
+                    + "--accept-model-license to accept the terms and agree to comply with them.\n"
                 )
                 continue
             }
