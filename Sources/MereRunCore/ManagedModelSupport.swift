@@ -821,6 +821,20 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 96
             ),
             descriptor(
+                ModelResolver.ModelID.miniMaxH3FL2VAMLX.rawValue,
+                "MiniMax-H3 FL2VA MLX",
+                "Generates native 24 fps video with synchronized 32 kHz stereo audio from text and optional first/last keyframes.",
+                minimum: 96,
+                recommended: 128
+            ),
+            descriptor(
+                ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue,
+                "MiniMax-H3 Ref2VA MLX",
+                "Runs a locally converted Ref2VA root with ordered image, video, and audio references; no redistributable managed snapshot is bundled.",
+                minimum: 96,
+                recommended: 128
+            ),
+            descriptor(
                 ModelResolver.ModelID.cosmos3EdgeMLX.rawValue,
                 "Cosmos3-Edge MLX",
                 "Runs NVIDIA Cosmos3-Edge video, action, navigation, and reasoner modes with native Swift MLX.",

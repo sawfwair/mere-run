@@ -234,20 +234,37 @@ public final class MMAudioBigVGAN: Module {
     @ModuleInfo(key: "resblocks") private var residualBlocks: [MMAudioAMPBlock]
     @ModuleInfo(key: "activation_post") private var postActivation: MMAudioAliasFreeActivation
     @ModuleInfo(key: "conv_post") private var postConvolution: MMAudioBigVGANConv1D
+    private let useFloat32: Bool
 
-    public override init() {
-        let rates = [8, 4, 2, 2, 2, 2]
-        let kernels = [16, 8, 4, 4, 4, 4]
+    public convenience override init() {
+        self.init(
+            inputChannels: 128,
+            initialChannels: 1_536,
+            upsampleRates: [8, 4, 2, 2, 2, 2],
+            upsampleKernelSizes: [16, 8, 4, 4, 4, 4],
+            useFloat32: false
+        )
+    }
+
+    public init(
+        inputChannels: Int,
+        initialChannels: Int,
+        upsampleRates: [Int],
+        upsampleKernelSizes: [Int],
+        useFloat32: Bool = false
+    ) {
+        self.useFloat32 = useFloat32
+        precondition(!upsampleRates.isEmpty && upsampleRates.count == upsampleKernelSizes.count)
         var upsamplers: [MMAudioBigVGANUpsample] = []
         var residualBlocks: [MMAudioAMPBlock] = []
-        for stage in rates.indices {
-            let inputChannels = 1_536 / (1 << stage)
-            let outputChannels = 1_536 / (1 << (stage + 1))
+        for stage in upsampleRates.indices {
+            let stageInputChannels = initialChannels / (1 << stage)
+            let outputChannels = initialChannels / (1 << (stage + 1))
             upsamplers.append(MMAudioBigVGANUpsample(
-                inputChannels: inputChannels,
+                inputChannels: stageInputChannels,
                 outputChannels: outputChannels,
-                kernelSize: kernels[stage],
-                stride: rates[stage]
+                kernelSize: upsampleKernelSizes[stage],
+                stride: upsampleRates[stage]
             ))
             for residualKernel in [3, 7, 11] {
                 residualBlocks.append(MMAudioAMPBlock(
@@ -258,16 +275,17 @@ public final class MMAudioBigVGAN: Module {
         }
 
         self._preConvolution.wrappedValue = MMAudioBigVGANConv1D(
-            inputChannels: 128,
-            outputChannels: 1_536,
+            inputChannels: inputChannels,
+            outputChannels: initialChannels,
             kernelSize: 7,
             padding: 3
         )
         self._upsamplers.wrappedValue = upsamplers
         self._residualBlocks.wrappedValue = residualBlocks
-        self._postActivation.wrappedValue = MMAudioAliasFreeActivation(channels: 24)
+        let finalChannels = initialChannels / (1 << upsampleRates.count)
+        self._postActivation.wrappedValue = MMAudioAliasFreeActivation(channels: finalChannels)
         self._postConvolution.wrappedValue = MMAudioBigVGANConv1D(
-            inputChannels: 24,
+            inputChannels: finalChannels,
             outputChannels: 1,
             kernelSize: 7,
             padding: 3,
@@ -276,7 +294,7 @@ public final class MMAudioBigVGAN: Module {
     }
 
     public func callAsFunction(_ spectrogram: MLXArray) -> MLXArray {
-        var hidden = preConvolution(spectrogram.asType(.float16))
+        var hidden = preConvolution(spectrogram.asType(useFloat32 ? .float32 : .float16))
         for stage in upsamplers.indices {
             hidden = upsamplers[stage](hidden)
             let start = stage * 3
@@ -336,10 +354,11 @@ public final class MMAudioBigVGAN: Module {
         return components.joined(separator: ".")
     }
 
-    private static func mapSafetensorsWeights(key: String, value: MLXArray) -> [(String, MLXArray)] {
-        if key.hasSuffix(".weight"), value.ndim == 3 {
-            let base = String(key.dropLast(".weight".count))
-            let isTranspose = key.hasPrefix("ups.")
+    static func mapSafetensorsWeights(key: String, value: MLXArray) -> [(String, MLXArray)] {
+        let mappedKey = remapUpsampleKey(key)
+        if mappedKey.hasSuffix(".weight"), value.ndim == 3 {
+            let base = String(mappedKey.dropLast(".weight".count))
+            let isTranspose = mappedKey.hasPrefix("ups.")
             let transposed = isTranspose ? value.transposed(1, 2, 0) : value.transposed(0, 2, 1)
             let magnitudeAxes = isTranspose ? [0, 1] : [1, 2]
             let magnitude = MLX.sqrt(MLX.sum(transposed * transposed, axes: magnitudeAxes, keepDims: true))
@@ -351,6 +370,6 @@ public final class MMAudioBigVGAN: Module {
                 ("\(base).parametrizations.weight.original1", transposed),
             ]
         }
-        return mapCheckpointWeight(key: key, value: value)
+        return mapCheckpointWeight(key: mappedKey, value: value)
     }
 }

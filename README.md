@@ -57,7 +57,7 @@ current flags.
 | Vision understanding | `vision caption`, `inspect`, `face`, `ground`, `segment`, `track`, `track-live`, `pose`, `flow`, `ocr` | Captioning and VQA, local face detection/identity embeddings, LightOn/GLM/Infinity OCR, Falcon grounding, SAM 3.1 segmentation and tracking, body/hand/face landmarks, and dense optical flow |
 | Depth, geometry, and 3D | `vision depth-video`, `geometry`, `geometry-multiview`, `image-to-3d*`; `image reconstruct-3d*` | Video Depth Anything, MoGe-2, Depth Anything 3, TripoSR, InstantMesh, and TRELLIS.2; depth/confidence EXRs, cameras, point clouds, 3DGS initialization, OBJ, PLY, GLB, and PBR voxel artifacts |
 | Audio enhancement | `audio enhance` | Native AP-BWE speech bandwidth extension and UniverSR general-audio super-resolution to hashed 48 kHz mono WAVs |
-| Video and worlds | `video generate`, `video cosmos3`, `video prepare-masks`, `video animate`, `video session`, `video export-latents`, `world serve` | LTX video, synchronized LTX 2.3 audio/video, resident distilled and full-dev LTX workers, Wan 2.2 TI2V, native Cosmos3-Edge generation/reasoning/action dynamics, native SAM 3.1 mask preparation, native SCAIL-2 subject animation/replacement, and warm DreamX or Cosmos3 world sessions |
+| Video and worlds | `video generate`, `video cosmos3`, `video prepare-masks`, `video animate`, `video session`, `video export-latents`, `world serve` | MiniMax-H3 FL2VA/Ref2VA synchronized video and audio, LTX video and synchronized LTX 2.3 audio/video, resident distilled and full-dev LTX workers, Wan 2.2 TI2V, native Cosmos3-Edge generation/reasoning/action dynamics, native SAM 3.1 mask preparation, native SCAIL-2 subject animation/replacement, and warm DreamX or Cosmos3 world sessions |
 | Music and sound | `music analyze`, `generate`, `realtime`, `separate`, `transcribe`; `sfx generate`, `sfx video generate` | ACE-Step generation, analysis, and covers; Magenta RT2 realtime MIDI performance; native RoFormer separation, dereverb, and denoise; MuScriptor full-mix MIDI transcription; Woosh and native MMAudio text/video-conditioned sound |
 | Speech | `speech synthesize`, `speech transcribe`, `speech diarize`, `speech listen`, `speech profile` | Qwen3 TTS, saved voice profiles, Qwen3 live ASR, Parakeet transcription, and native MLX Sortformer speaker diarization |
 | Serving and operations | `api serve`, `open-webui quickstart`, `status`, `run`, `model runtime`, `gate` | OpenAI-compatible chat, embeddings, images, TTS, and STT; resident model pooling, TTL/pinning, memory guards, durable run inspection, and installed-model quality gates |
@@ -754,6 +754,26 @@ swift run mere.run video generate \
   --duration 5 \
   --image ./performer.png \
   --output ./performance.mp4
+
+# MiniMax-H3 text/first-frame to synchronized 24 fps video + 32 kHz stereo
+swift run mere.run model pull video-minimax-h3-fl2va-mlx --accept-model-license
+swift run mere.run model optimize video-minimax-h3-fl2va-mlx
+swift run mere.run video generate \
+  "the paper bird takes flight with crisp wing sounds" \
+  --model video-minimax-h3-fl2va-mlx \
+  --image ./paper-bird.png \
+  --num-frames 124 \
+  --output ./paper-bird-h3.mp4
+
+# A locally converted Ref2VA root preserves reference order semantically
+swift run mere.run video generate \
+  "keep the subject, borrow the camera move, and follow the vocal rhythm" \
+  --model-root ./MiniMax-H3-Ref2VA-MLX \
+  --reference image:./subject.png \
+  --reference video:./camera-and-soundtrack.mp4 \
+  --reference audio:./voice.wav \
+  --num-frames 124 \
+  --output ./referenced-h3.mp4
 
 # Animate a masked reference subject from a driving video with native SCAIL-2
 swift run mere.run model pull video-scail2-14b-mlx

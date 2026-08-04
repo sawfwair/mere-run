@@ -418,8 +418,8 @@ public enum MereRunModelValidator {
                 warnings.append("Manifest engine mismatch: family=audio expects ap-bwe or universr.")
             case .sfx where engine != .woosh && engine != .mmaudio:
                 warnings.append("Manifest engine mismatch: family=sfx expects woosh or mmaudio.")
-            case .video where engine != .ltxVideo && engine != .wanVideo:
-                warnings.append("Manifest engine mismatch: family=video expects ltx-video or wan-video.")
+            case .video where engine != .ltxVideo && engine != .wanVideo && engine != .miniMaxH3:
+                warnings.append("Manifest engine mismatch: family=video expects ltx-video, wan-video, or minimax-h3.")
             case .psi where engine != .psiChat:
                 warnings.append("Manifest engine mismatch: family=psi expects psi-chat.")
             default:

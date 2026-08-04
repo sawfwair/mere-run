@@ -3,6 +3,59 @@
 These scripts are audited release tools. They are never invoked by a
 `mere.run` inference command and never become a Python sidecar.
 
+## MiniMax-H3 FL2VA and Ref2VA
+
+`convert_minimax_h3_convrot.py` converts either pinned MiniMax-H3 transformer
+partition from Comfy-Org's exact per-row ConvRot INT8 checkpoint into native
+MLX affine 8-bit tensors with group size 64. It first restores the unrotated
+weight basis, then reproduces MLX's affine scale, bias, and uint32 packing. It
+rejects any source whose filename, byte count, or SHA-256 differs from the
+pinned Hub revision and writes a hashed conversion receipt beside the output.
+
+The converter only handles transformer weights. A self-contained native model
+root must also contain the pinned Qwen3-VL conditioner, video/audio VAEs,
+tokenizer, `config.json`, `LICENSE`, `NOTICE`, and `MODIFICATIONS.md` described
+by `Sources/MereRunCore/MiniMaxH3/README.md`.
+
+```bash
+python3 scripts/model-conversion/convert_minimax_h3_convrot.py \
+  --partition ref2va \
+  --source minimax_h3_ref2va_int8_convrot.safetensors \
+  --output transformer.safetensors
+```
+
+The MiniMax-H3 Community License restricts territory and redistribution.
+Conversion and use must occur in an allowed territory, and converted packages
+must retain the upstream license, notice, modification disclosure, and safety
+requirements. Python and CUDA are conversion tooling only; inference remains
+native Swift/MLX.
+
+`requantize_minimax_h3_mlx.py` produces a compact inference-only transformer
+from that verified MLX 8-bit artifact. It requantizes affine linear weights to
+4-bit/group-64, omits only the AdaLN and time-embedding weights already covered
+by a verified `adaln_cache.safetensors`, and records the parent cache identity
+in safetensors metadata. The script streams the output transactionally, emits
+per-layer error statistics and SHA-256 receipts, and writes a matching config
+that keeps the Qwen3-VL conditioner at INT8 while selecting INT4 for the
+transformer. It never becomes part of the native inference path.
+
+```bash
+uv run --script scripts/model-conversion/requantize_minimax_h3_mlx.py \
+  --source transformer.safetensors \
+  --adaln-cache adaln_cache.safetensors \
+  --config config.json \
+  --output transformer-int4.safetensors \
+  --output-config config-int4.json \
+  --receipt transformer-int4.conversion.json
+```
+
+Install the emitted transformer and config together, retain the AdaLN cache and
+receipt beside them, and set the local manifest precision/quantization to INT4.
+Because cache-covered weights are intentionally absent, this compact artifact
+uses the cache's exact released 31-point modulation curve. The runtime resamples
+that curve for arbitrary valid schedule-point counts without restoring the
+omitted inference-redundant weights.
+
 ## Gemma 4 12B MLX 4-bit
 
 `convert_gemma4_12b_mlx.py` verifies Google's exact 23,919,549,408-byte Gemma 4

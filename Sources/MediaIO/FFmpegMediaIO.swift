@@ -335,6 +335,7 @@ enum FFmpegMediaIO {
         outputURL: URL,
         audioBitRate: Int? = nil
     ) throws {
+        let videoDuration = try videoDurationSeconds(videoURL)
         try FileManager.default.createDirectory(
             at: outputURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
@@ -344,20 +345,44 @@ enum FFmpegMediaIO {
             "-y",
             "-i", videoURL.path,
             "-i", audioURL.path,
+            "-map", "0:v:0",
+            "-map", "1:a:0",
             "-c:v", "copy",
             "-c:a", "aac",
+            // Preserve every generated video frame when decoded audio is a few
+            // samples short. Without padding, `-shortest` can discard delayed
+            // H.264 B-frames before their presentation timestamps are reached.
+            "-af", "apad",
         ]
         if let audioBitRate {
             arguments += ["-b:a", "\(max(1, audioBitRate))"]
         }
         arguments += [
-            "-shortest",
+            "-t", String(videoDuration),
             outputURL.path,
         ]
         _ = try FFmpegProcess.run(
             tool: MediaTool.ffmpegPath,
             arguments: arguments
         )
+    }
+
+    private static func videoDurationSeconds(_ url: URL) throws -> Double {
+        let result = try FFmpegProcess.run(
+            tool: MediaTool.ffprobePath,
+            arguments: [
+                "-v", "error",
+                "-show_entries", "format=duration",
+                "-of", "default=noprint_wrappers=1:nokey=1",
+                url.path,
+            ]
+        )
+        let rawDuration = String(decoding: result.stdout, as: UTF8.self)
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let duration = Double(rawDuration), duration.isFinite, duration > 0 else {
+            throw MediaIOError.videoOperationFailed("Could not determine video duration for muxing.")
+        }
+        return duration
     }
 
     static func extractFrames(

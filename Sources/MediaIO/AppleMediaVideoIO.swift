@@ -196,9 +196,17 @@ enum AppleMediaVideoIO {
               let compositionAudioTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) else {
             throw MediaIOError.videoOperationFailed("Could not create composition tracks.")
         }
-        let duration = CMTimeMinimum(videoAsset.duration, audioAsset.duration)
-        try compositionVideoTrack.insertTimeRange(CMTimeRange(start: .zero, duration: duration), of: videoTrack, at: .zero)
-        try compositionAudioTrack.insertTimeRange(CMTimeRange(start: .zero, duration: duration), of: audioTrack, at: .zero)
+        let audioDuration = CMTimeMinimum(videoAsset.duration, audioAsset.duration)
+        try compositionVideoTrack.insertTimeRange(
+            CMTimeRange(start: .zero, duration: videoAsset.duration),
+            of: videoTrack,
+            at: .zero
+        )
+        try compositionAudioTrack.insertTimeRange(
+            CMTimeRange(start: .zero, duration: audioDuration),
+            of: audioTrack,
+            at: .zero
+        )
         compositionVideoTrack.preferredTransform = videoTrack.preferredTransform
         try exportComposition(composition, outputURL: outputURL, videoComposition: nil, audioMix: nil)
     }

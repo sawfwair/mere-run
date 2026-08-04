@@ -413,6 +413,11 @@ enum InstalledModelSmokePlans {
                 try await runner.installedWanCheck(model: spec.id)
             }
 
+        case .miniMaxH3MLX:
+            return direct(spec, route: "video generate MiniMax-H3 synchronized AV") { runner in
+                try await runner.installedMiniMaxH3Check(model: spec.id)
+            }
+
         case .cosmos3EdgeMLX:
             return direct(spec, route: "video cosmos3 image-to-video") { runner in
                 try await runner.installedCosmosCheck(model: spec.id)
@@ -1191,6 +1196,35 @@ extension GateRunner {
             timeout: 3_600
         )
         return try generatedVideoObservation(output, run: run)
+    }
+
+    func installedMiniMaxH3Check(model: String) async throws -> GateObservation {
+        let output = artifactURL(model, extension: "mp4")
+        var arguments = [
+            "video", "generate",
+            "A red cube rotates slowly on a neutral background with a soft mechanical hum.",
+            "--model", model,
+            "--width", "128",
+            "--height", "128",
+            "--num-frames", "22",
+            "--steps", "2",
+            "--seed", "7",
+            "--output", output.path,
+            "--quiet",
+        ]
+        if model == ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue {
+            let image = try fixtureImage()
+            arguments.append(contentsOf: ["--reference", "image:\(image.path)"])
+        }
+        let run = try await exec(arguments, timeout: 7_200)
+        let bytes = try Data(contentsOf: output)
+        return GateObservation(
+            hash: Self.sha256(bytes),
+            secondRunHash: nil,
+            wallSeconds: run.wallSeconds,
+            decodeTps: nil,
+            semanticFailure: try validateVideoArtifact(output, requireAudio: true)
+        )
     }
 
     func installedCosmosCheck(model: String) async throws -> GateObservation {

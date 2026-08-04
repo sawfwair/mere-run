@@ -31,6 +31,7 @@ struct VideoGenerationPreflightInput {
     let imageStrength: Float
     let endImage: String?
     let endImageStrength: Float
+    let references: [String]
     let timings: Bool
     let timingsOutput: String?
     let generationArgv: [String]
@@ -63,6 +64,7 @@ struct VideoGenerationPreflightRequest: Codable, Equatable {
     let imageStrength: Float
     let endImage: String?
     let endImageStrength: Float
+    let references: [String]?
     let timings: Bool?
     let timingsOutput: String?
 
@@ -92,6 +94,7 @@ struct VideoGenerationPreflightRequest: Codable, Equatable {
         case imageStrength = "image_strength"
         case endImage = "end_image"
         case endImageStrength = "end_image_strength"
+        case references
         case timings
         case timingsOutput = "timings_output"
     }
@@ -153,6 +156,7 @@ struct VideoGenerationInputPreflightSummary: Codable, Equatable {
     let sourceAudio: VideoGenerationPathPreflightSummary?
     let sourceImage: VideoGenerationPathPreflightSummary?
     let endImage: VideoGenerationPathPreflightSummary?
+    let references: [VideoGenerationPathPreflightSummary]?
     let missingCount: Int
 
     enum CodingKeys: String, CodingKey {
@@ -160,6 +164,7 @@ struct VideoGenerationInputPreflightSummary: Codable, Equatable {
         case sourceAudio = "source_audio"
         case sourceImage = "source_image"
         case endImage = "end_image"
+        case references
         case missingCount = "missing_count"
     }
 }
@@ -250,6 +255,17 @@ struct VideoGenerationPreflightAnalyzer {
         return resources.validate().isEmpty && (try? resources.loadConfiguration()) != nil
     }
 
+    private var usesMiniMaxH3Geometry: Bool {
+        let requested = input.model.trimmingCharacters(in: .whitespacesAndNewlines)
+        if requested == ModelResolver.ModelID.miniMaxH3FL2VAMLX.rawValue
+            || requested == ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue {
+            return true
+        }
+        let candidate = input.modelRoot ?? input.model
+        let resources = MiniMaxH3Resources(rootURL: URL(fileURLWithPath: candidate).standardizedFileURL)
+        return resources.validate().isEmpty && (try? resources.loadConfiguration()) != nil
+    }
+
     private var usesAudioConditioning: Bool {
         guard let audio = input.audio else { return false }
         return !audio.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -314,6 +330,7 @@ struct VideoGenerationPreflightAnalyzer {
             imageStrength: input.imageStrength,
             endImage: input.endImage,
             endImageStrength: input.endImageStrength,
+            references: input.references.isEmpty ? nil : input.references,
             timings: input.timings,
             timingsOutput: input.timingsOutput
         )
@@ -325,6 +342,17 @@ struct VideoGenerationPreflightAnalyzer {
     ) {
         guard input.timings || input.timingsOutput != nil else { return }
         guard !usesAudioConditioning else { return }
+        guard !usesMiniMaxH3Geometry else {
+            diagnostics.append(
+                PreflightDiagnostic(
+                    id: "timings_lane_unsupported",
+                    severity: .blocker,
+                    title: "Phase timings are unavailable for this lane",
+                    message: "--timings and --timings-output are not available for MiniMax-H3 yet."
+                )
+            )
+            return
+        }
         guard !usesWanGeometry else {
             diagnostics.append(
                 PreflightDiagnostic(
@@ -387,6 +415,16 @@ struct VideoGenerationPreflightAnalyzer {
                     severity: .blocker,
                     title: "LTX product options do not apply to Wan",
                     message: "--quality and --output-mode currently select native LTX generation, not Wan2.2 TI2V."
+                )
+            )
+        }
+        if usesMiniMaxH3Geometry, input.quality != nil || input.outputMode != nil || input.legacyVariant != nil {
+            diagnostics.append(
+                PreflightDiagnostic(
+                    id: "ltx_product_selection_with_minimax_h3",
+                    severity: .blocker,
+                    title: "LTX product options do not apply to MiniMax-H3",
+                    message: "--quality, --output-mode, and --variant cannot be combined with MiniMax-H3."
                 )
             )
         }
@@ -467,8 +505,8 @@ struct VideoGenerationPreflightAnalyzer {
                 )
             )
         }
-        let minimumSpatialDimension = usesWanGeometry ? 32 : 64
-        let minimumFrameCount = usesWanGeometry ? 5 : 9
+        let minimumSpatialDimension = usesWanGeometry || usesMiniMaxH3Geometry ? 32 : 64
+        let minimumFrameCount = usesMiniMaxH3Geometry ? 22 : (usesWanGeometry ? 5 : 9)
         if input.width < minimumSpatialDimension {
             diagnostics.append(
                 PreflightDiagnostic(
@@ -536,6 +574,16 @@ struct VideoGenerationPreflightAnalyzer {
                     severity: .warning,
                     title: "LTX audio/video is tuned for 24 fps",
                     message: "LTX audio/video is trained around 24 fps; --fps \(input.fps) can make motion look time-stretched relative to audio."
+                )
+            )
+        }
+        if usesMiniMaxH3Geometry, input.fps != MiniMaxH3Geometry.framesPerSecond {
+            diagnostics.append(
+                PreflightDiagnostic(
+                    id: "minimax_h3_fps_fixed",
+                    severity: .note,
+                    title: "MiniMax-H3 uses fixed 24 fps",
+                    message: "MiniMax-H3 output will use 24 fps; --fps \(input.fps) is ignored."
                 )
             )
         }
@@ -769,6 +817,10 @@ struct VideoGenerationPreflightAnalyzer {
     }
 
     private func videoLayout(at url: URL) -> String? {
+        let h3 = MiniMaxH3Resources(rootURL: url)
+        if h3.validate().isEmpty, let configuration = try? h3.loadConfiguration() {
+            return "minimax_h3_\(configuration.task)_mlx"
+        }
         let resources = Wan2Resources(rootURL: url)
         if resources.validate().isEmpty, (try? resources.loadConfiguration()) != nil {
             return "wan22_ti2v_mlx"
@@ -785,7 +837,14 @@ struct VideoGenerationPreflightAnalyzer {
     }
 
     private func validateSelectedModelRoot(_ url: URL) throws {
-        if usesAudioConditioning {
+        if usesMiniMaxH3Geometry {
+            let resources = MiniMaxH3Resources(rootURL: url)
+            let missing = resources.validate(fileManager: fileManager)
+            guard missing.isEmpty else {
+                throw ValidationError("Missing MiniMax-H3 files: \(missing.map(\.path).joined(separator: ", "))")
+            }
+            _ = try resources.loadConfiguration()
+        } else if usesAudioConditioning {
             try validateNativeAudioToVideoModelRoot(url, fileManager: fileManager)
         } else if input.variant == .unifiedAV,
                   isLTX23AudioToVideoModelRoot(url, fileManager: fileManager),
@@ -858,6 +917,10 @@ struct VideoGenerationPreflightAnalyzer {
         let sourceAudio = usesAudioConditioning ? input.audio.map { pathSummary(requested: $0) } : nil
         let sourceImage = input.image.map { pathSummary(requested: $0) }
         let endImage = input.endImage.map { pathSummary(requested: $0) }
+        let references = input.references.map { raw -> VideoGenerationPathPreflightSummary in
+            let path = raw.firstIndex(of: ":").map { String(raw[raw.index(after: $0)...]) } ?? raw
+            return pathSummary(requested: path)
+        }
         for (summary, prefix) in [
             (sourceAudio, "source_audio"),
             (sourceImage, "source_image"),
@@ -886,9 +949,30 @@ struct VideoGenerationPreflightAnalyzer {
                 )
             }
         }
+        for (index, summary) in references.enumerated() {
+            if !summary.exists {
+                diagnostics.append(PreflightDiagnostic(
+                    id: "reference_\(index)_missing",
+                    severity: .blocker,
+                    title: "Reference media missing",
+                    message: "Reference media not found: \(summary.path)",
+                    locations: [.init(kind: "file", path: summary.path)]
+                ))
+            } else if summary.isDirectory {
+                diagnostics.append(PreflightDiagnostic(
+                    id: "reference_\(index)_is_directory",
+                    severity: .blocker,
+                    title: "Reference media is a directory",
+                    message: "Reference media path is a directory: \(summary.path)",
+                    locations: [.init(kind: "directory", path: summary.path)]
+                ))
+            }
+        }
 
         let mode: String
-        if sourceAudio != nil {
+        if !references.isEmpty {
+            mode = "reference_to_video_audio"
+        } else if sourceAudio != nil {
             if sourceImage == nil {
                 mode = "audio_to_video"
             } else if endImage == nil {
@@ -901,12 +985,13 @@ struct VideoGenerationPreflightAnalyzer {
                 ? "text_to_video"
                 : (endImage == nil ? "image_to_video" : "directed_image_to_video")
         }
-        let allInputs = [sourceAudio, sourceImage, endImage].compactMap { $0 }
+        let allInputs = [sourceAudio, sourceImage, endImage].compactMap { $0 } + references
         return VideoGenerationInputPreflightSummary(
             mode: mode,
             sourceAudio: sourceAudio,
             sourceImage: sourceImage,
             endImage: endImage,
+            references: references.isEmpty ? nil : references,
             missingCount: allInputs.filter { !$0.exists }.count
         )
     }
@@ -928,20 +1013,21 @@ struct VideoGenerationPreflightAnalyzer {
         inputs: VideoGenerationInputPreflightSummary,
         diagnostics: inout [PreflightDiagnostic]
     ) -> VideoGenerationPlanPreflightSummary {
-        let spatialMultiple = usesWanGeometry ? 32 : 64
+        let spatialMultiple = usesWanGeometry || usesMiniMaxH3Geometry ? 32 : 64
         let temporalMultiple = usesWanGeometry ? 4 : 8
-        let minimumFrames = usesWanGeometry ? 5 : 9
+        let minimumFrames = usesMiniMaxH3Geometry ? 22 : (usesWanGeometry ? 5 : 9)
         let resolvedWidth = max(spatialMultiple, (input.width / spatialMultiple) * spatialMultiple)
         let resolvedHeight = max(spatialMultiple, (input.height / spatialMultiple) * spatialMultiple)
         let requestedFrames = input.duration.map {
-            usesWanGeometry
+            usesMiniMaxH3Geometry
+                ? Int(($0 * Double(MiniMaxH3Geometry.framesPerSecond)).rounded())
+                : usesWanGeometry
                 ? nearestWanFrameCount(duration: $0, fps: input.fps)
                 : nearestLTXFrameCount(duration: $0, fps: input.fps)
         } ?? input.numFrames
-        let resolvedFrames = max(
-            minimumFrames,
-            ((requestedFrames - 1) / temporalMultiple) * temporalMultiple + 1
-        )
+        let resolvedFrames = usesMiniMaxH3Geometry
+            ? (try? MiniMaxH3Geometry.alignFrameCount(max(minimumFrames, requestedFrames))) ?? minimumFrames
+            : max(minimumFrames, ((requestedFrames - 1) / temporalMultiple) * temporalMultiple + 1)
 
         if input.width >= spatialMultiple,
            input.height >= spatialMultiple,
@@ -961,12 +1047,15 @@ struct VideoGenerationPreflightAnalyzer {
                     id: "num_frames_will_be_adjusted",
                     severity: .note,
                     title: "Frame count will be adjusted",
-                    message: "Frame count will be snapped from \(input.numFrames) to \(resolvedFrames) to satisfy \(temporalMultiple)n+1."
+                    message: usesMiniMaxH3Geometry
+                        ? "Frame count will be snapped from \(input.numFrames) to \(resolvedFrames) to satisfy 17*n+5."
+                        : "Frame count will be snapped from \(input.numFrames) to \(resolvedFrames) to satisfy \(temporalMultiple)n+1."
                 )
             )
         }
         if let duration = input.duration, input.fps > 0, duration > 0 {
-            let resolvedSeconds = Double(resolvedFrames) / Double(input.fps)
+            let outputFPS = usesMiniMaxH3Geometry ? MiniMaxH3Geometry.framesPerSecond : input.fps
+            let resolvedSeconds = Double(resolvedFrames) / Double(outputFPS)
             diagnostics.append(
                 PreflightDiagnostic(
                     id: "duration_resolved_to_frame_count",
@@ -976,7 +1065,7 @@ struct VideoGenerationPreflightAnalyzer {
                         format: "Duration %.2fs resolves to %d frames at %d fps (~%.2fs).",
                         duration,
                         resolvedFrames,
-                        input.fps,
+                        outputFPS,
                         resolvedSeconds
                     )
                 )
@@ -985,11 +1074,13 @@ struct VideoGenerationPreflightAnalyzer {
 
         let routeWritesAudio = resolvedLTXRoute(model: model)?.writesAudio
             ?? (input.variant == .unifiedAV)
-        let resolvedOutputMode: LTXVideoOutputMode? = usesWanGeometry
+        let resolvedOutputMode: LTXVideoOutputMode? = usesWanGeometry || usesMiniMaxH3Geometry
             ? nil
             : (usesAudioConditioning || input.variant == .unifiedAV ? .audioVideo : .videoOnly)
         return VideoGenerationPlanPreflightSummary(
-            variant: usesWanGeometry
+            variant: usesMiniMaxH3Geometry
+                ? "minimax-h3"
+                : usesWanGeometry
                 ? "wan22-ti2v"
                 : (usesAudioConditioning ? "audio-to-video" : input.variant.rawValue),
             quality: resolvedQuality(model: model)?.rawValue,
@@ -1001,11 +1092,13 @@ struct VideoGenerationPreflightAnalyzer {
             resolvedHeight: resolvedHeight,
             requestedNumFrames: input.numFrames,
             requestedDurationSeconds: input.duration,
-            fps: input.fps,
+            fps: usesMiniMaxH3Geometry ? MiniMaxH3Geometry.framesPerSecond : input.fps,
             resolvedNumFrames: resolvedFrames,
-            resolvedDurationSeconds: input.fps > 0 ? Double(resolvedFrames) / Double(input.fps) : nil,
+            resolvedDurationSeconds: input.fps > 0
+                ? Double(resolvedFrames) / Double(usesMiniMaxH3Geometry ? MiniMaxH3Geometry.framesPerSecond : input.fps)
+                : nil,
             seed: input.seed ?? 42,
-            writesAudio: usesAudioConditioning || (!usesWanGeometry && routeWritesAudio),
+            writesAudio: usesMiniMaxH3Geometry || usesAudioConditioning || (!usesWanGeometry && routeWritesAudio),
             audioConditioning: usesAudioConditioning,
             preservesSourceAudio: usesAudioConditioning,
             resolvedAudioStartTime: usesAudioConditioning ? input.audioStartTime : nil

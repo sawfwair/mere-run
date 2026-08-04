@@ -138,7 +138,7 @@ Public tree:
   - `mere.run run fetch` — Fetch a remote graph run into the standard local run-directory format.
   - `mere.run run cancel` — Cancel a graph run.
   - `mere.run run retry` — Retry an immutable relay graph job.
-- [`mere.run model`](/runtime/model-management) — List, pull, remove, inspect, and clean up models.
+- [`mere.run model`](/runtime/model-management) — List, pull, remove, inspect, optimize, and clean up models.
   - `mere.run model list` — List all known models with install status.
   - `mere.run model pull` — Download a managed model into the local model store.
   - `mere.run model remove` — Remove a model from the local model store.
@@ -149,6 +149,7 @@ Public tree:
   - `mere.run model runtime` — Read and update per-model API runtime settings.
     - `mere.run model runtime get` — Print typed API runtime settings for a managed model.
     - `mere.run model runtime set` — Update typed API runtime settings for a managed model.
+  - `mere.run model optimize` — Build inference-only caches for a supported installed model.
   - `mere.run model benchmark` — Run focused local model benchmarks.
     - `mere.run model benchmark chat` — Run a small grounded-chat eval slice against local assistant models.
     - `mere.run model benchmark tool-calls` — Run a small tool-call selection eval against local chat models.
@@ -1761,7 +1762,7 @@ a canonical hashed manifest.
 
 ### `mere.run video generate`
 
-Generate MP4 video with the native LTX and Wan2.2 pipelines.
+Generate MP4 video with the native MiniMax-H3, LTX, and Wan2.2 pipelines.
 
 ```bash
 swift run mere.run video generate "<prompt>" [options]
@@ -1782,7 +1783,9 @@ Key options:
 - `--duration`
 - `--fps`
 - `--seed`
-- `--steps`, `--guidance-scale`, `--shift`, `--negative-prompt` for Wan2.2
+- `--steps`: MiniMax-H3 schedule-point override or Wan2.2 inference steps
+- `--h3-weight-mode`: `auto`, `quantized`, or `resident-bf16`
+- `--guidance-scale`, `--shift`, `--negative-prompt` for Wan2.2
 - `--audio`: source audio path; automatically selects native LTX 2.3 A2Vid
 - `--audio-start-time`: source segment offset in seconds (default `0`)
 - `--a2v-guidance-scale`: audio-modality guidance (default `3`)
@@ -1796,6 +1799,8 @@ Key options:
 - `--image-strength`
 - `--end-image`
 - `--end-image-strength`
+- `--reference`: repeatable ordered MiniMax-H3 Ref2VA input in
+  `image:path`, `video:path`, or `audio:path` form
 - `--preflight`
 - `--json`: only with `--preflight`
 - `--timings`: native LTX 2.3 split-distilled, unified-AV, or A2Vid phase
@@ -1837,6 +1842,17 @@ For native Wan2.2 image-to-video, pass
 to multiples of 32 and frame counts follow `4n+1`; 512x320 with 17 frames is a
 useful short world-transition baseline. Tiny 128-pixel outputs are structural
 smokes, not quality renders.
+
+MiniMax-H3 always emits synchronized 24 fps video and 32 kHz stereo audio.
+FL2VA accepts `--image` and optional `--end-image`; Ref2VA accepts ordered
+`--reference` values and rejects those keyframe flags. H3 dimensions snap to
+32-pixel multiples, frame counts snap upward to `17*n+5`, and its
+CFG-distilled transformer needs one evaluation per schedule step. Ref2VA roots
+are locally converted; the public managed pull exists only for FL2VA.
+When `--steps` is omitted, H3 selects 9, 16, or 31 schedule points from packed
+row cost. Its source-bound AdaLN cache resamples the exact released 31-point
+curve for explicit overrides. `--h3-weight-mode auto` keeps compact Q4 on
+MacBooks and may expand to resident BF16 on memory-qualified desktop Macs.
 
 Preflight mode:
 
@@ -1904,6 +1920,14 @@ swift run mere.run video generate \
   --end-image ./car-end.png \
   --num-frames 65 \
   --output ./car-start-to-end.mp4
+
+swift run mere.run video generate \
+  "keep the reference subject and follow the camera movement" \
+  --model-root ./MiniMax-H3-Ref2VA-MLX \
+  --reference image:./subject.png \
+  --reference video:./camera.mp4 \
+  --num-frames 124 \
+  --output ./h3-ref2va.mp4
 ```
 
 ### `mere.run video session`
@@ -1970,6 +1994,21 @@ mere.run model gc --force
 Cleanup rechecks the ownership graph under the same lock used by managed pulls.
 Existing legacy cache layouts remain readable and are adopted into the
 revision-addressed layout without copying matching payload bytes on a later pull.
+
+### `mere.run model optimize`
+
+Build a reusable inference-only cache for an installed MiniMax-H3 MLX model:
+
+```bash
+mere.run model optimize video-minimax-h3-fl2va-mlx
+mere.run model optimize video-minimax-h3-fl2va-mlx --json
+```
+
+The generated `adaln_cache.safetensors` contains the released 31-point
+video/audio schedule's AdaLN modulation tables. Compatible H3 generations then
+skip loading the 13B-parameter AdaLN/time-embedding branch and resample that
+exact curve for their selected point count. `--force` replaces an existing
+cache atomically after the new cache has been built.
 
 ### `mere.run model remove`
 

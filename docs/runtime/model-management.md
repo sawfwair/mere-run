@@ -16,6 +16,7 @@ exactly what is safe to delete.
 | `mere.run model remove` | Remove a model from the local model store. |
 | `mere.run model storage` | Inspect physical model storage, sharing, and reclaimable space. |
 | `mere.run model gc` | Find or delete unreferenced model payloads and partial downloads. |
+| `mere.run model optimize` | Build inference-only caches for a supported installed model. |
 | `mere.run model repair-manifests` | Rewrite missing manifest metadata in the local store. |
 | `mere.run model runtime` | Read and update per-model API runtime settings. |
 | `mere.run model benchmark` | Run focused local model benchmarks. |
@@ -95,6 +96,23 @@ cache units, stale payloads, partial downloads, dead revision references, and
 unlinked blobs. Newly created unreferenced snapshots have a one-hour grace
 period. Installed model links and legacy links under MereRun application support
 keep their backing payloads live.
+
+### `mere.run model optimize`
+
+For MiniMax-H3 MLX installs, precompute the released 31-point schedule's AdaLN
+modulation tables once:
+
+```bash
+mere.run model optimize video-minimax-h3-fl2va-mlx
+```
+
+The cache is written beside the installed model. Compatible generation runs use
+it to avoid loading the inference-redundant AdaLN/time-embedding weights and
+resample its exact released curve for the selected schedule-point count. A
+compact transformer produced by `requantize_minimax_h3_mlx.py` intentionally
+omits those covered weights while retaining arbitrary valid schedule counts;
+its generated config keeps the transformer at INT4 and the Qwen3-VL
+conditioner at INT8.
 
 ### `mere.run status`
 

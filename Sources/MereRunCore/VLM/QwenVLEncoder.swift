@@ -113,6 +113,28 @@ public struct QwenVLTextEncoderConfig: Decodable, Sendable, Hashable {
 }
 
 public final class QwenVLEncoder: Module {
+    public struct ConditioningImage: @unchecked Sendable {
+        public let pixelValues: MLXArray
+        public let tokenRange: Range<Int>
+        public let temporalPatchCount: Int
+        public let heightPatchCount: Int
+        public let widthPatchCount: Int
+
+        public init(
+            pixelValues: MLXArray,
+            tokenRange: Range<Int>,
+            temporalPatchCount: Int = 1,
+            heightPatchCount: Int,
+            widthPatchCount: Int
+        ) {
+            self.pixelValues = pixelValues
+            self.tokenRange = tokenRange
+            self.temporalPatchCount = temporalPatchCount
+            self.heightPatchCount = heightPatchCount
+            self.widthPatchCount = widthPatchCount
+        }
+    }
+
     private static let debugVisionStats: Bool = {
         guard let raw = ProcessInfo.processInfo.environment["MERERUN_VLM_DEBUG_STATS"]?.lowercased() else {
             return false
@@ -156,6 +178,122 @@ public final class QwenVLEncoder: Module {
         let mergedH = patchH / spatialMergeSize
         let mergedW = patchW / spatialMergeSize
         return max(1, mergedH * mergedW)
+    }
+
+    /// Encodes H3-style multimodal presentations without a chat template or
+    /// language-model head. Each image pad run is replaced in place with the
+    /// Qwen3-VL vision tower output; the unnormalized activation immediately
+    /// after `activationLayer` is returned.
+    public func forwardMultimodalActivationHiddenState(
+        inputIds: MLXArray,
+        attentionMask: MLXArray,
+        images: [ConditioningImage],
+        activationLayer: Int
+    ) throws -> MLXArray? {
+        var tokenIds = inputIds
+        if tokenIds.dtype != .int32 { tokenIds = tokenIds.asType(.int32) }
+        let embeddings = textEncoder.encoder.embed(inputIds: tokenIds)
+        var deepstackByImage: [[MLXArray]] = []
+
+        for image in images {
+            let expectedTokens = max(
+                1,
+                image.temporalPatchCount
+                    * max(1, image.heightPatchCount / visionSpatialMergeSize)
+                    * max(1, image.widthPatchCount / visionSpatialMergeSize)
+            )
+            precondition(
+                image.tokenRange.count == expectedTokens,
+                "Qwen3-VL image placeholder count does not match its patch grid"
+            )
+            let patchInputs = Self.preparePatchInputs(
+                pixelValues: image.pixelValues,
+                patchSize: visionPatchSize,
+                mergeSize: visionSpatialMergeSize
+            )
+            let output = try visionTower(
+                patchInputs: patchInputs,
+                grid: [QwenVisionGrid(
+                    temporal: image.temporalPatchCount,
+                    height: image.heightPatchCount,
+                    width: image.widthPatchCount
+                )]
+            )
+            var visual = output.hiddenStates
+            if let projection = visionProjection { visual = projection(visual) }
+            precondition(
+                visual.dim(0) == image.tokenRange.count,
+                "Qwen3-VL vision tower output does not match its presentation span"
+            )
+            if visual.dtype != embeddings.dtype { visual = visual.asType(embeddings.dtype) }
+            embeddings[0, image.tokenRange, 0...] = visual
+            deepstackByImage.append(output.deepstackFeatures)
+        }
+
+        let deepstackLayerCount = deepstackByImage.map(\.count).max() ?? 0
+        let deepstackByLayer: [[MLXArray]] = (0..<deepstackLayerCount).map { layer in
+            deepstackByImage.map { imageFeatures in
+                precondition(
+                    layer < imageFeatures.count,
+                    "Qwen3-VL images must expose the same number of deepstack features"
+                )
+                return imageFeatures[layer]
+            }
+        }
+        let positionIds = Self.multimodalPositionIDs(
+            sequenceLength: embeddings.dim(1),
+            images: images,
+            spatialMergeSize: visionSpatialMergeSize
+        )
+        return textEncoder.encoder.forwardMultimodalActivationHiddenState(
+            embeddings: embeddings,
+            attentionMask: attentionMask,
+            positionIds: positionIds,
+            visualTokenRanges: images.map(\.tokenRange),
+            deepstackFeatures: deepstackByLayer,
+            activationLayer: activationLayer
+        )
+    }
+
+    private static func multimodalPositionIDs(
+        sequenceLength: Int,
+        images: [ConditioningImage],
+        spatialMergeSize: Int
+    ) -> MLXArray {
+        var axes = Array(repeating: [Int32](), count: 3)
+        for axis in axes.indices { axes[axis].reserveCapacity(sequenceLength) }
+        var cursor = 0
+        var nextPosition = 0
+
+        for image in images.sorted(by: { $0.tokenRange.lowerBound < $1.tokenRange.lowerBound }) {
+            precondition(image.tokenRange.lowerBound >= cursor && image.tokenRange.upperBound <= sequenceLength)
+            while cursor < image.tokenRange.lowerBound {
+                for axis in axes.indices { axes[axis].append(Int32(nextPosition)) }
+                cursor += 1
+                nextPosition += 1
+            }
+
+            let temporal = max(1, image.temporalPatchCount)
+            let height = max(1, image.heightPatchCount / spatialMergeSize)
+            let width = max(1, image.widthPatchCount / spatialMergeSize)
+            for temporalIndex in 0..<temporal {
+                for heightIndex in 0..<height {
+                    for widthIndex in 0..<width {
+                        axes[0].append(Int32(nextPosition + temporalIndex))
+                        axes[1].append(Int32(nextPosition + heightIndex))
+                        axes[2].append(Int32(nextPosition + widthIndex))
+                        cursor += 1
+                    }
+                }
+            }
+            nextPosition += max(temporal, max(height, width))
+        }
+        while cursor < sequenceLength {
+            for axis in axes.indices { axes[axis].append(Int32(nextPosition)) }
+            cursor += 1
+            nextPosition += 1
+        }
+        return MLXArray(axes.flatMap { $0 }, [3, 1, sequenceLength])
     }
 
     /// Prefill step for generation with vision embeddings injected into the prompt.
@@ -318,7 +456,7 @@ public final class QwenVLEncoder: Module {
     // MARK: - Patch inputs + replacement helpers
 
     private static func preparePatchInputs(pixelValues: MLXArray, patchSize: Int, mergeSize: Int = 2) -> MLXArray {
-        let batch = pixelValues.dim(0)
+        let frameCount = pixelValues.dim(0)
         let channels = pixelValues.dim(1)
         let height = pixelValues.dim(2)
         let width = pixelValues.dim(3)
@@ -334,7 +472,9 @@ public final class QwenVLEncoder: Module {
         // Input: [batch, C, H, W]
         // Reshape to separate merge blocks:
         // [batch, C, blockH, mergeSize, patchSize, blockW, mergeSize, patchSize]
-        var x = pixelValues.reshaped(batch, channels, blockH, mergeSize, patchSize, blockW, mergeSize, patchSize)
+        var x = pixelValues.reshaped(
+            frameCount, channels, blockH, mergeSize, patchSize, blockW, mergeSize, patchSize
+        )
 
         // Transpose to merge-permuted order:
         // [batch, blockH, blockW, mergeSize, mergeSize, C, patchSize, patchSize]
@@ -342,16 +482,21 @@ public final class QwenVLEncoder: Module {
         x = x.transposed(0, 2, 5, 3, 6, 1, 4, 7)
 
         // Flatten to: [batch, numPatches, C, spatialSize]
-        x = x.reshaped(batch, numPatches, channels, spatialSize)
+        x = x.reshaped(frameCount, numPatches, channels, spatialSize)
 
         // For temporal duplication (temporal_patch_size=2):
         // Duplicate along temporal dimension to match [C, T, H, W] layout
-        let t0 = x.expandedDimensions(axis: 3)  // [batch, numPatches, C, 1, spatial]
-        let t1 = x.expandedDimensions(axis: 3)  // [batch, numPatches, C, 1, spatial]
-        let temporal = MLX.concatenated([t0, t1], axis: 3)  // [batch, numPatches, C, 2, spatial]
+        if !frameCount.isMultiple(of: temporalPatchSize) {
+            x = MLX.concatenated([x, x[(frameCount - 1)..., 0..., 0..., 0...]], axis: 0)
+        }
+        let temporalPatchCount = x.dim(0) / temporalPatchSize
+        let temporal = x
+            .reshaped(temporalPatchCount, temporalPatchSize, numPatches, channels, spatialSize)
+            .transposed(0, 2, 3, 1, 4)
 
-        // Flatten to [batch, numPatches, C * T * spatial]
-        return temporal.reshaped(batch, numPatches, channels * temporalPatchSize * spatialSize)
+        // One media item per call: temporal patches extend the token axis, not
+        // the batch axis described by the single Qwen grid entry.
+        return temporal.reshaped(1, temporalPatchCount * numPatches, channels * temporalPatchSize * spatialSize)
     }
 
     /// Replace the expanded <|image_pad|> token span with vision embeddings.

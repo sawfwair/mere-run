@@ -77,6 +77,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case ltxVideo23FullMLX
     case ltxVideo23A2VMLX
     case wan22TI2VMLX
+    case miniMaxH3MLX
     case cosmos3EdgeMLX
     case scail2MLX
     case dreamXCausalMLX
@@ -392,6 +393,14 @@ public enum ManagedModelCatalog {
         "special_tokens_map.json",
         "generation_config.json",
     ]
+
+    private static let miniMaxH3UsageRestriction = usageRestriction(
+        summary: "MiniMax-H3 weights may not be used, distributed, or displayed in the United States, European Union, United Kingdom, or Republic of Korea; downstream distribution also requires the Community License agreement, notice, and safeguards.",
+        license: "MiniMax-H3 Community License",
+        sourceRepoId: MiniMaxH3Resources.sourceRepository,
+        sourceRevision: MiniMaxH3Resources.sourceRevision,
+        licenseURL: "https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/ec19cc6daf5d8add9417c18e86b6b58cc6c55027/LICENSE"
+    )
 
     private static func usageRestriction(
         summary: String,
@@ -2330,6 +2339,35 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["video generate"]
         ),
         ManagedModelSpec(
+            id: ModelResolver.ModelID.miniMaxH3FL2VAMLX.rawValue,
+            category: .video,
+            installShape: .structuredRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: MiniMaxH3Resources.artifactRepository,
+                revision: MiniMaxH3Resources.artifactRevision,
+                patterns: MiniMaxH3Resources.requiredFiles
+            ),
+            upstreamRepoId: MiniMaxH3Resources.artifactRepository,
+            upstreamRevision: MiniMaxH3Resources.artifactRevision,
+            usageRestriction: miniMaxH3UsageRestriction,
+            validationKind: .miniMaxH3MLX,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 69_284_785_360,
+            defaultCLICommands: ["video generate"]
+        ),
+        ManagedModelSpec(
+            id: ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue,
+            category: .video,
+            installShape: .structuredRoot,
+            upstreamRepoId: MiniMaxH3Resources.conversionSourceRepository,
+            upstreamRevision: MiniMaxH3Resources.conversionSourceRevision,
+            usageRestriction: miniMaxH3UsageRestriction,
+            validationKind: .miniMaxH3MLX,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 70_060_217_720,
+            defaultCLICommands: ["video generate"]
+        ),
+        ManagedModelSpec(
             id: ModelResolver.ModelID.cosmos3EdgeMLX.rawValue,
             category: .video,
             installShape: .structuredRoot,
@@ -2631,6 +2669,8 @@ public extension ManagedModelSpec {
             return Self.missingLTXVideo23A2VMLXPaths(in: rootURL, fileManager: fileManager)
         case .wan22TI2VMLX:
             return Wan2Resources(rootURL: rootURL).validate(fileManager: fileManager)
+        case .miniMaxH3MLX:
+            return MiniMaxH3Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .cosmos3EdgeMLX:
             let resources = Cosmos3Resources(rootURL: rootURL)
             return resources.validate(fileManager: fileManager)
@@ -2701,8 +2741,21 @@ public extension ManagedModelSpec {
             if !missing.isEmpty {
                 return missing.map { "Missing required Wan2.2 TI2V MLX file: \($0.path)" }
             }
+            return []
+        case .miniMaxH3MLX:
+            let resources = MiniMaxH3Resources(
+                rootURL: normalizedRootURL(rootURL, fileManager: fileManager)
+            )
+            let missing = resources.validate(fileManager: fileManager)
+            if !missing.isEmpty {
+                return missing.map { "Missing required MiniMax-H3 MLX file: \($0.path)" }
+            }
             do {
-                _ = try resources.loadConfiguration()
+                let configuration = try resources.loadConfiguration()
+                let expectedTask = id == ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue ? "ref2va" : "fl2va"
+                guard configuration.task == expectedTask else {
+                    return ["MiniMax-H3 model \(id) requires partition \(expectedTask), got \(configuration.task)."]
+                }
                 return []
             } catch {
                 return [error.localizedDescription]
