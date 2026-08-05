@@ -7,12 +7,12 @@ import argparse
 import hashlib
 import json
 import pathlib
+import struct
 import sys
 from typing import Any
 
 import torch
 import torch.nn.functional as F
-from safetensors.torch import save_file
 
 MODEL_ID = "vision-flood-terramind-base"
 SOURCE_REPOSITORY = "ibm-esa-geospatial/TerraMind-base-Flood"
@@ -110,6 +110,36 @@ def write_json(path: pathlib.Path, payload: Any) -> None:
     path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
 
 
+def write_deterministic_safetensors(
+    path: pathlib.Path,
+    tensors: dict[str, torch.Tensor],
+    metadata: dict[str, str],
+) -> None:
+    """Write the simple float32 subset used here without Rust HashMap ordering drift."""
+    header: dict[str, Any] = {"__metadata__": metadata}
+    offset = 0
+    for name, tensor in tensors.items():
+        if tensor.device.type != "cpu" or tensor.dtype != torch.float32 or not tensor.is_contiguous():
+            raise ValueError(f"{name} is not a contiguous CPU float32 tensor")
+        byte_count = tensor.numel() * tensor.element_size()
+        header[name] = {
+            "dtype": "F32",
+            "shape": list(tensor.shape),
+            "data_offsets": [offset, offset + byte_count],
+        }
+        offset += byte_count
+
+    encoded = json.dumps(header, separators=(",", ":"), ensure_ascii=True).encode()
+    encoded += b" " * ((8 - len(encoded) % 8) % 8)
+    partial = path.with_suffix(f"{path.suffix}.partial")
+    with partial.open("wb") as target:
+        target.write(struct.pack("<Q", len(encoded)))
+        target.write(encoded)
+        for tensor in tensors.values():
+            target.write(tensor.numpy().tobytes(order="C"))
+    partial.replace(path)
+
+
 def main() -> int:
     args = parse_args()
     checkpoint, configuration = resolve_sources(args)
@@ -133,16 +163,19 @@ def main() -> int:
 
     args.output.mkdir(parents=True, exist_ok=True)
     weights_path = args.output / "model.safetensors"
-    save_file(
-        converted,
+    write_deterministic_safetensors(
         weights_path,
+        converted,
+        # This explicit order reproduces the already released, checksum-pinned
+        # v1 package. safetensors <=0.8 passes metadata through a randomized
+        # Rust HashMap, so save_file() is not byte-deterministic across runs.
         metadata={
+            "source_checkpoint_sha256": SOURCE_CHECKPOINT_SHA256,
+            "dtype": args.dtype,
             "format": FORMAT,
             "model_id": MODEL_ID,
             "source_repository": SOURCE_REPOSITORY,
             "source_revision": SOURCE_REVISION,
-            "source_checkpoint_sha256": SOURCE_CHECKPOINT_SHA256,
-            "dtype": args.dtype,
         },
     )
     config = {
