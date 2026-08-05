@@ -648,6 +648,13 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
             vae: nil,
             scheduler: nil
         )
+        let denseLFM2TextComponents = Components(
+            tokenizer: .local(path: LFM2Resources.denseVariantSubdirectory),
+            textEncoder: .local(path: LFM2Resources.denseVariantSubdirectory),
+            transformer: nil,
+            vae: nil,
+            scheduler: nil
+        )
         let genericTextComponents = Components(
             tokenizer: .local(path: "."),
             textEncoder: .local(path: "."),
@@ -1044,6 +1051,21 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.chat],
                 components: q35TextComponents,
                 upstreamRepoId: "\(LFM2Resources.upstreamRepoId)@\(LFM2Resources.upstreamRevision)",
+                createdAt: createdAt
+            )
+        case .lfm25Dense2_6B4Bit:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .lfm2,
+                family: .liquid,
+                tier: .nano,
+                variant: .standard,
+                precision: .int4,
+                quantization: Quantization(bits: 4, groupSize: 64, scheme: "mlx-affine"),
+                defaults: nil,
+                supports: [.chat],
+                components: denseLFM2TextComponents,
+                upstreamRepoId: "\(LFM2Resources.denseUpstreamRepoId)@\(LFM2Resources.denseUpstreamRevision)",
                 createdAt: createdAt
             )
         case .qwen35Agent9B:

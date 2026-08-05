@@ -217,7 +217,7 @@ are:
   `image-hidream-o1`, `image-hidream-o1-dev`, `image-krea2-raw`,
   `image-krea2-turbo`,
   `image-ideogram4-sdnq-uint4`
-- Text chat: `text-chat-gemma4`, `text-chat-mebot`, `text-chat-psi-agent`, `text-chat-q36-nano`, `text-chat-lfm25-a1b-8bit`
+- Text chat: `text-chat-gemma4`, `text-chat-mebot`, `text-chat-psi-agent`, `text-chat-q36-nano`, `text-chat-lfm25-2.6b-4bit`, `text-chat-lfm25-a1b-8bit`
 - Text code / agents: `text-agent-qwen35-9b`, `text-agent-ornith-9b`, `text-agent-ornith-35b-mlx`, `text-agent-ornith-35b`, `text-code-north-mini`, `text-code-qwen3`
 - Text embed: `text-embed-qwen3-0.6b`
 - Text anonymize: `text-anonymize-privacy-filter`
@@ -804,7 +804,9 @@ Key options:
   enabled by default even though the reasoning stays hidden. Bonsai 27B also
   defaults to thinking-enabled generation.
 - `--stream`
-- `--stats`: includes Gemma4 MTP state and accept/draft counts when a Gemma4 model is used
+- `--stats`: includes user-visible `ttft_s`, decode-only `first_token_s`,
+  separate LFM2 prefill and decode tokens/sec, and Gemma4 MTP state and
+  accept/draft counts when those runtimes are used
 - `--quiet`
 
 Unless `--quiet` is set, diagnostics on stderr include the selected text
@@ -827,6 +829,7 @@ swift run mere.run text chat --model text-chat-q36-nano --prompt "Explain specul
 swift run mere.run text chat --model text-chat-q36-nano --response-format json_object --prompt 'Return an object with a name and an array of tags.'
 swift run mere.run text chat --model text-agent-ornith-9b --prompt "Write a compact Swift slugify helper."
 swift run mere.run text chat --model text-chat-inkling-small --reasoning-effort 0.2 --prompt "Answer directly."
+swift run mere.run text chat --model text-chat-lfm25-2.6b-4bit --prompt "Explain local inference in one paragraph."
 swift run mere.run text chat --model text-chat-lfm25-a1b-8bit --prompt "Summarize LFM2 in one paragraph."
 swift run mere.run text chat --stream --prompt "Write a short welcome message."
 swift run mere.run text chat --thinking --stats --prompt "How would you design a tokenizer?"
@@ -2542,8 +2545,10 @@ Security defaults:
   prompts are excluded from reuse, and text-only requests use the same semantic
   chat-prefix checkpoints as Gemma4.
 - LFM2 chat uses in-memory prefix KV reuse by default in `api serve`; set
-  `MERERUN_LFM2_PREFIX_KV_CACHE=0` for a baseline. Checkpoints fork both
-  attention KV and short-convolution state.
+  `MERERUN_LFM2_PREFIX_KV_CACHE=0` for a baseline. It retains exact prompts and
+  the stable conversation prefix before the final message instead of cloning
+  every intermediate prefill chunk. Checkpoints fork both attention KV and
+  short-convolution state.
 - Managed Gemma4 12B text and vision pulls install a companion MTP assistant.
   When `MERERUN_GEMMA4_MTP` is not disabled, greedy serial decode can use that
   assistant on the decode tail after prefill; sampled requests, continuous

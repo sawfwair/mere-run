@@ -8,19 +8,22 @@ public final class LFM2TokenizerAndTemplate: @unchecked Sendable {
     public let eosTokenId: Int?
     public let imEndTokenId: Int?
     public let toolCallEndTokenId: Int?
+    public let generationPromptSuffix: String
 
     public init(
         tokenizer: any Tokenizer,
         maxLength: Int,
         eosTokenId: Int?,
         imEndTokenId: Int?,
-        toolCallEndTokenId: Int?
+        toolCallEndTokenId: Int?,
+        generationPromptSuffix: String
     ) {
         self.tokenizer = tokenizer
         self.maxLength = maxLength
         self.eosTokenId = eosTokenId
         self.imEndTokenId = imEndTokenId
         self.toolCallEndTokenId = toolCallEndTokenId
+        self.generationPromptSuffix = generationPromptSuffix
     }
 
     public static func load(
@@ -29,12 +32,18 @@ public final class LFM2TokenizerAndTemplate: @unchecked Sendable {
         hubApi: HubApi = .shared
     ) async throws -> LFM2TokenizerAndTemplate {
         let tokenizer = try await AutoTokenizer.from(modelFolder: rootURL, hubApi: hubApi)
+        let chatTemplateURL = rootURL.appendingPathComponent("chat_template.jinja")
+        let chatTemplate = try? String(contentsOf: chatTemplateURL, encoding: .utf8)
+        let generationPromptSuffix = chatTemplate?.contains("<|im_start|>assistant\\n<think>") == true
+            ? "<think>"
+            : ""
         return LFM2TokenizerAndTemplate(
             tokenizer: tokenizer,
             maxLength: maxLengthOverride ?? LFM2Resources.defaultContextLength,
             eosTokenId: tokenizer.eosTokenId,
             imEndTokenId: tokenizer.convertTokenToId("<|im_end|>"),
-            toolCallEndTokenId: tokenizer.convertTokenToId("<|tool_call_end|>")
+            toolCallEndTokenId: tokenizer.convertTokenToId("<|tool_call_end|>"),
+            generationPromptSuffix: generationPromptSuffix
         )
     }
 
@@ -50,7 +59,8 @@ public final class LFM2TokenizerAndTemplate: @unchecked Sendable {
                 messages: messages,
                 tools: tools,
                 addGenerationPrompt: addGenerationPrompt,
-                includeThinking: includeThinking
+                includeThinking: includeThinking,
+                generationPromptSuffix: generationPromptSuffix
             ),
             addSpecialTokens: false
         )
@@ -98,7 +108,8 @@ public final class LFM2TokenizerAndTemplate: @unchecked Sendable {
         messages: [ChatMessage],
         tools: [ToolDefinition]? = nil,
         addGenerationPrompt: Bool = true,
-        includeThinking: Bool
+        includeThinking: Bool,
+        generationPromptSuffix: String = ""
     ) throws -> String {
         var prompt = "<|startoftext|>"
         var remaining = messages
@@ -144,6 +155,7 @@ public final class LFM2TokenizerAndTemplate: @unchecked Sendable {
 
         if addGenerationPrompt {
             prompt += "<|im_start|>assistant\n"
+            prompt += generationPromptSuffix
         }
 
         return prompt

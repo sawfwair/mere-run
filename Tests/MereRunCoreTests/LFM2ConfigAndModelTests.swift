@@ -95,6 +95,27 @@ final class LFM2ConfigAndModelTests: MereRunCoreTestCase {
         return try decodeConfig(config)
     }
 
+    private func makeTinyDenseConfig() throws -> LFM2Config {
+        try decodeConfig([
+            "architectures": ["Lfm2ForCausalLM"],
+            "model_type": "lfm2",
+            "vocab_size": 32,
+            "hidden_size": 16,
+            "intermediate_size": 32,
+            "num_hidden_layers": 4,
+            "num_attention_heads": 4,
+            "num_key_value_heads": 2,
+            "max_position_embeddings": 128,
+            "norm_eps": 0.00001,
+            "conv_bias": false,
+            "conv_L_cache": 2,
+            "rope_theta": 10_000_000,
+            "layer_types": ["conv", "full_attention", "conv", "full_attention"],
+            "eos_token_id": [31],
+            "tie_word_embeddings": true,
+        ])
+    }
+
     private func makeLayerCaches(config: LFM2Config) -> [LFM2LayerCache?] {
         let attentionLayers = config.fullAttentionLayerIndexes
         return (0..<config.numHiddenLayers).map { layerIndex in
@@ -141,6 +162,18 @@ final class LFM2ConfigAndModelTests: MereRunCoreTestCase {
         XCTAssertEqual(config.quantization?.groupSize, 32)
     }
 
+    func testDecodesLiquidAILFM25DenseConfigWithoutMoEFields() throws {
+        let config = try makeTinyDenseConfig()
+
+        XCTAssertEqual(config.modelType, "lfm2")
+        XCTAssertEqual(config.architectures, ["Lfm2ForCausalLM"])
+        XCTAssertEqual(config.moeIntermediateSize, config.intermediateSize)
+        XCTAssertEqual(config.numExperts, 0)
+        XCTAssertEqual(config.numExpertsPerTok, 1)
+        XCTAssertEqual(config.numDenseLayers, config.numHiddenLayers)
+        XCTAssertEqual(config.fullAttentionLayerIndexes, Set([1, 3]))
+    }
+
     func testRendersLiquidAIChatTemplateShape() throws {
         let prompt = try LFM2TokenizerAndTemplate.renderPrompt(
             messages: [
@@ -164,12 +197,62 @@ final class LFM2ConfigAndModelTests: MereRunCoreTestCase {
         )
     }
 
+    func testRendersDenseLFM25ThinkingGenerationPrefix() throws {
+        let prompt = try LFM2TokenizerAndTemplate.renderPrompt(
+            messages: [ChatMessage(role: .user, content: "What is 2+2?")],
+            addGenerationPrompt: true,
+            includeThinking: false,
+            generationPromptSuffix: "<think>"
+        )
+
+        XCTAssertTrue(prompt.hasSuffix("<|im_start|>assistant\n<think>"))
+    }
+
+    func testRenderedConversationHistoryIsAReusablePromptPrefix() throws {
+        let history = [
+            ChatMessage(role: .user, content: "Question one"),
+            ChatMessage(role: .assistant, content: "Answer one"),
+        ]
+        let historyPrompt = try LFM2TokenizerAndTemplate.renderPrompt(
+            messages: history,
+            addGenerationPrompt: false,
+            includeThinking: false
+        )
+        let nextPrompt = try LFM2TokenizerAndTemplate.renderPrompt(
+            messages: history + [ChatMessage(role: .user, content: "Question two")],
+            addGenerationPrompt: true,
+            includeThinking: false
+        )
+
+        XCTAssertTrue(nextPrompt.hasPrefix(historyPrompt))
+    }
+
     func testTinyLFM2ForwardProducesLogits() throws {
         MLXRandom.seed(42)
         let config = try makeTinyConfig()
         let model = LFM2Model(config: config)
         let caches = makeLayerCaches(config: config)
         let input = MLXArray([Int32(1), Int32(2), Int32(3)]).reshaped(1, 3)
+
+        let logits = model(input, cache: caches)
+        MLX.eval(logits)
+
+        XCTAssertEqual(logits.shape, [1, 3, config.vocabSize])
+        XCTAssertTrue(MLX.max(MLX.abs(logits.asType(.float32))).item(Float.self).isFinite)
+    }
+
+    func testTinyDenseLFM2ForwardUsesOfficialWeightNames() throws {
+        MLXRandom.seed(43)
+        let config = try makeTinyDenseConfig()
+        let model = LFM2Model(config: config)
+        let caches = makeLayerCaches(config: config)
+        let input = MLXArray([Int32(1), Int32(2), Int32(3)]).reshaped(1, 3)
+
+        let modulePaths = Set(model.leafModules().flattened().map(\.0))
+        XCTAssertTrue(modulePaths.contains("model.layers.0.feed_forward.w1"))
+        XCTAssertTrue(modulePaths.contains("model.layers.0.feed_forward.w2"))
+        XCTAssertTrue(modulePaths.contains("model.layers.0.feed_forward.w3"))
+        XCTAssertFalse(modulePaths.contains("model.layers.0.feed_forward.switch_mlp.gate_proj"))
 
         let logits = model(input, cache: caches)
         MLX.eval(logits)
@@ -336,6 +419,23 @@ final class LFM2ConfigAndModelTests: MereRunCoreTestCase {
         XCTAssertTrue(stats.enabled)
         XCTAssertEqual(stats.batchedDecodeSteps, 0)
         XCTAssertEqual(stats.maxBatchSize, 0)
+    }
+
+    func testLFM2PrefillThroughputUsesPromptTokensAndNativeTiming() throws {
+        let throughput = try XCTUnwrap(LFM2Generator.prefillTokensPerSecond(
+            promptTokenCount: 5_902,
+            prefillSeconds: 2.5
+        ))
+
+        XCTAssertEqual(throughput, 2_360.8, accuracy: 0.0001)
+        XCTAssertNil(LFM2Generator.prefillTokensPerSecond(
+            promptTokenCount: 0,
+            prefillSeconds: 2.5
+        ))
+        XCTAssertNil(LFM2Generator.prefillTokensPerSecond(
+            promptTokenCount: 5_902,
+            prefillSeconds: 0
+        ))
     }
 
     func testLFM2DecodeLoopEpochCancelsStaleLoopAndAllowsImmediateReuse() {

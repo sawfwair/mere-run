@@ -43,6 +43,7 @@ help in the repository gate.
 - `text-chat-q36-nano`
 - `text-chat-bonsai-27b-1bit` (managed packed 1-bit dense Qwen3.6 27B vision/reasoning snapshot)
 - `text-chat-bonsai-27b-2bit` (managed packed 2-bit ternary dense Qwen3.6 27B vision/reasoning snapshot)
+- `text-chat-lfm25-2.6b-4bit` (managed LiquidAI LFM2.5 2.6B dense MLX 4-bit snapshot)
 - `text-chat-lfm25-a1b-8bit` (managed LiquidAI LFM2.5 8B-A1B MLX 8-bit snapshot)
 - `text-agent-ornith-9b` (experimental native MLX/OptiQ coding-agent snapshot)
 - `text-agent-ornith-35b-mlx` (local native MLX Q4 coding-agent snapshot)
@@ -104,9 +105,11 @@ GGUF. Its persistent DS4 server defaults to a 32K operational context, a
 comfortable target; close other memory-heavy workloads before using it on a
 96 GB machine.
 
-`text-chat-lfm25-a1b-8bit` installs `LiquidAI/LFM2.5-8B-A1B-MLX-8bit`
-and runs through the native Swift LFM2 runtime. It is text-only; use
-`--model text-chat-lfm25-a1b-8bit` for CLI chat or `api serve --engine text-chat-lfm2`.
+`text-chat-lfm25-2.6b-4bit` installs the pinned 4-bit partition of
+`LiquidAI/LFM2.5-2.6B-MLX`; `text-chat-lfm25-a1b-8bit` installs
+`LiquidAI/LFM2.5-8B-A1B-MLX-8bit`. Both run through the native Swift LFM2
+runtime and are text-only. Select either with `--model`; `api serve --engine
+text-chat-lfm2` defaults to the A1B model unless `--model` is provided.
 Concurrent serve workloads use ragged, cache-safe decode batching when
 `--max-active-requests` is above `1` (`MERERUN_LFM2_CONTINUOUS_BATCHING`
 overrides); rows at different prompt lengths share a forward only when every

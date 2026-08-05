@@ -39,11 +39,18 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         try TestFileSystem.writeFile(root.appendingPathComponent("model.safetensors.index.json"), contents: Data("{}".utf8))
     }
 
-    private func writeMinimalValidLFM2Model(at root: URL) throws {
+    private func writeMinimalValidLFM2Model(
+        at root: URL,
+        id: ModelResolver.ModelID = .lfm25A1B8Bit
+    ) throws {
         try TestFileSystem.createDirectory(root)
-        try MereRunModelManifest.template(for: .lfm25A1B8Bit, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
+        try MereRunModelManifest.template(for: id, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
 
-        try TestFileSystem.writeFile(root.appendingPathComponent("config.json"), contents: Data(#"{"model_type":"lfm2_moe"}"#.utf8))
+        let modelType = id == .lfm25Dense2_6B4Bit ? "lfm2" : "lfm2_moe"
+        try TestFileSystem.writeFile(
+            root.appendingPathComponent("config.json"),
+            contents: Data(#"{"model_type":"\#(modelType)"}"#.utf8)
+        )
         try TestFileSystem.writeFile(root.appendingPathComponent("tokenizer.json"), contents: Data("{}".utf8))
         try TestFileSystem.writeFile(root.appendingPathComponent("tokenizer_config.json"), contents: Data("{}".utf8))
         try TestFileSystem.writeFile(root.appendingPathComponent("model.safetensors.index.json"), contents: Data("{}".utf8))
@@ -562,6 +569,35 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         XCTAssertEqual(report.manifest?.family, .liquid)
         XCTAssertEqual(report.manifest?.precision, .int8)
         XCTAssertEqual(report.manifest?.upstreamRepoId, "\(LFM2Resources.upstreamRepoId)@\(LFM2Resources.upstreamRevision)")
+    }
+
+    func testDenseLFM2NestedFourBitLayoutPassesValidation() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let root = temp.appendingPathComponent(LFM2Resources.denseModelId, isDirectory: true)
+        try TestFileSystem.createDirectory(root)
+        try MereRunModelManifest.template(
+            for: .lfm25Dense2_6B4Bit,
+            createdAt: Date(timeIntervalSince1970: 0)
+        ).write(to: root)
+        let variant = root.appendingPathComponent(LFM2Resources.denseVariantSubdirectory, isDirectory: true)
+        try writeMinimalValidLFM2Model(at: variant, id: .lfm25Dense2_6B4Bit)
+        try FileManager.default.removeItem(at: variant.appendingPathComponent(MereRunModelManifest.filename))
+
+        let report = MereRunModelValidator.validate(
+            modelRoot: root,
+            expectedModelID: LFM2Resources.denseModelId
+        )
+        XCTAssertTrue(report.isValid, report.errors.joined(separator: "\n"))
+        XCTAssertTrue(report.errors.isEmpty)
+        XCTAssertEqual(report.manifest?.engine, .lfm2)
+        XCTAssertEqual(report.manifest?.family, .liquid)
+        XCTAssertEqual(report.manifest?.precision, .int4)
+        XCTAssertEqual(
+            report.manifest?.upstreamRepoId,
+            "\(LFM2Resources.denseUpstreamRepoId)@\(LFM2Resources.denseUpstreamRevision)"
+        )
     }
 
     func testGemma4ChatOnlyRootLayoutPassesValidation() throws {

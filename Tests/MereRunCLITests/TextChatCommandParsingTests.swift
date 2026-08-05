@@ -97,6 +97,16 @@ final class TextChatCommandParsingTests: XCTestCase {
         XCTAssertTrue(backend.contains("native MLX"))
     }
 
+    func testDenseLFM2ParsesAsNativeMLX() throws {
+        let command = try TextChat.parse([
+            "--model", LFM2Resources.denseModelId,
+            "--prompt", "Explain local inference",
+        ])
+
+        XCTAssertEqual(command.model, LFM2Resources.denseModelId)
+        XCTAssertTrue(TextChat.backendDescription(for: command.model).contains("native MLX"))
+    }
+
     func testInklingParsesAsNativeMLXWithOperationalContext() throws {
         let command = try TextChat.parse([
             "--model", InklingResources.modelID,
@@ -138,6 +148,19 @@ final class TextChatCommandParsingTests: XCTestCase {
         let backend = TextChat.backendDescription(for: ModelResolver.ModelID.q36NanoGGUF.rawValue)
 
         XCTAssertEqual(backend, "llama.cpp/GGUF")
+    }
+
+    func testTextChatTTFTIncludesAllWorkBeforeFirstToken() throws {
+        let timing = ChatTiming(
+            loadSeconds: 1.0,
+            prefillSeconds: 2.0,
+            cacheConversionSeconds: 0.25,
+            decodeSeconds: 3.0,
+            firstTokenSeconds: 0.5
+        )
+
+        XCTAssertEqual(try XCTUnwrap(TextChat.ttftSeconds(for: timing)), 3.75, accuracy: 0.000_001)
+        XCTAssertNil(TextChat.ttftSeconds(for: ChatTiming(firstTokenSeconds: nil)))
     }
 
     func testGemma4TurboDefaultsToTurboQuantKVCache() throws {

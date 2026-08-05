@@ -21,7 +21,8 @@ Supported engines:
   and also serves `text-chat-bonsai-27b-1bit`, `text-chat-bonsai-27b-2bit`,
   plus Qwen-family agent experiments such as `text-agent-ornith-9b` and
   `text-agent-ornith-35b-mlx`.
-- `text-chat-lfm2`: LFM2 serving engine; defaults to `text-chat-lfm25-a1b-8bit`.
+- `text-chat-lfm2`: LFM2 serving engine; defaults to `text-chat-lfm25-a1b-8bit`
+  and accepts `--model text-chat-lfm25-2.6b-4bit` for the compact dense model.
 - `text-chat-deepseek-v4-flash`: DeepSeek V4 Flash via the bundled DS4 server.
 - `text-chat-klein`: local Klein/MeBot chat path when installed.
 - `text-embed-qwen3-0.6b`: native Qwen3 embedding model served through
@@ -177,8 +178,10 @@ download route.
   from reuse, and text-only requests use the same stable chat-prefix checkpoint
   rule as Gemma4.
 - LFM2 chat uses in-memory prefix KV reuse by default; set
-  `MERERUN_LFM2_PREFIX_KV_CACHE=0` for a baseline. Matching chunk-boundary
-  checkpoints fork both attention KV and short-convolution state.
+  `MERERUN_LFM2_PREFIX_KV_CACHE=0` for a baseline. Exact prompts and the stable
+  conversation prefix before the final message are retained; intermediate
+  prefill chunks are not cloned. Checkpoints fork both attention KV and
+  short-convolution state.
 - Gemma4, Qwen-family, and LFM2 decode batching engages automatically when
   `--max-active-requests` is above `1`. The corresponding
   `MERERUN_GEMMA4_CONTINUOUS_BATCHING`,
@@ -277,8 +280,8 @@ mere.run api serve --engine text-chat-gemma4 --model vision-chat-gemma4-12b --po
 ```
 
 ```bash
-mere.run model pull text-chat-lfm25-a1b-8bit --accept-model-license
-mere.run api serve --engine text-chat-lfm2 --port 11434
+mere.run model pull text-chat-lfm25-2.6b-4bit --accept-model-license
+mere.run api serve --engine text-chat-lfm2 --model text-chat-lfm25-2.6b-4bit --port 11434
 ```
 
 ```bash

@@ -99,16 +99,18 @@ public struct LFM2Config: Decodable, Sendable, Hashable {
         self.vocabSize = try container.decode(Int.self, forKey: .vocabSize)
         self.hiddenSize = try container.decode(Int.self, forKey: .hiddenSize)
         self.intermediateSize = try container.decode(Int.self, forKey: .intermediateSize)
-        self.moeIntermediateSize = try container.decode(Int.self, forKey: .moeIntermediateSize)
+        self.moeIntermediateSize = try container.decodeIfPresent(Int.self, forKey: .moeIntermediateSize)
+            ?? intermediateSize
         self.numHiddenLayers = try container.decode(Int.self, forKey: .numHiddenLayers)
-        self.numExperts = try container.decode(Int.self, forKey: .numExperts)
-        self.numExpertsPerTok = try container.decode(Int.self, forKey: .numExpertsPerTok)
+        self.numExperts = try container.decodeIfPresent(Int.self, forKey: .numExperts) ?? 0
+        self.numExpertsPerTok = try container.decodeIfPresent(Int.self, forKey: .numExpertsPerTok) ?? 1
         self.normTopKProb = try container.decodeIfPresent(Bool.self, forKey: .normTopKProb) ?? true
         self.numAttentionHeads = try container.decode(Int.self, forKey: .numAttentionHeads)
         self.numKeyValueHeads = try container.decode(Int.self, forKey: .numKeyValueHeads)
         self.maxPositionEmbeddings = try container.decode(Int.self, forKey: .maxPositionEmbeddings)
         self.useExpertBias = try container.decodeIfPresent(Bool.self, forKey: .useExpertBias) ?? false
-        self.numDenseLayers = try container.decodeIfPresent(Int.self, forKey: .numDenseLayers) ?? 0
+        self.numDenseLayers = try container.decodeIfPresent(Int.self, forKey: .numDenseLayers)
+            ?? (modelType == "lfm2" ? numHiddenLayers : 0)
         self.normEps = try container.decode(Float.self, forKey: .normEps)
         self.convBias = try container.decodeIfPresent(Bool.self, forKey: .convBias) ?? false
         self.convLCache = try container.decode(Int.self, forKey: .convLCache)

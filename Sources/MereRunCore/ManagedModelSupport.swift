@@ -432,6 +432,14 @@ public enum ManagedModelCapabilityCatalog {
                 setup: true
             ),
             descriptor(
+                LFM2Resources.denseModelId,
+                "LFM2.5 2.6B 4-bit",
+                "Runs the LiquidAI LFM2.5 2.6B dense MLX 4-bit snapshot through the native Swift LFM2 runtime.",
+                minimum: 8,
+                recommended: 12,
+                setup: true
+            ),
+            descriptor(
                 "text-chat-q36-nano-gguf",
                 "Qwen3.6 A3B chat nano (GGUF)",
                 "Runs Qwen3.6 35B-A3B GGUF through llama.cpp; the default chat model on Linux CUDA hosts.",
@@ -966,7 +974,11 @@ public enum ManagedModelCapabilityCatalog {
                 modelID: Gemma4Resources.twelveB4BitModelId,
                 title: "Compact native chat",
                 summary: "Best first chat pick for the smallest supported RAM band; use nano only when the 12B 4-bit lane is too tight.",
-                alternateModelIDs: [Gemma4Resources.nanoModelId, LFM2Resources.defaultModelId]
+                alternateModelIDs: [
+                    Gemma4Resources.nanoModelId,
+                    LFM2Resources.denseModelId,
+                    LFM2Resources.defaultModelId,
+                ]
             ),
             ManagedChatModelBandRecommendation(
                 minimumUnifiedMemoryGB: 24,

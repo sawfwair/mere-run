@@ -109,6 +109,20 @@ enum RuntimePrefillCheckpointPlanner {
     static func normalizedCheckpoints(_ counts: [Int], total: Int) -> Set<Int> {
         Set(counts.filter { $0 > 0 && $0 < total })
     }
+
+    static func storagePriority(
+        tokenCount: Int,
+        total: Int,
+        semanticCheckpoints: Set<Int>
+    ) -> RuntimePrefixCacheEntryPriority? {
+        if semanticCheckpoints.contains(tokenCount) {
+            return .semantic
+        }
+        if tokenCount == total {
+            return .chunk
+        }
+        return nil
+    }
 }
 
 enum RuntimePrefixCacheEntryPriority: Int, Sendable {

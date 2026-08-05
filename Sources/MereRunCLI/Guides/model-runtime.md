@@ -8,7 +8,7 @@ Read or update typed per-model API serving settings. These settings feed
 ## Required Models
 
 Use a managed API-capable model id such as `text-chat-gemma4`,
-`text-chat-laguna-s-2-1`, `text-chat-laguna-xs-2-1`, `text-chat-q36-nano`, `text-chat-lfm25-a1b-8bit`, `text-agent-deepseek-v4-flash`,
+`text-chat-laguna-s-2-1`, `text-chat-laguna-xs-2-1`, `text-chat-q36-nano`, `text-chat-lfm25-2.6b-4bit`, `text-chat-lfm25-a1b-8bit`, `text-agent-deepseek-v4-flash`,
 `text-agent-qwen35-9b`, or `text-chat-mebot`.
 
 ## Install And Check

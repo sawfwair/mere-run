@@ -1211,6 +1211,29 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["text chat", "api serve"]
         ),
         ManagedModelSpec(
+            id: LFM2Resources.denseModelId,
+            category: .textChat,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: LFM2Resources.denseUpstreamRepoId,
+                revision: LFM2Resources.denseUpstreamRevision,
+                patterns: LFM2Resources.denseSnapshotPatterns
+            ),
+            upstreamRepoId: LFM2Resources.denseUpstreamRepoId,
+            upstreamRevision: LFM2Resources.denseUpstreamRevision,
+            usageRestriction: usageRestriction(
+                summary: "LFM uses a custom open license; commercial use by entities with at least USD 10M annual revenue is not licensed under its community terms.",
+                license: "LFM Open License v1.0",
+                sourceRepoId: LFM2Resources.denseUpstreamRepoId,
+                sourceRevision: LFM2Resources.denseUpstreamRevision,
+                licenseURL: "https://huggingface.co/LiquidAI/LFM2.5-2.6B-MLX/blob/\(LFM2Resources.denseUpstreamRevision)/LICENSE"
+            ),
+            validationKind: .lfm2,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 1_601_108_788,
+            defaultCLICommands: ["text chat", "api serve"]
+        ),
+        ManagedModelSpec(
             id: "speech-tts-qwen3-nano",
             category: .speechTTS,
             installShape: .directoryRoot,
@@ -2604,6 +2627,9 @@ public extension ManagedModelSpec {
 
     func normalizedRootURL(_ rootURL: URL, fileManager: FileManager = .default) -> URL {
         let base = rootURL.resolvingSymlinksInPath()
+        if validationKind == .lfm2 {
+            return LFM2Resources.normalizedRootURL(base, fileManager: fileManager)
+        }
         switch normalizationKind {
         case .none, .musicACEStep:
             return base

@@ -89,9 +89,10 @@ public enum MereRunModelValidator {
             && ZImageTurboResources(rootURL: rootURL).hasMFluxWeights(fileManager: fileManager)
 
         // Root marker checks: diffusers-style models should have model_index.json, but allow fallback markers.
-        let modelIndex = rootURL.appendingPathComponent("model_index.json")
-        let rootConfig = rootURL.appendingPathComponent("config.json")
-        let sourceManifest = rootURL.appendingPathComponent("manifest.json")
+        let validationRoot = spec?.normalizedRootURL(rootURL, fileManager: fileManager) ?? rootURL
+        let modelIndex = validationRoot.appendingPathComponent("model_index.json")
+        let rootConfig = validationRoot.appendingPathComponent("config.json")
+        let sourceManifest = validationRoot.appendingPathComponent("manifest.json")
 
         let hasRootMarker = fileManager.fileExists(atPath: modelIndex.path)
             || fileManager.fileExists(atPath: rootConfig.path)
@@ -578,7 +579,8 @@ public enum MereRunModelValidator {
             || modelId == ModelResolver.ModelID.gemma4VisionTwelveB.rawValue {
             return .gemma
         }
-        if modelId == ModelResolver.ModelID.lfm25A1B8Bit.rawValue {
+        if modelId == ModelResolver.ModelID.lfm25A1B8Bit.rawValue
+            || modelId == ModelResolver.ModelID.lfm25Dense2_6B4Bit.rawValue {
             return .liquid
         }
         if modelId == ModelResolver.ModelID.q36Nano.rawValue

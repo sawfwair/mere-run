@@ -6,6 +6,17 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Text
+
+- added the pinned `LiquidAI/LFM2.5-2.6B-MLX` 4-bit partition as
+  `text-chat-lfm25-2.6b-4bit`, including dense `Lfm2ForCausalLM` config and
+  `w1`/`w2`/`w3` MLP support in the native Swift LFM2 runtime, nested snapshot
+  normalization, managed-model provenance, license acceptance, and real-model
+  validation coverage; `text chat --stats` reports measured LFM2 prefill
+  tokens/sec and user-visible TTFT alongside decode throughput. LFM2 API prefix
+  reuse now retains exact prompts and semantic conversation prefixes without
+  cloning every intermediate prefill chunk.
+
 ### Music
 
 - aligned ACE-Step planner precedence with the upstream Python contract:
