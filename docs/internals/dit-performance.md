@@ -161,6 +161,18 @@ for its attention phase. The previous 2,048-query schedule measured 10.350 and
 production; its output matched the previous schedule exactly in the attention
 gate (`max_abs=0`, `rel_l2=0`).
 
+A finer coordinate pass found a smaller but repeatable improvement at that
+large-row tier: 768 query rows with one attention kernel evaluated at a time.
+The order-balanced whole-block acceptance gate measured 9.733 versus 9.592
+seconds (1.015x) in one fresh process and 10.475 versus 10.278 seconds (1.019x)
+in a second, with bit-identical BF16 output (`rel_l2=0`). Production therefore
+uses 768-by-1 for 32,768+ packed rows while retaining 1,024-by-4 below that
+measured tier. Reproduce the paired gate directly with:
+
+```bash
+scripts/h3-kernel-lab.sh attention-block
+```
+
 Several tempting graph changes did not carry. Explicitly materializing
 contiguous Q/K/V copies regressed the full block to 15.148 seconds. Narrowing
 the implicit module state passed to each compiled closure also regressed, and
@@ -210,10 +222,12 @@ projection dimensions above 32,768 packed rows. Reproduce the projection and
 whole-block checks with `scripts/h3-kernel-lab.sh gemm` and
 `scripts/h3-kernel-lab.sh gemm-block`.
 
-The release-mode one-evaluation model probe packed 37,794 rows and took 953.192
-seconds for 50 blocks. Counting the dominant projection and dense-attention
-arithmetic gives about 3.504 PFLOP per evaluation, or 3.68 effective TFLOP/s
-across the whole sustained pass. This is lower than both the 7.6 TFLOP/s hot
+The release-mode one-evaluation model probe packed 37,794 rows. After the
+shape-aware GEMM and large-row attention schedules landed, its 50 blocks fell
+from 953.192 to 775.062 seconds (1.230x). Counting the dominant projection and
+dense-attention arithmetic gives about 3.504 PFLOP per evaluation, improving
+the sustained pass from 3.68 to 4.52 effective TFLOP/s. This is lower than both
+the 7.6 TFLOP/s hot
 single-block result and the 10-14 TFLOP/s isolated-kernel roof because the real
 pass turns over 50 independent parameter sets and includes every dependent
 normalization, modulation, transpose, synchronization, and thermal effect.
@@ -259,3 +273,9 @@ and video/audio artifacts are the acceptance boundary for speed-mode changes.
 The full acceptance receipt, including per-step timings, artifact geometry,
 hash, and the important 124-frame duration boundary, is recorded in
 [MiniMax-H3 BF16 on M4 Max](../benchmarks/minimax-h3-bf16-m4-max.md).
+
+A first-order tail-residual extrapolation was also tested at the accepted
+four-cache-step block count. It added no meaningful runtime cost, but the
+same-seed 416x256 proxy fell from 0.688 SSIM against the exact trajectory to
+0.583 and visibly shifted exposure and composition. The predictor was removed;
+maximum mode keeps the more faithful bounded stale residual.

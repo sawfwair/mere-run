@@ -575,8 +575,24 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
 
     func testDenoiseExecutionPolicyUsesMeasuredBlockwiseKernelSchedule() {
         XCTAssertEqual(
-            MiniMaxH3DenoiseExecutionPolicy.maximumAttentionQueryTokensPerKernel,
+            MiniMaxH3DenoiseExecutionPolicy.attentionKernelSchedule(sequenceLength: 14_958)
+                .maximumQueryTokens,
             1_024
+        )
+        XCTAssertEqual(
+            MiniMaxH3DenoiseExecutionPolicy.attentionKernelSchedule(sequenceLength: 14_958)
+                .maximumKernelsPerEvaluation,
+            4
+        )
+        XCTAssertEqual(
+            MiniMaxH3DenoiseExecutionPolicy.attentionKernelSchedule(sequenceLength: 37_966)
+                .maximumQueryTokens,
+            768
+        )
+        XCTAssertEqual(
+            MiniMaxH3DenoiseExecutionPolicy.attentionKernelSchedule(sequenceLength: 37_966)
+                .maximumKernelsPerEvaluation,
+            1
         )
     }
 

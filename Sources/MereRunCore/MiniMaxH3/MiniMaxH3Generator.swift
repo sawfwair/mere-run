@@ -123,6 +123,7 @@ struct MiniMaxH3BlockReusePolicy {
         let audioDelta = abs(audioSigmas[stepIndex - 1] - audioSigmas[stepIndex])
         return max(videoDelta, audioDelta) < Self.maximumSigmaDelta
     }
+
 }
 
 enum MiniMaxH3DenoiseExecutionMode: Equatable {
@@ -137,7 +138,16 @@ enum MiniMaxH3DenoiseExecutionMode: Equatable {
 
 enum MiniMaxH3DenoiseExecutionPolicy {
     static let blockwiseSequenceThreshold = 13_500
-    static let maximumAttentionQueryTokensPerKernel = 1_024
+    static let largeSequenceAttentionThreshold = 32_768
+
+    static func attentionKernelSchedule(
+        sequenceLength: Int
+    ) -> (maximumQueryTokens: Int, maximumKernelsPerEvaluation: Int) {
+        if sequenceLength >= largeSequenceAttentionThreshold {
+            return (maximumQueryTokens: 768, maximumKernelsPerEvaluation: 1)
+        }
+        return (maximumQueryTokens: 1_024, maximumKernelsPerEvaluation: 4)
+    }
 
     static func mode(
         usesResidentBF16: Bool,
@@ -553,15 +563,23 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
             : .blockwiseCompiled
         let usesCompiledStep = executionMode == .compiledStep
         transformer.usesBlockwiseCompilation = executionMode == .blockwiseCompiled
-        transformer.maximumAttentionQueryTokensPerKernel = MiniMaxH3DenoiseExecutionPolicy
-            .maximumAttentionQueryTokensPerKernel
+        let attentionKernelSchedule = MiniMaxH3DenoiseExecutionPolicy.attentionKernelSchedule(
+            sequenceLength: layout.sequenceLength
+        )
+        transformer.maximumAttentionQueryTokensPerKernel = attentionKernelSchedule
+            .maximumQueryTokens
+        transformer.maximumAttentionKernelsPerEvaluation = attentionKernelSchedule
+            .maximumKernelsPerEvaluation
         transformer.usesFusedPostAttention = ProcessInfo.processInfo
             .environment["MERERUN_H3_FUSED_POST_ATTENTION"] == "1"
         transformer.usesLayerwiseEvaluation = executionMode.usesLayerwiseEvaluation
         transformer.clearsCacheAfterLayerwiseEvaluation = false
         stepProfileLogger?(
             "execution_mode=\(executionMode) acceleration=\(accelerationMode.rawValue) "
-                + "fused_post_attention=\(transformer.usesFusedPostAttention)"
+                + "fused_post_attention=\(transformer.usesFusedPostAttention) "
+                + "attention_query_tokens=\(attentionKernelSchedule.maximumQueryTokens) "
+                + "attention_evaluation_batch="
+                + "\(attentionKernelSchedule.maximumKernelsPerEvaluation)"
         )
         if let blockReusePolicy {
             stepProfileLogger?(

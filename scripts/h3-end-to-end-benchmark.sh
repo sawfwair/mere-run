@@ -82,7 +82,8 @@ fi
 
 output_dir="$repo_root/tmp/h3-benchmark"
 mkdir -p "$output_dir"
-output="$output_dir/h3-${mode}-${width}x${height}-f${frames}-s${steps}.mp4"
+label="${MERERUN_H3_BENCH_LABEL:+-${MERERUN_H3_BENCH_LABEL}}"
+output="$output_dir/h3-${mode}${label}-${width}x${height}-f${frames}-s${steps}.mp4"
 prompt="Epic cinematic night at a rain-soaked city bus stop: a caped superhero stands calmly beneath a bright yellow umbrella. A silent lightning vortex tears open above the street, a city bus lifts weightlessly into the air, transforms into a colossal luminous dragon, and circles the hero while rain freezes in midair; dramatic volumetric lighting, realistic materials, fluid continuous camera movement, coherent anatomy, blockbuster visual effects."
 
 export MERERUN_H3_PROFILE_PHASES=1

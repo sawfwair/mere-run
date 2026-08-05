@@ -59,13 +59,20 @@ The format is based on Keep a Changelog.
   compile transform, and added exact H3 attention/projection shape benchmarks.
 - tightened the true-768 fused-attention query schedule from 2,048 to 1,024
   tokens after a matched whole-block sweep measured an approximately 10%
-  improvement with identical output. The pinned MLX fork also recognizes only
+  improvement with identical output. A subsequent order-balanced whole-block
+  gate selected 768-query single-evaluation batches for 32,768+ row sequences;
+  two fresh paired processes measured 1.015x and 1.019x with `rel_l2=0`. The
+  pinned MLX fork also recognizes only
   H3's four large BF16 projection shapes on 32,768+ packed rows and selects the
   faster exact Steel GEMM schedule. Isolated projections improved by 10-20%,
   while an order-balanced full block improved from 7.892 s to 7.619 s (1.036x)
   with `rel_l2=0`; environment overrides remain available for reproducible
   kernel-lab controls. The mlx-swift dependency and bundled Metal library
   provenance are pinned to the public fork commits that carry this schedule.
+  A fresh 37,794-row, 50-block BF16 evaluation then fell from 953.192 s to
+  775.062 s (1.230x), and its complete 1344x768 generation boundary fell from
+  1,253.425 s to 1,027.310 s. The resulting H.264/AAC artifact retained the
+  exact prior SHA-256, proving the speed path did not change model output.
 - added first-class `quality`, `balanced`, and `maximum` H3 denoise modes in
   both the CLI and macOS Studio. The speed modes reuse a bounded tail-block
   residual only across small adjacent sigma changes, run at least two complete

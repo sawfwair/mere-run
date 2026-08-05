@@ -64,27 +64,31 @@ scripts/h3-end-to-end-benchmark.sh probe-768
 - geometry: 1344x768, 124 frames, 24 fps
 - schedule: two points / one complete 50-block model evaluation
 - packed rows: 37,794
-- execution: dense BF16, blockwise compiled, 1,024-query attention chunks
+- execution: dense BF16, blockwise compiled, 768-query single-evaluation attention chunks
 - acceleration: exact `quality` (no tail reuse)
 
-| Phase | Time |
-| --- | ---: |
-| Text encoding | 4.218 s |
-| Transformer preparation | 4.661 s |
-| Denoising | **953.485 s (15:53.485)** |
-| Video VAE decode | 289.586 s (4:49.586) |
-| Audio decode | 0.873 s |
-| End to end | **1,253.425 s (20:53.425)** |
+| Phase | Baseline | Optimized exact |
+| --- | ---: | ---: |
+| Text encoding | 4.218 s | 4.078 s |
+| Transformer preparation | 4.661 s | 4.510 s |
+| Denoising | 953.485 s | **775.336 s (12:55.336)** |
+| Video VAE decode | 289.586 s | 242.004 s |
+| Audio decode | 0.873 s | 0.829 s |
+| End to end | 1,253.425 s | **1,027.310 s (17:07.310)** |
 
-The full model evaluation itself measured 953.192 seconds. Peak reported Metal
-memory was 48.77 GiB, so this workload is compute-bound rather than blocked by
-unified-memory capacity. The valid H.264/AAC output is 1344x768 at 24 fps with
-32 kHz stereo audio and a 5.167-second duration. Its SHA-256 is
-`f74e0d2ab0cf9a58233e954560a9aa6c05a1f905fd78914350a077b70f7e5848`.
+The full model evaluation itself fell from 953.192 to 775.062 seconds, a
+1.230x throughput improvement and 18.7% less wall time. End to end, the boundary
+is 3:46.115 faster (18.0%). Peak reported Metal memory remained 48.77 GiB, so
+this workload is compute-bound rather than blocked by unified-memory capacity.
+The valid H.264/AAC output is 1344x768 at 24 fps with 32 kHz stereo audio and a
+5.167-second duration. Its SHA-256 is
+`f74e0d2ab0cf9a58233e954560a9aa6c05a1f905fd78914350a077b70f7e5848`—exactly
+the same as the baseline artifact, proving the optimized execution did not
+change model output.
 
 The two-point artifact is intentionally noise-like and is not a visual quality
 gate. Using its full-evaluation time only as an arithmetic bound, a 20-point
-exact run projects to about 5.11 hours end to end. The existing 417-block
-`maximum` policy projects to about 2.29 hours. Those are projections, not
+exact run now projects to about 4.16 hours end to end. The existing 417-block
+`maximum` policy projects to about 1.87 hours. Those are projections, not
 measured 768p render receipts; a near-30-minute quality result requires fewer
 model/block evaluations rather than another small scheduling adjustment.

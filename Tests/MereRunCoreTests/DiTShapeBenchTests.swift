@@ -1464,6 +1464,71 @@ final class DiTShapeBenchTests: XCTestCase {
         Memory.clearCache()
     }
 
+    /// Compares attention chunk schedules inside the same compiled, weighted
+    /// production block. This is the acceptance gate for changing the true-768
+    /// H3 schedule; isolated SDPA timings are only useful for finding candidates.
+    func testMiniMaxH3BlockAttentionSchedules() throws {
+        try benchGate()
+        let environment = ProcessInfo.processInfo.environment
+        let rows = max(1, Int(environment["MERERUN_H3_BENCH_ROWS"] ?? "") ?? 37_966)
+        let rounds = max(2, Int(environment["MERERUN_H3_BENCH_ROUNDS"] ?? "") ?? 4)
+        let benchmark = MiniMaxH3BlockScheduleBenchmark(
+            rowCount: rows,
+            maximumQueryTokens: 1_024,
+            maximumKernelsPerEvaluation: 4
+        )
+
+        func output(queryTokens: Int, evaluationBatch: Int) -> MLXArray {
+            benchmark(
+                schedule: .splitPostAttention,
+                maximumQueryTokens: queryTokens,
+                maximumKernelsPerEvaluation: evaluationBatch
+            )
+        }
+        func elapsed(queryTokens: Int, evaluationBatch: Int) -> Double {
+            let started = CFAbsoluteTimeGetCurrent()
+            MLX.eval(output(queryTokens: queryTokens, evaluationBatch: evaluationBatch))
+            return CFAbsoluteTimeGetCurrent() - started
+        }
+
+        MLX.eval(output(queryTokens: 1_024, evaluationBatch: 4))
+        MLX.eval(output(queryTokens: 768, evaluationBatch: 1))
+        let reference = output(queryTokens: 1_024, evaluationBatch: 4).asType(.float32)
+        let candidate = output(queryTokens: 768, evaluationBatch: 1).asType(.float32)
+        MLX.eval(reference, candidate)
+        let delta = candidate - reference
+        let referenceSquared = MLX.sum(reference * reference).item(Float.self)
+        let relativeL2Error = sqrt(
+            Double(MLX.sum(delta * delta).item(Float.self))
+                / max(Double(referenceSquared), .leastNonzeroMagnitude)
+        )
+        XCTAssertLessThan(relativeL2Error, 1e-3)
+
+        var referenceTotal = 0.0
+        var candidateTotal = 0.0
+        for round in 0..<rounds {
+            if round.isMultiple(of: 2) {
+                referenceTotal += elapsed(queryTokens: 1_024, evaluationBatch: 4)
+                candidateTotal += elapsed(queryTokens: 768, evaluationBatch: 1)
+            } else {
+                candidateTotal += elapsed(queryTokens: 768, evaluationBatch: 1)
+                referenceTotal += elapsed(queryTokens: 1_024, evaluationBatch: 4)
+            }
+        }
+        let referenceSeconds = referenceTotal / Double(rounds)
+        let candidateSeconds = candidateTotal / Double(rounds)
+        print(String(
+            format: "[h3-lab] block-attention rows=%d reference=1024x4 reference_ms=%.0f "
+                + "candidate=768x1 candidate_ms=%.0f speedup=%.3fx relative_l2=%.6g",
+            rows,
+            referenceSeconds * 1_000,
+            candidateSeconds * 1_000,
+            referenceSeconds / candidateSeconds,
+            relativeL2Error
+        ))
+        Memory.clearCache()
+    }
+
     /// Loads the released H3 video VAE and times one complete 124-frame decode
     /// with a configurable spatial tile. Run each size in a fresh process:
     /// `MERERUN_H3_VAE_TILE_SIZE=320` and `MERERUN_H3_MODEL_ROOT=/path/to/root`.

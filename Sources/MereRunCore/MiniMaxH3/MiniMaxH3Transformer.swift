@@ -768,10 +768,18 @@ final class MiniMaxH3BlockScheduleBenchmark {
         )
     }
 
-    func callAsFunction(schedule: Schedule) -> MLXArray {
+    func callAsFunction(
+        schedule: Schedule,
+        maximumQueryTokens: Int? = nil,
+        maximumKernelsPerEvaluation: Int? = nil
+    ) -> MLXArray {
         let projectedAttention = projectAttention()
         MLX.eval(projectedAttention)
-        let attended = attend(projectedAttention)
+        let attended = attend(
+            projectedAttention,
+            maximumQueryTokens: maximumQueryTokens,
+            maximumKernelsPerEvaluation: maximumKernelsPerEvaluation
+        )
         return postAttention(
             schedule: schedule,
             attended: attended,
@@ -790,13 +798,18 @@ final class MiniMaxH3BlockScheduleBenchmark {
         ])
     }
 
-    func attend(_ projectedAttention: [MLXArray]) -> MLXArray {
+    func attend(
+        _ projectedAttention: [MLXArray],
+        maximumQueryTokens: Int? = nil,
+        maximumKernelsPerEvaluation: Int? = nil
+    ) -> MLXArray {
         block.scaledDotProductAttention(
             queries: projectedAttention[0],
             keys: projectedAttention[1],
             values: projectedAttention[2],
-            maximumQueryTokens: maximumQueryTokens,
+            maximumQueryTokens: maximumQueryTokens ?? self.maximumQueryTokens,
             maximumKernelsPerEvaluation: maximumKernelsPerEvaluation
+                ?? self.maximumKernelsPerEvaluation
         )
     }
 

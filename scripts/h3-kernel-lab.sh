@@ -59,6 +59,11 @@ case "$mode" in
     export MERERUN_H3_BENCH_ROUNDS="${MERERUN_H3_BENCH_ROUNDS:-2}"
     run_release_test DiTShapeBenchTests/testMiniMaxH3BlockExecutionSchedules
     ;;
+  attention-block)
+    export MERERUN_H3_BENCH_ROWS="${MERERUN_H3_BENCH_ROWS:-37966}"
+    export MERERUN_H3_BENCH_ROUNDS="${MERERUN_H3_BENCH_ROUNDS:-4}"
+    run_release_test DiTShapeBenchTests/testMiniMaxH3BlockAttentionSchedules
+    ;;
   gemm)
     run_release_test DiTShapeBenchTests/testMiniMaxH3MetalGEMMProjectionShapes
     ;;
@@ -66,7 +71,7 @@ case "$mode" in
     run_release_test DiTShapeBenchTests/testMiniMaxH3BlockGEMMSchedules
     ;;
   *)
-    print -u2 "usage: scripts/h3-kernel-lab.sh [quick|attention|projections|modulation|block|gemm|gemm-block]"
+    print -u2 "usage: scripts/h3-kernel-lab.sh [quick|attention|attention-block|projections|modulation|block|gemm|gemm-block]"
     exit 64
     ;;
 esac
