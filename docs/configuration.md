@@ -129,13 +129,12 @@ In-memory prompt-prefix reuse for the LFM2 chat runtime, enabled by default
 in `mere.run api serve` (set `0`, `false`, or `off` to disable; one-shot CLI
 invocations keep it off since a prefix cache cannot outlive the process),
 mirroring the Qwen-family implementation. Forked layer caches (attention KV
-and short-conv states both support forking) are stored at prefill chunk
-boundaries and the longest matching token prefix seeds later requests, so a
-repeated or extended prompt re-prefills only its tail. Chunk-boundary
-checkpoints only — Gemma4-style semantic chat-template checkpoints are not
-yet derived for LFM2. Bounded to 4 entries with the shared retention planner.
-Measured on a ~2.9k-token prompt: repeat requests drop from 11.7s to 0.3s
-end to end.
+and short-conv states both support forking) retain exact prompts plus the
+stable conversation prefix before the final message. The longest matching
+token prefix seeds later requests, so a repeated or extended prompt re-prefills
+only its tail. Intermediate prefill chunks are not cloned. The cache is bounded
+to 4 entries with the shared retention planner, which keeps semantic
+conversation checkpoints ahead of exact-prompt entries when pruning.
 
 ### Continuous batching (`MERERUN_GEMMA4_CONTINUOUS_BATCHING`, `MERERUN_LAGUNA_CONTINUOUS_BATCHING`, `MERERUN_Q35_CONTINUOUS_BATCHING`, `MERERUN_LFM2_CONTINUOUS_BATCHING`)
 

@@ -33,6 +33,26 @@ final class RuntimeCacheStatsTests: XCTestCase {
         XCTAssertEqual(checkpoints, [32])
     }
 
+    func testPrefillCheckpointPlannerStoresOnlySemanticAndFinalCheckpoints() {
+        let semantic = Set([768])
+
+        XCTAssertNil(RuntimePrefillCheckpointPlanner.storagePriority(
+            tokenCount: 512,
+            total: 1_280,
+            semanticCheckpoints: semantic
+        ))
+        XCTAssertEqual(RuntimePrefillCheckpointPlanner.storagePriority(
+            tokenCount: 768,
+            total: 1_280,
+            semanticCheckpoints: semantic
+        ), .semantic)
+        XCTAssertEqual(RuntimePrefillCheckpointPlanner.storagePriority(
+            tokenCount: 1_280,
+            total: 1_280,
+            semanticCheckpoints: semantic
+        ), .chunk)
+    }
+
     func testPrefixCacheRetentionPrunesChunkBeforeSemanticCheckpoint() {
         let base = Date(timeIntervalSince1970: 1_000)
         let key = RuntimePrefixCacheRetentionPlanner.keyToPrune(entries: [

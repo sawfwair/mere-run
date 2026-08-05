@@ -286,6 +286,11 @@ swift run mere.run api serve \
   `MERERUN_Q35_PREFIX_KV_CACHE=0` for a baseline. Vision prompts are excluded
   because image embeddings alter the effective prefix; text-only requests use
   the same stable chat-prefix checkpoint and pruning rule as Gemma4.
+- LFM2 chat uses prefix KV reuse by default in `api serve`; set
+  `MERERUN_LFM2_PREFIX_KV_CACHE=0` for a baseline. It retains exact prompts and
+  the stable conversation prefix before the final message, without cloning
+  every intermediate prefill chunk. Both attention KV and short-convolution
+  state are forked at those retained checkpoints.
 - Managed Gemma4 12B text and vision installs include the
   `text-chat-gemma4-12b-mtp` assistant companion. The API server uses it only
   for greedy serial decode-tail speculation after prefill; sampled requests,

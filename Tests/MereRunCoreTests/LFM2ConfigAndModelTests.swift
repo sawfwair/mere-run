@@ -208,6 +208,25 @@ final class LFM2ConfigAndModelTests: MereRunCoreTestCase {
         XCTAssertTrue(prompt.hasSuffix("<|im_start|>assistant\n<think>"))
     }
 
+    func testRenderedConversationHistoryIsAReusablePromptPrefix() throws {
+        let history = [
+            ChatMessage(role: .user, content: "Question one"),
+            ChatMessage(role: .assistant, content: "Answer one"),
+        ]
+        let historyPrompt = try LFM2TokenizerAndTemplate.renderPrompt(
+            messages: history,
+            addGenerationPrompt: false,
+            includeThinking: false
+        )
+        let nextPrompt = try LFM2TokenizerAndTemplate.renderPrompt(
+            messages: history + [ChatMessage(role: .user, content: "Question two")],
+            addGenerationPrompt: true,
+            includeThinking: false
+        )
+
+        XCTAssertTrue(nextPrompt.hasPrefix(historyPrompt))
+    }
+
     func testTinyLFM2ForwardProducesLogits() throws {
         MLXRandom.seed(42)
         let config = try makeTinyConfig()

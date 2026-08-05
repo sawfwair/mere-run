@@ -804,8 +804,9 @@ Key options:
   enabled by default even though the reasoning stays hidden. Bonsai 27B also
   defaults to thinking-enabled generation.
 - `--stream`
-- `--stats`: includes separate LFM2 prefill and decode tokens/sec, and Gemma4
-  MTP state and accept/draft counts when those runtimes are used
+- `--stats`: includes user-visible `ttft_s`, decode-only `first_token_s`,
+  separate LFM2 prefill and decode tokens/sec, and Gemma4 MTP state and
+  accept/draft counts when those runtimes are used
 - `--quiet`
 
 Unless `--quiet` is set, diagnostics on stderr include the selected text
@@ -2544,8 +2545,10 @@ Security defaults:
   prompts are excluded from reuse, and text-only requests use the same semantic
   chat-prefix checkpoints as Gemma4.
 - LFM2 chat uses in-memory prefix KV reuse by default in `api serve`; set
-  `MERERUN_LFM2_PREFIX_KV_CACHE=0` for a baseline. Checkpoints fork both
-  attention KV and short-convolution state.
+  `MERERUN_LFM2_PREFIX_KV_CACHE=0` for a baseline. It retains exact prompts and
+  the stable conversation prefix before the final message instead of cloning
+  every intermediate prefill chunk. Checkpoints fork both attention KV and
+  short-convolution state.
 - Managed Gemma4 12B text and vision pulls install a companion MTP assistant.
   When `MERERUN_GEMMA4_MTP` is not disabled, greedy serial decode can use that
   assistant on the decode tail after prefill; sampled requests, continuous

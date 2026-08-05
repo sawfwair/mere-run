@@ -13,7 +13,9 @@ The format is based on Keep a Changelog.
   `w1`/`w2`/`w3` MLP support in the native Swift LFM2 runtime, nested snapshot
   normalization, managed-model provenance, license acceptance, and real-model
   validation coverage; `text chat --stats` reports measured LFM2 prefill
-  tokens/sec alongside decode throughput.
+  tokens/sec and user-visible TTFT alongside decode throughput. LFM2 API prefix
+  reuse now retains exact prompts and semantic conversation prefixes without
+  cloning every intermediate prefill chunk.
 
 ### Music
 
@@ -31,6 +33,7 @@ The format is based on Keep a Changelog.
   `--lm-repetition-penalty` controls across the CLI, resident API, and macOS
   Studio. Recipe schema 4 persists the effective LM sampling policy so a
   supposedly reproducible render no longer hides hardcoded planner behavior.
+
 ## 0.34.0 - 2026-08-04
 
 This release advances the complete local creation stack across five first-class

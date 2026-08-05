@@ -365,6 +365,14 @@ public actor LFM2Generator: ChatGenerator {
             effectiveKVCacheMode = .default
         }
         var layerCaches = makeLayerCaches(config: loadedConfig, kvCacheMode: effectiveKVCacheMode)
+        let prefixCheckpoints = semanticPrefixCheckpoints(
+            tokenizerAndTemplate: tokenizerAndTemplate,
+            messages: request.messages,
+            tools: request.tools,
+            includeThinking: request.showThinking,
+            promptTokens: promptTokens,
+            maxContextLength: effectiveContext
+        )
         var prefillStartIndex = 0
         var prefillExistingLogits: MLXArray?
         if let seed = prefixKVCacheSeed(
@@ -384,6 +392,7 @@ public actor LFM2Generator: ChatGenerator {
             modelPath: loadedModelPath,
             startIndex: prefillStartIndex,
             existingLogits: prefillExistingLogits,
+            checkpointTokenCounts: prefixCheckpoints,
             residencyEpoch: residencyEpoch,
             progressHandler: progressHandler
         )
@@ -813,6 +822,7 @@ public actor LFM2Generator: ChatGenerator {
         modelPath: String? = nil,
         startIndex: Int = 0,
         existingLogits: MLXArray? = nil,
+        checkpointTokenCounts: Set<Int> = [],
         residencyEpoch: UInt64,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> LFM2PrefillOutput {
@@ -826,7 +836,12 @@ public actor LFM2Generator: ChatGenerator {
         while offset < promptTokens.count {
             try Task.checkCancellation()
             try requireCurrentResidency(residencyEpoch)
-            let end = min(promptTokens.count, offset + Self.prefillChunkSize)
+            let end = RuntimePrefillCheckpointPlanner.nextEnd(
+                processed: offset,
+                total: promptTokens.count,
+                chunkSize: Self.prefillChunkSize,
+                checkpoints: checkpointTokenCounts
+            )
             let chunk = Array(promptTokens[offset..<end])
             let input = MLXArray(chunk.map(Int32.init)).reshaped(1, chunk.count)
             let output = model.forwardPrefill(input, cache: cache)
@@ -835,13 +850,19 @@ public actor LFM2Generator: ChatGenerator {
             logits = output.logits
             hidden = output.hidden
             offset = end
-            if let modelPath {
+            if let modelPath,
+               let priority = RuntimePrefillCheckpointPlanner.storagePriority(
+                   tokenCount: end,
+                   total: promptTokens.count,
+                   semanticCheckpoints: checkpointTokenCounts
+               ) {
                 storePrefixKVCache(
                     modelPath: modelPath,
                     promptTokens: promptTokens,
                     tokenCount: end,
                     cache: cache,
-                    logits: output.logits
+                    logits: output.logits,
+                    priority: priority
                 )
             }
             progressHandler?(ChatProgress(
@@ -858,6 +879,35 @@ public actor LFM2Generator: ChatGenerator {
     }
 
     // MARK: - Prefix KV cache
+
+    private func semanticPrefixCheckpoints(
+        tokenizerAndTemplate: LFM2TokenizerAndTemplate,
+        messages: [ChatMessage],
+        tools: [ToolDefinition]?,
+        includeThinking: Bool,
+        promptTokens: [Int],
+        maxContextLength: Int
+    ) -> Set<Int> {
+        guard prefixKVCacheEnabled, messages.count > 1 else {
+            return []
+        }
+        let prefixMessages = Array(messages.dropLast())
+        guard !prefixMessages.isEmpty,
+              let prefixTokens = try? tokenizerAndTemplate.encodeForGeneration(
+                  messages: prefixMessages,
+                  tools: tools,
+                  addGenerationPrompt: false,
+                  includeThinking: includeThinking,
+                  maxLength: maxContextLength
+              ),
+              promptTokens.starts(with: prefixTokens) else {
+            return []
+        }
+        return RuntimePrefillCheckpointPlanner.normalizedCheckpoints(
+            [prefixTokens.count],
+            total: promptTokens.count
+        )
+    }
 
     public func prefixKVCacheStats() -> PrefixKVCacheStats {
         PrefixKVCacheStats(
@@ -908,7 +958,8 @@ public actor LFM2Generator: ChatGenerator {
         promptTokens: [Int],
         tokenCount: Int,
         cache: [LFM2LayerCache?],
-        logits: MLXArray
+        logits: MLXArray,
+        priority: RuntimePrefixCacheEntryPriority
     ) {
         guard prefixKVCacheEnabled, tokenCount > 0 else { return }
         let key = LFM2PrefixKVCacheKey(
@@ -919,7 +970,7 @@ public actor LFM2Generator: ChatGenerator {
         prefixKVCache[key] = LFM2PrefixKVCacheEntry(
             caches: cache.map { $0?.fork() },
             logits: logits,
-            priority: .chunk,
+            priority: priority,
             lastAccess: Date()
         )
         prefixKVCacheStores += 1

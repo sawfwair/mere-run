@@ -178,8 +178,10 @@ download route.
   from reuse, and text-only requests use the same stable chat-prefix checkpoint
   rule as Gemma4.
 - LFM2 chat uses in-memory prefix KV reuse by default; set
-  `MERERUN_LFM2_PREFIX_KV_CACHE=0` for a baseline. Matching chunk-boundary
-  checkpoints fork both attention KV and short-convolution state.
+  `MERERUN_LFM2_PREFIX_KV_CACHE=0` for a baseline. Exact prompts and the stable
+  conversation prefix before the final message are retained; intermediate
+  prefill chunks are not cloned. Checkpoints fork both attention KV and
+  short-convolution state.
 - Gemma4, Qwen-family, and LFM2 decode batching engages automatically when
   `--max-active-requests` is above `1`. The corresponding
   `MERERUN_GEMMA4_CONTINUOUS_BATCHING`,

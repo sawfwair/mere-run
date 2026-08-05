@@ -150,6 +150,19 @@ final class TextChatCommandParsingTests: XCTestCase {
         XCTAssertEqual(backend, "llama.cpp/GGUF")
     }
 
+    func testTextChatTTFTIncludesAllWorkBeforeFirstToken() throws {
+        let timing = ChatTiming(
+            loadSeconds: 1.0,
+            prefillSeconds: 2.0,
+            cacheConversionSeconds: 0.25,
+            decodeSeconds: 3.0,
+            firstTokenSeconds: 0.5
+        )
+
+        XCTAssertEqual(try XCTUnwrap(TextChat.ttftSeconds(for: timing)), 3.75, accuracy: 0.000_001)
+        XCTAssertNil(TextChat.ttftSeconds(for: ChatTiming(firstTokenSeconds: nil)))
+    }
+
     func testGemma4TurboDefaultsToTurboQuantKVCache() throws {
         let cmd = try TextChat.parse([
             "--prompt", "Say hello",
