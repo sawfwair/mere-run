@@ -748,6 +748,33 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         XCTAssertTrue(report.errors.contains { $0.contains("tokenizer.json") })
     }
 
+    func testTerraMindFloodSourceRootPassesWithoutTextComponents() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let root = temp.appendingPathComponent(TerraMindFloodResources.defaultModelID, isDirectory: true)
+        try TestFileSystem.createDirectory(root)
+        try MereRunModelManifest.template(
+            for: .visionFloodTerraMindBase,
+            createdAt: Date(timeIntervalSince1970: 0)
+        ).write(to: root)
+        try TestFileSystem.writeFile(
+            root.appendingPathComponent(TerraMindFloodResources.sourceCheckpointFilename)
+        )
+        try TestFileSystem.writeFile(
+            root.appendingPathComponent(TerraMindFloodResources.sourceConfigurationFilename)
+        )
+
+        let report = MereRunModelValidator.validate(
+            modelRoot: root,
+            expectedModelID: TerraMindFloodResources.defaultModelID
+        )
+
+        XCTAssertTrue(report.isValid, report.errors.joined(separator: "\n"))
+        XCTAssertTrue(report.errors.isEmpty)
+        XCTAssertNil(report.manifest?.components)
+    }
+
     func testFalconValidationFailsWithoutConfig() throws {
         let temp = try TestFileSystem.makeTempDir()
         defer { try? FileManager.default.removeItem(at: temp) }

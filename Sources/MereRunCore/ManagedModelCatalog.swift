@@ -13,6 +13,7 @@ public enum ManagedModelCategory: String, CaseIterable, Hashable, Sendable {
     case visionChat = "vision-chat"
     case visionSegment = "vision-segment"
     case visionGround = "vision-ground"
+    case visionFlood = "vision-flood"
     case visionFace = "vision-face"
     case visionGeometry = "vision-geometry"
     case visionDepth = "vision-depth"
@@ -55,6 +56,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case lightOnOCR
     case sam31
     case falconPerception
+    case terramindFlood
     case insightFaceBuffaloL
     case moge2
     case videoDepthAnything
@@ -1498,6 +1500,28 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["vision ground"]
         ),
         ManagedModelSpec(
+            id: ModelResolver.ModelID.visionFloodTerraMindBase.rawValue,
+            category: .visionFlood,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: TerraMindFloodResources.sourceRepository,
+                revision: TerraMindFloodResources.sourceRevision,
+                patterns: [
+                    "README.md",
+                    "LICENSE*",
+                    "NOTICE*",
+                    TerraMindFloodResources.sourceCheckpointFilename,
+                    TerraMindFloodResources.sourceConfigurationFilename,
+                ]
+            ),
+            upstreamRepoId: TerraMindFloodResources.sourceRepository,
+            upstreamRevision: TerraMindFloodResources.sourceRevision,
+            validationKind: .terramindFlood,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 673_199_088,
+            defaultCLICommands: ["geo flood"]
+        ),
+        ManagedModelSpec(
             id: FaceAnalysisResources.modelID,
             category: .visionFace,
             installShape: .directoryRoot,
@@ -2506,11 +2530,21 @@ public extension ManagedModelSpec {
     }
 
     var requiresManagedConversion: Bool {
-        validationKind == .instantMesh
+        validationKind == .instantMesh || validationKind == .terramindFlood
     }
 
     func managedConversionGuidance(at rootURL: URL) -> String? {
         guard requiresManagedConversion else { return nil }
+        if validationKind == .terramindFlood {
+            let source = rootURL.appendingPathComponent(TerraMindFloodResources.sourceCheckpointFilename).path
+            let configuration = rootURL.appendingPathComponent(
+                TerraMindFloodResources.sourceConfigurationFilename
+            ).path
+            return "Pinned TerraMind Flood source downloaded at \(source). Deterministic conversion is required "
+                + "before native MLX inference; run scripts/convert-terramind-flood-mlx.py "
+                + "--checkpoint \"\(source)\" --configuration \"\(configuration)\" "
+                + "--output \"\(rootURL.path)\" --dtype float32. FP16 is intentionally unsupported by parity evidence."
+        }
         let source = rootURL.appendingPathComponent("instant_mesh_base.ckpt").path
         let output = rootURL.appendingPathComponent(
             InstantMeshResources.managedConvertedDirectoryName,
@@ -2592,6 +2626,8 @@ public extension ManagedModelSpec {
             return SAM31Resources(modelRootURL: rootURL).missingRequiredPaths(fileManager: fileManager)
         case .falconPerception:
             return FalconPerceptionResources(rootURL: rootURL).validate(fileManager: fileManager)
+        case .terramindFlood:
+            return TerraMindFloodResources.missingSourcePaths(in: rootURL, fileManager: fileManager)
         case .insightFaceBuffaloL:
             return FaceAnalysisResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .moge2, .videoDepthAnything, .depthAnything3, .tripoSR:
@@ -2841,6 +2877,8 @@ public extension ManagedModelSpec {
                 in: normalized,
                 fileManager: fileManager
             ).isEmpty
+        case .terramindFlood:
+            return (try? TerraMindFloodResources.inspect(normalized)) != nil
         case .moge2, .videoDepthAnything, .depthAnything3, .tripoSR:
             guard let pin = GeometryModelPins.pin(for: id) else { return false }
             return Self.invalidPinnedArtifacts(

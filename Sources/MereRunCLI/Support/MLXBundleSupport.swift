@@ -45,7 +45,6 @@ enum MLXBundleSupport {
     static func ensureAvailable(quiet: Bool) throws {
       try validateLinkedRuntime()
 
-      let fm = FileManager.default
       let execDir = executableDirectory()
       let destBundleURL = execDir.appendingPathComponent(bundleName, isDirectory: true)
 
@@ -73,8 +72,7 @@ enum MLXBundleSupport {
       // husk without a metallib inside): copy one in, preferring candidates
       // whose stamp matches this binary.
       if let source = locateCandidateBundle(executableDir: execDir) {
-        try? fm.removeItem(at: destBundleURL)
-        try fm.copyItem(at: source, to: destBundleURL)
+        try installBundleIfMissing(from: source, to: destBundleURL)
         if !quiet {
           CLIStderr.write(
             "[mererun] Installed \(bundleName) for mlx-swift Metal shaders (from \(source.path)).\n"
@@ -483,6 +481,62 @@ enum MLXBundleSupport {
         try? fm.removeItem(at: tmp)
         // Tolerate races with a concurrent startup that produced the file.
         if fm.fileExists(atPath: destination.path) {
+          return
+        }
+        throw error
+      }
+    }
+
+    /// Installs a missing Cmlx bundle through a unique staging directory. Two
+    /// CLI processes may reach first-run bootstrap together (for example,
+    /// parallel workflow nodes). The winner moves its complete bundle into
+    /// place; losers accept that complete destination instead of surfacing
+    /// Cocoa's "item already exists" copy error.
+    static func installBundleIfMissing(from source: URL, to destination: URL) throws {
+      let fm = FileManager.default
+      let lockURL = destination.deletingLastPathComponent().appendingPathComponent(
+        ".\(bundleName).install.lock",
+        isDirectory: false
+      )
+      let descriptor = lockURL.path.withCString {
+        open($0, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR)
+      }
+      guard descriptor >= 0 else {
+        throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+      }
+      defer { close(descriptor) }
+      while flock(descriptor, LOCK_EX) != 0 {
+        guard errno == EINTR else {
+          throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
+      }
+      defer { flock(descriptor, LOCK_UN) }
+
+      if hasMetallib(destination) {
+        return
+      }
+
+      let staged =
+        destination
+        .deletingLastPathComponent()
+        .appendingPathComponent(
+          ".\(bundleName).tmp-\(getpid())-\(UUID().uuidString)",
+          isDirectory: true
+        )
+      try? fm.removeItem(at: staged)
+      defer { try? fm.removeItem(at: staged) }
+      try fm.copyItem(at: source, to: staged)
+
+      if hasMetallib(destination) {
+        return
+      }
+      if fm.fileExists(atPath: destination.path) {
+        try? fm.removeItem(at: destination)
+      }
+      do {
+        try fm.moveItem(at: staged, to: destination)
+      } catch {
+        if hasMetallib(destination) {
           return
         }
         throw error
