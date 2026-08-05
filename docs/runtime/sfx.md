@@ -34,6 +34,44 @@ encode/decode, and CLAP prompt/audio scoring. Generated audio and source video
 are reviewable in place; encoded NPY results show their dtype, shape, NumPy
 version, layout, and size. Progress and every output remain durable in Library.
 
+## Writing prompts
+
+Woosh is trained on caption datasets — AudioCaps, WavCaps and Freesound — where
+every label is a natural-language clause describing an event, and Sony's own
+examples follow that form ("A crowd applauds", "An engine humming and brakes
+squealing"). Keyword lists usually work too, but caption phrasing is more
+reliable, and for some sounds it is the difference between audio and silence.
+
+Measured on `sfx-woosh-dflow`, seed 7, peak amplitude of the generated WAV:
+
+| Prompt | Peak |
+| --- | --- |
+| `grand piano lid closing` | 0.015 — inaudible |
+| `grand piano lid closing, soft thud, long room tail` | 0.003 — inaudible |
+| `A piano lid closing` | 1.000 |
+| `A grand piano lid closes with a soft thud` | 0.573 |
+| `ceramic mug shattering on a tile floor` | 0.082 — very quiet |
+| `A ceramic mug shatters on a tile floor` | 0.893 |
+
+The collapse is not about the subject: `piano` and `lid closing` each generate
+fine on their own, and `piano lid closing, loud` recovers. Nor is it sampling —
+seed, `--cfg` and `--steps` change nothing, and the `dflow` and `flow`
+checkpoints fail identically on the same prompts.
+
+When a generation comes out inaudible, `sfx generate` warns with the measured
+peak. Rephrase as a caption before reaching for other parameters:
+
+```bash
+# Collapses to silence
+mere.run sfx generate "grand piano lid closing, soft thud, long room tail"
+
+# Generates cleanly
+mere.run sfx generate "A grand piano lid closes with a soft thud"
+```
+
+Naming a louder variant of the same event ("slamming shut" rather than
+"closing") also recovers a quiet prompt.
+
 ## Guides
 
 ```bash
