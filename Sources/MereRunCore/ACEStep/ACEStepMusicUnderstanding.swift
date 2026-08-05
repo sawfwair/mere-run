@@ -78,6 +78,64 @@ public struct ACEStepMusicPlan: Sendable, Hashable {
     }
 }
 
+/// Applies ACE-Step's documented metadata precedence: explicit user values win,
+/// while the language model fills only fields the caller left unspecified.
+public enum ACEStepPlanningPolicy {
+    public static func effectiveLanguage(
+        vocalLanguage: String?,
+        metadataLanguage: String?,
+        defaultLanguage: String = "en"
+    ) -> String {
+        nonEmpty(metadataLanguage)
+            ?? nonEmpty(vocalLanguage)
+            ?? defaultLanguage
+    }
+
+    public static func merge(
+        userMetadata: ACEStep5HzLMConstrainedSampler.UserMetadata,
+        plan: ACEStepMusicUnderstandingMetadata,
+        caption: String,
+        durationSeconds: Float
+    ) -> ACEStep5HzLMConstrainedSampler.UserMetadata {
+        ACEStep5HzLMConstrainedSampler.UserMetadata(
+            bpm: nonEmpty(userMetadata.bpm) ?? plan.bpm.map(String.init),
+            caption: caption,
+            duration: String(max(1, Int(durationSeconds.rounded()))),
+            keyscale: nonEmpty(userMetadata.keyscale) ?? nonEmpty(plan.keyscale),
+            language: nonEmpty(userMetadata.language) ?? nonEmpty(plan.language),
+            timesignature: nonEmpty(userMetadata.timesignature)
+                ?? nonEmpty(plan.timesignature)
+        )
+    }
+
+    public static func summary(
+        _ metadata: ACEStep5HzLMConstrainedSampler.UserMetadata
+    ) -> String {
+        var fields: [String] = []
+        if let bpm = nonEmpty(metadata.bpm) {
+            fields.append("bpm=\(bpm)")
+        }
+        if let keyscale = nonEmpty(metadata.keyscale) {
+            fields.append("keyscale=\(keyscale)")
+        }
+        if let timesignature = nonEmpty(metadata.timesignature) {
+            fields.append("timesignature=\(timesignature)")
+        }
+        if let language = nonEmpty(metadata.language) {
+            fields.append("language=\(language)")
+        }
+        if let duration = nonEmpty(metadata.duration) {
+            fields.append("duration=\(duration)s")
+        }
+        return fields.isEmpty ? "no metadata" : fields.joined(separator: ", ")
+    }
+
+    private static func nonEmpty(_ value: String?) -> String? {
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
+    }
+}
+
 extension ACEStepPipeline {
     public func planMusic(
         caption: String,

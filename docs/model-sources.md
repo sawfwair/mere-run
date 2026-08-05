@@ -95,6 +95,8 @@ from the runtime catalog used by `mere.run model list`,
 | `music` | `music-acestep-xl-sft` |
 | `music` | `music-acestep-xl-turbo` |
 | `music` | `music-acestep-xl-turbo-lm4b` |
+| `music` | `music-acestep-lm-1.7b` |
+| `music` | `music-acestep-lm-4b` |
 | `music` | `music-magenta-rt2-small` |
 | `music` | `music-magenta-rt2-base` |
 | `music` | `music-muscriptor-small` |
@@ -544,6 +546,8 @@ The top-level model roots are:
 .../models/music-acestep-xl-turbo-lm4b
 .../models/music-acestep-xl-sft
 .../models/music-acestep-xl-base
+.../models/music-acestep-lm-1.7b
+.../models/music-acestep-lm-4b
 ```
 
 Those roots may contain:
@@ -563,18 +567,24 @@ supported.
 `music-acestep-xl-turbo` pulls the ACE-Step 1.5 XL turbo DiT into
 `acestep-v15-xl-turbo/` and reuses the base ACE-Step 1.5 VAE and Qwen3 text
 encoder components. `music-acestep-xl-turbo-lm4b` adds the optional
-`acestep-5Hz-lm-4B/` 5 Hz LM. The default ACE-Step LM component discovery
-continues to prefer the smaller `acestep-5Hz-lm-1.7B/` when both LM directories
-are present; pass `--lm-subdirectory acestep-5Hz-lm-4B` to force the 4B LM.
+`acestep-5Hz-lm-4B/` 5 Hz LM. The independently pullable
+`music-acestep-lm-1.7b` and `music-acestep-lm-4b` planner models can be paired
+with any ACE-Step DiT through `--lm-model`; no shared-directory symlink is
+required. The 1.7B planner is the upstream default. Local component discovery
+therefore prefers `acestep-5Hz-lm-1.7B/` when both sizes are present; select
+`--lm-model music-acestep-lm-4b` only when you explicitly want the optional 4B
+planner.
 `music-acestep-xl-sft` and `music-acestep-xl-base` install the non-distilled
 XL checkpoints and use continuous flow sampling with CFG, APG, or ADG. Base is
 also the checkpoint family for extract, lego, and complete tasks. Every
 component is downloaded at the immutable revision listed in
 [ACE-Step validation](./runtime/acestep-validation.md).
 
-`mere.run music generate` and `mere.run music analyze` auto-discover these
-layouts unless you override the root with `--checkpoints-root` or
-`MERERUN_MUSIC_ACESTEP_ROOT`.
+`mere.run music generate`, `music analyze`, and `music serve` first look for a
+planner in the selected checkpoint root, then reuse an installed standalone or
+`music-acestep` 1.7B planner, and finally pull `music-acestep-lm-1.7b` when LM
+planning is required. Override that resolution with `--lm-model` or the legacy
+same-root `--lm-subdirectory`.
 
 ### `music-magenta-rt2-small` and `music-magenta-rt2-base`
 

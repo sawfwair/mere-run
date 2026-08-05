@@ -667,6 +667,20 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 64
             ),
             descriptor(
+                ModelResolver.ModelID.aceStepLM17B.rawValue,
+                "ACE-Step 1.7B planner",
+                "Provides the upstream-default 5 Hz language model independently of the ACE-Step DiT checkpoint.",
+                minimum: 16,
+                recommended: 24
+            ),
+            descriptor(
+                ModelResolver.ModelID.aceStepLM4B.rawValue,
+                "ACE-Step 4B planner",
+                "Provides the optional 4B 5 Hz language model independently of the ACE-Step DiT checkpoint.",
+                minimum: 24,
+                recommended: 32
+            ),
+            descriptor(
                 ModelResolver.ModelID.magentaRT2Small.rawValue,
                 "Magenta RealTime 2 small",
                 "Streams controllable Magenta RT2 music on Apple Silicon with the 230M model.",

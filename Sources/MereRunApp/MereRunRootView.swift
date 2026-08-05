@@ -3179,6 +3179,10 @@ private struct MusicModelLayoutOptions: View {
                         .merePanel()
                 }
                 if includesLM {
+                    TextField("5Hz LM model (default: 1.7B)", text: $controller.draft.musicLMModel)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
                     TextField("5Hz LM subdirectory (auto)", text: $controller.draft.musicLMSubdirectory)
                         .textFieldStyle(.plain)
                         .padding(10)

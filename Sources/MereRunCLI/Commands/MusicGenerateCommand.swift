@@ -115,8 +115,14 @@ struct MusicGenerate: AsyncParsableCommand {
     @Option(name: [.customLong("vae-subdirectory")], help: "VAE subdirectory under checkpoints root.")
     var vaeSubdirectory: String = "vae"
 
-    @Option(name: [.customLong("lm-subdirectory")], help: "Optional 5Hz LM subdirectory under checkpoints root. Auto-detected as 'acestep-5Hz-lm-1.7B' when omitted.")
+    @Option(name: [.customLong("lm-subdirectory")], help: "Legacy 5Hz LM subdirectory under the selected checkpoint root.")
     var lmSubdirectory: String?
+
+    @Option(
+        name: [.customLong("lm-model")],
+        help: "Managed 5Hz LM model id or local planner root. Defaults to music-acestep-lm-1.7b when the selected checkpoint has no LM."
+    )
+    var lmModel: String?
 
     @Option(name: [.customLong("text-subdirectory")], help: "Text encoder subdirectory under checkpoints root. Auto-detected as 'Qwen3-Embedding-0.6B' when omitted.")
     var textSubdirectory: String?
@@ -271,10 +277,13 @@ struct MusicGenerate: AsyncParsableCommand {
     @Option(name: [.customLong("lm-top-p")], help: "LM top-p nucleus sampling (1.0 = disabled).")
     var lmTopP: Float = 0.9
 
-    @Option(name: [.customLong("metadata-duration")], help: "Optional metadata duration string for constrained LM.")
+    @Option(
+        name: [.customLong("metadata-duration")],
+        help: "Compatibility alias for --duration; explicit duration always controls planning and rendering."
+    )
     var metadataDuration: String?
 
-    @Option(name: [.customLong("metadata-language")], help: "Optional language metadata for constrained LM.")
+    @Option(name: [.customLong("metadata-language")], help: "Compatibility override for --vocal-language.")
     var metadataLanguage: String?
 
     @Flag(name: [.customLong("no-tiled-vae")], help: "Disable tiled VAE decode.")
@@ -325,9 +334,7 @@ struct MusicGenerate: AsyncParsableCommand {
     func run() async throws {
         try MLXBundleSupport.ensureAvailable(quiet: quiet)
 
-        if let durationSeconds, durationSeconds <= 0 {
-            throw ValidationError("--duration must be > 0")
-        }
+        let explicitDurationSeconds = try resolvedExplicitDurationSeconds()
         if useLM && noLM {
             throw ValidationError("Pass either --use-lm or --no-lm, not both.")
         }
@@ -437,7 +444,7 @@ struct MusicGenerate: AsyncParsableCommand {
         }
 
         let effectiveTask = resolvedACEStepTask
-        var effectiveUseLM = flowEdit
+        let effectiveUseLM = flowEdit
             ? false
             : resolvedACEStepUsesLM(task: effectiveTask)
         if analyzeSourceAudio && effectiveTask != .cover && effectiveTask != .coverNoFSQ {
@@ -476,43 +483,21 @@ struct MusicGenerate: AsyncParsableCommand {
             for: checkpointVariant,
             task: effectiveTask
         )
-        let resolvedLMSubdirectory = try wantsLMResources
-            ? resolveACEStepLMSubdirectory(at: checkpointsRootURL, explicit: lmSubdirectory)
+        let resolvedLM = try await wantsLMResources
+            ? ACEStepCLIHelper.resolveLMResources(
+                checkpointsRoot: checkpointsRootURL,
+                lmModel: lmModel,
+                lmSubdirectory: lmSubdirectory
+            )
             : nil
         let resolvedTextSubdirectory = try resolveACEStepTextSubdirectory(
             at: checkpointsRootURL,
             explicit: textSubdirectory
         )
-        if wantsLMResources && resolvedLMSubdirectory == nil {
-            if useLM || analyzeSourceAudio || lmSubdirectory != nil {
-                throw ValidationError(
-                    "ACE-Step LM planning/generation and --analyze-source-audio require --lm-subdirectory. "
-                        + "Set --lm-subdirectory or use a managed model that includes a 5Hz LM."
-                )
-            }
-            effectiveUseLM = false
-            if !quiet {
-                CLIStderr.write(
-                    "No 5Hz LM is installed with this checkpoint; "
-                        + "continuing with direct DiT generation. Use --no-lm to make this choice explicit.\n"
-                )
-            }
-        }
         let needsLMResources = effectiveUseLM || analyzeSourceAudio
         if resolvedTextSubdirectory == nil {
             throw ValidationError("ACE-Step text encoder not found. Set --text-subdirectory or keep a default layout like 'Qwen3-Embedding-0.6B'.")
         }
-        if quality == .final,
-           let resolvedLMSubdirectory,
-           !resolvedLMSubdirectory.lowercased().contains("4b"),
-           !quiet
-        {
-            CLIStderr.write(
-                "Final quality is using \(resolvedLMSubdirectory); "
-                    + "use music-acestep-xl-turbo-lm4b or --lm-subdirectory with the 4B LM for the strongest planning.\n"
-            )
-        }
-
         let outputURL = CLIOutput.resolveOutputURL(output, defaultPrefix: "mererun-music", defaultExtension: "wav")
         try FileManager.default.createDirectory(at: outputURL.deletingLastPathComponent(), withIntermediateDirectories: true)
 
@@ -526,7 +511,7 @@ struct MusicGenerate: AsyncParsableCommand {
         var effectiveDurationSeconds = resolvedACEStepDurationSeconds(
             task: effectiveTask,
             sourceAudio48kHz: sourceAudio48kHz,
-            fallback: durationSeconds ?? qualityDefaults.fallbackDurationSeconds
+            fallback: explicitDurationSeconds ?? qualityDefaults.fallbackDurationSeconds
         )
         let resolvedInstruction = resolveInstruction(
             task: effectiveTask,
@@ -536,10 +521,14 @@ struct MusicGenerate: AsyncParsableCommand {
         )
 
         let shouldPlanDuration = effectiveUseLM
-            && durationSeconds == nil
+            && explicitDurationSeconds == nil
             && qualityDefaults.automaticDuration
             && !effectiveTask.locksDurationToSource
         var effectiveCaption = caption
+        let effectiveLanguage = ACEStepPlanningPolicy.effectiveLanguage(
+            vocalLanguage: vocalLanguage,
+            metadataLanguage: metadataLanguage
+        )
         var userMetadata = ACEStep5HzLMConstrainedSampler.UserMetadata(
             bpm: bpm.map(String.init),
             caption: caption,
@@ -549,23 +538,35 @@ struct MusicGenerate: AsyncParsableCommand {
                     effectiveDurationSeconds: effectiveDurationSeconds
                 ),
             keyscale: keyscale,
-            language: metadataLanguage,
+            language: effectiveLanguage,
             timesignature: timesignature
         )
 
         if !quiet {
             CLIStderr.write("Loading ACE-Step checkpoints from \(checkpointsRootURL.path)\n")
+            if let resolvedLM {
+                CLIStderr.write(
+                    "Using ACE-Step planner \(resolvedLM.source) from \(resolvedLM.rootURL.path)\n"
+                )
+            }
             if useLM && !effectiveUseLM {
                 CLIStderr.write("Skipping 5Hz LM for ACE-Step \(effectiveTask.rawValue) task; upstream uses direct DiT conditioning for this task.\n")
             }
         }
 
         let container = ACEStepModelContainer(
-            checkpointsRootURL: checkpointsRootURL,
-            turboSubdirectory: resolvedTurboSubdirectory,
-            vaeSubdirectory: vaeSubdirectory,
-            lmSubdirectory: needsLMResources ? resolvedLMSubdirectory : nil,
-            textEncoderSubdirectory: resolvedTextSubdirectory
+            decoderRootURL: checkpointsRootURL.appendingPathComponent(
+                resolvedTurboSubdirectory,
+                isDirectory: true
+            ),
+            vaeRootURL: checkpointsRootURL.appendingPathComponent(
+                vaeSubdirectory,
+                isDirectory: true
+            ),
+            lmRootURL: needsLMResources ? resolvedLM?.rootURL : nil,
+            textEncoderRootURL: resolvedTextSubdirectory.map {
+                checkpointsRootURL.appendingPathComponent($0, isDirectory: true)
+            }
         )
         let resources = try await container.resources()
         let pipeline = try ACEStepPipeline(
@@ -632,16 +633,16 @@ struct MusicGenerate: AsyncParsableCommand {
             if shouldPlanDuration, let plannedDuration = plan.metadata.durationSeconds {
                 effectiveDurationSeconds = clampedAutomaticDuration(plannedDuration)
             }
-            userMetadata = mergePlanMetadata(
-                existing: userMetadata,
+            userMetadata = ACEStepPlanningPolicy.merge(
+                userMetadata: userMetadata,
                 plan: plan.metadata,
                 caption: effectiveCaption,
                 durationSeconds: effectiveDurationSeconds
             )
             if !quiet {
                 CLIStderr.write(
-                    "ACE-Step plan: \(plan.metadata.understandingSummary); "
-                        + "duration=\(Int(effectiveDurationSeconds))s\n"
+                    "ACE-Step effective plan: "
+                        + "\(ACEStepPlanningPolicy.summary(userMetadata))\n"
                 )
             }
         }
@@ -712,7 +713,7 @@ struct MusicGenerate: AsyncParsableCommand {
                 sourceAudio48kHz: sourceAudio48kHz,
                 referenceTimbreAudio48kHz: referenceAudio48kHz,
                 audioCoverStrength: audioCoverStrength,
-                vocalLanguage: vocalLanguage,
+                vocalLanguage: effectiveLanguage,
                 instruction: resolvedInstruction,
                 task: effectiveTask,
                 repaintConfiguration: repaintConfiguration,
@@ -766,7 +767,7 @@ struct MusicGenerate: AsyncParsableCommand {
                     config: stemConfig,
                     lmUserMetadata: userMetadata,
                     sourceAudio48kHz: ranked.best.audio,
-                    vocalLanguage: vocalLanguage,
+                    vocalLanguage: effectiveLanguage,
                     instruction: ACEStepTask.extract.instruction(
                         trackName: stemName
                     ),
@@ -843,7 +844,17 @@ struct MusicGenerate: AsyncParsableCommand {
                         modelID: model,
                         manifest: manifest
                     ),
-                languageModelSubdirectory: resolvedLMSubdirectory,
+                languageModelSubdirectory: resolvedLM?.rootURL.lastPathComponent,
+                languageModelSource: resolvedLM?.source,
+                languageModelRoot: resolvedLM?.rootURL.path,
+                languageModelSources: resolvedLM.map {
+                    ACEStepGenerationRecipe.languageModelProvenance(
+                        source: $0.source,
+                        subdirectory: $0.rootURL.lastPathComponent,
+                        checkpointModelID: model,
+                        checkpointManifest: manifest
+                    )
+                } ?? [],
                 textEncoderSubdirectory: resolvedTextSubdirectory ?? "",
                 adapters: loadedAdapters,
                 task: effectiveTask,
@@ -1232,42 +1243,44 @@ struct MusicGenerate: AsyncParsableCommand {
     }
 
     func resolvedMetadataDuration(effectiveDurationSeconds: Float) -> String {
-        if let metadataDuration, !metadataDuration.isEmpty {
-            return metadataDuration
-        }
         let seconds = max(1, Int(effectiveDurationSeconds))
         return "\(seconds) seconds"
     }
 
     func resolvedLMMetadataDuration(effectiveDurationSeconds: Float) -> String {
-        if let metadataDuration, !metadataDuration.isEmpty {
-            return metadataDuration
-        }
         return String(max(1, Int(effectiveDurationSeconds)))
+    }
+
+    func resolvedExplicitDurationSeconds() throws -> Float? {
+        let legacyDuration: Float? = try metadataDuration.flatMap { value in
+            let parts = value
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+                .split(whereSeparator: { $0.isWhitespace })
+            guard let first = parts.first, let parsed = Float(first) else {
+                throw ValidationError("--metadata-duration must be a number of seconds.")
+            }
+            let units = parts.dropFirst().joined(separator: " ")
+            guard units.isEmpty || ["s", "sec", "second", "seconds"].contains(units) else {
+                throw ValidationError("--metadata-duration must be a number of seconds.")
+            }
+            return parsed
+        }
+        if let durationSeconds, let legacyDuration,
+           abs(durationSeconds - legacyDuration) > 0.001
+        {
+            throw ValidationError("--duration and --metadata-duration must match when both are provided.")
+        }
+        let resolved = durationSeconds ?? legacyDuration
+        if let resolved, resolved <= 0 || resolved > 600 {
+            throw ValidationError("--duration must be greater than 0 and at most 600 seconds.")
+        }
+        return resolved
     }
 
     func clampedAutomaticDuration(_ duration: Float) -> Float {
         let upperBound: Float = quality == .song ? 240 : 600
         return min(max(duration, 10), upperBound)
-    }
-
-    private func mergePlanMetadata(
-        existing: ACEStep5HzLMConstrainedSampler.UserMetadata,
-        plan: ACEStepMusicUnderstandingMetadata,
-        caption: String,
-        durationSeconds: Float
-    ) -> ACEStep5HzLMConstrainedSampler.UserMetadata {
-        ACEStep5HzLMConstrainedSampler.UserMetadata(
-            bpm: nonEmpty(existing.bpm) ?? plan.bpm.map(String.init),
-            caption: caption,
-            duration: resolvedLMMetadataDuration(
-                effectiveDurationSeconds: durationSeconds
-            ),
-            keyscale: nonEmpty(existing.keyscale) ?? nonEmpty(plan.keyscale),
-            language: nonEmpty(existing.language) ?? nonEmpty(plan.language),
-            timesignature: nonEmpty(existing.timesignature)
-                ?? nonEmpty(plan.timesignature)
-        )
     }
 
     private func nonEmpty(_ value: String?) -> String? {
@@ -1357,10 +1370,6 @@ struct MusicGenerate: AsyncParsableCommand {
             lmSubdirectory: useLM ? lmSubdirectory : nil,
             textSubdirectory: textSubdirectory
         )
-    }
-
-    private func resolveACEStepLMSubdirectory(at root: URL, explicit: String?) throws -> String? {
-        try ACEStepCLIHelper.resolveLMSubdirectory(at: root, explicit: explicit)
     }
 
     private func resolveACEStepTextSubdirectory(at root: URL, explicit: String?) throws -> String? {

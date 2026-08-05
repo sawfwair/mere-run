@@ -76,4 +76,50 @@ final class ACEStepMusicUnderstandingTests: MereRunCoreTestCase {
         XCTAssertNil(multiple.language)
         XCTAssertNil(unsupported.language)
     }
+
+    func testPlanningPolicyKeepsExplicitDurationAndLanguage() {
+        let merged = ACEStepPlanningPolicy.merge(
+            userMetadata: .init(
+                bpm: nil,
+                duration: "30",
+                language: "en"
+            ),
+            plan: .init(
+                bpm: 110,
+                durationSeconds: 560,
+                keyscale: "C minor",
+                language: "de",
+                timesignature: "4"
+            ),
+            caption: "English vocal synth pop",
+            durationSeconds: 30
+        )
+
+        XCTAssertEqual(merged.bpm, "110")
+        XCTAssertEqual(merged.duration, "30")
+        XCTAssertEqual(merged.language, "en")
+        XCTAssertEqual(merged.keyscale, "C minor")
+        XCTAssertEqual(merged.timesignature, "4")
+        XCTAssertEqual(
+            ACEStepPlanningPolicy.summary(merged),
+            "bpm=110, keyscale=C minor, timesignature=4, language=en, duration=30s"
+        )
+    }
+
+    func testPlanningPolicyUsesOneLanguageForPlannerAndLyrics() {
+        XCTAssertEqual(
+            ACEStepPlanningPolicy.effectiveLanguage(
+                vocalLanguage: "en",
+                metadataLanguage: nil
+            ),
+            "en"
+        )
+        XCTAssertEqual(
+            ACEStepPlanningPolicy.effectiveLanguage(
+                vocalLanguage: "en",
+                metadataLanguage: "ja"
+            ),
+            "ja"
+        )
+    }
 }

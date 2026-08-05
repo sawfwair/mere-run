@@ -20,6 +20,9 @@ Managed ids:
   CFG/APG/ADG inference.
 - `music-acestep-xl-base`: ACE-Step 1.5 XL-Base, including extract, lego, and
   complete tasks.
+- `music-acestep-lm-1.7b`: independently pullable upstream-default 5 Hz
+  planner; pairs with any ACE-Step DiT.
+- `music-acestep-lm-4b`: independently pullable optional 4B 5 Hz planner.
 - `music-magenta-rt2-small`: Magenta RealTime 2 small exported runtime assets.
 - `music-magenta-rt2-base`: Magenta RealTime 2 base exported runtime assets.
 
@@ -29,6 +32,7 @@ Managed ids:
 mere.run model pull music-acestep
 mere.run model pull music-acestep-xl-turbo
 mere.run model pull music-acestep-xl-turbo-lm4b
+mere.run model pull music-acestep-lm-1.7b
 mere.run model pull music-magenta-rt2-small
 mere.run music generate --help
 mere.run music analyze --help
@@ -60,10 +64,13 @@ mere.run guide music generate --model music-magenta-rt2-small
 - `--daw-bundle`, `--stems`: portable DAW session and Base-only extraction.
 - `--model`, `-m`: managed id, model root, or checkpoints root.
 - `--checkpoints-root`: root containing ACE-Step subdirectories.
-- `--turbo-subdirectory`, `--vae-subdirectory`, `--lm-subdirectory`, `--text-subdirectory`: component layout overrides.
+- `--turbo-subdirectory`, `--vae-subdirectory`, `--text-subdirectory`:
+  component layout overrides. `--lm-subdirectory` is the legacy same-root LM
+  override; prefer `--lm-model` for an independent planner.
+- `--lm-model`: independently select a managed planner id or local planner
+  root. If the DiT root has no LM, the default is `music-acestep-lm-1.7b`.
 - `--use-lm`: enable 5 Hz constrained LM for supported text-to-music tasks.
-- `--lm-subdirectory acestep-5Hz-lm-4B`: force the optional 4B LM when using
-  `music-acestep-xl-turbo-lm4b`.
+- `--lm-model music-acestep-lm-4b`: explicitly select the optional 4B planner.
 - `--duration`: output seconds.
 - `--steps`, `-s`: turbo denoise steps.
 - `--shift`: turbo scheduler shift; ACE-Step CLI default is `3.0`, matching upstream.
@@ -73,13 +80,15 @@ mere.run guide music generate --model music-magenta-rt2-small
 - `--analyze-source-audio`: run ACE-Step 5 Hz LM audio understanding before a
   cover and fill missing BPM, key/scale, language, and time signature metadata
   from the source audio. Explicit `--bpm`, `--keyscale`, `--timesignature`, and
-  `--metadata-language` values always win.
+  `--vocal-language` values always win.
 - `--reference-audio`: optional ACE-Step timbre reference audio file(s).
 - `--audio-cover-strength`: cover conditioning strength from `0` to `1`.
 - `--cover-noise-strength`: source-latent noise initialization strength from
   `0` to `1` for ACE-Step covers. `0` starts from pure noise; higher values
   start closer to the source song.
-- `--vocal-language`: language tag for lyric formatting.
+- `--vocal-language`: one language tag used by both LM metadata constraints and
+  lyric formatting. The compatibility `--metadata-language` alias overrides it
+  when both are present.
 - `--instruction`: caption instruction prefix.
 - `--task-type`, `--task`: `text2music`, `repaint`, `cover`, `cover-nofsq`,
   `extract`, `lego`, or `complete`. Unknown values are rejected during parsing.
@@ -96,7 +105,9 @@ mere.run guide music generate --model music-magenta-rt2-small
 - `--repaint-strength`: balanced-mode aggressiveness from `0` to `1`.
 - `--bpm`, `--keyscale`, `--timesignature`: musical metadata.
 - `--lm-top-k`, `--lm-top-p`: constrained LM sampling controls.
-- `--metadata-duration`, `--metadata-language`: metadata overrides for LM.
+- `--metadata-duration`: compatibility alias for `--duration`; conflicting
+  values are rejected so the planner and renderer cannot diverge.
+- `--metadata-language`: compatibility override for `--vocal-language`.
 - `--no-tiled-vae`, `--vae-chunk-size`, `--vae-overlap`: VAE decode memory controls.
 - `--temperature`, `--top-k`: Magenta RT2 sampling controls.
 - `--style-conditioning streaming|full`: choose realtime C++ style-token
@@ -120,10 +131,13 @@ mere.run guide music generate --model music-magenta-rt2-small
 ACE-Step uses upstream-style native Haar DCW sampler correction by default for
 cleaner diffusion latents before VAE decode.
 
-The default ACE-Step managed ID uses the smaller 1.5 turbo DiT. Use
-`music-acestep-xl-turbo` for the ACE-Step 1.5 XL turbo DiT on larger machines,
-or `music-acestep-xl-turbo-lm4b` with `--use-lm` and
-`--lm-subdirectory acestep-5Hz-lm-4B` when you want the optional 4B 5 Hz LM.
+The default ACE-Step managed ID uses the smaller 1.5 turbo DiT and upstream
+default 1.7B planner. Use `music-acestep-xl-turbo`, `music-acestep-xl-sft`, or
+`music-acestep-xl-base` for a different DiT while keeping the same planner.
+Pass `--lm-model music-acestep-lm-4b` only when you explicitly want the optional
+4B planner. Planner metadata is merged with the upstream rule that explicit
+user values win; diagnostics print the effective metadata, not discarded LM
+suggestions.
 ACE-Step cover, cover-nofsq, repaint, and extract tasks skip the LM phase,
 matching upstream. Turbo and SFT checkpoints support text-to-music, repaint,
 cover, and cover-nofsq. Extract, lego, and complete are Base-only; the CLI
@@ -135,7 +149,8 @@ Use a warm resident server when generating repeatedly:
 
 ```bash
 mere.run music serve \
-  --model music-acestep-xl-turbo-lm4b \
+  --model music-acestep-xl-sft \
+  --lm-model music-acestep-lm-1.7b \
   --adapter ./house-style.safetensors \
   --port 8081
 
@@ -210,7 +225,7 @@ mere.run music generate \
 
 For analysis-first workflows, run `mere.run music analyze` separately, inspect
 the JSON, then pass explicit `--bpm`, `--keyscale`, `--timesignature`, or
-`--metadata-language` values to pin the generated result. Explicit generation
+`--vocal-language` values to pin the generated result. Explicit generation
 flags always win over source analysis.
 
 ## Prompting Patterns
@@ -342,7 +357,9 @@ mere.run music realtime \
 
 - `--lyrics` and `--lyrics-file` conflict: use only one.
 - Text encoder missing: set `--text-subdirectory` or keep the default layout.
-- `--use-lm` fails: ensure the LM subdirectory exists or pass `--lm-subdirectory`.
+- `--use-lm` fails: pull `music-acestep-lm-1.7b` or pass `--lm-model` to a
+  managed planner id/local root. Use `--lm-subdirectory` only for legacy
+  same-root layouts.
   Cover, cover-nofsq, repaint, and extract skip LM even if the flag is present.
 - Base-only task rejected: extract, lego, and complete require
   `music-acestep-xl-base`; Turbo and SFT intentionally reject them.

@@ -218,7 +218,7 @@ struct StudioMusicToolsSheet: View {
         _tool = State(initialValue: initialTool)
 
         var analyze = CommandCatalog.template(id: .musicAnalyze)?.defaultDraft() ?? CommandDraft()
-        analyze.model = analyze.model.isBlank ? "music-acestep-xl-turbo-lm4b" : analyze.model
+        analyze.model = analyze.model.isBlank ? "music-acestep" : analyze.model
         _analyzeDraft = State(initialValue: analyze)
 
         var transcribe = CommandCatalog.template(id: .musicTranscribe)?.defaultDraft() ?? CommandDraft()
@@ -537,7 +537,12 @@ struct StudioMusicToolsSheet: View {
                 }
                 if includesLanguageModel {
                     labeledTextField(
-                        "Language model",
+                        "LM model",
+                        placeholder: "music-acestep-lm-1.7b",
+                        text: draft.musicLMModel
+                    )
+                    labeledTextField(
+                        "LM subdirectory",
                         placeholder: "Auto-discover",
                         text: draft.musicLMSubdirectory
                     )

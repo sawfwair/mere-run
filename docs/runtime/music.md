@@ -38,6 +38,8 @@ emitted flag absent from `mere.run catalog --json`.
 - `music-acestep-xl-turbo-lm4b`
 - `music-acestep-xl-sft`
 - `music-acestep-xl-base`
+- `music-acestep-lm-1.7b`
+- `music-acestep-lm-4b`
 - `music-magenta-rt2-small`
 - `music-magenta-rt2-base`
 - `music-muscriptor-small`
@@ -93,8 +95,8 @@ swift run mere.run music generate \
   --output ./reggaeton-cover.wav
 
 swift run mere.run music analyze ./song.mp3 \
-  --model music-acestep-xl-turbo-lm4b \
-  --lm-subdirectory acestep-5Hz-lm-4B \
+  --model music-acestep-xl-sft \
+  --lm-model music-acestep-lm-1.7b \
   > ./song-analysis.json
 
 swift run mere.run model pull music-acestep-xl-turbo
@@ -103,12 +105,12 @@ swift run mere.run music generate \
   --model music-acestep-xl-turbo \
   --output ./xl-track.wav
 
-swift run mere.run model pull music-acestep-xl-turbo-lm4b
+swift run mere.run model pull music-acestep-lm-4b
 swift run mere.run music generate \
   "arena-scale rock anthem with stacked vocals" \
-  --model music-acestep-xl-turbo-lm4b \
+  --model music-acestep-xl-turbo \
   --use-lm \
-  --lm-subdirectory acestep-5Hz-lm-4B \
+  --lm-model music-acestep-lm-4b \
   --output ./xl-lm4b-track.wav
 
 swift run mere.run music realtime \
@@ -272,7 +274,10 @@ checkpoint-aware tasks, quality, steps and scheduler, CFG/APG/ADG, retakes,
 cover strength/noise, repaint, flow edit, reference audio, LM metadata and
 sampling, complete-track classes, and tiled VAE decode. Song/final requests
 without `duration_seconds` use the resident LM planner; every JSON result
-returns `conditioning_metadata` with the values actually used.
+returns `conditioning_metadata` with the values actually used. An explicit
+`vocal_language` constrains both planner metadata and lyric formatting;
+`metadata_language` remains a compatibility override. `GET /health` reports
+the independently resolved `language_model_source` alongside the resident DiT.
 
 Batch items may select independent `candidates` values. The server serializes
 them through the warm session, returns every ranked candidate and exactly one

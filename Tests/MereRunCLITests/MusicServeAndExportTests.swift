@@ -109,13 +109,35 @@ final class MusicServeAndExportTests: XCTestCase {
             JSONSerialization.jsonObject(with: encoded) as? [String: String]
         )
 
-        XCTAssertEqual(ACEStepGenerationRecipe.currentSchemaVersion, 2)
+        XCTAssertEqual(ACEStepGenerationRecipe.currentSchemaVersion, 3)
         XCTAssertEqual(object["bpm"], "118")
         XCTAssertEqual(object["duration"], "12")
         XCTAssertEqual(object["keyscale"], "D major")
         XCTAssertEqual(object["language"], "en")
         XCTAssertEqual(object["timesignature"], "4")
         XCTAssertNil(object["caption"])
+    }
+
+    func testRecipePlannerProvenanceFindsBundledAndIndependentModels() throws {
+        let bundled = ACEStepGenerationRecipe.languageModelProvenance(
+            source: "acestep-5Hz-lm-4B",
+            subdirectory: "acestep-5Hz-lm-4B",
+            checkpointModelID: ModelResolver.ModelID.aceStepXLTurboLM4B.rawValue,
+            checkpointManifest: nil
+        )
+        XCTAssertEqual(bundled.count, 1)
+        XCTAssertEqual(bundled[0].repository, "ACE-Step/acestep-5Hz-lm-4B")
+        XCTAssertEqual(bundled[0].destinationPath, "acestep-5Hz-lm-4B")
+
+        let independent = ACEStepGenerationRecipe.languageModelProvenance(
+            source: ModelResolver.ModelID.aceStepLM17B.rawValue,
+            subdirectory: "acestep-5Hz-lm-1.7B",
+            checkpointModelID: ModelResolver.ModelID.aceStepXLSFT.rawValue,
+            checkpointManifest: nil
+        )
+        XCTAssertEqual(independent.count, 1)
+        XCTAssertEqual(independent[0].repository, "ACE-Step/Ace-Step1.5")
+        XCTAssertNil(independent[0].destinationPath)
     }
 
     func testMusicServeParsesSecureRuntimeOptions() throws {
@@ -128,6 +150,7 @@ final class MusicServeAndExportTests: XCTestCase {
         XCTAssertEqual(command.host, "0.0.0.0")
         XCTAssertEqual(command.port, 8_089)
         XCTAssertEqual(command.model, "music-acestep-xl-sft")
+        XCTAssertNil(command.lmModel)
         XCTAssertEqual(command.apiKey, "secret")
         XCTAssertTrue(MusicServe.isLoopback("127.0.0.1"))
         XCTAssertTrue(MusicServe.isLoopback("::1"))
@@ -138,6 +161,16 @@ final class MusicServeAndExportTests: XCTestCase {
             ),
             "resident model mismatch"
         )
+    }
+
+    func testMusicServeParsesIndependentPlannerModel() throws {
+        let command = try MusicServe.parse([
+            "--model", ModelResolver.ModelID.aceStepXLSFT.rawValue,
+            "--lm-model", ModelResolver.ModelID.aceStepLM17B.rawValue,
+        ])
+
+        XCTAssertEqual(command.model, ModelResolver.ModelID.aceStepXLSFT.rawValue)
+        XCTAssertEqual(command.lmModel, ModelResolver.ModelID.aceStepLM17B.rawValue)
     }
 
     func testMusicAPIRequestDecodesSnakeCaseAdvancedControls() throws {

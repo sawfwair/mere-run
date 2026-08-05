@@ -228,7 +228,7 @@ are:
 - Vision segmentation / tracking: `vision-segment-sam31`
 - Vision grounding: `vision-ground-falcon-perception`
 - Face detection and identity embeddings: `vision-face-buffalo-l`
-- Music: `music-acestep`, `music-acestep-xl-turbo`, `music-acestep-xl-turbo-lm4b`, `music-acestep-xl-sft`, `music-acestep-xl-base`, `music-magenta-rt2-small`, `music-magenta-rt2-base`
+- Music: `music-acestep`, `music-acestep-xl-turbo`, `music-acestep-xl-turbo-lm4b`, `music-acestep-xl-sft`, `music-acestep-xl-base`, `music-acestep-lm-1.7b`, `music-acestep-lm-4b`, `music-magenta-rt2-small`, `music-magenta-rt2-base`
 - SFX: `sfx-woosh-dflow`, `sfx-woosh-flow`
 - Video: `video-ltx-av`, `video-ltx23-av-mlx`, `video-ltx23-full-mlx`, `video-ltx23-a2vid-mlx`, `video-wan22-ti2v-5b-mlx`, `video-scail2-14b-mlx`
 
@@ -311,8 +311,8 @@ swift run mere.run music generate \
   --output ./xl-track.wav
 
 swift run mere.run music analyze ./song.mp3 \
-  --model music-acestep-xl-turbo-lm4b \
-  --lm-subdirectory acestep-5Hz-lm-4B
+  --model music-acestep-xl-sft \
+  --lm-model music-acestep-lm-1.7b
 
 swift run mere.run model pull music-magenta-rt2-small
 swift run mere.run music realtime \
@@ -1330,6 +1330,7 @@ Key options:
 - `--turbo-subdirectory`
 - `--vae-subdirectory`
 - `--lm-subdirectory`
+- `--lm-model`: managed planner id or local planner root
 - `--duration`: analyze the first N seconds instead of the full decoded input
 - `--max-new-tokens`
 - `--lm-temperature`
@@ -1343,8 +1344,8 @@ Examples:
 
 ```bash
 swift run mere.run music analyze ./song.mp3 \
-  --model music-acestep-xl-turbo-lm4b \
-  --lm-subdirectory acestep-5Hz-lm-4B
+  --model music-acestep-xl-sft \
+  --lm-model music-acestep-lm-1.7b
 swift run mere.run music analyze ./song.mp3 --duration 30 > ./song-analysis.json
 ```
 
@@ -1370,7 +1371,8 @@ Key options:
 - `--duration`
 - `--steps`
 - `--use-lm`
-- `--lm-subdirectory` (for example `acestep-5Hz-lm-4B` with `music-acestep-xl-turbo-lm4b`)
+- `--lm-model` (defaults to the independently managed 1.7B planner when needed)
+- `--lm-subdirectory` (legacy same-root component override)
 - `--text-subdirectory`
 - `--seed`
 - `--quiet`

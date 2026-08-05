@@ -493,6 +493,7 @@ struct CommandDraft: Equatable, Codable {
     var musicCheckpointsRoot = ""
     var musicDecoderSubdirectory = "acestep-v15-turbo"
     var musicVAESubdirectory = "vae"
+    var musicLMModel = ""
     var musicLMSubdirectory = ""
     var musicTextSubdirectory = ""
     var musicLMMode = "auto"
@@ -2117,6 +2118,9 @@ struct CommandTemplate: Identifiable, Equatable {
             if !draft.musicLMSubdirectory.isBlank {
                 args += ["--lm-subdirectory", draft.musicLMSubdirectory]
             }
+            if !draft.musicLMModel.isBlank {
+                args += ["--lm-model", draft.musicLMModel]
+            }
             if !draft.musicTextSubdirectory.isBlank {
                 args += ["--text-subdirectory", draft.musicTextSubdirectory]
             }
@@ -2459,6 +2463,9 @@ struct CommandTemplate: Identifiable, Equatable {
             if !draft.musicLMSubdirectory.isBlank {
                 args += ["--lm-subdirectory", draft.musicLMSubdirectory]
             }
+            if !draft.musicLMModel.isBlank {
+                args += ["--lm-model", draft.musicLMModel]
+            }
             if draft.useDuration { args += ["--duration", format(draft.durationSeconds)] }
             args += [
                 "--max-new-tokens", String(draft.musicAnalysisMaxTokens),
@@ -2587,6 +2594,9 @@ struct CommandTemplate: Identifiable, Equatable {
             }
             if !draft.musicLMSubdirectory.isBlank {
                 args += ["--lm-subdirectory", draft.musicLMSubdirectory]
+            }
+            if !draft.musicLMModel.isBlank {
+                args += ["--lm-model", draft.musicLMModel]
             }
             if !draft.musicTextSubdirectory.isBlank {
                 args += ["--text-subdirectory", draft.musicTextSubdirectory]
