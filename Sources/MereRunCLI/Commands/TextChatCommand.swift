@@ -39,6 +39,7 @@ struct TextChat: AsyncParsableCommand {
           - text-chat-laguna-s-2-1 (Poolside Laguna S 2.1 118B-A8B NVFP4 with DFlash)
           - text-chat-laguna-xs-2-1 (Poolside Laguna XS 2.1 33B-A3B NVFP4)
           - text-chat-inkling-small (Inkling-Small 276B-A12B mixed MLX: routed-expert q2, non-routed BF16)
+          - text-chat-lfm25-2.6b-4bit (LiquidAI LFM2.5 2.6B dense MLX 4-bit native Swift runtime)
           - text-chat-lfm25-a1b-8bit (LiquidAI LFM2.5 8B-A1B MLX 8-bit native Swift runtime)
           - text-chat-psi-agent
         Models are cached under ~/Library/Application Support/MereRun/models/<model-id>.
@@ -140,7 +141,7 @@ struct TextChat: AsyncParsableCommand {
         return NativeMLXRuntime.backendDescription
     }
 
-    @Option(name: [.long], help: "Canonical model id. Default: text-chat-gemma4-12b-4bit (Apple Silicon) / text-chat-q36-nano-gguf (Linux CUDA). Others: text-chat-laguna-s-2-1, text-chat-laguna-xs-2-1, text-chat-inkling-small, text-chat-bonsai-27b-1bit, text-chat-bonsai-27b-2bit, text-chat-q36-nano, text-agent-ornith-9b, text-agent-ornith-35b-mlx, text-chat-gemma4[-12b|-12b-4bit|-turbo|-max|-nano], text-chat-lfm25-a1b-8bit, text-chat-psi-agent.")
+    @Option(name: [.long], help: "Canonical model id. Default: text-chat-gemma4-12b-4bit (Apple Silicon) / text-chat-q36-nano-gguf (Linux CUDA). Others: text-chat-laguna-s-2-1, text-chat-laguna-xs-2-1, text-chat-inkling-small, text-chat-bonsai-27b-1bit, text-chat-bonsai-27b-2bit, text-chat-q36-nano, text-agent-ornith-9b, text-agent-ornith-35b-mlx, text-chat-gemma4[-12b|-12b-4bit|-turbo|-max|-nano], text-chat-lfm25-2.6b-4bit, text-chat-lfm25-a1b-8bit, text-chat-psi-agent.")
     var model: String = TextChat.defaultChatModelId
 
     @Option(

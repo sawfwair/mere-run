@@ -44,6 +44,7 @@ public struct ModelResolver {
         case bonsai27B1Bit = "text-chat-bonsai-27b-1bit"
         case bonsai27B2Bit = "text-chat-bonsai-27b-2bit"
         case lfm25A1B8Bit = "text-chat-lfm25-a1b-8bit"
+        case lfm25Dense2_6B4Bit = "text-chat-lfm25-2.6b-4bit"
         case qwen35Agent9B = "text-agent-qwen35-9b"
         case ornith9B = "text-agent-ornith-9b"
         case ornith35B = "text-agent-ornith-35b"

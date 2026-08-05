@@ -376,6 +376,17 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(cmd.model, LFM2Resources.defaultModelId)
     }
 
+    func testAPIServePreservesExplicitDenseLFM2ManagedID() throws {
+        let cmd = try APIServe.parse([
+            "--engine", "text-chat-lfm2",
+            "--model-path", LFM2Resources.denseModelId,
+        ])
+
+        XCTAssertEqual(cmd.engine, .textChatLFM2)
+        XCTAssertEqual(cmd.model, LFM2Resources.denseModelId)
+        XCTAssertEqual(cmd.defaultRuntimeModelID(modelPath: nil), LFM2Resources.denseModelId)
+    }
+
     func testAPIServeParsesLagunaEngineAndCanonicalDefault() throws {
         let cmd = try APIServe.parse([
             "--engine", "text-chat-laguna",

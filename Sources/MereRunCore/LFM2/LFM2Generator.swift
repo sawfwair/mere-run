@@ -930,8 +930,9 @@ public actor LFM2Generator: ChatGenerator {
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> URL {
         let requestedModel = modelPath ?? modelId
-        guard requestedModel == LFM2Resources.defaultModelId
-            || requestedModel.caseInsensitiveCompare(LFM2Resources.upstreamRepoId) == .orderedSame
+        let normalizedModel = requestedModel.lowercased()
+        guard LFM2Resources.managedModelIds.contains(where: { $0.lowercased() == normalizedModel })
+            || LFM2Resources.upstreamRepoIds.contains(where: { $0.lowercased() == normalizedModel })
             || requestedModel.hasPrefix("/")
             || requestedModel.hasPrefix("~")
             || requestedModel.hasPrefix(".") else {

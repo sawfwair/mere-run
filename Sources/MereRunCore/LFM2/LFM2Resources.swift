@@ -5,6 +5,10 @@ public struct LFM2Resources: Sendable, Hashable {
     public static let defaultModelId = "text-chat-lfm25-a1b-8bit"
     public static let upstreamRepoId = "LiquidAI/LFM2.5-8B-A1B-MLX-8bit"
     public static let upstreamRevision = "984aa3f7b00ab3deb00d987ae79b9bbe326eef3a"
+    public static let denseModelId = "text-chat-lfm25-2.6b-4bit"
+    public static let denseUpstreamRepoId = "LiquidAI/LFM2.5-2.6B-MLX"
+    public static let denseUpstreamRevision = "58e239c769c4eb2b766fee80f0b7228bff837baf"
+    public static let denseVariantSubdirectory = "4bit"
     public static let defaultContextLength = 32_768
 
     public static let snapshotPatterns = [
@@ -20,11 +24,26 @@ public struct LFM2Resources: Sendable, Hashable {
         "*.safetensors",
     ]
 
+    public static let denseSnapshotPatterns = [
+        "LICENSE*",
+        "README.md",
+        "\(denseVariantSubdirectory)/chat_template.jinja",
+        "\(denseVariantSubdirectory)/config.json",
+        "\(denseVariantSubdirectory)/generation_config.json",
+        "\(denseVariantSubdirectory)/tokenizer.json",
+        "\(denseVariantSubdirectory)/tokenizer_config.json",
+        "\(denseVariantSubdirectory)/model.safetensors",
+        "\(denseVariantSubdirectory)/model.safetensors.index.json",
+    ]
+
+    public static let managedModelIds = [defaultModelId, denseModelId]
+    public static let upstreamRepoIds = [upstreamRepoId, denseUpstreamRepoId]
+
     public static func handles(modelSpec: String) -> Bool {
         let normalized = modelSpec.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         guard !normalized.isEmpty else { return false }
-        return normalized == defaultModelId
-            || normalized == upstreamRepoId.lowercased()
+        return managedModelIds.contains { normalized == $0.lowercased() }
+            || upstreamRepoIds.contains { normalized == $0.lowercased() }
             || normalized.contains("lfm2")
             || normalized.contains("liquidai/")
     }
@@ -65,6 +84,10 @@ public struct LFM2Resources: Sendable, Hashable {
         let standardized = rootURL.standardizedFileURL
         if fileManager.fileExists(atPath: standardized.appendingPathComponent("config.json").path) {
             return standardized
+        }
+        let denseVariant = standardized.appendingPathComponent(denseVariantSubdirectory, isDirectory: true)
+        if fileManager.fileExists(atPath: denseVariant.appendingPathComponent("config.json").path) {
+            return denseVariant.standardizedFileURL
         }
         if let children = try? fileManager.contentsOfDirectoryResolvingSymlinks(
             at: standardized,

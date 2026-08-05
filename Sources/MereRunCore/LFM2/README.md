@@ -2,10 +2,11 @@
 
 Native Swift MLX runtime for LiquidAI LFM2 text-chat checkpoints.
 
-## Managed model
+## Managed models
 
-- Canonical id: `text-chat-lfm25-a1b-8bit`
-- Upstream: `LiquidAI/LFM2.5-8B-A1B-MLX-8bit`
+- `text-chat-lfm25-a1b-8bit` — `LiquidAI/LFM2.5-8B-A1B-MLX-8bit`
+- `text-chat-lfm25-2.6b-4bit` — the `4bit/` partition of
+  `LiquidAI/LFM2.5-2.6B-MLX`
 - Serving engine: `text-chat-lfm2`
 
 The runtime loads MLX-converted directory-root snapshots with:
@@ -17,13 +18,16 @@ The runtime loads MLX-converted directory-root snapshots with:
 
 ## Architecture
 
-`LFM2Model.swift` mirrors the `lfm2_moe` MLX layout:
+`LFM2Model.swift` mirrors both the dense `lfm2` and sparse `lfm2_moe` MLX
+layouts:
 
 - token embedding with tied output projection
 - hybrid decoder layers selected from `layer_types`
 - full-attention layers with q/k RMSNorm, RoPE, GQA KV repetition, and `KVCache`
 - short depthwise-conv layers with recurrent convolution state
-- dense feed-forward layers for the configured dense prefix
+- dense `w1`/`w2`/`w3` feed-forward layers for `Lfm2ForCausalLM`
+- dense `gate_proj`/`up_proj`/`down_proj` layers for the MoE model's configured
+  dense prefix
 - sparse MoE feed-forward layers with router top-k, optional `expert_bias`, and
   `SwitchGLU` expert projections
 

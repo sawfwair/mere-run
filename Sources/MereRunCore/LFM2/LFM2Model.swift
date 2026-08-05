@@ -469,37 +469,55 @@ final class LFM2SwitchGLU: Module {
 }
 
 final class LFM2FeedForward: Module {
-    @ModuleInfo(key: "gate_proj") var gateProj: Linear
-    @ModuleInfo(key: "up_proj") var upProj: Linear
-    @ModuleInfo(key: "down_proj") var downProj: Linear
-    @ModuleInfo(key: "gate") var gate: Linear
-    @ModuleInfo(key: "switch_mlp") var switchMLP: LFM2SwitchGLU
+    @ModuleInfo(key: "gate_proj") var gateProj: Linear?
+    @ModuleInfo(key: "up_proj") var upProj: Linear?
+    @ModuleInfo(key: "down_proj") var downProj: Linear?
+    @ModuleInfo(key: "w1") var w1: Linear?
+    @ModuleInfo(key: "w2") var w2: Linear?
+    @ModuleInfo(key: "w3") var w3: Linear?
+    @ModuleInfo(key: "gate") var gate: Linear?
+    @ModuleInfo(key: "switch_mlp") var switchMLP: LFM2SwitchGLU?
     @ModuleInfo(key: "expert_bias") var expertBias: MLXArray?
 
     private let usesDense: Bool
+    private let usesDenseWeightNames: Bool
     private let topK: Int
     private let normTopKProb: Bool
 
     init(config: LFM2Config, layerIndex: Int) {
-        self.usesDense = layerIndex < config.numDenseLayers
+        self.usesDense = config.modelType == "lfm2" || layerIndex < config.numDenseLayers
+        self.usesDenseWeightNames = config.modelType == "lfm2"
         self.topK = max(1, config.numExpertsPerTok)
         self.normTopKProb = config.normTopKProb
-        self._gateProj.wrappedValue = Linear(config.hiddenSize, config.intermediateSize, bias: false)
-        self._upProj.wrappedValue = Linear(config.hiddenSize, config.intermediateSize, bias: false)
-        self._downProj.wrappedValue = Linear(config.intermediateSize, config.hiddenSize, bias: false)
-        self._gate.wrappedValue = Linear(config.hiddenSize, config.numExperts, bias: false)
-        self._switchMLP.wrappedValue = LFM2SwitchGLU(config: config)
-        self._expertBias.wrappedValue = config.useExpertBias
-            ? MLXArray.zeros([config.numExperts])
-            : nil
+        if usesDenseWeightNames {
+            self._w1.wrappedValue = Linear(config.hiddenSize, config.intermediateSize, bias: false)
+            self._w2.wrappedValue = Linear(config.intermediateSize, config.hiddenSize, bias: false)
+            self._w3.wrappedValue = Linear(config.hiddenSize, config.intermediateSize, bias: false)
+        } else if usesDense {
+            self._gateProj.wrappedValue = Linear(config.hiddenSize, config.intermediateSize, bias: false)
+            self._upProj.wrappedValue = Linear(config.hiddenSize, config.intermediateSize, bias: false)
+            self._downProj.wrappedValue = Linear(config.intermediateSize, config.hiddenSize, bias: false)
+        } else {
+            self._gate.wrappedValue = Linear(config.hiddenSize, config.numExperts, bias: false)
+            self._switchMLP.wrappedValue = LFM2SwitchGLU(config: config)
+            self._expertBias.wrappedValue = config.useExpertBias
+                ? MLXArray.zeros([config.numExperts])
+                : nil
+        }
         super.init()
     }
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {
-        if usesDense {
+        if usesDenseWeightNames, let w1, let w2, let w3 {
+            return w2(lfm2Swiglu(w1(x), w3(x)))
+        }
+        if usesDense, let gateProj, let upProj, let downProj {
             return downProj(lfm2Swiglu(gateProj(x), upProj(x)))
         }
 
+        guard let gate, let switchMLP else {
+            preconditionFailure("LFM2 sparse feed-forward modules were not initialized")
+        }
         var scores = softmax(gate(x).asType(.float32), axis: -1)
         if let expertBias {
             scores = scores + expertBias
@@ -520,8 +538,8 @@ final class LFM2FeedForward: Module {
 }
 
 final class LFM2DecoderLayer: Module {
-    @ModuleInfo(key: "self_attn") var selfAttention: LFM2Attention
-    @ModuleInfo(key: "conv") var conv: LFM2ShortConv
+    @ModuleInfo(key: "self_attn") var selfAttention: LFM2Attention?
+    @ModuleInfo(key: "conv") var conv: LFM2ShortConv?
     @ModuleInfo(key: "feed_forward") var feedForward: LFM2FeedForward
     @ModuleInfo(key: "operator_norm") var operatorNorm: RMSNorm
     @ModuleInfo(key: "ffn_norm") var ffnNorm: RMSNorm
@@ -530,8 +548,11 @@ final class LFM2DecoderLayer: Module {
 
     init(config: LFM2Config, layerIndex: Int) {
         self.isAttentionLayer = config.fullAttentionLayerIndexes.contains(layerIndex)
-        self._selfAttention.wrappedValue = LFM2Attention(config: config)
-        self._conv.wrappedValue = LFM2ShortConv(config: config)
+        if isAttentionLayer {
+            self._selfAttention.wrappedValue = LFM2Attention(config: config)
+        } else {
+            self._conv.wrappedValue = LFM2ShortConv(config: config)
+        }
         self._feedForward.wrappedValue = LFM2FeedForward(config: config, layerIndex: layerIndex)
         self._operatorNorm.wrappedValue = RMSNorm(dimensions: config.hiddenSize, eps: config.normEps)
         self._ffnNorm.wrappedValue = RMSNorm(dimensions: config.hiddenSize, eps: config.normEps)
@@ -552,6 +573,9 @@ final class LFM2DecoderLayer: Module {
             } else {
                 attentionCache = nil
             }
+            guard let selfAttention else {
+                preconditionFailure("LFM2 attention module was not initialized")
+            }
             operatorOut = selfAttention(normed, mask: attentionMask, cache: attentionCache)
         } else {
             let convCache: LFM2ConvCache?
@@ -559,6 +583,9 @@ final class LFM2DecoderLayer: Module {
                 convCache = c
             } else {
                 convCache = nil
+            }
+            guard let conv else {
+                preconditionFailure("LFM2 convolution module was not initialized")
             }
             operatorOut = conv(normed, cache: convCache)
         }

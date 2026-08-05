@@ -68,6 +68,7 @@ from the runtime catalog used by `mere.run model list`,
 | `text-chat` | `text-chat-q36-nano-gguf` |
 | `text-chat` | `text-agent-deepseek-v4-flash` |
 | `text-chat` | `text-chat-lfm25-a1b-8bit` |
+| `text-chat` | `text-chat-lfm25-2.6b-4bit` |
 | `speech-tts` | `speech-tts-qwen3-nano` |
 | `speech-tts` | `speech-tts-qwen3-customvoice` |
 | `speech-asr` | `speech-asr-qwen3` |
@@ -157,7 +158,7 @@ validates all configured models before downloading any; both accept the same
 | `image-klein-9b`, `image-klein-base-9b` | FLUX Non-Commercial License v2.1; non-commercial, non-production use |
 | `image-krea2-raw`, `image-krea2-turbo` | Krea 2 Community License; commercial use is limited to entities below USD 1M trailing annual revenue, plus use/distribution conditions |
 | `image-ideogram4-sdnq-uint4` | Ideogram Non-Commercial Model Agreement |
-| `text-chat-lfm25-a1b-8bit` | LFM Open License v1.0; commercial use by entities at or above USD 10M annual revenue is excluded |
+| `text-chat-lfm25-a1b-8bit`, `text-chat-lfm25-2.6b-4bit` | LFM Open License v1.0; commercial use by entities at or above USD 10M annual revenue is excluded |
 | `vision-segment-sam31` | Meta SAM License custom use, trade-control, attribution, and redistribution conditions |
 | `vision-face-buffalo-l` | InsightFace pretrained weights; non-commercial research use |
 | `video-minimax-h3-fl2va-mlx`, `video-minimax-h3-ref2va-mlx` | MiniMax-H3 Community License; use, distribution, and display are excluded in the United States, European Union, United Kingdom, and Republic of Korea, with downstream notice and safeguard obligations |
@@ -314,6 +315,12 @@ with source and emitted artifact hashes, and is published as the user-facing
 a text-only MLX 8-bit directory-root model with `config.json`,
 `tokenizer.json`, `tokenizer_config.json`, and sharded `*.safetensors` weights.
 mere.run runs it through the native Swift LFM2 runtime; no Python bridge is used.
+
+`text-chat-lfm25-2.6b-4bit` uses the pinned `4bit/` partition of
+`LiquidAI/LFM2.5-2.6B-MLX`. The managed pull selects only that partition plus
+the repository license and model card, then normalizes the nested directory
+for the native dense `Lfm2ForCausalLM` runtime. The checkpoint uses affine
+4-bit linear weights with a 6-bit tied embedding and is approximately 1.60 GB.
 
 Useful environment variables for that path:
 
@@ -525,6 +532,7 @@ swift run mere.run model pull image-zimage-nano
 # Pull into a custom SSD-backed store
 MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull text-chat-q36-nano
 MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull text-chat-lfm25-a1b-8bit --accept-model-license
+MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull text-chat-lfm25-2.6b-4bit --accept-model-license
 
 # Inspect what is currently installed
 swift run mere.run status

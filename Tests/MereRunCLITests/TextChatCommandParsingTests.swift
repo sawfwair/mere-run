@@ -97,6 +97,16 @@ final class TextChatCommandParsingTests: XCTestCase {
         XCTAssertTrue(backend.contains("native MLX"))
     }
 
+    func testDenseLFM2ParsesAsNativeMLX() throws {
+        let command = try TextChat.parse([
+            "--model", LFM2Resources.denseModelId,
+            "--prompt", "Explain local inference",
+        ])
+
+        XCTAssertEqual(command.model, LFM2Resources.denseModelId)
+        XCTAssertTrue(TextChat.backendDescription(for: command.model).contains("native MLX"))
+    }
+
     func testInklingParsesAsNativeMLXWithOperationalContext() throws {
         let command = try TextChat.parse([
             "--model", InklingResources.modelID,

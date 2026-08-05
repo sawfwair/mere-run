@@ -53,6 +53,7 @@ The runtime uses explicit public IDs such as:
 - `text-chat-gemma4`
 - `text-chat-q36-nano`
 - `text-chat-lfm25-a1b-8bit`
+- `text-chat-lfm25-2.6b-4bit`
 - `text-agent-deepseek-v4-flash`
 - `speech-tts-qwen3-nano`
 

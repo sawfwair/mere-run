@@ -102,11 +102,11 @@ swift run mere.run api serve \
   --model vision-chat-gemma4-12b
 ```
 
-For the LiquidAI LFM2.5 MLX 8-bit model:
+For the compact LiquidAI LFM2.5 2.6B MLX 4-bit model:
 
 ```bash
-swift run mere.run model pull text-chat-lfm25-a1b-8bit --accept-model-license
-swift run mere.run api serve --engine text-chat-lfm2
+swift run mere.run model pull text-chat-lfm25-2.6b-4bit --accept-model-license
+swift run mere.run api serve --engine text-chat-lfm2 --model text-chat-lfm25-2.6b-4bit
 ```
 
 For the opt-in Laguna S 2.1 target with its automatically installed DFlash
@@ -452,6 +452,9 @@ Engine compatibility:
   also apply the model's published top-k of 20.
 - `text-chat-lfm25-a1b-8bit`: uses the LFM2 serving engine with the
   LiquidAI LFM2.5 8B-A1B MLX 8-bit weights, accepts function tools, and rejects
+  image content parts.
+- `text-chat-lfm25-2.6b-4bit`: uses the same native LFM2 serving engine with
+  LiquidAI's dense 2.6B MLX 4-bit weights, accepts function tools, and rejects
   image content parts.
 - `text-chat-klein`: supports `response_format: {"type":"json_object"}` with
   local JSON retry behavior.

@@ -6,6 +6,14 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Text
+
+- added the pinned `LiquidAI/LFM2.5-2.6B-MLX` 4-bit partition as
+  `text-chat-lfm25-2.6b-4bit`, including dense `Lfm2ForCausalLM` config and
+  `w1`/`w2`/`w3` MLP support in the native Swift LFM2 runtime, nested snapshot
+  normalization, managed-model provenance, license acceptance, and real-model
+  validation coverage.
+
 ### Music
 
 - aligned ACE-Step planner precedence with the upstream Python contract:
@@ -22,7 +30,6 @@ The format is based on Keep a Changelog.
   `--lm-repetition-penalty` controls across the CLI, resident API, and macOS
   Studio. Recipe schema 4 persists the effective LM sampling policy so a
   supposedly reproducible render no longer hides hardcoded planner behavior.
-
 ## 0.34.0 - 2026-08-04
 
 This release advances the complete local creation stack across five first-class
