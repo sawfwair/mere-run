@@ -2838,8 +2838,13 @@ private struct MusicGenerationOptions: View {
                         .merePanel()
                 }
                 AdaptiveControlRow {
+                    NumberField(title: "LM temperature", value: $controller.draft.musicLMTemperature)
                     NumberStepper(title: "LM top-k", value: $controller.draft.musicLMTopK, range: 0...2_048, step: 1)
                     NumberField(title: "LM top-p", value: $controller.draft.musicLMTopP)
+                    NumberField(
+                        title: "LM repetition penalty",
+                        value: $controller.draft.musicLMRepetitionPenalty
+                    )
                 }
                 TextField("Vocal language", text: $controller.draft.musicVocalLanguage)
                     .textFieldStyle(.plain)

@@ -104,7 +104,10 @@ mere.run guide music generate --model music-magenta-rt2-small
   widest boundary fades; aggressive performs pure diffusion.
 - `--repaint-strength`: balanced-mode aggressiveness from `0` to `1`.
 - `--bpm`, `--keyscale`, `--timesignature`: musical metadata.
-- `--lm-top-k`, `--lm-top-p`: constrained LM sampling controls.
+- `--lm-temperature`, `--lm-top-k`, `--lm-top-p`,
+  `--lm-repetition-penalty`: constrained planner sampling controls. Temperature
+  defaults to upstream's `0.85`; repetition penalty defaults to the neutral
+  upstream value `1.0`.
 - `--metadata-duration`: compatibility alias for `--duration`; conflicting
   values are rejected so the planner and renderer cannot diverge.
 - `--metadata-language`: compatibility override for `--vocal-language`.

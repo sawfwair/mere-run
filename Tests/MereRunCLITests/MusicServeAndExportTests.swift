@@ -109,13 +109,43 @@ final class MusicServeAndExportTests: XCTestCase {
             JSONSerialization.jsonObject(with: encoded) as? [String: String]
         )
 
-        XCTAssertEqual(ACEStepGenerationRecipe.currentSchemaVersion, 3)
+        XCTAssertEqual(ACEStepGenerationRecipe.currentSchemaVersion, 4)
         XCTAssertEqual(object["bpm"], "118")
         XCTAssertEqual(object["duration"], "12")
         XCTAssertEqual(object["keyscale"], "D major")
         XCTAssertEqual(object["language"], "en")
         XCTAssertEqual(object["timesignature"], "4")
         XCTAssertNil(object["caption"])
+    }
+
+    func testRecipeSchemaPersistsLanguageModelSampling() throws {
+        let sampling = ACEStepRecipeLMSampling(
+            temperature: 0.7,
+            topK: 32,
+            topP: 0.85,
+            repetitionPenalty: 1.08
+        )
+        let encoded = try JSONEncoder().encode(sampling)
+        let object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+        )
+
+        XCTAssertEqual(
+            try XCTUnwrap(object["temperature"] as? Double),
+            0.7,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(object["top_k"] as? Int, 32)
+        XCTAssertEqual(
+            try XCTUnwrap(object["top_p"] as? Double),
+            0.85,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            try XCTUnwrap(object["repetition_penalty"] as? Double),
+            1.08,
+            accuracy: 0.0001
+        )
     }
 
     func testRecipePlannerProvenanceFindsBundledAndIndependentModels() throws {
@@ -198,6 +228,8 @@ final class MusicServeAndExportTests: XCTestCase {
                   "use_lm": true,
                   "lm_top_k": 50,
                   "lm_top_p": 0.85,
+                  "lm_temperature": 0.7,
+                  "lm_repetition_penalty": 1.08,
                   "bpm": 118,
                   "keyscale": "D major",
                   "metadata_language": "en",
@@ -237,6 +269,8 @@ final class MusicServeAndExportTests: XCTestCase {
         XCTAssertEqual(request.useLanguageModel, true)
         XCTAssertEqual(request.lmTopK, 50)
         XCTAssertEqual(request.lmTopP, 0.85)
+        XCTAssertEqual(request.lmTemperature, 0.7)
+        XCTAssertEqual(request.lmRepetitionPenalty, 1.08)
         XCTAssertEqual(request.bpm, 118)
         XCTAssertEqual(request.keyscale, "D major")
         XCTAssertEqual(request.metadataLanguage, "en")

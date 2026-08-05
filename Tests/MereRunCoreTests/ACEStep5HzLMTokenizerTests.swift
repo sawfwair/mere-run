@@ -4,6 +4,14 @@ import XCTest
 
 final class ACEStep5HzLMTokenizerTests: MereRunCoreTestCase {
 
+    func testGenerationDefaultsMatchUpstreamPlannerSampling() {
+        let config = ACEStep5HzLMGenerationConfig()
+
+        XCTAssertEqual(config.temperature, 0.85, accuracy: 0.0001)
+        XCTAssertNil(config.repetitionPenalty)
+        XCTAssertEqual(config.repetitionContextSize, 40_960)
+    }
+
     func testLoadTokenizerAudioCodeMap() throws {
         let env = ProcessInfo.processInfo.environment
         guard let root = env["MERERUN_TEST_ACESTEP_5HZ_ROOT"], !root.isEmpty else {
@@ -21,4 +29,3 @@ final class ACEStep5HzLMTokenizerTests: MereRunCoreTestCase {
         XCTAssertEqual(tok.audioCodeTokenIdToValue[idMax], 63_999)
     }
 }
-

@@ -18,6 +18,10 @@ The format is based on Keep a Changelog.
   analyze, and serve. Any ACE-Step DiT can now pair with either planner without
   a model-store symlink; 1.7B is the upstream-compatible default and 4B remains
   an explicit option.
+- exposed the upstream ACE-Step planner's `--lm-temperature` and
+  `--lm-repetition-penalty` controls across the CLI, resident API, and macOS
+  Studio. Recipe schema 4 persists the effective LM sampling policy so a
+  supposedly reproducible render no longer hides hardcoded planner behavior.
 
 ## 0.34.0 - 2026-08-04
 

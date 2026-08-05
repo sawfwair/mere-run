@@ -211,6 +211,8 @@ struct MusicAPIGenerationRequest: Codable, Sendable {
     var useLanguageModel: Bool?
     var lmTopK: Int?
     var lmTopP: Float?
+    var lmTemperature: Float?
+    var lmRepetitionPenalty: Float?
     var bpm: Int?
     var keyscale: String?
     var metadataLanguage: String?
@@ -262,6 +264,8 @@ struct MusicAPIGenerationRequest: Codable, Sendable {
         case useLanguageModel = "use_lm"
         case lmTopK = "lm_top_k"
         case lmTopP = "lm_top_p"
+        case lmTemperature = "lm_temperature"
+        case lmRepetitionPenalty = "lm_repetition_penalty"
         case bpm
         case keyscale
         case metadataLanguage = "metadata_language"
@@ -596,11 +600,21 @@ private final class MusicAPIServer: @unchecked Sendable {
         }
         let lmTopK = payload.lmTopK ?? 0
         let lmTopP = payload.lmTopP ?? 0.9
-        guard lmTopK >= 0, (0...1).contains(lmTopP) else {
+        let lmTemperature = payload.lmTemperature ?? 0.85
+        let lmRepetitionPenalty = payload.lmRepetitionPenalty ?? 1.0
+        guard lmTopK >= 0,
+              (0...1).contains(lmTopP),
+              (0...2).contains(lmTemperature),
+              lmRepetitionPenalty > 0
+        else {
             throw ValidationError(
-                "LM sampling requires lm_top_k >= 0 and lm_top_p in [0, 1]."
+                "LM sampling requires lm_top_k >= 0, lm_top_p in [0, 1], "
+                    + "lm_temperature in [0, 2], and lm_repetition_penalty > 0."
             )
         }
+        let effectiveLMRepetitionPenalty = lmRepetitionPenalty == 1
+            ? nil
+            : lmRepetitionPenalty
         let vaeChunkSize = payload.vaeChunkSize ?? 512
         let vaeOverlap = payload.vaeOverlap ?? 64
         guard vaeChunkSize > 0, vaeOverlap >= 0 else {
@@ -684,9 +698,10 @@ private final class MusicAPIServer: @unchecked Sendable {
                 ),
                 lmConfig: .init(
                     maxNewTokens: 1_024,
-                    temperature: 0.85,
+                    temperature: lmTemperature,
                     topK: lmTopK,
-                    topP: lmTopP
+                    topP: lmTopP,
+                    repetitionPenalty: effectiveLMRepetitionPenalty
                 )
             )
             effectivePrompt = Self.nonEmpty(plan.metadata.caption) ?? prompt
@@ -750,8 +765,10 @@ private final class MusicAPIServer: @unchecked Sendable {
                 config: config,
                 lmConfig: .init(
                     maxNewTokens: 4_096,
+                    temperature: lmTemperature,
                     topK: lmTopK,
-                    topP: lmTopP
+                    topP: lmTopP,
+                    repetitionPenalty: effectiveLMRepetitionPenalty
                 ),
                 lmUserMetadata: metadata,
                 sourceAudio48kHz: sourceAudio,

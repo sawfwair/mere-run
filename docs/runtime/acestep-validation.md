@@ -21,10 +21,11 @@ Hugging Face revisions:
 
 Generation recipes repeat the effective repository/revision set, adapter
 SHA-256 and scale, final effective conditioning metadata, complete inference
-configuration, candidate ranking, and input/output hashes. Recipe schema 3
-adds the resolved planner source, root, and immutable repository/revision
-provenance to schema 2's post-planning BPM, duration, key/scale, vocal
-language, and time signature. This protects old installs whose original
+configuration, candidate ranking, and input/output hashes. Recipe schema 4
+adds planner temperature, top-k/top-p, and repetition penalty to schema 3's
+resolved planner source, root, and immutable repository/revision provenance
+and schema 2's post-planning BPM, duration, key/scale, vocal language, and time
+signature. This protects old installs whose original
 manifest predates source provenance, distinguishes requested metadata from the
 values actually used, and records independently resolved DiT and planner
 components.

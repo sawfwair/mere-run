@@ -62,6 +62,8 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
         XCTAssertNil(cmd.steps)
         XCTAssertNil(cmd.shift)
         XCTAssertNil(cmd.guidanceScale)
+        XCTAssertEqual(cmd.lmTemperature, 0.85, accuracy: 0.0001)
+        XCTAssertEqual(cmd.lmRepetitionPenalty, 1.0, accuracy: 0.0001)
         XCTAssertEqual(cmd.coverNoiseStrength, 0.0, accuracy: 0.0001)
         XCTAssertFalse(cmd.resolvedACEStepIsCover)
     }
@@ -87,6 +89,8 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
             "--cfg-interval-end", "0.9",
             "--velocity-norm-threshold", "2.5",
             "--velocity-ema-factor", "0.1",
+            "--lm-temperature", "0.7",
+            "--lm-repetition-penalty", "1.08",
         ])
 
         XCTAssertEqual(cmd.model, "/tmp/acestep")
@@ -107,6 +111,8 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.cfgIntervalEnd, 0.9)
         XCTAssertEqual(cmd.velocityNormThreshold, 2.5)
         XCTAssertEqual(cmd.velocityEMAFactor, 0.1)
+        XCTAssertEqual(cmd.lmTemperature, 0.7, accuracy: 0.0001)
+        XCTAssertEqual(cmd.lmRepetitionPenalty, 1.08, accuracy: 0.0001)
     }
 
     func testMusicGenerateParsesIndependentPlannerModel() throws {

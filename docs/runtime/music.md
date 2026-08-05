@@ -232,18 +232,20 @@ fast distilled path. Base uniquely enables extract, lego, and complete.
 `--quality draft|song|final|edit` is model-aware. It selects checkpoint-safe
 steps, sampler, guidance, velocity stabilization, LM planning policy, automatic
 duration behavior, and a warm best-of-N count. Explicit flags still override
-the preset. `final` prefers the 4B planner when it is installed. Best-of-N
+the preset. The independently managed 1.7B planner is the default; 4B is an
+explicit `--lm-model music-acestep-lm-4b` choice. Best-of-N
 ranking checks finite samples, level, clipping, DC offset, crest factor,
 spectral flatness, frame-energy movement, periodicity, time-varying spectral
 structure, and tail continuity. This prevents loud stationary noise or a
 prematurely dead ending from winning on level statistics alone.
 
 Every ACE-Step generation writes 48 kHz stereo 24-bit WAV by default plus a
-schema 2 reproducible recipe JSON. The recipe records exact checkpoint
+schema 4 reproducible recipe JSON. The recipe records exact checkpoint
 repositories and immutable revisions, adapter hashes and scales,
 prompt/lyrics/instruction, the final effective BPM, duration, key/scale, vocal
-language and time signature, task/edit configuration, inference controls,
-candidate seeds and technical scores, export policy, and input/output hashes.
+language and time signature, task/edit configuration, planner temperature,
+top-k/top-p, repetition penalty, diffusion controls, candidate seeds and
+technical scores, export policy, and input/output hashes.
 When the 5 Hz LM is active, each candidate also records its semantic audio-code
 count. The generation seed drives both LM sampling and diffusion.
 `--export-format float32` preserves a floating-point master; `--daw-bundle`
@@ -278,6 +280,9 @@ returns `conditioning_metadata` with the values actually used. An explicit
 `vocal_language` constrains both planner metadata and lyric formatting;
 `metadata_language` remains a compatibility override. `GET /health` reports
 the independently resolved `language_model_source` alongside the resident DiT.
+Planner sampling fields use the same defaults and validation as the CLI:
+`lm_temperature` defaults to `0.85`, `lm_top_k` to `0`, `lm_top_p` to `0.9`,
+and `lm_repetition_penalty` to neutral `1.0`.
 
 Batch items may select independent `candidates` values. The server serializes
 them through the warm session, returns every ranked candidate and exactly one

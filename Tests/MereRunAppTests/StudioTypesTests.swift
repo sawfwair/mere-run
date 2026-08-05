@@ -579,6 +579,8 @@ final class StudioTypesTests: XCTestCase {
         draft.musicSourceAudio = "/tmp/demo.wav"
         draft.musicReferenceAudioPaths = "/tmp/vocal.wav\n/tmp/band.wav"
         draft.musicLMMode = "use"
+        draft.musicLMTemperature = 0.7
+        draft.musicLMRepetitionPenalty = 1.08
         draft.musicAnalyzeSourceAudio = true
         draft.useDuration = true
         draft.durationSeconds = 42
@@ -607,6 +609,8 @@ final class StudioTypesTests: XCTestCase {
         assertPair(args, "--stems", "Drums,Bass,Vocals")
         assertPair(args, "--daw-bundle", "/tmp/session")
         XCTAssertTrue(args.contains("--use-lm"))
+        assertPair(args, "--lm-temperature", "0.7")
+        assertPair(args, "--lm-repetition-penalty", "1.08")
         XCTAssertTrue(args.contains("--analyze-source-audio"))
         XCTAssertTrue(args.contains("--keep-candidates"))
         XCTAssertTrue(args.contains("--flow-edit"))

@@ -277,6 +277,15 @@ struct MusicGenerate: AsyncParsableCommand {
     @Option(name: [.customLong("lm-top-p")], help: "LM top-p nucleus sampling (1.0 = disabled).")
     var lmTopP: Float = 0.9
 
+    @Option(name: [.customLong("lm-temperature")], help: "LM sampling temperature from 0.0 to 2.0.")
+    var lmTemperature: Float = 0.85
+
+    @Option(
+        name: [.customLong("lm-repetition-penalty")],
+        help: "LM repetition penalty (> 0; 1.0 = disabled)."
+    )
+    var lmRepetitionPenalty: Float = 1.0
+
     @Option(
         name: [.customLong("metadata-duration")],
         help: "Compatibility alias for --duration; explicit duration always controls planning and rendering."
@@ -412,6 +421,12 @@ struct MusicGenerate: AsyncParsableCommand {
         guard (0.0...1.0).contains(lmTopP) else {
             throw ValidationError("--lm-top-p must be between 0.0 and 1.0")
         }
+        guard (0.0...2.0).contains(lmTemperature) else {
+            throw ValidationError("--lm-temperature must be between 0.0 and 2.0")
+        }
+        guard lmRepetitionPenalty > 0 else {
+            throw ValidationError("--lm-repetition-penalty must be > 0")
+        }
         guard vaeChunkSize > 0 else {
             throw ValidationError("--vae-chunk-size must be > 0")
         }
@@ -503,6 +518,9 @@ struct MusicGenerate: AsyncParsableCommand {
 
         let inputLRC = try loadLRC()
         let resolvedLyrics = try inputLRC?.lyrics ?? loadLyrics()
+        let effectiveLMRepetitionPenalty = lmRepetitionPenalty == 1
+            ? nil
+            : lmRepetitionPenalty
         let sourceAudio48kHz = try loadACEStepSourceAudio48kHz()
         let referenceAudio48kHz = try loadACEStepReferenceAudio48kHz()
         if effectiveTask.requiresSourceAudio && sourceAudio48kHz == nil {
@@ -587,7 +605,13 @@ struct MusicGenerate: AsyncParsableCommand {
             let sourceAnalysis = try pipeline.understandSourceAudio(
                 sourceAudio48kHz: sourceAudio48kHz,
                 durationSeconds: effectiveDurationSeconds,
-                lmConfig: .init(maxNewTokens: 2048, temperature: 0.3, topK: lmTopK, topP: lmTopP)
+                lmConfig: .init(
+                    maxNewTokens: 2_048,
+                    temperature: 0.3,
+                    topK: lmTopK,
+                    topP: lmTopP,
+                    repetitionPenalty: effectiveLMRepetitionPenalty
+                )
             )
             let merge = mergedMetadataWithSourceAnalysis(userMetadata, sourceAnalysis.metadata)
             userMetadata = merge.metadata
@@ -621,9 +645,10 @@ struct MusicGenerate: AsyncParsableCommand {
                 userMetadata: planningMetadata,
                 lmConfig: .init(
                     maxNewTokens: 1_024,
-                    temperature: 0.85,
+                    temperature: lmTemperature,
                     topK: lmTopK,
                     topP: lmTopP,
+                    repetitionPenalty: effectiveLMRepetitionPenalty,
                     seed: seed
                 )
             )
@@ -705,9 +730,10 @@ struct MusicGenerate: AsyncParsableCommand {
                 config: inference,
                 lmConfig: .init(
                     maxNewTokens: 4_096,
-                    temperature: 0.85,
+                    temperature: lmTemperature,
                     topK: lmTopK,
-                    topP: lmTopP
+                    topP: lmTopP,
+                    repetitionPenalty: effectiveLMRepetitionPenalty
                 ),
                 lmUserMetadata: userMetadata,
                 sourceAudio48kHz: sourceAudio48kHz,
@@ -864,6 +890,14 @@ struct MusicGenerate: AsyncParsableCommand {
                 instruction: resolvedInstruction,
                 conditioningMetadata:
                     ACEStepRecipeConditioningMetadata(userMetadata),
+                languageModelSampling: effectiveUseLM
+                    ? ACEStepRecipeLMSampling(
+                        temperature: lmTemperature,
+                        topK: lmTopK,
+                        topP: lmTopP,
+                        repetitionPenalty: lmRepetitionPenalty
+                    )
+                    : nil,
                 inference: inference,
                 repaint: repaintConfiguration,
                 flowEdit: flowEditConfiguration,

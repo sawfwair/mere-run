@@ -1373,6 +1373,9 @@ Key options:
 - `--use-lm`
 - `--lm-model` (defaults to the independently managed 1.7B planner when needed)
 - `--lm-subdirectory` (legacy same-root component override)
+- `--lm-temperature`: planner sampling temperature from `0` to `2` (default `0.85`)
+- `--lm-top-k`, `--lm-top-p`: planner candidate and nucleus sampling
+- `--lm-repetition-penalty`: semantic-code repetition penalty; `1.0` disables it
 - `--text-subdirectory`
 - `--seed`
 - `--quiet`
@@ -1405,6 +1408,12 @@ swift run mere.run music generate \
   --duration 8 \
   --steps 4 \
   --output ./ambient.wav
+swift run mere.run music generate \
+  "indie pop with short, clearly separated vocal phrases" \
+  --use-lm \
+  --lm-temperature 0.7 \
+  --lm-repetition-penalty 1.08 \
+  --output ./controlled-phrasing.wav
 swift run mere.run music generate \
   "dream-pop cover with soft vocals" \
   --source-audio ./song.mp3 \

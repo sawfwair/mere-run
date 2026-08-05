@@ -276,7 +276,7 @@ final class ACEStepPipelineIntegrationTests: MereRunCoreTestCase {
             caption: "upbeat electronic groove.",
             lyrics: "[verse]\nla la la",
             config: .init(durationSeconds: durationSeconds, seed: 7),
-            lmConfig: .init(maxNewTokens: 128, temperature: 0.0, topP: 1.0, repetitionPenalty: nil),
+            lmConfig: .init(maxNewTokens: 128, temperature: 0.0, topP: 1.0, repetitionPenalty: 1.05),
             lmUserMetadata: .init(
                 bpm: "120",
                 duration: "10",
