@@ -131,16 +131,23 @@ def verify_source_manifest(root: Path) -> None:
         require(lfs_hash is None or lfs_hash == entry["sha256"], "source LFS hash disagrees")
 
 
-def verify_transformer(root: Path) -> None:
+def verify_transformer(root: Path, transformer_precision: str) -> None:
+    transformer_bits = {"q4": 4, "q8": 8, "bf16": None}[transformer_precision]
     tensors, metadata = safetensors_header(root / "transformer.safetensors")
-    require(len(tensors) == 844, "wrong compact transformer tensor count")
+    expected_tensor_count = 428 if transformer_bits is None else 844
+    require(len(tensors) == expected_tensor_count, "wrong compact transformer tensor count")
     require(metadata.get("source_repository") == SOURCE_REPOSITORY, "wrong transformer source")
     require(metadata.get("source_revision") == SOURCE_REVISION, "wrong transformer revision")
-    require(metadata.get("quantization") == "affine 4-bit g64", "wrong transformer quantization")
+    expected_quantization = "none" if transformer_bits is None else f"affine {transformer_bits}-bit g64"
+    require(metadata.get("precision") == transformer_precision, "wrong transformer precision")
+    require(metadata.get("quantization") == expected_quantization, "wrong transformer quantization")
     require(metadata.get("cache_covered_weights_omitted") == "true", "cache omission not declared")
     require(metadata.get("qkv_layout") == "global-qkv-slabs", "wrong transformer QKV layout")
-    require(len([key for key in tensors if key.endswith(".scales")]) == 208, "wrong Q4 scale count")
-    require(len([key for key in tensors if key.endswith(".biases")]) == 208, "wrong Q4 bias count")
+    expected_quantized_linears = 0 if transformer_bits is None else 208
+    require(len([key for key in tensors if key.endswith(".scales")]) == expected_quantized_linears,
+            "wrong transformer scale count")
+    require(len([key for key in tensors if key.endswith(".biases")]) == expected_quantized_linears,
+            "wrong transformer bias count")
     require("condition_proj.weight" in tensors, "dense condition projection is missing")
     require(tensors["condition_proj.weight"]["dtype"] == "BF16", "condition projection lost BF16")
     require(not any("adaln_proj" in key for key in tensors), "AdaLN weight survived compaction")
@@ -184,13 +191,24 @@ def verify_vaes_and_cache(root: Path) -> None:
             "wrong cached block count")
 
 
-def verify_receipts(root: Path, hashes: dict[str, str], location: str) -> None:
+def verify_receipts(
+    root: Path,
+    hashes: dict[str, str],
+    location: str,
+    transformer_precision: str,
+) -> None:
+    transformer_bits = {"q4": 4, "q8": 8, "bf16": None}[transformer_precision]
     require((root / "LICENSE").stat().st_size == LICENSE_BYTES, "wrong license byte count")
     require(hashes["LICENSE"] == LICENSE_SHA256, "wrong license hash")
     config = load_json(root / "config.json")
     require(config.get("model_type") == "minimax_h3", "wrong config model type")
     require(config.get("partition") == "fl2va", "wrong config partition")
-    require(config.get("quantization") == {"bits": 4, "group_size": 64, "mode": "affine"},
+    expected_quantization = None if transformer_bits is None else {
+        "bits": transformer_bits,
+        "group_size": 64,
+        "mode": "affine",
+    }
+    require(config.get("quantization") == expected_quantization,
             "wrong transformer config quantization")
     require(config.get("text_encoder_quantization") ==
             {"bits": 8, "group_size": 64, "mode": "affine"},
@@ -216,6 +234,10 @@ def verify_receipts(root: Path, hashes: dict[str, str], location: str) -> None:
         require(output.get("byte_count") == (root / filename).stat().st_size,
                 f"receipt byte count differs for {filename}")
     transformer = receipt.get("outputs", {}).get("transformer.safetensors", {})
+    require(transformer.get("precision") == transformer_precision,
+            "wrong transformer receipt precision")
+    require(transformer.get("quantization") == expected_quantization,
+            "wrong transformer receipt quantization")
     require(transformer.get("qkv_matrices_deinterleaved") == 52,
             "wrong transformer QKV reorder count")
     require(transformer.get("qkv_layout") == "global-qkv-slabs",
@@ -226,6 +248,11 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("root", type=Path)
     parser.add_argument("--conversion-location", required=True)
+    parser.add_argument(
+        "--transformer-precision",
+        choices=("q4", "q8", "bf16"),
+        default="q4",
+    )
     args = parser.parse_args()
     root = args.root.expanduser().resolve()
     missing = sorted(RUNTIME_FILES - {path.name for path in root.iterdir() if path.is_file()})
@@ -233,10 +260,10 @@ def main() -> int:
 
     hashes = verify_sha256sums(root)
     verify_source_manifest(root)
-    verify_transformer(root)
+    verify_transformer(root, args.transformer_precision)
     verify_text_encoder(root)
     verify_vaes_and_cache(root)
-    verify_receipts(root, hashes, args.conversion_location)
+    verify_receipts(root, hashes, args.conversion_location, args.transformer_precision)
     total = sum((root / filename).stat().st_size for filename in RUNTIME_FILES)
     print(json.dumps({"status": "verified", "files": len(RUNTIME_FILES), "bytes": total}, sort_keys=True))
     return 0

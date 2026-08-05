@@ -16,6 +16,9 @@ struct VideoGenerationPreflightInput {
     let width: Int
     let height: Int
     let numFrames: Int
+    let steps: Int?
+    let h3WeightMode: String
+    let h3AccelerationMode: String
     let duration: Double?
     let fps: Int
     let seed: Int?
@@ -49,6 +52,9 @@ struct VideoGenerationPreflightRequest: Codable, Equatable {
     let width: Int
     let height: Int
     let numFrames: Int
+    let steps: Int?
+    let h3WeightMode: String?
+    let h3AccelerationMode: String?
     let duration: Double?
     let fps: Int
     let seed: Int?
@@ -79,6 +85,9 @@ struct VideoGenerationPreflightRequest: Codable, Equatable {
         case width
         case height
         case numFrames = "num_frames"
+        case steps
+        case h3WeightMode = "h3_weight_mode"
+        case h3AccelerationMode = "h3_acceleration"
         case duration
         case fps
         case seed
@@ -194,6 +203,9 @@ struct VideoGenerationPlanPreflightSummary: Codable, Equatable {
     let resolvedHeight: Int
     let requestedNumFrames: Int
     let requestedDurationSeconds: Double?
+    let resolvedSteps: Int?
+    let h3WeightMode: String?
+    let h3AccelerationMode: String?
     let fps: Int
     let resolvedNumFrames: Int
     let resolvedDurationSeconds: Double?
@@ -214,6 +226,9 @@ struct VideoGenerationPlanPreflightSummary: Codable, Equatable {
         case resolvedHeight = "resolved_height"
         case requestedNumFrames = "requested_num_frames"
         case requestedDurationSeconds = "requested_duration_seconds"
+        case resolvedSteps = "resolved_steps"
+        case h3WeightMode = "h3_weight_mode"
+        case h3AccelerationMode = "h3_acceleration"
         case fps
         case resolvedNumFrames = "resolved_num_frames"
         case resolvedDurationSeconds = "resolved_duration_seconds"
@@ -258,6 +273,7 @@ struct VideoGenerationPreflightAnalyzer {
     private var usesMiniMaxH3Geometry: Bool {
         let requested = input.model.trimmingCharacters(in: .whitespacesAndNewlines)
         if requested == ModelResolver.ModelID.miniMaxH3FL2VAMLX.rawValue
+            || requested == ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue
             || requested == ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue {
             return true
         }
@@ -315,6 +331,9 @@ struct VideoGenerationPreflightAnalyzer {
             width: input.width,
             height: input.height,
             numFrames: input.numFrames,
+            steps: input.steps,
+            h3WeightMode: usesMiniMaxH3Geometry ? input.h3WeightMode : nil,
+            h3AccelerationMode: usesMiniMaxH3Geometry ? input.h3AccelerationMode : nil,
             duration: input.duration,
             fps: input.fps,
             seed: input.seed,
@@ -1077,6 +1096,21 @@ struct VideoGenerationPreflightAnalyzer {
         let resolvedOutputMode: LTXVideoOutputMode? = usesWanGeometry || usesMiniMaxH3Geometry
             ? nil
             : (usesAudioConditioning || input.variant == .unifiedAV ? .audioVideo : .videoOnly)
+        let h3AccelerationMode = MiniMaxH3AccelerationMode(rawValue: input.h3AccelerationMode) ?? .quality
+        let resolvedH3Steps: Int? = if usesMiniMaxH3Geometry {
+            input.steps ?? (try? MiniMaxH3StepPolicy.recommendedPointCount(
+                width: resolvedWidth,
+                height: resolvedHeight,
+                numFrames: resolvedFrames,
+                keyframeCount: [input.image, input.endImage].compactMap { $0 }.count,
+                referenceKinds: input.references.compactMap { reference in
+                    MiniMaxH3ReferenceKind(rawValue: String(reference.prefix { $0 != ":" }))
+                },
+                accelerationMode: h3AccelerationMode
+            ))
+        } else {
+            nil
+        }
         return VideoGenerationPlanPreflightSummary(
             variant: usesMiniMaxH3Geometry
                 ? "minimax-h3"
@@ -1092,6 +1126,9 @@ struct VideoGenerationPreflightAnalyzer {
             resolvedHeight: resolvedHeight,
             requestedNumFrames: input.numFrames,
             requestedDurationSeconds: input.duration,
+            resolvedSteps: resolvedH3Steps,
+            h3WeightMode: usesMiniMaxH3Geometry ? input.h3WeightMode : nil,
+            h3AccelerationMode: usesMiniMaxH3Geometry ? input.h3AccelerationMode : nil,
             fps: usesMiniMaxH3Geometry ? MiniMaxH3Geometry.framesPerSecond : input.fps,
             resolvedNumFrames: resolvedFrames,
             resolvedDurationSeconds: input.fps > 0

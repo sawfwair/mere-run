@@ -37,33 +37,58 @@ public enum MiniMaxH3ModelLoader {
             configuration: .init(configuration),
             includeAdaLN: cachedAdaLN == nil
         )
-        let (loadedWeights, metadata) = try MLX.loadArraysAndMetadata(
-            url: resources.transformerWeightsURL
-        )
-        if metadata["cache_covered_weights_omitted"] == "true", cachedAdaLN == nil {
-            throw MiniMaxH3ModelLoaderError.adaLNCacheRequired
+        guard let layout = resources.transformerWeightsLayout() else {
+            throw HFSafetensorsWeightsLoader.LoaderError.shardFileMissing(
+                resources.transformerWeightsURL
+            )
         }
-        var weights = loadedWeights
-        if cachedAdaLN != nil {
-            weights = weights.filter { key, _ in
-                !key.contains(".adaln_proj.") && !key.hasPrefix("time_embedder.")
+        switch layout {
+        case .shardedBF16(let indexURL):
+            try HFSafetensorsWeightsLoader.applyShardedWeights(
+                indexURL: indexURL,
+                to: transformer,
+                dtype: nil,
+                verify: [.shapeMismatch],
+                mapper: { key, value in
+                    releasedBF16TransformerWeight(
+                        key: key,
+                        value: value,
+                        omitCachedAdaLNWeights: cachedAdaLN != nil,
+                        headCount: configuration.attentionHeadCount,
+                        headDimension: configuration.attentionHeadDimension
+                    )
+                },
+                progressHandler: progressHandler
+            )
+        case .single(let weightsURL):
+            let (loadedWeights, metadata) = try MLX.loadArraysAndMetadata(url: weightsURL)
+            if metadata["cache_covered_weights_omitted"] == "true", cachedAdaLN == nil {
+                throw MiniMaxH3ModelLoaderError.adaLNCacheRequired
+            }
+            var weights = loadedWeights
+            if cachedAdaLN != nil {
+                weights = weights.filter { key, _ in
+                    !key.contains(".adaln_proj.") && !key.hasPrefix("time_embedder.")
+                }
+            }
+            if let quantization = configuration.quantization {
+                try HFSafetensorsWeightsLoader.applyQuantizedWeightsFromArrays(
+                    weights,
+                    to: transformer,
+                    groupSize: quantization.groupSize,
+                    bits: quantization.bits
+                )
+            } else {
+                try transformer.update(
+                    parameters: ModuleParameters.unflattened(weights.map { ($0.key, $0.value) }),
+                    verify: [.shapeMismatch]
+                )
             }
         }
-        if let quantization = configuration.quantization {
-            try HFSafetensorsWeightsLoader.applyQuantizedWeightsFromArrays(
-                weights,
-                to: transformer,
-                groupSize: quantization.groupSize,
-                bits: quantization.bits
-            )
-        } else {
-            try transformer.update(
-                parameters: ModuleParameters.unflattened(weights.map { ($0.key, $0.value) }),
-                verify: [.shapeMismatch]
-            )
-        }
         #if os(Linux)
-        if configuration.quantization != nil, Device.defaultDevice().deviceType == .gpu {
+        if configuration.quantization != nil,
+           !resources.usesShardedBF16Transformer,
+           Device.defaultDevice().deviceType == .gpu {
             for (_, module) in transformer.leafModules().flattened() {
                 (module as? PortableQuantizedLinear)?.cacheDenseFallbackWeight = false
             }
@@ -71,6 +96,30 @@ public enum MiniMaxH3ModelLoader {
         }
         #endif
         return transformer
+    }
+
+    static func releasedBF16TransformerWeight(
+        key: String,
+        value: MLXArray,
+        omitCachedAdaLNWeights: Bool,
+        headCount: Int = 56,
+        headDimension: Int = 128
+    ) -> [(String, MLXArray)] {
+        if omitCachedAdaLNWeights,
+           (key.contains(".adaln_proj.") || key.hasPrefix("time_embedder.")) {
+            return []
+        }
+        guard key.hasSuffix(".attn.qkv_proj.weight") else {
+            return [(key, value)]
+        }
+        let expectedRows = headCount * 3 * headDimension
+        precondition(value.ndim == 2 && value.dim(0) == expectedRows)
+        let trailingShape = Array(value.shape.dropFirst())
+        let grouped = value.reshaped([headCount, 3, headDimension] + trailingShape)
+        let pieces = MLX.split(grouped, parts: 3, axis: 1).map {
+            $0.squeezed(axis: 1).reshaped([headCount * headDimension] + trailingShape)
+        }
+        return [(key, MLX.concatenated(pieces, axis: 0))]
     }
 
     public static func loadConditioner(

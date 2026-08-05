@@ -857,6 +857,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 128
             ),
             descriptor(
+                ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue,
+                "MiniMax-H3 FL2VA BF16 MLX",
+                "Uses the faithful BF16 H3 transformer for maximum visual quality while reusing the native tokenizer, conditioner, and audio/video decoders.",
+                minimum: 96,
+                recommended: 128
+            ),
+            descriptor(
                 ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue,
                 "MiniMax-H3 Ref2VA MLX",
                 "Runs a locally converted Ref2VA root with ordered image, video, and audio references; no redistributable managed snapshot is bundled.",

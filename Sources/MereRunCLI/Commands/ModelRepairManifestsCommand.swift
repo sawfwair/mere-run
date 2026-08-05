@@ -14,7 +14,20 @@ struct ModelRepairManifests: ParsableCommand {
     @Flag(name: [.long], help: "Emit a structured JSON repair report.")
     var json: Bool = false
 
+    @Flag(
+        name: [.customLong("accept-model-license")],
+        help: "Record that you reviewed and accept the listed third-party model terms when writing a missing manifest."
+    )
+    var acceptModelLicense: Bool = false
+
+    @Option(name: [.long], help: "Repair only this canonical model ID.")
+    var model: String?
+
     func run() throws {
+        if let requested = normalizedRequestedModel,
+           ModelResolver.ModelID(rawValue: requested) == nil {
+            throw ValidationError("Unknown canonical model id: \(requested)")
+        }
         let modelDirs = resolveCandidateModelDirs()
         guard !modelDirs.isEmpty else {
             throw ValidationError("Could not locate any model directories to repair.")
@@ -55,7 +68,9 @@ struct ModelRepairManifests: ParsableCommand {
     ) -> ModelRepairManifestsReport {
         var entries: [ModelRepairManifestEntry] = []
 
-        for modelID in ModelResolver.ModelID.allCases {
+        let modelIDs = normalizedRequestedModel.flatMap(ModelResolver.ModelID.init(rawValue:))
+            .map { [$0] } ?? ModelResolver.ModelID.allCases
+        for modelID in modelIDs {
             var foundAnyModel = false
             for modelsDir in modelDirs {
                 let modelRoot = modelsDir.appendingPathComponent(modelID.rawValue, isDirectory: true)
@@ -78,7 +93,8 @@ struct ModelRepairManifests: ParsableCommand {
                 do {
                     _ = try MereRunModelManifest.writeTemplateIfKnown(
                         modelId: modelID.rawValue,
-                        to: modelRoot
+                        to: modelRoot,
+                        usageTermsAcknowledged: acceptModelLicense
                     )
                     entries.append(.init(modelID: modelID.rawValue, status: .wrote, path: manifestURL.path))
                 } catch {
@@ -111,6 +127,12 @@ struct ModelRepairManifests: ParsableCommand {
 
     private func resolveCandidateModelDirs() -> [URL] {
         [MereRunModelPaths.modelsDir]
+    }
+
+    private var normalizedRequestedModel: String? {
+        guard let model else { return nil }
+        let normalized = model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return normalized.isEmpty ? nil : normalized
     }
 }
 

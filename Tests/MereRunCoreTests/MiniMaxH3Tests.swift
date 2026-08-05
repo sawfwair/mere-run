@@ -14,6 +14,28 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         XCTAssertEqual(parts[2].asArray(Float.self), [8, 9, 10, 11])
     }
 
+    func testReleasedBF16TransformerQKVIsDeinterleavedAtLoadTime() {
+        let raw = MLXArray(0..<12).reshaped(12, 1)
+        let mapped = MiniMaxH3ModelLoader.releasedBF16TransformerWeight(
+            key: "blocks.0.attn.qkv_proj.weight",
+            value: raw,
+            omitCachedAdaLNWeights: true,
+            headCount: 2,
+            headDimension: 2
+        )
+        MLX.eval(mapped.map(\.1))
+
+        XCTAssertEqual(mapped.map(\.0), ["blocks.0.attn.qkv_proj.weight"])
+        XCTAssertEqual(mapped[0].1.asArray(Int32.self), [0, 1, 6, 7, 2, 3, 8, 9, 4, 5, 10, 11])
+        XCTAssertTrue(
+            MiniMaxH3ModelLoader.releasedBF16TransformerWeight(
+                key: "blocks.0.adaln_proj.linear.weight",
+                value: raw,
+                omitCachedAdaLNWeights: true
+            ).isEmpty
+        )
+    }
+
     func testPinnedMLXArtifactConfigurationDecodes() throws {
         let data = Data(#"""
         {
@@ -109,6 +131,41 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         XCTAssertEqual(spec.hubFallback?.patterns, MiniMaxH3Resources.compactArtifactFiles)
     }
 
+    func testManagedBF16ProfileUsesPinnedExistingMLXArtifact() throws {
+        XCTAssertEqual(
+            MiniMaxH3Resources.bf16ArtifactRepository,
+            "pipenetwork/MiniMax-H3-MLX-bf16"
+        )
+        XCTAssertEqual(
+            MiniMaxH3Resources.bf16ArtifactRevision,
+            "1486555759eed9e3037edf29f9e055a0713bab2f"
+        )
+        XCTAssertEqual(MiniMaxH3Resources.bf16ShardFilenames.count, 13)
+        XCTAssertFalse(MiniMaxH3Resources.bf16SupportArtifactFiles.contains("transformer.safetensors"))
+        XCTAssertFalse(MiniMaxH3Resources.bf16SupportArtifactFiles.contains("adaln_cache.safetensors"))
+
+        let spec = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: MiniMaxH3Resources.fl2vaBF16ModelID)
+        )
+        XCTAssertEqual(spec.hubFallback?.repoId, MiniMaxH3Resources.artifactRepository)
+        XCTAssertEqual(spec.hubFallback?.patterns, MiniMaxH3Resources.bf16SupportArtifactFiles)
+        let transformer = try XCTUnwrap(spec.mountedHubFallbacks.first)
+        XCTAssertEqual(transformer.destinationPath, MiniMaxH3Resources.bf16TransformerDirectory)
+        XCTAssertEqual(transformer.hubFallback.repoId, MiniMaxH3Resources.bf16ArtifactRepository)
+        XCTAssertEqual(transformer.hubFallback.revision, MiniMaxH3Resources.bf16ArtifactRevision)
+
+        let manifest = MereRunModelManifest.template(
+            for: .miniMaxH3FL2VABF16MLX,
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+        XCTAssertEqual(manifest.precision, .bf16)
+        XCTAssertNil(manifest.quantization)
+        XCTAssertEqual(
+            manifest.upstreamRepoId,
+            "\(MiniMaxH3Resources.bf16ArtifactRepository)@\(MiniMaxH3Resources.bf16ArtifactRevision)"
+        )
+    }
+
     func testCompactTransformerPreservesAdaLNCacheSourceIdentity() throws {
         let rootURL = FileManager.default.temporaryDirectory
             .appending(path: "minimax-h3-compact-\(UUID().uuidString)")
@@ -153,25 +210,24 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         XCTAssertEqual(mappedConvolution.first?.1.shape, [2, 4, 5, 6, 3])
 
         let fused = MLXArray(0..<6_144)
-        let split = MiniMaxH3VideoVAE.mapCheckpointWeight(
+        let mappedQKV = MiniMaxH3VideoVAE.mapCheckpointWeight(
             key: "decoder.transformer_blocks.0.attn.to_qkv.weight",
             value: fused
         )
-        XCTAssertEqual(split.map(\.0), [
-            "decoder.transformer_blocks.0.attn.to_q.weight",
-            "decoder.transformer_blocks.0.attn.to_k.weight",
-            "decoder.transformer_blocks.0.attn.to_v.weight",
+        XCTAssertEqual(mappedQKV.map(\.0), [
+            "decoder.transformer_blocks.0.attn.to_qkv.weight",
         ])
-        XCTAssertTrue(split.allSatisfy { $0.1.shape == [2_048] })
-        XCTAssertEqual(split[0].1.asArray(Int32.self)[0], 0)
-        XCTAssertEqual(split[0].1.asArray(Int32.self)[64], 192)
-        XCTAssertEqual(split[0].1.asArray(Int32.self)[2_047], 6_015)
-        XCTAssertEqual(split[1].1.asArray(Int32.self)[0], 64)
-        XCTAssertEqual(split[1].1.asArray(Int32.self)[64], 256)
-        XCTAssertEqual(split[1].1.asArray(Int32.self)[2_047], 6_079)
-        XCTAssertEqual(split[2].1.asArray(Int32.self)[0], 128)
-        XCTAssertEqual(split[2].1.asArray(Int32.self)[64], 320)
-        XCTAssertEqual(split[2].1.asArray(Int32.self)[2_047], 6_143)
+        XCTAssertEqual(mappedQKV[0].1.shape, [6_144])
+        let packedQKV = mappedQKV[0].1.asArray(Int32.self)
+        XCTAssertEqual(packedQKV[0], 0)
+        XCTAssertEqual(packedQKV[64], 192)
+        XCTAssertEqual(packedQKV[2_047], 6_015)
+        XCTAssertEqual(packedQKV[2_048], 64)
+        XCTAssertEqual(packedQKV[2_112], 256)
+        XCTAssertEqual(packedQKV[4_095], 6_079)
+        XCTAssertEqual(packedQKV[4_096], 128)
+        XCTAssertEqual(packedQKV[4_160], 320)
+        XCTAssertEqual(packedQKV[6_143], 6_143)
 
         let audioEncoder = MiniMaxH3AudioVAE.mapConvertedWeight(
             key: "encoder.block.0.weight",
@@ -262,6 +318,20 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         XCTAssertEqual(pixels.asArray(UInt8.self), [0, 127, 255])
     }
 
+    func testVideoVAETilePlansPreserveCanvasAndMinimumOverlap() {
+        for tileSize in [256, 320] {
+            for length in [480, 832, 1_344] {
+                let plan = MiniMaxH3VideoVAE.tilePlan(length: length, tileSize: tileSize)
+                XCTAssertEqual(plan.starts.first, 0)
+                XCTAssertEqual(plan.starts.last! + plan.lengths.last!, length)
+                XCTAssertTrue(plan.lengths.allSatisfy { $0 == tileSize || $0 == length })
+                XCTAssertTrue(plan.overlaps.allSatisfy {
+                    $0 >= MiniMaxH3VideoVAE.minimumSpatialTileOverlap
+                })
+            }
+        }
+    }
+
     func testRef2VAPackedLayoutPreservesOrderedReferenceBlocks() throws {
         let layout = try MiniMaxH3Geometry.buildRef2VA(
             textTokenTags: [1, 0],
@@ -310,6 +380,65 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         XCTAssertTrue(final.asArray(Float.self).allSatisfy(\.isFinite))
     }
 
+    func testBlockReusePolicyBoundsCacheStepsForPracticalSchedule() throws {
+        XCTAssertNil(MiniMaxH3AccelerationMode.quality.blockReusePolicy)
+        XCTAssertEqual(
+            MiniMaxH3BlockReusePolicy(cacheDepth: 0.5).warmBlockCount(totalBlockCount: 50),
+            25
+        )
+        let policy = try XCTUnwrap(MiniMaxH3AccelerationMode.maximum.blockReusePolicy)
+        XCTAssertEqual(policy.warmBlockCount(totalBlockCount: 50), 9)
+        XCTAssertEqual(policy.maximumConsecutiveCachedSteps, 4)
+
+        let video = try MiniMaxH3Schedule(pointCount: 9, shift: 12)
+        let audio = try MiniMaxH3Schedule(pointCount: 9, shift: 3)
+        var hasResidual = false
+        var consecutive = 0
+        var decisions: [Bool] = []
+        for index in video.timesteps.indices {
+            let reuses = policy.shouldReuseTail(
+                stepIndex: index,
+                stepCount: video.timesteps.count,
+                videoSigmas: video.sigmas,
+                audioSigmas: audio.sigmas,
+                hasCachedResidual: hasResidual,
+                consecutiveCachedSteps: consecutive
+            )
+            decisions.append(reuses)
+            if reuses {
+                consecutive += 1
+            } else {
+                hasResidual = true
+                consecutive = 0
+            }
+        }
+        XCTAssertEqual(decisions, [false, false, true, true, true, true, false, false])
+
+        let longVideo = try MiniMaxH3Schedule(pointCount: 16, shift: 12)
+        let longAudio = try MiniMaxH3Schedule(pointCount: 16, shift: 3)
+        hasResidual = false
+        consecutive = 0
+        var longCachedSteps = 0
+        for index in longVideo.timesteps.indices {
+            let reuses = policy.shouldReuseTail(
+                stepIndex: index,
+                stepCount: longVideo.timesteps.count,
+                videoSigmas: longVideo.sigmas,
+                audioSigmas: longAudio.sigmas,
+                hasCachedResidual: hasResidual,
+                consecutiveCachedSteps: consecutive
+            )
+            if reuses {
+                longCachedSteps += 1
+                consecutive += 1
+            } else {
+                hasResidual = true
+                consecutive = 0
+            }
+        }
+        XCTAssertEqual(longCachedSteps, 10)
+    }
+
     func testResidentBF16PolicyAccountsForGeometryAndMemory() throws {
         let denseBytes = 41 * MiniMaxH3ResidentBF16Policy.gibibyte
         XCTAssertTrue(try MiniMaxH3ResidentBF16Policy.shouldMaterialize(
@@ -352,9 +481,17 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
             hasAdaLNCache: false,
             isPortableMac: false
         ))
-        XCTAssertFalse(try MiniMaxH3ResidentBF16Policy.shouldMaterialize(
+        XCTAssertTrue(try MiniMaxH3ResidentBF16Policy.shouldMaterialize(
             mode: .automatic,
             physicalMemoryBytes: 128 * MiniMaxH3ResidentBF16Policy.gibibyte,
+            estimatedResidentBytes: denseBytes,
+            sequenceLength: 12_925,
+            hasAdaLNCache: true,
+            isPortableMac: true
+        ))
+        XCTAssertFalse(try MiniMaxH3ResidentBF16Policy.shouldMaterialize(
+            mode: .automatic,
+            physicalMemoryBytes: 64 * MiniMaxH3ResidentBF16Policy.gibibyte,
             estimatedResidentBytes: denseBytes,
             sequenceLength: 12_925,
             hasAdaLNCache: true,
@@ -368,6 +505,79 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
             hasAdaLNCache: true,
             isPortableMac: true
         ))
+    }
+
+    func testDenoiseExecutionPolicyKeepsProfilingOutsideCompiledTransforms() {
+        XCTAssertEqual(
+            MiniMaxH3DenoiseExecutionPolicy.mode(
+                usesResidentBF16: false,
+                sequenceLength: 12_925,
+                usesBlockProfiling: false
+            ),
+            .compiledStep
+        )
+        XCTAssertFalse(MiniMaxH3DenoiseExecutionMode.compiledStep.usesLayerwiseEvaluation)
+        XCTAssertEqual(
+            MiniMaxH3DenoiseExecutionPolicy.mode(
+                usesResidentBF16: false,
+                sequenceLength: 12_925,
+                usesBlockProfiling: true
+            ),
+            .eagerStep
+        )
+        XCTAssertTrue(MiniMaxH3DenoiseExecutionMode.eagerStep.usesLayerwiseEvaluation)
+        XCTAssertEqual(
+            MiniMaxH3DenoiseExecutionPolicy.mode(
+                usesResidentBF16: true,
+                sequenceLength: 12_925,
+                usesBlockProfiling: false,
+                denoiseStepCount: 1
+            ),
+            .eagerStep
+        )
+        XCTAssertEqual(
+            MiniMaxH3DenoiseExecutionPolicy.mode(
+                usesResidentBF16: true,
+                sequenceLength: 12_925,
+                usesBlockProfiling: false,
+                denoiseStepCount: 2
+            ),
+            .compiledStep
+        )
+        XCTAssertEqual(
+            MiniMaxH3DenoiseExecutionPolicy.mode(
+                usesResidentBF16: true,
+                sequenceLength: 12_925,
+                usesBlockProfiling: false,
+                profilingOverride: "compiled"
+            ),
+            .compiledStep
+        )
+        XCTAssertEqual(
+            MiniMaxH3DenoiseExecutionPolicy.mode(
+                usesResidentBF16: false,
+                sequenceLength: 12_925,
+                usesBlockProfiling: true,
+                profilingOverride: "compiled"
+            ),
+            .eagerStep
+        )
+        XCTAssertEqual(
+            MiniMaxH3DenoiseExecutionPolicy.mode(
+                usesResidentBF16: true,
+                sequenceLength: MiniMaxH3DenoiseExecutionPolicy.blockwiseSequenceThreshold + 1,
+                usesBlockProfiling: true
+            ),
+            .blockwiseCompiled
+        )
+        XCTAssertFalse(MiniMaxH3DenoiseExecutionMode.blockwiseCompiled.usesLayerwiseEvaluation)
+    }
+
+    func testDenoiseExecutionPolicyUsesMeasuredBlockwiseKernelSchedule() {
+        XCTAssertEqual(
+            MiniMaxH3DenoiseExecutionPolicy.maximumAttentionQueryTokensPerKernel,
+            1_024
+        )
     }
 
     func testStepPolicyUsesPracticalExtendedAndMaximumEnvelopes() throws {
@@ -401,7 +611,16 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
                 height: 768,
                 numFrames: 124
             ),
-            31
+            21
+        )
+        XCTAssertEqual(
+            try MiniMaxH3StepPolicy.recommendedPointCount(
+                width: 1_344,
+                height: 768,
+                numFrames: 124,
+                accelerationMode: .maximum
+            ),
+            12
         )
         XCTAssertEqual(
             try MiniMaxH3StepPolicy.recommendedPointCount(
@@ -428,6 +647,61 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
             steps: 31
         )
         XCTAssertEqual(explicit.steps, 31)
+        let longClip = try MiniMaxH3GenerationOptions(
+            prompt: "a ten second local video",
+            width: 832,
+            height: 480,
+            numFrames: 243
+        )
+        XCTAssertEqual(longClip.steps, 21)
+        let acceleratedLongClip = try MiniMaxH3GenerationOptions(
+            prompt: "a fast ten second local video",
+            width: 832,
+            height: 480,
+            numFrames: 243,
+            accelerationMode: .maximum
+        )
+        XCTAssertEqual(acceleratedLongClip.steps, 12)
+    }
+
+    func testExactScheduleCacheSurvivesDiscardingBF16AdaLNWeights() throws {
+        let configuration = MiniMaxH3TransformerConfiguration(
+            hiddenSize: 32,
+            layerCount: 2,
+            refinerLayerCount: 1,
+            attentionHeadCount: 4,
+            attentionHeadDimension: 8,
+            feedForwardSize: 64,
+            videoLatentChannels: 8,
+            audioLatentChannels: 32,
+            patchSize: [1, 2, 2],
+            textDimension: 32,
+            timeFrequencyDimension: 32,
+            timeEmbeddingHiddenSize: 32,
+            timeEmbeddingDimension: 32,
+            ropeFrequencyCount: 1
+        )
+        let model = MiniMaxH3Transformer(configuration: configuration)
+        let videoSchedule = try MiniMaxH3Schedule(pointCount: 4, shift: 12)
+        let audioSchedule = try MiniMaxH3Schedule(pointCount: 4, shift: 3)
+        let cache = model.precomputeAdaLN(
+            videoSchedule: videoSchedule,
+            audioSchedule: audioSchedule,
+            sourceIdentity: "test"
+        )
+        XCTAssertEqual(cache.stepCount, 3)
+        let scheduleBytesBefore = model.parameters().flattened()
+            .filter { $0.0.contains("adaln_proj") || $0.0.hasPrefix("time_embedder.") }
+            .reduce(0) { $0 + $1.1.nbytes }
+        XCTAssertGreaterThan(scheduleBytesBefore, 1_000)
+
+        model.discardAdaLNWeights()
+
+        let scheduleParametersAfter = model.parameters().flattened()
+            .filter { $0.0.contains("adaln_proj") || $0.0.hasPrefix("time_embedder.") }
+        XCTAssertTrue(scheduleParametersAfter.allSatisfy { $0.1.size == 1 })
+        XCTAssertLessThan(scheduleParametersAfter.reduce(0) { $0 + $1.1.nbytes }, scheduleBytesBefore)
+        XCTAssertEqual(cache.step(at: 0).blockModulations.count, 2)
     }
 
     func testTinyTransformerResidentBF16MatchesQuantizedExecution() throws {
@@ -707,6 +981,30 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
             cachedAdaLN: nil
         )
         MLX.eval(blockwiseCompiled.videoVelocityRows, blockwiseCompiled.audioVelocityRows)
+        let refreshedReuse = model.callWithBlockResidualReuse(
+            videoRows: video,
+            audioRows: audio,
+            context: context,
+            timesteps: timesteps,
+            cachedAdaLN: nil,
+            warmBlockCount: 1,
+            cachedTailResidual: nil
+        )
+        let reusedTail = model.callWithBlockResidualReuse(
+            videoRows: video,
+            audioRows: audio,
+            context: context,
+            timesteps: timesteps,
+            cachedAdaLN: nil,
+            warmBlockCount: 1,
+            cachedTailResidual: try XCTUnwrap(refreshedReuse.refreshedTailResidual)
+        )
+        MLX.eval(
+            refreshedReuse.output.videoVelocityRows,
+            refreshedReuse.output.audioVelocityRows,
+            reusedTail.output.videoVelocityRows,
+            reusedTail.output.audioVelocityRows
+        )
         model.usesBlockwiseCompilation = false
         model.usesLayerwiseEvaluation = true
         model.clearsCacheAfterLayerwiseEvaluation = false
@@ -748,6 +1046,34 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         XCTAssertLessThanOrEqual(
             MLX.abs(prepared.audioVelocityRows - blockwiseCompiled.audioVelocityRows)
                 .max().item(Float.self),
+            1e-5
+        )
+        XCTAssertLessThanOrEqual(
+            MLX.abs(
+                blockwiseCompiled.videoVelocityRows
+                    - refreshedReuse.output.videoVelocityRows
+            ).max().item(Float.self),
+            1e-5
+        )
+        XCTAssertLessThanOrEqual(
+            MLX.abs(
+                blockwiseCompiled.audioVelocityRows
+                    - refreshedReuse.output.audioVelocityRows
+            ).max().item(Float.self),
+            1e-5
+        )
+        XCTAssertLessThanOrEqual(
+            MLX.abs(
+                refreshedReuse.output.videoVelocityRows
+                    - reusedTail.output.videoVelocityRows
+            ).max().item(Float.self),
+            1e-5
+        )
+        XCTAssertLessThanOrEqual(
+            MLX.abs(
+                refreshedReuse.output.audioVelocityRows
+                    - reusedTail.output.audioVelocityRows
+            ).max().item(Float.self),
             1e-5
         )
         XCTAssertLessThanOrEqual(

@@ -558,7 +558,12 @@ final class DiTShapeBenchTests: XCTestCase {
                 ))
             }
 
-            for rows in [4_608, 12_925] {
+            let configuredRows = ProcessInfo.processInfo.environment["MERERUN_H3_BENCH_ROWS"]?
+                .split(separator: ",")
+                .compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
+                .filter { $0 > 0 } ?? []
+            let rowCounts = configuredRows.isEmpty ? [4_608, 12_925] : configuredRows
+            for rows in rowCounts {
                 for (name, inputDimension, outputDimension) in [
                     ("qkv", 5_376, 21_504),
                     ("ff2", 14_336, 5_376),
@@ -582,6 +587,91 @@ final class DiTShapeBenchTests: XCTestCase {
                 }
             }
         }
+    }
+
+    /// Compares H3's current per-token AdaLN gather with Maestro's exact-math
+    /// contiguous-run formulation. The latter avoids materializing index
+    /// gathers for layouts whose modality/timestep pairs form a handful of
+    /// long runs. Both arms produce the same packed tensor and retain a single
+    /// projection-sized input; this is a speed experiment, not an approximation.
+    func testMiniMaxH3AdaLNRunModulation() throws {
+        try benchGate()
+        let rows = max(
+            1,
+            Int(ProcessInfo.processInfo.environment["MERERUN_H3_BENCH_ROWS"] ?? "") ?? 29_018
+        )
+        let hiddenSize = 5_376
+        let textRows = min(256, rows)
+        let conditionRows = min(1_600, max(0, rows - textRows))
+        let audioRows = min(840, max(0, rows - textRows - conditionRows))
+        let boundaries = [
+            0,
+            textRows,
+            textRows + conditionRows,
+            textRows + conditionRows + audioRows,
+            rows,
+        ]
+        let runIndices: [Int32] = [1, 6, 5, 0]
+        let runs = zip(boundaries, boundaries.dropFirst()).enumerated().compactMap { offset, pair in
+            pair.0 < pair.1 ? (range: pair.0..<pair.1, index: Int(runIndices[offset])) : nil
+        }
+        let indices = MLXArray(runs.flatMap { run in
+            repeatElement(Int32(run.index), count: run.range.count)
+        })
+        let value = MLXRandom.normal([1, rows, hiddenSize]).asType(.bfloat16)
+        let modulation = MLXRandom.normal([9, 3, hiddenSize]).asType(.bfloat16)
+        MLX.eval(value, modulation, indices)
+
+        func gathered() -> MLXArray {
+            let shift = MLX.take(modulation[0..., 0, 0...], indices, axis: 0)
+                .expandedDimensions(axis: 0)
+            let scale = MLX.take(modulation[0..., 1, 0...], indices, axis: 0)
+                .expandedDimensions(axis: 0)
+            let gate = MLX.take(modulation[0..., 2, 0...], indices, axis: 0)
+                .expandedDimensions(axis: 0)
+            return gate * (value * (1 + scale) + shift)
+        }
+
+        func byRuns() -> MLXArray {
+            MLX.concatenated(runs.map { run in
+                let parameters = modulation[run.index, 0..., 0...]
+                let shift = parameters[0, 0...]
+                let scale = parameters[1, 0...]
+                let gate = parameters[2, 0...]
+                let slice = value[0..., run.range, 0...]
+                return gate * (slice * (1 + scale) + shift)
+            }, axis: 1)
+        }
+
+        let gatheredOutput = gathered()
+        let runOutput = byRuns()
+        MLX.eval(gatheredOutput, runOutput)
+        let maximumAbsoluteError = MLX.max(MLX.abs(
+            gatheredOutput.asType(.float32) - runOutput.asType(.float32)
+        )).item(Float.self)
+        XCTAssertEqual(maximumAbsoluteError, 0)
+
+        func measure(_ body: () -> MLXArray) -> Double {
+            var best = Double.greatestFiniteMagnitude
+            for _ in 0..<3 {
+                let started = CFAbsoluteTimeGetCurrent()
+                MLX.eval(body())
+                best = min(best, CFAbsoluteTimeGetCurrent() - started)
+            }
+            return best
+        }
+        let gatheredSeconds = measure(gathered)
+        let runSeconds = measure(byRuns)
+        print(String(
+            format: "[h3-lab] modulation rows=%d hidden=%d runs=%d gather_ms=%.1f run_ms=%.1f speedup=%.3fx max_abs=%.6g",
+            rows,
+            hiddenSize,
+            runs.count,
+            gatheredSeconds * 1_000,
+            runSeconds * 1_000,
+            gatheredSeconds / runSeconds,
+            maximumAbsoluteError
+        ))
     }
 
     /// Exact dense MiniMax-H3 attention shape for the 768x448, 124-frame
@@ -625,6 +715,784 @@ final class DiTShapeBenchTests: XCTestCase {
                 operations / best / 1e12
             ))
         }
+    }
+
+    /// Searches exact H3 attention schedules across query chunks, head chunks,
+    /// and Metal evaluation batches. Every candidate is compared numerically
+    /// with the production 2,048-query/56-head/4-kernel schedule; this is a
+    /// kernel-scheduling search, not an attention approximation.
+    ///
+    /// Configure the frontier with:
+    ///
+    /// - `MERERUN_H3_BENCH_ROWS=14958,37966`
+    /// - `MERERUN_H3_BENCH_CHUNKS=1024,1536,2048,2560,3072,4096`
+    /// - `MERERUN_H3_BENCH_HEAD_CHUNKS=14,28,56`
+    /// - `MERERUN_H3_BENCH_EVAL_BATCHES=1,2,4,8`
+    /// - `MERERUN_H3_BENCH_ROUNDS=2`
+    /// - `MERERUN_H3_BENCH_SEARCH=coordinate` for a fast three-axis search,
+    ///   or `grid` for the complete Cartesian frontier
+    /// - `MERERUN_H3_BENCH_FAST=1` to share one paired baseline and defer
+    ///   validation while searching; this keeps the full key/value length but
+    ///   samples 8,192 query rows by default, then extrapolates the full pass
+    /// - `MERERUN_H3_BENCH_SAMPLE_QUERY_ROWS=8192` to tune that fast sample
+    ///   size; rerun the winner without fast mode for full-pass parity
+    /// - `MERERUN_H3_BENCH_VALIDATE=0` to skip the exactness calculation
+    /// - `MERERUN_H3_BENCH_DTYPE=fp16` to compare Metal's FP16 attention path
+    ///   with the production-default BF16 path
+    func testMiniMaxH3AttentionChunkSizes() throws {
+        try benchGate()
+        let environment = ProcessInfo.processInfo.environment
+        let benchmarkDType: DType = environment["MERERUN_H3_BENCH_DTYPE"] == "fp16"
+            ? .float16
+            : .bfloat16
+        let benchmarkDTypeLabel = benchmarkDType == .float16 ? "fp16" : "bf16"
+
+        func configuredIntegers(_ key: String) -> [Int] {
+            environment[key]?
+                .split(separator: ",")
+                .compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
+                .filter { $0 > 0 } ?? []
+        }
+
+        let configuredRows = configuredIntegers("MERERUN_H3_BENCH_ROWS")
+        let rowCounts = configuredRows.isEmpty ? [14_958] : configuredRows
+        let configuredChunks = configuredIntegers("MERERUN_H3_BENCH_CHUNKS")
+        let chunkSizes = configuredChunks.isEmpty
+            ? [1_024, 1_536, 2_048, 2_560, 3_072, 4_096, 8_192]
+            : configuredChunks
+        let configuredHeadChunks = configuredIntegers("MERERUN_H3_BENCH_HEAD_CHUNKS")
+        let headChunkSizes = configuredHeadChunks.isEmpty ? [14, 28, 56] : configuredHeadChunks
+        let configuredEvaluationBatches = configuredIntegers("MERERUN_H3_BENCH_EVAL_BATCHES")
+        let evaluationBatchSizes = configuredEvaluationBatches.isEmpty
+            ? [1, 2, 4, 8]
+            : configuredEvaluationBatches
+        let rounds = max(1, Int(environment["MERERUN_H3_BENCH_ROUNDS"] ?? "") ?? 2)
+        let searchMode = environment["MERERUN_H3_BENCH_SEARCH"] ?? "coordinate"
+        let usesFastSearch = environment["MERERUN_H3_BENCH_FAST"] == "1"
+        let validatesExactness = environment["MERERUN_H3_BENCH_VALIDATE"] != "0"
+
+        Stream.withNewDefaultStream {
+            let heads = 56
+            let headDimension = 128
+            let scale = Float(1 / sqrt(Double(headDimension)))
+
+            func attention(
+                query: MLXArray,
+                key: MLXArray,
+                value: MLXArray,
+                queryChunkSize: Int,
+                headChunkSize: Int,
+                evaluationBatchSize: Int
+            ) -> MLXArray {
+                var headOutputs: [MLXArray] = []
+                var pending: [MLXArray] = []
+                for headStart in stride(from: 0, to: query.dim(1), by: headChunkSize) {
+                    let headEnd = min(headStart + headChunkSize, query.dim(1))
+                    var queryOutputs: [MLXArray] = []
+                    for queryStart in stride(from: 0, to: query.dim(2), by: queryChunkSize) {
+                        let queryEnd = min(queryStart + queryChunkSize, query.dim(2))
+                        let chunk = MLXFast.scaledDotProductAttention(
+                            queries: query[0..., headStart..<headEnd, queryStart..<queryEnd, 0...],
+                            keys: key[0..., headStart..<headEnd, 0..., 0...],
+                            values: value[0..., headStart..<headEnd, 0..., 0...],
+                            scale: scale,
+                            mask: .none
+                        )
+                        queryOutputs.append(chunk)
+                        pending.append(chunk)
+                        if pending.count == evaluationBatchSize {
+                            MLX.eval(pending)
+                            pending.removeAll(keepingCapacity: true)
+                        }
+                    }
+                    headOutputs.append(MLX.concatenated(queryOutputs, axis: 2))
+                }
+                if !pending.isEmpty {
+                    MLX.eval(pending)
+                }
+                return MLX.concatenated(headOutputs, axis: 1)
+            }
+
+            for rows in rowCounts {
+                let configuredSampleRows = max(
+                    1,
+                    Int(environment["MERERUN_H3_BENCH_SAMPLE_QUERY_ROWS"] ?? "") ?? 8_192
+                )
+                let queryRows = usesFastSearch ? min(rows, configuredSampleRows) : rows
+                let query = MLXRandom.normal([1, heads, queryRows, headDimension])
+                    .asType(benchmarkDType)
+                let key = MLXRandom.normal([1, heads, rows, headDimension])
+                    .asType(benchmarkDType)
+                let value = MLXRandom.normal([1, heads, rows, headDimension])
+                    .asType(benchmarkDType)
+                MLX.eval(query, key, value)
+
+                let baseline = {
+                    attention(
+                        query: query,
+                        key: key,
+                        value: value,
+                        queryChunkSize: min(2_048, rows),
+                        headChunkSize: heads,
+                        evaluationBatchSize: 4
+                    )
+                }
+                let baselineOutput = baseline()
+                MLX.eval(baselineOutput)
+                let baseline32 = validatesExactness ? baselineOutput.asType(.float32) : nil
+                if let baseline32 { MLX.eval(baseline32) }
+
+                struct AttentionSchedule: Hashable {
+                    let queryChunkSize: Int
+                    let headChunkSize: Int
+                    let evaluationBatchSize: Int
+                }
+
+                struct Measurement {
+                    let candidateSeconds: Double
+                    let baselineSeconds: Double
+
+                    var speedup: Double { baselineSeconds / candidateSeconds }
+                }
+
+                var measured: [AttentionSchedule: Measurement] = [:]
+                var bestSeconds = Double.greatestFiniteMagnitude
+                var bestSpeedup = 0.0
+                var bestDescription = ""
+
+                func elapsed(_ body: () -> MLXArray) -> Double {
+                    let started = CFAbsoluteTimeGetCurrent()
+                    MLX.eval(body())
+                    return CFAbsoluteTimeGetCurrent() - started
+                }
+                let sharedBaselineSeconds: Double? = usesFastSearch ? elapsed(baseline) : nil
+
+                func measure(_ schedule: AttentionSchedule) -> Measurement {
+                    if let measurement = measured[schedule] { return measurement }
+                    Memory.peakMemory = 0
+                    let candidate = {
+                        attention(
+                            query: query,
+                            key: key,
+                            value: value,
+                            queryChunkSize: schedule.queryChunkSize,
+                            headChunkSize: schedule.headChunkSize,
+                            evaluationBatchSize: schedule.evaluationBatchSize
+                        )
+                    }
+                    let measurement: Measurement
+                    let output: MLXArray?
+                    if let sharedBaselineSeconds {
+                        MLX.eval(candidate())
+                        measurement = Measurement(
+                            candidateSeconds: elapsed(candidate),
+                            baselineSeconds: sharedBaselineSeconds
+                        )
+                        output = nil
+                    } else {
+                        MLX.eval(baseline(), candidate())
+                        var baselineSeconds = 0.0
+                        var candidateSeconds = 0.0
+                        for round in 0..<rounds {
+                            if round.isMultiple(of: 2) {
+                                baselineSeconds += elapsed(baseline)
+                                candidateSeconds += elapsed(candidate)
+                            } else {
+                                candidateSeconds += elapsed(candidate)
+                                baselineSeconds += elapsed(baseline)
+                            }
+                        }
+                        measurement = Measurement(
+                            candidateSeconds: candidateSeconds / Double(rounds),
+                            baselineSeconds: baselineSeconds / Double(rounds)
+                        )
+                        let candidateOutput = candidate()
+                        MLX.eval(candidateOutput)
+                        output = candidateOutput
+                    }
+                    let peakGiB = Double(Memory.peakMemory) / 1_073_741_824
+                    var maximumAbsoluteError = 0.0
+                    var relativeL2Error = 0.0
+                    if let baseline32, let output {
+                        let delta = output.asType(.float32) - baseline32
+                        let errorSquared = MLX.sum(delta * delta).item(Float.self)
+                        let referenceSquared = MLX.sum(baseline32 * baseline32).item(Float.self)
+                        maximumAbsoluteError = Double(MLX.max(MLX.abs(delta)).item(Float.self))
+                        relativeL2Error = sqrt(
+                            Double(errorSquared) / max(Double(referenceSquared), .leastNonzeroMagnitude)
+                        )
+                        XCTAssertLessThan(relativeL2Error, 1e-3)
+                    }
+                    let operations = 4 * Double(heads) * Double(queryRows)
+                        * Double(rows) * Double(headDimension)
+                    let fullPassScale = Double(rows) / Double(queryRows)
+                    print(String(
+                        format: "[h3-lab] attention dtype=%@ rows=%d sampled_queries=%d query=%d "
+                            + "heads=%d batch=%d sample_kernels=%d full_kernels=%d "
+                            + "sample_ms=%.0f estimated_full_ms=%.0f paired_base_ms=%.0f "
+                            + "speedup=%.3fx tflops=%.2f max_abs=%.6g rel_l2=%.6g peak_gib=%.2f",
+                        benchmarkDTypeLabel,
+                        rows,
+                        queryRows,
+                        schedule.queryChunkSize,
+                        schedule.headChunkSize,
+                        schedule.evaluationBatchSize,
+                        ((queryRows + schedule.queryChunkSize - 1) / schedule.queryChunkSize)
+                            * ((heads + schedule.headChunkSize - 1) / schedule.headChunkSize),
+                        ((rows + schedule.queryChunkSize - 1) / schedule.queryChunkSize)
+                            * ((heads + schedule.headChunkSize - 1) / schedule.headChunkSize),
+                        measurement.candidateSeconds * 1_000,
+                        measurement.candidateSeconds * fullPassScale * 1_000,
+                        measurement.baselineSeconds * 1_000,
+                        measurement.speedup,
+                        operations / measurement.candidateSeconds / 1e12,
+                        maximumAbsoluteError,
+                        relativeL2Error,
+                        peakGiB
+                    ))
+                    measured[schedule] = measurement
+                    if measurement.speedup > bestSpeedup {
+                        bestSeconds = measurement.candidateSeconds
+                        bestSpeedup = measurement.speedup
+                        bestDescription = "query=\(schedule.queryChunkSize) "
+                            + "heads=\(schedule.headChunkSize) batch=\(schedule.evaluationBatchSize)"
+                    }
+                    Memory.clearCache()
+                    return measurement
+                }
+
+                func fastest(_ schedules: [AttentionSchedule]) -> AttentionSchedule {
+                    precondition(!schedules.isEmpty)
+                    var winner = schedules[0]
+                    var winnerSpeedup = measure(winner).speedup
+                    for schedule in schedules.dropFirst() {
+                        let speedup = measure(schedule).speedup
+                        if speedup > winnerSpeedup {
+                            winner = schedule
+                            winnerSpeedup = speedup
+                        }
+                    }
+                    return winner
+                }
+
+                if searchMode == "grid" {
+                    for requestedChunkSize in chunkSizes {
+                        for requestedHeadChunkSize in headChunkSizes {
+                            for evaluationBatchSize in evaluationBatchSizes {
+                                _ = measure(AttentionSchedule(
+                                    queryChunkSize: min(requestedChunkSize, rows),
+                                    headChunkSize: min(requestedHeadChunkSize, heads),
+                                    evaluationBatchSize: evaluationBatchSize
+                                ))
+                            }
+                        }
+                    }
+                } else {
+                    let queryWinner = fastest(chunkSizes.map {
+                        AttentionSchedule(
+                            queryChunkSize: min($0, rows),
+                            headChunkSize: heads,
+                            evaluationBatchSize: 4
+                        )
+                    })
+                    let headWinner = fastest(headChunkSizes.map {
+                        AttentionSchedule(
+                            queryChunkSize: queryWinner.queryChunkSize,
+                            headChunkSize: min($0, heads),
+                            evaluationBatchSize: 4
+                        )
+                    })
+                    _ = fastest(evaluationBatchSizes.map {
+                        AttentionSchedule(
+                            queryChunkSize: headWinner.queryChunkSize,
+                            headChunkSize: headWinner.headChunkSize,
+                            evaluationBatchSize: $0
+                        )
+                    })
+                }
+                print(String(
+                    format: "[h3-lab] winner dtype=%@ rows=%d sampled_queries=%d search=%@ "
+                        + "%@ estimated_full_ms=%.0f speedup=%.3fx candidates=%d",
+                    benchmarkDTypeLabel,
+                    rows,
+                    queryRows,
+                    searchMode,
+                    bestDescription,
+                    bestSeconds * Double(rows) / Double(queryRows) * 1_000,
+                    bestSpeedup,
+                    measured.count
+                ))
+                Memory.clearCache()
+            }
+        }
+    }
+
+    /// Laboratory sweep for the non-NAX MLX Steel GEMM tile and threadgroup
+    /// swizzle at H3's true-768 QKV projection shape.
+    func testMiniMaxH3MetalGEMMTiles() throws {
+        try benchGate()
+
+        struct Tile: Hashable {
+            let blockRows: Int
+            let blockColumns: Int
+            let blockDepth: Int
+            let rowWarps: Int
+            let columnWarps: Int
+        }
+        struct Arm: Hashable {
+            let tile: Tile
+            let swizzle: Int
+        }
+
+        let defaultTile = Tile(
+            blockRows: 64,
+            blockColumns: 64,
+            blockDepth: 16,
+            rowWarps: 1,
+            columnWarps: 2
+        )
+        let tiles = [
+            defaultTile,
+            Tile(blockRows: 64, blockColumns: 64, blockDepth: 16, rowWarps: 2, columnWarps: 2),
+            Tile(blockRows: 64, blockColumns: 32, blockDepth: 32, rowWarps: 2, columnWarps: 2),
+            Tile(blockRows: 32, blockColumns: 64, blockDepth: 16, rowWarps: 1, columnWarps: 2),
+            Tile(blockRows: 32, blockColumns: 32, blockDepth: 16, rowWarps: 2, columnWarps: 2),
+            Tile(blockRows: 64, blockColumns: 32, blockDepth: 8, rowWarps: 4, columnWarps: 1),
+        ]
+        let arms = tiles.flatMap { tile in
+            (0...3).map { Arm(tile: tile, swizzle: $0) }
+        }
+
+        func select(_ arm: Arm) {
+            setenv("MLX_GEMM_BM", String(arm.tile.blockRows), 1)
+            setenv("MLX_GEMM_BN", String(arm.tile.blockColumns), 1)
+            setenv("MLX_GEMM_BK", String(arm.tile.blockDepth), 1)
+            setenv("MLX_GEMM_WM", String(arm.tile.rowWarps), 1)
+            setenv("MLX_GEMM_WN", String(arm.tile.columnWarps), 1)
+            setenv("MLX_GEMM_SWIZZLE_LOG", String(arm.swizzle), 1)
+        }
+
+        let defaultArm = Arm(tile: defaultTile, swizzle: 0)
+        defer { select(defaultArm) }
+
+        Stream.withNewDefaultStream {
+            let rows = 37_966
+            let inputDimension = 5_376
+            let outputDimension = 21_504
+            let input = MLXRandom.normal([1, rows, inputDimension]).asType(.bfloat16)
+            let weight = MLXRandom.normal([outputDimension, inputDimension]).asType(.bfloat16)
+            MLX.eval(input, weight)
+
+            func projection() -> MLXArray {
+                MLX.matmul(input, weight.T)
+            }
+
+            select(defaultArm)
+            let reference = projection()
+            MLX.eval(reference)
+            let referenceSample = reference[0..., 0..<128, 0...].asType(.float32)
+            MLX.eval(referenceSample)
+
+            for tile in tiles {
+                let arm = Arm(tile: tile, swizzle: 0)
+                select(arm)
+                let output = projection()
+                MLX.eval(output)
+                let delta = output[0..., 0..<128, 0...].asType(.float32) - referenceSample
+                let errorSquared = MLX.sum(delta * delta).item(Float.self)
+                let referenceSquared = MLX.sum(referenceSample * referenceSample).item(Float.self)
+                let maximumAbsoluteError = MLX.max(MLX.abs(delta)).item(Float.self)
+                let relativeL2Error = sqrt(
+                    Double(errorSquared) / max(Double(referenceSquared), .leastNonzeroMagnitude)
+                )
+                XCTAssertLessThan(relativeL2Error, 1e-3)
+                print(String(
+                    format: "[h3-lab] gemm-parity bm=%d bn=%d bk=%d wm=%d wn=%d "
+                        + "max_abs=%.6g rel_l2=%.6g",
+                    tile.blockRows,
+                    tile.blockColumns,
+                    tile.blockDepth,
+                    tile.rowWarps,
+                    tile.columnWarps,
+                    maximumAbsoluteError,
+                    relativeL2Error
+                ))
+            }
+
+            var totals = Dictionary(uniqueKeysWithValues: arms.map { ($0, 0.0) })
+            for orderedArms in [arms, Array(arms.reversed())] {
+                for arm in orderedArms {
+                    select(arm)
+                    let started = CFAbsoluteTimeGetCurrent()
+                    MLX.eval(projection())
+                    totals[arm, default: 0] += CFAbsoluteTimeGetCurrent() - started
+                }
+            }
+
+            let operations = 2 * Double(rows) * Double(inputDimension) * Double(outputDimension)
+            for arm in arms {
+                let seconds = totals[arm, default: 0] / 2
+                print(String(
+                    format: "[h3-lab] gemm-tile bm=%d bn=%d bk=%d wm=%d wn=%d "
+                        + "swizzle=%d mean_ms=%.1f tflops=%.2f",
+                    arm.tile.blockRows,
+                    arm.tile.blockColumns,
+                    arm.tile.blockDepth,
+                    arm.tile.rowWarps,
+                    arm.tile.columnWarps,
+                    arm.swizzle,
+                    seconds * 1_000,
+                    operations / seconds / 1e12
+                ))
+            }
+        }
+    }
+
+    /// Confirms the QKV winner against every dense projection in a production
+    /// H3 block before any MLX heuristic changes are considered.
+    func testMiniMaxH3MetalGEMMProjectionShapes() throws {
+        try benchGate()
+
+        struct Arm {
+            let name: String
+            let blockRows: Int
+            let blockColumns: Int
+            let blockDepth: Int
+            let rowWarps: Int
+            let columnWarps: Int
+            let swizzle: Int
+        }
+
+        let arms = [
+            Arm(name: "default", blockRows: 64, blockColumns: 64, blockDepth: 16,
+                rowWarps: 1, columnWarps: 2, swizzle: 0),
+            Arm(name: "default-sw1", blockRows: 64, blockColumns: 64, blockDepth: 16,
+                rowWarps: 1, columnWarps: 2, swizzle: 1),
+            Arm(name: "four-warp-sw2", blockRows: 64, blockColumns: 64, blockDepth: 16,
+                rowWarps: 2, columnWarps: 2, swizzle: 2),
+            Arm(name: "narrow-m-sw2", blockRows: 32, blockColumns: 64, blockDepth: 16,
+                rowWarps: 1, columnWarps: 2, swizzle: 2),
+        ]
+        let shapes = [
+            (name: "qkv", input: 5_376, output: 21_504),
+            (name: "attention-out", input: 7_168, output: 5_376),
+            (name: "ff-in", input: 5_376, output: 28_672),
+            (name: "ff-out", input: 14_336, output: 5_376),
+        ]
+
+        func select(_ arm: Arm) {
+            setenv("MLX_GEMM_BM", String(arm.blockRows), 1)
+            setenv("MLX_GEMM_BN", String(arm.blockColumns), 1)
+            setenv("MLX_GEMM_BK", String(arm.blockDepth), 1)
+            setenv("MLX_GEMM_WM", String(arm.rowWarps), 1)
+            setenv("MLX_GEMM_WN", String(arm.columnWarps), 1)
+            setenv("MLX_GEMM_SWIZZLE_LOG", String(arm.swizzle), 1)
+        }
+
+        defer { select(arms[0]) }
+
+        Stream.withNewDefaultStream {
+            let rows = 37_966
+            for shape in shapes {
+                let input = MLXRandom.normal([1, rows, shape.input]).asType(.bfloat16)
+                let weight = MLXRandom.normal([shape.output, shape.input]).asType(.bfloat16)
+                MLX.eval(input, weight)
+
+                func projection() -> MLXArray {
+                    MLX.matmul(input, weight.T)
+                }
+
+                select(arms[0])
+                let reference = projection()
+                MLX.eval(reference)
+                let referenceSample = reference[0..., 0..<128, 0...].asType(.float32)
+                MLX.eval(referenceSample)
+
+                var totals = Dictionary(uniqueKeysWithValues: arms.map { ($0.name, 0.0) })
+                for orderedArms in [arms, Array(arms.reversed())] {
+                    for arm in orderedArms {
+                        select(arm)
+                        let started = CFAbsoluteTimeGetCurrent()
+                        let output = projection()
+                        MLX.eval(output)
+                        totals[arm.name, default: 0] += CFAbsoluteTimeGetCurrent() - started
+
+                        let delta = output[0..., 0..<128, 0...].asType(.float32) - referenceSample
+                        let errorSquared = MLX.sum(delta * delta).item(Float.self)
+                        let referenceSquared = MLX.sum(referenceSample * referenceSample).item(Float.self)
+                        let relativeL2Error = sqrt(
+                            Double(errorSquared) / max(Double(referenceSquared), .leastNonzeroMagnitude)
+                        )
+                        XCTAssertLessThan(relativeL2Error, 1e-3)
+                    }
+                }
+
+                let operations = 2 * Double(rows) * Double(shape.input) * Double(shape.output)
+                for arm in arms {
+                    let seconds = totals[arm.name, default: 0] / 2
+                    print(String(
+                        format: "[h3-lab] gemm-shape %@ %@ %d->%d mean_ms=%.1f tflops=%.2f",
+                        shape.name,
+                        arm.name,
+                        shape.input,
+                        shape.output,
+                        seconds * 1_000,
+                        operations / seconds / 1e12
+                    ))
+                }
+            }
+        }
+    }
+
+    /// Paired whole-block confirmation for the default and candidate GEMM
+    /// schedules so thermal drift hits both arms symmetrically.
+    func testMiniMaxH3BlockGEMMSchedules() throws {
+        try benchGate()
+        let rows = 37_966
+        let benchmark = MiniMaxH3BlockScheduleBenchmark(
+            rowCount: rows,
+            maximumQueryTokens: 1_024,
+            maximumKernelsPerEvaluation: 4
+        )
+
+        func selectDefault() {
+            setenv("MLX_GEMM_H3_TUNED", "0", 1)
+            setenv("MLX_GEMM_BM", "64", 1)
+            setenv("MLX_GEMM_BN", "64", 1)
+            setenv("MLX_GEMM_BK", "16", 1)
+            setenv("MLX_GEMM_WM", "1", 1)
+            setenv("MLX_GEMM_WN", "2", 1)
+            setenv("MLX_GEMM_SWIZZLE_LOG", "0", 1)
+        }
+
+        func selectCandidate() {
+            setenv("MLX_GEMM_H3_TUNED", "0", 1)
+            setenv("MLX_GEMM_BM", "64", 1)
+            setenv("MLX_GEMM_BN", "64", 1)
+            setenv("MLX_GEMM_BK", "16", 1)
+            setenv("MLX_GEMM_WM", "2", 1)
+            setenv("MLX_GEMM_WN", "2", 1)
+            setenv("MLX_GEMM_SWIZZLE_LOG", "2", 1)
+        }
+
+        func selectHybrid() {
+            setenv("MLX_GEMM_H3_TUNED", "1", 1)
+        }
+
+        defer { selectDefault() }
+
+        selectDefault()
+        let reference = benchmark(schedule: .splitPostAttention)
+        MLX.eval(reference)
+        selectCandidate()
+        let candidate = benchmark(schedule: .splitPostAttention)
+        MLX.eval(candidate)
+        selectHybrid()
+        let hybrid = benchmark(schedule: .splitPostAttention)
+        MLX.eval(hybrid)
+        let reference32 = reference.asType(.float32)
+        MLX.eval(reference32)
+        func relativeL2(_ output: MLXArray) -> Double {
+            let delta = output.asType(.float32) - reference32
+            let errorSquared = MLX.sum(delta * delta).item(Float.self)
+            let referenceSquared = MLX.sum(reference32 * reference32).item(Float.self)
+            return sqrt(Double(errorSquared) / max(Double(referenceSquared), .leastNonzeroMagnitude))
+        }
+        let candidateRelativeL2Error = relativeL2(candidate)
+        let hybridRelativeL2Error = relativeL2(hybrid)
+        XCTAssertLessThan(candidateRelativeL2Error, 1e-3)
+        XCTAssertLessThan(hybridRelativeL2Error, 1e-3)
+
+        var totals = [Double](repeating: 0, count: 3)
+        let rounds = 3
+        for round in 0..<rounds {
+            let order: [(select: () -> Void, arm: Int)]
+            switch round {
+            case 0:
+                order = [(selectDefault, 0), (selectCandidate, 1), (selectHybrid, 2)]
+            case 1:
+                order = [(selectCandidate, 1), (selectHybrid, 2), (selectDefault, 0)]
+            default:
+                order = [(selectHybrid, 2), (selectDefault, 0), (selectCandidate, 1)]
+            }
+            for arm in order {
+                arm.select()
+                let started = CFAbsoluteTimeGetCurrent()
+                MLX.eval(benchmark(schedule: .splitPostAttention))
+                totals[arm.arm] += CFAbsoluteTimeGetCurrent() - started
+            }
+        }
+        totals = totals.map { $0 / Double(rounds) }
+        print(String(
+            format: "[h3-lab] block-gemm rows=%d default_ms=%.0f generic_ms=%.0f "
+                + "hybrid_ms=%.0f generic_speedup=%.3fx hybrid_speedup=%.3fx "
+                + "generic_rel_l2=%.6g hybrid_rel_l2=%.6g",
+            rows,
+            totals[0] * 1_000,
+            totals[1] * 1_000,
+            totals[2] * 1_000,
+            totals[0] / totals[1],
+            totals[0] / totals[2],
+            candidateRelativeL2Error,
+            hybridRelativeL2Error
+        ))
+    }
+
+    /// Measures the exact compiled schedules used by one production H3 block.
+    /// This catches graph-boundary and synchronization costs that isolated GEMM
+    /// and SDPA probes cannot see. Use 37,966 rows for the true-768 target.
+    func testMiniMaxH3BlockExecutionSchedules() throws {
+        try benchGate()
+        let environment = ProcessInfo.processInfo.environment
+        let rows = max(1, Int(environment["MERERUN_H3_BENCH_ROWS"] ?? "") ?? 14_958)
+        let queryTokens = max(
+            1,
+            Int(environment["MERERUN_H3_BENCH_QUERY_TOKENS"] ?? "") ?? 1_024
+        )
+        let evaluationBatch = max(
+            1,
+            Int(environment["MERERUN_H3_BENCH_EVAL_BATCH"] ?? "") ?? 4
+        )
+        let rounds = max(1, Int(environment["MERERUN_H3_BENCH_ROUNDS"] ?? "") ?? 2)
+        let benchmark = MiniMaxH3BlockScheduleBenchmark(
+            rowCount: rows,
+            maximumQueryTokens: queryTokens,
+            maximumKernelsPerEvaluation: evaluationBatch
+        )
+
+        func elapsed(_ schedule: MiniMaxH3BlockScheduleBenchmark.Schedule) -> Double {
+            let started = CFAbsoluteTimeGetCurrent()
+            MLX.eval(benchmark(schedule: schedule))
+            return CFAbsoluteTimeGetCurrent() - started
+        }
+
+        MLX.eval(benchmark(schedule: .splitPostAttention))
+        MLX.eval(benchmark(schedule: .fusedPostAttention))
+
+        let splitOutput = benchmark(schedule: .splitPostAttention).asType(.float32)
+        let fusedOutput = benchmark(schedule: .fusedPostAttention).asType(.float32)
+        MLX.eval(splitOutput, fusedOutput)
+        let fusedDelta = fusedOutput - splitOutput
+        let referenceSquared = MLX.sum(splitOutput * splitOutput).item(Float.self)
+        let fusedRelativeL2Error = sqrt(
+            Double(MLX.sum(fusedDelta * fusedDelta).item(Float.self))
+                / max(Double(referenceSquared), .leastNonzeroMagnitude)
+        )
+        XCTAssertLessThan(fusedRelativeL2Error, 1e-3)
+
+        var splitBest = Double.greatestFiniteMagnitude
+        var fusedBest = Double.greatestFiniteMagnitude
+        Memory.peakMemory = 0
+        for round in 0..<rounds {
+            if round.isMultiple(of: 2) {
+                splitBest = min(splitBest, elapsed(.splitPostAttention))
+                fusedBest = min(fusedBest, elapsed(.fusedPostAttention))
+            } else {
+                fusedBest = min(fusedBest, elapsed(.fusedPostAttention))
+                splitBest = min(splitBest, elapsed(.splitPostAttention))
+            }
+        }
+
+        let projectedAttention = benchmark.projectAttention()
+        MLX.eval(projectedAttention)
+        let attended = benchmark.attend(projectedAttention)
+        MLX.eval(attended)
+        func phaseElapsed(_ body: () -> Void) -> Double {
+            var best = Double.greatestFiniteMagnitude
+            for _ in 0..<rounds {
+                let started = CFAbsoluteTimeGetCurrent()
+                body()
+                best = min(best, CFAbsoluteTimeGetCurrent() - started)
+            }
+            return best
+        }
+        let attentionProjectionSeconds = phaseElapsed {
+            MLX.eval(benchmark.projectAttention())
+        }
+        let attentionSeconds = phaseElapsed {
+            MLX.eval(benchmark.attend(projectedAttention))
+        }
+        let splitPostAttentionSeconds = phaseElapsed {
+            MLX.eval(benchmark.postAttention(
+                schedule: .splitPostAttention,
+                attended: attended,
+                gate: projectedAttention[3]
+            ))
+        }
+        let fusedPostAttentionSeconds = phaseElapsed {
+            MLX.eval(benchmark.postAttention(
+                schedule: .fusedPostAttention,
+                attended: attended,
+                gate: projectedAttention[3]
+            ))
+        }
+
+        let configuration = MiniMaxH3TransformerConfiguration()
+        let projectionOperations = 2 * Double(rows) * Double(configuration.hiddenSize)
+            * Double(
+                4 * configuration.attentionHeadCount * configuration.attentionHeadDimension
+                    + 3 * configuration.feedForwardSize
+            )
+        let attentionOperations = 4 * Double(configuration.attentionHeadCount) * Double(rows)
+            * Double(rows) * Double(configuration.attentionHeadDimension)
+        let operations = projectionOperations + attentionOperations
+        let peakGiB = Double(Memory.peakMemory) / 1_073_741_824
+        print(String(
+            format: "[h3-lab] block rows=%d query=%d batch=%d split_ms=%.0f "
+                + "fused_ms=%.0f fused_speedup=%.3fx split_tflops=%.2f fused_tflops=%.2f "
+                + "fused_rel_l2=%.6g peak_gib=%.2f",
+            rows,
+            queryTokens,
+            evaluationBatch,
+            splitBest * 1_000,
+            fusedBest * 1_000,
+            splitBest / fusedBest,
+            operations / splitBest / 1e12,
+            operations / fusedBest / 1e12,
+            fusedRelativeL2Error,
+            peakGiB
+        ))
+        print(String(
+            format: "[h3-lab] block-phases rows=%d attention_projection_ms=%.0f "
+                + "attention_ms=%.0f split_post_ms=%.0f fused_post_ms=%.0f",
+            rows,
+            attentionProjectionSeconds * 1_000,
+            attentionSeconds * 1_000,
+            splitPostAttentionSeconds * 1_000,
+            fusedPostAttentionSeconds * 1_000
+        ))
+        Memory.clearCache()
+    }
+
+    /// Loads the released H3 video VAE and times one complete 124-frame decode
+    /// with a configurable spatial tile. Run each size in a fresh process:
+    /// `MERERUN_H3_VAE_TILE_SIZE=320` and `MERERUN_H3_MODEL_ROOT=/path/to/root`.
+    func testMiniMaxH3VideoVAETileSize() throws {
+        try benchGate()
+        guard let root = ProcessInfo.processInfo.environment["MERERUN_H3_MODEL_ROOT"],
+              !root.isEmpty else {
+            throw XCTSkip("Set MERERUN_H3_MODEL_ROOT to an installed H3 model root")
+        }
+        let tileSize = Int(
+            ProcessInfo.processInfo.environment["MERERUN_H3_VAE_TILE_SIZE"] ?? ""
+        ) ?? MiniMaxH3VideoVAE.defaultSpatialTileSize
+        let resources = MiniMaxH3Resources(rootURL: URL(fileURLWithPath: root, isDirectory: true))
+        let model = try MiniMaxH3ModelLoader.loadVideoVAE(resources: resources)
+        model.spatialTileSize = tileSize
+        let latents = MLXRandom.normal([1, 24, 37, 30, 52]).asType(.float32)
+        MLX.eval(latents)
+
+        let started = CFAbsoluteTimeGetCurrent()
+        let decoded = model.decode(latents)
+        MLX.eval(decoded)
+        print(String(
+            format: "[dit-bench] H3 video VAE tile=%d frames=%d %.3fs peak=%.2fGiB",
+            tileSize,
+            decoded.dim(1),
+            CFAbsoluteTimeGetCurrent() - started,
+            Double(Memory.snapshot().peakMemory) / 1_073_741_824
+        ))
+        XCTAssertEqual(decoded.shape, [1, 124, 480, 832, 3])
     }
 
     /// Full-model paired A/B: the same quantized klein-nano forward with the

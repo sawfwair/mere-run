@@ -389,6 +389,7 @@ struct StudioDraft: Codable, Equatable {
     var timingsOutputPath = ""
     /// Optional fields preserve saved Studio drafts from before MiniMax-H3 support.
     var h3WeightMode: String?
+    var h3AccelerationMode: String?
     var h3Steps: Int?
     var h3ReferenceInputs: [String]?
 
@@ -503,6 +504,7 @@ struct StudioDraft: Codable, Equatable {
         timings = false
         timingsOutputPath = ""
         h3WeightMode = nil
+        h3AccelerationMode = nil
         h3Steps = nil
         h3ReferenceInputs = nil
     }
@@ -828,6 +830,7 @@ enum StudioCommandAdapter {
             draft.timings = studioDraft.timings
             draft.timingsOutputPath = studioDraft.timingsOutputPath
             draft.h3WeightMode = studioDraft.h3WeightMode
+            draft.h3AccelerationMode = studioDraft.h3AccelerationMode
             draft.h3Steps = studioDraft.h3Steps
             draft.h3ReferenceInputs = studioDraft.h3ReferenceInputs
 

@@ -86,3 +86,176 @@ lower resolution, or smaller models — not kernel work.
 - Single blocks fuse QKV+MLP-in into one 3072→18432 projection and
   attn+MLP-out into one 12288→3072 projection — already the right shape for
   the hardware; splitting or refusing them was not worth measuring further.
+
+## MiniMax-H3 kernel lab
+
+H3 performance experiments must start with bounded, non-generative loops. The
+default lab loads no checkpoint, runs no conditioner or VAE, and writes no
+media. It searches exact schedules for the dominant dense-attention kernel at
+the measured 14,958-row shape:
+
+```bash
+scripts/h3-kernel-lab.sh quick
+```
+
+The script reuses the release XCTest bundle while it is newer than `Package.swift`,
+`Sources/`, and `Tests/`; set `MERERUN_H3_LAB_REBUILD=1` to force a cold rebuild.
+
+The quick loop walks query chunk size, attention-head chunk size, and the number
+of Metal kernels queued before synchronization using coordinate descent. That
+keeps the default inner loop to about a dozen arms instead of a Cartesian sweep.
+It reports wall time, effective TFLOP/s, peak memory, and speedup relative to the
+current production schedule. Every arm is compared with that schedule using
+maximum absolute and relative-L2 error; a numerically divergent arm fails the
+test instead of becoming a runtime candidate.
+
+Each arm is timed next to the production schedule, with their order reversed on
+alternate rounds. This paired design cancels most thermal drift and sweep-order
+bias; do not promote a raw first-arm timing from an unpaired loop.
+
+The search surface is configurable without editing code:
+
+```bash
+MERERUN_H3_BENCH_ROWS=37966 \
+MERERUN_H3_BENCH_CHUNKS=1024,1536,2048,2560,3072,4096 \
+MERERUN_H3_BENCH_HEAD_CHUNKS=14,28,56 \
+MERERUN_H3_BENCH_EVAL_BATCHES=1,2,4,8 \
+scripts/h3-kernel-lab.sh attention
+```
+
+`attention` defaults to the exhaustive grid. Set
+`MERERUN_H3_BENCH_SEARCH=coordinate` when narrowing a larger shape before the
+full confirmation sweep.
+
+Projection-only loops isolate Q4 matrix multiplication from the resident-BF16
+path without running a transformer step:
+
+```bash
+MERERUN_H3_BENCH_ROWS=14958,37966 scripts/h3-kernel-lab.sh projections
+```
+
+The modulation loop compares per-token AdaLN gathers with exact contiguous-run
+modulation, without loading a checkpoint:
+
+```bash
+scripts/h3-kernel-lab.sh modulation
+```
+
+At 29,018 rows, the run formulation matched exactly and measured 5.7 ms versus
+10.4 ms for gathers (1.835x). That isolated saving is too small relative to a
+full H3 block to justify production graph complexity, so the experiment remains
+in the lab.
+
+The full-block loop instantiates one production-width H3 block with resident
+BF16 weights. It measures the real compiled graph boundaries, chunked SDPA,
+and MLP together instead of extrapolating from isolated kernels:
+
+```bash
+MERERUN_H3_BENCH_ROWS=37966 scripts/h3-kernel-lab.sh block
+```
+
+At the 37,966-row true-768 shape, exact fresh-process controls measured the
+1,024-query schedule at 9.287 seconds for a split full block and 6.511 seconds
+for its attention phase. The previous 2,048-query schedule measured 10.350 and
+7.120 seconds respectively. The 1,024-query schedule therefore carries into
+production; its output matched the previous schedule exactly in the attention
+gate (`max_abs=0`, `rel_l2=0`).
+
+Several tempting graph changes did not carry. Explicitly materializing
+contiguous Q/K/V copies regressed the full block to 15.148 seconds. Narrowing
+the implicit module state passed to each compiled closure also regressed, and
+larger post-attention fusion did not repeatably beat the existing split graph.
+Those arms remain rejected rather than becoming hidden runtime switches.
+
+The lower-level MLX Metal tile is not an untapped switch either. A temporary
+JIT-controlled sweep ran one BF16 attention chunk with 56 heads, 1,024 query
+rows, 37,966 key/value rows, and head dimension 128. Every arm was checked
+against the default output before the dependency checkout was restored:
+
+| Steel tile (BQ x BK) | Median | Effective throughput |
+| --- | ---: | ---: |
+| **32 x 16 (MLX default)** | **102.4 ms** | **10.89 TFLOP/s** |
+| 16 x 16 | 157.3 ms | 7.09 TFLOP/s |
+| 32 x 8 | 103.7 ms | 10.75 TFLOP/s |
+| 32 x 32 | 123.4 ms | 9.04 TFLOP/s |
+| 64 x 16 | 107.6 ms | 10.36 TFLOP/s |
+| 64 x 32 | 115.2 ms | 9.67 TFLOP/s |
+
+The default was both fastest and bit-identical to its repeated control. The
+different-key-tile arms remained well inside the numerical gate but did not
+improve time. H3 is already using MLX's fused Steel full-attention path on M4;
+the NAX path is unavailable on this generation, and replacing Steel with a new
+approximate attention algorithm would be a model-math change rather than a
+runtime scheduling optimization.
+
+Dense projection dispatch did expose one exact M4 win. MLX's large-device BF16
+heuristic used a 64 x 64 x 16 Steel GEMM tile with two total warps and no
+threadgroup swizzle. At the true-768 row count, four total warps plus a two-bit
+swizzle improved every production projection family; selecting the alternate
+32-row tile for the two shapes where it won preserved the same whole-block gain:
+
+| H3 projection | MLX default | Tuned | Speedup |
+| --- | ---: | ---: | ---: |
+| QKV, 5,376 -> 21,504 | 745.1 ms | 621.2 ms | 1.199x |
+| attention out, 7,168 -> 5,376 | 270.0 ms | 237.7 ms | 1.136x |
+| feed-forward in, 5,376 -> 28,672 | 1,099.1 ms | 994.4 ms | 1.105x |
+| feed-forward out, 14,336 -> 5,376 | 669.0 ms | 583.9 ms | 1.146x |
+
+Every projection arm was bit-identical in BF16. A three-arm, order-balanced
+whole-block comparison then measured 7.892 seconds for MLX's default, 7.625
+seconds for the generic four-warp schedule, and 7.619 seconds for the
+shape-aware schedule. The shape-aware result is a 1.036x exact full-block
+speedup (`rel_l2=0`), and is deliberately restricted to H3's four exact
+projection dimensions above 32,768 packed rows. Reproduce the projection and
+whole-block checks with `scripts/h3-kernel-lab.sh gemm` and
+`scripts/h3-kernel-lab.sh gemm-block`.
+
+The release-mode one-evaluation model probe packed 37,794 rows and took 953.192
+seconds for 50 blocks. Counting the dominant projection and dense-attention
+arithmetic gives about 3.504 PFLOP per evaluation, or 3.68 effective TFLOP/s
+across the whole sustained pass. This is lower than both the 7.6 TFLOP/s hot
+single-block result and the 10-14 TFLOP/s isolated-kernel roof because the real
+pass turns over 50 independent parameter sets and includes every dependent
+normalization, modulation, transpose, synchronization, and thermal effect.
+Peak Metal memory was only 48.77 GiB; additional disk or unified memory does
+not close that utilization gap.
+
+Only improvements that repeat across fresh processes, preserve the numerical
+gate, and improve a matched full-block or denoise-step probe should move into
+the runtime. Full video generation remains a final quality gate, not the inner
+optimization loop.
+
+### Bounded tail-block reuse
+
+Exact attention scheduling and resident BF16 improve each native call, but H3
+still executes 50 sequential transformer blocks. The explicit `balanced` and
+`maximum` acceleration modes reduce the number of blocks on safe adjacent
+schedule steps. A full step stores `finalHidden - warmHidden`; a cache step
+recomputes 25 leading blocks in `balanced` or nine in `maximum`, then adds that
+stored tail residual. Both video and audio sigma deltas must be below 0.12, the
+schedule position must be inside 10%...90%, and at least two complete
+evaluations must precede reuse. Balanced refreshes after two cache steps;
+maximum refreshes after four.
+
+Automatic long-geometry schedules use 21 points (20 model evaluations),
+matching the current practical CUDA default instead of the previous 31 points.
+Maximum acceleration caps automatic schedules at 12 points. With an explicit
+20-point schedule, its bounded reuse policy runs six full evaluations and
+recomputes nine of 50 blocks on 13 cache evaluations, for 417 block calls
+versus 950 in exact quality (56.1% less transformer-block work).
+
+On the M4 Max 128 GB test machine, a matched warm-cache 512x320, 22-frame,
+16-point run measured 112.413 s of denoise in exact `quality` mode and 74.754 s
+in `maximum`: 1.504x faster, or 33.5% less denoise time. Eight of fifteen calls
+used 13 blocks. The same-seed MP4 remained coherent but changed portal framing.
+For the accepted automatic-speed envelope, a matched 512x320, 22-frame,
+12-point same-seed pair measured 62.847 s of denoise and 73.07 s end to end in
+`quality`, versus 41.928 s and 51.45 s in `maximum` (1.499x denoise). The
+accelerated artifact remained free of the spatial lattice seen when reuse began
+after only one full evaluation. This is an approximate trajectory accelerator
+rather than an exact kernel optimization; exact `quality` remains the default
+and video/audio artifacts are the acceptance boundary for speed-mode changes.
+
+The full acceptance receipt, including per-step timings, artifact geometry,
+hash, and the important 124-frame duration boundary, is recorded in
+[MiniMax-H3 BF16 on M4 Max](../benchmarks/minimax-h3-bf16-m4-max.md).

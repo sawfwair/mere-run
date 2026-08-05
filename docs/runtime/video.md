@@ -52,6 +52,13 @@ are an escape hatch, not the capability contract.
   source-bound AdaLN cache. It generates 24 fps RGB and synchronized 32 kHz
   stereo audio from text, a first frame, or directed first/last frames. Frame
   counts follow `17*n+5`; width and height are multiples of 32.
+- `video-minimax-h3-fl2va-bf16-mlx`: maximum-fidelity FL2VA package. It streams
+  PipeNetwork's pinned 13-shard BF16 MLX transformer directly, discards the
+  schedule-only AdaLN tensors after building an exact cache for the requested
+  schedule, and deinterleaves the released per-head QKV layout in memory. The tokenizer,
+  Q8 conditioner, FP16 video VAE, and FP32 audio VAE come from the same pinned
+  native support package. The managed install is about 100 GB on disk; the
+  active transformer is about 40 GB after the cached AdaLN tensors are omitted.
 - `video-minimax-h3-ref2va-mlx`: identifier for a locally converted Ref2VA
   root. Repeated `--reference image:path|video:path|audio:path` options retain
   request order. Video soundtracks are conditioned with their video; a
@@ -92,6 +99,13 @@ mere.run video generate "a glass marble rolls across wood with a delicate rattle
   --num-frames 124 \
   --output ./marble-h3.mp4
 
+# Maximum-fidelity BF16 transformer; same native Studio and CLI workflow
+mere.run model pull video-minimax-h3-fl2va-bf16-mlx --accept-model-license
+mere.run video generate "a cinematic rain-soaked bus stop at night" \
+  --model video-minimax-h3-fl2va-bf16-mlx \
+  --width 1280 --height 768 --duration 10 --steps 20 \
+  --output ./bus-stop-bf16.mp4
+
 mere.run video generate "preserve the person and use the reference motion" \
   --model-root ./MiniMax-H3-Ref2VA-MLX \
   --reference image:./person.png \
@@ -112,13 +126,25 @@ from the official BF16/F32 projections; no post-pull optimization step is
 required. Generation skips loading and executing the transformer's
 13B-parameter AdaLN/time-embedding branch and resamples its exact released
 31-point curve for the selected schedule. By default H3 uses 9 points through
-13,500 packed rows, 16 through 26,000, and 31 above that; `--steps` remains an
+13,500 packed rows, 16 through 26,000, and 21 above that. Maximum acceleration
+caps the automatic schedule at 12 points; `--steps` remains an
 explicit schedule-point override. Compact cache-backed INT4 transformers
-therefore remain correct at arbitrary point counts. MacBooks keep Q4 resident
-by default; desktop Macs may select resident BF16 when memory admits it, and
-`--h3-weight-mode` can force either path. `model optimize` remains available
-for compatible locally converted roots that still contain the full AdaLN
-branch.
+therefore remain correct at arbitrary point counts. MacBooks below 96 GiB keep
+Q4 resident by default; memory-qualified desktops and 96+ GiB MacBooks select the
+faster resident BF16 path when the requested geometry leaves the required
+runtime reserve. `--h3-weight-mode` can force either path. `model optimize`
+remains available for compatible locally converted roots that still contain
+the full AdaLN branch.
+
+The denoise policy is independently selectable. `--h3-acceleration quality`
+executes all 50 blocks and is the exact default. `balanced` recomputes the
+leading 50% of blocks on eligible small-sigma-delta steps and refreshes after
+at most two cache hits. `maximum` is the explicitly approximate speed lane: it
+recomputes the leading nine of 50 blocks and refreshes after at most four cache
+hits. Both modes run at least two complete evaluations before reuse and retain
+full evaluations at the schedule boundaries. They can materially reduce
+denoise time, but they are
+approximate and may change motion or composition for the same prompt and seed.
 
 ### Cosmos3 generation, actions, and reasoning
 

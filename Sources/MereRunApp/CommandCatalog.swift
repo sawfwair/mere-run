@@ -716,7 +716,9 @@ struct CommandDraft: Equatable, Codable {
     var timingsOutputPath = ""
     /// Optional preserves older Library rows before MiniMax-H3 became a Studio-native workflow.
     var h3WeightMode: String?
-    /// Nil keeps MiniMax-H3's geometry-aware 9/16/31-point adaptive schedule.
+    /// Quality is exact; balanced and maximum enable bounded approximate block reuse.
+    var h3AccelerationMode: String?
+    /// Nil keeps MiniMax-H3's geometry-aware 9/16/21-point adaptive schedule.
     var h3Steps: Int?
     /// Ordered `image:path`, `video:path`, and `audio:path` reference specifications.
     var h3ReferenceInputs: [String]?
@@ -2265,6 +2267,10 @@ struct CommandTemplate: Identifiable, Equatable {
                 if let h3Steps = draft.h3Steps { args += ["--steps", String(h3Steps)] }
                 if let weightMode = draft.h3WeightMode, !weightMode.isBlank {
                     args += ["--h3-weight-mode", weightMode]
+                }
+                if let accelerationMode = draft.h3AccelerationMode,
+                   !accelerationMode.isBlank {
+                    args += ["--h3-acceleration", accelerationMode]
                 }
                 for reference in draft.h3ReferenceInputs ?? [] where !reference.isBlank {
                     args += ["--reference", reference]

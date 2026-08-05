@@ -2445,6 +2445,33 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["video generate"]
         ),
         ManagedModelSpec(
+            id: ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue,
+            category: .video,
+            installShape: .structuredRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: MiniMaxH3Resources.artifactRepository,
+                revision: MiniMaxH3Resources.artifactRevision,
+                patterns: MiniMaxH3Resources.bf16SupportArtifactFiles
+            ),
+            mountedHubFallbacks: [
+                MountedHubFallbackConfig(
+                    destinationPath: MiniMaxH3Resources.bf16TransformerDirectory,
+                    hubFallback: HubFallbackConfig(
+                        repoId: MiniMaxH3Resources.bf16ArtifactRepository,
+                        revision: MiniMaxH3Resources.bf16ArtifactRevision,
+                        patterns: MiniMaxH3Resources.bf16ArtifactFiles
+                    )
+                ),
+            ],
+            upstreamRepoId: MiniMaxH3Resources.bf16ArtifactRepository,
+            upstreamRevision: MiniMaxH3Resources.bf16ArtifactRevision,
+            usageRestriction: miniMaxH3UsageRestriction,
+            validationKind: .miniMaxH3MLX,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 100_279_671_824,
+            defaultCLICommands: ["video generate"]
+        ),
+        ManagedModelSpec(
             id: ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue,
             category: .video,
             installShape: .structuredRoot,

@@ -2,6 +2,9 @@ import Foundation
 import MLX
 import MLXFast
 import MLXNN
+#if DEBUG
+import MLXRandom
+#endif
 
 @inline(__always)
 private func miniMaxH3Linear(_ linear: Linear, _ value: MLXArray) -> MLXArray {
@@ -106,6 +109,11 @@ public struct MiniMaxH3TransformerConfiguration: Hashable, Sendable {
 public struct MiniMaxH3TransformerOutput {
     public let videoVelocityRows: MLXArray
     public let audioVelocityRows: MLXArray
+}
+
+struct MiniMaxH3BlockReuseResult {
+    let output: MiniMaxH3TransformerOutput
+    let refreshedTailResidual: MLXArray?
 }
 
 private final class MiniMaxH3Attention: Module {
@@ -315,6 +323,10 @@ private final class MiniMaxH3AdaLNProjection: Module {
         )
     }
 
+    convenience init(discarded: Void) {
+        self.init(inputDimension: 1, hiddenSize: 1, partCount: 1, modalityCount: 1)
+    }
+
     func callAsFunction(_ timeEmbedding: MLXArray) -> [MLXArray] {
         let projected = miniMaxH3Linear(linear, MLXNN.silu(timeEmbedding))
             .reshaped(timeEmbedding.dim(0) * modalityCount, partCount * hiddenSize)
@@ -343,6 +355,11 @@ private final class MiniMaxH3TimeEmbedding: Module {
         )
     }
 
+    init(discarded: Void) {
+        self._input.wrappedValue = Linear(1, 1, bias: false)
+        self._output.wrappedValue = Linear(1, 1, bias: false)
+    }
+
     func callAsFunction(_ value: MLXArray) -> MLXArray {
         miniMaxH3Linear(output, MLXNN.silu(miniMaxH3Linear(input, value)))
     }
@@ -354,8 +371,10 @@ private final class MiniMaxH3TransformerBlock: Module {
     @ModuleInfo(key: "norm2") var feedForwardNorm: RMSNorm
     @ModuleInfo(key: "mlp") var feedForward: MiniMaxH3FeedForward
     @ModuleInfo(key: "adaln_proj") var adaLN: MiniMaxH3AdaLNProjection?
+    private var adaLNWeightsAvailable: Bool
 
     init(configuration: MiniMaxH3TransformerConfiguration, includeAdaLN: Bool) {
+        self.adaLNWeightsAvailable = includeAdaLN
         self._attentionNorm.wrappedValue = RMSNorm(
             dimensions: configuration.hiddenSize,
             eps: configuration.normEpsilon
@@ -377,7 +396,15 @@ private final class MiniMaxH3TransformerBlock: Module {
     }
 
     var includesAdaLN: Bool {
-        adaLN != nil
+        adaLNWeightsAvailable
+    }
+
+    func discardAdaLNWeights() {
+        guard adaLNWeightsAvailable else { return }
+        update(modules: ModuleChildren.unflattened([
+            ("adaln_proj", MiniMaxH3AdaLNProjection(discarded: ())),
+        ]))
+        adaLNWeightsAvailable = false
     }
 
     func callAsFunction(
@@ -517,7 +544,9 @@ private final class MiniMaxH3TransformerBlock: Module {
     }
 
     func precomputeModulation(timeEmbedding: MLXArray) -> MLXArray {
-        guard let adaLN else { preconditionFailure("MiniMax-H3 AdaLN weights are not loaded") }
+        guard adaLNWeightsAvailable, let adaLN else {
+            preconditionFailure("MiniMax-H3 AdaLN weights are not loaded")
+        }
         return adaLN.concatenated(timeEmbedding)
     }
 }
@@ -551,6 +580,13 @@ private final class MiniMaxH3FinalLayer: Module {
             configuration.audioLatentChannels,
             bias: true
         )
+    }
+
+    func discardAdaLNWeights() {
+        guard adaLN != nil else { return }
+        update(modules: ModuleChildren.unflattened([
+            ("adaln_proj", MiniMaxH3AdaLNProjection(discarded: ())),
+        ]))
     }
 
     func callAsFunction(
@@ -609,7 +645,199 @@ private struct MiniMaxH3CompiledBlockForwards {
     let attentionOutput: MiniMaxH3CompiledBlockForward
     let feedForwardProjection: MiniMaxH3CompiledBlockForward
     let feedForwardOutput: MiniMaxH3CompiledBlockForward
+    let postAttention: MiniMaxH3CompiledBlockForward
 }
+
+#if DEBUG
+/// Test-only harness for timing the exact production H3 block schedules at
+/// realistic packed-row counts without loading the complete checkpoint.
+final class MiniMaxH3BlockScheduleBenchmark {
+    enum Schedule {
+        case splitPostAttention
+        case fusedPostAttention
+    }
+
+    let rowCount: Int
+    private let maximumQueryTokens: Int
+    private let maximumKernelsPerEvaluation: Int
+    private let block: MiniMaxH3TransformerBlock
+    private let forwards: MiniMaxH3CompiledBlockForwards
+    private let hidden: MLXArray
+    private let timeEmbedding: MLXArray
+    private let adaLNIndices: MLXArray
+    private let rope: MiniMaxH3RotaryEmbedding
+    private let cachedModulation: MLXArray
+
+    init(
+        rowCount: Int,
+        maximumQueryTokens: Int,
+        maximumKernelsPerEvaluation: Int
+    ) {
+        precondition(rowCount > 0)
+        precondition(maximumQueryTokens > 0)
+        precondition(maximumKernelsPerEvaluation > 0)
+        self.rowCount = rowCount
+        self.maximumQueryTokens = maximumQueryTokens
+        self.maximumKernelsPerEvaluation = maximumKernelsPerEvaluation
+
+        let configuration = MiniMaxH3TransformerConfiguration()
+        let block = MiniMaxH3TransformerBlock(configuration: configuration, includeAdaLN: false)
+        block.update(parameters: block.parameters().mapValues { $0.asType(.bfloat16) })
+        MLX.eval(block.parameters())
+        self.block = block
+
+        let attentionProjection = MLX.compile(inputs: [block]) { inputs in
+            block.attentionProjection(
+                inputs[0],
+                timeEmbedding: inputs[1],
+                adaLNIndices: inputs[2],
+                rope: MiniMaxH3RotaryEmbedding(cosine: inputs[3], sine: inputs[4]),
+                cachedModulation: inputs[5]
+            )
+        }
+        let attentionOutput = MLX.compile(inputs: [block]) { inputs in
+            [block.attentionProjectionResidual(
+                inputs[0],
+                attended: inputs[1],
+                gate: inputs[2]
+            )]
+        }
+        let feedForwardProjection = MLX.compile(inputs: [block]) { inputs in
+            block.feedForwardProjection(
+                inputs[0],
+                timeEmbedding: inputs[1],
+                adaLNIndices: inputs[2],
+                cachedModulation: inputs[3]
+            )
+        }
+        let feedForwardOutput = MLX.compile(inputs: [block]) { inputs in
+            [block.feedForwardProjectionResidual(
+                inputs[0],
+                projected: inputs[1],
+                gate: inputs[2]
+            )]
+        }
+        let postAttention = MLX.compile(inputs: [block]) { inputs in
+            let attended = block.attentionProjectionResidual(
+                inputs[0],
+                attended: inputs[1],
+                gate: inputs[2]
+            )
+            return [block.feedForwardResidual(
+                attended,
+                timeEmbedding: inputs[3],
+                adaLNIndices: inputs[4],
+                cachedModulation: inputs[5]
+            )]
+        }
+        self.forwards = MiniMaxH3CompiledBlockForwards(
+            attentionProjection: attentionProjection,
+            attentionOutput: attentionOutput,
+            feedForwardProjection: feedForwardProjection,
+            feedForwardOutput: feedForwardOutput,
+            postAttention: postAttention
+        )
+
+        self.hidden = MLXRandom.normal([1, rowCount, configuration.hiddenSize])
+            .asType(.bfloat16)
+        self.timeEmbedding = MLXArray.zeros(
+            [3, configuration.timeEmbeddingDimension],
+            dtype: .bfloat16
+        )
+        self.adaLNIndices = MLXArray((0..<rowCount).map { Int32($0 % 9) })
+        self.rope = MiniMaxH3RotaryEmbedding(
+            cosine: MLXArray.ones(
+                [1, rowCount, 1, 6 * configuration.ropeFrequencyCount],
+                dtype: .bfloat16
+            ),
+            sine: MLXArray.zeros(
+                [1, rowCount, 1, 6 * configuration.ropeFrequencyCount],
+                dtype: .bfloat16
+            )
+        )
+        self.cachedModulation = (
+            MLXRandom.normal([9, 6 * configuration.hiddenSize]) * Float(0.1)
+        ).asType(.bfloat16)
+        MLX.eval(
+            hidden,
+            timeEmbedding,
+            adaLNIndices,
+            rope.cosine,
+            rope.sine,
+            cachedModulation
+        )
+    }
+
+    func callAsFunction(schedule: Schedule) -> MLXArray {
+        let projectedAttention = projectAttention()
+        MLX.eval(projectedAttention)
+        let attended = attend(projectedAttention)
+        return postAttention(
+            schedule: schedule,
+            attended: attended,
+            gate: projectedAttention[3]
+        )
+    }
+
+    func projectAttention() -> [MLXArray] {
+        forwards.attentionProjection([
+            hidden,
+            timeEmbedding,
+            adaLNIndices,
+            rope.cosine,
+            rope.sine,
+            cachedModulation,
+        ])
+    }
+
+    func attend(_ projectedAttention: [MLXArray]) -> MLXArray {
+        block.scaledDotProductAttention(
+            queries: projectedAttention[0],
+            keys: projectedAttention[1],
+            values: projectedAttention[2],
+            maximumQueryTokens: maximumQueryTokens,
+            maximumKernelsPerEvaluation: maximumKernelsPerEvaluation
+        )
+    }
+
+    func postAttention(schedule: Schedule, attended: MLXArray, gate: MLXArray) -> MLXArray {
+        switch schedule {
+        case .splitPostAttention:
+            let attentionOutput = forwards.attentionOutput([
+                hidden,
+                attended,
+                gate,
+            ])[0]
+            MLX.eval(attentionOutput)
+            let projectedFeedForward = forwards.feedForwardProjection([
+                attentionOutput,
+                timeEmbedding,
+                adaLNIndices,
+                cachedModulation,
+            ])
+            MLX.eval(projectedFeedForward)
+            let output = forwards.feedForwardOutput([
+                attentionOutput,
+                projectedFeedForward[0],
+                projectedFeedForward[1],
+            ])[0]
+            MLX.eval(output)
+            return output
+        case .fusedPostAttention:
+            let output = forwards.postAttention([
+                hidden,
+                attended,
+                gate,
+                timeEmbedding,
+                adaLNIndices,
+                cachedModulation,
+            ])[0]
+            MLX.eval(output)
+            return output
+        }
+    }
+}
+#endif
 
 struct MiniMaxH3ResidentBF16Materialization: Sendable, Equatable {
     let linearCount: Int
@@ -683,8 +911,9 @@ public final class MiniMaxH3Transformer: Module {
     var usesLayerwiseEvaluation = false
     var clearsCacheAfterLayerwiseEvaluation = true
     var usesBlockwiseCompilation = false
+    var usesFusedPostAttention = true
     private(set) var usesResidentBF16 = false
-    var maximumAttentionQueryTokensPerKernel = 2_048
+    var maximumAttentionQueryTokensPerKernel = 1_024
     var maximumAttentionKernelsPerEvaluation = 4
     var blockTimingHandler: ((Int, TimeInterval, Memory.Snapshot) -> Void)?
     @ModuleInfo(key: "video_patch_proj") var videoInput: Linear
@@ -699,11 +928,13 @@ public final class MiniMaxH3Transformer: Module {
     private let timeFrequencies: MLXArray
     private var compiledBlockRunner: MiniMaxH3TransformerBlock?
     private var compiledBlockForwards: MiniMaxH3CompiledBlockForwards?
+    private var adaLNWeightsAvailable: Bool
 
     public init(
         configuration: MiniMaxH3TransformerConfiguration = .init(),
         includeAdaLN: Bool = true
     ) {
+        self.adaLNWeightsAvailable = includeAdaLN
         self.configuration = configuration
         self._videoInput.wrappedValue = Linear(
             configuration.videoPatchDimension,
@@ -849,6 +1080,91 @@ public final class MiniMaxH3Transformer: Module {
         timesteps: MLXArray,
         cachedAdaLN: MiniMaxH3AdaLNStep?
     ) -> MiniMaxH3TransformerOutput {
+        let prepared = prepareBlockInput(
+            videoRows: videoRows,
+            audioRows: audioRows,
+            context: context,
+            timesteps: timesteps,
+            cachedAdaLN: cachedAdaLN
+        )
+        let hidden = runBlocks(
+            prepared.hidden,
+            range: blocks.indices,
+            context: context,
+            timeEmbedding: prepared.timeEmbedding,
+            cachedAdaLN: cachedAdaLN
+        )
+        return finalize(
+            hidden,
+            context: context,
+            timeEmbedding: prepared.timeEmbedding,
+            cachedAdaLN: cachedAdaLN
+        )
+    }
+
+    func callWithBlockResidualReuse(
+        videoRows: MLXArray,
+        audioRows: MLXArray,
+        context: MiniMaxH3TransformerPreparedContext,
+        timesteps: MLXArray,
+        cachedAdaLN: MiniMaxH3AdaLNStep?,
+        warmBlockCount: Int,
+        cachedTailResidual: MLXArray?
+    ) -> MiniMaxH3BlockReuseResult {
+        precondition(warmBlockCount >= 0 && warmBlockCount < blocks.count)
+        let prepared = prepareBlockInput(
+            videoRows: videoRows,
+            audioRows: audioRows,
+            context: context,
+            timesteps: timesteps,
+            cachedAdaLN: cachedAdaLN
+        )
+        let warmHidden = runBlocks(
+            prepared.hidden,
+            range: 0..<warmBlockCount,
+            context: context,
+            timeEmbedding: prepared.timeEmbedding,
+            cachedAdaLN: cachedAdaLN
+        )
+
+        let hidden: MLXArray
+        let refreshedTailResidual: MLXArray?
+        if let cachedTailResidual {
+            precondition(cachedTailResidual.shape == warmHidden.shape)
+            hidden = warmHidden + cachedTailResidual
+            refreshedTailResidual = nil
+            MLX.eval(hidden)
+        } else {
+            hidden = runBlocks(
+                warmHidden,
+                range: warmBlockCount..<blocks.count,
+                context: context,
+                timeEmbedding: prepared.timeEmbedding,
+                cachedAdaLN: cachedAdaLN
+            )
+            let residual = hidden - warmHidden
+            MLX.eval(residual)
+            refreshedTailResidual = residual
+        }
+
+        return MiniMaxH3BlockReuseResult(
+            output: finalize(
+                hidden,
+                context: context,
+                timeEmbedding: prepared.timeEmbedding,
+                cachedAdaLN: cachedAdaLN
+            ),
+            refreshedTailResidual: refreshedTailResidual
+        )
+    }
+
+    private func prepareBlockInput(
+        videoRows: MLXArray,
+        audioRows: MLXArray,
+        context: MiniMaxH3TransformerPreparedContext,
+        timesteps: MLXArray,
+        cachedAdaLN: MiniMaxH3AdaLNStep?
+    ) -> (hidden: MLXArray, timeEmbedding: MLXArray) {
         let layout = context.layout
         precondition(videoRows.dim(1) == layout.conditionVideoRowCount + layout.targetVideoRows.count)
         precondition(audioRows.dim(1) == layout.conditionAudioRowCount + layout.targetAudioRows.count)
@@ -870,13 +1186,26 @@ public final class MiniMaxH3Transformer: Module {
         }
         packed.append(targetAudio)
         packed.append(targetVideo)
-        var hidden = MLX.concatenated(packed, axis: 1)
+        let hidden = MLX.concatenated(packed, axis: 1)
 
         let timeEmbedding = cachedAdaLN?.timeEmbedding ?? embedTimesteps(timesteps)
         if let cachedAdaLN {
             precondition(cachedAdaLN.blockModulations.count == blocks.count)
         }
-        for (index, block) in blocks.enumerated() {
+        return (hidden, timeEmbedding)
+    }
+
+    private func runBlocks(
+        _ initialHidden: MLXArray,
+        range: Range<Int>,
+        context: MiniMaxH3TransformerPreparedContext,
+        timeEmbedding: MLXArray,
+        cachedAdaLN: MiniMaxH3AdaLNStep?
+    ) -> MLXArray {
+        precondition(range.lowerBound >= 0 && range.upperBound <= blocks.count)
+        var hidden = initialHidden
+        for index in range {
+            let block = blocks[index]
             let blockStarted = blockTimingHandler.map { _ in CFAbsoluteTimeGetCurrent() }
             if usesBlockwiseCompilation {
                 var attentionInputs = [
@@ -899,20 +1228,35 @@ public final class MiniMaxH3Transformer: Module {
                     maximumQueryTokens: maximumAttentionQueryTokensPerKernel,
                     maximumKernelsPerEvaluation: maximumAttentionKernelsPerEvaluation
                 )
-                hidden = compiled.attentionOutput([hidden, attended, projectedAttention[3]])[0]
-                MLX.eval(hidden)
-                var feedForwardInputs = [hidden, timeEmbedding, context.adaLNIndices]
-                if let modulation = cachedAdaLN?.blockModulations[index] {
-                    feedForwardInputs.append(modulation)
+                if usesFusedPostAttention {
+                    var postAttentionInputs = [
+                        hidden,
+                        attended,
+                        projectedAttention[3],
+                        timeEmbedding,
+                        context.adaLNIndices,
+                    ]
+                    if let modulation = cachedAdaLN?.blockModulations[index] {
+                        postAttentionInputs.append(modulation)
+                    }
+                    hidden = compiled.postAttention(postAttentionInputs)[0]
+                    MLX.eval(hidden)
+                } else {
+                    hidden = compiled.attentionOutput([hidden, attended, projectedAttention[3]])[0]
+                    MLX.eval(hidden)
+                    var feedForwardInputs = [hidden, timeEmbedding, context.adaLNIndices]
+                    if let modulation = cachedAdaLN?.blockModulations[index] {
+                        feedForwardInputs.append(modulation)
+                    }
+                    let projectedFeedForward = compiled.feedForwardProjection(feedForwardInputs)
+                    MLX.eval(projectedFeedForward)
+                    hidden = compiled.feedForwardOutput([
+                        hidden,
+                        projectedFeedForward[0],
+                        projectedFeedForward[1],
+                    ])[0]
+                    MLX.eval(hidden)
                 }
-                let projectedFeedForward = compiled.feedForwardProjection(feedForwardInputs)
-                MLX.eval(projectedFeedForward)
-                hidden = compiled.feedForwardOutput([
-                    hidden,
-                    projectedFeedForward[0],
-                    projectedFeedForward[1],
-                ])[0]
-                MLX.eval(hidden)
             } else {
                 hidden = block(
                     hidden,
@@ -936,12 +1280,21 @@ public final class MiniMaxH3Transformer: Module {
                 )
             }
         }
-        return finalLayer(
+        return hidden
+    }
+
+    private func finalize(
+        _ hidden: MLXArray,
+        context: MiniMaxH3TransformerPreparedContext,
+        timeEmbedding: MLXArray,
+        cachedAdaLN: MiniMaxH3AdaLNStep?
+    ) -> MiniMaxH3TransformerOutput {
+        finalLayer(
             hidden,
             timeEmbedding: timeEmbedding,
-            videoRows: layout.targetVideoRows,
+            videoRows: context.layout.targetVideoRows,
             videoTimeIndex: 0,
-            audioRows: layout.targetAudioRows,
+            audioRows: context.layout.targetAudioRows,
             audioTimeIndex: 1,
             cachedModulation: cachedAdaLN?.finalModulation
         )
@@ -951,12 +1304,12 @@ public final class MiniMaxH3Transformer: Module {
         for block: MiniMaxH3TransformerBlock
     ) -> MiniMaxH3CompiledBlockForwards {
         if let compiledBlockRunner, let compiledBlockForwards {
-            compiledBlockRunner.update(parameters: block.parameters())
+            updateCompiledBlockRunner(compiledBlockRunner, from: block)
             return compiledBlockForwards
         }
 
         let runner = makeCompiledBlockRunner(from: block)
-        runner.update(parameters: block.parameters())
+        updateCompiledBlockRunner(runner, from: block)
         let attentionProjection = MLX.compile(inputs: [runner]) { (inputs: [MLXArray]) -> [MLXArray] in
             runner.attentionProjection(
                 inputs[0],
@@ -988,15 +1341,39 @@ public final class MiniMaxH3Transformer: Module {
                 gate: inputs[2]
             )]
         }
+        let postAttention = MLX.compile(inputs: [runner]) { (inputs: [MLXArray]) -> [MLXArray] in
+            let attended = runner.attentionProjectionResidual(
+                inputs[0],
+                attended: inputs[1],
+                gate: inputs[2]
+            )
+            return [runner.feedForwardResidual(
+                attended,
+                timeEmbedding: inputs[3],
+                adaLNIndices: inputs[4],
+                cachedModulation: inputs.count == 6 ? inputs[5] : nil
+            )]
+        }
         let forwards = MiniMaxH3CompiledBlockForwards(
             attentionProjection: attentionProjection,
             attentionOutput: attentionOutput,
             feedForwardProjection: feedForwardProjection,
-            feedForwardOutput: feedForwardOutput
+            feedForwardOutput: feedForwardOutput,
+            postAttention: postAttention
         )
         compiledBlockRunner = runner
         compiledBlockForwards = forwards
         return forwards
+    }
+
+    private func updateCompiledBlockRunner(
+        _ runner: MiniMaxH3TransformerBlock,
+        from block: MiniMaxH3TransformerBlock
+    ) {
+        let parameters = block.parameters().flattened().filter { path, _ in
+            block.includesAdaLN || !path.hasPrefix("adaln_proj.")
+        }
+        runner.update(parameters: ModuleParameters.unflattened(parameters))
     }
 
     private func makeCompiledBlockRunner(
@@ -1090,8 +1467,27 @@ public final class MiniMaxH3Transformer: Module {
         )
     }
 
+    /// Releases the schedule-only projection weights after an exact modulation
+    /// table has been built for the current run. The remaining dense core is
+    /// the complete denoising transformer.
+    func discardAdaLNWeights() {
+        guard adaLNWeightsAvailable else { return }
+        compiledBlockRunner = nil
+        compiledBlockForwards = nil
+        update(modules: ModuleChildren.unflattened([
+            ("time_embedder", MiniMaxH3TimeEmbedding(discarded: ())),
+        ]))
+        for block in blocks {
+            block.discardAdaLNWeights()
+        }
+        finalLayer.discardAdaLNWeights()
+        adaLNWeightsAvailable = false
+    }
+
     private func embedTimesteps(_ timesteps: MLXArray) -> MLXArray {
-        guard let timeEmbedder else { preconditionFailure("MiniMax-H3 AdaLN cache is required") }
+        guard adaLNWeightsAvailable, let timeEmbedder else {
+            preconditionFailure("MiniMax-H3 AdaLN cache is required")
+        }
         let arguments = timesteps.reshaped(-1, 1) * timeFrequencies.reshaped(1, -1)
         let sinusoidal = MLX.concatenated([MLX.cos(arguments), MLX.sin(arguments)], axis: -1)
         return timeEmbedder(sinusoidal.asType(.float32))

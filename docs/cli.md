@@ -1865,10 +1865,22 @@ FL2VA accepts `--image` and optional `--end-image`; Ref2VA accepts ordered
 32-pixel multiples, frame counts snap upward to `17*n+5`, and its
 CFG-distilled transformer needs one evaluation per schedule step. Ref2VA roots
 are locally converted; the public managed pull exists only for FL2VA.
-When `--steps` is omitted, H3 selects 9, 16, or 31 schedule points from packed
-row cost. Its source-bound AdaLN cache resamples the exact released 31-point
+When `--steps` is omitted, H3 selects 9, 16, or 21 schedule points from packed
+row cost. Maximum acceleration caps the automatic schedule at 12 points. Its
+source-bound AdaLN cache resamples the exact released 31-point
 curve for explicit overrides. `--h3-weight-mode auto` keeps compact Q4 on
-MacBooks and may expand to resident BF16 on memory-qualified desktop Macs.
+MacBooks below 96 GiB and expands to the faster resident BF16 path on memory-qualified
+desktops and 96+ GiB MacBooks when the requested geometry leaves the required
+runtime reserve.
+
+`--h3-acceleration quality` is the exact default. `balanced` reuses the measured
+contribution of the trailing 50% of transformer blocks on eligible adjacent
+schedule steps and refreshes after at most two cache hits. `maximum` is the
+explicit speed lane: it reuses the trailing 82% and refreshes after at most
+four cache hits. Both require two complete evaluations before the first reuse
+and keep the schedule boundaries native. They remain approximate: the same
+prompt and seed may follow a different motion or composition trajectory. Use
+`quality` when exact-seed fidelity matters.
 
 Preflight mode:
 
@@ -1876,8 +1888,9 @@ Preflight mode:
   video model, creating directories, or writing an MP4.
 - the report includes model availability, output path state, source/end image
   and audio state, resolved dimensions, resolved frame count/duration, source
-  audio offset, seed, input mode, whether audio conditions generation, whether
-  the source soundtrack is preserved, diagnostics, and declarative actions.
+  audio offset, seed, input mode, the resolved H3 steps/weight/acceleration
+  policy when applicable, whether audio conditions generation, whether the
+  source soundtrack is preserved, diagnostics, and declarative actions.
 - blockers such as a missing model root, missing image, invalid frame rate, or
   `--end-image` without `--image` produce JSON and a nonzero exit. Requesting
   phase timings on a legacy merged distilled root or Wan2.2 is also blocked.
