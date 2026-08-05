@@ -1649,6 +1649,22 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 upstreamRepoId: repoID,
                 createdAt: createdAt
             )
+        case .aceStepLM17B, .aceStepLM4B:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .aceStep,
+                family: .music,
+                tier: modelID == .aceStepLM4B ? .max : .latest,
+                variant: .standard,
+                precision: .bf16,
+                defaults: nil,
+                supports: [.musicGeneration],
+                components: nil,
+                upstreamRepoId: modelID == .aceStepLM4B
+                    ? "ACE-Step/acestep-5Hz-lm-4B"
+                    : "ACE-Step/Ace-Step1.5",
+                createdAt: createdAt
+            )
         case .magentaRT2Small, .magentaRT2Base:
             let isBase = modelID == .magentaRT2Base
             return MereRunModelManifest(

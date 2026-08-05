@@ -5,6 +5,11 @@ import MLX
 import MereRunCore
 
 enum ACEStepCLIHelper {
+    struct LMResolution: Hashable {
+        let rootURL: URL
+        let source: String
+    }
+
     static func resolveUserPath(_ path: String) -> URL {
         let trimmed = path.trimmingCharacters(in: .whitespacesAndNewlines)
         if trimmed == "~" {
@@ -173,10 +178,10 @@ enum ACEStepCLIHelper {
         }
 
         let preferredCandidates = [
-            "acestep-5Hz-lm-4B",
-            "acestep-5hz-lm-4b",
             "acestep-5Hz-lm-1.7B",
             "acestep-5hz-lm-1.7b",
+            "acestep-5Hz-lm-4B",
+            "acestep-5hz-lm-4b",
             "acestep-5Hz-lm",
             "acestep-5hz-lm",
             "music-acestep-5hz-lm-4b",
@@ -209,6 +214,98 @@ enum ACEStepCLIHelper {
         })
 
         return discovered?.lastPathComponent
+    }
+
+    static func resolveLMResources(
+        checkpointsRoot: URL,
+        lmModel: String?,
+        lmSubdirectory: String?
+    ) async throws -> LMResolution {
+        if let explicitSubdirectory = nonEmpty(lmSubdirectory) {
+            guard nonEmpty(lmModel) == nil else {
+                throw ValidationError("Pass either --lm-model or --lm-subdirectory, not both.")
+            }
+            guard let resolved = try resolveLMSubdirectory(
+                at: checkpointsRoot,
+                explicit: explicitSubdirectory
+            ) else {
+                throw ValidationError("--lm-subdirectory not found: \(explicitSubdirectory)")
+            }
+            return LMResolution(
+                rootURL: checkpointsRoot.appendingPathComponent(resolved, isDirectory: true),
+                source: resolved
+            )
+        }
+
+        if let explicitModel = nonEmpty(lmModel) {
+            return try await resolveManagedLM(
+                requestedModel: explicitModel,
+                defaultModelID: ModelResolver.ModelID.aceStepLM17B.rawValue
+            )
+        }
+
+        if let local = try resolveLMSubdirectory(at: checkpointsRoot, explicit: nil) {
+            return LMResolution(
+                rootURL: checkpointsRoot.appendingPathComponent(local, isDirectory: true),
+                source: local
+            )
+        }
+
+        for installedModelID in [
+            ModelResolver.ModelID.aceStepLM17B.rawValue,
+            ModelResolver.ModelID.aceStep.rawValue,
+        ] {
+            guard let installedRoot = ManagedModelResolver.resolveInstalledModel(id: installedModelID),
+                  let resolvedRoot = resolveLMRoot(at: installedRoot)
+            else {
+                continue
+            }
+            return LMResolution(rootURL: resolvedRoot, source: installedModelID)
+        }
+
+        return try await resolveManagedLM(
+            requestedModel: nil,
+            defaultModelID: ModelResolver.ModelID.aceStepLM17B.rawValue
+        )
+    }
+
+    static func resolveLMRoot(at root: URL) -> URL? {
+        let normalized = root.standardizedFileURL
+        if isUsableLMDirectory(normalized, fileManager: .default) {
+            return normalized
+        }
+        guard let subdirectory = try? resolveLMSubdirectory(at: normalized, explicit: nil) else {
+            return nil
+        }
+        return normalized.appendingPathComponent(subdirectory, isDirectory: true)
+    }
+
+    private static func resolveManagedLM(
+        requestedModel: String?,
+        defaultModelID: String
+    ) async throws -> LMResolution {
+        do {
+            let resolution = try await ManagedModelResolver.resolveForRuntime(
+                requestedModel: requestedModel,
+                defaultModelID: defaultModelID
+            )
+            guard let root = resolveLMRoot(at: resolution.url) else {
+                throw ValidationError(
+                    "ACE-Step planner \(resolution.spec.id) does not contain a usable 5Hz LM."
+                )
+            }
+            let source = resolution.source == .explicitPath
+                ? "local"
+                : resolution.spec.id
+            return LMResolution(rootURL: root, source: source)
+        } catch let error as ManagedModelResolver.ResolverError {
+            throw ValidationError(error.localizedDescription)
+        }
+    }
+
+    private static func nonEmpty(_ value: String?) -> String? {
+        let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     static func resolveTextSubdirectory(at root: URL, explicit: String?) throws -> String? {

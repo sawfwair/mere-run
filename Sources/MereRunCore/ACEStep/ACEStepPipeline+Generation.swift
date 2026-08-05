@@ -207,7 +207,7 @@ extension ACEStepPipeline {
         nonCoverContextLatents: MLXArray? = nil,
         audioCoverStrength: Float = 1.0,
         coverNoiseStrength: Float = 0.0,
-        dcwEnabled: Bool = true,
+        dcwEnabled: Bool = false,
         dcwMode: ACEStepDCWMode = .double,
         dcwScaler: Float = 0.05,
         dcwHighScaler: Float = 0.02,

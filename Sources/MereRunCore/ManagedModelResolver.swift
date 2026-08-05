@@ -411,7 +411,7 @@ public enum ManagedModelResolver {
         fileManager: FileManager
     ) throws {
         switch spec.normalizationKind {
-        case .none, .qwen3ASRNested, .parakeetNested, .musicACEStep:
+        case .none, .qwen3ASRNested, .parakeetNested, .musicACEStep, .musicACEStepLM:
             return
         }
     }

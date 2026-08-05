@@ -1158,6 +1158,45 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertTrue(spec.isManagedRootComplete(root, fileManager: .default))
     }
 
+    func testACEStepStandalonePlannerModelsUsePinnedSources() throws {
+        let planner17 = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: ModelResolver.ModelID.aceStepLM17B.rawValue)
+        )
+        XCTAssertEqual(planner17.validationKind, .aceStepLM)
+        XCTAssertEqual(planner17.hubFallback?.repoId, "ACE-Step/Ace-Step1.5")
+        XCTAssertEqual(
+            planner17.hubFallback?.revision,
+            "19671f406d603126926c1b7e2adc169acbcade22"
+        )
+        XCTAssertEqual(
+            planner17.hubFallback?.patterns,
+            ["acestep-5Hz-lm-1.7B/*"]
+        )
+
+        let nestedRoot = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: nestedRoot) }
+        let nestedLM = nestedRoot.appendingPathComponent(
+            "acestep-5Hz-lm-1.7B",
+            isDirectory: true
+        )
+        try writeMinimalACEStepLMRoot(at: nestedLM)
+        XCTAssertEqual(
+            planner17.normalizedRootURL(nestedRoot, fileManager: .default),
+            nestedLM.resolvingSymlinksInPath()
+        )
+        XCTAssertTrue(planner17.isManagedRootComplete(nestedRoot, fileManager: .default))
+
+        let planner4 = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: ModelResolver.ModelID.aceStepLM4B.rawValue)
+        )
+        XCTAssertEqual(planner4.validationKind, .aceStepLM)
+        XCTAssertEqual(planner4.hubFallback?.repoId, "ACE-Step/acestep-5Hz-lm-4B")
+        XCTAssertEqual(
+            planner4.hubFallback?.revision,
+            "0a3ec94b557aea7d508da38b31cfe7341f6ff737"
+        )
+    }
+
     func testMagentaRT2SpecsUsePinnedExportedRuntimeAssets() throws {
         let small = try XCTUnwrap(ManagedModelCatalog.spec(for: ModelResolver.ModelID.magentaRT2Small.rawValue))
         XCTAssertEqual(small.category, .music)

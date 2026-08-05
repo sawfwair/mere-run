@@ -13,8 +13,8 @@ struct MusicAnalyze: AsyncParsableCommand {
 
         Example:
           mere.run music analyze ~/Downloads/song.mp3 \
-            --model music-acestep-xl-turbo-lm4b \
-            --lm-subdirectory acestep-5Hz-lm-4B
+            --model music-acestep-xl-sft \
+            --lm-model music-acestep-lm-1.7b
         """
     )
 
@@ -36,8 +36,14 @@ struct MusicAnalyze: AsyncParsableCommand {
     @Option(name: [.customLong("vae-subdirectory")], help: "VAE subdirectory under checkpoints root.")
     var vaeSubdirectory: String = "vae"
 
-    @Option(name: [.customLong("lm-subdirectory")], help: "5Hz LM subdirectory under checkpoints root. Auto-detected when omitted.")
+    @Option(name: [.customLong("lm-subdirectory")], help: "Legacy 5Hz LM subdirectory under the checkpoint root.")
     var lmSubdirectory: String?
+
+    @Option(
+        name: [.customLong("lm-model")],
+        help: "Managed 5Hz LM model id or local planner root. Defaults to music-acestep-lm-1.7b when the selected checkpoint has no LM."
+    )
+    var lmModel: String?
 
     @Option(name: [.customLong("duration")], help: "Analyze the first N seconds instead of the full decoded input.")
     var durationSeconds: Float?
@@ -96,17 +102,11 @@ struct MusicAnalyze: AsyncParsableCommand {
             at: checkpointsRootURL,
             explicit: turboSubdirectory
         )
-        let resolvedLMSubdirectory = try ACEStepCLIHelper.resolveLMSubdirectory(
-            at: checkpointsRootURL,
-            explicit: lmSubdirectory
+        let resolvedLM = try await ACEStepCLIHelper.resolveLMResources(
+            checkpointsRoot: checkpointsRootURL,
+            lmModel: lmModel,
+            lmSubdirectory: lmSubdirectory
         )
-        guard let resolvedLMSubdirectory else {
-            throw ValidationError(
-                "music analyze requires an ACE-Step 5Hz LM subdirectory. "
-                    + "Pull `music-acestep` or `music-acestep-xl-turbo-lm4b`, "
-                    + "or pass --lm-subdirectory."
-            )
-        }
 
         let inputURL = ACEStepCLIHelper.resolveUserPath(audio)
         let audio48kHz = try ACEStepCLIHelper.loadAudio48kHz(audio, label: "audio")
@@ -116,15 +116,20 @@ struct MusicAnalyze: AsyncParsableCommand {
         if !quiet {
             CLIStderr.write("Using ACE-Step source audio: \(inputURL.path)\n")
             CLIStderr.write("Loading ACE-Step checkpoints from \(checkpointsRootURL.path)\n")
-            CLIStderr.write("Analyzing ACE-Step source audio with 5Hz LM\n")
+            CLIStderr.write("Analyzing ACE-Step source audio with planner \(resolvedLM.source)\n")
         }
 
         let container = ACEStepModelContainer(
-            checkpointsRootURL: checkpointsRootURL,
-            turboSubdirectory: resolvedTurboSubdirectory,
-            vaeSubdirectory: vaeSubdirectory,
-            lmSubdirectory: resolvedLMSubdirectory,
-            textEncoderSubdirectory: nil
+            decoderRootURL: checkpointsRootURL.appendingPathComponent(
+                resolvedTurboSubdirectory,
+                isDirectory: true
+            ),
+            vaeRootURL: checkpointsRootURL.appendingPathComponent(
+                vaeSubdirectory,
+                isDirectory: true
+            ),
+            lmRootURL: resolvedLM.rootURL,
+            textEncoderRootURL: nil
         )
         let resources = try await container.resources()
         let pipeline = try ACEStepPipeline(
@@ -153,7 +158,9 @@ struct MusicAnalyze: AsyncParsableCommand {
             model: model,
             checkpointsRoot: checkpointsRootURL.path,
             turboSubdirectory: resolvedTurboSubdirectory,
-            lmSubdirectory: resolvedLMSubdirectory,
+            lmSubdirectory: resolvedLM.rootURL.lastPathComponent,
+            languageModelSource: resolvedLM.source,
+            languageModelRoot: resolvedLM.rootURL.path,
             inputDurationSeconds: inputDurationSeconds,
             analyzedDurationSeconds: analyzedDurationSeconds,
             metadata: analysis.metadata,
@@ -176,6 +183,8 @@ struct MusicAnalyzeOutput: Codable, Equatable {
     let checkpointsRoot: String
     let turboSubdirectory: String
     let lmSubdirectory: String
+    let languageModelSource: String
+    let languageModelRoot: String
     let inputDurationSeconds: Float
     let analyzedDurationSeconds: Float
     let metadata: ACEStepMusicUnderstandingMetadata

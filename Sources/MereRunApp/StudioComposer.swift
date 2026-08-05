@@ -1055,6 +1055,13 @@ struct StudioOptionsPanel: View {
         .pickerStyle(.segmented)
         Toggle("Analyze source metadata", isOn: $draft.musicAnalyzeSourceAudio)
             .font(MereRunTheme.captionFont)
+        HStack(spacing: MereRunTheme.Spacing.sm) {
+            numberField("LM temperature", value: $draft.musicLMTemperature)
+            numberField(
+                "LM repetition penalty",
+                value: $draft.musicLMRepetitionPenalty
+            )
+        }
 
         Toggle("Set exact duration", isOn: $draft.useDuration)
             .font(MereRunTheme.captionFont)

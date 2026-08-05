@@ -28,8 +28,22 @@ struct ACEStepRecipeConditioningMetadata: Codable, Equatable {
     }
 }
 
+struct ACEStepRecipeLMSampling: Codable, Equatable {
+    var temperature: Float
+    var topK: Int
+    var topP: Float
+    var repetitionPenalty: Float
+
+    enum CodingKeys: String, CodingKey {
+        case temperature
+        case topK = "top_k"
+        case topP = "top_p"
+        case repetitionPenalty = "repetition_penalty"
+    }
+}
+
 struct ACEStepGenerationRecipe: Codable {
-    static let currentSchemaVersion = 2
+    static let currentSchemaVersion = 4
 
     var schemaVersion: Int
     var createdAt: Date
@@ -38,6 +52,9 @@ struct ACEStepGenerationRecipe: Codable {
     var decoderSubdirectory: String
     var checkpointSources: [MereRunModelManifest.SourceProvenance]
     var languageModelSubdirectory: String?
+    var languageModelSource: String?
+    var languageModelRoot: String?
+    var languageModelSources: [MereRunModelManifest.SourceProvenance]
     var textEncoderSubdirectory: String
     var adapters: [ACEStepAdapterDescriptor]
     var task: ACEStepTask
@@ -46,6 +63,7 @@ struct ACEStepGenerationRecipe: Codable {
     var lyrics: String
     var instruction: String
     var conditioningMetadata: ACEStepRecipeConditioningMetadata
+    var languageModelSampling: ACEStepRecipeLMSampling?
     var inference: ACEStepInferenceConfig
     var repaint: ACEStepRepaintConfiguration?
     var flowEdit: ACEStepFlowEditConfiguration?
@@ -66,6 +84,9 @@ struct ACEStepGenerationRecipe: Codable {
         case decoderSubdirectory = "decoder_subdirectory"
         case checkpointSources = "checkpoint_sources"
         case languageModelSubdirectory = "language_model_subdirectory"
+        case languageModelSource = "language_model_source"
+        case languageModelRoot = "language_model_root"
+        case languageModelSources = "language_model_sources"
         case textEncoderSubdirectory = "text_encoder_subdirectory"
         case adapters
         case task
@@ -74,6 +95,7 @@ struct ACEStepGenerationRecipe: Codable {
         case lyrics
         case instruction
         case conditioningMetadata = "conditioning_metadata"
+        case languageModelSampling = "language_model_sampling"
         case inference
         case repaint
         case flowEdit = "flow_edit"
@@ -134,6 +156,38 @@ struct ACEStepGenerationRecipe: Codable {
             )
         }
         return sources
+    }
+
+    static func languageModelProvenance(
+        source: String,
+        subdirectory: String,
+        checkpointModelID: String,
+        checkpointManifest: MereRunModelManifest?
+    ) -> [MereRunModelManifest.SourceProvenance] {
+        let independent = checkpointProvenance(modelID: source, manifest: nil)
+        if !independent.isEmpty {
+            return independent
+        }
+
+        let checkpointSources = checkpointProvenance(
+            modelID: checkpointModelID,
+            manifest: checkpointManifest
+        )
+        let mounted = checkpointSources.filter {
+            $0.destinationPath?.caseInsensitiveCompare(subdirectory)
+                == .orderedSame
+        }
+        if !mounted.isEmpty {
+            return mounted
+        }
+
+        guard subdirectory.lowercased().contains("1.7b") else {
+            return []
+        }
+        return checkpointSources.filter {
+            $0.repository.caseInsensitiveCompare("ACE-Step/Ace-Step1.5")
+                == .orderedSame
+        }
     }
 }
 

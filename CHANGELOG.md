@@ -6,6 +6,23 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Music
+
+- aligned ACE-Step planner precedence with the upstream Python contract:
+  explicit duration and vocal language now constrain planning, semantic-code
+  generation, lyric formatting, recipes, and the resident API consistently.
+  Planner diagnostics report effective metadata instead of displaying a
+  discarded LM duration as though it controlled the render.
+- added independently pullable `music-acestep-lm-1.7b` and
+  `music-acestep-lm-4b` planner models plus `--lm-model` routing for generate,
+  analyze, and serve. Any ACE-Step DiT can now pair with either planner without
+  a model-store symlink; 1.7B is the upstream-compatible default and 4B remains
+  an explicit option.
+- exposed the upstream ACE-Step planner's `--lm-temperature` and
+  `--lm-repetition-penalty` controls across the CLI, resident API, and macOS
+  Studio. Recipe schema 4 persists the effective LM sampling policy so a
+  supposedly reproducible render no longer hides hardcoded planner behavior.
+
 ## 0.34.0 - 2026-08-04
 
 This release advances the complete local creation stack across five first-class

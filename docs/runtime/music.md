@@ -38,6 +38,8 @@ emitted flag absent from `mere.run catalog --json`.
 - `music-acestep-xl-turbo-lm4b`
 - `music-acestep-xl-sft`
 - `music-acestep-xl-base`
+- `music-acestep-lm-1.7b`
+- `music-acestep-lm-4b`
 - `music-magenta-rt2-small`
 - `music-magenta-rt2-base`
 - `music-muscriptor-small`
@@ -93,8 +95,8 @@ swift run mere.run music generate \
   --output ./reggaeton-cover.wav
 
 swift run mere.run music analyze ./song.mp3 \
-  --model music-acestep-xl-turbo-lm4b \
-  --lm-subdirectory acestep-5Hz-lm-4B \
+  --model music-acestep-xl-sft \
+  --lm-model music-acestep-lm-1.7b \
   > ./song-analysis.json
 
 swift run mere.run model pull music-acestep-xl-turbo
@@ -103,12 +105,12 @@ swift run mere.run music generate \
   --model music-acestep-xl-turbo \
   --output ./xl-track.wav
 
-swift run mere.run model pull music-acestep-xl-turbo-lm4b
+swift run mere.run model pull music-acestep-lm-4b
 swift run mere.run music generate \
   "arena-scale rock anthem with stacked vocals" \
-  --model music-acestep-xl-turbo-lm4b \
+  --model music-acestep-xl-turbo \
   --use-lm \
-  --lm-subdirectory acestep-5Hz-lm-4B \
+  --lm-model music-acestep-lm-4b \
   --output ./xl-lm4b-track.wav
 
 swift run mere.run music realtime \
@@ -230,18 +232,20 @@ fast distilled path. Base uniquely enables extract, lego, and complete.
 `--quality draft|song|final|edit` is model-aware. It selects checkpoint-safe
 steps, sampler, guidance, velocity stabilization, LM planning policy, automatic
 duration behavior, and a warm best-of-N count. Explicit flags still override
-the preset. `final` prefers the 4B planner when it is installed. Best-of-N
+the preset. The independently managed 1.7B planner is the default; 4B is an
+explicit `--lm-model music-acestep-lm-4b` choice. Best-of-N
 ranking checks finite samples, level, clipping, DC offset, crest factor,
 spectral flatness, frame-energy movement, periodicity, time-varying spectral
 structure, and tail continuity. This prevents loud stationary noise or a
 prematurely dead ending from winning on level statistics alone.
 
 Every ACE-Step generation writes 48 kHz stereo 24-bit WAV by default plus a
-schema 2 reproducible recipe JSON. The recipe records exact checkpoint
+schema 4 reproducible recipe JSON. The recipe records exact checkpoint
 repositories and immutable revisions, adapter hashes and scales,
 prompt/lyrics/instruction, the final effective BPM, duration, key/scale, vocal
-language and time signature, task/edit configuration, inference controls,
-candidate seeds and technical scores, export policy, and input/output hashes.
+language and time signature, task/edit configuration, planner temperature,
+top-k/top-p, repetition penalty, diffusion controls, candidate seeds and
+technical scores, export policy, and input/output hashes.
 When the 5 Hz LM is active, each candidate also records its semantic audio-code
 count. The generation seed drives both LM sampling and diffusion.
 `--export-format float32` preserves a floating-point master; `--daw-bundle`
@@ -272,7 +276,13 @@ checkpoint-aware tasks, quality, steps and scheduler, CFG/APG/ADG, retakes,
 cover strength/noise, repaint, flow edit, reference audio, LM metadata and
 sampling, complete-track classes, and tiled VAE decode. Song/final requests
 without `duration_seconds` use the resident LM planner; every JSON result
-returns `conditioning_metadata` with the values actually used.
+returns `conditioning_metadata` with the values actually used. An explicit
+`vocal_language` constrains both planner metadata and lyric formatting;
+`metadata_language` remains a compatibility override. `GET /health` reports
+the independently resolved `language_model_source` alongside the resident DiT.
+Planner sampling fields use the same defaults and validation as the CLI:
+`lm_temperature` defaults to `0.85`, `lm_top_k` to `0`, `lm_top_p` to `0.9`,
+and `lm_repetition_penalty` to neutral `1.0`.
 
 Batch items may select independent `candidates` values. The server serializes
 them through the warm session, returns every ranked candidate and exactly one

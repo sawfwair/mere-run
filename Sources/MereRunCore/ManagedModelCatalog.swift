@@ -65,6 +65,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case instantMesh
     case trellis2
     case aceStep
+    case aceStepLM
     case magentaRT2
     case muScriptor
     case roFormer
@@ -91,6 +92,7 @@ public enum ManagedModelNormalizationKind: String, Hashable, Sendable {
     case qwen3ASRNested
     case parakeetNested
     case musicACEStep
+    case musicACEStepLM
 }
 
 public enum ManagedModelAliasKind: String, Hashable, Sendable {
@@ -1859,6 +1861,46 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["music generate", "music analyze"]
         ),
         ManagedModelSpec(
+            id: ModelResolver.ModelID.aceStepLM17B.rawValue,
+            category: .music,
+            installShape: .structuredRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: "ACE-Step/Ace-Step1.5",
+                revision: aceStepSharedRevision,
+                patterns: [
+                    "acestep-5Hz-lm-1.7B/*",
+                ]
+            ),
+            upstreamRepoId: "ACE-Step/Ace-Step1.5",
+            upstreamRevision: aceStepSharedRevision,
+            validationKind: .aceStepLM,
+            normalizationKind: .musicACEStepLM,
+            estimatedDownloadBytes: 4 * 1_073_741_824,
+            defaultCLICommands: ["music generate", "music analyze", "music serve"]
+        ),
+        ManagedModelSpec(
+            id: ModelResolver.ModelID.aceStepLM4B.rawValue,
+            category: .music,
+            installShape: .structuredRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: "ACE-Step/acestep-5Hz-lm-4B",
+                revision: aceStepLM4BRevision,
+                patterns: [
+                    "*.json",
+                    "*.safetensors",
+                    "*.jinja",
+                    "merges.txt",
+                    "vocab.json",
+                ]
+            ),
+            upstreamRepoId: "ACE-Step/acestep-5Hz-lm-4B",
+            upstreamRevision: aceStepLM4BRevision,
+            validationKind: .aceStepLM,
+            normalizationKind: .musicACEStepLM,
+            estimatedDownloadBytes: 9 * 1_073_741_824,
+            defaultCLICommands: ["music generate", "music analyze", "music serve"]
+        ),
+        ManagedModelSpec(
             id: ModelResolver.ModelID.magentaRT2Small.rawValue,
             category: .music,
             installShape: .structuredRoot,
@@ -2565,6 +2607,21 @@ public extension ManagedModelSpec {
         switch normalizationKind {
         case .none, .musicACEStep:
             return base
+        case .musicACEStepLM:
+            if ACEStep5HzLMResources(rootURL: base).validate(fileManager: fileManager).isEmpty {
+                return base
+            }
+            let candidates = [
+                "acestep-5Hz-lm-1.7B",
+                "acestep-5hz-lm-1.7b",
+                "acestep-5Hz-lm-4B",
+                "acestep-5hz-lm-4b",
+            ]
+            return candidates
+                .map { base.appendingPathComponent($0, isDirectory: true) }
+                .first {
+                    ACEStep5HzLMResources(rootURL: $0).validate(fileManager: fileManager).isEmpty
+                } ?? base
         case .qwen3ASRNested:
             let direct = missingPathsWithoutNormalization(in: base, fileManager: fileManager)
             if direct.isEmpty {
@@ -2665,6 +2722,8 @@ public extension ManagedModelSpec {
             return Self.missingLightOnOCRPaths(in: rootURL, fileManager: fileManager)
         case .aceStep:
             return Self.missingACEStepPaths(modelID: id, in: rootURL, fileManager: fileManager)
+        case .aceStepLM:
+            return ACEStep5HzLMResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .magentaRT2:
             return Self.missingMagentaRT2Paths(modelID: id, in: rootURL, fileManager: fileManager)
         case .muScriptor:

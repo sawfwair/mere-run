@@ -28,8 +28,14 @@ struct MusicServe: AsyncParsableCommand {
     @Option(name: [.customLong("vae-subdirectory")], help: "ACE-Step VAE subdirectory.")
     var vaeSubdirectory: String = "vae"
 
-    @Option(name: [.customLong("lm-subdirectory")], help: "Optional 5Hz LM subdirectory; the 4B LM is preferred.")
+    @Option(name: [.customLong("lm-subdirectory")], help: "Optional 5Hz LM subdirectory under the checkpoint root.")
     var lmSubdirectory: String?
+
+    @Option(
+        name: [.customLong("lm-model")],
+        help: "Managed 5Hz LM model id or local planner root. Defaults to music-acestep-lm-1.7b when the selected checkpoint has no LM."
+    )
+    var lmModel: String?
 
     @Option(name: [.customLong("text-subdirectory")], help: "Optional text encoder subdirectory.")
     var textSubdirectory: String?
@@ -84,21 +90,23 @@ struct MusicServe: AsyncParsableCommand {
         ) else {
             throw ValidationError("ACE-Step text encoder not found.")
         }
-        let lm = try ACEStepCLIHelper.resolveLMSubdirectory(
-            at: root,
-            explicit: lmSubdirectory
+        let lm = try await ACEStepCLIHelper.resolveLMResources(
+            checkpointsRoot: root,
+            lmModel: lmModel,
+            lmSubdirectory: lmSubdirectory
         )
         let variant = try ACEStepCheckpointVariant.load(
             modelRootURL: root.appendingPathComponent(decoder, isDirectory: true)
         )
         let container = ACEStepModelContainer(
-            checkpointsRootURL: root,
-            turboSubdirectory: decoder,
-            vaeSubdirectory: vaeSubdirectory,
-            lmSubdirectory: lm,
-            textEncoderSubdirectory: text
+            decoderRootURL: root.appendingPathComponent(decoder, isDirectory: true),
+            vaeRootURL: root.appendingPathComponent(vaeSubdirectory, isDirectory: true),
+            lmRootURL: lm.rootURL,
+            textEncoderRootURL: root.appendingPathComponent(text, isDirectory: true)
         )
-        CLIStderr.write("Loading resident ACE-Step \(variant.rawValue) session\n")
+        CLIStderr.write(
+            "Loading resident ACE-Step \(variant.rawValue) session with planner \(lm.source)\n"
+        )
         let resources = try await container.resources()
         let pipeline = try ACEStepPipeline(
             decoderResources: resources.decoderResources,
@@ -112,7 +120,8 @@ struct MusicServe: AsyncParsableCommand {
             pipeline: pipeline,
             variant: variant,
             modelID: model,
-            languageModelAvailable: lm != nil,
+            languageModelAvailable: true,
+            languageModelSource: lm.source,
             adapters: loadedAdapters,
             apiKey: resolvedAPIKey
         )
@@ -202,6 +211,8 @@ struct MusicAPIGenerationRequest: Codable, Sendable {
     var useLanguageModel: Bool?
     var lmTopK: Int?
     var lmTopP: Float?
+    var lmTemperature: Float?
+    var lmRepetitionPenalty: Float?
     var bpm: Int?
     var keyscale: String?
     var metadataLanguage: String?
@@ -253,6 +264,8 @@ struct MusicAPIGenerationRequest: Codable, Sendable {
         case useLanguageModel = "use_lm"
         case lmTopK = "lm_top_k"
         case lmTopP = "lm_top_p"
+        case lmTemperature = "lm_temperature"
+        case lmRepetitionPenalty = "lm_repetition_penalty"
         case bpm
         case keyscale
         case metadataLanguage = "metadata_language"
@@ -291,6 +304,7 @@ private struct MusicAPIHealthResponse: Codable {
     var checkpointVariant: ACEStepCheckpointVariant
     var resident: Bool
     var languageModelAvailable: Bool
+    var languageModelSource: String
     var adapters: [ACEStepAdapterDescriptor]
 
     enum CodingKeys: String, CodingKey {
@@ -299,6 +313,7 @@ private struct MusicAPIHealthResponse: Codable {
         case checkpointVariant = "checkpoint_variant"
         case resident
         case languageModelAvailable = "language_model_available"
+        case languageModelSource = "language_model_source"
         case adapters
     }
 }
@@ -359,6 +374,7 @@ private final class MusicAPIServer: @unchecked Sendable {
     let variant: ACEStepCheckpointVariant
     let modelID: String
     let languageModelAvailable: Bool
+    let languageModelSource: String
     let adapters: [ACEStepAdapterDescriptor]
     let apiKey: String?
 
@@ -368,6 +384,7 @@ private final class MusicAPIServer: @unchecked Sendable {
         variant: ACEStepCheckpointVariant,
         modelID: String,
         languageModelAvailable: Bool,
+        languageModelSource: String,
         adapters: [ACEStepAdapterDescriptor],
         apiKey: String?
     ) {
@@ -376,6 +393,7 @@ private final class MusicAPIServer: @unchecked Sendable {
         self.variant = variant
         self.modelID = modelID
         self.languageModelAvailable = languageModelAvailable
+        self.languageModelSource = languageModelSource
         self.adapters = adapters
         self.apiKey = apiKey
     }
@@ -403,6 +421,7 @@ private final class MusicAPIServer: @unchecked Sendable {
                     checkpointVariant: variant,
                     resident: true,
                     languageModelAvailable: languageModelAvailable,
+                    languageModelSource: languageModelSource,
                     adapters: adapters
                 )
             )
@@ -581,11 +600,21 @@ private final class MusicAPIServer: @unchecked Sendable {
         }
         let lmTopK = payload.lmTopK ?? 0
         let lmTopP = payload.lmTopP ?? 0.9
-        guard lmTopK >= 0, (0...1).contains(lmTopP) else {
+        let lmTemperature = payload.lmTemperature ?? 0.85
+        let lmRepetitionPenalty = payload.lmRepetitionPenalty ?? 1.0
+        guard lmTopK >= 0,
+              (0...1).contains(lmTopP),
+              (0...2).contains(lmTemperature),
+              lmRepetitionPenalty > 0
+        else {
             throw ValidationError(
-                "LM sampling requires lm_top_k >= 0 and lm_top_p in [0, 1]."
+                "LM sampling requires lm_top_k >= 0, lm_top_p in [0, 1], "
+                    + "lm_temperature in [0, 2], and lm_repetition_penalty > 0."
             )
         }
+        let effectiveLMRepetitionPenalty = lmRepetitionPenalty == 1
+            ? nil
+            : lmRepetitionPenalty
         let vaeChunkSize = payload.vaeChunkSize ?? 512
         let vaeOverlap = payload.vaeOverlap ?? 64
         guard vaeChunkSize > 0, vaeOverlap >= 0 else {
@@ -639,6 +668,10 @@ private final class MusicAPIServer: @unchecked Sendable {
             && !task.locksDurationToSource
             && !isFlowEdit
         var effectivePrompt = prompt
+        let effectiveLanguage = ACEStepPlanningPolicy.effectiveLanguage(
+            vocalLanguage: payload.vocalLanguage,
+            metadataLanguage: payload.metadataLanguage
+        )
         var metadata = ACEStep5HzLMConstrainedSampler.UserMetadata(
             bpm: payload.bpm.map(String.init),
             caption: prompt,
@@ -646,7 +679,7 @@ private final class MusicAPIServer: @unchecked Sendable {
                 ? nil
                 : String(max(1, Int(duration.rounded()))),
             keyscale: Self.nonEmpty(payload.keyscale),
-            language: Self.nonEmpty(payload.metadataLanguage),
+            language: effectiveLanguage,
             timesignature: Self.nonEmpty(payload.timeSignature)
         )
         if useLM && defaults.plansMetadata {
@@ -665,9 +698,10 @@ private final class MusicAPIServer: @unchecked Sendable {
                 ),
                 lmConfig: .init(
                     maxNewTokens: 1_024,
-                    temperature: 0.85,
+                    temperature: lmTemperature,
                     topK: lmTopK,
-                    topP: lmTopP
+                    topP: lmTopP,
+                    repetitionPenalty: effectiveLMRepetitionPenalty
                 )
             )
             effectivePrompt = Self.nonEmpty(plan.metadata.caption) ?? prompt
@@ -677,17 +711,11 @@ private final class MusicAPIServer: @unchecked Sendable {
                 let upperBound: Float = quality == .song ? 240 : 600
                 duration = min(max(plannedDuration, 10), upperBound)
             }
-            metadata = .init(
-                bpm: Self.nonEmpty(metadata.bpm)
-                    ?? plan.metadata.bpm.map(String.init),
+            metadata = ACEStepPlanningPolicy.merge(
+                userMetadata: metadata,
+                plan: plan.metadata,
                 caption: effectivePrompt,
-                duration: String(max(1, Int(duration.rounded()))),
-                keyscale: Self.nonEmpty(metadata.keyscale)
-                    ?? Self.nonEmpty(plan.metadata.keyscale),
-                language: Self.nonEmpty(metadata.language)
-                    ?? Self.nonEmpty(plan.metadata.language),
-                timesignature: Self.nonEmpty(metadata.timesignature)
-                    ?? Self.nonEmpty(plan.metadata.timesignature)
+                durationSeconds: duration
             )
         }
         let config = ACEStepInferenceConfig(
@@ -737,17 +765,17 @@ private final class MusicAPIServer: @unchecked Sendable {
                 config: config,
                 lmConfig: .init(
                     maxNewTokens: 4_096,
+                    temperature: lmTemperature,
                     topK: lmTopK,
-                    topP: lmTopP
+                    topP: lmTopP,
+                    repetitionPenalty: effectiveLMRepetitionPenalty
                 ),
                 lmUserMetadata: metadata,
                 sourceAudio48kHz: sourceAudio,
                 referenceTimbreAudio48kHz:
                     referenceAudio.isEmpty ? nil : referenceAudio,
                 audioCoverStrength: audioCoverStrength,
-                vocalLanguage: Self.nonEmpty(payload.vocalLanguage)
-                    ?? Self.nonEmpty(metadata.language)
-                    ?? "en",
+                vocalLanguage: effectiveLanguage,
                 instruction: instruction,
                 task: task,
                 repaintConfiguration: repaint,

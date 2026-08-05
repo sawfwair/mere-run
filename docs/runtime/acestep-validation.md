@@ -13,6 +13,7 @@ Hugging Face revisions:
 | Component | Repository | Revision |
 | --- | --- | --- |
 | Shared VAE/text/Turbo assets | `ACE-Step/Ace-Step1.5` | `19671f406d603126926c1b7e2adc169acbcade22` |
+| 1.7B planner | `ACE-Step/Ace-Step1.5` | `19671f406d603126926c1b7e2adc169acbcade22` |
 | XL-Turbo | `ACE-Step/acestep-v15-xl-turbo` | `d4a0b288b83ebb7e25a8c0b32c573c22e134e8ee` |
 | 4B planner | `ACE-Step/acestep-5Hz-lm-4B` | `0a3ec94b557aea7d508da38b31cfe7341f6ff737` |
 | XL-SFT | `ACE-Step/acestep-v15-xl-sft` | `d06de46b4622f781cf07f4a013a67d591ca52819` |
@@ -20,10 +21,14 @@ Hugging Face revisions:
 
 Generation recipes repeat the effective repository/revision set, adapter
 SHA-256 and scale, final effective conditioning metadata, complete inference
-configuration, candidate ranking, and input/output hashes. Recipe schema 2
-adds the post-planning BPM, duration, key/scale, vocal language, and time
-signature. This protects old installs whose original manifest predates source
-provenance and distinguishes requested metadata from the values actually used.
+configuration, candidate ranking, and input/output hashes. Recipe schema 4
+adds planner temperature, top-k/top-p, and repetition penalty to schema 3's
+resolved planner source, root, and immutable repository/revision provenance
+and schema 2's post-planning BPM, duration, key/scale, vocal language, and time
+signature. This protects old installs whose original
+manifest predates source provenance, distinguishes requested metadata from the
+values actually used, and records independently resolved DiT and planner
+components.
 
 ## Parity and local gates
 
@@ -36,6 +41,9 @@ The deterministic test surface covers:
   spherical interpolation, and flow-edit integration windows;
 - prompt/condition encoder, audio-tokenizer, DCW, first-velocity, final-latent,
   and VAE parity dump paths;
+- Python-contract metadata precedence: explicit duration and language survive
+  conflicting planner proposals, 1.7B is discovered before 4B, and separately
+  managed planners resolve without checkpoint-store symlinks;
 - stable seed fanout, candidate metrics/ranking, batch/session serialization,
   API decoding/security, WAV headers, LRC, recipes, and DAW bundle topology;
 - PEFT LoRA and LyCORIS LoKr key mapping, numerical contributions, alpha/scale,

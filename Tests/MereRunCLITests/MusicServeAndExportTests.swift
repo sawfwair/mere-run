@@ -109,13 +109,65 @@ final class MusicServeAndExportTests: XCTestCase {
             JSONSerialization.jsonObject(with: encoded) as? [String: String]
         )
 
-        XCTAssertEqual(ACEStepGenerationRecipe.currentSchemaVersion, 2)
+        XCTAssertEqual(ACEStepGenerationRecipe.currentSchemaVersion, 4)
         XCTAssertEqual(object["bpm"], "118")
         XCTAssertEqual(object["duration"], "12")
         XCTAssertEqual(object["keyscale"], "D major")
         XCTAssertEqual(object["language"], "en")
         XCTAssertEqual(object["timesignature"], "4")
         XCTAssertNil(object["caption"])
+    }
+
+    func testRecipeSchemaPersistsLanguageModelSampling() throws {
+        let sampling = ACEStepRecipeLMSampling(
+            temperature: 0.7,
+            topK: 32,
+            topP: 0.85,
+            repetitionPenalty: 1.08
+        )
+        let encoded = try JSONEncoder().encode(sampling)
+        let object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: encoded) as? [String: Any]
+        )
+
+        XCTAssertEqual(
+            try XCTUnwrap(object["temperature"] as? Double),
+            0.7,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(object["top_k"] as? Int, 32)
+        XCTAssertEqual(
+            try XCTUnwrap(object["top_p"] as? Double),
+            0.85,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(
+            try XCTUnwrap(object["repetition_penalty"] as? Double),
+            1.08,
+            accuracy: 0.0001
+        )
+    }
+
+    func testRecipePlannerProvenanceFindsBundledAndIndependentModels() throws {
+        let bundled = ACEStepGenerationRecipe.languageModelProvenance(
+            source: "acestep-5Hz-lm-4B",
+            subdirectory: "acestep-5Hz-lm-4B",
+            checkpointModelID: ModelResolver.ModelID.aceStepXLTurboLM4B.rawValue,
+            checkpointManifest: nil
+        )
+        XCTAssertEqual(bundled.count, 1)
+        XCTAssertEqual(bundled[0].repository, "ACE-Step/acestep-5Hz-lm-4B")
+        XCTAssertEqual(bundled[0].destinationPath, "acestep-5Hz-lm-4B")
+
+        let independent = ACEStepGenerationRecipe.languageModelProvenance(
+            source: ModelResolver.ModelID.aceStepLM17B.rawValue,
+            subdirectory: "acestep-5Hz-lm-1.7B",
+            checkpointModelID: ModelResolver.ModelID.aceStepXLSFT.rawValue,
+            checkpointManifest: nil
+        )
+        XCTAssertEqual(independent.count, 1)
+        XCTAssertEqual(independent[0].repository, "ACE-Step/Ace-Step1.5")
+        XCTAssertNil(independent[0].destinationPath)
     }
 
     func testMusicServeParsesSecureRuntimeOptions() throws {
@@ -128,6 +180,7 @@ final class MusicServeAndExportTests: XCTestCase {
         XCTAssertEqual(command.host, "0.0.0.0")
         XCTAssertEqual(command.port, 8_089)
         XCTAssertEqual(command.model, "music-acestep-xl-sft")
+        XCTAssertNil(command.lmModel)
         XCTAssertEqual(command.apiKey, "secret")
         XCTAssertTrue(MusicServe.isLoopback("127.0.0.1"))
         XCTAssertTrue(MusicServe.isLoopback("::1"))
@@ -138,6 +191,16 @@ final class MusicServeAndExportTests: XCTestCase {
             ),
             "resident model mismatch"
         )
+    }
+
+    func testMusicServeParsesIndependentPlannerModel() throws {
+        let command = try MusicServe.parse([
+            "--model", ModelResolver.ModelID.aceStepXLSFT.rawValue,
+            "--lm-model", ModelResolver.ModelID.aceStepLM17B.rawValue,
+        ])
+
+        XCTAssertEqual(command.model, ModelResolver.ModelID.aceStepXLSFT.rawValue)
+        XCTAssertEqual(command.lmModel, ModelResolver.ModelID.aceStepLM17B.rawValue)
     }
 
     func testMusicAPIRequestDecodesSnakeCaseAdvancedControls() throws {
@@ -165,6 +228,8 @@ final class MusicServeAndExportTests: XCTestCase {
                   "use_lm": true,
                   "lm_top_k": 50,
                   "lm_top_p": 0.85,
+                  "lm_temperature": 0.7,
+                  "lm_repetition_penalty": 1.08,
                   "bpm": 118,
                   "keyscale": "D major",
                   "metadata_language": "en",
@@ -204,6 +269,8 @@ final class MusicServeAndExportTests: XCTestCase {
         XCTAssertEqual(request.useLanguageModel, true)
         XCTAssertEqual(request.lmTopK, 50)
         XCTAssertEqual(request.lmTopP, 0.85)
+        XCTAssertEqual(request.lmTemperature, 0.7)
+        XCTAssertEqual(request.lmRepetitionPenalty, 1.08)
         XCTAssertEqual(request.bpm, 118)
         XCTAssertEqual(request.keyscale, "D major")
         XCTAssertEqual(request.metadataLanguage, "en")

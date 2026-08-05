@@ -1,3 +1,4 @@
+import Foundation
 import XCTest
 @testable import MereRunCLI
 @testable import MereRunCore
@@ -14,6 +15,7 @@ final class MusicAnalyzeCommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.turboSubdirectory, "acestep-v15-turbo")
         XCTAssertEqual(cmd.vaeSubdirectory, "vae")
         XCTAssertNil(cmd.lmSubdirectory)
+        XCTAssertNil(cmd.lmModel)
         XCTAssertNil(cmd.durationSeconds)
         XCTAssertEqual(cmd.maxNewTokens, 2048)
         XCTAssertEqual(cmd.lmTemperature, 0.3, accuracy: 0.0001)
@@ -57,6 +59,110 @@ final class MusicAnalyzeCommandParsingTests: XCTestCase {
         XCTAssertTrue(cmd.quiet)
     }
 
+    func testMusicAnalyzeParsesIndependentPlannerModel() throws {
+        let cmd = try MusicAnalyze.parse([
+            "/tmp/song.mp3",
+            "--model", ModelResolver.ModelID.aceStepXLSFT.rawValue,
+            "--lm-model", ModelResolver.ModelID.aceStepLM4B.rawValue,
+        ])
+
+        XCTAssertEqual(cmd.model, ModelResolver.ModelID.aceStepXLSFT.rawValue)
+        XCTAssertEqual(cmd.lmModel, ModelResolver.ModelID.aceStepLM4B.rawValue)
+        XCTAssertNil(cmd.lmSubdirectory)
+    }
+
+    func testACEPlannerDiscoveryPrefersUpstreamDefault17B() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let planner17 = root.appendingPathComponent("acestep-5Hz-lm-1.7B", isDirectory: true)
+        let planner4 = root.appendingPathComponent("acestep-5Hz-lm-4B", isDirectory: true)
+        try writeMinimalLM(at: planner17)
+        try writeMinimalLM(at: planner4)
+
+        XCTAssertEqual(
+            try ACEStepCLIHelper.resolveLMSubdirectory(at: root, explicit: nil),
+            "acestep-5Hz-lm-1.7B"
+        )
+        XCTAssertEqual(ACEStepCLIHelper.resolveLMRoot(at: planner17), planner17)
+    }
+
+    func testACEPlannerResolutionReusesInstalled17BWithoutCheckpointSymlink() async throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer {
+            MereRunModelPaths.setProcessModelsDirOverride(nil)
+            try? FileManager.default.removeItem(at: root)
+        }
+        let models = root.appendingPathComponent("models", isDirectory: true)
+        MereRunModelPaths.setProcessModelsDirOverride(models)
+
+        let selectedCheckpoint = root.appendingPathComponent("xl-sft", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: selectedCheckpoint,
+            withIntermediateDirectories: true
+        )
+        let base = models.appendingPathComponent(
+            ModelResolver.ModelID.aceStep.rawValue,
+            isDirectory: true
+        )
+        for subdirectory in [
+            "acestep-v15-turbo",
+            "vae",
+            "Qwen3-Embedding-0.6B",
+        ] {
+            try FileManager.default.createDirectory(
+                at: base.appendingPathComponent(subdirectory, isDirectory: true),
+                withIntermediateDirectories: true
+            )
+        }
+        let planner = base.appendingPathComponent("acestep-5Hz-lm-1.7B", isDirectory: true)
+        try writeMinimalLM(at: planner)
+        try MereRunModelManifest.template(for: .aceStep).write(to: base)
+
+        let resolved = try await ACEStepCLIHelper.resolveLMResources(
+            checkpointsRoot: selectedCheckpoint,
+            lmModel: nil,
+            lmSubdirectory: nil
+        )
+
+        XCTAssertEqual(resolved.source, ModelResolver.ModelID.aceStep.rawValue)
+        XCTAssertEqual(resolved.rootURL, planner)
+        XCTAssertFalse(
+            FileManager.default.fileExists(
+                atPath: selectedCheckpoint
+                    .appendingPathComponent("acestep-5Hz-lm-1.7B")
+                    .path
+            )
+        )
+    }
+
+    func testACEPlannerResolutionLabelsExplicitLocalRootTruthfully() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let checkpoint = directory.appendingPathComponent("xl-sft", isDirectory: true)
+        let planner = directory.appendingPathComponent("custom-planner", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: checkpoint,
+            withIntermediateDirectories: true
+        )
+        try FileManager.default.createDirectory(
+            at: planner,
+            withIntermediateDirectories: true
+        )
+        try writeMinimalLM(at: planner)
+
+        let resolved = try await ACEStepCLIHelper.resolveLMResources(
+            checkpointsRoot: checkpoint,
+            lmModel: planner.path,
+            lmSubdirectory: nil
+        )
+
+        XCTAssertEqual(resolved.source, "local")
+        XCTAssertEqual(resolved.rootURL, planner)
+    }
+
     func testMusicAnalyzeOutputRoundTrips() throws {
         let output = MusicAnalyzeOutput(
             audio: "/tmp/song.mp3",
@@ -64,6 +170,8 @@ final class MusicAnalyzeCommandParsingTests: XCTestCase {
             checkpointsRoot: "/tmp/acestep",
             turboSubdirectory: "acestep-v15-turbo",
             lmSubdirectory: "acestep-5Hz-lm-1.7B",
+            languageModelSource: ModelResolver.ModelID.aceStepLM17B.rawValue,
+            languageModelRoot: "/tmp/acestep/acestep-5Hz-lm-1.7B",
             inputDurationSeconds: 180,
             analyzedDurationSeconds: 30,
             metadata: ACEStepMusicUnderstandingMetadata(
@@ -99,5 +207,23 @@ final class MusicAnalyzeCommandParsingTests: XCTestCase {
                 "transcribe",
             ])
         )
+    }
+
+    private func writeMinimalLM(at root: URL) throws {
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        for filename in [
+            "config.json",
+            "model.safetensors",
+            "tokenizer_config.json",
+            "tokenizer.json",
+            "added_tokens.json",
+        ] {
+            XCTAssertTrue(
+                FileManager.default.createFile(
+                    atPath: root.appendingPathComponent(filename).path,
+                    contents: Data()
+                )
+            )
+        }
     }
 }

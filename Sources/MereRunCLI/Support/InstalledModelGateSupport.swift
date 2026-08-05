@@ -316,6 +316,24 @@ enum InstalledModelSmokePlans {
                 try await runner.installedACEStepCheck(model: spec.id)
             }
 
+        case .aceStepLM:
+            return companion(
+                spec,
+                installedIDs: installedIDs,
+                candidates: [
+                    ModelResolver.ModelID.aceStep.rawValue,
+                    ModelResolver.ModelID.aceStepXLTurbo.rawValue,
+                    ModelResolver.ModelID.aceStepXLSFT.rawValue,
+                    ModelResolver.ModelID.aceStepXLBase.rawValue,
+                ],
+                route: "music generate with an independent planner"
+            ) { runner, primary in
+                try await runner.installedACEStepCheck(
+                    model: primary,
+                    plannerModel: spec.id
+                )
+            }
+
         case .magentaRT2:
             return direct(spec, route: "music generate") { runner in
                 try await runner.installedMagentaCheck(model: spec.id)
@@ -967,23 +985,31 @@ extension GateRunner {
         return try directoryObservation(output, run: run, label: "TRELLIS.2 mesh artifacts")
     }
 
-    func installedACEStepCheck(model: String) async throws -> GateObservation {
+    func installedACEStepCheck(
+        model: String,
+        plannerModel: String? = nil
+    ) async throws -> GateObservation {
         let output = artifactURL(model, extension: "wav")
+        var arguments = [
+            "music", "generate",
+            "A short soft electronic pulse.",
+            "--model", model,
+            "--duration", "2",
+            "--quality", "draft",
+            "--steps", "1",
+            "--candidates", "1",
+            "--seed", "7",
+            "--no-recipe",
+            "--output", output.path,
+            "--quiet",
+        ]
+        if let plannerModel {
+            arguments += ["--use-lm", "--lm-model", plannerModel]
+        } else {
+            arguments.append("--no-lm")
+        }
         let run = try await exec(
-            [
-                "music", "generate",
-                "A short soft electronic pulse.",
-                "--model", model,
-                "--duration", "2",
-                "--quality", "draft",
-                "--steps", "1",
-                "--candidates", "1",
-                "--no-lm",
-                "--seed", "7",
-                "--no-recipe",
-                "--output", output.path,
-                "--quiet",
-            ],
+            arguments,
             timeout: 3_600
         )
         return try audioObservation(output, run: run)

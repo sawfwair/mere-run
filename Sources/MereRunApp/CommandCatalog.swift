@@ -493,6 +493,7 @@ struct CommandDraft: Equatable, Codable {
     var musicCheckpointsRoot = ""
     var musicDecoderSubdirectory = "acestep-v15-turbo"
     var musicVAESubdirectory = "vae"
+    var musicLMModel = ""
     var musicLMSubdirectory = ""
     var musicTextSubdirectory = ""
     var musicLMMode = "auto"
@@ -536,8 +537,10 @@ struct CommandDraft: Equatable, Codable {
     var musicBPM = ""
     var musicKey = ""
     var musicTimeSignature = ""
+    var musicLMTemperature = 0.85
     var musicLMTopK = 0
     var musicLMTopP = 0.9
+    var musicLMRepetitionPenalty = 1.0
     var musicMetadataDuration = ""
     var musicMetadataLanguage = ""
     var musicNoTiledVAE = false
@@ -2117,6 +2120,9 @@ struct CommandTemplate: Identifiable, Equatable {
             if !draft.musicLMSubdirectory.isBlank {
                 args += ["--lm-subdirectory", draft.musicLMSubdirectory]
             }
+            if !draft.musicLMModel.isBlank {
+                args += ["--lm-model", draft.musicLMModel]
+            }
             if !draft.musicTextSubdirectory.isBlank {
                 args += ["--text-subdirectory", draft.musicTextSubdirectory]
             }
@@ -2193,8 +2199,10 @@ struct CommandTemplate: Identifiable, Equatable {
                 args += ["--timesignature", draft.musicTimeSignature]
             }
             args += [
+                "--lm-temperature", format(draft.musicLMTemperature),
                 "--lm-top-k", String(draft.musicLMTopK),
-                "--lm-top-p", format(draft.musicLMTopP)
+                "--lm-top-p", format(draft.musicLMTopP),
+                "--lm-repetition-penalty", format(draft.musicLMRepetitionPenalty)
             ]
             if !draft.musicMetadataDuration.isBlank {
                 args += ["--metadata-duration", draft.musicMetadataDuration]
@@ -2459,6 +2467,9 @@ struct CommandTemplate: Identifiable, Equatable {
             if !draft.musicLMSubdirectory.isBlank {
                 args += ["--lm-subdirectory", draft.musicLMSubdirectory]
             }
+            if !draft.musicLMModel.isBlank {
+                args += ["--lm-model", draft.musicLMModel]
+            }
             if draft.useDuration { args += ["--duration", format(draft.durationSeconds)] }
             args += [
                 "--max-new-tokens", String(draft.musicAnalysisMaxTokens),
@@ -2587,6 +2598,9 @@ struct CommandTemplate: Identifiable, Equatable {
             }
             if !draft.musicLMSubdirectory.isBlank {
                 args += ["--lm-subdirectory", draft.musicLMSubdirectory]
+            }
+            if !draft.musicLMModel.isBlank {
+                args += ["--lm-model", draft.musicLMModel]
             }
             if !draft.musicTextSubdirectory.isBlank {
                 args += ["--text-subdirectory", draft.musicTextSubdirectory]

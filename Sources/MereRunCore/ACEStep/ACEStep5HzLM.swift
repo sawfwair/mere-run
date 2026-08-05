@@ -19,7 +19,7 @@ public struct ACEStep5HzLMGenerationConfig: Sendable, Hashable {
         topK: Int = 0,
         topP: Float = 0.9,
         repetitionPenalty: Float? = nil,
-        repetitionContextSize: Int = 64,
+        repetitionContextSize: Int = 40_960,
         stopTokenIds: Set<Int> = [],
         seed: UInt64? = nil
     ) {

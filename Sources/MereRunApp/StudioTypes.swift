@@ -342,6 +342,8 @@ struct StudioDraft: Codable, Equatable {
     var musicReferenceAudioPaths = ""
     var musicLRCFile = ""
     var musicLMMode = "auto"
+    var musicLMTemperature = 0.85
+    var musicLMRepetitionPenalty = 1.0
     var musicAnalyzeSourceAudio = false
     var musicOverrideSteps = false
     var musicCandidates = 0
@@ -455,6 +457,8 @@ struct StudioDraft: Codable, Equatable {
         musicReferenceAudioPaths = ""
         musicLRCFile = ""
         musicLMMode = "auto"
+        musicLMTemperature = 0.85
+        musicLMRepetitionPenalty = 1
         musicAnalyzeSourceAudio = false
         musicOverrideSteps = false
         musicCandidates = 0
@@ -768,6 +772,8 @@ enum StudioCommandAdapter {
             draft.musicReferenceAudioPaths = studioDraft.musicReferenceAudioPaths
             draft.musicLRCFile = studioDraft.musicLRCFile
             draft.musicLMMode = studioDraft.musicLMMode
+            draft.musicLMTemperature = studioDraft.musicLMTemperature
+            draft.musicLMRepetitionPenalty = studioDraft.musicLMRepetitionPenalty
             draft.musicAnalyzeSourceAudio = studioDraft.musicAnalyzeSourceAudio
             draft.musicOverrideSteps = studioDraft.musicOverrideSteps
             draft.musicCandidates = studioDraft.musicCandidates

@@ -14,12 +14,15 @@ Managed ids:
 - `music-acestep`: ACE-Step turbo, VAE, and 5 Hz LM.
 - `music-acestep-xl-turbo-lm4b`: ACE-Step XL turbo plus the optional 4B 5 Hz
   LM.
+- `music-acestep-lm-1.7b`: independently pullable upstream-default planner.
+- `music-acestep-lm-4b`: independently pullable optional 4B planner.
 
 ## Install And Check
 
 ```bash
 mere.run model pull music-acestep
 mere.run model pull music-acestep-xl-turbo-lm4b
+mere.run model pull music-acestep-lm-1.7b
 mere.run music analyze --help
 mere.run guide music analyze --model music-acestep-xl-turbo-lm4b
 ```
@@ -29,8 +32,10 @@ mere.run guide music analyze --model music-acestep-xl-turbo-lm4b
 - positional audio: audio file to analyze.
 - `--model`, `-m`: managed ACE-Step id, model root, or checkpoints root.
 - `--checkpoints-root`: root containing ACE-Step subdirectories.
-- `--turbo-subdirectory`, `--vae-subdirectory`, `--lm-subdirectory`: component
-  layout overrides.
+- `--turbo-subdirectory`, `--vae-subdirectory`: component layout overrides.
+  `--lm-subdirectory` is the legacy same-root LM override.
+- `--lm-model`: managed planner id or local planner root, independent of the
+  DiT selected by `--model`.
 - `--duration`: analyze the first N seconds instead of the full decoded input.
 - `--max-new-tokens`: maximum LM tokens for the understanding pass.
 - `--lm-temperature`, `--lm-top-k`, `--lm-top-p`: LM sampling controls.
@@ -70,7 +75,7 @@ which metadata to override manually.
 Use `music generate --analyze-source-audio` when analysis is only an input to a
 cover or remix. In that path, analysis fills missing generation metadata before
 the direct ACE-Step DiT cover pass. Explicit generation flags such as `--bpm`,
-`--keyscale`, `--timesignature`, and `--metadata-language` still take priority.
+`--keyscale`, `--timesignature`, and `--vocal-language` still take priority.
 
 Use `--duration 30` for fast probes on long songs. Run without `--duration` when
 the entire song structure matters, or add `--include-raw-lm` when debugging why
@@ -80,8 +85,8 @@ metadata was missing or parsed unexpectedly.
 
 ```bash
 mere.run music analyze ./song.mp3 \
-  --model music-acestep-xl-turbo-lm4b \
-  --lm-subdirectory acestep-5Hz-lm-4B
+  --model music-acestep-xl-sft \
+  --lm-model music-acestep-lm-1.7b
 ```
 
 ```bash
@@ -103,7 +108,7 @@ mere.run music generate \
 ```bash
 mere.run music generate \
   "modern reggaeton dance club remix, dembow rhythm, punchy bass" \
-  --model music-acestep-xl-turbo-lm4b \
+  --model music-acestep-xl-turbo \
   --source-audio ./song.mp3 \
   --analyze-source-audio \
   --audio-cover-strength 0.20 \
@@ -124,9 +129,10 @@ mere.run music generate \
 
 ## Troubleshooting
 
-- Missing LM: pull `music-acestep` or `music-acestep-xl-turbo-lm4b`, or pass
-  `--lm-subdirectory`.
-- XL turbo without LM: use `music-acestep-xl-turbo-lm4b` for analysis.
+- Missing LM: pull `music-acestep-lm-1.7b`, or pass `--lm-model` to a managed
+  planner id or local root.
+- Legacy bundled layout: use `--lm-subdirectory` only when the LM lives under
+  the selected checkpoint root.
 - Huge JSON: avoid `--include-audio-codes` for full songs unless you are
   debugging the token stream.
 - Slow analysis: pass `--duration` to inspect a shorter prefix first.

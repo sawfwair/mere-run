@@ -2838,8 +2838,13 @@ private struct MusicGenerationOptions: View {
                         .merePanel()
                 }
                 AdaptiveControlRow {
+                    NumberField(title: "LM temperature", value: $controller.draft.musicLMTemperature)
                     NumberStepper(title: "LM top-k", value: $controller.draft.musicLMTopK, range: 0...2_048, step: 1)
                     NumberField(title: "LM top-p", value: $controller.draft.musicLMTopP)
+                    NumberField(
+                        title: "LM repetition penalty",
+                        value: $controller.draft.musicLMRepetitionPenalty
+                    )
                 }
                 TextField("Vocal language", text: $controller.draft.musicVocalLanguage)
                     .textFieldStyle(.plain)
@@ -3179,6 +3184,10 @@ private struct MusicModelLayoutOptions: View {
                         .merePanel()
                 }
                 if includesLM {
+                    TextField("5Hz LM model (default: 1.7B)", text: $controller.draft.musicLMModel)
+                        .textFieldStyle(.plain)
+                        .padding(10)
+                        .merePanel()
                     TextField("5Hz LM subdirectory (auto)", text: $controller.draft.musicLMSubdirectory)
                         .textFieldStyle(.plain)
                         .padding(10)

@@ -587,9 +587,10 @@ swift run mere.run music generate \
   --output ./cover.wav
 
 # Analyze a source song before cover/remix work
+swift run mere.run model pull music-acestep-lm-1.7b
 swift run mere.run music analyze ./song.mp3 \
-  --model music-acestep-xl-turbo-lm4b \
-  --lm-subdirectory acestep-5Hz-lm-4B \
+  --model music-acestep-xl-sft \
+  --lm-model music-acestep-lm-1.7b \
   > ./song-analysis.json
 
 # Transcribe a full mix into instrument-separated MIDI with MuScriptor
