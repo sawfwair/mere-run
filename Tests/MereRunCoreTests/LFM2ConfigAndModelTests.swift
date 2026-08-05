@@ -402,6 +402,23 @@ final class LFM2ConfigAndModelTests: MereRunCoreTestCase {
         XCTAssertEqual(stats.maxBatchSize, 0)
     }
 
+    func testLFM2PrefillThroughputUsesPromptTokensAndNativeTiming() throws {
+        let throughput = try XCTUnwrap(LFM2Generator.prefillTokensPerSecond(
+            promptTokenCount: 5_902,
+            prefillSeconds: 2.5
+        ))
+
+        XCTAssertEqual(throughput, 2_360.8, accuracy: 0.0001)
+        XCTAssertNil(LFM2Generator.prefillTokensPerSecond(
+            promptTokenCount: 0,
+            prefillSeconds: 2.5
+        ))
+        XCTAssertNil(LFM2Generator.prefillTokensPerSecond(
+            promptTokenCount: 5_902,
+            prefillSeconds: 0
+        ))
+    }
+
     func testLFM2DecodeLoopEpochCancelsStaleLoopAndAllowsImmediateReuse() {
         var state = LFM2DecodeLoopEpochState()
         let originalEpoch = state.residencyEpoch

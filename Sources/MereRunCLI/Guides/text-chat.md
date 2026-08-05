@@ -102,7 +102,9 @@ mere.run text train-lora \
   available for native MLX Gemma and Qwen-family chat models, forces thinking
   off, and validates every generated token against the JSON grammar.
 - `--thinking`, `--show-thinking`: include hidden reasoning output when supported.
-- `--stats`: print timing to stderr; Gemma4 runs also include MTP state and accept/draft counts.
+- `--stats`: print timing and throughput to stderr. LFM2 reports separate
+  prefill and decode tokens/sec; Gemma4 runs also include MTP state and
+  accept/draft counts.
 - `--stream`: stream tokens to stdout.
 - `--lora`: local `.safetensors` adapter path for supported native chat models.
 - `--lora-scale`: adapter scale; defaults to `1.0`.

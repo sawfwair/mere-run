@@ -124,6 +124,14 @@ public actor LFM2Generator: ChatGenerator {
     private static let prefillChunkSize = 512
     private static let prefixKVCacheMaxEntries = 4
 
+    static func prefillTokensPerSecond(
+        promptTokenCount: Int,
+        prefillSeconds: Double
+    ) -> Double? {
+        guard promptTokenCount > 0, prefillSeconds > 0 else { return nil }
+        return Double(promptTokenCount) / prefillSeconds
+    }
+
     /// In-memory prompt-prefix reuse, mirroring the Qwen-family
     /// implementation: forked layer caches (both attention KV and conv states
     /// support forking) are stored at prefill chunk boundaries and the
@@ -416,7 +424,11 @@ public actor LFM2Generator: ChatGenerator {
                 firstTokenSeconds: decodeResult.firstTokenSeconds,
                 kvCacheMode: effectiveKVCacheMode,
                 prefillKVCache: effectiveKVCacheMode.genericCacheLabel,
-                decodeKVCache: effectiveKVCacheMode.genericCacheLabel
+                decodeKVCache: effectiveKVCacheMode.genericCacheLabel,
+                prefillTokensPerSecond: Self.prefillTokensPerSecond(
+                    promptTokenCount: promptTokens.count,
+                    prefillSeconds: prefillSeconds
+                )
             ),
             toolCalls: toolCalls,
             promptTokens: promptTokens.count

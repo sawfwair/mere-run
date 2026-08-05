@@ -12,7 +12,8 @@ The format is based on Keep a Changelog.
   `text-chat-lfm25-2.6b-4bit`, including dense `Lfm2ForCausalLM` config and
   `w1`/`w2`/`w3` MLP support in the native Swift LFM2 runtime, nested snapshot
   normalization, managed-model provenance, license acceptance, and real-model
-  validation coverage.
+  validation coverage; `text chat --stats` reports measured LFM2 prefill
+  tokens/sec alongside decode throughput.
 
 ### Music
 

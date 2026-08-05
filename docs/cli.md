@@ -804,7 +804,8 @@ Key options:
   enabled by default even though the reasoning stays hidden. Bonsai 27B also
   defaults to thinking-enabled generation.
 - `--stream`
-- `--stats`: includes Gemma4 MTP state and accept/draft counts when a Gemma4 model is used
+- `--stats`: includes separate LFM2 prefill and decode tokens/sec, and Gemma4
+  MTP state and accept/draft counts when those runtimes are used
 - `--quiet`
 
 Unless `--quiet` is set, diagnostics on stderr include the selected text
