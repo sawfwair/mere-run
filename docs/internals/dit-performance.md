@@ -234,6 +234,37 @@ normalization, modulation, transpose, synchronization, and thermal effect.
 Peak Metal memory was only 48.77 GiB; additional disk or unified memory does
 not close that utilization gap.
 
+The first valid ten-second geometry is 243 frames, which produces 72 video
+latent frames. At 1344x768, the locked benchmark prompt therefore packs 73,470
+rows: 72,576 video rows, 810 audio rows, and 84 text rows. True-shape searches
+did not justify another transformer policy. A sampled 384-query/four-kernel
+attention candidate lost its full-block gate to the shipped 768-query/single-
+kernel schedule (31.845 s versus 31.438 s, `rel_l2=0`). A longer-row GEMM tier
+also lost its order-balanced whole-block gate (29.151 s versus 29.088 s,
+`rel_l2=0`) and was removed. These results put one exact 50-block evaluation
+near 24-26 minutes before VAE decode; a 20-point exact schedule still needs 19
+such evaluations.
+
+The video VAE did retain a separate full-precision runtime win. Fresh-process released-
+checkpoint sweeps at 832x480 and 124 frames measured 96.091 s with 256-pixel
+tiles, 76.421 s with 320-pixel tiles, and 77.577 s with 480-pixel tiles. The
+320-pixel arm was 1.257x faster than the old default and reduced reported peak
+Metal memory from 9.85 to 8.91 GiB. At 1344x768 it decoded the same 124 frames
+in 213.005 s at 15.12 GiB peak; the 480-pixel arm crossed 252 seconds without
+finishing and was stopped. The production default is therefore 320 pixels.
+The model, precision, causal tile algorithm, and overlap blend are unchanged;
+the larger tile reduces redundant overlap and tile-boundary context loss.
+Reproduce a candidate in a fresh process with:
+
+```bash
+MERERUN_H3_MODEL_ROOT=/path/to/h3 \
+MERERUN_H3_VAE_TILE_SIZE=320 \
+MERERUN_H3_VAE_WIDTH=1344 \
+MERERUN_H3_VAE_HEIGHT=768 \
+MERERUN_H3_VAE_FRAMES=124 \
+scripts/h3-kernel-lab.sh vae
+```
+
 Only improvements that repeat across fresh processes, preserve the numerical
 gate, and improve a matched full-block or denoise-step probe should move into
 the runtime. Full video generation remains a final quality gate, not the inner

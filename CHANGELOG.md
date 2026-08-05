@@ -54,6 +54,13 @@ The format is based on Keep a Changelog.
 - fused the video VAE decoder's released per-head-interleaved QKV projection
   into one global-QKV linear after exact load-time deinterleaving, removing two
   projection dispatches per decoder block while retaining tiled geometry.
+- increased the H3 video VAE's default spatial tile from 256 to 320 pixels
+  after fresh-process checkpoint sweeps. At 832x480 and 124 frames the matched
+  decode fell from 96.091 s to 76.421 s (1.257x) while reported peak Metal
+  memory fell from 9.85 to 8.91 GiB. The true 1344x768 lab shape completed in
+  213.005 s; a 480-pixel candidate exceeded that boundary and was rejected.
+  The accepted path retains the released decoder, precision, causal tiling,
+  and overlap blending while reducing redundant overlap work.
 - added non-perturbing per-step performance telemetry, made block profiling
   select a safe eager execution path instead of evaluating inside an MLX
   compile transform, and added exact H3 attention/projection shape benchmarks.

@@ -70,8 +70,11 @@ case "$mode" in
   gemm-block)
     run_release_test DiTShapeBenchTests/testMiniMaxH3BlockGEMMSchedules
     ;;
+  vae)
+    run_release_test DiTShapeBenchTests/testMiniMaxH3VideoVAETileSize
+    ;;
   *)
-    print -u2 "usage: scripts/h3-kernel-lab.sh [quick|attention|attention-block|projections|modulation|block|gemm|gemm-block]"
+    print -u2 "usage: scripts/h3-kernel-lab.sh [quick|attention|attention-block|projections|modulation|block|gemm|gemm-block|vae]"
     exit 64
     ;;
 esac

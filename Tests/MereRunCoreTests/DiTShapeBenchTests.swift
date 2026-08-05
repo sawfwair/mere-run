@@ -1031,6 +1031,8 @@ final class DiTShapeBenchTests: XCTestCase {
     /// swizzle at H3's true-768 QKV projection shape.
     func testMiniMaxH3MetalGEMMTiles() throws {
         try benchGate()
+        let environment = ProcessInfo.processInfo.environment
+        let rows = max(1, Int(environment["MERERUN_H3_BENCH_ROWS"] ?? "") ?? 37_966)
 
         struct Tile: Hashable {
             let blockRows: Int
@@ -1064,6 +1066,7 @@ final class DiTShapeBenchTests: XCTestCase {
         }
 
         func select(_ arm: Arm) {
+            setenv("MLX_GEMM_H3_TUNED", "0", 1)
             setenv("MLX_GEMM_BM", String(arm.tile.blockRows), 1)
             setenv("MLX_GEMM_BN", String(arm.tile.blockColumns), 1)
             setenv("MLX_GEMM_BK", String(arm.tile.blockDepth), 1)
@@ -1076,7 +1079,6 @@ final class DiTShapeBenchTests: XCTestCase {
         defer { select(defaultArm) }
 
         Stream.withNewDefaultStream {
-            let rows = 37_966
             let inputDimension = 5_376
             let outputDimension = 21_504
             let input = MLXRandom.normal([1, rows, inputDimension]).asType(.bfloat16)
@@ -1149,9 +1151,12 @@ final class DiTShapeBenchTests: XCTestCase {
     }
 
     /// Confirms the QKV winner against every dense projection in a production
-    /// H3 block before any MLX heuristic changes are considered.
+    /// H3 block before any MLX heuristic changes are considered. Set
+    /// `MERERUN_H3_BENCH_ROWS` to retune a longer packed sequence.
     func testMiniMaxH3MetalGEMMProjectionShapes() throws {
         try benchGate()
+        let environment = ProcessInfo.processInfo.environment
+        let rows = max(1, Int(environment["MERERUN_H3_BENCH_ROWS"] ?? "") ?? 37_966)
 
         struct Arm {
             let name: String
@@ -1168,10 +1173,18 @@ final class DiTShapeBenchTests: XCTestCase {
                 rowWarps: 1, columnWarps: 2, swizzle: 0),
             Arm(name: "default-sw1", blockRows: 64, blockColumns: 64, blockDepth: 16,
                 rowWarps: 1, columnWarps: 2, swizzle: 1),
+            Arm(name: "four-warp-sw1", blockRows: 64, blockColumns: 64, blockDepth: 16,
+                rowWarps: 2, columnWarps: 2, swizzle: 1),
             Arm(name: "four-warp-sw2", blockRows: 64, blockColumns: 64, blockDepth: 16,
                 rowWarps: 2, columnWarps: 2, swizzle: 2),
+            Arm(name: "four-warp-sw3", blockRows: 64, blockColumns: 64, blockDepth: 16,
+                rowWarps: 2, columnWarps: 2, swizzle: 3),
+            Arm(name: "narrow-m-sw1", blockRows: 32, blockColumns: 64, blockDepth: 16,
+                rowWarps: 1, columnWarps: 2, swizzle: 1),
             Arm(name: "narrow-m-sw2", blockRows: 32, blockColumns: 64, blockDepth: 16,
                 rowWarps: 1, columnWarps: 2, swizzle: 2),
+            Arm(name: "narrow-m-sw3", blockRows: 32, blockColumns: 64, blockDepth: 16,
+                rowWarps: 1, columnWarps: 2, swizzle: 3),
         ]
         let shapes = [
             (name: "qkv", input: 5_376, output: 21_504),
@@ -1181,6 +1194,7 @@ final class DiTShapeBenchTests: XCTestCase {
         ]
 
         func select(_ arm: Arm) {
+            setenv("MLX_GEMM_H3_TUNED", "0", 1)
             setenv("MLX_GEMM_BM", String(arm.blockRows), 1)
             setenv("MLX_GEMM_BN", String(arm.blockColumns), 1)
             setenv("MLX_GEMM_BK", String(arm.blockDepth), 1)
@@ -1192,7 +1206,6 @@ final class DiTShapeBenchTests: XCTestCase {
         defer { select(arms[0]) }
 
         Stream.withNewDefaultStream {
-            let rows = 37_966
             for shape in shapes {
                 let input = MLXRandom.normal([1, rows, shape.input]).asType(.bfloat16)
                 let weight = MLXRandom.normal([shape.output, shape.input]).asType(.bfloat16)
@@ -1472,10 +1485,26 @@ final class DiTShapeBenchTests: XCTestCase {
         let environment = ProcessInfo.processInfo.environment
         let rows = max(1, Int(environment["MERERUN_H3_BENCH_ROWS"] ?? "") ?? 37_966)
         let rounds = max(2, Int(environment["MERERUN_H3_BENCH_ROUNDS"] ?? "") ?? 4)
+        let referenceQueryTokens = max(
+            1,
+            Int(environment["MERERUN_H3_BENCH_REFERENCE_QUERY_TOKENS"] ?? "") ?? 1_024
+        )
+        let referenceEvaluationBatch = max(
+            1,
+            Int(environment["MERERUN_H3_BENCH_REFERENCE_EVAL_BATCH"] ?? "") ?? 4
+        )
+        let candidateQueryTokens = max(
+            1,
+            Int(environment["MERERUN_H3_BENCH_CANDIDATE_QUERY_TOKENS"] ?? "") ?? 768
+        )
+        let candidateEvaluationBatch = max(
+            1,
+            Int(environment["MERERUN_H3_BENCH_CANDIDATE_EVAL_BATCH"] ?? "") ?? 1
+        )
         let benchmark = MiniMaxH3BlockScheduleBenchmark(
             rowCount: rows,
-            maximumQueryTokens: 1_024,
-            maximumKernelsPerEvaluation: 4
+            maximumQueryTokens: referenceQueryTokens,
+            maximumKernelsPerEvaluation: referenceEvaluationBatch
         )
 
         func output(queryTokens: Int, evaluationBatch: Int) -> MLXArray {
@@ -1491,10 +1520,16 @@ final class DiTShapeBenchTests: XCTestCase {
             return CFAbsoluteTimeGetCurrent() - started
         }
 
-        MLX.eval(output(queryTokens: 1_024, evaluationBatch: 4))
-        MLX.eval(output(queryTokens: 768, evaluationBatch: 1))
-        let reference = output(queryTokens: 1_024, evaluationBatch: 4).asType(.float32)
-        let candidate = output(queryTokens: 768, evaluationBatch: 1).asType(.float32)
+        MLX.eval(output(queryTokens: referenceQueryTokens, evaluationBatch: referenceEvaluationBatch))
+        MLX.eval(output(queryTokens: candidateQueryTokens, evaluationBatch: candidateEvaluationBatch))
+        let reference = output(
+            queryTokens: referenceQueryTokens,
+            evaluationBatch: referenceEvaluationBatch
+        ).asType(.float32)
+        let candidate = output(
+            queryTokens: candidateQueryTokens,
+            evaluationBatch: candidateEvaluationBatch
+        ).asType(.float32)
         MLX.eval(reference, candidate)
         let delta = candidate - reference
         let referenceSquared = MLX.sum(reference * reference).item(Float.self)
@@ -1508,20 +1543,36 @@ final class DiTShapeBenchTests: XCTestCase {
         var candidateTotal = 0.0
         for round in 0..<rounds {
             if round.isMultiple(of: 2) {
-                referenceTotal += elapsed(queryTokens: 1_024, evaluationBatch: 4)
-                candidateTotal += elapsed(queryTokens: 768, evaluationBatch: 1)
+                referenceTotal += elapsed(
+                    queryTokens: referenceQueryTokens,
+                    evaluationBatch: referenceEvaluationBatch
+                )
+                candidateTotal += elapsed(
+                    queryTokens: candidateQueryTokens,
+                    evaluationBatch: candidateEvaluationBatch
+                )
             } else {
-                candidateTotal += elapsed(queryTokens: 768, evaluationBatch: 1)
-                referenceTotal += elapsed(queryTokens: 1_024, evaluationBatch: 4)
+                candidateTotal += elapsed(
+                    queryTokens: candidateQueryTokens,
+                    evaluationBatch: candidateEvaluationBatch
+                )
+                referenceTotal += elapsed(
+                    queryTokens: referenceQueryTokens,
+                    evaluationBatch: referenceEvaluationBatch
+                )
             }
         }
         let referenceSeconds = referenceTotal / Double(rounds)
         let candidateSeconds = candidateTotal / Double(rounds)
         print(String(
-            format: "[h3-lab] block-attention rows=%d reference=1024x4 reference_ms=%.0f "
-                + "candidate=768x1 candidate_ms=%.0f speedup=%.3fx relative_l2=%.6g",
+            format: "[h3-lab] block-attention rows=%d reference=%dx%d reference_ms=%.0f "
+                + "candidate=%dx%d candidate_ms=%.0f speedup=%.3fx relative_l2=%.6g",
             rows,
+            referenceQueryTokens,
+            referenceEvaluationBatch,
             referenceSeconds * 1_000,
+            candidateQueryTokens,
+            candidateEvaluationBatch,
             candidateSeconds * 1_000,
             referenceSeconds / candidateSeconds,
             relativeL2Error
@@ -1529,35 +1580,48 @@ final class DiTShapeBenchTests: XCTestCase {
         Memory.clearCache()
     }
 
-    /// Loads the released H3 video VAE and times one complete 124-frame decode
-    /// with a configurable spatial tile. Run each size in a fresh process:
-    /// `MERERUN_H3_VAE_TILE_SIZE=320` and `MERERUN_H3_MODEL_ROOT=/path/to/root`.
+    /// Loads the released H3 video VAE and times one complete decode with a
+    /// configurable spatial tile and geometry. Run each size in a fresh process.
     func testMiniMaxH3VideoVAETileSize() throws {
         try benchGate()
+        let environment = ProcessInfo.processInfo.environment
         guard let root = ProcessInfo.processInfo.environment["MERERUN_H3_MODEL_ROOT"],
               !root.isEmpty else {
             throw XCTSkip("Set MERERUN_H3_MODEL_ROOT to an installed H3 model root")
         }
-        let tileSize = Int(
-            ProcessInfo.processInfo.environment["MERERUN_H3_VAE_TILE_SIZE"] ?? ""
-        ) ?? MiniMaxH3VideoVAE.defaultSpatialTileSize
+        let tileSize = Int(environment["MERERUN_H3_VAE_TILE_SIZE"] ?? "")
+            ?? MiniMaxH3VideoVAE.defaultSpatialTileSize
+        let width = Int(environment["MERERUN_H3_VAE_WIDTH"] ?? "") ?? 832
+        let height = Int(environment["MERERUN_H3_VAE_HEIGHT"] ?? "") ?? 480
+        let frameCount = Int(environment["MERERUN_H3_VAE_FRAMES"] ?? "") ?? 124
+        XCTAssertTrue(width.isMultiple(of: 16))
+        XCTAssertTrue(height.isMultiple(of: 16))
+        let latentFrames = try MiniMaxH3Geometry.videoLatentFrameCount(for: frameCount)
         let resources = MiniMaxH3Resources(rootURL: URL(fileURLWithPath: root, isDirectory: true))
         let model = try MiniMaxH3ModelLoader.loadVideoVAE(resources: resources)
         model.spatialTileSize = tileSize
-        let latents = MLXRandom.normal([1, 24, 37, 30, 52]).asType(.float32)
+        let latents = MLXRandom.normal([
+            1,
+            24,
+            latentFrames,
+            height / 16,
+            width / 16,
+        ]).asType(.float32)
         MLX.eval(latents)
 
         let started = CFAbsoluteTimeGetCurrent()
         let decoded = model.decode(latents)
         MLX.eval(decoded)
         print(String(
-            format: "[dit-bench] H3 video VAE tile=%d frames=%d %.3fs peak=%.2fGiB",
+            format: "[dit-bench] H3 video VAE tile=%d size=%dx%d frames=%d %.3fs peak=%.2fGiB",
             tileSize,
+            width,
+            height,
             decoded.dim(1),
             CFAbsoluteTimeGetCurrent() - started,
             Double(Memory.snapshot().peakMemory) / 1_073_741_824
         ))
-        XCTAssertEqual(decoded.shape, [1, 124, 480, 832, 3])
+        XCTAssertEqual(decoded.shape, [1, frameCount, height, width, 3])
     }
 
     /// Full-model paired A/B: the same quantized klein-nano forward with the

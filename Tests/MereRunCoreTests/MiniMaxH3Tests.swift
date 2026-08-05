@@ -319,6 +319,7 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
     }
 
     func testVideoVAETilePlansPreserveCanvasAndMinimumOverlap() {
+        XCTAssertEqual(MiniMaxH3VideoVAE.defaultSpatialTileSize, 320)
         for tileSize in [256, 320] {
             for length in [480, 832, 1_344] {
                 let plan = MiniMaxH3VideoVAE.tilePlan(length: length, tileSize: tileSize)

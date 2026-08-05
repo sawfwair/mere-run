@@ -237,7 +237,7 @@ public final class MiniMaxH3VideoDecoder: Module {
 }
 
 public final class MiniMaxH3VideoVAE: Module {
-    static let defaultSpatialTileSize = 256
+    static let defaultSpatialTileSize = 320
     static let minimumSpatialTileOverlap = 64
 
     var spatialTileSize = defaultSpatialTileSize

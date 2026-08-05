@@ -92,3 +92,38 @@ exact run now projects to about 4.16 hours end to end. The existing 417-block
 `maximum` policy projects to about 1.87 hours. Those are projections, not
 measured 768p render receipts; a near-30-minute quality result requires fewer
 model/block evaluations rather than another small scheduling adjustment.
+
+## VAE tile frontier
+
+A later fresh-process sweep of the released BF16 video decoder changed the
+production spatial tile from 256 to 320 pixels. At 832x480 and 124 frames, the
+matched decode fell from 96.091 to 76.421 seconds (1.257x) while reported peak
+Metal memory fell from 9.85 to 8.91 GiB. A 480-pixel arm reached 77.577 seconds
+and lost. At the true 1344x768 shape, the accepted 320-pixel arm completed in
+213.005 seconds at a 15.12 GiB reported peak; the 480-pixel arm crossed 252
+seconds without completing and was stopped.
+
+This is a non-quantized runtime change: the released decoder, precision,
+causal tiling, and overlap blend remain intact. The larger tile performs fewer
+overlapping tile evaluations and gives each evaluation more spatial context.
+The earlier end-to-end table remains the immutable artifact receipt; replacing
+its 242.004-second decode with 213.005 seconds would be an arithmetic projection,
+not a newly measured end-to-end result.
+
+## Ten-second physical boundary
+
+The first valid frame count beyond ten seconds is 243 frames (10.125 seconds),
+which yields 72 video latent frames and 73,470 packed rows for the locked prompt.
+True-shape whole-block gates measured 29.088-31.438 seconds per transformer
+block with the accepted policies. That puts one exact 50-block model evaluation
+near 24-26 minutes. Scaling the measured 124-frame VAE decode only as an
+arithmetic estimate adds roughly seven minutes, placing the single-evaluation
+10-second boundary near 31-33 minutes.
+
+That number is the physical one-evaluation boundary, not a quality render.
+A 20-point exact schedule still performs 19 complete model evaluations and
+therefore projects to roughly 7.7-8.3 hours of denoising before decode. The
+417-block `maximum` schedule projects to roughly 3.4-3.7 hours before decode.
+Reaching near 30 minutes with comparable visual quality consequently requires
+a materially lower-evaluation model or sampler, such as an upstream distilled
+checkpoint; it cannot come from another one-percent kernel scheduling win.
