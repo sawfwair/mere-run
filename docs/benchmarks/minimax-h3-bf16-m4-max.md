@@ -126,11 +126,14 @@ not a newly measured end-to-end result.
 
 The first valid frame count beyond ten seconds is 243 frames (10.125 seconds),
 which yields 72 video latent frames and 73,470 packed rows for the locked prompt.
-True-shape whole-block gates measured 29.088-31.438 seconds per transformer
-block with the accepted policies. That puts one exact 50-block model evaluation
-near 24-26 minutes. Scaling the measured 124-frame VAE decode only as an
-arithmetic estimate adds roughly seven minutes, placing the single-evaluation
-10-second boundary near 31-33 minutes.
+The accepted exact attention schedule splits the 56 independent heads into
+eight-head submissions with 640 query rows per kernel. An order-balanced
+full-block gate measured 32.249 seconds for the previous 768-query/56-head
+schedule and 25.173 seconds for the new schedule, a 1.281x speedup with
+bit-identical BF16 output (`rel_l2=0`). That puts one exact 50-block model
+evaluation near 21 minutes. Scaling the measured 124-frame VAE decode only as
+an arithmetic estimate adds roughly seven minutes, placing the
+single-evaluation 10-second boundary near 28 minutes.
 
 A deterministic full-block dtype gate at these exact 73,470 rows measured
 29.679 seconds in BF16 and 30.204 seconds in FP16. The FP16 output remained
@@ -141,8 +144,9 @@ this workload.
 
 That number is the physical one-evaluation boundary, not a quality render.
 A 20-point exact schedule still performs 19 complete model evaluations and
-therefore projects to roughly 7.7-8.3 hours of denoising before decode. The
-417-block `maximum` schedule projects to roughly 3.4-3.7 hours before decode.
+therefore projects to roughly 6.6 hours of denoising before decode. The
+417-block `maximum` schedule projects to roughly 2.9 hours before decode.
 Reaching near 30 minutes with comparable visual quality consequently requires
 a materially lower-evaluation model or sampler, such as an upstream distilled
-checkpoint; it cannot come from another one-percent kernel scheduling win.
+checkpoint; the exact head-scheduling win does not remove the remaining
+evaluation-count multiplier.

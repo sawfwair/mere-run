@@ -154,7 +154,8 @@ private final class MiniMaxH3Attention: Module {
             queries: projected[0],
             keys: projected[1],
             values: projected[2],
-            maximumQueryTokens: nil
+            maximumQueryTokens: nil,
+            maximumHeadsPerKernel: nil
         )
         return projectOutput(attended)
     }
@@ -183,11 +184,14 @@ private final class MiniMaxH3Attention: Module {
         keys: MLXArray,
         values: MLXArray,
         maximumQueryTokens: Int?,
+        maximumHeadsPerKernel: Int?,
         maximumKernelsPerEvaluation: Int = 1
     ) -> MLXArray {
-        guard let maximumQueryTokens,
-              maximumQueryTokens > 0,
-              queries.dim(2) > maximumQueryTokens else {
+        if let maximumQueryTokens { precondition(maximumQueryTokens > 0) }
+        if let maximumHeadsPerKernel { precondition(maximumHeadsPerKernel > 0) }
+        let queryChunkSize = min(maximumQueryTokens ?? queries.dim(2), queries.dim(2))
+        let headChunkSize = min(maximumHeadsPerKernel ?? queries.dim(1), queries.dim(1))
+        guard queryChunkSize < queries.dim(2) || headChunkSize < queries.dim(1) else {
             return MLXFast.scaledDotProductAttention(
                 queries: queries,
                 keys: keys,
@@ -198,30 +202,38 @@ private final class MiniMaxH3Attention: Module {
         }
 
         precondition(maximumKernelsPerEvaluation > 0)
-        var chunks: [MLXArray] = []
-        chunks.reserveCapacity((queries.dim(2) + maximumQueryTokens - 1) / maximumQueryTokens)
+        var headOutputs: [MLXArray] = []
+        headOutputs.reserveCapacity((queries.dim(1) + headChunkSize - 1) / headChunkSize)
         var pending: [MLXArray] = []
         pending.reserveCapacity(maximumKernelsPerEvaluation)
-        for start in stride(from: 0, to: queries.dim(2), by: maximumQueryTokens) {
-            let end = min(start + maximumQueryTokens, queries.dim(2))
-            let chunk = MLXFast.scaledDotProductAttention(
-                queries: queries[0..., 0..., start..<end, 0...],
-                keys: keys,
-                values: values,
-                scale: scale,
-                mask: .none
-            )
-            chunks.append(chunk)
-            pending.append(chunk)
-            if pending.count == maximumKernelsPerEvaluation {
-                MLX.eval(pending)
-                pending.removeAll(keepingCapacity: true)
+        for headStart in stride(from: 0, to: queries.dim(1), by: headChunkSize) {
+            let headEnd = min(headStart + headChunkSize, queries.dim(1))
+            var queryOutputs: [MLXArray] = []
+            queryOutputs.reserveCapacity((queries.dim(2) + queryChunkSize - 1) / queryChunkSize)
+            for queryStart in stride(from: 0, to: queries.dim(2), by: queryChunkSize) {
+                let queryEnd = min(queryStart + queryChunkSize, queries.dim(2))
+                let chunk = MLXFast.scaledDotProductAttention(
+                    queries: queries[
+                        0..., headStart..<headEnd, queryStart..<queryEnd, 0...
+                    ],
+                    keys: keys[0..., headStart..<headEnd, 0..., 0...],
+                    values: values[0..., headStart..<headEnd, 0..., 0...],
+                    scale: scale,
+                    mask: .none
+                )
+                queryOutputs.append(chunk)
+                pending.append(chunk)
+                if pending.count == maximumKernelsPerEvaluation {
+                    MLX.eval(pending)
+                    pending.removeAll(keepingCapacity: true)
+                }
             }
+            headOutputs.append(MLX.concatenated(queryOutputs, axis: 2))
         }
         if !pending.isEmpty {
             MLX.eval(pending)
         }
-        return MLX.concatenated(chunks, axis: 2)
+        return MLX.concatenated(headOutputs, axis: 1)
     }
 
     func projectOutput(_ attended: MLXArray) -> MLXArray {
@@ -496,6 +508,7 @@ private final class MiniMaxH3TransformerBlock: Module {
         keys: MLXArray,
         values: MLXArray,
         maximumQueryTokens: Int,
+        maximumHeadsPerKernel: Int?,
         maximumKernelsPerEvaluation: Int
     ) -> MLXArray {
         attention.scaledDotProductAttention(
@@ -503,6 +516,7 @@ private final class MiniMaxH3TransformerBlock: Module {
             keys: keys,
             values: values,
             maximumQueryTokens: maximumQueryTokens,
+            maximumHeadsPerKernel: maximumHeadsPerKernel,
             maximumKernelsPerEvaluation: maximumKernelsPerEvaluation
         )
     }
@@ -660,6 +674,7 @@ final class MiniMaxH3BlockScheduleBenchmark {
 
     let rowCount: Int
     private let maximumQueryTokens: Int
+    private let maximumHeadsPerKernel: Int?
     private let maximumKernelsPerEvaluation: Int
     private let block: MiniMaxH3TransformerBlock
     private let originalParameters: [(String, MLXArray)]
@@ -675,6 +690,7 @@ final class MiniMaxH3BlockScheduleBenchmark {
         rowCount: Int,
         maximumQueryTokens: Int,
         maximumKernelsPerEvaluation: Int,
+        maximumHeadsPerKernel: Int? = nil,
         dtype: DType = .bfloat16,
         weightSeed: UInt64? = nil,
         inputSeed: UInt64? = nil
@@ -682,8 +698,10 @@ final class MiniMaxH3BlockScheduleBenchmark {
         precondition(rowCount > 0)
         precondition(maximumQueryTokens > 0)
         precondition(maximumKernelsPerEvaluation > 0)
+        if let maximumHeadsPerKernel { precondition(maximumHeadsPerKernel > 0) }
         self.rowCount = rowCount
         self.maximumQueryTokens = maximumQueryTokens
+        self.maximumHeadsPerKernel = maximumHeadsPerKernel
         self.maximumKernelsPerEvaluation = maximumKernelsPerEvaluation
 
         let configuration = MiniMaxH3TransformerConfiguration()
@@ -795,6 +813,7 @@ final class MiniMaxH3BlockScheduleBenchmark {
     func callAsFunction(
         schedule: Schedule,
         maximumQueryTokens: Int? = nil,
+        maximumHeadsPerKernel: Int? = nil,
         maximumKernelsPerEvaluation: Int? = nil,
         input: MLXArray? = nil
     ) -> MLXArray {
@@ -804,6 +823,7 @@ final class MiniMaxH3BlockScheduleBenchmark {
         let attended = attend(
             projectedAttention,
             maximumQueryTokens: maximumQueryTokens,
+            maximumHeadsPerKernel: maximumHeadsPerKernel,
             maximumKernelsPerEvaluation: maximumKernelsPerEvaluation
         )
         return postAttention(
@@ -828,6 +848,7 @@ final class MiniMaxH3BlockScheduleBenchmark {
     func attend(
         _ projectedAttention: [MLXArray],
         maximumQueryTokens: Int? = nil,
+        maximumHeadsPerKernel: Int? = nil,
         maximumKernelsPerEvaluation: Int? = nil
     ) -> MLXArray {
         block.scaledDotProductAttention(
@@ -835,6 +856,7 @@ final class MiniMaxH3BlockScheduleBenchmark {
             keys: projectedAttention[1],
             values: projectedAttention[2],
             maximumQueryTokens: maximumQueryTokens ?? self.maximumQueryTokens,
+            maximumHeadsPerKernel: maximumHeadsPerKernel ?? self.maximumHeadsPerKernel,
             maximumKernelsPerEvaluation: maximumKernelsPerEvaluation
                 ?? self.maximumKernelsPerEvaluation
         )
@@ -1017,6 +1039,7 @@ public final class MiniMaxH3Transformer: Module {
     var usesFusedPostAttention = true
     private(set) var usesResidentBF16 = false
     var maximumAttentionQueryTokensPerKernel = 1_024
+    var maximumAttentionHeadsPerKernel: Int?
     var maximumAttentionKernelsPerEvaluation = 4
     var blockTimingHandler: ((Int, TimeInterval, Memory.Snapshot) -> Void)?
     @ModuleInfo(key: "video_patch_proj") var videoInput: Linear
@@ -1329,6 +1352,7 @@ public final class MiniMaxH3Transformer: Module {
                     keys: projectedAttention[1],
                     values: projectedAttention[2],
                     maximumQueryTokens: maximumAttentionQueryTokensPerKernel,
+                    maximumHeadsPerKernel: maximumAttentionHeadsPerKernel,
                     maximumKernelsPerEvaluation: maximumAttentionKernelsPerEvaluation
                 )
                 if usesFusedPostAttention {

@@ -628,6 +628,10 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
                 .maximumKernelsPerEvaluation,
             4
         )
+        XCTAssertNil(
+            MiniMaxH3DenoiseExecutionPolicy.attentionKernelSchedule(sequenceLength: 14_958)
+                .maximumHeadsPerKernel
+        )
         XCTAssertEqual(
             MiniMaxH3DenoiseExecutionPolicy.attentionKernelSchedule(sequenceLength: 37_966)
                 .maximumQueryTokens,
@@ -635,6 +639,25 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         )
         XCTAssertEqual(
             MiniMaxH3DenoiseExecutionPolicy.attentionKernelSchedule(sequenceLength: 37_966)
+                .maximumKernelsPerEvaluation,
+            1
+        )
+        XCTAssertNil(
+            MiniMaxH3DenoiseExecutionPolicy.attentionKernelSchedule(sequenceLength: 37_966)
+                .maximumHeadsPerKernel
+        )
+        XCTAssertEqual(
+            MiniMaxH3DenoiseExecutionPolicy.attentionKernelSchedule(sequenceLength: 73_470)
+                .maximumQueryTokens,
+            640
+        )
+        XCTAssertEqual(
+            MiniMaxH3DenoiseExecutionPolicy.attentionKernelSchedule(sequenceLength: 73_470)
+                .maximumHeadsPerKernel,
+            8
+        )
+        XCTAssertEqual(
+            MiniMaxH3DenoiseExecutionPolicy.attentionKernelSchedule(sequenceLength: 73_470)
                 .maximumKernelsPerEvaluation,
             1
         )
@@ -1032,6 +1055,7 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         let compiledOutputs = compiled([video, audio, timesteps])
         MLX.eval(compiledOutputs)
         model.maximumAttentionQueryTokensPerKernel = 2
+        model.maximumAttentionHeadsPerKernel = 1
         model.usesBlockwiseCompilation = true
         let blockwiseCompiled = model(
             videoRows: video,

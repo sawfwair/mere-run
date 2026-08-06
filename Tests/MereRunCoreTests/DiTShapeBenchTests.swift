@@ -1896,6 +1896,10 @@ final class DiTShapeBenchTests: XCTestCase {
             1,
             Int(environment["MERERUN_H3_BENCH_REFERENCE_EVAL_BATCH"] ?? "") ?? 4
         )
+        let referenceHeads = max(
+            1,
+            Int(environment["MERERUN_H3_BENCH_REFERENCE_HEADS"] ?? "") ?? 56
+        )
         let candidateQueryTokens = max(
             1,
             Int(environment["MERERUN_H3_BENCH_CANDIDATE_QUERY_TOKENS"] ?? "") ?? 768
@@ -1904,33 +1908,52 @@ final class DiTShapeBenchTests: XCTestCase {
             1,
             Int(environment["MERERUN_H3_BENCH_CANDIDATE_EVAL_BATCH"] ?? "") ?? 1
         )
+        let candidateHeads = max(
+            1,
+            Int(environment["MERERUN_H3_BENCH_CANDIDATE_HEADS"] ?? "") ?? 56
+        )
         let benchmark = MiniMaxH3BlockScheduleBenchmark(
             rowCount: rows,
             maximumQueryTokens: referenceQueryTokens,
             maximumKernelsPerEvaluation: referenceEvaluationBatch
         )
 
-        func output(queryTokens: Int, evaluationBatch: Int) -> MLXArray {
+        func output(queryTokens: Int, heads: Int, evaluationBatch: Int) -> MLXArray {
             benchmark(
                 schedule: .splitPostAttention,
                 maximumQueryTokens: queryTokens,
+                maximumHeadsPerKernel: heads,
                 maximumKernelsPerEvaluation: evaluationBatch
             )
         }
-        func elapsed(queryTokens: Int, evaluationBatch: Int) -> Double {
+        func elapsed(queryTokens: Int, heads: Int, evaluationBatch: Int) -> Double {
             let started = CFAbsoluteTimeGetCurrent()
-            MLX.eval(output(queryTokens: queryTokens, evaluationBatch: evaluationBatch))
+            MLX.eval(output(
+                queryTokens: queryTokens,
+                heads: heads,
+                evaluationBatch: evaluationBatch
+            ))
             return CFAbsoluteTimeGetCurrent() - started
         }
 
-        MLX.eval(output(queryTokens: referenceQueryTokens, evaluationBatch: referenceEvaluationBatch))
-        MLX.eval(output(queryTokens: candidateQueryTokens, evaluationBatch: candidateEvaluationBatch))
+        MLX.eval(output(
+            queryTokens: referenceQueryTokens,
+            heads: referenceHeads,
+            evaluationBatch: referenceEvaluationBatch
+        ))
+        MLX.eval(output(
+            queryTokens: candidateQueryTokens,
+            heads: candidateHeads,
+            evaluationBatch: candidateEvaluationBatch
+        ))
         let reference = output(
             queryTokens: referenceQueryTokens,
+            heads: referenceHeads,
             evaluationBatch: referenceEvaluationBatch
         ).asType(.float32)
         let candidate = output(
             queryTokens: candidateQueryTokens,
+            heads: candidateHeads,
             evaluationBatch: candidateEvaluationBatch
         ).asType(.float32)
         MLX.eval(reference, candidate)
@@ -1948,19 +1971,23 @@ final class DiTShapeBenchTests: XCTestCase {
             if round.isMultiple(of: 2) {
                 referenceTotal += elapsed(
                     queryTokens: referenceQueryTokens,
+                    heads: referenceHeads,
                     evaluationBatch: referenceEvaluationBatch
                 )
                 candidateTotal += elapsed(
                     queryTokens: candidateQueryTokens,
+                    heads: candidateHeads,
                     evaluationBatch: candidateEvaluationBatch
                 )
             } else {
                 candidateTotal += elapsed(
                     queryTokens: candidateQueryTokens,
+                    heads: candidateHeads,
                     evaluationBatch: candidateEvaluationBatch
                 )
                 referenceTotal += elapsed(
                     queryTokens: referenceQueryTokens,
+                    heads: referenceHeads,
                     evaluationBatch: referenceEvaluationBatch
                 )
             }
@@ -1968,13 +1995,15 @@ final class DiTShapeBenchTests: XCTestCase {
         let referenceSeconds = referenceTotal / Double(rounds)
         let candidateSeconds = candidateTotal / Double(rounds)
         print(String(
-            format: "[h3-lab] block-attention rows=%d reference=%dx%d reference_ms=%.0f "
-                + "candidate=%dx%d candidate_ms=%.0f speedup=%.3fx relative_l2=%.6g",
+            format: "[h3-lab] block-attention rows=%d reference=%dx%dx%d reference_ms=%.0f "
+                + "candidate=%dx%dx%d candidate_ms=%.0f speedup=%.3fx relative_l2=%.6g",
             rows,
             referenceQueryTokens,
+            referenceHeads,
             referenceEvaluationBatch,
             referenceSeconds * 1_000,
             candidateQueryTokens,
+            candidateHeads,
             candidateEvaluationBatch,
             candidateSeconds * 1_000,
             referenceSeconds / candidateSeconds,

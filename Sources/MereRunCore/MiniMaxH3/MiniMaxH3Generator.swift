@@ -139,14 +139,34 @@ enum MiniMaxH3DenoiseExecutionMode: Equatable {
 enum MiniMaxH3DenoiseExecutionPolicy {
     static let blockwiseSequenceThreshold = 13_500
     static let largeSequenceAttentionThreshold = 32_768
+    static let veryLargeSequenceAttentionThreshold = 65_536
 
     static func attentionKernelSchedule(
         sequenceLength: Int
-    ) -> (maximumQueryTokens: Int, maximumKernelsPerEvaluation: Int) {
-        if sequenceLength >= largeSequenceAttentionThreshold {
-            return (maximumQueryTokens: 768, maximumKernelsPerEvaluation: 1)
+    ) -> (
+        maximumQueryTokens: Int,
+        maximumHeadsPerKernel: Int?,
+        maximumKernelsPerEvaluation: Int
+    ) {
+        if sequenceLength >= veryLargeSequenceAttentionThreshold {
+            return (
+                maximumQueryTokens: 640,
+                maximumHeadsPerKernel: 8,
+                maximumKernelsPerEvaluation: 1
+            )
         }
-        return (maximumQueryTokens: 1_024, maximumKernelsPerEvaluation: 4)
+        if sequenceLength >= largeSequenceAttentionThreshold {
+            return (
+                maximumQueryTokens: 768,
+                maximumHeadsPerKernel: nil,
+                maximumKernelsPerEvaluation: 1
+            )
+        }
+        return (
+            maximumQueryTokens: 1_024,
+            maximumHeadsPerKernel: nil,
+            maximumKernelsPerEvaluation: 4
+        )
     }
 
     static func mode(
@@ -568,6 +588,8 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         )
         transformer.maximumAttentionQueryTokensPerKernel = attentionKernelSchedule
             .maximumQueryTokens
+        transformer.maximumAttentionHeadsPerKernel = attentionKernelSchedule
+            .maximumHeadsPerKernel
         transformer.maximumAttentionKernelsPerEvaluation = attentionKernelSchedule
             .maximumKernelsPerEvaluation
         transformer.usesFusedPostAttention = ProcessInfo.processInfo
@@ -578,6 +600,8 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
             "execution_mode=\(executionMode) acceleration=\(accelerationMode.rawValue) "
                 + "fused_post_attention=\(transformer.usesFusedPostAttention) "
                 + "attention_query_tokens=\(attentionKernelSchedule.maximumQueryTokens) "
+                + "attention_heads_per_kernel="
+                + "\(attentionKernelSchedule.maximumHeadsPerKernel ?? transformer.configuration.attentionHeadCount) "
                 + "attention_evaluation_batch="
                 + "\(attentionKernelSchedule.maximumKernelsPerEvaluation)"
         )

@@ -86,6 +86,14 @@ The format is based on Keep a Changelog.
   775.062 s (1.230x), and its complete 1344x768 generation boundary fell from
   1,253.425 s to 1,027.310 s. The resulting H.264/AAC artifact retained the
   exact prior SHA-256, proving the speed path did not change model output.
+- added a separate exact attention schedule for 65,536+ packed rows after the
+  true 73,470-row, 10.125-second geometry showed that attention consumed 74.6%
+  of a production-width block. Splitting the 56 independent heads into
+  eight-head submissions with 640 query rows per kernel reduced a complete
+  attention pass from 22.088 s to 16.383 s. The order-balanced full-block gate
+  then improved from 32.249 s to 25.173 s (1.281x) with bit-identical BF16
+  output (`rel_l2=0`), moving the projected physical one-evaluation boundary
+  from roughly 31-33 minutes to roughly 28 minutes including decode.
 - added first-class `quality`, `balanced`, and `maximum` H3 denoise modes in
   both the CLI and macOS Studio. The speed modes reuse a bounded tail-block
   residual only across small adjacent sigma changes, run at least two complete

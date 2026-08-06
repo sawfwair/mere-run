@@ -260,14 +260,38 @@ Reproduce the release-mode comparison with `scripts/h3-kernel-lab.sh turnover`.
 
 The first valid ten-second geometry is 243 frames, which produces 72 video
 latent frames. At 1344x768, the locked benchmark prompt therefore packs 73,470
-rows: 72,576 video rows, 810 audio rows, and 84 text rows. True-shape searches
-did not justify another transformer policy. A sampled 384-query/four-kernel
-attention candidate lost its full-block gate to the shipped 768-query/single-
-kernel schedule (31.845 s versus 31.438 s, `rel_l2=0`). A longer-row GEMM tier
-also lost its order-balanced whole-block gate (29.151 s versus 29.088 s,
-`rel_l2=0`) and was removed. These results put one exact 50-block evaluation
-near 24-26 minutes before VAE decode; a 20-point exact schedule still needs 19
-such evaluations.
+rows: 72,576 video rows, 810 audio rows, and 84 text rows. A phase ledger at
+that shape measured 32.645 seconds for one split block: 24.351 seconds (74.6%)
+in exact attention, 2.079 seconds in its input projection, and 4.424 seconds in
+the complete post-attention and feed-forward tail.
+
+Splitting the 56 independent attention heads across smaller Steel submissions
+exposed a large exact scheduling win that query-only searches missed. A full
+73,470-query attention pass with 640-query chunks, eight heads per kernel, and
+one kernel evaluated per submission measured 16.383 seconds versus 22.088
+seconds for the paired legacy control (`max_abs=0`, `rel_l2=0`). The decisive
+order-balanced full-block gate then measured 32.249 seconds for the shipped
+768-query/56-head schedule and 25.173 seconds for 640-query/eight-head
+execution: a 1.281x exact speedup with `rel_l2=0`. Production uses this schedule
+only at 65,536 or more packed rows; the separately measured 37,966-row schedule
+remains unchanged. Reproduce the acceptance gate with:
+
+```bash
+MERERUN_H3_BENCH_ROWS=73470 \
+MERERUN_H3_BENCH_REFERENCE_QUERY_TOKENS=768 \
+MERERUN_H3_BENCH_REFERENCE_HEADS=56 \
+MERERUN_H3_BENCH_REFERENCE_EVAL_BATCH=1 \
+MERERUN_H3_BENCH_CANDIDATE_QUERY_TOKENS=640 \
+MERERUN_H3_BENCH_CANDIDATE_HEADS=8 \
+MERERUN_H3_BENCH_CANDIDATE_EVAL_BATCH=1 \
+scripts/h3-kernel-lab.sh attention-block
+```
+
+A sampled 384-query/four-kernel attention candidate still loses, and a
+longer-row GEMM tier also lost its order-balanced whole-block gate (29.151 s
+versus 29.088 s, `rel_l2=0`) and was removed. The accepted head schedule puts
+one exact 50-block evaluation near 21 minutes before VAE decode. A 20-point
+exact schedule still needs 19 such evaluations.
 
 Full-block FP16 execution was also screened rather than inferred from nominal
 GPU peak rates. With identical seeded weights and inputs, FP16 stayed inside a
