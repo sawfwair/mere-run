@@ -147,6 +147,11 @@ public struct MiniMaxH3Configuration: Decodable, Hashable, Sendable {
 }
 
 public struct MiniMaxH3Resources: Sendable {
+    public enum TransformerWeightsLayout: Sendable, Hashable {
+        case single(URL)
+        case shardedBF16(indexURL: URL)
+    }
+
     private struct SafetensorsHeader: Decodable {
         let metadata: [String: String]?
 
@@ -156,11 +161,18 @@ public struct MiniMaxH3Resources: Sendable {
     }
 
     public static let fl2vaModelID = "video-minimax-h3-fl2va-mlx"
+    public static let fl2vaBF16ModelID = "video-minimax-h3-fl2va-bf16-mlx"
     public static let ref2vaModelID = "video-minimax-h3-ref2va-mlx"
     public static let sourceRepository = "MiniMaxAI/MiniMax-H3"
     public static let sourceRevision = "ec19cc6daf5d8add9417c18e86b6b58cc6c55027"
     public static let artifactRepository = "Sawfwair/MiniMax-H3-FL2VA-MLX-4bit"
     public static let artifactRevision = "e1244ad93d60c737c7e0f065a1c9372f3de7caf8"
+    public static let bf16ArtifactRepository = "pipenetwork/MiniMax-H3-MLX-bf16"
+    public static let bf16ArtifactRevision = "1486555759eed9e3037edf29f9e055a0713bab2f"
+    public static let bf16TransformerDirectory = "transformer-bf16"
+    public static let officialTransformerSourceIdentity =
+        "MiniMaxAI/MiniMax-H3@ec19cc6daf5d8add9417c18e86b6b58cc6c55027:"
+        + "FL2VA/transformer:index-sha256:fb457a26ffa6294660e249b0ddd03a337f2e5393f770b5c34c8b8f90a29a7efb"
     public static let conversionSourceRepository = "Comfy-Org/MiniMax-H3"
     public static let conversionSourceRevision = "fd70b39279d1ae6eb214c903f53e1bec3af19a77"
     public static let ref2vaSourceSHA256 = "9eef934046a0671bc8a5daf87100705e1478419c574cfde70c50fbe6885f76a9"
@@ -184,6 +196,19 @@ public struct MiniMaxH3Resources: Sendable {
         "transformer.conversion.json",
         "SHA256SUMS",
     ]
+    public static let bf16SupportArtifactFiles = compactArtifactFiles.filter {
+        $0 != "transformer.safetensors" && $0 != MiniMaxH3AdaLNCache.filename
+    }
+    public static let bf16ArtifactFiles = [
+        "README.md",
+        "LICENSE",
+        "config.json",
+        "model.safetensors.index.json",
+        "model-*.safetensors",
+    ]
+    public static let bf16ShardFilenames = (1...13).map {
+        String(format: "model-%05d-of-00013.safetensors", $0)
+    }
 
     public let rootURL: URL
 
@@ -193,13 +218,37 @@ public struct MiniMaxH3Resources: Sendable {
 
     public var configURL: URL { rootURL.appending(path: "config.json") }
     public var transformerWeightsURL: URL { rootURL.appending(path: "transformer.safetensors") }
+    public var bf16TransformerRootURL: URL {
+        rootURL.appending(path: Self.bf16TransformerDirectory, directoryHint: .isDirectory)
+    }
+    public var bf16TransformerIndexURL: URL {
+        bf16TransformerRootURL.appending(path: "model.safetensors.index.json")
+    }
     public var textEncoderWeightsURL: URL { rootURL.appending(path: "text_encoder.safetensors") }
     public var tokenizerURL: URL { rootURL }
     public var videoVAEWeightsURL: URL { rootURL.appending(path: "video_vae.safetensors") }
     public var audioVAEWeightsURL: URL { rootURL.appending(path: "audio_vae.safetensors") }
     public var adaLNCacheURL: URL { rootURL.appending(path: MiniMaxH3AdaLNCache.filename) }
 
+    public func transformerWeightsLayout(fileManager: FileManager = .default) -> TransformerWeightsLayout? {
+        if fileManager.fileExists(atPath: bf16TransformerIndexURL.path) {
+            return .shardedBF16(indexURL: bf16TransformerIndexURL)
+        }
+        if fileManager.fileExists(atPath: transformerWeightsURL.path) {
+            return .single(transformerWeightsURL)
+        }
+        return nil
+    }
+
+    public var usesShardedBF16Transformer: Bool {
+        if case .shardedBF16 = transformerWeightsLayout() { return true }
+        return false
+    }
+
     func adaLNCacheSourceIdentity() throws -> String {
+        if usesShardedBF16Transformer {
+            return Self.officialTransformerSourceIdentity
+        }
         if let inheritedIdentity = try transformerMetadata()["adaln_cache_source_identity"] {
             return inheritedIdentity
         }
@@ -215,6 +264,7 @@ public struct MiniMaxH3Resources: Sendable {
     }
 
     func transformerMetadata() throws -> [String: String] {
+        guard !usesShardedBF16Transformer else { return [:] }
         let handle = try FileHandle(forReadingFrom: transformerWeightsURL)
         defer { try? handle.close() }
         guard let lengthData = try handle.read(upToCount: MemoryLayout<UInt64>.size),
@@ -252,13 +302,26 @@ public struct MiniMaxH3Resources: Sendable {
     }
 
     func requiresAdaLNCache() throws -> Bool {
-        try transformerMetadata()["cache_covered_weights_omitted"] == "true"
+        if usesShardedBF16Transformer { return false }
+        return try transformerMetadata()["cache_covered_weights_omitted"] == "true"
     }
 
     public func validate(fileManager: FileManager = .default) -> [URL] {
-        Self.requiredFiles
+        var missing = Self.requiredFiles
+            .filter { $0 != "transformer.safetensors" }
             .map { rootURL.appending(path: $0) }
             .filter { !fileManager.fileExists(atPath: $0.path) }
+        switch transformerWeightsLayout(fileManager: fileManager) {
+        case .single:
+            break
+        case .shardedBF16:
+            missing += Self.bf16ShardFilenames
+                .map { bf16TransformerRootURL.appending(path: $0) }
+                .filter { !fileManager.fileExists(atPath: $0.path) }
+        case nil:
+            missing.append(transformerWeightsURL)
+        }
+        return missing
     }
 
     public func loadConfiguration() throws -> MiniMaxH3Configuration {

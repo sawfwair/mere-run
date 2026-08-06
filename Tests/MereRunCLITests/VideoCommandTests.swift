@@ -328,6 +328,7 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertEqual(cmd.fps, 24)
         XCTAssertNil(cmd.steps)
         XCTAssertEqual(cmd.h3WeightMode, .automatic)
+        XCTAssertEqual(cmd.h3Acceleration, .quality)
         XCTAssertEqual(cmd.imageStrength, 1.0)
         XCTAssertNil(cmd.endImage)
         XCTAssertEqual(cmd.endImageStrength, 1.0)
@@ -347,12 +348,15 @@ final class VideoCommandTests: XCTestCase {
             "--reference", "audio:/tmp/voice.wav",
             "--steps", "31",
             "--h3-weight-mode", "resident-bf16",
+            "--h3-acceleration", "maximum",
         ])
 
         XCTAssertEqual(cmd.model, ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue)
         XCTAssertEqual(cmd.steps, 31)
         XCTAssertEqual(cmd.h3WeightMode, .residentBF16)
         XCTAssertEqual(cmd.h3WeightMode.generationMode, .residentBF16)
+        XCTAssertEqual(cmd.h3Acceleration, .maximum)
+        XCTAssertEqual(cmd.h3Acceleration.generationMode, .maximum)
         XCTAssertEqual(cmd.references, [
             "image:/tmp/subject.png",
             "video:/tmp/motion.mp4",
@@ -515,6 +519,38 @@ final class VideoCommandTests: XCTestCase {
 
         XCTAssertTrue(cmd.preflight)
         XCTAssertTrue(cmd.json)
+    }
+
+    func testMiniMaxH3PreflightPreservesResolvedSpeedPolicy() throws {
+        let output = makeTempOutput(name: "h3-maximum.mp4")
+        let cmd = try VideoGenerate.parse([
+            "a superhero waits under an umbrella as a portal opens",
+            "--model", ModelResolver.ModelID.miniMaxH3FL2VAMLX.rawValue,
+            "--width", "832",
+            "--height", "480",
+            "--num-frames", "243",
+            "--h3-weight-mode", "resident-bf16",
+            "--h3-acceleration", "maximum",
+            "--preflight",
+            "--json",
+        ])
+
+        let envelope = cmd.makePreflightEnvelope(
+            outputURL: output,
+            fileManager: .default,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.request.h3WeightMode, "resident-bf16")
+        XCTAssertEqual(envelope.request.h3AccelerationMode, "maximum")
+        XCTAssertEqual(envelope.result.plan.resolvedSteps, 12)
+        XCTAssertEqual(envelope.result.plan.h3WeightMode, "resident-bf16")
+        XCTAssertEqual(envelope.result.plan.h3AccelerationMode, "maximum")
+        let actionArguments = envelope.actions.first { $0.id == "start-video-generation" }?.command?.argv
+        XCTAssertTrue(actionArguments?.contains("--h3-weight-mode") == true)
+        XCTAssertTrue(actionArguments?.contains("resident-bf16") == true)
+        XCTAssertTrue(actionArguments?.contains("--h3-acceleration") == true)
+        XCTAssertTrue(actionArguments?.contains("maximum") == true)
     }
 
     func testVideoGenerateParsesStartAndEndKeyframes() throws {

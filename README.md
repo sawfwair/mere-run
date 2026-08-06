@@ -768,6 +768,14 @@ swift run mere.run video generate \
   --num-frames 124 \
   --output ./paper-bird-h3.mp4
 
+# Maximum-fidelity H3: direct pinned 13-shard BF16 MLX transformer
+swift run mere.run model pull video-minimax-h3-fl2va-bf16-mlx --accept-model-license
+swift run mere.run video generate \
+  "a cinematic rain-soaked bus stop at night" \
+  --model video-minimax-h3-fl2va-bf16-mlx \
+  --width 1280 --height 768 --duration 10 --steps 20 \
+  --output ./bus-stop-bf16.mp4
+
 # A locally converted Ref2VA root preserves reference order semantically
 swift run mere.run video generate \
   "keep the subject, borrow the camera move, and follow the vocal rhythm" \

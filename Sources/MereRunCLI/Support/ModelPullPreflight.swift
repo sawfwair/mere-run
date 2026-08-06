@@ -260,6 +260,7 @@ struct ModelPullPreflightAnalyzer {
         ))?.usageTermsAcknowledged == true
         let estimatedDownloadBytes = ModelPullDiskPreflight.estimatedDownloadBytes(
             for: spec,
+            modelDir: installPath,
             force: input.force,
             hubCacheURL: hubCache,
             fileManager: fileManager

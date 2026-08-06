@@ -51,9 +51,7 @@ final class MiniMaxH3VideoDecoderAttention: Module {
     let headDimension: Int
     let rotaryDimension: Int
 
-    @ModuleInfo(key: "to_q") var query: Linear
-    @ModuleInfo(key: "to_k") var key: Linear
-    @ModuleInfo(key: "to_v") var value: Linear
+    @ModuleInfo(key: "to_qkv") var queryKeyValue: Linear
     @ModuleInfo(key: "to_out") var output: Linear
 
     init(configuration: MiniMaxH3VideoDecoderConfiguration) {
@@ -61,18 +59,17 @@ final class MiniMaxH3VideoDecoderAttention: Module {
         headDimension = configuration.headDimension
         rotaryDimension = configuration.rotaryDimension
         let hidden = configuration.hiddenSize
-        _query.wrappedValue = Linear(hidden, hidden, bias: true)
-        _key.wrappedValue = Linear(hidden, hidden, bias: true)
-        _value.wrappedValue = Linear(hidden, hidden, bias: true)
+        _queryKeyValue.wrappedValue = Linear(hidden, 3 * hidden, bias: true)
         _output.wrappedValue = Linear(hidden, hidden, bias: true)
     }
 
     func callAsFunction(_ input: MLXArray, cosine: MLXArray, sine: MLXArray) -> MLXArray {
         let batch = input.dim(0)
         let sequence = input.dim(1)
-        var q = query(input).reshaped(batch, sequence, headCount, headDimension)
-        var k = key(input).reshaped(batch, sequence, headCount, headDimension)
-        let v = value(input).reshaped(batch, sequence, headCount, headDimension)
+        let projected = MLX.split(queryKeyValue(input), parts: 3, axis: -1)
+        var q = projected[0].reshaped(batch, sequence, headCount, headDimension)
+        var k = projected[1].reshaped(batch, sequence, headCount, headDimension)
+        let v = projected[2].reshaped(batch, sequence, headCount, headDimension)
 
         q = MiniMaxH3VideoDecoderAttention.rmsNormalizeHeads(q)
         k = MiniMaxH3VideoDecoderAttention.rmsNormalizeHeads(k)
@@ -240,6 +237,11 @@ public final class MiniMaxH3VideoDecoder: Module {
 }
 
 public final class MiniMaxH3VideoVAE: Module {
+    static let defaultSpatialTileSize = 320
+    static let minimumSpatialTileOverlap = 64
+
+    var spatialTileSize = defaultSpatialTileSize
+
     @ModuleInfo(key: "encoder") public var encoder: MiniMaxH3VideoEncoder
     @ModuleInfo(key: "quant_conv") var quantConvolution: Conv3d
     @ModuleInfo(key: "post_quant_conv") var postQuantConvolution: Conv3d
@@ -281,12 +283,9 @@ public final class MiniMaxH3VideoVAE: Module {
         }
 
         if key.contains(".attn.to_qkv.") {
-            let queryKey = key.replacingOccurrences(of: ".attn.to_qkv.", with: ".attn.to_q.")
-            let keyKey = key.replacingOccurrences(of: ".attn.to_qkv.", with: ".attn.to_k.")
-            let valueKey = key.replacingOccurrences(of: ".attn.to_qkv.", with: ".attn.to_v.")
             // The released VAE projects to [head, qkv, headDimension], not
             // [qkv, head, headDimension]. Deinterleave the per-head groups
-            // before loading the three standalone MLX Linear modules.
+            // before loading the fused global-QKV MLX Linear module.
             let headCount = 32
             let headDimension = 64
             precondition(value.dim(0) == headCount * 3 * headDimension)
@@ -295,7 +294,7 @@ public final class MiniMaxH3VideoVAE: Module {
             let pieces = MLX.split(grouped, parts: 3, axis: 1).map {
                 $0.squeezed(axis: 1).reshaped([headCount * headDimension] + trailingShape)
             }
-            return [(queryKey, pieces[0]), (keyKey, pieces[1]), (valueKey, pieces[2])]
+            return [(key, MLX.concatenated(pieces, axis: 0))]
         }
         if value.ndim == 5 {
             return [(key, value.transposed(0, 2, 3, 4, 1))]
@@ -355,8 +354,8 @@ public final class MiniMaxH3VideoVAE: Module {
     private func encodeClip(_ video: MLXArray) -> MLXArray {
         let pixelHeight = video.dim(2)
         let pixelWidth = video.dim(3)
-        let y = Self.tilePlan(length: pixelHeight)
-        let x = Self.tilePlan(length: pixelWidth)
+        let y = Self.tilePlan(length: pixelHeight, tileSize: spatialTileSize)
+        let x = Self.tilePlan(length: pixelWidth, tileSize: spatialTileSize)
         var tiles: [MLXArray] = []
         for (yIndex, yStart) in y.starts.enumerated() {
             for (xIndex, xStart) in x.starts.enumerated() {
@@ -477,8 +476,8 @@ public final class MiniMaxH3VideoVAE: Module {
     ) -> MLXArray {
         let pixelHeight = latent.dim(3) * 16
         let pixelWidth = latent.dim(4) * 16
-        let y = Self.tilePlan(length: pixelHeight)
-        let x = Self.tilePlan(length: pixelWidth)
+        let y = Self.tilePlan(length: pixelHeight, tileSize: spatialTileSize)
+        let x = Self.tilePlan(length: pixelWidth, tileSize: spatialTileSize)
         var tiles: [MLXArray] = []
         for (yIndex, yStart) in y.starts.enumerated() {
             for (xIndex, xStart) in x.starts.enumerated() {
@@ -526,9 +525,12 @@ public final class MiniMaxH3VideoVAE: Module {
         return MLX.concatenated(stitchedRows, axis: 3)
     }
 
-    private static func tilePlan(length: Int) -> (starts: [Int], lengths: [Int], overlaps: [Int]) {
-        let tileSize = 256
-        let minimumOverlap = 64
+    static func tilePlan(
+        length: Int,
+        tileSize: Int
+    ) -> (starts: [Int], lengths: [Int], overlaps: [Int]) {
+        precondition(tileSize >= minimumSpatialTileOverlap && tileSize.isMultiple(of: 16))
+        let minimumOverlap = minimumSpatialTileOverlap
         guard length > tileSize else { return ([0], [length], []) }
         var count = Int(ceil(Double(length) / Double(tileSize)))
         while tileSize * count - minimumOverlap * (count - 1) < length { count += 1 }

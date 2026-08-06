@@ -27,6 +27,7 @@ both cataloged and accepted by ArgumentParser.
 The primary Video surface uses model-family-aware controls: LTX uses `--quality`
 and `--output-mode`, while native MiniMax-H3 exposes its exact `17*n+5` frame
 cadence, adaptive or explicit denoising schedule, weight-residency policy, and
+exact, balanced, or maximum denoise acceleration, plus
 ordered Ref2VA image/video/audio references without emitting incompatible LTX
 flags. Its general attachment workflow supports a start image, end keyframe,
 and source audio. Advanced Video contains

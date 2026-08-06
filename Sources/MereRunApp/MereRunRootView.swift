@@ -3653,18 +3653,33 @@ private struct VideoOptions: View {
             Text("Resident BF16").tag("resident-bf16")
         }
         .pickerStyle(.segmented)
+        Picker(
+            "Denoise acceleration",
+            selection: Binding(
+                get: { controller.draft.h3AccelerationMode ?? "quality" },
+                set: { controller.draft.h3AccelerationMode = $0 }
+            )
+        ) {
+            Text("Exact").tag("quality")
+            Text("Balanced").tag("balanced")
+            Text("Maximum").tag("maximum")
+        }
+        .pickerStyle(.segmented)
+        Text("Balanced and Maximum are faster approximate paths; Exact preserves the native trajectory.")
+            .font(MereRunTheme.captionFont)
+            .foregroundStyle(MereRunTheme.textMuted)
         Toggle(
-            "Override adaptive 9 / 16 / 31-point schedule",
+            "Override adaptive 9 / 16 / 21-point schedule",
             isOn: Binding(
                 get: { controller.draft.h3Steps != nil },
-                set: { controller.draft.h3Steps = $0 ? 31 : nil }
+                set: { controller.draft.h3Steps = $0 ? 21 : nil }
             )
         )
         if controller.draft.h3Steps != nil {
             NumberStepper(
                 title: "Schedule points",
                 value: Binding(
-                    get: { controller.draft.h3Steps ?? 31 },
+                    get: { controller.draft.h3Steps ?? 21 },
                     set: { controller.draft.h3Steps = $0 }
                 ),
                 range: 1...64,

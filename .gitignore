@@ -2,6 +2,7 @@
 .swiftpm/
 .DS_Store
 .tmp/
+/tmp/
 DerivedData/
 *.xcuserstate
 node_modules/

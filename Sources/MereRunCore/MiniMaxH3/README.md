@@ -16,16 +16,28 @@ Supported open-checkpoint paths:
 H3 emits 24 fps RGB video and native 32 kHz stereo audio. Frame counts use the
 released `17*n+5` temporal geometry. The transformer is CFG-distilled; the
 runtime therefore performs a single model evaluation per denoising step.
-The default schedule adapts to packed-row cost at 9, 16, or 31 points. A
+The default schedule adapts to packed-row cost at 9, 16, or 21 points. The
+maximum acceleration mode caps automatic schedules at 12 points (11 model
+evaluations). A
 source-bound cache stores the exact released 31-point AdaLN curve and resamples
 it for explicit point-count overrides. The converted transformer stores global
 Q/K/V slabs; the unmodified video VAE retains the released per-head interleave.
 
-Compact Q4 is the automatic MacBook lane. Desktop Macs with sufficient unified
-memory may expand those weights once to resident BF16 for compute-bound denoise;
+Compact Q4 remains the automatic lane on lower-memory MacBooks. Memory-qualified
+MacBooks with at least 96 GiB of unified memory, and desktop Macs with sufficient
+headroom, expand those weights once to resident BF16 for compute-bound denoise;
 the CLI can force either mode. H3 inference also raises MLX wired residency
 through the shared ticket coordinator so weights and activation workspaces do
 not silently fall out of the GPU residency set.
+
+`--h3-acceleration quality` executes every transformer block and preserves the
+native same-seed trajectory. The explicit `balanced` and `maximum` modes trade
+exact trajectory identity for speed: a full step captures the contribution of
+the trailing 50% or 75% of blocks, eligible adjacent steps recompute the prefix
+and reuse that residual, and a full refresh follows at most two cache hits.
+Both modalities must have a sigma delta below 0.12. At least two complete
+evaluations precede reuse, and the final schedule region always executes all
+50 blocks.
 
 The model weights are governed by the MiniMax-H3 Community License, not the
 mere.run source license. In particular, the published license excludes use,

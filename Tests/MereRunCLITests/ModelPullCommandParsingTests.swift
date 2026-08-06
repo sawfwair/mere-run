@@ -479,6 +479,57 @@ final class ModelPullCommandParsingTests: XCTestCase {
         )
     }
 
+    func testDiskPreflightCreditsReclaimablePartialInstallForCompositePull() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let cache = root.appendingPathComponent("hub", isDirectory: true)
+        let modelDir = root.appendingPathComponent("models/video-composite-test", isDirectory: true)
+        try FileManager.default.createDirectory(at: cache, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: modelDir, withIntermediateDirectories: true)
+        try Data(repeating: 0xA5, count: 4 * 1_048_576).write(
+            to: modelDir.appendingPathComponent("existing-support.safetensors")
+        )
+
+        let estimate = 20 * ModelPullDiskPreflight.bytesPerGiB
+        let spec = ManagedModelSpec(
+            id: "video-composite-test",
+            category: .video,
+            installShape: .structuredRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: "example/support",
+                revision: "0123456789abcdef0123456789abcdef01234567",
+                patterns: ["existing-support.safetensors"]
+            ),
+            mountedHubFallbacks: [
+                MountedHubFallbackConfig(
+                    destinationPath: "transformer",
+                    hubFallback: HubFallbackConfig(
+                        repoId: "example/transformer",
+                        revision: "fedcba9876543210fedcba9876543210fedcba98",
+                        patterns: ["model.safetensors"]
+                    )
+                ),
+            ],
+            validationKind: .miniMaxH3MLX,
+            estimatedDownloadBytes: estimate
+        )
+        let reclaimable = ModelPullDiskPreflight.reclaimableLocalBytes(
+            in: modelDir,
+            onFileSystemContaining: cache
+        )
+
+        XCTAssertGreaterThan(reclaimable, 0)
+        XCTAssertEqual(
+            ModelPullDiskPreflight.estimatedDownloadBytes(
+                for: spec,
+                modelDir: modelDir,
+                force: false,
+                hubCacheURL: cache
+            ),
+            estimate - reclaimable
+        )
+    }
+
     func testStructuredPreflightUsesCompleteCachedInklingSnapshotUnlessForced() throws {
         let root = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }

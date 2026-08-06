@@ -57,7 +57,9 @@ struct ModelOptimize: ParsableCommand {
         guard let modelID = ModelResolver.ModelID(rawValue: target) else {
             throw ValidationError("Not a path and not a known model id: \(target)")
         }
-        guard modelID == .miniMaxH3FL2VAMLX || modelID == .miniMaxH3Ref2VAMLX else {
+        guard modelID == .miniMaxH3FL2VAMLX
+                || modelID == .miniMaxH3FL2VABF16MLX
+                || modelID == .miniMaxH3Ref2VAMLX else {
             throw ValidationError("Model optimization currently supports MiniMax-H3 MLX models.")
         }
         do {

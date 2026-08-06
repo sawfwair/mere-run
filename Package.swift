@@ -503,7 +503,7 @@ if !isLinuxPackage {
 var packageDependencies: [Package.Dependency] = (useLinuxPrebuiltMLX ? [] : [
   .package(
     url: "https://github.com/sawfwair/mlx-swift",
-    revision: "009a42f024a04e50bb50bb6ce90d0a3e396c1760"
+    revision: "79bc410c85df66c3f4246084057bdfd971932ac7"
   )
 ]) + [
   .package(

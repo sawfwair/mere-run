@@ -1,6 +1,6 @@
 mlx-core-version: 0.32.1
 mlx-swift-version: unknown
-mlx-swift-revision: 009a42f024a04e50bb50bb6ce90d0a3e396c1760
+mlx-swift-revision: 79bc410c85df66c3f4246084057bdfd971932ac7
 kernel-sources-sha256: a4a91e902e4a3c196ba45f3c6ee65c769c26b5825ae3b72d8b93ca233db2d93f
-built-at: 2026-07-29T04:43:45Z
+built-at: 2026-08-05T21:40:04Z
 metal-compiler: Apple metal version 32023.883 (metalfe-32023.883)

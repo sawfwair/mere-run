@@ -1651,6 +1651,7 @@ final class StudioTypesTests: XCTestCase {
         draft.steps = 40
         draft.h3Steps = 16
         draft.h3WeightMode = "quantized"
+        draft.h3AccelerationMode = "maximum"
         draft.audioPath = "/tmp/should-not-be-used.wav"
         draft.timings = true
 
@@ -1665,6 +1666,7 @@ final class StudioTypesTests: XCTestCase {
         assertPair(args, "--num-frames", "73")
         assertPair(args, "--steps", "16")
         assertPair(args, "--h3-weight-mode", "quantized")
+        assertPair(args, "--h3-acceleration", "maximum")
     }
 
     func testMiniMaxH3Ref2VAPreservesOrderedMultimodalReferences() throws {

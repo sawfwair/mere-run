@@ -349,27 +349,78 @@ struct ModelPullDiskPreflight {
 
     static func estimatedDownloadBytes(
         for spec: ManagedModelSpec,
+        modelDir: URL,
         force: Bool,
         hubCacheURL: URL,
         fileManager: FileManager = .default
     ) -> Int64? {
-        guard !force,
-              spec.mountedHubFallbacks.isEmpty,
-              let config = spec.hubFallback,
-              let cachedSnapshot = try? HubSnapshot.cachedMaterializedSnapshotURL(
-                options: HubSnapshotOptions(
-                    repoId: config.repoId,
-                    revision: config.revision,
-                    patterns: config.patterns,
-                    cacheDirectory: hubCacheURL,
-                    offline: true
-                ),
-                fileManager: fileManager
-              ),
-              spec.missingPaths(in: cachedSnapshot, fileManager: fileManager).isEmpty else {
-            return spec.estimatedDownloadBytes
+        if !force,
+           spec.mountedHubFallbacks.isEmpty,
+           let config = spec.hubFallback,
+           let cachedSnapshot = try? HubSnapshot.cachedMaterializedSnapshotURL(
+            options: HubSnapshotOptions(
+                repoId: config.repoId,
+                revision: config.revision,
+                patterns: config.patterns,
+                cacheDirectory: hubCacheURL,
+                offline: true
+            ),
+            fileManager: fileManager
+           ),
+           spec.missingPaths(in: cachedSnapshot, fileManager: fileManager).isEmpty {
+            return 0
         }
-        return 0
+
+        guard let estimate = spec.estimatedDownloadBytes else { return nil }
+        guard !force else { return estimate }
+        let reclaimableBytes = reclaimableLocalBytes(
+            in: modelDir,
+            onFileSystemContaining: hubCacheURL,
+            fileManager: fileManager
+        )
+        return max(0, estimate - reclaimableBytes)
+    }
+
+    static func reclaimableLocalBytes(
+        in modelDir: URL,
+        onFileSystemContaining hubCacheURL: URL,
+        fileManager: FileManager = .default
+    ) -> Int64 {
+        guard fileManager.fileExists(atPath: modelDir.path),
+              let modelVolume = try? modelDir.resourceValues(forKeys: [.volumeIdentifierKey]).volumeIdentifier,
+              let hubPath = existingPath(for: hubCacheURL, fileManager: fileManager),
+              let hubVolume = try? hubPath.resourceValues(forKeys: [.volumeIdentifierKey]).volumeIdentifier,
+              modelVolume.isEqual(hubVolume),
+              let enumerator = fileManager.enumerator(
+                at: modelDir,
+                includingPropertiesForKeys: [
+                    .isRegularFileKey,
+                    .isSymbolicLinkKey,
+                    .fileAllocatedSizeKey,
+                    .totalFileAllocatedSizeKey,
+                ],
+                options: [.skipsPackageDescendants]
+              ) else {
+            return 0
+        }
+
+        var total: Int64 = 0
+        for case let fileURL as URL in enumerator {
+            guard let values = try? fileURL.resourceValues(forKeys: [
+                .isRegularFileKey,
+                .isSymbolicLinkKey,
+                .fileAllocatedSizeKey,
+                .totalFileAllocatedSizeKey,
+            ]),
+            values.isRegularFile == true,
+            values.isSymbolicLink != true else {
+                continue
+            }
+            let allocated = values.totalFileAllocatedSize ?? values.fileAllocatedSize ?? 0
+            let byteCount = Int64(max(0, allocated))
+            total = total > Int64.max - byteCount ? Int64.max : total + byteCount
+        }
+        return total
     }
 
     static func check(
@@ -389,6 +440,7 @@ struct ModelPullDiskPreflight {
 
         let estimatedDownloadBytes = estimatedDownloadBytes(
             for: spec,
+            modelDir: modelDir,
             force: force,
             hubCacheURL: hubCache,
             fileManager: fileManager

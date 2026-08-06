@@ -776,19 +776,34 @@ struct StudioOptionsPanel: View {
                 Text("BF16").tag("resident-bf16")
             }
             .pickerStyle(.segmented)
+            Picker(
+                "Denoise",
+                selection: Binding(
+                    get: { draft.h3AccelerationMode ?? "quality" },
+                    set: { draft.h3AccelerationMode = $0 }
+                )
+            ) {
+                Text("Exact").tag("quality")
+                Text("Balanced").tag("balanced")
+                Text("Maximum").tag("maximum")
+            }
+            .pickerStyle(.segmented)
+            Text("Balanced and Maximum trade exact-seed trajectory fidelity for faster denoising.")
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textMuted)
             Toggle(
                 "Override adaptive schedule",
                 isOn: Binding(
                     get: { draft.h3Steps != nil },
-                    set: { draft.h3Steps = $0 ? 31 : nil }
+                    set: { draft.h3Steps = $0 ? 21 : nil }
                 )
             )
             .font(MereRunTheme.captionFont)
             if draft.h3Steps != nil {
                 Stepper(
-                    "Schedule points \(draft.h3Steps ?? 31)",
+                    "Schedule points \(draft.h3Steps ?? 21)",
                     value: Binding(
-                        get: { draft.h3Steps ?? 31 },
+                        get: { draft.h3Steps ?? 21 },
                         set: { draft.h3Steps = $0 }
                     ),
                     in: 1...64

@@ -34,6 +34,103 @@ The format is based on Keep a Changelog.
   Studio. Recipe schema 4 persists the effective LM sampling policy so a
   supposedly reproducible render no longer hides hardcoded planner behavior.
 
+### MiniMax-H3 performance
+
+- fixed hissy H3 soundtracks by restoring the released audio VAE's
+  `mean_proj`, `logs_proj`, and `dec_in_proj` biases during checkpoint
+  conversion. A deterministic FP32 decode that previously diverged from the
+  ComfyUI reference at `rel_l2=0.463` now reaches `rel_l2=0.0000194` with
+  effectively unit cosine similarity. The release-mode kernel lab now carries
+  a checkpoint-backed audio parity fixture so this cannot silently regress.
+- added `video-minimax-h3-fl2va-bf16-mlx` as a first-class maximum-fidelity
+  CLI, managed-model, and macOS Studio choice. The runtime consumes
+  PipeNetwork's immutable 13-shard BF16 MLX checkpoint directly, streams one
+  shard at a time, builds exact AdaLN values for the requested schedule before
+  dropping 106 AdaLN/time tensors from live memory, and performs the released
+  per-head QKV deinterleave in memory instead of
+  publishing another derivative checkpoint. Pulls remain explicitly gated by
+  the MiniMax-H3 Community License acknowledgement.
+- enabled the faster resident-BF16 transformer path automatically on
+  memory-qualified 96+ GiB MacBooks, while retaining compact Q4 defaults on
+  lower-memory portable systems and preserving geometry-aware runtime reserve.
+- added shape-aware compiled execution: full-step compilation for smaller
+  sequences and staged blockwise compilation for larger packed sequences. The
+  latter reduced a matched 14,958-row resident-BF16 denoise step from 201.2 s
+  eager to 127.9 s on an M4 Max without changing the model or sampler.
+- fused the video VAE decoder's released per-head-interleaved QKV projection
+  into one global-QKV linear after exact load-time deinterleaving, removing two
+  projection dispatches per decoder block while retaining tiled geometry.
+- increased the H3 video VAE's default spatial tile from 256 to 320 pixels
+  after fresh-process checkpoint sweeps. At 832x480 and 124 frames the matched
+  decode fell from 96.091 s to 76.421 s (1.257x) while reported peak Metal
+  memory fell from 9.85 to 8.91 GiB. The true 1344x768 lab shape completed in
+  213.005 s; a 480-pixel candidate exceeded that boundary and was rejected.
+  The accepted path retains the released decoder, precision, causal tiling,
+  and overlap blending while reducing redundant overlap work.
+- added non-perturbing per-step performance telemetry, made block profiling
+  select a safe eager execution path instead of evaluating inside an MLX
+  compile transform, and added exact H3 attention/projection shape benchmarks.
+- tightened the true-768 fused-attention query schedule from 2,048 to 1,024
+  tokens after a matched whole-block sweep measured an approximately 10%
+  improvement with identical output. A subsequent order-balanced whole-block
+  gate selected 768-query single-evaluation batches for 32,768+ row sequences;
+  two fresh paired processes measured 1.015x and 1.019x with `rel_l2=0`. The
+  pinned MLX fork also recognizes only
+  H3's four large BF16 projection shapes on 32,768+ packed rows and selects the
+  faster exact Steel GEMM schedule. Isolated projections improved by 10-20%,
+  while an order-balanced full block improved from 7.892 s to 7.619 s (1.036x)
+  with `rel_l2=0`; environment overrides remain available for reproducible
+  kernel-lab controls. The mlx-swift dependency and bundled Metal library
+  provenance are pinned to the public fork commits that carry this schedule.
+  A fresh 37,794-row, 50-block BF16 evaluation then fell from 953.192 s to
+  775.062 s (1.230x), and its complete 1344x768 generation boundary fell from
+  1,253.425 s to 1,027.310 s. The resulting H.264/AAC artifact retained the
+  exact prior SHA-256, proving the speed path did not change model output.
+- added a separate exact attention schedule for 65,536+ packed rows after the
+  true 73,470-row, 10.125-second geometry showed that attention consumed 74.6%
+  of a production-width block. Splitting the 56 independent heads into
+  eight-head submissions with 640 query rows per kernel reduced a complete
+  attention pass from 22.088 s to 16.383 s. The order-balanced full-block gate
+  then improved from 32.249 s to 25.173 s (1.281x) with bit-identical BF16
+  output (`rel_l2=0`), moving the projected physical one-evaluation boundary
+  from roughly 31-33 minutes to roughly 28 minutes including decode.
+- added first-class `quality`, `balanced`, and `maximum` H3 denoise modes in
+  both the CLI and macOS Studio. The speed modes reuse a bounded tail-block
+  residual only across small adjacent sigma changes, run at least two complete
+  evaluations before the first reuse, use mode-specific bounded refresh
+  streaks, and keep the final schedule region native. On a matched warm-cache
+  16-point, 1,216-row M4 Max loop, the initial `maximum` policy reduced denoise
+  time from 112.413 s to 74.754 s (1.504x); `quality` remains the exact default.
+- made H3 speed choices durable in `video generate --preflight --json`: the
+  request and resolved plan report schedule points, transformer weight mode,
+  and acceleration mode, and the declarative action preserves both H3 flags
+  for automation and macOS Studio receipts.
+- capped long-geometry automatic schedules at 21 points (20 model
+  evaluations), matching the current H3 CUDA runtime default instead of
+  spending 30 evaluations without an upstream quality requirement. Explicit
+  `maximum` acceleration caps automatic schedules at 12 points (11 model
+  evaluations), while `--steps` continues to override either policy. The
+  accepted 12-point schedule executes 365 block calls instead of the old
+  long-geometry policy's 1,500: 75.7% less transformer-block work. A matched
+  512x320, 22-frame, same-seed acceptance pair measured 62.847 s of denoise
+  and 73.07 s end to end in `quality`, versus 41.928 s and 51.45 s in
+  `maximum` (1.499x denoise). The accepted artifact remained free of the
+  spatial lattice produced by more aggressive cache schedules.
+- added a checkpoint-free H3 AdaLN modulation lab inspired by contiguous-run
+  CUDA implementations. At the full 29,018-row shape, run modulation was
+  numerically exact and reduced that isolated operation from 10.4 ms to 5.7 ms
+  (1.835x), but the absolute saving was too small to justify changing the
+  production MLX graph.
+- expanded the explicitly approximate `maximum` lane after a locked BF16 proxy
+  acceptance run. A 20-point schedule now executes six full evaluations and 13
+  nine-block cache evaluations (417 block calls versus 950 exact). On the
+  matched 416x256, 107-frame M4 Max proxy, denoise fell from 674.031 s exact to
+  203.805 s and end-to-end time from 703.423 s to 231.740 s; the accepted MP4
+  retained coherent rain, character, levitating-bus, and dragon motion without
+  the rejected spatial lattice. The real 832x480, 124-frame, 20-point BF16 run
+  then completed in 1,653.711 s (27:33.711) end to end: 1,526.533 s denoise,
+  119.544 s video decode, and 0.892 s audio decode. `quality` remains the exact
+  default.
 ## 0.34.0 - 2026-08-04
 
 This release advances the complete local creation stack across five first-class
@@ -58,7 +155,7 @@ artifact contracts instead of becoming a model-specific sidecar.
   including 2 fps paired video presentation timestamps, video soundtrack
   conditioning, per-reference spatial grids, shared audio/video rotary clocks,
   and the released reference-count and modality constraints.
-- added adaptive MiniMax-H3 9/16/31-point schedule tiers, explicit
+- added adaptive MiniMax-H3 9/16/21-point schedule tiers, explicit
   `--h3-weight-mode auto|quantized|resident-bf16`, chassis-aware compact Q4
   defaults for MacBooks, staged resident-BF16 expansion for desktop Macs, and
   coordinated 50-64 GiB MLX wired-memory residency. Large sequences reuse one

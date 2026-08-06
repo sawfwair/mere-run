@@ -122,6 +122,7 @@ from the runtime catalog used by `mere.run model list`,
 | `video` | `video-ltx23-a2vid-mlx` |
 | `video` | `video-wan22-ti2v-5b-mlx` |
 | `video` | `video-minimax-h3-fl2va-mlx` |
+| `video` | `video-minimax-h3-fl2va-bf16-mlx` |
 | `video` | `video-minimax-h3-ref2va-mlx` |
 | `video` | `video-cosmos3-edge-mlx` |
 | `video` | `video-scail2-14b-mlx` |
@@ -161,7 +162,7 @@ validates all configured models before downloading any; both accept the same
 | `text-chat-lfm25-a1b-8bit`, `text-chat-lfm25-2.6b-4bit` | LFM Open License v1.0; commercial use by entities at or above USD 10M annual revenue is excluded |
 | `vision-segment-sam31` | Meta SAM License custom use, trade-control, attribution, and redistribution conditions |
 | `vision-face-buffalo-l` | InsightFace pretrained weights; non-commercial research use |
-| `video-minimax-h3-fl2va-mlx`, `video-minimax-h3-ref2va-mlx` | MiniMax-H3 Community License; use, distribution, and display are excluded in the United States, European Union, United Kingdom, and Republic of Korea, with downstream notice and safeguard obligations |
+| `video-minimax-h3-fl2va-mlx`, `video-minimax-h3-fl2va-bf16-mlx`, `video-minimax-h3-ref2va-mlx` | MiniMax-H3 Community License; use, distribution, and display are excluded in the United States, European Union, United Kingdom, and Republic of Korea, with downstream notice and safeguard obligations |
 | `image-3d-trellis2-4b` | the mounted DINOv3 encoder is gated under Meta's custom DINOv3 License |
 | `music-muscriptor-{small,medium,large}` | CC BY-NC 4.0 model weights |
 | `sfx-woosh-*` | CC BY-NC 4.0 Woosh or MMAudio Synchformer weights |

@@ -223,6 +223,8 @@ the exact writes and consume a typed report with:
 ```bash
 mere.run model repair-manifests --dry-run --json
 mere.run model repair-manifests --json
+mere.run model repair-manifests --model video-minimax-h3-fl2va-bf16-mlx \
+  --accept-model-license --json
 ```
 
 The report identifies healthy manifests, proposed or completed writes, absent

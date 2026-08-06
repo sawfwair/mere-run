@@ -326,9 +326,11 @@ public final class MiniMaxH3AudioVAE: Module {
         }
         let mappedKey = key
         let plainConvolutionPrefixes = ["encoder.", "mean_proj.", "logs_proj.", "dec_in_proj."]
-        if plainConvolutionPrefixes.contains(where: mappedKey.hasPrefix),
-           mappedKey.hasSuffix(".weight"), value.ndim == 3 {
-            return [(mappedKey, value.transposed(0, 2, 1))]
+        if plainConvolutionPrefixes.contains(where: mappedKey.hasPrefix) {
+            if mappedKey.hasSuffix(".weight"), value.ndim == 3 {
+                return [(mappedKey, value.transposed(0, 2, 1))]
+            }
+            return [(mappedKey, value)]
         }
         if mappedKey.hasPrefix("encoder.") || mappedKey.hasPrefix("pre_block.") {
             return [(mappedKey, value)]

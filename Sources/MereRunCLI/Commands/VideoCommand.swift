@@ -52,6 +52,20 @@ enum MiniMaxH3CLITransformerWeightMode: String, CaseIterable, ExpressibleByArgum
     }
 }
 
+enum MiniMaxH3CLIAccelerationMode: String, CaseIterable, ExpressibleByArgument {
+    case quality
+    case balanced
+    case maximum
+
+    var generationMode: MiniMaxH3AccelerationMode {
+        switch self {
+        case .quality: .quality
+        case .balanced: .balanced
+        case .maximum: .maximum
+        }
+    }
+}
+
 private struct MiniMaxH3WiredMemoryPolicy: WiredMemoryPolicy, Hashable {
     func limit(baseline: Int, activeSizes: [Int]) -> Int {
         max(baseline, activeSizes.max() ?? baseline)
@@ -275,7 +289,7 @@ struct VideoGenerate: AsyncParsableCommand {
 
     @Option(
         name: [.long],
-        help: "Denoising schedule points. Defaults to 40 for Wan; MiniMax-H3 selects 9, 16, or 31 from packed geometry."
+        help: "Denoising schedule points. Defaults to 40 for Wan; MiniMax-H3 selects 9, 16, or 21 from packed geometry."
     )
     var steps: Int?
 
@@ -284,6 +298,12 @@ struct VideoGenerate: AsyncParsableCommand {
         help: "MiniMax-H3 transformer compute: auto, quantized, or resident-bf16."
     )
     var h3WeightMode: MiniMaxH3CLITransformerWeightMode = .automatic
+
+    @Option(
+        name: [.customLong("h3-acceleration")],
+        help: "MiniMax-H3 denoise mode: quality runs every block; balanced/maximum reuse bounded tail-block residuals for speed."
+    )
+    var h3Acceleration: MiniMaxH3CLIAccelerationMode = .quality
 
     @Option(name: [.customLong("guidance-scale")], help: "Wan classifier-free guidance scale.")
     var guidanceScale: Float = 5
@@ -560,6 +580,7 @@ struct VideoGenerate: AsyncParsableCommand {
                 steps: steps,
                 seed: UInt64(bitPattern: Int64(seed ?? 42)),
                 transformerWeightMode: h3WeightMode.generationMode,
+                accelerationMode: h3Acceleration.generationMode,
                 firstFrameURL: sourceImageURL,
                 lastFrameURL: endImageURL,
                 references: parsedReferences
@@ -1267,6 +1288,9 @@ struct VideoGenerate: AsyncParsableCommand {
             width: width,
             height: height,
             numFrames: numFrames,
+            steps: steps,
+            h3WeightMode: h3WeightMode.rawValue,
+            h3AccelerationMode: h3Acceleration.rawValue,
             duration: duration,
             fps: fps,
             seed: seed,
@@ -1338,6 +1362,12 @@ struct VideoGenerate: AsyncParsableCommand {
         if let legacyVariant {
             args += ["--variant", legacyVariant.rawValue]
         }
+        if isMiniMaxH3Request {
+            args += [
+                "--h3-weight-mode", h3WeightMode.rawValue,
+                "--h3-acceleration", h3Acceleration.rawValue,
+            ]
+        }
         if let duration {
             args += ["--duration", String(duration)]
         }
@@ -1384,6 +1414,20 @@ struct VideoGenerate: AsyncParsableCommand {
             args += ["--timings-output", timingsOutput]
         }
         return args
+    }
+
+    private var isMiniMaxH3Request: Bool {
+        let requested = resolvedRequestedModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        if requested == ModelResolver.ModelID.miniMaxH3FL2VAMLX.rawValue
+            || requested == ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue
+            || requested == ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue {
+            return true
+        }
+        guard let modelRoot else { return false }
+        let resources = MiniMaxH3Resources(
+            rootURL: URL(fileURLWithPath: modelRoot).standardizedFileURL
+        )
+        return resources.validate().isEmpty && (try? resources.loadConfiguration()) != nil
     }
 }
 

@@ -21,14 +21,16 @@ Example::
       python convert_minimax_h3_official_mlx.py \
         --cache-dir /workspace/hf-cache \
         --conversion-location "CA-MTL-3, Canada" \
+        --transformer-precision bf16 \
         --output /workspace/minimax-h3-sawfwair
 
 The output transformer is mixed precision: the 208 transformer/refiner core
-linears are affine Q4/group-64, while the released BF16/F32 precision islands
-remain dense. The Qwen3-VL conditioner retains exactly the 50 language layers
-H3 reads and uses affine Q8/group-64 for 439 eligible linears. The AdaLN cache
-is evaluated from the original BF16/F32 projections before those 13B
-inference-redundant parameters are omitted from the compact transformer.
+linears use the selected affine Q4 or Q8/group-64 width, while the released
+BF16/F32 precision islands remain dense. The Qwen3-VL conditioner retains
+exactly the 50 language layers H3 reads and uses affine Q8/group-64 for 439
+eligible linears. The AdaLN cache is evaluated from the original BF16/F32
+projections before those 13B inference-redundant parameters are omitted from
+the compact transformer.
 """
 
 from __future__ import annotations
@@ -56,7 +58,6 @@ SOURCE_REVISION = "ec19cc6daf5d8add9417c18e86b6b58cc6c55027"
 SOURCE_LICENSE_SHA256 = "59b99642b95ea21630e311198ddbfffbfe05aadba0c2f5d884cbdf4efcc90f44"
 SOURCE_LICENSE_BYTES = 17_604
 GROUP_SIZE = 64
-TRANSFORMER_BITS = 4
 TEXT_ENCODER_BITS = 8
 SAMPLE_POINTS = 31
 VIDEO_SHIFT = 12.0
@@ -307,7 +308,7 @@ def quantizer_self_test() -> dict[str, dict[str, str]]:
     ).reshape(17, 128)
     weight = mx.array(values).astype(mx.bfloat16)
     observed: dict[str, dict[str, str]] = {}
-    for bits in (TRANSFORMER_BITS, TEXT_ENCODER_BITS):
+    for bits in sorted(QUANTIZER_SELF_TEST):
         packed, scales, biases = mx.quantize(
             weight,
             group_size=GROUP_SIZE,
@@ -586,11 +587,13 @@ def convert_transformer(
     index: dict[str, Any],
     downloaded: dict[str, Path],
     source_identity: str,
+    transformer_precision: str,
 ) -> dict[str, Any]:
     import mlx.core as mx
 
+    transformer_bits = {"q4": 4, "q8": 8, "bf16": None}[transformer_precision]
     converted: dict[str, Any] = {}
-    quantized = copied = omitted = qkv_reordered = 0
+    quantized = dense_core = copied = omitted = qkv_reordered = 0
     for shard_index, (name, shard_path, keys) in enumerate(
         source_shards("FL2VA/transformer", index, downloaded), start=1
     ):
@@ -605,12 +608,17 @@ def convert_transformer(
                 if key.endswith(".attn.qkv_proj.weight"):
                     value = reorder_transformer_qkv(value)
                     qkv_reordered += 1
-                packed, scales, biases = quantize_weight(value, TRANSFORMER_BITS)
-                prefix = key.removesuffix(".weight")
-                converted[key] = packed
-                converted[f"{prefix}.scales"] = scales
-                converted[f"{prefix}.biases"] = biases
-                quantized += 1
+                if transformer_bits is None:
+                    mx.eval(value)
+                    converted[key] = value
+                    dense_core += 1
+                else:
+                    packed, scales, biases = quantize_weight(value, transformer_bits)
+                    prefix = key.removesuffix(".weight")
+                    converted[key] = packed
+                    converted[f"{prefix}.scales"] = scales
+                    converted[f"{prefix}.biases"] = biases
+                    quantized += 1
             else:
                 mx.eval(value)
                 converted[key] = value
@@ -618,18 +626,27 @@ def convert_transformer(
         del raw
         mx.clear_cache()
 
-    if (quantized, copied, omitted, qkv_reordered, len(converted)) != (208, 220, 107, 52, 844):
+    expected = (0, 208, 220, 107, 52, 428) if transformer_bits is None else (
+        208, 0, 220, 107, 52, 844
+    )
+    if (quantized, dense_core, copied, omitted, qkv_reordered, len(converted)) != expected:
         raise ValueError(
             "Unexpected compact transformer geometry: "
-            f"quantized={quantized}, copied={copied}, omitted={omitted}, "
+            f"quantized={quantized}, dense_core={dense_core}, copied={copied}, omitted={omitted}, "
             f"qkv_reordered={qkv_reordered}, arrays={len(converted)}"
         )
+    precision_metadata = (
+        "released mixed BF16/F32"
+        if transformer_bits is None
+        else f"affine {transformer_bits}-bit g64"
+    )
     atomic_safetensors(
         output,
         dict(sorted(converted.items())),
         {
             "format": "mere.run.minimax-h3-inference-transformer",
-            "quantization": "affine 4-bit g64",
+            "precision": transformer_precision,
+            "quantization": "none" if transformer_bits is None else precision_metadata,
             "source_precision": "released mixed BF16/F32",
             "source_repository": SOURCE_REPOSITORY,
             "source_revision": SOURCE_REVISION,
@@ -642,11 +659,17 @@ def convert_transformer(
         "input_tensors": len(index["weight_map"]),
         "output_tensors": len(converted),
         "quantized_linears": quantized,
+        "dense_core_linears": dense_core,
         "copied_dense_tensors": copied,
         "omitted_cache_or_rope_tensors": omitted,
         "qkv_matrices_deinterleaved": qkv_reordered,
         "qkv_layout": "global-qkv-slabs",
-        "quantization": {"bits": 4, "group_size": 64, "mode": "affine"},
+        "precision": transformer_precision,
+        "quantization": None if transformer_bits is None else {
+            "bits": transformer_bits,
+            "group_size": 64,
+            "mode": "affine",
+        },
         "dense_precision_islands_preserved": list(TRANSFORMER_DENSE_PREFIXES),
     }
     release_arrays(converted)
@@ -837,7 +860,12 @@ def convert_audio_vae(
     return stats
 
 
-def write_package_support(output: Path, downloaded: dict[str, Path]) -> None:
+def write_package_support(
+    output: Path,
+    downloaded: dict[str, Path],
+    transformer_precision: str,
+) -> None:
+    transformer_bits = {"q4": 4, "q8": 8, "bf16": None}[transformer_precision]
     shutil.copyfile(downloaded["LICENSE"], output / "LICENSE")
     shutil.copyfile(
         downloaded["FL2VA/processor/tokenizer.json"], output / "tokenizer.json"
@@ -851,8 +879,13 @@ def write_package_support(output: Path, downloaded: dict[str, Path]) -> None:
         "Copyright © 2026 MiniMax. All Rights Reserved.\n",
         encoding="utf-8",
     )
+    core_precision_description = (
+        "preserved at the released BF16 precision"
+        if transformer_bits is None
+        else f"quantized directly from the released BF16 tensors to MLX affine {transformer_bits}-bit, group size 64"
+    )
     (output / "MODIFICATIONS.md").write_text(
-        """# Modifications to MiniMax H3
+        f"""# Modifications to MiniMax H3
 
 These files are MODIFIED versions of the MiniMax H3 Works, redistributed under
 the MiniMax H3 Community License Agreement in `LICENSE` and `NOTICE`.
@@ -866,8 +899,7 @@ No third-party converted or quantized weights were used.
 * The 52 fused transformer and token-refiner QKV matrices were first reordered
   from MiniMax's raw per-head interleave into the official reference model's
   `[all-q; all-k; all-v]` layout. The 208 core linear weights were then
-  quantized directly from the released BF16 tensors to MLX affine 4-bit,
-  group size 64.
+  {core_precision_description}.
   Precision-sensitive BF16/F32 input, timestep, normalization, and output
   tensors remain at their released precision.
 * The original BF16/F32 AdaLN projections and timestep MLP were evaluated over
@@ -898,7 +930,6 @@ inference-only omissions and numeric conversions above.
         "tasks": ["t2va", "fl2va"],
         "sigma_shift_scales": {"video": VIDEO_SHIFT, "audio": AUDIO_SHIFT},
         "fps": 24,
-        "quantization": {"group_size": 64, "bits": 4, "mode": "affine"},
         "text_encoder_quantization": {
             "group_size": 64,
             "bits": 8,
@@ -927,6 +958,12 @@ inference-only omissions and numeric conversions above.
             "theta": 5_000_000.0,
         },
     }
+    if transformer_bits is not None:
+        config["quantization"] = {
+            "group_size": 64,
+            "bits": transformer_bits,
+            "mode": "affine",
+        }
     atomic_json(output / "config.json", config)
 
 
@@ -985,6 +1022,12 @@ def parse_args() -> argparse.Namespace:
         choices=("transformer", "text_encoder", "video_vae", "audio_vae"),
         default=("transformer", "text_encoder", "video_vae", "audio_vae"),
     )
+    parser.add_argument(
+        "--transformer-precision",
+        choices=("q4", "q8", "bf16"),
+        default="q4",
+        help="Storage precision for the 208 transformer core linears.",
+    )
     parser.add_argument("--plan", action="store_true")
     parser.add_argument("--self-test-only", action="store_true")
     return parser.parse_args()
@@ -1020,7 +1063,7 @@ def main() -> int:
     downloaded = download_sources(
         metadata, source_files, cache_dir, source_manifest_path
     )
-    write_package_support(output, downloaded)
+    write_package_support(output, downloaded, args.transformer_precision)
     self_test = quantizer_self_test()
     qkv_self_test = qkv_reorder_self_test()
 
@@ -1054,6 +1097,7 @@ def main() -> int:
             transformer_index,
             downloaded,
             source_identity,
+            args.transformer_precision,
         )
         component_stats["transformer.safetensors"] = transformer_stats
 
@@ -1077,7 +1121,7 @@ def main() -> int:
     }
     conversion_receipt = {
         "converter": "scripts/model-conversion/convert_minimax_h3_official_mlx.py",
-        "converter_version": 2,
+        "converter_version": 3,
         "converter_sha256": sha256_file(Path(__file__).resolve()),
         "started_at": started_at,
         "completed_at": utc_now(),

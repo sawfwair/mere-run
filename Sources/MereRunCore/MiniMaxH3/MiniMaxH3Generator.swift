@@ -52,10 +52,154 @@ public enum MiniMaxH3TransformerWeightMode: String, Sendable, Hashable {
     case residentBF16 = "resident-bf16"
 }
 
+public enum MiniMaxH3AccelerationMode: String, Sendable, Hashable {
+    case quality
+    case balanced
+    case maximum
+
+    var blockReusePolicy: MiniMaxH3BlockReusePolicy? {
+        switch self {
+        case .quality: nil
+        case .balanced:
+            MiniMaxH3BlockReusePolicy(
+                cacheDepth: 0.5,
+                window: 0.1...0.9,
+                maximumConsecutiveCachedSteps: 2
+            )
+        case .maximum:
+            MiniMaxH3BlockReusePolicy(
+                cacheDepth: 0.82,
+                window: 0.1...0.9,
+                maximumConsecutiveCachedSteps: 4
+            )
+        }
+    }
+}
+
+struct MiniMaxH3BlockReusePolicy {
+    static let maximumSigmaDelta: Float = 0.12
+
+    let cacheDepth: Double
+    let window: ClosedRange<Float>
+    let maximumConsecutiveCachedSteps: Int
+
+    init(
+        cacheDepth: Double,
+        window: ClosedRange<Float> = 0.1...0.9,
+        maximumConsecutiveCachedSteps: Int = 2
+    ) {
+        precondition((0..<1).contains(cacheDepth))
+        precondition((0...1).contains(window.lowerBound))
+        precondition((0...1).contains(window.upperBound))
+        precondition(maximumConsecutiveCachedSteps >= 0)
+        self.cacheDepth = cacheDepth
+        self.window = window
+        self.maximumConsecutiveCachedSteps = maximumConsecutiveCachedSteps
+    }
+
+    func warmBlockCount(totalBlockCount: Int) -> Int {
+        precondition(totalBlockCount > 0)
+        let count = Int((Double(totalBlockCount) * (1 - cacheDepth)).rounded())
+        return max(0, min(totalBlockCount - 1, count))
+    }
+
+    func shouldReuseTail(
+        stepIndex: Int,
+        stepCount: Int,
+        videoSigmas: [Float],
+        audioSigmas: [Float],
+        hasCachedResidual: Bool,
+        consecutiveCachedSteps: Int
+    ) -> Bool {
+        guard stepIndex >= 2,
+              stepIndex < stepCount,
+              videoSigmas.count == stepCount + 1,
+              audioSigmas.count == stepCount + 1,
+              hasCachedResidual,
+              consecutiveCachedSteps < maximumConsecutiveCachedSteps else { return false }
+        let position = Float(stepIndex) / Float(stepCount)
+        guard window.contains(position) else { return false }
+        let videoDelta = abs(videoSigmas[stepIndex - 1] - videoSigmas[stepIndex])
+        let audioDelta = abs(audioSigmas[stepIndex - 1] - audioSigmas[stepIndex])
+        return max(videoDelta, audioDelta) < Self.maximumSigmaDelta
+    }
+
+}
+
+enum MiniMaxH3DenoiseExecutionMode: Equatable {
+    case compiledStep
+    case eagerStep
+    case blockwiseCompiled
+
+    var usesLayerwiseEvaluation: Bool {
+        self == .eagerStep
+    }
+}
+
+enum MiniMaxH3DenoiseExecutionPolicy {
+    static let blockwiseSequenceThreshold = 13_500
+    static let largeSequenceAttentionThreshold = 32_768
+    static let veryLargeSequenceAttentionThreshold = 65_536
+
+    static func attentionKernelSchedule(
+        sequenceLength: Int
+    ) -> (
+        maximumQueryTokens: Int,
+        maximumHeadsPerKernel: Int?,
+        maximumKernelsPerEvaluation: Int
+    ) {
+        if sequenceLength >= veryLargeSequenceAttentionThreshold {
+            return (
+                maximumQueryTokens: 640,
+                maximumHeadsPerKernel: 8,
+                maximumKernelsPerEvaluation: 1
+            )
+        }
+        if sequenceLength >= largeSequenceAttentionThreshold {
+            return (
+                maximumQueryTokens: 768,
+                maximumHeadsPerKernel: nil,
+                maximumKernelsPerEvaluation: 1
+            )
+        }
+        return (
+            maximumQueryTokens: 1_024,
+            maximumHeadsPerKernel: nil,
+            maximumKernelsPerEvaluation: 4
+        )
+    }
+
+    static func mode(
+        usesResidentBF16: Bool,
+        sequenceLength: Int,
+        usesBlockProfiling: Bool,
+        denoiseStepCount: Int = 2,
+        profilingOverride: String? = nil
+    ) -> MiniMaxH3DenoiseExecutionMode {
+        if !usesBlockProfiling {
+            switch profilingOverride?.lowercased() {
+            case "compiled": return .compiledStep
+            case "eager": return .eagerStep
+            case "blockwise": return .blockwiseCompiled
+            default: break
+            }
+        }
+        if sequenceLength > blockwiseSequenceThreshold {
+            return .blockwiseCompiled
+        }
+        if usesBlockProfiling || (usesResidentBF16 && denoiseStepCount == 1) {
+            return .eagerStep
+        }
+        return .compiledStep
+    }
+
+}
+
 public enum MiniMaxH3StepPolicy {
     public static let practicalPointCount = 9
     public static let extendedPointCount = 16
-    public static let maximumQualityPointCount = 31
+    public static let maximumQualityPointCount = 21
+    public static let maximumSpeedPointCount = 12
     public static let practicalPackedRowLimit = 13_500
     public static let extendedPackedRowLimit = 26_000
 
@@ -64,7 +208,8 @@ public enum MiniMaxH3StepPolicy {
         height: Int,
         numFrames: Int,
         keyframeCount: Int = 0,
-        referenceKinds: [MiniMaxH3ReferenceKind] = []
+        referenceKinds: [MiniMaxH3ReferenceKind] = [],
+        accelerationMode: MiniMaxH3AccelerationMode = .quality
     ) throws -> Int {
         let latentFrames = try MiniMaxH3Geometry.videoLatentFrameCount(for: numFrames)
         let rowsPerVideoFrame = (height / 32) * (width / 32)
@@ -82,19 +227,27 @@ public enum MiniMaxH3StepPolicy {
                 estimatedRows += targetAudioRows
             }
         }
+        let geometryPointCount: Int
         if estimatedRows <= practicalPackedRowLimit {
-            return practicalPointCount
+            geometryPointCount = practicalPointCount
+        } else if estimatedRows <= extendedPackedRowLimit {
+            geometryPointCount = extendedPointCount
+        } else {
+            geometryPointCount = maximumQualityPointCount
         }
-        if estimatedRows <= extendedPackedRowLimit {
-            return extendedPointCount
+        switch accelerationMode {
+        case .quality, .balanced:
+            return geometryPointCount
+        case .maximum:
+            return min(geometryPointCount, maximumSpeedPointCount)
         }
-        return maximumQualityPointCount
     }
 }
 
 enum MiniMaxH3ResidentBF16Policy {
     static let gibibyte = UInt64(1_073_741_824)
     static let minimumPackedRows = 2_048
+    static let minimumPortableMemoryBytes = 96 * gibibyte
 
     static func automaticReserveBytes(sequenceLength: Int) -> UInt64 {
         let base = 16 * gibibyte
@@ -115,7 +268,9 @@ enum MiniMaxH3ResidentBF16Policy {
         case .quantized:
             return false
         case .automatic:
-            guard !isPortableMac,
+            let portableMemoryQualified = !isPortableMac
+                || physicalMemoryBytes >= minimumPortableMemoryBytes
+            guard portableMemoryQualified,
                   hasAdaLNCache,
                   estimatedResidentBytes > 0,
                   sequenceLength >= minimumPackedRows else { return false }
@@ -166,6 +321,7 @@ public struct MiniMaxH3GenerationOptions: Sendable, Hashable {
     public let steps: Int
     public let seed: UInt64
     public let transformerWeightMode: MiniMaxH3TransformerWeightMode
+    public let accelerationMode: MiniMaxH3AccelerationMode
     public let firstFrameURL: URL?
     public let lastFrameURL: URL?
     public let references: [MiniMaxH3ReferenceInput]
@@ -178,6 +334,7 @@ public struct MiniMaxH3GenerationOptions: Sendable, Hashable {
         steps: Int? = nil,
         seed: UInt64 = 42,
         transformerWeightMode: MiniMaxH3TransformerWeightMode = .automatic,
+        accelerationMode: MiniMaxH3AccelerationMode = .quality,
         firstFrameURL: URL? = nil,
         lastFrameURL: URL? = nil,
         references: [MiniMaxH3ReferenceInput] = []
@@ -210,7 +367,8 @@ public struct MiniMaxH3GenerationOptions: Sendable, Hashable {
             height: height,
             numFrames: numFrames,
             keyframeCount: [firstFrameURL, lastFrameURL].compactMap { $0 }.count,
-            referenceKinds: references.map(\.kind)
+            referenceKinds: references.map(\.kind),
+            accelerationMode: accelerationMode
         )
         guard resolvedSteps >= 2 else {
             throw MiniMaxH3GeneratorError.invalidOptions("steps must be at least 2")
@@ -222,6 +380,7 @@ public struct MiniMaxH3GenerationOptions: Sendable, Hashable {
         self.steps = resolvedSteps
         self.seed = seed
         self.transformerWeightMode = transformerWeightMode
+        self.accelerationMode = accelerationMode
         self.firstFrameURL = firstFrameURL
         self.lastFrameURL = lastFrameURL
         self.references = references
@@ -274,18 +433,36 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         MLX.clip(decodedFrames * 255, min: 0, max: 255).asType(.uint8)
     }
 
-    private func loadDenoisingTransformer(
+    private func loadDenoisingRuntime(
         resources: MiniMaxH3Resources,
         configuration: MiniMaxH3Configuration,
-        adaLNCache: MiniMaxH3AdaLNCache?,
+        videoSchedule: MiniMaxH3Schedule,
+        audioSchedule: MiniMaxH3Schedule,
         sequenceLength: Int,
         weightMode: MiniMaxH3TransformerWeightMode,
         progressHandler: (@Sendable (MiniMaxH3GenerationProgress) -> Void)?
-    ) throws -> MiniMaxH3Transformer {
+    ) throws -> (transformer: MiniMaxH3Transformer, adaLNCache: MiniMaxH3AdaLNCache?) {
+        let adaLNCache: MiniMaxH3AdaLNCache?
+        let cachedAdaLNForLoading: MiniMaxH3AdaLNCache?
+        if resources.usesShardedBF16Transformer {
+            // The released BF16 artifact retains the schedule-only projections.
+            // Build their exact table for this run instead of interpolating the
+            // compact package's fixed 31-point cache.
+            adaLNCache = nil
+            cachedAdaLNForLoading = nil
+        } else {
+            adaLNCache = try Self.loadAdaLNCache(
+                resources: resources,
+                configuration: configuration,
+                videoSchedule: videoSchedule,
+                audioSchedule: audioSchedule
+            )
+            cachedAdaLNForLoading = adaLNCache
+        }
         let transformer = try MiniMaxH3ModelLoader.loadInferenceTransformer(
             resources: resources,
             configuration: configuration,
-            cachedAdaLN: adaLNCache,
+            cachedAdaLN: cachedAdaLNForLoading,
             progressHandler: { shard in
                 progressHandler?(.init(
                     stage: .loadingTransformer,
@@ -294,12 +471,24 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                 ))
             }
         )
+        let resolvedAdaLNCache: MiniMaxH3AdaLNCache?
+        if resources.usesShardedBF16Transformer {
+            resolvedAdaLNCache = transformer.precomputeAdaLN(
+                videoSchedule: videoSchedule,
+                audioSchedule: audioSchedule,
+                sourceIdentity: try resources.adaLNCacheSourceIdentity()
+            )
+            transformer.discardAdaLNWeights()
+            Memory.clearCache()
+        } else {
+            resolvedAdaLNCache = adaLNCache
+        }
         let shouldMaterialize = try MiniMaxH3ResidentBF16Policy.shouldMaterialize(
             mode: weightMode,
             physicalMemoryBytes: ProcessInfo.processInfo.physicalMemory,
             estimatedResidentBytes: transformer.estimatedResidentBF16ByteCount,
             sequenceLength: sequenceLength,
-            hasAdaLNCache: adaLNCache != nil,
+            hasAdaLNCache: resolvedAdaLNCache != nil,
             isPortableMac: MiniMaxH3Host.isPortableMac
         )
         if shouldMaterialize {
@@ -310,7 +499,7 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
             ))
             _ = transformer.materializeResidentBF16()
         }
-        return transformer
+        return (transformer, resolvedAdaLNCache)
     }
 
     private func denoise(
@@ -324,15 +513,24 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         videoSchedule: MiniMaxH3Schedule,
         audioSchedule: MiniMaxH3Schedule,
         adaLNCache: MiniMaxH3AdaLNCache?,
+        accelerationMode: MiniMaxH3AccelerationMode,
         progressHandler: (@Sendable (MiniMaxH3GenerationProgress) -> Void)?
     ) -> (videoRows: MLXArray, audioRows: MLXArray) {
         precondition(videoSchedule.timesteps.count == audioSchedule.timesteps.count)
-        let profileLogger = MereRunRuntimeDebug.logger(
+        let blockProfileLogger = MereRunRuntimeDebug.logger(
             keys: ["MERERUN_H3_PROFILE_BLOCKS"],
             prefix: "[minimax-h3-profile]"
         )
-        profileLogger?("rows=\(layout.sequenceLength) blocks=\(transformer.configuration.layerCount)")
-        transformer.blockTimingHandler = profileLogger.map { logger in
+        let stepProfileLogger = MereRunRuntimeDebug.logger(
+            keys: ["MERERUN_H3_PROFILE_STEPS"],
+            prefix: "[minimax-h3-step-profile]"
+        )
+        blockProfileLogger?("rows=\(layout.sequenceLength) blocks=\(transformer.configuration.layerCount)")
+        stepProfileLogger?(
+            "rows=\(layout.sequenceLength) steps=\(videoSchedule.timesteps.count) "
+                + "resident_bf16=\(transformer.usesResidentBF16)"
+        )
+        transformer.blockTimingHandler = blockProfileLogger.map { logger in
             { index, elapsed, memory in
                 logger(String(
                     format: "block=%02d seconds=%.3f active_gib=%.2f cache_gib=%.2f peak_gib=%.2f",
@@ -351,19 +549,68 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         if let conditionVideoRows { MLX.eval(conditionVideoRows) }
         if let conditionAudioRows { MLX.eval(conditionAudioRows) }
 
-        // Quantized projections benefit from a compiled whole-step graph at
-        // practical sequence lengths. Resident bf16 already dispatches dense
-        // GEMMs at the hardware-efficient shapes, while wrapping all 50 blocks
-        // in one compiled call adds substantial graph overhead. Evaluate its
-        // eager block stack once per step, matching the upstream MLX engine and
-        // allowing the allocator to reuse intermediate buffers across blocks.
+        // Practical sequence lengths benefit from a compiled whole-step graph
+        // once its first invocation is amortized. A single-step diagnostic is
+        // faster with resident bf16 when its eager stack synchronizes after
+        // each block; this bounds the lazy graph and keeps the allocator
+        // reusing intermediate buffers without paying compilation overhead.
         // Very large sequences keep independent compiled block boundaries to
         // avoid the macOS watchdog.
-        let requiresBlockwiseExecution = layout.sequenceLength > 16_384
-        let usesCompiledStep = !transformer.usesResidentBF16 && !requiresBlockwiseExecution
-        transformer.usesBlockwiseCompilation = requiresBlockwiseExecution
-        transformer.usesLayerwiseEvaluation = false
+        let blockReusePolicy = accelerationMode.blockReusePolicy.map { policy in
+            let environment = ProcessInfo.processInfo.environment
+            let requestedCacheDepth = Double(environment["MERERUN_H3_REUSE_DEPTH"] ?? "")
+            let cacheDepth = requestedCacheDepth.flatMap {
+                (0..<1).contains($0) ? $0 : nil
+            } ?? policy.cacheDepth
+            let requestedReuseStreak = Int(environment["MERERUN_H3_REUSE_STREAK"] ?? "")
+            let maximumConsecutiveCachedSteps = requestedReuseStreak.flatMap {
+                $0 >= 0 ? $0 : nil
+            } ?? policy.maximumConsecutiveCachedSteps
+            return MiniMaxH3BlockReusePolicy(
+                cacheDepth: cacheDepth,
+                window: policy.window,
+                maximumConsecutiveCachedSteps: maximumConsecutiveCachedSteps
+            )
+        }
+        let executionMode = blockReusePolicy == nil
+            ? MiniMaxH3DenoiseExecutionPolicy.mode(
+                usesResidentBF16: transformer.usesResidentBF16,
+                sequenceLength: layout.sequenceLength,
+                usesBlockProfiling: blockProfileLogger != nil,
+                denoiseStepCount: videoSchedule.timesteps.count,
+                profilingOverride: ProcessInfo.processInfo.environment["MERERUN_H3_EXECUTION_MODE"]
+            )
+            : .blockwiseCompiled
+        let usesCompiledStep = executionMode == .compiledStep
+        transformer.usesBlockwiseCompilation = executionMode == .blockwiseCompiled
+        let attentionKernelSchedule = MiniMaxH3DenoiseExecutionPolicy.attentionKernelSchedule(
+            sequenceLength: layout.sequenceLength
+        )
+        transformer.maximumAttentionQueryTokensPerKernel = attentionKernelSchedule
+            .maximumQueryTokens
+        transformer.maximumAttentionHeadsPerKernel = attentionKernelSchedule
+            .maximumHeadsPerKernel
+        transformer.maximumAttentionKernelsPerEvaluation = attentionKernelSchedule
+            .maximumKernelsPerEvaluation
+        transformer.usesFusedPostAttention = ProcessInfo.processInfo
+            .environment["MERERUN_H3_FUSED_POST_ATTENTION"] == "1"
+        transformer.usesLayerwiseEvaluation = executionMode.usesLayerwiseEvaluation
         transformer.clearsCacheAfterLayerwiseEvaluation = false
+        stepProfileLogger?(
+            "execution_mode=\(executionMode) acceleration=\(accelerationMode.rawValue) "
+                + "fused_post_attention=\(transformer.usesFusedPostAttention) "
+                + "attention_query_tokens=\(attentionKernelSchedule.maximumQueryTokens) "
+                + "attention_heads_per_kernel="
+                + "\(attentionKernelSchedule.maximumHeadsPerKernel ?? transformer.configuration.attentionHeadCount) "
+                + "attention_evaluation_batch="
+                + "\(attentionKernelSchedule.maximumKernelsPerEvaluation)"
+        )
+        if let blockReusePolicy {
+            stepProfileLogger?(
+                "reuse_depth=\(blockReusePolicy.cacheDepth) "
+                    + "reuse_streak=\(blockReusePolicy.maximumConsecutiveCachedSteps)"
+            )
+        }
 
         let compiledStep = MLX.compile { (inputs: [MLXArray]) -> [MLXArray] in
             let videoSample = inputs[0]
@@ -406,7 +653,14 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
             ]
         }
 
+        let totalBlockCount = transformer.configuration.layerCount
+        let warmBlockCount = blockReusePolicy?.warmBlockCount(totalBlockCount: totalBlockCount)
+        var cachedTailResidual: MLXArray?
+        var consecutiveCachedSteps = 0
+        var cachedStepCount = 0
+
         for index in videoSchedule.timesteps.indices {
+            let stepStarted = stepProfileLogger.map { _ in CFAbsoluteTimeGetCurrent() }
             progressHandler?(.init(
                 stage: .denoising,
                 stepIndex: index,
@@ -421,6 +675,20 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
             ])
             let videoCoefficients = Self.scheduleCoefficients(videoSchedule, index: index)
             let audioCoefficients = Self.scheduleCoefficients(audioSchedule, index: index)
+            let reusesTail = blockReusePolicy?.shouldReuseTail(
+                stepIndex: index,
+                stepCount: videoSchedule.timesteps.count,
+                videoSigmas: videoSchedule.sigmas,
+                audioSigmas: audioSchedule.sigmas,
+                hasCachedResidual: cachedTailResidual != nil,
+                consecutiveCachedSteps: consecutiveCachedSteps
+            ) ?? false
+            if let warmBlockCount {
+                stepProfileLogger?(
+                    "step_plan=\(index + 1)/\(videoSchedule.timesteps.count) "
+                        + "cached_tail=\(reusesTail) blocks=\(reusesTail ? warmBlockCount : totalBlockCount)"
+                )
+            }
             if usesCompiledStep {
                 var inputs = [
                     videoRows,
@@ -444,13 +712,34 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                 let audioInput = conditionAudioRows.map {
                     MLX.concatenated([$0, audioRows], axis: 1)
                 } ?? audioRows
-                let predicted = transformer(
-                    videoRows: videoInput,
-                    audioRows: audioInput,
-                    context: context,
-                    timesteps: timestepValues,
-                    cachedAdaLN: adaLNCache?.step(at: index)
-                )
+                let predicted: MiniMaxH3TransformerOutput
+                if let warmBlockCount {
+                    let result = transformer.callWithBlockResidualReuse(
+                        videoRows: videoInput,
+                        audioRows: audioInput,
+                        context: context,
+                        timesteps: timestepValues,
+                        cachedAdaLN: adaLNCache?.step(at: index),
+                        warmBlockCount: warmBlockCount,
+                        cachedTailResidual: reusesTail ? cachedTailResidual : nil
+                    )
+                    predicted = result.output
+                    if let refreshedTailResidual = result.refreshedTailResidual {
+                        cachedTailResidual = refreshedTailResidual
+                        consecutiveCachedSteps = 0
+                    } else {
+                        consecutiveCachedSteps += 1
+                        cachedStepCount += 1
+                    }
+                } else {
+                    predicted = transformer(
+                        videoRows: videoInput,
+                        audioRows: audioInput,
+                        context: context,
+                        timesteps: timestepValues,
+                        cachedAdaLN: adaLNCache?.step(at: index)
+                    )
+                }
                 videoRows = Self.advance(
                     sample: videoRows,
                     velocity: predicted.videoVelocityRows,
@@ -463,6 +752,23 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                 )
             }
             MLX.eval(videoRows, audioRows)
+            if let stepStarted, let stepProfileLogger {
+                let memory = Memory.snapshot()
+                stepProfileLogger(String(
+                    format: "step=%02d/%02d seconds=%.3f active_gib=%.2f cache_gib=%.2f peak_gib=%.2f",
+                    index + 1,
+                    videoSchedule.timesteps.count,
+                    CFAbsoluteTimeGetCurrent() - stepStarted,
+                    Double(memory.activeMemory) / 1_073_741_824,
+                    Double(memory.cacheMemory) / 1_073_741_824,
+                    Double(memory.peakMemory) / 1_073_741_824
+                ))
+            }
+        }
+        if warmBlockCount != nil {
+            stepProfileLogger?(
+                "cached_steps=\(cachedStepCount)/\(videoSchedule.timesteps.count)"
+            )
         }
         return (videoRows, audioRows)
     }
@@ -504,8 +810,7 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                 allowScheduleResampling: true
             )
         } catch {
-            let metadata = try resources.transformerMetadata()
-            guard metadata["cache_covered_weights_omitted"] != "true" else {
+            guard try !resources.requiresAdaLNCache() else {
                 throw error
             }
             return nil
@@ -517,6 +822,11 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         resources: MiniMaxH3Resources,
         progressHandler: (@Sendable (MiniMaxH3GenerationProgress) -> Void)? = nil
     ) throws -> MiniMaxH3GenerationResult {
+        let phaseProfileLogger = MereRunRuntimeDebug.logger(
+            keys: ["MERERUN_H3_PROFILE_PHASES"],
+            prefix: "[minimax-h3-phase-profile]"
+        )
+        let generationStarted = CFAbsoluteTimeGetCurrent()
         let missing = resources.validate()
         guard missing.isEmpty else { throw MiniMaxH3GeneratorError.missingModelFiles(missing) }
         let configuration = try resources.loadConfiguration()
@@ -537,6 +847,7 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         let audioFrames = MiniMaxH3Geometry.audioLatentFrameCount(for: options.numFrames)
 
         progressHandler?(.init(stage: .loadingTextEncoder, stepIndex: 0, totalSteps: options.steps - 1))
+        let conditionerPreparationStarted = CFAbsoluteTimeGetCurrent()
         let tokenizer = try QwenTokenizer.load(from: resources.tokenizerURL, maxLengthOverride: 262_144)
         let presentation = try conditionerPresentation(tokenizer: tokenizer, options: options)
         guard !presentation.tokenIDs.isEmpty else {
@@ -547,7 +858,12 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         }
         let inputIDs = MLXArray(presentation.tokenIDs.map(Int32.init)).reshaped(1, presentation.tokenIDs.count)
         let attentionMask = MLXArray.ones([1, presentation.tokenIDs.count], dtype: .int32)
+        phaseProfileLogger?(String(
+            format: "phase=conditioner_preparation seconds=%.3f",
+            CFAbsoluteTimeGetCurrent() - conditionerPreparationStarted
+        ))
         let promptStates: MLXArray = try withMiniMaxH3AutoreleasePool {
+            let conditionerLoadStarted = CFAbsoluteTimeGetCurrent()
             let encoder = try MiniMaxH3ModelLoader.loadConditioner(
                 resources: resources,
                 configuration: configuration,
@@ -559,7 +875,12 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                     ))
                 }
             )
+            phaseProfileLogger?(String(
+                format: "phase=conditioner_load seconds=%.3f",
+                CFAbsoluteTimeGetCurrent() - conditionerLoadStarted
+            ))
             progressHandler?(.init(stage: .encodingText, stepIndex: 0, totalSteps: options.steps - 1))
+            let textEncodingStarted = CFAbsoluteTimeGetCurrent()
             guard let states = try encoder.forwardMultimodalActivationHiddenState(
                 inputIds: inputIDs,
                 attentionMask: attentionMask,
@@ -569,6 +890,10 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                 throw MiniMaxH3GeneratorError.invalidOptions("text encoder did not return layer-50 states")
             }
             MLX.eval(states)
+            phaseProfileLogger?(String(
+                format: "phase=text_encoding seconds=%.3f",
+                CFAbsoluteTimeGetCurrent() - textEncodingStarted
+            ))
             return states
         }
         Memory.clearCache()
@@ -577,12 +902,17 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         let keyframeAnchors: [MiniMaxH3KeyframeAnchor] = options.lastFrameURL == nil
             ? (options.firstFrameURL == nil ? [] : [.first])
             : [.first, .last]
+        let keyframeEncodingStarted = CFAbsoluteTimeGetCurrent()
         var conditionRows = try encodeKeyframes(
             keyframeURLs,
             options: options,
             resources: resources,
             progressHandler: progressHandler
         )
+        phaseProfileLogger?(String(
+            format: "phase=keyframe_encoding seconds=%.3f",
+            CFAbsoluteTimeGetCurrent() - keyframeEncodingStarted
+        ))
         Memory.clearCache()
 
         let layout = try MiniMaxH3Geometry.buildFL2VA(
@@ -612,22 +942,24 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
 
         progressHandler?(.init(stage: .loadingTransformer, stepIndex: 0, totalSteps: options.steps - 1))
         try withMiniMaxH3AutoreleasePool {
-            let adaLNCache = try Self.loadAdaLNCache(
+            let transformerPreparationStarted = CFAbsoluteTimeGetCurrent()
+            let runtime = try loadDenoisingRuntime(
                 resources: resources,
                 configuration: configuration,
                 videoSchedule: videoSchedule,
-                audioSchedule: audioSchedule
-            )
-            let transformer = try loadDenoisingTransformer(
-                resources: resources,
-                configuration: configuration,
-                adaLNCache: adaLNCache,
+                audioSchedule: audioSchedule,
                 sequenceLength: layout.sequenceLength,
                 weightMode: options.transformerWeightMode,
                 progressHandler: progressHandler
             )
+            phaseProfileLogger?(String(
+                format: "phase=transformer_preparation seconds=%.3f resident_bf16=%@",
+                CFAbsoluteTimeGetCurrent() - transformerPreparationStarted,
+                runtime.transformer.usesResidentBF16 ? "true" : "false"
+            ))
+            let denoisingStarted = CFAbsoluteTimeGetCurrent()
             (videoRows, audioRows) = denoise(
-                transformer: transformer,
+                transformer: runtime.transformer,
                 videoRows: videoRows,
                 audioRows: audioRows,
                 conditionVideoRows: conditionRows,
@@ -636,9 +968,14 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                 layout: layout,
                 videoSchedule: videoSchedule,
                 audioSchedule: audioSchedule,
-                adaLNCache: adaLNCache,
+                adaLNCache: runtime.adaLNCache,
+                accelerationMode: options.accelerationMode,
                 progressHandler: progressHandler
             )
+            phaseProfileLogger?(String(
+                format: "phase=denoising seconds=%.3f",
+                CFAbsoluteTimeGetCurrent() - denoisingStarted
+            ))
         }
         Memory.clearCache()
         video = MiniMaxH3Geometry.unpatchifyVideo(
@@ -649,21 +986,35 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         )
         let audio = MiniMaxH3Geometry.unpackAudio(audioRows[0])
         progressHandler?(.init(stage: .decodingVideo, stepIndex: options.steps - 1, totalSteps: options.steps - 1))
+        let videoDecodingStarted = CFAbsoluteTimeGetCurrent()
         let frames: MLXArray = try withMiniMaxH3AutoreleasePool {
             let vae = try MiniMaxH3ModelLoader.loadVideoVAE(resources: resources)
             let pixels = Self.mediaFrames(from: vae.decode(video))
             MLX.eval(pixels)
             return pixels
         }
+        phaseProfileLogger?(String(
+            format: "phase=video_decoding seconds=%.3f",
+            CFAbsoluteTimeGetCurrent() - videoDecodingStarted
+        ))
         Memory.clearCache()
         progressHandler?(.init(stage: .decodingAudio, stepIndex: options.steps - 1, totalSteps: options.steps - 1))
+        let audioDecodingStarted = CFAbsoluteTimeGetCurrent()
         let waveform: MLXArray = try withMiniMaxH3AutoreleasePool {
             let vae = try MiniMaxH3ModelLoader.loadAudioVAE(resources: resources)
             let decoded = vae.decode(audio)
             MLX.eval(decoded)
             return decoded
         }
+        phaseProfileLogger?(String(
+            format: "phase=audio_decoding seconds=%.3f",
+            CFAbsoluteTimeGetCurrent() - audioDecodingStarted
+        ))
         Memory.clearCache()
+        phaseProfileLogger?(String(
+            format: "phase=generation_total seconds=%.3f",
+            CFAbsoluteTimeGetCurrent() - generationStarted
+        ))
         return MiniMaxH3GenerationResult(frames: frames, audio: waveform, seed: options.seed)
     }
 
@@ -788,22 +1139,17 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
 
         progressHandler?(.init(stage: .loadingTransformer, stepIndex: 0, totalSteps: options.steps - 1))
         try withMiniMaxH3AutoreleasePool {
-            let adaLNCache = try Self.loadAdaLNCache(
+            let runtime = try loadDenoisingRuntime(
                 resources: resources,
                 configuration: configuration,
                 videoSchedule: videoSchedule,
-                audioSchedule: audioSchedule
-            )
-            let transformer = try loadDenoisingTransformer(
-                resources: resources,
-                configuration: configuration,
-                adaLNCache: adaLNCache,
+                audioSchedule: audioSchedule,
                 sequenceLength: layout.sequenceLength,
                 weightMode: options.transformerWeightMode,
                 progressHandler: progressHandler
             )
             (videoRows, audioRows) = denoise(
-                transformer: transformer,
+                transformer: runtime.transformer,
                 videoRows: videoRows,
                 audioRows: audioRows,
                 conditionVideoRows: noisedVideoConditions,
@@ -812,7 +1158,8 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                 layout: layout,
                 videoSchedule: videoSchedule,
                 audioSchedule: audioSchedule,
-                adaLNCache: adaLNCache,
+                adaLNCache: runtime.adaLNCache,
+                accelerationMode: options.accelerationMode,
                 progressHandler: progressHandler
             )
         }
