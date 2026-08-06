@@ -79,6 +79,8 @@ public enum ManagedAdapterCatalog {
     public static let merePlatformAssistantID = "mere-platform-assistant"
     public static let scail2LightX2VFourStepID = "scail2-lightx2v-4step"
     public static let scail2LightX2VFourStepRevision = "27ae38da91014b947dd39cc3fa78b97cd7b386dd"
+    public static let miniMaxH3TurboFourStepID = "minimax-h3-turbo-4step"
+    public static let miniMaxH3TurboFourStepRevision = "b604dd5fe25c4c747699f698a1e63f6c46d4a066"
 
     public static let allSpecs: [ManagedAdapterSpec] = [
         ManagedAdapterSpec(
@@ -120,6 +122,27 @@ public enum ManagedAdapterCatalog {
                 filename: "wan2.1_i2v_lora_rank64_lightx2v_4step.safetensors",
                 byteCount: 739_472_104,
                 sha256: "8833bd4fd7c8eabebf0bc8ee5cfaf47f4f310ce116928a02c1adf8941dd4b0f1"
+            )
+        ),
+        ManagedAdapterSpec(
+            id: miniMaxH3TurboFourStepID,
+            title: "MiniMax-H3 Turbo 4-step",
+            version: String(miniMaxH3TurboFourStepRevision.prefix(12)),
+            summary: "Four-evaluation runtime LoRA for the native MiniMax-H3 BF16 FL2VA model.",
+            baseModelID: ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue,
+            format: MiniMaxH3TurboAdapter.format,
+            license: "Apache-2.0 (adapter); MiniMax-H3 Community License (base model)",
+            upstreamRevision: miniMaxH3TurboFourStepRevision,
+            releaseManifestURL: URL(
+                string: "https://huggingface.co/larryvrh/MiniMax-H3-Turbo-Lora/commit/\(miniMaxH3TurboFourStepRevision)"
+            )!,
+            downloadURL: URL(
+                string: "https://huggingface.co/larryvrh/MiniMax-H3-Turbo-Lora/resolve/\(miniMaxH3TurboFourStepRevision)/minimax_h3_turbo_4step_ema_ckpt850.safetensors?download=true"
+            )!,
+            artifact: ModelArtifactPin(
+                filename: "minimax_h3_turbo_4step_ema_ckpt850.safetensors",
+                byteCount: 779_849_816,
+                sha256: "5a6eeba171cf183020a4ad48774bb2968f29f8168afd6ec17a04987f3528b4ea"
             )
         ),
     ]

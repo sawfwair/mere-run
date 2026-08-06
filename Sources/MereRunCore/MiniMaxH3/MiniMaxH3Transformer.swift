@@ -1511,6 +1511,21 @@ public final class MiniMaxH3Transformer: Module {
             includeAdaLN: block.includesAdaLN
         )
         let replacements: [(String, Module)] = block.leafModules().flattened().compactMap { path, module in
+            if let lora = module as? MiniMaxH3RuntimeLoRALinear {
+                let base = Linear(
+                    weight: MLXArray.zeros(lora.weight.shape, dtype: lora.weight.dtype),
+                    bias: lora.bias.map { MLXArray.zeros($0.shape, dtype: $0.dtype) }
+                )
+                return (
+                    path,
+                    MiniMaxH3RuntimeLoRALinear(
+                        base: base,
+                        loraDown: MLXArray.zeros(lora.loraDown.shape, dtype: lora.loraDown.dtype),
+                        loraUp: MLXArray.zeros(lora.loraUp.shape, dtype: lora.loraUp.dtype),
+                        strength: lora.strength
+                    )
+                )
+            }
             guard let quantized = module as? QuantizedLinear else { return nil }
             let weight = MLXArray.zeros(quantized.weight.shape, dtype: quantized.weight.dtype)
             let bias = quantized.bias.map { MLXArray.zeros($0.shape, dtype: $0.dtype) }

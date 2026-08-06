@@ -6,6 +6,17 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+- added the immutable, checksum-pinned `minimax-h3-turbo-4step` managed
+  adapter and first-class `video generate --h3-adapter` controls for the BF16
+  FL2VA model. The native MLX runtime applies all 259 mixed-rank LoRA pairs in
+  activation space, remaps fused QKV rows, includes AdaLN deltas in the exact
+  schedule cache, and defaults to four denoise evaluations. Preflight resolves
+  the managed path and rejects missing adapters, compact/Ref2VA bases,
+  incompatible step counts, and compounded block-reuse acceleration. A real
+  release-mode 1280x768, 124-frame generation completed in 60:59.420 wall time
+  with 56:13.421 of denoising, 51.37 GiB peak reported Metal memory, zero
+  swaps, and no spatial lattice in the accepted output.
+
 ## 0.35.0 - 2026-08-06
 
 This release makes MiniMax-H3 materially faster and more faithful on Apple

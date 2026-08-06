@@ -19,6 +19,8 @@ struct VideoGenerationPreflightInput {
     let steps: Int?
     let h3WeightMode: String
     let h3AccelerationMode: String
+    let h3Adapter: String?
+    let h3AdapterStrength: Float
     let duration: Double?
     let fps: Int
     let seed: Int?
@@ -55,6 +57,8 @@ struct VideoGenerationPreflightRequest: Codable, Equatable {
     let steps: Int?
     let h3WeightMode: String?
     let h3AccelerationMode: String?
+    let h3Adapter: String?
+    let h3AdapterStrength: Float?
     let duration: Double?
     let fps: Int
     let seed: Int?
@@ -88,6 +92,8 @@ struct VideoGenerationPreflightRequest: Codable, Equatable {
         case steps
         case h3WeightMode = "h3_weight_mode"
         case h3AccelerationMode = "h3_acceleration"
+        case h3Adapter = "h3_adapter"
+        case h3AdapterStrength = "h3_adapter_strength"
         case duration
         case fps
         case seed
@@ -166,6 +172,7 @@ struct VideoGenerationInputPreflightSummary: Codable, Equatable {
     let sourceImage: VideoGenerationPathPreflightSummary?
     let endImage: VideoGenerationPathPreflightSummary?
     let references: [VideoGenerationPathPreflightSummary]?
+    let adapter: VideoGenerationPathPreflightSummary?
     let missingCount: Int
 
     enum CodingKeys: String, CodingKey {
@@ -174,6 +181,7 @@ struct VideoGenerationInputPreflightSummary: Codable, Equatable {
         case sourceImage = "source_image"
         case endImage = "end_image"
         case references
+        case adapter
         case missingCount = "missing_count"
     }
 }
@@ -206,6 +214,8 @@ struct VideoGenerationPlanPreflightSummary: Codable, Equatable {
     let resolvedSteps: Int?
     let h3WeightMode: String?
     let h3AccelerationMode: String?
+    let h3Adapter: String?
+    let h3AdapterStrength: Float?
     let fps: Int
     let resolvedNumFrames: Int
     let resolvedDurationSeconds: Double?
@@ -229,6 +239,8 @@ struct VideoGenerationPlanPreflightSummary: Codable, Equatable {
         case resolvedSteps = "resolved_steps"
         case h3WeightMode = "h3_weight_mode"
         case h3AccelerationMode = "h3_acceleration"
+        case h3Adapter = "h3_adapter"
+        case h3AdapterStrength = "h3_adapter_strength"
         case fps
         case resolvedNumFrames = "resolved_num_frames"
         case resolvedDurationSeconds = "resolved_duration_seconds"
@@ -334,6 +346,10 @@ struct VideoGenerationPreflightAnalyzer {
             steps: input.steps,
             h3WeightMode: usesMiniMaxH3Geometry ? input.h3WeightMode : nil,
             h3AccelerationMode: usesMiniMaxH3Geometry ? input.h3AccelerationMode : nil,
+            h3Adapter: usesMiniMaxH3Geometry ? input.h3Adapter : nil,
+            h3AdapterStrength: usesMiniMaxH3Geometry && input.h3Adapter != nil
+                ? input.h3AdapterStrength
+                : nil,
             duration: input.duration,
             fps: input.fps,
             seed: input.seed,
@@ -446,6 +462,38 @@ struct VideoGenerationPreflightAnalyzer {
                     message: "--quality, --output-mode, and --variant cannot be combined with MiniMax-H3."
                 )
             )
+        }
+        if !usesMiniMaxH3Geometry, input.h3Adapter != nil {
+            diagnostics.append(PreflightDiagnostic(
+                id: "h3_adapter_with_non_h3_model",
+                severity: .blocker,
+                title: "MiniMax-H3 adapter requires MiniMax-H3",
+                message: "--h3-adapter can only be used with a MiniMax-H3 model."
+            ))
+        }
+        if input.h3Adapter != nil, input.h3AdapterStrength <= 0 {
+            diagnostics.append(PreflightDiagnostic(
+                id: "h3_adapter_strength_invalid",
+                severity: .blocker,
+                title: "MiniMax-H3 adapter strength is invalid",
+                message: "--h3-adapter-strength must be > 0."
+            ))
+        }
+        if input.h3Adapter != nil, input.h3AccelerationMode != MiniMaxH3AccelerationMode.quality.rawValue {
+            diagnostics.append(PreflightDiagnostic(
+                id: "h3_adapter_acceleration_conflict",
+                severity: .blocker,
+                title: "MiniMax-H3 Turbo already distills the denoise schedule",
+                message: "Use --h3-acceleration quality with --h3-adapter."
+            ))
+        }
+        if input.h3Adapter != nil, !input.references.isEmpty {
+            diagnostics.append(PreflightDiagnostic(
+                id: "h3_adapter_ref2va_unsupported",
+                severity: .blocker,
+                title: "MiniMax-H3 Turbo does not support Ref2VA",
+                message: "Use the Turbo adapter for FL2VA text or keyframe generation without --reference."
+            ))
         }
         if input.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             diagnostics.append(
@@ -612,6 +660,33 @@ struct VideoGenerationPreflightAnalyzer {
         model: VideoGenerationModelPreflightSummary,
         diagnostics: inout [PreflightDiagnostic]
     ) {
+        if input.h3Adapter != nil, usesMiniMaxH3Geometry {
+            let usesBF16: Bool
+            if let path = model.path {
+                usesBF16 = MiniMaxH3Resources(
+                    rootURL: URL(fileURLWithPath: path).standardizedFileURL
+                ).usesShardedBF16Transformer
+            } else {
+                usesBF16 = model.requested == ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue
+            }
+            if !usesBF16 {
+                diagnostics.append(PreflightDiagnostic(
+                    id: "h3_adapter_requires_bf16",
+                    severity: .blocker,
+                    title: "MiniMax-H3 Turbo requires the BF16 base model",
+                    message: "Use --model \(ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue)."
+                ))
+            }
+            if let steps = input.steps,
+               steps != MiniMaxH3TurboAdapter.recommendedSchedulePointCount {
+                diagnostics.append(PreflightDiagnostic(
+                    id: "h3_adapter_steps_invalid",
+                    severity: .blocker,
+                    title: "MiniMax-H3 Turbo uses four denoise evaluations",
+                    message: "Omit --steps or set --steps 5 (five schedule points)."
+                ))
+            }
+        }
         guard let requestedQuality = input.quality,
               let actualQuality = resolvedQuality(model: model),
               requestedQuality != actualQuality else {
@@ -940,6 +1015,10 @@ struct VideoGenerationPreflightAnalyzer {
             let path = raw.firstIndex(of: ":").map { String(raw[raw.index(after: $0)...]) } ?? raw
             return pathSummary(requested: path)
         }
+        let adapter = input.h3Adapter.map { reference -> VideoGenerationPathPreflightSummary in
+            let path = ManagedAdapterCatalog.spec(for: reference)?.installedFileURL().path ?? reference
+            return pathSummary(requested: reference, resolvedPath: path)
+        }
         for (summary, prefix) in [
             (sourceAudio, "source_audio"),
             (sourceImage, "source_image"),
@@ -987,6 +1066,26 @@ struct VideoGenerationPreflightAnalyzer {
                 ))
             }
         }
+        if let adapter, !adapter.exists {
+            let pullHint = ManagedAdapterCatalog.spec(for: adapter.requested).map {
+                " Run `mere.run adapter pull \($0.id)`."
+            } ?? ""
+            diagnostics.append(PreflightDiagnostic(
+                id: "h3_adapter_missing",
+                severity: .blocker,
+                title: "MiniMax-H3 adapter missing",
+                message: "Adapter not found: \(adapter.path).\(pullHint)",
+                locations: [.init(kind: "file", path: adapter.path)]
+            ))
+        } else if let adapter, adapter.isDirectory {
+            diagnostics.append(PreflightDiagnostic(
+                id: "h3_adapter_is_directory",
+                severity: .blocker,
+                title: "MiniMax-H3 adapter path is a directory",
+                message: "Adapter path must be a safetensors file: \(adapter.path)",
+                locations: [.init(kind: "directory", path: adapter.path)]
+            ))
+        }
 
         let mode: String
         if !references.isEmpty {
@@ -1004,19 +1103,23 @@ struct VideoGenerationPreflightAnalyzer {
                 ? "text_to_video"
                 : (endImage == nil ? "image_to_video" : "directed_image_to_video")
         }
-        let allInputs = [sourceAudio, sourceImage, endImage].compactMap { $0 } + references
+        let allInputs = [sourceAudio, sourceImage, endImage, adapter].compactMap { $0 } + references
         return VideoGenerationInputPreflightSummary(
             mode: mode,
             sourceAudio: sourceAudio,
             sourceImage: sourceImage,
             endImage: endImage,
             references: references.isEmpty ? nil : references,
+            adapter: adapter,
             missingCount: allInputs.filter { !$0.exists }.count
         )
     }
 
-    private func pathSummary(requested: String) -> VideoGenerationPathPreflightSummary {
-        let url = URL(fileURLWithPath: requested).standardizedFileURL
+    private func pathSummary(
+        requested: String,
+        resolvedPath: String? = nil
+    ) -> VideoGenerationPathPreflightSummary {
+        let url = URL(fileURLWithPath: resolvedPath ?? requested).standardizedFileURL
         var isDirectory: ObjCBool = false
         let exists = fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory)
         return VideoGenerationPathPreflightSummary(
@@ -1098,7 +1201,9 @@ struct VideoGenerationPreflightAnalyzer {
             : (usesAudioConditioning || input.variant == .unifiedAV ? .audioVideo : .videoOnly)
         let h3AccelerationMode = MiniMaxH3AccelerationMode(rawValue: input.h3AccelerationMode) ?? .quality
         let resolvedH3Steps: Int? = if usesMiniMaxH3Geometry {
-            input.steps ?? (try? MiniMaxH3StepPolicy.recommendedPointCount(
+            input.steps ?? (input.h3Adapter != nil
+                ? MiniMaxH3TurboAdapter.recommendedSchedulePointCount
+                : (try? MiniMaxH3StepPolicy.recommendedPointCount(
                 width: resolvedWidth,
                 height: resolvedHeight,
                 numFrames: resolvedFrames,
@@ -1107,7 +1212,7 @@ struct VideoGenerationPreflightAnalyzer {
                     MiniMaxH3ReferenceKind(rawValue: String(reference.prefix { $0 != ":" }))
                 },
                 accelerationMode: h3AccelerationMode
-            ))
+            )))
         } else {
             nil
         }
@@ -1129,6 +1234,10 @@ struct VideoGenerationPreflightAnalyzer {
             resolvedSteps: resolvedH3Steps,
             h3WeightMode: usesMiniMaxH3Geometry ? input.h3WeightMode : nil,
             h3AccelerationMode: usesMiniMaxH3Geometry ? input.h3AccelerationMode : nil,
+            h3Adapter: usesMiniMaxH3Geometry ? input.h3Adapter : nil,
+            h3AdapterStrength: usesMiniMaxH3Geometry && input.h3Adapter != nil
+                ? input.h3AdapterStrength
+                : nil,
             fps: usesMiniMaxH3Geometry ? MiniMaxH3Geometry.framesPerSecond : input.fps,
             resolvedNumFrames: resolvedFrames,
             resolvedDurationSeconds: input.fps > 0

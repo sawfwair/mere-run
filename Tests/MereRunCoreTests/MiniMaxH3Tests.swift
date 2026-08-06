@@ -4,6 +4,43 @@ import XCTest
 @testable import MereRunCore
 
 final class MiniMaxH3Tests: MereRunCoreTestCase {
+    func testRuntimeLoRAAppliesDeltaInActivationSpace() {
+        let base = Linear(
+            weight: MLXArray([Float(1), 0, 0, 1]).reshaped(2, 2),
+            bias: nil
+        )
+        let layer = MiniMaxH3RuntimeLoRALinear(
+            base: base,
+            loraDown: MLXArray([Float(1), 0]).reshaped(1, 2),
+            loraUp: MLXArray([Float(2), 3]).reshaped(2, 1),
+            strength: 0.5
+        )
+        let output = layer(MLXArray([Float(4), 5]).reshaped(1, 2))
+        MLX.eval(output)
+        XCTAssertEqual(output.asArray(Float.self), [8, 11])
+    }
+
+    func testTurboAdapterUsesFourDenoiseEvaluationsByDefault() throws {
+        let options = try MiniMaxH3GenerationOptions(
+            prompt: "a cinematic local video",
+            width: 256,
+            height: 160,
+            numFrames: 22,
+            adapterURL: URL(fileURLWithPath: "/tmp/minimax-h3-turbo.safetensors")
+        )
+        XCTAssertEqual(options.steps, 5)
+        XCTAssertEqual(options.adapterStrength, 1)
+
+        XCTAssertThrowsError(try MiniMaxH3GenerationOptions(
+            prompt: "invalid compounded acceleration",
+            width: 256,
+            height: 160,
+            numFrames: 22,
+            accelerationMode: .maximum,
+            adapterURL: URL(fileURLWithPath: "/tmp/minimax-h3-turbo.safetensors")
+        ))
+    }
+
     func testTransformerQKVUsesConvertedGlobalSlabs() {
         let projected = MLXArray((0..<12).map(Float.init)).reshaped(1, 1, 12)
         let parts = miniMaxH3SplitProjectedQKV(projected, heads: 2, headDimension: 2)

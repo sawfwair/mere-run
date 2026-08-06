@@ -26,6 +26,14 @@ struct AdapterCommandTests {
         #expect(command.target == ManagedAdapterCatalog.scail2LightX2VFourStepID)
     }
 
+    @Test("MiniMax-H3 Turbo adapter pull parses its canonical id")
+    func parsesMiniMaxH3TurboPull() throws {
+        let command = try AdapterPull.parse([
+            ManagedAdapterCatalog.miniMaxH3TurboFourStepID,
+        ])
+        #expect(command.target == ManagedAdapterCatalog.miniMaxH3TurboFourStepID)
+    }
+
     @Test("Local LoRA paths remain supported")
     func resolvesLocalPath() throws {
         let relative = "fixtures/local-adapter.safetensors"
