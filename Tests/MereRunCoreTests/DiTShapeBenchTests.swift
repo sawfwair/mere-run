@@ -1477,6 +1477,109 @@ final class DiTShapeBenchTests: XCTestCase {
         Memory.clearCache()
     }
 
+    /// Screens the complete weighted H3 block in fp16 against the production
+    /// bf16 path. Both arms reset the same PRNG seed so their weights and
+    /// inputs differ only by the requested storage and execution dtype.
+    func testMiniMaxH3BlockDTypes() throws {
+        try benchGate()
+        let environment = ProcessInfo.processInfo.environment
+        let rows = max(1, Int(environment["MERERUN_H3_BENCH_ROWS"] ?? "") ?? 37_966)
+        let queryTokens = max(
+            1,
+            Int(environment["MERERUN_H3_BENCH_QUERY_TOKENS"] ?? "") ?? 768
+        )
+        let evaluationBatch = max(
+            1,
+            Int(environment["MERERUN_H3_BENCH_EVAL_BATCH"] ?? "") ?? 1
+        )
+        let rounds = max(2, Int(environment["MERERUN_H3_BENCH_ROUNDS"] ?? "") ?? 3)
+        let seed: UInt64 = 20_260_805
+
+        MLXRandom.seed(seed)
+        let bf16 = MiniMaxH3BlockScheduleBenchmark(
+            rowCount: rows,
+            maximumQueryTokens: queryTokens,
+            maximumKernelsPerEvaluation: evaluationBatch,
+            dtype: .bfloat16
+        )
+        MLXRandom.seed(seed)
+        let fp16 = MiniMaxH3BlockScheduleBenchmark(
+            rowCount: rows,
+            maximumQueryTokens: queryTokens,
+            maximumKernelsPerEvaluation: evaluationBatch,
+            dtype: .float16
+        )
+
+        func output(_ benchmark: MiniMaxH3BlockScheduleBenchmark) -> MLXArray {
+            benchmark(schedule: .fusedPostAttention).asType(.float32)
+        }
+        func elapsed(_ benchmark: MiniMaxH3BlockScheduleBenchmark) -> Double {
+            let started = CFAbsoluteTimeGetCurrent()
+            MLX.eval(output(benchmark))
+            return CFAbsoluteTimeGetCurrent() - started
+        }
+
+        MLX.eval(output(bf16))
+        MLX.eval(output(fp16))
+        let bf16Output = output(bf16)
+        let fp16Output = output(fp16)
+        MLX.eval(bf16Output, fp16Output)
+        let delta = fp16Output - bf16Output
+        let referenceSquared = MLX.sum(bf16Output * bf16Output).item(Float.self)
+        let deltaSquared = MLX.sum(delta * delta).item(Float.self)
+        let relativeL2Error = sqrt(
+            Double(deltaSquared) / max(Double(referenceSquared), .leastNonzeroMagnitude)
+        )
+        let maximumAbsoluteError = MLX.max(MLX.abs(delta)).item(Float.self)
+        XCTAssertTrue(relativeL2Error.isFinite)
+        XCTAssertTrue(Double(maximumAbsoluteError).isFinite)
+
+        var bf16Best = Double.greatestFiniteMagnitude
+        var fp16Best = Double.greatestFiniteMagnitude
+        Memory.peakMemory = 0
+        for round in 0..<rounds {
+            if round.isMultiple(of: 2) {
+                bf16Best = min(bf16Best, elapsed(bf16))
+                fp16Best = min(fp16Best, elapsed(fp16))
+            } else {
+                fp16Best = min(fp16Best, elapsed(fp16))
+                bf16Best = min(bf16Best, elapsed(bf16))
+            }
+        }
+
+        let qualityGate = 0.01
+        let configuration = MiniMaxH3TransformerConfiguration()
+        let projectionOperations = 2 * Double(rows) * Double(configuration.hiddenSize)
+            * Double(
+                4 * configuration.attentionHeadCount * configuration.attentionHeadDimension
+                    + 3 * configuration.feedForwardSize
+            )
+        let attentionOperations = 4 * Double(configuration.attentionHeadCount) * Double(rows)
+            * Double(rows) * Double(configuration.attentionHeadDimension)
+        let operations = projectionOperations + attentionOperations
+        let peakGiB = Double(Memory.peakMemory) / 1_073_741_824
+        print(String(
+            format: "[h3-lab] block-dtype rows=%d query=%d batch=%d "
+                + "bf16_ms=%.0f fp16_ms=%.0f fp16_speedup=%.3fx "
+                + "bf16_tflops=%.2f fp16_tflops=%.2f max_abs=%.6g rel_l2=%.6g "
+                + "quality_gate=%.3g quality_safe=%@ peak_gib=%.2f",
+            rows,
+            queryTokens,
+            evaluationBatch,
+            bf16Best * 1_000,
+            fp16Best * 1_000,
+            bf16Best / fp16Best,
+            operations / bf16Best / 1e12,
+            operations / fp16Best / 1e12,
+            maximumAbsoluteError,
+            relativeL2Error,
+            qualityGate,
+            relativeL2Error <= qualityGate ? "yes" : "no",
+            peakGiB
+        ))
+        Memory.clearCache()
+    }
+
     /// Compares attention chunk schedules inside the same compiled, weighted
     /// production block. This is the acceptance gate for changing the true-768
     /// H3 schedule; isolated SDPA timings are only useful for finding candidates.

@@ -126,6 +126,13 @@ near 24-26 minutes. Scaling the measured 124-frame VAE decode only as an
 arithmetic estimate adds roughly seven minutes, placing the single-evaluation
 10-second boundary near 31-33 minutes.
 
+A deterministic full-block dtype gate at these exact 73,470 rows measured
+29.679 seconds in BF16 and 30.204 seconds in FP16. The FP16 output remained
+numerically close for one block (`rel_l2=0.00243324`), but it was 1.7% slower;
+the shorter 14,958- and 37,966-row screens were also slower. The runtime keeps
+BF16 because changing precision does not unlock additional M4 throughput for
+this workload.
+
 That number is the physical one-evaluation boundary, not a quality render.
 A 20-point exact schedule still performs 19 complete model evaluations and
 therefore projects to roughly 7.7-8.3 hours of denoising before decode. The

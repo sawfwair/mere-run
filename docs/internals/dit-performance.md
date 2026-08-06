@@ -245,6 +245,14 @@ also lost its order-balanced whole-block gate (29.151 s versus 29.088 s,
 near 24-26 minutes before VAE decode; a 20-point exact schedule still needs 19
 such evaluations.
 
+Full-block FP16 execution was also screened rather than inferred from nominal
+GPU peak rates. With identical seeded weights and inputs, FP16 stayed inside a
+one-block `rel_l2 <= 0.01` gate but was slower at every measured packed shape:
+1.772 versus 1.652 seconds at 14,958 rows, 8.778 versus 8.644 seconds at 37,966
+rows, and 30.204 versus 29.679 seconds at the true ten-second 73,470-row shape.
+Production therefore remains resident BF16. Re-run the deterministic comparison
+after an MLX or Metal update with `scripts/h3-kernel-lab.sh dtype`.
+
 The video VAE did retain a separate full-precision runtime win. Fresh-process released-
 checkpoint sweeps at 832x480 and 124 frames measured 96.091 s with 256-pixel
 tiles, 76.421 s with 320-pixel tiles, and 77.577 s with 480-pixel tiles. The

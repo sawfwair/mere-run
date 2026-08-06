@@ -59,6 +59,13 @@ case "$mode" in
     export MERERUN_H3_BENCH_ROUNDS="${MERERUN_H3_BENCH_ROUNDS:-2}"
     run_release_test DiTShapeBenchTests/testMiniMaxH3BlockExecutionSchedules
     ;;
+  dtype)
+    export MERERUN_H3_BENCH_ROWS="${MERERUN_H3_BENCH_ROWS:-37966}"
+    export MERERUN_H3_BENCH_QUERY_TOKENS="${MERERUN_H3_BENCH_QUERY_TOKENS:-768}"
+    export MERERUN_H3_BENCH_EVAL_BATCH="${MERERUN_H3_BENCH_EVAL_BATCH:-1}"
+    export MERERUN_H3_BENCH_ROUNDS="${MERERUN_H3_BENCH_ROUNDS:-3}"
+    run_release_test DiTShapeBenchTests/testMiniMaxH3BlockDTypes
+    ;;
   attention-block)
     export MERERUN_H3_BENCH_ROWS="${MERERUN_H3_BENCH_ROWS:-37966}"
     export MERERUN_H3_BENCH_ROUNDS="${MERERUN_H3_BENCH_ROUNDS:-4}"
@@ -74,7 +81,7 @@ case "$mode" in
     run_release_test DiTShapeBenchTests/testMiniMaxH3VideoVAETileSize
     ;;
   *)
-    print -u2 "usage: scripts/h3-kernel-lab.sh [quick|attention|attention-block|projections|modulation|block|gemm|gemm-block|vae]"
+    print -u2 "usage: scripts/h3-kernel-lab.sh [quick|attention|attention-block|projections|modulation|block|dtype|gemm|gemm-block|vae]"
     exit 64
     ;;
 esac

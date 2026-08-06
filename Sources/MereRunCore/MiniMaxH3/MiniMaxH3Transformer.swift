@@ -671,7 +671,8 @@ final class MiniMaxH3BlockScheduleBenchmark {
     init(
         rowCount: Int,
         maximumQueryTokens: Int,
-        maximumKernelsPerEvaluation: Int
+        maximumKernelsPerEvaluation: Int,
+        dtype: DType = .bfloat16
     ) {
         precondition(rowCount > 0)
         precondition(maximumQueryTokens > 0)
@@ -682,7 +683,7 @@ final class MiniMaxH3BlockScheduleBenchmark {
 
         let configuration = MiniMaxH3TransformerConfiguration()
         let block = MiniMaxH3TransformerBlock(configuration: configuration, includeAdaLN: false)
-        block.update(parameters: block.parameters().mapValues { $0.asType(.bfloat16) })
+        block.update(parameters: block.parameters().mapValues { $0.asType(dtype) })
         MLX.eval(block.parameters())
         self.block = block
 
@@ -739,25 +740,25 @@ final class MiniMaxH3BlockScheduleBenchmark {
         )
 
         self.hidden = MLXRandom.normal([1, rowCount, configuration.hiddenSize])
-            .asType(.bfloat16)
+            .asType(dtype)
         self.timeEmbedding = MLXArray.zeros(
             [3, configuration.timeEmbeddingDimension],
-            dtype: .bfloat16
+            dtype: dtype
         )
         self.adaLNIndices = MLXArray((0..<rowCount).map { Int32($0 % 9) })
         self.rope = MiniMaxH3RotaryEmbedding(
             cosine: MLXArray.ones(
                 [1, rowCount, 1, 6 * configuration.ropeFrequencyCount],
-                dtype: .bfloat16
+                dtype: dtype
             ),
             sine: MLXArray.zeros(
                 [1, rowCount, 1, 6 * configuration.ropeFrequencyCount],
-                dtype: .bfloat16
+                dtype: dtype
             )
         )
         self.cachedModulation = (
             MLXRandom.normal([9, 6 * configuration.hiddenSize]) * Float(0.1)
-        ).asType(.bfloat16)
+        ).asType(dtype)
         MLX.eval(
             hidden,
             timeEmbedding,
