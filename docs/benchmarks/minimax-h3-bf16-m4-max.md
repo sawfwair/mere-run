@@ -106,6 +106,12 @@ seconds without completing and was stopped.
 This is a non-quantized runtime change: the released decoder, precision,
 causal tiling, and overlap blend remain intact. The larger tile performs fewer
 overlapping tile evaluations and gives each evaluation more spatial context.
+At true 1344x768 spatial geometry, an order-balanced 22-frame screen confirmed
+that 320 pixels also beats the tempting overlap-count breakpoints: a hot-state
+416-versus-320 pair measured 33.756 versus 32.321 seconds, and 432- and
+496-pixel arms were materially slower. A two-temporal-chunk submission
+prototype produced no repeatable speedup and raised reported peak Metal memory
+from 13.49 to 21.40 GiB, so the accepted path keeps serial causal chunks.
 The earlier end-to-end table remains the immutable artifact receipt; replacing
 its 242.004-second decode with 213.005 seconds would be an arithmetic projection,
 not a newly measured end-to-end result.

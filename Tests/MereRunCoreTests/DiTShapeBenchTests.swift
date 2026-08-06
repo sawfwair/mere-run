@@ -1596,6 +1596,10 @@ final class DiTShapeBenchTests: XCTestCase {
         let frameCount = Int(environment["MERERUN_H3_VAE_FRAMES"] ?? "") ?? 124
         XCTAssertTrue(width.isMultiple(of: 16))
         XCTAssertTrue(height.isMultiple(of: 16))
+        guard frameCount >= 22 else {
+            XCTFail("H3 video VAE decode requires at least 22 output frames")
+            return
+        }
         let latentFrames = try MiniMaxH3Geometry.videoLatentFrameCount(for: frameCount)
         let resources = MiniMaxH3Resources(rootURL: URL(fileURLWithPath: root, isDirectory: true))
         let model = try MiniMaxH3ModelLoader.loadVideoVAE(resources: resources)

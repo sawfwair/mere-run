@@ -254,6 +254,13 @@ in 213.005 s at 15.12 GiB peak; the 480-pixel arm crossed 252 seconds without
 finishing and was stopped. The production default is therefore 320 pixels.
 The model, precision, causal tile algorithm, and overlap blend are unchanged;
 the larger tile reduces redundant overlap and tile-boundary context loss.
+The true-spatial 22-frame screen also rejected tile-count breakpoints that a
+pixel-work estimate alone made attractive: in a hot-state pair, 416-pixel tiles
+took 33.756 s versus 32.321 s at 320 pixels, while 432- and 496-pixel arms were
+materially slower. Batching two independent temporal chunks into one decoder
+submission likewise produced no repeatable wall-time win at 39 frames and
+raised peak Metal memory from 13.49 to 21.40 GiB, so temporal chunk execution
+remains serial.
 Reproduce a candidate in a fresh process with:
 
 ```bash
