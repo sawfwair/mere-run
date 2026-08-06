@@ -288,6 +288,22 @@ MERERUN_H3_VAE_FRAMES=124 \
 scripts/h3-kernel-lab.sh vae
 ```
 
+The audio VAE has its own checkpoint-backed parity loop:
+
+```bash
+MERERUN_H3_MODEL_ROOT=/path/to/h3 scripts/h3-kernel-lab.sh audio-parity
+```
+
+This fixture caught a checkpoint-mapping defect that discarded the released
+`mean_proj`, `logs_proj`, and `dec_in_proj` biases. With identical deterministic
+latents and FP32 weights, the old waveform differed from ComfyUI's
+MiniMaxH3AudioVAE at `16e3f3034f2bba1fff6c70cbd759339778555cd6` by
+`rel_l2=0.463`. Restoring the biases reduced the complete decode error to
+`rel_l2=0.0000194` with effectively unit cosine similarity. The gate locks
+reference waveform samples and RMS across the full decoder, while the
+production path remains the released 32 kHz stereo model with no denoiser or
+post-processing added.
+
 Only improvements that repeat across fresh processes, preserve the numerical
 gate, and improve a matched full-block or denoise-step probe should move into
 the runtime. Full video generation remains a final quality gate, not the inner

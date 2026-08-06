@@ -44,6 +44,12 @@ Visual acceptance confirmed a coherent caped figure and yellow umbrella,
 wet-street reflections, levitating bus, and luminous dragon motion without the
 spatial lattice rejected in earlier aggressive cache experiments.
 
+The locked MP4 predates the audio-VAE bias-loading correction documented in
+the kernel lab. Its video remains the accepted visual and timing receipt, but
+its hissy soundtrack is not an audio-quality reference. The corrected decoder
+matches the released FP32 reference at `rel_l2=0.0000194`; a future long render
+must replace the soundtrack acceptance receipt rather than reusing this file.
+
 ## Duration boundary
 
 MiniMax-H3 frame counts follow `17*n+5`. The locked 124-frame artifact is

@@ -80,8 +80,11 @@ case "$mode" in
   vae)
     run_release_test DiTShapeBenchTests/testMiniMaxH3VideoVAETileSize
     ;;
+  audio-parity)
+    run_release_test MiniMaxH3Tests/testInstalledAudioVAEDecodeMatchesReference
+    ;;
   *)
-    print -u2 "usage: scripts/h3-kernel-lab.sh [quick|attention|attention-block|projections|modulation|block|dtype|gemm|gemm-block|vae]"
+    print -u2 "usage: scripts/h3-kernel-lab.sh [quick|attention|attention-block|projections|modulation|block|dtype|gemm|gemm-block|vae|audio-parity]"
     exit 64
     ;;
 esac

@@ -36,6 +36,12 @@ The format is based on Keep a Changelog.
 
 ### MiniMax-H3 performance
 
+- fixed hissy H3 soundtracks by restoring the released audio VAE's
+  `mean_proj`, `logs_proj`, and `dec_in_proj` biases during checkpoint
+  conversion. A deterministic FP32 decode that previously diverged from the
+  ComfyUI reference at `rel_l2=0.463` now reaches `rel_l2=0.0000194` with
+  effectively unit cosine similarity. The release-mode kernel lab now carries
+  a checkpoint-backed audio parity fixture so this cannot silently regress.
 - added `video-minimax-h3-fl2va-bf16-mlx` as a first-class maximum-fidelity
   CLI, managed-model, and macOS Studio choice. The runtime consumes
   PipeNetwork's immutable 13-shard BF16 MLX checkpoint directly, streams one

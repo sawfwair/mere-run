@@ -234,6 +234,12 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
             value: MLXArray.zeros([64, 1, 7])
         )
         XCTAssertEqual(audioEncoder.first?.1.shape, [64, 7, 1])
+        let audioInputBias = MiniMaxH3AudioVAE.mapConvertedWeight(
+            key: "dec_in_proj.bias",
+            value: MLXArray.zeros([2_048])
+        )
+        XCTAssertEqual(audioInputBias.map(\.0), ["dec_in_proj.bias"])
+        XCTAssertEqual(audioInputBias.first?.1.shape, [2_048])
         let audioResidual = MiniMaxH3AudioVAE.mapConvertedWeight(
             key: "encoder.block.1.block.0.block.1.weight",
             value: MLXArray.zeros([64, 64, 7])
@@ -307,6 +313,43 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         MLX.eval(audioRoundTrip)
         XCTAssertEqual(audioRoundTrip.shape, audio.shape)
         XCTAssertEqual(audioRoundTrip.asArray(Float.self), audio.asArray(Float.self))
+    }
+
+    func testInstalledAudioVAEDecodeMatchesReference() throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard let root = environment["MERERUN_H3_MODEL_ROOT"], !root.isEmpty else {
+            throw XCTSkip(
+                "Set MERERUN_H3_MODEL_ROOT to run the checkpoint-backed H3 audio parity fixture."
+            )
+        }
+
+        let latentFrames = 8
+        let latentValues = (0..<(32 * 2 * latentFrames)).map { index in
+            Float((index * 37) % 257 - 128) / 64
+        }
+        let latent = MLXArray(latentValues).reshaped(1, 32, 2, latentFrames)
+        let resources = MiniMaxH3Resources(rootURL: URL(fileURLWithPath: root, isDirectory: true))
+        let waveform = try MiniMaxH3ModelLoader.loadAudioVAE(resources: resources).decode(latent)
+        MLX.eval(waveform)
+
+        XCTAssertEqual(waveform.shape, [1, latentFrames * MiniMaxH3AudioVAE.hopLength, 2])
+        let values = waveform.asArray(Float.self)
+        XCTAssertTrue(values.allSatisfy(\.isFinite))
+        // FP32 samples from ComfyUI's MiniMaxH3AudioVAE at
+        // 16e3f3034f2bba1fff6c70cbd759339778555cd6 for the latent fixture above.
+        let referenceSamples: [(Int, Float)] = [
+            (0, 0.044_520_34), (1, 0.011_212_92), (2, -0.013_318_60),
+            (63, -0.142_264_11), (255, 0.202_620_71), (511, -0.673_421_03),
+            (1_023, 0.361_299_25), (2_047, -0.206_609_98),
+            (4_095, -0.600_924_31), (6_143, 0.713_577_15),
+            (8_191, 0.200_860_02), (10_239, 0.757_872_64),
+            (12_287, -0.011_021_69), (12_799, 0.009_704_24),
+        ]
+        for (index, expected) in referenceSamples {
+            XCTAssertEqual(values[index], expected, accuracy: 0.000_1, "reference sample \(index)")
+        }
+        let rootMeanSquare = sqrt(values.reduce(0) { $0 + $1 * $1 } / Float(values.count))
+        XCTAssertEqual(rootMeanSquare, 0.556_741_18, accuracy: 0.000_1)
     }
 
     func testDecodedFramesConvertToMediaPixels() {
