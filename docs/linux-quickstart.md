@@ -175,8 +175,12 @@ refuses to emit a `.deb` when the toolkit major is unknown or unsupported,
 rather than attaching incorrect runtime dependencies. CUDA 12 packages target
 NVIDIA's 12.8 package series and accept the corresponding Lambda Stack library
 packages as Debian alternatives. CUDA 13 packages declare:
-`cuda-cccl-13-0`, `cuda-cudart-13-0`, `cuda-nvrtc-13-0`,
+`cuda-cccl-13-0`, `cuda-cudart-dev-13-0`, `cuda-cudart-13-0`, `cuda-nvrtc-13-0`,
 `libcublas-13-0`, `libcufft-13-0`, `libcudnn9-cuda-13`, and `libnccl2`.
+CUDA 12 packages likewise require `cuda-cudart-dev-12-8`. MLX compiles
+specialized kernels with NVRTC during inference, so CUDA headers such as
+`cuda_bf16.h` are runtime requirements even though mere.run itself is already
+compiled.
 Use an artifact suffix such as `cuda12` or `cuda13` when publishing multiple
 CUDA lanes. Maintainers who supply an exact
 `MERERUN_PACKAGE_LINUX_DEPS` value deliberately bypass this gate; that override

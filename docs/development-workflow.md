@@ -166,7 +166,9 @@ Arm64 CUDA package builds require a real arm64 CUDA host. CUDA `.deb` artifacts
 are gated to binaries whose linked `libcudart` SONAME proves CUDA 12 or CUDA 13,
 then add the matching runtime/JIT dependency family. CUDA 12 targets NVIDIA's
 12.8 packages with Lambda Stack alternatives; CUDA 13 targets NVIDIA's 13.0
-packages. For any other or unknown toolkit major, use `--skip-deb`; the tar
+packages. Both families include the matching `cuda-cudart-dev` package because
+MLX's runtime NVRTC kernels require CUDA headers such as `cuda_bf16.h`. For any
+other or unknown toolkit major, use `--skip-deb`; the tar
 package path remains available and must be smoke-tested on a matching host.
 An explicit `MERERUN_PACKAGE_LINUX_DEPS` value bypasses the automatic CUDA
 major gate and is written verbatim, making dependency compatibility the

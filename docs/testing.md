@@ -139,7 +139,9 @@ dpkg-deb --info dist/linux/mere-run-cuda_*_amd64.deb
 
 The `.deb` check requires the built binary to link one unambiguous CUDA 12 or
 CUDA 13 `libcudart` SONAME. Packaging selects the matching dependency family
-and fails instead of writing dependencies for an unknown toolkit major.
+and fails instead of writing dependencies for an unknown toolkit major. The
+selected family includes CUDA runtime development headers because MLX's NVRTC
+kernels compile during inference, not only during package construction.
 An explicit `MERERUN_PACKAGE_LINUX_DEPS` fixture separately verifies the
 maintainer override; its value is written verbatim and bypasses the default
 major gate.

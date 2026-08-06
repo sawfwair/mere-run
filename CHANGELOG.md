@@ -14,6 +14,13 @@ ACE-Step planner parity, and hardens the documentation supply chain. Creative
 capabilities retain first-class CLI and macOS Studio controls; the specialized
 TerraMind tensor workflow is intentionally CLI-only in this release.
 
+### Linux packaging
+
+- added the matching CUDA runtime development-header package to CUDA 12 and 13
+  Debian dependencies. MLX compiles specialized kernels with NVRTC during
+  inference, so clean runtime installs now include headers such as
+  `cuda_bf16.h` instead of failing when the first GPU kernel is compiled.
+
 ### Geospatial inference
 
 - added the CLI-only `mere.run geo flood`, a native Swift/MLX TerraMind Flood
