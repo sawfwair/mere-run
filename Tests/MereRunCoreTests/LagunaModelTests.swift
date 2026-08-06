@@ -1418,6 +1418,201 @@ final class LagunaModelTests: MereRunCoreTestCase {
         }
     }
 
+    func testNVFP4AdjacentScalePairCertificateFailsClosed() {
+        let certified = MLXArray([
+            UInt8(7), 11,  // the explicitly preserved first-pair exception
+            13, 13,
+            17, 17,
+            19, 19,
+        ]).reshaped([2, 4])
+        XCTAssertTrue(lagunaNVFP4AdjacentScalePairsCertified(certified))
+        XCTAssertFalse(
+            lagunaNVFP4AdjacentScalePairsCertified(
+                certified,
+                allowedFlatPairs: []
+            )
+        )
+
+        let unexpectedMismatch = MLXArray([
+            UInt8(7), 11,
+            13, 13,
+            17, 23,
+            19, 19,
+        ]).reshaped([2, 4])
+        XCTAssertFalse(
+            lagunaNVFP4AdjacentScalePairsCertified(unexpectedMismatch)
+        )
+        XCTAssertFalse(
+            lagunaNVFP4AdjacentScalePairsCertified(
+                MLXArray([UInt8(1), 1, 2]).reshaped([1, 3])
+            )
+        )
+    }
+
+    func testPairwiseScaleReuseMatchesStockSortedNVFP4SwiGLU() throws {
+        guard Device.defaultDevice().deviceType == .gpu,
+              GPU.deviceInfo().architecture == "applegpu_g16s" else {
+            throw XCTSkip("The pairwise prefill kernel requires an M4 Max GPU.")
+        }
+        MLXRandom.seed(61)
+        let expertCount = 4
+        let inputDimensions = 512
+        let outputDimensions = 64
+        let groupSize = 16
+        let bits = 4
+        let gate = MLX.quantized(
+            MLXRandom.uniform(
+                low: -0.25,
+                high: 0.25,
+                [expertCount, outputDimensions, inputDimensions]
+            ),
+            groupSize: groupSize,
+            bits: bits,
+            mode: .nvfp4
+        )
+        let up = MLX.quantized(
+            MLXRandom.uniform(
+                low: -0.25,
+                high: 0.25,
+                [expertCount, outputDimensions, inputDimensions]
+            ),
+            groupSize: groupSize,
+            bits: bits,
+            mode: .nvfp4
+        )
+        MLX.eval(gate.wq, gate.scales, up.wq, up.scales)
+
+        func certifiedPairPlane(_ scales: MLXArray) throws -> MLXArray {
+            var values = scales.asArray(UInt8.self)
+            for index in stride(from: 0, to: values.count, by: 2) {
+                values[index + 1] = values[index]
+            }
+            let first = values[0]
+            let replacement = try XCTUnwrap(
+                values.dropFirst(2).first(where: { $0 != first })
+            )
+            values[1] = replacement
+            let plane = MLXArray(values).reshaped(scales.shape)
+            XCTAssertTrue(lagunaNVFP4AdjacentScalePairsCertified(plane))
+            return plane
+        }
+
+        let gateScales = try certifiedPairPlane(gate.scales)
+        let upScales = try certifiedPairPlane(up.scales)
+        let routeCount = 64
+        let input = MLXRandom.uniform(
+            low: -0.5,
+            high: 0.5,
+            [routeCount, 1, inputDimensions]
+        ).asType(.bfloat16)
+        let indices = MLXArray(
+            (0..<routeCount).map { Int32($0 / (routeCount / expertCount)) }
+        )
+
+        let gateOutput = portableGatherQuantizedMM(
+            input,
+            gate.wq,
+            scales: gateScales,
+            biases: nil,
+            rhsIndices: indices,
+            transpose: true,
+            groupSize: groupSize,
+            bits: bits,
+            mode: .nvfp4,
+            sortedIndices: true
+        )
+        let upOutput = portableGatherQuantizedMM(
+            input,
+            up.wq,
+            scales: upScales,
+            biases: nil,
+            rhsIndices: indices,
+            transpose: true,
+            groupSize: groupSize,
+            bits: bits,
+            mode: .nvfp4,
+            sortedIndices: true
+        )
+        let reference = MLXNN.silu(gateOutput) * upOutput
+        let stock = try XCTUnwrap(
+            RoutedMoERouting.fusedSortedNVFP4SwiGLU(
+                input,
+                gateWeight: gate.wq,
+                gateScales: gateScales,
+                upWeight: up.wq,
+                upScales: upScales,
+                sortedExpertIndices: indices,
+                groupSize: groupSize,
+                bits: bits,
+                pairwiseScaleReuse: false
+            )
+        )
+        let pairwise = try XCTUnwrap(
+            RoutedMoERouting.fusedSortedNVFP4SwiGLU(
+                input,
+                gateWeight: gate.wq,
+                gateScales: gateScales,
+                upWeight: up.wq,
+                upScales: upScales,
+                sortedExpertIndices: indices,
+                groupSize: groupSize,
+                bits: bits,
+                pairwiseScaleReuse: true
+            )
+        )
+        MLX.eval(reference, stock, pairwise)
+
+        XCTAssertEqual(
+            MLX.max(
+                MLX.abs(reference.asType(.float32) - stock.asType(.float32))
+            ).item(Float.self),
+            0
+        )
+        XCTAssertEqual(
+            MLX.max(
+                MLX.abs(stock.asType(.float32) - pairwise.asType(.float32))
+            ).item(Float.self),
+            0
+        )
+
+        Memory.clearCache()
+        let activeBefore = Memory.activeMemory
+        for _ in 0..<8 {
+            autoreleasepool {
+                let repeated = RoutedMoERouting.fusedSortedNVFP4SwiGLU(
+                    input,
+                    gateWeight: gate.wq,
+                    gateScales: gateScales,
+                    upWeight: up.wq,
+                    upScales: upScales,
+                    sortedExpertIndices: indices,
+                    groupSize: groupSize,
+                    bits: bits,
+                    pairwiseScaleReuse: true
+                )
+                XCTAssertNotNil(repeated)
+                if let repeated {
+                    MLX.eval(repeated)
+                    XCTAssertEqual(
+                        MLX.max(
+                            MLX.abs(
+                                pairwise.asType(.float32)
+                                    - repeated.asType(.float32)
+                            )
+                        ).item(Float.self),
+                        0
+                    )
+                }
+            }
+        }
+        Memory.clearCache()
+        XCTAssertLessThanOrEqual(
+            Memory.activeMemory,
+            activeBefore + 1_048_576,
+            "Pairwise prefill scale reuse must not retain per-forward MLX buffers."
+        )
+    }
+
     func testSortedNVFP4DownProjectionMatchesNativeGather() throws {
         guard Device.defaultDevice().deviceType == .gpu,
               GPU.deviceInfo().architecture == "applegpu_g16s" else {
@@ -2045,6 +2240,20 @@ final class LagunaModelTests: MereRunCoreTestCase {
                 to: model,
                 dtype: nil,
                 verify: .shapeMismatch
+            )
+        }
+
+        if LagunaMoEAccelerationPolicy.prefillExpertPairwiseScaleReuseEnabled {
+            _ = model.prepareRuntimeAcceleration()
+            let sparseLayers = model.model.layers.compactMap {
+                $0.mlp as? LagunaSparseMoE
+            }
+            XCTAssertEqual(
+                sparseLayers.filter {
+                    $0.switchMLP.prefillPairwiseScaleReuseCertified
+                }.count,
+                sparseLayers.count,
+                "Every loaded routed gate/up scale plane must pass the lossless pair certificate."
             )
         }
 
