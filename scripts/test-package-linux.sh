@@ -188,6 +188,11 @@ if ! dpkg-deb --field "$cuda_deb" Depends | grep -q 'libcufft-13-0'; then
   dpkg-deb --field "$cuda_deb" Depends >&2
   exit 1
 fi
+if ! dpkg-deb --field "$cuda_deb" Depends | grep -q 'cuda-cudart-dev-13-0'; then
+  echo "[test-package-linux] expected CUDA .deb dependencies to include runtime JIT headers:" >&2
+  dpkg-deb --field "$cuda_deb" Depends >&2
+  exit 1
+fi
 if [[ "$(dpkg-deb --field "$cuda_deb" Package)" != "mere-run-cuda" ]]; then
   echo "[test-package-linux] expected CUDA .deb package name to be mere-run-cuda:" >&2
   dpkg-deb --field "$cuda_deb" Package >&2
@@ -215,6 +220,11 @@ cuda12_deb="$cuda12_output_dir/mere-run-cuda12_0.0.0+cuda12-fixture_${deb_arch}.
 cuda12_depends="$(dpkg-deb --field "$cuda12_deb" Depends)"
 if ! grep -q 'cuda-cudart-12-8 | libcudart12' <<<"$cuda12_depends"; then
   echo "[test-package-linux] expected CUDA 12 .deb dependencies to support NVIDIA and Lambda Stack runtimes:" >&2
+  printf '%s\n' "$cuda12_depends" >&2
+  exit 1
+fi
+if ! grep -q 'cuda-cudart-dev-12-8' <<<"$cuda12_depends"; then
+  echo "[test-package-linux] expected CUDA 12 .deb dependencies to include runtime JIT headers:" >&2
   printf '%s\n' "$cuda12_depends" >&2
   exit 1
 fi

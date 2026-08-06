@@ -597,10 +597,10 @@ if (( do_deb )); then
       fi
       case "$cuda_toolkit_major" in
         12)
-          default_depends="$default_depends, cuda-cccl-12-8 | libcu++-dev, cuda-cccl-12-8 | libcub-dev, cuda-cudart-12-8 | libcudart12, cuda-nvrtc-12-8 | libnvrtc12, libcublas-12-8 | libcublas12, libcufft-12-8 | libcufft11, libcudnn9-cuda-12 | python3-torch-cuda, libnccl2"
+          default_depends="$default_depends, cuda-cccl-12-8 | libcu++-dev, cuda-cccl-12-8 | libcub-dev, cuda-cudart-dev-12-8, cuda-cudart-12-8 | libcudart12, cuda-nvrtc-12-8 | libnvrtc12, libcublas-12-8 | libcublas12, libcufft-12-8 | libcufft11, libcudnn9-cuda-12 | python3-torch-cuda, libnccl2"
           ;;
         13)
-          default_depends="$default_depends, cuda-cccl-13-0, cuda-cudart-13-0, cuda-nvrtc-13-0, libcublas-13-0, libcufft-13-0, libcudnn9-cuda-13, libnccl2"
+          default_depends="$default_depends, cuda-cccl-13-0, cuda-cudart-dev-13-0, cuda-cudart-13-0, cuda-nvrtc-13-0, libcublas-13-0, libcufft-13-0, libcudnn9-cuda-13, libnccl2"
           ;;
         *)
           echo "[package-linux] error: CUDA .deb packaging supports toolkit majors 12 and 13, but the built binary links libcudart.so.$cuda_toolkit_major." >&2
