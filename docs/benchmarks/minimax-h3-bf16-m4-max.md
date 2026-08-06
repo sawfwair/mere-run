@@ -157,3 +157,20 @@ Inference-only solver screens did not change that conclusion. On the locked
 A two-evaluation Heun solve reached the desired compute class—45.548 seconds of
 proxy denoise—but produced tiled chromatic noise at 0.327 SSIM. Both candidates
 were removed; these are rejection receipts, not available runtime modes.
+
+### Arithmetic roof
+
+At 73,470 packed rows, the released 50-layer transformer performs about 211.390
+TFLOP per block: 154.767 TFLOP of dense attention and 56.624 TFLOP of linear
+projections. The accepted 25.173-second block is therefore about 8.40 effective
+TFLOP/s. For scale, even treating 36 TFLOP/s as a perfectly attainable
+end-to-end ceiling gives 5.872 seconds per block and 293.6 seconds per complete
+model evaluation. The 19-evaluation exact schedule cannot fall below roughly
+93 minutes of transformer arithmetic, while the 417-block `maximum` schedule
+cannot fall below roughly 40.8 minutes, before the approximately seven-minute
+video decode estimate. Real execution must be slower than those floors.
+
+This bound rules out a 30-minute ten-second result from exact kernel scheduling
+alone. Reaching that class requires less model math—distillation, a validated
+sparser attention structure, or fewer evaluated blocks—not more disk, unified
+memory, or a debug-versus-release correction.

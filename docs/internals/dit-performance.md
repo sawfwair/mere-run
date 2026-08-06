@@ -333,6 +333,25 @@ from 0.602x to 0.928x; several unsupported tile shapes also failed the output
 gate. The temporary selection controls were removed rather than adding a
 non-winning H3-specific Steel branch.
 
+A focused 42-candidate schedule grid then searched 592...688 query rows and
+five, six, eight, nine, ten, or twelve heads per submission. A short 2,048-row
+screen suggested 608/eight, but the complete 73,470-query gate reversed it:
+608/eight measured 18.567 seconds versus 17.926 seconds for 640/eight, with
+exact output. Queuing every 640/eight submission through `asyncEval` also lost
+its direct four-round gate, 18.650 seconds versus 17.182 seconds for synchronous
+evaluation (`rel_l2=0`). Both laboratory controls were removed.
+
+The true-ten-second arithmetic explains the remaining scale. One transformer
+block contains approximately 211.390 TFLOP: 154.767 TFLOP (73.2%) in dense
+attention and 56.624 TFLOP (26.8%) in the four linear projections. The accepted
+25.173-second block therefore sustains about 8.40 TFLOP/s end to end. Even an
+unattainable 36-TFLOP/s-perfect execution would require 5.872 seconds per block
+and 293.6 seconds per complete 50-block evaluation. Nineteen exact evaluations
+have a compute-only floor of about 93 minutes; the 417-block `maximum` schedule
+has a floor of about 40.8 minutes before VAE decode. This is an arithmetic
+lower bound, not a performance forecast, and shows why the current checkpoint
+cannot reach a 30-minute ten-second render through exact dispatch tuning alone.
+
 The video VAE did retain a separate full-precision runtime win. Fresh-process released-
 checkpoint sweeps at 832x480 and 124 frames measured 96.091 s with 256-pixel
 tiles, 76.421 s with 320-pixel tiles, and 77.577 s with 480-pixel tiles. The
