@@ -253,6 +253,14 @@ rows, and 30.204 versus 29.679 seconds at the true ten-second 73,470-row shape.
 Production therefore remains resident BF16. Re-run the deterministic comparison
 after an MLX or Metal update with `scripts/h3-kernel-lab.sh dtype`.
 
+The fused non-NAX Steel attention microtile was then swept locally at 14,958
+rows with exact output checks. Apple's existing 32-query x 16-key tile with
+four SIMD groups measured 511 ms in the initial cool-state run. Query tiles of
+16, 24, 40, 48, and 64 rows and key tiles of 8, 24, 32, and 64 rows did not
+beat it; the valid candidates ranged from 535 to 678 ms. A 48-key candidate
+also failed exactness (`rel_l2=0.278`) and was rejected. The temporary MLX
+controls were removed, leaving the upstream Steel attention dispatch intact.
+
 The video VAE did retain a separate full-precision runtime win. Fresh-process released-
 checkpoint sweeps at 832x480 and 124 frames measured 96.091 s with 256-pixel
 tiles, 76.421 s with 320-pixel tiles, and 77.577 s with 480-pixel tiles. The
