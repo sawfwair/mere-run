@@ -293,6 +293,14 @@ versus 29.088 s, `rel_l2=0`) and was removed. The accepted head schedule puts
 one exact 50-block evaluation near 21 minutes before VAE decode. A 20-point
 exact schedule still needs 19 such evaluations.
 
+The accepted eight-head schedule was also paired with the transformer's
+existing fused post-attention graph. At 73,470 rows, an order-balanced two-round
+gate measured 24.801 seconds for the split graph and 24.570 seconds for the
+fused graph, a bit-identical but only 1.009x improvement (`max_abs=0`,
+`rel_l2=0`). That falls below the 1.02 production threshold, so the runtime
+keeps the simpler split graph. Re-run this rejection gate with
+`scripts/h3-kernel-lab.sh post`.
+
 Full-block FP16 execution was also screened rather than inferred from nominal
 GPU peak rates. With identical seeded weights and inputs, FP16 stayed inside a
 one-block `rel_l2 <= 0.01` gate but was slower at every measured packed shape:

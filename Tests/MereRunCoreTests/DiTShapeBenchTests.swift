@@ -1366,11 +1366,16 @@ final class DiTShapeBenchTests: XCTestCase {
             1,
             Int(environment["MERERUN_H3_BENCH_EVAL_BATCH"] ?? "") ?? 4
         )
+        let headsPerKernel = max(
+            1,
+            Int(environment["MERERUN_H3_BENCH_HEADS"] ?? "") ?? 56
+        )
         let rounds = max(1, Int(environment["MERERUN_H3_BENCH_ROUNDS"] ?? "") ?? 2)
         let benchmark = MiniMaxH3BlockScheduleBenchmark(
             rowCount: rows,
             maximumQueryTokens: queryTokens,
-            maximumKernelsPerEvaluation: evaluationBatch
+            maximumKernelsPerEvaluation: evaluationBatch,
+            maximumHeadsPerKernel: headsPerKernel
         )
 
         func elapsed(_ schedule: MiniMaxH3BlockScheduleBenchmark.Schedule) -> Double {
@@ -1474,12 +1479,13 @@ final class DiTShapeBenchTests: XCTestCase {
         let operations = projectionOperations + attentionOperations
         let peakGiB = Double(Memory.peakMemory) / 1_073_741_824
         print(String(
-            format: "[h3-lab] block rows=%d query=%d batch=%d split_ms=%.0f "
+            format: "[h3-lab] block rows=%d query=%d heads=%d batch=%d split_ms=%.0f "
                 + "ff_fused_ms=%.0f fused_ms=%.0f ff_fused_speedup=%.3fx "
                 + "fused_speedup=%.3fx split_tflops=%.2f ff_fused_tflops=%.2f "
                 + "fused_tflops=%.2f ff_fused_rel_l2=%.6g fused_rel_l2=%.6g peak_gib=%.2f",
             rows,
             queryTokens,
+            headsPerKernel,
             evaluationBatch,
             splitBest * 1_000,
             feedForwardBest * 1_000,
@@ -1503,6 +1509,86 @@ final class DiTShapeBenchTests: XCTestCase {
             splitPostAttentionSeconds * 1_000,
             fusedFeedForwardSeconds * 1_000,
             fusedPostAttentionSeconds * 1_000
+        ))
+        Memory.clearCache()
+    }
+
+    /// Compares the existing split post-attention graph with the exact fully
+    /// fused residual/MLP tail on top of one selected attention schedule.
+    func testMiniMaxH3BlockPostAttentionSchedules() throws {
+        try benchGate()
+        let environment = ProcessInfo.processInfo.environment
+        let rows = max(1, Int(environment["MERERUN_H3_BENCH_ROWS"] ?? "") ?? 73_470)
+        let queryTokens = max(
+            1,
+            Int(environment["MERERUN_H3_BENCH_QUERY_TOKENS"] ?? "") ?? 640
+        )
+        let headsPerKernel = max(
+            1,
+            Int(environment["MERERUN_H3_BENCH_HEADS"] ?? "") ?? 8
+        )
+        let evaluationBatch = max(
+            1,
+            Int(environment["MERERUN_H3_BENCH_EVAL_BATCH"] ?? "") ?? 1
+        )
+        let rounds = max(2, Int(environment["MERERUN_H3_BENCH_ROUNDS"] ?? "") ?? 2)
+        let benchmark = MiniMaxH3BlockScheduleBenchmark(
+            rowCount: rows,
+            maximumQueryTokens: queryTokens,
+            maximumKernelsPerEvaluation: evaluationBatch,
+            maximumHeadsPerKernel: headsPerKernel
+        )
+
+        func output(_ schedule: MiniMaxH3BlockScheduleBenchmark.Schedule) -> MLXArray {
+            benchmark(schedule: schedule)
+        }
+        func elapsed(_ schedule: MiniMaxH3BlockScheduleBenchmark.Schedule) -> Double {
+            let started = CFAbsoluteTimeGetCurrent()
+            MLX.eval(output(schedule))
+            return CFAbsoluteTimeGetCurrent() - started
+        }
+
+        let reference = output(.splitPostAttention).asType(.float32)
+        let candidate = output(.fusedPostAttention).asType(.float32)
+        MLX.eval(reference, candidate)
+        let delta = candidate - reference
+        let referenceSquared = MLX.sum(reference * reference).item(Float.self)
+        let maximumAbsoluteError = Double(MLX.max(MLX.abs(delta)).item(Float.self))
+        let relativeL2Error = sqrt(
+            Double(MLX.sum(delta * delta).item(Float.self))
+                / max(Double(referenceSquared), .leastNonzeroMagnitude)
+        )
+        XCTAssertLessThan(relativeL2Error, 1e-3)
+
+        var splitTotal = 0.0
+        var fusedTotal = 0.0
+        Memory.peakMemory = 0
+        for round in 0..<rounds {
+            if round.isMultiple(of: 2) {
+                splitTotal += elapsed(.splitPostAttention)
+                fusedTotal += elapsed(.fusedPostAttention)
+            } else {
+                fusedTotal += elapsed(.fusedPostAttention)
+                splitTotal += elapsed(.splitPostAttention)
+            }
+        }
+        let splitSeconds = splitTotal / Double(rounds)
+        let fusedSeconds = fusedTotal / Double(rounds)
+        let peakGiB = Double(Memory.peakMemory) / 1_073_741_824
+        print(String(
+            format: "[h3-lab] block-post rows=%d query=%d heads=%d batch=%d "
+                + "split_ms=%.0f fused_ms=%.0f speedup=%.3fx "
+                + "max_abs=%.6g rel_l2=%.6g peak_gib=%.2f",
+            rows,
+            queryTokens,
+            headsPerKernel,
+            evaluationBatch,
+            splitSeconds * 1_000,
+            fusedSeconds * 1_000,
+            splitSeconds / fusedSeconds,
+            maximumAbsoluteError,
+            relativeL2Error,
+            peakGiB
         ))
         Memory.clearCache()
     }
