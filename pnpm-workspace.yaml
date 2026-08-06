@@ -1,0 +1,7 @@
+minimumReleaseAge: 4320
+trustPolicy: no-downgrade
+trustPolicyIgnoreAfter: 10080
+blockExoticSubdeps: true
+strictDepBuilds: true
+allowBuilds:
+  esbuild@0.27.3: true

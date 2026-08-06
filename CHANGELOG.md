@@ -6,6 +6,14 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Security
+
+- hardened the documentation supply chain with pnpm 10.34.5, a three-day
+  minimum release age, no-downgrade trust checks, exotic-subdependency
+  blocking, and a strict build-script allowlist limited to the pinned esbuild
+  package. The Pages workflow now grants write and OIDC permissions only to
+  the deploy job and prevents checkout credentials from persisting.
+
 ### Text
 
 - added the pinned `LiquidAI/LFM2.5-2.6B-MLX` 4-bit partition as
