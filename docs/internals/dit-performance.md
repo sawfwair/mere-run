@@ -324,6 +324,15 @@ beat it; the valid candidates ranged from 535 to 678 ms. A 48-key candidate
 also failed exactness (`rel_l2=0.278`) and was rejected. The temporary MLX
 controls were removed, leaving the upstream Steel attention dispatch intact.
 
+The production 73,470-key call was then swept separately with eight heads and
+640 query rows per exact Steel submission. Across 20 BQ/BK/warp
+specializations, the existing 32-query x 16-key tile with four SIMD groups
+remained the local winner: 17.129 ms versus its paired 17.181 ms control, only
+measurement noise. Every numerically valid alternative was slower, ranging
+from 0.602x to 0.928x; several unsupported tile shapes also failed the output
+gate. The temporary selection controls were removed rather than adding a
+non-winning H3-specific Steel branch.
+
 The video VAE did retain a separate full-precision runtime win. Fresh-process released-
 checkpoint sweeps at 832x480 and 124 frames measured 96.091 s with 256-pixel
 tiles, 76.421 s with 320-pixel tiles, and 77.577 s with 480-pixel tiles. The
