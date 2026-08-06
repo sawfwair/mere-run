@@ -72,6 +72,11 @@ case "$mode" in
     ;;
 esac
 
+width="${MERERUN_H3_BENCH_WIDTH:-$width}"
+height="${MERERUN_H3_BENCH_HEIGHT:-$height}"
+frames="${MERERUN_H3_BENCH_FRAMES:-$frames}"
+steps="${MERERUN_H3_BENCH_STEPS:-$steps}"
+
 if [[ ! -x "$binary" || "${MERERUN_H3_BENCH_REBUILD:-0}" == "1" ]]; then
   swift build -c release --product mere.run
 fi

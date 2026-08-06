@@ -301,6 +301,13 @@ fused graph, a bit-identical but only 1.009x improvement (`max_abs=0`,
 keeps the simpler split graph. Re-run this rejection gate with
 `scripts/h3-kernel-lab.sh post`.
 
+A subsequent 40-candidate local grid searched 512...768 query chunks, four,
+seven, eight, or fourteen heads per submission, and one or two submissions per
+evaluation. Each candidate used 4,096 sampled query rows against the complete
+73,470-row key/value shape. The existing 640-query/eight-head/single-submission
+schedule remained the winner, projecting 16.532 seconds for the complete
+attention pass; the earlier exact full-pass gate measured 16.383 seconds.
+
 Full-block FP16 execution was also screened rather than inferred from nominal
 GPU peak rates. With identical seeded weights and inputs, FP16 stayed inside a
 one-block `rel_l2 <= 0.01` gate but was slower at every measured packed shape:
@@ -413,3 +420,20 @@ four-cache-step block count. It added no meaningful runtime cost, but the
 same-seed 416x256 proxy fell from 0.688 SSIM against the exact trajectory to
 0.583 and visibly shifted exposure and composition. The predictor was removed;
 maximum mode keeps the more faithful bounded stale residual.
+
+Lower-evaluation ODE math was tested on that same 416x256, 107-frame prompt and
+seed before any long render. A 12-point variable-step Adams-Bashforth candidate
+completed denoise in 314.742 seconds but reached only 0.667 SSIM and 19.22 dB
+PSNR against the 20-point Euler reference. Plain 12-point Euler was both faster
+on this small compiled-step geometry (253.063 seconds) and closer to the
+reference at 0.694 SSIM and 20.57 dB, so the multistep candidate was removed.
+
+The highest-leverage undistilled screen used one Heun interval: an Euler
+predictor plus endpoint correction, or two complete model evaluations. It
+finished denoise in 45.548 seconds and the complete proxy in 74.344 seconds,
+but decoded into tiled chromatic noise rather than a coherent scene. Its 0.327
+SSIM and 13.22 dB PSNR confirm that the released H3 vector field is not straight
+enough for a two-evaluation solve. The candidate and its endpoint AdaLN path
+were removed. On this checkpoint, reducing the quality schedule to the physical
+one- or two-evaluation boundary therefore requires learned distillation rather
+than an inference-only integrator swap.

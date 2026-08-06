@@ -150,3 +150,10 @@ Reaching near 30 minutes with comparable visual quality consequently requires
 a materially lower-evaluation model or sampler, such as an upstream distilled
 checkpoint; the exact head-scheduling win does not remove the remaining
 evaluation-count multiplier.
+
+Inference-only solver screens did not change that conclusion. On the locked
+416x256 proxy, 12-point variable-step Adams-Bashforth was less faithful to the
+20-point Euler artifact than plain 12-point Euler (0.667 versus 0.694 SSIM).
+A two-evaluation Heun solve reached the desired compute class—45.548 seconds of
+proxy denoise—but produced tiled chromatic noise at 0.327 SSIM. Both candidates
+were removed; these are rejection receipts, not available runtime modes.
