@@ -465,3 +465,34 @@ enough for a two-evaluation solve. The candidate and its endpoint AdaLN path
 were removed. On this checkpoint, reducing the quality schedule to the physical
 one- or two-evaluation boundary therefore requires learned distillation rather
 than an inference-only integrator swap.
+
+Spatial token reduction and depth pruning were also screened behind temporary
+laboratory controls, then removed. A KV-only candidate kept conditioning tokens
+exact, retained full-resolution keys and values for nearby video frames, and
+2x2-pooled only distant video keys and values. On the 416x256, 107-frame,
+12-point proxy, a one-frame-radius arm measured 0.591 SSIM and 16.18 dB PSNR
+against dense 12-point Euler. A three-frame-radius arm improved that to 0.617
+SSIM and 16.73 dB and remained visually coherent, but still changed composition
+and motion. At the true 73,470-row call shape, the corresponding full-block
+times were 14.635 and 17.908 seconds versus 25.173 seconds for exact dense
+attention.
+
+That speedup is real but insufficient. The automatic 12-point `maximum`
+schedule executes 304 transformer blocks under its accepted reuse policy. The
+measured sparse-block times therefore project to 74.1 minutes of denoise at the
+one-frame radius or 90.7 minutes at the better-quality three-frame radius,
+before roughly seven minutes of video/audio decode. Running every fifth block
+with dense attention scored only 0.602 SSIM and 16.38 dB, below the simpler
+three-frame arm. Combining the one-frame arm with an intentionally more
+aggressive 235-block reuse schedule fell to 0.488 SSIM and 15.21 dB and exposed
+a visible spatial lattice. None of those variants moved into production.
+
+Pooling 2x2 video queries as well as distant keys and values reduced the proxy
+one-evaluation denoise from 24.556 to 21.012 seconds, but the decoded result
+collapsed into large spatial blocks (0.444 SSIM, 10.39 dB). Executing alternate
+transformer layers was faster still, but both unscaled and 2x-residual-scaled
+variants collapsed into a finer latent lattice at one evaluation (0.184 and
+0.179 SSIM). These failures bound the remaining inference-only frontier:
+near-30-minute output at this geometry needs a checkpoint trained for fewer
+evaluations and/or fewer layers, not an untrained token- or depth-pruning
+shortcut.
