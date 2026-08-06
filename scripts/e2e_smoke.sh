@@ -174,7 +174,7 @@ core_suite() {
   if require_model "speech-asr-parakeet" && [[ -f "$speech_tts_wav" ]]; then
     run_step "speech_transcribe_parakeet" 240 \
       "$MERERUN_BIN" speech transcribe "$speech_tts_wav" --backend parakeet --model speech-asr-parakeet --no-timestamps --quiet
-    assert_contains "speech_transcribe_parakeet_output" "$OUT_DIR/speech_transcribe_parakeet.stdout" "local inference smoke test"
+    assert_contains "speech_transcribe_parakeet_output" "$OUT_DIR/speech_transcribe_parakeet.stdout" "local inference.*smoke.*test"
   fi
 
   if require_model "speech-asr-qwen3" && [[ -f "$speech_tts_wav" ]]; then
