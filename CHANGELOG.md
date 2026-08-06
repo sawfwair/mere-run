@@ -6,6 +6,22 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.35.0 - 2026-08-06
+
+This release makes MiniMax-H3 materially faster and more faithful on Apple
+Silicon, adds native LFM2.5 text inference and TerraMind flood mapping, restores
+ACE-Step planner parity, and hardens the documentation supply chain. Creative
+capabilities retain first-class CLI and macOS Studio controls; the specialized
+TerraMind tensor workflow is intentionally CLI-only in this release.
+
+### Geospatial inference
+
+- added the CLI-only `mere.run geo flood`, a native Swift/MLX TerraMind Flood
+  runtime for four-timestep Sentinel-2, Sentinel-1, and DEM tiles, plus a
+  checksum-pinned float32-only converter for the official ImpactMesh
+  checkpoint. Real Helene parity preserves all 126 candidate pixels with mask
+  Jaccard 1.0; unsafe FP16 conversions are rejected.
+
 ### Security
 
 - hardened the documentation supply chain with pnpm 10.34.5, a three-day
@@ -139,6 +155,7 @@ The format is based on Keep a Changelog.
   then completed in 1,653.711 s (27:33.711) end to end: 1,526.533 s denoise,
   119.544 s video decode, and 0.892 s audio decode. `quality` remains the exact
   default.
+
 ## 0.34.0 - 2026-08-04
 
 This release advances the complete local creation stack across five first-class
@@ -149,11 +166,6 @@ artifact contracts instead of becoming a model-specific sidecar.
 
 ### Video and synchronized audio
 
-- added `mere.run geo flood`, a native Swift/MLX TerraMind Flood runtime for
-  four-timestep Sentinel-2, Sentinel-1, and DEM tiles, plus a checksum-pinned
-  float32-only converter for the official ImpactMesh checkpoint. Real Helene
-  parity preserves all 126 candidate pixels with mask Jaccard 1.0; unsafe FP16
-  conversions are rejected.
 - added a native Swift/MLX MiniMax-H3 runtime for the released FL2VA and
   Ref2VA partitions: Qwen3-VL layer-50 multimodal conditioning, the dense 50
   layer joint video/audio transformer, causal tiled video VAE, DAC/causal
@@ -163,7 +175,7 @@ artifact contracts instead of becoming a model-specific sidecar.
   including 2 fps paired video presentation timestamps, video soundtrack
   conditioning, per-reference spatial grids, shared audio/video rotary clocks,
   and the released reference-count and modality constraints.
-- added adaptive MiniMax-H3 9/16/21-point schedule tiers, explicit
+- added adaptive MiniMax-H3 9/16/31-point schedule tiers, explicit
   `--h3-weight-mode auto|quantized|resident-bf16`, chassis-aware compact Q4
   defaults for MacBooks, staged resident-BF16 expansion for desktop Macs, and
   coordinated 50-64 GiB MLX wired-memory residency. Large sequences reuse one
