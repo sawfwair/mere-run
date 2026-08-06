@@ -66,6 +66,13 @@ case "$mode" in
     export MERERUN_H3_BENCH_ROUNDS="${MERERUN_H3_BENCH_ROUNDS:-3}"
     run_release_test DiTShapeBenchTests/testMiniMaxH3BlockDTypes
     ;;
+  turnover)
+    export MERERUN_H3_BENCH_ROWS="${MERERUN_H3_BENCH_ROWS:-14958}"
+    export MERERUN_H3_BENCH_QUERY_TOKENS="${MERERUN_H3_BENCH_QUERY_TOKENS:-1024}"
+    export MERERUN_H3_BENCH_EVAL_BATCH="${MERERUN_H3_BENCH_EVAL_BATCH:-4}"
+    export MERERUN_H3_BENCH_ROUNDS="${MERERUN_H3_BENCH_ROUNDS:-2}"
+    run_release_test DiTShapeBenchTests/testMiniMaxH3BlockWeightTurnover
+    ;;
   attention-block)
     export MERERUN_H3_BENCH_ROWS="${MERERUN_H3_BENCH_ROWS:-37966}"
     export MERERUN_H3_BENCH_ROUNDS="${MERERUN_H3_BENCH_ROUNDS:-4}"
@@ -84,7 +91,7 @@ case "$mode" in
     run_release_test MiniMaxH3Tests/testInstalledAudioVAEDecodeMatchesReference
     ;;
   *)
-    print -u2 "usage: scripts/h3-kernel-lab.sh [quick|attention|attention-block|projections|modulation|block|dtype|gemm|gemm-block|vae|audio-parity]"
+    print -u2 "usage: scripts/h3-kernel-lab.sh [quick|attention|attention-block|projections|modulation|block|dtype|turnover|gemm|gemm-block|vae|audio-parity]"
     exit 64
     ;;
 esac

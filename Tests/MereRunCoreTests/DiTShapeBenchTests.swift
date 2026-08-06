@@ -1380,29 +1380,45 @@ final class DiTShapeBenchTests: XCTestCase {
         }
 
         MLX.eval(benchmark(schedule: .splitPostAttention))
+        MLX.eval(benchmark(schedule: .fusedFeedForward))
         MLX.eval(benchmark(schedule: .fusedPostAttention))
 
         let splitOutput = benchmark(schedule: .splitPostAttention).asType(.float32)
+        let feedForwardOutput = benchmark(schedule: .fusedFeedForward).asType(.float32)
         let fusedOutput = benchmark(schedule: .fusedPostAttention).asType(.float32)
-        MLX.eval(splitOutput, fusedOutput)
+        MLX.eval(splitOutput, feedForwardOutput, fusedOutput)
+        let feedForwardDelta = feedForwardOutput - splitOutput
         let fusedDelta = fusedOutput - splitOutput
         let referenceSquared = MLX.sum(splitOutput * splitOutput).item(Float.self)
+        let feedForwardRelativeL2Error = sqrt(
+            Double(MLX.sum(feedForwardDelta * feedForwardDelta).item(Float.self))
+                / max(Double(referenceSquared), .leastNonzeroMagnitude)
+        )
         let fusedRelativeL2Error = sqrt(
             Double(MLX.sum(fusedDelta * fusedDelta).item(Float.self))
                 / max(Double(referenceSquared), .leastNonzeroMagnitude)
         )
+        XCTAssertLessThan(feedForwardRelativeL2Error, 1e-3)
         XCTAssertLessThan(fusedRelativeL2Error, 1e-3)
 
         var splitBest = Double.greatestFiniteMagnitude
+        var feedForwardBest = Double.greatestFiniteMagnitude
         var fusedBest = Double.greatestFiniteMagnitude
         Memory.peakMemory = 0
         for round in 0..<rounds {
-            if round.isMultiple(of: 2) {
+            switch round % 3 {
+            case 0:
                 splitBest = min(splitBest, elapsed(.splitPostAttention))
+                feedForwardBest = min(feedForwardBest, elapsed(.fusedFeedForward))
                 fusedBest = min(fusedBest, elapsed(.fusedPostAttention))
-            } else {
+            case 1:
+                feedForwardBest = min(feedForwardBest, elapsed(.fusedFeedForward))
                 fusedBest = min(fusedBest, elapsed(.fusedPostAttention))
                 splitBest = min(splitBest, elapsed(.splitPostAttention))
+            default:
+                fusedBest = min(fusedBest, elapsed(.fusedPostAttention))
+                splitBest = min(splitBest, elapsed(.splitPostAttention))
+                feedForwardBest = min(feedForwardBest, elapsed(.fusedFeedForward))
             }
         }
 
@@ -1432,6 +1448,13 @@ final class DiTShapeBenchTests: XCTestCase {
                 gate: projectedAttention[3]
             ))
         }
+        let fusedFeedForwardSeconds = phaseElapsed {
+            MLX.eval(benchmark.postAttention(
+                schedule: .fusedFeedForward,
+                attended: attended,
+                gate: projectedAttention[3]
+            ))
+        }
         let fusedPostAttentionSeconds = phaseElapsed {
             MLX.eval(benchmark.postAttention(
                 schedule: .fusedPostAttention,
@@ -1452,26 +1475,33 @@ final class DiTShapeBenchTests: XCTestCase {
         let peakGiB = Double(Memory.peakMemory) / 1_073_741_824
         print(String(
             format: "[h3-lab] block rows=%d query=%d batch=%d split_ms=%.0f "
-                + "fused_ms=%.0f fused_speedup=%.3fx split_tflops=%.2f fused_tflops=%.2f "
-                + "fused_rel_l2=%.6g peak_gib=%.2f",
+                + "ff_fused_ms=%.0f fused_ms=%.0f ff_fused_speedup=%.3fx "
+                + "fused_speedup=%.3fx split_tflops=%.2f ff_fused_tflops=%.2f "
+                + "fused_tflops=%.2f ff_fused_rel_l2=%.6g fused_rel_l2=%.6g peak_gib=%.2f",
             rows,
             queryTokens,
             evaluationBatch,
             splitBest * 1_000,
+            feedForwardBest * 1_000,
             fusedBest * 1_000,
+            splitBest / feedForwardBest,
             splitBest / fusedBest,
             operations / splitBest / 1e12,
+            operations / feedForwardBest / 1e12,
             operations / fusedBest / 1e12,
+            feedForwardRelativeL2Error,
             fusedRelativeL2Error,
             peakGiB
         ))
         print(String(
             format: "[h3-lab] block-phases rows=%d attention_projection_ms=%.0f "
-                + "attention_ms=%.0f split_post_ms=%.0f fused_post_ms=%.0f",
+                + "attention_ms=%.0f split_post_ms=%.0f ff_fused_post_ms=%.0f "
+                + "fused_post_ms=%.0f",
             rows,
             attentionProjectionSeconds * 1_000,
             attentionSeconds * 1_000,
             splitPostAttentionSeconds * 1_000,
+            fusedFeedForwardSeconds * 1_000,
             fusedPostAttentionSeconds * 1_000
         ))
         Memory.clearCache()
@@ -1576,6 +1606,131 @@ final class DiTShapeBenchTests: XCTestCase {
             qualityGate,
             relativeL2Error <= qualityGate ? "yes" : "no",
             peakGiB
+        ))
+        Memory.clearCache()
+    }
+
+    /// Separates the cost of rebinding the shared compiled block runner from
+    /// the cost of turning over independent H3 weight sets. Production reuses
+    /// one compiled graph across 50 blocks, so a hot single-block loop can
+    /// otherwise overstate sustained checkpoint throughput.
+    func testMiniMaxH3BlockWeightTurnover() throws {
+        try benchGate()
+        let environment = ProcessInfo.processInfo.environment
+        let rows = max(1, Int(environment["MERERUN_H3_BENCH_ROWS"] ?? "") ?? 14_958)
+        let queryTokens = max(
+            1,
+            Int(environment["MERERUN_H3_BENCH_QUERY_TOKENS"] ?? "") ?? 1_024
+        )
+        let evaluationBatch = max(
+            1,
+            Int(environment["MERERUN_H3_BENCH_EVAL_BATCH"] ?? "") ?? 4
+        )
+        let rounds = max(2, Int(environment["MERERUN_H3_BENCH_ROUNDS"] ?? "") ?? 2)
+        let inputSeed: UInt64 = 20_260_805
+        let shared = MiniMaxH3BlockScheduleBenchmark(
+            rowCount: rows,
+            maximumQueryTokens: queryTokens,
+            maximumKernelsPerEvaluation: evaluationBatch,
+            weightSeed: 1,
+            inputSeed: inputSeed
+        )
+        let sourceA = MiniMaxH3BlockScheduleBenchmark(
+            rowCount: rows,
+            maximumQueryTokens: queryTokens,
+            maximumKernelsPerEvaluation: evaluationBatch,
+            weightSeed: 1,
+            inputSeed: inputSeed
+        )
+        let sourceB = MiniMaxH3BlockScheduleBenchmark(
+            rowCount: rows,
+            maximumQueryTokens: queryTokens,
+            maximumKernelsPerEvaluation: evaluationBatch,
+            weightSeed: 2,
+            inputSeed: inputSeed
+        )
+
+        func output(_ benchmark: MiniMaxH3BlockScheduleBenchmark) -> MLXArray {
+            benchmark(schedule: .splitPostAttention)
+        }
+        func relativeL2(_ candidate: MLXArray, reference: MLXArray) -> Double {
+            let candidate32 = candidate.asType(.float32)
+            let reference32 = reference.asType(.float32)
+            MLX.eval(candidate32, reference32)
+            let delta = candidate32 - reference32
+            let errorSquared = MLX.sum(delta * delta).item(Float.self)
+            let referenceSquared = MLX.sum(reference32 * reference32).item(Float.self)
+            return sqrt(
+                Double(errorSquared) / max(Double(referenceSquared), .leastNonzeroMagnitude)
+            )
+        }
+
+        let dedicatedA = output(sourceA)
+        MLX.eval(dedicatedA)
+        shared.useOriginalWeights(from: sourceA)
+        let reboundA = output(shared)
+        MLX.eval(reboundA)
+        let reboundARelativeL2 = relativeL2(reboundA, reference: dedicatedA)
+        XCTAssertLessThan(reboundARelativeL2, 1e-3)
+
+        let dedicatedB = output(sourceB)
+        MLX.eval(dedicatedB)
+        shared.useOriginalWeights(from: sourceB)
+        let reboundB = output(shared)
+        MLX.eval(reboundB)
+        let reboundBRelativeL2 = relativeL2(reboundB, reference: dedicatedB)
+        XCTAssertLessThan(reboundBRelativeL2, 1e-3)
+
+        func elapsed(_ body: () -> MLXArray) -> Double {
+            let started = CFAbsoluteTimeGetCurrent()
+            MLX.eval(body())
+            return CFAbsoluteTimeGetCurrent() - started
+        }
+
+        var hotTotal = 0.0
+        var reboundSameTotal = 0.0
+        var reboundAlternatingTotal = 0.0
+        var dedicatedAlternatingTotal = 0.0
+        for round in 0..<rounds {
+            let selectedSource = round.isMultiple(of: 2) ? sourceA : sourceB
+            let selectedDedicated = round.isMultiple(of: 2) ? sourceA : sourceB
+
+            shared.useOriginalWeights(from: selectedSource)
+            hotTotal += elapsed { output(shared) }
+
+            reboundSameTotal += elapsed {
+                shared.useOriginalWeights(from: selectedSource)
+                return output(shared)
+            }
+
+            let alternateSource = round.isMultiple(of: 2) ? sourceB : sourceA
+            reboundAlternatingTotal += elapsed {
+                shared.useOriginalWeights(from: alternateSource)
+                return output(shared)
+            }
+
+            dedicatedAlternatingTotal += elapsed { output(selectedDedicated) }
+        }
+
+        let hotSeconds = hotTotal / Double(rounds)
+        let reboundSameSeconds = reboundSameTotal / Double(rounds)
+        let reboundAlternatingSeconds = reboundAlternatingTotal / Double(rounds)
+        let dedicatedAlternatingSeconds = dedicatedAlternatingTotal / Double(rounds)
+        print(String(
+            format: "[h3-lab] block-turnover rows=%d query=%d batch=%d "
+                + "hot_ms=%.0f rebound_same_ms=%.0f rebound_alternating_ms=%.0f "
+                + "dedicated_alternating_ms=%.0f dedicated_speedup=%.3fx "
+                + "rebound_a_rel_l2=%.6g rebound_b_rel_l2=%.6g",
+            rows,
+            queryTokens,
+            evaluationBatch,
+            hotSeconds * 1_000,
+            reboundSameSeconds * 1_000,
+            reboundAlternatingSeconds * 1_000,
+            dedicatedAlternatingSeconds * 1_000,
+            reboundAlternatingSeconds / dedicatedAlternatingSeconds,
+            reboundARelativeL2,
+            reboundBRelativeL2
         ))
         Memory.clearCache()
     }

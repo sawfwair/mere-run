@@ -654,6 +654,7 @@ private struct MiniMaxH3CompiledBlockForwards {
 final class MiniMaxH3BlockScheduleBenchmark {
     enum Schedule {
         case splitPostAttention
+        case fusedFeedForward
         case fusedPostAttention
     }
 
@@ -661,7 +662,9 @@ final class MiniMaxH3BlockScheduleBenchmark {
     private let maximumQueryTokens: Int
     private let maximumKernelsPerEvaluation: Int
     private let block: MiniMaxH3TransformerBlock
+    private let originalParameters: [(String, MLXArray)]
     private let forwards: MiniMaxH3CompiledBlockForwards
+    private let fusedFeedForward: MiniMaxH3CompiledBlockForward
     private let hidden: MLXArray
     private let timeEmbedding: MLXArray
     private let adaLNIndices: MLXArray
@@ -672,7 +675,9 @@ final class MiniMaxH3BlockScheduleBenchmark {
         rowCount: Int,
         maximumQueryTokens: Int,
         maximumKernelsPerEvaluation: Int,
-        dtype: DType = .bfloat16
+        dtype: DType = .bfloat16,
+        weightSeed: UInt64? = nil,
+        inputSeed: UInt64? = nil
     ) {
         precondition(rowCount > 0)
         precondition(maximumQueryTokens > 0)
@@ -682,10 +687,12 @@ final class MiniMaxH3BlockScheduleBenchmark {
         self.maximumKernelsPerEvaluation = maximumKernelsPerEvaluation
 
         let configuration = MiniMaxH3TransformerConfiguration()
+        if let weightSeed { MLXRandom.seed(weightSeed) }
         let block = MiniMaxH3TransformerBlock(configuration: configuration, includeAdaLN: false)
         block.update(parameters: block.parameters().mapValues { $0.asType(dtype) })
         MLX.eval(block.parameters())
         self.block = block
+        self.originalParameters = block.parameters().flattened()
 
         let attentionProjection = MLX.compile(inputs: [block]) { inputs in
             block.attentionProjection(
@@ -718,6 +725,14 @@ final class MiniMaxH3BlockScheduleBenchmark {
                 gate: inputs[2]
             )]
         }
+        let feedForward = MLX.compile(inputs: [block]) { inputs in
+            [block.feedForwardResidual(
+                inputs[0],
+                timeEmbedding: inputs[1],
+                adaLNIndices: inputs[2],
+                cachedModulation: inputs[3]
+            )]
+        }
         let postAttention = MLX.compile(inputs: [block]) { inputs in
             let attended = block.attentionProjectionResidual(
                 inputs[0],
@@ -738,7 +753,9 @@ final class MiniMaxH3BlockScheduleBenchmark {
             feedForwardOutput: feedForwardOutput,
             postAttention: postAttention
         )
+        self.fusedFeedForward = feedForward
 
+        if let inputSeed { MLXRandom.seed(inputSeed) }
         self.hidden = MLXRandom.normal([1, rowCount, configuration.hiddenSize])
             .asType(dtype)
         self.timeEmbedding = MLXArray.zeros(
@@ -767,6 +784,10 @@ final class MiniMaxH3BlockScheduleBenchmark {
             rope.sine,
             cachedModulation
         )
+    }
+
+    func useOriginalWeights(from source: MiniMaxH3BlockScheduleBenchmark) {
+        block.update(parameters: ModuleParameters.unflattened(source.originalParameters))
     }
 
     func callAsFunction(
@@ -834,6 +855,21 @@ final class MiniMaxH3BlockScheduleBenchmark {
                 attentionOutput,
                 projectedFeedForward[0],
                 projectedFeedForward[1],
+            ])[0]
+            MLX.eval(output)
+            return output
+        case .fusedFeedForward:
+            let attentionOutput = forwards.attentionOutput([
+                hidden,
+                attended,
+                gate,
+            ])[0]
+            MLX.eval(attentionOutput)
+            let output = fusedFeedForward([
+                attentionOutput,
+                timeEmbedding,
+                adaLNIndices,
+                cachedModulation,
             ])[0]
             MLX.eval(output)
             return output

@@ -177,6 +177,11 @@ Several tempting graph changes did not carry. Explicitly materializing
 contiguous Q/K/V copies regressed the full block to 15.148 seconds. Narrowing
 the implicit module state passed to each compiled closure also regressed, and
 larger post-attention fusion did not repeatably beat the existing split graph.
+Fusing only the feed-forward half was exact but lost at both practical production
+shapes: 1.879 versus 1.830 seconds at 14,958 rows and 10.517 versus 10.021
+seconds at 37,966 rows. Its 30.581 versus 30.800 second result at the 73,470-row
+ten-second shape was only a 1.007x lead, too small and too shape-specific to
+justify a second production schedule.
 Those arms remain rejected rather than becoming hidden runtime switches.
 
 The lower-level MLX Metal tile is not an untapped switch either. A temporary
@@ -233,6 +238,15 @@ pass turns over 50 independent parameter sets and includes every dependent
 normalization, modulation, transpose, synchronization, and thermal effect.
 Peak Metal memory was only 48.77 GiB; additional disk or unified memory does
 not close that utilization gap.
+
+The `turnover` lab checks whether that gap comes from reusing one compiled
+runner for all 50 parameter sets. At 14,958 rows, two dedicated compiled runners
+beat alternating weight rebinding by 1.077x, but the result reversed at the
+37,966-row true-768 shape: dedicated runners measured 14.325 seconds versus
+13.909 seconds for the shared runner, or 0.971x. Rebound output matched the
+corresponding dedicated runner exactly (`rel_l2=0`). Production therefore keeps
+one runner rather than multiplying compiled state for a small-shape-only win.
+Reproduce the release-mode comparison with `scripts/h3-kernel-lab.sh turnover`.
 
 The first valid ten-second geometry is 243 frames, which produces 72 video
 latent frames. At 1344x768, the locked benchmark prompt therefore packs 73,470
@@ -320,6 +334,14 @@ stored tail residual. Both video and audio sigma deltas must be below 0.12, the
 schedule position must be inside 10%...90%, and at least two complete
 evaluations must precede reuse. Balanced refreshes after two cache steps;
 maximum refreshes after four.
+
+This is also the acceleration primitive published by
+[TE-Speed-MiniMaxH3-OSS](https://github.com/HELPMEEADICE/TE-Speed-MiniMaxH3-OSS):
+its defaults use the same 0.12 sigma-delta test and 10%...90% window, while
+recomputing 25% of the blocks and forcing a full refresh after two cached steps.
+`maximum` is already more aggressive, recomputing 18% and allowing four cached
+steps. TE-Speed therefore confirms the existing model-math lane rather than
+supplying a second exact kernel optimization.
 
 Automatic long-geometry schedules use 21 points (20 model evaluations),
 matching the current practical CUDA default instead of the previous 31 points.
