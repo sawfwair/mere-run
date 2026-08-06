@@ -790,12 +790,16 @@ final class MiniMaxH3BlockScheduleBenchmark {
         block.update(parameters: ModuleParameters.unflattened(source.originalParameters))
     }
 
+    var defaultInput: MLXArray { hidden }
+
     func callAsFunction(
         schedule: Schedule,
         maximumQueryTokens: Int? = nil,
-        maximumKernelsPerEvaluation: Int? = nil
+        maximumKernelsPerEvaluation: Int? = nil,
+        input: MLXArray? = nil
     ) -> MLXArray {
-        let projectedAttention = projectAttention()
+        let hidden = input ?? self.hidden
+        let projectedAttention = projectAttention(input: hidden)
         MLX.eval(projectedAttention)
         let attended = attend(
             projectedAttention,
@@ -805,13 +809,14 @@ final class MiniMaxH3BlockScheduleBenchmark {
         return postAttention(
             schedule: schedule,
             attended: attended,
-            gate: projectedAttention[3]
+            gate: projectedAttention[3],
+            input: hidden
         )
     }
 
-    func projectAttention() -> [MLXArray] {
+    func projectAttention(input: MLXArray? = nil) -> [MLXArray] {
         forwards.attentionProjection([
-            hidden,
+            input ?? hidden,
             timeEmbedding,
             adaLNIndices,
             rope.cosine,
@@ -835,29 +840,77 @@ final class MiniMaxH3BlockScheduleBenchmark {
         )
     }
 
-    func postAttention(schedule: Schedule, attended: MLXArray, gate: MLXArray) -> MLXArray {
+    func attentionOutput(
+        input: MLXArray,
+        attended: MLXArray,
+        gate: MLXArray
+    ) -> MLXArray {
+        let output = forwards.attentionOutput([input, attended, gate])[0]
+        MLX.eval(output)
+        return output
+    }
+
+    func splitFeedForward(input: MLXArray) -> MLXArray {
+        let projected = forwards.feedForwardProjection([
+            input,
+            timeEmbedding,
+            adaLNIndices,
+            cachedModulation,
+        ])
+        MLX.eval(projected)
+        let output = forwards.feedForwardOutput([input, projected[0], projected[1]])[0]
+        MLX.eval(output)
+        return output
+    }
+
+    func makeFusedBoundary(
+        to successor: MiniMaxH3BlockScheduleBenchmark
+    ) -> @Sendable ([MLXArray]) -> [MLXArray] {
+        MLX.compile(inputs: [block, successor.block]) { inputs in
+            let nextHidden = self.block.feedForwardResidual(
+                inputs[0],
+                timeEmbedding: inputs[1],
+                adaLNIndices: inputs[2],
+                cachedModulation: inputs[3]
+            )
+            return [nextHidden] + successor.block.attentionProjection(
+                nextHidden,
+                timeEmbedding: inputs[4],
+                adaLNIndices: inputs[5],
+                rope: MiniMaxH3RotaryEmbedding(cosine: inputs[6], sine: inputs[7]),
+                cachedModulation: inputs[8]
+            )
+        }
+    }
+
+    func fusedBoundaryInputs(
+        to successor: MiniMaxH3BlockScheduleBenchmark,
+        input: MLXArray
+    ) -> [MLXArray] {
+        [
+            input,
+            timeEmbedding,
+            adaLNIndices,
+            cachedModulation,
+            successor.timeEmbedding,
+            successor.adaLNIndices,
+            successor.rope.cosine,
+            successor.rope.sine,
+            successor.cachedModulation,
+        ]
+    }
+
+    func postAttention(
+        schedule: Schedule,
+        attended: MLXArray,
+        gate: MLXArray,
+        input: MLXArray? = nil
+    ) -> MLXArray {
+        let hidden = input ?? self.hidden
         switch schedule {
         case .splitPostAttention:
-            let attentionOutput = forwards.attentionOutput([
-                hidden,
-                attended,
-                gate,
-            ])[0]
-            MLX.eval(attentionOutput)
-            let projectedFeedForward = forwards.feedForwardProjection([
-                attentionOutput,
-                timeEmbedding,
-                adaLNIndices,
-                cachedModulation,
-            ])
-            MLX.eval(projectedFeedForward)
-            let output = forwards.feedForwardOutput([
-                attentionOutput,
-                projectedFeedForward[0],
-                projectedFeedForward[1],
-            ])[0]
-            MLX.eval(output)
-            return output
+            let attendedHidden = attentionOutput(input: hidden, attended: attended, gate: gate)
+            return splitFeedForward(input: attendedHidden)
         case .fusedFeedForward:
             let attentionOutput = forwards.attentionOutput([
                 hidden,

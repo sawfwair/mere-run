@@ -182,6 +182,16 @@ shapes: 1.879 versus 1.830 seconds at 14,958 rows and 10.517 versus 10.021
 seconds at 37,966 rows. Its 30.581 versus 30.800 second result at the 73,470-row
 ten-second shape was only a 1.007x lead, too small and too shape-specific to
 justify a second production schedule.
+
+Fusing that feed-forward tail across the next block's attention-projection
+boundary was also exact, but did not survive the true-shape gate. The paired
+two-block work improved from 2.388 to 2.370 seconds at 14,958 rows and from
+13.219 to 12.159 seconds at 37,966 rows. At the 73,470-row ten-second shape,
+however, it improved only from 29.557 to 29.295 seconds (1.009x), while the
+boundary itself regressed from 5.684 to 5.770 seconds. Production therefore
+keeps the simpler split boundary. Reproduce the order-balanced release-mode
+probe with `scripts/h3-kernel-lab.sh boundary`.
+
 Those arms remain rejected rather than becoming hidden runtime switches.
 
 The lower-level MLX Metal tile is not an untapped switch either. A temporary

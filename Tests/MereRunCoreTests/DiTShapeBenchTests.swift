@@ -1610,6 +1610,151 @@ final class DiTShapeBenchTests: XCTestCase {
         Memory.clearCache()
     }
 
+    /// Tests whether keeping one block's feed-forward tail and the next
+    /// block's attention projection in one compiled graph can eliminate two
+    /// large hidden-state materialization boundaries without changing H3 math.
+    func testMiniMaxH3TwoBlockBoundaryFusion() throws {
+        try benchGate()
+        let environment = ProcessInfo.processInfo.environment
+        let rows = max(1, Int(environment["MERERUN_H3_BENCH_ROWS"] ?? "") ?? 14_958)
+        let queryTokens = max(
+            1,
+            Int(environment["MERERUN_H3_BENCH_QUERY_TOKENS"] ?? "") ?? 1_024
+        )
+        let evaluationBatch = max(
+            1,
+            Int(environment["MERERUN_H3_BENCH_EVAL_BATCH"] ?? "") ?? 4
+        )
+        let rounds = max(2, Int(environment["MERERUN_H3_BENCH_ROUNDS"] ?? "") ?? 2)
+        let inputSeed: UInt64 = 20_260_805
+        let first = MiniMaxH3BlockScheduleBenchmark(
+            rowCount: rows,
+            maximumQueryTokens: queryTokens,
+            maximumKernelsPerEvaluation: evaluationBatch,
+            weightSeed: 1,
+            inputSeed: inputSeed
+        )
+        let second = MiniMaxH3BlockScheduleBenchmark(
+            rowCount: rows,
+            maximumQueryTokens: queryTokens,
+            maximumKernelsPerEvaluation: evaluationBatch,
+            weightSeed: 2,
+            inputSeed: inputSeed
+        )
+        let fusedBoundary = first.makeFusedBoundary(to: second)
+
+        let firstProjection = first.projectAttention()
+        MLX.eval(firstProjection)
+        let firstAttended = first.attend(firstProjection)
+        let boundaryInput = first.attentionOutput(
+            input: first.defaultInput,
+            attended: firstAttended,
+            gate: firstProjection[3]
+        )
+
+        func baselineBoundary() -> [MLXArray] {
+            let nextHidden = first.splitFeedForward(input: boundaryInput)
+            let projected = second.projectAttention(input: nextHidden)
+            MLX.eval(projected)
+            return [nextHidden] + projected
+        }
+
+        func candidateBoundary() -> [MLXArray] {
+            let outputs = fusedBoundary(first.fusedBoundaryInputs(
+                to: second,
+                input: boundaryInput
+            ))
+            MLX.eval(outputs)
+            return outputs
+        }
+
+        func finish(_ boundary: [MLXArray]) -> MLXArray {
+            let nextHidden = boundary[0]
+            let projected = Array(boundary[1...4])
+            let attended = second.attend(projected)
+            return second.postAttention(
+                schedule: .splitPostAttention,
+                attended: attended,
+                gate: projected[3],
+                input: nextHidden
+            )
+        }
+
+        func relativeL2(_ candidate: MLXArray, reference: MLXArray) -> Double {
+            let candidate32 = candidate.asType(.float32)
+            let reference32 = reference.asType(.float32)
+            MLX.eval(candidate32, reference32)
+            let delta = candidate32 - reference32
+            let errorSquared = MLX.sum(delta * delta).item(Float.self)
+            let referenceSquared = MLX.sum(reference32 * reference32).item(Float.self)
+            return sqrt(
+                Double(errorSquared) / max(Double(referenceSquared), .leastNonzeroMagnitude)
+            )
+        }
+
+        MLX.eval(finish(baselineBoundary()))
+        MLX.eval(finish(candidateBoundary()))
+        let reference = finish(baselineBoundary())
+        let candidate = finish(candidateBoundary())
+        MLX.eval(reference, candidate)
+        let candidateRelativeL2 = relativeL2(candidate, reference: reference)
+        XCTAssertLessThan(candidateRelativeL2, 1e-3)
+
+        func elapsed(_ body: () -> MLXArray) -> Double {
+            let started = CFAbsoluteTimeGetCurrent()
+            MLX.eval(body())
+            return CFAbsoluteTimeGetCurrent() - started
+        }
+        func boundaryElapsed(_ body: () -> [MLXArray]) -> Double {
+            let started = CFAbsoluteTimeGetCurrent()
+            MLX.eval(body())
+            return CFAbsoluteTimeGetCurrent() - started
+        }
+
+        var baselineTotal = 0.0
+        var candidateTotal = 0.0
+        var baselineBoundaryTotal = 0.0
+        var candidateBoundaryTotal = 0.0
+        Memory.peakMemory = 0
+        for round in 0..<rounds {
+            if round.isMultiple(of: 2) {
+                baselineTotal += elapsed { finish(baselineBoundary()) }
+                candidateTotal += elapsed { finish(candidateBoundary()) }
+                baselineBoundaryTotal += boundaryElapsed { baselineBoundary() }
+                candidateBoundaryTotal += boundaryElapsed { candidateBoundary() }
+            } else {
+                candidateBoundaryTotal += boundaryElapsed { candidateBoundary() }
+                baselineBoundaryTotal += boundaryElapsed { baselineBoundary() }
+                candidateTotal += elapsed { finish(candidateBoundary()) }
+                baselineTotal += elapsed { finish(baselineBoundary()) }
+            }
+        }
+
+        let baselineSeconds = baselineTotal / Double(rounds)
+        let candidateSeconds = candidateTotal / Double(rounds)
+        let baselineBoundarySeconds = baselineBoundaryTotal / Double(rounds)
+        let candidateBoundarySeconds = candidateBoundaryTotal / Double(rounds)
+        let peakGiB = Double(Memory.peakMemory) / 1_073_741_824
+        print(String(
+            format: "[h3-lab] two-block-boundary rows=%d query=%d batch=%d "
+                + "baseline_ms=%.0f fused_ms=%.0f speedup=%.3fx "
+                + "baseline_boundary_ms=%.0f fused_boundary_ms=%.0f "
+                + "boundary_speedup=%.3fx fused_rel_l2=%.6g peak_gib=%.2f",
+            rows,
+            queryTokens,
+            evaluationBatch,
+            baselineSeconds * 1_000,
+            candidateSeconds * 1_000,
+            baselineSeconds / candidateSeconds,
+            baselineBoundarySeconds * 1_000,
+            candidateBoundarySeconds * 1_000,
+            baselineBoundarySeconds / candidateBoundarySeconds,
+            candidateRelativeL2,
+            peakGiB
+        ))
+        Memory.clearCache()
+    }
+
     /// Separates the cost of rebinding the shared compiled block runner from
     /// the cost of turning over independent H3 weight sets. Production reuses
     /// one compiled graph across 50 blocks, so a hot single-block loop can
