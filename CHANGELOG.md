@@ -6,6 +6,16 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.35.1 - 2026-08-06
+
+This patch release adds a checksum-pinned four-step MiniMax-H3 Turbo path,
+promotes an exact Laguna XS 2.1 prefill optimization, and completes the Linux
+CUDA runtime-JIT dependency closure. The H3 adapter is first-class in the CLI
+and uses the same managed-model, license, preflight, receipt, and native MLX
+runtime contracts as the base BF16 model.
+
+### Video
+
 - added the immutable, checksum-pinned `minimax-h3-turbo-4step` managed
   adapter and first-class `video generate --h3-adapter` controls for the BF16
   FL2VA model. The native MLX runtime applies all 259 mixed-rank LoRA pairs in
@@ -17,13 +27,19 @@ The format is based on Keep a Changelog.
   with 56:13.421 of denoising, 51.37 GiB peak reported Metal memory, zero
   swaps, and no spatial lattice in the accepted output.
 
-## 0.35.0 - 2026-08-06
+### Text performance
 
-This release makes MiniMax-H3 materially faster and more faithful on Apple
-Silicon, adds native LFM2.5 text inference and TerraMind flood mapping, restores
-ACE-Step planner parity, and hardens the documentation supply chain. Creative
-capabilities retain first-class CLI and macOS Studio controls; the specialized
-TerraMind tensor workflow is intentionally CLI-only in this release.
+- certified the loaded Laguna XS 2.1 routed gate/up NVFP4 group-16 scale
+  planes at initialization and specialized the existing sorted prefill Metal
+  kernel so adjacent SIMD lanes can reuse a certified-identical scale byte.
+  The path preserves the quantizer's allowed first-pair exception, exact
+  dequantization and MMA ordering, retains only a Boolean certificate, and
+  fails closed to the stock MLX loader with
+  `MERERUN_LAGUNA_PREFILL_EXPERT_PAIRWISE_SCALES=0` as an operator kill switch.
+  All 39 sparse layers in the installed Poolside Laguna XS 2.1 checkpoint
+  passed the certificate; forced release inference loaded all five shards and
+  completed deterministically. The paired M5 Max promotion checked all 1,344
+  tokens with `max_abs_diff=0` at score `2.5901857153934094`.
 
 ### Linux packaging
 
@@ -31,6 +47,14 @@ TerraMind tensor workflow is intentionally CLI-only in this release.
   Debian dependencies. MLX compiles specialized kernels with NVRTC during
   inference, so clean runtime installs now include headers such as
   `cuda_bf16.h` instead of failing when the first GPU kernel is compiled.
+
+## 0.35.0 - 2026-08-06
+
+This release makes MiniMax-H3 materially faster and more faithful on Apple
+Silicon, adds native LFM2.5 text inference and TerraMind flood mapping, restores
+ACE-Step planner parity, and hardens the documentation supply chain. Creative
+capabilities retain first-class CLI and macOS Studio controls; the specialized
+TerraMind tensor workflow is intentionally CLI-only in this release.
 
 ### Geospatial inference
 
