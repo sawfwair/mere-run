@@ -54,6 +54,10 @@ enum LagunaMoEAccelerationPolicy {
         "MERERUN_LAGUNA_FUSED_ROUTED_SHARED_DOWN_RESIDUAL",
         default: m5MaxDefaultsEnabled
     )
+    static let prefillExpertPairwiseScaleReuseEnabled = booleanEnvironment(
+        "MERERUN_LAGUNA_PREFILL_EXPERT_PAIRWISE_SCALES",
+        default: m5MaxDefaultsEnabled
+    )
     static let decodeNVFP4RowsPerSIMDGroup = decodeRowsPerSIMDGroup(
         ProcessInfo.processInfo.environment[
             "MERERUN_LAGUNA_DECODE_NVFP4_ROWS_PER_SIMDGROUP"
@@ -110,6 +114,38 @@ enum LagunaMoEAccelerationPolicy {
         }
         return xsCandidate
     }
+}
+
+/// Proves that every adjacent pair in an NVFP4 group-16 scale plane is
+/// byte-identical except for explicitly preserved pairs. The Laguna XS expert
+/// tensors shipped by Poolside were produced by a simdgroup-wide quantizer:
+/// the two group-16 halves of each 32-weight span therefore share one scale,
+/// while the first pair may carry the quantizer's duplicated-write exception.
+///
+/// This is a fail-closed, input-independent certificate over the weights that
+/// were actually loaded. A false result keeps the stock prefill loader. A true
+/// result permits the M5 kernel to load the even scale byte once and broadcast
+/// it to the adjacent SIMD lane without changing a single dequantized value.
+func lagunaNVFP4AdjacentScalePairsCertified(
+    _ scales: MLXArray,
+    allowedFlatPairs: Set<Int> = [0]
+) -> Bool {
+    let pairCount = scales.size / 2
+    guard scales.dtype == .uint8,
+          scales.ndim >= 1,
+          scales.size.isMultiple(of: 2),
+          scales.dim(-1).isMultiple(of: 2),
+          allowedFlatPairs.allSatisfy({ $0 >= 0 && $0 < pairCount }) else {
+        return false
+    }
+
+    let pairs = contiguous(scales).reshaped([pairCount, 2])
+    let mismatch = (pairs[0..., 0] .!= pairs[0..., 1]).asType(.int32)
+    var violations = mismatch.sum()
+    for index in allowedFlatPairs {
+        violations = violations - mismatch[index]
+    }
+    return violations.item(Int32.self) == 0
 }
 
 enum LagunaGraphAccelerationPolicy {
@@ -972,6 +1008,7 @@ final class LagunaSwitchGLU: Module {
     @ModuleInfo(key: "up_proj") var upProj: LagunaSwitchLinear
     @ModuleInfo(key: "down_proj") var downProj: LagunaSwitchLinear
     private let decodeNVFP4RowsPerSIMDGroup: Int
+    private(set) var prefillPairwiseScaleReuseCertified = false
 
     init(config: LagunaConfig) {
         self.decodeNVFP4RowsPerSIMDGroup =
@@ -1081,7 +1118,8 @@ final class LagunaSwitchGLU: Module {
                upScales: upScales,
                sortedExpertIndices: sortedIndices,
                groupSize: gateProj.groupSize,
-               bits: gateProj.bits
+               bits: gateProj.bits,
+               pairwiseScaleReuse: prefillPairwiseScaleReuseCertified
            ) {
             activated = fused
         } else {
@@ -1225,6 +1263,32 @@ final class LagunaSwitchGLU: Module {
             bits: downProj.bits
         )
     }
+
+    /// Certifies the loaded routed gate/up scale planes once, before warmup.
+    /// The result is retained as a Boolean only; unlike the challenge runtime's
+    /// packed decode-bank reuse, production needs no additional scale storage.
+    func preparePrefillPairwiseScaleReuse() {
+        prefillPairwiseScaleReuseCertified = false
+        guard LagunaMoEAccelerationPolicy.prefillExpertPairwiseScaleReuseEnabled,
+              gateProj.mode == .nvfp4,
+              upProj.mode == .nvfp4,
+              gateProj.groupSize == 16,
+              upProj.groupSize == 16,
+              gateProj.bits == 4,
+              upProj.bits == 4,
+              gateProj.biases == nil,
+              upProj.biases == nil,
+              let gateScales = gateProj.scales,
+              let upScales = upProj.scales,
+              gateScales.dtype == .uint8,
+              upScales.dtype == .uint8,
+              gateScales.shape == upScales.shape else {
+            return
+        }
+        prefillPairwiseScaleReuseCertified =
+            lagunaNVFP4AdjacentScalePairsCertified(gateScales)
+            && lagunaNVFP4AdjacentScalePairsCertified(upScales)
+    }
 }
 
 final class LagunaRouter: Module {
@@ -1337,6 +1401,10 @@ final class LagunaSparseMoE: LagunaFeedForward {
 
     func preparePrefillAcceleration() -> MLXArray? {
         switchMLP.prepareSortedDownWarmUp()
+    }
+
+    func preparePrefillPairwiseScaleReuse() {
+        switchMLP.preparePrefillPairwiseScaleReuse()
     }
 }
 
@@ -2066,6 +2134,9 @@ final class LagunaLanguageModel: Module {
     func prepareRuntimeAcceleration() -> [MLXArray] {
         var arrays = preparePrefillAcceleration()
         for layer in layers {
+            if let sparse = layer.mlp as? LagunaSparseMoE {
+                sparse.preparePrefillPairwiseScaleReuse()
+            }
             arrays.append(contentsOf: layer.selfAttention.prepareNativeAffineQKV())
             arrays.append(
                 contentsOf: layer.selfAttention.prepareTerminalPrefillProjectionWeights()
