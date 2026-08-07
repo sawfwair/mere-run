@@ -1801,6 +1801,10 @@ Key options:
 - `--seed`
 - `--steps`: MiniMax-H3 schedule-point override or Wan2.2 inference steps
 - `--h3-weight-mode`: `auto`, `quantized`, or `resident-bf16`
+- `--h3-acceleration`: `quality`, `balanced`, or `maximum`
+- `--h3-adapter`: installed MiniMax-H3 adapter catalog id or local safetensors
+  path
+- `--h3-adapter-strength`: MiniMax-H3 runtime adapter multiplier
 - `--guidance-scale`, `--shift`, `--negative-prompt` for Wan2.2
 - `--audio`: source audio path; automatically selects native LTX 2.3 A2Vid
 - `--audio-start-time`: source segment offset in seconds (default `0`)
@@ -1881,6 +1885,14 @@ four cache hits. Both require two complete evaluations before the first reuse
 and keep the schedule boundaries native. They remain approximate: the same
 prompt and seed may follow a different motion or composition trajectory. Use
 `quality` when exact-seed fidelity matters.
+
+`--h3-adapter minimax-h3-turbo-4step` selects the separately pulled Turbo
+LoRA for `video-minimax-h3-fl2va-bf16-mlx`. When `--steps` is omitted it uses
+five schedule points (four transformer evaluations). It runs the LoRA in
+activation space and requires `--h3-acceleration quality`; Ref2VA and the
+compact quantized H3 package are rejected. The preflight report resolves the
+managed adapter path, verifies its presence, and preserves the adapter id,
+strength, and resolved schedule in the declarative action.
 
 Preflight mode:
 
@@ -2178,6 +2190,7 @@ mere.run adapter list
 mere.run adapter list --json
 mere.run adapter pull mere-platform-assistant
 mere.run adapter pull scail2-lightx2v-4step
+mere.run adapter pull minimax-h3-turbo-4step
 ```
 
 The pull verifies the cataloged byte count and SHA-256 before atomically
@@ -2186,6 +2199,8 @@ verification diagnostics go to stderr. Use the adapter id directly with
 `text chat --lora`, `api serve --lora`, or the matching SCAIL
 `video animate --distilled-adapter` option. `video animate --profile fast`
 selects `scail2-lightx2v-4step` and its fixed four-step schedule.
+Use `minimax-h3-turbo-4step` with `video generate --h3-adapter`; its BF16
+FL2VA base remains subject to the MiniMax-H3 Community License acceptance.
 
 For a cross-command decision guide, see [Benchmarking](./benchmarking.md). The
 sections below are the command reference for each benchmark lane.

@@ -364,6 +364,42 @@ final class VideoCommandTests: XCTestCase {
         ])
     }
 
+    func testVideoGenerateParsesMiniMaxH3TurboAdapter() throws {
+        let command = try VideoGenerate.parse([
+            "a superhero at a bus stop",
+            "--model", ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue,
+            "--h3-adapter", ManagedAdapterCatalog.miniMaxH3TurboFourStepID,
+            "--h3-adapter-strength", "0.9",
+        ])
+        XCTAssertEqual(command.h3Adapter, ManagedAdapterCatalog.miniMaxH3TurboFourStepID)
+        XCTAssertEqual(command.h3AdapterStrength, 0.9)
+    }
+
+    func testMiniMaxH3TurboPreflightPreservesAdapterAndFourEvaluations() throws {
+        let missingAdapter = FileManager.default.temporaryDirectory
+            .appendingPathComponent("missing-h3-turbo-\(UUID().uuidString).safetensors")
+        let command = try VideoGenerate.parse([
+            "a superhero at a bus stop",
+            "--model", ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue,
+            "--h3-adapter", missingAdapter.path,
+            "--h3-adapter-strength", "0.9",
+        ])
+        let envelope = command.makePreflightEnvelope(
+            outputURL: makeTempOutput(name: "h3-turbo.mp4"),
+            fileManager: .default,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.request.h3Adapter, missingAdapter.path)
+        XCTAssertEqual(envelope.request.h3AdapterStrength, 0.9)
+        XCTAssertEqual(envelope.result.plan.resolvedSteps, 5)
+        XCTAssertEqual(envelope.result.inputs.adapter?.path, missingAdapter.path)
+        XCTAssertTrue(envelope.diagnostics.contains { $0.id == "h3_adapter_missing" })
+        let action = envelope.actions.first { $0.id == "start-video-generation" }
+        XCTAssertTrue(action?.command?.argv.contains("--h3-adapter") == true)
+        XCTAssertTrue(action?.command?.argv.contains(missingAdapter.path) == true)
+    }
+
     func testVideoGenerateSeparatesCheckpointQualityFromOutputMode() throws {
         let finalVideo = try VideoGenerate.parse([
             "a cinematic final shot",

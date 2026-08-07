@@ -58,6 +58,44 @@ it is not a ten-second runtime claim. The first valid frame count beyond ten
 seconds is 243 frames (10.125 seconds), which requires a separate measured
 receipt.
 
+## Turbo four-evaluation receipt
+
+The optional `minimax-h3-turbo-4step` adapter was validated separately with a
+real release-mode generation rather than extrapolating its tiny-shape smoke
+test:
+
+- checkpoint: managed `video-minimax-h3-fl2va-bf16-mlx`
+- adapter: checksum-pinned `minimax-h3-turbo-4step`, strength `0.9`
+- geometry: 1280x768, 124 frames, 24 fps
+- schedule: five points / four complete model evaluations
+- seed: `20260804`
+- packed rows: 36,047
+- execution: dense BF16, blockwise compiled, exact `quality` acceleration
+
+| Phase | Time |
+| --- | ---: |
+| Text encoding | 4.066 s |
+| Transformer and adapter preparation | 4.231 s |
+| Denoising | 3,373.421 s (56:13.421) |
+| Video VAE decode | 272.737 s (4:32.737) |
+| Audio decode | 0.987 s |
+| Native generation total | **3,656.608 s (60:56.608)** |
+| Process wall time | **3,659.420 s (60:59.420)** |
+
+The four evaluations measured 842.253, 829.334, 825.381, and 876.346 seconds.
+Peak reported Metal memory was 51.37 GiB, the process reported zero swaps, and
+the final H.264/AAC MP4 contained 124 unique frames with synchronized 32 kHz
+stereo audio. Its SHA-256 is
+`bf651365864295b8de793af7b4311e8b2e84269fd280bda88f4a38068fd19665`.
+
+Visual acceptance confirmed a stable umbrella and caped figure, wet-street
+reflections, a levitating bus, and a luminous dragon developing through the
+shot without the rejected spatial lattice. The final dragon remains slightly
+soft and translucent, so this is a practical four-evaluation receipt rather
+than a claim of parity with the full 19-evaluation trajectory. The prompt
+requested driving rain, so its broadband soundtrack is not a clean-noise or
+hiss acceptance reference.
+
 ## True-768 one-evaluation boundary
 
 A separate release-mode probe locks the physical 768-line target without

@@ -845,6 +845,18 @@ performed only where the model terms permit it. The upstream FL2VA and Ref2VA
 trees are about 144 GB each; the complete upstream repository is roughly
 498 GB, so compile success is not artifact or generation proof.
 
+The optional `minimax-h3-turbo-4step` runtime adapter is the EMA checkpoint
+`minimax_h3_turbo_4step_ema_ckpt850.safetensors` from
+`larryvrh/MiniMax-H3-Turbo-Lora`, pinned at immutable commit
+`b604dd5fe25c4c747699f698a1e63f6c46d4a066`. The catalog verifies its exact
+779,849,816-byte length and SHA-256
+`5a6eeba171cf183020a4ad48774bb2968f29f8168afd6ec17a04987f3528b4ea`.
+The adapter card declares Apache-2.0, but using it does not replace or relax
+the MiniMax-H3 Community License governing the required BF16 base model.
+The runtime remaps the adapter's fused QKV output rows into the same global
+Q/K/V slab order as the converted base and applies all 259 LoRA pairs as live
+activation deltas, including the schedule-only AdaLN projections.
+
 ### `video-wan22-ti2v-5b-mlx`
 
 The native Wan2.2 TI2V-5B model root is:

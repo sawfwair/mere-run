@@ -322,6 +322,8 @@ public struct MiniMaxH3GenerationOptions: Sendable, Hashable {
     public let seed: UInt64
     public let transformerWeightMode: MiniMaxH3TransformerWeightMode
     public let accelerationMode: MiniMaxH3AccelerationMode
+    public let adapterURL: URL?
+    public let adapterStrength: Float
     public let firstFrameURL: URL?
     public let lastFrameURL: URL?
     public let references: [MiniMaxH3ReferenceInput]
@@ -335,6 +337,8 @@ public struct MiniMaxH3GenerationOptions: Sendable, Hashable {
         seed: UInt64 = 42,
         transformerWeightMode: MiniMaxH3TransformerWeightMode = .automatic,
         accelerationMode: MiniMaxH3AccelerationMode = .quality,
+        adapterURL: URL? = nil,
+        adapterStrength: Float = 1,
         firstFrameURL: URL? = nil,
         lastFrameURL: URL? = nil,
         references: [MiniMaxH3ReferenceInput] = []
@@ -362,16 +366,44 @@ public struct MiniMaxH3GenerationOptions: Sendable, Hashable {
            !references.contains(where: { $0.kind != .audio }) {
             throw MiniMaxH3GeneratorError.invalidOptions("an audio reference must be paired with an image or video")
         }
-        let resolvedSteps = try steps ?? MiniMaxH3StepPolicy.recommendedPointCount(
-            width: width,
-            height: height,
-            numFrames: numFrames,
-            keyframeCount: [firstFrameURL, lastFrameURL].compactMap { $0 }.count,
-            referenceKinds: references.map(\.kind),
-            accelerationMode: accelerationMode
-        )
+        if adapterURL != nil {
+            guard adapterStrength > 0 else {
+                throw MiniMaxH3GeneratorError.invalidOptions("adapter strength must be greater than zero")
+            }
+            guard accelerationMode == .quality else {
+                throw MiniMaxH3GeneratorError.invalidOptions(
+                    "MiniMax-H3 Turbo already distills the denoise schedule and cannot be combined with block-reuse acceleration"
+                )
+            }
+            guard references.isEmpty else {
+                throw MiniMaxH3GeneratorError.invalidOptions(
+                    "MiniMax-H3 Turbo supports FL2VA text/keyframe generation, not Ref2VA references"
+                )
+            }
+        }
+        let resolvedSteps: Int
+        if let steps {
+            resolvedSteps = steps
+        } else if adapterURL != nil {
+            resolvedSteps = MiniMaxH3TurboAdapter.recommendedSchedulePointCount
+        } else {
+            resolvedSteps = try MiniMaxH3StepPolicy.recommendedPointCount(
+                width: width,
+                height: height,
+                numFrames: numFrames,
+                keyframeCount: [firstFrameURL, lastFrameURL].compactMap { $0 }.count,
+                referenceKinds: references.map(\.kind),
+                accelerationMode: accelerationMode
+            )
+        }
         guard resolvedSteps >= 2 else {
             throw MiniMaxH3GeneratorError.invalidOptions("steps must be at least 2")
+        }
+        if adapterURL != nil,
+           resolvedSteps != MiniMaxH3TurboAdapter.recommendedSchedulePointCount {
+            throw MiniMaxH3GeneratorError.invalidOptions(
+                "MiniMax-H3 Turbo requires 5 schedule points (4 denoise evaluations)"
+            )
         }
         self.prompt = trimmed
         self.width = width
@@ -381,6 +413,8 @@ public struct MiniMaxH3GenerationOptions: Sendable, Hashable {
         self.seed = seed
         self.transformerWeightMode = transformerWeightMode
         self.accelerationMode = accelerationMode
+        self.adapterURL = adapterURL
+        self.adapterStrength = adapterStrength
         self.firstFrameURL = firstFrameURL
         self.lastFrameURL = lastFrameURL
         self.references = references
@@ -440,6 +474,8 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         audioSchedule: MiniMaxH3Schedule,
         sequenceLength: Int,
         weightMode: MiniMaxH3TransformerWeightMode,
+        adapterURL: URL?,
+        adapterStrength: Float,
         progressHandler: (@Sendable (MiniMaxH3GenerationProgress) -> Void)?
     ) throws -> (transformer: MiniMaxH3Transformer, adaLNCache: MiniMaxH3AdaLNCache?) {
         let adaLNCache: MiniMaxH3AdaLNCache?
@@ -471,6 +507,18 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                 ))
             }
         )
+        if let adapterURL {
+            guard resources.usesShardedBF16Transformer else {
+                throw MiniMaxH3GeneratorError.invalidOptions(
+                    "MiniMax-H3 Turbo currently requires the BF16 FL2VA model"
+                )
+            }
+            try MiniMaxH3TurboAdapter.install(
+                url: adapterURL,
+                into: transformer,
+                strength: adapterStrength
+            )
+        }
         let resolvedAdaLNCache: MiniMaxH3AdaLNCache?
         if resources.usesShardedBF16Transformer {
             resolvedAdaLNCache = transformer.precomputeAdaLN(
@@ -950,6 +998,8 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                 audioSchedule: audioSchedule,
                 sequenceLength: layout.sequenceLength,
                 weightMode: options.transformerWeightMode,
+                adapterURL: options.adapterURL,
+                adapterStrength: options.adapterStrength,
                 progressHandler: progressHandler
             )
             phaseProfileLogger?(String(
@@ -1146,6 +1196,8 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                 audioSchedule: audioSchedule,
                 sequenceLength: layout.sequenceLength,
                 weightMode: options.transformerWeightMode,
+                adapterURL: options.adapterURL,
+                adapterStrength: options.adapterStrength,
                 progressHandler: progressHandler
             )
             (videoRows, audioRows) = denoise(

@@ -112,6 +112,18 @@ public enum MiniMaxH3ModelLoader {
         guard key.hasSuffix(".attn.qkv_proj.weight") else {
             return [(key, value)]
         }
+        return [(key, deinterleavedQKVOutputRows(
+            value,
+            headCount: headCount,
+            headDimension: headDimension
+        ))]
+    }
+
+    static func deinterleavedQKVOutputRows(
+        _ value: MLXArray,
+        headCount: Int,
+        headDimension: Int
+    ) -> MLXArray {
         let expectedRows = headCount * 3 * headDimension
         precondition(value.ndim == 2 && value.dim(0) == expectedRows)
         let trailingShape = Array(value.shape.dropFirst())
@@ -119,7 +131,7 @@ public enum MiniMaxH3ModelLoader {
         let pieces = MLX.split(grouped, parts: 3, axis: 1).map {
             $0.squeezed(axis: 1).reshaped([headCount * headDimension] + trailingShape)
         }
-        return [(key, MLX.concatenated(pieces, axis: 0))]
+        return MLX.concatenated(pieces, axis: 0)
     }
 
     public static func loadConditioner(

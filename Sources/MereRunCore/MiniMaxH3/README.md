@@ -30,6 +30,14 @@ the CLI can force either mode. H3 inference also raises MLX wired residency
 through the shared ticket coordinator so weights and activation workspaces do
 not silently fall out of the GPU residency set.
 
+The optional checksum-pinned `minimax-h3-turbo-4step` LoRA runs only with the
+BF16 FL2VA transformer. Its 259 mixed-rank pairs are applied as
+activation-space deltas rather than merged into the base, and its fused QKV
+rows are deinterleaved to match the runtime's global slabs. AdaLN adapter
+deltas are included while the exact four-evaluation schedule cache is built,
+before the large schedule-only weights are discarded. Turbo cannot be
+combined with Ref2VA or tail-residual reuse.
+
 `--h3-acceleration quality` executes every transformer block and preserves the
 native same-seed trajectory. The explicit `balanced` and `maximum` modes trade
 exact trajectory identity for speed: a full step captures the contribution of

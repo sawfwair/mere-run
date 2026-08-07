@@ -305,6 +305,15 @@ struct VideoGenerate: AsyncParsableCommand {
     )
     var h3Acceleration: MiniMaxH3CLIAccelerationMode = .quality
 
+    @Option(
+        name: [.customLong("h3-adapter")],
+        help: "Installed MiniMax-H3 adapter catalog id or local safetensors path. Turbo defaults to four denoise evaluations."
+    )
+    var h3Adapter: String?
+
+    @Option(name: [.customLong("h3-adapter-strength")], help: "MiniMax-H3 runtime adapter multiplier.")
+    var h3AdapterStrength: Float = 1
+
     @Option(name: [.customLong("guidance-scale")], help: "Wan classifier-free guidance scale.")
     var guidanceScale: Float = 5
 
@@ -475,6 +484,9 @@ struct VideoGenerate: AsyncParsableCommand {
         guard v2aGuidanceScale >= 0 else {
             throw ValidationError("--v2a-guidance-scale must be >= 0")
         }
+        guard h3AdapterStrength > 0 else {
+            throw ValidationError("--h3-adapter-strength must be > 0")
+        }
         guard a2vSteps > 0 else {
             throw ValidationError("--a2v-steps must be >= 1")
         }
@@ -545,6 +557,13 @@ struct VideoGenerate: AsyncParsableCommand {
             }
             let h3Resources = MiniMaxH3Resources(rootURL: resolvedRootURL)
             let h3Configuration = try h3Resources.loadConfiguration()
+            if h3Adapter != nil, !h3Resources.usesShardedBF16Transformer {
+                throw ValidationError("--h3-adapter currently requires the MiniMax-H3 BF16 FL2VA model.")
+            }
+            let resolvedH3Adapter = try ManagedAdapterArgumentResolver.resolve(
+                h3Adapter,
+                baseModelID: ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue
+            ).map { URL(fileURLWithPath: $0).standardizedFileURL }
             let parsedReferences = try parseMiniMaxH3References()
             if h3Configuration.task == "fl2va", !parsedReferences.isEmpty {
                 throw ValidationError("--reference requires a MiniMax-H3 Ref2VA model root.")
@@ -564,6 +583,9 @@ struct VideoGenerate: AsyncParsableCommand {
             if !quiet {
                 CLIStderr.write("Engine: native MiniMax-H3 \(h3Configuration.task.uppercased())\n")
                 CLIStderr.write("Model root: \(resolvedRootURL.path)\n")
+                if let resolvedH3Adapter {
+                    CLIStderr.write("Adapter: \(resolvedH3Adapter.path) (strength \(h3AdapterStrength))\n")
+                }
                 if h3Width != width || h3Height != height {
                     CLIStderr.write("Adjusted MiniMax-H3 size to \(h3Width)x\(h3Height) (must be divisible by 32)\n")
                 }
@@ -581,6 +603,8 @@ struct VideoGenerate: AsyncParsableCommand {
                 seed: UInt64(bitPattern: Int64(seed ?? 42)),
                 transformerWeightMode: h3WeightMode.generationMode,
                 accelerationMode: h3Acceleration.generationMode,
+                adapterURL: resolvedH3Adapter,
+                adapterStrength: h3AdapterStrength,
                 firstFrameURL: sourceImageURL,
                 lastFrameURL: endImageURL,
                 references: parsedReferences
@@ -616,6 +640,9 @@ struct VideoGenerate: AsyncParsableCommand {
             if !quiet { CLIStderr.write("Saved: \(outputURL.path)\n") }
             print(outputURL.path)
             return
+        }
+        if h3Adapter != nil {
+            throw ValidationError("--h3-adapter can only be used with a MiniMax-H3 model.")
         }
         if !references.isEmpty {
             throw ValidationError("--reference is only supported by MiniMax-H3 Ref2VA model roots.")
@@ -1291,6 +1318,8 @@ struct VideoGenerate: AsyncParsableCommand {
             steps: steps,
             h3WeightMode: h3WeightMode.rawValue,
             h3AccelerationMode: h3Acceleration.rawValue,
+            h3Adapter: h3Adapter,
+            h3AdapterStrength: h3AdapterStrength,
             duration: duration,
             fps: fps,
             seed: seed,
@@ -1367,6 +1396,9 @@ struct VideoGenerate: AsyncParsableCommand {
                 "--h3-weight-mode", h3WeightMode.rawValue,
                 "--h3-acceleration", h3Acceleration.rawValue,
             ]
+            if let h3Adapter {
+                args += ["--h3-adapter", h3Adapter, "--h3-adapter-strength", String(h3AdapterStrength)]
+            }
         }
         if let duration {
             args += ["--duration", String(duration)]
