@@ -1009,6 +1009,7 @@ final class LagunaSwitchGLU: Module {
     @ModuleInfo(key: "down_proj") var downProj: LagunaSwitchLinear
     private let decodeNVFP4RowsPerSIMDGroup: Int
     private(set) var prefillPairwiseScaleReuseCertified = false
+    private(set) var prefillDownPairwiseScaleReuseCertified = false
 
     init(config: LagunaConfig) {
         self.decodeNVFP4RowsPerSIMDGroup =
@@ -1148,7 +1149,8 @@ final class LagunaSwitchGLU: Module {
                scales: downScales,
                sortedExpertIndices: sortedIndices,
                groupSize: downProj.groupSize,
-               bits: downProj.bits
+               bits: downProj.bits,
+               pairwiseScaleReuse: prefillDownPairwiseScaleReuseCertified
            ) {
             sortedOutput = fusedDown
         } else {
@@ -1260,34 +1262,46 @@ final class LagunaSwitchGLU: Module {
             scales: scales,
             sortedExpertIndices: indices,
             groupSize: downProj.groupSize,
-            bits: downProj.bits
+            bits: downProj.bits,
+            pairwiseScaleReuse: prefillDownPairwiseScaleReuseCertified
         )
     }
 
-    /// Certifies the loaded routed gate/up scale planes once, before warmup.
-    /// The result is retained as a Boolean only; unlike the challenge runtime's
-    /// packed decode-bank reuse, production needs no additional scale storage.
+    /// Certifies the loaded routed scale planes once, before warmup. The
+    /// results are retained as Booleans only; unlike the challenge runtime's
+    /// packed banks, production needs no additional scale storage.
     func preparePrefillPairwiseScaleReuse() {
         prefillPairwiseScaleReuseCertified = false
-        guard LagunaMoEAccelerationPolicy.prefillExpertPairwiseScaleReuseEnabled,
-              gateProj.mode == .nvfp4,
-              upProj.mode == .nvfp4,
-              gateProj.groupSize == 16,
-              upProj.groupSize == 16,
-              gateProj.bits == 4,
-              upProj.bits == 4,
-              gateProj.biases == nil,
-              upProj.biases == nil,
-              let gateScales = gateProj.scales,
-              let upScales = upProj.scales,
-              gateScales.dtype == .uint8,
-              upScales.dtype == .uint8,
-              gateScales.shape == upScales.shape else {
+        prefillDownPairwiseScaleReuseCertified = false
+        guard LagunaMoEAccelerationPolicy.prefillExpertPairwiseScaleReuseEnabled else {
             return
         }
-        prefillPairwiseScaleReuseCertified =
-            lagunaNVFP4AdjacentScalePairsCertified(gateScales)
-            && lagunaNVFP4AdjacentScalePairsCertified(upScales)
+        if gateProj.mode == .nvfp4,
+           upProj.mode == .nvfp4,
+           gateProj.groupSize == 16,
+           upProj.groupSize == 16,
+           gateProj.bits == 4,
+           upProj.bits == 4,
+           gateProj.biases == nil,
+           upProj.biases == nil,
+           let gateScales = gateProj.scales,
+           let upScales = upProj.scales,
+           gateScales.dtype == .uint8,
+           upScales.dtype == .uint8,
+           gateScales.shape == upScales.shape {
+            prefillPairwiseScaleReuseCertified =
+                lagunaNVFP4AdjacentScalePairsCertified(gateScales)
+                && lagunaNVFP4AdjacentScalePairsCertified(upScales)
+        }
+        if downProj.mode == .nvfp4,
+           downProj.groupSize == 16,
+           downProj.bits == 4,
+           downProj.biases == nil,
+           let downScales = downProj.scales,
+           downScales.dtype == .uint8 {
+            prefillDownPairwiseScaleReuseCertified =
+                lagunaNVFP4AdjacentScalePairsCertified(downScales)
+        }
     }
 }
 
@@ -2132,11 +2146,13 @@ final class LagunaLanguageModel: Module {
     }
 
     func prepareRuntimeAcceleration() -> [MLXArray] {
-        var arrays = preparePrefillAcceleration()
         for layer in layers {
             if let sparse = layer.mlp as? LagunaSparseMoE {
                 sparse.preparePrefillPairwiseScaleReuse()
             }
+        }
+        var arrays = preparePrefillAcceleration()
+        for layer in layers {
             arrays.append(contentsOf: layer.selfAttention.prepareNativeAffineQKV())
             arrays.append(
                 contentsOf: layer.selfAttention.prepareTerminalPrefillProjectionWeights()

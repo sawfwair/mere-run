@@ -353,7 +353,8 @@ enum RoutedMoERouting {
         scales: MLXArray,
         sortedExpertIndices: MLXArray,
         groupSize: Int,
-        bits: Int
+        bits: Int,
+        pairwiseScaleReuse: Bool = false
     ) -> MLXArray? {
         #if os(macOS)
         guard supportsExpertAlignedNVFP4Metal,
@@ -424,6 +425,7 @@ enum RoutedMoERouting {
                 ("DataT", sortedInput.dtype),
                 ("OUTPUT_DIMENSIONS", outputDimensions),
                 ("INPUT_DIMENSIONS", inputDimensions),
+                ("PAIRWISE_SCALE_REUSE", pairwiseScaleReuse),
             ],
             grid: ((outputDimensions / 32) * 32, maximumRouteTiles * 2, 1),
             threadGroup: (32, 2, 1),
@@ -644,9 +646,10 @@ enum RoutedMoERouting {
         ensureRowContiguous: true
     )
 
-    /// Drop-in replacement for MLX's `QuantizedBlockLoader` at the one exact
-    /// Laguna prefill geometry. Two adjacent SIMD lanes own the two group-16
-    /// halves of one 32-weight span. Once the loaded scale planes have passed
+    /// Drop-in replacement for MLX's `QuantizedBlockLoader` at the exact tiled
+    /// geometry shared by Laguna's routed gate, up, and down prefill kernels.
+    /// Two adjacent SIMD lanes own the two group-16 halves of one 32-weight
+    /// span. Once a loaded scale plane has passed
     /// `lagunaNVFP4AdjacentScalePairsCertified`, the even lane loads their
     /// shared uint8 scale and broadcasts it to the odd lane. The first logical
     /// pair of every output tile is conservatively read by both lanes, which
@@ -717,24 +720,26 @@ enum RoutedMoERouting {
 
             void load_unsafe() const {
                 const bool even_group = (thread_idx & 1) == 0;
-                uint scale_bits = 0;
+                float scale = 0.0f;
                 if (even_group) {
-                    scale_bits = uint(*scales);
+                    scale = fp4nv_scale_x16384(*scales);
                 }
-                const uint paired_scale =
-                    simd_shuffle_xor(scale_bits, ushort(1));
+                const float paired_scale =
+                    simd_shuffle_xor(scale, ushort(1));
                 if (!even_group) {
-                    scale_bits = paired_scale;
+                    scale = paired_scale;
                 }
                 // Preserve the odd byte of the first logical pair. Doing this
                 // for every output tile is conservative and makes the loader
                 // exact without specializing on an expert/tile coordinate.
                 if (first_k && bi == 0 && !even_group) {
-                    scale_bits = uint(*scales);
+                    scale = fp4nv_scale_x16384(*scales);
                 }
 
-                const float scale =
-                    fp4nv_scale_x16384(uint8_t(scale_bits));
+                // The normal odd lane reuses the same converted float bits as
+                // the even lane instead of converting their certified-alias
+                // byte again. This is the production form of the officially
+                // promoted M5 prefill scale-conversion hoist.
                 for (int i = 0; i < n_reads / 4; ++i) {
                     T values[8];
                     fp4nv_decode8<T>(
@@ -996,15 +1001,26 @@ enum RoutedMoERouting {
                 BK_PADDED,
                 1,
                 WM * WN * SIMD_SIZE>;
-            using weight_loader_t = QuantizedBlockLoader<
-                DataT,
-                BN,
-                BK,
-                BK_PADDED,
-                true,
-                WM * WN * SIMD_SIZE,
-                GROUP_SIZE,
-                BITS>;
+            using weight_loader_t = metal::conditional_t<
+                PAIRWISE_SCALE_REUSE,
+                MereLagunaPairwiseNVFP4BlockLoader<
+                    DataT,
+                    BN,
+                    BK,
+                    BK_PADDED,
+                    true,
+                    WM * WN * SIMD_SIZE,
+                    GROUP_SIZE,
+                    BITS>,
+                QuantizedBlockLoader<
+                    DataT,
+                    BN,
+                    BK,
+                    BK_PADDED,
+                    true,
+                    WM * WN * SIMD_SIZE,
+                    GROUP_SIZE,
+                    BITS>>;
 
             threadgroup DataT input_tile[BM * BK_PADDED];
             threadgroup DataT weight_tile[BN * BK_PADDED];
@@ -1074,7 +1090,7 @@ enum RoutedMoERouting {
                     short2(BN, tile_rows));
             }
         """,
-        header: "// MLX_INCLUDE_FP_QUANTIZED_HEADERS\n",
+        header: pairwiseNVFP4BlockLoaderHeader,
         ensureRowContiguous: true
     )
 

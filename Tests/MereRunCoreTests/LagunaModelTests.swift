@@ -1634,6 +1634,21 @@ final class LagunaModelTests: MereRunCoreTestCase {
             bits: bits,
             mode: .nvfp4
         )
+        MLX.eval(projection.wq, projection.scales)
+        var scaleValues = projection.scales.asArray(UInt8.self)
+        for index in stride(from: 0, to: scaleValues.count, by: 2) {
+            scaleValues[index + 1] = scaleValues[index]
+        }
+        let first = scaleValues[0]
+        let replacement = try XCTUnwrap(
+            scaleValues.dropFirst(2).first(where: { $0 != first })
+        )
+        scaleValues[1] = replacement
+        let pairwiseScales = MLXArray(scaleValues)
+            .reshaped(projection.scales.shape)
+        XCTAssertTrue(
+            lagunaNVFP4AdjacentScalePairsCertified(pairwiseScales)
+        )
         for routeCount in [64, 512, 1_024] {
             let input = MLXRandom.uniform(
                 low: -0.5,
@@ -1649,7 +1664,7 @@ final class LagunaModelTests: MereRunCoreTestCase {
             let reference = portableGatherQuantizedMM(
                 input,
                 projection.wq,
-                scales: projection.scales,
+                scales: pairwiseScales,
                 biases: projection.biases,
                 rhsIndices: indices,
                 transpose: true,
@@ -1658,21 +1673,38 @@ final class LagunaModelTests: MereRunCoreTestCase {
                 mode: .nvfp4,
                 sortedIndices: true
             )
-            let actual = try XCTUnwrap(RoutedMoERouting.sortedNVFP4Projection(
+            let stock = try XCTUnwrap(RoutedMoERouting.sortedNVFP4Projection(
                 input,
                 weight: projection.wq,
-                scales: projection.scales,
+                scales: pairwiseScales,
                 sortedExpertIndices: indices,
                 groupSize: groupSize,
-                bits: bits
+                bits: bits,
+                pairwiseScaleReuse: false
             ))
-            MLX.eval(reference, actual)
+            let pairwise = try XCTUnwrap(
+                RoutedMoERouting.sortedNVFP4Projection(
+                    input,
+                    weight: projection.wq,
+                    scales: pairwiseScales,
+                    sortedExpertIndices: indices,
+                    groupSize: groupSize,
+                    bits: bits,
+                    pairwiseScaleReuse: true
+                )
+            )
+            MLX.eval(reference, stock, pairwise)
 
-            XCTAssertEqual(actual.shape, reference.shape)
-            let maximumDifference = MLX.max(
-                MLX.abs(reference.asType(.float32) - actual.asType(.float32))
+            XCTAssertEqual(stock.shape, reference.shape)
+            XCTAssertEqual(pairwise.shape, reference.shape)
+            let stockDifference = MLX.max(
+                MLX.abs(reference.asType(.float32) - stock.asType(.float32))
             ).item(Float.self)
-            XCTAssertEqual(maximumDifference, 0, "routeCount=\(routeCount)")
+            let pairwiseDifference = MLX.max(
+                MLX.abs(stock.asType(.float32) - pairwise.asType(.float32))
+            ).item(Float.self)
+            XCTAssertEqual(stockDifference, 0, "routeCount=\(routeCount)")
+            XCTAssertEqual(pairwiseDifference, 0, "routeCount=\(routeCount)")
         }
     }
 
@@ -2254,6 +2286,13 @@ final class LagunaModelTests: MereRunCoreTestCase {
                 }.count,
                 sparseLayers.count,
                 "Every loaded routed gate/up scale plane must pass the lossless pair certificate."
+            )
+            XCTAssertEqual(
+                sparseLayers.filter {
+                    $0.switchMLP.prefillDownPairwiseScaleReuseCertified
+                }.count,
+                sparseLayers.count,
+                "Every loaded routed down scale plane must pass the lossless pair certificate."
             )
         }
 
