@@ -5,10 +5,23 @@ import MLXNN
 import MLXRandom
 
 enum LagunaMoEAccelerationPolicy {
+    static func supportsActive64ByDefault(architecture: String?) -> Bool {
+        architecture == "applegpu_g16s" || architecture == "applegpu_g17s"
+    }
+
     private static let m5MaxDefaultsEnabled: Bool = {
         #if os(macOS)
         Device.defaultDevice().deviceType == .gpu
             && GPU.deviceInfo().architecture == "applegpu_g17s"
+        #else
+        false
+        #endif
+    }()
+
+    private static let active64DefaultsEnabled: Bool = {
+        #if os(macOS)
+        Device.defaultDevice().deviceType == .gpu
+            && supportsActive64ByDefault(architecture: GPU.deviceInfo().architecture)
         #else
         false
         #endif
@@ -60,7 +73,7 @@ enum LagunaMoEAccelerationPolicy {
     )
     static let active64RouterTournamentEnabled = booleanEnvironment(
         "MERERUN_LAGUNA_ACTIVE64_ROUTER",
-        default: m5MaxDefaultsEnabled
+        default: active64DefaultsEnabled
     )
     static let decodeNVFP4RowsPerSIMDGroup = decodeRowsPerSIMDGroup(
         ProcessInfo.processInfo.environment[
@@ -153,10 +166,23 @@ func lagunaNVFP4AdjacentScalePairsCertified(
 }
 
 enum LagunaGraphAccelerationPolicy {
+    static func supportsNativeAffineByDefault(architecture: String?) -> Bool {
+        architecture == "applegpu_g16s" || architecture == "applegpu_g17s"
+    }
+
     private static let m5MaxDefaultsEnabled: Bool = {
         #if os(macOS)
         Device.defaultDevice().deviceType == .gpu
             && GPU.deviceInfo().architecture == "applegpu_g17s"
+        #else
+        false
+        #endif
+    }()
+
+    private static let nativeAffineQKVDefaultsEnabled: Bool = {
+        #if os(macOS)
+        Device.defaultDevice().deviceType == .gpu
+            && supportsNativeAffineByDefault(architecture: GPU.deviceInfo().architecture)
         #else
         false
         #endif
@@ -190,14 +216,51 @@ enum LagunaGraphAccelerationPolicy {
     )
     static let nativeAffineQKVEnabled = parseBoolean(
         ProcessInfo.processInfo.environment["MERERUN_LAGUNA_NATIVE_AFFINE_QKV"],
-        default: m5MaxDefaultsEnabled
+        default: nativeAffineQKVDefaultsEnabled
     )
     static let nativeAffineQKVLayerCount = nativeAffineQKVEnabled
         ? parseLayerCount(
             ProcessInfo.processInfo.environment["MERERUN_LAGUNA_NATIVE_AFFINE_QKV_LAYERS"],
-            default: 28
+            default: 40
         )
         : 0
+    static let nativeAffineOProjEnabled = parseBoolean(
+        ProcessInfo.processInfo.environment["MERERUN_LAGUNA_NATIVE_AFFINE_OPROJ"],
+        default: nativeAffineQKVDefaultsEnabled
+    )
+    static let nativeAffineOProjLayerCount = nativeAffineOProjEnabled
+        ? parseLayerCount(
+            ProcessInfo.processInfo.environment["MERERUN_LAGUNA_NATIVE_AFFINE_OPROJ_LAYERS"],
+            default: 40
+        )
+        : 0
+    static let nativeAffineGProjEnabled = parseBoolean(
+        ProcessInfo.processInfo.environment["MERERUN_LAGUNA_NATIVE_AFFINE_GPROJ"],
+        default: nativeAffineQKVDefaultsEnabled
+    )
+    static let nativeAffineGProjLayerCount = nativeAffineGProjEnabled
+        ? parseLayerCount(
+            ProcessInfo.processInfo.environment["MERERUN_LAGUNA_NATIVE_AFFINE_GPROJ_LAYERS"],
+            default: 40
+        )
+        : 0
+    static let nativeAffineGProjFoldEnabled = parseBoolean(
+        ProcessInfo.processInfo.environment["MERERUN_LAGUNA_NATIVE_AFFINE_GPROJ_FOLD"],
+        default: m5MaxDefaultsEnabled
+    )
+    static let fusedNormAffineQKVEnabled = parseBoolean(
+        ProcessInfo.processInfo.environment["MERERUN_LAGUNA_FUSED_NORM_AFFINE_QKV"],
+        default: m5MaxDefaultsEnabled
+    )
+    static let fusedGatedAffineOProjEnabled = parseBoolean(
+        ProcessInfo.processInfo.environment["MERERUN_LAGUNA_FUSED_GATED_AFFINE_OPROJ"],
+        default: true
+    )
+    static let decodeAsyncStageEnabled = parseBoolean(
+        ProcessInfo.processInfo.environment["MERERUN_LAGUNA_DECODE_ASYNC_STAGE"],
+        default: nativeAffineQKVDefaultsEnabled
+    )
+    static let decodeAsyncLayerIndices: Set<Int> = [0, 1, 7, 15, 23, 31, 39]
 
     static func parseBoolean(_ raw: String?, default defaultValue: Bool) -> Bool {
         LagunaMoEAccelerationPolicy.parseBoolean(raw, default: defaultValue)
@@ -225,6 +288,14 @@ enum LagunaGraphAccelerationPolicy {
 
     static func usesNativeAffineQKV(layerIndex: Int) -> Bool {
         layerIndex >= 0 && layerIndex < nativeAffineQKVLayerCount
+    }
+
+    static func usesNativeAffineOProj(layerIndex: Int) -> Bool {
+        layerIndex >= 0 && layerIndex < nativeAffineOProjLayerCount
+    }
+
+    static func usesNativeAffineGProj(layerIndex: Int) -> Bool {
+        layerIndex >= 0 && layerIndex < nativeAffineGProjLayerCount
     }
 }
 
@@ -1460,6 +1531,9 @@ final class LagunaAttention: Module {
     private let layerIndex: Int
     private let isTerminalLayer: Bool
     private var _nativeAffineQKV: LagunaNativeAffineWeight?
+    private var _nativeAffineOProj: LagunaNativeAffineWeight?
+    private var _nativeAffineGProj: LagunaNativeAffineWeight?
+    private var _nativeAffineQKVGateRows = 0
     private var _terminalPrefillQGateWeight: MLXArray?
     private var _terminalPrefillKVWeight: MLXArray?
 
@@ -1506,9 +1580,13 @@ final class LagunaAttention: Module {
         super.init()
     }
 
-    func prepareNativeAffineQKV() -> [MLXArray] {
+    func prepareNativeAffineQKV(
+        enabled: Bool? = nil,
+        includeGate: Bool? = nil
+    ) -> [MLXArray] {
         guard _nativeAffineQKV == nil,
-              LagunaGraphAccelerationPolicy.usesNativeAffineQKV(layerIndex: layerIndex),
+              enabled
+                ?? LagunaGraphAccelerationPolicy.usesNativeAffineQKV(layerIndex: layerIndex),
               headDim == 128,
               keyValueHeadCount == 8,
               headCount == 48 || headCount == 64,
@@ -1526,20 +1604,122 @@ final class LagunaAttention: Module {
               let value = lagunaNativeAffineWeight(vProj.weight) else {
             return []
         }
+        let gate: LagunaNativeAffineWeight?
+        let gateEnabled = includeGate
+            ?? (
+                LagunaGraphAccelerationPolicy.nativeAffineGProjFoldEnabled
+                    && LagunaGraphAccelerationPolicy.usesNativeAffineGProj(
+                        layerIndex: layerIndex
+                    )
+            )
+        if gateEnabled,
+           gatePerHead,
+           let gProj,
+           type(of: gProj) == Linear.self,
+           gProj.bias == nil,
+           gProj.weight.shape == [headCount, 2_048] {
+            gate = lagunaNativeAffineWeight(gProj.weight)
+        } else {
+            gate = nil
+        }
+        var packedBlocks = [query.packedCodes, key.packedCodes, value.packedCodes]
+        var scaleBlocks = [query.scales, key.scales, value.scales]
+        var biasBlocks = [query.biases, key.biases, value.biases]
+        if let gate {
+            packedBlocks.append(gate.packedCodes)
+            scaleBlocks.append(gate.scales)
+            biasBlocks.append(gate.biases)
+            _nativeAffineQKVGateRows = headCount
+        }
         let fused = LagunaNativeAffineWeight(
-            packedCodes: concatenated(
-                [query.packedCodes, key.packedCodes, value.packedCodes],
-                axis: 0
-            ),
-            scales: concatenated([query.scales, key.scales, value.scales], axis: 0),
-            biases: concatenated([query.biases, key.biases, value.biases], axis: 0),
+            packedCodes: concatenated(packedBlocks, axis: 0),
+            scales: concatenated(scaleBlocks, axis: 0),
+            biases: concatenated(biasBlocks, axis: 0),
             originalShape: [
-                qProj.weight.dim(0) + kProj.weight.dim(0) + vProj.weight.dim(0),
+                qProj.weight.dim(0) + kProj.weight.dim(0) + vProj.weight.dim(0)
+                    + _nativeAffineQKVGateRows,
                 qProj.weight.dim(1),
             ]
         )
         _nativeAffineQKV = fused
         return fused.arrays
+    }
+
+    func prepareNativeAffineOProj(enabled: Bool? = nil) -> [MLXArray] {
+        let enabled = enabled
+            ?? LagunaGraphAccelerationPolicy.usesNativeAffineOProj(layerIndex: layerIndex)
+        guard enabled,
+              _nativeAffineOProj == nil,
+              type(of: oProj) == Linear.self,
+              oProj.bias == nil,
+              oProj.weight.shape == [2_048, headCount * headDim],
+              let affine = lagunaNativeAffineWeight(oProj.weight) else {
+            return []
+        }
+        _nativeAffineOProj = affine
+        return affine.arrays
+    }
+
+    func prepareNativeAffineGProj(enabled: Bool? = nil) -> [MLXArray] {
+        let enabled = enabled
+            ?? LagunaGraphAccelerationPolicy.usesNativeAffineGProj(layerIndex: layerIndex)
+        guard enabled,
+              _nativeAffineQKVGateRows == 0,
+              _nativeAffineGProj == nil,
+              gatePerHead,
+              let gProj,
+              type(of: gProj) == Linear.self,
+              gProj.bias == nil,
+              gProj.weight.shape == [headCount, 2_048],
+              let affine = lagunaNativeAffineWeight(gProj.weight) else {
+            return []
+        }
+        _nativeAffineGProj = affine
+        return affine.arrays
+    }
+
+    /// Compile and execute the fused decode tail while model loading is still
+    /// untimed. The custom Metal pipeline is keyed only by the Laguna head
+    /// count, so one warm-up per 48/64-head family avoids charging the first
+    /// user request for PSO construction without caching request data.
+    func prepareFusedGatedAffineOProjWarmUp() -> MLXArray? {
+        guard LagunaGraphAccelerationPolicy.fusedGatedAffineOProjEnabled,
+              gatePerHead,
+              headCount == 48 || headCount == 64,
+              let affine = _nativeAffineOProj else {
+            return nil
+        }
+        return LagunaGatedAffineOProj.call(
+            attentionOutput: MLXArray.zeros([1, 1, headCount * headDim], dtype: .bfloat16),
+            gateLogits: MLXArray.zeros([1, 1, headCount], dtype: .bfloat16),
+            codes: affine.packedCodes,
+            scales: affine.scales,
+            biases: affine.biases,
+            heads: headCount
+        )
+    }
+
+    func prepareFusedNormAffineQKVWarmUp(
+        normWeight: MLXArray
+    ) -> (rows: Int, output: MLXArray)? {
+        guard LagunaGraphAccelerationPolicy.fusedNormAffineQKVEnabled,
+              let affine = _nativeAffineQKV else {
+            return nil
+        }
+        let rows = (headCount + 2 * keyValueHeadCount) * headDim
+            + _nativeAffineQKVGateRows
+        guard let output = LagunaNormAffineQKV.call(
+            residual: MLXArray.zeros([1, 1, 2_048], dtype: .bfloat16),
+            normWeight: normWeight,
+            codes: affine.packedCodes,
+            scales: affine.scales,
+            biases: affine.biases,
+            heads: headCount,
+            gateRows: _nativeAffineQKVGateRows
+        ) else {
+            return nil
+        }
+        return (rows, output)
     }
 
     /// Retain two bias-free BF16 side banks for the terminal XS prefill layer.
@@ -1592,8 +1772,31 @@ final class LagunaAttention: Module {
     /// Discard retained base-weight layouts that would otherwise bypass them.
     func invalidateTextLoRAUnsafeAcceleration() {
         _nativeAffineQKV = nil
+        _nativeAffineOProj = nil
+        _nativeAffineGProj = nil
+        _nativeAffineQKVGateRows = 0
         _terminalPrefillQGateWeight = nil
         _terminalPrefillKVWeight = nil
+    }
+
+    private func projectOutput(_ input: MLXArray, useCustomKernels: Bool) -> MLXArray {
+        if useCustomKernels,
+           input.shape == [1, 1, headCount * headDim],
+           input.dtype == .bfloat16,
+           let affine = _nativeAffineOProj,
+           affine.originalShape == [2_048, headCount * headDim] {
+            return MLX.quantizedMM(
+                input,
+                affine.packedCodes,
+                scales: affine.scales,
+                biases: affine.biases,
+                transpose: true,
+                groupSize: 32,
+                bits: 8,
+                mode: .affine
+            )
+        }
+        return oProj(input)
     }
 
     func callAsFunction(
@@ -1601,6 +1804,8 @@ final class LagunaAttention: Module {
         cache: Gemma4AttentionCache?,
         precomputedMask: MLXFast.ScaledDotProductAttentionMaskMode? = nil,
         precomputedRoPEAtlas: MLXArray? = nil,
+        residualForFusedQKV: MLXArray? = nil,
+        rmsNormWeight: MLXArray? = nil,
         useCustomKernels: Bool = true
     ) -> MLXArray {
         let batch = x.dim(0)
@@ -1612,16 +1817,38 @@ final class LagunaAttention: Module {
         let rawQueries: MLXArray
         let rawKeys: MLXArray
         var values: MLXArray
+        let bankedGate: MLXArray?
         let queryDimensions = headCount * headDim
         let keyValueDimensions = keyValueHeadCount * headDim
-        if useCustomKernels,
-           batch == 1,
-           sequenceLength == 1,
-           x.dtype == .bfloat16,
-           x.shape == [1, 1, 2_048],
-           let affine = _nativeAffineQKV,
-           affine.originalShape == [queryDimensions + 2 * keyValueDimensions, 2_048] {
-            let qkv = MLX.quantizedMM(
+        let bankedQKV: MLXArray? = {
+            guard useCustomKernels,
+                  batch == 1,
+                  sequenceLength == 1,
+                  x.dtype == .bfloat16,
+                  x.shape == [1, 1, 2_048],
+                  let affine = _nativeAffineQKV,
+                  affine.originalShape == [
+                      queryDimensions + 2 * keyValueDimensions
+                          + _nativeAffineQKVGateRows,
+                      2_048,
+                  ] else {
+                return nil
+            }
+            if LagunaGraphAccelerationPolicy.fusedNormAffineQKVEnabled,
+               let residualForFusedQKV,
+               let rmsNormWeight,
+               let fused = LagunaNormAffineQKV.call(
+                   residual: residualForFusedQKV,
+                   normWeight: rmsNormWeight,
+                   codes: affine.packedCodes,
+                   scales: affine.scales,
+                   biases: affine.biases,
+                   heads: headCount,
+                   gateRows: _nativeAffineQKVGateRows
+               ) {
+                return fused
+            }
+            return MLX.quantizedMM(
                 x,
                 affine.packedCodes,
                 scales: affine.scales,
@@ -1631,6 +1858,8 @@ final class LagunaAttention: Module {
                 bits: 8,
                 mode: .affine
             )
+        }()
+        if let qkv = bankedQKV {
             rawQueries = qkv[.ellipsis, 0..<queryDimensions]
             rawKeys = qkv[
                 .ellipsis,
@@ -1638,8 +1867,14 @@ final class LagunaAttention: Module {
             ]
             values = qkv[
                 .ellipsis,
-                (queryDimensions + keyValueDimensions)...
+                (queryDimensions + keyValueDimensions)..<(queryDimensions + 2 * keyValueDimensions)
             ].reshaped(batch, sequenceLength, keyValueHeadCount, headDim)
+            if _nativeAffineQKVGateRows == headCount {
+                let gateStart = queryDimensions + 2 * keyValueDimensions
+                bankedGate = qkv[.ellipsis, gateStart..<(gateStart + headCount)]
+            } else {
+                bankedGate = nil
+            }
         } else {
             rawQueries = qProj(x)
             rawKeys = kProj(x)
@@ -1649,6 +1884,7 @@ final class LagunaAttention: Module {
                 keyValueHeadCount,
                 headDim
             )
+            bankedGate = nil
         }
         var queries: MLXArray
         var keys: MLXArray
@@ -1709,15 +1945,54 @@ final class LagunaAttention: Module {
         ).transposed(0, 2, 1, 3)
 
         if let gProj {
-            let gate = MLXNN.softplus(gProj(x).asType(.float32)).asType(output.dtype)
+            let projectedGate: MLXArray
+            if let bankedGate {
+                projectedGate = bankedGate
+            } else if useCustomKernels,
+                      x.shape == [1, 1, 2_048],
+                      x.dtype == .bfloat16,
+                      let affine = _nativeAffineGProj,
+                      affine.originalShape == [headCount, 2_048] {
+                projectedGate = MLX.quantizedMM(
+                    x,
+                    affine.packedCodes,
+                    scales: affine.scales,
+                    biases: affine.biases,
+                    transpose: true,
+                    groupSize: 32,
+                    bits: 8,
+                    mode: .affine
+                )
+            } else {
+                projectedGate = gProj(x)
+            }
+            let flattenedOutput = output.reshaped(batch, sequenceLength, -1)
+            if useCustomKernels,
+               LagunaGraphAccelerationPolicy.fusedGatedAffineOProjEnabled,
+               gatePerHead,
+               let affine = _nativeAffineOProj,
+               let projected = LagunaGatedAffineOProj.call(
+                   attentionOutput: flattenedOutput,
+                   gateLogits: projectedGate,
+                   codes: affine.packedCodes,
+                   scales: affine.scales,
+                   biases: affine.biases,
+                   heads: headCount
+               ) {
+                return projected
+            }
+            let gate = MLXNN.softplus(projectedGate.asType(.float32)).asType(output.dtype)
             if gatePerHead {
                 output = output * MLX.expandedDimensions(gate, axis: gate.ndim)
             } else {
-                output = output.reshaped(batch, sequenceLength, -1) * gate
-                return oProj(output)
+                output = flattenedOutput * gate
+                return projectOutput(output, useCustomKernels: useCustomKernels)
             }
         }
-        return oProj(output.reshaped(batch, sequenceLength, -1))
+        return projectOutput(
+            output.reshaped(batch, sequenceLength, -1),
+            useCustomKernels: useCustomKernels
+        )
     }
 
     /// Final-layer multi-token specialization for callers that consume only
@@ -1946,6 +2221,8 @@ final class LagunaDecoderLayer: Module {
             cache: cache,
             precomputedMask: precomputedMask,
             precomputedRoPEAtlas: precomputedRoPEAtlas,
+            residualForFusedQKV: x,
+            rmsNormWeight: inputLayerNorm.weight,
             useCustomKernels: useCustomKernels
         )
         let attended: MLXArray
@@ -1980,6 +2257,12 @@ final class LagunaDecoderLayer: Module {
             )
         }
         return attended + mlp(normalized)
+    }
+
+    func prepareFusedNormAffineQKVWarmUp() -> (rows: Int, output: MLXArray)? {
+        selfAttention.prepareFusedNormAffineQKVWarmUp(
+            normWeight: inputLayerNorm.weight
+        )
     }
 
     /// Preserve every terminal-layer K/V row while carrying only the consumed
@@ -2119,6 +2402,13 @@ final class LagunaLanguageModel: Module {
                (index + 1).isMultiple(of: ladderStride) {
                 asyncEval(hidden)
             }
+            if useCustomKernels,
+               LagunaGraphAccelerationPolicy.decodeAsyncStageEnabled,
+               hidden.dim(0) == 1,
+               sequenceLength == 1,
+               LagunaGraphAccelerationPolicy.decodeAsyncLayerIndices.contains(index) {
+                asyncEval(hidden)
+            }
         }
         if lastPositionOnly, hidden.dim(1) > 1 {
             hidden = hidden[0..., (hidden.dim(1) - 1)..., 0...]
@@ -2173,9 +2463,28 @@ final class LagunaLanguageModel: Module {
         var arrays = preparePrefillAcceleration()
         for layer in layers {
             arrays.append(contentsOf: layer.selfAttention.prepareNativeAffineQKV())
+            arrays.append(contentsOf: layer.selfAttention.prepareNativeAffineGProj())
+            arrays.append(contentsOf: layer.selfAttention.prepareNativeAffineOProj())
             arrays.append(
                 contentsOf: layer.selfAttention.prepareTerminalPrefillProjectionWeights()
             )
+        }
+        var warmedHeadCounts: Set<Int> = []
+        for (layerIndex, layer) in layers.enumerated() {
+            let headCount = config.attentionHeads(layerIndex: layerIndex)
+            guard warmedHeadCounts.insert(headCount).inserted,
+                  let warmUp = layer.selfAttention.prepareFusedGatedAffineOProjWarmUp() else {
+                continue
+            }
+            arrays.append(warmUp)
+        }
+        var warmedQKVRows: Set<Int> = []
+        for layer in layers {
+            guard let warmUp = layer.prepareFusedNormAffineQKVWarmUp(),
+                  warmedQKVRows.insert(warmUp.rows).inserted else {
+                continue
+            }
+            arrays.append(warmUp.output)
         }
         return arrays
     }

@@ -1039,6 +1039,36 @@ final class LagunaModelTests: MereRunCoreTestCase {
     }
 
     func testDecodeNVFP4RowsPerSIMDGroupParsing() {
+        XCTAssertTrue(
+            LagunaMoEAccelerationPolicy.supportsActive64ByDefault(
+                architecture: "applegpu_g16s"
+            )
+        )
+        XCTAssertTrue(
+            LagunaMoEAccelerationPolicy.supportsActive64ByDefault(
+                architecture: "applegpu_g17s"
+            )
+        )
+        XCTAssertFalse(
+            LagunaMoEAccelerationPolicy.supportsActive64ByDefault(
+                architecture: "applegpu_g15s"
+            )
+        )
+        XCTAssertTrue(
+            LagunaGraphAccelerationPolicy.supportsNativeAffineByDefault(
+                architecture: "applegpu_g16s"
+            )
+        )
+        XCTAssertTrue(
+            LagunaGraphAccelerationPolicy.supportsNativeAffineByDefault(
+                architecture: "applegpu_g17s"
+            )
+        )
+        XCTAssertFalse(
+            LagunaGraphAccelerationPolicy.supportsNativeAffineByDefault(
+                architecture: nil
+            )
+        )
         XCTAssertEqual(
             LagunaMoEAccelerationPolicy.defaultDecodeRowsPerSIMDGroup(
                 architecture: "applegpu_g17s"
@@ -1087,26 +1117,26 @@ final class LagunaModelTests: MereRunCoreTestCase {
         )
     }
 
-    func testNativeAffineQKVLayerCountParsing() {
+    func testNativeAffineLayerCountParsing() {
         XCTAssertEqual(
-            LagunaGraphAccelerationPolicy.parseLayerCount(nil, default: 28),
-            28
-        )
-        XCTAssertEqual(
-            LagunaGraphAccelerationPolicy.parseLayerCount("16", default: 28),
-            16
-        )
-        XCTAssertEqual(
-            LagunaGraphAccelerationPolicy.parseLayerCount("-1", default: 28),
-            0
-        )
-        XCTAssertEqual(
-            LagunaGraphAccelerationPolicy.parseLayerCount("41", default: 28),
+            LagunaGraphAccelerationPolicy.parseLayerCount(nil, default: 40),
             40
         )
         XCTAssertEqual(
-            LagunaGraphAccelerationPolicy.parseLayerCount("bad", default: 28),
-            28
+            LagunaGraphAccelerationPolicy.parseLayerCount("16", default: 40),
+            16
+        )
+        XCTAssertEqual(
+            LagunaGraphAccelerationPolicy.parseLayerCount("-1", default: 40),
+            0
+        )
+        XCTAssertEqual(
+            LagunaGraphAccelerationPolicy.parseLayerCount("41", default: 40),
+            40
+        )
+        XCTAssertEqual(
+            LagunaGraphAccelerationPolicy.parseLayerCount("bad", default: 40),
+            40
         )
     }
 
@@ -1129,6 +1159,93 @@ final class LagunaModelTests: MereRunCoreTestCase {
         XCTAssertEqual(affine.biases.dtype, .bfloat16)
     }
 
+    func testNativeAffineAttentionOutputAndGateSideLayouts() throws {
+        MLXRandom.seed(63)
+        let attention = LagunaAttention(config: try makeXSAttentionConfig(), layerIndex: 0)
+        attention.update(parameters: attention.parameters().mapValues {
+            $0.asType(.bfloat16)
+        })
+
+        let gate = attention.prepareNativeAffineGProj(enabled: true)
+        let output = attention.prepareNativeAffineOProj(enabled: true)
+        MLX.eval(gate + output)
+
+        XCTAssertEqual(gate.count, 3)
+        XCTAssertEqual(gate[0].shape, [64, 512])
+        XCTAssertEqual(gate[1].shape, [64, 64])
+        XCTAssertEqual(gate[2].shape, [64, 64])
+        XCTAssertEqual(output.count, 3)
+        XCTAssertEqual(output[0].shape, [2_048, 2_048])
+        XCTAssertEqual(output[1].shape, [2_048, 256])
+        XCTAssertEqual(output[2].shape, [2_048, 256])
+
+        XCTAssertTrue(attention.prepareNativeAffineGProj(enabled: true).isEmpty)
+        XCTAssertTrue(attention.prepareNativeAffineOProj(enabled: true).isEmpty)
+    }
+
+    func testFusedGatedAffineOProjMatchesQuantizedReference() throws {
+        #if os(macOS)
+        let architecture = GPU.deviceInfo().architecture
+        guard architecture == "applegpu_g16s" || architecture == "applegpu_g17s" else {
+            throw XCTSkip("The fused Laguna output projection requires M4 Max or M5 Max.")
+        }
+
+        try Device.withDefaultDevice(.gpu) {
+            MLXRandom.seed(65)
+            let heads = 48
+            let inputWidth = heads * 128
+            let attentionOutput = MLXRandom.uniform(
+                low: -0.5,
+                high: 0.5,
+                [1, 1, inputWidth]
+            ).asType(.bfloat16)
+            let gateLogits = MLXRandom.uniform(
+                low: -3,
+                high: 3,
+                [1, 1, heads]
+            ).asType(.bfloat16)
+            let weight = MLXRandom.uniform(
+                low: -0.2,
+                high: 0.2,
+                [2_048, inputWidth]
+            ).asType(.bfloat16)
+            let affine = try XCTUnwrap(lagunaNativeAffineWeight(weight))
+            let gate = MLXNN.softplus(gateLogits.asType(.float32)).asType(.bfloat16)
+            let gated = attentionOutput.reshaped(1, 1, heads, 128)
+                * MLX.expandedDimensions(gate, axis: gate.ndim)
+            let reference = MLX.quantizedMM(
+                gated.reshaped(1, 1, inputWidth),
+                affine.packedCodes,
+                scales: affine.scales,
+                biases: affine.biases,
+                transpose: true,
+                groupSize: 32,
+                bits: 8,
+                mode: .affine
+            )
+            let actual = try XCTUnwrap(
+                LagunaGatedAffineOProj.call(
+                    attentionOutput: attentionOutput,
+                    gateLogits: gateLogits,
+                    codes: affine.packedCodes,
+                    scales: affine.scales,
+                    biases: affine.biases,
+                    heads: heads
+                )
+            )
+            MLX.eval(reference, actual)
+            XCTAssertEqual(actual.shape, reference.shape)
+            XCTAssertEqual(
+                MLX.max(MLX.abs(actual.asType(.float32) - reference.asType(.float32)))
+                    .item(Float.self),
+                0
+            )
+        }
+        #else
+        throw XCTSkip("Metal-only Laguna kernel")
+        #endif
+    }
+
     func testNativeAffineQKVPreparesAndRunsXSDecodeShape() throws {
         guard LagunaGraphAccelerationPolicy.nativeAffineQKVEnabled else {
             throw XCTSkip("Set MERERUN_LAGUNA_NATIVE_AFFINE_QKV=1 to exercise the side layout.")
@@ -1138,7 +1255,7 @@ final class LagunaModelTests: MereRunCoreTestCase {
         attention.update(parameters: attention.parameters().mapValues {
             $0.asType(.bfloat16)
         })
-        let prepared = attention.prepareNativeAffineQKV()
+        let prepared = attention.prepareNativeAffineQKV(includeGate: false)
         guard prepared.count == 3 else {
             XCTFail("Expected one packed QKV side layout.")
             return
@@ -1150,7 +1267,7 @@ final class LagunaModelTests: MereRunCoreTestCase {
         XCTAssertEqual(prepared[2].shape, [10_240, 64])
 
         XCTAssertTrue(
-            attention.prepareNativeAffineQKV().isEmpty,
+            attention.prepareNativeAffineQKV(includeGate: false).isEmpty,
             "Preparation must retain exactly one side layout per attention layer."
         )
 
@@ -1182,6 +1299,90 @@ final class LagunaModelTests: MereRunCoreTestCase {
             activeBefore + 1_048_576,
             "Repeated affine-QKV decode must not retain per-token MLX buffers."
         )
+    }
+
+    func testNativeAffineQKVCanFoldPerHeadGateRows() throws {
+        MLXRandom.seed(66)
+        let attention = LagunaAttention(config: try makeXSAttentionConfig(), layerIndex: 0)
+        attention.update(parameters: attention.parameters().mapValues {
+            $0.asType(.bfloat16)
+        })
+        let prepared = attention.prepareNativeAffineQKV(
+            enabled: true,
+            includeGate: true
+        )
+        MLX.eval(prepared)
+
+        XCTAssertEqual(prepared.count, 3)
+        XCTAssertEqual(prepared[0].shape, [10_304, 512])
+        XCTAssertEqual(prepared[1].shape, [10_304, 64])
+        XCTAssertEqual(prepared[2].shape, [10_304, 64])
+    }
+
+    func testFusedNormAffineQKVMatchesSeparateReference() throws {
+        #if os(macOS)
+        let architecture = GPU.deviceInfo().architecture
+        guard architecture == "applegpu_g16s" || architecture == "applegpu_g17s" else {
+            throw XCTSkip("The fused Laguna QKV projection requires M4 Max or M5 Max.")
+        }
+
+        try Device.withDefaultDevice(.gpu) {
+            MLXRandom.seed(67)
+            let heads = 48
+            let rows = (heads + 16) * 128
+            let residual = MLXRandom.uniform(
+                low: -0.5,
+                high: 0.5,
+                [1, 1, 2_048]
+            ).asType(.bfloat16)
+            let normWeight = MLXRandom.uniform(
+                low: 0.5,
+                high: 1.5,
+                [2_048]
+            ).asType(.bfloat16)
+            let weight = MLXRandom.uniform(
+                low: -0.2,
+                high: 0.2,
+                [rows, 2_048]
+            ).asType(.bfloat16)
+            let affine = try XCTUnwrap(lagunaNativeAffineWeight(weight))
+            let norm = RMSNorm(dimensions: 2_048, eps: 1e-6)
+            try norm.update(
+                parameters: ModuleParameters.unflattened([("weight", normWeight)]),
+                verify: .none
+            )
+            let reference = MLX.quantizedMM(
+                norm(residual),
+                affine.packedCodes,
+                scales: affine.scales,
+                biases: affine.biases,
+                transpose: true,
+                groupSize: 32,
+                bits: 8,
+                mode: .affine
+            )
+            let actual = try XCTUnwrap(
+                LagunaNormAffineQKV.call(
+                    residual: residual,
+                    normWeight: normWeight,
+                    codes: affine.packedCodes,
+                    scales: affine.scales,
+                    biases: affine.biases,
+                    heads: heads,
+                    gateRows: 0
+                )
+            )
+            MLX.eval(reference, actual)
+            XCTAssertEqual(actual.shape, reference.shape)
+            XCTAssertEqual(
+                MLX.max(MLX.abs(actual.asType(.float32) - reference.asType(.float32)))
+                    .item(Float.self),
+                0
+            )
+        }
+        #else
+        throw XCTSkip("Metal-only Laguna kernel")
+        #endif
     }
 
     func testTerminalPrefillProjectionBanksPreserveLastAttentionRow() throws {
