@@ -6,6 +6,11 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Text
+
+- fixed `text chat --stream --quiet` so `--quiet` suppresses stderr diagnostics
+  without disconnecting incremental generated text from stdout.
+
 ### Video
 
 - added `minimax-h3-lightx2v-4step` as a second immutable, checksum-pinned

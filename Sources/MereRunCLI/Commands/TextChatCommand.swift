@@ -297,17 +297,10 @@ struct TextChat: AsyncParsableCommand {
         )
 
         let streamingOutput = StreamingChatOutput(enabled: stream)
-        let progressHandler: (@Sendable (ChatProgress) -> Void)?
-        if quiet {
-            progressHandler = nil
-        } else {
-            progressHandler = { progress in
-                if streamingOutput.write(progress: progress) {
-                    return
-                }
-                CLIStderr.write("[\(progress.stage.rawValue)] \(progress.message ?? "")\n")
-            }
-        }
+        let progressHandler = TextChatProgressHandler.make(
+            quiet: quiet,
+            streamingOutput: streamingOutput
+        )
 
         let startTime = Date()
         if !quiet {
@@ -724,14 +717,41 @@ private struct TextChatPreflightReport: Codable, Equatable {
     }
 }
 
-private final class StreamingChatOutput: @unchecked Sendable {
+enum TextChatProgressHandler {
+    static func make(
+        quiet: Bool,
+        streamingOutput: StreamingChatOutput,
+        diagnosticWriter: @escaping @Sendable (String) -> Void = CLIStderr.write
+    ) -> (@Sendable (ChatProgress) -> Void)? {
+        guard !quiet || streamingOutput.enabled else {
+            return nil
+        }
+
+        return { progress in
+            if streamingOutput.write(progress: progress) {
+                return
+            }
+            guard !quiet else {
+                return
+            }
+            diagnosticWriter("[\(progress.stage.rawValue)] \(progress.message ?? "")\n")
+        }
+    }
+}
+
+final class StreamingChatOutput: @unchecked Sendable {
     let enabled: Bool
 
     private let lock = NSLock()
     private var wroteOutput = false
+    private let writer: @Sendable (String) -> Void
 
-    init(enabled: Bool) {
+    init(
+        enabled: Bool,
+        writer: @escaping @Sendable (String) -> Void = CLIStdout.write
+    ) {
         self.enabled = enabled
+        self.writer = writer
     }
 
     var hasWritten: Bool {
@@ -752,7 +772,7 @@ private final class StreamingChatOutput: @unchecked Sendable {
 
         lock.lock()
         defer { lock.unlock() }
-        CLIStdout.write(text)
+        writer(text)
         wroteOutput = true
         return true
     }
@@ -760,6 +780,6 @@ private final class StreamingChatOutput: @unchecked Sendable {
     func finishLine() {
         lock.lock()
         defer { lock.unlock() }
-        CLIStdout.write("\n")
+        writer("\n")
     }
 }

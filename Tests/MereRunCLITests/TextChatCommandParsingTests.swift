@@ -45,6 +45,37 @@ final class TextChatCommandParsingTests: XCTestCase {
         XCTAssertTrue(cmd.stream)
     }
 
+    func testQuietStreamingKeepsGeneratingCallbackAndSuppressesDiagnostics() throws {
+        let stdout = TextOutputRecorder()
+        let stderr = TextOutputRecorder()
+        let streamingOutput = StreamingChatOutput(enabled: true, writer: stdout.write)
+        let progressHandler = try XCTUnwrap(
+            TextChatProgressHandler.make(
+                quiet: true,
+                streamingOutput: streamingOutput,
+                diagnosticWriter: stderr.write
+            )
+        )
+
+        progressHandler(ChatProgress(stage: .loadingModel, message: "Loading model"))
+        progressHandler(ChatProgress(stage: .generating, message: "live token"))
+
+        XCTAssertEqual(stdout.value, "live token")
+        XCTAssertEqual(stderr.value, "")
+        XCTAssertTrue(streamingOutput.hasWritten)
+    }
+
+    func testQuietNonStreamingDisablesProgressCallback() {
+        let streamingOutput = StreamingChatOutput(enabled: false)
+
+        XCTAssertNil(
+            TextChatProgressHandler.make(
+                quiet: true,
+                streamingOutput: streamingOutput
+            )
+        )
+    }
+
     func testTextChatParsesJSONObjectResponseFormatForQ36() throws {
         let cmd = try TextChat.parse([
             "--model", Q35Resources.q36NanoModelId,
@@ -318,5 +349,22 @@ final class TextChatCommandParsingTests: XCTestCase {
         XCTAssertThrowsError(try cmd.resolveQ35KVCacheMode(for: cmd.model)) { error in
             XCTAssertTrue(String(describing: error).contains("must be 4 or 8"))
         }
+    }
+}
+
+private final class TextOutputRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var text = ""
+
+    var value: String {
+        lock.lock()
+        defer { lock.unlock() }
+        return text
+    }
+
+    func write(_ value: String) {
+        lock.lock()
+        defer { lock.unlock() }
+        text += value
     }
 }
