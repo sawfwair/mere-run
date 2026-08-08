@@ -207,6 +207,51 @@ final class MachineInferenceAdmissionTests: XCTestCase {
         XCTAssertEqual(try coordinator.snapshot().queued.count, 0)
     }
 
+    func testDiskCapacityFallsBackWhenImportantUsageProbeReturnsFalseZero() {
+        let available = 188 * gibibyte
+
+        XCTAssertEqual(
+            MachineInferenceCoordinator.reconciledAvailableDiskBytes(
+                importantUsageCapacity: 0,
+                fileSystemFreeBytes: available
+            ),
+            available
+        )
+    }
+
+    func testDiskCapacityUsesConservativePositiveProbe() {
+        XCTAssertEqual(
+            MachineInferenceCoordinator.reconciledAvailableDiskBytes(
+                importantUsageCapacity: Int64(80 * gibibyte),
+                fileSystemFreeBytes: 100 * gibibyte
+            ),
+            80 * gibibyte
+        )
+        XCTAssertEqual(
+            MachineInferenceCoordinator.reconciledAvailableDiskBytes(
+                importantUsageCapacity: Int64(120 * gibibyte),
+                fileSystemFreeBytes: 100 * gibibyte
+            ),
+            100 * gibibyte
+        )
+    }
+
+    func testDiskCapacityPreservesRealZeroWhenNoPositiveProbeExists() {
+        XCTAssertEqual(
+            MachineInferenceCoordinator.reconciledAvailableDiskBytes(
+                importantUsageCapacity: 0,
+                fileSystemFreeBytes: 0
+            ),
+            0
+        )
+        XCTAssertNil(
+            MachineInferenceCoordinator.reconciledAvailableDiskBytes(
+                importantUsageCapacity: nil,
+                fileSystemFreeBytes: nil
+            )
+        )
+    }
+
     func testLowMemoryRejectsWhenNoActiveWorkCanReleaseHeadroom() async throws {
         let directory = try temporaryDirectory()
         let coordinator = makeCoordinator(
