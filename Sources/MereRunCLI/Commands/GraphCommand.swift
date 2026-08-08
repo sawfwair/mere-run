@@ -940,25 +940,35 @@ struct WorkflowGraphRequirements: Equatable {
     let networkAccess: Bool
 
     static func resolve(graph: WorkflowGraphDocument, inputs: WorkflowInputsDocument) -> WorkflowGraphRequirements {
-        var modelIDs = graph.nodes.compactMap { node -> String? in
+        let modelIDs = graph.nodes.flatMap { node -> [String] in
+            let selectedModelID: String?
             if let model = node.arguments["model"] {
-                if case .string(let value) = model { return value }
-                if case .reference(let rawReference) = model,
-                   let reference = try? WorkflowReference(rawReference),
-                   case .input(let name) = reference.source {
-                    return (inputs.values[name] ?? graph.inputs[name]?.defaultValue)?.stringValue
+                if case .string(let value) = model {
+                    selectedModelID = value
+                } else if case .reference(let rawReference) = model,
+                          let reference = try? WorkflowReference(rawReference),
+                          case .input(let name) = reference.source {
+                    selectedModelID = (inputs.values[name] ?? graph.inputs[name]?.defaultValue)?.stringValue
+                } else {
+                    selectedModelID = nil
                 }
+            } else {
+                selectedModelID = nil
             }
+            let defaultModelID: String?
             switch node.kind {
-            case "image.train-lora": return ImageTrainLoRA.defaultManagedModelID.rawValue
-            case "image.generate": return ImageGenerate.defaultManagedModelID.rawValue
-            case "vision.ground": return VisionGround.defaultManagedModelID.rawValue
-            case "video.generate": return ModelResolver.ModelID.ltxVideo23AVMLX.rawValue
-            default: return nil
+            case "image.train-lora": defaultModelID = ImageTrainLoRA.defaultManagedModelID.rawValue
+            case "image.generate": defaultModelID = ImageGenerate.defaultManagedModelID.rawValue
+            case "vision.ground": defaultModelID = VisionGround.defaultManagedModelID.rawValue
+            case "vision.segment", "vision.track": defaultModelID = VisionSegment.defaultManagedModelID.rawValue
+            case "video.generate": defaultModelID = ModelResolver.ModelID.ltxVideo23AVMLX.rawValue
+            default: defaultModelID = nil
             }
-        }
-        for node in graph.nodes {
-            modelIDs.append(contentsOf: WorkflowNodeRegistry.entry(for: node)?.requirements.modelIDs ?? [])
+            return resolveModelIDs(
+                selectedModelID: selectedModelID,
+                registryModelIDs: WorkflowNodeRegistry.entry(for: node)?.requirements.modelIDs ?? [],
+                defaultModelID: defaultModelID
+            )
         }
         var acceleratorBackends = Set(["cpu", "metal", "cuda", "rocm"])
         var minimumAcceleratorMemoryBytes: Int64?
@@ -1001,6 +1011,16 @@ struct WorkflowGraphRequirements: Equatable {
             minimumCPUCores: minimumCPUCores,
             networkAccess: networkAccess
         )
+    }
+
+    static func resolveModelIDs(
+        selectedModelID: String?,
+        registryModelIDs: [String],
+        defaultModelID: String?
+    ) -> [String] {
+        if let selectedModelID { return [selectedModelID] }
+        if !registryModelIDs.isEmpty { return registryModelIDs }
+        return defaultModelID.map { [$0] } ?? []
     }
 }
 

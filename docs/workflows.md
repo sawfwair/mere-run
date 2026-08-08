@@ -51,7 +51,7 @@ The V1 node catalog contains:
 - `seed.value`, `choice.value`
 - `text.join`, `text.template`
 - `text.enhance`, `image.describe`
-- `vision.ground`
+- `vision.ground`, `vision.segment`, `vision.track`
 - `image.train-lora`
 - `image.generate`
 - `video.generate`
@@ -67,6 +67,12 @@ installed model and never trigger a hidden pull.
 default. It emits an annotated image and structured detections JSON as verified
 artifacts. Grounding output is candidate geometry; graph execution does not
 promote it into evidence or findings.
+
+`vision.segment` and `vision.track` use the managed `vision-segment-sam31`
+model by default. Both emit an annotated media artifact, structured JSON, and a
+portable directory of PNG masks. They refine or propagate candidate geometry;
+their masks remain review candidates until a mission workflow corroborates and
+accepts them.
 
 Catalog value schemas recursively describe array items, object properties, and
 additional properties. Editors may expose those nested slots as typed ports

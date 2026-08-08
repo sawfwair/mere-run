@@ -69,6 +69,18 @@ final class WorkflowGraphTests: XCTestCase {
         )
     }
 
+    func testVisionSAMCatalogExposesMasksAndStructuredArtifacts() throws {
+        let segment = try XCTUnwrap(WorkflowNodeRegistry.entry(for: "vision.segment"))
+        let track = try XCTUnwrap(WorkflowNodeRegistry.entry(for: "vision.track"))
+
+        XCTAssertEqual(segment.presentation?.primaryArgument, "image")
+        XCTAssertEqual(track.presentation?.primaryArgument, "video")
+        XCTAssertEqual(segment.outputs.map(\.name), ["image", "segments", "masks"])
+        XCTAssertEqual(track.outputs.map(\.name), ["video", "tracks", "masks"])
+        XCTAssertEqual(segment.outputs.first(where: { $0.name == "masks" })?.type, .assetDirectory)
+        XCTAssertEqual(track.outputs.first(where: { $0.name == "masks" })?.contentTypes, ["image/png"])
+    }
+
     func testCreativeMaterialIntrinsicsHaveExactSemantics() throws {
         XCTAssertEqual(
             try WorkflowIntrinsicInvocation(
@@ -280,6 +292,66 @@ final class WorkflowGraphTests: XCTestCase {
         ))
     }
 
+    func testVisionSegmentBuildsPreflightAndMaskArtifactInvocation() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let node = WorkflowNode(
+            id: "segment",
+            kind: "vision.segment",
+            arguments: [
+                "image": .string("/tmp/post-event.png"),
+                "prompts": .array([.string("damaged roof"), .string("debris")]),
+                "threshold": .number(0.12),
+                "show_boxes": .boolean(true),
+            ],
+            dependsOn: nil
+        )
+
+        let invocation = try WorkflowNodeCommandBuilder.invocation(
+            node: node,
+            arguments: node.arguments,
+            nodeDirectory: root
+        )
+
+        XCTAssertEqual(invocation.command, ["vision", "segment"])
+        XCTAssertTrue(invocation.preflightArguments.suffix(2).elementsEqual(["--preflight", "--json"]))
+        XCTAssertTrue(invocation.runArguments.contains("--quiet"))
+        XCTAssertTrue(invocation.runArguments.contains("damaged roof"))
+        XCTAssertTrue(invocation.runArguments.contains("--mask-output-dir"))
+        XCTAssertEqual(invocation.outputs["segments"]?.contentTypes, ["application/json"])
+        XCTAssertEqual(invocation.outputs["masks"]?.type, .assetDirectory)
+        XCTAssertTrue(invocation.outputs["masks"]?.path?.hasSuffix("/artifacts/masks") == true)
+    }
+
+    func testVisionTrackBuildsPreflightAndMaskArtifactInvocation() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let node = WorkflowNode(
+            id: "track",
+            kind: "vision.track",
+            arguments: [
+                "video": .string("/tmp/collection.mp4"),
+                "prompts": .array([.string("bridge")]),
+                "init_frame": .integer(4),
+                "end_frame": .integer(18),
+            ],
+            dependsOn: nil
+        )
+
+        let invocation = try WorkflowNodeCommandBuilder.invocation(
+            node: node,
+            arguments: node.arguments,
+            nodeDirectory: root
+        )
+
+        XCTAssertEqual(invocation.command, ["vision", "track"])
+        XCTAssertTrue(invocation.preflightArguments.suffix(2).elementsEqual(["--preflight", "--json"]))
+        XCTAssertTrue(invocation.runArguments.contains("--quiet"))
+        XCTAssertEqual(invocation.outputs["video"]?.contentTypes, ["video/mp4"])
+        XCTAssertEqual(invocation.outputs["tracks"]?.contentTypes, ["application/json"])
+        XCTAssertEqual(invocation.outputs["masks"]?.type, .assetDirectory)
+    }
+
     func testPluginTIFFOutputUsesPortableExtension() {
         XCTAssertEqual(
             WorkflowNodeCommandBuilder.outputExtension(contentTypes: ["image/tiff"]),
@@ -322,6 +394,69 @@ final class WorkflowGraphTests: XCTestCase {
 
         XCTAssertEqual(requirements.nodeKinds, ["vision.ground"])
         XCTAssertEqual(requirements.modelIDs, ["vision-ground-falcon-perception"])
+        XCTAssertEqual(requirements.acceleratorBackends, ["cuda", "metal"])
+    }
+
+    func testExplicitModelSelectionOverridesProviderCandidateRequirements() {
+        XCTAssertEqual(
+            WorkflowGraphRequirements.resolveModelIDs(
+                selectedModelID: "vision-embed-olmoearth-v12-base",
+                registryModelIDs: [
+                    "vision-embed-olmoearth-v12-nano",
+                    "vision-embed-olmoearth-v12-tiny",
+                    "vision-embed-olmoearth-v12-small",
+                    "vision-embed-olmoearth-v12-base",
+                ],
+                defaultModelID: nil
+            ),
+            ["vision-embed-olmoearth-v12-base"]
+        )
+    }
+
+    func testVisionSAMDefaultsManagedModelRequirement() throws {
+        let graph = try decodeGraph("""
+        {
+          "schema_version": 1,
+          "kind": "mere.run/workflow-graph",
+          "name": "sam-candidates",
+          "inputs": {
+            "image": {"type": "asset", "content_types": ["image/png"]},
+            "video": {"type": "asset", "content_types": ["video/mp4"]}
+          },
+          "nodes": [
+            {
+              "id": "segment",
+              "kind": "vision.segment",
+              "arguments": {
+                "image": {"$ref": "inputs.image"},
+                "prompts": ["building", "debris"]
+              }
+            },
+            {
+              "id": "track",
+              "kind": "vision.track",
+              "arguments": {
+                "video": {"$ref": "inputs.video"},
+                "prompts": ["bridge"]
+              }
+            }
+          ],
+          "outputs": {
+            "segments": {"$ref": "nodes.segment.outputs.segments"},
+            "tracks": {"$ref": "nodes.track.outputs.tracks"}
+          }
+        }
+        """)
+        let requirements = WorkflowGraphRequirements.resolve(
+            graph: graph,
+            inputs: .init(values: [
+                "image": .string("/tmp/post-event.png"),
+                "video": .string("/tmp/collection.mp4"),
+            ])
+        )
+
+        XCTAssertEqual(requirements.nodeKinds, ["vision.segment", "vision.track"])
+        XCTAssertEqual(requirements.modelIDs, ["vision-segment-sam31"])
         XCTAssertEqual(requirements.acceleratorBackends, ["cuda", "metal"])
     }
 

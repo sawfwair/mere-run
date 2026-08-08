@@ -872,6 +872,112 @@ enum WorkflowNodeRegistry {
             presentation: .init(style: "material", primaryArgument: "image")
         ),
         WorkflowNodeCatalogEntry(
+            kind: "vision.segment",
+            title: "Segment objects",
+            description: "Refine prompted candidate regions into SAM 3.1 masks.",
+            category: "vision",
+            inputs: [
+                .init(
+                    name: "image",
+                    type: .asset,
+                    required: true,
+                    acceptedContentTypes: ["image/png", "image/jpeg", "image/webp"]
+                ),
+                .init(
+                    name: "prompts",
+                    type: .json,
+                    required: true,
+                    description: "One or more text prompts for candidate-mask refinement.",
+                    valueSchema: .init(type: .array, items: .init(type: .string))
+                ),
+                .init(name: "model", type: .string, required: false),
+                .init(name: "threshold", type: .number, required: false, defaultValue: .number(0.05), minimum: 0),
+                .init(name: "resolution", type: .integer, required: false, defaultValue: .integer(1008), minimum: 1),
+                .init(name: "show_boxes", type: .boolean, required: false, defaultValue: .boolean(false)),
+                .init(name: "multimask", type: .boolean, required: false, defaultValue: .boolean(false)),
+            ],
+            outputs: [
+                .init(
+                    name: "image",
+                    type: .asset,
+                    description: "Annotated segmentation image.",
+                    contentTypes: ["image/png"]
+                ),
+                .init(
+                    name: "segments",
+                    type: .asset,
+                    description: "Structured candidate segments and mask metadata.",
+                    contentTypes: ["application/json"]
+                ),
+                .init(
+                    name: "masks",
+                    type: .assetDirectory,
+                    description: "Per-object PNG masks.",
+                    contentTypes: ["image/png"]
+                ),
+            ],
+            requirements: .init(
+                modelIDs: [],
+                acceleratorBackends: ["metal", "cuda"],
+                minimumAcceleratorMemoryBytes: nil
+            ),
+            presentation: .init(style: "material", primaryArgument: "image")
+        ),
+        WorkflowNodeCatalogEntry(
+            kind: "vision.track",
+            title: "Track objects",
+            description: "Propagate prompted SAM 3.1 masks through a video.",
+            category: "vision",
+            inputs: [
+                .init(
+                    name: "video",
+                    type: .asset,
+                    required: true,
+                    acceptedContentTypes: ["video/mp4", "video/quicktime"]
+                ),
+                .init(
+                    name: "prompts",
+                    type: .json,
+                    required: true,
+                    description: "One or more text prompts used to seed tracking.",
+                    valueSchema: .init(type: .array, items: .init(type: .string))
+                ),
+                .init(name: "model", type: .string, required: false),
+                .init(name: "threshold", type: .number, required: false, defaultValue: .number(0.05), minimum: 0),
+                .init(name: "resolution", type: .integer, required: false, defaultValue: .integer(1008), minimum: 1),
+                .init(name: "init_frame", type: .integer, required: false, defaultValue: .integer(0), minimum: 0),
+                .init(name: "end_frame", type: .integer, required: false, minimum: 0),
+                .init(name: "show_boxes", type: .boolean, required: false, defaultValue: .boolean(false)),
+                .init(name: "show_labels", type: .boolean, required: false, defaultValue: .boolean(false)),
+            ],
+            outputs: [
+                .init(
+                    name: "video",
+                    type: .asset,
+                    description: "Annotated tracking video.",
+                    contentTypes: ["video/mp4"]
+                ),
+                .init(
+                    name: "tracks",
+                    type: .asset,
+                    description: "Structured per-frame tracks and mask metadata.",
+                    contentTypes: ["application/json"]
+                ),
+                .init(
+                    name: "masks",
+                    type: .assetDirectory,
+                    description: "Per-frame PNG masks.",
+                    contentTypes: ["image/png"]
+                ),
+            ],
+            requirements: .init(
+                modelIDs: [],
+                acceleratorBackends: ["metal", "cuda"],
+                minimumAcceleratorMemoryBytes: nil
+            ),
+            presentation: .init(style: "material", primaryArgument: "video")
+        ),
+        WorkflowNodeCatalogEntry(
             kind: "image.train-lora",
             title: "Train image LoRA",
             category: "image",

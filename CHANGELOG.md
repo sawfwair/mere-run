@@ -256,6 +256,10 @@ artifact contracts instead of becoming a model-specific sidecar.
 - added model-aware `vision ground --preflight --json` and workflow-safe
   `--quiet` behavior so agents and graph runners can validate placement,
   inputs, and artifact paths without loading the model or parsing diagnostics.
+- added `vision.segment` and `vision.track` as portable SAM 3.1 graph nodes with
+  graph-safe preflight, quiet execution, structured JSON, annotated media, and
+  durable per-object or per-frame PNG mask directories. SAM outputs remain
+  candidate geometry until a downstream mission workflow accepts them.
 - preserved TIFF provider outputs as portable `.tif` artifacts with
   `image/tiff` metadata throughout workflow materialization, run bundles, and
   fetched results instead of degrading geospatial rasters to generic binary

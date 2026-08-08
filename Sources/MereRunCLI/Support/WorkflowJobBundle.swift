@@ -703,6 +703,7 @@ struct WorkflowBundleMaterializer {
             case "image.train-lora": return ImageTrainLoRA.defaultManagedModelID.rawValue
             case "image.generate": return ImageGenerate.defaultManagedModelID.rawValue
             case "vision.ground": return VisionGround.defaultManagedModelID.rawValue
+            case "vision.segment", "vision.track": return VisionSegment.defaultManagedModelID.rawValue
             case "video.generate": return ModelResolver.ModelID.ltxVideo23AVMLX.rawValue
             default: return nil
             }
@@ -1354,6 +1355,70 @@ enum WorkflowNodeCommandBuilder {
                 ],
                 streamsEvents: false
             )
+        case "vision.segment":
+            let outputImage = artifacts.appendingPathComponent("image.png")
+            let segments = artifacts.appendingPathComponent("segments.json")
+            let masks = artifacts.appendingPathComponent("masks", isDirectory: true)
+            var args = [
+                "vision", "segment", try requiredString("image", in: arguments),
+                "--prompt",
+            ]
+            args.append(contentsOf: try requiredStringArray("prompts", in: arguments))
+            appendString("model", flag: "--model", from: arguments, to: &args)
+            appendNumber("threshold", flag: "--threshold", from: arguments, to: &args)
+            appendInteger("resolution", flag: "--resolution", from: arguments, to: &args)
+            appendFlag("show_boxes", flag: "--show-boxes", from: arguments, to: &args)
+            appendFlag("multimask", flag: "--multimask", from: arguments, to: &args)
+            args += [
+                "--output", outputImage.path,
+                "--json-output", segments.path,
+                "--mask-output-dir", masks.path,
+            ]
+            return .init(
+                command: ["vision", "segment"],
+                executable: CurrentExecutable.url(),
+                preflightArguments: args + ["--preflight", "--json"],
+                runArguments: args + ["--quiet"],
+                outputs: [
+                    "image": fileOutput(outputImage, contentTypes: ["image/png"]),
+                    "segments": fileOutput(segments, contentTypes: ["application/json"]),
+                    "masks": directoryOutput(masks, contentTypes: ["image/png"]),
+                ],
+                streamsEvents: false
+            )
+        case "vision.track":
+            let outputVideo = artifacts.appendingPathComponent("video.mp4")
+            let tracks = artifacts.appendingPathComponent("tracks.json")
+            let masks = artifacts.appendingPathComponent("masks", isDirectory: true)
+            var args = [
+                "vision", "track", try requiredString("video", in: arguments),
+                "--prompt",
+            ]
+            args.append(contentsOf: try requiredStringArray("prompts", in: arguments))
+            appendString("model", flag: "--model", from: arguments, to: &args)
+            appendNumber("threshold", flag: "--threshold", from: arguments, to: &args)
+            appendInteger("resolution", flag: "--resolution", from: arguments, to: &args)
+            appendInteger("init_frame", flag: "--init-frame", from: arguments, to: &args)
+            appendInteger("end_frame", flag: "--end-frame", from: arguments, to: &args)
+            appendFlag("show_boxes", flag: "--show-boxes", from: arguments, to: &args)
+            appendFlag("show_labels", flag: "--show-labels", from: arguments, to: &args)
+            args += [
+                "--output", outputVideo.path,
+                "--json-output", tracks.path,
+                "--mask-output-dir", masks.path,
+            ]
+            return .init(
+                command: ["vision", "track"],
+                executable: CurrentExecutable.url(),
+                preflightArguments: args + ["--preflight", "--json"],
+                runArguments: args + ["--quiet"],
+                outputs: [
+                    "video": fileOutput(outputVideo, contentTypes: ["video/mp4"]),
+                    "tracks": fileOutput(tracks, contentTypes: ["application/json"]),
+                    "masks": directoryOutput(masks, contentTypes: ["image/png"]),
+                ],
+                streamsEvents: false
+            )
         case "image.train-lora":
             let output = artifacts.appendingPathComponent("adapter.safetensors")
             var args = ["image", "train-lora", "--data", try requiredString("data", in: arguments), "--output", output.path]
@@ -1489,6 +1554,15 @@ enum WorkflowNodeCommandBuilder {
     private static func fileOutput(_ url: URL, contentTypes: [String]) -> WorkflowInvocationOutput {
         WorkflowInvocationOutput(
             type: .asset,
+            path: url.path,
+            optional: false,
+            contentTypes: contentTypes
+        )
+    }
+
+    private static func directoryOutput(_ url: URL, contentTypes: [String]) -> WorkflowInvocationOutput {
+        WorkflowInvocationOutput(
+            type: .assetDirectory,
             path: url.path,
             optional: false,
             contentTypes: contentTypes
