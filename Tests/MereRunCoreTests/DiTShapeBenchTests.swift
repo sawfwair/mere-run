@@ -2128,11 +2128,13 @@ final class DiTShapeBenchTests: XCTestCase {
         let latentFrames = try MiniMaxH3Geometry.videoLatentFrameCount(for: frameCount)
         let usesCompiledDecoder = environment["MERERUN_H3_VAE_COMPILED"] != "0"
         let materializesWeights = environment["MERERUN_H3_VAE_MATERIALIZE"] == "1"
+        let evaluatesChunksIndividually = environment["MERERUN_H3_VAE_CHUNK_EVAL"] != "0"
         let totalStarted = CFAbsoluteTimeGetCurrent()
         let resources = MiniMaxH3Resources(rootURL: URL(fileURLWithPath: root, isDirectory: true))
         let model = try MiniMaxH3ModelLoader.loadVideoVAE(resources: resources)
         model.spatialTileSize = tileSize
         model.usesCompiledTileDecoder = usesCompiledDecoder
+        model.evaluatesTemporalChunksIndividually = evaluatesChunksIndividually
         if materializesWeights {
             MLX.eval(model.parameters())
         }
@@ -2151,11 +2153,12 @@ final class DiTShapeBenchTests: XCTestCase {
         MLX.eval(decoded)
         let decodeSeconds = CFAbsoluteTimeGetCurrent() - started
         print(String(
-            format: "[dit-bench] H3 video VAE tile=%d compiled=%@ materialized=%@ "
+            format: "[dit-bench] H3 video VAE tile=%d compiled=%@ materialized=%@ chunk_eval=%@ "
                 + "size=%dx%d frames=%d load=%.3fs decode=%.3fs total=%.3fs peak=%.2fGiB",
             tileSize,
             usesCompiledDecoder ? "true" : "false",
             materializesWeights ? "true" : "false",
+            evaluatesChunksIndividually ? "true" : "false",
             width,
             height,
             decoded.dim(1),

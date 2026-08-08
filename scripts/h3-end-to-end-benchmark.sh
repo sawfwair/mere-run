@@ -80,9 +80,10 @@ steps="${MERERUN_H3_BENCH_STEPS:-$steps}"
 if [[ ! -x "$binary" || "${MERERUN_H3_BENCH_REBUILD:-0}" == "1" ]]; then
   swift build -c release --product mere.run
 fi
-if pgrep -f '/mere\.run ' >/dev/null; then
-  print -u2 "another mere.run workload is active; refusing a contaminated H3 benchmark"
-  pgrep -fl '/mere\.run ' >&2
+contaminant_pattern='/mere\.run |mlxfast|mlx-fast|MereRunPackageTests\.xctest|python.*(mlx|train|eval)'
+if pgrep -if "$contaminant_pattern" >/dev/null; then
+  print -u2 "another ML workload is active; refusing a contaminated H3 benchmark"
+  pgrep -ifl "$contaminant_pattern" >&2
   exit 75
 fi
 

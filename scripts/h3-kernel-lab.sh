@@ -11,9 +11,10 @@ export MERERUN_DIT_BENCH=1
 export CFFIXED_USER_HOME="${MERERUN_H3_LAB_HOME:-${TMPDIR:-/tmp}/mere-run-h3-kernel-home}"
 mkdir -p "$CFFIXED_USER_HOME"
 
-if pgrep -f '/mere\.run ' >/dev/null; then
-  print -u2 "another mere.run workload is active; refusing a contaminated H3 kernel benchmark"
-  pgrep -fl '/mere\.run ' >&2
+contaminant_pattern='/mere\.run |mlxfast|mlx-fast|MereRunPackageTests\.xctest|python.*(mlx|train|eval)'
+if pgrep -if "$contaminant_pattern" >/dev/null; then
+  print -u2 "another ML workload is active; refusing a contaminated H3 kernel benchmark"
+  pgrep -ifl "$contaminant_pattern" >&2
   exit 75
 fi
 

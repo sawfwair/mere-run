@@ -242,6 +242,7 @@ public final class MiniMaxH3VideoVAE: Module {
 
     var spatialTileSize = defaultSpatialTileSize
     var usesCompiledTileDecoder = true
+    var evaluatesTemporalChunksIndividually = true
 
     @ModuleInfo(key: "encoder") public var encoder: MiniMaxH3VideoEncoder
     @ModuleInfo(key: "quant_conv") var quantConvolution: Conv3d
@@ -444,7 +445,9 @@ public final class MiniMaxH3VideoVAE: Module {
                 denormalized[0..., 0..., start..<(start + tokensPerChunk + tokenOverlap), 0..., 0...],
                 tileDecoder: tileDecoder
             )
-            MLX.eval(clip)
+            if evaluatesTemporalChunksIndividually {
+                MLX.eval(clip)
+            }
             for part in 0..<2 {
                 let frameStart = part * pixelFramesPerChunk
                 let frameEnd = min(frameStart + pixelFramesPerChunk, clip.dim(2))
