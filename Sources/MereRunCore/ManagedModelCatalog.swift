@@ -14,6 +14,8 @@ public enum ManagedModelCategory: String, CaseIterable, Hashable, Sendable {
     case visionSegment = "vision-segment"
     case visionGround = "vision-ground"
     case visionFlood = "vision-flood"
+    case visionFire = "vision-fire"
+    case visionEmbed = "vision-embed"
     case visionFace = "vision-face"
     case visionGeometry = "vision-geometry"
     case visionDepth = "vision-depth"
@@ -57,6 +59,9 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case sam31
     case falconPerception
     case terramindFlood
+    case terramindFire
+    case tessera
+    case olmoEarth
     case insightFaceBuffaloL
     case moge2
     case videoDepthAnything
@@ -544,6 +549,77 @@ public enum ManagedModelCatalog {
         sourceRevision: ltxGemma3TextEncoderRevision,
         licenseURL: "https://ai.google.dev/gemma/terms"
     )
+
+    private static let geoExpansionSpecs: [ManagedModelSpec] = [
+        ManagedModelSpec(
+            id: ModelResolver.ModelID.visionFireTerraMindBase.rawValue,
+            category: .visionFire,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: TerraMindFireResources.sourceRepository,
+                revision: TerraMindFireResources.sourceRevision,
+                patterns: [
+                    "README.md",
+                    "LICENSE*",
+                    "NOTICE*",
+                    TerraMindFireResources.sourceCheckpointFilename,
+                    TerraMindFireResources.sourceConfigurationFilename,
+                ]
+            ),
+            upstreamRepoId: TerraMindFireResources.sourceRepository,
+            upstreamRevision: TerraMindFireResources.sourceRevision,
+            validationKind: .terramindFire,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 673_193_610,
+            defaultCLICommands: ["geo fire"]
+        ),
+    ] + TESSERAResources.allSpecs.map { source in
+        ManagedModelSpec(
+            id: source.modelID,
+            category: .visionEmbed,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: source.sourceRepository,
+                revision: source.sourceRevision,
+                patterns: ["README.md", source.sourceCheckpointFilename]
+            ),
+            upstreamRepoId: source.sourceRepository,
+            upstreamRevision: source.sourceRevision,
+            validationKind: .tessera,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: source.sourceCheckpointByteCount,
+            defaultCLICommands: ["geo tessera"]
+        )
+    } + OlmoEarthResources.allSpecs.map { source in
+        ManagedModelSpec(
+            id: source.modelID,
+            category: .visionEmbed,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: source.sourceRepository,
+                revision: source.sourceRevision,
+                patterns: [
+                    "README.md",
+                    "LICENSE*",
+                    OlmoEarthResources.sourceWeightsFilename,
+                    OlmoEarthResources.sourceConfigurationFilename,
+                ]
+            ),
+            upstreamRepoId: source.sourceRepository,
+            upstreamRevision: source.sourceRevision,
+            usageRestriction: usageRestriction(
+                summary: "OlmoEarth permits broad use but prohibits military and defense applications, intelligence gathering, human surveillance and policing, and extractive activities such as drilling, mining, and deforestation.",
+                license: "OlmoEarth Artifact License",
+                sourceRepoId: source.sourceRepository,
+                sourceRevision: source.sourceRevision,
+                licenseURL: "https://huggingface.co/\(source.sourceRepository)/blob/\(source.sourceRevision)/LICENSE.txt"
+            ),
+            validationKind: .olmoEarth,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: source.sourceWeightsByteCount,
+            defaultCLICommands: ["geo olmoearth"]
+        )
+    }
 
     public static let allSpecs: [ManagedModelSpec] = [
         ManagedModelSpec(
@@ -2531,7 +2607,7 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["world serve"],
             companionModelIDs: [ModelResolver.ModelID.wan22TI2V5BMLX.rawValue]
         ),
-    ]
+    ] + geoExpansionSpecs
 
     public static var allModelIDs: [String] {
         allSpecs.map(\.id)
@@ -2622,7 +2698,12 @@ public extension ManagedModelSpec {
     }
 
     var requiresManagedConversion: Bool {
-        validationKind == .instantMesh || validationKind == .terramindFlood
+        switch validationKind {
+        case .instantMesh, .terramindFlood, .terramindFire, .tessera, .olmoEarth:
+            true
+        default:
+            false
+        }
     }
 
     func managedConversionGuidance(at rootURL: URL) -> String? {
@@ -2636,6 +2717,34 @@ public extension ManagedModelSpec {
                 + "before native MLX inference; run scripts/convert-terramind-flood-mlx.py "
                 + "--checkpoint \"\(source)\" --configuration \"\(configuration)\" "
                 + "--output \"\(rootURL.path)\" --dtype float32. FP16 is intentionally unsupported by parity evidence."
+        }
+        if validationKind == .terramindFire {
+            let source = rootURL.appendingPathComponent(TerraMindFireResources.sourceCheckpointFilename).path
+            let configuration = rootURL.appendingPathComponent(
+                TerraMindFireResources.sourceConfigurationFilename
+            ).path
+            return "Pinned TerraMind Fire source downloaded at \(source). Deterministic conversion is required "
+                + "before native MLX inference; run scripts/convert-terramind-fire-mlx.py "
+                + "--checkpoint \"\(source)\" --configuration \"\(configuration)\" "
+                + "--output \"\(rootURL.path)\" --dtype float32."
+        }
+        if validationKind == .tessera, let source = TESSERAResources.spec(for: id) {
+            let checkpoint = rootURL.appendingPathComponent(source.sourceCheckpointFilename).path
+            return "Pinned TESSERA v2 \(source.variant.rawValue) source downloaded at \(checkpoint). "
+                + "Deterministic conversion is required before native MLX inference; run "
+                + "scripts/convert-tessera-v2-mlx.py --variant \(source.variant.rawValue) "
+                + "--checkpoint \"\(checkpoint)\" --output \"\(rootURL.path)\" --dtype float32."
+        }
+        if validationKind == .olmoEarth, let source = OlmoEarthResources.spec(for: id) {
+            let weights = rootURL.appendingPathComponent(OlmoEarthResources.sourceWeightsFilename).path
+            let configuration = rootURL.appendingPathComponent(
+                OlmoEarthResources.sourceConfigurationFilename
+            ).path
+            return "Pinned OlmoEarth v1.2 \(source.variant.rawValue) source downloaded at \(weights). "
+                + "Deterministic conversion is required before native MLX inference; run "
+                + "scripts/convert-olmoearth-v12-mlx.py --variant \(source.variant.rawValue) "
+                + "--weights \"\(weights)\" --configuration \"\(configuration)\" "
+                + "--output \"\(rootURL.path)\" --dtype float32."
         }
         let source = rootURL.appendingPathComponent("instant_mesh_base.ckpt").path
         let output = rootURL.appendingPathComponent(
@@ -2738,6 +2847,12 @@ public extension ManagedModelSpec {
             return FalconPerceptionResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .terramindFlood:
             return TerraMindFloodResources.missingSourcePaths(in: rootURL, fileManager: fileManager)
+        case .terramindFire:
+            return TerraMindFireResources.missingSourcePaths(in: rootURL, fileManager: fileManager)
+        case .tessera:
+            return TESSERAResources.missingSourcePaths(for: id, in: rootURL, fileManager: fileManager)
+        case .olmoEarth:
+            return OlmoEarthResources.missingSourcePaths(in: rootURL, fileManager: fileManager)
         case .insightFaceBuffaloL:
             return FaceAnalysisResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .moge2, .videoDepthAnything, .depthAnything3, .tripoSR:
@@ -2991,6 +3106,12 @@ public extension ManagedModelSpec {
             ).isEmpty
         case .terramindFlood:
             return (try? TerraMindFloodResources.inspect(normalized)) != nil
+        case .terramindFire:
+            return (try? TerraMindFireResources.inspect(normalized)) != nil
+        case .tessera:
+            return (try? TESSERAResources.inspect(normalized))?.source.modelID == id
+        case .olmoEarth:
+            return (try? OlmoEarthResources.inspect(normalized))?.source.modelID == id
         case .moge2, .videoDepthAnything, .depthAnything3, .tripoSR:
             guard let pin = GeometryModelPins.pin(for: id) else { return false }
             return Self.invalidPinnedArtifacts(

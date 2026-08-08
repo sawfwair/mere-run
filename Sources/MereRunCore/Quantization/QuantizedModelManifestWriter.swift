@@ -33,13 +33,19 @@ public enum QuantizedModelManifestWriter {
             if id.hasPrefix("vision-depth-") { return .depth }
             if id.hasPrefix("image-3d-") { return .threeD }
             if id.hasPrefix("speech-diarization-") { return .asr }
+            if id.hasPrefix("vision-fire-") || id.hasPrefix("vision-flood-") { return .terramind }
+            if id.hasPrefix("vision-embed-tessera-") { return .tessera }
+            if id.hasPrefix("vision-embed-olmoearth-") { return .olmoEarth }
             if id.hasPrefix("text-code-north-mini") { return .code }
             return nil
         }
 
         func inferTier(from id: String) -> MereRunModelManifest.Tier? {
             if id.hasSuffix("-nano") { return .nano }
+            if id.hasSuffix("-tiny") { return .tiny }
             if id.hasSuffix("-small") { return .small }
+            if id.hasSuffix("-medium") { return .medium }
+            if id.hasSuffix("-large") { return .large }
             if id.hasSuffix("-max") { return .max }
             if id.hasSuffix("-base") { return .base }
             return nil
@@ -58,7 +64,9 @@ public enum QuantizedModelManifestWriter {
             case .qwen35HybridMoE: return .qwen
             case .samSegmentation: return .sam
             case .falconPerception: return .falcon
-            case .terramindFlood: return .terramind
+            case .terramindFlood, .terramindFire: return .terramind
+            case .tessera: return .tessera
+            case .olmoEarth: return .olmoEarth
             case .insightFace: return .face
             case .moge2, .depthAnything3: return .geometry
             case .videoDepthAnything: return .depth
@@ -127,6 +135,10 @@ public enum QuantizedModelManifestWriter {
                     return [.visionGrounding, .visionDetection, .visionSegmentation]
                 case .terramindFlood:
                     return [.floodSegmentation]
+                case .terramindFire:
+                    return [.fireSegmentation]
+                case .tessera, .olmoEarth:
+                    return [.earthObservationEmbedding]
                 case .insightFace:
                     return [.faceDetection, .faceLandmarks, .faceEmbedding, .faceVerification]
                 case .moge2:
@@ -243,7 +255,8 @@ public enum QuantizedModelManifestWriter {
                 break
             case .qwen35HybridMoE:
                 break
-            case .samSegmentation, .falconPerception, .terramindFlood, .insightFace, .moge2,
+            case .samSegmentation, .falconPerception, .terramindFlood, .terramindFire, .tessera,
+                 .olmoEarth, .insightFace, .moge2,
                  .videoDepthAnything, .depthAnything3,
                  .tripoSR, .instantMesh, .trellis2:
                 break

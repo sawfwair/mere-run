@@ -4589,7 +4589,8 @@ actor CodeGenServer {
                 modelPath: resolved.rootURL.path,
                 request: request
             )
-        case .gemma, .laguna, .liquid, .qwen, .sam, .falcon, .terramind, .face, .geometry, .depth, .threeD,
+        case .gemma, .laguna, .liquid, .qwen, .sam, .falcon, .terramind, .tessera, .olmoEarth,
+             .face, .geometry, .depth, .threeD,
              .tts, .asr, .embed, .code, .ocr, .audio, .music, .sfx, .video, .psi, .privacy, .deepseek,
              .inkling, nil:
             throw APIRequestValidationError.invalidField(

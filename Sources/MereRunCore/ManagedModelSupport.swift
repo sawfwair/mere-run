@@ -584,6 +584,76 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 24
             ),
             descriptor(
+                ModelResolver.ModelID.visionFireTerraMindBase.rawValue,
+                "Geospatial fire segmentation",
+                "Runs four-timestep Sentinel-2, Sentinel-1, and DEM fire segmentation with native Swift MLX.",
+                minimum: 16,
+                recommended: 24
+            ),
+            descriptor(
+                ModelResolver.ModelID.visionEmbedTESSERAV2Nano.rawValue,
+                "TESSERA v2 Nano time-series embeddings",
+                "Encodes Sentinel-1/2 observation sequences into 128-dimensional retrieval and analysis vectors.",
+                minimum: 4,
+                recommended: 6
+            ),
+            descriptor(
+                ModelResolver.ModelID.visionEmbedTESSERAV2Small.rawValue,
+                "TESSERA v2 Small time-series embeddings",
+                "Adds temporal capacity for compact Sentinel-1/2 representation workflows.",
+                minimum: 6,
+                recommended: 8
+            ),
+            descriptor(
+                ModelResolver.ModelID.visionEmbedTESSERAV2Medium.rawValue,
+                "TESSERA v2 Medium time-series embeddings",
+                "Balances temporal representation quality and latency on entry Apple Silicon machines.",
+                minimum: 8,
+                recommended: 12
+            ),
+            descriptor(
+                ModelResolver.ModelID.visionEmbedTESSERAV2Large.rawValue,
+                "TESSERA v2 Large time-series embeddings",
+                "Runs the strongest deployable TESSERA v2 student for Sentinel-1/2 time-series analysis.",
+                minimum: 8,
+                recommended: 16
+            ),
+            descriptor(
+                ModelResolver.ModelID.visionEmbedTESSERAV2Teacher.rawValue,
+                "TESSERA v2 2B Teacher embeddings",
+                "Runs the full 2.06B research encoder for 1,024-dimensional Sentinel-1/2 time-series embeddings.",
+                minimum: 24,
+                recommended: 32
+            ),
+            descriptor(
+                ModelResolver.ModelID.visionEmbedOlmoEarthV12Nano.rawValue,
+                "OlmoEarth v1.2 Nano embeddings",
+                "Creates compact multisensor spatial embeddings from Sentinel-2, Sentinel-1, or Landsat imagery.",
+                minimum: 4,
+                recommended: 8
+            ),
+            descriptor(
+                ModelResolver.ModelID.visionEmbedOlmoEarthV12Tiny.rawValue,
+                "OlmoEarth v1.2 Tiny embeddings",
+                "Creates efficient multisensor spatial embeddings on entry Apple Silicon machines.",
+                minimum: 8,
+                recommended: 12
+            ),
+            descriptor(
+                ModelResolver.ModelID.visionEmbedOlmoEarthV12Small.rawValue,
+                "OlmoEarth v1.2 Small embeddings",
+                "Increases multisensor Earth-observation representation capacity for local analysis.",
+                minimum: 12,
+                recommended: 16
+            ),
+            descriptor(
+                ModelResolver.ModelID.visionEmbedOlmoEarthV12Base.rawValue,
+                "OlmoEarth v1.2 Base embeddings",
+                "Runs the largest OlmoEarth v1.2 encoder for multisensor humanitarian and environmental analysis.",
+                minimum: 16,
+                recommended: 24
+            ),
+            descriptor(
                 FaceAnalysisResources.modelID,
                 "Face analysis",
                 "Detects faces and landmarks, creates identity embeddings, and compares people locally.",
@@ -927,6 +997,10 @@ public enum ManagedModelCapabilityCatalog {
 
         if spec.validationKind == .terramindFlood && !machine.isAppleSiliconMac {
             reasons.append("TerraMind Flood requires Apple Silicon macOS.")
+        }
+
+        if spec.validationKind == .terramindFire && !machine.isAppleSiliconMac {
+            reasons.append("TerraMind Fire requires Apple Silicon macOS.")
         }
 
         if machine.unifiedMemoryGB < descriptor.minimumUnifiedMemoryGB {

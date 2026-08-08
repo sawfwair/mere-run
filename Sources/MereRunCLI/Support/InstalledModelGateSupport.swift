@@ -276,6 +276,21 @@ enum InstalledModelSmokePlans {
                 try await runner.installedFloodCheck(model: spec.id)
             }
 
+        case .terramindFire:
+            return direct(spec, route: "geo fire normalized tensor smoke") { runner in
+                try await runner.installedFireCheck(model: spec.id)
+            }
+
+        case .tessera:
+            return direct(spec, route: "geo tessera temporal embedding smoke") { runner in
+                try await runner.installedTESSERACheck(model: spec.id)
+            }
+
+        case .olmoEarth:
+            return direct(spec, route: "geo olmoearth multisensor embedding smoke") { runner in
+                try await runner.installedOlmoEarthCheck(model: spec.id)
+            }
+
         case .insightFaceBuffaloL:
             return direct(spec, route: "vision face detect") { runner in
                 try await runner.installedFaceCheck(model: spec.id)
@@ -857,6 +872,129 @@ extension GateRunner {
             semanticFailure: valid
                 ? nil
                 : "TerraMind flood logits were missing, non-finite, or had the wrong shape"
+        )
+    }
+
+    func installedFireCheck(model: String) async throws -> GateObservation {
+        let input = artifactURL("\(model)-input", extension: "safetensors")
+        let output = artifactURL(model, extension: "safetensors")
+        try MLX.save(
+            arrays: [
+                "S2L2A": MLX.zeros([1, 12, 4, 256, 256], dtype: .float32),
+                "S1RTC": MLX.zeros([1, 2, 4, 256, 256], dtype: .float32),
+                "DEM": MLX.zeros([1, 1, 4, 256, 256], dtype: .float32),
+            ],
+            metadata: ["format": "mere.run/terramind-fire-smoke-v1"],
+            url: input
+        )
+        let run = try await exec(
+            ["geo", "fire", input.path, "--model", model, "--output", output.path, "--json"],
+            timeout: 1_800
+        )
+        let data = try Data(contentsOf: output)
+        let arrays = try MLX.loadArrays(url: output)
+        guard let logits = arrays["logits"] else {
+            throw GateError.invalidArtifact("TerraMind fire output did not contain logits")
+        }
+        let values = logits.asArray(Float.self)
+        let valid = logits.shape == [1, 2, 256, 256]
+            && values.allSatisfy(\.isFinite)
+            && !values.isEmpty
+        return GateObservation(
+            hash: Self.sha256(data),
+            secondRunHash: nil,
+            wallSeconds: run.wallSeconds,
+            decodeTps: nil,
+            semanticFailure: valid
+                ? nil
+                : "TerraMind fire logits were missing, non-finite, or had the wrong shape"
+        )
+    }
+
+    func installedTESSERACheck(model: String) async throws -> GateObservation {
+        let input = artifactURL("\(model)-input", extension: "safetensors")
+        let output = artifactURL(model, extension: "safetensors")
+        try MLX.save(
+            arrays: [
+                "S2": MLX.zeros([1, 2, 10], dtype: .float32),
+                "S2_DOY": MLXArray([Float(15), 165], [1, 2]),
+                "S1_ASC": MLX.zeros([1, 2, 2], dtype: .float32),
+                "S1_ASC_DOY": MLXArray([Float(12), 160], [1, 2]),
+            ],
+            metadata: ["format": "mere.run/tessera-v2-smoke-v1"],
+            url: input
+        )
+        let run = try await exec(
+            [
+                "geo", "tessera", input.path,
+                "--model", model,
+                "--dimensions", model.hasSuffix("-teacher") ? "1024" : "128",
+                "--output", output.path,
+                "--json",
+            ],
+            timeout: 1_800
+        )
+        let data = try Data(contentsOf: output)
+        let arrays = try MLX.loadArrays(url: output)
+        guard let embeddings = arrays["embeddings"] else {
+            throw GateError.invalidArtifact("TESSERA output did not contain embeddings")
+        }
+        let values = embeddings.asArray(Float.self)
+        let valid = embeddings.shape == [1, 128]
+            && values.allSatisfy(\.isFinite)
+            && values.contains { abs($0) > 0.000_001 }
+        return GateObservation(
+            hash: Self.sha256(data),
+            secondRunHash: nil,
+            wallSeconds: run.wallSeconds,
+            decodeTps: nil,
+            semanticFailure: valid
+                ? nil
+                : "TESSERA embeddings were zero, non-finite, or had the wrong shape"
+        )
+    }
+
+    func installedOlmoEarthCheck(model: String) async throws -> GateObservation {
+        guard let source = OlmoEarthResources.spec(for: model) else {
+            throw GateError.invalidArtifact("Unsupported OlmoEarth model id: \(model)")
+        }
+        let input = artifactURL("\(model)-input", extension: "safetensors")
+        let output = artifactURL(model, extension: "safetensors")
+        try MLX.save(
+            arrays: [
+                "TIMESTAMPS": MLXArray([Int32(1), 0, 2_026], [1, 1, 3]),
+                "S2L2A": MLX.zeros([1, 8, 8, 1, 12], dtype: .float32),
+            ],
+            metadata: ["format": "mere.run/olmoearth-v1.2-smoke-v1"],
+            url: input
+        )
+        let run = try await exec(
+            [
+                "geo", "olmoearth", input.path,
+                "--model", model,
+                "--patch-size", "4",
+                "--output", output.path,
+                "--json",
+            ],
+            timeout: 1_800
+        )
+        let data = try Data(contentsOf: output)
+        let arrays = try MLX.loadArrays(url: output)
+        guard let embeddings = arrays[OlmoEarthModality.sentinel2L2A.outputTensorName] else {
+            throw GateError.invalidArtifact("OlmoEarth output did not contain Sentinel-2 embeddings")
+        }
+        let values = embeddings.asArray(Float.self)
+        let valid = embeddings.shape == [1, 2, 2, source.architecture.embeddingDimension]
+            && values.allSatisfy(\.isFinite)
+            && values.contains { abs($0) > 0.000_001 }
+        return GateObservation(
+            hash: Self.sha256(data),
+            secondRunHash: nil,
+            wallSeconds: run.wallSeconds,
+            decodeTps: nil,
+            semanticFailure: valid
+                ? nil
+                : "OlmoEarth embeddings were zero, non-finite, or had the wrong shape"
         )
     }
 

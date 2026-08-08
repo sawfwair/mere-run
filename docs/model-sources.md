@@ -127,6 +127,16 @@ from the runtime catalog used by `mere.run model list`,
 | `video` | `video-cosmos3-edge-mlx` |
 | `video` | `video-scail2-14b-mlx` |
 | `video` | `video-dreamx-world-5b-ar-mlx` |
+| `vision-fire` | `vision-fire-terramind-base` |
+| `vision-embed` | `vision-embed-tessera-v2-nano` |
+| `vision-embed` | `vision-embed-tessera-v2-small` |
+| `vision-embed` | `vision-embed-tessera-v2-medium` |
+| `vision-embed` | `vision-embed-tessera-v2-large` |
+| `vision-embed` | `vision-embed-tessera-v2-teacher` |
+| `vision-embed` | `vision-embed-olmoearth-v12-nano` |
+| `vision-embed` | `vision-embed-olmoearth-v12-tiny` |
+| `vision-embed` | `vision-embed-olmoearth-v12-small` |
+| `vision-embed` | `vision-embed-olmoearth-v12-base` |
 <!-- managed-model-catalog:end -->
 
 ### Restricted model downloads
@@ -162,6 +172,7 @@ validates all configured models before downloading any; both accept the same
 | `text-chat-lfm25-a1b-8bit`, `text-chat-lfm25-2.6b-4bit` | LFM Open License v1.0; commercial use by entities at or above USD 10M annual revenue is excluded |
 | `vision-segment-sam31` | Meta SAM License custom use, trade-control, attribution, and redistribution conditions |
 | `vision-face-buffalo-l` | InsightFace pretrained weights; non-commercial research use |
+| `vision-embed-olmoearth-v12-{nano,tiny,small,base}` | OlmoEarth Artifact License; prohibited military, defense, intelligence, human-surveillance, policing, and listed extractive uses |
 | `video-minimax-h3-fl2va-mlx`, `video-minimax-h3-fl2va-bf16-mlx`, `video-minimax-h3-ref2va-mlx` | MiniMax-H3 Community License; use, distribution, and display are excluded in the United States, European Union, United Kingdom, and Republic of Korea, with downstream notice and safeguard obligations |
 | `image-3d-trellis2-4b` | the mounted DINOv3 encoder is gated under Meta's custom DINOv3 License |
 | `music-muscriptor-{small,medium,large}` | CC BY-NC 4.0 model weights |
