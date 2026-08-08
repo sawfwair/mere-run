@@ -822,7 +822,9 @@ Key options:
 
 Unless `--quiet` is set, diagnostics on stderr include the selected text
 backend, for example native MLX/Metal for MLX models or llama.cpp/GGUF for GGUF
-models.
+models. `--quiet` does not change the requested output mode: with `--stream`,
+generated text still arrives incrementally on stdout while diagnostics remain
+suppressed.
 
 `--lora` accepts a compatible local adapter file or cataloged adapter id.
 Native Gemma 4, Laguna XS 2.1, and Inkling-Small adapters produced by
