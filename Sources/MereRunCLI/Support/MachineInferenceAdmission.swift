@@ -458,17 +458,50 @@ struct MachineInferenceCoordinator: Sendable {
 
     private static func availableDiskBytes(at url: URL) -> UInt64? {
 #if os(Linux)
+        return fileSystemFreeBytes(at: url)
+#else
+        let importantUsageCapacity = try? url.resourceValues(
+            forKeys: [.volumeAvailableCapacityForImportantUsageKey]
+        ).volumeAvailableCapacityForImportantUsage
+        return reconciledAvailableDiskBytes(
+            importantUsageCapacity: importantUsageCapacity,
+            fileSystemFreeBytes: fileSystemFreeBytes(at: url)
+        )
+#endif
+    }
+
+    /// The important-usage capacity probe can return zero when macOS cannot
+    /// reach `sysmond`, including inside a restricted process sandbox. A
+    /// positive filesystem value proves that the volume is not actually full.
+    /// When both probes succeed, use the smaller value for admission safety.
+    static func reconciledAvailableDiskBytes(
+        importantUsageCapacity: Int64?,
+        fileSystemFreeBytes: UInt64?
+    ) -> UInt64? {
+        let positiveFileSystemBytes = fileSystemFreeBytes.flatMap { $0 > 0 ? $0 : nil }
+        guard let importantUsageCapacity else {
+            return fileSystemFreeBytes
+        }
+        guard importantUsageCapacity > 0 else {
+            if importantUsageCapacity == 0 {
+                return positiveFileSystemBytes ?? 0
+            }
+            return fileSystemFreeBytes
+        }
+
+        let importantBytes = UInt64(importantUsageCapacity)
+        guard let positiveFileSystemBytes else {
+            return importantBytes
+        }
+        return min(importantBytes, positiveFileSystemBytes)
+    }
+
+    private static func fileSystemFreeBytes(at url: URL) -> UInt64? {
         guard let attributes = try? FileManager.default.attributesOfFileSystem(forPath: url.path),
               let freeBytes = attributes[.systemFreeSize] as? NSNumber else {
             return nil
         }
         return freeBytes.uint64Value
-#else
-        let capacity = try? url.resourceValues(
-            forKeys: [.volumeAvailableCapacityForImportantUsageKey]
-        ).volumeAvailableCapacityForImportantUsage
-        return capacity.flatMap { $0 >= 0 ? UInt64($0) : nil }
-#endif
     }
 
     private static func isProcessAlive(_ processID: Int32) -> Bool {
@@ -575,6 +608,8 @@ enum CLIInferenceAdmissionClassifier {
             let large = ["train-adapter"].contains(subcommand)
             return MachineInferenceRequest(label: label, resourceClass: large ? .large : .standard)
         case "video", "world":
+            return MachineInferenceRequest(label: label, resourceClass: .large)
+        case "geo":
             return MachineInferenceRequest(label: label, resourceClass: .large)
         case "model" where subcommand == "benchmark":
             return MachineInferenceRequest(label: label, resourceClass: .large)

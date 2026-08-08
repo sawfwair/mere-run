@@ -173,9 +173,12 @@ private final class MiniMaxH3Attention: Module {
             query = rope.apply(query)
             key = rope.apply(key)
         }
-        query = query.transposed(0, 2, 1, 3)
-        key = key.transposed(0, 2, 1, 3)
-        let value = projected[2].transposed(0, 2, 1, 3)
+        // Chunked SDPA reuses the complete K/V tensors for every query slice.
+        // Materialize the transposed head-major views once so MLX does not
+        // repack the same strided K/V storage inside every attention kernel.
+        query = query.transposed(0, 2, 1, 3).contiguous()
+        key = key.transposed(0, 2, 1, 3).contiguous()
+        let value = projected[2].transposed(0, 2, 1, 3).contiguous()
         return [query, key, value]
     }
 
@@ -1014,6 +1017,23 @@ private func miniMaxH3MaterializeResidentBF16(
     return .init(linearCount: replacements.count, byteCount: byteCount)
 }
 
+private func miniMaxH3ResidentBF16ByteCount(_ linear: Linear) -> UInt64 {
+    if let quantized = linear as? QuantizedLinear {
+        let shape = quantized.shape
+        return UInt64(shape.0) * UInt64(shape.1) * 2
+            + UInt64(quantized.bias?.size ?? 0) * 2
+    }
+    return linear.parameters().flattened().reduce(into: UInt64(0)) { total, entry in
+        total += UInt64(entry.1.size) * 2
+    }
+}
+
+private func miniMaxH3EvaluateParameters(in module: Module) {
+    let parameters = module.parameters().flattened().map(\.1)
+    guard !parameters.isEmpty else { return }
+    MLX.eval(parameters)
+}
+
 struct MiniMaxH3RotaryEmbedding {
     let cosine: MLXArray
     let sine: MLXArray
@@ -1100,10 +1120,8 @@ public final class MiniMaxH3Transformer: Module {
 
     var estimatedResidentBF16ByteCount: UInt64 {
         leafModules().flattened().reduce(into: UInt64(0)) { total, entry in
-            guard let quantized = entry.1 as? QuantizedLinear else { return }
-            let shape = quantized.shape
-            total += UInt64(shape.0) * UInt64(shape.1) * 2
-            total += UInt64(quantized.bias?.size ?? 0) * 2
+            guard let linear = entry.1 as? Linear else { return }
+            total += miniMaxH3ResidentBF16ByteCount(linear)
         }
     }
 
@@ -1114,29 +1132,25 @@ public final class MiniMaxH3Transformer: Module {
     func materializeResidentBF16() -> MiniMaxH3ResidentBF16Materialization {
         compiledBlockRunner = nil
         compiledBlockForwards = nil
-        var total = MiniMaxH3ResidentBF16Materialization(linearCount: 0, byteCount: 0)
 
-        func include(_ materialization: MiniMaxH3ResidentBF16Materialization) {
-            total = .init(
-                linearCount: total.linearCount + materialization.linearCount,
-                byteCount: total.byteCount + materialization.byteCount
-            )
+        func materialize(_ module: Module) {
+            _ = miniMaxH3MaterializeResidentBF16(in: module)
+            miniMaxH3EvaluateParameters(in: module)
             MLX.Memory.clearCache()
         }
 
         for block in tokenRefiner.blocks {
-            include(miniMaxH3MaterializeResidentBF16(in: block))
+            materialize(block)
         }
         for block in blocks {
-            include(miniMaxH3MaterializeResidentBF16(in: block))
+            materialize(block)
         }
         if let timeEmbedder {
-            include(miniMaxH3MaterializeResidentBF16(in: timeEmbedder))
+            materialize(timeEmbedder)
         }
-        include(miniMaxH3MaterializeResidentBF16(in: finalLayer))
+        materialize(finalLayer)
 
         var rootReplacements: [(String, Module)] = []
-        var rootBytes: UInt64 = 0
         for (path, linear) in [
             ("video_patch_proj", videoInput),
             ("audio_patch_proj", audioInput),
@@ -1144,14 +1158,26 @@ public final class MiniMaxH3Transformer: Module {
         ] {
             guard let resident = miniMaxH3ResidentBF16Linear(linear) else { continue }
             rootReplacements.append((path, resident.linear))
-            rootBytes += resident.byteCount
         }
         if !rootReplacements.isEmpty {
             update(modules: ModuleChildren.unflattened(rootReplacements))
-            include(.init(linearCount: rootReplacements.count, byteCount: rootBytes))
         }
-        usesResidentBF16 = total.linearCount > 0
-        return total
+
+        // Sharded BF16 checkpoints already contain dense Linear modules, so
+        // conversion alone is a no-op. Evaluating the complete parameter tree
+        // here makes the requested residency real instead of charging each
+        // transformer block to the first denoise pass.
+        miniMaxH3EvaluateParameters(in: self)
+        MLX.Memory.clearCache()
+
+        let linears = leafModules().flattened().compactMap { $0.1 as? Linear }
+        usesResidentBF16 = !linears.isEmpty && !linears.contains { $0 is QuantizedLinear }
+        return .init(
+            linearCount: linears.count,
+            byteCount: linears.reduce(into: UInt64(0)) { total, linear in
+                total += miniMaxH3ResidentBF16ByteCount(linear)
+            }
+        )
     }
 
     public func callAsFunction(
