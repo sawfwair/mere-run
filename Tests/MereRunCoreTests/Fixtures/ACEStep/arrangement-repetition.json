@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "sample_rate": 48000,
+  "section_seconds": 4,
+  "repeated_sections": [
+    { "frequencies": [220, 440], "pulse_hz": 4, "noise_mix": 0 },
+    { "frequencies": [220, 440], "pulse_hz": 4, "noise_mix": 0 },
+    { "frequencies": [220, 440], "pulse_hz": 4, "noise_mix": 0 },
+    { "frequencies": [220, 440], "pulse_hz": 4, "noise_mix": 0 }
+  ],
+  "evolving_sections": [
+    { "frequencies": [110, 165], "pulse_hz": 2, "noise_mix": 0 },
+    { "frequencies": [880, 1320, 1760], "pulse_hz": 8, "noise_mix": 0 },
+    { "frequencies": [], "pulse_hz": 6, "noise_mix": 1 },
+    { "frequencies": [220, 330, 550, 880], "pulse_hz": 3, "noise_mix": 0.25 }
+  ]
+}

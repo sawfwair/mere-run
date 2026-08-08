@@ -67,6 +67,7 @@ public struct ACEStepCandidateMetrics: Codable, Hashable, Sendable {
     public var spectralFlatness: Float?
     public var frameEnergyVariation: Float?
     public var periodicity: Float?
+    public var arrangementRepetition: Float?
     public var temporalSpectralVariation: Float?
     public var tailEnergyRatio: Float?
 
@@ -81,6 +82,7 @@ public struct ACEStepCandidateMetrics: Codable, Hashable, Sendable {
         spectralFlatness: Float? = nil,
         frameEnergyVariation: Float? = nil,
         periodicity: Float? = nil,
+        arrangementRepetition: Float? = nil,
         temporalSpectralVariation: Float? = nil,
         tailEnergyRatio: Float? = nil
     ) {
@@ -94,6 +96,7 @@ public struct ACEStepCandidateMetrics: Codable, Hashable, Sendable {
         self.spectralFlatness = spectralFlatness
         self.frameEnergyVariation = frameEnergyVariation
         self.periodicity = periodicity
+        self.arrangementRepetition = arrangementRepetition
         self.temporalSpectralVariation = temporalSpectralVariation
         self.tailEnergyRatio = tailEnergyRatio
     }
@@ -360,6 +363,7 @@ public enum ACEStepCandidateScorer {
                 spectralFlatness: 1,
                 frameEnergyVariation: 0,
                 periodicity: 0,
+                arrangementRepetition: nil,
                 temporalSpectralVariation: 0,
                 tailEnergyRatio: 0
             )
@@ -396,6 +400,7 @@ public enum ACEStepCandidateScorer {
         let spectralFlatness = estimateSpectralFlatness(mono)
         let frameEnergyVariation = estimateFrameEnergyVariation(mono)
         let periodicity = estimatePeriodicity(mono)
+        let arrangementRepetition = estimateArrangementRepetition(mono)
         let temporalSpectralVariation = estimateTemporalSpectralVariation(mono)
         let tailEnergyRatio = estimateTailEnergyRatio(mono)
         let metrics = ACEStepCandidateMetrics(
@@ -409,6 +414,7 @@ public enum ACEStepCandidateScorer {
             spectralFlatness: spectralFlatness,
             frameEnergyVariation: frameEnergyVariation,
             periodicity: periodicity,
+            arrangementRepetition: arrangementRepetition,
             temporalSpectralVariation: temporalSpectralVariation,
             tailEnergyRatio: tailEnergyRatio
         )
@@ -422,7 +428,9 @@ public enum ACEStepCandidateScorer {
         let dcScore = max(0, 1 - metrics.dcOffset * 20)
         let flatnessScore = 1 - min(max((spectralFlatness - 0.15) / 0.7, 0), 1)
         let variationScore = min(max(frameEnergyVariation / 0.35, 0), 1)
-        let periodicityScore = min(max((periodicity - 0.05) / 0.35, 0), 1)
+        let arrangementVariationScore = arrangementRepetition.map {
+            1 - min(max($0, 0), 1)
+        } ?? 0.5
         let temporalStructureScore = min(
             max((temporalSpectralVariation - 0.65) / 0.9, 0),
             1
@@ -434,8 +442,8 @@ public enum ACEStepCandidateScorer {
         let structureScore =
             0.15 * flatnessScore
             + 0.10 * variationScore
-            + 0.10 * periodicityScore
-            + 0.45 * temporalStructureScore
+            + 0.20 * arrangementVariationScore
+            + 0.35 * temporalStructureScore
             + 0.20 * tailContinuityScore
         let score = 100 * (
             0.20 * finiteScore
@@ -561,6 +569,106 @@ public enum ACEStepCandidateScorer {
             periodicitySum += best
         }
         return Float(periodicitySum / Double(starts.count))
+    }
+
+    private static func estimateArrangementRepetition(
+        _ samples: [Float]
+    ) -> Float? {
+        let blockSize = 4 * 48_000
+        guard samples.count >= 3 * blockSize else {
+            return nil
+        }
+        let blockCount = min(16, samples.count / blockSize)
+        let starts = analysisWindowStarts(
+            sampleCount: samples.count,
+            windowSize: blockSize,
+            maximumCount: blockCount
+        )
+        let frameSize = 1_024
+        let frameCount = 16
+        let lastFrameOffset = blockSize - frameSize
+        let frameOffsets = (0..<frameCount).map { index in
+            Int(
+                (Double(lastFrameOffset) * Double(index)
+                    / Double(frameCount - 1)).rounded()
+            )
+        }
+        let minimumBin = 4
+        let maximumBin = 384
+        var spectralBins: [Int] = []
+        spectralBins.reserveCapacity(24)
+        for index in 0..<24 {
+            let ratio = Double(index) / 23
+            let bin = Int(
+                (Double(minimumBin)
+                    * pow(Double(maximumBin) / Double(minimumBin), ratio))
+                    .rounded()
+            )
+            if bin > (spectralBins.last ?? 0) {
+                spectralBins.append(bin)
+            }
+        }
+
+        let signatures = starts.map { blockStart in
+            let spectrum = spectralBins.map { bin in
+                let meanPower = frameOffsets.reduce(0.0) { partial, offset in
+                    partial + goertzelPower(
+                        samples,
+                        start: blockStart + offset,
+                        windowSize: frameSize,
+                        bin: bin
+                    )
+                } / Double(frameOffsets.count)
+                return log(max(meanPower, 1e-20))
+            }
+            let envelope = (0..<16).map { index in
+                let start = blockStart + index * blockSize / 16
+                let end = blockStart + (index + 1) * blockSize / 16
+                return rootMeanSquare(samples[start..<end])
+            }
+            return standardized(spectrum) + standardized(envelope)
+        }
+
+        var similarities: [Double] = []
+        for left in 0..<(signatures.count - 2) {
+            for right in (left + 2)..<signatures.count {
+                let lhs = signatures[left]
+                let rhs = signatures[right]
+                let dot = zip(lhs, rhs).reduce(0.0) { $0 + $1.0 * $1.1 }
+                let lhsMagnitude = sqrt(lhs.reduce(0.0) { $0 + $1 * $1 })
+                let rhsMagnitude = sqrt(rhs.reduce(0.0) { $0 + $1 * $1 })
+                similarities.append(
+                    dot / max(
+                        lhsMagnitude * rhsMagnitude,
+                        Double.leastNonzeroMagnitude
+                    )
+                )
+            }
+        }
+        guard !similarities.isEmpty else {
+            return nil
+        }
+        similarities.sort()
+        let percentileIndex = Int(
+            (Double(similarities.count - 1) * 0.9).rounded(.up)
+        )
+        return Float(min(max(similarities[percentileIndex], 0), 1))
+    }
+
+    private static func standardized(_ values: [Double]) -> [Double] {
+        guard !values.isEmpty else {
+            return []
+        }
+        let mean = values.reduce(0, +) / Double(values.count)
+        let variance = values.reduce(0.0) { partial, value in
+            let difference = value - mean
+            return partial + difference * difference
+        } / Double(values.count)
+        let scale = sqrt(variance)
+        guard scale > 1e-9 else {
+            return [Double](repeating: 0, count: values.count)
+        }
+        return values.map { ($0 - mean) / scale }
     }
 
     private static func estimateTailEnergyRatio(_ samples: [Float]) -> Float {

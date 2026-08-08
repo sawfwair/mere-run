@@ -6,6 +6,13 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Music
+
+- replaced ACE-Step candidate ranking's positive short-window periodicity
+  reward with a four-second arrangement-repetition metric, so repeated sections
+  no longer outrank developing candidates while silence, clipping, non-finite,
+  and broken-tail rejection remains intact.
+
 ### Video
 
 - added `minimax-h3-lightx2v-4step` as a second immutable, checksum-pinned

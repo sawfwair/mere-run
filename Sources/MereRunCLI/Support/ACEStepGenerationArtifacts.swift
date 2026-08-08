@@ -43,7 +43,7 @@ struct ACEStepRecipeLMSampling: Codable, Equatable {
 }
 
 struct ACEStepGenerationRecipe: Codable {
-    static let currentSchemaVersion = 4
+    static let currentSchemaVersion = 5
 
     var schemaVersion: Int
     var createdAt: Date

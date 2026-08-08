@@ -109,7 +109,7 @@ final class MusicServeAndExportTests: XCTestCase {
             JSONSerialization.jsonObject(with: encoded) as? [String: String]
         )
 
-        XCTAssertEqual(ACEStepGenerationRecipe.currentSchemaVersion, 4)
+        XCTAssertEqual(ACEStepGenerationRecipe.currentSchemaVersion, 5)
         XCTAssertEqual(object["bpm"], "118")
         XCTAssertEqual(object["duration"], "12")
         XCTAssertEqual(object["keyscale"], "D major")

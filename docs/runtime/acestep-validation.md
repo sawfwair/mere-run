@@ -21,8 +21,9 @@ Hugging Face revisions:
 
 Generation recipes repeat the effective repository/revision set, adapter
 SHA-256 and scale, final effective conditioning metadata, complete inference
-configuration, candidate ranking, and input/output hashes. Recipe schema 4
-adds planner temperature, top-k/top-p, and repetition penalty to schema 3's
+configuration, candidate ranking, and input/output hashes. Recipe schema 5
+adds arrangement-scale repetition to each candidate's technical metrics;
+schema 4 added planner temperature, top-k/top-p, and repetition penalty to schema 3's
 resolved planner source, root, and immutable repository/revision provenance
 and schema 2's post-planning BPM, duration, key/scale, vocal language, and time
 signature. This protects old installs whose original
@@ -150,6 +151,25 @@ for 12 seconds and passed `temporalSpectralVariation >= 0.85` plus
 Repeating the transient case with the same seed reproduced its planner
 metadata, candidate scores/code counts, and WAV byte-for-byte at SHA-256
 `1a5c7c56e5373d69400f553256637199bb2b1e04877435abf8f2e2ebe6e555dc`.
+
+### Arrangement-ranker investigation
+
+Issue #254 was reproduced with a fixed 60-second, 96 BPM, D minor, 4/4
+progressive-electronic prompt; seeds `25400...25403`; four candidates; and the
+same explicit 1.7B planner for Turbo and XL-SFT. Unnormalized float32 exports
+were analyzed under anonymous labels using four-second spectral/envelope
+signatures. The previous ranker selected the XL-SFT candidate with 0.993
+90th-percentile non-adjacent block similarity and only 0.043 mean adjacent
+block change; an unselected candidate measured 0.789 and 0.514 respectively.
+Across both checkpoint lanes, five of the six alternatives had lower
+arrangement repetition than the selected output.
+
+The positive short-window waveform-periodicity contribution did not measure
+this behavior and has been replaced by arrangement variation. The original
+periodicity value remains in recipes as a diagnostic, while finite audio,
+activity, clipping, DC, and the other safety-quality contributions retain
+their prior weights. A deterministic repeated-block versus evolving-section
+fixture protects the new ranking behavior without committing generated audio.
 
 The review CSV remains deliberately unscored until a person listens. The
 technical rank is evidence against the exact stationary-noise regression, but

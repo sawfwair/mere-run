@@ -87,6 +87,40 @@ final class ACEStepTaskAndRepaintTests: MereRunCoreTestCase {
         )
     }
 
+    func testCandidateScoringPenalizesRepeatedArrangementBlocks() throws {
+        let fixtureURL = try XCTUnwrap(Bundle.module.resourceURL)
+            .appendingPathComponent(
+                "Fixtures/ACEStep/arrangement-repetition.json"
+            )
+        let fixture = try JSONDecoder().decode(
+            ArrangementRepetitionFixture.self,
+            from: Data(contentsOf: fixtureURL)
+        )
+        let repeated = arrangementSamples(
+            fixture.repeatedSections,
+            sampleRate: fixture.sampleRate,
+            sectionSeconds: fixture.sectionSeconds
+        )
+        let evolving = arrangementSamples(
+            fixture.evolvingSections,
+            sampleRate: fixture.sampleRate,
+            sectionSeconds: fixture.sectionSeconds
+        )
+
+        let repeatedResult = ACEStepCandidateScorer.evaluate(MLXArray(repeated))
+        let evolvingResult = ACEStepCandidateScorer.evaluate(MLXArray(evolving))
+        let repeatedMetric = try XCTUnwrap(
+            repeatedResult.metrics.arrangementRepetition
+        )
+        let evolvingMetric = try XCTUnwrap(
+            evolvingResult.metrics.arrangementRepetition
+        )
+
+        XCTAssertGreaterThan(repeatedMetric, 0.9)
+        XCTAssertLessThan(evolvingMetric, repeatedMetric - 0.15)
+        XCTAssertGreaterThan(evolvingResult.score, repeatedResult.score)
+    }
+
     func testCandidateRankingIsScoreDescendingAndStableByIndex() {
         let audio = MLXArray([Float](repeating: 0, count: 2))
         let metrics = ACEStepCandidateScorer.evaluate(audio).metrics
@@ -599,5 +633,59 @@ final class ACEStepTaskAndRepaintTests: MereRunCoreTestCase {
             spliced.asArray(Float.self),
             [0, 5, 10, 10, 10, 10, 5, 0, 0, 0]
         )
+    }
+}
+
+private struct ArrangementRepetitionFixture: Decodable {
+    struct Section: Decodable {
+        var frequencies: [Double]
+        var pulseHz: Double
+        var noiseMix: Double
+
+        enum CodingKeys: String, CodingKey {
+            case frequencies
+            case pulseHz = "pulse_hz"
+            case noiseMix = "noise_mix"
+        }
+    }
+
+    var sampleRate: Int
+    var sectionSeconds: Int
+    var repeatedSections: [Section]
+    var evolvingSections: [Section]
+
+    enum CodingKeys: String, CodingKey {
+        case sampleRate = "sample_rate"
+        case sectionSeconds = "section_seconds"
+        case repeatedSections = "repeated_sections"
+        case evolvingSections = "evolving_sections"
+    }
+}
+
+private func arrangementSamples(
+    _ sections: [ArrangementRepetitionFixture.Section],
+    sampleRate: Int,
+    sectionSeconds: Int
+) -> [Float] {
+    sections.flatMap { section in
+        (0..<(sampleRate * sectionSeconds)).map { index in
+            let time = Double(index) / Double(sampleRate)
+            let pulse = 0.55 + 0.45 * max(
+                0,
+                sin(2 * Double.pi * section.pulseHz * time)
+            )
+            let tone = section.frequencies.enumerated().reduce(0.0) {
+                partial, element in
+                let amplitude = 0.16 / Double(element.offset + 1)
+                return partial + amplitude * sin(
+                    2 * Double.pi * element.element * time
+                )
+            }
+            let hashed = sin(Double(index) * 12.9898) * 43_758.5453
+            let noise = 0.16 * (2 * (hashed - floor(hashed)) - 1)
+            let mixed = (1 - section.noiseMix) * tone
+                + section.noiseMix * noise
+            return Float(pulse * mixed)
+        }
     }
 }
