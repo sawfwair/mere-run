@@ -209,16 +209,38 @@ native projection/reduction chain; set it to `1` to opt in on a supported M4
 Max. Any non-XS shape, dtype, quantization layout, or unquantized shared expert
 falls back automatically.
 
-The same M5-ranked runtime uses a retained group-32 affine INT8 side layout for
-Q/K/V on the first 28 layers of one-token decode. Prefill, batched decode, and
-the original BF16 checkpoint parameters are unchanged. Disable it with
+The measured M4 Max and M5 Max runtimes use retained group-32 affine INT8 side
+layouts for Q/K/V, the attention output, and the per-head gate projections on
+all 40 layers of one-token decode. M5 Max folds the gate rows into the Q/K/V
+bank and fuses the input RMSNorm with that projection. The custom kernel keeps
+the reference BF16 normalization boundary before the affine dot products. M4
+Max keeps a separate gate bank because the corrected folded geometry measured
+neutral there. A fused Metal tail consumes the raw gate logits, reproduces the
+stable FP32 softplus and BF16 rounding boundary, and performs the affine output
+projection in the same dispatch. All custom pipelines are warmed during model
+preparation, outside the first request. Prefill, batched decode, DFlash
+verification, and the original BF16 checkpoint parameters are unchanged.
+Disable Q/K/V with
 `MERERUN_LAGUNA_NATIVE_AFFINE_QKV=0`, opt in on other hardware with `=1`, or
 set `MERERUN_LAGUNA_NATIVE_AFFINE_QKV_LAYERS=0...40` for a bounded rollout.
-The official XS head pattern makes the default 28-layer side layout 598.5 MiB;
-preparation is idempotent and decode retains no additional buffer per token.
-The default remains 28 because that exact slice passed the public, hidden,
-semantic, and paired-timing M5 gates; the prepared 40-layer continuation is
-not a production default until it receives the same validation.
+The matching controls are `MERERUN_LAGUNA_NATIVE_AFFINE_OPROJ`,
+`MERERUN_LAGUNA_NATIVE_AFFINE_OPROJ_LAYERS`,
+`MERERUN_LAGUNA_NATIVE_AFFINE_GPROJ`, and
+`MERERUN_LAGUNA_NATIVE_AFFINE_GPROJ_LAYERS`.
+`MERERUN_LAGUNA_FUSED_GATED_AFFINE_OPROJ=0` restores the two-dispatch gate and
+output-projection chain; `MERERUN_LAGUNA_NATIVE_AFFINE_GPROJ_FOLD=0` restores
+the separate gate bank on M5, while `=1` opts into the same folded geometry on
+M4. `MERERUN_LAGUNA_FUSED_NORM_AFFINE_QKV=0` restores the standalone input
+RMSNorm plus affine Q/K/V projection on M5. Unsupported shapes and every
+multi-token forward fall back to the ordinary production modules.
+`MERERUN_LAGUNA_NVFP4_QDOT_FAST=0` restores the reference Laguna routed-QMV
+decode and disables its exact split-nibble, power-of-two scale-fold, and
+dead-zero seed elisions. `MERERUN_LAGUNA_DECODE_ASYNC_STAGE=0` disables the
+exact seven-stage decode enqueue ladder. It is enabled by default on M4 Max and
+M5 Max after repeatable production A/B gains and multiple exact official M5
+receipts. The complete Q/K/V, output, and gate side layouts retain about
+1.50 GiB for the official XS head pattern; preparation is idempotent and
+decode retains no additional buffer per token.
 
 Example:
 

@@ -32,6 +32,11 @@ enum RoutedMoERouting {
         #endif
     }
 
+    private static let lagunaNVFP4QDotFastEnabled = parseBoolean(
+        ProcessInfo.processInfo.environment["MERERUN_LAGUNA_NVFP4_QDOT_FAST"],
+        default: true
+    )
+
     /// Computes an unsorted NVFP4 gate/up gather-GEMV and SwiGLU activation.
     ///
     /// One threadgroup runs the gate and up projections concurrently for one
@@ -1094,12 +1099,18 @@ enum RoutedMoERouting {
         ensureRowContiguous: true
     )
 
-    private static let lagunaXSDownHeader = """
+    private static let lagunaXSDownHeader = lagunaNVFP4QDotFastEnabled
+        ? lagunaXSFastQDotHeader
+        : lagunaXSReferenceQDotHeader
+
+    private static let lagunaXSReferenceQDotHeader = """
         static inline float mere_laguna_nvfp4_scale(uint8_t bits) {
-            ushort raw = ushort(bits & 127) << 7;
-            half converted = as_type<half>(raw);
-            half signed_value = (bits & 128) ? -converted : converted;
-            return float(signed_value) * 4194304.0f;
+            // E4M3 and IEEE half are both sign-magnitude here. Adding the
+            // source sign bit before the shift carries it directly into the
+            // half sign position, including negative zero, and removes the
+            // post-conversion conditional negate without changing any bits.
+            ushort raw = ushort((uint(bits) + (bits & 128u)) << 7);
+            return float(as_type<half>(raw)) * 4194304.0f;
         }
 
         static inline float mere_laguna_nvfp4_qdot_codes_16(
@@ -1146,8 +1157,96 @@ enum RoutedMoERouting {
         }
         """
 
+    /// Laguna-only NVFP4 group-16 qdot specialization. It constructs the same
+    /// half bit patterns with a split-nibble integer sequence, moves the exact
+    /// 2^14 renormalization into the group scale, and seeds the accumulator
+    /// from the first four-term product group. The only exceptional case is
+    /// the sign of an all-negative-zero partial, which every caller absorbs in
+    /// its existing +0.0 row accumulator before the BF16 output boundary.
+    private static let lagunaXSFastQDotHeader = """
+        static inline float mere_laguna_nvfp4_scale(uint8_t bits) {
+            if (bits < 16u) {
+                return float(uint(bits) << 5);
+            }
+            ushort raw = ushort(bits & 127) << 7;
+            half converted = as_type<half>(raw);
+            half signed_value = (bits & 128) ? -converted : converted;
+            return float(signed_value) * 4194304.0f;
+        }
+
+        static inline float mere_laguna_nvfp4_qdot_codes_16(
+            uint2 codes,
+            const thread float* input,
+            float scale
+        ) {
+            float accum;
+            {
+                const uint c = codes.x;
+                const uint xe = c & 0x0F0F0F0Fu;
+                const uint ge = xe | (xe << 3);
+                const uint yo = c & 0xF0F0F0F0u;
+                const uint go = yo | (yo >> 3);
+                const uint p0 = (ge << 9) & 0x8E008E00u;
+                const uint p1 = (go << 8) & 0x8E008E00u;
+                const uint p2 = (ge << 1) & 0x8E008E00u;
+                const uint p3 = go & 0x8E008E00u;
+                const float2 v04 = float2(as_type<half2>(p0));
+                const float2 v15 = float2(as_type<half2>(p1));
+                const float2 v26 = float2(as_type<half2>(p2));
+                const float2 v37 = float2(as_type<half2>(p3));
+                accum =
+                    (input[0] * v04.x
+                     + input[1] * v15.x
+                     + input[2] * v26.x
+                     + input[3] * v37.x);
+                accum +=
+                    (input[4] * v04.y
+                     + input[5] * v15.y
+                     + input[6] * v26.y
+                     + input[7] * v37.y);
+            }
+            {
+                const uint c = codes.y;
+                const uint xe = c & 0x0F0F0F0Fu;
+                const uint ge = xe | (xe << 3);
+                const uint yo = c & 0xF0F0F0F0u;
+                const uint go = yo | (yo >> 3);
+                const uint p0 = (ge << 9) & 0x8E008E00u;
+                const uint p1 = (go << 8) & 0x8E008E00u;
+                const uint p2 = (ge << 1) & 0x8E008E00u;
+                const uint p3 = go & 0x8E008E00u;
+                const float2 v04 = float2(as_type<half2>(p0));
+                const float2 v15 = float2(as_type<half2>(p1));
+                const float2 v26 = float2(as_type<half2>(p2));
+                const float2 v37 = float2(as_type<half2>(p3));
+                accum +=
+                    (input[8] * v04.x
+                     + input[9] * v15.x
+                     + input[10] * v26.x
+                     + input[11] * v37.x);
+                accum +=
+                    (input[12] * v04.y
+                     + input[13] * v15.y
+                     + input[14] * v26.y
+                     + input[15] * v37.y);
+            }
+            return scale * accum;
+        }
+
+        static inline float mere_laguna_nvfp4_qdot_16(
+            const device uint8_t* weight,
+            const thread float* input,
+            float scale
+        ) {
+            const device uint2* packed = (const device uint2*)weight;
+            return mere_laguna_nvfp4_qdot_codes_16(packed[0], input, scale);
+        }
+        """
+
     private static let lagunaXSRoutedSharedDownResidualKernel = MLXFast.metalKernel(
-        name: "mere_laguna_xs_routed_shared_nvfp4_down_residual_bf16_r1_v1",
+        name: lagunaNVFP4QDotFastEnabled
+            ? "mere_laguna_xs_routed_shared_nvfp4_down_residual_bf16_r1_qf_v1"
+            : "mere_laguna_xs_routed_shared_nvfp4_down_residual_bf16_r1_v1",
         inputNames: [
             "routed_activated",
             "routed_down_weight",
@@ -1254,7 +1353,9 @@ enum RoutedMoERouting {
     )
 
     private static let fusedGatherNVFP4SwiGLUKernel = MLXFast.metalKernel(
-        name: "mere_routed_moe_gather_nvfp4_swiglu",
+        name: lagunaNVFP4QDotFastEnabled
+            ? "mere_routed_moe_gather_nvfp4_swiglu_qf_v1"
+            : "mere_routed_moe_gather_nvfp4_swiglu",
         inputNames: [
             "x",
             "gate_weight",
@@ -1334,12 +1435,10 @@ enum RoutedMoERouting {
                         selected_weight + size_t(row) * packed_input;
                     const device uint8_t* row_scales =
                         selected_scales + size_t(row) * scale_input;
-                    const float scale =
-                        dequantize_scale<float, GROUP_SIZE>(row_scales[0]);
-                    results[row] += qdot<
-                        float,
-                        values_per_thread,
-                        BITS>(row_weight, input_values, scale);
+                    results[row] += mere_laguna_nvfp4_qdot_16(
+                        row_weight,
+                        input_values,
+                        mere_laguna_nvfp4_scale(row_scales[0]));
                 }
 
                 selected_weight +=
@@ -1386,7 +1485,7 @@ enum RoutedMoERouting {
                 ] = DataT(DataT(gate_value * sigmoid_value) * up_value);
             }
         """,
-        header: "// MLX_INCLUDE_FP_QUANTIZED_HEADERS\n",
+        header: "// MLX_INCLUDE_FP_QUANTIZED_HEADERS\n" + lagunaXSDownHeader,
         ensureRowContiguous: true
     )
 

@@ -642,10 +642,10 @@ SOFTWARE.
 - source project: [`sawfwair/mlx-swift`](https://github.com/sawfwair/mlx-swift),
   based on upstream [`ml-explore/mlx-swift`](https://github.com/ml-explore/mlx-swift)
   0.32.1
-- pinned package revision: `79bc410c85df66c3f4246084057bdfd971932ac7`
+- pinned package revision: `22c76cc40edbae2c2af72532678d8e5c06cbfa46`
 - embedded MLX revision: `2a977448c20451eb4f100691bd2f6513e610f150`
 - generated-kernel source SHA-256:
-  `a4a91e902e4a3c196ba45f3c6ee65c769c26b5825ae3b72d8b93ca233db2d93f`
+  `961bc42bb4161801fb8b0f7fd9d4570e7e86318f1644520bb39eae04eed9820c`
 - license: MIT
 
 ```

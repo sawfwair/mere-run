@@ -27,8 +27,8 @@ enum MLXBundleSupport {
 
     static let expectedProvenance = MetallibProvenance(
       coreVersion: "0.32.1",
-      swiftRevision: "79bc410c85df66c3f4246084057bdfd971932ac7",
-      kernelSourcesSHA256: "a4a91e902e4a3c196ba45f3c6ee65c769c26b5825ae3b72d8b93ca233db2d93f"
+      swiftRevision: "22c76cc40edbae2c2af72532678d8e5c06cbfa46",
+      kernelSourcesSHA256: "961bc42bb4161801fb8b0f7fd9d4570e7e86318f1644520bb39eae04eed9820c"
     )
 
     /// Relationship between a bundle's metallib version stamp
