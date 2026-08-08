@@ -106,12 +106,12 @@ mere.run video generate "a cinematic rain-soaked bus stop at night" \
   --width 1280 --height 768 --duration 10 --steps 20 \
   --output ./bus-stop-bf16.mp4
 
-# Optional four-evaluation Turbo lane for the BF16 FL2VA model
+# Two four-evaluation adapter lanes for the BF16 FL2VA model
 mere.run adapter pull minimax-h3-turbo-4step
+mere.run adapter pull minimax-h3-lightx2v-4step
 mere.run video generate "a superhero waits beneath an umbrella at a bus stop" \
   --model video-minimax-h3-fl2va-bf16-mlx \
-  --h3-adapter minimax-h3-turbo-4step \
-  --h3-adapter-strength 0.9 \
+  --h3-adapter minimax-h3-lightx2v-4step \
   --output ./bus-stop-turbo.mp4
 
 mere.run video generate "preserve the person and use the reference motion" \
@@ -129,15 +129,18 @@ converting, using, or redistributing any artifact. Passing
 `--accept-model-license` and continuing with the download confirms that you
 accept those terms and agree to comply with them.
 
-The optional `minimax-h3-turbo-4step` adapter is checksum-pinned separately
-and applied in activation space so its small BF16 deltas are not rounded into
-the base transformer. It defaults to five schedule points, which are four
-model evaluations. The current adapter was trained for FL2VA, requires the
-BF16 base model, and cannot be combined with Ref2VA references or H3
-tail-residual reuse. Omit `--steps` (or set it to `5`) and keep
-`--h3-acceleration quality`. Strengths around `0.8` to `0.95` can soften the
-preview adapter's oversharp or plastic artifacts; `1.0` applies the released
-weights exactly.
+The `minimax-h3-turbo-4step` EMA-850 adapter and
+`minimax-h3-lightx2v-4step` LightX2V adapter are checksum-pinned separately.
+EMA-850 remains an activation-space adapter because its AdaLN deltas
+participate in schedule-cache construction. LightX2V has no AdaLN targets, so
+the runtime applies its published alpha/rank scale and fuses its deltas into
+the BF16 transformer once before denoising; the PEFT tensors are then released
+and add no per-block LoRA matmuls. Both default to five schedule points, which
+are four model evaluations. They were trained for FL2VA, require the BF16 base
+model, and cannot be combined with Ref2VA references or H3 tail-residual reuse.
+Omit `--steps` (or set it to `5`) and keep `--h3-acceleration quality`.
+Strength `1.0` applies either adapter's released weights exactly; the strength
+control remains available for prompt-specific tuning.
 
 The managed package already includes the inference-only AdaLN cache computed
 from the official BF16/F32 projections; no post-pull optimization step is

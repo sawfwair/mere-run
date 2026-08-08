@@ -1897,13 +1897,16 @@ and keep the schedule boundaries native. They remain approximate: the same
 prompt and seed may follow a different motion or composition trajectory. Use
 `quality` when exact-seed fidelity matters.
 
-`--h3-adapter minimax-h3-turbo-4step` selects the separately pulled Turbo
-LoRA for `video-minimax-h3-fl2va-bf16-mlx`. When `--steps` is omitted it uses
-five schedule points (four transformer evaluations). It runs the LoRA in
-activation space and requires `--h3-acceleration quality`; Ref2VA and the
-compact quantized H3 package are rejected. The preflight report resolves the
-managed adapter path, verifies its presence, and preserves the adapter id,
-strength, and resolved schedule in the declarative action.
+`--h3-adapter minimax-h3-turbo-4step` selects the separately pulled EMA-850
+LoRA, while `--h3-adapter minimax-h3-lightx2v-4step` selects the LightX2V
+PEFT LoRA. Both target `video-minimax-h3-fl2va-bf16-mlx`. When `--steps` is
+omitted they use five schedule points (four transformer evaluations). EMA-850
+runs in activation space; LightX2V is fused once into the BF16 transformer
+before denoising and adds no LoRA matmuls to the generation loop. Both require
+`--h3-acceleration quality`; Ref2VA and the compact quantized H3 package are
+rejected. The preflight report resolves the managed adapter path, verifies its
+presence, and preserves the adapter id, strength, and resolved schedule in the
+declarative action.
 
 Preflight mode:
 
@@ -2202,6 +2205,7 @@ mere.run adapter list --json
 mere.run adapter pull mere-platform-assistant
 mere.run adapter pull scail2-lightx2v-4step
 mere.run adapter pull minimax-h3-turbo-4step
+mere.run adapter pull minimax-h3-lightx2v-4step
 ```
 
 The pull verifies the cataloged byte count and SHA-256 before atomically
@@ -2210,8 +2214,9 @@ verification diagnostics go to stderr. Use the adapter id directly with
 `text chat --lora`, `api serve --lora`, or the matching SCAIL
 `video animate --distilled-adapter` option. `video animate --profile fast`
 selects `scail2-lightx2v-4step` and its fixed four-step schedule.
-Use `minimax-h3-turbo-4step` with `video generate --h3-adapter`; its BF16
-FL2VA base remains subject to the MiniMax-H3 Community License acceptance.
+Use either `minimax-h3-turbo-4step` or `minimax-h3-lightx2v-4step` with
+`video generate --h3-adapter`; their BF16 FL2VA base remains subject to the
+MiniMax-H3 Community License acceptance.
 
 For a cross-command decision guide, see [Benchmarking](./benchmarking.md). The
 sections below are the command reference for each benchmark lane.

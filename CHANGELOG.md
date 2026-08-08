@@ -6,6 +6,15 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Video
+
+- added `minimax-h3-lightx2v-4step` as a second immutable, checksum-pinned
+  MiniMax-H3 managed adapter. The native runtime reads LightX2V's published
+  312-pair PEFT checkpoint directly, preserves its separate Q/K/V projections
+  without an expanded converted copy, applies its published alpha/rank scale,
+  fuses the deltas into BF16 weights once before denoising, and uses the
+  existing exact four-evaluation FL2VA path without per-block LoRA matmuls.
+
 ### Geospatial inference
 
 - added native TerraMind ImpactMesh Fire segmentation, with an immutable

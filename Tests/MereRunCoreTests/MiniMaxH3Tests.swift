@@ -20,6 +20,87 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         XCTAssertEqual(output.asArray(Float.self), [8, 11])
     }
 
+    func testLightX2VPEFTAdapterFusesOnceIntoNativeRuntime() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let adapterURL = temp.appendingPathComponent("lightx2v-h3.safetensors")
+        let rankOneInput = MLXArray.ones([1, 2], dtype: .float32)
+        let rankOneAttentionOutput = MLXArray.ones([2, 1], dtype: .float32)
+        try MLX.save(
+            arrays: [
+                "transformer_blocks.0.attn.to_q.lora_A.default.weight": rankOneInput,
+                "transformer_blocks.0.attn.to_q.lora_B.default.weight": rankOneAttentionOutput,
+                "transformer_blocks.0.attn.to_k.lora_A.default.weight": rankOneInput,
+                "transformer_blocks.0.attn.to_k.lora_B.default.weight": rankOneAttentionOutput,
+                "transformer_blocks.0.attn.to_v.lora_A.default.weight": rankOneInput,
+                "transformer_blocks.0.attn.to_v.lora_B.default.weight": rankOneAttentionOutput,
+                "transformer_blocks.0.attn.to_out.0.lora_A.default.weight": rankOneInput,
+                "transformer_blocks.0.attn.to_out.0.lora_B.default.weight": rankOneAttentionOutput,
+                "transformer_blocks.0.ff.net.0.proj.lora_A.default.weight": rankOneInput,
+                "transformer_blocks.0.ff.net.0.proj.lora_B.default.weight": MLXArray.ones(
+                    [6, 1],
+                    dtype: .float32
+                ),
+                "transformer_blocks.0.ff.net.2.lora_A.default.weight": MLXArray.ones(
+                    [1, 3],
+                    dtype: .float32
+                ),
+                "transformer_blocks.0.ff.net.2.lora_B.default.weight": rankOneAttentionOutput,
+            ],
+            url: adapterURL
+        )
+
+        let transformer = MiniMaxH3Transformer(
+            configuration: MiniMaxH3TransformerConfiguration(
+                hiddenSize: 2,
+                layerCount: 1,
+                refinerLayerCount: 0,
+                attentionHeadCount: 1,
+                attentionHeadDimension: 2,
+                feedForwardSize: 3,
+                videoLatentChannels: 1,
+                audioLatentChannels: 1,
+                patchSize: [1, 1, 1],
+                textDimension: 2,
+                timeFrequencyDimension: 2,
+                timeEmbeddingHiddenSize: 2,
+                timeEmbeddingDimension: 2,
+                ropeFrequencyCount: 1
+            ),
+            includeAdaLN: false
+        )
+        let originalLeaves = Dictionary(
+            uniqueKeysWithValues: transformer.leafModules().flattened()
+        )
+        let originalQKV = try XCTUnwrap(
+            originalLeaves["blocks.0.attn.qkv_proj"] as? Linear
+        ).weight
+        MLX.eval(originalQKV)
+        let originalQKVValues = originalQKV.asArray(Float.self)
+        let count = try MiniMaxH3TurboAdapter.install(
+            url: adapterURL,
+            into: transformer,
+            strength: 1,
+            expectedPairCount: 6
+        )
+        let leaves = Dictionary(uniqueKeysWithValues: transformer.leafModules().flattened())
+        let qkv = try XCTUnwrap(leaves["blocks.0.attn.qkv_proj"] as? Linear)
+        MLX.eval(qkv.weight)
+        let qkvDelta = zip(qkv.weight.asArray(Float.self), originalQKVValues).map {
+            $0.0 - $0.1
+        }
+
+        XCTAssertEqual(count, 6)
+        XCTAssertEqual(qkvDelta.count, 12)
+        for value in qkvDelta {
+            XCTAssertEqual(value, 8, accuracy: 1e-5)
+        }
+        XCTAssertFalse(qkv is MiniMaxH3RuntimeLoRALinear)
+        XCTAssertFalse(leaves["blocks.0.attn.out_proj"] is MiniMaxH3RuntimeLoRALinear)
+        XCTAssertFalse(leaves["blocks.0.mlp.fc1"] is MiniMaxH3RuntimeLoRALinear)
+        XCTAssertFalse(leaves["blocks.0.mlp.fc2"] is MiniMaxH3RuntimeLoRALinear)
+    }
+
     func testTurboAdapterUsesFourDenoiseEvaluationsByDefault() throws {
         let options = try MiniMaxH3GenerationOptions(
             prompt: "a cinematic local video",
