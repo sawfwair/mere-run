@@ -60,6 +60,9 @@ struct VisionTrack: AsyncParsableCommand {
     @Flag(name: [.customLong("json")], help: "With --preflight, emit a structured JSON report.")
     var json: Bool = false
 
+    @Flag(name: [.customShort("q"), .long], help: "Suppress normal progress output.")
+    var quiet: Bool = false
+
     func validate() throws {
         if json && !preflight {
             throw ValidationError("--json is only supported with --preflight for vision track.")
@@ -101,7 +104,7 @@ struct VisionTrack: AsyncParsableCommand {
             return
         }
 
-        try MLXBundleSupport.ensureAvailable(quiet: false)
+        try MLXBundleSupport.ensureAvailable(quiet: quiet)
 
         guard FileManager.default.fileExists(atPath: videoURL.path) else {
             throw ValidationError("Video not found: \(videoURL.path)")
@@ -130,15 +133,17 @@ struct VisionTrack: AsyncParsableCommand {
             maskOutputDirectoryURL: maskOutputDirectoryURL
         )
 
-        print("Model: \(result.modelID)")
-        print("Objects: \(result.objects.count)")
-        print("Frames: \(result.frames.count)")
-        print("Video: \(result.annotatedVideoPath)")
-        if let jsonOutputPath = result.jsonOutputPath {
-            print("JSON: \(jsonOutputPath)")
-        }
-        if let maskOutputDirectoryURL {
-            print("Masks: \(maskOutputDirectoryURL.path)")
+        if !quiet {
+            print("Model: \(result.modelID)")
+            print("Objects: \(result.objects.count)")
+            print("Frames: \(result.frames.count)")
+            print("Video: \(result.annotatedVideoPath)")
+            if let jsonOutputPath = result.jsonOutputPath {
+                print("JSON: \(jsonOutputPath)")
+            }
+            if let maskOutputDirectoryURL {
+                print("Masks: \(maskOutputDirectoryURL.path)")
+            }
         }
     }
 

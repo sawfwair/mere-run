@@ -67,7 +67,22 @@ struct VisionSegment: AsyncParsableCommand {
     @Flag(name: [.long], help: "For geometry prompts, emit multiple mask candidates per prompted object.")
     var multimask: Bool = false
 
+    @Flag(name: [.customLong("preflight")], help: "Inspect the segmentation request without loading SAM or processing the image.")
+    var preflight: Bool = false
+
+    @Flag(name: [.customLong("json")], help: "With --preflight, emit a structured JSON report.")
+    var json: Bool = false
+
+    @Flag(name: [.customShort("q"), .long], help: "Suppress normal progress output.")
+    var quiet: Bool = false
+
     func validate() throws {
+        if json && !preflight {
+            throw ValidationError("--json is only supported with --preflight for vision segment.")
+        }
+        if preflight {
+            return
+        }
         guard !prompt.isEmpty || !box.isEmpty || !point.isEmpty else {
             throw ValidationError("Provide at least one --prompt, --box, or --point value.")
         }
@@ -81,18 +96,28 @@ struct VisionSegment: AsyncParsableCommand {
     }
 
     func run() async throws {
-        try MLXBundleSupport.ensureAvailable(quiet: false)
+        let imageURL = URL(fileURLWithPath: image).standardizedFileURL
+        let outputImageURL = Self.resolveAnnotatedOutputURL(output, inputImageURL: imageURL)
+        let outputJSONURL = Self.resolveJSONOutputURL(jsonOutput, inputImageURL: imageURL)
+        let maskOutputDirectoryURL = Self.resolveDirectoryURL(maskOutputDir)
+        if preflight {
+            try runPreflight(
+                imageURL: imageURL,
+                outputImageURL: outputImageURL,
+                outputJSONURL: outputJSONURL,
+                maskOutputDirectoryURL: maskOutputDirectoryURL
+            )
+            return
+        }
+
+        try MLXBundleSupport.ensureAvailable(quiet: quiet)
 
         let fileManager = FileManager.default
-        let imageURL = URL(fileURLWithPath: image).standardizedFileURL
         guard fileManager.fileExists(atPath: imageURL.path) else {
             throw ValidationError("Image not found: \(imageURL.path)")
         }
 
         let resolvedModel = try Self.resolveModelRoot(model, fileManager: fileManager)
-        let outputImageURL = Self.resolveAnnotatedOutputURL(output, inputImageURL: imageURL)
-        let outputJSONURL = Self.resolveJSONOutputURL(jsonOutput, inputImageURL: imageURL)
-        let maskOutputDirectoryURL = Self.resolveDirectoryURL(maskOutputDir)
         let promptSet = try parsedPromptSet()
 
         let segmenter = try SAM31ImageSegmenter(
@@ -112,13 +137,111 @@ struct VisionSegment: AsyncParsableCommand {
             maskOutputDirectoryURL: maskOutputDirectoryURL
         )
 
-        print("Model: \(result.modelID)")
-        print("Detections: \(result.detections.count)")
-        print("Image: \(result.annotatedImageURL.path)")
-        print("JSON: \(result.jsonOutputURL.path)")
-        if let maskOutputDirectoryURL {
-            print("Masks: \(maskOutputDirectoryURL.path)")
+        if !quiet {
+            print("Model: \(result.modelID)")
+            print("Detections: \(result.detections.count)")
+            print("Image: \(result.annotatedImageURL.path)")
+            print("JSON: \(result.jsonOutputURL.path)")
+            if let maskOutputDirectoryURL {
+                print("Masks: \(maskOutputDirectoryURL.path)")
+            }
         }
+    }
+
+    func makePreflightEnvelope(
+        imageURL: URL,
+        outputImageURL: URL,
+        outputJSONURL: URL,
+        maskOutputDirectoryURL: URL?,
+        fileManager: FileManager = .default,
+        now: @escaping () -> Date = Date.init
+    ) -> VisionSegmentPreflightEnvelope {
+        let input = VisionSegmentPreflightInput(
+            imageURL: imageURL,
+            outputImageURL: outputImageURL,
+            outputJSONURL: outputJSONURL,
+            maskOutputDirectoryURL: maskOutputDirectoryURL,
+            prompt: prompt,
+            box: box,
+            point: point,
+            model: model,
+            threshold: threshold,
+            resolution: resolution,
+            showBoxes: showBoxes,
+            multimask: multimask,
+            segmentArgv: segmentActionArguments(
+                imageURL: imageURL,
+                outputImageURL: outputImageURL,
+                outputJSONURL: outputJSONURL,
+                maskOutputDirectoryURL: maskOutputDirectoryURL
+            ),
+            cwd: fileManager.currentDirectoryPath
+        )
+        return VisionSegmentPreflightAnalyzer(
+            input: input,
+            fileManager: fileManager,
+            now: now
+        ).envelope()
+    }
+
+    private func runPreflight(
+        imageURL: URL,
+        outputImageURL: URL,
+        outputJSONURL: URL,
+        maskOutputDirectoryURL: URL?
+    ) throws {
+        let envelope = makePreflightEnvelope(
+            imageURL: imageURL,
+            outputImageURL: outputImageURL,
+            outputJSONURL: outputJSONURL,
+            maskOutputDirectoryURL: maskOutputDirectoryURL
+        )
+        if json {
+            print(try StructuredRunOutput.encode(envelope))
+        } else {
+            print(envelope.summary)
+            for diagnostic in envelope.diagnostics {
+                print("[\(diagnostic.severity.rawValue)] \(diagnostic.title): \(diagnostic.message)")
+            }
+        }
+        if envelope.status == .blocked {
+            throw ExitCode.failure
+        }
+    }
+
+    private func segmentActionArguments(
+        imageURL: URL,
+        outputImageURL: URL,
+        outputJSONURL: URL,
+        maskOutputDirectoryURL: URL?
+    ) -> [String] {
+        var args = ["mere.run", "vision", "segment", imageURL.path]
+        if !prompt.isEmpty {
+            args.append("--prompt")
+            args.append(contentsOf: prompt)
+        }
+        for boxPrompt in box {
+            args += ["--box", boxPrompt]
+        }
+        for pointPrompt in point {
+            args += ["--point", pointPrompt]
+        }
+        if let model {
+            args += ["--model", model]
+        }
+        args += ["--output", outputImageURL.path]
+        args += ["--json-output", outputJSONURL.path]
+        if let maskOutputDirectoryURL {
+            args += ["--mask-output-dir", maskOutputDirectoryURL.path]
+        }
+        args += ["--threshold", String(threshold), "--resolution", String(resolution)]
+        if showBoxes {
+            args.append("--show-boxes")
+        }
+        if multimask {
+            args.append("--multimask")
+        }
+        return args
     }
 
     static func resolveModelRoot(

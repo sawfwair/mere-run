@@ -34,6 +34,9 @@ final class VisionSegmentCommandParsingTests: XCTestCase {
         XCTAssertNil(cmd.output)
         XCTAssertNil(cmd.jsonOutput)
         XCTAssertFalse(cmd.showBoxes)
+        XCTAssertFalse(cmd.preflight)
+        XCTAssertFalse(cmd.json)
+        XCTAssertFalse(cmd.quiet)
         XCTAssertEqual(cmd.threshold, 0.05, accuracy: 0.0001)
         XCTAssertEqual(cmd.resolution, 1008)
     }
@@ -50,6 +53,7 @@ final class VisionSegmentCommandParsingTests: XCTestCase {
             "--mask-output-dir", "/tmp/masks",
             "--show-boxes",
             "--multimask",
+            "--quiet",
             "--threshold", "0.45",
             "--resolution", "504",
         ])
@@ -63,8 +67,51 @@ final class VisionSegmentCommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.maskOutputDir, "/tmp/masks")
         XCTAssertTrue(cmd.showBoxes)
         XCTAssertTrue(cmd.multimask)
+        XCTAssertTrue(cmd.quiet)
         XCTAssertEqual(cmd.threshold, 0.45, accuracy: 0.0001)
         XCTAssertEqual(cmd.resolution, 504)
+    }
+
+    func testVisionSegmentPreflightReportsRunnablePlan() throws {
+        let temp = try makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let modelRoot = temp.appendingPathComponent("sam31", isDirectory: true)
+        try writeMinimalSAM31Model(at: modelRoot)
+        let imageURL = try makeTempFile(name: "scene.png", in: temp)
+        let outputURL = temp.appendingPathComponent("scene-segmented.png")
+        let jsonURL = temp.appendingPathComponent("scene-segmented.json")
+        let maskDir = temp.appendingPathComponent("masks", isDirectory: true)
+        let cmd = try VisionSegment.parse([
+            imageURL.path,
+            "--prompt", "a damaged building", "debris",
+            "--model", modelRoot.path,
+            "--output", outputURL.path,
+            "--json-output", jsonURL.path,
+            "--mask-output-dir", maskDir.path,
+            "--show-boxes",
+            "--preflight",
+            "--json",
+        ])
+
+        let envelope = cmd.makePreflightEnvelope(
+            imageURL: imageURL,
+            outputImageURL: outputURL,
+            outputJSONURL: jsonURL,
+            maskOutputDirectoryURL: maskDir,
+            fileManager: .default,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.status, .ok)
+        XCTAssertEqual(envelope.command, ["vision", "segment"])
+        XCTAssertTrue(envelope.result.image.exists)
+        XCTAssertEqual(envelope.result.model.kind, "local_path")
+        XCTAssertEqual(envelope.result.prompts.normalizedTextPrompts, ["damaged building", "debris"])
+        XCTAssertEqual(envelope.result.outputs.annotatedImage.path, outputURL.path)
+        XCTAssertEqual(envelope.result.outputs.segmentationJSON.path, jsonURL.path)
+        XCTAssertEqual(envelope.result.outputs.maskDirectory?.path, maskDir.path)
+        XCTAssertTrue(envelope.actions.contains { $0.id == "start-segmentation" && $0.enabled })
     }
 
     func testVisionSegmentParsesPromptSetFromTextBoxesAndPoints() throws {
@@ -102,6 +149,7 @@ final class VisionSegmentCommandParsingTests: XCTestCase {
         XCTAssertFalse(cmd.showBoxes)
         XCTAssertFalse(cmd.preflight)
         XCTAssertFalse(cmd.json)
+        XCTAssertFalse(cmd.quiet)
     }
 
     func testVisionTrackResolvesDefaultOutputPaths() {
@@ -122,10 +170,12 @@ final class VisionSegmentCommandParsingTests: XCTestCase {
             "--prompt", "a dog",
             "--preflight",
             "--json",
+            "--quiet",
         ])
 
         XCTAssertTrue(cmd.preflight)
         XCTAssertTrue(cmd.json)
+        XCTAssertTrue(cmd.quiet)
     }
 
     func testVisionTrackPreflightReportsRunnablePlan() throws {
