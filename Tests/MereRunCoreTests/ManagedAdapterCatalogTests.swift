@@ -53,6 +53,22 @@ struct ManagedAdapterCatalogTests {
         #expect(spec.downloadURL.absoluteString.contains(spec.upstreamRevision!))
     }
 
+    @Test("MiniMax-H3 LightX2V release is an immutable BF16 runtime pin")
+    func miniMaxH3LightX2VReleaseIsPinned() throws {
+        let spec = try #require(
+            ManagedAdapterCatalog.spec(for: ManagedAdapterCatalog.miniMaxH3LightX2VFourStepID)
+        )
+        #expect(spec.version == "b65e359c0d12")
+        #expect(spec.baseModelID == ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue)
+        #expect(spec.format == MiniMaxH3TurboAdapter.lightX2VFormat)
+        #expect(spec.upstreamRevision == "b65e359c0d128b3c5e08e0f5bf2791b794378588")
+        #expect(spec.artifact.filename == "minimax_h3_fl2v_turbo_4step_v0.1.safetensors")
+        #expect(spec.artifact.byteCount == 1_383_677_888)
+        #expect(spec.artifact.sha256 == "5ff4a12c8b4599fec716e1b15a45e504e0d1129111896bdcde5ac4a15e395b29")
+        #expect(spec.downloadURL.host == "huggingface.co")
+        #expect(spec.downloadURL.absoluteString.contains(spec.upstreamRevision!))
+    }
+
     @Test("Catalog ids resolve case-insensitively")
     func normalizedLookup() {
         #expect(ManagedAdapterCatalog.spec(for: " MERE-PLATFORM-ASSISTANT ")?.version == "22")

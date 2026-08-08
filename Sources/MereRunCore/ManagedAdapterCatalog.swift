@@ -81,6 +81,8 @@ public enum ManagedAdapterCatalog {
     public static let scail2LightX2VFourStepRevision = "27ae38da91014b947dd39cc3fa78b97cd7b386dd"
     public static let miniMaxH3TurboFourStepID = "minimax-h3-turbo-4step"
     public static let miniMaxH3TurboFourStepRevision = "b604dd5fe25c4c747699f698a1e63f6c46d4a066"
+    public static let miniMaxH3LightX2VFourStepID = "minimax-h3-lightx2v-4step"
+    public static let miniMaxH3LightX2VFourStepRevision = "b65e359c0d128b3c5e08e0f5bf2791b794378588"
 
     public static let allSpecs: [ManagedAdapterSpec] = [
         ManagedAdapterSpec(
@@ -126,7 +128,7 @@ public enum ManagedAdapterCatalog {
         ),
         ManagedAdapterSpec(
             id: miniMaxH3TurboFourStepID,
-            title: "MiniMax-H3 Turbo 4-step",
+            title: "MiniMax-H3 Turbo 4-step (EMA-850)",
             version: String(miniMaxH3TurboFourStepRevision.prefix(12)),
             summary: "Four-evaluation runtime LoRA for the native MiniMax-H3 BF16 FL2VA model.",
             baseModelID: ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue,
@@ -143,6 +145,27 @@ public enum ManagedAdapterCatalog {
                 filename: "minimax_h3_turbo_4step_ema_ckpt850.safetensors",
                 byteCount: 779_849_816,
                 sha256: "5a6eeba171cf183020a4ad48774bb2968f29f8168afd6ec17a04987f3528b4ea"
+            )
+        ),
+        ManagedAdapterSpec(
+            id: miniMaxH3LightX2VFourStepID,
+            title: "MiniMax-H3 Turbo 4-step (LightX2V)",
+            version: String(miniMaxH3LightX2VFourStepRevision.prefix(12)),
+            summary: "LightX2V four-evaluation PEFT LoRA for the native MiniMax-H3 BF16 FL2VA model.",
+            baseModelID: ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue,
+            format: MiniMaxH3TurboAdapter.lightX2VFormat,
+            license: "Apache-2.0 (adapter); MiniMax-H3 Community License (base model)",
+            upstreamRevision: miniMaxH3LightX2VFourStepRevision,
+            releaseManifestURL: URL(
+                string: "https://huggingface.co/lightx2v/Minimax-h3-Turbo/commit/\(miniMaxH3LightX2VFourStepRevision)"
+            )!,
+            downloadURL: URL(
+                string: "https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/\(miniMaxH3LightX2VFourStepRevision)/minimax_h3_fl2v_turbo_4step_v0.1.safetensors?download=true"
+            )!,
+            artifact: ModelArtifactPin(
+                filename: "minimax_h3_fl2v_turbo_4step_v0.1.safetensors",
+                byteCount: 1_383_677_888,
+                sha256: "5ff4a12c8b4599fec716e1b15a45e504e0d1129111896bdcde5ac4a15e395b29"
             )
         ),
     ]

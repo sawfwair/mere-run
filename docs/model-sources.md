@@ -868,6 +868,21 @@ The runtime remaps the adapter's fused QKV output rows into the same global
 Q/K/V slab order as the converted base and applies all 259 LoRA pairs as live
 activation deltas, including the schedule-only AdaLN projections.
 
+The second managed H3 adapter, `minimax-h3-lightx2v-4step`, pins
+`minimax_h3_fl2v_turbo_4step_v0.1.safetensors` from
+`lightx2v/Minimax-h3-Turbo` at immutable commit
+`b65e359c0d128b3c5e08e0f5bf2791b794378588`. The catalog verifies its exact
+1,383,677,888-byte length and SHA-256
+`5ff4a12c8b4599fec716e1b15a45e504e0d1129111896bdcde5ac4a15e395b29`.
+The runtime consumes its 312 published PEFT pairs directly, applies the
+published alpha/rank scale, and projects its separate Q, K, and V deltas into
+the base transformer's global slabs without producing an expanded converted
+checkpoint. It fuses each scaled delta into the BF16 transformer once during
+model loading and releases the LoRA tensors before denoising, leaving no
+per-block adapter matmuls in the generation loop. Its Apache-2.0 adapter
+license likewise does not replace the base model's MiniMax-H3 Community
+License.
+
 ### `video-wan22-ti2v-5b-mlx`
 
 The native Wan2.2 TI2V-5B model root is:

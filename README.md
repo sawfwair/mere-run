@@ -776,6 +776,15 @@ swift run mere.run video generate \
   --width 1280 --height 768 --duration 10 --steps 20 \
   --output ./bus-stop-bf16.mp4
 
+# Two checksum-pinned four-evaluation adapters for the BF16 H3 model
+swift run mere.run adapter pull minimax-h3-turbo-4step
+swift run mere.run adapter pull minimax-h3-lightx2v-4step
+swift run mere.run video generate \
+  "two actors cross a rain-soaked street while trading a whispered line" \
+  --model video-minimax-h3-fl2va-bf16-mlx \
+  --h3-adapter minimax-h3-lightx2v-4step \
+  --output ./street-dialogue-h3.mp4
+
 # A locally converted Ref2VA root preserves reference order semantically
 swift run mere.run video generate \
   "keep the subject, borrow the camera move, and follow the vocal rhythm" \
