@@ -609,6 +609,8 @@ enum CLIInferenceAdmissionClassifier {
             return MachineInferenceRequest(label: label, resourceClass: large ? .large : .standard)
         case "video", "world":
             return MachineInferenceRequest(label: label, resourceClass: .large)
+        case "geo":
+            return MachineInferenceRequest(label: label, resourceClass: .large)
         case "model" where subcommand == "benchmark":
             return MachineInferenceRequest(label: label, resourceClass: .large)
         case "adapter" where subcommand != "list" && subcommand != "pull":

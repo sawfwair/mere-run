@@ -294,6 +294,18 @@ final class MachineInferenceAdmissionTests: XCTestCase {
         )
         XCTAssertEqual(
             CLIInferenceAdmissionClassifier.request(
+                arguments: ["mere.run", "geo", "fire", "input.safetensors"]
+            ),
+            MachineInferenceRequest(label: "geo fire", resourceClass: .large)
+        )
+        XCTAssertEqual(
+            CLIInferenceAdmissionClassifier.request(
+                arguments: ["mere.run", "geo", "olmoearth", "input.safetensors"]
+            ),
+            MachineInferenceRequest(label: "geo olmoearth", resourceClass: .large)
+        )
+        XCTAssertEqual(
+            CLIInferenceAdmissionClassifier.request(
                 arguments: ["mere.run", "text", "chat", "--model", "text-chat-deepseek-v4-flash"]
             ),
             MachineInferenceRequest(label: "text chat", resourceClass: .large)
