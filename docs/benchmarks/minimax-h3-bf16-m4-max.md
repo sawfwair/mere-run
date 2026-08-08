@@ -7,7 +7,7 @@ transformer-only extrapolation.
 ## Locked workload
 
 - checkpoint: managed `video-minimax-h3-fl2va-bf16-mlx`
-- mode: resident BF16 transformer, `maximum` acceleration
+- mode: resident BF16 transformer, historical scheduled-tail `maximum`
 - geometry: 832x480, 124 frames, 24 fps
 - schedule: 20 points / 19 model evaluations
 - seed: `20260804`
@@ -15,6 +15,10 @@ transformer-only extrapolation.
 - execution: blockwise compiled
 - policy: six complete 50-block evaluations and thirteen nine-block cached-tail
   evaluations, with native start, refresh, and endpoint evaluations
+
+This historical artifact is reproducible on the current runtime with
+`MERERUN_H3_CACHE_STRATEGY=scheduled-tail`. Production `maximum` now selects
+the adaptive first-block policy measured below.
 
 The command is reproducible with the repository benchmark harness:
 
@@ -43,6 +47,68 @@ stereo audio. Its SHA-256 is
 Visual acceptance confirmed a coherent caped figure and yellow umbrella,
 wet-street reflections, levitating bus, and luminous dragon motion without the
 spatial lattice rejected in earlier aggressive cache experiments.
+
+## Adaptive first-block cache A/B
+
+A later release-build A/B held checkpoint, prompt, seed, geometry, schedule,
+weight residency, and packed layout fixed while changing only the cache
+decision. This practical proxy used resident BF16 at 416x256, 107 frames,
+20 schedule points / 19 evaluations, and 3,768 packed rows.
+
+| Policy | Full / cached evaluations | Executed blocks | Denoising | End to end |
+| --- | ---: | ---: | ---: | ---: |
+| Scheduled-tail baseline | 6 / 13 | 417 | 222.220 s | 257.814 s |
+| Adaptive first-block `maximum` | 7 / 12 | 362 | **163.953 s** | **194.174 s** |
+
+The adaptive policy reduced denoising time by 26.2%, end-to-end time by 24.7%,
+and transformer block work by 13.2% relative to the fixed scheduled-tail
+baseline. It was run third rather than first, and macOS reported no thermal or
+performance warning at its start. A deliberately conservative 0.12/0.18
+calibration was also measured and rejected: it admitted only 7 cache hits,
+executed 607 blocks, and took 328.364 seconds to denoise.
+
+Both accepted MP4s contain H.264 416x256 video at 24 fps and AAC 32 kHz stereo
+audio. Contact-sheet inspection confirmed the same coherent bus-lift-to-dragon
+trajectory without lattice collapse. The baseline SHA-256 is
+`02fb184e6cc8213197e52ecaf4b6b344eb4b292b6233213605bc36d5d50cb66b`; the
+adaptive output SHA-256 is
+`97409a6aada0e21aca2c6917adad582f86c2d82bfaee05195da79303174920dc`.
+
+## Resident sliding-window and frame-injection receipts
+
+A real two-window FL2VA generation then exercised the long-form path with the
+same managed BF16 checkpoint. It generated 56 frames at 416x256 using 39-frame
+windows, an 18-frame video-and-audio overlap, nine schedule points per window,
+and the adaptive `maximum` policy. The second window reused the resident Qwen
+conditioner and transformer: both model-load phases measured 0.000 seconds.
+
+| Window | Full / cached evaluations | Executed blocks | Denoising | Generation |
+| --- | ---: | ---: | ---: | ---: |
+| First | 5 / 3 | 253 | 43.268 s | 67.796 s |
+| Continuation | 5 / 3 | 253 | 51.273 s | 63.421 s |
+
+The resulting H.264/AAC MP4 contains exactly 56 frames at 24 fps and 32 kHz
+stereo audio, both 2.333 seconds long. At the window boundary, frame-to-frame
+RGB mean absolute difference was 4.128, below every adjacent comparison in the
+local inspection range (6.418–7.609). Audio sample jumps at the same boundary
+were 0.00954 and 0.00616, below the local channel p95 deltas of 0.02284 and
+0.02128. Contact-sheet and spectrogram inspection found neither a visual cut
+nor an audio-click impulse. The artifact SHA-256 is
+`ac51d8eb9623e9f7ea996204a415370058241f912aadffc058dde3a2525f25de`.
+
+A separate release-mode FL2VA generation injected an exact image at output
+frame 11 of a 22-frame, 416x256 shot. The Qwen multimodal presentation and
+video-VAE condition path both consumed the frame; the run completed in 46.944
+seconds with 28.532 seconds of denoising. The valid H.264/AAC output has
+SHA-256
+`cea064abd0c99c0350629f8207e0e1055a2b96f0b2e2f9b76bda2effb17cf940`.
+Contact-sheet inspection confirmed a coherent approach to and departure from
+the injected composition without collapse.
+
+These receipts prove FL2VA execution. The same typed continuation layout is
+covered for Ref2VA by unit tests, including continuation rows before ordered
+references and shifted target positions, but a real Ref2VA checkpoint was not
+installed for this run.
 
 The locked MP4 predates the audio-VAE bias-loading correction documented in
 the kernel lab. Its video remains the accepted visual and timing receipt, but

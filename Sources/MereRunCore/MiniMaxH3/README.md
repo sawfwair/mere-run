@@ -8,10 +8,13 @@ Supported open-checkpoint paths:
 
 - text-to-video-and-audio with the FL2VA checkpoint;
 - first-frame and first/last-frame video-and-audio conditioning with FL2VA;
+- up to 12 arbitrary frame-indexed FL2VA image conditions;
 - ordered image, video (including its soundtrack), and audio reference
   conditioning with Ref2VA. The released limits are 12 total references,
   including at most 9 images, 3 videos, and 3 audio clips; audio cannot be the
-  only reference type.
+  only reference type;
+- resident FL2VA and Ref2VA sliding windows that condition on overlapping
+  motion, the boundary frame, and matching generated stereo audio.
 
 H3 emits 24 fps RGB video and native 32 kHz stereo audio. Frame counts use the
 released `17*n+5` temporal geometry. The transformer is CFG-distilled; the
@@ -39,16 +42,36 @@ schedule cache is built. The LightX2V adapter's 312 native PEFT pairs retain
 their separate Q/K/V projections and published alpha/rank scale while their
 deltas are fused into the BF16 transformer once before denoising. This avoids
 both an expanded converted checkpoint and per-block LoRA matmuls. Neither
-adapter can be combined with Ref2VA or tail-residual reuse.
+adapter can be combined with Ref2VA or H3 cache acceleration.
 
 `--h3-acceleration quality` executes every transformer block and preserves the
 native same-seed trajectory. The explicit `balanced` and `maximum` modes trade
-exact trajectory identity for speed: a full step captures the contribution of
-the trailing 50% or 75% of blocks, eligible adjacent steps recompute the prefix
-and reuse that residual, and a full refresh follows at most two cache hits.
-Both modalities must have a sigma delta below 0.12. At least two complete
-evaluations precede reuse, and the final schedule region always executes all
-50 blocks.
+exact trajectory identity for speed through a modality-aware adaptive cache.
+Every step executes the first transformer block. The runtime then compares its
+target-only residual with the last full refresh using separate global and
+worst-time-slice drift measurements for video and audio. A cache hit reuses the
+target residual from blocks 2 through 50; a rejected or non-finite measurement
+executes all 50 blocks and refreshes both residuals.
+
+`balanced` admits global drift up to 0.08 and worst-time-slice drift up to 0.12,
+allows at most two adjacent cache hits, and reserves the final two evaluations
+for full refreshes. The measured `maximum` envelope is 0.30 global and 0.40
+worst-time-slice drift, with at most four adjacent hits and a mandatory final
+full evaluation. Both modes require two complete evaluations before the first
+reuse. Cache telemetry reports all four drift measurements and exact executed
+block counts. `MERERUN_H3_CACHE_STRATEGY=scheduled-tail` retains the former
+fixed-depth policy only as a reproducible benchmark baseline.
+
+Long-form generation uses a typed global window plan. Window frame counts keep
+the target `17*n+5` geometry and overlap counts use `17*n+1`, so all history
+except the last boundary frame encodes into complete 17-frame video chunks.
+The boundary becomes the next first-frame condition. Its exact overlap
+waveform is encoded once, divided into audio history and two boundary latents,
+and packed beside video history before the target A/V rows. Only the generated
+target after that boundary is appended. Global frame injection is localized
+per window without changing its requested output index. The generator retains
+the Qwen conditioner, transformer and AdaLN schedule, both VAEs, and Ref2VA
+reference encodings across the complete rollout.
 
 The model weights are governed by the MiniMax-H3 Community License, not the
 mere.run source license. In particular, the published license excludes use,

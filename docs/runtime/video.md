@@ -119,6 +119,24 @@ mere.run video generate "preserve the person and use the reference motion" \
   --reference image:./person.png \
   --reference video:./motion.mp4 \
   --output ./ref2va.mp4
+
+# Long FL2VA or Ref2VA shots keep the H3 runtime resident and condition each
+# new window on overlapping motion plus its matching generated soundtrack.
+mere.run video generate "one continuous tracking shot through a night market" \
+  --model video-minimax-h3-fl2va-bf16-mlx \
+  --duration 15 \
+  --h3-window-frames 124 \
+  --h3-window-overlap 35 \
+  --h3-acceleration maximum \
+  --output ./market-long.mp4
+
+# Exact zero-based FL2VA frame injection can direct intermediate beats.
+mere.run video generate "the actor crosses three connected sets" \
+  --model video-minimax-h3-fl2va-bf16-mlx \
+  --num-frames 175 \
+  --h3-frame 72:./second-set.png \
+  --h3-frame 144:./third-set.png \
+  --output ./three-sets.mp4
 ```
 
 MiniMax-H3 is CFG-distilled, so `--steps` is a schedule-point count without a
@@ -137,10 +155,23 @@ the runtime applies its published alpha/rank scale and fuses its deltas into
 the BF16 transformer once before denoising; the PEFT tensors are then released
 and add no per-block LoRA matmuls. Both default to five schedule points, which
 are four model evaluations. They were trained for FL2VA, require the BF16 base
-model, and cannot be combined with Ref2VA references or H3 tail-residual reuse.
+model, and cannot be combined with Ref2VA references or H3 cache acceleration.
 Omit `--steps` (or set it to `5`) and keep `--h3-acceleration quality`.
 Strength `1.0` applies either adapter's released weights exactly; the strength
 control remains available for prompt-specific tuning.
+
+`--h3-frame FRAME:PATH` adds an FL2VA keyframe at an exact zero-based output
+frame. Values may be repeated up to the released 12-frame condition limit and
+remain on the global timeline when sliding windows are enabled.
+`--h3-window-frames` enables resident long-form generation for FL2VA or Ref2VA.
+The window count must use H3's `17*n+5` target geometry; overlap supplied by
+`--h3-window-overlap` must use `17*n+1` and leave at least 22 frames for each
+new target. Each continuation encodes all overlap frames except the boundary
+as motion history, uses the final overlap frame as the next first-frame
+condition, and carries the corresponding 32 kHz stereo waveform as history
+and boundary audio latents. Only new frames and samples are appended, so the
+final MP4 has the exact aligned global duration. Conditioner, transformer,
+AdaLN table, reference encodings, and both VAEs remain resident across windows.
 
 The managed package already includes the inference-only AdaLN cache computed
 from the official BF16/F32 projections; no post-pull optimization step is

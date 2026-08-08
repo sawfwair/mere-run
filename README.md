@@ -795,6 +795,26 @@ swift run mere.run video generate \
   --num-frames 124 \
   --output ./referenced-h3.mp4
 
+# Resident H3 long-form generation carries prior motion and matching audio
+# through every overlap. The same flags work with FL2VA and Ref2VA roots.
+swift run mere.run video generate \
+  "one continuous tracking shot through the midnight market" \
+  --model video-minimax-h3-fl2va-bf16-mlx \
+  --duration 15 \
+  --h3-window-frames 124 \
+  --h3-window-overlap 35 \
+  --h3-acceleration maximum \
+  --output ./market-long-h3.mp4
+
+# FL2VA can inject up to 12 images at exact zero-based output-frame indices.
+swift run mere.run video generate \
+  "the same actor crosses three connected practical sets" \
+  --model video-minimax-h3-fl2va-bf16-mlx \
+  --num-frames 175 \
+  --h3-frame 72:./second-set.png \
+  --h3-frame 144:./third-set.png \
+  --output ./directed-sets-h3.mp4
+
 # Animate a masked reference subject from a driving video with native SCAIL-2
 swift run mere.run model pull video-scail2-14b-mlx
 swift run mere.run adapter pull scail2-lightx2v-4step

@@ -17,9 +17,75 @@ public enum MiniMaxH3Modality: Int32, Sendable {
     case audio = 2
 }
 
-public enum MiniMaxH3KeyframeAnchor: String, Codable, Sendable {
+public enum MiniMaxH3KeyframeAnchor: RawRepresentable, Codable, Sendable, Equatable {
+    public typealias RawValue = String
+
+    case history(latentFrameCount: Int)
     case first
+    case frame(Int)
     case last
+
+    public init?(rawValue: String) {
+        switch rawValue {
+        case "first": self = .first
+        case "last": self = .last
+        default:
+            let components = rawValue.split(separator: ":", maxSplits: 1)
+            guard components.count == 2,
+                  let value = Int(components[1]) else {
+                return nil
+            }
+            switch components[0] {
+            case "history": self = .history(latentFrameCount: value)
+            case "frame": self = .frame(value)
+            default: return nil
+            }
+        }
+    }
+
+    public var rawValue: String {
+        switch self {
+        case .history(let count): "history:\(count)"
+        case .first: "first"
+        case .frame(let index): "frame:\(index)"
+        case .last: "last"
+        }
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.singleValueContainer()
+        let rawValue = try container.decode(String.self)
+        guard let value = Self(rawValue: rawValue) else {
+            throw DecodingError.dataCorruptedError(
+                in: container,
+                debugDescription: "invalid MiniMax-H3 keyframe anchor: \(rawValue)"
+            )
+        }
+        self = value
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.singleValueContainer()
+        try container.encode(rawValue)
+    }
+
+    var latentFrameCount: Int {
+        switch self {
+        case .history(let count): count
+        case .first, .frame, .last: 1
+        }
+    }
+}
+
+public enum MiniMaxH3AudioConditionAnchor: Sendable, Equatable {
+    case history(latentFrameCount: Int)
+    case first(latentFrameCount: Int)
+
+    var latentFrameCount: Int {
+        switch self {
+        case .history(let count), .first(let count): count
+        }
+    }
 }
 
 public struct MiniMaxH3ConditionSegment: Sendable {
@@ -181,7 +247,8 @@ public enum MiniMaxH3Geometry {
         latentHeight: Int,
         latentWidth: Int,
         audioLatentFrames: Int,
-        keyframeAnchors: [MiniMaxH3KeyframeAnchor]
+        keyframeAnchors: [MiniMaxH3KeyframeAnchor],
+        audioConditionAnchors: [MiniMaxH3AudioConditionAnchor] = []
     ) throws -> MiniMaxH3PackedLayout {
         guard videoLatentFrames > 0, latentHeight > 0, latentWidth > 0, audioLatentFrames > 0 else {
             throw MiniMaxH3LayoutError.invalidGeometry("all latent dimensions must be positive")
@@ -191,11 +258,19 @@ public enum MiniMaxH3Geometry {
         }
         let textCount = textTokenTags.count
         let rowsPerFrame = (latentHeight / 2) * (latentWidth / 2)
-        let conditionCount = keyframeAnchors.count * rowsPerFrame
+        let conditionVideoCount = keyframeAnchors.reduce(0) {
+            $0 + $1.latentFrameCount * rowsPerFrame
+        }
+        let conditionAudioCount = audioConditionAnchors.reduce(0) {
+            $0 + $1.latentFrameCount * 2
+        }
         let audioCount = audioLatentFrames * 2
         let videoCount = videoLatentFrames * rowsPerFrame
         let textRows = 0..<textCount
-        let conditionRows = textCount..<(textCount + conditionCount)
+        let conditionVideoRows = textCount..<(textCount + conditionVideoCount)
+        let conditionAudioStart = conditionVideoRows.upperBound
+        let conditionAudioRows = conditionAudioStart..<(conditionAudioStart + conditionAudioCount)
+        let conditionRows = textCount..<conditionAudioRows.upperBound
         let audioRows = conditionRows.upperBound..<(conditionRows.upperBound + audioCount)
         let videoRows = audioRows.upperBound..<(audioRows.upperBound + videoCount)
 
@@ -207,51 +282,109 @@ public enum MiniMaxH3Geometry {
         for row in textRows {
             positions[row * 3] = Float(row)
         }
-        for (index, anchor) in keyframeAnchors.enumerated() {
-            let time: Double = switch anchor {
-            case .first: Double(textCount)
-            case .last: Double(textCount) + temporalSpan(videoLatentFrames) - frameSpanScale
+        let historyLatentFrames = keyframeAnchors.reduce(0) { total, anchor in
+            if case .history(let count) = anchor { return total + count }
+            return total
+        }
+        let targetOrigin = Double(textCount) + temporalSpan(historyLatentFrames)
+        let targetTemporal = temporalGrid(videoLatentFrames, origin: targetOrigin)
+        var conditionVideoCursor = conditionVideoRows.lowerBound
+        var historyOrigin = Double(textCount)
+        for anchor in keyframeAnchors {
+            let latentFrameCount = anchor.latentFrameCount
+            let times: [Double] = switch anchor {
+            case .history:
+                temporalGrid(latentFrameCount, origin: historyOrigin)
+            case .first:
+                Array(targetTemporal.prefix(latentFrameCount))
+            case .frame(let frameIndex):
+                [targetOrigin + Double(frameIndex) * frameSpanScale]
+            case .last:
+                [targetOrigin + temporalSpan(videoLatentFrames) - frameSpanScale]
             }
-            for (offset, spatial) in frameGrid.enumerated() {
-                let row = conditionRows.lowerBound + index * rowsPerFrame + offset
-                positions[row * 3] = Float(time)
-                positions[row * 3 + 1] = Float(spatial.0)
-                positions[row * 3 + 2] = Float(spatial.1)
+            if case .history = anchor {
+                historyOrigin += temporalSpan(latentFrameCount)
             }
+            for latentFrame in 0..<latentFrameCount {
+                for (offset, spatial) in frameGrid.enumerated() {
+                    let row = conditionVideoCursor + latentFrame * rowsPerFrame + offset
+                    positions[row * 3] = Float(times[latentFrame])
+                    positions[row * 3 + 1] = Float(spatial.0)
+                    positions[row * 3 + 2] = Float(spatial.1)
+                }
+            }
+            conditionVideoCursor += latentFrameCount * rowsPerFrame
+        }
+        var conditionAudioCursor = conditionAudioRows.lowerBound
+        var audioHistoryOrigin = Double(textCount)
+        for anchor in audioConditionAnchors {
+            let origin: Double = switch anchor {
+            case .history: audioHistoryOrigin
+            case .first: targetOrigin
+            }
+            let rows = conditionAudioCursor..<(conditionAudioCursor + anchor.latentFrameCount * 2)
+            fillAudioPositions(
+                &positions,
+                rows: rows,
+                frames: anchor.latentFrameCount,
+                origin: origin,
+                widthGrid: widthGrid
+            )
+            if case .history = anchor {
+                audioHistoryOrigin += Double(anchor.latentFrameCount)
+            }
+            conditionAudioCursor = rows.upperBound
         }
         for channel in 0..<2 {
             for frame in 0..<audioLatentFrames {
                 let row = audioRows.lowerBound + channel * audioLatentFrames + frame
-                positions[row * 3] = Float(textCount + frame)
+                positions[row * 3] = Float(targetOrigin + Double(frame))
                 positions[row * 3 + 2] = Float(channel == 0 ? widthGrid[0] : widthGrid[widthGrid.count - 1])
             }
         }
-        let temporal = temporalGrid(videoLatentFrames, origin: Double(textCount))
         for frame in 0..<videoLatentFrames {
             for (offset, spatial) in frameGrid.enumerated() {
                 let row = videoRows.lowerBound + frame * rowsPerFrame + offset
-                positions[row * 3] = Float(temporal[frame])
+                positions[row * 3] = Float(targetTemporal[frame])
                 positions[row * 3 + 1] = Float(spatial.0)
                 positions[row * 3 + 2] = Float(spatial.1)
             }
         }
 
         var tags = textTokenTags
-        tags.append(contentsOf: repeatElement(MiniMaxH3Modality.video.rawValue, count: conditionCount))
+        tags.append(contentsOf: repeatElement(
+            MiniMaxH3Modality.video.rawValue,
+            count: conditionVideoCount
+        ))
+        tags.append(contentsOf: repeatElement(
+            MiniMaxH3Modality.audio.rawValue,
+            count: conditionAudioCount
+        ))
         tags.append(contentsOf: repeatElement(MiniMaxH3Modality.audio.rawValue, count: audioCount))
         tags.append(contentsOf: repeatElement(MiniMaxH3Modality.video.rawValue, count: videoCount))
+        var segments: [MiniMaxH3ConditionSegment] = []
+        if !conditionVideoRows.isEmpty {
+            segments.append(.init(
+                modality: .video,
+                packedRows: conditionVideoRows,
+                sourceRows: 0..<conditionVideoRows.count
+            ))
+        }
+        if !conditionAudioRows.isEmpty {
+            segments.append(.init(
+                modality: .audio,
+                packedRows: conditionAudioRows,
+                sourceRows: 0..<conditionAudioRows.count
+            ))
+        }
         return MiniMaxH3PackedLayout(
             positions: MLXArray(positions, [videoRows.upperBound, 3]),
             tokenTags: tags,
             textRows: textRows,
             conditionRows: conditionRows,
-            conditionSegments: conditionRows.isEmpty ? [] : [.init(
-                modality: .video,
-                packedRows: conditionRows,
-                sourceRows: 0..<conditionRows.count
-            )],
-            conditionVideoRowCount: conditionRows.count,
-            conditionAudioRowCount: 0,
+            conditionSegments: segments,
+            conditionVideoRowCount: conditionVideoCount,
+            conditionAudioRowCount: conditionAudioCount,
             targetAudioRows: audioRows,
             targetVideoRows: videoRows,
             videoLatentFrames: videoLatentFrames,
@@ -267,7 +400,9 @@ public enum MiniMaxH3Geometry {
         videoLatentFrames: Int,
         latentHeight: Int,
         latentWidth: Int,
-        audioLatentFrames: Int
+        audioLatentFrames: Int,
+        keyframeAnchors: [MiniMaxH3KeyframeAnchor] = [],
+        audioConditionAnchors: [MiniMaxH3AudioConditionAnchor] = []
     ) throws -> MiniMaxH3PackedLayout {
         guard videoLatentFrames > 0, latentHeight > 0, latentWidth > 0, audioLatentFrames > 0 else {
             throw MiniMaxH3LayoutError.invalidGeometry("all target latent dimensions must be positive")
@@ -293,23 +428,60 @@ public enum MiniMaxH3Geometry {
         }
 
         let textRows = 0..<textTokenTags.count
-        let targetVideoCount = videoLatentFrames * (latentHeight / 2) * (latentWidth / 2)
+        let targetGrid = framePositionGrid(latentHeight: latentHeight, latentWidth: latentWidth)
+        let targetRowsPerFrame = targetGrid.frame.count
+        let targetVideoCount = videoLatentFrames * targetRowsPerFrame
         let targetAudioCount = audioLatentFrames * 2
-        let conditionVideoCount = references.reduce(0) { $0 + $1.videoRowCount }
-        let conditionAudioCount = references.reduce(0) { $0 + $1.audioRowCount }
-        let conditionRows = textRows.upperBound..<(textRows.upperBound + conditionVideoCount + conditionAudioCount)
+        let keyframeVideoCount = keyframeAnchors.reduce(0) {
+            $0 + $1.latentFrameCount * targetRowsPerFrame
+        }
+        let keyframeAudioCount = audioConditionAnchors.reduce(0) {
+            $0 + $1.latentFrameCount * 2
+        }
+        let referenceVideoCount = references.reduce(0) { $0 + $1.videoRowCount }
+        let referenceAudioCount = references.reduce(0) { $0 + $1.audioRowCount }
+        let conditionVideoCount = keyframeVideoCount + referenceVideoCount
+        let conditionAudioCount = keyframeAudioCount + referenceAudioCount
+        let keyframeVideoRows = textRows.upperBound..<(textRows.upperBound + keyframeVideoCount)
+        let keyframeAudioRows = keyframeVideoRows.upperBound..<(
+            keyframeVideoRows.upperBound + keyframeAudioCount
+        )
+        let conditionRows = textRows.upperBound..<(
+            textRows.upperBound + conditionVideoCount + conditionAudioCount
+        )
         let targetAudioRows = conditionRows.upperBound..<(conditionRows.upperBound + targetAudioCount)
         let targetVideoRows = targetAudioRows.upperBound..<(targetAudioRows.upperBound + targetVideoCount)
         var positions = Array(repeating: Float(0), count: targetVideoRows.upperBound * 3)
         for row in textRows { positions[row * 3] = Float(row) }
+        var tags = textTokenTags + Array(
+            repeating: MiniMaxH3Modality.text.rawValue,
+            count: targetVideoRows.upperBound - textRows.count
+        )
+        func mark(_ rows: Range<Int>, as modality: MiniMaxH3Modality) {
+            for row in rows { tags[row] = modality.rawValue }
+        }
 
-        let targetGrid = framePositionGrid(latentHeight: latentHeight, latentWidth: latentWidth)
-        var packedCursor = conditionRows.lowerBound
-        var videoCursor = 0
-        var audioCursor = 0
-        var rotaryTime = Double(textRows.count)
         var segments: [MiniMaxH3ConditionSegment] = []
-        var tags = textTokenTags
+        if !keyframeVideoRows.isEmpty {
+            segments.append(.init(
+                modality: .video,
+                packedRows: keyframeVideoRows,
+                sourceRows: 0..<keyframeVideoCount
+            ))
+            mark(keyframeVideoRows, as: .video)
+        }
+        if !keyframeAudioRows.isEmpty {
+            segments.append(.init(
+                modality: .audio,
+                packedRows: keyframeAudioRows,
+                sourceRows: 0..<keyframeAudioCount
+            ))
+            mark(keyframeAudioRows, as: .audio)
+        }
+        var packedCursor = keyframeAudioRows.upperBound
+        var videoCursor = keyframeVideoCount
+        var audioCursor = keyframeAudioCount
+        var rotaryTime = Double(textRows.count)
         for reference in references {
             switch reference.kind {
             case .image:
@@ -325,7 +497,7 @@ public enum MiniMaxH3Geometry {
                     origin: rotaryTime,
                     singleImage: true
                 )
-                tags.append(contentsOf: repeatElement(MiniMaxH3Modality.video.rawValue, count: packed.count))
+                mark(packed, as: .video)
                 packedCursor = packed.upperBound
                 videoCursor = source.upperBound
                 rotaryTime += 1
@@ -340,7 +512,7 @@ public enum MiniMaxH3Geometry {
                     origin: rotaryTime,
                     widthGrid: targetGrid.width
                 )
-                tags.append(contentsOf: repeatElement(MiniMaxH3Modality.audio.rawValue, count: packed.count))
+                mark(packed, as: .audio)
                 packedCursor = packed.upperBound
                 audioCursor = source.upperBound
                 rotaryTime += Double(reference.audioLatentFrames)
@@ -360,7 +532,7 @@ public enum MiniMaxH3Geometry {
                         origin: rotaryTime,
                         widthGrid: grid.width
                     )
-                    tags.append(contentsOf: repeatElement(MiniMaxH3Modality.audio.rawValue, count: packed.count))
+                    mark(packed, as: .audio)
                     packedCursor = packed.upperBound
                     audioCursor = source.upperBound
                 }
@@ -376,7 +548,7 @@ public enum MiniMaxH3Geometry {
                     origin: rotaryTime,
                     singleImage: false
                 )
-                tags.append(contentsOf: repeatElement(MiniMaxH3Modality.video.rawValue, count: packed.count))
+                mark(packed, as: .video)
                 packedCursor = packed.upperBound
                 videoCursor = source.upperBound
                 rotaryTime += max(
@@ -385,12 +557,66 @@ public enum MiniMaxH3Geometry {
                 )
             }
         }
-
+        let historyLatentFrames = keyframeAnchors.reduce(0) { total, anchor in
+            if case .history(let count) = anchor { return total + count }
+            return total
+        }
+        let targetOrigin = rotaryTime + temporalSpan(historyLatentFrames)
+        let targetTemporal = temporalGrid(videoLatentFrames, origin: targetOrigin)
+        var keyframeVideoCursor = keyframeVideoRows.lowerBound
+        var historyOrigin = rotaryTime
+        for anchor in keyframeAnchors {
+            let latentFrameCount = anchor.latentFrameCount
+            let times: [Double] = switch anchor {
+            case .history:
+                temporalGrid(latentFrameCount, origin: historyOrigin)
+            case .first:
+                Array(targetTemporal.prefix(latentFrameCount))
+            case .frame(let frameIndex):
+                [targetOrigin + Double(frameIndex) * frameSpanScale]
+            case .last:
+                [targetOrigin + temporalSpan(videoLatentFrames) - frameSpanScale]
+            }
+            if case .history = anchor {
+                historyOrigin += temporalSpan(latentFrameCount)
+            }
+            for latentFrame in 0..<latentFrameCount {
+                for (offset, spatial) in targetGrid.frame.enumerated() {
+                    let row = keyframeVideoCursor + latentFrame * targetRowsPerFrame + offset
+                    positions[row * 3] = Float(times[latentFrame])
+                    positions[row * 3 + 1] = Float(spatial.0)
+                    positions[row * 3 + 2] = Float(spatial.1)
+                }
+            }
+            keyframeVideoCursor += latentFrameCount * targetRowsPerFrame
+        }
+        var keyframeAudioCursor = keyframeAudioRows.lowerBound
+        var audioHistoryOrigin = rotaryTime
+        for anchor in audioConditionAnchors {
+            let origin: Double = switch anchor {
+            case .history: audioHistoryOrigin
+            case .first: targetOrigin
+            }
+            let rows = keyframeAudioCursor..<(
+                keyframeAudioCursor + anchor.latentFrameCount * 2
+            )
+            fillAudioPositions(
+                &positions,
+                rows: rows,
+                frames: anchor.latentFrameCount,
+                origin: origin,
+                widthGrid: targetGrid.width
+            )
+            if case .history = anchor {
+                audioHistoryOrigin += Double(anchor.latentFrameCount)
+            }
+            keyframeAudioCursor = rows.upperBound
+        }
         fillAudioPositions(
             &positions,
             rows: targetAudioRows,
             frames: audioLatentFrames,
-            origin: rotaryTime,
+            origin: targetOrigin,
             widthGrid: targetGrid.width
         )
         fillVideoPositions(
@@ -399,11 +625,11 @@ public enum MiniMaxH3Geometry {
             latentFrames: videoLatentFrames,
             latentHeight: latentHeight,
             latentWidth: latentWidth,
-            origin: rotaryTime,
+            origin: targetOrigin,
             singleImage: false
         )
-        tags.append(contentsOf: repeatElement(MiniMaxH3Modality.audio.rawValue, count: targetAudioRows.count))
-        tags.append(contentsOf: repeatElement(MiniMaxH3Modality.video.rawValue, count: targetVideoRows.count))
+        mark(targetAudioRows, as: .audio)
+        mark(targetVideoRows, as: .video)
         return MiniMaxH3PackedLayout(
             positions: MLXArray(positions, [targetVideoRows.upperBound, 3]),
             tokenTags: tags,
