@@ -698,6 +698,92 @@ final class LagunaModelTests: MereRunCoreTestCase {
         )
     }
 
+    func testActive64RouterMatchesStockTop8AcrossFamilies() throws {
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip("The Laguna Active64 router requires a Metal GPU.")
+        }
+
+        func verify(
+            _ values: [Float],
+            rows: Int,
+            bias: [Float],
+            normalizing: Bool,
+            file: StaticString = #filePath,
+            line: UInt = #line
+        ) {
+            let logits = MLXArray(values).reshaped([1, rows, 256])
+            let correctionBias = MLXArray(bias)
+            let scores = sigmoid(logits)
+            let selectionScores = scores + correctionBias
+            let stockIndices = stopGradient(
+                argPartition(-selectionScores, kth: 7, axis: -1)[
+                    .ellipsis,
+                    ..<8
+                ]
+            )
+            var stockWeights = takeAlong(scores, stockIndices, axis: -1)
+            if normalizing {
+                stockWeights = stockWeights / stockWeights.sum(axis: -1, keepDims: true)
+            }
+
+            let active = LagunaActive64Router.routeForTesting(
+                logits: logits,
+                correctionBias: correctionBias,
+                normalizing: normalizing
+            )
+            MLX.eval(stockIndices, stockWeights, active.indices, active.weights)
+
+            XCTAssertEqual(
+                active.indices.asType(.uint32).asArray(UInt32.self),
+                stockIndices.asType(.uint32).asArray(UInt32.self),
+                file: file,
+                line: line
+            )
+            XCTAssertEqual(
+                active.weights.asArray(Float.self),
+                stockWeights.asArray(Float.self),
+                file: file,
+                line: line
+            )
+        }
+
+        var smooth: [Float] = []
+        smooth.reserveCapacity(256)
+        for index in 0..<256 {
+            let position = Float(index)
+            let first = sin(position * Float(0.173)) * Float(5)
+            let second = cos(position * Float(0.071)) * Float(2)
+            smooth.append(first + second)
+        }
+        let smoothBias = (0..<256).map { index in
+            Float((index % 13) - 6) * 0.003
+        }
+        verify(smooth, rows: 1, bias: smoothBias, normalizing: false)
+        verify(smooth, rows: 1, bias: smoothBias, normalizing: true)
+
+        let ties = (0..<(2 * 256)).map { offset -> Float in
+            let column = offset % 256
+            return column.isMultiple(of: 2) ? -0.0 : 0.0
+        }
+        let zeroBias = Array(repeating: Float(0), count: 256)
+        verify(ties, rows: 2, bias: zeroBias, normalizing: false)
+        verify(ties, rows: 2, bias: zeroBias, normalizing: true)
+
+        let extremes = (0..<(3 * 256)).map { offset -> Float in
+            let row = offset / 256
+            let column = offset % 256
+            if column.isMultiple(of: 31) {
+                return row.isMultiple(of: 2) ? 80 : -80
+            }
+            return Float((column % 17) - 8) * Float(row + 1)
+        }
+        let extremeBias = (0..<256).map { index in
+            Float((index % 9) - 4) * 0.0005
+        }
+        verify(extremes, rows: 3, bias: extremeBias, normalizing: false)
+        verify(extremes, rows: 3, bias: extremeBias, normalizing: true)
+    }
+
     func testFusedPrefillResidualRMSNormMatchesStockOperations() throws {
         guard Device.defaultDevice().deviceType == .gpu else {
             throw XCTSkip("The fused Laguna prefill kernel requires a Metal GPU.")

@@ -58,6 +58,10 @@ enum LagunaMoEAccelerationPolicy {
         "MERERUN_LAGUNA_PREFILL_EXPERT_PAIRWISE_SCALES",
         default: m5MaxDefaultsEnabled
     )
+    static let active64RouterTournamentEnabled = booleanEnvironment(
+        "MERERUN_LAGUNA_ACTIVE64_ROUTER",
+        default: m5MaxDefaultsEnabled
+    )
     static let decodeNVFP4RowsPerSIMDGroup = decodeRowsPerSIMDGroup(
         ProcessInfo.processInfo.environment[
             "MERERUN_LAGUNA_DECODE_NVFP4_ROWS_PER_SIMDGROUP"
@@ -1310,11 +1314,13 @@ final class LagunaRouter: Module {
     @ParameterInfo(key: "e_score_correction_bias") var correctionBias: MLXArray
 
     private let topK: Int
+    private let expertCount: Int
     private let normalize: Bool
     private let softcap: Float
 
     init(config: LagunaConfig) {
         self.topK = config.numExpertsPerToken
+        self.expertCount = config.numExperts
         self.normalize = config.normTopKProbability
         self.softcap = config.moeRouterLogitSoftcapping
         self._weight.wrappedValue = MLXArray.zeros([config.numExperts, config.hiddenSize])
@@ -1322,10 +1328,23 @@ final class LagunaRouter: Module {
         super.init()
     }
 
-    func callAsFunction(_ x: MLXArray) -> (indices: MLXArray, weights: MLXArray) {
+    func callAsFunction(
+        _ x: MLXArray,
+        useCustomKernels: Bool = true
+    ) -> (indices: MLXArray, weights: MLXArray) {
         var logits = x.matmul(weight.T).asType(.float32)
         if softcap > 0 {
             logits = tanh(logits / softcap) * softcap
+        }
+        if let routed = LagunaActive64Router.routeIfEnabled(
+            logits: logits,
+            correctionBias: correctionBias,
+            expertCount: expertCount,
+            topK: topK,
+            normalizing: normalize,
+            useCustomKernels: useCustomKernels
+        ) {
+            return (routed.indices, routed.weights.asType(x.dtype))
         }
         let scores = sigmoid(logits)
         let selectionScores = scores + correctionBias.asType(scores.dtype)
@@ -1374,7 +1393,7 @@ final class LagunaSparseMoE: LagunaFeedForward {
         residual: MLXArray?,
         useCustomKernels: Bool = true
     ) -> MLXArray {
-        let routed = gate(x)
+        let routed = gate(x, useCustomKernels: useCustomKernels)
         if useCustomKernels,
            LagunaMoEAccelerationPolicy.fusedRoutedSharedDownResidualEnabled,
            let residual,
