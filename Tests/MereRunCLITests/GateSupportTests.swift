@@ -105,6 +105,21 @@ final class GateSupportTests: XCTestCase {
         )
     }
 
+    func testNewGeoFamiliesHaveDirectNativeInferenceSmokePlans() throws {
+        let expectations: [(String, String)] = [
+            ("vision-fire-terramind-base", "geo fire normalized tensor smoke"),
+            ("vision-embed-tessera-v2-large", "geo tessera temporal embedding smoke"),
+            ("vision-embed-olmoearth-v12-base", "geo olmoearth multisensor embedding smoke"),
+        ]
+
+        for (modelID, route) in expectations {
+            let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: modelID))
+            let plan = try XCTUnwrap(InstalledModelSmokePlans.plan(for: spec, installedIDs: [modelID]))
+            XCTAssertEqual(plan.check.requiredModels, [modelID])
+            XCTAssertEqual(plan.check.successDetail, "direct true inference: \(route)")
+        }
+    }
+
     func testDreamXRequiresWanAndUsesAWorldTransition() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: "video-dreamx-world-5b-ar-mlx"))
 

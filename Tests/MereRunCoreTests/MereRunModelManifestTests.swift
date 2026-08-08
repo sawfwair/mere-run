@@ -227,6 +227,40 @@ final class MereRunModelManifestTests: MereRunCoreTestCase {
         )
     }
 
+    func testTerraMindFireTemplateHasExpectedNativeMetadata() {
+        let manifest = MereRunModelManifest.template(
+            for: .visionFireTerraMindBase,
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+
+        XCTAssertEqual(manifest.engine, .terramindFire)
+        XCTAssertEqual(manifest.family, .terramind)
+        XCTAssertEqual(manifest.tier, .base)
+        XCTAssertEqual(manifest.precision, .fp32)
+        XCTAssertEqual(manifest.supports, [.fireSegmentation])
+        XCTAssertNil(manifest.components)
+    }
+
+    func testTESSERAAndOlmoEarthTemplatesPreserveHardwareTiers() {
+        let tessera = MereRunModelManifest.template(
+            for: .visionEmbedTESSERAV2Teacher,
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+        let olmoEarth = MereRunModelManifest.template(
+            for: .visionEmbedOlmoEarthV12Base,
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+
+        XCTAssertEqual(tessera.engine, .tessera)
+        XCTAssertEqual(tessera.family, .tessera)
+        XCTAssertEqual(tessera.tier, .max)
+        XCTAssertEqual(tessera.supports, [.earthObservationEmbedding])
+        XCTAssertEqual(olmoEarth.engine, .olmoEarth)
+        XCTAssertEqual(olmoEarth.family, .olmoEarth)
+        XCTAssertEqual(olmoEarth.tier, .base)
+        XCTAssertEqual(olmoEarth.supports, [.earthObservationEmbedding])
+    }
+
     func testInfinityParser2ProTemplateHasExpectedMetadata() throws {
         let manifest = MereRunModelManifest.template(for: .infinityParser2Pro, createdAt: Date(timeIntervalSince1970: 0))
 

@@ -6,6 +6,23 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Geospatial inference
+
+- added native TerraMind ImpactMesh Fire segmentation, with an immutable
+  official-source pin, deterministic float32 safetensors conversion, managed
+  model provenance, CLI preflight/JSON output, and an installed-model smoke.
+- added hardware-scaled native TESSERA v2 time-series embeddings across Nano,
+  Small, Medium, Large, and the full 2.06B Teacher. The runtime preserves the
+  students' Matryoshka outputs, the Teacher's 1,024-dimensional output and
+  distinct pooled Sentinel-1 normalization, and exact PyTorch/MLX parity.
+- added hardware-scaled native OlmoEarth v1.2 Nano, Tiny, Small, and Base
+  multisensor spatial embeddings for Sentinel-2 L2A, Sentinel-1 RTC, and
+  Landsat. Managed pulls disclose and require acceptance of the upstream
+  artifact license's prohibited-use terms.
+- evaluated THOR and deferred a runtime until a Sentinel-3/native-resolution
+  workflow supplies a distinct usefulness gate beyond the validated TESSERA
+  and OlmoEarth embedding routes.
+
 ## 0.35.1 - 2026-08-06
 
 This patch release adds a checksum-pinned four-step MiniMax-H3 Turbo path,

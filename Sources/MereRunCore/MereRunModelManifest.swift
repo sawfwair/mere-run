@@ -38,6 +38,12 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case falconPerception = "falcon-perception"
         /// IBM/ESA TerraMind temporal flood-segmentation family.
         case terramindFlood = "terramind-flood"
+        /// IBM/ESA TerraMind temporal fire-segmentation family.
+        case terramindFire = "terramind-fire"
+        /// TESSERA v2 Sentinel-1/2 temporal embedding family.
+        case tessera
+        /// Ai2 OlmoEarth multisensor spatial embedding family.
+        case olmoEarth = "olmoearth"
         /// InsightFace Buffalo-L face detection and identity-embedding family.
         case insightFace = "insightface"
         /// MoGe-2 metric monocular geometry family.
@@ -115,6 +121,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case sam
         case falcon
         case terramind
+        case tessera
+        case olmoEarth = "olmoearth"
         case face
         case geometry
         case depth
@@ -136,7 +144,10 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
 
     public enum Tier: String, Codable, CaseIterable, Hashable, Sendable {
         case nano
+        case tiny
         case small
+        case medium
+        case large
         case base
         case max
         case latest
@@ -190,6 +201,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case loraTraining = "lora_training"
         case visionSegmentation = "vision_segmentation"
         case floodSegmentation = "flood_segmentation"
+        case fireSegmentation = "fire_segmentation"
+        case earthObservationEmbedding = "earth_observation_embedding"
         case visionTracking = "vision_tracking"
         case visionGrounding = "vision_grounding"
         case visionDetection = "vision_detection"
@@ -1398,6 +1411,72 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.floodSegmentation],
                 components: nil,
                 upstreamRepoId: "\(TerraMindFloodResources.sourceRepository)@\(TerraMindFloodResources.sourceRevision)",
+                createdAt: createdAt
+            )
+        case .visionFireTerraMindBase:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .terramindFire,
+                family: .terramind,
+                tier: .base,
+                variant: .standard,
+                precision: .fp32,
+                defaults: nil,
+                supports: [.fireSegmentation],
+                components: nil,
+                upstreamRepoId: "\(TerraMindFireResources.sourceRepository)@\(TerraMindFireResources.sourceRevision)",
+                createdAt: createdAt
+            )
+        case .visionEmbedTESSERAV2Nano,
+             .visionEmbedTESSERAV2Small,
+             .visionEmbedTESSERAV2Medium,
+             .visionEmbedTESSERAV2Large,
+             .visionEmbedTESSERAV2Teacher:
+            let source = TESSERAResources.spec(for: modelID.rawValue)!
+            let tier: Tier
+            switch source.variant {
+            case .nano: tier = .nano
+            case .small: tier = .small
+            case .medium: tier = .medium
+            case .large: tier = .large
+            case .teacher: tier = .max
+            }
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .tessera,
+                family: .tessera,
+                tier: tier,
+                variant: .standard,
+                precision: .fp32,
+                defaults: nil,
+                supports: [.earthObservationEmbedding],
+                components: nil,
+                upstreamRepoId: "\(source.sourceRepository)@\(source.sourceRevision)",
+                createdAt: createdAt
+            )
+        case .visionEmbedOlmoEarthV12Nano,
+             .visionEmbedOlmoEarthV12Tiny,
+             .visionEmbedOlmoEarthV12Small,
+             .visionEmbedOlmoEarthV12Base:
+            let source = OlmoEarthResources.spec(for: modelID.rawValue)!
+            let tier: Tier
+            switch source.variant {
+            case .nano: tier = .nano
+            case .tiny: tier = .tiny
+            case .small: tier = .small
+            case .base: tier = .base
+            }
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .olmoEarth,
+                family: .olmoEarth,
+                tier: tier,
+                variant: .standard,
+                precision: .fp32,
+                defaults: nil,
+                supports: [.earthObservationEmbedding],
+                components: nil,
+                upstreamRepoId: "\(source.sourceRepository)@\(source.sourceRevision)",
                 createdAt: createdAt
             )
         case .visionFaceBuffaloL:

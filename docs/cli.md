@@ -72,6 +72,9 @@ Public tree:
   - `mere.run vision ocr` — Extract text from images using LightOnOCR, GLM-OCR, or Infinity-Parser2.
 - [`mere.run geo`](/runtime/geo) — Run native geospatial inference models on local Earth-observation data.
   - `mere.run geo flood` — Run native TerraMind Flood tile inference with MLX on Apple silicon.
+  - `mere.run geo fire` — Run native TerraMind Fire tile inference with MLX on Apple silicon.
+  - `mere.run geo tessera` — Encode local Sentinel-1/2 time series with a native TESSERA v2 student.
+  - `mere.run geo olmoearth` — Encode multisensor Earth observations with native OlmoEarth v1.2.
 - [`mere.run audio`](/runtime/audio) — Enhance general audio locally.
   - `mere.run audio enhance` — Extend speech or general-audio bandwidth to 48 kHz.
 - [`mere.run music`](/runtime/music) — Generate, analyze, transcribe, and separate music locally.
@@ -227,6 +230,13 @@ are:
   `vision-ocr-infinity-pro`
 - Vision segmentation / tracking: `vision-segment-sam31`
 - Vision grounding: `vision-ground-falcon-perception`
+- Geospatial segmentation: `vision-flood-terramind-base`, `vision-fire-terramind-base`
+- Geospatial time-series embeddings: `vision-embed-tessera-v2-nano`,
+  `vision-embed-tessera-v2-small`, `vision-embed-tessera-v2-medium`,
+  `vision-embed-tessera-v2-large`, `vision-embed-tessera-v2-teacher`
+- Geospatial multisensor embeddings: `vision-embed-olmoearth-v12-nano`,
+  `vision-embed-olmoearth-v12-tiny`, `vision-embed-olmoearth-v12-small`,
+  `vision-embed-olmoearth-v12-base`
 - Face detection and identity embeddings: `vision-face-buffalo-l`
 - Music: `music-acestep`, `music-acestep-xl-turbo`, `music-acestep-xl-turbo-lm4b`, `music-acestep-xl-sft`, `music-acestep-xl-base`, `music-acestep-lm-1.7b`, `music-acestep-lm-4b`, `music-magenta-rt2-small`, `music-magenta-rt2-base`
 - SFX: `sfx-woosh-dflow`, `sfx-woosh-flow`
@@ -238,6 +248,7 @@ For subsystem-specific implementation guides, see:
 - [Text Runtime](./runtime/text.md)
 - [Speech Runtime](./runtime/speech.md)
 - [Vision Runtime](./runtime/vision.md)
+- [Geospatial Runtime](./runtime/geo.md)
 - [Music Runtime](./runtime/music.md)
 - [SFX Runtime](./runtime/sfx.md)
 - [Video Runtime](./runtime/video.md)

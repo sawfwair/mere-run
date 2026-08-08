@@ -173,6 +173,9 @@ public enum MereRunModelValidator {
             || spec?.validationKind == .wan22TI2VMLX
             || spec?.validationKind == .dreamXCausalMLX
             || spec?.validationKind == .terramindFlood
+            || spec?.validationKind == .terramindFire
+            || spec?.validationKind == .tessera
+            || spec?.validationKind == .olmoEarth
             || spec?.validationKind == .inkling {
             errors.append(contentsOf: spec?.validationMessages(in: rootURL, fileManager: fileManager) ?? [])
             transformerDir = nil
@@ -397,8 +400,12 @@ public enum MereRunModelValidator {
                 warnings.append("Manifest engine mismatch: family=sam expects sam-segmentation.")
             case .falcon where engine != .falconPerception:
                 warnings.append("Manifest engine mismatch: family=falcon expects falcon-perception.")
-            case .terramind where engine != .terramindFlood:
-                warnings.append("Manifest engine mismatch: family=terramind expects terramind-flood.")
+            case .terramind where engine != .terramindFlood && engine != .terramindFire:
+                warnings.append("Manifest engine mismatch: family=terramind expects a TerraMind task engine.")
+            case .tessera where engine != .tessera:
+                warnings.append("Manifest engine mismatch: family=tessera expects tessera.")
+            case .olmoEarth where engine != .olmoEarth:
+                warnings.append("Manifest engine mismatch: family=olmoearth expects olmoearth.")
             case .face where engine != .insightFace:
                 warnings.append("Manifest engine mismatch: family=face expects insightface.")
             case .tts where engine != .qwen3TTS:
@@ -499,7 +506,7 @@ public enum MereRunModelValidator {
             switch manifest.engine {
             case .qwen3Coder?, .northMiniCode?, .inkling?, .aceStep?, .magentaRT2?, .muScriptor?, .roFormer?, .apBWE?, .univerSR?, .woosh?, .mmaudio?, .ltxVideo?,
                  .wanVideo?, .moge2?, .videoDepthAnything?, .depthAnything3?, .tripoSR?, .instantMesh?, .trellis2?,
-                 .insightFace?, .sortformer?, .terramindFlood?:
+                 .insightFace?, .sortformer?, .terramindFlood?, .terramindFire?, .tessera?, .olmoEarth?:
                 return true
             default:
                 return false
@@ -554,6 +561,9 @@ public enum MereRunModelValidator {
         if modelId.hasPrefix("vision-segment-") { return .sam }
         if modelId.hasPrefix("vision-ground-") { return .falcon }
         if modelId.hasPrefix("vision-flood-") { return .terramind }
+        if modelId.hasPrefix("vision-fire-") { return .terramind }
+        if modelId.hasPrefix("vision-embed-tessera-") { return .tessera }
+        if modelId.hasPrefix("vision-embed-olmoearth-") { return .olmoEarth }
         if modelId.hasPrefix("vision-face-") { return .face }
         if modelId.hasPrefix("vision-geometry-") { return .geometry }
         if modelId.hasPrefix("vision-depth-") { return .depth }
@@ -592,7 +602,10 @@ public enum MereRunModelValidator {
 
     private static func inferTier(from modelId: String) -> MereRunModelManifest.Tier? {
         if modelId.hasSuffix("-nano") { return .nano }
+        if modelId.hasSuffix("-tiny") { return .tiny }
         if modelId.hasSuffix("-small") { return .small }
+        if modelId.hasSuffix("-medium") { return .medium }
+        if modelId.hasSuffix("-large") { return .large }
         if modelId.hasSuffix("-max") { return .max }
         if modelId.hasSuffix("-base") { return .base }
         return nil
