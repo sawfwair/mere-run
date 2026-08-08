@@ -680,7 +680,10 @@ final class DiTShapeBenchTests: XCTestCase {
     func testMiniMaxH3PracticalTierSDPA() throws {
         try benchGate()
         Stream.withNewDefaultStream {
-            let rows = 12_925
+            let rows = max(
+                1,
+                Int(ProcessInfo.processInfo.environment["MERERUN_H3_BENCH_ROWS"] ?? "") ?? 12_930
+            )
             let heads = 56
             let headDimension = 128
             let query = MLXRandom.normal([1, heads, rows, headDimension]).asType(.bfloat16)
@@ -1261,7 +1264,10 @@ final class DiTShapeBenchTests: XCTestCase {
     /// schedules so thermal drift hits both arms symmetrically.
     func testMiniMaxH3BlockGEMMSchedules() throws {
         try benchGate()
-        let rows = 37_966
+        let rows = max(
+            1,
+            Int(ProcessInfo.processInfo.environment["MERERUN_H3_BENCH_ROWS"] ?? "") ?? 37_966
+        )
         let benchmark = MiniMaxH3BlockScheduleBenchmark(
             rowCount: rows,
             maximumQueryTokens: 1_024,
@@ -1289,7 +1295,8 @@ final class DiTShapeBenchTests: XCTestCase {
         }
 
         func selectHybrid() {
-            setenv("MLX_GEMM_H3_TUNED", "1", 1)
+            selectDefault()
+            unsetenv("MLX_GEMM_H3_TUNED")
         }
 
         defer { selectDefault() }
@@ -2119,9 +2126,17 @@ final class DiTShapeBenchTests: XCTestCase {
             return
         }
         let latentFrames = try MiniMaxH3Geometry.videoLatentFrameCount(for: frameCount)
+        let usesCompiledDecoder = environment["MERERUN_H3_VAE_COMPILED"] != "0"
+        let materializesWeights = environment["MERERUN_H3_VAE_MATERIALIZE"] == "1"
+        let totalStarted = CFAbsoluteTimeGetCurrent()
         let resources = MiniMaxH3Resources(rootURL: URL(fileURLWithPath: root, isDirectory: true))
         let model = try MiniMaxH3ModelLoader.loadVideoVAE(resources: resources)
         model.spatialTileSize = tileSize
+        model.usesCompiledTileDecoder = usesCompiledDecoder
+        if materializesWeights {
+            MLX.eval(model.parameters())
+        }
+        let loadSeconds = CFAbsoluteTimeGetCurrent() - totalStarted
         let latents = MLXRandom.normal([
             1,
             24,
@@ -2134,13 +2149,19 @@ final class DiTShapeBenchTests: XCTestCase {
         let started = CFAbsoluteTimeGetCurrent()
         let decoded = model.decode(latents)
         MLX.eval(decoded)
+        let decodeSeconds = CFAbsoluteTimeGetCurrent() - started
         print(String(
-            format: "[dit-bench] H3 video VAE tile=%d size=%dx%d frames=%d %.3fs peak=%.2fGiB",
+            format: "[dit-bench] H3 video VAE tile=%d compiled=%@ materialized=%@ "
+                + "size=%dx%d frames=%d load=%.3fs decode=%.3fs total=%.3fs peak=%.2fGiB",
             tileSize,
+            usesCompiledDecoder ? "true" : "false",
+            materializesWeights ? "true" : "false",
             width,
             height,
             decoded.dim(1),
-            CFAbsoluteTimeGetCurrent() - started,
+            loadSeconds,
+            decodeSeconds,
+            loadSeconds + decodeSeconds,
             Double(Memory.snapshot().peakMemory) / 1_073_741_824
         ))
         XCTAssertEqual(decoded.shape, [1, frameCount, height, width, 3])

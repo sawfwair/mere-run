@@ -592,7 +592,7 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         XCTAssertEqual(
             MiniMaxH3DenoiseExecutionPolicy.mode(
                 usesResidentBF16: false,
-                sequenceLength: 12_925,
+                sequenceLength: 11_925,
                 usesBlockProfiling: false
             ),
             .compiledStep
@@ -601,7 +601,7 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         XCTAssertEqual(
             MiniMaxH3DenoiseExecutionPolicy.mode(
                 usesResidentBF16: false,
-                sequenceLength: 12_925,
+                sequenceLength: 11_925,
                 usesBlockProfiling: true
             ),
             .eagerStep
@@ -610,7 +610,7 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         XCTAssertEqual(
             MiniMaxH3DenoiseExecutionPolicy.mode(
                 usesResidentBF16: true,
-                sequenceLength: 12_925,
+                sequenceLength: 11_925,
                 usesBlockProfiling: false,
                 denoiseStepCount: 1
             ),
@@ -619,7 +619,7 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         XCTAssertEqual(
             MiniMaxH3DenoiseExecutionPolicy.mode(
                 usesResidentBF16: true,
-                sequenceLength: 12_925,
+                sequenceLength: 11_925,
                 usesBlockProfiling: false,
                 denoiseStepCount: 2
             ),
@@ -628,7 +628,7 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         XCTAssertEqual(
             MiniMaxH3DenoiseExecutionPolicy.mode(
                 usesResidentBF16: true,
-                sequenceLength: 12_925,
+                sequenceLength: 11_925,
                 usesBlockProfiling: false,
                 profilingOverride: "compiled"
             ),
@@ -637,7 +637,7 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         XCTAssertEqual(
             MiniMaxH3DenoiseExecutionPolicy.mode(
                 usesResidentBF16: false,
-                sequenceLength: 12_925,
+                sequenceLength: 11_925,
                 usesBlockProfiling: true,
                 profilingOverride: "compiled"
             ),
@@ -656,6 +656,20 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
 
     func testDenoiseExecutionPolicyUsesMeasuredBlockwiseKernelSchedule() {
         XCTAssertEqual(
+            MiniMaxH3DenoiseExecutionPolicy.attentionKernelSchedule(sequenceLength: 12_930)
+                .maximumQueryTokens,
+            640
+        )
+        XCTAssertEqual(
+            MiniMaxH3DenoiseExecutionPolicy.attentionKernelSchedule(sequenceLength: 12_930)
+                .maximumKernelsPerEvaluation,
+            1
+        )
+        XCTAssertNil(
+            MiniMaxH3DenoiseExecutionPolicy.attentionKernelSchedule(sequenceLength: 12_930)
+                .maximumHeadsPerKernel
+        )
+        XCTAssertEqual(
             MiniMaxH3DenoiseExecutionPolicy.attentionKernelSchedule(sequenceLength: 14_958)
                 .maximumQueryTokens,
             1_024
@@ -663,7 +677,7 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         XCTAssertEqual(
             MiniMaxH3DenoiseExecutionPolicy.attentionKernelSchedule(sequenceLength: 14_958)
                 .maximumKernelsPerEvaluation,
-            4
+            1
         )
         XCTAssertNil(
             MiniMaxH3DenoiseExecutionPolicy.attentionKernelSchedule(sequenceLength: 14_958)
@@ -922,6 +936,40 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
             ).max().item(Float.self),
             0.05
         )
+    }
+
+    func testTinyDenseBF16TransformerIsActuallyMaterialized() {
+        let configuration = MiniMaxH3TransformerConfiguration(
+            hiddenSize: 32,
+            layerCount: 2,
+            refinerLayerCount: 1,
+            attentionHeadCount: 4,
+            attentionHeadDimension: 8,
+            feedForwardSize: 64,
+            videoLatentChannels: 8,
+            audioLatentChannels: 32,
+            patchSize: [1, 2, 2],
+            textDimension: 32,
+            timeFrequencyDimension: 32,
+            timeEmbeddingHiddenSize: 32,
+            timeEmbeddingDimension: 32,
+            ropeFrequencyCount: 1
+        )
+        let model = MiniMaxH3Transformer(configuration: configuration)
+        model.update(parameters: model.parameters().mapValues { $0.asType(.bfloat16) })
+        let linearCount = model.leafModules().flattened().count { $0.1 is Linear }
+        let estimatedBytes = model.estimatedResidentBF16ByteCount
+
+        XCTAssertGreaterThan(linearCount, 0)
+        XCTAssertGreaterThan(estimatedBytes, 0)
+        XCTAssertFalse(model.usesResidentBF16)
+
+        let materialized = model.materializeResidentBF16()
+
+        XCTAssertTrue(model.usesResidentBF16)
+        XCTAssertEqual(materialized.linearCount, linearCount)
+        XCTAssertEqual(materialized.byteCount, estimatedBytes)
+        XCTAssertFalse(model.leafModules().flattened().contains { $0.1 is QuantizedLinear })
     }
 
     func testTinyTransformerPreservesTargetShapes() throws {

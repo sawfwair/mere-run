@@ -241,6 +241,7 @@ public final class MiniMaxH3VideoVAE: Module {
     static let minimumSpatialTileOverlap = 64
 
     var spatialTileSize = defaultSpatialTileSize
+    var usesCompiledTileDecoder = true
 
     @ModuleInfo(key: "encoder") public var encoder: MiniMaxH3VideoEncoder
     @ModuleInfo(key: "quant_conv") var quantConvolution: Conv3d
@@ -430,10 +431,13 @@ public final class MiniMaxH3VideoVAE: Module {
         let chunkCount = (originalTokenCount + tokenDrop + resolvedPadTokens) / tokensPerChunk - 1
         var decodedChunks: [MLXArray] = []
         var overlap: MLXArray?
-        let tileDecoder = MLX.compile { (channelLast: MLXArray) -> MLXArray in
+        let decodeTile: (MLXArray) -> MLXArray = { (channelLast: MLXArray) -> MLXArray in
             let projected = self.postQuantConvolution(channelLast).transposed(0, 4, 1, 2, 3)
             return self.decoder(projected)
         }
+        let tileDecoder: (MLXArray) -> MLXArray = usesCompiledTileDecoder
+            ? MLX.compile(decodeTile)
+            : decodeTile
         for index in 0..<chunkCount {
             let start = index * tokensPerChunk
             let clip = decodeClip(
@@ -472,7 +476,7 @@ public final class MiniMaxH3VideoVAE: Module {
 
     private func decodeClip(
         _ latent: MLXArray,
-        tileDecoder: @Sendable (MLXArray) -> MLXArray
+        tileDecoder: (MLXArray) -> MLXArray
     ) -> MLXArray {
         let pixelHeight = latent.dim(3) * 16
         let pixelWidth = latent.dim(4) * 16

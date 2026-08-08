@@ -11,11 +11,18 @@ export MERERUN_DIT_BENCH=1
 export CFFIXED_USER_HOME="${MERERUN_H3_LAB_HOME:-${TMPDIR:-/tmp}/mere-run-h3-kernel-home}"
 mkdir -p "$CFFIXED_USER_HOME"
 
+if pgrep -f '/mere\.run ' >/dev/null; then
+  print -u2 "another mere.run workload is active; refusing a contaminated H3 kernel benchmark"
+  pgrep -fl '/mere\.run ' >&2
+  exit 75
+fi
+
 run_release_test() {
   local filter="$1"
   local release_root="$repo_root/.build/arm64-apple-macosx/release"
   local test_binary_root="$release_root/MereRunPackageTests.xctest/Contents/MacOS"
   local test_binary="$test_binary_root/MereRunPackageTests"
+  local default_metallib="$release_root/Resources/default.metallib"
   local stale_source=""
 
   if [[ -f "$test_binary" ]]; then
@@ -25,8 +32,11 @@ run_release_test() {
     swift build --build-tests -c release -Xswiftc -enable-testing -Xswiftc -DDEBUG
   fi
   if [[ ! -f "$test_binary_root/mlx.metallib" ]]; then
+    if [[ ! -f "$default_metallib" ]]; then
+      default_metallib="$release_root/magentart.framework/Resources/default.metallib"
+    fi
     mkdir -p "$test_binary_root"
-    cp "$release_root/Resources/default.metallib" "$test_binary_root/mlx.metallib"
+    cp "$default_metallib" "$test_binary_root/mlx.metallib"
   fi
   xcrun xctest -XCTest "$filter" "$release_root/MereRunPackageTests.xctest"
 }

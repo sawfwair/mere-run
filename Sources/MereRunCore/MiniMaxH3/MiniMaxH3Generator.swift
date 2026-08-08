@@ -137,7 +137,8 @@ enum MiniMaxH3DenoiseExecutionMode: Equatable {
 }
 
 enum MiniMaxH3DenoiseExecutionPolicy {
-    static let blockwiseSequenceThreshold = 13_500
+    static let blockwiseSequenceThreshold = 12_000
+    static let practicalAttentionUpperBound = 13_500
     static let largeSequenceAttentionThreshold = 32_768
     static let veryLargeSequenceAttentionThreshold = 65_536
 
@@ -162,10 +163,18 @@ enum MiniMaxH3DenoiseExecutionPolicy {
                 maximumKernelsPerEvaluation: 1
             )
         }
+        if sequenceLength > blockwiseSequenceThreshold,
+           sequenceLength <= practicalAttentionUpperBound {
+            return (
+                maximumQueryTokens: 640,
+                maximumHeadsPerKernel: nil,
+                maximumKernelsPerEvaluation: 1
+            )
+        }
         return (
             maximumQueryTokens: 1_024,
             maximumHeadsPerKernel: nil,
-            maximumKernelsPerEvaluation: 4
+            maximumKernelsPerEvaluation: 1
         )
     }
 
@@ -597,13 +606,11 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         if let conditionVideoRows { MLX.eval(conditionVideoRows) }
         if let conditionAudioRows { MLX.eval(conditionAudioRows) }
 
-        // Practical sequence lengths benefit from a compiled whole-step graph
-        // once its first invocation is amortized. A single-step diagnostic is
-        // faster with resident bf16 when its eager stack synchronizes after
-        // each block; this bounds the lazy graph and keeps the allocator
-        // reusing intermediate buffers without paying compilation overhead.
-        // Very large sequences keep independent compiled block boundaries to
-        // avoid the macOS watchdog.
+        // The practical H3 tier uses independent compiled block boundaries to
+        // bound the graph, reuse intermediate buffers, and hold steadier clocks
+        // during a sustained denoise pass. Smaller graphs can still amortize a
+        // compiled whole-step transform; very large graphs also stay blockwise
+        // to avoid the macOS watchdog.
         let blockReusePolicy = accelerationMode.blockReusePolicy.map { policy in
             let environment = ProcessInfo.processInfo.environment
             let requestedCacheDepth = Double(environment["MERERUN_H3_REUSE_DEPTH"] ?? "")
@@ -634,24 +641,33 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         let attentionKernelSchedule = MiniMaxH3DenoiseExecutionPolicy.attentionKernelSchedule(
             sequenceLength: layout.sequenceLength
         )
-        transformer.maximumAttentionQueryTokensPerKernel = attentionKernelSchedule
-            .maximumQueryTokens
-        transformer.maximumAttentionHeadsPerKernel = attentionKernelSchedule
-            .maximumHeadsPerKernel
-        transformer.maximumAttentionKernelsPerEvaluation = attentionKernelSchedule
-            .maximumKernelsPerEvaluation
+        let environment = ProcessInfo.processInfo.environment
+        transformer.maximumAttentionQueryTokensPerKernel = max(
+            1,
+            Int(environment["MERERUN_H3_ATTENTION_QUERY_TOKENS"] ?? "")
+                ?? attentionKernelSchedule.maximumQueryTokens
+        )
+        transformer.maximumAttentionHeadsPerKernel = Int(
+            environment["MERERUN_H3_ATTENTION_HEADS_PER_KERNEL"] ?? ""
+        ).map { max(1, $0) } ?? attentionKernelSchedule.maximumHeadsPerKernel
+        transformer.maximumAttentionKernelsPerEvaluation = max(
+            1,
+            Int(environment["MERERUN_H3_ATTENTION_EVALUATION_BATCH"] ?? "")
+                ?? attentionKernelSchedule.maximumKernelsPerEvaluation
+        )
         transformer.usesFusedPostAttention = ProcessInfo.processInfo
             .environment["MERERUN_H3_FUSED_POST_ATTENTION"] == "1"
         transformer.usesLayerwiseEvaluation = executionMode.usesLayerwiseEvaluation
         transformer.clearsCacheAfterLayerwiseEvaluation = false
+        let attentionHeadsPerKernel = transformer.maximumAttentionHeadsPerKernel
+            ?? transformer.configuration.attentionHeadCount
         stepProfileLogger?(
             "execution_mode=\(executionMode) acceleration=\(accelerationMode.rawValue) "
                 + "fused_post_attention=\(transformer.usesFusedPostAttention) "
-                + "attention_query_tokens=\(attentionKernelSchedule.maximumQueryTokens) "
-                + "attention_heads_per_kernel="
-                + "\(attentionKernelSchedule.maximumHeadsPerKernel ?? transformer.configuration.attentionHeadCount) "
+                + "attention_query_tokens=\(transformer.maximumAttentionQueryTokensPerKernel) "
+                + "attention_heads_per_kernel=\(attentionHeadsPerKernel) "
                 + "attention_evaluation_batch="
-                + "\(attentionKernelSchedule.maximumKernelsPerEvaluation)"
+                + "\(transformer.maximumAttentionKernelsPerEvaluation)"
         )
         if let blockReusePolicy {
             stepProfileLogger?(
