@@ -82,7 +82,10 @@ final class Krea2Attention: Module {
     func callAsFunction(
         _ x: MLXArray,
         rotary: (cos: MLXArray, sin: MLXArray)? = nil,
-        mask: MLXArray? = nil
+        mask: MLXArray? = nil,
+        dynamicSparseRuntime: DynamicSparseAttentionRuntime? = nil,
+        layerIndex: Int = 0,
+        prefixTokenCount: Int = 0
     ) -> MLXArray {
         let batch = x.dim(0)
         let sequence = x.dim(1)
@@ -103,7 +106,20 @@ final class Krea2Attention: Module {
             v = MLX.repeated(v, count: repeats, axis: 1)
         }
 
-        let attended = MLXFast.scaledDotProductAttention(
+        // The current custom kernel has no additive-mask input. Krea's image
+        // blocks therefore remain dense until padded text keys can be excluded
+        // exactly; mask-free attention sites can use the staged runtime now.
+        let sparse = mask == nil
+            ? dynamicSparseRuntime?.call(
+                queries: q,
+                keys: k,
+                values: v,
+                layerIndex: layerIndex,
+                prefixTokenCount: prefixTokenCount,
+                scale: scale
+            )
+            : nil
+        let attended = sparse ?? MLXFast.scaledDotProductAttention(
             queries: q,
             keys: k,
             values: v,
@@ -296,7 +312,10 @@ final class Krea2SingleStreamBlock: Module {
         _ x: MLXArray,
         modulation: MLXArray,
         rotary: (cos: MLXArray, sin: MLXArray),
-        mask: MLXArray
+        mask: MLXArray,
+        dynamicSparseRuntime: DynamicSparseAttentionRuntime? = nil,
+        layerIndex: Int = 0,
+        prefixTokenCount: Int = 0
     ) -> MLXArray {
         let batch = x.dim(0)
         let table = scaleShiftTable.reshaped(1, 6, hiddenSize)
@@ -308,7 +327,14 @@ final class Krea2SingleStreamBlock: Module {
         let postshift = values[0..., 0..., 4, 0...]
         let postgate = values[0..., 0..., 5, 0...]
 
-        var out = x + pregate * attn((1 + prescale) * norm1(x) + preshift, rotary: rotary, mask: mask)
+        var out = x + pregate * attn(
+            (1 + prescale) * norm1(x) + preshift,
+            rotary: rotary,
+            mask: mask,
+            dynamicSparseRuntime: dynamicSparseRuntime,
+            layerIndex: layerIndex,
+            prefixTokenCount: prefixTokenCount
+        )
         out = out + postgate * ff((1 + postscale) * norm2(out) + postshift)
         return out
     }
@@ -415,6 +441,7 @@ final class Krea2PositionalEncoding {
 
 public final class Krea2Transformer: Module {
     public let configuration: Krea2TransformerConfiguration
+    private let dynamicSparseRuntime: DynamicSparseAttentionRuntime?
 
     @ModuleInfo(key: "img_in") var imgIn: Linear
     @ModuleInfo(key: "txt_in") var txtIn: Krea2TextProjection
@@ -433,6 +460,7 @@ public final class Krea2Transformer: Module {
 
     public init(configuration: Krea2TransformerConfiguration) {
         self.configuration = configuration
+        self.dynamicSparseRuntime = DynamicSparseAttentionRuntime.configured(model: .krea2)
         self._imgIn.wrappedValue = Linear(configuration.inChannels, configuration.hiddenSize, bias: true)
         self._txtIn.wrappedValue = Krea2TextProjection(
             textDim: configuration.textHiddenDim,
@@ -458,6 +486,10 @@ public final class Krea2Transformer: Module {
             theta: configuration.ropeTheta
         )
         super.init()
+    }
+
+    func beginDenoisingStep(index: Int, count: Int) {
+        dynamicSparseRuntime?.beginStep(index: index, count: count)
     }
 
     public func callAsFunction(
@@ -507,11 +539,19 @@ public final class Krea2Transformer: Module {
         let attentionMask = Krea2SampleBuilder.attentionMask(validMask: combinedMask, dtype: combined.dtype)
         let tokenMask = (combinedMask .== MLXArray(Int32(1))).expandedDimensions(axis: -1)
         let rotary = positionalEncoding(positionIds: combinedPositions)
-        for block in transformerBlocks {
+        for (index, block) in transformerBlocks.enumerated() {
             combined = MLX.where(tokenMask, combined, MLX.zeros(combined.shape, dtype: combined.dtype))
             combined = gradientCheckpointing
                 ? block.checkpointed(combined, modulation: timeModulation, rotary: rotary, mask: attentionMask)
-                : block(combined, modulation: timeModulation, rotary: rotary, mask: attentionMask)
+                : block(
+                    combined,
+                    modulation: timeModulation,
+                    rotary: rotary,
+                    mask: attentionMask,
+                    dynamicSparseRuntime: dynamicSparseRuntime,
+                    layerIndex: index,
+                    prefixTokenCount: textLength
+                )
         }
         combined = MLX.where(tokenMask, combined, MLX.zeros(combined.shape, dtype: combined.dtype))
         let output = finalLayer(combined, timestepEmbedding: timeEmbedding)

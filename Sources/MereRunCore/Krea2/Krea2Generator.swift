@@ -256,6 +256,7 @@ public final class Krea2Generator: ImageGenerator {
         let textContextBF16 = text.hiddenStates.asType(.bfloat16)
         for step in 0..<request.steps {
             try Task.checkCancellation()
+            transformer.beginDenoisingStep(index: step, count: request.steps)
             progressHandler?(GenerationProgress(stage: .denoising, stepIndex: step, totalSteps: request.steps))
             let tCurrent = timesteps[step]
             let tPrevious = timesteps[step + 1]
