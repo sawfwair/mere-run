@@ -2,13 +2,17 @@ import XCTest
 @testable import MereRunCore
 
 final class DynamicSparseAttentionTests: MereRunCoreTestCase {
-    func testSelectionIsExplicitAndModelScoped() {
-        XCTAssertEqual(DynamicSparseAttentionRuntime.selection(environment: [:]), [])
+    func testZImageRuntimeIsEnabledByDefaultAndCanBeDisabled() {
+        XCTAssertTrue(DynamicSparseAttentionRuntime.isEnabled(model: .zImage, environment: [:]))
+        XCTAssertFalse(DynamicSparseAttentionRuntime.isEnabled(
+            model: .zImage,
+            environment: ["MERERUN_DYNAMIC_SPARSE_ATTENTION": "0"]
+        ))
         XCTAssertEqual(
             DynamicSparseAttentionRuntime.selection(environment: [
-                "MERERUN_DYNAMIC_SPARSE_ATTENTION": "wan2,ltx",
+                "MERERUN_DYNAMIC_SPARSE_ATTENTION": "z-image",
             ]),
-            [.wan2, .ltx]
+            [.zImage]
         )
         XCTAssertEqual(
             DynamicSparseAttentionRuntime.selection(environment: [
@@ -35,11 +39,11 @@ final class DynamicSparseAttentionTests: MereRunCoreTestCase {
         XCTAssertEqual(request.prefixTokenCount, 0)
     }
 
-    func testConfigurationCanLowerThresholdForTomorrowSmokeOnly() throws {
+    func testConfigurationCanLowerThresholdForDiagnosticSmoke() throws {
         let runtime = try XCTUnwrap(DynamicSparseAttentionRuntime.configured(
-            model: .wan2,
+            model: .zImage,
             environment: [
-                "MERERUN_DYNAMIC_SPARSE_ATTENTION": "wan2",
+                "MERERUN_DYNAMIC_SPARSE_ATTENTION": "z-image",
                 "MERERUN_DYNAMIC_SPARSE_LOG": "1",
                 "MERERUN_DYNAMIC_SPARSE_MIN_TOKENS": "256",
                 "MERERUN_DYNAMIC_SPARSE_TAU": "0.75",
@@ -47,6 +51,7 @@ final class DynamicSparseAttentionTests: MereRunCoreTestCase {
         ))
         XCTAssertEqual(runtime.policy.minimumSequenceLength, 256)
         XCTAssertEqual(runtime.policy.thresholdStandardDeviations, 0.75)
+        XCTAssertEqual(runtime.maximumGateRelativeError, 0.015)
         XCTAssertNotNil(runtime.logHandler)
     }
 }

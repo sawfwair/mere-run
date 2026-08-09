@@ -2,27 +2,18 @@ import Foundation
 import MLX
 
 enum DynamicSparseAttentionModel: String, CaseIterable, Sendable {
-    case wan2
-    case scail2
-    case ltx
-    case cosmos3
-    case trellis2
-    case flux2
-    case krea2
-    case qwenImageEdit = "qwen-image-edit"
     case zImage = "z-image"
-    case ideogram4
 }
 
-/// Opt-in staging controller for model-specific dynamic sparse attention.
+/// Model-specific admission controller for reusable dynamic sparse attention.
 ///
-/// H3 owns its released admission policy. Other model integrations stay
-/// disabled unless explicitly selected through `MERERUN_DYNAMIC_SPARSE_ATTENTION`.
-/// This lets source and CPU-only validation land independently from the real
-/// Metal numerical and artifact gates required before production enablement.
+/// H3 owns its released admission policy. Z-Image enables this runtime only at
+/// the long-sequence crossover validated on Metal; the environment selector is
+/// retained as a diagnostic disable and threshold override.
 final class DynamicSparseAttentionRuntime {
     let model: DynamicSparseAttentionModel
     let policy: DynamicSparseAttentionPolicy
+    let maximumGateRelativeError: Float
     let maximumQueryTokens: Int
     let maximumKernelsPerEvaluation: Int
 
@@ -35,13 +26,16 @@ final class DynamicSparseAttentionRuntime {
     init(
         model: DynamicSparseAttentionModel,
         policy: DynamicSparseAttentionPolicy,
+        maximumGateRelativeError: Float = 0.01,
         maximumQueryTokens: Int = 1_024,
         maximumKernelsPerEvaluation: Int = 4
     ) {
+        precondition(maximumGateRelativeError > 0)
         precondition(maximumQueryTokens > 0)
         precondition(maximumKernelsPerEvaluation > 0)
         self.model = model
         self.policy = policy
+        self.maximumGateRelativeError = maximumGateRelativeError
         self.maximumQueryTokens = maximumQueryTokens
         self.maximumKernelsPerEvaluation = maximumKernelsPerEvaluation
     }
@@ -54,7 +48,7 @@ final class DynamicSparseAttentionRuntime {
         denseLeadingLayerCount: Int = 2,
         environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> DynamicSparseAttentionRuntime? {
-        guard selection(environment: environment).contains(model) else { return nil }
+        guard isEnabled(model: model, environment: environment) else { return nil }
         let threshold = Float(environment["MERERUN_DYNAMIC_SPARSE_TAU"] ?? "")
             .flatMap { $0 >= 0 ? $0 : nil } ?? 1
         let sequenceThreshold = Int(environment["MERERUN_DYNAMIC_SPARSE_MIN_TOKENS"] ?? "")
@@ -67,7 +61,8 @@ final class DynamicSparseAttentionRuntime {
                 denseLeadingStepFraction: denseLeadingStepFraction,
                 denseTrailingStepCount: denseTrailingStepCount,
                 denseLeadingLayerCount: denseLeadingLayerCount
-            )
+            ),
+            maximumGateRelativeError: 0.015
         )
         if ["1", "true", "yes"].contains(
             environment["MERERUN_DYNAMIC_SPARSE_LOG"]?.lowercased() ?? ""
@@ -77,6 +72,20 @@ final class DynamicSparseAttentionRuntime {
             }
         }
         return runtime
+    }
+
+    static func isEnabled(
+        model: DynamicSparseAttentionModel,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> Bool {
+        guard let raw = environment["MERERUN_DYNAMIC_SPARSE_ATTENTION"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased(),
+              !raw.isEmpty else {
+            return model == .zImage
+        }
+        if ["0", "false", "no"].contains(raw) { return false }
+        return selection(environment: environment).contains(model)
     }
 
     static func selection(
@@ -134,7 +143,8 @@ final class DynamicSparseAttentionRuntime {
                 keys: keys,
                 values: values,
                 queryStart: prefixTokenCount,
-                scale: scale
+                scale: scale,
+                maximumRelativeErrorLimit: maximumGateRelativeError
             )
             gateResults[key] = gate?.passed ?? false
             if let gate {

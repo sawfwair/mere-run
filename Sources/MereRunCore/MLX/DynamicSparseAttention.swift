@@ -188,8 +188,10 @@ enum DynamicSparseAttention {
         values: MLXArray,
         queryStart: Int,
         scale: Float,
+        maximumRelativeErrorLimit: Float = 0.01,
         sampleQueryCount: Int = 8
     ) -> DynamicSparseAttentionGate? {
+        precondition(maximumRelativeErrorLimit > 0)
         guard supports(
             queries: queries,
             keys: keys,
@@ -259,7 +261,7 @@ enum DynamicSparseAttention {
         // Absolute activation scales differ substantially across native model
         // families. Admit the dense-route implementation by scale-invariant
         // error while retaining tight BF16 conversion and aggregate bounds.
-        let passed = maximumRelativeError <= 0.015
+        let passed = maximumRelativeError <= maximumRelativeErrorLimit
             && meanRelativeError <= 0.005
             && measured[2] <= 0.005
         return .init(
