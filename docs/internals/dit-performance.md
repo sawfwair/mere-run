@@ -400,44 +400,88 @@ gate, and improve a matched full-block or denoise-step probe should move into
 the runtime. Full video generation remains a final quality gate, not the inner
 optimization loop.
 
-### Bounded tail-block reuse
+### Dynamic sparse H3 attention on Apple GPUs
+
+H3's packed sequence is not a homogeneous video grid. It contains dense text,
+conditioning video, generated-audio, and target-video regions, so sparsifying
+the whole sequence would place dialogue and reference fidelity at unnecessary
+risk. The production path instead applies an independently written Metal
+implementation of the dynamic-routing ideas published by
+[Sol-Attn](https://nvlabs.github.io/Sana/Sol-Attn/) only to target-video
+queries. It uses 64-token blocks and a 128-wide BF16 SIMDgroup-matrix kernel.
+Every prefix query stays on MLX's fused dense SDPA path; every prefix key and
+the neighboring target-video blocks remain exact for sparse queries.
+Query-centroid and key-centroid scores route additional exact blocks at
+runtime. Skipped blocks still contribute through key-centroid logits and
+summed values in the same online-softmax accumulator.
+
+The first two transformer layers, the first 20% of schedule evaluations, and
+the final evaluation remain dense. Production eligibility starts at 12,000
+packed rows. Before the first sparse layer at a new shape, an all-routes-dense
+sample compares the custom Metal result with fused SDPA; unsupported devices,
+dtypes, or a failed error envelope fall back to dense attention. On the real
+13,085-row checkpoint tensors, FP32 projection outputs staged through BF16 MMA
+passed at `max_abs=0.10026`, `mean_abs=0.00219996`, and
+`rel_l2=0.0027471`.
+
+The bounded release benchmarks separate kernel throughput from artifact
+quality:
+
+| Input | Rows / prefix / heads | Dense | Sparse | Speedup | Routed blocks |
+| --- | --- | ---: | ---: | ---: | ---: |
+| BF16 | 12,930 / 951 / 56 | 389 ms | 293 ms | 1.327x | 14.44% |
+| FP32 staged to BF16 MMA | 13,085 / 653 / 56 | 717 ms | 371 ms | 1.931x | 15.84% |
+
+Those random-tensor timings establish the execution win, not approximation
+quality. The acceptance boundary was a real fixed-seed LightX2V generation at
+768x448, 124 frames, 24 fps, and four transformer evaluations. Dense denoising
+took 631.826 seconds; dynamic sparse attention took 444.216 seconds, a measured
+29.7% reduction. The clean sparse step measured 101.294 seconds versus
+131.430 and 134.311 seconds for the comparable late dense steps. The final
+protected dense step in the sparse process measured 127.645 seconds, ruling
+out a simple late-run thermal advantage. Complete native generation fell from
+736.285 to 535.386 seconds. The dense run paid a larger first-step compile cost,
+so the end-to-end figure is an observed run receipt rather than an isolated
+kernel attribution.
+
+Both MP4s contain exactly 124 coherent H.264 frames plus synchronized 32 kHz
+stereo AAC. Eight-point matched contact sheets retained the two actors,
+recorder handoff, train motion, faces, and final composition without sparse
+block corruption. Native Parakeet transcribed both soundtracks as
+`You kept the recording? Every second.` The full hashes and phase ledger are in
+[MiniMax-H3 BF16 on M4 Max](../benchmarks/minimax-h3-bf16-m4-max.md).
+
+### Adaptive first-block cache
 
 Exact attention scheduling and resident BF16 improve each native call, but H3
 still executes 50 sequential transformer blocks. The explicit `balanced` and
-`maximum` acceleration modes reduce the number of blocks on safe adjacent
-schedule steps. A full step stores `finalHidden - warmHidden`; a cache step
-recomputes 25 leading blocks in `balanced` or nine in `maximum`, then adds that
-stored tail residual. Both video and audio sigma deltas must be below 0.12, the
-schedule position must be inside 10%...90%, and at least two complete
-evaluations must precede reuse. Balanced refreshes after two cache steps;
-maximum refreshes after four.
+`maximum` acceleration modes now execute block 1 on every schedule point and
+use its measured change to decide whether blocks 2 through 50 can be reused.
+A full refresh stores the target-only tail residual. The next candidate stacks
+four statistics into one host boundary: global and worst-time-slice relative
+change for video and audio. Reuse requires every finite statistic to fit its
+mode's envelope; otherwise the runtime executes all 50 blocks and refreshes.
 
-This is also the acceleration primitive published by
-[TE-Speed-MiniMaxH3-OSS](https://github.com/HELPMEEADICE/TE-Speed-MiniMaxH3-OSS):
-its defaults use the same 0.12 sigma-delta test and 10%...90% window, while
-recomputing 25% of the blocks and forcing a full refresh after two cached steps.
-`maximum` is already more aggressive, recomputing 18% and allowing four cached
-steps. TE-Speed therefore confirms the existing model-math lane rather than
-supplying a second exact kernel optimization.
+`balanced` uses 0.08 global and 0.12 temporal thresholds, admits at most two
+adjacent hits, and reserves the final two evaluations for complete refreshes.
+`maximum` uses the measured 0.30/0.40 envelope, admits at most four adjacent
+hits, and reserves the final evaluation. Both require two complete evaluations
+before reuse and apply the cached residual only to target rows, never the text
+or media-condition prefix.
 
-Automatic long-geometry schedules use 21 points (20 model evaluations),
-matching the current practical CUDA default instead of the previous 31 points.
-Maximum acceleration caps automatic schedules at 12 points. With an explicit
-20-point schedule, its bounded reuse policy runs six full evaluations and
-recomputes nine of 50 blocks on 13 cache evaluations, for 417 block calls
-versus 950 in exact quality (56.1% less transformer-block work).
+The former fixed-depth scheduled-tail policy remains available solely for
+matched comparisons through `MERERUN_H3_CACHE_STRATEGY=scheduled-tail`. On the
+locked 416x256, 107-frame, 20-point resident-BF16 proxy, scheduled-tail ran 417
+blocks in 222.220 seconds of denoise. Adaptive `maximum` ran 362 blocks in
+163.953 seconds: 26.2% less denoise time and 24.7% less end-to-end time. A
+conservative 0.12/0.18 calibration was explicitly rejected after it admitted
+only seven hits and took 328.364 seconds.
 
-On the M4 Max 128 GB test machine, a matched warm-cache 512x320, 22-frame,
-16-point run measured 112.413 s of denoise in exact `quality` mode and 74.754 s
-in `maximum`: 1.504x faster, or 33.5% less denoise time. Eight of fifteen calls
-used 13 blocks. The same-seed MP4 remained coherent but changed portal framing.
-For the accepted automatic-speed envelope, a matched 512x320, 22-frame,
-12-point same-seed pair measured 62.847 s of denoise and 73.07 s end to end in
-`quality`, versus 41.928 s and 51.45 s in `maximum` (1.499x denoise). The
-accelerated artifact remained free of the spatial lattice seen when reuse began
-after only one full evaluation. This is an approximate trajectory accelerator
-rather than an exact kernel optimization; exact `quality` remains the default
-and video/audio artifacts are the acceptance boundary for speed-mode changes.
+This remains an approximate trajectory accelerator rather than an exact kernel
+optimization. Exact `quality` remains the default, and synchronized video and
+audio artifacts are the acceptance boundary for speed-mode changes. Automatic
+long-geometry schedules use 21 points; maximum acceleration caps automatic
+schedules at 12 points.
 
 The full acceptance receipt, including per-step timings, artifact geometry,
 hash, and the important 124-frame duration boundary, is recorded in

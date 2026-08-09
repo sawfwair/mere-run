@@ -19,6 +19,17 @@ The format is based on Keep a Changelog.
   without an expanded converted copy, applies its published alpha/rank scale,
   fuses the deltas into BF16 weights once before denoising, and uses the
   existing exact four-evaluation FL2VA path without per-block LoRA matmuls.
+- added an independently implemented MiniMax-H3 dynamic-sparse attention lane
+  for Apple GPUs. Explicit `balanced` and `maximum` acceleration keep text,
+  conditioning media, generated audio, neighboring video blocks, early layers,
+  and schedule boundaries dense; route distant target-video blocks on the fly;
+  and fail closed behind a once-per-shape dense-route numerical gate. Turbo
+  adapters may use this attention-only lane while continuing to prohibit
+  denoise-step cache reuse.
+- accelerated a real 768x448, 124-frame LightX2V generation from 631.826 to
+  444.216 seconds of denoising and from 736.285 to 535.386 seconds end to end.
+  Both fixed-seed outputs retained all 124 H.264 frames, synchronized 32 kHz
+  stereo audio, coherent actors and motion, and the complete two-line dialogue.
 
 ### Geospatial inference
 

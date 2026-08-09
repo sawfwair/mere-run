@@ -245,6 +245,8 @@ struct VideoGenerate: AsyncParsableCommand {
           swift run mere.run video generate "a kinetic live performance" --audio song.wav --audio-start-time 30 --duration 5 --image performer.png
           swift run mere.run video generate "the camera walks forward" --model video-wan22-ti2v-5b-mlx --image frame.png --num-frames 41 --width 1280 --height 704
           swift run mere.run video generate "use this subject and motion" --model-root ./MiniMax-H3-Ref2VA-MLX --reference image:subject.png --reference video:motion.mp4
+          swift run mere.run video generate "one continuous tracking shot" --model minimax-h3-fl2va-bf16-mlx --duration 15 --h3-window-frames 124 --h3-window-overlap 35
+          swift run mere.run video generate "the actor crosses three sets" --model minimax-h3-fl2va-bf16-mlx --h3-frame 72:second-set.png --h3-frame 144:third-set.png
         """
     )
 
@@ -301,7 +303,7 @@ struct VideoGenerate: AsyncParsableCommand {
 
     @Option(
         name: [.customLong("h3-acceleration")],
-        help: "MiniMax-H3 denoise mode: quality runs every block; balanced/maximum reuse bounded tail-block residuals for speed."
+        help: "MiniMax-H3 acceleration: quality is exact; balanced/maximum add dynamic sparse attention and, without a Turbo adapter, adaptive first-block caching."
     )
     var h3Acceleration: MiniMaxH3CLIAccelerationMode = .quality
 
@@ -313,6 +315,24 @@ struct VideoGenerate: AsyncParsableCommand {
 
     @Option(name: [.customLong("h3-adapter-strength")], help: "MiniMax-H3 runtime adapter multiplier.")
     var h3AdapterStrength: Float = 1
+
+    @Option(
+        name: [.customLong("h3-frame")],
+        help: "MiniMax-H3 FL2VA image at zero-based FRAME:PATH. Repeat for arbitrary timed frame injection."
+    )
+    var h3FrameArguments: [String] = []
+
+    @Option(
+        name: [.customLong("h3-window-frames")],
+        help: "MiniMax-H3 resident sliding-window size (17*n+5 frames). Enables long-form generation."
+    )
+    var h3WindowFrames: Int?
+
+    @Option(
+        name: [.customLong("h3-window-overlap")],
+        help: "MiniMax-H3 sliding overlap (17*n+1 frames, default 18). Carries motion and matching audio."
+    )
+    var h3WindowOverlap: Int = 18
 
     @Option(name: [.customLong("guidance-scale")], help: "Wan classifier-free guidance scale.")
     var guidanceScale: Float = 5
@@ -565,12 +585,17 @@ struct VideoGenerate: AsyncParsableCommand {
                 baseModelID: ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue
             ).map { URL(fileURLWithPath: $0).standardizedFileURL }
             let parsedReferences = try parseMiniMaxH3References()
+            let parsedFrameInputs = try parseMiniMaxH3FrameInputs()
             if h3Configuration.task == "fl2va", !parsedReferences.isEmpty {
                 throw ValidationError("--reference requires a MiniMax-H3 Ref2VA model root.")
             }
             if h3Configuration.task == "ref2va" {
-                guard sourceImageURL == nil, endImageURL == nil else {
-                    throw ValidationError("MiniMax-H3 Ref2VA uses ordered --reference inputs, not --image/--end-image.")
+                guard sourceImageURL == nil,
+                      endImageURL == nil,
+                      parsedFrameInputs.isEmpty else {
+                    throw ValidationError(
+                        "MiniMax-H3 Ref2VA uses ordered --reference inputs, not FL2VA frame conditions."
+                    )
                 }
                 guard !parsedReferences.isEmpty else {
                     throw ValidationError("MiniMax-H3 Ref2VA requires at least one --reference.")
@@ -580,6 +605,13 @@ struct VideoGenerate: AsyncParsableCommand {
             let h3Height = max(32, (height / 32) * 32)
             let requestedH3Frames = duration.map { Int(($0 * 24).rounded()) } ?? numFrames
             let h3Frames = try MiniMaxH3Geometry.alignFrameCount(max(22, requestedH3Frames))
+            let slidingWindowOptions = try h3WindowFrames.map {
+                try MiniMaxH3SlidingWindowOptions(
+                    totalFrameCount: h3Frames,
+                    windowFrameCount: $0,
+                    overlapFrameCount: h3WindowOverlap
+                )
+            }
             if !quiet {
                 CLIStderr.write("Engine: native MiniMax-H3 \(h3Configuration.task.uppercased())\n")
                 CLIStderr.write("Model root: \(resolvedRootURL.path)\n")
@@ -591,6 +623,14 @@ struct VideoGenerate: AsyncParsableCommand {
                 }
                 if h3Frames != requestedH3Frames {
                     CLIStderr.write("Adjusted MiniMax-H3 frame count to \(h3Frames) (must have form 17*n+5)\n")
+                }
+                if let slidingWindowOptions {
+                    let plan = MiniMaxH3SlidingWindowPlan(options: slidingWindowOptions)
+                    CLIStderr.write(
+                        "Sliding windows: \(plan.windows.count) x "
+                            + "\(slidingWindowOptions.windowFrameCount) frames, "
+                            + "overlap \(slidingWindowOptions.overlapFrameCount)\n"
+                    )
                 }
             }
             try MLXBundleSupport.ensureAvailable(quiet: quiet)
@@ -607,26 +647,40 @@ struct VideoGenerate: AsyncParsableCommand {
                 adapterStrength: h3AdapterStrength,
                 firstFrameURL: sourceImageURL,
                 lastFrameURL: endImageURL,
+                frameInputs: parsedFrameInputs,
                 references: parsedReferences
             )
-            let generator = MiniMaxH3Generator()
+            let generator = MiniMaxH3Generator(retainsRuntime: slidingWindowOptions != nil)
             let reportsProgress = !quiet
+            let progressHandler: @Sendable (MiniMaxH3GenerationProgress) -> Void = { progress in
+                guard reportsProgress else { return }
+                if progress.stage == .denoising {
+                    CLIStderr.write("Denoising \(progress.stepIndex + 1)/\(progress.totalSteps)\n")
+                } else {
+                    CLIStderr.write("\(progress.stage.rawValue)\n")
+                }
+            }
             let wiredMemoryTicket = MiniMaxH3WiredMemoryPolicy().ticket(
                 size: miniMaxH3WiredMemoryTargetBytes()
             )
             let result = try await wiredMemoryTicket.withWiredLimit {
                 try Stream.withNewDefaultStream {
-                    try generator.generate(
+                    if let slidingWindowOptions {
+                        return try generator.generateSlidingWindows(
+                            options: h3Options,
+                            slidingWindowOptions: slidingWindowOptions,
+                            resources: h3Resources,
+                            windowHandler: { index, count in
+                                guard reportsProgress else { return }
+                                CLIStderr.write("H3 window \(index + 1)/\(count)\n")
+                            },
+                            progressHandler: progressHandler
+                        )
+                    }
+                    return try generator.generate(
                         options: h3Options,
                         resources: h3Resources,
-                        progressHandler: { progress in
-                            guard reportsProgress else { return }
-                            if progress.stage == .denoising {
-                                CLIStderr.write("Denoising \(progress.stepIndex + 1)/\(progress.totalSteps)\n")
-                            } else {
-                                CLIStderr.write("\(progress.stage.rawValue)\n")
-                            }
-                        }
+                        progressHandler: progressHandler
                     )
                 }
             }
@@ -643,6 +697,11 @@ struct VideoGenerate: AsyncParsableCommand {
         }
         if h3Adapter != nil {
             throw ValidationError("--h3-adapter can only be used with a MiniMax-H3 model.")
+        }
+        if !h3FrameArguments.isEmpty || h3WindowFrames != nil {
+            throw ValidationError(
+                "--h3-frame and --h3-window-frames can only be used with a MiniMax-H3 model."
+            )
         }
         if !references.isEmpty {
             throw ValidationError("--reference is only supported by MiniMax-H3 Ref2VA model roots.")
@@ -831,6 +890,24 @@ struct VideoGenerate: AsyncParsableCommand {
                 throw ValidationError("Reference file not found: \(url.path)")
             }
             return MiniMaxH3ReferenceInput(kind: kind, url: url)
+        }
+    }
+
+    private func parseMiniMaxH3FrameInputs() throws -> [MiniMaxH3FrameInput] {
+        try h3FrameArguments.map { raw in
+            guard let separator = raw.firstIndex(of: ":") else {
+                throw ValidationError("--h3-frame must be zero-based FRAME:PATH (got \(raw)).")
+            }
+            let rawIndex = String(raw[..<separator])
+            let rawPath = String(raw[raw.index(after: separator)...])
+            guard let frameIndex = Int(rawIndex), frameIndex >= 0, !rawPath.isEmpty else {
+                throw ValidationError("--h3-frame must be zero-based FRAME:PATH (got \(raw)).")
+            }
+            let url = URL(fileURLWithPath: rawPath).standardizedFileURL
+            guard FileManager.default.fileExists(atPath: url.path) else {
+                throw ValidationError("H3 frame image not found: \(url.path)")
+            }
+            return MiniMaxH3FrameInput(frameIndex: frameIndex, url: url)
         }
     }
 
@@ -1320,6 +1397,9 @@ struct VideoGenerate: AsyncParsableCommand {
             h3AccelerationMode: h3Acceleration.rawValue,
             h3Adapter: h3Adapter,
             h3AdapterStrength: h3AdapterStrength,
+            h3FrameInputs: h3FrameArguments,
+            h3WindowFrames: h3WindowFrames,
+            h3WindowOverlap: h3WindowOverlap,
             duration: duration,
             fps: fps,
             seed: seed,
@@ -1398,6 +1478,15 @@ struct VideoGenerate: AsyncParsableCommand {
             ]
             if let h3Adapter {
                 args += ["--h3-adapter", h3Adapter, "--h3-adapter-strength", String(h3AdapterStrength)]
+            }
+            for frame in h3FrameArguments {
+                args += ["--h3-frame", frame]
+            }
+            if let h3WindowFrames {
+                args += [
+                    "--h3-window-frames", String(h3WindowFrames),
+                    "--h3-window-overlap", String(h3WindowOverlap),
+                ]
             }
         }
         if let duration {

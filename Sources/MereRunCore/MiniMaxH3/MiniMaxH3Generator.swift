@@ -46,6 +46,16 @@ public struct MiniMaxH3ReferenceInput: Sendable, Hashable {
     }
 }
 
+public struct MiniMaxH3FrameInput: Sendable, Hashable {
+    public let frameIndex: Int
+    public let url: URL
+
+    public init(frameIndex: Int, url: URL) {
+        self.frameIndex = frameIndex
+        self.url = url.standardizedFileURL
+    }
+}
+
 public enum MiniMaxH3TransformerWeightMode: String, Sendable, Hashable {
     case automatic = "auto"
     case quantized
@@ -57,6 +67,44 @@ public enum MiniMaxH3AccelerationMode: String, Sendable, Hashable {
     case balanced
     case maximum
 
+    var adaptiveFirstBlockCachePolicy: MiniMaxH3AdaptiveFirstBlockCachePolicy? {
+        switch self {
+        case .quality: nil
+        case .balanced:
+            MiniMaxH3AdaptiveFirstBlockCachePolicy(
+                globalThreshold: 0.08,
+                temporalThreshold: 0.12,
+                window: 0.1...0.9,
+                maximumConsecutiveCachedSteps: 2,
+                requiredFinalFullSteps: 2
+            )
+        case .maximum:
+            MiniMaxH3AdaptiveFirstBlockCachePolicy(
+                globalThreshold: 0.30,
+                temporalThreshold: 0.40,
+                window: 0.1...0.95,
+                maximumConsecutiveCachedSteps: 4,
+                requiredFinalFullSteps: 1
+            )
+        }
+    }
+
+    var dynamicSparseAttentionPolicy: MiniMaxH3DynamicSparseAttentionPolicy? {
+        switch self {
+        case .quality: nil
+        case .balanced:
+            MiniMaxH3DynamicSparseAttentionPolicy(
+                thresholdStandardDeviations: 0.75
+            )
+        case .maximum:
+            MiniMaxH3DynamicSparseAttentionPolicy(
+                thresholdStandardDeviations: 1
+            )
+        }
+    }
+
+    // Retained as an internal benchmark baseline. Production acceleration
+    // selects the adaptive first-block cache unless explicitly overridden.
     var blockReusePolicy: MiniMaxH3BlockReusePolicy? {
         switch self {
         case .quality: nil
@@ -73,6 +121,62 @@ public enum MiniMaxH3AccelerationMode: String, Sendable, Hashable {
                 maximumConsecutiveCachedSteps: 4
             )
         }
+    }
+}
+
+struct MiniMaxH3AdaptiveFirstBlockCachePolicy: Sendable, Equatable {
+    let globalThreshold: Float
+    let temporalThreshold: Float
+    let window: ClosedRange<Float>
+    let maximumConsecutiveCachedSteps: Int
+    let minimumFullSteps: Int
+    let requiredFinalFullSteps: Int
+
+    init(
+        globalThreshold: Float,
+        temporalThreshold: Float,
+        window: ClosedRange<Float> = 0.1...0.9,
+        maximumConsecutiveCachedSteps: Int = 2,
+        minimumFullSteps: Int = 2,
+        requiredFinalFullSteps: Int = 1
+    ) {
+        precondition(globalThreshold > 0)
+        precondition(temporalThreshold > 0)
+        precondition((0...1).contains(window.lowerBound))
+        precondition((0...1).contains(window.upperBound))
+        precondition(maximumConsecutiveCachedSteps >= 0)
+        precondition(minimumFullSteps >= 1)
+        precondition(requiredFinalFullSteps >= 1)
+        self.globalThreshold = globalThreshold
+        self.temporalThreshold = temporalThreshold
+        self.window = window
+        self.maximumConsecutiveCachedSteps = maximumConsecutiveCachedSteps
+        self.minimumFullSteps = minimumFullSteps
+        self.requiredFinalFullSteps = requiredFinalFullSteps
+    }
+
+    func canConsiderReuse(
+        stepIndex: Int,
+        stepCount: Int,
+        fullStepCount: Int,
+        consecutiveCachedSteps: Int,
+        hasCachedState: Bool
+    ) -> Bool {
+        guard stepIndex >= 0,
+              stepIndex < stepCount,
+              fullStepCount >= minimumFullSteps,
+              hasCachedState,
+              consecutiveCachedSteps < maximumConsecutiveCachedSteps,
+              stepIndex < stepCount - requiredFinalFullSteps else { return false }
+        return window.contains(Float(stepIndex) / Float(stepCount))
+    }
+
+    func shouldReuse(change: MiniMaxH3FirstBlockChange) -> Bool {
+        change.isFinite
+            && change.videoGlobal <= globalThreshold
+            && change.audioGlobal <= globalThreshold
+            && change.videoTemporalMaximum <= temporalThreshold
+            && change.audioTemporalMaximum <= temporalThreshold
     }
 }
 
@@ -335,6 +439,7 @@ public struct MiniMaxH3GenerationOptions: Sendable, Hashable {
     public let adapterStrength: Float
     public let firstFrameURL: URL?
     public let lastFrameURL: URL?
+    public let frameInputs: [MiniMaxH3FrameInput]
     public let references: [MiniMaxH3ReferenceInput]
 
     public init(
@@ -350,6 +455,7 @@ public struct MiniMaxH3GenerationOptions: Sendable, Hashable {
         adapterStrength: Float = 1,
         firstFrameURL: URL? = nil,
         lastFrameURL: URL? = nil,
+        frameInputs: [MiniMaxH3FrameInput] = [],
         references: [MiniMaxH3ReferenceInput] = []
     ) throws {
         let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -362,6 +468,28 @@ public struct MiniMaxH3GenerationOptions: Sendable, Hashable {
         }
         guard lastFrameURL == nil || firstFrameURL != nil else {
             throw MiniMaxH3GeneratorError.invalidOptions("a last frame requires a first frame")
+        }
+        guard frameInputs.count <= 12 else {
+            throw MiniMaxH3GeneratorError.invalidOptions("FL2VA accepts at most 12 positioned frame inputs")
+        }
+        guard frameInputs.allSatisfy({ (0..<numFrames).contains($0.frameIndex) }) else {
+            throw MiniMaxH3GeneratorError.invalidOptions(
+                "positioned frame indices must be inside the output frame range"
+            )
+        }
+        let positionedIndices = frameInputs.map(\.frameIndex)
+        guard Set(positionedIndices).count == positionedIndices.count else {
+            throw MiniMaxH3GeneratorError.invalidOptions("positioned frame indices must be unique")
+        }
+        guard firstFrameURL == nil || !positionedIndices.contains(0) else {
+            throw MiniMaxH3GeneratorError.invalidOptions(
+                "--image and a positioned frame at index 0 cannot be combined"
+            )
+        }
+        guard lastFrameURL == nil || !positionedIndices.contains(numFrames - 1) else {
+            throw MiniMaxH3GeneratorError.invalidOptions(
+                "--end-image and a positioned frame at the final index cannot be combined"
+            )
         }
         guard references.count <= 12 else {
             throw MiniMaxH3GeneratorError.invalidOptions("Ref2VA accepts at most 12 ordered references")
@@ -379,11 +507,6 @@ public struct MiniMaxH3GenerationOptions: Sendable, Hashable {
             guard adapterStrength > 0 else {
                 throw MiniMaxH3GeneratorError.invalidOptions("adapter strength must be greater than zero")
             }
-            guard accelerationMode == .quality else {
-                throw MiniMaxH3GeneratorError.invalidOptions(
-                    "MiniMax-H3 Turbo already distills the denoise schedule and cannot be combined with block-reuse acceleration"
-                )
-            }
             guard references.isEmpty else {
                 throw MiniMaxH3GeneratorError.invalidOptions(
                     "MiniMax-H3 Turbo supports FL2VA text/keyframe generation, not Ref2VA references"
@@ -400,7 +523,8 @@ public struct MiniMaxH3GenerationOptions: Sendable, Hashable {
                 width: width,
                 height: height,
                 numFrames: numFrames,
-                keyframeCount: [firstFrameURL, lastFrameURL].compactMap { $0 }.count,
+                keyframeCount: [firstFrameURL, lastFrameURL].compactMap { $0 }.count
+                    + frameInputs.count,
                 referenceKinds: references.map(\.kind),
                 accelerationMode: accelerationMode
             )
@@ -426,6 +550,7 @@ public struct MiniMaxH3GenerationOptions: Sendable, Hashable {
         self.adapterStrength = adapterStrength
         self.firstFrameURL = firstFrameURL
         self.lastFrameURL = lastFrameURL
+        self.frameInputs = frameInputs.sorted { $0.frameIndex < $1.frameIndex }
         self.references = references
     }
 }
@@ -455,6 +580,19 @@ public struct MiniMaxH3GenerationResult: @unchecked Sendable {
 }
 
 public final class MiniMaxH3Generator: @unchecked Sendable {
+    private struct DenoisingRuntimeCacheKey: Hashable {
+        let modelRoot: URL
+        let schedulePointCount: Int
+        let weightMode: MiniMaxH3TransformerWeightMode
+        let adapterURL: URL?
+        let adapterStrength: Float
+    }
+
+    private struct ReferenceCacheKey: Hashable {
+        let references: [MiniMaxH3ReferenceInput]
+        let maximumFrameCount: Int
+    }
+
     private struct ConditionerPresentation {
         let tokenIDs: [Int]
         let tokenTags: [Int32]
@@ -470,7 +608,44 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         let geometry: MiniMaxH3PreparedReferenceGeometry
     }
 
-    public init() {}
+    private struct FrameCondition {
+        let url: URL
+        let anchor: MiniMaxH3KeyframeAnchor
+    }
+
+    private struct ContinuationConditions {
+        let videoRows: MLXArray
+        let audioRows: MLXArray
+        let videoAnchors: [MiniMaxH3KeyframeAnchor]
+        let audioAnchors: [MiniMaxH3AudioConditionAnchor]
+    }
+
+    private struct PreparedReferenceRows {
+        let video: MLXArray?
+        let audio: MLXArray?
+    }
+
+    private let retainsRuntime: Bool
+    private var retainedConditioner: (root: URL, model: QwenVLEncoder)?
+    private var retainedVideoVAE: (root: URL, model: MiniMaxH3VideoVAE)?
+    private var retainedAudioVAE: (root: URL, model: MiniMaxH3AudioVAE)?
+    private var retainedPreparedReferences: (
+        key: ReferenceCacheKey,
+        values: [PreparedReference]
+    )?
+    private var retainedPreparedReferenceRows: (
+        key: ReferenceCacheKey,
+        values: PreparedReferenceRows
+    )?
+    private var retainedDenoisingRuntime: (
+        key: DenoisingRuntimeCacheKey,
+        transformer: MiniMaxH3Transformer,
+        adaLNCache: MiniMaxH3AdaLNCache?
+    )?
+
+    public init(retainsRuntime: Bool = false) {
+        self.retainsRuntime = retainsRuntime
+    }
 
     static func mediaFrames(from decodedFrames: MLXArray) -> MLXArray {
         MLX.clip(decodedFrames * 255, min: 0, max: 255).asType(.uint8)
@@ -487,6 +662,21 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         adapterStrength: Float,
         progressHandler: (@Sendable (MiniMaxH3GenerationProgress) -> Void)?
     ) throws -> (transformer: MiniMaxH3Transformer, adaLNCache: MiniMaxH3AdaLNCache?) {
+        let cacheKey = DenoisingRuntimeCacheKey(
+            modelRoot: resources.rootURL.resolvingSymlinksInPath(),
+            schedulePointCount: videoSchedule.timesteps.count + 1,
+            weightMode: weightMode,
+            adapterURL: adapterURL?.resolvingSymlinksInPath(),
+            adapterStrength: adapterStrength
+        )
+        if retainsRuntime,
+           let retainedDenoisingRuntime,
+           retainedDenoisingRuntime.key == cacheKey {
+            return (
+                retainedDenoisingRuntime.transformer,
+                retainedDenoisingRuntime.adaLNCache
+            )
+        }
         let adaLNCache: MiniMaxH3AdaLNCache?
         let cachedAdaLNForLoading: MiniMaxH3AdaLNCache?
         if resources.usesShardedBF16Transformer {
@@ -556,7 +746,48 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
             ))
             _ = transformer.materializeResidentBF16()
         }
+        if retainsRuntime {
+            retainedDenoisingRuntime = (cacheKey, transformer, resolvedAdaLNCache)
+        }
         return (transformer, resolvedAdaLNCache)
+    }
+
+    private func loadConditioner(
+        resources: MiniMaxH3Resources,
+        configuration: MiniMaxH3Configuration,
+        progressHandler: (@Sendable (HFSafetensorsWeightsLoader.ShardProgress) -> Void)? = nil
+    ) throws -> QwenVLEncoder {
+        let root = resources.rootURL.resolvingSymlinksInPath()
+        if retainsRuntime, let retainedConditioner, retainedConditioner.root == root {
+            return retainedConditioner.model
+        }
+        let model = try MiniMaxH3ModelLoader.loadConditioner(
+            resources: resources,
+            configuration: configuration,
+            progressHandler: progressHandler
+        )
+        if retainsRuntime { retainedConditioner = (root, model) }
+        return model
+    }
+
+    private func loadVideoVAE(resources: MiniMaxH3Resources) throws -> MiniMaxH3VideoVAE {
+        let root = resources.rootURL.resolvingSymlinksInPath()
+        if retainsRuntime, let retainedVideoVAE, retainedVideoVAE.root == root {
+            return retainedVideoVAE.model
+        }
+        let model = try MiniMaxH3ModelLoader.loadVideoVAE(resources: resources)
+        if retainsRuntime { retainedVideoVAE = (root, model) }
+        return model
+    }
+
+    private func loadAudioVAE(resources: MiniMaxH3Resources) throws -> MiniMaxH3AudioVAE {
+        let root = resources.rootURL.resolvingSymlinksInPath()
+        if retainsRuntime, let retainedAudioVAE, retainedAudioVAE.root == root {
+            return retainedAudioVAE.model
+        }
+        let model = try MiniMaxH3ModelLoader.loadAudioVAE(resources: resources)
+        if retainsRuntime { retainedAudioVAE = (root, model) }
+        return model
     }
 
     private func denoise(
@@ -571,6 +802,7 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         audioSchedule: MiniMaxH3Schedule,
         adaLNCache: MiniMaxH3AdaLNCache?,
         accelerationMode: MiniMaxH3AccelerationMode,
+        permitsCacheReuse: Bool,
         progressHandler: (@Sendable (MiniMaxH3GenerationProgress) -> Void)?
     ) -> (videoRows: MLXArray, audioRows: MLXArray) {
         precondition(videoSchedule.timesteps.count == audioSchedule.timesteps.count)
@@ -611,23 +843,65 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         // during a sustained denoise pass. Smaller graphs can still amortize a
         // compiled whole-step transform; very large graphs also stay blockwise
         // to avoid the macOS watchdog.
-        let blockReusePolicy = accelerationMode.blockReusePolicy.map { policy in
-            let environment = ProcessInfo.processInfo.environment
-            let requestedCacheDepth = Double(environment["MERERUN_H3_REUSE_DEPTH"] ?? "")
-            let cacheDepth = requestedCacheDepth.flatMap {
-                (0..<1).contains($0) ? $0 : nil
-            } ?? policy.cacheDepth
-            let requestedReuseStreak = Int(environment["MERERUN_H3_REUSE_STREAK"] ?? "")
-            let maximumConsecutiveCachedSteps = requestedReuseStreak.flatMap {
-                $0 >= 0 ? $0 : nil
-            } ?? policy.maximumConsecutiveCachedSteps
-            return MiniMaxH3BlockReusePolicy(
-                cacheDepth: cacheDepth,
-                window: policy.window,
-                maximumConsecutiveCachedSteps: maximumConsecutiveCachedSteps
-            )
+        let environment = ProcessInfo.processInfo.environment
+        let usesScheduledTailCache = environment["MERERUN_H3_CACHE_STRATEGY"] == "scheduled-tail"
+        let requestedReuseStreak = Int(environment["MERERUN_H3_REUSE_STREAK"] ?? "")
+        let adaptiveCachePolicy = !permitsCacheReuse || usesScheduledTailCache
+            ? nil
+            : accelerationMode.adaptiveFirstBlockCachePolicy.map { policy in
+                let globalThreshold = Float(environment["MERERUN_H3_FIRST_BLOCK_THRESHOLD"] ?? "")
+                    .flatMap { $0 > 0 ? $0 : nil }
+                    ?? policy.globalThreshold
+                let temporalThreshold = Float(
+                    environment["MERERUN_H3_FIRST_BLOCK_TEMPORAL_THRESHOLD"] ?? ""
+                ).flatMap { $0 > 0 ? $0 : nil }
+                    ?? policy.temporalThreshold
+                let maximumConsecutiveCachedSteps = requestedReuseStreak.flatMap {
+                    $0 >= 0 ? $0 : nil
+                } ?? policy.maximumConsecutiveCachedSteps
+                return MiniMaxH3AdaptiveFirstBlockCachePolicy(
+                    globalThreshold: globalThreshold,
+                    temporalThreshold: temporalThreshold,
+                    window: policy.window,
+                    maximumConsecutiveCachedSteps: maximumConsecutiveCachedSteps,
+                    minimumFullSteps: policy.minimumFullSteps,
+                    requiredFinalFullSteps: policy.requiredFinalFullSteps
+                )
+            }
+        let blockReusePolicy = permitsCacheReuse && usesScheduledTailCache
+            ? accelerationMode.blockReusePolicy.map { policy in
+                let requestedCacheDepth = Double(environment["MERERUN_H3_REUSE_DEPTH"] ?? "")
+                let cacheDepth = requestedCacheDepth.flatMap {
+                    (0..<1).contains($0) ? $0 : nil
+                } ?? policy.cacheDepth
+                let maximumConsecutiveCachedSteps = requestedReuseStreak.flatMap {
+                    $0 >= 0 ? $0 : nil
+                } ?? policy.maximumConsecutiveCachedSteps
+                return MiniMaxH3BlockReusePolicy(
+                    cacheDepth: cacheDepth,
+                    window: policy.window,
+                    maximumConsecutiveCachedSteps: maximumConsecutiveCachedSteps
+                )
+            } : nil
+        let configuredDynamicSparseAttentionPolicy = environment["MERERUN_H3_DYNAMIC_SPARSE"] == "0"
+            ? nil
+            : accelerationMode.dynamicSparseAttentionPolicy.map { policy in
+                MiniMaxH3DynamicSparseAttentionPolicy(
+                    thresholdStandardDeviations: Float(
+                        environment["MERERUN_H3_DYNAMIC_SPARSE_TAU"] ?? ""
+                    ).flatMap { $0 >= 0 ? $0 : nil } ?? policy.thresholdStandardDeviations,
+                    minimumSequenceLength: policy.minimumSequenceLength,
+                    denseLeadingStepFraction: policy.denseLeadingStepFraction,
+                    denseTrailingStepCount: policy.denseTrailingStepCount,
+                    denseLeadingLayerCount: policy.denseLeadingLayerCount
+                )
+            }
+        let dynamicSparseAttentionPolicy = configuredDynamicSparseAttentionPolicy.flatMap { policy in
+            layout.sequenceLength >= policy.minimumSequenceLength ? policy : nil
         }
-        let executionMode = blockReusePolicy == nil
+        let executionMode = adaptiveCachePolicy == nil
+            && blockReusePolicy == nil
+            && dynamicSparseAttentionPolicy == nil
             ? MiniMaxH3DenoiseExecutionPolicy.mode(
                 usesResidentBF16: transformer.usesResidentBF16,
                 sequenceLength: layout.sequenceLength,
@@ -641,7 +915,6 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         let attentionKernelSchedule = MiniMaxH3DenoiseExecutionPolicy.attentionKernelSchedule(
             sequenceLength: layout.sequenceLength
         )
-        let environment = ProcessInfo.processInfo.environment
         transformer.maximumAttentionQueryTokensPerKernel = max(
             1,
             Int(environment["MERERUN_H3_ATTENTION_QUERY_TOKENS"] ?? "")
@@ -655,6 +928,9 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
             Int(environment["MERERUN_H3_ATTENTION_EVALUATION_BATCH"] ?? "")
                 ?? attentionKernelSchedule.maximumKernelsPerEvaluation
         )
+        transformer.dynamicSparseAttentionPolicy = dynamicSparseAttentionPolicy
+        transformer.dynamicSparseAttentionStepCount = videoSchedule.timesteps.count
+        transformer.dynamicSparseAttentionLogHandler = stepProfileLogger
         transformer.usesFusedPostAttention = ProcessInfo.processInfo
             .environment["MERERUN_H3_FUSED_POST_ATTENTION"] == "1"
         transformer.usesLayerwiseEvaluation = executionMode.usesLayerwiseEvaluation
@@ -667,12 +943,32 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                 + "attention_query_tokens=\(transformer.maximumAttentionQueryTokensPerKernel) "
                 + "attention_heads_per_kernel=\(attentionHeadsPerKernel) "
                 + "attention_evaluation_batch="
-                + "\(transformer.maximumAttentionKernelsPerEvaluation)"
+                + "\(transformer.maximumAttentionKernelsPerEvaluation) "
+                + "dynamic_sparse=\(dynamicSparseAttentionPolicy != nil)"
         )
+        if let dynamicSparseAttentionPolicy {
+            stepProfileLogger?(
+                "dynamic_sparse_tau=\(dynamicSparseAttentionPolicy.thresholdStandardDeviations) "
+                    + "dense_step_fraction=\(dynamicSparseAttentionPolicy.denseLeadingStepFraction) "
+                    + "dense_trailing_steps=\(dynamicSparseAttentionPolicy.denseTrailingStepCount) "
+                    + "dense_leading_layers=\(dynamicSparseAttentionPolicy.denseLeadingLayerCount) "
+                    + "prefix_sink=\(layout.targetVideoRows.lowerBound)"
+            )
+        }
         if let blockReusePolicy {
             stepProfileLogger?(
-                "reuse_depth=\(blockReusePolicy.cacheDepth) "
+                "cache_strategy=scheduled-tail "
+                    + "reuse_depth=\(blockReusePolicy.cacheDepth) "
                     + "reuse_streak=\(blockReusePolicy.maximumConsecutiveCachedSteps)"
+            )
+        }
+        if let adaptiveCachePolicy {
+            stepProfileLogger?(
+                "cache_strategy=adaptive-first-block "
+                    + "global_threshold=\(adaptiveCachePolicy.globalThreshold) "
+                    + "temporal_threshold=\(adaptiveCachePolicy.temporalThreshold) "
+                    + "reuse_streak=\(adaptiveCachePolicy.maximumConsecutiveCachedSteps) "
+                    + "final_full_steps=\(adaptiveCachePolicy.requiredFinalFullSteps)"
             )
         }
 
@@ -720,10 +1016,15 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         let totalBlockCount = transformer.configuration.layerCount
         let warmBlockCount = blockReusePolicy?.warmBlockCount(totalBlockCount: totalBlockCount)
         var cachedTailResidual: MLXArray?
+        var previousFirstResidual: MLXArray?
+        var cachedTargetTailResidual: MLXArray?
         var consecutiveCachedSteps = 0
         var cachedStepCount = 0
+        var fullStepCount = 0
+        var executedBlockCount = 0
 
         for index in videoSchedule.timesteps.indices {
+            transformer.dynamicSparseAttentionStepIndex = index
             let stepStarted = stepProfileLogger.map { _ in CFAbsoluteTimeGetCurrent() }
             progressHandler?(.init(
                 stage: .denoising,
@@ -747,12 +1048,9 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                 hasCachedResidual: cachedTailResidual != nil,
                 consecutiveCachedSteps: consecutiveCachedSteps
             ) ?? false
-            if let warmBlockCount {
-                stepProfileLogger?(
-                    "step_plan=\(index + 1)/\(videoSchedule.timesteps.count) "
-                        + "cached_tail=\(reusesTail) blocks=\(reusesTail ? warmBlockCount : totalBlockCount)"
-                )
-            }
+            var cacheHitThisStep = false
+            var executedBlocksThisStep = totalBlockCount
+            var firstBlockChange: MiniMaxH3FirstBlockChange?
             if usesCompiledStep {
                 var inputs = [
                     videoRows,
@@ -769,6 +1067,7 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                 let outputs = compiledStep(inputs)
                 videoRows = outputs[0]
                 audioRows = outputs[1]
+                fullStepCount += 1
             } else {
                 let videoInput = conditionVideoRows.map {
                     MLX.concatenated([$0, videoRows], axis: 1)
@@ -777,7 +1076,42 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                     MLX.concatenated([$0, audioRows], axis: 1)
                 } ?? audioRows
                 let predicted: MiniMaxH3TransformerOutput
-                if let warmBlockCount {
+                if let adaptiveCachePolicy {
+                    let canConsiderReuse = adaptiveCachePolicy.canConsiderReuse(
+                        stepIndex: index,
+                        stepCount: videoSchedule.timesteps.count,
+                        fullStepCount: fullStepCount,
+                        consecutiveCachedSteps: consecutiveCachedSteps,
+                        hasCachedState: previousFirstResidual != nil && cachedTargetTailResidual != nil
+                    )
+                    let result = transformer.callWithAdaptiveFirstBlockReuse(
+                        videoRows: videoInput,
+                        audioRows: audioInput,
+                        context: context,
+                        timesteps: timestepValues,
+                        cachedAdaLN: adaLNCache?.step(at: index),
+                        policy: adaptiveCachePolicy,
+                        canConsiderReuse: canConsiderReuse,
+                        previousFirstResidual: previousFirstResidual,
+                        cachedTargetTailResidual: cachedTargetTailResidual
+                    )
+                    predicted = result.output
+                    firstBlockChange = result.change
+                    if result.reusedTail {
+                        cacheHitThisStep = true
+                        executedBlocksThisStep = 1
+                        consecutiveCachedSteps += 1
+                        cachedStepCount += 1
+                    } else if let refreshedFirstResidual = result.refreshedFirstResidual,
+                              let refreshedTargetTailResidual = result.refreshedTargetTailResidual {
+                        previousFirstResidual = refreshedFirstResidual
+                        cachedTargetTailResidual = refreshedTargetTailResidual
+                        consecutiveCachedSteps = 0
+                        fullStepCount += 1
+                    } else {
+                        preconditionFailure("adaptive MiniMax-H3 cache did not return refreshed state")
+                    }
+                } else if let warmBlockCount {
                     let result = transformer.callWithBlockResidualReuse(
                         videoRows: videoInput,
                         audioRows: audioInput,
@@ -791,7 +1125,10 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                     if let refreshedTailResidual = result.refreshedTailResidual {
                         cachedTailResidual = refreshedTailResidual
                         consecutiveCachedSteps = 0
+                        fullStepCount += 1
                     } else {
+                        cacheHitThisStep = true
+                        executedBlocksThisStep = warmBlockCount
                         consecutiveCachedSteps += 1
                         cachedStepCount += 1
                     }
@@ -803,6 +1140,7 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                         timesteps: timestepValues,
                         cachedAdaLN: adaLNCache?.step(at: index)
                     )
+                    fullStepCount += 1
                 }
                 videoRows = Self.advance(
                     sample: videoRows,
@@ -814,6 +1152,22 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                     velocity: predicted.audioVelocityRows,
                     coefficients: audioCoefficients
                 )
+            }
+            executedBlockCount += executedBlocksThisStep
+            if adaptiveCachePolicy != nil || blockReusePolicy != nil {
+                var plan = "step_plan=\(index + 1)/\(videoSchedule.timesteps.count) "
+                    + "cache_hit=\(cacheHitThisStep) blocks=\(executedBlocksThisStep)"
+                if let firstBlockChange {
+                    plan += String(
+                        format: " video_global=%.5f audio_global=%.5f "
+                            + "video_temporal=%.5f audio_temporal=%.5f",
+                        firstBlockChange.videoGlobal,
+                        firstBlockChange.audioGlobal,
+                        firstBlockChange.videoTemporalMaximum,
+                        firstBlockChange.audioTemporalMaximum
+                    )
+                }
+                stepProfileLogger?(plan)
             }
             MLX.eval(videoRows, audioRows)
             if let stepStarted, let stepProfileLogger {
@@ -829,9 +1183,11 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                 ))
             }
         }
-        if warmBlockCount != nil {
+        if adaptiveCachePolicy != nil || blockReusePolicy != nil {
             stepProfileLogger?(
-                "cached_steps=\(cachedStepCount)/\(videoSchedule.timesteps.count)"
+                "cached_steps=\(cachedStepCount)/\(videoSchedule.timesteps.count) "
+                    + "full_steps=\(fullStepCount) executed_blocks=\(executedBlockCount) "
+                    + "baseline_blocks=\(videoSchedule.timesteps.count * totalBlockCount)"
             )
         }
         return (videoRows, audioRows)
@@ -884,6 +1240,7 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
     public func generate(
         options: MiniMaxH3GenerationOptions,
         resources: MiniMaxH3Resources,
+        continuation: MiniMaxH3ContinuationInput? = nil,
         progressHandler: (@Sendable (MiniMaxH3GenerationProgress) -> Void)? = nil
     ) throws -> MiniMaxH3GenerationResult {
         let phaseProfileLogger = MereRunRuntimeDebug.logger(
@@ -899,6 +1256,7 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                 options: options,
                 resources: resources,
                 configuration: configuration,
+                continuation: continuation,
                 progressHandler: progressHandler
             )
         }
@@ -909,11 +1267,29 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         let latentHeight = options.height / 16
         let latentWidth = options.width / 16
         let audioFrames = MiniMaxH3Geometry.audioLatentFrameCount(for: options.numFrames)
+        if let continuation {
+            guard continuation.frames.dim(2) == options.height,
+                  continuation.frames.dim(3) == options.width else {
+                throw MiniMaxH3GeneratorError.invalidOptions(
+                    "continuation dimensions must match the target H3 dimensions"
+                )
+            }
+            guard !options.frameInputs.contains(where: { $0.frameIndex == 0 }),
+                  options.firstFrameURL == nil else {
+                throw MiniMaxH3GeneratorError.invalidOptions(
+                    "continuation already supplies the first target frame"
+                )
+            }
+        }
 
         progressHandler?(.init(stage: .loadingTextEncoder, stepIndex: 0, totalSteps: options.steps - 1))
         let conditionerPreparationStarted = CFAbsoluteTimeGetCurrent()
         let tokenizer = try QwenTokenizer.load(from: resources.tokenizerURL, maxLengthOverride: 262_144)
-        let presentation = try conditionerPresentation(tokenizer: tokenizer, options: options)
+        let presentation = try conditionerPresentation(
+            tokenizer: tokenizer,
+            options: options,
+            continuationFrame: continuation.map(Self.boundaryFrame)
+        )
         guard !presentation.tokenIDs.isEmpty else {
             throw MiniMaxH3GeneratorError.invalidOptions("prompt tokenized to zero rows")
         }
@@ -928,7 +1304,7 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         ))
         let promptStates: MLXArray = try withMiniMaxH3AutoreleasePool {
             let conditionerLoadStarted = CFAbsoluteTimeGetCurrent()
-            let encoder = try MiniMaxH3ModelLoader.loadConditioner(
+            let encoder = try loadConditioner(
                 resources: resources,
                 configuration: configuration,
                 progressHandler: { shard in
@@ -962,17 +1338,26 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         }
         Memory.clearCache()
 
-        let keyframeURLs = [options.firstFrameURL, options.lastFrameURL].compactMap { $0 }
-        let keyframeAnchors: [MiniMaxH3KeyframeAnchor] = options.lastFrameURL == nil
-            ? (options.firstFrameURL == nil ? [] : [.first])
-            : [.first, .last]
+        let frameConditions = Self.frameConditions(options: options)
         let keyframeEncodingStarted = CFAbsoluteTimeGetCurrent()
-        var conditionRows = try encodeKeyframes(
-            keyframeURLs,
+        let continuationConditions = try continuation.map {
+            try encodeContinuation(
+                $0,
+                resources: resources,
+                progressHandler: progressHandler
+            )
+        }
+        let keyframeRows = try encodeKeyframes(
+            frameConditions.map(\.url),
             options: options,
             resources: resources,
             progressHandler: progressHandler
         )
+        var conditionVideoRows = Self.concatenateRows([
+            continuationConditions?.videoRows,
+            keyframeRows,
+        ])
+        var conditionAudioRows = continuationConditions?.audioRows
         phaseProfileLogger?(String(
             format: "phase=keyframe_encoding seconds=%.3f",
             CFAbsoluteTimeGetCurrent() - keyframeEncodingStarted
@@ -985,12 +1370,22 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
             latentHeight: latentHeight,
             latentWidth: latentWidth,
             audioLatentFrames: audioFrames,
-            keyframeAnchors: keyframeAnchors
+            keyframeAnchors: (continuationConditions?.videoAnchors ?? [])
+                + frameConditions.map(\.anchor),
+            audioConditionAnchors: continuationConditions?.audioAnchors ?? []
         )
         MLXRandom.seed(options.seed)
-        if let currentConditions = conditionRows {
+        if let currentConditions = conditionVideoRows {
             let conditionNoise = MLXRandom.normal(currentConditions.shape).asType(.float32)
-            conditionRows = MiniMaxH3Schedule.noise(
+            conditionVideoRows = MiniMaxH3Schedule.noise(
+                clean: currentConditions,
+                timestep: 0.999,
+                noise: conditionNoise
+            )
+        }
+        if let currentConditions = conditionAudioRows {
+            let conditionNoise = MLXRandom.normal(currentConditions.shape).asType(.float32)
+            conditionAudioRows = MiniMaxH3Schedule.noise(
                 clean: currentConditions,
                 timestep: 0.999,
                 noise: conditionNoise
@@ -1028,14 +1423,15 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                 transformer: runtime.transformer,
                 videoRows: videoRows,
                 audioRows: audioRows,
-                conditionVideoRows: conditionRows,
-                conditionAudioRows: nil,
+                conditionVideoRows: conditionVideoRows,
+                conditionAudioRows: conditionAudioRows,
                 promptStates: promptStates,
                 layout: layout,
                 videoSchedule: videoSchedule,
                 audioSchedule: audioSchedule,
                 adaLNCache: runtime.adaLNCache,
                 accelerationMode: options.accelerationMode,
+                permitsCacheReuse: options.adapterURL == nil,
                 progressHandler: progressHandler
             )
             phaseProfileLogger?(String(
@@ -1054,7 +1450,7 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         progressHandler?(.init(stage: .decodingVideo, stepIndex: options.steps - 1, totalSteps: options.steps - 1))
         let videoDecodingStarted = CFAbsoluteTimeGetCurrent()
         let frames: MLXArray = try withMiniMaxH3AutoreleasePool {
-            let vae = try MiniMaxH3ModelLoader.loadVideoVAE(resources: resources)
+            let vae = try loadVideoVAE(resources: resources)
             let pixels = Self.mediaFrames(from: vae.decode(video))
             MLX.eval(pixels)
             return pixels
@@ -1067,7 +1463,7 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         progressHandler?(.init(stage: .decodingAudio, stepIndex: options.steps - 1, totalSteps: options.steps - 1))
         let audioDecodingStarted = CFAbsoluteTimeGetCurrent()
         let waveform: MLXArray = try withMiniMaxH3AutoreleasePool {
-            let vae = try MiniMaxH3ModelLoader.loadAudioVAE(resources: resources)
+            let vae = try loadAudioVAE(resources: resources)
             let decoded = vae.decode(audio)
             MLX.eval(decoded)
             return decoded
@@ -1088,9 +1484,12 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         options: MiniMaxH3GenerationOptions,
         resources: MiniMaxH3Resources,
         configuration: MiniMaxH3Configuration,
+        continuation: MiniMaxH3ContinuationInput?,
         progressHandler: (@Sendable (MiniMaxH3GenerationProgress) -> Void)?
     ) throws -> MiniMaxH3GenerationResult {
-        guard options.firstFrameURL == nil, options.lastFrameURL == nil else {
+        guard options.firstFrameURL == nil,
+              options.lastFrameURL == nil,
+              options.frameInputs.isEmpty else {
             throw MiniMaxH3GeneratorError.invalidOptions("Ref2VA uses ordered references, not FL2VA keyframes")
         }
         guard !options.references.isEmpty else {
@@ -1100,14 +1499,23 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         let latentHeight = options.height / 16
         let latentWidth = options.width / 16
         let audioFrames = MiniMaxH3Geometry.audioLatentFrameCount(for: options.numFrames)
-        let prepared = try prepareReferences(options: options)
+        if let continuation {
+            guard continuation.frames.dim(2) == options.height,
+                  continuation.frames.dim(3) == options.width else {
+                throw MiniMaxH3GeneratorError.invalidOptions(
+                    "continuation dimensions must match the target H3 dimensions"
+                )
+            }
+        }
+        let prepared = try preparedReferences(options: options)
 
         progressHandler?(.init(stage: .loadingTextEncoder, stepIndex: 0, totalSteps: options.steps - 1))
         let tokenizer = try QwenTokenizer.load(from: resources.tokenizerURL, maxLengthOverride: 262_144)
         let presentation = try referenceConditionerPresentation(
             tokenizer: tokenizer,
             prompt: options.prompt,
-            references: prepared
+            references: prepared,
+            continuationFrame: continuation.map(Self.boundaryFrame)
         )
         guard !presentation.tokenIDs.isEmpty, presentation.tokenIDs.count <= 262_144 else {
             throw MiniMaxH3GeneratorError.invalidOptions("Ref2VA presentation must contain 1...262144 tokens")
@@ -1115,7 +1523,7 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         let inputIDs = MLXArray(presentation.tokenIDs.map(Int32.init)).reshaped(1, presentation.tokenIDs.count)
         let attentionMask = MLXArray.ones([1, presentation.tokenIDs.count], dtype: .int32)
         let promptStates: MLXArray = try withMiniMaxH3AutoreleasePool {
-            let encoder = try MiniMaxH3ModelLoader.loadConditioner(
+            let encoder = try loadConditioner(
                 resources: resources,
                 configuration: configuration,
                 progressHandler: { shard in
@@ -1140,37 +1548,27 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         }
         Memory.clearCache()
 
-        progressHandler?(.init(stage: .encodingReferences, stepIndex: 0, totalSteps: prepared.count))
-        let conditionVideoRows: MLXArray? = try withMiniMaxH3AutoreleasePool {
-            guard prepared.contains(where: { $0.visual != nil }) else { return nil }
-            let vae = try MiniMaxH3ModelLoader.loadVideoVAE(resources: resources)
-            var rows: [MLXArray] = []
-            for (index, reference) in prepared.enumerated() {
-                guard let visual = reference.visual else { continue }
-                let latent = reference.kind == .image
-                    ? vae.encodeKeyframe(visual)
-                    : vae.encodeReferenceVideo(visual)
-                let packed = MiniMaxH3Geometry.patchifyVideo(latent).asType(.float32)
-                MLX.eval(packed)
-                rows.append(packed)
-                progressHandler?(.init(stage: .encodingReferences, stepIndex: index + 1, totalSteps: prepared.count))
-            }
-            return MLX.concatenated(rows, axis: 1)
+        let referenceRows = try encodeReferences(
+            prepared,
+            options: options,
+            resources: resources,
+            progressHandler: progressHandler
+        )
+        let continuationConditions = try continuation.map {
+            try encodeContinuation(
+                $0,
+                resources: resources,
+                progressHandler: progressHandler
+            )
         }
-        Memory.clearCache()
-        let conditionAudioRows: MLXArray? = try withMiniMaxH3AutoreleasePool {
-            guard prepared.contains(where: { $0.waveform != nil }) else { return nil }
-            let vae = try MiniMaxH3ModelLoader.loadAudioVAE(resources: resources)
-            var rows: [MLXArray] = []
-            for (index, reference) in prepared.enumerated() {
-                guard let waveform = reference.waveform else { continue }
-                let packed = MiniMaxH3Geometry.packAudio(vae.encode(waveform)).expandedDimensions(axis: 0)
-                MLX.eval(packed)
-                rows.append(packed)
-                progressHandler?(.init(stage: .encodingReferences, stepIndex: index + 1, totalSteps: prepared.count))
-            }
-            return MLX.concatenated(rows, axis: 1)
-        }
+        let conditionVideoRows = Self.concatenateRows([
+            continuationConditions?.videoRows,
+            referenceRows.video,
+        ])
+        let conditionAudioRows = Self.concatenateRows([
+            continuationConditions?.audioRows,
+            referenceRows.audio,
+        ])
         Memory.clearCache()
 
         let layout = try MiniMaxH3Geometry.buildRef2VA(
@@ -1179,7 +1577,9 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
             videoLatentFrames: latentFrames,
             latentHeight: latentHeight,
             latentWidth: latentWidth,
-            audioLatentFrames: audioFrames
+            audioLatentFrames: audioFrames,
+            keyframeAnchors: continuationConditions?.videoAnchors ?? [],
+            audioConditionAnchors: continuationConditions?.audioAnchors ?? []
         )
         MLXRandom.seed(options.seed)
         let noisedVideoConditions = conditionVideoRows.map {
@@ -1228,6 +1628,7 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                 audioSchedule: audioSchedule,
                 adaLNCache: runtime.adaLNCache,
                 accelerationMode: options.accelerationMode,
+                permitsCacheReuse: options.adapterURL == nil,
                 progressHandler: progressHandler
             )
         }
@@ -1242,7 +1643,7 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         progressHandler?(.init(stage: .decodingVideo, stepIndex: options.steps - 1, totalSteps: options.steps - 1))
         let frames: MLXArray = try withMiniMaxH3AutoreleasePool {
             let pixels = Self.mediaFrames(
-                from: try MiniMaxH3ModelLoader.loadVideoVAE(resources: resources).decode(video)
+                from: try loadVideoVAE(resources: resources).decode(video)
             )
             MLX.eval(pixels)
             return pixels
@@ -1250,12 +1651,89 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         Memory.clearCache()
         progressHandler?(.init(stage: .decodingAudio, stepIndex: options.steps - 1, totalSteps: options.steps - 1))
         let waveform: MLXArray = try withMiniMaxH3AutoreleasePool {
-            let decoded = try MiniMaxH3ModelLoader.loadAudioVAE(resources: resources).decode(audio)
+            let decoded = try loadAudioVAE(resources: resources).decode(audio)
             MLX.eval(decoded)
             return decoded
         }
         Memory.clearCache()
         return MiniMaxH3GenerationResult(frames: frames, audio: waveform, seed: options.seed)
+    }
+
+    private func preparedReferences(
+        options: MiniMaxH3GenerationOptions
+    ) throws -> [PreparedReference] {
+        let key = ReferenceCacheKey(
+            references: options.references,
+            maximumFrameCount: options.numFrames
+        )
+        if retainsRuntime,
+           let retainedPreparedReferences,
+           retainedPreparedReferences.key == key {
+            return retainedPreparedReferences.values
+        }
+        let values = try prepareReferences(options: options)
+        if retainsRuntime { retainedPreparedReferences = (key, values) }
+        return values
+    }
+
+    private func encodeReferences(
+        _ prepared: [PreparedReference],
+        options: MiniMaxH3GenerationOptions,
+        resources: MiniMaxH3Resources,
+        progressHandler: (@Sendable (MiniMaxH3GenerationProgress) -> Void)?
+    ) throws -> PreparedReferenceRows {
+        let key = ReferenceCacheKey(
+            references: options.references,
+            maximumFrameCount: options.numFrames
+        )
+        if retainsRuntime,
+           let retainedPreparedReferenceRows,
+           retainedPreparedReferenceRows.key == key {
+            return retainedPreparedReferenceRows.values
+        }
+        progressHandler?(.init(stage: .encodingReferences, stepIndex: 0, totalSteps: prepared.count))
+        let videoRows: MLXArray? = try withMiniMaxH3AutoreleasePool {
+            guard prepared.contains(where: { $0.visual != nil }) else { return nil }
+            let vae = try loadVideoVAE(resources: resources)
+            var rows: [MLXArray] = []
+            for (index, reference) in prepared.enumerated() {
+                guard let visual = reference.visual else { continue }
+                let latent = reference.kind == .image
+                    ? vae.encodeKeyframe(visual)
+                    : vae.encodeReferenceVideo(visual)
+                let packed = MiniMaxH3Geometry.patchifyVideo(latent).asType(.float32)
+                MLX.eval(packed)
+                rows.append(packed)
+                progressHandler?(.init(
+                    stage: .encodingReferences,
+                    stepIndex: index + 1,
+                    totalSteps: prepared.count
+                ))
+            }
+            return MLX.concatenated(rows, axis: 1)
+        }
+        let audioRows: MLXArray? = try withMiniMaxH3AutoreleasePool {
+            guard prepared.contains(where: { $0.waveform != nil }) else { return nil }
+            let vae = try loadAudioVAE(resources: resources)
+            var rows: [MLXArray] = []
+            for (index, reference) in prepared.enumerated() {
+                guard let waveform = reference.waveform else { continue }
+                let packed = MiniMaxH3Geometry.packAudio(
+                    vae.encode(waveform)
+                ).expandedDimensions(axis: 0)
+                MLX.eval(packed)
+                rows.append(packed)
+                progressHandler?(.init(
+                    stage: .encodingReferences,
+                    stepIndex: index + 1,
+                    totalSteps: prepared.count
+                ))
+            }
+            return MLX.concatenated(rows, axis: 1)
+        }
+        let values = PreparedReferenceRows(video: videoRows, audio: audioRows)
+        if retainsRuntime { retainedPreparedReferenceRows = (key, values) }
+        return values
     }
 
     private func prepareReferences(options: MiniMaxH3GenerationOptions) throws -> [PreparedReference] {
@@ -1394,7 +1872,8 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
     private func referenceConditionerPresentation(
         tokenizer: QwenTokenizer,
         prompt: String,
-        references: [PreparedReference]
+        references: [PreparedReference],
+        continuationFrame: MLXArray? = nil
     ) throws -> ConditionerPresentation {
         guard let imageTokenID = tokenizer.imageTokenId,
               let videoTokenID = tokenizer.videoTokenId,
@@ -1432,6 +1911,23 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                 heightPatchCount: patchHeight,
                 widthPatchCount: patchWidth
             ))
+        }
+        if let continuationFrame {
+            MLX.eval(continuationFrame)
+            let frame = continuationFrame[0, 0]
+            let image = try MediaImageIO.imageFromRGBHWC(
+                frame.asArray(UInt8.self),
+                width: continuationFrame.dim(3),
+                height: continuationFrame.dim(2)
+            )
+            let pixels = try QwenVLImageLoader.pixelValues(
+                image: image,
+                patchSize: 16,
+                spatialMergeSize: 2
+            )
+            imageCount += 1
+            appendText("<Picture \(imageCount)>: ")
+            appendVision(pixels, padToken: imageTokenID)
         }
         for reference in references {
             if reference.waveform != nil {
@@ -1531,7 +2027,7 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         guard !urls.isEmpty else { return nil }
         progressHandler?(.init(stage: .encodingKeyframes, stepIndex: 0, totalSteps: urls.count))
         return try withMiniMaxH3AutoreleasePool {
-            let vae = try MiniMaxH3ModelLoader.loadVideoVAE(resources: resources)
+            let vae = try loadVideoVAE(resources: resources)
             var rows: [MLXArray] = []
             for (index, url) in urls.enumerated() {
                 let image: MediaImage
@@ -1554,32 +2050,133 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         }
     }
 
+    private func encodeContinuation(
+        _ continuation: MiniMaxH3ContinuationInput,
+        resources: MiniMaxH3Resources,
+        progressHandler: (@Sendable (MiniMaxH3GenerationProgress) -> Void)?
+    ) throws -> ContinuationConditions {
+        progressHandler?(.init(stage: .encodingKeyframes, stepIndex: 0, totalSteps: 2))
+        let videoVAE = try loadVideoVAE(resources: resources)
+        let rgb = continuation.frames.asType(.float32) / 255
+        var videoRows: [MLXArray] = []
+        var videoAnchors: [MiniMaxH3KeyframeAnchor] = []
+        if continuation.frameCount > 1 {
+            let history = rgb[
+                0...,
+                0..<(continuation.frameCount - 1),
+                0...,
+                0...,
+                0...
+            ]
+            let historyLatent = videoVAE.encodeReferenceVideo(history)
+            videoRows.append(MiniMaxH3Geometry.patchifyVideo(historyLatent).asType(.float32))
+            videoAnchors.append(.history(latentFrameCount: historyLatent.dim(2)))
+        }
+        let boundary = rgb[
+            0...,
+            (continuation.frameCount - 1)..<continuation.frameCount,
+            0...,
+            0...,
+            0...
+        ]
+        let boundaryLatent = videoVAE.encodeKeyframe(boundary.squeezed(axis: 1))
+        videoRows.append(MiniMaxH3Geometry.patchifyVideo(boundaryLatent).asType(.float32))
+        videoAnchors.append(.first)
+        let packedVideo = MLX.concatenated(videoRows, axis: 1)
+        MLX.eval(packedVideo)
+        progressHandler?(.init(stage: .encodingKeyframes, stepIndex: 1, totalSteps: 2))
+
+        let audioVAE = try loadAudioVAE(resources: resources)
+        let audioLatent = audioVAE.encode(continuation.audio.asType(.float32))
+        let boundaryLatentCount = min(
+            audioLatent.dim(3),
+            max(
+                1,
+                Int((Double(MiniMaxH3Geometry.audioLatentsPerSecond)
+                    / Double(MiniMaxH3Geometry.framesPerSecond)).rounded())
+            )
+        )
+        let historyLatentCount = audioLatent.dim(3) - boundaryLatentCount
+        var audioRows: [MLXArray] = []
+        var audioAnchors: [MiniMaxH3AudioConditionAnchor] = []
+        if historyLatentCount > 0 {
+            let history = audioLatent[0..., 0..., 0..., 0..<historyLatentCount]
+            audioRows.append(MiniMaxH3Geometry.packAudio(history).expandedDimensions(axis: 0))
+            audioAnchors.append(.history(latentFrameCount: historyLatentCount))
+        }
+        let first = audioLatent[
+            0...,
+            0...,
+            0...,
+            historyLatentCount..<audioLatent.dim(3)
+        ]
+        audioRows.append(MiniMaxH3Geometry.packAudio(first).expandedDimensions(axis: 0))
+        audioAnchors.append(.first(latentFrameCount: boundaryLatentCount))
+        let packedAudio = MLX.concatenated(audioRows, axis: 1)
+        MLX.eval(packedAudio)
+        progressHandler?(.init(stage: .encodingKeyframes, stepIndex: 2, totalSteps: 2))
+        return ContinuationConditions(
+            videoRows: packedVideo,
+            audioRows: packedAudio,
+            videoAnchors: videoAnchors,
+            audioAnchors: audioAnchors
+        )
+    }
+
+    private static func concatenateRows(_ arrays: [MLXArray?]) -> MLXArray? {
+        let values = arrays.compactMap { $0 }
+        guard !values.isEmpty else { return nil }
+        return values.count == 1 ? values[0] : MLX.concatenated(values, axis: 1)
+    }
+
+    private static func boundaryFrame(_ continuation: MiniMaxH3ContinuationInput) -> MLXArray {
+        continuation.frames[
+            0...,
+            (continuation.frameCount - 1)..<continuation.frameCount,
+            0...,
+            0...,
+            0...
+        ]
+    }
+
     private func conditionerPresentation(
         tokenizer: QwenTokenizer,
-        options: MiniMaxH3GenerationOptions
+        options: MiniMaxH3GenerationOptions,
+        continuationFrame: MLXArray? = nil
     ) throws -> ConditionerPresentation {
-        let keyframeURLs = [options.firstFrameURL, options.lastFrameURL].compactMap { $0 }
+        let keyframeURLs = Self.frameConditions(options: options).map(\.url)
         var tokenIDs: [Int] = []
         var tokenTags: [Int32] = []
         var images: [QwenVLEncoder.ConditioningImage] = []
 
-        if !keyframeURLs.isEmpty {
+        if continuationFrame != nil || !keyframeURLs.isEmpty {
             guard let imageTokenID = tokenizer.imageTokenId,
                   let visionStartTokenID = tokenizer.visionStartTokenId,
                   let visionEndTokenID = tokenizer.visionEndTokenId else {
                 throw MiniMaxH3GeneratorError.invalidOptions("Qwen3-VL tokenizer is missing vision tokens")
             }
-            for (index, url) in keyframeURLs.enumerated() {
-                let prepared: MediaImage
+            var preparedImages: [MediaImage] = []
+            if let continuationFrame {
+                MLX.eval(continuationFrame)
+                let frame = continuationFrame[0, 0]
+                preparedImages.append(try MediaImageIO.imageFromRGBHWC(
+                    frame.asArray(UInt8.self),
+                    width: continuationFrame.dim(3),
+                    height: continuationFrame.dim(2)
+                ))
+            }
+            for url in keyframeURLs {
                 do {
-                    prepared = try MediaImageIO.resized(
+                    preparedImages.append(try MediaImageIO.resized(
                         try MediaImageIO.decode(url),
                         width: options.width,
                         height: options.height
-                    )
+                    ))
                 } catch {
                     throw MiniMaxH3GeneratorError.imageDecodeFailed(url)
                 }
+            }
+            for (index, prepared) in preparedImages.enumerated() {
                 let pixelValues = try QwenVLImageLoader.pixelValues(
                     image: prepared,
                     patchSize: 16,
@@ -1621,5 +2218,30 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         tokenIDs.append(contentsOf: promptIDs)
         tokenTags.append(contentsOf: repeatElement(MiniMaxH3Modality.text.rawValue, count: promptIDs.count))
         return ConditionerPresentation(tokenIDs: tokenIDs, tokenTags: tokenTags, images: images)
+    }
+
+    private static func frameConditions(options: MiniMaxH3GenerationOptions) -> [FrameCondition] {
+        var conditions: [(index: Int, condition: FrameCondition)] = []
+        if let firstFrameURL = options.firstFrameURL {
+            conditions.append((0, .init(url: firstFrameURL, anchor: .first)))
+        }
+        conditions.append(contentsOf: options.frameInputs.map { input in
+            let anchor: MiniMaxH3KeyframeAnchor
+            if input.frameIndex == 0 {
+                anchor = .first
+            } else if input.frameIndex == options.numFrames - 1 {
+                anchor = .last
+            } else {
+                anchor = .frame(input.frameIndex)
+            }
+            return (input.frameIndex, .init(url: input.url, anchor: anchor))
+        })
+        if let lastFrameURL = options.lastFrameURL {
+            conditions.append((
+                options.numFrames - 1,
+                .init(url: lastFrameURL, anchor: .last)
+            ))
+        }
+        return conditions.sorted { $0.index < $1.index }.map(\.condition)
     }
 }

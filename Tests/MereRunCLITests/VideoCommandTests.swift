@@ -329,6 +329,9 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertNil(cmd.steps)
         XCTAssertEqual(cmd.h3WeightMode, .automatic)
         XCTAssertEqual(cmd.h3Acceleration, .quality)
+        XCTAssertTrue(cmd.h3FrameArguments.isEmpty)
+        XCTAssertNil(cmd.h3WindowFrames)
+        XCTAssertEqual(cmd.h3WindowOverlap, 18)
         XCTAssertEqual(cmd.imageStrength, 1.0)
         XCTAssertNil(cmd.endImage)
         XCTAssertEqual(cmd.endImageStrength, 1.0)
@@ -362,6 +365,68 @@ final class VideoCommandTests: XCTestCase {
             "video:/tmp/motion.mp4",
             "audio:/tmp/voice.wav",
         ])
+    }
+
+    func testVideoGenerateParsesH3FrameInjectionAndSlidingWindow() throws {
+        let temporaryDirectory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("h3-frame-preflight-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(
+            at: temporaryDirectory,
+            withIntermediateDirectories: true
+        )
+        defer { try? FileManager.default.removeItem(at: temporaryDirectory) }
+        let secondSet = temporaryDirectory.appendingPathComponent("second-set.png")
+        let thirdSet = temporaryDirectory.appendingPathComponent("third-set.png")
+        XCTAssertTrue(FileManager.default.createFile(atPath: secondSet.path, contents: Data()))
+        XCTAssertTrue(FileManager.default.createFile(atPath: thirdSet.path, contents: Data()))
+        let secondArgument = "72:\(secondSet.path)"
+        let thirdArgument = "144:\(thirdSet.path)"
+        let command = try VideoGenerate.parse([
+            "the actor moves through a continuous scene",
+            "--model", ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue,
+            "--h3-frame", secondArgument,
+            "--h3-frame", thirdArgument,
+            "--num-frames", "175",
+            "--h3-window-frames", "124",
+            "--h3-window-overlap", "35",
+        ])
+
+        XCTAssertEqual(command.h3FrameArguments, [
+            secondArgument,
+            thirdArgument,
+        ])
+        XCTAssertEqual(command.h3WindowFrames, 124)
+        XCTAssertEqual(command.h3WindowOverlap, 35)
+
+        let envelope = command.makePreflightEnvelope(
+            outputURL: makeTempOutput(name: "h3-sliding.mp4"),
+            fileManager: .default,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+        XCTAssertEqual(envelope.request.h3FrameInputs, [
+            secondArgument,
+            thirdArgument,
+        ])
+        XCTAssertEqual(envelope.request.h3WindowFrames, 124)
+        XCTAssertEqual(envelope.request.h3WindowOverlap, 35)
+        XCTAssertEqual(envelope.result.plan.h3FrameCount, 2)
+        XCTAssertEqual(envelope.result.plan.h3WindowFrames, 124)
+        XCTAssertEqual(envelope.result.plan.h3WindowOverlap, 35)
+        XCTAssertEqual(envelope.result.plan.h3WindowCount, 2)
+        XCTAssertEqual(envelope.result.inputs.h3Frames?.map(\.path), [
+            secondSet.path,
+            thirdSet.path,
+        ])
+        XCTAssertEqual(envelope.result.inputs.missingCount, 0)
+        let actionArguments = envelope.actions.first {
+            $0.id == "start-video-generation"
+        }?.command?.argv
+        XCTAssertTrue(actionArguments?.contains("--h3-frame") == true)
+        XCTAssertTrue(actionArguments?.contains(secondArgument) == true)
+        XCTAssertTrue(actionArguments?.contains("--h3-window-frames") == true)
+        XCTAssertTrue(actionArguments?.contains("124") == true)
+        XCTAssertTrue(actionArguments?.contains("--h3-window-overlap") == true)
+        XCTAssertTrue(actionArguments?.contains("35") == true)
     }
 
     func testVideoGenerateParsesMiniMaxH3TurboAdapter() throws {
@@ -587,6 +652,39 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertTrue(actionArguments?.contains("resident-bf16") == true)
         XCTAssertTrue(actionArguments?.contains("--h3-acceleration") == true)
         XCTAssertTrue(actionArguments?.contains("maximum") == true)
+    }
+
+    func testMiniMaxH3PreflightAllowsAdapterAttentionAcceleration() throws {
+        let adapter = FileManager.default.temporaryDirectory
+            .appendingPathComponent("h3-adapter-\(UUID().uuidString).safetensors")
+        XCTAssertTrue(FileManager.default.createFile(
+            atPath: adapter.path,
+            contents: Data()
+        ))
+        defer { try? FileManager.default.removeItem(at: adapter) }
+
+        let output = makeTempOutput(name: "h3-adapter-maximum.mp4")
+        let cmd = try VideoGenerate.parse([
+            "a cinematic dialogue scene",
+            "--model", ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue,
+            "--h3-adapter", adapter.path,
+            "--h3-acceleration", "maximum",
+            "--preflight",
+            "--json",
+        ])
+
+        let envelope = cmd.makePreflightEnvelope(
+            outputURL: output,
+            fileManager: .default,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertFalse(envelope.diagnostics.contains {
+            $0.id == "h3_adapter_acceleration_conflict"
+        })
+        XCTAssertEqual(envelope.result.plan.resolvedSteps, 5)
+        XCTAssertEqual(envelope.result.plan.h3AccelerationMode, "maximum")
+        XCTAssertEqual(envelope.result.plan.h3Adapter, adapter.path)
     }
 
     func testVideoGenerateParsesStartAndEndKeyframes() throws {

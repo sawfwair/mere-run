@@ -1818,6 +1818,9 @@ Key options:
 - `--h3-adapter`: installed MiniMax-H3 adapter catalog id or local safetensors
   path
 - `--h3-adapter-strength`: MiniMax-H3 runtime adapter multiplier
+- `--h3-frame`: repeatable zero-based `FRAME:PATH` FL2VA image injection
+- `--h3-window-frames`: resident H3 sliding-window size in `17*n+5` frames
+- `--h3-window-overlap`: motion/audio overlap in `17*n+1` frames (default `18`)
 - `--guidance-scale`, `--shift`, `--negative-prompt` for Wan2.2
 - `--audio`: source audio path; automatically selects native LTX 2.3 A2Vid
 - `--audio-start-time`: source segment offset in seconds (default `0`)
@@ -1877,8 +1880,9 @@ useful short world-transition baseline. Tiny 128-pixel outputs are structural
 smokes, not quality renders.
 
 MiniMax-H3 always emits synchronized 24 fps video and 32 kHz stereo audio.
-FL2VA accepts `--image` and optional `--end-image`; Ref2VA accepts ordered
-`--reference` values and rejects those keyframe flags. H3 dimensions snap to
+FL2VA accepts `--image`, optional `--end-image`, and up to 12 repeatable
+`--h3-frame FRAME:PATH` conditions at exact zero-based output indices. Ref2VA
+accepts ordered `--reference` values and rejects FL2VA keyframe flags. H3 dimensions snap to
 32-pixel multiples, frame counts snap upward to `17*n+5`, and its
 CFG-distilled transformer needs one evaluation per schedule step. Ref2VA roots
 are locally converted; the public managed pull exists only for FL2VA.
@@ -1890,14 +1894,31 @@ MacBooks below 96 GiB and expands to the faster resident BF16 path on memory-qua
 desktops and 96+ GiB MacBooks when the requested geometry leaves the required
 runtime reserve.
 
-`--h3-acceleration quality` is the exact default. `balanced` reuses the measured
-contribution of the trailing 50% of transformer blocks on eligible adjacent
-schedule steps and refreshes after at most two cache hits. `maximum` is the
-explicit speed lane: it reuses the trailing 82% and refreshes after at most
-four cache hits. Both require two complete evaluations before the first reuse
-and keep the schedule boundaries native. They remain approximate: the same
-prompt and seed may follow a different motion or composition trajectory. Use
-`quality` when exact-seed fidelity matters.
+`--h3-acceleration quality` is the dense, exact default. At 12,000 or more
+packed rows, `balanced` and `maximum` add dynamic block-sparse attention for
+target-video queries. Prefix queries and keys, neighboring video blocks, the
+first two layers, the leading schedule region, and the final evaluation stay
+dense. Skipped blocks retain a summary correction, and the Metal path must pass
+a once-per-shape dense-route numerical gate before it can run.
+
+Without an H3 adapter, `balanced` and `maximum` also use a modality-aware
+adaptive first-block cache. Every evaluation still runs block 1, then measures
+global and worst-time-slice drift for video and audio against the last full
+refresh. A qualifying step reuses only the target residual from blocks 2
+through 50. `balanced` admits at most two adjacent hits and reserves the final
+two evaluations; `maximum` admits four adjacent hits and always executes the
+final evaluation in full. Both require two complete evaluations before cache
+reuse. These modes remain approximate: the same prompt and seed may follow a
+different motion or composition trajectory. Use `quality` when exact-seed
+fidelity matters.
+
+`--h3-window-frames` enables resident sliding windows for FL2VA or Ref2VA. The
+window count must be `17*n+5`; `--h3-window-overlap` must be `17*n+1` and leave
+at least 22 target frames. The runtime conditions each new window on prior
+overlap motion, its final boundary frame, and matching generated stereo audio,
+then appends only new frames and samples. The output duration and all
+`--h3-frame` indices stay on one global timeline. Transformer, conditioner,
+AdaLN table, reference encodings, and VAEs remain loaded between windows.
 
 `--h3-adapter minimax-h3-turbo-4step` selects the separately pulled EMA-850
 LoRA, while `--h3-adapter minimax-h3-lightx2v-4step` selects the LightX2V
@@ -1905,10 +1926,11 @@ PEFT LoRA. Both target `video-minimax-h3-fl2va-bf16-mlx`. When `--steps` is
 omitted they use five schedule points (four transformer evaluations). EMA-850
 runs in activation space; LightX2V is fused once into the BF16 transformer
 before denoising and adds no LoRA matmuls to the generation loop. Both require
-`--h3-acceleration quality`; Ref2VA and the compact quantized H3 package are
-rejected. The preflight report resolves the managed adapter path, verifies its
-presence, and preserves the adapter id, strength, and resolved schedule in the
-declarative action.
+dense execution of all 50 blocks and prohibit denoise-step cache reuse, but
+may use the attention-only `balanced` or `maximum` path. Ref2VA and the compact
+quantized H3 package are rejected. The preflight report resolves the managed
+adapter path, verifies its presence, and preserves the adapter id, strength,
+and resolved schedule in the declarative action.
 
 Preflight mode:
 
@@ -1917,7 +1939,8 @@ Preflight mode:
 - the report includes model availability, output path state, source/end image
   and audio state, resolved dimensions, resolved frame count/duration, source
   audio offset, seed, input mode, the resolved H3 steps/weight/acceleration
-  policy when applicable, whether audio conditions generation, whether the
+  policy, timed-frame count, and sliding-window geometry/count when applicable,
+  whether audio conditions generation, whether the
   source soundtrack is preserved, diagnostics, and declarative actions.
 - blockers such as a missing model root, missing image, invalid frame rate, or
   `--end-image` without `--image` produce JSON and a nonzero exit. Requesting

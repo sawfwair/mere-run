@@ -21,6 +21,9 @@ struct VideoGenerationPreflightInput {
     let h3AccelerationMode: String
     let h3Adapter: String?
     let h3AdapterStrength: Float
+    let h3FrameInputs: [String]
+    let h3WindowFrames: Int?
+    let h3WindowOverlap: Int
     let duration: Double?
     let fps: Int
     let seed: Int?
@@ -59,6 +62,9 @@ struct VideoGenerationPreflightRequest: Codable, Equatable {
     let h3AccelerationMode: String?
     let h3Adapter: String?
     let h3AdapterStrength: Float?
+    let h3FrameInputs: [String]?
+    let h3WindowFrames: Int?
+    let h3WindowOverlap: Int?
     let duration: Double?
     let fps: Int
     let seed: Int?
@@ -94,6 +100,9 @@ struct VideoGenerationPreflightRequest: Codable, Equatable {
         case h3AccelerationMode = "h3_acceleration"
         case h3Adapter = "h3_adapter"
         case h3AdapterStrength = "h3_adapter_strength"
+        case h3FrameInputs = "h3_frames"
+        case h3WindowFrames = "h3_window_frames"
+        case h3WindowOverlap = "h3_window_overlap"
         case duration
         case fps
         case seed
@@ -171,6 +180,7 @@ struct VideoGenerationInputPreflightSummary: Codable, Equatable {
     let sourceAudio: VideoGenerationPathPreflightSummary?
     let sourceImage: VideoGenerationPathPreflightSummary?
     let endImage: VideoGenerationPathPreflightSummary?
+    let h3Frames: [VideoGenerationPathPreflightSummary]?
     let references: [VideoGenerationPathPreflightSummary]?
     let adapter: VideoGenerationPathPreflightSummary?
     let missingCount: Int
@@ -180,6 +190,7 @@ struct VideoGenerationInputPreflightSummary: Codable, Equatable {
         case sourceAudio = "source_audio"
         case sourceImage = "source_image"
         case endImage = "end_image"
+        case h3Frames = "h3_frames"
         case references
         case adapter
         case missingCount = "missing_count"
@@ -216,6 +227,10 @@ struct VideoGenerationPlanPreflightSummary: Codable, Equatable {
     let h3AccelerationMode: String?
     let h3Adapter: String?
     let h3AdapterStrength: Float?
+    let h3FrameCount: Int?
+    let h3WindowFrames: Int?
+    let h3WindowOverlap: Int?
+    let h3WindowCount: Int?
     let fps: Int
     let resolvedNumFrames: Int
     let resolvedDurationSeconds: Double?
@@ -241,6 +256,10 @@ struct VideoGenerationPlanPreflightSummary: Codable, Equatable {
         case h3AccelerationMode = "h3_acceleration"
         case h3Adapter = "h3_adapter"
         case h3AdapterStrength = "h3_adapter_strength"
+        case h3FrameCount = "h3_frame_count"
+        case h3WindowFrames = "h3_window_frames"
+        case h3WindowOverlap = "h3_window_overlap"
+        case h3WindowCount = "h3_window_count"
         case fps
         case resolvedNumFrames = "resolved_num_frames"
         case resolvedDurationSeconds = "resolved_duration_seconds"
@@ -349,6 +368,13 @@ struct VideoGenerationPreflightAnalyzer {
             h3Adapter: usesMiniMaxH3Geometry ? input.h3Adapter : nil,
             h3AdapterStrength: usesMiniMaxH3Geometry && input.h3Adapter != nil
                 ? input.h3AdapterStrength
+                : nil,
+            h3FrameInputs: usesMiniMaxH3Geometry && !input.h3FrameInputs.isEmpty
+                ? input.h3FrameInputs
+                : nil,
+            h3WindowFrames: usesMiniMaxH3Geometry ? input.h3WindowFrames : nil,
+            h3WindowOverlap: usesMiniMaxH3Geometry && input.h3WindowFrames != nil
+                ? input.h3WindowOverlap
                 : nil,
             duration: input.duration,
             fps: input.fps,
@@ -471,20 +497,29 @@ struct VideoGenerationPreflightAnalyzer {
                 message: "--h3-adapter can only be used with a MiniMax-H3 model."
             ))
         }
+        if !usesMiniMaxH3Geometry,
+           (!input.h3FrameInputs.isEmpty || input.h3WindowFrames != nil) {
+            diagnostics.append(PreflightDiagnostic(
+                id: "h3_window_or_frame_with_non_h3_model",
+                severity: .blocker,
+                title: "MiniMax-H3 controls require MiniMax-H3",
+                message: "--h3-frame and --h3-window-frames can only be used with a MiniMax-H3 model."
+            ))
+        }
+        if !input.references.isEmpty, !input.h3FrameInputs.isEmpty {
+            diagnostics.append(PreflightDiagnostic(
+                id: "h3_frame_ref2va_unsupported",
+                severity: .blocker,
+                title: "Timed H3 frames require FL2VA",
+                message: "Use --h3-frame with FL2VA; Ref2VA uses ordered --reference inputs."
+            ))
+        }
         if input.h3Adapter != nil, input.h3AdapterStrength <= 0 {
             diagnostics.append(PreflightDiagnostic(
                 id: "h3_adapter_strength_invalid",
                 severity: .blocker,
                 title: "MiniMax-H3 adapter strength is invalid",
                 message: "--h3-adapter-strength must be > 0."
-            ))
-        }
-        if input.h3Adapter != nil, input.h3AccelerationMode != MiniMaxH3AccelerationMode.quality.rawValue {
-            diagnostics.append(PreflightDiagnostic(
-                id: "h3_adapter_acceleration_conflict",
-                severity: .blocker,
-                title: "MiniMax-H3 Turbo already distills the denoise schedule",
-                message: "Use --h3-acceleration quality with --h3-adapter."
             ))
         }
         if input.h3Adapter != nil, !input.references.isEmpty {
@@ -1011,6 +1046,10 @@ struct VideoGenerationPreflightAnalyzer {
         let sourceAudio = usesAudioConditioning ? input.audio.map { pathSummary(requested: $0) } : nil
         let sourceImage = input.image.map { pathSummary(requested: $0) }
         let endImage = input.endImage.map { pathSummary(requested: $0) }
+        let h3Frames = input.h3FrameInputs.map { raw -> VideoGenerationPathPreflightSummary in
+            let path = raw.firstIndex(of: ":").map { String(raw[raw.index(after: $0)...]) } ?? raw
+            return pathSummary(requested: path)
+        }
         let references = input.references.map { raw -> VideoGenerationPathPreflightSummary in
             let path = raw.firstIndex(of: ":").map { String(raw[raw.index(after: $0)...]) } ?? raw
             return pathSummary(requested: path)
@@ -1066,6 +1105,25 @@ struct VideoGenerationPreflightAnalyzer {
                 ))
             }
         }
+        for (index, summary) in h3Frames.enumerated() {
+            if !summary.exists {
+                diagnostics.append(PreflightDiagnostic(
+                    id: "h3_frame_\(index)_missing",
+                    severity: .blocker,
+                    title: "Timed H3 frame missing",
+                    message: "Timed frame image not found: \(summary.path)",
+                    locations: [.init(kind: "file", path: summary.path)]
+                ))
+            } else if summary.isDirectory {
+                diagnostics.append(PreflightDiagnostic(
+                    id: "h3_frame_\(index)_is_directory",
+                    severity: .blocker,
+                    title: "Timed H3 frame is a directory",
+                    message: "Timed frame path is a directory: \(summary.path)",
+                    locations: [.init(kind: "directory", path: summary.path)]
+                ))
+            }
+        }
         if let adapter, !adapter.exists {
             let pullHint = ManagedAdapterCatalog.spec(for: adapter.requested).map {
                 " Run `mere.run adapter pull \($0.id)`."
@@ -1103,12 +1161,15 @@ struct VideoGenerationPreflightAnalyzer {
                 ? "text_to_video"
                 : (endImage == nil ? "image_to_video" : "directed_image_to_video")
         }
-        let allInputs = [sourceAudio, sourceImage, endImage, adapter].compactMap { $0 } + references
+        let allInputs = [sourceAudio, sourceImage, endImage, adapter].compactMap { $0 }
+            + h3Frames
+            + references
         return VideoGenerationInputPreflightSummary(
             mode: mode,
             sourceAudio: sourceAudio,
             sourceImage: sourceImage,
             endImage: endImage,
+            h3Frames: h3Frames.isEmpty ? nil : h3Frames,
             references: references.isEmpty ? nil : references,
             adapter: adapter,
             missingCount: allInputs.filter { !$0.exists }.count
@@ -1150,6 +1211,46 @@ struct VideoGenerationPreflightAnalyzer {
         let resolvedFrames = usesMiniMaxH3Geometry
             ? (try? MiniMaxH3Geometry.alignFrameCount(max(minimumFrames, requestedFrames))) ?? minimumFrames
             : max(minimumFrames, ((requestedFrames - 1) / temporalMultiple) * temporalMultiple + 1)
+        let h3FrameIndices = input.h3FrameInputs.compactMap { value -> Int? in
+            guard let separator = value.firstIndex(of: ":") else { return nil }
+            return Int(value[..<separator])
+        }
+        if usesMiniMaxH3Geometry, h3FrameIndices.count != input.h3FrameInputs.count {
+            diagnostics.append(PreflightDiagnostic(
+                id: "h3_frame_syntax_invalid",
+                severity: .blocker,
+                title: "Timed H3 frame syntax is invalid",
+                message: "Every --h3-frame value must use zero-based FRAME:PATH syntax."
+            ))
+        }
+        if usesMiniMaxH3Geometry,
+           (Set(h3FrameIndices).count != h3FrameIndices.count
+            || h3FrameIndices.contains(where: { !(0..<resolvedFrames).contains($0) })) {
+            diagnostics.append(PreflightDiagnostic(
+                id: "h3_frame_index_invalid",
+                severity: .blocker,
+                title: "Timed H3 frame indices are invalid",
+                message: "--h3-frame indices must be unique and inside the resolved output timeline."
+            ))
+        }
+        var slidingWindowPlan: MiniMaxH3SlidingWindowPlan?
+        if usesMiniMaxH3Geometry, let windowFrames = input.h3WindowFrames {
+            do {
+                let options = try MiniMaxH3SlidingWindowOptions(
+                    totalFrameCount: resolvedFrames,
+                    windowFrameCount: windowFrames,
+                    overlapFrameCount: input.h3WindowOverlap
+                )
+                slidingWindowPlan = MiniMaxH3SlidingWindowPlan(options: options)
+            } catch {
+                diagnostics.append(PreflightDiagnostic(
+                    id: "h3_sliding_window_invalid",
+                    severity: .blocker,
+                    title: "MiniMax-H3 sliding window is invalid",
+                    message: error.localizedDescription
+                ))
+            }
+        }
 
         if input.width >= spatialMultiple,
            input.height >= spatialMultiple,
@@ -1207,7 +1308,8 @@ struct VideoGenerationPreflightAnalyzer {
                 width: resolvedWidth,
                 height: resolvedHeight,
                 numFrames: resolvedFrames,
-                keyframeCount: [input.image, input.endImage].compactMap { $0 }.count,
+                keyframeCount: [input.image, input.endImage].compactMap { $0 }.count
+                    + input.h3FrameInputs.count,
                 referenceKinds: input.references.compactMap { reference in
                     MiniMaxH3ReferenceKind(rawValue: String(reference.prefix { $0 != ":" }))
                 },
@@ -1238,6 +1340,12 @@ struct VideoGenerationPreflightAnalyzer {
             h3AdapterStrength: usesMiniMaxH3Geometry && input.h3Adapter != nil
                 ? input.h3AdapterStrength
                 : nil,
+            h3FrameCount: usesMiniMaxH3Geometry ? input.h3FrameInputs.count : nil,
+            h3WindowFrames: usesMiniMaxH3Geometry ? input.h3WindowFrames : nil,
+            h3WindowOverlap: usesMiniMaxH3Geometry && input.h3WindowFrames != nil
+                ? input.h3WindowOverlap
+                : nil,
+            h3WindowCount: slidingWindowPlan?.windows.count,
             fps: usesMiniMaxH3Geometry ? MiniMaxH3Geometry.framesPerSecond : input.fps,
             resolvedNumFrames: resolvedFrames,
             resolvedDurationSeconds: input.fps > 0

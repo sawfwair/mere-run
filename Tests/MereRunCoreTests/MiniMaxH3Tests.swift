@@ -1,9 +1,173 @@
+import Foundation
 import MLX
+import MLXFast
 import MLXNN
+import MLXRandom
 import XCTest
 @testable import MereRunCore
 
 final class MiniMaxH3Tests: MereRunCoreTestCase {
+    func testDynamicSparseAttentionPolicyProtectsDenseBoundaries() throws {
+        XCTAssertNil(MiniMaxH3AccelerationMode.quality.dynamicSparseAttentionPolicy)
+        let balanced = try XCTUnwrap(
+            MiniMaxH3AccelerationMode.balanced.dynamicSparseAttentionPolicy
+        )
+        let maximum = try XCTUnwrap(
+            MiniMaxH3AccelerationMode.maximum.dynamicSparseAttentionPolicy
+        )
+        XCTAssertEqual(balanced.thresholdStandardDeviations, 0.75)
+        XCTAssertEqual(maximum.thresholdStandardDeviations, 1)
+
+        XCTAssertNil(maximum.request(
+            stepIndex: 1,
+            stepCount: 8,
+            layerIndex: 2,
+            sequenceLength: 12_930,
+            prefixTokenCount: 900
+        ))
+        XCTAssertNil(maximum.request(
+            stepIndex: 2,
+            stepCount: 8,
+            layerIndex: 1,
+            sequenceLength: 12_930,
+            prefixTokenCount: 900
+        ))
+        XCTAssertNotNil(maximum.request(
+            stepIndex: 2,
+            stepCount: 8,
+            layerIndex: 2,
+            sequenceLength: 12_930,
+            prefixTokenCount: 900
+        ))
+        XCTAssertNil(maximum.request(
+            stepIndex: 7,
+            stepCount: 8,
+            layerIndex: 49,
+            sequenceLength: 12_930,
+            prefixTokenCount: 900
+        ))
+        XCTAssertNil(maximum.request(
+            stepIndex: 2,
+            stepCount: 8,
+            layerIndex: 2,
+            sequenceLength: 11_999,
+            prefixTokenCount: 900
+        ))
+    }
+
+    func testDynamicSparseAttentionRoutesAboveAdaptiveThreshold() {
+        let queryCentroids = MLXArray([Float(1), 0]).reshaped(1, 1, 1, 2)
+        let keyCentroids = MLXArray([
+            Float(-2), 0,
+            -1, 0,
+            0, 0,
+            3, 0,
+        ]).reshaped(1, 1, 4, 2)
+        let routes = MiniMaxH3DynamicSparseAttention.routesForTesting(
+            queryCentroids: queryCentroids,
+            keyCentroids: keyCentroids,
+            thresholdStandardDeviations: 0
+        )
+        MLX.eval(routes)
+        XCTAssertEqual(routes.asArray(UInt8.self), [0, 0, 0, 1])
+    }
+
+    func testDynamicSparseMetalDenseRouteMatchesFusedSDPA() throws {
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip("Dynamic sparse attention Metal parity requires a GPU.")
+        }
+        MLXRandom.seed(41)
+        let shape = [1, 2, 256, MiniMaxH3DynamicSparseAttention.headDimension]
+        let queries = (MLXRandom.normal(shape) * Float(0.2)).asType(.bfloat16)
+        let keys = (MLXRandom.normal(shape) * Float(0.2)).asType(.bfloat16)
+        let values = MLXRandom.normal(shape).asType(.bfloat16)
+        MLX.eval(queries, keys, values)
+
+        let gate = try XCTUnwrap(MiniMaxH3DynamicSparseAttention.denseRouteGate(
+            queries: queries,
+            keys: keys,
+            values: values,
+            queryStart: 128,
+            scale: 1 / sqrt(Float(MiniMaxH3DynamicSparseAttention.headDimension))
+        ))
+        XCTAssertTrue(gate.passed)
+        XCTAssertLessThanOrEqual(gate.relativeL2Error, 0.005)
+    }
+
+    func testDynamicSparseMetalFloat32InputsPassDenseGate() throws {
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip("Dynamic sparse attention FP32 gate requires a GPU.")
+        }
+        MLXRandom.seed(2_026_081)
+        let shape = [1, 2, 256, MiniMaxH3DynamicSparseAttention.headDimension]
+        let queries = MLXRandom.normal(shape)
+        let keys = MLXRandom.normal(shape)
+        let values = MLXRandom.normal(shape)
+        MLX.eval(queries, keys, values)
+
+        let gate = try XCTUnwrap(MiniMaxH3DynamicSparseAttention.denseRouteGate(
+            queries: queries,
+            keys: keys,
+            values: values,
+            queryStart: 64,
+            scale: 1 / sqrt(Float(MiniMaxH3DynamicSparseAttention.headDimension))
+        ))
+        XCTAssertTrue(gate.passed)
+    }
+
+    func testDynamicSparseMetalRetainsSkippedBlockCentroidContribution() throws {
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip("Dynamic sparse attention Metal correction requires a GPU.")
+        }
+        MLXRandom.seed(42)
+        let heads = 2
+        let tokens = 256
+        let dimension = MiniMaxH3DynamicSparseAttention.headDimension
+        let shape = [1, heads, tokens, dimension]
+        let queries = (MLXRandom.normal(shape) * Float(0.2)).asType(.bfloat16)
+        let keys = (MLXRandom.normal(shape) * Float(0.2)).asType(.bfloat16)
+        let values = MLXRandom.normal(shape).asType(.bfloat16)
+        let routes = MLXArray.zeros([1, heads, 1, 4], dtype: .uint8)
+        let scale = 1 / sqrt(Float(dimension))
+        let candidate = try XCTUnwrap(
+            MiniMaxH3DynamicSparseAttention.sparseOutputForTesting(
+                queries: queries,
+                keys: keys,
+                values: values,
+                routes: routes,
+                queryStart: 192,
+                queryCount: 1,
+                prefixTokenCount: 64,
+                scale: scale
+            )
+        )
+
+        let skippedCentroid = keys[0..., 0..., 64..<128, 0...]
+            .mean(axis: 2, keepDims: true)
+        let approximatedKeys = MLX.concatenated([
+            keys[0..., 0..., 0..<64, 0...],
+            MLX.broadcast(skippedCentroid, to: [1, heads, 64, dimension]),
+            keys[0..., 0..., 128..., 0...],
+        ], axis: 2)
+        let reference = MLXFast.scaledDotProductAttention(
+            queries: queries[0..., 0..., 192..<193, 0...],
+            keys: approximatedKeys,
+            values: values,
+            scale: scale,
+            mask: .none
+        )
+        let delta = candidate.asType(.float32) - reference.asType(.float32)
+        let relativeL2 = MLX.sqrt(
+            MLX.sum(delta * delta)
+                / MLX.maximum(
+                    MLX.sum(reference.asType(.float32) * reference.asType(.float32)),
+                    MLXArray(Float(1e-12))
+                )
+        )
+        MLX.eval(candidate, reference, relativeL2)
+        XCTAssertLessThanOrEqual(relativeL2.item(Float.self), 0.005)
+    }
+
     func testRuntimeLoRAAppliesDeltaInActivationSpace() {
         let base = Linear(
             weight: MLXArray([Float(1), 0, 0, 1]).reshaped(2, 2),
@@ -112,13 +276,88 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         XCTAssertEqual(options.steps, 5)
         XCTAssertEqual(options.adapterStrength, 1)
 
-        XCTAssertThrowsError(try MiniMaxH3GenerationOptions(
-            prompt: "invalid compounded acceleration",
+        let sparseTurbo = try MiniMaxH3GenerationOptions(
+            prompt: "Turbo with attention-only acceleration",
             width: 256,
             height: 160,
             numFrames: 22,
             accelerationMode: .maximum,
             adapterURL: URL(fileURLWithPath: "/tmp/minimax-h3-turbo.safetensors")
+        )
+        XCTAssertEqual(sparseTurbo.steps, 5)
+        XCTAssertEqual(sparseTurbo.accelerationMode, .maximum)
+    }
+
+    func testPositionedFrameInputsAreValidatedAndSorted() throws {
+        let later = URL(fileURLWithPath: "/tmp/later.png")
+        let earlier = URL(fileURLWithPath: "/tmp/earlier.png")
+        let options = try MiniMaxH3GenerationOptions(
+            prompt: "a continuous staged scene",
+            width: 256,
+            height: 160,
+            numFrames: 90,
+            frameInputs: [
+                .init(frameIndex: 72, url: later),
+                .init(frameIndex: 24, url: earlier),
+            ]
+        )
+
+        XCTAssertEqual(options.frameInputs.map(\.frameIndex), [24, 72])
+        XCTAssertThrowsError(try MiniMaxH3GenerationOptions(
+            prompt: "duplicate frames",
+            width: 256,
+            height: 160,
+            numFrames: 90,
+            frameInputs: [
+                .init(frameIndex: 24, url: earlier),
+                .init(frameIndex: 24, url: later),
+            ]
+        ))
+        XCTAssertThrowsError(try MiniMaxH3GenerationOptions(
+            prompt: "out of range frame",
+            width: 256,
+            height: 160,
+            numFrames: 90,
+            frameInputs: [.init(frameIndex: 90, url: later)]
+        ))
+    }
+
+    func testSlidingWindowPlanPreservesExactGlobalTimeline() throws {
+        let options = try MiniMaxH3SlidingWindowOptions(
+            totalFrameCount: 124,
+            windowFrameCount: 39,
+            overlapFrameCount: 18
+        )
+        let plan = MiniMaxH3SlidingWindowPlan(options: options)
+
+        XCTAssertEqual(plan.windows.count, 6)
+        XCTAssertEqual(plan.windows[0].generatedFrameCount, 39)
+        XCTAssertEqual(plan.windows[0].appendedFrameRange, 0..<39)
+        XCTAssertEqual(plan.windows[1].boundaryFrameIndex, 38)
+        XCTAssertEqual(plan.windows[1].generatedFrameCount, 22)
+        XCTAssertEqual(plan.windows[1].appendedFrameRange, 1..<22)
+        XCTAssertEqual(plan.windows[1].outputFrameRange, 39..<60)
+        XCTAssertEqual(plan.windows[2].localFrameIndex(for: 72), 13)
+        XCTAssertEqual(plan.windows.last?.outputFrameRange, 123..<124)
+        XCTAssertEqual(plan.windows.last?.appendedFrameRange, 1..<2)
+        XCTAssertEqual(plan.windows.reduce(0) { $0 + $1.appendedFrameCount }, 124)
+    }
+
+    func testSlidingWindowOptionsRequireCompatibleTargetGeometry() {
+        XCTAssertThrowsError(try MiniMaxH3SlidingWindowOptions(
+            totalFrameCount: 124,
+            windowFrameCount: 39,
+            overlapFrameCount: 17
+        ))
+        XCTAssertThrowsError(try MiniMaxH3SlidingWindowOptions(
+            totalFrameCount: 124,
+            windowFrameCount: 39,
+            overlapFrameCount: 35
+        ))
+        XCTAssertNoThrow(try MiniMaxH3SlidingWindowOptions(
+            totalFrameCount: 243,
+            windowFrameCount: 124,
+            overlapFrameCount: 35
         ))
     }
 
@@ -411,6 +650,64 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         XCTAssertTrue(layout.tokenTags[3..<15].allSatisfy { $0 == MiniMaxH3Modality.video.rawValue })
     }
 
+    func testKeyframeAnchorPreservesStringAndCodableCompatibility() throws {
+        let anchors: [MiniMaxH3KeyframeAnchor] = [
+            .first,
+            .last,
+            .history(latentFrameCount: 6),
+            .frame(11),
+        ]
+        XCTAssertEqual(anchors.map(\.rawValue), ["first", "last", "history:6", "frame:11"])
+        XCTAssertEqual(anchors.compactMap { MiniMaxH3KeyframeAnchor(rawValue: $0.rawValue) }, anchors)
+
+        let encoded = try JSONEncoder().encode(anchors)
+        XCTAssertEqual(try JSONDecoder().decode([MiniMaxH3KeyframeAnchor].self, from: encoded), anchors)
+        XCTAssertEqual(
+            try JSONDecoder().decode(MiniMaxH3KeyframeAnchor.self, from: Data("\"first\"".utf8)),
+            .first
+        )
+    }
+
+    func testFL2VAHistoryFrameAndAudioConditionsShareShiftedTargetTimeline() throws {
+        let layout = try MiniMaxH3Geometry.buildFL2VA(
+            textTokenTags: [1, 1],
+            videoLatentFrames: 2,
+            latentHeight: 4,
+            latentWidth: 4,
+            audioLatentFrames: 3,
+            keyframeAnchors: [
+                .history(latentFrameCount: 2),
+                .first,
+                .frame(6),
+                .last,
+            ],
+            audioConditionAnchors: [
+                .history(latentFrameCount: 3),
+                .first(latentFrameCount: 2),
+            ]
+        )
+        XCTAssertEqual(layout.textRows, 0..<2)
+        XCTAssertEqual(layout.conditionRows, 2..<32)
+        XCTAssertEqual(layout.conditionVideoRowCount, 20)
+        XCTAssertEqual(layout.conditionAudioRowCount, 10)
+        XCTAssertEqual(layout.targetAudioRows, 32..<38)
+        XCTAssertEqual(layout.targetVideoRows, 38..<46)
+        XCTAssertEqual(layout.conditionSegments.map(\.modality), [.video, .audio])
+        XCTAssertEqual(layout.conditionSegments.map(\.sourceRows), [0..<20, 0..<10])
+
+        let positions = layout.positions.asArray(Float.self)
+        func time(at row: Int) -> Float { positions[row * 3] }
+        XCTAssertEqual(time(at: 2), 2, accuracy: 1e-5)
+        XCTAssertEqual(time(at: 6), 2 + 5.0 / 3.0, accuracy: 1e-5)
+        XCTAssertEqual(time(at: 10), 2 + 25.0 / 3.0, accuracy: 1e-5)
+        XCTAssertEqual(time(at: 14), 2 + 55.0 / 3.0, accuracy: 1e-5)
+        XCTAssertEqual(time(at: 18), 17, accuracy: 1e-5)
+        XCTAssertEqual(time(at: 22), 2, accuracy: 1e-5)
+        XCTAssertEqual(time(at: 28), 2 + 25.0 / 3.0, accuracy: 1e-5)
+        XCTAssertEqual(time(at: layout.targetAudioRows.lowerBound), 2 + 25.0 / 3.0, accuracy: 1e-5)
+        XCTAssertEqual(time(at: layout.targetVideoRows.lowerBound), 2 + 25.0 / 3.0, accuracy: 1e-5)
+    }
+
     func testVideoAndAudioPackingRoundTrip() {
         let video = MLXArray(0..<384).asType(.float32).reshaped(1, 3, 2, 8, 8)
         let rows = MiniMaxH3Geometry.patchifyVideo(video)
@@ -525,6 +822,69 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         XCTAssertTrue(layout.tokenTags[12..<24].allSatisfy { $0 == MiniMaxH3Modality.video.rawValue })
     }
 
+    func testRef2VAContinuationPrecedesReferencesAndShiftsTarget() throws {
+        let layout = try MiniMaxH3Geometry.buildRef2VA(
+            textTokenTags: [1, 0],
+            references: [
+                .init(kind: .image, videoLatentFrames: 1, latentHeight: 4, latentWidth: 4),
+                .init(
+                    kind: .video,
+                    videoLatentFrames: 2,
+                    latentHeight: 4,
+                    latentWidth: 6,
+                    audioLatentFrames: 3
+                ),
+                .init(kind: .audio, audioLatentFrames: 2),
+            ],
+            videoLatentFrames: 2,
+            latentHeight: 4,
+            latentWidth: 4,
+            audioLatentFrames: 4,
+            keyframeAnchors: [.history(latentFrameCount: 2), .first],
+            audioConditionAnchors: [
+                .history(latentFrameCount: 3),
+                .first(latentFrameCount: 2),
+            ]
+        )
+
+        XCTAssertEqual(layout.conditionVideoRowCount, 28)
+        XCTAssertEqual(layout.conditionAudioRowCount, 20)
+        XCTAssertEqual(layout.conditionRows, 2..<50)
+        XCTAssertEqual(layout.targetAudioRows, 50..<58)
+        XCTAssertEqual(layout.targetVideoRows, 58..<66)
+        XCTAssertEqual(
+            layout.conditionSegments.map(\.modality),
+            [.video, .audio, .video, .audio, .video, .audio]
+        )
+        XCTAssertEqual(layout.conditionSegments.map(\.packedRows), [
+            2..<14,
+            14..<24,
+            24..<28,
+            28..<34,
+            34..<46,
+            46..<50,
+        ])
+        XCTAssertEqual(layout.conditionSegments.map(\.sourceRows), [
+            0..<12,
+            0..<10,
+            12..<16,
+            10..<16,
+            16..<28,
+            16..<20,
+        ])
+
+        let positions = layout.positions.asArray(Float.self)
+        func time(at row: Int) -> Float { positions[row * 3] }
+        let referenceEnd = Float(40.0 / 3.0)
+        let targetOrigin = Float(65.0 / 3.0)
+        XCTAssertEqual(time(at: 2), referenceEnd, accuracy: 1e-5)
+        XCTAssertEqual(time(at: 10), targetOrigin, accuracy: 1e-5)
+        XCTAssertEqual(time(at: 14), referenceEnd, accuracy: 1e-5)
+        XCTAssertEqual(time(at: 20), targetOrigin, accuracy: 1e-5)
+        XCTAssertEqual(time(at: layout.targetAudioRows.lowerBound), targetOrigin, accuracy: 1e-5)
+        XCTAssertEqual(time(at: layout.targetVideoRows.lowerBound), targetOrigin, accuracy: 1e-5)
+    }
+
     func testShiftedSchedulesTerminateAtCleanEndpoint() throws {
         let video = try MiniMaxH3Schedule(pointCount: 5, shift: 12)
         let audio = try MiniMaxH3Schedule(pointCount: 5, shift: 3)
@@ -599,6 +959,155 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
             }
         }
         XCTAssertEqual(longCachedSteps, 10)
+    }
+
+    func testAdaptiveFirstBlockCachePolicyUsesSafeModalityGuards() throws {
+        XCTAssertNil(MiniMaxH3AccelerationMode.quality.adaptiveFirstBlockCachePolicy)
+        let balanced = try XCTUnwrap(
+            MiniMaxH3AccelerationMode.balanced.adaptiveFirstBlockCachePolicy
+        )
+        XCTAssertEqual(balanced.globalThreshold, 0.08)
+        XCTAssertEqual(balanced.temporalThreshold, 0.12)
+        XCTAssertEqual(balanced.maximumConsecutiveCachedSteps, 2)
+        XCTAssertEqual(balanced.requiredFinalFullSteps, 2)
+        let maximum = try XCTUnwrap(
+            MiniMaxH3AccelerationMode.maximum.adaptiveFirstBlockCachePolicy
+        )
+        XCTAssertEqual(maximum.globalThreshold, 0.30)
+        XCTAssertEqual(maximum.temporalThreshold, 0.40)
+        XCTAssertEqual(maximum.maximumConsecutiveCachedSteps, 4)
+        XCTAssertEqual(maximum.requiredFinalFullSteps, 1)
+
+        XCTAssertFalse(balanced.canConsiderReuse(
+            stepIndex: 1,
+            stepCount: 8,
+            fullStepCount: 1,
+            consecutiveCachedSteps: 0,
+            hasCachedState: true
+        ))
+        XCTAssertTrue(balanced.canConsiderReuse(
+            stepIndex: 2,
+            stepCount: 8,
+            fullStepCount: 2,
+            consecutiveCachedSteps: 0,
+            hasCachedState: true
+        ))
+        XCTAssertFalse(balanced.canConsiderReuse(
+            stepIndex: 6,
+            stepCount: 8,
+            fullStepCount: 2,
+            consecutiveCachedSteps: 0,
+            hasCachedState: true
+        ))
+        XCTAssertFalse(balanced.canConsiderReuse(
+            stepIndex: 3,
+            stepCount: 8,
+            fullStepCount: 2,
+            consecutiveCachedSteps: 2,
+            hasCachedState: true
+        ))
+
+        XCTAssertTrue(balanced.shouldReuse(change: .init(
+            videoGlobal: 0.05,
+            audioGlobal: 0.03,
+            videoTemporalMaximum: 0.10,
+            audioTemporalMaximum: 0.08
+        )))
+        XCTAssertFalse(balanced.shouldReuse(change: .init(
+            videoGlobal: 0.05,
+            audioGlobal: 0.03,
+            videoTemporalMaximum: 0.13,
+            audioTemporalMaximum: 0.08
+        )))
+        XCTAssertFalse(balanced.shouldReuse(change: .init(
+            videoGlobal: 0.05,
+            audioGlobal: .nan,
+            videoTemporalMaximum: 0.10,
+            audioTemporalMaximum: 0.08
+        )))
+
+        var fullSteps = 0
+        var consecutiveCachedSteps = 0
+        var cachedSteps = 0
+        for stepIndex in 0..<19 {
+            let canReuse = maximum.canConsiderReuse(
+                stepIndex: stepIndex,
+                stepCount: 19,
+                fullStepCount: fullSteps,
+                consecutiveCachedSteps: consecutiveCachedSteps,
+                hasCachedState: fullSteps > 0
+            )
+            if canReuse {
+                cachedSteps += 1
+                consecutiveCachedSteps += 1
+            } else {
+                fullSteps += 1
+                consecutiveCachedSteps = 0
+            }
+        }
+        XCTAssertEqual(cachedSteps, 13)
+        XCTAssertEqual(fullSteps, 6)
+        XCTAssertEqual(cachedSteps + fullSteps, 19)
+        XCTAssertEqual(cachedSteps + fullSteps * 50, 313)
+    }
+
+    func testFirstBlockChangeSeparatesGlobalAndTemporalAudioVideoDrift() throws {
+        let layout = try MiniMaxH3Geometry.buildFL2VA(
+            textTokenTags: [MiniMaxH3Modality.text.rawValue, MiniMaxH3Modality.text.rawValue],
+            videoLatentFrames: 2,
+            latentHeight: 4,
+            latentWidth: 4,
+            audioLatentFrames: 3,
+            keyframeAnchors: []
+        )
+        let targetRowCount = layout.targetAudioRows.count + layout.targetVideoRows.count
+        let hiddenSize = 2
+        let previousValues = [Float](repeating: 1, count: targetRowCount * hiddenSize)
+        var currentValues = previousValues
+
+        for row in 0..<layout.targetAudioRows.count {
+            for hidden in 0..<hiddenSize {
+                currentValues[row * hiddenSize + hidden] = 1.02
+            }
+        }
+        for row in layout.targetAudioRows.count..<targetRowCount {
+            for hidden in 0..<hiddenSize {
+                currentValues[row * hiddenSize + hidden] = 1.05
+            }
+        }
+        let uniform = MiniMaxH3FirstBlockChange.measure(
+            current: MLXArray(currentValues, [1, targetRowCount, hiddenSize]),
+            previous: MLXArray(previousValues, [1, targetRowCount, hiddenSize]),
+            layout: layout
+        )
+        XCTAssertEqual(uniform.videoGlobal, 0.05, accuracy: 1e-5)
+        XCTAssertEqual(uniform.audioGlobal, 0.02, accuracy: 1e-5)
+        XCTAssertEqual(uniform.videoTemporalMaximum, 0.05, accuracy: 1e-5)
+        XCTAssertEqual(uniform.audioTemporalMaximum, 0.02, accuracy: 1e-5)
+
+        currentValues = previousValues
+        let audioFrames = layout.audioLatentFrames
+        for row in [1, audioFrames + 1] {
+            for hidden in 0..<hiddenSize {
+                currentValues[row * hiddenSize + hidden] = 1.3
+            }
+        }
+        let videoStart = layout.targetAudioRows.count
+        let videoRowsPerFrame = layout.targetVideoRows.count / layout.videoLatentFrames
+        for row in videoStart..<(videoStart + videoRowsPerFrame) {
+            for hidden in 0..<hiddenSize {
+                currentValues[row * hiddenSize + hidden] = 1.2
+            }
+        }
+        let localized = MiniMaxH3FirstBlockChange.measure(
+            current: MLXArray(currentValues, [1, targetRowCount, hiddenSize]),
+            previous: MLXArray(previousValues, [1, targetRowCount, hiddenSize]),
+            layout: layout
+        )
+        XCTAssertEqual(localized.videoGlobal, 0.10, accuracy: 1e-5)
+        XCTAssertEqual(localized.videoTemporalMaximum, 0.20, accuracy: 1e-5)
+        XCTAssertEqual(localized.audioGlobal, 0.10, accuracy: 1e-5)
+        XCTAssertEqual(localized.audioTemporalMaximum, 0.30, accuracy: 1e-5)
     }
 
     func testResidentBF16PolicyAccountsForGeometryAndMemory() throws {
@@ -1249,11 +1758,41 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
             warmBlockCount: 1,
             cachedTailResidual: try XCTUnwrap(refreshedReuse.refreshedTailResidual)
         )
+        let adaptivePolicy = MiniMaxH3AdaptiveFirstBlockCachePolicy(
+            globalThreshold: 0.1,
+            temporalThreshold: 0.1
+        )
+        let adaptiveRefresh = model.callWithAdaptiveFirstBlockReuse(
+            videoRows: video,
+            audioRows: audio,
+            context: context,
+            timesteps: timesteps,
+            cachedAdaLN: nil,
+            policy: adaptivePolicy,
+            canConsiderReuse: false,
+            previousFirstResidual: nil,
+            cachedTargetTailResidual: nil
+        )
+        let adaptiveReuse = model.callWithAdaptiveFirstBlockReuse(
+            videoRows: video,
+            audioRows: audio,
+            context: context,
+            timesteps: timesteps,
+            cachedAdaLN: nil,
+            policy: adaptivePolicy,
+            canConsiderReuse: true,
+            previousFirstResidual: try XCTUnwrap(adaptiveRefresh.refreshedFirstResidual),
+            cachedTargetTailResidual: try XCTUnwrap(adaptiveRefresh.refreshedTargetTailResidual)
+        )
         MLX.eval(
             refreshedReuse.output.videoVelocityRows,
             refreshedReuse.output.audioVelocityRows,
             reusedTail.output.videoVelocityRows,
-            reusedTail.output.audioVelocityRows
+            reusedTail.output.audioVelocityRows,
+            adaptiveRefresh.output.videoVelocityRows,
+            adaptiveRefresh.output.audioVelocityRows,
+            adaptiveReuse.output.videoVelocityRows,
+            adaptiveReuse.output.audioVelocityRows
         )
         model.usesBlockwiseCompilation = false
         model.usesLayerwiseEvaluation = true
@@ -1323,6 +1862,40 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
             MLX.abs(
                 refreshedReuse.output.audioVelocityRows
                     - reusedTail.output.audioVelocityRows
+            ).max().item(Float.self),
+            1e-5
+        )
+        XCTAssertFalse(adaptiveRefresh.reusedTail)
+        XCTAssertNil(adaptiveRefresh.change)
+        XCTAssertTrue(adaptiveReuse.reusedTail)
+        let adaptiveChange = try XCTUnwrap(adaptiveReuse.change)
+        XCTAssertEqual(adaptiveChange.videoGlobal, 0, accuracy: 1e-6)
+        XCTAssertEqual(adaptiveChange.audioGlobal, 0, accuracy: 1e-6)
+        XCTAssertLessThanOrEqual(
+            MLX.abs(
+                blockwiseCompiled.videoVelocityRows
+                    - adaptiveRefresh.output.videoVelocityRows
+            ).max().item(Float.self),
+            1e-5
+        )
+        XCTAssertLessThanOrEqual(
+            MLX.abs(
+                blockwiseCompiled.audioVelocityRows
+                    - adaptiveRefresh.output.audioVelocityRows
+            ).max().item(Float.self),
+            1e-5
+        )
+        XCTAssertLessThanOrEqual(
+            MLX.abs(
+                adaptiveRefresh.output.videoVelocityRows
+                    - adaptiveReuse.output.videoVelocityRows
+            ).max().item(Float.self),
+            1e-5
+        )
+        XCTAssertLessThanOrEqual(
+            MLX.abs(
+                adaptiveRefresh.output.audioVelocityRows
+                    - adaptiveReuse.output.audioVelocityRows
             ).max().item(Float.self),
             1e-5
         )

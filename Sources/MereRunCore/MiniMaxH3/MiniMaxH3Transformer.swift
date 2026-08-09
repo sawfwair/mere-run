@@ -116,6 +116,111 @@ struct MiniMaxH3BlockReuseResult {
     let refreshedTailResidual: MLXArray?
 }
 
+struct MiniMaxH3FirstBlockChange: Sendable, Equatable {
+    let videoGlobal: Float
+    let audioGlobal: Float
+    let videoTemporalMaximum: Float
+    let audioTemporalMaximum: Float
+
+    var isFinite: Bool {
+        videoGlobal.isFinite
+            && audioGlobal.isFinite
+            && videoTemporalMaximum.isFinite
+            && audioTemporalMaximum.isFinite
+    }
+
+    static func measure(
+        current: MLXArray,
+        previous: MLXArray,
+        layout: MiniMaxH3PackedLayout
+    ) -> Self {
+        let audioRowCount = layout.targetAudioRows.count
+        let videoRowCount = layout.targetVideoRows.count
+        let totalRowCount = audioRowCount + videoRowCount
+        precondition(current.shape == previous.shape)
+        precondition(current.ndim == 3 && current.dim(0) == 1)
+        precondition(current.dim(1) == totalRowCount)
+        precondition(audioRowCount == layout.audioLatentFrames * 2)
+        precondition(videoRowCount.isMultiple(of: layout.videoLatentFrames))
+
+        let currentFloat = current.asType(.float32)
+        let previousFloat = previous.asType(.float32)
+        let currentAudio = currentFloat[0..., 0..<audioRowCount, 0...]
+        let previousAudio = previousFloat[0..., 0..<audioRowCount, 0...]
+        let currentVideo = currentFloat[0..., audioRowCount..<totalRowCount, 0...]
+        let previousVideo = previousFloat[0..., audioRowCount..<totalRowCount, 0...]
+
+        func relativeGlobal(_ value: MLXArray, _ reference: MLXArray) -> MLXArray {
+            let numerator = MLX.mean(MLX.abs(value - reference))
+            let denominator = MLX.maximum(
+                MLX.mean(MLX.abs(reference)),
+                MLXArray(Float(1e-8))
+            )
+            return numerator / denominator
+        }
+
+        let videoRowsPerFrame = videoRowCount / layout.videoLatentFrames
+        let videoDifference = MLX.abs(currentVideo - previousVideo).reshaped(
+            1,
+            layout.videoLatentFrames,
+            videoRowsPerFrame,
+            current.dim(2)
+        )
+        let videoReference = MLX.abs(previousVideo).reshaped(
+            1,
+            layout.videoLatentFrames,
+            videoRowsPerFrame,
+            current.dim(2)
+        )
+        let videoTemporal = MLX.mean(videoDifference, axes: [0, 2, 3])
+            / MLX.maximum(
+                MLX.mean(videoReference, axes: [0, 2, 3]),
+                MLXArray(Float(1e-8))
+            )
+
+        let audioDifference = MLX.abs(currentAudio - previousAudio).reshaped(
+            1,
+            2,
+            layout.audioLatentFrames,
+            current.dim(2)
+        )
+        let audioReference = MLX.abs(previousAudio).reshaped(
+            1,
+            2,
+            layout.audioLatentFrames,
+            current.dim(2)
+        )
+        let audioTemporal = MLX.mean(audioDifference, axes: [0, 1, 3])
+            / MLX.maximum(
+                MLX.mean(audioReference, axes: [0, 1, 3]),
+                MLXArray(Float(1e-8))
+            )
+
+        let metrics = MLX.stacked([
+            relativeGlobal(currentVideo, previousVideo),
+            relativeGlobal(currentAudio, previousAudio),
+            MLX.max(videoTemporal),
+            MLX.max(audioTemporal),
+        ]).asType(.float32)
+        MLX.eval(metrics)
+        let values = metrics.asArray(Float.self)
+        return .init(
+            videoGlobal: values[0],
+            audioGlobal: values[1],
+            videoTemporalMaximum: values[2],
+            audioTemporalMaximum: values[3]
+        )
+    }
+}
+
+struct MiniMaxH3AdaptiveBlockReuseResult {
+    let output: MiniMaxH3TransformerOutput
+    let refreshedFirstResidual: MLXArray?
+    let refreshedTargetTailResidual: MLXArray?
+    let reusedTail: Bool
+    let change: MiniMaxH3FirstBlockChange?
+}
+
 private final class MiniMaxH3Attention: Module {
     let heads: Int
     let headDimension: Int
@@ -512,9 +617,22 @@ private final class MiniMaxH3TransformerBlock: Module {
         values: MLXArray,
         maximumQueryTokens: Int,
         maximumHeadsPerKernel: Int?,
-        maximumKernelsPerEvaluation: Int
+        maximumKernelsPerEvaluation: Int,
+        dynamicSparseRequest: MiniMaxH3DynamicSparseAttentionRequest? = nil
     ) -> MLXArray {
-        attention.scaledDotProductAttention(
+        if let dynamicSparseRequest,
+           let sparse = MiniMaxH3DynamicSparseAttention.call(
+               queries: queries,
+               keys: keys,
+               values: values,
+               request: dynamicSparseRequest,
+               scale: attention.scale,
+               maximumQueryTokens: maximumQueryTokens,
+               maximumKernelsPerEvaluation: maximumKernelsPerEvaluation
+           ) {
+            return sparse
+        }
+        return attention.scaledDotProductAttention(
             queries: queries,
             keys: keys,
             values: values,
@@ -1061,6 +1179,10 @@ public final class MiniMaxH3Transformer: Module {
     var maximumAttentionQueryTokensPerKernel = 1_024
     var maximumAttentionHeadsPerKernel: Int?
     var maximumAttentionKernelsPerEvaluation = 4
+    var dynamicSparseAttentionPolicy: MiniMaxH3DynamicSparseAttentionPolicy?
+    var dynamicSparseAttentionStepIndex = 0
+    var dynamicSparseAttentionStepCount = 0
+    var dynamicSparseAttentionLogHandler: ((String) -> Void)?
     var blockTimingHandler: ((Int, TimeInterval, Memory.Snapshot) -> Void)?
     @ModuleInfo(key: "video_patch_proj") var videoInput: Linear
     @ModuleInfo(key: "audio_patch_proj") var audioInput: Linear
@@ -1074,6 +1196,7 @@ public final class MiniMaxH3Transformer: Module {
     private let timeFrequencies: MLXArray
     private var compiledBlockRunner: MiniMaxH3TransformerBlock?
     private var compiledBlockForwards: MiniMaxH3CompiledBlockForwards?
+    private var dynamicSparseAttentionGateResults: [String: Bool] = [:]
     private var adaLNWeightsAvailable: Bool
 
     public init(
@@ -1310,6 +1433,98 @@ public final class MiniMaxH3Transformer: Module {
         )
     }
 
+    func callWithAdaptiveFirstBlockReuse(
+        videoRows: MLXArray,
+        audioRows: MLXArray,
+        context: MiniMaxH3TransformerPreparedContext,
+        timesteps: MLXArray,
+        cachedAdaLN: MiniMaxH3AdaLNStep?,
+        policy: MiniMaxH3AdaptiveFirstBlockCachePolicy,
+        canConsiderReuse: Bool,
+        previousFirstResidual: MLXArray?,
+        cachedTargetTailResidual: MLXArray?
+    ) -> MiniMaxH3AdaptiveBlockReuseResult {
+        precondition(blocks.count > 1)
+        let prepared = prepareBlockInput(
+            videoRows: videoRows,
+            audioRows: audioRows,
+            context: context,
+            timesteps: timesteps,
+            cachedAdaLN: cachedAdaLN
+        )
+        let firstHidden = runBlocks(
+            prepared.hidden,
+            range: 0..<1,
+            context: context,
+            timeEmbedding: prepared.timeEmbedding,
+            cachedAdaLN: cachedAdaLN
+        )
+        let targetRows = context.layout.targetAudioRows.lowerBound..<context.layout.targetVideoRows.upperBound
+        let initialTarget = prepared.hidden[0..., targetRows, 0...]
+        let firstTarget = firstHidden[0..., targetRows, 0...]
+        let firstResidual = firstTarget - initialTarget
+
+        let change: MiniMaxH3FirstBlockChange?
+        let reusesTail: Bool
+        if canConsiderReuse,
+           let previousFirstResidual,
+           let cachedTargetTailResidual,
+           previousFirstResidual.shape == firstResidual.shape,
+           cachedTargetTailResidual.shape == firstTarget.shape {
+            let measured = MiniMaxH3FirstBlockChange.measure(
+                current: firstResidual,
+                previous: previousFirstResidual,
+                layout: context.layout
+            )
+            change = measured
+            reusesTail = policy.shouldReuse(change: measured)
+        } else {
+            change = nil
+            reusesTail = false
+        }
+
+        let hidden: MLXArray
+        let refreshedFirstResidual: MLXArray?
+        let refreshedTargetTailResidual: MLXArray?
+        if reusesTail, let cachedTargetTailResidual {
+            let completedTarget = firstTarget + cachedTargetTailResidual
+            hidden = targetRows.lowerBound == 0
+                ? completedTarget
+                : MLX.concatenated([
+                    firstHidden[0..., 0..<targetRows.lowerBound, 0...],
+                    completedTarget,
+                ], axis: 1)
+            MLX.eval(hidden)
+            refreshedFirstResidual = nil
+            refreshedTargetTailResidual = nil
+        } else {
+            hidden = runBlocks(
+                firstHidden,
+                range: 1..<blocks.count,
+                context: context,
+                timeEmbedding: prepared.timeEmbedding,
+                cachedAdaLN: cachedAdaLN
+            )
+            let targetTailResidual = hidden[0..., targetRows, 0...] - firstTarget
+            MLX.eval(firstResidual, targetTailResidual)
+            refreshedFirstResidual = firstResidual
+            refreshedTargetTailResidual = targetTailResidual
+        }
+
+        return MiniMaxH3AdaptiveBlockReuseResult(
+            output: finalize(
+                hidden,
+                context: context,
+                timeEmbedding: prepared.timeEmbedding,
+                cachedAdaLN: cachedAdaLN
+            ),
+            refreshedFirstResidual: refreshedFirstResidual,
+            refreshedTargetTailResidual: refreshedTargetTailResidual,
+            reusedTail: reusesTail,
+            change: change
+        )
+    }
+
     private func prepareBlockInput(
         videoRows: MLXArray,
         audioRows: MLXArray,
@@ -1373,13 +1588,21 @@ public final class MiniMaxH3Transformer: Module {
                 let compiled = compiledBlockForward(for: block)
                 let projectedAttention = compiled.attentionProjection(attentionInputs)
                 MLX.eval(projectedAttention)
+                let dynamicSparseRequest = qualifiedDynamicSparseAttentionRequest(
+                    queries: projectedAttention[0],
+                    keys: projectedAttention[1],
+                    values: projectedAttention[2],
+                    layerIndex: index,
+                    layout: context.layout
+                )
                 let attended = block.scaledDotProductAttention(
                     queries: projectedAttention[0],
                     keys: projectedAttention[1],
                     values: projectedAttention[2],
                     maximumQueryTokens: maximumAttentionQueryTokensPerKernel,
                     maximumHeadsPerKernel: maximumAttentionHeadsPerKernel,
-                    maximumKernelsPerEvaluation: maximumAttentionKernelsPerEvaluation
+                    maximumKernelsPerEvaluation: maximumAttentionKernelsPerEvaluation,
+                    dynamicSparseRequest: dynamicSparseRequest
                 )
                 if usesFusedPostAttention {
                     var postAttentionInputs = [
@@ -1434,6 +1657,53 @@ public final class MiniMaxH3Transformer: Module {
             }
         }
         return hidden
+    }
+
+    private func qualifiedDynamicSparseAttentionRequest(
+        queries: MLXArray,
+        keys: MLXArray,
+        values: MLXArray,
+        layerIndex: Int,
+        layout: MiniMaxH3PackedLayout
+    ) -> MiniMaxH3DynamicSparseAttentionRequest? {
+        guard let request = dynamicSparseAttentionPolicy?.request(
+            stepIndex: dynamicSparseAttentionStepIndex,
+            stepCount: dynamicSparseAttentionStepCount,
+            layerIndex: layerIndex,
+            sequenceLength: layout.sequenceLength,
+            prefixTokenCount: layout.targetVideoRows.lowerBound
+        ) else { return nil }
+
+        let gateShape = "\(queries.dim(1))x\(queries.dim(2))x\(request.prefixTokenCount)"
+        let gateKey = "\(gateShape):\(queries.dtype):\(keys.dtype):\(values.dtype)"
+        if dynamicSparseAttentionGateResults[gateKey] == nil {
+            let gate = MiniMaxH3DynamicSparseAttention.denseRouteGate(
+                queries: queries,
+                keys: keys,
+                values: values,
+                queryStart: request.prefixTokenCount,
+                scale: 1 / sqrt(Float(configuration.attentionHeadDimension))
+            )
+            dynamicSparseAttentionGateResults[gateKey] = gate?.passed ?? false
+            if let gate {
+                dynamicSparseAttentionLogHandler?(String(
+                    format: "dynamic_sparse_gate=%@ shape=%@ max_abs=%.6g mean_abs=%.6g rel_l2=%.6g",
+                    gate.passed ? "pass" : "fail",
+                    gateShape,
+                    gate.maximumAbsoluteError,
+                    gate.meanAbsoluteError,
+                    gate.relativeL2Error
+                ))
+            } else {
+                dynamicSparseAttentionLogHandler?(
+                    "dynamic_sparse_gate=unavailable shape=\(gateShape) "
+                        + "q_dtype=\(queries.dtype) k_dtype=\(keys.dtype) "
+                        + "v_dtype=\(values.dtype) device="
+                        + String(describing: Device.defaultDevice().deviceType)
+                )
+            }
+        }
+        return dynamicSparseAttentionGateResults[gateKey] == true ? request : nil
     }
 
     private func finalize(

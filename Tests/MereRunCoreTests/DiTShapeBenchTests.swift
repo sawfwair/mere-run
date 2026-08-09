@@ -720,6 +720,154 @@ final class DiTShapeBenchTests: XCTestCase {
         }
     }
 
+    /// Compares H3's production chunked dense attention with the native Metal
+    /// dynamic sparse path, including summary construction, routing, prefix
+    /// sink, and centroid correction. Configure with
+    /// `MERERUN_H3_SPARSE_BENCH_ROWS`, `MERERUN_H3_SPARSE_BENCH_PREFIX`,
+    /// `MERERUN_H3_SPARSE_BENCH_TAU`, `MERERUN_H3_SPARSE_BENCH_DTYPE`, and
+    /// `MERERUN_H3_SPARSE_BENCH_ROUNDS`.
+    func testMiniMaxH3DynamicSparseAttention() throws {
+        try benchGate()
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip("MiniMax-H3 dynamic sparse benchmark requires a Metal GPU.")
+        }
+        let environment = ProcessInfo.processInfo.environment
+        let rows = max(
+            256,
+            Int(environment["MERERUN_H3_SPARSE_BENCH_ROWS"] ?? "") ?? 12_930
+        )
+        let heads = max(
+            1,
+            Int(environment["MERERUN_H3_SPARSE_BENCH_HEADS"] ?? "") ?? 56
+        )
+        let prefix = min(
+            rows - 64,
+            max(64, Int(environment["MERERUN_H3_SPARSE_BENCH_PREFIX"] ?? "") ?? 951)
+        )
+        let tau = max(
+            0,
+            Float(environment["MERERUN_H3_SPARSE_BENCH_TAU"] ?? "") ?? 1
+        )
+        let queryChunk = max(
+            1,
+            Int(environment["MERERUN_H3_SPARSE_BENCH_QUERY_TOKENS"] ?? "") ?? 640
+        )
+        let rounds = max(
+            1,
+            Int(environment["MERERUN_H3_SPARSE_BENCH_ROUNDS"] ?? "") ?? 2
+        )
+        let dtype: DType = environment["MERERUN_H3_SPARSE_BENCH_DTYPE"] == "fp32"
+            ? .float32
+            : .bfloat16
+        let dimension = MiniMaxH3DynamicSparseAttention.headDimension
+        let scale = 1 / sqrt(Float(dimension))
+        MLXRandom.seed(2_026)
+        let shape = [1, heads, rows, dimension]
+        let queries = MLXRandom.normal(shape).asType(dtype)
+        let keys = MLXRandom.normal(shape).asType(dtype)
+        let values = MLXRandom.normal(shape).asType(dtype)
+        MLX.eval(queries, keys, values)
+
+        let request = MiniMaxH3DynamicSparseAttentionRequest(
+            prefixTokenCount: prefix,
+            thresholdStandardDeviations: tau
+        )
+        func sparse() -> MLXArray {
+            MiniMaxH3DynamicSparseAttention.call(
+                queries: queries,
+                keys: keys,
+                values: values,
+                request: request,
+                scale: scale,
+                maximumQueryTokens: queryChunk,
+                maximumKernelsPerEvaluation: 1
+            )!
+        }
+        func dense() -> MLXArray {
+            var outputs: [MLXArray] = []
+            for start in stride(from: 0, to: rows, by: queryChunk) {
+                let end = min(start + queryChunk, rows)
+                let output = MLXFast.scaledDotProductAttention(
+                    queries: queries[0..., 0..., start..<end, 0...],
+                    keys: keys,
+                    values: values,
+                    scale: scale,
+                    mask: .none
+                )
+                MLX.eval(output)
+                outputs.append(output)
+            }
+            return MLX.concatenated(outputs, axis: 2)
+        }
+
+        let gate = try XCTUnwrap(MiniMaxH3DynamicSparseAttention.denseRouteGate(
+            queries: queries,
+            keys: keys,
+            values: values,
+            queryStart: prefix,
+            scale: scale
+        ))
+        XCTAssertTrue(gate.passed)
+        let plan = MiniMaxH3DynamicSparseAttention.makeRoutePlan(
+            queries: queries,
+            keys: keys,
+            values: values,
+            queryStart: prefix,
+            thresholdStandardDeviations: tau,
+            scale: scale
+        )
+        let routeDensity = plan.routes.asType(.float32).mean().item(Float.self)
+
+        MLX.eval(dense(), sparse())
+        var denseTotal = 0.0
+        var sparseTotal = 0.0
+        for round in 0..<rounds {
+            if round.isMultiple(of: 2) {
+                var started = CFAbsoluteTimeGetCurrent()
+                MLX.eval(dense())
+                denseTotal += CFAbsoluteTimeGetCurrent() - started
+                started = CFAbsoluteTimeGetCurrent()
+                MLX.eval(sparse())
+                sparseTotal += CFAbsoluteTimeGetCurrent() - started
+            } else {
+                var started = CFAbsoluteTimeGetCurrent()
+                MLX.eval(sparse())
+                sparseTotal += CFAbsoluteTimeGetCurrent() - started
+                started = CFAbsoluteTimeGetCurrent()
+                MLX.eval(dense())
+                denseTotal += CFAbsoluteTimeGetCurrent() - started
+            }
+        }
+        let denseSeconds = denseTotal / Double(rounds)
+        let sparseSeconds = sparseTotal / Double(rounds)
+        let reference = dense().asType(.float32)
+        let candidate = sparse().asType(.float32)
+        let delta = candidate - reference
+        let maximumAbsoluteError = MLX.max(MLX.abs(delta)).item(Float.self)
+        let relativeL2Error = MLX.sqrt(
+            MLX.sum(delta * delta)
+                / MLX.maximum(MLX.sum(reference * reference), MLXArray(Float(1e-12)))
+        ).item(Float.self)
+        print(String(
+            format: "[h3-lab] dynamic-sparse rows=%d prefix=%d heads=%d dtype=%@ tau=%.2f "
+                + "route_density=%.4f dense_ms=%.0f sparse_ms=%.0f speedup=%.3fx "
+                + "max_abs=%.6g rel_l2=%.6g gate_rel_l2=%.6g",
+            rows,
+            prefix,
+            heads,
+            String(describing: dtype),
+            tau,
+            routeDensity,
+            denseSeconds * 1_000,
+            sparseSeconds * 1_000,
+            denseSeconds / sparseSeconds,
+            maximumAbsoluteError,
+            relativeL2Error,
+            gate.relativeL2Error
+        ))
+        XCTAssertTrue(relativeL2Error.isFinite)
+    }
+
     /// Searches exact H3 attention schedules across query chunks, head chunks,
     /// and Metal evaluation batches. Every candidate is compared numerically
     /// with the production 2,048-query/56-head/4-kernel schedule; this is a
