@@ -1687,11 +1687,14 @@ public final class MiniMaxH3Transformer: Module {
             dynamicSparseAttentionGateResults[gateKey] = gate?.passed ?? false
             if let gate {
                 dynamicSparseAttentionLogHandler?(String(
-                    format: "dynamic_sparse_gate=%@ shape=%@ max_abs=%.6g mean_abs=%.6g rel_l2=%.6g",
+                    format: "dynamic_sparse_gate=%@ shape=%@ max_abs=%.6g mean_abs=%.6g "
+                        + "max_rel=%.6g mean_rel=%.6g rel_l2=%.6g",
                     gate.passed ? "pass" : "fail",
                     gateShape,
                     gate.maximumAbsoluteError,
                     gate.meanAbsoluteError,
+                    gate.maximumRelativeError,
+                    gate.meanRelativeError,
                     gate.relativeL2Error
                 ))
             } else {
