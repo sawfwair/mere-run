@@ -5644,6 +5644,10 @@ protocol LTXUnifiedAVTransformerRuntime: Module {
     ) -> (videoVelocity: MLXArray, audioVelocity: MLXArray)
 }
 
+extension LTXUnifiedAVTransformerRuntime {
+    func beginDenoisingStep(index _: Int, count _: Int) {}
+}
+
 private final class LTXUnifiedAVTransformer: Module, LTXUnifiedAVTransformerRuntime {
     let videoDim = 4096
     let audioDim = 2048

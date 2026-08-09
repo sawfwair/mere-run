@@ -167,8 +167,8 @@ final class Cosmos3PackedAttention: Module {
             generationCosine: MLXArray,
             generationSine: MLXArray
         ),
-        dynamicSparseRuntime: DynamicSparseAttentionRuntime?,
-        layerIndex: Int
+        dynamicSparseRuntime: DynamicSparseAttentionRuntime? = nil,
+        layerIndex: Int = 0
     ) -> (understanding: MLXArray, generation: MLXArray) {
         var qUnderstanding = understandingQuery(understanding)
             .reshaped(-1, attentionHeads, headDimension)
@@ -387,8 +387,8 @@ final class Cosmos3DecoderLayer: Module {
             generationCosine: MLXArray,
             generationSine: MLXArray
         ),
-        dynamicSparseRuntime: DynamicSparseAttentionRuntime?,
-        layerIndex: Int
+        dynamicSparseRuntime: DynamicSparseAttentionRuntime? = nil,
+        layerIndex: Int = 0
     ) -> (understanding: MLXArray, generation: MLXArray) {
         let attended = attention(
             understanding: understandingInputNorm(understanding),
