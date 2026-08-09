@@ -654,6 +654,39 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertTrue(actionArguments?.contains("maximum") == true)
     }
 
+    func testMiniMaxH3PreflightAllowsAdapterAttentionAcceleration() throws {
+        let adapter = FileManager.default.temporaryDirectory
+            .appendingPathComponent("h3-adapter-\(UUID().uuidString).safetensors")
+        XCTAssertTrue(FileManager.default.createFile(
+            atPath: adapter.path,
+            contents: Data()
+        ))
+        defer { try? FileManager.default.removeItem(at: adapter) }
+
+        let output = makeTempOutput(name: "h3-adapter-maximum.mp4")
+        let cmd = try VideoGenerate.parse([
+            "a cinematic dialogue scene",
+            "--model", ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue,
+            "--h3-adapter", adapter.path,
+            "--h3-acceleration", "maximum",
+            "--preflight",
+            "--json",
+        ])
+
+        let envelope = cmd.makePreflightEnvelope(
+            outputURL: output,
+            fileManager: .default,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertFalse(envelope.diagnostics.contains {
+            $0.id == "h3_adapter_acceleration_conflict"
+        })
+        XCTAssertEqual(envelope.result.plan.resolvedSteps, 5)
+        XCTAssertEqual(envelope.result.plan.h3AccelerationMode, "maximum")
+        XCTAssertEqual(envelope.result.plan.h3Adapter, adapter.path)
+    }
+
     func testVideoGenerateParsesStartAndEndKeyframes() throws {
         let cmd = try VideoGenerate.parse([
             "a flower opens from bud to bloom",

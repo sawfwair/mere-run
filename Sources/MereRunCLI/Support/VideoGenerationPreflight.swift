@@ -522,14 +522,6 @@ struct VideoGenerationPreflightAnalyzer {
                 message: "--h3-adapter-strength must be > 0."
             ))
         }
-        if input.h3Adapter != nil, input.h3AccelerationMode != MiniMaxH3AccelerationMode.quality.rawValue {
-            diagnostics.append(PreflightDiagnostic(
-                id: "h3_adapter_acceleration_conflict",
-                severity: .blocker,
-                title: "MiniMax-H3 Turbo already distills the denoise schedule",
-                message: "Use --h3-acceleration quality with --h3-adapter."
-            ))
-        }
         if input.h3Adapter != nil, !input.references.isEmpty {
             diagnostics.append(PreflightDiagnostic(
                 id: "h3_adapter_ref2va_unsupported",
