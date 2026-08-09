@@ -726,7 +726,7 @@ final class DiTShapeBenchTests: XCTestCase {
     /// `MERERUN_H3_SPARSE_BENCH_ROWS`, `MERERUN_H3_SPARSE_BENCH_PREFIX`,
     /// `MERERUN_H3_SPARSE_BENCH_TAU`, `MERERUN_H3_SPARSE_BENCH_DTYPE`, and
     /// `MERERUN_H3_SPARSE_BENCH_ROUNDS`.
-    func testMiniMaxH3DynamicSparseAttention() throws {
+    func testDynamicSparseAttention() throws {
         try benchGate()
         guard Device.defaultDevice().deviceType == .gpu else {
             throw XCTSkip("MiniMax-H3 dynamic sparse benchmark requires a Metal GPU.")
@@ -759,7 +759,7 @@ final class DiTShapeBenchTests: XCTestCase {
         let dtype: DType = environment["MERERUN_H3_SPARSE_BENCH_DTYPE"] == "fp32"
             ? .float32
             : .bfloat16
-        let dimension = MiniMaxH3DynamicSparseAttention.headDimension
+        let dimension = DynamicSparseAttention.headDimension
         let scale = 1 / sqrt(Float(dimension))
         MLXRandom.seed(2_026)
         let shape = [1, heads, rows, dimension]
@@ -768,12 +768,12 @@ final class DiTShapeBenchTests: XCTestCase {
         let values = MLXRandom.normal(shape).asType(dtype)
         MLX.eval(queries, keys, values)
 
-        let request = MiniMaxH3DynamicSparseAttentionRequest(
+        let request = DynamicSparseAttentionRequest(
             prefixTokenCount: prefix,
             thresholdStandardDeviations: tau
         )
         func sparse() -> MLXArray {
-            MiniMaxH3DynamicSparseAttention.call(
+            DynamicSparseAttention.call(
                 queries: queries,
                 keys: keys,
                 values: values,
@@ -800,7 +800,7 @@ final class DiTShapeBenchTests: XCTestCase {
             return MLX.concatenated(outputs, axis: 2)
         }
 
-        let gate = try XCTUnwrap(MiniMaxH3DynamicSparseAttention.denseRouteGate(
+        let gate = try XCTUnwrap(DynamicSparseAttention.denseRouteGate(
             queries: queries,
             keys: keys,
             values: values,
@@ -808,7 +808,7 @@ final class DiTShapeBenchTests: XCTestCase {
             scale: scale
         ))
         XCTAssertTrue(gate.passed)
-        let plan = MiniMaxH3DynamicSparseAttention.makeRoutePlan(
+        let plan = DynamicSparseAttention.makeRoutePlan(
             queries: queries,
             keys: keys,
             values: values,

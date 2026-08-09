@@ -63,7 +63,7 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
             0, 0,
             3, 0,
         ]).reshaped(1, 1, 4, 2)
-        let routes = MiniMaxH3DynamicSparseAttention.routesForTesting(
+        let routes = DynamicSparseAttention.routesForTesting(
             queryCentroids: queryCentroids,
             keyCentroids: keyCentroids,
             thresholdStandardDeviations: 0
@@ -77,18 +77,18 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
             throw XCTSkip("Dynamic sparse attention Metal parity requires a GPU.")
         }
         MLXRandom.seed(41)
-        let shape = [1, 2, 256, MiniMaxH3DynamicSparseAttention.headDimension]
+        let shape = [1, 2, 256, DynamicSparseAttention.headDimension]
         let queries = (MLXRandom.normal(shape) * Float(0.2)).asType(.bfloat16)
         let keys = (MLXRandom.normal(shape) * Float(0.2)).asType(.bfloat16)
         let values = MLXRandom.normal(shape).asType(.bfloat16)
         MLX.eval(queries, keys, values)
 
-        let gate = try XCTUnwrap(MiniMaxH3DynamicSparseAttention.denseRouteGate(
+        let gate = try XCTUnwrap(DynamicSparseAttention.denseRouteGate(
             queries: queries,
             keys: keys,
             values: values,
             queryStart: 128,
-            scale: 1 / sqrt(Float(MiniMaxH3DynamicSparseAttention.headDimension))
+            scale: 1 / sqrt(Float(DynamicSparseAttention.headDimension))
         ))
         XCTAssertTrue(gate.passed)
         XCTAssertLessThanOrEqual(gate.relativeL2Error, 0.005)
@@ -99,18 +99,18 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
             throw XCTSkip("Dynamic sparse attention FP32 gate requires a GPU.")
         }
         MLXRandom.seed(2_026_081)
-        let shape = [1, 2, 256, MiniMaxH3DynamicSparseAttention.headDimension]
+        let shape = [1, 2, 256, DynamicSparseAttention.headDimension]
         let queries = MLXRandom.normal(shape)
         let keys = MLXRandom.normal(shape)
         let values = MLXRandom.normal(shape)
         MLX.eval(queries, keys, values)
 
-        let gate = try XCTUnwrap(MiniMaxH3DynamicSparseAttention.denseRouteGate(
+        let gate = try XCTUnwrap(DynamicSparseAttention.denseRouteGate(
             queries: queries,
             keys: keys,
             values: values,
             queryStart: 64,
-            scale: 1 / sqrt(Float(MiniMaxH3DynamicSparseAttention.headDimension))
+            scale: 1 / sqrt(Float(DynamicSparseAttention.headDimension))
         ))
         XCTAssertTrue(gate.passed)
     }
@@ -122,7 +122,7 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         MLXRandom.seed(42)
         let heads = 2
         let tokens = 256
-        let dimension = MiniMaxH3DynamicSparseAttention.headDimension
+        let dimension = DynamicSparseAttention.headDimension
         let shape = [1, heads, tokens, dimension]
         let queries = (MLXRandom.normal(shape) * Float(0.2)).asType(.bfloat16)
         let keys = (MLXRandom.normal(shape) * Float(0.2)).asType(.bfloat16)
@@ -130,7 +130,7 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         let routes = MLXArray.zeros([1, heads, 1, 4], dtype: .uint8)
         let scale = 1 / sqrt(Float(dimension))
         let candidate = try XCTUnwrap(
-            MiniMaxH3DynamicSparseAttention.sparseOutputForTesting(
+            DynamicSparseAttention.sparseOutputForTesting(
                 queries: queries,
                 keys: keys,
                 values: values,

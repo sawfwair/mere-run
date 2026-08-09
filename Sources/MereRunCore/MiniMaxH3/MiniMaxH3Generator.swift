@@ -89,15 +89,15 @@ public enum MiniMaxH3AccelerationMode: String, Sendable, Hashable {
         }
     }
 
-    var dynamicSparseAttentionPolicy: MiniMaxH3DynamicSparseAttentionPolicy? {
+    var dynamicSparseAttentionPolicy: DynamicSparseAttentionPolicy? {
         switch self {
         case .quality: nil
         case .balanced:
-            MiniMaxH3DynamicSparseAttentionPolicy(
+            DynamicSparseAttentionPolicy(
                 thresholdStandardDeviations: 0.75
             )
         case .maximum:
-            MiniMaxH3DynamicSparseAttentionPolicy(
+            DynamicSparseAttentionPolicy(
                 thresholdStandardDeviations: 1
             )
         }
@@ -886,7 +886,7 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         let configuredDynamicSparseAttentionPolicy = environment["MERERUN_H3_DYNAMIC_SPARSE"] == "0"
             ? nil
             : accelerationMode.dynamicSparseAttentionPolicy.map { policy in
-                MiniMaxH3DynamicSparseAttentionPolicy(
+                DynamicSparseAttentionPolicy(
                     thresholdStandardDeviations: Float(
                         environment["MERERUN_H3_DYNAMIC_SPARSE_TAU"] ?? ""
                     ).flatMap { $0 >= 0 ? $0 : nil } ?? policy.thresholdStandardDeviations,

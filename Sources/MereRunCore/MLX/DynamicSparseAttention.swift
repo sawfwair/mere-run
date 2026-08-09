@@ -2,12 +2,12 @@ import Foundation
 import MLX
 import MLXFast
 
-struct MiniMaxH3DynamicSparseAttentionRequest: Sendable, Equatable {
+struct DynamicSparseAttentionRequest: Sendable, Equatable {
     let prefixTokenCount: Int
     let thresholdStandardDeviations: Float
 }
 
-struct MiniMaxH3DynamicSparseAttentionPolicy: Sendable, Equatable {
+struct DynamicSparseAttentionPolicy: Sendable, Equatable {
     let thresholdStandardDeviations: Float
     let minimumSequenceLength: Int
     let denseLeadingStepFraction: Float
@@ -39,13 +39,13 @@ struct MiniMaxH3DynamicSparseAttentionPolicy: Sendable, Equatable {
         layerIndex: Int,
         sequenceLength: Int,
         prefixTokenCount: Int
-    ) -> MiniMaxH3DynamicSparseAttentionRequest? {
+    ) -> DynamicSparseAttentionRequest? {
         guard stepCount > 0,
               stepIndex >= 0,
               stepIndex < stepCount,
               layerIndex >= denseLeadingLayerCount,
               sequenceLength >= minimumSequenceLength,
-              prefixTokenCount > 0,
+              prefixTokenCount >= 0,
               prefixTokenCount < sequenceLength else { return nil }
         let denseLeadingStepCount = Int(
             ceil(Float(stepCount) * denseLeadingStepFraction)
@@ -59,23 +59,24 @@ struct MiniMaxH3DynamicSparseAttentionPolicy: Sendable, Equatable {
     }
 }
 
-struct MiniMaxH3DynamicSparseAttentionGate: Sendable, Equatable {
+struct DynamicSparseAttentionGate: Sendable, Equatable {
     let maximumAbsoluteError: Float
     let meanAbsoluteError: Float
     let relativeL2Error: Float
     let passed: Bool
 }
 
-/// H3-specific dynamic block-sparse attention for Apple GPUs.
+/// Dynamic block-sparse attention for long, batch-one diffusion sequences on Apple GPUs.
 ///
 /// The implementation independently applies the on-the-fly sparsification
-/// ideas described by Sol-Attn to H3's packed modality layout. Every 64-token
+/// ideas described by Sol-Attn. Every 64-token
 /// block is represented by a key centroid and a summed value. Query-dependent
 /// routing retains high-score blocks exactly; skipped blocks contribute through
 /// those summaries in the same online-softmax accumulator. Prefix keys and
-/// adjacent video blocks are always exact, while prefix queries remain on MLX's
-/// dense fused SDPA path.
-enum MiniMaxH3DynamicSparseAttention {
+/// adjacent blocks are always exact, while any prefix queries remain on MLX's
+/// dense fused SDPA path. Model integrations own admission, dense boundaries,
+/// layout permutation, and numerical acceptance.
+enum DynamicSparseAttention {
     static let blockSize = 64
     static let headDimension = 128
 
@@ -91,7 +92,7 @@ enum MiniMaxH3DynamicSparseAttention {
         queries: MLXArray,
         keys: MLXArray,
         values: MLXArray,
-        request: MiniMaxH3DynamicSparseAttentionRequest,
+        request: DynamicSparseAttentionRequest,
         scale: Float,
         maximumQueryTokens: Int,
         maximumKernelsPerEvaluation: Int
@@ -126,14 +127,6 @@ enum MiniMaxH3DynamicSparseAttention {
             thresholdStandardDeviations: request.thresholdStandardDeviations,
             scale: scale
         )
-        let densePrefix = MLXFast.scaledDotProductAttention(
-            queries: queries[0..., 0..., 0..<sparseQueryStart, 0...],
-            keys: keys,
-            values: values,
-            scale: scale,
-            mask: .none
-        )
-
         let targetCount = queries.dim(2) - sparseQueryStart
         // Dense SDPA chunks for intermediate-memory control. This kernel has
         // no quadratic score allocation, so larger query submissions keep the
@@ -142,10 +135,21 @@ enum MiniMaxH3DynamicSparseAttention {
             16_384,
             (maximumQueryTokens / blockSize) * blockSize
         )
-        var outputs = [densePrefix]
+        var outputs: [MLXArray] = []
         outputs.reserveCapacity(1 + (targetCount + sparseQueryChunk - 1) / sparseQueryChunk)
-        var pending: [MLXArray] = [densePrefix]
+        var pending: [MLXArray] = []
         pending.reserveCapacity(maximumKernelsPerEvaluation)
+        if sparseQueryStart > 0 {
+            let densePrefix = MLXFast.scaledDotProductAttention(
+                queries: queries[0..., 0..., 0..<sparseQueryStart, 0...],
+                keys: keys,
+                values: values,
+                scale: scale,
+                mask: .none
+            )
+            outputs.append(densePrefix)
+            pending.append(densePrefix)
+        }
         for localStart in stride(from: 0, to: targetCount, by: sparseQueryChunk) {
             let count = min(sparseQueryChunk, targetCount - localStart)
             let sparse = sparseKernelOutput(
@@ -172,7 +176,8 @@ enum MiniMaxH3DynamicSparseAttention {
         if !pending.isEmpty {
             MLX.eval(pending)
         }
-        return MLX.concatenated(outputs, axis: 2)
+        precondition(!outputs.isEmpty)
+        return outputs.count == 1 ? outputs[0] : MLX.concatenated(outputs, axis: 2)
     }
 
     static func denseRouteGate(
@@ -182,7 +187,7 @@ enum MiniMaxH3DynamicSparseAttention {
         queryStart: Int,
         scale: Float,
         sampleQueryCount: Int = 8
-    ) -> MiniMaxH3DynamicSparseAttentionGate? {
+    ) -> DynamicSparseAttentionGate? {
         guard supports(
             queries: queries,
             keys: keys,
@@ -397,7 +402,7 @@ enum MiniMaxH3DynamicSparseAttention {
         )
         return (outputs[0], outputs[1], outputs[2])
         #else
-        preconditionFailure("MiniMax-H3 sparse summaries require Metal")
+        preconditionFailure("Dynamic sparse summaries require Metal")
         #endif
     }
 
@@ -439,13 +444,13 @@ enum MiniMaxH3DynamicSparseAttention {
             outputDTypes: [.bfloat16]
         )[0]
         #else
-        preconditionFailure("MiniMax-H3 sparse attention requires Metal")
+        preconditionFailure("Dynamic sparse attention requires Metal")
         #endif
     }
 
     #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
     private static let summaryKernel = MLXFast.metalKernel(
-        name: "mere_h3_dynamic_sparse_summaries_bf16_d128_b64_v1",
+        name: "mere_dynamic_sparse_summaries_bf16_d128_b64_v1",
         inputNames: ["queries", "keys", "values"],
         outputNames: ["query_centroids", "key_centroids", "value_sums"],
         source: """
@@ -478,7 +483,7 @@ enum MiniMaxH3DynamicSparseAttention {
     )
 
     private static let attentionKernel = MLXFast.metalKernel(
-        name: "mere_h3_dynamic_sparse_online_softmax_bf16_d128_b64_mma_v5",
+        name: "mere_dynamic_sparse_online_softmax_bf16_d128_b64_mma_v5",
         inputNames: [
             "queries", "keys", "values", "key_centroids", "value_sums",
             "routes", "scale_value",
