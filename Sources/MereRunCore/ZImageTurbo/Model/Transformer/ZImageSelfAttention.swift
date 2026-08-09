@@ -38,7 +38,10 @@ final class ZImageSelfAttention: Module {
   func callAsFunction(
     _ x: MLXArray,
     attnMask: MLXArray? = nil,
-    freqsCis: MLXArray? = nil
+    freqsCis: MLXArray? = nil,
+    dynamicSparseRuntime: DynamicSparseAttentionRuntime? = nil,
+    layerIndex: Int = 0,
+    exactSuffixTokenCount: Int = 0
   ) -> MLXArray {
     let batch = x.dim(0)
     let seqLen = x.dim(1)
@@ -59,13 +62,51 @@ final class ZImageSelfAttention: Module {
     q = q.transposed(0, 2, 1, 3)
     k = k.transposed(0, 2, 1, 3)
 
-    let attn = MLXFast.scaledDotProductAttention(
+    let sparse: MLXArray? = attnMask == nil ? dynamicSparseRuntime.flatMap { runtime in
+      if exactSuffixTokenCount == 0 {
+        return runtime.call(
+          queries: q,
+          keys: k,
+          values: v,
+          layerIndex: layerIndex,
+          prefixTokenCount: 0,
+          scale: scale
+        )
+      }
+      guard exactSuffixTokenCount > 0, exactSuffixTokenCount < seqLen else { return nil }
+      let tailStart = seqLen - exactSuffixTokenCount
+      let reorderedQ = MLX.concatenated([
+        q[0..., 0..., tailStart..., 0...],
+        q[0..., 0..., 0..<tailStart, 0...],
+      ], axis: 2)
+      let reorderedK = MLX.concatenated([
+        k[0..., 0..., tailStart..., 0...],
+        k[0..., 0..., 0..<tailStart, 0...],
+      ], axis: 2)
+      let reorderedV = MLX.concatenated([
+        v[0..., 0..., tailStart..., 0...],
+        v[0..., 0..., 0..<tailStart, 0...],
+      ], axis: 2)
+      guard let reorderedOutput = runtime.call(
+        queries: reorderedQ,
+        keys: reorderedK,
+        values: reorderedV,
+        layerIndex: layerIndex,
+        prefixTokenCount: exactSuffixTokenCount,
+        scale: scale
+      ) else { return nil }
+      return MLX.concatenated([
+        reorderedOutput[0..., 0..., exactSuffixTokenCount..., 0...],
+        reorderedOutput[0..., 0..., 0..<exactSuffixTokenCount, 0...],
+      ], axis: 2)
+    } : nil
+    let attn = (sparse ?? MLXFast.scaledDotProductAttention(
       queries: q,
       keys: k,
       values: v,
       scale: scale,
       mask: attnMask
-    ).transposed(0, 2, 1, 3).reshaped(batch, seqLen, dim)
+    )).transposed(0, 2, 1, 3).reshaped(batch, seqLen, dim)
 
     return toOut[0](attn)
   }

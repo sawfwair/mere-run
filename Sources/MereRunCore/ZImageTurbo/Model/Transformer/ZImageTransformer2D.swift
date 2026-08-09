@@ -13,6 +13,7 @@ final class ZImageModuleTable2_1<T: Module>: Module {
 
 public final class ZImageTransformer2DModel: Module {
   public let configuration: ZImageTurboTransformerConfig
+  private let dynamicSparseRuntime: DynamicSparseAttentionRuntime?
   @ModuleInfo(key: "t_embedder") var tEmbedder: ZImageTimestepEmbedder
   @ModuleInfo(key: "all_x_embedder") var allXEmbedder: ZImageModuleTable2_1<Linear>
   @ModuleInfo(key: "all_final_layer") var allFinalLayer: ZImageModuleTable2_1<ZImageFinalLayer>
@@ -35,6 +36,7 @@ public final class ZImageTransformer2DModel: Module {
 
   public init(configuration: ZImageTurboTransformerConfig) {
     self.configuration = configuration
+    self.dynamicSparseRuntime = DynamicSparseAttentionRuntime.configured(model: .zImage)
     let outSize = min(configuration.dim, 256)
     self._tEmbedder.wrappedValue = ZImageTimestepEmbedder(outSize: outSize, midSize: 1024)
 
@@ -109,6 +111,10 @@ public final class ZImageTransformer2DModel: Module {
     self._xPadToken.wrappedValue = MLX.zeros([1, configuration.dim], dtype: .bfloat16)
     self._capPadToken.wrappedValue = MLX.zeros([1, configuration.dim], dtype: .bfloat16)
     super.init()
+  }
+
+  func beginDenoisingStep(index: Int, count: Int) {
+    dynamicSparseRuntime?.beginStep(index: index, count: count)
   }
 
   public func clearCache() {
@@ -225,7 +231,7 @@ public final class ZImageTransformer2DModel: Module {
     }
 
     var noiseStream = image
-    for block in noiseRefiner {
+    for (index, block) in noiseRefiner.enumerated() {
       if gradientCheckpointing {
         let blockRef = block
         let imgFreqs = cached.imgFreqs
@@ -239,7 +245,9 @@ public final class ZImageTransformer2DModel: Module {
           noiseStream,
           attnMask: nil,
           freqsCis: cached.imgFreqs,
-          adalnInput: tEmb
+          adalnInput: tEmb,
+          dynamicSparseRuntime: dynamicSparseRuntime,
+          layerIndex: index
         )
       }
     }
@@ -265,7 +273,7 @@ public final class ZImageTransformer2DModel: Module {
 
     var unified = MLX.concatenated([noiseStream, capStream], axis: 1)
 
-    for block in layers {
+    for (index, block) in layers.enumerated() {
       if gradientCheckpointing {
         let blockRef = block
         let unifiedFreqs = cached.unifiedFreqsCis
@@ -275,7 +283,15 @@ public final class ZImageTransformer2DModel: Module {
         }
         unified = checkpointedBlock([unified])[0]
       } else {
-        unified = block(unified, attnMask: nil, freqsCis: cached.unifiedFreqsCis, adalnInput: tEmb)
+        unified = block(
+          unified,
+          attnMask: nil,
+          freqsCis: cached.unifiedFreqsCis,
+          adalnInput: tEmb,
+          dynamicSparseRuntime: dynamicSparseRuntime,
+          layerIndex: noiseRefiner.count + index,
+          exactSuffixTokenCount: cached.capSeqLen
+        )
       }
     }
 
