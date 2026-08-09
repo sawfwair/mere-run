@@ -139,11 +139,14 @@ final class DynamicSparseAttentionRuntime {
             gateResults[key] = gate?.passed ?? false
             if let gate {
                 logHandler?(String(
-                    format: "dynamic_sparse model=%@ gate=%@ max_abs=%.6g mean_abs=%.6g rel_l2=%.6g",
+                    format: "dynamic_sparse model=%@ gate=%@ max_abs=%.6g mean_abs=%.6g "
+                        + "max_rel=%.6g mean_rel=%.6g rel_l2=%.6g",
                     model.rawValue,
                     gate.passed ? "pass" : "fail",
                     gate.maximumAbsoluteError,
                     gate.meanAbsoluteError,
+                    gate.maximumRelativeError,
+                    gate.meanRelativeError,
                     gate.relativeL2Error
                 ))
             } else {

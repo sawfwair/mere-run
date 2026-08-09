@@ -62,6 +62,8 @@ struct DynamicSparseAttentionPolicy: Sendable, Equatable {
 struct DynamicSparseAttentionGate: Sendable, Equatable {
     let maximumAbsoluteError: Float
     let meanAbsoluteError: Float
+    let maximumRelativeError: Float
+    let meanRelativeError: Float
     let relativeL2Error: Float
     let passed: Bool
 }
@@ -247,26 +249,24 @@ enum DynamicSparseAttention {
                         MLXArray(Float(1e-12))
                     )
             ),
+            MLX.max(MLX.abs(reference.asType(.float32))),
+            MLX.mean(MLX.abs(reference.asType(.float32))),
         ])
         MLX.eval(metrics)
         let measured = metrics.asArray(Float.self)
-        let stagesFloat32 = queries.dtype == .float32
-            || keys.dtype == .float32
-            || values.dtype == .float32
-        // The production H3 projection graph promotes Q/K/V to FP32. The
-        // sparse MMA path stages those values as BF16, so its dense-route gate
-        // allows the measured conversion envelope while retaining the same
-        // relative-error bound used by native BF16 input.
-        let maximumLimit: Float = queries.dim(2) >= 32_768
-            ? 0.15
-            : (stagesFloat32 ? 0.12 : 0.08)
-        let meanLimit: Float = stagesFloat32 ? 0.0025 : 0.002
-        let passed = measured[0] <= maximumLimit
-            && measured[1] <= meanLimit
+        let maximumRelativeError = measured[0] / max(measured[3], 1e-12)
+        let meanRelativeError = measured[1] / max(measured[4], 1e-12)
+        // Absolute activation scales differ substantially across native model
+        // families. Admit the dense-route implementation by scale-invariant
+        // error while retaining tight BF16 conversion and aggregate bounds.
+        let passed = maximumRelativeError <= 0.015
+            && meanRelativeError <= 0.005
             && measured[2] <= 0.005
         return .init(
             maximumAbsoluteError: measured[0],
             meanAbsoluteError: measured[1],
+            maximumRelativeError: maximumRelativeError,
+            meanRelativeError: meanRelativeError,
             relativeL2Error: measured[2],
             passed: passed
         )
@@ -426,6 +426,11 @@ enum DynamicSparseAttention {
         precondition(routes.dtype == .uint8)
         let heads = queries.dim(1)
         let scaleArray = MLXArray([scale])
+        let outputDType: DType = queries.dtype == .float32
+            || keys.dtype == .float32
+            || values.dtype == .float32
+            ? .float32
+            : .bfloat16
         #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
         return attentionKernel(
             [queries, keys, values, keyCentroids, valueSums, routes, scaleArray],
@@ -437,11 +442,12 @@ enum DynamicSparseAttention {
                 ("FIRST_QUERY_BLOCK", firstQueryBlock),
                 ("KEY_BLOCK_COUNT", keyBlockCount),
                 ("ROUTE_QUERY_BLOCKS", routes.dim(2)),
+                ("OutputT", outputDType),
             ],
             grid: (32, ((queryCount + 31) / 32) * 4, heads),
             threadGroup: (32, 4, 1),
             outputShapes: [[1, heads, queryCount, headDimension]],
-            outputDTypes: [.bfloat16]
+            outputDTypes: [outputDType]
         )[0]
         #else
         preconditionFailure("Dynamic sparse attention requires Metal")
@@ -483,7 +489,7 @@ enum DynamicSparseAttention {
     )
 
     private static let attentionKernel = MLXFast.metalKernel(
-        name: "mere_dynamic_sparse_online_softmax_bf16_d128_b64_mma_v5",
+        name: "mere_dynamic_sparse_online_softmax_bf16_d128_b64_mma_v6",
         inputNames: [
             "queries", "keys", "values", "key_centroids", "value_sums",
             "routes", "scale_value",
@@ -801,10 +807,10 @@ enum DynamicSparseAttention {
                 uint output_base = (head * QUERY_COUNT + local_query) * head_dimension;
                 for (uint frag = 0; frag < matrix_count; ++frag) {
                     uint output_dimension = frag * matrix_size + matrix_column;
-                    output[output_base + output_dimension] = bfloat(
+                    output[output_base + output_dimension] = OutputT(
                         accumulated[frag].thread_elements()[0] / row_sum
                     );
-                    output[output_base + output_dimension + 1] = bfloat(
+                    output[output_base + output_dimension + 1] = OutputT(
                         accumulated[frag].thread_elements()[1] / row_sum
                     );
                 }
