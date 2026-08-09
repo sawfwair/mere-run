@@ -129,17 +129,24 @@ struct Trellis2RotaryEmbedding {
 struct Trellis2FlowModel {
     let configuration: Trellis2FlowConfiguration
     private let weights: Trellis2WeightStore
+    private let dynamicSparseRuntime: DynamicSparseAttentionRuntime?
 
     init(configuration: Trellis2FlowConfiguration, checkpointURL: URL) throws {
         self.configuration = configuration
         self.weights = try Trellis2WeightStore(url: checkpointURL)
+        self.dynamicSparseRuntime = DynamicSparseAttentionRuntime.configured(model: .trellis2)
         try validateWeights()
     }
 
     init(configuration: Trellis2FlowConfiguration, weights: [String: MLXArray]) throws {
         self.configuration = configuration
         self.weights = Trellis2WeightStore(values: weights)
+        self.dynamicSparseRuntime = DynamicSparseAttentionRuntime.configured(model: .trellis2)
         try validateWeights()
+    }
+
+    func beginDenoisingStep(index: Int, count: Int) {
+        dynamicSparseRuntime?.beginStep(index: index, count: count)
     }
 
     private func validateWeights() throws {
@@ -259,7 +266,12 @@ struct Trellis2FlowModel {
         let dtype = input.dtype
         var hidden = MLXFast.layerNorm(input.asType(.float32), eps: 1e-6)
         hidden = (hidden * (1 + scaleAttention.asType(.float32)) + shiftAttention.asType(.float32)).asType(dtype)
-        hidden = try selfAttention(hidden, rotary: rotary, prefix: "\(prefix).self_attn")
+        hidden = try selfAttention(
+            hidden,
+            rotary: rotary,
+            prefix: "\(prefix).self_attn",
+            layerIndex: index
+        )
         var output = (input.asType(.float32) + hidden.asType(.float32) * gateAttention.asType(.float32)).asType(dtype)
 
         hidden = try affineLayerNorm(output, prefix: "\(prefix).norm2")
@@ -277,7 +289,8 @@ struct Trellis2FlowModel {
     private func selfAttention(
         _ input: MLXArray,
         rotary: Trellis2RotaryEmbedding,
-        prefix: String
+        prefix: String,
+        layerIndex: Int
     ) throws -> MLXArray {
         let batch = input.dim(0)
         let length = input.dim(1)
@@ -290,7 +303,13 @@ struct Trellis2FlowModel {
         var key = try multiHeadRMSNorm(pieces[1], prefix: "\(prefix).k_rms_norm")
         query = rotary.apply(query)
         key = rotary.apply(key)
-        let attended = attention(query: query, key: key, value: pieces[2])
+        let attended = attention(
+            query: query,
+            key: key,
+            value: pieces[2],
+            dynamicSparseRuntime: dynamicSparseRuntime,
+            layerIndex: layerIndex
+        )
             .reshaped(batch, length, configuration.modelChannels)
         return try weights.linear(attended, prefix: "\(prefix).to_out")
     }
@@ -325,17 +344,32 @@ struct Trellis2FlowModel {
         return (normalized * gamma * scale).asType(input.dtype)
     }
 
-    private func attention(query: MLXArray, key: MLXArray, value: MLXArray) -> MLXArray {
+    private func attention(
+        query: MLXArray,
+        key: MLXArray,
+        value: MLXArray,
+        dynamicSparseRuntime: DynamicSparseAttentionRuntime? = nil,
+        layerIndex: Int = 0
+    ) -> MLXArray {
         let q = query.transposed(0, 2, 1, 3)
         let k = key.transposed(0, 2, 1, 3)
         let v = value.transposed(0, 2, 1, 3)
-        return MLXFast.scaledDotProductAttention(
+        let scale = 1 / sqrt(Float(configuration.headDimension))
+        let sparse = dynamicSparseRuntime?.call(
             queries: q,
             keys: k,
             values: v,
-            scale: 1 / sqrt(Float(configuration.headDimension)),
+            layerIndex: layerIndex,
+            prefixTokenCount: 0,
+            scale: scale
+        )
+        return (sparse ?? MLXFast.scaledDotProductAttention(
+            queries: q,
+            keys: k,
+            values: v,
+            scale: scale,
             mask: .none
-        ).transposed(0, 2, 1, 3)
+        )).transposed(0, 2, 1, 3)
     }
 
     private func affineLayerNorm(_ input: MLXArray, prefix: String) throws -> MLXArray {
@@ -386,6 +420,7 @@ enum Trellis2FlowSampler {
         var sample = noise
         let timesteps = configuration.timesteps
         for index in 0..<configuration.steps {
+            model.beginDenoisingStep(index: index, count: configuration.steps)
             let timestep = timesteps[index]
             let previous = timesteps[index + 1]
             let strength = configuration.guidanceInterval.contains(timestep)
