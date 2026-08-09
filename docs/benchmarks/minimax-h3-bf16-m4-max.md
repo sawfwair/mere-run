@@ -162,6 +162,59 @@ than a claim of parity with the full 19-evaluation trajectory. The prompt
 requested driving rain, so its broadband soundtrack is not a clean-noise or
 hiss acceptance reference.
 
+## Dynamic sparse Metal receipt
+
+The Apple-GPU dynamic-sparse path was accepted with a real synchronized-video
+generation, not from random-tensor timing alone:
+
+- checkpoint: managed `video-minimax-h3-fl2va-bf16-mlx`
+- adapter: checksum-pinned `minimax-h3-lightx2v-4step`, strength `1.0`
+- geometry: 768x448, 124 frames, 24 fps, 13,085 packed rows
+- schedule: five points / four transformer evaluations
+- seed: `20260808`
+- dense arm: resident BF16, exact `quality`
+- sparse arm: resident BF16, attention-only `maximum`, tau `1.0`, no cache reuse
+- prompt: a continuous rain-soaked railway-platform two-shot with a detective,
+  a paramedic, a recorder handoff, a passing train, and two spoken lines
+
+| Phase | Dense | Dynamic sparse |
+| --- | ---: | ---: |
+| Conditioner preparation/load | 0.332 s | 0.311 s |
+| Text encoding | 4.077 s | 4.066 s |
+| Transformer preparation | 14.218 s | 14.093 s |
+| Evaluation 1, protected dense | 211.479 s | 108.017 s |
+| Evaluation 2, sparse plus one-time gate | 154.554 s | 107.196 s |
+| Evaluation 3, sparse steady state | 131.430 s | 101.294 s |
+| Evaluation 4, protected dense | 134.311 s | 127.645 s |
+| Denoising | **631.826 s** | **444.216 s** |
+| Video/audio decode | 85.632 s | 72.503 s |
+| Native generation total | **736.285 s** | **535.386 s** |
+| Process wall time | 737.28 s | 537.28 s |
+
+This is a 29.7% measured denoise reduction and 27.3% measured native
+end-to-end reduction. Both processes reported zero swaps and approximately
+68.0 GB peak footprint. The dense arm paid a larger first-evaluation compile
+cost, while the later sparse process could reuse system Metal compilation
+state. Therefore the complete-run delta is an observed receipt, not a claim
+that every second came from sparsity. The most comparable late dense arm took
+131.430 and 134.311 seconds; sparse steady state took 101.294 seconds. The
+sparse process's final protected dense evaluation took 127.645 seconds, giving
+an in-process thermal control for the 20.6% faster sparse step.
+
+Before sparse execution was admitted, the custom all-routes-dense Metal sample
+matched fused SDPA at `max_abs=0.10026`, `mean_abs=0.00219996`, and
+`rel_l2=0.0027471`. Both outputs then passed the artifact boundary: 768x448
+H.264, exactly 124 frames at 24 fps and 5.167 seconds, plus stereo AAC at
+32 kHz. Eight matched frame samples retained both actor identities, the
+recorder handoff, coherent faces, train movement, and the final composition.
+Native Parakeet transcribed both soundtracks exactly as
+`You kept the recording? Every second.`
+
+The dense artifact SHA-256 is
+`5d1b0ed616a7527ab8fefc1982ac88a21e23ab7087abb51fc574372229dca3ed`.
+The dynamic-sparse artifact SHA-256 is
+`96bdcbe41bbd65fde2784384150c9b9b6ec867dcf61456f8a74b74b0a52c132d`.
+
 ## True-768 one-evaluation boundary
 
 A separate release-mode probe locks the physical 768-line target without

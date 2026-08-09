@@ -155,8 +155,10 @@ the runtime applies its published alpha/rank scale and fuses its deltas into
 the BF16 transformer once before denoising; the PEFT tensors are then released
 and add no per-block LoRA matmuls. Both default to five schedule points, which
 are four model evaluations. They were trained for FL2VA, require the BF16 base
-model, and cannot be combined with Ref2VA references or H3 cache acceleration.
-Omit `--steps` (or set it to `5`) and keep `--h3-acceleration quality`.
+model, and cannot be combined with Ref2VA references or H3 denoise-step cache
+reuse. Omit `--steps` (or set it to `5`). `--h3-acceleration quality` keeps the
+fully dense path; `balanced` and `maximum` may use attention-only dynamic
+sparsity while still executing all 50 blocks on every model evaluation.
 Strength `1.0` applies either adapter's released weights exactly; the strength
 control remains available for prompt-specific tuning.
 
@@ -189,14 +191,23 @@ remains available for compatible locally converted roots that still contain
 the full AdaLN branch.
 
 The denoise policy is independently selectable. `--h3-acceleration quality`
-executes all 50 blocks and is the exact default. `balanced` recomputes the
-leading 50% of blocks on eligible small-sigma-delta steps and refreshes after
-at most two cache hits. `maximum` is the explicitly approximate speed lane: it
-recomputes the leading nine of 50 blocks and refreshes after at most four cache
-hits. Both modes run at least two complete evaluations before reuse and retain
-full evaluations at the schedule boundaries. They can materially reduce
-denoise time, but they are
-approximate and may change motion or composition for the same prompt and seed.
+uses dense attention, executes all 50 blocks, and is the exact default. At
+12,000 or more packed rows, `balanced` and `maximum` dynamically route distant
+target-video attention blocks on Apple GPUs. Prefix queries, all prefix keys,
+neighboring video blocks, the first two transformer layers, the leading
+schedule region, and the final evaluation remain dense. Skipped blocks retain
+a centroid-and-summed-value correction in the online-softmax accumulator, and
+a once-per-shape dense-route gate must pass before sparse execution is admitted.
+
+Without an H3 adapter, those two modes additionally use the modality-aware
+adaptive first-block cache. Every evaluation executes block 1 and measures
+global plus worst-time-slice drift independently for video and audio. A cache
+hit reuses only the target residual from blocks 2 through 50. `balanced`
+refreshes after at most two hits and reserves the final two evaluations;
+`maximum` refreshes after at most four hits and reserves the final evaluation.
+Both require two complete evaluations before reuse. Dynamic attention and cache
+reuse are approximate and may change motion or composition for the same prompt
+and seed; use `quality` when exact-seed fidelity matters.
 
 ### Cosmos3 generation, actions, and reasoning
 

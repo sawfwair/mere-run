@@ -400,6 +400,57 @@ gate, and improve a matched full-block or denoise-step probe should move into
 the runtime. Full video generation remains a final quality gate, not the inner
 optimization loop.
 
+### Dynamic sparse H3 attention on Apple GPUs
+
+H3's packed sequence is not a homogeneous video grid. It contains dense text,
+conditioning video, generated-audio, and target-video regions, so sparsifying
+the whole sequence would place dialogue and reference fidelity at unnecessary
+risk. The production path instead applies an independently written Metal
+implementation of the dynamic-routing ideas published by
+[Sol-Attn](https://nvlabs.github.io/Sana/Sol-Attn/) only to target-video
+queries. It uses 64-token blocks and a 128-wide BF16 SIMDgroup-matrix kernel.
+Every prefix query stays on MLX's fused dense SDPA path; every prefix key and
+the neighboring target-video blocks remain exact for sparse queries.
+Query-centroid and key-centroid scores route additional exact blocks at
+runtime. Skipped blocks still contribute through key-centroid logits and
+summed values in the same online-softmax accumulator.
+
+The first two transformer layers, the first 20% of schedule evaluations, and
+the final evaluation remain dense. Production eligibility starts at 12,000
+packed rows. Before the first sparse layer at a new shape, an all-routes-dense
+sample compares the custom Metal result with fused SDPA; unsupported devices,
+dtypes, or a failed error envelope fall back to dense attention. On the real
+13,085-row checkpoint tensors, FP32 projection outputs staged through BF16 MMA
+passed at `max_abs=0.10026`, `mean_abs=0.00219996`, and
+`rel_l2=0.0027471`.
+
+The bounded release benchmarks separate kernel throughput from artifact
+quality:
+
+| Input | Rows / prefix / heads | Dense | Sparse | Speedup | Routed blocks |
+| --- | --- | ---: | ---: | ---: | ---: |
+| BF16 | 12,930 / 951 / 56 | 389 ms | 293 ms | 1.327x | 14.44% |
+| FP32 staged to BF16 MMA | 13,085 / 653 / 56 | 717 ms | 371 ms | 1.931x | 15.84% |
+
+Those random-tensor timings establish the execution win, not approximation
+quality. The acceptance boundary was a real fixed-seed LightX2V generation at
+768x448, 124 frames, 24 fps, and four transformer evaluations. Dense denoising
+took 631.826 seconds; dynamic sparse attention took 444.216 seconds, a measured
+29.7% reduction. The clean sparse step measured 101.294 seconds versus
+131.430 and 134.311 seconds for the comparable late dense steps. The final
+protected dense step in the sparse process measured 127.645 seconds, ruling
+out a simple late-run thermal advantage. Complete native generation fell from
+736.285 to 535.386 seconds. The dense run paid a larger first-step compile cost,
+so the end-to-end figure is an observed run receipt rather than an isolated
+kernel attribution.
+
+Both MP4s contain exactly 124 coherent H.264 frames plus synchronized 32 kHz
+stereo AAC. Eight-point matched contact sheets retained the two actors,
+recorder handoff, train motion, faces, and final composition without sparse
+block corruption. Native Parakeet transcribed both soundtracks as
+`You kept the recording? Every second.` The full hashes and phase ledger are in
+[MiniMax-H3 BF16 on M4 Max](../benchmarks/minimax-h3-bf16-m4-max.md).
+
 ### Adaptive first-block cache
 
 Exact attention scheduling and resident BF16 improve each native call, but H3

@@ -303,7 +303,7 @@ struct VideoGenerate: AsyncParsableCommand {
 
     @Option(
         name: [.customLong("h3-acceleration")],
-        help: "MiniMax-H3 denoise mode: quality runs every block; balanced/maximum use adaptive first-block drift guards."
+        help: "MiniMax-H3 acceleration: quality is exact; balanced/maximum add dynamic sparse attention and, without a Turbo adapter, adaptive first-block caching."
     )
     var h3Acceleration: MiniMaxH3CLIAccelerationMode = .quality
 

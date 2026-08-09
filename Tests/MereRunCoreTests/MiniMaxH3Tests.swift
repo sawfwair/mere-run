@@ -1,10 +1,173 @@
 import Foundation
 import MLX
+import MLXFast
 import MLXNN
+import MLXRandom
 import XCTest
 @testable import MereRunCore
 
 final class MiniMaxH3Tests: MereRunCoreTestCase {
+    func testDynamicSparseAttentionPolicyProtectsDenseBoundaries() throws {
+        XCTAssertNil(MiniMaxH3AccelerationMode.quality.dynamicSparseAttentionPolicy)
+        let balanced = try XCTUnwrap(
+            MiniMaxH3AccelerationMode.balanced.dynamicSparseAttentionPolicy
+        )
+        let maximum = try XCTUnwrap(
+            MiniMaxH3AccelerationMode.maximum.dynamicSparseAttentionPolicy
+        )
+        XCTAssertEqual(balanced.thresholdStandardDeviations, 0.75)
+        XCTAssertEqual(maximum.thresholdStandardDeviations, 1)
+
+        XCTAssertNil(maximum.request(
+            stepIndex: 1,
+            stepCount: 8,
+            layerIndex: 2,
+            sequenceLength: 12_930,
+            prefixTokenCount: 900
+        ))
+        XCTAssertNil(maximum.request(
+            stepIndex: 2,
+            stepCount: 8,
+            layerIndex: 1,
+            sequenceLength: 12_930,
+            prefixTokenCount: 900
+        ))
+        XCTAssertNotNil(maximum.request(
+            stepIndex: 2,
+            stepCount: 8,
+            layerIndex: 2,
+            sequenceLength: 12_930,
+            prefixTokenCount: 900
+        ))
+        XCTAssertNil(maximum.request(
+            stepIndex: 7,
+            stepCount: 8,
+            layerIndex: 49,
+            sequenceLength: 12_930,
+            prefixTokenCount: 900
+        ))
+        XCTAssertNil(maximum.request(
+            stepIndex: 2,
+            stepCount: 8,
+            layerIndex: 2,
+            sequenceLength: 11_999,
+            prefixTokenCount: 900
+        ))
+    }
+
+    func testDynamicSparseAttentionRoutesAboveAdaptiveThreshold() {
+        let queryCentroids = MLXArray([Float(1), 0]).reshaped(1, 1, 1, 2)
+        let keyCentroids = MLXArray([
+            Float(-2), 0,
+            -1, 0,
+            0, 0,
+            3, 0,
+        ]).reshaped(1, 1, 4, 2)
+        let routes = MiniMaxH3DynamicSparseAttention.routesForTesting(
+            queryCentroids: queryCentroids,
+            keyCentroids: keyCentroids,
+            thresholdStandardDeviations: 0
+        )
+        MLX.eval(routes)
+        XCTAssertEqual(routes.asArray(UInt8.self), [0, 0, 0, 1])
+    }
+
+    func testDynamicSparseMetalDenseRouteMatchesFusedSDPA() throws {
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip("Dynamic sparse attention Metal parity requires a GPU.")
+        }
+        MLXRandom.seed(41)
+        let shape = [1, 2, 256, MiniMaxH3DynamicSparseAttention.headDimension]
+        let queries = (MLXRandom.normal(shape) * Float(0.2)).asType(.bfloat16)
+        let keys = (MLXRandom.normal(shape) * Float(0.2)).asType(.bfloat16)
+        let values = MLXRandom.normal(shape).asType(.bfloat16)
+        MLX.eval(queries, keys, values)
+
+        let gate = try XCTUnwrap(MiniMaxH3DynamicSparseAttention.denseRouteGate(
+            queries: queries,
+            keys: keys,
+            values: values,
+            queryStart: 128,
+            scale: 1 / sqrt(Float(MiniMaxH3DynamicSparseAttention.headDimension))
+        ))
+        XCTAssertTrue(gate.passed)
+        XCTAssertLessThanOrEqual(gate.relativeL2Error, 0.005)
+    }
+
+    func testDynamicSparseMetalFloat32InputsPassDenseGate() throws {
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip("Dynamic sparse attention FP32 gate requires a GPU.")
+        }
+        MLXRandom.seed(2_026_081)
+        let shape = [1, 2, 256, MiniMaxH3DynamicSparseAttention.headDimension]
+        let queries = MLXRandom.normal(shape)
+        let keys = MLXRandom.normal(shape)
+        let values = MLXRandom.normal(shape)
+        MLX.eval(queries, keys, values)
+
+        let gate = try XCTUnwrap(MiniMaxH3DynamicSparseAttention.denseRouteGate(
+            queries: queries,
+            keys: keys,
+            values: values,
+            queryStart: 64,
+            scale: 1 / sqrt(Float(MiniMaxH3DynamicSparseAttention.headDimension))
+        ))
+        XCTAssertTrue(gate.passed)
+    }
+
+    func testDynamicSparseMetalRetainsSkippedBlockCentroidContribution() throws {
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip("Dynamic sparse attention Metal correction requires a GPU.")
+        }
+        MLXRandom.seed(42)
+        let heads = 2
+        let tokens = 256
+        let dimension = MiniMaxH3DynamicSparseAttention.headDimension
+        let shape = [1, heads, tokens, dimension]
+        let queries = (MLXRandom.normal(shape) * Float(0.2)).asType(.bfloat16)
+        let keys = (MLXRandom.normal(shape) * Float(0.2)).asType(.bfloat16)
+        let values = MLXRandom.normal(shape).asType(.bfloat16)
+        let routes = MLXArray.zeros([1, heads, 1, 4], dtype: .uint8)
+        let scale = 1 / sqrt(Float(dimension))
+        let candidate = try XCTUnwrap(
+            MiniMaxH3DynamicSparseAttention.sparseOutputForTesting(
+                queries: queries,
+                keys: keys,
+                values: values,
+                routes: routes,
+                queryStart: 192,
+                queryCount: 1,
+                prefixTokenCount: 64,
+                scale: scale
+            )
+        )
+
+        let skippedCentroid = keys[0..., 0..., 64..<128, 0...]
+            .mean(axis: 2, keepDims: true)
+        let approximatedKeys = MLX.concatenated([
+            keys[0..., 0..., 0..<64, 0...],
+            MLX.broadcast(skippedCentroid, to: [1, heads, 64, dimension]),
+            keys[0..., 0..., 128..., 0...],
+        ], axis: 2)
+        let reference = MLXFast.scaledDotProductAttention(
+            queries: queries[0..., 0..., 192..<193, 0...],
+            keys: approximatedKeys,
+            values: values,
+            scale: scale,
+            mask: .none
+        )
+        let delta = candidate.asType(.float32) - reference.asType(.float32)
+        let relativeL2 = MLX.sqrt(
+            MLX.sum(delta * delta)
+                / MLX.maximum(
+                    MLX.sum(reference.asType(.float32) * reference.asType(.float32)),
+                    MLXArray(Float(1e-12))
+                )
+        )
+        MLX.eval(candidate, reference, relativeL2)
+        XCTAssertLessThanOrEqual(relativeL2.item(Float.self), 0.005)
+    }
+
     func testRuntimeLoRAAppliesDeltaInActivationSpace() {
         let base = Linear(
             weight: MLXArray([Float(1), 0, 0, 1]).reshaped(2, 2),
@@ -113,14 +276,16 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         XCTAssertEqual(options.steps, 5)
         XCTAssertEqual(options.adapterStrength, 1)
 
-        XCTAssertThrowsError(try MiniMaxH3GenerationOptions(
-            prompt: "invalid compounded acceleration",
+        let sparseTurbo = try MiniMaxH3GenerationOptions(
+            prompt: "Turbo with attention-only acceleration",
             width: 256,
             height: 160,
             numFrames: 22,
             accelerationMode: .maximum,
             adapterURL: URL(fileURLWithPath: "/tmp/minimax-h3-turbo.safetensors")
-        ))
+        )
+        XCTAssertEqual(sparseTurbo.steps, 5)
+        XCTAssertEqual(sparseTurbo.accelerationMode, .maximum)
     }
 
     func testPositionedFrameInputsAreValidatedAndSorted() throws {

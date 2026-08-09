@@ -617,9 +617,22 @@ private final class MiniMaxH3TransformerBlock: Module {
         values: MLXArray,
         maximumQueryTokens: Int,
         maximumHeadsPerKernel: Int?,
-        maximumKernelsPerEvaluation: Int
+        maximumKernelsPerEvaluation: Int,
+        dynamicSparseRequest: MiniMaxH3DynamicSparseAttentionRequest? = nil
     ) -> MLXArray {
-        attention.scaledDotProductAttention(
+        if let dynamicSparseRequest,
+           let sparse = MiniMaxH3DynamicSparseAttention.call(
+               queries: queries,
+               keys: keys,
+               values: values,
+               request: dynamicSparseRequest,
+               scale: attention.scale,
+               maximumQueryTokens: maximumQueryTokens,
+               maximumKernelsPerEvaluation: maximumKernelsPerEvaluation
+           ) {
+            return sparse
+        }
+        return attention.scaledDotProductAttention(
             queries: queries,
             keys: keys,
             values: values,
@@ -1166,6 +1179,10 @@ public final class MiniMaxH3Transformer: Module {
     var maximumAttentionQueryTokensPerKernel = 1_024
     var maximumAttentionHeadsPerKernel: Int?
     var maximumAttentionKernelsPerEvaluation = 4
+    var dynamicSparseAttentionPolicy: MiniMaxH3DynamicSparseAttentionPolicy?
+    var dynamicSparseAttentionStepIndex = 0
+    var dynamicSparseAttentionStepCount = 0
+    var dynamicSparseAttentionLogHandler: ((String) -> Void)?
     var blockTimingHandler: ((Int, TimeInterval, Memory.Snapshot) -> Void)?
     @ModuleInfo(key: "video_patch_proj") var videoInput: Linear
     @ModuleInfo(key: "audio_patch_proj") var audioInput: Linear
@@ -1179,6 +1196,7 @@ public final class MiniMaxH3Transformer: Module {
     private let timeFrequencies: MLXArray
     private var compiledBlockRunner: MiniMaxH3TransformerBlock?
     private var compiledBlockForwards: MiniMaxH3CompiledBlockForwards?
+    private var dynamicSparseAttentionGateResults: [String: Bool] = [:]
     private var adaLNWeightsAvailable: Bool
 
     public init(
@@ -1570,13 +1588,21 @@ public final class MiniMaxH3Transformer: Module {
                 let compiled = compiledBlockForward(for: block)
                 let projectedAttention = compiled.attentionProjection(attentionInputs)
                 MLX.eval(projectedAttention)
+                let dynamicSparseRequest = qualifiedDynamicSparseAttentionRequest(
+                    queries: projectedAttention[0],
+                    keys: projectedAttention[1],
+                    values: projectedAttention[2],
+                    layerIndex: index,
+                    layout: context.layout
+                )
                 let attended = block.scaledDotProductAttention(
                     queries: projectedAttention[0],
                     keys: projectedAttention[1],
                     values: projectedAttention[2],
                     maximumQueryTokens: maximumAttentionQueryTokensPerKernel,
                     maximumHeadsPerKernel: maximumAttentionHeadsPerKernel,
-                    maximumKernelsPerEvaluation: maximumAttentionKernelsPerEvaluation
+                    maximumKernelsPerEvaluation: maximumAttentionKernelsPerEvaluation,
+                    dynamicSparseRequest: dynamicSparseRequest
                 )
                 if usesFusedPostAttention {
                     var postAttentionInputs = [
@@ -1631,6 +1657,53 @@ public final class MiniMaxH3Transformer: Module {
             }
         }
         return hidden
+    }
+
+    private func qualifiedDynamicSparseAttentionRequest(
+        queries: MLXArray,
+        keys: MLXArray,
+        values: MLXArray,
+        layerIndex: Int,
+        layout: MiniMaxH3PackedLayout
+    ) -> MiniMaxH3DynamicSparseAttentionRequest? {
+        guard let request = dynamicSparseAttentionPolicy?.request(
+            stepIndex: dynamicSparseAttentionStepIndex,
+            stepCount: dynamicSparseAttentionStepCount,
+            layerIndex: layerIndex,
+            sequenceLength: layout.sequenceLength,
+            prefixTokenCount: layout.targetVideoRows.lowerBound
+        ) else { return nil }
+
+        let gateShape = "\(queries.dim(1))x\(queries.dim(2))x\(request.prefixTokenCount)"
+        let gateKey = "\(gateShape):\(queries.dtype):\(keys.dtype):\(values.dtype)"
+        if dynamicSparseAttentionGateResults[gateKey] == nil {
+            let gate = MiniMaxH3DynamicSparseAttention.denseRouteGate(
+                queries: queries,
+                keys: keys,
+                values: values,
+                queryStart: request.prefixTokenCount,
+                scale: 1 / sqrt(Float(configuration.attentionHeadDimension))
+            )
+            dynamicSparseAttentionGateResults[gateKey] = gate?.passed ?? false
+            if let gate {
+                dynamicSparseAttentionLogHandler?(String(
+                    format: "dynamic_sparse_gate=%@ shape=%@ max_abs=%.6g mean_abs=%.6g rel_l2=%.6g",
+                    gate.passed ? "pass" : "fail",
+                    gateShape,
+                    gate.maximumAbsoluteError,
+                    gate.meanAbsoluteError,
+                    gate.relativeL2Error
+                ))
+            } else {
+                dynamicSparseAttentionLogHandler?(
+                    "dynamic_sparse_gate=unavailable shape=\(gateShape) "
+                        + "q_dtype=\(queries.dtype) k_dtype=\(keys.dtype) "
+                        + "v_dtype=\(values.dtype) device="
+                        + String(describing: Device.defaultDevice().deviceType)
+                )
+            }
+        }
+        return dynamicSparseAttentionGateResults[gateKey] == true ? request : nil
     }
 
     private func finalize(

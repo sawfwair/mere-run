@@ -1894,18 +1894,23 @@ MacBooks below 96 GiB and expands to the faster resident BF16 path on memory-qua
 desktops and 96+ GiB MacBooks when the requested geometry leaves the required
 runtime reserve.
 
-`--h3-acceleration quality` is the exact default. `balanced` and `maximum` use
-a modality-aware adaptive first-block cache. Every evaluation still runs the
-first transformer block, then independently measures global and worst-time-slice
-drift for video and audio against the last full refresh. A qualifying step
-reuses only the target residual from blocks 2 through 50; a rejected or
-non-finite measurement executes all blocks and refreshes the cache. `balanced`
-allows at most two adjacent hits and reserves the final two evaluations for
-full refreshes. `maximum` allows four adjacent hits and always executes the
-final evaluation in full. Both require two complete evaluations before reuse
-and keep schedule boundaries native. They remain approximate: the same prompt
-and seed may follow a different motion or composition trajectory. Use
-`quality` when exact-seed fidelity matters.
+`--h3-acceleration quality` is the dense, exact default. At 12,000 or more
+packed rows, `balanced` and `maximum` add dynamic block-sparse attention for
+target-video queries. Prefix queries and keys, neighboring video blocks, the
+first two layers, the leading schedule region, and the final evaluation stay
+dense. Skipped blocks retain a summary correction, and the Metal path must pass
+a once-per-shape dense-route numerical gate before it can run.
+
+Without an H3 adapter, `balanced` and `maximum` also use a modality-aware
+adaptive first-block cache. Every evaluation still runs block 1, then measures
+global and worst-time-slice drift for video and audio against the last full
+refresh. A qualifying step reuses only the target residual from blocks 2
+through 50. `balanced` admits at most two adjacent hits and reserves the final
+two evaluations; `maximum` admits four adjacent hits and always executes the
+final evaluation in full. Both require two complete evaluations before cache
+reuse. These modes remain approximate: the same prompt and seed may follow a
+different motion or composition trajectory. Use `quality` when exact-seed
+fidelity matters.
 
 `--h3-window-frames` enables resident sliding windows for FL2VA or Ref2VA. The
 window count must be `17*n+5`; `--h3-window-overlap` must be `17*n+1` and leave
@@ -1921,10 +1926,11 @@ PEFT LoRA. Both target `video-minimax-h3-fl2va-bf16-mlx`. When `--steps` is
 omitted they use five schedule points (four transformer evaluations). EMA-850
 runs in activation space; LightX2V is fused once into the BF16 transformer
 before denoising and adds no LoRA matmuls to the generation loop. Both require
-`--h3-acceleration quality`; Ref2VA and the compact quantized H3 package are
-rejected. The preflight report resolves the managed adapter path, verifies its
-presence, and preserves the adapter id, strength, and resolved schedule in the
-declarative action.
+dense execution of all 50 blocks and prohibit denoise-step cache reuse, but
+may use the attention-only `balanced` or `maximum` path. Ref2VA and the compact
+quantized H3 package are rejected. The preflight report resolves the managed
+adapter path, verifies its presence, and preserves the adapter id, strength,
+and resolved schedule in the declarative action.
 
 Preflight mode:
 

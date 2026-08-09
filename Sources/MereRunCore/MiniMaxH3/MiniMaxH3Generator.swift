@@ -89,6 +89,20 @@ public enum MiniMaxH3AccelerationMode: String, Sendable, Hashable {
         }
     }
 
+    var dynamicSparseAttentionPolicy: MiniMaxH3DynamicSparseAttentionPolicy? {
+        switch self {
+        case .quality: nil
+        case .balanced:
+            MiniMaxH3DynamicSparseAttentionPolicy(
+                thresholdStandardDeviations: 0.75
+            )
+        case .maximum:
+            MiniMaxH3DynamicSparseAttentionPolicy(
+                thresholdStandardDeviations: 1
+            )
+        }
+    }
+
     // Retained as an internal benchmark baseline. Production acceleration
     // selects the adaptive first-block cache unless explicitly overridden.
     var blockReusePolicy: MiniMaxH3BlockReusePolicy? {
@@ -493,11 +507,6 @@ public struct MiniMaxH3GenerationOptions: Sendable, Hashable {
             guard adapterStrength > 0 else {
                 throw MiniMaxH3GeneratorError.invalidOptions("adapter strength must be greater than zero")
             }
-            guard accelerationMode == .quality else {
-                throw MiniMaxH3GeneratorError.invalidOptions(
-                    "MiniMax-H3 Turbo already distills the denoise schedule and cannot be combined with block-reuse acceleration"
-                )
-            }
             guard references.isEmpty else {
                 throw MiniMaxH3GeneratorError.invalidOptions(
                     "MiniMax-H3 Turbo supports FL2VA text/keyframe generation, not Ref2VA references"
@@ -793,6 +802,7 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         audioSchedule: MiniMaxH3Schedule,
         adaLNCache: MiniMaxH3AdaLNCache?,
         accelerationMode: MiniMaxH3AccelerationMode,
+        permitsCacheReuse: Bool,
         progressHandler: (@Sendable (MiniMaxH3GenerationProgress) -> Void)?
     ) -> (videoRows: MLXArray, audioRows: MLXArray) {
         precondition(videoSchedule.timesteps.count == audioSchedule.timesteps.count)
@@ -836,7 +846,7 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         let environment = ProcessInfo.processInfo.environment
         let usesScheduledTailCache = environment["MERERUN_H3_CACHE_STRATEGY"] == "scheduled-tail"
         let requestedReuseStreak = Int(environment["MERERUN_H3_REUSE_STREAK"] ?? "")
-        let adaptiveCachePolicy = usesScheduledTailCache
+        let adaptiveCachePolicy = !permitsCacheReuse || usesScheduledTailCache
             ? nil
             : accelerationMode.adaptiveFirstBlockCachePolicy.map { policy in
                 let globalThreshold = Float(environment["MERERUN_H3_FIRST_BLOCK_THRESHOLD"] ?? "")
@@ -858,21 +868,40 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                     requiredFinalFullSteps: policy.requiredFinalFullSteps
                 )
             }
-        let blockReusePolicy = usesScheduledTailCache ? accelerationMode.blockReusePolicy.map { policy in
-            let requestedCacheDepth = Double(environment["MERERUN_H3_REUSE_DEPTH"] ?? "")
-            let cacheDepth = requestedCacheDepth.flatMap {
-                (0..<1).contains($0) ? $0 : nil
-            } ?? policy.cacheDepth
-            let maximumConsecutiveCachedSteps = requestedReuseStreak.flatMap {
-                $0 >= 0 ? $0 : nil
-            } ?? policy.maximumConsecutiveCachedSteps
-            return MiniMaxH3BlockReusePolicy(
-                cacheDepth: cacheDepth,
-                window: policy.window,
-                maximumConsecutiveCachedSteps: maximumConsecutiveCachedSteps
-            )
-        } : nil
-        let executionMode = adaptiveCachePolicy == nil && blockReusePolicy == nil
+        let blockReusePolicy = permitsCacheReuse && usesScheduledTailCache
+            ? accelerationMode.blockReusePolicy.map { policy in
+                let requestedCacheDepth = Double(environment["MERERUN_H3_REUSE_DEPTH"] ?? "")
+                let cacheDepth = requestedCacheDepth.flatMap {
+                    (0..<1).contains($0) ? $0 : nil
+                } ?? policy.cacheDepth
+                let maximumConsecutiveCachedSteps = requestedReuseStreak.flatMap {
+                    $0 >= 0 ? $0 : nil
+                } ?? policy.maximumConsecutiveCachedSteps
+                return MiniMaxH3BlockReusePolicy(
+                    cacheDepth: cacheDepth,
+                    window: policy.window,
+                    maximumConsecutiveCachedSteps: maximumConsecutiveCachedSteps
+                )
+            } : nil
+        let configuredDynamicSparseAttentionPolicy = environment["MERERUN_H3_DYNAMIC_SPARSE"] == "0"
+            ? nil
+            : accelerationMode.dynamicSparseAttentionPolicy.map { policy in
+                MiniMaxH3DynamicSparseAttentionPolicy(
+                    thresholdStandardDeviations: Float(
+                        environment["MERERUN_H3_DYNAMIC_SPARSE_TAU"] ?? ""
+                    ).flatMap { $0 >= 0 ? $0 : nil } ?? policy.thresholdStandardDeviations,
+                    minimumSequenceLength: policy.minimumSequenceLength,
+                    denseLeadingStepFraction: policy.denseLeadingStepFraction,
+                    denseTrailingStepCount: policy.denseTrailingStepCount,
+                    denseLeadingLayerCount: policy.denseLeadingLayerCount
+                )
+            }
+        let dynamicSparseAttentionPolicy = configuredDynamicSparseAttentionPolicy.flatMap { policy in
+            layout.sequenceLength >= policy.minimumSequenceLength ? policy : nil
+        }
+        let executionMode = adaptiveCachePolicy == nil
+            && blockReusePolicy == nil
+            && dynamicSparseAttentionPolicy == nil
             ? MiniMaxH3DenoiseExecutionPolicy.mode(
                 usesResidentBF16: transformer.usesResidentBF16,
                 sequenceLength: layout.sequenceLength,
@@ -899,6 +928,9 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
             Int(environment["MERERUN_H3_ATTENTION_EVALUATION_BATCH"] ?? "")
                 ?? attentionKernelSchedule.maximumKernelsPerEvaluation
         )
+        transformer.dynamicSparseAttentionPolicy = dynamicSparseAttentionPolicy
+        transformer.dynamicSparseAttentionStepCount = videoSchedule.timesteps.count
+        transformer.dynamicSparseAttentionLogHandler = stepProfileLogger
         transformer.usesFusedPostAttention = ProcessInfo.processInfo
             .environment["MERERUN_H3_FUSED_POST_ATTENTION"] == "1"
         transformer.usesLayerwiseEvaluation = executionMode.usesLayerwiseEvaluation
@@ -911,8 +943,18 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                 + "attention_query_tokens=\(transformer.maximumAttentionQueryTokensPerKernel) "
                 + "attention_heads_per_kernel=\(attentionHeadsPerKernel) "
                 + "attention_evaluation_batch="
-                + "\(transformer.maximumAttentionKernelsPerEvaluation)"
+                + "\(transformer.maximumAttentionKernelsPerEvaluation) "
+                + "dynamic_sparse=\(dynamicSparseAttentionPolicy != nil)"
         )
+        if let dynamicSparseAttentionPolicy {
+            stepProfileLogger?(
+                "dynamic_sparse_tau=\(dynamicSparseAttentionPolicy.thresholdStandardDeviations) "
+                    + "dense_step_fraction=\(dynamicSparseAttentionPolicy.denseLeadingStepFraction) "
+                    + "dense_trailing_steps=\(dynamicSparseAttentionPolicy.denseTrailingStepCount) "
+                    + "dense_leading_layers=\(dynamicSparseAttentionPolicy.denseLeadingLayerCount) "
+                    + "prefix_sink=\(layout.targetVideoRows.lowerBound)"
+            )
+        }
         if let blockReusePolicy {
             stepProfileLogger?(
                 "cache_strategy=scheduled-tail "
@@ -982,6 +1024,7 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         var executedBlockCount = 0
 
         for index in videoSchedule.timesteps.indices {
+            transformer.dynamicSparseAttentionStepIndex = index
             let stepStarted = stepProfileLogger.map { _ in CFAbsoluteTimeGetCurrent() }
             progressHandler?(.init(
                 stage: .denoising,
@@ -1388,6 +1431,7 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                 audioSchedule: audioSchedule,
                 adaLNCache: runtime.adaLNCache,
                 accelerationMode: options.accelerationMode,
+                permitsCacheReuse: options.adapterURL == nil,
                 progressHandler: progressHandler
             )
             phaseProfileLogger?(String(
@@ -1584,6 +1628,7 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                 audioSchedule: audioSchedule,
                 adaLNCache: runtime.adaLNCache,
                 accelerationMode: options.accelerationMode,
+                permitsCacheReuse: options.adapterURL == nil,
                 progressHandler: progressHandler
             )
         }

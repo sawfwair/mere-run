@@ -42,11 +42,25 @@ schedule cache is built. The LightX2V adapter's 312 native PEFT pairs retain
 their separate Q/K/V projections and published alpha/rank scale while their
 deltas are fused into the BF16 transformer once before denoising. This avoids
 both an expanded converted checkpoint and per-block LoRA matmuls. Neither
-adapter can be combined with Ref2VA or H3 cache acceleration.
+adapter can be combined with Ref2VA or denoise-step cache reuse. They can use
+the attention-only `balanced` and `maximum` paths; their four-step schedule
+always executes all 50 blocks.
 
 `--h3-acceleration quality` executes every transformer block and preserves the
-native same-seed trajectory. The explicit `balanced` and `maximum` modes trade
-exact trajectory identity for speed through a modality-aware adaptive cache.
+native same-seed trajectory. At packed sequences of at least 12,000 tokens,
+the explicit `balanced` and `maximum` modes add an independently implemented
+Apple Metal dynamic-sparse attention path inspired by
+[Sol-Attn](https://nvlabs.github.io/Sana/Sol-Attn/). Text, conditioning video,
+and generated-audio prefix queries stay on MLX's dense fused attention path.
+Every target-video query keeps prefix keys and neighboring 64-token video
+blocks exact. Query-dependent high-score blocks are also exact; skipped blocks
+still contribute through key centroids and summed values in the same online
+softmax accumulator. The first two transformer layers, leading denoise region,
+and final evaluation remain dense. A once-per-shape all-dense Metal comparison
+must pass before the sparse path can run.
+
+Without a Turbo adapter, `balanced` and `maximum` also trade exact trajectory
+identity for speed through a modality-aware adaptive cache.
 Every step executes the first transformer block. The runtime then compares its
 target-only residual with the last full refresh using separate global and
 worst-time-slice drift measurements for video and audio. A cache hit reuses the
