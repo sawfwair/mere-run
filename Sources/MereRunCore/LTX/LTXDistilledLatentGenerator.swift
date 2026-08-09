@@ -682,6 +682,7 @@ private final class LTXDistilledTransformer: Module {
     let headDim = 128
     let outChannels = 128
     let timestepScaleMultiplier: Float = 1000.0
+    private let dynamicSparseRuntime: DynamicSparseAttentionRuntime?
 
     @ModuleInfo(key: "patchify_proj") var patchifyProj: Linear
     @ModuleInfo(key: "adaln_single") var adalnSingle: LTXAdaLayerNormSingle
@@ -692,6 +693,7 @@ private final class LTXDistilledTransformer: Module {
     @ModuleInfo(key: "transformer_blocks") var transformerBlocks: [LTXDistilledTransformerBlock]
 
     override init() {
+        self.dynamicSparseRuntime = DynamicSparseAttentionRuntime.configured(model: .ltx)
         self._patchifyProj.wrappedValue = Linear(128, 4096, bias: true)
         self._adalnSingle.wrappedValue = LTXAdaLayerNormSingle(embeddingDim: 4096, embeddingCoefficient: 6)
         self._captionProjection.wrappedValue = LTXPixArtTextProjection(inFeatures: 3840, hiddenSize: 4096, outFeatures: 4096, bias: true)
@@ -722,13 +724,15 @@ private final class LTXDistilledTransformer: Module {
 
         let projectedContext = captionProjection(context).reshaped(batch, context.dim(1), hiddenSize)
 
-        for block in transformerBlocks {
+        for (index, block) in transformerBlocks.enumerated() {
             x = block(
                 x,
                 context: projectedContext,
                 timestepEmb: reshapedTimeEmb,
                 rope: rope,
-                contextMask: nil
+                contextMask: nil,
+                dynamicSparseRuntime: dynamicSparseRuntime,
+                layerIndex: index
             )
         }
 
@@ -740,6 +744,10 @@ private final class LTXDistilledTransformer: Module {
         x = normOut(x)
         x = x * (MLXArray(1.0).asType(x.dtype) + scale) + shift
         return projOut(x)
+    }
+
+    func beginDenoisingStep(index: Int, count: Int) {
+        dynamicSparseRuntime?.beginStep(index: index, count: count)
     }
 }
 
@@ -764,7 +772,9 @@ private final class LTXDistilledTransformerBlock: Module {
         context: MLXArray,
         timestepEmb: MLXArray,
         rope: (cos: MLXArray, sin: MLXArray),
-        contextMask: MLXArray?
+        contextMask: MLXArray?,
+        dynamicSparseRuntime: DynamicSparseAttentionRuntime?,
+        layerIndex: Int
     ) -> MLXArray {
         let batch = x.dim(0)
         let tokens = x.dim(1)
@@ -777,7 +787,14 @@ private final class LTXDistilledTransformerBlock: Module {
 
         var h = rmsNormNoWeight(x)
         h = h * (MLXArray(1.0).asType(h.dtype) + scaleMSA) + shiftMSA
-        h = attn1(h, context: nil, mask: nil, rope: rope)
+        h = attn1(
+            h,
+            context: nil,
+            mask: nil,
+            rope: rope,
+            dynamicSparseRuntime: dynamicSparseRuntime,
+            layerIndex: layerIndex
+        )
 
         var out = x + h * gateMSA
         out = out + attn2(rmsNormNoWeight(out), context: context, mask: contextMask, rope: nil)
@@ -836,7 +853,9 @@ private final class LTXDistilledAttention: Module {
         context: MLXArray?,
         mask: MLXArray?,
         rope: (cos: MLXArray, sin: MLXArray)?,
-        keyRope: (cos: MLXArray, sin: MLXArray)? = nil
+        keyRope: (cos: MLXArray, sin: MLXArray)? = nil,
+        dynamicSparseRuntime: DynamicSparseAttentionRuntime? = nil,
+        layerIndex: Int = 0
     ) -> MLXArray {
         let ctx = context ?? x
 
@@ -854,11 +873,22 @@ private final class LTXDistilledAttention: Module {
             kHeads = applySplitRoPEHeads(kHeads, cosFreq: kRope.cos, sinFreq: kRope.sin)
         }
 
-        var out = MLXFast.scaledDotProductAttention(
+        let scale = 1.0 / Float(headDim).squareRoot()
+        let sparse = context == nil && mask == nil && headDim == DynamicSparseAttention.headDimension
+            ? dynamicSparseRuntime?.call(
+                queries: qHeads,
+                keys: kHeads,
+                values: vHeads,
+                layerIndex: layerIndex,
+                prefixTokenCount: 0,
+                scale: scale
+            )
+            : nil
+        var out = sparse ?? MLXFast.scaledDotProductAttention(
             queries: qHeads,
             keys: kHeads,
             values: vHeads,
-            scale: 1.0 / Float(headDim).squareRoot(),
+            scale: scale,
             mask: mask.map { .array($0) } ?? .none
         )
 
@@ -1001,6 +1031,7 @@ private func denoiseLoop(
     let debugDumpAll = ProcessInfo.processInfo.environment["MERERUN_VIDEO_LTX_DEBUG_DUMP_ALL"] == "1"
 
     for i in 0..<(max(0, sigmas.count - 1)) {
+        transformer.beginDenoisingStep(index: i, count: sigmas.count - 1)
         let sigma = sigmas[i]
         let nextSigma = sigmas[i + 1]
 
@@ -4998,6 +5029,7 @@ func denoiseFrozenAudioVideoLoop(
     let audioSigma = MLX.zeros([audioBatch], dtype: dtype)
 
     for index in 0..<(max(0, sigmas.count - 1)) {
+        transformer.beginDenoisingStep(index: index, count: sigmas.count - 1)
         let sigma = sigmas[index]
         let nextSigma = sigmas[index + 1]
         let batch = currentVideo.dim(0)
@@ -5264,6 +5296,7 @@ private func denoiseAVLoop(
     let dtype = videoLatents.dtype
 
     for i in 0..<(max(0, sigmas.count - 1)) {
+        transformer.beginDenoisingStep(index: i, count: sigmas.count - 1)
         let sigma = sigmas[i]
         let nextSigma = sigmas[i + 1]
 
@@ -5424,6 +5457,7 @@ private func denoiseGuidedAVLoop(
     let dtype = videoLatents.dtype
 
     for index in 0..<(max(0, sigmas.count - 1)) {
+        transformer.beginDenoisingStep(index: index, count: sigmas.count - 1)
         let sigma = sigmas[index]
         let nextSigma = sigmas[index + 1]
         let videoShape = (
@@ -5591,6 +5625,8 @@ private func createAudioPositionGrid(
 }
 
 protocol LTXUnifiedAVTransformerRuntime: Module {
+    func beginDenoisingStep(index: Int, count: Int)
+
     func forward(
         videoLatent: MLXArray,
         audioLatent: MLXArray,
@@ -5616,6 +5652,7 @@ private final class LTXUnifiedAVTransformer: Module, LTXUnifiedAVTransformerRunt
     let audioHeads = 32
     let audioHeadDim = 64
     let timestepScaleMultiplier: Float = 1000.0
+    private let dynamicSparseRuntime: DynamicSparseAttentionRuntime?
 
     @ModuleInfo(key: "patchify_proj") var patchifyProj: Linear
     @ModuleInfo(key: "adaln_single") var adalnSingle: LTXAdaLayerNormSingle
@@ -5638,6 +5675,7 @@ private final class LTXUnifiedAVTransformer: Module, LTXUnifiedAVTransformerRunt
     @ModuleInfo(key: "transformer_blocks") var transformerBlocks: [LTXUnifiedAVTransformerBlock]
 
     override init() {
+        self.dynamicSparseRuntime = DynamicSparseAttentionRuntime.configured(model: .ltx)
         self._patchifyProj.wrappedValue = Linear(128, 4096, bias: true)
         self._adalnSingle.wrappedValue = LTXAdaLayerNormSingle(embeddingDim: 4096, embeddingCoefficient: 6)
         self._captionProjection.wrappedValue = LTXPixArtTextProjection(inFeatures: 3840, hiddenSize: 4096, outFeatures: 4096, bias: true)
@@ -5660,6 +5698,10 @@ private final class LTXUnifiedAVTransformer: Module, LTXUnifiedAVTransformerRunt
             LTXUnifiedAVTransformerBlock()
         }
         super.init()
+    }
+
+    func beginDenoisingStep(index: Int, count: Int) {
+        dynamicSparseRuntime?.beginStep(index: index, count: count)
     }
 
     func forward(
@@ -5749,7 +5791,7 @@ private final class LTXUnifiedAVTransformer: Module, LTXUnifiedAVTransformerRunt
         let videoCrossGate = videoCrossGateFlat.reshaped(videoBatch, videoTokens, -1)
         let audioCrossGate = audioCrossGateFlat.reshaped(audioBatch, audioTokens, -1)
 
-        for block in transformerBlocks {
+        for (index, block) in transformerBlocks.enumerated() {
             let out = block(
                 videoX: videoX,
                 audioX: audioX,
@@ -5764,7 +5806,9 @@ private final class LTXUnifiedAVTransformer: Module, LTXUnifiedAVTransformerRunt
                 videoCrossScaleShiftTimestep: videoCrossScaleShift,
                 audioCrossScaleShiftTimestep: audioCrossScaleShift,
                 videoCrossGateTimestep: videoCrossGate,
-                audioCrossGateTimestep: audioCrossGate
+                audioCrossGateTimestep: audioCrossGate,
+                dynamicSparseRuntime: dynamicSparseRuntime,
+                layerIndex: index
             )
             videoX = out.videoX
             audioX = out.audioX
@@ -5839,7 +5883,9 @@ private final class LTXUnifiedAVTransformerBlock: Module {
         videoCrossScaleShiftTimestep: MLXArray,
         audioCrossScaleShiftTimestep: MLXArray,
         videoCrossGateTimestep: MLXArray,
-        audioCrossGateTimestep: MLXArray
+        audioCrossGateTimestep: MLXArray,
+        dynamicSparseRuntime: DynamicSparseAttentionRuntime?,
+        layerIndex: Int
     ) -> (videoX: MLXArray, audioX: MLXArray) {
         var vx = videoX
         var ax = audioX
@@ -5851,7 +5897,14 @@ private final class LTXUnifiedAVTransformerBlock: Module {
 
         var normVX = rmsNormNoWeight(vx)
         normVX = normVX * (MLXArray(1.0).asType(normVX.dtype) + vScaleMSA) + vShiftMSA
-        vx = vx + attn1(normVX, context: nil, mask: nil, rope: videoRope) * vGateMSA
+        vx = vx + attn1(
+            normVX,
+            context: nil,
+            mask: nil,
+            rope: videoRope,
+            dynamicSparseRuntime: dynamicSparseRuntime,
+            layerIndex: layerIndex
+        ) * vGateMSA
         vx = vx + attn2(rmsNormNoWeight(vx), context: videoContext, mask: nil, rope: nil)
 
         let audioAda = audioScaleShiftTable.reshaped(1, 1, 6, audioDim) + audioTimestepEmb.reshaped(ax.dim(0), ax.dim(1), 6, audioDim)
@@ -5953,6 +6006,7 @@ private final class LTXUnifiedAVTransformerV2: Module, LTXUnifiedAVTransformerRu
     let timestepScaleMultiplier: Float = 1000.0
     let avCaTimestepScaleMultiplier: Float = 1000.0
     private var parityForwardCount = 0
+    private let dynamicSparseRuntime: DynamicSparseAttentionRuntime?
 
     @ModuleInfo(key: "patchify_proj") var patchifyProj: Linear
     @ModuleInfo(key: "audio_patchify_proj") var audioPatchifyProj: Linear
@@ -5974,6 +6028,7 @@ private final class LTXUnifiedAVTransformerV2: Module, LTXUnifiedAVTransformerRu
     @ModuleInfo(key: "audio_norm_out") var audioNormOut: LayerNorm
 
     override init() {
+        self.dynamicSparseRuntime = DynamicSparseAttentionRuntime.configured(model: .ltx)
         self._patchifyProj.wrappedValue = Linear(128, videoDim, bias: true)
         self._audioPatchifyProj.wrappedValue = Linear(128, audioDim, bias: true)
         self._projOut.wrappedValue = Linear(videoDim, 128, bias: true)
@@ -6009,6 +6064,10 @@ private final class LTXUnifiedAVTransformerV2: Module, LTXUnifiedAVTransformerRu
         self._normOut.wrappedValue = LayerNorm(dimensions: videoDim, eps: 1e-6, affine: false)
         self._audioNormOut.wrappedValue = LayerNorm(dimensions: audioDim, eps: 1e-6, affine: false)
         super.init()
+    }
+
+    func beginDenoisingStep(index: Int, count: Int) {
+        dynamicSparseRuntime?.beginStep(index: index, count: count)
     }
 
     func forward(
@@ -6123,6 +6182,8 @@ private final class LTXUnifiedAVTransformerV2: Module, LTXUnifiedAVTransformerRu
                 skipAudioSelfAttention: perturbation.skippedAudioSelfAttentionBlocks.contains(index),
                 skipAudioToVideoCrossAttention: perturbation.skipsAudioToVideoCrossAttention,
                 skipVideoToAudioCrossAttention: perturbation.skipsVideoToAudioCrossAttention,
+                dynamicSparseRuntime: dynamicSparseRuntime,
+                layerIndex: index,
                 debugSave: index == 0 ? { array, name in
                     paritySave(array, "block0_\(name)")
                 } : nil
@@ -6279,6 +6340,8 @@ private final class LTXUnifiedAVTransformerV2Block: Module {
         skipAudioSelfAttention: Bool,
         skipAudioToVideoCrossAttention: Bool,
         skipVideoToAudioCrossAttention: Bool,
+        dynamicSparseRuntime: DynamicSparseAttentionRuntime?,
+        layerIndex: Int,
         debugSave: ((MLXArray, String) -> Void)? = nil
     ) -> (video: MLXArray, audio: MLXArray) {
         var video = videoHidden
@@ -6290,7 +6353,14 @@ private final class LTXUnifiedAVTransformerV2Block: Module {
         if !skipVideoSelfAttention {
             var videoNorm = rmsNormNoWeight(video)
             videoNorm = videoNorm * (MLXArray(1.0).asType(videoNorm.dtype) + vAda[1]) + vAda[0]
-            video = video + attn1(videoNorm, context: nil, mask: nil, rope: videoRope) * vAda[2]
+            video = video + attn1(
+                videoNorm,
+                context: nil,
+                mask: nil,
+                rope: videoRope,
+                dynamicSparseRuntime: dynamicSparseRuntime,
+                layerIndex: layerIndex
+            ) * vAda[2]
         }
         debugSave?(video, "video_after_self_attention")
 
