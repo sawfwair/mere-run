@@ -7,6 +7,7 @@ import MLXNN
 /// to text encoder embeddings (unlike SD3/FLUX which have joint+single splits).
 public final class MMDiT: Module {
     public let config: QwenImageEditTransformerConfig
+    private let dynamicSparseRuntime: DynamicSparseAttentionRuntime?
 
     // Patch embedding - uses DenseLayer to support both Linear and QuantizedLinear
     @ModuleInfo(key: "x_embedder") var xEmbedder: any DenseLayer
@@ -43,6 +44,7 @@ public final class MMDiT: Module {
     ///   - factory: Factory for creating dense layers (default creates standard Linear layers)
     public init(config: QwenImageEditTransformerConfig, factory: DenseLayerFactory = .standard) {
         self.config = config
+        self.dynamicSparseRuntime = DynamicSparseAttentionRuntime.configured(model: .qwenImageEdit)
 
         // Extract configuration
         self.patchSize = config.patchSize
@@ -131,6 +133,10 @@ public final class MMDiT: Module {
         super.init()
     }
 
+    func beginDenoisingStep(index: Int, count: Int) {
+        dynamicSparseRuntime?.beginStep(index: index, count: count)
+    }
+
     /// Forward pass through MMDiT
     /// - Parameters:
     ///   - latents: Noisy latent tensor [batch, channels, height, width]
@@ -175,14 +181,16 @@ public final class MMDiT: Module {
         let ctxFreqsCis = rope.getFreqs(seqLen: ctx.dim(1))
 
         // Process through all transformer blocks with cross-attention
-        for block in transformerBlocks {
+        for (index, block) in transformerBlocks.enumerated() {
             (x, ctx) = block.forwardJoint(
                 x: x,
                 context: ctx,
                 conditioning: tEmb,
                 xFreqsCis: xFreqsCis,
                 contextFreqsCis: ctxFreqsCis,
-                attnMask: nil
+                attnMask: nil,
+                dynamicSparseRuntime: dynamicSparseRuntime,
+                layerIndex: index
             )
         }
 

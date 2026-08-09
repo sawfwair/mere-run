@@ -167,6 +167,26 @@ public final class MMDiTAttention: Module {
         contextFreqsCis: MLXArray? = nil,
         attnMask: MLXArray? = nil
     ) -> (image: MLXArray, context: MLXArray) {
+        jointAttention(
+            x: x,
+            context: context,
+            xFreqsCis: xFreqsCis,
+            contextFreqsCis: contextFreqsCis,
+            attnMask: attnMask,
+            dynamicSparseRuntime: nil,
+            layerIndex: 0
+        )
+    }
+
+    func jointAttention(
+        x: MLXArray,
+        context: MLXArray,
+        xFreqsCis: MLXArray? = nil,
+        contextFreqsCis: MLXArray? = nil,
+        attnMask: MLXArray? = nil,
+        dynamicSparseRuntime: DynamicSparseAttentionRuntime? = nil,
+        layerIndex: Int = 0
+    ) -> (image: MLXArray, context: MLXArray) {
         guard let addQProj, let addKProj, let addVProj, let toAddOut else {
             fatalError("Joint attention requires context projections (hasContextProjection=true)")
         }
@@ -218,8 +238,35 @@ public final class MMDiTAttention: Module {
             vT = repeatKV(vT, repeats: repeats)
         }
 
-        // Scaled dot-product attention
-        let attnOut = MLXFast.scaledDotProductAttention(
+        let sparse: MLXArray? = attnMask == nil ? dynamicSparseRuntime.flatMap { runtime in
+            // Qwen stores image tokens first. Reorder only the attention axes
+            // so context stays exact and the generated image becomes the tail.
+            let reorderedQ = MLX.concatenated([
+                qT[0..., 0..., imgSeqLen..., 0...],
+                qT[0..., 0..., 0..<imgSeqLen, 0...],
+            ], axis: 2)
+            let reorderedK = MLX.concatenated([
+                kT[0..., 0..., imgSeqLen..., 0...],
+                kT[0..., 0..., 0..<imgSeqLen, 0...],
+            ], axis: 2)
+            let reorderedV = MLX.concatenated([
+                vT[0..., 0..., imgSeqLen..., 0...],
+                vT[0..., 0..., 0..<imgSeqLen, 0...],
+            ], axis: 2)
+            guard let reorderedOutput = runtime.call(
+                queries: reorderedQ,
+                keys: reorderedK,
+                values: reorderedV,
+                layerIndex: layerIndex,
+                prefixTokenCount: ctxSeqLen,
+                scale: scale
+            ) else { return nil }
+            return MLX.concatenated([
+                reorderedOutput[0..., 0..., ctxSeqLen..., 0...],
+                reorderedOutput[0..., 0..., 0..<ctxSeqLen, 0...],
+            ], axis: 2)
+        } : nil
+        let attnOut = sparse ?? MLXFast.scaledDotProductAttention(
             queries: qT,
             keys: kT,
             values: vT,

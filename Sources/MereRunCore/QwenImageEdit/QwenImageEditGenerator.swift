@@ -156,6 +156,10 @@ public actor QwenImageEditGenerator: ImageGenerator {
         )
         for stepIndex in 0..<inferenceConfig.numInferenceSteps {
             try Task.checkCancellation()
+            transformer.beginDenoisingStep(
+                index: stepIndex,
+                count: inferenceConfig.numInferenceSteps
+            )
             progressHandler?(GenerationProgress(
                 stage: .denoising,
                 stepIndex: stepIndex,

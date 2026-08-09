@@ -161,6 +161,28 @@ public final class MMDiTBlock: Module {
         contextFreqsCis: MLXArray? = nil,
         attnMask: MLXArray? = nil
     ) -> (image: MLXArray, context: MLXArray) {
+        forwardJoint(
+            x: x,
+            context: context,
+            conditioning: conditioning,
+            xFreqsCis: xFreqsCis,
+            contextFreqsCis: contextFreqsCis,
+            attnMask: attnMask,
+            dynamicSparseRuntime: nil,
+            layerIndex: 0
+        )
+    }
+
+    func forwardJoint(
+        x: MLXArray,
+        context: MLXArray,
+        conditioning: MLXArray,
+        xFreqsCis: MLXArray? = nil,
+        contextFreqsCis: MLXArray? = nil,
+        attnMask: MLXArray? = nil,
+        dynamicSparseRuntime: DynamicSparseAttentionRuntime? = nil,
+        layerIndex: Int = 0
+    ) -> (image: MLXArray, context: MLXArray) {
         guard blockType == .joint else {
             fatalError("forwardJoint called on single block")
         }
@@ -188,7 +210,9 @@ public final class MMDiTBlock: Module {
             context: ctxNormed,
             xFreqsCis: xFreqsCis,
             contextFreqsCis: contextFreqsCis,
-            attnMask: attnMask
+            attnMask: attnMask,
+            dynamicSparseRuntime: dynamicSparseRuntime,
+            layerIndex: layerIndex
         )
 
         // Residual with gate
