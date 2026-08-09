@@ -40,11 +40,13 @@ final class DynamicSparseAttentionTests: MereRunCoreTestCase {
             model: .wan2,
             environment: [
                 "MERERUN_DYNAMIC_SPARSE_ATTENTION": "wan2",
+                "MERERUN_DYNAMIC_SPARSE_LOG": "1",
                 "MERERUN_DYNAMIC_SPARSE_MIN_TOKENS": "256",
                 "MERERUN_DYNAMIC_SPARSE_TAU": "0.75",
             ]
         ))
         XCTAssertEqual(runtime.policy.minimumSequenceLength, 256)
         XCTAssertEqual(runtime.policy.thresholdStandardDeviations, 0.75)
+        XCTAssertNotNil(runtime.logHandler)
     }
 }

@@ -59,7 +59,7 @@ final class DynamicSparseAttentionRuntime {
             .flatMap { $0 >= 0 ? $0 : nil } ?? 1
         let sequenceThreshold = Int(environment["MERERUN_DYNAMIC_SPARSE_MIN_TOKENS"] ?? "")
             .flatMap { $0 > 0 ? $0 : nil } ?? minimumSequenceLength
-        return DynamicSparseAttentionRuntime(
+        let runtime = DynamicSparseAttentionRuntime(
             model: model,
             policy: DynamicSparseAttentionPolicy(
                 thresholdStandardDeviations: threshold,
@@ -69,6 +69,14 @@ final class DynamicSparseAttentionRuntime {
                 denseLeadingLayerCount: denseLeadingLayerCount
             )
         )
+        if ["1", "true", "yes"].contains(
+            environment["MERERUN_DYNAMIC_SPARSE_LOG"]?.lowercased() ?? ""
+        ) {
+            runtime.logHandler = { message in
+                FileHandle.standardError.write(Data((message + "\n").utf8))
+            }
+        }
+        return runtime
     }
 
     static func selection(
