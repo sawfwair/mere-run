@@ -525,6 +525,7 @@ public final class SCAIL2Generator: @unchecked Sendable {
                 : eulerScheduler.timesteps
             for (stepIndex, timestep) in timesteps.enumerated() {
                 try Task.checkCancellation()
+                transformer.beginDenoisingStep(index: stepIndex, count: timesteps.count)
                 progressHandler?(GenerationProgress(
                     stage: .denoising,
                     stepIndex: stepIndex,

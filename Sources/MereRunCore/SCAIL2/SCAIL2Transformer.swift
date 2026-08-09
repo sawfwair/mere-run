@@ -312,7 +312,13 @@ final class SCAIL2SelfAttention: Module {
         )
     }
 
-    func callAsFunction(_ input: MLXArray, rope: Wan2RoPE.Cache) -> MLXArray {
+    func callAsFunction(
+        _ input: MLXArray,
+        rope: Wan2RoPE.Cache,
+        layout: SCAIL2TokenLayout,
+        dynamicSparseRuntime: DynamicSparseAttentionRuntime?,
+        layerIndex: Int
+    ) -> MLXArray {
         let batch = input.dim(0)
         let sequence = input.dim(1)
         let typed = input.asType(query.weight.dtype)
@@ -321,7 +327,41 @@ final class SCAIL2SelfAttention: Module {
         let v = value(typed).reshaped(batch, sequence, heads, headDimension).transposed(0, 2, 1, 3)
         q = SCAIL2RoPE.apply(q, cache: rope).transposed(0, 2, 1, 3)
         k = SCAIL2RoPE.apply(k, cache: rope).transposed(0, 2, 1, 3)
-        let attended = Self.scaledDotProductAttention(
+        let sparse: MLXArray? = dynamicSparseRuntime.flatMap { runtime in
+            guard layout.totalLength == sequence else { return nil }
+            let conditioningEnd = layout.videoOffset
+            let videoEnd = conditioningEnd + layout.videoLength
+            let prefixTokenCount = layout.totalLength - layout.videoLength
+            let reorderedQueries = MLX.concatenated([
+                q[0..., 0..., 0..<conditioningEnd, 0...],
+                q[0..., 0..., videoEnd..., 0...],
+                q[0..., 0..., conditioningEnd..<videoEnd, 0...],
+            ], axis: 2)
+            let reorderedKeys = MLX.concatenated([
+                k[0..., 0..., 0..<conditioningEnd, 0...],
+                k[0..., 0..., videoEnd..., 0...],
+                k[0..., 0..., conditioningEnd..<videoEnd, 0...],
+            ], axis: 2)
+            let reorderedValues = MLX.concatenated([
+                v[0..., 0..., 0..<conditioningEnd, 0...],
+                v[0..., 0..., videoEnd..., 0...],
+                v[0..., 0..., conditioningEnd..<videoEnd, 0...],
+            ], axis: 2)
+            guard let reorderedOutput = runtime.call(
+                queries: reorderedQueries,
+                keys: reorderedKeys,
+                values: reorderedValues,
+                layerIndex: layerIndex,
+                prefixTokenCount: prefixTokenCount,
+                scale: scale
+            ) else { return nil }
+            return MLX.concatenated([
+                reorderedOutput[0..., 0..., 0..<conditioningEnd, 0...],
+                reorderedOutput[0..., 0..., prefixTokenCount..., 0...],
+                reorderedOutput[0..., 0..., conditioningEnd..<prefixTokenCount, 0...],
+            ], axis: 2)
+        }
+        let attended = sparse ?? Self.scaledDotProductAttention(
             queries: q,
             keys: k,
             values: v,
@@ -520,13 +560,22 @@ final class SCAIL2TransformerBlock: Module {
         text: MLXArray,
         image: MLXArray,
         rope: Wan2RoPE.Cache,
-        crossCache: SCAIL2CrossAttentionCache?
+        crossCache: SCAIL2CrossAttentionCache?,
+        layout: SCAIL2TokenLayout,
+        dynamicSparseRuntime: DynamicSparseAttentionRuntime?,
+        layerIndex: Int
     ) -> MLXArray {
         let parts = MLX.split(modulation.expandedDimensions(axis: 1) + modulationInput, parts: 6, axis: 2)
             .map { $0.squeezed(axis: 2) }
         let hiddenType = input.dtype
         let selfInput = selfNorm(input.asType(.float32)) * (1 + parts[1]) + parts[0]
-        let selfOutput = selfAttention(selfInput.asType(hiddenType), rope: rope)
+        let selfOutput = selfAttention(
+            selfInput.asType(hiddenType),
+            rope: rope,
+            layout: layout,
+            dynamicSparseRuntime: dynamicSparseRuntime,
+            layerIndex: layerIndex
+        )
         var hidden = (input.asType(.float32) + selfOutput.asType(.float32) * parts[2]).asType(hiddenType)
         hidden = hidden + crossAttention(
             crossNorm(hidden.asType(.float32)).asType(hiddenType),
@@ -545,13 +594,20 @@ final class SCAIL2TransformerBlock: Module {
         text: MLXArray,
         image: MLXArray,
         rope: Wan2RoPE.Cache,
-        crossCache: SCAIL2CrossAttentionCache?
+        crossCache: SCAIL2CrossAttentionCache?,
+        layout: SCAIL2TokenLayout
     ) -> [String: MLXArray] {
         let parts = MLX.split(modulation.expandedDimensions(axis: 1) + modulationInput, parts: 6, axis: 2)
             .map { $0.squeezed(axis: 2) }
         let hiddenType = input.dtype
         let selfInput = selfNorm(input.asType(.float32)) * (1 + parts[1]) + parts[0]
-        let selfOutput = selfAttention(selfInput.asType(hiddenType), rope: rope)
+        let selfOutput = selfAttention(
+            selfInput.asType(hiddenType),
+            rope: rope,
+            layout: layout,
+            dynamicSparseRuntime: nil,
+            layerIndex: 0
+        )
         var hidden = (input.asType(.float32) + selfOutput.asType(.float32) * parts[2]).asType(hiddenType)
         let postSelf = hidden
         let crossInput = crossNorm(hidden.asType(.float32)).asType(hiddenType)
@@ -616,6 +672,7 @@ public final class SCAIL2TransformerModel: Module {
     public let configuration: SCAIL2TransformerConfiguration
     let inverseTimestepFrequencies: MLXArray
     let ropeFrequencies: MLXArray
+    private let dynamicSparseRuntime: DynamicSparseAttentionRuntime?
     @ModuleInfo(key: "patch_embedding_proj") var patchProjection: Linear
     @ModuleInfo(key: "patch_embedding_pose_proj") var posePatchProjection: Linear
     @ModuleInfo(key: "patch_embedding_mask_proj") var maskPatchProjection: Linear
@@ -630,6 +687,7 @@ public final class SCAIL2TransformerModel: Module {
 
     public init(configuration: SCAIL2TransformerConfiguration = SCAIL2TransformerConfiguration()) {
         self.configuration = configuration
+        self.dynamicSparseRuntime = DynamicSparseAttentionRuntime.configured(model: .scail2)
         let patchVolume = configuration.patchSize.reduce(1, *)
         self._patchProjection.wrappedValue = Linear(
             configuration.inputChannels * patchVolume,
@@ -729,6 +787,10 @@ public final class SCAIL2TransformerModel: Module {
         )
     }
 
+    func beginDenoisingStep(index: Int, count: Int) {
+        dynamicSparseRuntime?.beginStep(index: index, count: count)
+    }
+
     public func callAsFunction(
         _ input: SCAIL2TransformerInput,
         conditioning: SCAIL2PreparedConditioning,
@@ -761,7 +823,10 @@ public final class SCAIL2TransformerModel: Module {
                 text: conditioning.text,
                 image: conditioning.image,
                 rope: rope,
-                crossCache: crossCache
+                crossCache: crossCache,
+                layout: assembled.layout,
+                dynamicSparseRuntime: dynamicSparseRuntime,
+                layerIndex: index
             )
             if let evaluationBlockInterval,
                (index + 1).isMultiple(of: evaluationBlockInterval) {
@@ -810,7 +875,8 @@ public final class SCAIL2TransformerModel: Module {
             text: conditioning.text,
             image: conditioning.image,
             rope: rope,
-            crossCache: conditioning.crossAttentionCaches[0]
+            crossCache: conditioning.crossAttentionCaches[0],
+            layout: assembled.layout
         )
         hidden = blockTrace["block_0_output"]!
         let patches = outputHead(hidden, timestepEmbedding: timestepEmbedding)
@@ -869,7 +935,10 @@ public final class SCAIL2TransformerModel: Module {
                 text: conditioning.text,
                 image: conditioning.image,
                 rope: rope,
-                crossCache: conditioning.crossAttentionCaches[index]
+                crossCache: conditioning.crossAttentionCaches[index],
+                layout: assembled.layout,
+                dynamicSparseRuntime: nil,
+                layerIndex: index
             )
         }
         let patches = outputHead(finalHidden, timestepEmbedding: timestepEmbedding)
