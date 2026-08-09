@@ -482,6 +482,16 @@ swift run mere.run image validate --family klein --test pipeline
 - `Sources/MereRunCore/ZImageTurbo/ZImageTurboGenerator+Inference.swift`
 - `Sources/MereRunCore/ZImageTurbo/ZImageTurboGenerator+LoRA.swift`
 
+Z-Image automatically uses dynamic sparse attention for sequences of at least
+12,000 tokens. The first two transformer layers, the leading 20% of denoising,
+and the final denoise step stay dense, and a once-per-shape numerical gate falls
+back to dense attention whenever the sparse route is not sufficiently faithful.
+Set `MERERUN_DYNAMIC_SPARSE_ATTENTION=0` to keep all attention dense. The sparse
+path is approximate, so same-seed high-resolution images can differ from dense
+generation; smaller shapes stay on the byte-identical dense path. In a warm
+1792x1792 four-step run it reduced generation time from 151.41 to 133.03 seconds
+(12.1%) while peak reported memory remained approximately 109.8 GB.
+
 ### HiDream O1 family
 
 - `Sources/MereRunCore/HiDreamO1/HiDreamO1Generator.swift`
