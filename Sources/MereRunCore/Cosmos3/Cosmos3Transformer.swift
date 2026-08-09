@@ -166,7 +166,9 @@ final class Cosmos3PackedAttention: Module {
             understandingSine: MLXArray,
             generationCosine: MLXArray,
             generationSine: MLXArray
-        )
+        ),
+        dynamicSparseRuntime: DynamicSparseAttentionRuntime?,
+        layerIndex: Int
     ) -> (understanding: MLXArray, generation: MLXArray) {
         var qUnderstanding = understandingQuery(understanding)
             .reshaped(-1, attentionHeads, headDimension)
@@ -214,16 +216,67 @@ final class Cosmos3PackedAttention: Module {
             values: vUnderstanding,
             mask: .causal
         )
-        let full = attend(
+        let generationKeys = MLX.concatenated([normalizedUnderstandingKey, kGeneration], axis: 0)
+        let generationValues = MLX.concatenated([vUnderstanding, vGeneration], axis: 0)
+        let sparse = sparseGenerationAttention(
+            understandingQueries: qUnderstanding,
+            generationQueries: qGeneration,
+            keys: generationKeys,
+            values: generationValues,
+            dynamicSparseRuntime: dynamicSparseRuntime,
+            layerIndex: layerIndex
+        )
+        let full = sparse ?? attend(
             queries: qGeneration,
-            keys: MLX.concatenated([normalizedUnderstandingKey, kGeneration], axis: 0),
-            values: MLX.concatenated([vUnderstanding, vGeneration], axis: 0),
+            keys: generationKeys,
+            values: generationValues,
             mask: .none
         )
         return (
             understandingOutput(causal),
             generationOutput(full)
         )
+    }
+
+    private func sparseGenerationAttention(
+        understandingQueries: MLXArray,
+        generationQueries: MLXArray,
+        keys: MLXArray,
+        values: MLXArray,
+        dynamicSparseRuntime: DynamicSparseAttentionRuntime?,
+        layerIndex: Int
+    ) -> MLXArray? {
+        guard let dynamicSparseRuntime else { return nil }
+        let prefixTokenCount = understandingQueries.dim(0)
+        let queries = MLX.concatenated(
+            [understandingQueries, generationQueries],
+            axis: 0
+        ).transposed(1, 0, 2).expandedDimensions(axis: 0)
+        var expandedKeys = keys.transposed(1, 0, 2).expandedDimensions(axis: 0)
+        var expandedValues = values.transposed(1, 0, 2).expandedDimensions(axis: 0)
+        if keyValueHeads != attentionHeads {
+            let repeats = attentionHeads / keyValueHeads
+            let keyLength = keys.dim(0)
+            expandedKeys = MLX.broadcast(
+                expandedKeys.reshaped(1, keyValueHeads, 1, keyLength, headDimension),
+                to: [1, keyValueHeads, repeats, keyLength, headDimension]
+            ).reshaped(1, attentionHeads, keyLength, headDimension)
+            expandedValues = MLX.broadcast(
+                expandedValues.reshaped(1, keyValueHeads, 1, keyLength, headDimension),
+                to: [1, keyValueHeads, repeats, keyLength, headDimension]
+            ).reshaped(1, attentionHeads, keyLength, headDimension)
+        }
+        guard let attended = dynamicSparseRuntime.call(
+            queries: queries,
+            keys: expandedKeys,
+            values: expandedValues,
+            layerIndex: layerIndex,
+            prefixTokenCount: prefixTokenCount,
+            scale: scale
+        ) else { return nil }
+        return attended[0, 0..., prefixTokenCount..., 0...]
+            .transposed(1, 0, 2)
+            .reshaped(generationQueries.dim(0), attentionHeads * headDimension)
     }
 
     func understandingOnly(
@@ -333,12 +386,16 @@ final class Cosmos3DecoderLayer: Module {
             understandingSine: MLXArray,
             generationCosine: MLXArray,
             generationSine: MLXArray
-        )
+        ),
+        dynamicSparseRuntime: DynamicSparseAttentionRuntime?,
+        layerIndex: Int
     ) -> (understanding: MLXArray, generation: MLXArray) {
         let attended = attention(
             understanding: understandingInputNorm(understanding),
             generation: generationInputNorm(generation),
-            rotary: rotary
+            rotary: rotary,
+            dynamicSparseRuntime: dynamicSparseRuntime,
+            layerIndex: layerIndex
         )
         let understandingResidual = understanding + attended.understanding
         let generationResidual = generation + attended.generation
@@ -387,6 +444,7 @@ final class Cosmos3TimestepEmbedding: Module {
 public final class Cosmos3OmniTransformerModel: Module {
     public let configuration: Cosmos3TransformerConfiguration
     public let rotaryEmbedding: Cosmos3RotaryEmbedding
+    private let dynamicSparseRuntime: DynamicSparseAttentionRuntime?
 
     @ModuleInfo(key: "embed_tokens") var tokenEmbedding: Embedding
     @ModuleInfo(key: "layers") var layers: [Cosmos3DecoderLayer]
@@ -405,6 +463,7 @@ public final class Cosmos3OmniTransformerModel: Module {
         precondition(configuration.generatesActions)
         let actionDimension = configuration.actionDimension!
         self.configuration = configuration
+        self.dynamicSparseRuntime = DynamicSparseAttentionRuntime.configured(model: .cosmos3)
         self.rotaryEmbedding = Cosmos3RotaryEmbedding(
             headDimension: configuration.headDimension,
             theta: configuration.ropeTheta,
@@ -481,6 +540,10 @@ public final class Cosmos3OmniTransformerModel: Module {
         return projected
     }
 
+    func beginDenoisingStep(index: Int, count: Int) {
+        dynamicSparseRuntime?.beginStep(index: index, count: count)
+    }
+
     public func callAsFunction(
         understanding: MLXArray,
         generation: MLXArray,
@@ -498,11 +561,13 @@ public final class Cosmos3OmniTransformerModel: Module {
         )
         var understandingHidden = understanding
         var generationHidden = generation
-        for layer in layers {
+        for (index, layer) in layers.enumerated() {
             (understandingHidden, generationHidden) = layer(
                 understanding: understandingHidden,
                 generation: generationHidden,
-                rotary: layerRotary
+                rotary: layerRotary,
+                dynamicSparseRuntime: dynamicSparseRuntime,
+                layerIndex: index
             )
         }
         return (

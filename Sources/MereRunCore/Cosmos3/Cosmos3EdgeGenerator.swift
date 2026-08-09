@@ -319,6 +319,10 @@ public final class Cosmos3EdgeGenerator: @unchecked Sendable {
         )
         for (stepIndex, timestep) in visionScheduler.timesteps.enumerated() {
             try Task.checkCancellation()
+            transformer!.beginDenoisingStep(
+                index: stepIndex,
+                count: visionScheduler.timesteps.count
+            )
             progressHandler?(GenerationProgress(
                 stage: .denoising,
                 stepIndex: stepIndex,
@@ -463,6 +467,7 @@ public final class Cosmos3EdgeGenerator: @unchecked Sendable {
         )
         for (stepIndex, timestep) in scheduler.timesteps.enumerated() {
             try Task.checkCancellation()
+            transformer!.beginDenoisingStep(index: stepIndex, count: scheduler.timesteps.count)
             progressHandler?(GenerationProgress(
                 stage: .denoising,
                 stepIndex: stepIndex,
