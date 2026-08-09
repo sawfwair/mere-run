@@ -73,7 +73,10 @@ final class Ideogram4Attention: Module {
         _ x: MLXArray,
         segmentIds: MLXArray?,
         cos: MLXArray,
-        sin: MLXArray
+        sin: MLXArray,
+        dynamicSparseRuntime: DynamicSparseAttentionRuntime?,
+        layerIndex: Int,
+        prefixTokenCount: Int
     ) -> MLXArray {
         let batch = x.dim(0)
         let sequenceLength = x.dim(1)
@@ -105,6 +108,33 @@ final class Ideogram4Attention: Module {
 
         (queries, keys) = applyRotaryPosEmb(queries, keys, cos: cos, sin: sin)
 
+        let sparse = segmentIds == nil
+            ? dynamicSparseRuntime?.call(
+                queries: queries,
+                keys: keys,
+                values: values,
+                layerIndex: layerIndex,
+                prefixTokenCount: prefixTokenCount,
+                scale: scale
+            )
+            : nil
+        let attended = (sparse ?? denseAttention(
+            queries: queries,
+            keys: keys,
+            values: values,
+            segmentIds: segmentIds
+        )).asType(x.dtype)
+            .transposed(0, 2, 1, 3)
+            .reshaped(batch, sequenceLength, hiddenSize)
+        return output(attended)
+    }
+
+    private func denseAttention(
+        queries: MLXArray,
+        keys: MLXArray,
+        values: MLXArray,
+        segmentIds: MLXArray?
+    ) -> MLXArray {
         let scores = MLX.matmul(
             queries.asType(.float32),
             keys.asType(.float32).transposed(0, 1, 3, 2)
@@ -119,16 +149,9 @@ final class Ideogram4Attention: Module {
             )
             attention = softmax(maskedScores, axis: -1)
         } else {
-            // Samples built by Ideogram4SampleBuilder contain one valid segment.
-            // Skipping its all-true O(sequence^2) mask avoids both the mask and
-            // the masked-score materialization in every denoiser layer.
             attention = softmax(scores, axis: -1)
         }
-        let attended = MLX.matmul(attention, values.asType(.float32))
-            .asType(x.dtype)
-            .transposed(0, 2, 1, 3)
-            .reshaped(batch, sequenceLength, hiddenSize)
-        return output(attended)
+        return MLX.matmul(attention, values.asType(.float32))
     }
 
     private func blockDiagonalAttentionMask(segmentIds: MLXArray) -> MLXArray {
@@ -199,7 +222,10 @@ final class Ideogram4TransformerBlock: Module {
         segmentIds: MLXArray?,
         cos: MLXArray,
         sin: MLXArray,
-        adalnInput: MLXArray
+        adalnInput: MLXArray,
+        dynamicSparseRuntime: DynamicSparseAttentionRuntime?,
+        layerIndex: Int,
+        prefixTokenCount: Int
     ) -> MLXArray {
         let modulation = adalnModulation(adalnInput)
         let modulationParts = MLX.split(modulation, parts: 4, axis: -1)
@@ -221,7 +247,10 @@ final class Ideogram4TransformerBlock: Module {
             attentionInput,
             segmentIds: segmentIds,
             cos: cos,
-            sin: sin
+            sin: sin,
+            dynamicSparseRuntime: dynamicSparseRuntime,
+            layerIndex: layerIndex,
+            prefixTokenCount: prefixTokenCount
         )
         var out = fusedKernelsEnabled
             ? Ideogram4FusedKernels.gatedResidualRMSNorm(
@@ -278,6 +307,7 @@ final class Ideogram4FinalLayer: Module {
 public final class Ideogram4Transformer: Module {
     public let configuration: Ideogram4TransformerConfiguration
     let fusedKernelsEnabled: Bool
+    private let dynamicSparseRuntime: DynamicSparseAttentionRuntime?
 
     @ModuleInfo(key: "input_proj") var inputProj: Linear
     @ModuleInfo(key: "llm_cond_norm") var llmCondNorm: RMSNorm
@@ -300,6 +330,7 @@ public final class Ideogram4Transformer: Module {
     init(configuration: Ideogram4TransformerConfiguration, fusedKernelsEnabled: Bool) {
         self.configuration = configuration
         self.fusedKernelsEnabled = fusedKernelsEnabled
+        self.dynamicSparseRuntime = DynamicSparseAttentionRuntime.configured(model: .ideogram4)
         self._inputProj.wrappedValue = Linear(configuration.inChannels, configuration.embeddingDim, bias: true)
         self._llmCondNorm.wrappedValue = RMSNorm(dimensions: configuration.llmFeaturesDim, eps: 1e-6)
         self._llmCondProj.wrappedValue = Linear(configuration.llmFeaturesDim, configuration.embeddingDim, bias: true)
@@ -325,6 +356,10 @@ public final class Ideogram4Transformer: Module {
         super.init()
     }
 
+    func beginDenoisingStep(index: Int, count: Int) {
+        dynamicSparseRuntime?.beginStep(index: index, count: count)
+    }
+
     public func callAsFunction(sample: Ideogram4PackedSample, timestep: MLXArray) -> MLXArray {
         callAsFunction(
             llmFeatures: sample.llmFeatures,
@@ -333,7 +368,8 @@ public final class Ideogram4Transformer: Module {
             positionIds: sample.positionIds,
             segmentIds: sample.segmentIds,
             indicator: sample.indicator,
-            segmentsAreUniform: true
+            segmentsAreUniform: true,
+            dynamicSparsePrefixTokenCount: sample.textTokenCount
         )
     }
 
@@ -352,7 +388,8 @@ public final class Ideogram4Transformer: Module {
             positionIds: positionIds,
             segmentIds: segmentIds,
             indicator: indicator,
-            segmentsAreUniform: false
+            segmentsAreUniform: false,
+            dynamicSparsePrefixTokenCount: 0
         )
     }
 
@@ -363,7 +400,8 @@ public final class Ideogram4Transformer: Module {
         positionIds: MLXArray,
         segmentIds: MLXArray,
         indicator: MLXArray,
-        segmentsAreUniform: Bool
+        segmentsAreUniform: Bool,
+        dynamicSparsePrefixTokenCount: Int = 0
     ) -> MLXArray {
         let outputMask = roleMask(indicator, role: Ideogram4SampleBuilder.outputImageIndicator, dtype: x.dtype)
         let llmMask = roleMask(indicator, role: Ideogram4SampleBuilder.llmTokenIndicator, dtype: x.dtype)
@@ -384,13 +422,16 @@ public final class Ideogram4Transformer: Module {
 
         let normalizedPositionIds = normalizePositionIds(positionIds)
         let (cos, sin) = rotaryEmbedding(positionIds: normalizedPositionIds, dtype: hidden.dtype)
-        for layer in layers {
+        for (index, layer) in layers.enumerated() {
             hidden = layer(
                 hidden,
                 segmentIds: segmentsAreUniform ? nil : segmentIds,
                 cos: cos,
                 sin: sin,
-                adalnInput: adalnInput
+                adalnInput: adalnInput,
+                dynamicSparseRuntime: dynamicSparseRuntime,
+                layerIndex: index,
+                prefixTokenCount: dynamicSparsePrefixTokenCount
             )
         }
         return finalLayer(hidden, conditioning: adalnInput).asType(.float32)

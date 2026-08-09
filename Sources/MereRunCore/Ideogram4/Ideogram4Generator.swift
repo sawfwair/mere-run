@@ -132,6 +132,8 @@ public final class Ideogram4Generator: ImageGenerator {
         for step in stride(from: request.steps - 1, through: 0, by: -1) {
             try Task.checkCancellation()
             let completed = request.steps - 1 - step
+            conditionalTransformer.beginDenoisingStep(index: completed, count: request.steps)
+            unconditionalTransformer.beginDenoisingStep(index: completed, count: request.steps)
             progressHandler?(GenerationProgress(stage: .denoising, stepIndex: completed, totalSteps: request.steps))
 
             let tValue = scheduler.value(at: scheduler.interval(step + 1))
