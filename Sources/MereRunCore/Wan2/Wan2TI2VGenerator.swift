@@ -211,6 +211,7 @@ public final class Wan2TI2VGenerator: @unchecked Sendable {
         let debugStats = ProcessInfo.processInfo.environment["MERERUN_WAN2_DEBUG_STATS"] == "1"
         for (stepIndex, timestep) in timesteps.enumerated() {
             try Task.checkCancellation()
+            transformer.beginDenoisingStep(index: stepIndex, count: timesteps.count)
             progressHandler?(GenerationProgress(
                 stage: .denoising,
                 stepIndex: stepIndex,

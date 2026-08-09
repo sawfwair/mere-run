@@ -256,7 +256,9 @@ final class Wan2SelfAttention: Module {
         _ input: MLXArray,
         grid: Wan2GridSize,
         rope: Wan2RoPE.Cache,
-        mask: MLXArray?
+        mask: MLXArray?,
+        dynamicSparseRuntime: DynamicSparseAttentionRuntime?,
+        layerIndex: Int
     ) -> MLXArray {
         let batch = input.dim(0)
         let sequence = input.dim(1)
@@ -267,7 +269,17 @@ final class Wan2SelfAttention: Module {
         let v = value(typed).reshaped(batch, sequence, heads, headDimension).transposed(0, 2, 1, 3)
         q = Wan2RoPE.apply(q.asType(.float32), grid: grid, cache: rope).transposed(0, 2, 1, 3)
         k = Wan2RoPE.apply(k.asType(.float32), grid: grid, cache: rope).transposed(0, 2, 1, 3)
-        let attended = MLXFast.scaledDotProductAttention(
+        let sparse = mask == nil
+            ? dynamicSparseRuntime?.call(
+                queries: q,
+                keys: k,
+                values: v,
+                layerIndex: layerIndex,
+                prefixTokenCount: 0,
+                scale: scale
+            )
+            : nil
+        let attended = sparse ?? MLXFast.scaledDotProductAttention(
             queries: q,
             keys: k,
             values: v,
@@ -396,7 +408,9 @@ final class Wan2TransformerBlock: Module {
         rope: Wan2RoPE.Cache,
         selfMask: MLXArray?,
         crossCache: Wan2AttentionKVCache?,
-        cameraConditioning: Wan2ProjectiveCameraConditioning?
+        cameraConditioning: Wan2ProjectiveCameraConditioning?,
+        dynamicSparseRuntime: DynamicSparseAttentionRuntime?,
+        layerIndex: Int
     ) -> MLXArray {
         let parts = MLX.split(modulation.expandedDimensions(axis: 1) + modulationInput, parts: 6, axis: 2)
             .map { $0.squeezed(axis: 2) }
@@ -407,7 +421,9 @@ final class Wan2TransformerBlock: Module {
             selfInput.asType(hiddenType),
             grid: grid,
             rope: rope,
-            mask: selfMask
+            mask: selfMask,
+            dynamicSparseRuntime: dynamicSparseRuntime,
+            layerIndex: layerIndex
         )
         if let cameraAttention, let cameraConditioning {
             precondition(cameraConditioning.frameCount == grid.frames)
@@ -463,6 +479,7 @@ public final class Wan2TransformerModel: Module {
     public let configuration: Wan2TransformerConfiguration
     let inverseTimestepFrequencies: MLXArray
     let ropeFrequencies: MLXArray
+    private let dynamicSparseRuntime: DynamicSparseAttentionRuntime?
 
     @ModuleInfo(key: "patch_embedding_proj") var patchProjection: Linear
     @ModuleInfo(key: "text_embedding_0") var textProjectionIn: Linear
@@ -475,6 +492,7 @@ public final class Wan2TransformerModel: Module {
 
     public init(configuration: Wan2TransformerConfiguration = Wan2TransformerConfiguration()) {
         self.configuration = configuration
+        self.dynamicSparseRuntime = DynamicSparseAttentionRuntime.configured(model: .wan2)
         let patchVolume = configuration.patchSize.reduce(1, *)
         self._patchProjection.wrappedValue = Linear(
             configuration.inputChannels * patchVolume,
@@ -543,6 +561,10 @@ public final class Wan2TransformerModel: Module {
         blocks.map { $0.crossAttention.prepareCache(context: context) }
     }
 
+    func beginDenoisingStep(index: Int, count: Int) {
+        dynamicSparseRuntime?.beginStep(index: index, count: count)
+    }
+
     public func callAsFunction(
         latents: [MLXArray],
         timesteps: MLXArray,
@@ -598,7 +620,9 @@ public final class Wan2TransformerModel: Module {
                     rope: rope,
                     selfMask: nil,
                     crossCache: crossCaches?[index],
-                    cameraConditioning: cameraConditioning
+                    cameraConditioning: cameraConditioning,
+                    dynamicSparseRuntime: dynamicSparseRuntime,
+                    layerIndex: index
                 )
             }
         }
