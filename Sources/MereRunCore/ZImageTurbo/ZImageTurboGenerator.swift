@@ -161,6 +161,10 @@ public actor ZImageTurboGenerator: ImageGenerator, ChatGenerator {
 
                 for stepIndex in startStep..<inferenceConfig.numInferenceSteps {
                     try Task.checkCancellation()
+                    model.transformer.beginDenoisingStep(
+                        index: stepIndex,
+                        count: inferenceConfig.numInferenceSteps
+                    )
                     progressHandler?(GenerationProgress(
                         stage: .denoising,
                         stepIndex: stepIndex,

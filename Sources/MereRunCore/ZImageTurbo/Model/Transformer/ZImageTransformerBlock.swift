@@ -49,7 +49,10 @@ public final class ZImageTransformerBlock: Module {
     _ x: MLXArray,
     attnMask: MLXArray? = nil,
     freqsCis: MLXArray? = nil,
-    adalnInput: MLXArray? = nil
+    adalnInput: MLXArray? = nil,
+    dynamicSparseRuntime: DynamicSparseAttentionRuntime? = nil,
+    layerIndex: Int = 0,
+    exactSuffixTokenCount: Int = 0
   ) -> MLXArray {
     var out = x
 
@@ -64,14 +67,28 @@ public final class ZImageTransformerBlock: Module {
 
       let xNormed = attentionNorm1(out)
       let xScaled = xNormed * attnScale
-      let attnOut = attention(xScaled, attnMask: attnMask, freqsCis: freqsCis)
+      let attnOut = attention(
+        xScaled,
+        attnMask: attnMask,
+        freqsCis: freqsCis,
+        dynamicSparseRuntime: dynamicSparseRuntime,
+        layerIndex: layerIndex,
+        exactSuffixTokenCount: exactSuffixTokenCount
+      )
       let attnNormed = attentionNorm2(attnOut)
       out = out + attnGate * attnNormed
 
       let ffnOut = feedForward(ffnNorm1(out) * mlpScale)
       out = out + mlpGate * ffnNorm2(ffnOut)
     } else {
-      let attnOut = attention(attentionNorm1(out), attnMask: attnMask, freqsCis: freqsCis)
+      let attnOut = attention(
+        attentionNorm1(out),
+        attnMask: attnMask,
+        freqsCis: freqsCis,
+        dynamicSparseRuntime: dynamicSparseRuntime,
+        layerIndex: layerIndex,
+        exactSuffixTokenCount: exactSuffixTokenCount
+      )
       out = out + attentionNorm2(attnOut)
 
       let ffnOut = feedForward(ffnNorm1(out))
