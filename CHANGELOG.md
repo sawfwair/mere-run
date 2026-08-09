@@ -11,6 +11,18 @@ The format is based on Keep a Changelog.
 - fixed `text chat --stream --quiet` so `--quiet` suppresses stderr diagnostics
   without disconnecting incremental generated text from stdout.
 
+### Image
+
+- accelerated high-resolution Z-Image generation with dynamic sparse attention.
+  Sequences below 12,000 tokens remain dense; larger generations keep the first
+  two transformer layers, the leading 20% of the denoise schedule, and the final
+  step dense, and fail closed to dense attention when the numerical route gate
+  does not pass. Set `MERERUN_DYNAMIC_SPARSE_ATTENTION=0` to disable the default.
+- reduced a warm 1792x1792, four-step generation from 151.41 to 133.03 seconds
+  (12.1%) with peak reported memory unchanged at approximately 109.8 GB. Because
+  this path approximates distant-token attention, same-seed high-resolution
+  output can differ from the dense path; smaller generations remain byte-identical.
+
 ### Video
 
 - added `minimax-h3-lightx2v-4step` as a second immutable, checksum-pinned

@@ -618,10 +618,10 @@ private final class MiniMaxH3TransformerBlock: Module {
         maximumQueryTokens: Int,
         maximumHeadsPerKernel: Int?,
         maximumKernelsPerEvaluation: Int,
-        dynamicSparseRequest: MiniMaxH3DynamicSparseAttentionRequest? = nil
+        dynamicSparseRequest: DynamicSparseAttentionRequest? = nil
     ) -> MLXArray {
         if let dynamicSparseRequest,
-           let sparse = MiniMaxH3DynamicSparseAttention.call(
+           let sparse = DynamicSparseAttention.call(
                queries: queries,
                keys: keys,
                values: values,
@@ -1179,7 +1179,7 @@ public final class MiniMaxH3Transformer: Module {
     var maximumAttentionQueryTokensPerKernel = 1_024
     var maximumAttentionHeadsPerKernel: Int?
     var maximumAttentionKernelsPerEvaluation = 4
-    var dynamicSparseAttentionPolicy: MiniMaxH3DynamicSparseAttentionPolicy?
+    var dynamicSparseAttentionPolicy: DynamicSparseAttentionPolicy?
     var dynamicSparseAttentionStepIndex = 0
     var dynamicSparseAttentionStepCount = 0
     var dynamicSparseAttentionLogHandler: ((String) -> Void)?
@@ -1665,7 +1665,7 @@ public final class MiniMaxH3Transformer: Module {
         values: MLXArray,
         layerIndex: Int,
         layout: MiniMaxH3PackedLayout
-    ) -> MiniMaxH3DynamicSparseAttentionRequest? {
+    ) -> DynamicSparseAttentionRequest? {
         guard let request = dynamicSparseAttentionPolicy?.request(
             stepIndex: dynamicSparseAttentionStepIndex,
             stepCount: dynamicSparseAttentionStepCount,
@@ -1677,7 +1677,7 @@ public final class MiniMaxH3Transformer: Module {
         let gateShape = "\(queries.dim(1))x\(queries.dim(2))x\(request.prefixTokenCount)"
         let gateKey = "\(gateShape):\(queries.dtype):\(keys.dtype):\(values.dtype)"
         if dynamicSparseAttentionGateResults[gateKey] == nil {
-            let gate = MiniMaxH3DynamicSparseAttention.denseRouteGate(
+            let gate = DynamicSparseAttention.denseRouteGate(
                 queries: queries,
                 keys: keys,
                 values: values,
@@ -1687,11 +1687,14 @@ public final class MiniMaxH3Transformer: Module {
             dynamicSparseAttentionGateResults[gateKey] = gate?.passed ?? false
             if let gate {
                 dynamicSparseAttentionLogHandler?(String(
-                    format: "dynamic_sparse_gate=%@ shape=%@ max_abs=%.6g mean_abs=%.6g rel_l2=%.6g",
+                    format: "dynamic_sparse_gate=%@ shape=%@ max_abs=%.6g mean_abs=%.6g "
+                        + "max_rel=%.6g mean_rel=%.6g rel_l2=%.6g",
                     gate.passed ? "pass" : "fail",
                     gateShape,
                     gate.maximumAbsoluteError,
                     gate.meanAbsoluteError,
+                    gate.maximumRelativeError,
+                    gate.meanRelativeError,
                     gate.relativeL2Error
                 ))
             } else {

@@ -2,12 +2,12 @@ import Foundation
 import MLX
 import MLXFast
 
-struct MiniMaxH3DynamicSparseAttentionRequest: Sendable, Equatable {
+struct DynamicSparseAttentionRequest: Sendable, Equatable {
     let prefixTokenCount: Int
     let thresholdStandardDeviations: Float
 }
 
-struct MiniMaxH3DynamicSparseAttentionPolicy: Sendable, Equatable {
+struct DynamicSparseAttentionPolicy: Sendable, Equatable {
     let thresholdStandardDeviations: Float
     let minimumSequenceLength: Int
     let denseLeadingStepFraction: Float
@@ -39,13 +39,13 @@ struct MiniMaxH3DynamicSparseAttentionPolicy: Sendable, Equatable {
         layerIndex: Int,
         sequenceLength: Int,
         prefixTokenCount: Int
-    ) -> MiniMaxH3DynamicSparseAttentionRequest? {
+    ) -> DynamicSparseAttentionRequest? {
         guard stepCount > 0,
               stepIndex >= 0,
               stepIndex < stepCount,
               layerIndex >= denseLeadingLayerCount,
               sequenceLength >= minimumSequenceLength,
-              prefixTokenCount > 0,
+              prefixTokenCount >= 0,
               prefixTokenCount < sequenceLength else { return nil }
         let denseLeadingStepCount = Int(
             ceil(Float(stepCount) * denseLeadingStepFraction)
@@ -59,23 +59,26 @@ struct MiniMaxH3DynamicSparseAttentionPolicy: Sendable, Equatable {
     }
 }
 
-struct MiniMaxH3DynamicSparseAttentionGate: Sendable, Equatable {
+struct DynamicSparseAttentionGate: Sendable, Equatable {
     let maximumAbsoluteError: Float
     let meanAbsoluteError: Float
+    let maximumRelativeError: Float
+    let meanRelativeError: Float
     let relativeL2Error: Float
     let passed: Bool
 }
 
-/// H3-specific dynamic block-sparse attention for Apple GPUs.
+/// Dynamic block-sparse attention for long, batch-one diffusion sequences on Apple GPUs.
 ///
 /// The implementation independently applies the on-the-fly sparsification
-/// ideas described by Sol-Attn to H3's packed modality layout. Every 64-token
+/// ideas described by Sol-Attn. Every 64-token
 /// block is represented by a key centroid and a summed value. Query-dependent
 /// routing retains high-score blocks exactly; skipped blocks contribute through
 /// those summaries in the same online-softmax accumulator. Prefix keys and
-/// adjacent video blocks are always exact, while prefix queries remain on MLX's
-/// dense fused SDPA path.
-enum MiniMaxH3DynamicSparseAttention {
+/// adjacent blocks are always exact, while any prefix queries remain on MLX's
+/// dense fused SDPA path. Model integrations own admission, dense boundaries,
+/// layout permutation, and numerical acceptance.
+enum DynamicSparseAttention {
     static let blockSize = 64
     static let headDimension = 128
 
@@ -91,7 +94,7 @@ enum MiniMaxH3DynamicSparseAttention {
         queries: MLXArray,
         keys: MLXArray,
         values: MLXArray,
-        request: MiniMaxH3DynamicSparseAttentionRequest,
+        request: DynamicSparseAttentionRequest,
         scale: Float,
         maximumQueryTokens: Int,
         maximumKernelsPerEvaluation: Int
@@ -126,14 +129,6 @@ enum MiniMaxH3DynamicSparseAttention {
             thresholdStandardDeviations: request.thresholdStandardDeviations,
             scale: scale
         )
-        let densePrefix = MLXFast.scaledDotProductAttention(
-            queries: queries[0..., 0..., 0..<sparseQueryStart, 0...],
-            keys: keys,
-            values: values,
-            scale: scale,
-            mask: .none
-        )
-
         let targetCount = queries.dim(2) - sparseQueryStart
         // Dense SDPA chunks for intermediate-memory control. This kernel has
         // no quadratic score allocation, so larger query submissions keep the
@@ -142,10 +137,21 @@ enum MiniMaxH3DynamicSparseAttention {
             16_384,
             (maximumQueryTokens / blockSize) * blockSize
         )
-        var outputs = [densePrefix]
+        var outputs: [MLXArray] = []
         outputs.reserveCapacity(1 + (targetCount + sparseQueryChunk - 1) / sparseQueryChunk)
-        var pending: [MLXArray] = [densePrefix]
+        var pending: [MLXArray] = []
         pending.reserveCapacity(maximumKernelsPerEvaluation)
+        if sparseQueryStart > 0 {
+            let densePrefix = MLXFast.scaledDotProductAttention(
+                queries: queries[0..., 0..., 0..<sparseQueryStart, 0...],
+                keys: keys,
+                values: values,
+                scale: scale,
+                mask: .none
+            )
+            outputs.append(densePrefix)
+            pending.append(densePrefix)
+        }
         for localStart in stride(from: 0, to: targetCount, by: sparseQueryChunk) {
             let count = min(sparseQueryChunk, targetCount - localStart)
             let sparse = sparseKernelOutput(
@@ -172,7 +178,8 @@ enum MiniMaxH3DynamicSparseAttention {
         if !pending.isEmpty {
             MLX.eval(pending)
         }
-        return MLX.concatenated(outputs, axis: 2)
+        precondition(!outputs.isEmpty)
+        return outputs.count == 1 ? outputs[0] : MLX.concatenated(outputs, axis: 2)
     }
 
     static func denseRouteGate(
@@ -181,8 +188,10 @@ enum MiniMaxH3DynamicSparseAttention {
         values: MLXArray,
         queryStart: Int,
         scale: Float,
+        maximumRelativeErrorLimit: Float = 0.01,
         sampleQueryCount: Int = 8
-    ) -> MiniMaxH3DynamicSparseAttentionGate? {
+    ) -> DynamicSparseAttentionGate? {
+        precondition(maximumRelativeErrorLimit > 0)
         guard supports(
             queries: queries,
             keys: keys,
@@ -242,26 +251,24 @@ enum MiniMaxH3DynamicSparseAttention {
                         MLXArray(Float(1e-12))
                     )
             ),
+            MLX.max(MLX.abs(reference.asType(.float32))),
+            MLX.mean(MLX.abs(reference.asType(.float32))),
         ])
         MLX.eval(metrics)
         let measured = metrics.asArray(Float.self)
-        let stagesFloat32 = queries.dtype == .float32
-            || keys.dtype == .float32
-            || values.dtype == .float32
-        // The production H3 projection graph promotes Q/K/V to FP32. The
-        // sparse MMA path stages those values as BF16, so its dense-route gate
-        // allows the measured conversion envelope while retaining the same
-        // relative-error bound used by native BF16 input.
-        let maximumLimit: Float = queries.dim(2) >= 32_768
-            ? 0.15
-            : (stagesFloat32 ? 0.12 : 0.08)
-        let meanLimit: Float = stagesFloat32 ? 0.0025 : 0.002
-        let passed = measured[0] <= maximumLimit
-            && measured[1] <= meanLimit
+        let maximumRelativeError = measured[0] / max(measured[3], 1e-12)
+        let meanRelativeError = measured[1] / max(measured[4], 1e-12)
+        // Absolute activation scales differ substantially across native model
+        // families. Admit the dense-route implementation by scale-invariant
+        // error while retaining tight BF16 conversion and aggregate bounds.
+        let passed = maximumRelativeError <= maximumRelativeErrorLimit
+            && meanRelativeError <= 0.005
             && measured[2] <= 0.005
         return .init(
             maximumAbsoluteError: measured[0],
             meanAbsoluteError: measured[1],
+            maximumRelativeError: maximumRelativeError,
+            meanRelativeError: meanRelativeError,
             relativeL2Error: measured[2],
             passed: passed
         )
@@ -397,7 +404,7 @@ enum MiniMaxH3DynamicSparseAttention {
         )
         return (outputs[0], outputs[1], outputs[2])
         #else
-        preconditionFailure("MiniMax-H3 sparse summaries require Metal")
+        preconditionFailure("Dynamic sparse summaries require Metal")
         #endif
     }
 
@@ -421,6 +428,11 @@ enum MiniMaxH3DynamicSparseAttention {
         precondition(routes.dtype == .uint8)
         let heads = queries.dim(1)
         let scaleArray = MLXArray([scale])
+        let outputDType: DType = queries.dtype == .float32
+            || keys.dtype == .float32
+            || values.dtype == .float32
+            ? .float32
+            : .bfloat16
         #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
         return attentionKernel(
             [queries, keys, values, keyCentroids, valueSums, routes, scaleArray],
@@ -432,20 +444,21 @@ enum MiniMaxH3DynamicSparseAttention {
                 ("FIRST_QUERY_BLOCK", firstQueryBlock),
                 ("KEY_BLOCK_COUNT", keyBlockCount),
                 ("ROUTE_QUERY_BLOCKS", routes.dim(2)),
+                ("OutputT", outputDType),
             ],
             grid: (32, ((queryCount + 31) / 32) * 4, heads),
             threadGroup: (32, 4, 1),
             outputShapes: [[1, heads, queryCount, headDimension]],
-            outputDTypes: [.bfloat16]
+            outputDTypes: [outputDType]
         )[0]
         #else
-        preconditionFailure("MiniMax-H3 sparse attention requires Metal")
+        preconditionFailure("Dynamic sparse attention requires Metal")
         #endif
     }
 
     #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
     private static let summaryKernel = MLXFast.metalKernel(
-        name: "mere_h3_dynamic_sparse_summaries_bf16_d128_b64_v1",
+        name: "mere_dynamic_sparse_summaries_bf16_d128_b64_v1",
         inputNames: ["queries", "keys", "values"],
         outputNames: ["query_centroids", "key_centroids", "value_sums"],
         source: """
@@ -478,7 +491,7 @@ enum MiniMaxH3DynamicSparseAttention {
     )
 
     private static let attentionKernel = MLXFast.metalKernel(
-        name: "mere_h3_dynamic_sparse_online_softmax_bf16_d128_b64_mma_v5",
+        name: "mere_dynamic_sparse_online_softmax_bf16_d128_b64_mma_v6",
         inputNames: [
             "queries", "keys", "values", "key_centroids", "value_sums",
             "routes", "scale_value",
@@ -796,10 +809,10 @@ enum MiniMaxH3DynamicSparseAttention {
                 uint output_base = (head * QUERY_COUNT + local_query) * head_dimension;
                 for (uint frag = 0; frag < matrix_count; ++frag) {
                     uint output_dimension = frag * matrix_size + matrix_column;
-                    output[output_base + output_dimension] = bfloat(
+                    output[output_base + output_dimension] = OutputT(
                         accumulated[frag].thread_elements()[0] / row_sum
                     );
-                    output[output_base + output_dimension + 1] = bfloat(
+                    output[output_base + output_dimension + 1] = OutputT(
                         accumulated[frag].thread_elements()[1] / row_sum
                     );
                 }
