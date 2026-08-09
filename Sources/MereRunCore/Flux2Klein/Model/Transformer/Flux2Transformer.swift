@@ -293,7 +293,9 @@ final class Flux2Attention: Module {
     func callAsFunction(
         hiddenStates: MLXArray,
         encoderHiddenStates: MLXArray,
-        rotaryEmb: (MLXArray, MLXArray)
+        rotaryEmb: (MLXArray, MLXArray),
+        dynamicSparseRuntime: DynamicSparseAttentionRuntime?,
+        layerIndex: Int
     ) -> (MLXArray, MLXArray) {
         let batch = hiddenStates.shape[0]
         let hiddenSize = numHeads * headDim
@@ -332,14 +334,21 @@ final class Flux2Attention: Module {
         let jointKRope = Flux2PosEmbed.applyRotaryEmb(jointK, freqs: rotaryEmb)
 
         // Scaled dot-product attention
-        let attnOut = Self.attention(jointQRope, jointKRope, jointV)
+        let txtLen = encoderHiddenStates.shape[1]
+        let attnOut = Self.attention(
+            jointQRope,
+            jointKRope,
+            jointV,
+            dynamicSparseRuntime: dynamicSparseRuntime,
+            layerIndex: layerIndex,
+            prefixTokenCount: txtLen
+        )
 
         // Reshape back: [batch, heads, seq, dim] -> [batch, seq, hidden]
         var out = attnOut.transposed(0, 2, 1, 3)
         out = out.reshaped([batch, -1, hiddenSize])
 
         // Split back to context (text) and image - text is first
-        let txtLen = encoderHiddenStates.shape[1]
         let contextOut = out[0..., 0..<txtLen, 0...]
         let hiddenOut = out[0..., txtLen..., 0...]
 
@@ -350,8 +359,27 @@ final class Flux2Attention: Module {
         return (imgOut, txtOut)
     }
 
-	    static func attention(_ q: MLXArray, _ k: MLXArray, _ v: MLXArray) -> MLXArray {
+	    static func attention(
+            _ q: MLXArray,
+            _ k: MLXArray,
+            _ v: MLXArray,
+            dynamicSparseRuntime: DynamicSparseAttentionRuntime? = nil,
+            layerIndex: Int = 0,
+            prefixTokenCount: Int = 0
+        ) -> MLXArray {
 	        let scale = 1.0 / sqrt(Float(q.shape.last!))
+#if os(macOS)
+            if let sparse = dynamicSparseRuntime?.call(
+                queries: q,
+                keys: k,
+                values: v,
+                layerIndex: layerIndex,
+                prefixTokenCount: prefixTokenCount,
+                scale: scale
+            ) {
+                return sparse
+            }
+#endif
 #if os(iOS)
 	        // Avoid materializing a full [B, H, T, T] attention matrix on memory-constrained devices.
 	        // For typical FLUX.2 seq lengths (~4k+), the naive path can exceed iOS jetsam limits.
@@ -456,14 +484,18 @@ final class Flux2TransformerBlock: Module {
         encoderHiddenStates: MLXArray,
         modImg: ((MLXArray, MLXArray, MLXArray), (MLXArray, MLXArray, MLXArray)),
         modTxt: ((MLXArray, MLXArray, MLXArray), (MLXArray, MLXArray, MLXArray)),
-        rotaryEmb: (MLXArray, MLXArray)
+        rotaryEmb: (MLXArray, MLXArray),
+        dynamicSparseRuntime: DynamicSparseAttentionRuntime? = nil,
+        layerIndex: Int = 0
     ) -> (MLXArray, MLXArray) {
         forward(
             hiddenStates: hiddenStates,
             encoderHiddenStates: encoderHiddenStates,
             modImg: modImg,
             modTxt: modTxt,
-            rotaryEmb: rotaryEmb
+            rotaryEmb: rotaryEmb,
+            dynamicSparseRuntime: dynamicSparseRuntime,
+            layerIndex: layerIndex
         )
     }
 
@@ -472,7 +504,9 @@ final class Flux2TransformerBlock: Module {
         encoderHiddenStates: MLXArray,
         modImg: ((MLXArray, MLXArray, MLXArray), (MLXArray, MLXArray, MLXArray)),
         modTxt: ((MLXArray, MLXArray, MLXArray), (MLXArray, MLXArray, MLXArray)),
-        rotaryEmb: (MLXArray, MLXArray)
+        rotaryEmb: (MLXArray, MLXArray),
+        dynamicSparseRuntime: DynamicSparseAttentionRuntime? = nil,
+        layerIndex: Int = 0
     ) -> (MLXArray, MLXArray) {
         if checkpointedForward == nil {
             checkpointedForward = checkpoint(model: self) { block, inputs in
@@ -526,7 +560,9 @@ final class Flux2TransformerBlock: Module {
         encoderHiddenStates: MLXArray,
         modImg: ((MLXArray, MLXArray, MLXArray), (MLXArray, MLXArray, MLXArray)),
         modTxt: ((MLXArray, MLXArray, MLXArray), (MLXArray, MLXArray, MLXArray)),
-        rotaryEmb: (MLXArray, MLXArray)
+        rotaryEmb: (MLXArray, MLXArray),
+        dynamicSparseRuntime: DynamicSparseAttentionRuntime? = nil,
+        layerIndex: Int = 0
     ) -> (MLXArray, MLXArray) {
         // Unpack modulation: (msa params, mlp params)
         let ((shiftMsaImg, scaleMsaImg, gateMsaImg), (shiftMlpImg, scaleMlpImg, gateMlpImg)) = modImg
@@ -544,7 +580,9 @@ final class Flux2TransformerBlock: Module {
         let (attnOutImg, attnOutTxt) = attn(
             hiddenStates: normImg,
             encoderHiddenStates: normTxt,
-            rotaryEmb: rotaryEmb
+            rotaryEmb: rotaryEmb,
+            dynamicSparseRuntime: dynamicSparseRuntime,
+            layerIndex: layerIndex
         )
 
         // Gated residual for image
@@ -616,6 +654,22 @@ final class Flux2ParallelSelfAttention: Module {
     }
 
     func callAsFunction(_ x: MLXArray, rotaryEmb: (MLXArray, MLXArray)) -> MLXArray {
+        callAsFunction(
+            x,
+            rotaryEmb: rotaryEmb,
+            dynamicSparseRuntime: nil,
+            layerIndex: 0,
+            prefixTokenCount: 0
+        )
+    }
+
+    func callAsFunction(
+        _ x: MLXArray,
+        rotaryEmb: (MLXArray, MLXArray),
+        dynamicSparseRuntime: DynamicSparseAttentionRuntime?,
+        layerIndex: Int,
+        prefixTokenCount: Int
+    ) -> MLXArray {
         let batch = x.shape[0]
 
         // Fused QKV + MLP projection
@@ -646,7 +700,14 @@ final class Flux2ParallelSelfAttention: Module {
         let kRope = Flux2PosEmbed.applyRotaryEmb(k, freqs: rotaryEmb)
 
         // Attention
-        let attnOut = Flux2Attention.attention(qRope, kRope, vReshaped)
+        let attnOut = Flux2Attention.attention(
+            qRope,
+            kRope,
+            vReshaped,
+            dynamicSparseRuntime: dynamicSparseRuntime,
+            layerIndex: layerIndex,
+            prefixTokenCount: prefixTokenCount
+        )
         var attnReshaped = attnOut.transposed(0, 2, 1, 3)
         attnReshaped = attnReshaped.reshaped([batch, -1, hiddenSize])
 
@@ -699,9 +760,19 @@ final class Flux2SingleTransformerBlock: Module {
     func callAsFunction(
         _ x: MLXArray,
         mod: (MLXArray, MLXArray, MLXArray),
-        rotaryEmb: (MLXArray, MLXArray)
+        rotaryEmb: (MLXArray, MLXArray),
+        dynamicSparseRuntime: DynamicSparseAttentionRuntime? = nil,
+        layerIndex: Int = 0,
+        prefixTokenCount: Int = 0
     ) -> MLXArray {
-        forward(x, mod: mod, rotaryEmb: rotaryEmb)
+        forward(
+            x,
+            mod: mod,
+            rotaryEmb: rotaryEmb,
+            dynamicSparseRuntime: dynamicSparseRuntime,
+            layerIndex: layerIndex,
+            prefixTokenCount: prefixTokenCount
+        )
     }
 
     func checkpointed(
@@ -731,7 +802,10 @@ final class Flux2SingleTransformerBlock: Module {
     private func forward(
         _ x: MLXArray,
         mod: (MLXArray, MLXArray, MLXArray),
-        rotaryEmb: (MLXArray, MLXArray)
+        rotaryEmb: (MLXArray, MLXArray),
+        dynamicSparseRuntime: DynamicSparseAttentionRuntime? = nil,
+        layerIndex: Int = 0,
+        prefixTokenCount: Int = 0
     ) -> MLXArray {
         let (shift, scale, gate) = mod
 
@@ -740,7 +814,13 @@ final class Flux2SingleTransformerBlock: Module {
         normed = (1 + scale) * normed + shift
 
         // Attention + FFN (fused)
-        let out = attn(normed, rotaryEmb: rotaryEmb)
+        let out = attn(
+            normed,
+            rotaryEmb: rotaryEmb,
+            dynamicSparseRuntime: dynamicSparseRuntime,
+            layerIndex: layerIndex,
+            prefixTokenCount: prefixTokenCount
+        )
 
         // Gated residual
         return x + gate * out
@@ -787,6 +867,7 @@ final class Flux2AdaLNContinuous: Module {
 
 public final class Flux2Transformer2DModel: Module {
     public let config: Flux2TransformerConfiguration
+    private let dynamicSparseRuntime: DynamicSparseAttentionRuntime?
 
     @ModuleInfo(key: "x_embedder") var xEmbedder: Linear
     @ModuleInfo(key: "context_embedder") var contextEmbedder: Linear
@@ -816,6 +897,7 @@ public final class Flux2Transformer2DModel: Module {
 
     public init(config: Flux2TransformerConfiguration) {
         self.config = config
+        self.dynamicSparseRuntime = DynamicSparseAttentionRuntime.configured(model: .flux2)
 
         self._xEmbedder.wrappedValue = Linear(config.inChannels, config.hiddenSize, bias: false)
         self._contextEmbedder.wrappedValue = Linear(config.contextDim, config.hiddenSize, bias: false)
@@ -849,6 +931,7 @@ public final class Flux2Transformer2DModel: Module {
         singleTransformerBlocks: [Flux2SingleTransformerBlock]
     ) {
         self.config = config
+        self.dynamicSparseRuntime = DynamicSparseAttentionRuntime.configured(model: .flux2)
 
         // Placeholder Linear layers - will be replaced
         self._xEmbedder.wrappedValue = Linear(1, 1, bias: false)
@@ -869,6 +952,10 @@ public final class Flux2Transformer2DModel: Module {
         self.posEmbed = Flux2PosEmbed(theta: config.ropeTheta, axesDim: config.axesDimsRope)
 
         super.init()
+    }
+
+    func beginDenoisingStep(index: Int, count: Int) {
+        dynamicSparseRuntime?.beginStep(index: index, count: count)
     }
 
     public func callAsFunction(
@@ -927,7 +1014,7 @@ public final class Flux2Transformer2DModel: Module {
         let modTxtParams = (doubleModTxt[0][0], doubleModTxt[1][0])
 
         // Joint transformer blocks
-        for block in transformerBlocks {
+        for (index, block) in transformerBlocks.enumerated() {
             if gradientCheckpointing {
                 (txt, img) = block.checkpointed(
                     hiddenStates: img,
@@ -942,28 +1029,37 @@ public final class Flux2Transformer2DModel: Module {
                     encoderHiddenStates: txt,
                     modImg: modImgParams,
                     modTxt: modTxtParams,
-                    rotaryEmb: concatRotary
+                    rotaryEmb: concatRotary,
+                    dynamicSparseRuntime: dynamicSparseRuntime,
+                    layerIndex: index
                 )
             }
         }
 
         // Concatenate for single stream: [txt, img] (text first, then image)
+        let numTxtTokens = txt.shape[1]
         var combined = MLX.concatenated([txt, img], axis: 1)
 
         // Extract single stream modulation
         let singleModParams = singleMod[0][0]
 
         // Single transformer blocks
-        for block in singleTransformerBlocks {
+        for (index, block) in singleTransformerBlocks.enumerated() {
             if gradientCheckpointing {
                 combined = block.checkpointed(combined, mod: singleModParams, rotaryEmb: concatRotary)
             } else {
-                combined = block(combined, mod: singleModParams, rotaryEmb: concatRotary)
+                combined = block(
+                    combined,
+                    mod: singleModParams,
+                    rotaryEmb: concatRotary,
+                    dynamicSparseRuntime: dynamicSparseRuntime,
+                    layerIndex: transformerBlocks.count + index,
+                    prefixTokenCount: numTxtTokens
+                )
             }
         }
 
         // Extract image part (text is first, image is after)
-        let numTxtTokens = txt.shape[1]
         img = combined[0..., numTxtTokens..., 0...]
 
         // Output projection

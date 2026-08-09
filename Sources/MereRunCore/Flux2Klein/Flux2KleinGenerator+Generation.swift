@@ -211,6 +211,7 @@ extension Flux2KleinGenerator {
         let denoiseStart = timingEnabled ? CFAbsoluteTimeGetCurrent() : 0
         for step in 0..<request.steps {
             try Task.checkCancellation()
+            transformer.beginDenoisingStep(index: step, count: request.steps)
             progressHandler?(GenerationProgress(stage: .denoising, stepIndex: step, totalSteps: request.steps))
 
             // mflux passes raw timestep (sigma * 1000), transformer handles scaling conditionally
