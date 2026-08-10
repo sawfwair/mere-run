@@ -34,11 +34,12 @@ The format is based on Keep a Changelog.
   timing, process peak RSS and footprint, MLX peak-memory extraction, thermal
   and swap provenance, exact output-geometry checks, and matched-seed
   SSIM/PSNR/VMAF plus decoded-audio correlation and relative-L2 diagnostics.
-  The start gate now also rejects concurrent Swift/Xcode builds and more than
-  1 GiB of existing swap, records the exact prompt and ordered arguments, and
-  can verify every reference's order, type, size, and SHA-256 against a pinned
-  manifest. Structural, provenance, or scoring failures preserve their
-  outputs and receipts for inspection.
+  The algorithm and kernel start gates now also reject concurrent Swift/Xcode
+  builds and more than 1 GiB of existing swap. The algorithm runner records
+  the exact prompt and ordered arguments and can verify every reference's
+  order, type, size, and SHA-256 against a pinned manifest. Structural,
+  provenance, or scoring failures preserve their outputs and receipts for
+  inspection.
 - added an isolated experimental MiniMax-H3 `token-reduction` arm. It preserves
   every prefix, condition, reference, and audio row; horizontally pairs only
   target-video tokens after block 3; restores before block 40 for the first ten

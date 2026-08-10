@@ -73,6 +73,14 @@ scripts/h3-kernel-lab.sh gate-adaln
 scripts/h3-kernel-lab.sh gate-adaln-int8
 ```
 
+Every kernel-lab mode applies the same clean-host boundary as the generation
+harness: no matching ML process, `mere.run` process, Swift compiler, or Xcode
+build, and no more than 1024 MiB of starting swap. Override the ceiling only as
+an explicit evidence-policy change with
+`MERERUN_H3_LAB_MAX_STARTING_SWAP_MIB`; the selected ceiling and matched
+processes are retained in `.build/h3-kernel-lab/start-gate.txt` before any
+release build or benchmark begins.
+
 K2 through K4 need two implementations where hardware requires it:
 
 - a portable MLX/Metal fallback for current M-series Macs;

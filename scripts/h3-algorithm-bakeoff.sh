@@ -128,16 +128,37 @@ starting_swap_mib="$(print -r -- "$swap_usage" | awk '
 }
 
 contaminant_pattern='/mere\.run |mere\.run-node|mlxfast|mlx-fast|MereRunPackageTests\.xctest|python.*(mlx|train|eval)|swift-build|swift-driver|swift-frontend|xcodebuild'
-contaminants="$(pgrep -ifl "$contaminant_pattern" | awk -v current="$$" -v parent="$PPID" '$1 != current && $1 != parent' || true)"
+contaminant_pids="$(pgrep -if "$contaminant_pattern" | awk -v current="$$" -v parent="$PPID" '$1 != current && $1 != parent' || true)"
+contaminants=""
+if [[ -n "$contaminant_pids" ]]; then
+  while IFS= read -r contaminant_pid; do
+    process_executable="$(ps -p "$contaminant_pid" -o comm= | sed -E 's/^[[:space:]]+//' || true)"
+    [[ -n "$process_executable" ]] || continue
+    process_cwd="$(lsof -a -p "$contaminant_pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1 || true)"
+    [[ -n "$contaminants" ]] && contaminants+=$'\n'
+    contaminants+="$contaminant_pid"$'\t'"$process_executable"$'\t'"${process_cwd:--}"
+  done <<< "$contaminant_pids"
+fi
 {
   date -u '+utc=%Y-%m-%dT%H:%M:%SZ'
   print -r -- "invocation_dir=$invocation_dir"
+  print -r -- "commit=$(git -C "$repo_root" rev-parse HEAD)"
+  if [[ -z "$(git -C "$repo_root" status --porcelain)" ]]; then
+    print -r -- "worktree=clean"
+  else
+    print -r -- "worktree=dirty"
+  fi
+  print -r -- "model=$model"
+  print -r -- "width=$width"
+  print -r -- "height=$height"
+  print -r -- "frames=$frames"
+  print -r -- "seed=$seed"
   print -r -- "contaminant_pattern=$contaminant_pattern"
   print -r -- "starting_swap_used_mib=$starting_swap_mib"
   print -r -- "max_starting_swap_mib=$max_starting_swap_mib"
   print -r -- "$swap_usage"
   if [[ -n "$contaminants" ]]; then
-    print -r -- "matched_processes:"
+    print -r -- $'matched_processes:\npid\texecutable\tcwd'
     print -r -- "$contaminants"
   else
     print -r -- "matched_processes=none"
@@ -146,6 +167,7 @@ contaminants="$(pgrep -ifl "$contaminant_pattern" | awk -v current="$$" -v paren
 
 if [[ -n "$contaminants" ]]; then
   print -u2 "another build or ML workload is active; refusing a contaminated H3 algorithm bake-off"
+  print -u2 -r -- $'pid\texecutable\tcwd'
   print -u2 -r -- "$contaminants"
   print -u2 "see $output_dir/start-gate.txt"
   exit 75
