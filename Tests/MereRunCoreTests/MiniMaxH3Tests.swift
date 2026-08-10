@@ -818,9 +818,32 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: rootURL) }
 
-        for filename in ["SOURCE_MANIFEST.json", "SHA256SUMS"] {
-            try Data("{}".utf8).write(to: rootURL.appending(path: filename))
+        try Data("{}".utf8).write(to: rootURL.appending(path: "SHA256SUMS"))
+        let sourceManifestURL = rootURL.appending(path: "SOURCE_MANIFEST.json")
+        let sourceManifest = """
+        {
+          "adaln_cache": {
+            "byte_count": 873820740,
+            "format": "mere.run.minimax-h3-adaln-cache",
+            "path": "adaln_cache.safetensors",
+            "schedule": {
+              "audio_flow_shift": 3.0,
+              "point_count": 31,
+              "video_flow_shift": 12.0
+            },
+            "schema_version": 2,
+            "sha256": "2cbe9e3324ef2cc5108a3ba7f1219d84079ff00a017f604fd86300005cc64fcd",
+            "source_identity": "sha256:234f22f69f8d40d6ed81cceed8259fa287f3c9417d40fba5274e3a7aa84e18a2"
+          },
+          "artifact": {
+            "format": "mere.run.minimax-h3-ref2va-mlx-8bit",
+            "partition": "ref2va",
+            "repository": "Sawfwair/MiniMax-H3-Ref2VA-MLX-8bit"
+          },
+          "schema_version": 1
         }
+        """
+        try Data(sourceManifest.utf8).write(to: sourceManifestURL)
         let receiptURL = rootURL.appending(path: "transformer.conversion.json")
         let receipt = """
         {
@@ -862,8 +885,32 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         try handle.truncate(atOffset: UInt64(MiniMaxH3Resources.ref2vaConvertedByteCount))
         try handle.close()
 
+        let cacheMetadata = [
+            "__metadata__": [
+                "format": "mere.run.minimax-h3-adaln-cache",
+                "schema_version": MiniMaxH3AdaLNCache.schemaVersion,
+                "source_identity": MiniMaxH3Resources.ref2vaAdaLNCacheSourceIdentity,
+            ],
+        ]
+        let cacheHeader = try JSONEncoder().encode(cacheMetadata)
+        var cacheHeaderLength = UInt64(cacheHeader.count).littleEndian
+        var cacheFile = withUnsafeBytes(of: &cacheHeaderLength) { Data($0) }
+        cacheFile.append(cacheHeader)
+        let cacheURL = rootURL.appending(path: MiniMaxH3AdaLNCache.filename)
+        try cacheFile.write(to: cacheURL)
+        let cacheHandle = try FileHandle(forWritingTo: cacheURL)
+        try cacheHandle.truncate(atOffset: UInt64(MiniMaxH3Resources.ref2vaAdaLNCacheByteCount))
+        try cacheHandle.close()
+
         let resources = MiniMaxH3Resources(rootURL: rootURL)
         XCTAssertTrue(resources.validateManagedRef2VAArtifact().isEmpty)
+
+        try Data(sourceManifest.replacingOccurrences(
+            of: MiniMaxH3Resources.ref2vaAdaLNCacheSHA256,
+            with: String(repeating: "0", count: 64)
+        ).utf8).write(to: sourceManifestURL)
+        XCTAssertTrue(resources.validateManagedRef2VAArtifact().contains { $0.contains("pinned AdaLN cache") })
+        try Data(sourceManifest.utf8).write(to: sourceManifestURL)
 
         try Data(receipt.replacingOccurrences(of: "\"256\": 200", with: "\"256\": 199").utf8)
             .write(to: receiptURL)

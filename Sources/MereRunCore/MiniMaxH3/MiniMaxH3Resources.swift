@@ -59,6 +59,56 @@ struct MiniMaxH3Ref2VAConversionReceipt: Decodable, Sendable {
     }
 }
 
+private struct MiniMaxH3Ref2VASourceManifest: Decodable, Sendable {
+    struct Artifact: Decodable, Sendable {
+        let format: String
+        let partition: String
+        let repository: String
+    }
+
+    struct AdaLNCache: Decodable, Sendable {
+        struct Schedule: Decodable, Sendable {
+            let audioFlowShift: Float
+            let pointCount: Int
+            let videoFlowShift: Float
+
+            enum CodingKeys: String, CodingKey {
+                case audioFlowShift = "audio_flow_shift"
+                case pointCount = "point_count"
+                case videoFlowShift = "video_flow_shift"
+            }
+        }
+
+        let byteCount: Int64
+        let format: String
+        let path: String
+        let schedule: Schedule
+        let schemaVersion: Int
+        let sha256: String
+        let sourceIdentity: String
+
+        enum CodingKeys: String, CodingKey {
+            case byteCount = "byte_count"
+            case format
+            case path
+            case schedule
+            case schemaVersion = "schema_version"
+            case sha256
+            case sourceIdentity = "source_identity"
+        }
+    }
+
+    let artifact: Artifact
+    let adaLNCache: AdaLNCache
+    let schemaVersion: Int
+
+    enum CodingKeys: String, CodingKey {
+        case artifact
+        case adaLNCache = "adaln_cache"
+        case schemaVersion = "schema_version"
+    }
+}
+
 public struct MiniMaxH3Configuration: Decodable, Hashable, Sendable {
     public let modelType: String
     public let task: String
@@ -218,6 +268,8 @@ public struct MiniMaxH3Resources: Sendable {
     public static let ref2vaSourceByteCount: Int64 = 34_038_894_550
     public static let ref2vaConvertedSHA256 = "234f22f69f8d40d6ed81cceed8259fa287f3c9417d40fba5274e3a7aa84e18a2"
     public static let ref2vaConvertedByteCount: Int64 = 36_024_412_656
+    public static let ref2vaAdaLNCacheSHA256 = "2cbe9e3324ef2cc5108a3ba7f1219d84079ff00a017f604fd86300005cc64fcd"
+    public static let ref2vaAdaLNCacheByteCount: Int64 = 873_820_740
     public static let ref2vaAdaLNCacheSourceIdentity =
         "sha256:\(ref2vaConvertedSHA256)"
 
@@ -319,12 +371,16 @@ public struct MiniMaxH3Resources: Sendable {
 
     func transformerMetadata() throws -> [String: String] {
         guard !usesShardedBF16Transformer else { return [:] }
-        let handle = try FileHandle(forReadingFrom: transformerWeightsURL)
+        return try safetensorsMetadata(at: transformerWeightsURL)
+    }
+
+    private func safetensorsMetadata(at url: URL) throws -> [String: String] {
+        let handle = try FileHandle(forReadingFrom: url)
         defer { try? handle.close() }
         guard let lengthData = try handle.read(upToCount: MemoryLayout<UInt64>.size),
               lengthData.count == MemoryLayout<UInt64>.size else {
             throw MiniMaxH3ResourcesError.invalidConfiguration(
-                transformerWeightsURL,
+                url,
                 "safetensors header length is missing"
             )
         }
@@ -334,14 +390,14 @@ public struct MiniMaxH3Resources: Sendable {
         let headerLength = UInt64(littleEndian: rawLength)
         guard headerLength > 0, headerLength <= 64 * 1_024 * 1_024 else {
             throw MiniMaxH3ResourcesError.invalidConfiguration(
-                transformerWeightsURL,
+                url,
                 "safetensors header length is invalid"
             )
         }
         guard let headerData = try handle.read(upToCount: Int(headerLength)),
               headerData.count == Int(headerLength) else {
             throw MiniMaxH3ResourcesError.invalidConfiguration(
-                transformerWeightsURL,
+                url,
                 "safetensors header is truncated"
             )
         }
@@ -349,7 +405,7 @@ public struct MiniMaxH3Resources: Sendable {
             return try JSONDecoder().decode(SafetensorsHeader.self, from: headerData).metadata ?? [:]
         } catch {
             throw MiniMaxH3ResourcesError.invalidConfiguration(
-                transformerWeightsURL,
+                url,
                 "safetensors metadata is invalid: \(error.localizedDescription)"
             )
         }
@@ -396,27 +452,67 @@ public struct MiniMaxH3Resources: Sendable {
     }
 
     func validateManagedRef2VAArtifact(fileManager: FileManager = .default) -> [String] {
+        let sourceManifestURL = rootURL.appending(path: "SOURCE_MANIFEST.json")
         let requiredProvenance = [
-            rootURL.appending(path: "SOURCE_MANIFEST.json"),
+            sourceManifestURL,
             conversionReceiptURL,
             rootURL.appending(path: "SHA256SUMS"),
+            adaLNCacheURL,
         ]
         let missing = requiredProvenance.filter { !fileManager.fileExists(atPath: $0.path) }
         guard missing.isEmpty else {
             return missing.map { "Missing required Ref2VA provenance file: \($0.lastPathComponent)" }
         }
 
+        let sourceManifest: MiniMaxH3Ref2VASourceManifest
         let receipt: MiniMaxH3Ref2VAConversionReceipt
         do {
+            sourceManifest = try JSONDecoder().decode(
+                MiniMaxH3Ref2VASourceManifest.self,
+                from: Data(contentsOf: sourceManifestURL)
+            )
             receipt = try JSONDecoder().decode(
                 MiniMaxH3Ref2VAConversionReceipt.self,
                 from: Data(contentsOf: conversionReceiptURL)
             )
         } catch {
-            return ["Invalid Ref2VA conversion receipt: \(error.localizedDescription)"]
+            return ["Invalid Ref2VA provenance: \(error.localizedDescription)"]
         }
 
         var issues: [String] = []
+        if sourceManifest.schemaVersion != 1
+            || sourceManifest.artifact.format != "mere.run.minimax-h3-ref2va-mlx-8bit"
+            || sourceManifest.artifact.partition != "ref2va"
+            || sourceManifest.artifact.repository != Self.ref2vaArtifactRepository {
+            issues.append("Ref2VA source manifest does not identify the pinned managed artifact.")
+        }
+        let cache = sourceManifest.adaLNCache
+        if cache.path != MiniMaxH3AdaLNCache.filename
+            || cache.byteCount != Self.ref2vaAdaLNCacheByteCount
+            || cache.sha256 != Self.ref2vaAdaLNCacheSHA256
+            || cache.format != "mere.run.minimax-h3-adaln-cache"
+            || cache.schemaVersion != 2
+            || cache.sourceIdentity != Self.ref2vaAdaLNCacheSourceIdentity
+            || cache.schedule.pointCount != 31
+            || cache.schedule.videoFlowShift != 12
+            || cache.schedule.audioFlowShift != 3 {
+            issues.append("Ref2VA source manifest does not match the pinned AdaLN cache.")
+        }
+        let resolvedCacheURL = adaLNCacheURL.resolvingSymlinksInPath()
+        let actualCacheBytes = try? resolvedCacheURL.resourceValues(forKeys: [.fileSizeKey]).fileSize
+        if Int64(actualCacheBytes ?? -1) != Self.ref2vaAdaLNCacheByteCount {
+            issues.append("Ref2VA AdaLN cache byte count does not match the pinned artifact.")
+        }
+        do {
+            let metadata = try safetensorsMetadata(at: adaLNCacheURL)
+            if metadata["format"] != "mere.run.minimax-h3-adaln-cache"
+                || metadata["schema_version"] != MiniMaxH3AdaLNCache.schemaVersion
+                || metadata["source_identity"] != Self.ref2vaAdaLNCacheSourceIdentity {
+                issues.append("Ref2VA AdaLN cache metadata does not match the pinned artifact.")
+            }
+        } catch {
+            issues.append("Ref2VA AdaLN cache metadata is invalid: \(error.localizedDescription)")
+        }
         if receipt.converter != "scripts/model-conversion/convert_minimax_h3_convrot.py"
             || receipt.converterVersion != 2 {
             issues.append("Ref2VA conversion receipt must use the pinned ConvRot converter version 2.")

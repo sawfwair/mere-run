@@ -3142,8 +3142,9 @@ public extension ManagedModelSpec {
     }
 
     private func managedSourceMatches(_ rootURL: URL, fileManager: FileManager) -> Bool {
-        guard id == ModelResolver.ModelID.zetaNano.rawValue,
-              let expectedRepo = upstreamRepoId else {
+        let requiresPinnedSource = id == ModelResolver.ModelID.zetaNano.rawValue
+            || id == ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue
+        guard requiresPinnedSource, let expectedRepo = upstreamRepoId else {
             return true
         }
         let normalized = normalizedRootURL(rootURL, fileManager: fileManager)
@@ -3159,7 +3160,8 @@ public extension ManagedModelSpec {
            installedRepo == expectedWithRevision {
             return true
         }
-        if installedRepo == "\(expectedRepo)@\(ZImageTurboRepository.revision)" {
+        if id == ModelResolver.ModelID.zetaNano.rawValue,
+           installedRepo == "\(expectedRepo)@\(ZImageTurboRepository.revision)" {
             return true
         }
         return false

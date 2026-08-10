@@ -22,9 +22,10 @@ mere.run model pull video-minimax-h3-ref2va-mlx --accept-model-license
 ```
 
 The package is `Sawfwair/MiniMax-H3-Ref2VA-MLX-8bit` at immutable Hub commit
-`abb9114fe9d6e3cccc6376eee1abaf09d3f2a9fe`. Alongside the transformer it carries the pinned
-Qwen3-VL conditioner, video/audio VAEs, tokenizer, `config.json`, `LICENSE`,
-`NOTICE`, `MODIFICATIONS.md`, source manifest, conversion receipt, and hashes.
+`61dc387ef1a7166425cdacd63c2340598dcc364f`. Alongside the transformer it
+carries the pinned Qwen3-VL conditioner, video/audio VAEs, tokenizer,
+`config.json`, `LICENSE`, `NOTICE`, `MODIFICATIONS.md`, source manifest,
+conversion receipt, and hashes.
 Eight-bit is the published Ref2VA quality floor; lower precision did not pass
 the visual quality check.
 

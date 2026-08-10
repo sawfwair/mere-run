@@ -123,6 +123,7 @@ struct ModelPullPreflightAnalyzer {
     let fileManager: FileManager
     let hubCacheURL: URL?
     let modelStoreURL: URL?
+    let estimatedDownloadBytesOverrides: [String: Int64]
     let diskAvailableBytes: (URL) -> Int64?
     let now: () -> Date
 
@@ -131,6 +132,7 @@ struct ModelPullPreflightAnalyzer {
         fileManager: FileManager = .default,
         hubCacheURL: URL? = nil,
         modelStoreURL: URL? = nil,
+        estimatedDownloadBytesOverrides: [String: Int64] = [:],
         diskAvailableBytes: ((URL) -> Int64?)? = nil,
         now: @escaping () -> Date = Date.init
     ) {
@@ -138,6 +140,7 @@ struct ModelPullPreflightAnalyzer {
         self.fileManager = fileManager
         self.hubCacheURL = hubCacheURL
         self.modelStoreURL = modelStoreURL
+        self.estimatedDownloadBytesOverrides = estimatedDownloadBytesOverrides
         self.diskAvailableBytes = diskAvailableBytes ?? {
             ModelPullDiskPreflight.availableBytes(onFileSystemContaining: $0, fileManager: fileManager)
         }
@@ -258,13 +261,14 @@ struct ModelPullPreflightAnalyzer {
             from: installPath,
             fileManager: fileManager
         ))?.usageTermsAcknowledged == true
-        let estimatedDownloadBytes = ModelPullDiskPreflight.estimatedDownloadBytes(
-            for: spec,
-            modelDir: installPath,
-            force: input.force,
-            hubCacheURL: hubCache,
-            fileManager: fileManager
-        )
+        let estimatedDownloadBytes = estimatedDownloadBytesOverrides[spec.id]
+            ?? ModelPullDiskPreflight.estimatedDownloadBytes(
+                for: spec,
+                modelDir: installPath,
+                force: input.force,
+                hubCacheURL: hubCache,
+                fileManager: fileManager
+            )
         let willDownload = selected && hasSource && !blockedBySupport && !blockedByUsageTerms && (input.force || !installed)
         let status = Self.modelStatus(
             selected: selected,

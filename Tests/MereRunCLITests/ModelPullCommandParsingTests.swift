@@ -441,6 +441,34 @@ final class ModelPullCommandParsingTests: XCTestCase {
         XCTAssertNil(ModelPullDiskPreflight.requiredBytes(estimatedDownloadBytes: nil))
     }
 
+    func testStructuredPreflightUsesVerifiedRevisionDeltaOverride() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let cache = root.appendingPathComponent("hub", isDirectory: true)
+        let modelStore = root.appendingPathComponent("models", isDirectory: true)
+        let modelID = ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue
+        let deltaBytes: Int64 = 4_362
+        let command = try ModelPull.parse([
+            modelID,
+            "--allow-unsupported",
+            "--accept-model-license",
+            "--preflight",
+            "--json",
+        ])
+
+        let envelope = command.makePreflightEnvelope(
+            hubCacheURL: cache,
+            modelStoreURL: modelStore,
+            estimatedDownloadBytesOverrides: [modelID: deltaBytes],
+            diskAvailableBytes: { _ in 3 * ModelPullDiskPreflight.bytesPerGiB }
+        )
+
+        XCTAssertNotEqual(envelope.status, .blocked)
+        XCTAssertEqual(envelope.result.estimatedDownloadBytes, deltaBytes)
+        XCTAssertEqual(envelope.result.models.first?.estimatedDownloadBytes, deltaBytes)
+        XCTAssertEqual(envelope.result.models.first?.status, "will_download")
+    }
+
     func testDiskPreflightDoesNotRequireModelBytesForCompleteCachedSnapshot() throws {
         let root = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }

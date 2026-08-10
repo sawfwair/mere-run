@@ -30,6 +30,27 @@ was built one three-modality timestep batch per released schedule point, then
 reloaded and compared with both a fresh cache and direct live AdaLN evaluation.
 At schedule step 10, maximum video and audio output error were both zero.
 
+### Managed revision-upgrade receipt
+
+The artifact was first installed at pre-cache revision
+`abb9114fe9d6e3cccc6376eee1abaf09d3f2a9fe`, with the corrected cache added to
+the model root locally. After the catalog pin moved to the revision above,
+ordinary `model pull` now treats the old manifest as stale and asks the Hub
+tree for the target revision's Git/LFS object identities. It preserves the
+installed root while preparing the new immutable snapshot and adopts a local
+payload only after its byte count and Git blob SHA-1 or LFS SHA-256 match the
+target object.
+
+On that real stale install, structured preflight reported 4,362 bytes rather
+than the package's 70.94 GB logical size. Those bytes were the two changed
+managed provenance files; every large target object, including the
+873,820,740-byte cache, was already available by exact content identity. A
+normal pull, without `--force` or a preparation command, produced a 14-file
+snapshot receipt whose requested and resolved revision are both
+`61dc387ef1a7166425cdacd63c2340598dcc364f`. Post-pull model validation checks
+the cache byte count and safetensors format, schema, and transformer-bound
+source identity in addition to the conversion receipt.
+
 ## Conversion correction
 
 The source checkpoint stores per-tensor ConvRot metadata. Two different source

@@ -56,6 +56,11 @@ The format is based on Keep a Changelog.
   preserves live three-modality batch semantics instead of projecting every
   schedule row together, and managed Ref2VA cache identity is bound to the
   immutable transformer SHA-256 rather than model-store symlink metadata.
+- made managed Ref2VA pulls revision-aware. A stale installed manifest now
+  triggers an update, while exact Git/LFS objects and verified files from the
+  existing install are hard-linked into the new immutable Hub snapshot. Pull
+  preflight reports only the content-addressed revision delta instead of
+  requiring space for a duplicate 70.94 GB package.
 - added `video-minimax-h3-ref2va-mlx` as a self-contained explicit managed
   pull from the immutable public `Sawfwair/MiniMax-H3-Ref2VA-MLX-8bit`
   artifact. Its transformer and conditioner use MLX affine INT8/group-64;

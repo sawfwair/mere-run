@@ -31,6 +31,7 @@ public struct HubSnapshotOptions: Sendable {
     public var accessToken: String?
     public var offline: Bool
     public var useBackgroundSession: Bool
+    public var reuseRoots: [URL]
 
     public init(
         repoId: String,
@@ -40,7 +41,8 @@ public struct HubSnapshotOptions: Sendable {
         cacheDirectory: URL? = nil,
         accessToken: String? = nil,
         offline: Bool = false,
-        useBackgroundSession: Bool = false
+        useBackgroundSession: Bool = false,
+        reuseRoots: [URL] = []
     ) {
         self.repoId = repoId
         self.revision = revision
@@ -50,6 +52,7 @@ public struct HubSnapshotOptions: Sendable {
         self.accessToken = accessToken
         self.offline = offline
         self.useBackgroundSession = useBackgroundSession
+        self.reuseRoots = reuseRoots
     }
 }
 
@@ -160,6 +163,49 @@ public actor HubSnapshot {
         cachedSnapshotURL = nil
     }
 
+    /// Estimates the bytes that are not already available as verified local
+    /// content. The Hub tree exposes Git/LFS object identities, so revision
+    /// upgrades can credit exact cached blobs and explicitly supplied roots
+    /// without assuming that same-path files remained unchanged.
+    public func estimatedDownloadBytes() async throws -> Int64 {
+        let (entries, resolvedRevision, preResolvedFiles) = try await selectedRemoteEntries()
+        let snapshotURL = materializedSnapshotURL(resolvedRevision: resolvedRevision)
+        var missingBytes: Int64 = 0
+
+        for entry in entries {
+            try Self.validateRelativePath(entry.path)
+            let expectedBytes = max(entry.size ?? 0, 0)
+            let destination = snapshotURL.appending(path: entry.path)
+            let metadataDestination = snapshotMetadataURL(snapshotURL)
+                .appending(path: entry.path + ".metadata")
+            if Self.fileExists(at: destination, expectedBytes: expectedBytes),
+               let metadata = Self.readDownloadMetadata(at: metadataDestination),
+               metadata.commitHash == resolvedRevision {
+                continue
+            }
+
+            let remote = try await remoteFile(
+                for: entry,
+                resolvedRevision: resolvedRevision,
+                preResolved: preResolvedFiles[entry.path]
+            )
+            if reusableBlobURL(remote: remote, expectedBytes: expectedBytes) != nil {
+                continue
+            }
+            if try reusableRootPayload(
+                relativePath: entry.path,
+                expectedBytes: expectedBytes,
+                remote: remote
+            ) != nil {
+                continue
+            }
+            missingBytes = missingBytes > Int64.max - expectedBytes
+                ? Int64.max
+                : missingBytes + expectedBytes
+        }
+        return missingBytes
+    }
+
     public static func resolvedDownloadBase(
         requested: URL? = nil,
         fileManager: FileManager = .default
@@ -244,33 +290,11 @@ public actor HubSnapshot {
     }
 
     private func prepareMaterializedSnapshot(progressHandler: ProgressHandler?) async throws -> URL {
-        let tree = try await remoteTreeEntries()
-        let entries = tree.entries
-            .filter { $0.type == "file" && Self.matchesPath($0.path, patterns: options.patterns) }
-            .sorted { $0.path < $1.path }
-        guard !entries.isEmpty else {
-            throw Hub.HubClientError.fileNotFound(options.patterns.joined(separator: ", "))
-        }
-
-        var preResolvedFiles: [String: HubSnapshotRemoteFile] = [:]
-        let resolvedRevision: String
-        if let treeRevision = tree.resolvedRevision {
-            resolvedRevision = treeRevision
-        } else {
-            let firstEntry = entries[0]
-            let remote = try await resolveRemoteFile(
-                source: resolveURL(for: firstEntry.path),
-                relativePath: firstEntry.path
-            )
-            resolvedRevision = remote.commitHash
-            preResolvedFiles[firstEntry.path] = remote
-        }
+        let (entries, resolvedRevision, initialPreResolvedFiles) = try await selectedRemoteEntries()
+        var preResolvedFiles = initialPreResolvedFiles
 
         let snapshotURL = materializedSnapshotURL(resolvedRevision: resolvedRevision)
-        let metadataURL = snapshotURL
-            .appending(path: ".cache")
-            .appending(path: "huggingface")
-            .appending(path: "download")
+        let metadataURL = snapshotMetadataURL(snapshotURL)
         try FileManager.default.createDirectory(at: snapshotURL, withIntermediateDirectories: true)
 
         let totalBytes = max(entries.reduce(Int64(0)) { partial, entry in
@@ -327,20 +351,55 @@ public actor HubSnapshot {
                 continue
             }
 
-            let remote: HubSnapshotRemoteFile
-            if let preResolved = preResolvedFiles.removeValue(forKey: entry.path) {
-                remote = preResolved
-            } else {
-                let source = resolveURL(for: entry.path)
-                remote = try await resolveRemoteFile(source: source, relativePath: entry.path)
-            }
-            guard remote.commitHash == resolvedRevision else {
-                throw Hub.HubClientError.downloadError(
-                    "Repository revision changed while downloading \(options.repoId): "
-                        + "expected \(resolvedRevision), found \(remote.commitHash)"
+            let remote = try await remoteFile(
+                for: entry,
+                resolvedRevision: resolvedRevision,
+                preResolved: preResolvedFiles.removeValue(forKey: entry.path)
+            )
+            if let reused = try materializeReusableBlob(
+                expectedBytes: expectedBytes,
+                destination: destination,
+                metadataDestination: metadataDestination,
+                remote: remote
+            ) {
+                completedBytes += max(expectedBytes, Self.fileSize(at: destination))
+                receiptFiles.append(
+                    HubSnapshotReceipt.File(
+                        path: entry.path,
+                        size: Self.fileSize(at: destination),
+                        commit: reused.commitHash,
+                        etag: reused.etag
+                    )
                 )
+                progressHandler?(HubSnapshotProgress(
+                    completedUnitCount: min(completedBytes, totalBytes),
+                    totalUnitCount: totalBytes
+                ))
+                continue
             }
             if let adopted = try adoptExistingPayload(
+                expectedBytes: expectedBytes,
+                destination: destination,
+                metadataDestination: metadataDestination,
+                remote: remote
+            ) {
+                completedBytes += max(expectedBytes, Self.fileSize(at: destination))
+                receiptFiles.append(
+                    HubSnapshotReceipt.File(
+                        path: entry.path,
+                        size: Self.fileSize(at: destination),
+                        commit: adopted.commitHash,
+                        etag: adopted.etag
+                    )
+                )
+                progressHandler?(HubSnapshotProgress(
+                    completedUnitCount: min(completedBytes, totalBytes),
+                    totalUnitCount: totalBytes
+                ))
+                continue
+            }
+            if let adopted = try adoptReusableRootPayload(
+                relativePath: entry.path,
                 expectedBytes: expectedBytes,
                 destination: destination,
                 metadataDestination: metadataDestination,
@@ -409,6 +468,65 @@ public actor HubSnapshot {
         try writeRequestedRevisionReference(resolvedRevision: resolvedRevision)
         progressHandler?(HubSnapshotProgress(completedUnitCount: totalBytes, totalUnitCount: totalBytes))
         return snapshotURL
+    }
+
+    private func selectedRemoteEntries() async throws -> (
+        entries: [HubSnapshotTreeEntry],
+        resolvedRevision: String,
+        preResolvedFiles: [String: HubSnapshotRemoteFile]
+    ) {
+        let tree = try await remoteTreeEntries()
+        let entries = tree.entries
+            .filter { $0.type == "file" && Self.matchesPath($0.path, patterns: options.patterns) }
+            .sorted { $0.path < $1.path }
+        guard let firstEntry = entries.first else {
+            throw Hub.HubClientError.fileNotFound(options.patterns.joined(separator: ", "))
+        }
+
+        if let treeRevision = tree.resolvedRevision {
+            return (entries, treeRevision, [:])
+        }
+        let remote = try await resolveRemoteFile(
+            source: resolveURL(for: firstEntry.path),
+            relativePath: firstEntry.path
+        )
+        return (entries, remote.commitHash, [firstEntry.path: remote])
+    }
+
+    private func remoteFile(
+        for entry: HubSnapshotTreeEntry,
+        resolvedRevision: String,
+        preResolved: HubSnapshotRemoteFile?
+    ) async throws -> HubSnapshotRemoteFile {
+        let remote: HubSnapshotRemoteFile
+        if let preResolved {
+            remote = preResolved
+        } else if let etag = entry.lfs?.oid ?? entry.oid, !etag.isEmpty {
+            remote = HubSnapshotRemoteFile(
+                commitHash: resolvedRevision,
+                etag: etag,
+                downloadURL: resolveURL(for: entry.path)
+            )
+        } else {
+            remote = try await resolveRemoteFile(
+                source: resolveURL(for: entry.path),
+                relativePath: entry.path
+            )
+        }
+        guard remote.commitHash == resolvedRevision else {
+            throw Hub.HubClientError.downloadError(
+                "Repository revision changed while downloading \(options.repoId): "
+                    + "expected \(resolvedRevision), found \(remote.commitHash)"
+            )
+        }
+        return remote
+    }
+
+    private func snapshotMetadataURL(_ snapshotURL: URL) -> URL {
+        snapshotURL
+            .appending(path: ".cache")
+            .appending(path: "huggingface")
+            .appending(path: "download")
     }
 
     private func remoteTreeEntries() async throws -> HubSnapshotTree {
@@ -550,6 +668,94 @@ public actor HubSnapshot {
             try? FileManager.default.removeItem(at: temporaryURL)
         }
         try FileManager.default.linkItem(at: blobURL, to: destination)
+    }
+
+    private func reusableBlobURL(
+        remote: HubSnapshotRemoteFile,
+        expectedBytes: Int64
+    ) -> URL? {
+        guard let etag = remote.etag, !etag.isEmpty else { return nil }
+        let blobURL = contentBlobURL(etag: etag)
+        return Self.fileExists(at: blobURL, expectedBytes: expectedBytes) ? blobURL : nil
+    }
+
+    private func reusableRootPayload(
+        relativePath: String,
+        expectedBytes: Int64,
+        remote: HubSnapshotRemoteFile
+    ) throws -> URL? {
+        guard let etag = remote.etag, !etag.isEmpty else { return nil }
+        for root in options.reuseRoots {
+            let candidate = root.appending(path: relativePath).resolvingSymlinksInPath()
+            guard Self.fileExists(at: candidate, expectedBytes: expectedBytes),
+                  Self.sharesVolume(candidate, downloadBase),
+                  try Self.payloadMatchesETag(
+                    at: candidate,
+                    etag: etag,
+                    byteCount: expectedBytes
+                  ) else {
+                continue
+            }
+            return candidate
+        }
+        return nil
+    }
+
+    private func materializeReusableBlob(
+        expectedBytes: Int64,
+        destination: URL,
+        metadataDestination: URL,
+        remote: HubSnapshotRemoteFile
+    ) throws -> HubSnapshotDownloadMetadata? {
+        guard let blobURL = reusableBlobURL(remote: remote, expectedBytes: expectedBytes) else {
+            return nil
+        }
+        try FileManager.default.createDirectory(
+            at: destination.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try? FileManager.default.removeItem(at: destination)
+        try FileManager.default.linkItem(at: blobURL, to: destination)
+        try writeDownloadMetadata(remote, to: metadataDestination)
+        return HubSnapshotDownloadMetadata(commitHash: remote.commitHash, etag: remote.etag)
+    }
+
+    private func adoptReusableRootPayload(
+        relativePath: String,
+        expectedBytes: Int64,
+        destination: URL,
+        metadataDestination: URL,
+        remote: HubSnapshotRemoteFile
+    ) throws -> HubSnapshotDownloadMetadata? {
+        guard let etag = remote.etag,
+              let payload = try reusableRootPayload(
+                relativePath: relativePath,
+                expectedBytes: expectedBytes,
+                remote: remote
+              ) else {
+            return nil
+        }
+        let blobURL = contentBlobURL(etag: etag)
+        try FileManager.default.createDirectory(
+            at: blobURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        if !FileManager.default.fileExists(atPath: blobURL.path) {
+            do {
+                try FileManager.default.linkItem(at: payload, to: blobURL)
+            } catch {
+                guard FileManager.default.fileExists(atPath: blobURL.path),
+                      Self.fileSize(at: blobURL) == expectedBytes else {
+                    throw error
+                }
+            }
+        }
+        return try materializeReusableBlob(
+            expectedBytes: expectedBytes,
+            destination: destination,
+            metadataDestination: metadataDestination,
+            remote: remote
+        )
     }
 
     private func importLegacyPayload(
@@ -847,6 +1053,14 @@ public actor HubSnapshot {
         return size ?? 0
     }
 
+    private static func sharesVolume(_ lhs: URL, _ rhs: URL) -> Bool {
+        guard let lhsVolume = try? lhs.resourceValues(forKeys: [.volumeIdentifierKey]).volumeIdentifier,
+              let rhsVolume = try? rhs.resourceValues(forKeys: [.volumeIdentifierKey]).volumeIdentifier else {
+            return false
+        }
+        return lhsVolume.isEqual(rhsVolume)
+    }
+
     private static func normalizedETag(_ etag: String?) -> String? {
         guard var etag else { return nil }
         if etag.hasPrefix("W/") {
@@ -921,6 +1135,13 @@ private struct HubSnapshotTreeEntry: Decodable, Sendable {
     let path: String
     let type: String
     let size: Int64?
+    let oid: String?
+    let lfs: HubSnapshotLFSPointer?
+}
+
+private struct HubSnapshotLFSPointer: Decodable, Sendable {
+    let oid: String
+    let size: Int64
 }
 
 private struct HubSnapshotDownloadMetadata: Sendable {
