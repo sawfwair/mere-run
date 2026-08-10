@@ -321,6 +321,43 @@ list with the `MERERUN_H3_BAKEOFF_*` variables documented by the script's
 defaults. A render arm is marked skipped when an exact same-aspect scale cannot
 remain on the 32px grid; the harness never rounds it into a different aspect.
 
+`receipts.tsv` measures generation only; preflight is completed before its
+clock starts. Every passing arm records wall time, `/usr/bin/time` maximum RSS
+and peak footprint, the maximum MLX `peak_gib` reported by per-step profiling,
+the output SHA-256, and all raw logs. `environment.txt` preserves hardware, OS,
+thermal warnings, swap, VM statistics, disk headroom, the process-deny pattern,
+and the clean/dirty source state; per-arm before/after snapshots capture thermal,
+swap, and VM state around the timed region. The runner refuses to start while
+another ML workload matches that pattern.
+
+After generation, `scripts/h3-bakeoff-score.py` verifies that every MP4 matches
+the requested width, height, frame count, 24 fps video, 32 kHz stereo audio,
+and duration. It compares each arm with the same-seed dense-quality output and
+writes a matched eight-frame baseline/candidate contact sheet, one JSON report,
+and a `quality.tsv` summary containing video SSIM, PSNR, VMAF, decoded-audio
+zero-lag correlation, relative L2, RMS, peak, and clipping fractions. A
+structural or metric failure makes the harness fail but does not delete the
+expensive artifacts or raw evidence.
+
+The numeric media scores are diagnostics, not an automatic acceptance rule.
+They expose trajectory drift and broken media contracts; blinded visual review,
+reference retention, motion/coherence, dialogue intelligibility, and A/V sync
+remain required. Score an existing pair independently with:
+
+```bash
+scripts/h3-bakeoff-score.py \
+  ./quality.mp4 \
+  ./candidate.mp4 \
+  --json ./candidate.quality.json \
+  --contact-sheet ./candidate.contact.png \
+  --expected-width 512 \
+  --expected-height 512 \
+  --expected-frames 124 \
+  --expected-fps 24 \
+  --expected-sample-rate 32000 \
+  --expected-channels 2
+```
+
 ## Acceptance gates
 
 Every result records the commit, executable, model artifact identity, hardware,

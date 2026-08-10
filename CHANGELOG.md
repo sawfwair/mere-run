@@ -30,6 +30,12 @@ The format is based on Keep a Changelog.
   latent grid at the same-aspect internal geometry and upscale decoded RGB
   frames with h3.c-compatible high-quality vImage resampling. The mode remains
   opt-in and does not yet compose with continuation or sliding windows.
+- hardened the MiniMax-H3 algorithm bake-off harness with generation-only wall
+  timing, process peak RSS and footprint, MLX peak-memory extraction, thermal
+  and swap provenance, exact output-geometry checks, and matched-seed
+  SSIM/PSNR/VMAF plus decoded-audio correlation and relative-L2 diagnostics.
+  Structural or scoring failures now fail the harness while preserving every
+  output and receipt for inspection.
 - added an isolated experimental MiniMax-H3 `token-reduction` arm. It preserves
   every prefix, condition, reference, and audio row; horizontally pairs only
   target-video tokens after block 3; restores before block 40 for the first ten
