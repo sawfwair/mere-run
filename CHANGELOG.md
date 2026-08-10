@@ -25,6 +25,15 @@ The format is based on Keep a Changelog.
 
 ### Video
 
+- added `video-minimax-h3-ref2va-mlx` as a self-contained explicit managed
+  pull from the immutable public `Sawfwair/MiniMax-H3-Ref2VA-MLX-8bit`
+  artifact. Its transformer and conditioner use MLX affine INT8/group-64;
+  8-bit is the supported Ref2VA quality floor.
+- fixed the MiniMax-H3 ConvRot converter to honor each source tensor's embedded
+  rotation group independently from MLX's output quantization group. The
+  corrected release reverses group-256 transformer matrices and group-64 AdaLN
+  matrices before requantizing to MLX affine INT8/group-64, and the managed
+  model validates the pinned source/output receipt.
 - added `minimax-h3-lightx2v-4step` as a second immutable, checksum-pinned
   MiniMax-H3 managed adapter. The native runtime reads LightX2V's published
   312-pair PEFT checkpoint directly, preserves its separate Q/K/V projections

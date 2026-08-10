@@ -523,6 +523,116 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         )
     }
 
+    func testManagedRef2VAProfileUsesPinnedPublicEightBitArtifact() throws {
+        XCTAssertEqual(
+            MiniMaxH3Resources.ref2vaArtifactRepository,
+            "Sawfwair/MiniMax-H3-Ref2VA-MLX-8bit"
+        )
+        XCTAssertEqual(MiniMaxH3Resources.ref2vaArtifactRevision.count, 40)
+        XCTAssertEqual(
+            MiniMaxH3Resources.ref2vaConvertedSHA256,
+            "234f22f69f8d40d6ed81cceed8259fa287f3c9417d40fba5274e3a7aa84e18a2"
+        )
+        XCTAssertEqual(MiniMaxH3Resources.ref2vaConvertedByteCount, 36_024_412_656)
+        XCTAssertTrue(MiniMaxH3Resources.ref2vaArtifactFiles.contains("SOURCE_MANIFEST.json"))
+        XCTAssertTrue(MiniMaxH3Resources.ref2vaArtifactFiles.contains("transformer.conversion.json"))
+        XCTAssertTrue(MiniMaxH3Resources.ref2vaArtifactFiles.contains("SHA256SUMS"))
+
+        let spec = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: MiniMaxH3Resources.ref2vaModelID)
+        )
+        XCTAssertEqual(spec.hubFallback?.repoId, MiniMaxH3Resources.ref2vaArtifactRepository)
+        XCTAssertEqual(spec.hubFallback?.revision, MiniMaxH3Resources.ref2vaArtifactRevision)
+        XCTAssertEqual(spec.hubFallback?.patterns, MiniMaxH3Resources.ref2vaArtifactFiles)
+        XCTAssertEqual(spec.estimatedDownloadBytes, 70_067_281_810)
+
+        let manifest = MereRunModelManifest.template(
+            for: .miniMaxH3Ref2VAMLX,
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+        XCTAssertEqual(manifest.precision, .int8)
+        XCTAssertEqual(manifest.quantization?.bits, 8)
+        XCTAssertEqual(manifest.quantization?.groupSize, 64)
+        XCTAssertEqual(manifest.quantization?.scheme, "mlx-affine")
+        XCTAssertEqual(
+            manifest.upstreamRepoId,
+            "\(MiniMaxH3Resources.ref2vaArtifactRepository)@\(MiniMaxH3Resources.ref2vaArtifactRevision)"
+        )
+    }
+
+    func testManagedRef2VAArtifactValidationPinsConversionReceipt() throws {
+        let rootURL = FileManager.default.temporaryDirectory
+            .appending(path: "minimax-h3-ref2va-\(UUID().uuidString)")
+        try FileManager.default.createDirectory(at: rootURL, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: rootURL) }
+
+        for filename in ["SOURCE_MANIFEST.json", "SHA256SUMS"] {
+            try Data("{}".utf8).write(to: rootURL.appending(path: filename))
+        }
+        let receiptURL = rootURL.appending(path: "transformer.conversion.json")
+        let receipt = """
+        {
+          "converter": "scripts/model-conversion/convert_minimax_h3_convrot.py",
+          "converter_version": 2,
+          "output": {
+            "byte_count": 36024412656,
+            "filename": "transformer.safetensors",
+            "sha256": "234f22f69f8d40d6ed81cceed8259fa287f3c9417d40fba5274e3a7aa84e18a2"
+          },
+          "partition": "ref2va",
+          "quantization": {"bits": 8, "group_size": 64, "mode": "affine"},
+          "source": {
+            "byte_count": 34038894550,
+            "filename": "minimax_h3_ref2va_int8_convrot.safetensors",
+            "repository": "Comfy-Org/MiniMax-H3",
+            "revision": "fd70b39279d1ae6eb214c903f53e1bec3af19a77",
+            "sha256": "9eef934046a0671bc8a5daf87100705e1478419c574cfde70c50fbe6885f76a9"
+          },
+          "source_convrot_groups": {"256": 200, "64": 50}
+        }
+        """
+        try Data(receipt.utf8).write(to: receiptURL)
+
+        let metadata = [
+            "__metadata__": [
+                "quantization": "affine 8-bit g64",
+                "source_repository": MiniMaxH3Resources.conversionSourceRepository,
+                "source_revision": MiniMaxH3Resources.conversionSourceRevision,
+            ],
+        ]
+        let header = try JSONEncoder().encode(metadata)
+        var headerLength = UInt64(header.count).littleEndian
+        var transformer = withUnsafeBytes(of: &headerLength) { Data($0) }
+        transformer.append(header)
+        let transformerURL = rootURL.appending(path: "transformer.safetensors")
+        try transformer.write(to: transformerURL)
+        let handle = try FileHandle(forWritingTo: transformerURL)
+        try handle.truncate(atOffset: UInt64(MiniMaxH3Resources.ref2vaConvertedByteCount))
+        try handle.close()
+
+        let resources = MiniMaxH3Resources(rootURL: rootURL)
+        XCTAssertTrue(resources.validateManagedRef2VAArtifact().isEmpty)
+
+        try Data(receipt.replacingOccurrences(of: "\"256\": 200", with: "\"256\": 199").utf8)
+            .write(to: receiptURL)
+        XCTAssertTrue(resources.validateManagedRef2VAArtifact().contains { $0.contains("source-group counts") })
+    }
+
+    func testManagedRef2VAArtifactWhenAvailable() throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard let root = environment["MERERUN_H3_REF2VA_MODEL_ROOT"], !root.isEmpty else {
+            throw XCTSkip("Set MERERUN_H3_REF2VA_MODEL_ROOT to validate the complete managed Ref2VA artifact.")
+        }
+        let spec = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: MiniMaxH3Resources.ref2vaModelID)
+        )
+        let rootURL = URL(fileURLWithPath: root, isDirectory: true)
+        let messages = spec.validationMessages(in: rootURL)
+        XCTAssertTrue(messages.isEmpty, messages.joined(separator: "; "))
+        XCTAssertTrue(spec.isManagedRootComplete(rootURL))
+        XCTAssertTrue(spec.isManagedRuntimeReady(rootURL))
+    }
+
     func testCompactTransformerPreservesAdaLNCacheSourceIdentity() throws {
         let rootURL = FileManager.default.temporaryDirectory
             .appending(path: "minimax-h3-compact-\(UUID().uuidString)")

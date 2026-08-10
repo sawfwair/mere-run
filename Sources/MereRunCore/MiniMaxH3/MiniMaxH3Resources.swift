@@ -23,6 +23,42 @@ public struct MiniMaxH3QuantizationConfiguration: Codable, Hashable, Sendable {
     }
 }
 
+struct MiniMaxH3Ref2VAConversionReceipt: Decodable, Sendable {
+    struct FileIdentity: Decodable, Sendable {
+        let byteCount: Int64
+        let filename: String
+        let repository: String?
+        let revision: String?
+        let sha256: String
+
+        enum CodingKeys: String, CodingKey {
+            case byteCount = "byte_count"
+            case filename
+            case repository
+            case revision
+            case sha256
+        }
+    }
+
+    let converter: String
+    let converterVersion: Int
+    let partition: String
+    let source: FileIdentity
+    let output: FileIdentity
+    let sourceConvRotGroups: [String: Int]
+    let quantization: MiniMaxH3QuantizationConfiguration
+
+    enum CodingKeys: String, CodingKey {
+        case converter
+        case converterVersion = "converter_version"
+        case partition
+        case source
+        case output
+        case sourceConvRotGroups = "source_convrot_groups"
+        case quantization
+    }
+}
+
 public struct MiniMaxH3Configuration: Decodable, Hashable, Sendable {
     public let modelType: String
     public let task: String
@@ -169,14 +205,19 @@ public struct MiniMaxH3Resources: Sendable {
     public static let artifactRevision = "e1244ad93d60c737c7e0f065a1c9372f3de7caf8"
     public static let bf16ArtifactRepository = "pipenetwork/MiniMax-H3-MLX-bf16"
     public static let bf16ArtifactRevision = "1486555759eed9e3037edf29f9e055a0713bab2f"
+    public static let ref2vaArtifactRepository = "Sawfwair/MiniMax-H3-Ref2VA-MLX-8bit"
+    public static let ref2vaArtifactRevision = "abb9114fe9d6e3cccc6376eee1abaf09d3f2a9fe"
     public static let bf16TransformerDirectory = "transformer-bf16"
     public static let officialTransformerSourceIdentity =
         "MiniMaxAI/MiniMax-H3@ec19cc6daf5d8add9417c18e86b6b58cc6c55027:"
         + "FL2VA/transformer:index-sha256:fb457a26ffa6294660e249b0ddd03a337f2e5393f770b5c34c8b8f90a29a7efb"
     public static let conversionSourceRepository = "Comfy-Org/MiniMax-H3"
     public static let conversionSourceRevision = "fd70b39279d1ae6eb214c903f53e1bec3af19a77"
+    public static let ref2vaSourceFilename = "minimax_h3_ref2va_int8_convrot.safetensors"
     public static let ref2vaSourceSHA256 = "9eef934046a0671bc8a5daf87100705e1478419c574cfde70c50fbe6885f76a9"
-    public static let ref2vaConvertedSHA256 = "c3ddde0dc29503281cd4c03c1f82b9cb640f4670da68caa5f55e3cec8f2045e8"
+    public static let ref2vaSourceByteCount: Int64 = 34_038_894_550
+    public static let ref2vaConvertedSHA256 = "234f22f69f8d40d6ed81cceed8259fa287f3c9417d40fba5274e3a7aa84e18a2"
+    public static let ref2vaConvertedByteCount: Int64 = 36_024_412_656
 
     public static let requiredFiles = [
         "config.json",
@@ -199,6 +240,11 @@ public struct MiniMaxH3Resources: Sendable {
     public static let bf16SupportArtifactFiles = compactArtifactFiles.filter {
         $0 != "transformer.safetensors" && $0 != MiniMaxH3AdaLNCache.filename
     }
+    public static let ref2vaArtifactFiles = requiredFiles + [
+        "SOURCE_MANIFEST.json",
+        "transformer.conversion.json",
+        "SHA256SUMS",
+    ]
     public static let bf16ArtifactFiles = [
         "README.md",
         "LICENSE",
@@ -229,6 +275,7 @@ public struct MiniMaxH3Resources: Sendable {
     public var videoVAEWeightsURL: URL { rootURL.appending(path: "video_vae.safetensors") }
     public var audioVAEWeightsURL: URL { rootURL.appending(path: "audio_vae.safetensors") }
     public var adaLNCacheURL: URL { rootURL.appending(path: MiniMaxH3AdaLNCache.filename) }
+    public var conversionReceiptURL: URL { rootURL.appending(path: "transformer.conversion.json") }
 
     public func transformerWeightsLayout(fileManager: FileManager = .default) -> TransformerWeightsLayout? {
         if fileManager.fileExists(atPath: bf16TransformerIndexURL.path) {
@@ -339,5 +386,75 @@ public struct MiniMaxH3Resources: Sendable {
             throw MiniMaxH3ResourcesError.invalidConfiguration(configURL, issues.joined(separator: "; "))
         }
         return configuration
+    }
+
+    func validateManagedRef2VAArtifact(fileManager: FileManager = .default) -> [String] {
+        let requiredProvenance = [
+            rootURL.appending(path: "SOURCE_MANIFEST.json"),
+            conversionReceiptURL,
+            rootURL.appending(path: "SHA256SUMS"),
+        ]
+        let missing = requiredProvenance.filter { !fileManager.fileExists(atPath: $0.path) }
+        guard missing.isEmpty else {
+            return missing.map { "Missing required Ref2VA provenance file: \($0.lastPathComponent)" }
+        }
+
+        let receipt: MiniMaxH3Ref2VAConversionReceipt
+        do {
+            receipt = try JSONDecoder().decode(
+                MiniMaxH3Ref2VAConversionReceipt.self,
+                from: Data(contentsOf: conversionReceiptURL)
+            )
+        } catch {
+            return ["Invalid Ref2VA conversion receipt: \(error.localizedDescription)"]
+        }
+
+        var issues: [String] = []
+        if receipt.converter != "scripts/model-conversion/convert_minimax_h3_convrot.py"
+            || receipt.converterVersion != 2 {
+            issues.append("Ref2VA conversion receipt must use the pinned ConvRot converter version 2.")
+        }
+        if receipt.partition != "ref2va" {
+            issues.append("Ref2VA conversion receipt partition must be ref2va.")
+        }
+        if receipt.source.repository != Self.conversionSourceRepository
+            || receipt.source.revision != Self.conversionSourceRevision
+            || receipt.source.filename != Self.ref2vaSourceFilename
+            || receipt.source.byteCount != Self.ref2vaSourceByteCount
+            || receipt.source.sha256 != Self.ref2vaSourceSHA256 {
+            issues.append("Ref2VA conversion receipt does not match the pinned source artifact.")
+        }
+        if receipt.output.filename != transformerWeightsURL.lastPathComponent
+            || receipt.output.repository != nil
+            || receipt.output.revision != nil
+            || receipt.output.byteCount != Self.ref2vaConvertedByteCount
+            || receipt.output.sha256 != Self.ref2vaConvertedSHA256 {
+            issues.append("Ref2VA conversion receipt does not match the pinned MLX transformer.")
+        }
+        if receipt.sourceConvRotGroups != ["64": 50, "256": 200] {
+            issues.append("Ref2VA conversion receipt has unexpected ConvRot source-group counts.")
+        }
+        if receipt.quantization != MiniMaxH3QuantizationConfiguration(
+            bits: 8,
+            groupSize: 64,
+            mode: "affine"
+        ) {
+            issues.append("Ref2VA conversion receipt must declare MLX affine INT8/group-64 output.")
+        }
+        let actualBytes = try? transformerWeightsURL.resourceValues(forKeys: [.fileSizeKey]).fileSize
+        if Int64(actualBytes ?? -1) != Self.ref2vaConvertedByteCount {
+            issues.append("Ref2VA transformer byte count does not match the pinned artifact.")
+        }
+        do {
+            let metadata = try transformerMetadata()
+            if metadata["quantization"] != "affine 8-bit g64"
+                || metadata["source_repository"] != Self.conversionSourceRepository
+                || metadata["source_revision"] != Self.conversionSourceRevision {
+                issues.append("Ref2VA transformer metadata does not match the pinned conversion source.")
+            }
+        } catch {
+            issues.append("Ref2VA transformer metadata is invalid: \(error.localizedDescription)")
+        }
+        return issues
     }
 }

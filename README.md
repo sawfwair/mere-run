@@ -785,10 +785,11 @@ swift run mere.run video generate \
   --h3-adapter minimax-h3-lightx2v-4step \
   --output ./street-dialogue-h3.mp4
 
-# A locally converted Ref2VA root preserves reference order semantically
+# Managed 8-bit Ref2VA preserves reference order semantically
+swift run mere.run model pull video-minimax-h3-ref2va-mlx --accept-model-license
 swift run mere.run video generate \
   "keep the subject, borrow the camera move, and follow the vocal rhythm" \
-  --model-root ./MiniMax-H3-Ref2VA-MLX \
+  --model video-minimax-h3-ref2va-mlx \
   --reference image:./subject.png \
   --reference video:./camera-and-soundtrack.mp4 \
   --reference audio:./voice.wav \

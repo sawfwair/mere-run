@@ -7,22 +7,39 @@ These scripts are audited release tools. They are never invoked by a
 
 `convert_minimax_h3_convrot.py` converts either pinned MiniMax-H3 transformer
 partition from Comfy-Org's exact per-row ConvRot INT8 checkpoint into native
-MLX affine 8-bit tensors with group size 64. It first restores the unrotated
-weight basis, then reproduces MLX's affine scale, bias, and uint32 packing. It
-rejects any source whose filename, byte count, or SHA-256 differs from the
-pinned Hub revision and writes a hashed conversion receipt beside the output.
+MLX affine 8-bit tensors with group size 64. It reads and validates each
+tensor's embedded `convrot_groupsize` before restoring the unrotated weight
+basis; that source rotation group is independent of MLX's output group size.
+It then reproduces MLX's affine scale, bias, and uint32 packing. It rejects any
+source whose filename, byte count, or SHA-256 differs from the pinned Hub
+revision and writes a hashed conversion receipt beside the output.
 
-The converter only handles transformer weights. A self-contained native model
-root must also contain the pinned Qwen3-VL conditioner, video/audio VAEs,
-tokenizer, `config.json`, `LICENSE`, `NOTICE`, and `MODIFICATIONS.md` described
-by `Sources/MereRunCore/MiniMaxH3/README.md`.
+The converter only handles transformer weights. It is release tooling for the
+self-contained public Ref2VA package; users install that package with:
 
 ```bash
-python3 scripts/model-conversion/convert_minimax_h3_convrot.py \
+mere.run model pull video-minimax-h3-ref2va-mlx --accept-model-license
+```
+
+The package is `Sawfwair/MiniMax-H3-Ref2VA-MLX-8bit` at immutable Hub commit
+`abb9114fe9d6e3cccc6376eee1abaf09d3f2a9fe`. Alongside the transformer it carries the pinned
+Qwen3-VL conditioner, video/audio VAEs, tokenizer, `config.json`, `LICENSE`,
+`NOTICE`, `MODIFICATIONS.md`, source manifest, conversion receipt, and hashes.
+Eight-bit is the published Ref2VA quality floor; lower precision did not pass
+the visual quality check.
+
+```bash
+uv run --script scripts/model-conversion/convert_minimax_h3_convrot.py \
   --partition ref2va \
   --source minimax_h3_ref2va_int8_convrot.safetensors \
-  --output transformer.safetensors
+  --output transformer.safetensors \
+  --device cpu
 ```
+
+The script pins its Python conversion dependencies and defaults to CPU for a
+repeatable reference artifact. A different device is allowed for local use and
+is recorded in the receipt, but its byte hash can differ because quantization
+occurs at rounding boundaries.
 
 The MiniMax-H3 Community License restricts territory and redistribution.
 Conversion and use must occur in an allowed territory, and converted packages

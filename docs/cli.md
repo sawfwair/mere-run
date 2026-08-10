@@ -1885,8 +1885,9 @@ FL2VA accepts `--image`, optional `--end-image`, and up to 12 repeatable
 `--h3-frame FRAME:PATH` conditions at exact zero-based output indices. Ref2VA
 accepts ordered `--reference` values and rejects FL2VA keyframe flags. H3 dimensions snap to
 32-pixel multiples, frame counts snap upward to `17*n+5`, and its
-CFG-distilled transformer needs one evaluation per schedule step. Ref2VA roots
-are locally converted; the public managed pull exists only for FL2VA.
+CFG-distilled transformer needs one evaluation per schedule step. Ref2VA is an
+explicit managed pull with an 8-bit transformer and conditioner; 8-bit is the
+published Ref2VA quality floor.
 When `--steps` is omitted, H3 selects 9, 16, or 21 schedule points from packed
 row cost. Maximum acceleration caps the automatic schedule at 12 points. Its
 source-bound AdaLN cache resamples the exact released 31-point
@@ -2002,9 +2003,10 @@ swift run mere.run video generate \
   --num-frames 65 \
   --output ./car-start-to-end.mp4
 
+swift run mere.run model pull video-minimax-h3-ref2va-mlx --accept-model-license
 swift run mere.run video generate \
   "keep the reference subject and follow the camera movement" \
-  --model-root ./MiniMax-H3-Ref2VA-MLX \
+  --model video-minimax-h3-ref2va-mlx \
   --reference image:./subject.png \
   --reference video:./camera.mp4 \
   --num-frames 124 \

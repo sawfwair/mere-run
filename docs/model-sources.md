@@ -824,17 +824,28 @@ QKV matrices are deinterleaved from MiniMax's released per-head row order into
 the global Q/K/V slabs consumed by the native runtime. Runtime auto-download is
 disabled.
 
-Ref2VA is conversion-only. The audited converter accepts only
+The explicit-pull Ref2VA root is the flat
+`Sawfwair/MiniMax-H3-Ref2VA-MLX-8bit` package pinned at immutable Hub commit
+`abb9114fe9d6e3cccc6376eee1abaf09d3f2a9fe`. Its 13-file managed download is exactly
+70,067,281,810 bytes and includes the complete runtime root plus source
+manifest, conversion receipt, hashes, license, notice, and modification
+disclosure. Runtime auto-download is disabled. Eight-bit is the supported
+Ref2VA floor because lower precision did not meet the visual quality bar.
+
+The audited release converter accepts only
 `minimax_h3_ref2va_int8_convrot.safetensors` from
 `Comfy-Org/MiniMax-H3@fd70b39279d1ae6eb214c903f53e1bec3af19a77`, exactly
 34,038,894,550 bytes with SHA-256
 `9eef934046a0671bc8a5daf87100705e1478419c574cfde70c50fbe6885f76a9`.
-It reverses the regular-Hadamard ConvRot basis, reproduces MLX affine INT8
-group-64 packing, and emits a hashed receipt. The verified conversion used for
-runtime validation is 36,024,412,656 bytes with SHA-256
-`c3ddde0dc29503281cd4c03c1f82b9cb640f4670da68caa5f55e3cec8f2045e8`.
-Stage it as `transformer.safetensors` beside the exact FL conditioner, VAEs,
-tokenizer, notices, and a `config.json` whose `partition` is `ref2va`.
+It validates each tensor's embedded ConvRot group size, reverses that
+regular-Hadamard basis, reproduces MLX affine INT8 group-64 packing, and emits
+a hashed receipt. The source uses group 256 for 200 transformer matrices and
+group 64 for 50 AdaLN matrices; these source groups are independent of MLX's
+output group size. The verified CPU conversion from the script's pinned
+PyTorch 2.7.1 toolchain is 36,024,412,656 bytes with SHA-256
+`234f22f69f8d40d6ed81cceed8259fa287f3c9417d40fba5274e3a7aa84e18a2`.
+It is published as `transformer.safetensors` beside the exact FL conditioner,
+VAEs, tokenizer, notices, and a `config.json` whose `partition` is `ref2va`.
 
 `convert_minimax_h3_official_mlx.py` creates the managed FL2VA package in one
 audited pass from the official release. It computes the source-bound AdaLN

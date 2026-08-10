@@ -59,12 +59,12 @@ are an escape hatch, not the capability contract.
   Q8 conditioner, FP16 video VAE, and FP32 audio VAE come from the same pinned
   native support package. The managed install is about 100 GB on disk; the
   active transformer is about 40 GB after the cached AdaLN tensors are omitted.
-- `video-minimax-h3-ref2va-mlx`: identifier for a locally converted Ref2VA
-  root. Repeated `--reference image:path|video:path|audio:path` options retain
-  request order. Video soundtracks are conditioned with their video; a
-  standalone audio reference must be paired with an image or video. There is
-  no managed Ref2VA download because mere.run does not publish a converted
-  copy of the territory-restricted weights.
+- `video-minimax-h3-ref2va-mlx`: explicit-pull 8-bit Ref2VA package. Repeated
+  `--reference image:path|video:path|audio:path` options retain request order.
+  Video soundtracks are conditioned with their video; a standalone audio
+  reference must be paired with an image or video. The transformer and Qwen
+  conditioner use MLX affine INT8/group-64; 8-bit is the published Ref2VA
+  quality floor.
 - `video-ltx23-av-mlx`: standalone distilled LTX 2.3 MLX checkpoint for fast
   drafts. This is the default `--quality draft` checkpoint.
 - `video-ltx23-full-mlx`: LTX 2.3 dev checkpoint, official distilled LoRA,
@@ -114,8 +114,9 @@ mere.run video generate "a superhero waits beneath an umbrella at a bus stop" \
   --h3-adapter minimax-h3-lightx2v-4step \
   --output ./bus-stop-turbo.mp4
 
+mere.run model pull video-minimax-h3-ref2va-mlx --accept-model-license
 mere.run video generate "preserve the person and use the reference motion" \
-  --model-root ./MiniMax-H3-Ref2VA-MLX \
+  --model video-minimax-h3-ref2va-mlx \
   --reference image:./person.png \
   --reference video:./motion.mp4 \
   --output ./ref2va.mp4

@@ -936,7 +936,7 @@ public enum ManagedModelCapabilityCatalog {
             descriptor(
                 ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue,
                 "MiniMax-H3 Ref2VA MLX",
-                "Runs a locally converted Ref2VA root with ordered image, video, and audio references; no redistributable managed snapshot is bundled.",
+                "Runs the explicit-pull 8-bit Ref2VA package with ordered image, video, and audio references and synchronized generated audio.",
                 minimum: 96,
                 recommended: 128
             ),
