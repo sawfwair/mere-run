@@ -206,7 +206,7 @@ public struct MiniMaxH3Resources: Sendable {
     public static let bf16ArtifactRepository = "pipenetwork/MiniMax-H3-MLX-bf16"
     public static let bf16ArtifactRevision = "1486555759eed9e3037edf29f9e055a0713bab2f"
     public static let ref2vaArtifactRepository = "Sawfwair/MiniMax-H3-Ref2VA-MLX-8bit"
-    public static let ref2vaArtifactRevision = "abb9114fe9d6e3cccc6376eee1abaf09d3f2a9fe"
+    public static let ref2vaArtifactRevision = "61dc387ef1a7166425cdacd63c2340598dcc364f"
     public static let bf16TransformerDirectory = "transformer-bf16"
     public static let officialTransformerSourceIdentity =
         "MiniMaxAI/MiniMax-H3@ec19cc6daf5d8add9417c18e86b6b58cc6c55027:"
@@ -218,6 +218,8 @@ public struct MiniMaxH3Resources: Sendable {
     public static let ref2vaSourceByteCount: Int64 = 34_038_894_550
     public static let ref2vaConvertedSHA256 = "234f22f69f8d40d6ed81cceed8259fa287f3c9417d40fba5274e3a7aa84e18a2"
     public static let ref2vaConvertedByteCount: Int64 = 36_024_412_656
+    public static let ref2vaAdaLNCacheSourceIdentity =
+        "sha256:\(ref2vaConvertedSHA256)"
 
     public static let requiredFiles = [
         "config.json",
@@ -241,6 +243,7 @@ public struct MiniMaxH3Resources: Sendable {
         $0 != "transformer.safetensors" && $0 != MiniMaxH3AdaLNCache.filename
     }
     public static let ref2vaArtifactFiles = requiredFiles + [
+        "adaln_cache.safetensors",
         "SOURCE_MANIFEST.json",
         "transformer.conversion.json",
         "SHA256SUMS",
@@ -299,7 +302,11 @@ public struct MiniMaxH3Resources: Sendable {
         if let inheritedIdentity = try transformerMetadata()["adaln_cache_source_identity"] {
             return inheritedIdentity
         }
-        let values = try transformerWeightsURL.resourceValues(forKeys: [
+        if validateManagedRef2VAArtifact().isEmpty {
+            return Self.ref2vaAdaLNCacheSourceIdentity
+        }
+        let resolvedWeightsURL = transformerWeightsURL.resolvingSymlinksInPath()
+        let values = try resolvedWeightsURL.resourceValues(forKeys: [
             .fileSizeKey,
             .contentModificationDateKey,
         ])
@@ -441,7 +448,8 @@ public struct MiniMaxH3Resources: Sendable {
         ) {
             issues.append("Ref2VA conversion receipt must declare MLX affine INT8/group-64 output.")
         }
-        let actualBytes = try? transformerWeightsURL.resourceValues(forKeys: [.fileSizeKey]).fileSize
+        let resolvedWeightsURL = transformerWeightsURL.resolvingSymlinksInPath()
+        let actualBytes = try? resolvedWeightsURL.resourceValues(forKeys: [.fileSizeKey]).fileSize
         if Int64(actualBytes ?? -1) != Self.ref2vaConvertedByteCount {
             issues.append("Ref2VA transformer byte count does not match the pinned artifact.")
         }

@@ -64,7 +64,8 @@ are an escape hatch, not the capability contract.
   Video soundtracks are conditioned with their video; a standalone audio
   reference must be paired with an image or video. The transformer and Qwen
   conditioner use MLX affine INT8/group-64; 8-bit is the published Ref2VA
-  quality floor.
+  quality floor. Its source-bound AdaLN cache is bundled, so no post-pull
+  `model optimize` step is required.
 - `video-ltx23-av-mlx`: standalone distilled LTX 2.3 MLX checkpoint for fast
   drafts. This is the default `--quality draft` checkpoint.
 - `video-ltx23-full-mlx`: LTX 2.3 dev checkpoint, official distilled LoRA,
@@ -176,9 +177,9 @@ and boundary audio latents. Only new frames and samples are appended, so the
 final MP4 has the exact aligned global duration. Conditioner, transformer,
 AdaLN table, reference encodings, and both VAEs remain resident across windows.
 
-The managed package already includes the inference-only AdaLN cache computed
-from the official BF16/F32 projections; no post-pull optimization step is
-required. Generation skips loading and executing the transformer's
+The compact FL2VA and Ref2VA managed packages already include their
+inference-only AdaLN caches; no post-pull optimization step is required.
+Generation skips loading and executing the transformer's
 13B-parameter AdaLN/time-embedding branch and resamples its exact released
 31-point curve for the selected schedule. By default H3 uses 9 points through
 13,500 packed rows, 16 through 26,000, and 21 above that. Maximum acceleration
@@ -209,6 +210,35 @@ refreshes after at most two hits and reserves the final two evaluations;
 Both require two complete evaluations before reuse. Dynamic attention and cache
 reuse are approximate and may change motion or composition for the same prompt
 and seed; use `quality` when exact-seed fidelity matters.
+
+`--h3-acceleration velocity-reuse-2` is an isolated experimental bake-off arm.
+It keeps the quality schedule, protects the first and final full evaluations,
+and reuses the complete synchronized video/audio velocity on intervening odd
+steps. It disables the other approximation policies so its timing and quality
+deltas can be attributed directly; it is not an automatic or default mode.
+
+The isolated `layers-45` and `layers-40` arms rank mean absolute attention and
+MLP gates from the exact AdaLN table, protect blocks 0, 1, and 49, and skip the
+lowest remaining blocks. They reduce executed block work but currently keep all
+weights loaded, so no residency reduction is claimed.
+
+`--h3-acceleration token-reduction` preserves the complete packed prefix and
+target audio while pairing adjacent horizontal target-video tokens after block
+3. It uses averaged spatial RoPE coordinates on the reduced grid. During the
+first ten denoise evaluations the reduced path continues through block 39;
+later evaluations restore before block 30. Each full-resolution video token is
+reconstructed from its saved value plus the corresponding reduced token's
+update from the pooled baseline, preserving within-pair detail. The arm is
+isolated from the other approximation policies and is not a default.
+
+`--h3-render-width` and `--h3-render-height` select an explicit internal target
+canvas for FL2VA or Ref2VA. Set both; they must be same-aspect 32px multiples no
+larger than the requested output. DiT and VAE decode operate on that smaller
+grid, then the decoded RGB frames are returned to `--width` and `--height` with
+the pinned h3.c high-quality vImage scaling contract. A 512x512 output can use
+384x384 for the 75% arm or 320x320 for the 62.5% arm. Reduced rendering is
+currently rejected with sliding windows because continuation conditioning has
+not yet been resampled and qualified.
 
 ### Cosmos3 generation, actions, and reasoning
 

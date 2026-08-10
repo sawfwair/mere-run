@@ -19,6 +19,8 @@ struct VideoGenerationPreflightInput {
     let steps: Int?
     let h3WeightMode: String
     let h3AccelerationMode: String
+    let h3RenderWidth: Int?
+    let h3RenderHeight: Int?
     let h3Adapter: String?
     let h3AdapterStrength: Float
     let h3FrameInputs: [String]
@@ -60,6 +62,8 @@ struct VideoGenerationPreflightRequest: Codable, Equatable {
     let steps: Int?
     let h3WeightMode: String?
     let h3AccelerationMode: String?
+    let h3RenderWidth: Int?
+    let h3RenderHeight: Int?
     let h3Adapter: String?
     let h3AdapterStrength: Float?
     let h3FrameInputs: [String]?
@@ -98,6 +102,8 @@ struct VideoGenerationPreflightRequest: Codable, Equatable {
         case steps
         case h3WeightMode = "h3_weight_mode"
         case h3AccelerationMode = "h3_acceleration"
+        case h3RenderWidth = "h3_render_width"
+        case h3RenderHeight = "h3_render_height"
         case h3Adapter = "h3_adapter"
         case h3AdapterStrength = "h3_adapter_strength"
         case h3FrameInputs = "h3_frames"
@@ -225,6 +231,8 @@ struct VideoGenerationPlanPreflightSummary: Codable, Equatable {
     let resolvedSteps: Int?
     let h3WeightMode: String?
     let h3AccelerationMode: String?
+    let h3RenderWidth: Int?
+    let h3RenderHeight: Int?
     let h3Adapter: String?
     let h3AdapterStrength: Float?
     let h3FrameCount: Int?
@@ -254,6 +262,8 @@ struct VideoGenerationPlanPreflightSummary: Codable, Equatable {
         case resolvedSteps = "resolved_steps"
         case h3WeightMode = "h3_weight_mode"
         case h3AccelerationMode = "h3_acceleration"
+        case h3RenderWidth = "h3_render_width"
+        case h3RenderHeight = "h3_render_height"
         case h3Adapter = "h3_adapter"
         case h3AdapterStrength = "h3_adapter_strength"
         case h3FrameCount = "h3_frame_count"
@@ -365,6 +375,8 @@ struct VideoGenerationPreflightAnalyzer {
             steps: input.steps,
             h3WeightMode: usesMiniMaxH3Geometry ? input.h3WeightMode : nil,
             h3AccelerationMode: usesMiniMaxH3Geometry ? input.h3AccelerationMode : nil,
+            h3RenderWidth: usesMiniMaxH3Geometry ? input.h3RenderWidth : nil,
+            h3RenderHeight: usesMiniMaxH3Geometry ? input.h3RenderHeight : nil,
             h3Adapter: usesMiniMaxH3Geometry ? input.h3Adapter : nil,
             h3AdapterStrength: usesMiniMaxH3Geometry && input.h3Adapter != nil
                 ? input.h3AdapterStrength
@@ -498,12 +510,24 @@ struct VideoGenerationPreflightAnalyzer {
             ))
         }
         if !usesMiniMaxH3Geometry,
-           (!input.h3FrameInputs.isEmpty || input.h3WindowFrames != nil) {
+           (!input.h3FrameInputs.isEmpty
+            || input.h3WindowFrames != nil
+            || input.h3RenderWidth != nil
+            || input.h3RenderHeight != nil) {
             diagnostics.append(PreflightDiagnostic(
                 id: "h3_window_or_frame_with_non_h3_model",
                 severity: .blocker,
                 title: "MiniMax-H3 controls require MiniMax-H3",
-                message: "--h3-frame and --h3-window-frames can only be used with a MiniMax-H3 model."
+                message: "H3 frame, window, and internal-render controls require a MiniMax-H3 model."
+            ))
+        }
+        if usesMiniMaxH3Geometry,
+           (input.h3RenderWidth == nil) != (input.h3RenderHeight == nil) {
+            diagnostics.append(PreflightDiagnostic(
+                id: "h3_render_canvas_incomplete",
+                severity: .blocker,
+                title: "MiniMax-H3 internal render canvas is incomplete",
+                message: "--h3-render-width and --h3-render-height must be set together."
             ))
         }
         if !input.references.isEmpty, !input.h3FrameInputs.isEmpty {
@@ -1211,6 +1235,44 @@ struct VideoGenerationPreflightAnalyzer {
         let resolvedFrames = usesMiniMaxH3Geometry
             ? (try? MiniMaxH3Geometry.alignFrameCount(max(minimumFrames, requestedFrames))) ?? minimumFrames
             : max(minimumFrames, ((requestedFrames - 1) / temporalMultiple) * temporalMultiple + 1)
+        var validH3RenderWidth: Int?
+        var validH3RenderHeight: Int?
+        if usesMiniMaxH3Geometry,
+           let renderWidth = input.h3RenderWidth,
+           let renderHeight = input.h3RenderHeight {
+            let (leftAspect, leftOverflow) = renderWidth.multipliedReportingOverflow(by: resolvedHeight)
+            let (rightAspect, rightOverflow) = renderHeight.multipliedReportingOverflow(by: resolvedWidth)
+            if renderWidth < 32
+                || renderHeight < 32
+                || !renderWidth.isMultiple(of: 32)
+                || !renderHeight.isMultiple(of: 32)
+                || renderWidth > resolvedWidth
+                || renderHeight > resolvedHeight
+                || leftOverflow
+                || rightOverflow
+                || leftAspect != rightAspect {
+                diagnostics.append(PreflightDiagnostic(
+                    id: "h3_render_canvas_invalid",
+                    severity: .blocker,
+                    title: "MiniMax-H3 internal render canvas is invalid",
+                    message: "Internal render dimensions must preserve output aspect, use 32px multiples, and not exceed the resolved output canvas."
+                ))
+            } else {
+                validH3RenderWidth = renderWidth
+                validH3RenderHeight = renderHeight
+            }
+        }
+        if usesMiniMaxH3Geometry,
+           input.h3WindowFrames != nil,
+           validH3RenderWidth != nil,
+           (validH3RenderWidth != resolvedWidth || validH3RenderHeight != resolvedHeight) {
+            diagnostics.append(PreflightDiagnostic(
+                id: "h3_render_canvas_sliding_window_unsupported",
+                severity: .blocker,
+                title: "Reduced H3 rendering cannot use sliding windows yet",
+                message: "Run a single H3 window or remove --h3-render-width and --h3-render-height."
+            ))
+        }
         let h3FrameIndices = input.h3FrameInputs.compactMap { value -> Int? in
             guard let separator = value.firstIndex(of: ":") else { return nil }
             return Int(value[..<separator])
@@ -1305,8 +1367,8 @@ struct VideoGenerationPreflightAnalyzer {
             input.steps ?? (input.h3Adapter != nil
                 ? MiniMaxH3TurboAdapter.recommendedSchedulePointCount
                 : (try? MiniMaxH3StepPolicy.recommendedPointCount(
-                width: resolvedWidth,
-                height: resolvedHeight,
+                width: validH3RenderWidth ?? resolvedWidth,
+                height: validH3RenderHeight ?? resolvedHeight,
                 numFrames: resolvedFrames,
                 keyframeCount: [input.image, input.endImage].compactMap { $0 }.count
                     + input.h3FrameInputs.count,
@@ -1336,6 +1398,8 @@ struct VideoGenerationPreflightAnalyzer {
             resolvedSteps: resolvedH3Steps,
             h3WeightMode: usesMiniMaxH3Geometry ? input.h3WeightMode : nil,
             h3AccelerationMode: usesMiniMaxH3Geometry ? input.h3AccelerationMode : nil,
+            h3RenderWidth: usesMiniMaxH3Geometry ? input.h3RenderWidth : nil,
+            h3RenderHeight: usesMiniMaxH3Geometry ? input.h3RenderHeight : nil,
             h3Adapter: usesMiniMaxH3Geometry ? input.h3Adapter : nil,
             h3AdapterStrength: usesMiniMaxH3Geometry && input.h3Adapter != nil
                 ? input.h3AdapterStrength

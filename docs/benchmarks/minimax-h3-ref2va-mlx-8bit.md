@@ -9,8 +9,8 @@ FL2VA or LTX.
 
 - managed ID: `video-minimax-h3-ref2va-mlx`
 - repository: `Sawfwair/MiniMax-H3-Ref2VA-MLX-8bit`
-- immutable revision: `abb9114fe9d6e3cccc6376eee1abaf09d3f2a9fe`
-- managed bytes: `70,067,281,810`
+- immutable revision: `61dc387ef1a7166425cdacd63c2340598dcc364f`
+- managed bytes: `70,941,103,245`
 - source: `Comfy-Org/MiniMax-H3@fd70b39279d1ae6eb214c903f53e1bec3af19a77`
 - source file bytes: `34,038,894,550`
 - source SHA-256: `9eef934046a0671bc8a5daf87100705e1478419c574cfde70c50fbe6885f76a9`
@@ -21,6 +21,14 @@ FL2VA or LTX.
 The transformer and Qwen3-VL conditioner are MLX affine INT8/group-64. The
 video VAE is FP16 and the audio VAE is FP32. Lower Ref2VA precision did not
 meet the visual quality bar, so 8-bit is the published floor.
+
+The 14-file managed pull also includes `adaln_cache.safetensors`, exactly
+873,820,740 bytes with SHA-256
+`2cbe9e3324ef2cc5108a3ba7f1219d84079ff00a017f604fd86300005cc64fcd`.
+Its source identity is the immutable converted-transformer SHA-256. The cache
+was built one three-modality timestep batch per released schedule point, then
+reloaded and compared with both a fresh cache and direct live AdaLN evaluation.
+At schedule step 10, maximum video and audio output error were both zero.
 
 ## Conversion correction
 

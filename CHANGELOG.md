@@ -25,6 +25,31 @@ The format is based on Keep a Changelog.
 
 ### Video
 
+- added explicit `--h3-render-width` and `--h3-render-height` controls for
+  MiniMax-H3 reduced-canvas bake-offs. FL2VA and Ref2VA now run their target
+  latent grid at the same-aspect internal geometry and upscale decoded RGB
+  frames with h3.c-compatible high-quality vImage resampling. The mode remains
+  opt-in and does not yet compose with continuation or sliding windows.
+- added an isolated experimental MiniMax-H3 `token-reduction` arm. It preserves
+  every prefix, condition, reference, and audio row; horizontally pairs only
+  target-video tokens after block 3; restores before block 40 for the first ten
+  evaluations and before block 30 thereafter; and reconstructs the full grid
+  from the saved original tokens plus each reduced token's learned delta.
+- added the explicit experimental MiniMax-H3 `velocity-reuse-2` acceleration
+  arm for controlled h3.c transfer bake-offs. It preserves the quality schedule
+  and full first/final evaluations, reuses complete video/audio velocities only
+  on intervening odd steps, and does not compose with the other approximation
+  policies or become a default without FL2VA and Ref2VA quality receipts.
+- added isolated `layers-45` and `layers-40` MiniMax-H3 A/B arms that reproduce
+  h3.c's cached AdaLN gate ranking while protecting blocks 0, 1, and 49. The
+  current implementation skips execution but retains every loaded weight, so
+  it makes no transformer-residency reduction claim.
+- bundled Ref2VA's source-bound 31-point AdaLN cache in its pinned managed
+  artifact, so a normal pull can omit the schedule-only AdaLN/time-embedding
+  branch without a post-pull optimization step. Cache construction now
+  preserves live three-modality batch semantics instead of projecting every
+  schedule row together, and managed Ref2VA cache identity is bound to the
+  immutable transformer SHA-256 rather than model-store symlink metadata.
 - added `video-minimax-h3-ref2va-mlx` as a self-contained explicit managed
   pull from the immutable public `Sawfwair/MiniMax-H3-Ref2VA-MLX-8bit`
   artifact. Its transformer and conditioner use MLX affine INT8/group-64;

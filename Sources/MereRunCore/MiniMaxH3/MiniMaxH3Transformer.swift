@@ -12,6 +12,44 @@ private func miniMaxH3Linear(_ linear: Linear, _ value: MLXArray) -> MLXArray {
     return linear(value.asType(activationDType))
 }
 
+enum MiniMaxH3ExactKernelMode: String, Sendable, Equatable {
+    case disabled
+    case affineQ8 = "affine-q8"
+}
+
+enum MiniMaxH3ExactKernelStage: String, CaseIterable, Sendable, Hashable {
+    case gateAdaLN = "k1-gate-adaln"
+    case qkvProjection = "k2b-qkv-projection"
+    case attentionOutput = "k3-attention-output"
+    case feedForwardInput = "k4a-feed-forward-input"
+    case feedForwardOutput = "k4b-feed-forward-output"
+}
+
+private struct MiniMaxH3AffineQ8Weights {
+    let codes: MLXArray
+    let scales: MLXArray
+    let biases: MLXArray
+}
+
+private func miniMaxH3AffineQ8Weights(
+    _ linear: Linear
+) -> MiniMaxH3AffineQ8Weights? {
+    guard let quantized = linear as? QuantizedLinear,
+          quantized.bits == 8,
+          quantized.groupSize == 64,
+          quantized.mode == .affine,
+          quantized.bias == nil,
+          quantized.globalScale == nil,
+          let biases = quantized.biases else {
+        return nil
+    }
+    return MiniMaxH3AffineQ8Weights(
+        codes: quantized.weight,
+        scales: quantized.scales,
+        biases: biases
+    )
+}
+
 func miniMaxH3SplitProjectedQKV(
     _ projected: MLXArray,
     heads: Int,
@@ -231,6 +269,10 @@ private final class MiniMaxH3Attention: Module {
     @ModuleInfo(key: "q_norm") var queryNorm: RMSNorm
     @ModuleInfo(key: "k_norm") var keyNorm: RMSNorm
     @ModuleInfo(key: "out_proj") var output: Linear
+    var exactKernelMode: MiniMaxH3ExactKernelMode = .disabled
+    var enabledExactKernelStages = Set(MiniMaxH3ExactKernelStage.allCases)
+    var exactKernelDispatchHandler: ((MiniMaxH3ExactKernelStage) -> Void)?
+    var exactKernelFallbackHandler: ((MiniMaxH3ExactKernelStage, String) -> Void)?
 
     init(configuration: MiniMaxH3TransformerConfiguration) {
         self.heads = configuration.attentionHeadCount
@@ -266,6 +308,33 @@ private final class MiniMaxH3Attention: Module {
     }
 
     func project(_ input: MLXArray, rope: MiniMaxH3RotaryEmbedding?) -> [MLXArray] {
+        if exactKernelMode == .affineQ8,
+           enabledExactKernelStages.contains(.qkvProjection) {
+            if let rope, let weights = miniMaxH3AffineQ8Weights(queryKeyValue) {
+                if let projected = MiniMaxH3FusedKernels.projectHeadMajorQKVAffineInt8(
+                    input: input,
+                    weightCodes: weights.codes,
+                    weightScales: weights.scales,
+                    weightBiases: weights.biases,
+                    queryNormWeight: queryNorm.weight,
+                    keyNormWeight: keyNorm.weight,
+                    ropeCosine: rope.cosine,
+                    ropeSine: rope.sine,
+                    eps: queryNorm.eps
+                ) {
+                    exactKernelDispatchHandler?(.qkvProjection)
+                    return [projected.query, projected.key, projected.value]
+                }
+                exactKernelFallbackHandler?(
+                    .qkvProjection,
+                    "input=\(input.dtype):\(input.shape) q_norm=\(queryNorm.weight.dtype) "
+                        + "k_norm=\(keyNorm.weight.dtype) rope=\(rope.cosine.dtype):"
+                        + "\(rope.cosine.shape)"
+                )
+            } else {
+                exactKernelFallbackHandler?(.qkvProjection, "weight-or-rope-contract")
+            }
+        }
         // The MLX-Serve artifact deinterleaves the released checkpoint's
         // per-head rows into three global Q/K/V slabs before quantization.
         // Do not apply the raw-checkpoint interleave a second time here.
@@ -345,6 +414,26 @@ private final class MiniMaxH3Attention: Module {
     }
 
     func projectOutput(_ attended: MLXArray) -> MLXArray {
+        if exactKernelMode == .affineQ8,
+           enabledExactKernelStages.contains(.attentionOutput) {
+            if let weights = miniMaxH3AffineQ8Weights(output) {
+                if let projected = MiniMaxH3FusedKernels.projectHeadMajorAttentionAffineInt8(
+                    attention: attended,
+                    weightCodes: weights.codes,
+                    weightScales: weights.scales,
+                    weightBiases: weights.biases
+                ) {
+                    exactKernelDispatchHandler?(.attentionOutput)
+                    return projected
+                }
+                exactKernelFallbackHandler?(
+                    .attentionOutput,
+                    "attention=\(attended.dtype):\(attended.shape)"
+                )
+            } else {
+                exactKernelFallbackHandler?(.attentionOutput, "weight-contract")
+            }
+        }
         let batch = attended.dim(0)
         let sequence = attended.dim(2)
         return output(attended.transposed(0, 2, 1, 3).reshaped(batch, sequence, innerDimension))
@@ -354,6 +443,10 @@ private final class MiniMaxH3Attention: Module {
 private final class MiniMaxH3FeedForward: Module {
     @ModuleInfo(key: "fc1") var input: Linear
     @ModuleInfo(key: "fc2") var output: Linear
+    var exactKernelMode: MiniMaxH3ExactKernelMode = .disabled
+    var enabledExactKernelStages = Set(MiniMaxH3ExactKernelStage.allCases)
+    var exactKernelDispatchHandler: ((MiniMaxH3ExactKernelStage) -> Void)?
+    var exactKernelFallbackHandler: ((MiniMaxH3ExactKernelStage, String) -> Void)?
 
     init(configuration: MiniMaxH3TransformerConfiguration) {
         self._input.wrappedValue = Linear(
@@ -369,16 +462,57 @@ private final class MiniMaxH3FeedForward: Module {
     }
 
     func callAsFunction(_ value: MLXArray) -> MLXArray {
-        output(project(value))
+        projectOutput(project(value))
     }
 
     func project(_ value: MLXArray) -> MLXArray {
+        if exactKernelMode == .affineQ8,
+           enabledExactKernelStages.contains(.feedForwardInput) {
+            if let weights = miniMaxH3AffineQ8Weights(input) {
+                if let projected = MiniMaxH3FusedKernels
+                    .projectFeedForwardInputAffineInt8SwiGLU(
+                        input: value,
+                        weightCodes: weights.codes,
+                        weightScales: weights.scales,
+                        weightBiases: weights.biases
+                    ) {
+                    exactKernelDispatchHandler?(.feedForwardInput)
+                    return projected
+                }
+                exactKernelFallbackHandler?(
+                    .feedForwardInput,
+                    "input=\(value.dtype):\(value.shape)"
+                )
+            } else {
+                exactKernelFallbackHandler?(.feedForwardInput, "weight-contract")
+            }
+        }
         let parts = MLX.split(input(value), parts: 2, axis: -1)
         return MLXNN.silu(parts[0]) * parts[1]
     }
 
     func projectOutput(_ value: MLXArray) -> MLXArray {
-        output(value)
+        if exactKernelMode == .affineQ8,
+           enabledExactKernelStages.contains(.feedForwardOutput) {
+            if let weights = miniMaxH3AffineQ8Weights(output) {
+                if let projected = MiniMaxH3FusedKernels.projectFeedForwardOutputAffineInt8(
+                    input: value,
+                    weightCodes: weights.codes,
+                    weightScales: weights.scales,
+                    weightBiases: weights.biases
+                ) {
+                    exactKernelDispatchHandler?(.feedForwardOutput)
+                    return projected
+                }
+                exactKernelFallbackHandler?(
+                    .feedForwardOutput,
+                    "input=\(value.dtype):\(value.shape)"
+                )
+            } else {
+                exactKernelFallbackHandler?(.feedForwardOutput, "weight-contract")
+            }
+        }
+        return output(value)
     }
 }
 
@@ -492,6 +626,30 @@ private final class MiniMaxH3TransformerBlock: Module {
     @ModuleInfo(key: "mlp") var feedForward: MiniMaxH3FeedForward
     @ModuleInfo(key: "adaln_proj") var adaLN: MiniMaxH3AdaLNProjection?
     private var adaLNWeightsAvailable: Bool
+    var exactKernelMode: MiniMaxH3ExactKernelMode = .disabled {
+        didSet {
+            attention.exactKernelMode = exactKernelMode
+            feedForward.exactKernelMode = exactKernelMode
+        }
+    }
+    var enabledExactKernelStages = Set(MiniMaxH3ExactKernelStage.allCases) {
+        didSet {
+            attention.enabledExactKernelStages = enabledExactKernelStages
+            feedForward.enabledExactKernelStages = enabledExactKernelStages
+        }
+    }
+    var exactKernelDispatchHandler: ((MiniMaxH3ExactKernelStage) -> Void)? {
+        didSet {
+            attention.exactKernelDispatchHandler = exactKernelDispatchHandler
+            feedForward.exactKernelDispatchHandler = exactKernelDispatchHandler
+        }
+    }
+    var exactKernelFallbackHandler: ((MiniMaxH3ExactKernelStage, String) -> Void)? {
+        didSet {
+            attention.exactKernelFallbackHandler = exactKernelFallbackHandler
+            feedForward.exactKernelFallbackHandler = exactKernelFallbackHandler
+        }
+    }
 
     init(configuration: MiniMaxH3TransformerConfiguration, includeAdaLN: Bool) {
         self.adaLNWeightsAvailable = includeAdaLN
@@ -519,6 +677,16 @@ private final class MiniMaxH3TransformerBlock: Module {
         adaLNWeightsAvailable
     }
 
+    var supportsAffineQ8ExactKernels: Bool {
+        miniMaxH3AffineQ8Weights(attention.queryKeyValue) != nil
+            && miniMaxH3AffineQ8Weights(attention.output) != nil
+            && miniMaxH3AffineQ8Weights(feedForward.input) != nil
+            && miniMaxH3AffineQ8Weights(feedForward.output) != nil
+            && attention.queryNorm.weight.dtype == .bfloat16
+            && attention.keyNorm.weight.dtype == .bfloat16
+            && feedForwardNorm.weight.dtype == .bfloat16
+    }
+
     func discardAdaLNWeights() {
         guard adaLNWeightsAvailable else { return }
         update(modules: ModuleChildren.unflattened([
@@ -534,6 +702,17 @@ private final class MiniMaxH3TransformerBlock: Module {
         rope: MiniMaxH3RotaryEmbedding,
         cachedModulation: MLXArray?
     ) -> MLXArray {
+        if exactKernelMode == .affineQ8,
+           enabledExactKernelStages.contains(.gateAdaLN),
+           let exact = exactAffineQ8Call(
+               value,
+               timeEmbedding: timeEmbedding,
+               adaLNIndices: adaLNIndices,
+               rope: rope,
+               cachedModulation: cachedModulation
+           ) {
+            return exact
+        }
         let attended = attentionResidual(
             value,
             timeEmbedding: timeEmbedding,
@@ -547,6 +726,59 @@ private final class MiniMaxH3TransformerBlock: Module {
             adaLNIndices: adaLNIndices,
             cachedModulation: cachedModulation
         )
+    }
+
+    private func exactAffineQ8Call(
+        _ value: MLXArray,
+        timeEmbedding: MLXArray,
+        adaLNIndices: MLXArray,
+        rope: MiniMaxH3RotaryEmbedding,
+        cachedModulation: MLXArray?
+    ) -> MLXArray? {
+        let completeModulation: MLXArray
+        if let cachedModulation {
+            completeModulation = cachedModulation
+        } else {
+            guard let adaLN else {
+                exactKernelFallbackHandler?(.gateAdaLN, "adaln-unavailable")
+                return nil
+            }
+            completeModulation = adaLN.concatenated(timeEmbedding)
+        }
+        let modulation = MLX.split(completeModulation, parts: 6, axis: -1)
+        let shiftAttention = MLX.take(
+            modulation[0],
+            adaLNIndices,
+            axis: 0
+        ).expandedDimensions(axis: 0)
+        let scaleAttention = MLX.take(
+            modulation[1],
+            adaLNIndices,
+            axis: 0
+        ).expandedDimensions(axis: 0)
+        let attentionInput = attentionNorm(value) * (1 + scaleAttention) + shiftAttention
+        let attentionOutput = attention(attentionInput, rope: rope)
+        guard let boundary = MiniMaxH3FusedKernels.gateAttentionAndPrepareFeedForward(
+            residual: value,
+            attentionOutput: attentionOutput,
+            normWeight: feedForwardNorm.weight,
+            modulation: completeModulation,
+            rowIndices: adaLNIndices,
+            eps: feedForwardNorm.eps
+        ) else {
+            exactKernelFallbackHandler?(
+                .gateAdaLN,
+                "residual=\(value.dtype):\(value.shape) "
+                    + "attention=\(attentionOutput.dtype):\(attentionOutput.shape) "
+                    + "norm=\(feedForwardNorm.weight.dtype) "
+                    + "modulation=\(completeModulation.dtype):\(completeModulation.shape) "
+                    + "indices=\(adaLNIndices.dtype):\(adaLNIndices.shape)"
+            )
+            return nil
+        }
+        exactKernelDispatchHandler?(.gateAdaLN)
+        return boundary.residual
+            + boundary.feedForwardGate * feedForward(boundary.feedForwardInput)
     }
 
     func attentionResidual(
@@ -765,6 +997,111 @@ struct MiniMaxH3TransformerPreparedContext {
     let adaLNIndices: MLXArray
     let rope: MiniMaxH3RotaryEmbedding
     let layout: MiniMaxH3PackedLayout
+}
+
+struct MiniMaxH3TokenReductionState {
+    let reducedHidden: MLXArray
+    let originalVideo: MLXArray
+    let pooledBaseline: MLXArray
+}
+
+struct MiniMaxH3TokenReductionMap {
+    let targetVideoStart: Int
+    let reducedVideoRowCount: Int
+    let firstVideoIndices: MLXArray
+    let secondVideoIndices: MLXArray
+    let parentVideoIndices: MLXArray
+    let absoluteSourceIndices: MLXArray
+
+    init(layout: MiniMaxH3PackedLayout) {
+        precondition(layout.targetVideoRows.upperBound == layout.sequenceLength)
+        let spatialHeight = layout.latentHeight / 2
+        let spatialWidth = layout.latentWidth / 2
+        let reducedWidth = (spatialWidth + 1) / 2
+        precondition(spatialHeight > 0 && spatialWidth > 0)
+        precondition(
+            layout.targetVideoRows.count
+                == layout.videoLatentFrames * spatialHeight * spatialWidth
+        )
+
+        var first: [Int32] = []
+        var second: [Int32] = []
+        first.reserveCapacity(layout.videoLatentFrames * spatialHeight * reducedWidth)
+        second.reserveCapacity(first.capacity)
+        for temporal in 0..<layout.videoLatentFrames {
+            for height in 0..<spatialHeight {
+                let rowStart = (temporal * spatialHeight + height) * spatialWidth
+                for reducedColumn in 0..<reducedWidth {
+                    let firstIndex = rowStart + reducedColumn * 2
+                    first.append(Int32(firstIndex))
+                    second.append(Int32(min(firstIndex + 1, rowStart + spatialWidth - 1)))
+                }
+            }
+        }
+        var parents: [Int32] = []
+        parents.reserveCapacity(layout.targetVideoRows.count)
+        for temporal in 0..<layout.videoLatentFrames {
+            for height in 0..<spatialHeight {
+                let reducedRowStart = (temporal * spatialHeight + height) * reducedWidth
+                for column in 0..<spatialWidth {
+                    parents.append(Int32(reducedRowStart + column / 2))
+                }
+            }
+        }
+        let prefix = (0..<layout.targetVideoRows.lowerBound).map(Int32.init)
+        let video = first.map { Int32(layout.targetVideoRows.lowerBound) + $0 }
+        self.targetVideoStart = layout.targetVideoRows.lowerBound
+        self.reducedVideoRowCount = first.count
+        self.firstVideoIndices = MLXArray(first)
+        self.secondVideoIndices = MLXArray(second)
+        self.parentVideoIndices = MLXArray(parents)
+        self.absoluteSourceIndices = MLXArray(prefix + video)
+    }
+
+    func pool(_ hidden: MLXArray) -> MiniMaxH3TokenReductionState {
+        precondition(hidden.ndim == 3)
+        let originalVideo = hidden[0..., targetVideoStart..., 0...]
+        let first = MLX.take(originalVideo, firstVideoIndices, axis: 1).asType(.float32)
+        let second = MLX.take(originalVideo, secondVideoIndices, axis: 1).asType(.float32)
+        let pooled = ((first + second) * 0.5).asType(hidden.dtype)
+        let reduced = targetVideoStart == 0
+            ? pooled
+            : MLX.concatenated([hidden[0..., 0..<targetVideoStart, 0...], pooled], axis: 1)
+        return MiniMaxH3TokenReductionState(
+            reducedHidden: reduced,
+            originalVideo: originalVideo,
+            pooledBaseline: pooled
+        )
+    }
+
+    func restore(
+        _ reducedHidden: MLXArray,
+        state: MiniMaxH3TokenReductionState,
+        updateScale: Float
+    ) -> MLXArray {
+        precondition(reducedHidden.dim(1) == targetVideoStart + reducedVideoRowCount)
+        let reducedVideo = reducedHidden[0..., targetVideoStart..., 0...]
+        let current = MLX.take(reducedVideo, parentVideoIndices, axis: 1).asType(.float32)
+        let baseline = MLX.take(
+            state.pooledBaseline,
+            parentVideoIndices,
+            axis: 1
+        ).asType(.float32)
+        let restoredVideo = (
+            state.originalVideo.asType(.float32) + updateScale * (current - baseline)
+        ).asType(reducedHidden.dtype)
+        return targetVideoStart == 0
+            ? restoredVideo
+            : MLX.concatenated([
+                reducedHidden[0..., 0..<targetVideoStart, 0...],
+                restoredVideo,
+            ], axis: 1)
+    }
+}
+
+struct MiniMaxH3TokenReductionPreparedContext {
+    let map: MiniMaxH3TokenReductionMap
+    let reducedContext: MiniMaxH3TransformerPreparedContext
 }
 
 struct MiniMaxH3AdaLNStep {
@@ -1175,6 +1512,38 @@ public final class MiniMaxH3Transformer: Module {
     var clearsCacheAfterLayerwiseEvaluation = true
     var usesBlockwiseCompilation = false
     var usesFusedPostAttention = true
+    var exactKernelMode: MiniMaxH3ExactKernelMode = .disabled {
+        didSet {
+            for block in blocks {
+                block.exactKernelMode = exactKernelMode
+            }
+            compiledBlockRunner = nil
+            compiledBlockForwards = nil
+        }
+    }
+    var enabledExactKernelStages = Set(MiniMaxH3ExactKernelStage.allCases) {
+        didSet {
+            for block in blocks {
+                block.enabledExactKernelStages = enabledExactKernelStages
+            }
+            compiledBlockRunner = nil
+            compiledBlockForwards = nil
+        }
+    }
+    var exactKernelDispatchHandler: ((MiniMaxH3ExactKernelStage) -> Void)? {
+        didSet {
+            for block in blocks {
+                block.exactKernelDispatchHandler = exactKernelDispatchHandler
+            }
+        }
+    }
+    var exactKernelFallbackHandler: ((MiniMaxH3ExactKernelStage, String) -> Void)? {
+        didSet {
+            for block in blocks {
+                block.exactKernelFallbackHandler = exactKernelFallbackHandler
+            }
+        }
+    }
     private(set) var usesResidentBF16 = false
     var maximumAttentionQueryTokensPerKernel = 1_024
     var maximumAttentionHeadsPerKernel: Int?
@@ -1184,6 +1553,7 @@ public final class MiniMaxH3Transformer: Module {
     var dynamicSparseAttentionStepCount = 0
     var dynamicSparseAttentionLogHandler: ((String) -> Void)?
     var blockTimingHandler: ((Int, TimeInterval, Memory.Snapshot) -> Void)?
+    var activeBlockIndices: Set<Int>?
     @ModuleInfo(key: "video_patch_proj") var videoInput: Linear
     @ModuleInfo(key: "audio_patch_proj") var audioInput: Linear
     @ModuleInfo(key: "condition_proj") var textInput: Linear
@@ -1197,6 +1567,14 @@ public final class MiniMaxH3Transformer: Module {
     private var compiledBlockRunner: MiniMaxH3TransformerBlock?
     private var compiledBlockForwards: MiniMaxH3CompiledBlockForwards?
     private var dynamicSparseAttentionGateResults: [String: Bool] = [:]
+
+    var supportsAffineQ8ExactKernels: Bool {
+        !blocks.isEmpty && blocks.allSatisfy(\.supportsAffineQ8ExactKernels)
+    }
+
+    var affineQ8ExactKernelBlockCount: Int {
+        blocks.count(where: \.supportsAffineQ8ExactKernels)
+    }
     private var adaLNWeightsAvailable: Bool
 
     public init(
@@ -1246,6 +1624,10 @@ public final class MiniMaxH3Transformer: Module {
             guard let linear = entry.1 as? Linear else { return }
             total += miniMaxH3ResidentBF16ByteCount(linear)
         }
+    }
+
+    var activeBlockCount: Int {
+        activeBlockIndices?.count ?? blocks.count
     }
 
     /// Expands compact quantized storage into resident bf16 linear weights.
@@ -1348,6 +1730,71 @@ public final class MiniMaxH3Transformer: Module {
         )
     }
 
+    func prepareTokenReduction(
+        context: MiniMaxH3TransformerPreparedContext
+    ) -> MiniMaxH3TokenReductionPreparedContext {
+        let map = MiniMaxH3TokenReductionMap(layout: context.layout)
+        let firstPositions = MLX.take(
+            context.layout.positions[context.layout.targetVideoRows, 0...],
+            map.firstVideoIndices,
+            axis: 0
+        ).asType(.float32)
+        let secondPositions = MLX.take(
+            context.layout.positions[context.layout.targetVideoRows, 0...],
+            map.secondVideoIndices,
+            axis: 0
+        ).asType(.float32)
+        let reducedVideoPositions = (firstPositions + secondPositions) * 0.5
+        let reducedPositions = map.targetVideoStart == 0
+            ? reducedVideoPositions
+            : MLX.concatenated([
+                context.layout.positions[0..<map.targetVideoStart, 0...],
+                reducedVideoPositions,
+            ], axis: 0)
+        let reducedAdaLNIndices = MLX.take(
+            context.adaLNIndices,
+            map.absoluteSourceIndices,
+            axis: 0
+        )
+        let absoluteSources = map.absoluteSourceIndices.asArray(Int32.self).map(Int.init)
+        let reducedTags = absoluteSources.map { context.layout.tokenTags[$0] }
+        let reducedWidth = ((context.layout.latentWidth / 2 + 1) / 2) * 2
+        let reducedLayout = MiniMaxH3PackedLayout(
+            positions: reducedPositions,
+            tokenTags: reducedTags,
+            textRows: context.layout.textRows,
+            conditionRows: context.layout.conditionRows,
+            conditionSegments: context.layout.conditionSegments,
+            conditionVideoRowCount: context.layout.conditionVideoRowCount,
+            conditionAudioRowCount: context.layout.conditionAudioRowCount,
+            targetAudioRows: context.layout.targetAudioRows,
+            targetVideoRows: map.targetVideoStart..<(map.targetVideoStart + map.reducedVideoRowCount),
+            videoLatentFrames: context.layout.videoLatentFrames,
+            latentHeight: context.layout.latentHeight,
+            latentWidth: reducedWidth,
+            audioLatentFrames: context.layout.audioLatentFrames
+        )
+        let reducedRope = rotaryEmbedding(positions: reducedPositions)
+        MLX.eval(
+            map.firstVideoIndices,
+            map.secondVideoIndices,
+            map.parentVideoIndices,
+            map.absoluteSourceIndices,
+            reducedAdaLNIndices,
+            reducedRope.cosine,
+            reducedRope.sine
+        )
+        return MiniMaxH3TokenReductionPreparedContext(
+            map: map,
+            reducedContext: MiniMaxH3TransformerPreparedContext(
+                text: context.text,
+                adaLNIndices: reducedAdaLNIndices,
+                rope: reducedRope,
+                layout: reducedLayout
+            )
+        )
+    }
+
     func callAsFunction(
         videoRows: MLXArray,
         audioRows: MLXArray,
@@ -1371,6 +1818,61 @@ public final class MiniMaxH3Transformer: Module {
         )
         return finalize(
             hidden,
+            context: context,
+            timeEmbedding: prepared.timeEmbedding,
+            cachedAdaLN: cachedAdaLN
+        )
+    }
+
+    func callWithTokenReduction(
+        videoRows: MLXArray,
+        audioRows: MLXArray,
+        context: MiniMaxH3TransformerPreparedContext,
+        reduction: MiniMaxH3TokenReductionPreparedContext,
+        timesteps: MLXArray,
+        cachedAdaLN: MiniMaxH3AdaLNStep?,
+        policy: MiniMaxH3TokenReductionPolicy,
+        stepIndex: Int
+    ) -> MiniMaxH3TransformerOutput {
+        let restoreBeforeBlock = policy.restoreBeforeBlock(stepIndex: stepIndex)
+        precondition(policy.beginBlock < blocks.count)
+        precondition(restoreBeforeBlock <= blocks.count)
+        let prepared = prepareBlockInput(
+            videoRows: videoRows,
+            audioRows: audioRows,
+            context: context,
+            timesteps: timesteps,
+            cachedAdaLN: cachedAdaLN
+        )
+        let fullBeforeReduction = runBlocks(
+            prepared.hidden,
+            range: 0..<policy.beginBlock,
+            context: context,
+            timeEmbedding: prepared.timeEmbedding,
+            cachedAdaLN: cachedAdaLN
+        )
+        let reductionState = reduction.map.pool(fullBeforeReduction)
+        let reducedHidden = runBlocks(
+            reductionState.reducedHidden,
+            range: policy.beginBlock..<restoreBeforeBlock,
+            context: reduction.reducedContext,
+            timeEmbedding: prepared.timeEmbedding,
+            cachedAdaLN: cachedAdaLN
+        )
+        let restoredHidden = reduction.map.restore(
+            reducedHidden,
+            state: reductionState,
+            updateScale: policy.updateScale
+        )
+        let finalHidden = runBlocks(
+            restoredHidden,
+            range: restoreBeforeBlock..<blocks.count,
+            context: context,
+            timeEmbedding: prepared.timeEmbedding,
+            cachedAdaLN: cachedAdaLN
+        )
+        return finalize(
+            finalHidden,
             context: context,
             timeEmbedding: prepared.timeEmbedding,
             cachedAdaLN: cachedAdaLN
@@ -1572,6 +2074,7 @@ public final class MiniMaxH3Transformer: Module {
         precondition(range.lowerBound >= 0 && range.upperBound <= blocks.count)
         var hidden = initialHidden
         for index in range {
+            if let activeBlockIndices, !activeBlockIndices.contains(index) { continue }
             let block = blocks[index]
             let blockStarted = blockTimingHandler.map { _ in CFAbsoluteTimeGetCurrent() }
             if usesBlockwiseCompilation {
@@ -1809,6 +2312,10 @@ public final class MiniMaxH3Transformer: Module {
             configuration: configuration,
             includeAdaLN: block.includesAdaLN
         )
+        runner.exactKernelMode = block.exactKernelMode
+        runner.enabledExactKernelStages = block.enabledExactKernelStages
+        runner.exactKernelDispatchHandler = block.exactKernelDispatchHandler
+        runner.exactKernelFallbackHandler = block.exactKernelFallbackHandler
         let replacements: [(String, Module)] = block.leafModules().flattened().compactMap { path, module in
             if let lora = module as? MiniMaxH3RuntimeLoRALinear {
                 let base = Linear(
@@ -1871,14 +2378,17 @@ public final class MiniMaxH3Transformer: Module {
         progressHandler: (@Sendable (Int, Int) -> Void)? = nil
     ) -> MiniMaxH3AdaLNCache {
         precondition(videoSchedule.timesteps.count == audioSchedule.timesteps.count)
-        let stepCount = videoSchedule.timesteps.count
-        let flattenedTimesteps = videoSchedule.timesteps.indices.flatMap { index in
-            let videoTimestep = videoSchedule.timesteps[index]
-            let audioTimestep = audioSchedule.timesteps[index]
-            return [videoTimestep, audioTimestep, max(videoTimestep, 0.999)]
+        let stepTimeEmbeddings = videoSchedule.timesteps.indices.map { index in
+            let timesteps = MLXArray([
+                videoSchedule.timesteps[index],
+                audioSchedule.timesteps[index],
+                max(videoSchedule.timesteps[index], 0.999),
+            ])
+            let value = embedTimesteps(timesteps)
+            MLX.eval(value)
+            return value
         }
-        let timeEmbeddings = embedTimesteps(MLXArray(flattenedTimesteps))
-            .reshaped(stepCount, 3, configuration.timeEmbeddingDimension)
+        let timeEmbeddings = MLX.stacked(stepTimeEmbeddings, axis: 0)
         MLX.eval(timeEmbeddings)
 
         let progressTotal = blocks.count + 2
@@ -1886,16 +2396,21 @@ public final class MiniMaxH3Transformer: Module {
         var blockModulations: [MLXArray] = []
         blockModulations.reserveCapacity(blocks.count)
         for (index, block) in blocks.enumerated() {
-            let modulation = block.precomputeModulation(
-                timeEmbedding: timeEmbeddings.reshaped(stepCount * 3, configuration.timeEmbeddingDimension)
-            ).reshaped(stepCount, 3 * 3, 6 * configuration.hiddenSize)
+            let stepModulations = stepTimeEmbeddings.map { timeEmbedding in
+                let value = block.precomputeModulation(timeEmbedding: timeEmbedding)
+                MLX.eval(value)
+                return value
+            }
+            let modulation = MLX.stacked(stepModulations, axis: 0)
             MLX.eval(modulation)
             blockModulations.append(modulation)
             progressHandler?(index + 2, progressTotal)
         }
-        let finalModulations = finalLayer.precomputeModulation(
-            timeEmbedding: timeEmbeddings.reshaped(stepCount * 3, configuration.timeEmbeddingDimension)
-        ).reshaped(stepCount, 3, 2 * configuration.hiddenSize)
+        let finalModulations = MLX.stacked(stepTimeEmbeddings.map { timeEmbedding in
+            let value = finalLayer.precomputeModulation(timeEmbedding: timeEmbedding)
+            MLX.eval(value)
+            return value
+        }, axis: 0)
         MLX.eval(finalModulations)
         progressHandler?(progressTotal, progressTotal)
         return MiniMaxH3AdaLNCache(
@@ -1905,6 +2420,26 @@ public final class MiniMaxH3Transformer: Module {
             videoSigmas: videoSchedule.sigmas,
             audioSigmas: audioSchedule.sigmas,
             sourceIdentity: sourceIdentity
+        )
+    }
+
+    func precomputeAdaLNStep(timesteps: MLXArray) -> MiniMaxH3AdaLNStep {
+        precondition(timesteps.shape == [3])
+        let timeEmbedding = embedTimesteps(timesteps)
+        MLX.eval(timeEmbedding)
+        let blockModulations = blocks.map { block in
+            let modulation = block.precomputeModulation(timeEmbedding: timeEmbedding)
+            MLX.eval(modulation)
+            return modulation
+        }
+        let finalModulation = finalLayer.precomputeModulation(
+            timeEmbedding: timeEmbedding
+        )
+        MLX.eval(finalModulation)
+        return MiniMaxH3AdaLNStep(
+            timeEmbedding: timeEmbedding,
+            blockModulations: blockModulations,
+            finalModulation: finalModulation
         )
     }
 

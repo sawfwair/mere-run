@@ -826,11 +826,12 @@ disabled.
 
 The explicit-pull Ref2VA root is the flat
 `Sawfwair/MiniMax-H3-Ref2VA-MLX-8bit` package pinned at immutable Hub commit
-`abb9114fe9d6e3cccc6376eee1abaf09d3f2a9fe`. Its 13-file managed download is exactly
-70,067,281,810 bytes and includes the complete runtime root plus source
-manifest, conversion receipt, hashes, license, notice, and modification
-disclosure. Runtime auto-download is disabled. Eight-bit is the supported
-Ref2VA floor because lower precision did not meet the visual quality bar.
+`61dc387ef1a7166425cdacd63c2340598dcc364f`. Its 14-file managed download is exactly
+70,941,103,245 bytes and includes the complete runtime root, a source-bound
+31-point AdaLN cache, source manifest, conversion receipt, hashes, license,
+notice, and modification disclosure. Runtime auto-download is disabled.
+Eight-bit is the supported Ref2VA floor because lower precision did not meet
+the visual quality bar.
 
 The audited release converter accepts only
 `minimax_h3_ref2va_int8_convrot.safetensors` from

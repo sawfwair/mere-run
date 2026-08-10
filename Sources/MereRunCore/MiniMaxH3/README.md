@@ -106,7 +106,7 @@ rows into the global Q/K/V slabs expected by the native runtime before Q4
 packing.
 The explicit-pull Ref2VA package is published as
 `Sawfwair/MiniMax-H3-Ref2VA-MLX-8bit` and pinned to Hub commit
-`abb9114fe9d6e3cccc6376eee1abaf09d3f2a9fe`. Its transformer comes from the exact
+`61dc387ef1a7166425cdacd63c2340598dcc364f`. Its transformer comes from the exact
 `Comfy-Org/MiniMax-H3@fd70b39279d1ae6eb214c903f53e1bec3af19a77` ConvRot
 source through `scripts/model-conversion/convert_minimax_h3_convrot.py`. The
 converter reads each tensor's embedded ConvRot group size (256 for the 200
@@ -116,8 +116,11 @@ INT8/group-64, exactly 36,024,412,656 bytes with SHA-256
 `234f22f69f8d40d6ed81cceed8259fa287f3c9417d40fba5274e3a7aa84e18a2`.
 The conditioner is also affine INT8/group-64. Lower Ref2VA precision did not
 meet the visual quality bar, so 8-bit is the supported floor. The package is
-self-contained and retains its source manifest, conversion receipt, hashes,
-license, notice, and modification disclosure.
+self-contained and retains its source-bound 31-point AdaLN cache, source
+manifest, conversion receipt, hashes, license, notice, and modification
+disclosure. The cache is tied to the immutable transformer SHA-256 and lets a
+normal managed pull omit the schedule-only AdaLN/time-embedding branch without
+running `model optimize` locally.
 
 The implementation follows the published MiniMax/Hugging Face architecture.
 No ComfyUI source is included or used at runtime.

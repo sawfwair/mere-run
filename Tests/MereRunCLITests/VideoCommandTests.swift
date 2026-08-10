@@ -367,6 +367,58 @@ final class VideoCommandTests: XCTestCase {
         ])
     }
 
+    func testVideoGenerateParsesExperimentalH3VelocityReuseArm() throws {
+        let command = try VideoGenerate.parse([
+            "a controlled velocity reuse comparison",
+            "--model", ModelResolver.ModelID.miniMaxH3FL2VAMLX.rawValue,
+            "--h3-acceleration", "velocity-reuse-2",
+        ])
+
+        XCTAssertEqual(command.h3Acceleration, .velocityReuse2)
+        XCTAssertEqual(command.h3Acceleration.generationMode, .velocityReuse2)
+    }
+
+    func testVideoGenerateParsesExperimentalH3LayerThinningArms() throws {
+        let fast = try VideoGenerate.parse([
+            "a controlled layer thinning comparison",
+            "--model", ModelResolver.ModelID.miniMaxH3FL2VAMLX.rawValue,
+            "--h3-acceleration", "layers-45",
+        ])
+        let aggressive = try VideoGenerate.parse([
+            "a controlled aggressive layer comparison",
+            "--model", ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue,
+            "--h3-acceleration", "layers-40",
+        ])
+
+        XCTAssertEqual(fast.h3Acceleration.generationMode, .layers45)
+        XCTAssertEqual(aggressive.h3Acceleration.generationMode, .layers40)
+    }
+
+    func testVideoGenerateParsesExperimentalH3TokenReductionArm() throws {
+        let command = try VideoGenerate.parse([
+            "a horizontal token reduction comparison",
+            "--model", ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue,
+            "--h3-acceleration", "token-reduction",
+        ])
+
+        XCTAssertEqual(command.h3Acceleration, .tokenReduction)
+        XCTAssertEqual(command.h3Acceleration.generationMode, .tokenReduction)
+    }
+
+    func testVideoGenerateParsesReducedH3RenderCanvas() throws {
+        let command = try VideoGenerate.parse([
+            "an internal canvas comparison",
+            "--model", ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue,
+            "--width", "512",
+            "--height", "512",
+            "--h3-render-width", "384",
+            "--h3-render-height", "384",
+        ])
+
+        XCTAssertEqual(command.h3RenderWidth, 384)
+        XCTAssertEqual(command.h3RenderHeight, 384)
+    }
+
     func testVideoGenerateParsesH3FrameInjectionAndSlidingWindow() throws {
         let temporaryDirectory = FileManager.default.temporaryDirectory
             .appendingPathComponent("h3-frame-preflight-\(UUID().uuidString)")
@@ -652,6 +704,73 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertTrue(actionArguments?.contains("resident-bf16") == true)
         XCTAssertTrue(actionArguments?.contains("--h3-acceleration") == true)
         XCTAssertTrue(actionArguments?.contains("maximum") == true)
+    }
+
+    func testMiniMaxH3PreflightPreservesReducedRenderCanvas() throws {
+        let output = makeTempOutput(name: "h3-reduced-canvas.mp4")
+        let command = try VideoGenerate.parse([
+            "an internal canvas comparison",
+            "--model", ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue,
+            "--width", "512",
+            "--height", "512",
+            "--h3-render-width", "384",
+            "--h3-render-height", "384",
+            "--preflight",
+            "--json",
+        ])
+
+        let envelope = command.makePreflightEnvelope(
+            outputURL: output,
+            fileManager: .default,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.request.h3RenderWidth, 384)
+        XCTAssertEqual(envelope.request.h3RenderHeight, 384)
+        XCTAssertEqual(envelope.result.plan.h3RenderWidth, 384)
+        XCTAssertEqual(envelope.result.plan.h3RenderHeight, 384)
+        XCTAssertFalse(envelope.diagnostics.contains { $0.id == "h3_render_canvas_invalid" })
+        let actionArguments = envelope.actions.first {
+            $0.id == "start-video-generation"
+        }?.command?.argv
+        XCTAssertTrue(actionArguments?.contains("--h3-render-width") == true)
+        XCTAssertTrue(actionArguments?.contains("--h3-render-height") == true)
+    }
+
+    func testMiniMaxH3PreflightRejectsInvalidOrSlidingReducedCanvas() throws {
+        let invalid = try VideoGenerate.parse([
+            "an invalid internal canvas",
+            "--model", ModelResolver.ModelID.miniMaxH3FL2VAMLX.rawValue,
+            "--width", "512",
+            "--height", "512",
+            "--h3-render-width", "384",
+            "--h3-render-height", "320",
+            "--preflight",
+        ]).makePreflightEnvelope(
+            outputURL: makeTempOutput(name: "h3-invalid-canvas.mp4"),
+            fileManager: .default,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+        XCTAssertTrue(invalid.diagnostics.contains { $0.id == "h3_render_canvas_invalid" })
+
+        let sliding = try VideoGenerate.parse([
+            "a reduced sliding canvas",
+            "--model", ModelResolver.ModelID.miniMaxH3FL2VAMLX.rawValue,
+            "--width", "512",
+            "--height", "512",
+            "--num-frames", "124",
+            "--h3-render-width", "384",
+            "--h3-render-height", "384",
+            "--h3-window-frames", "39",
+            "--preflight",
+        ]).makePreflightEnvelope(
+            outputURL: makeTempOutput(name: "h3-reduced-sliding.mp4"),
+            fileManager: .default,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+        XCTAssertTrue(sliding.diagnostics.contains {
+            $0.id == "h3_render_canvas_sliding_window_unsupported"
+        })
     }
 
     func testMiniMaxH3PreflightAllowsAdapterAttentionAcceleration() throws {

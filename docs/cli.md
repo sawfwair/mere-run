@@ -1815,7 +1815,11 @@ Key options:
 - `--seed`
 - `--steps`: MiniMax-H3 schedule-point override or Wan2.2 inference steps
 - `--h3-weight-mode`: `auto`, `quantized`, or `resident-bf16`
-- `--h3-acceleration`: `quality`, `balanced`, or `maximum`
+- `--h3-acceleration`: `quality`, `balanced`, `maximum`, or the experimental
+  `layers-45`, `layers-40`, `velocity-reuse-2`, and `token-reduction` A/B arms
+- `--h3-render-width`, `--h3-render-height`: optional same-aspect internal H3
+  canvas. Both must be 32px multiples no larger than the output canvas; decoded
+  frames are high-quality upscaled back to `--width` and `--height`
 - `--h3-adapter`: installed MiniMax-H3 adapter catalog id or local safetensors
   path
 - `--h3-adapter-strength`: MiniMax-H3 runtime adapter multiplier
@@ -1913,6 +1917,37 @@ final evaluation in full. Both require two complete evaluations before cache
 reuse. These modes remain approximate: the same prompt and seed may follow a
 different motion or composition trajectory. Use `quality` when exact-seed
 fidelity matters.
+
+`velocity-reuse-2` is a separate experimental h3.c transfer arm. It retains the
+quality schedule, runs the first and final denoise evaluations in full, and
+reuses the complete video and audio velocity outputs on intervening odd steps.
+It does not compose with dynamic-sparse attention or either block-cache policy.
+Use it only for controlled same-seed FL2VA and Ref2VA comparisons until the
+quality envelope is published.
+
+`layers-45` and `layers-40` are separate gate-ranked thinning arms. They rank
+the cached schedule's mean absolute attention/MLP AdaLN gates, always protect
+blocks 0, 1, and 49, and skip the lowest remaining scores. They currently save
+block execution only: mere.run still retains every loaded transformer weight,
+so these modes do not yet claim h3.c's weight-residency reduction.
+
+`token-reduction` is the isolated h3.c token-pairing arm. Blocks 0 through 3
+run on the full packed sequence. Only adjacent horizontal target-video tokens
+are averaged; text, condition media, references, target audio, and odd trailing
+video tokens remain exact. The reduced sequence runs through block 39 for the
+first ten denoise evaluations and through block 29 afterward. Reconstruction
+adds each reduced token's change from its pooled baseline back to both saved
+full-resolution source tokens before the remaining full-grid blocks. This mode
+does not compose with sparse attention, layer thinning, or denoise-step reuse
+and remains non-default pending FL2VA and Ref2VA quality receipts.
+
+For reduced-canvas comparisons, set both internal dimensions explicitly. For
+example, `--width 512 --height 512 --h3-render-width 384
+--h3-render-height 384` runs DiT and VAE decode at 75% linear resolution, then
+uses the pinned oracle's high-quality vImage ARGB8888 scaler to emit 512x512
+frames. The internal canvas must preserve aspect exactly. Sliding-window
+continuation is rejected for now rather than silently conditioning on the wrong
+resolution.
 
 `--h3-window-frames` enables resident sliding windows for FL2VA or Ref2VA. The
 window count must be `17*n+5`; `--h3-window-overlap` must be `17*n+1` and leave
@@ -2093,8 +2128,8 @@ video/audio schedule's AdaLN modulation tables. Compatible H3 generations then
 skip loading the 13B-parameter AdaLN/time-embedding branch and resample that
 exact curve for their selected point count. `--force` replaces an existing
 cache atomically after the new cache has been built. The managed
-`video-minimax-h3-fl2va-mlx` artifact already includes this source-bound cache;
-no post-pull optimization is needed.
+`video-minimax-h3-fl2va-mlx` and `video-minimax-h3-ref2va-mlx` artifacts already
+include their source-bound caches; no post-pull optimization is needed.
 
 ### `mere.run model remove`
 
