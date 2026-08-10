@@ -40,6 +40,10 @@ The format is based on Keep a Changelog.
   order, type, size, and SHA-256 against a pinned manifest. Structural,
   provenance, or scoring failures preserve their outputs and receipts for
   inspection.
+- added a resumable, repository-locked H3 exact-kernel suite. It runs the K1
+  through K5 canaries and installed Ref2VA full-forward gate in evidence order,
+  retains per-mode logs and clean-host receipts, stops immediately on a host
+  rejection, and skips only modes with durable pass markers when resumed.
 - added an isolated experimental MiniMax-H3 `token-reduction` arm. It preserves
   every prefix, condition, reference, and audio row; horizontally pairs only
   target-video tokens after block 3; restores before block 40 for the first ten

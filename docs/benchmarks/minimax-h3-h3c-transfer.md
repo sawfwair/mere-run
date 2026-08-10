@@ -81,6 +81,24 @@ an explicit evidence-policy change with
 processes are retained in `.build/h3-kernel-lab/start-gate.txt` before any
 release build or benchmark begins.
 
+Run every exact candidate in evidence order with the resumable suite wrapper:
+
+```bash
+scripts/h3-kernel-suite.sh --output .build/h3-kernel-suite/ref2va
+scripts/h3-kernel-suite.sh --output .build/h3-kernel-suite/ref2va --resume
+```
+
+The default queue covers K1 floating and activation-INT8 boundaries, K2a/K2b,
+K3, K4, K5, and the installed Ref2VA full-forward gate. Each attempt gets its
+own stdout, stderr, and start-gate receipt, so resuming never overwrites failed
+evidence. A clean-host rejection stops the suite immediately with exit 75;
+other failures are recorded while remaining modes continue. Successful modes
+leave commit-bound pass markers, so `--resume` skips only proven passes. The
+suite requires a clean worktree and binds resume to its original commit and
+ordered mode set. An atomic repository-local lock prevents two suites from
+producing overlapping timing evidence; an exited lock owner is recovered only
+after its recorded PID no longer exists.
+
 K2 through K4 need two implementations where hardware requires it:
 
 - a portable MLX/Metal fallback for current M-series Macs;
