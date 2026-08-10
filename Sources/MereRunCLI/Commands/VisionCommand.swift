@@ -9,6 +9,7 @@ struct Vision: ParsableCommand {
             VisionInspect.self,
             VisionFace.self,
             VisionGround.self,
+            VisionServe.self,
             VisionSegment.self,
             VisionTrack.self,
             VisionTrackLive.self,
