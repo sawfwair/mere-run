@@ -145,7 +145,7 @@ final class SpeechTranscribeCommandParsingTests: XCTestCase {
         XCTAssertEqual(visionNames, Set([
             "caption", "inspect", "ground", "segment", "face", "track", "track-live", "pose", "flow", "ocr",
             "depth-video", "geometry", "geometry-multiview", "image-to-3d", "image-to-3d-multiview",
-            "image-to-3d-trellis2",
+            "image-to-3d-trellis2", "serve",
         ]))
 
         let videoNames = Set(Video.configuration.subcommands.map { $0.configuration.commandName })

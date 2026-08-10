@@ -215,6 +215,26 @@ annotated `image` plus structured `detections` JSON. These outputs are candidate
 geometry, not authoritative evidence. Direct CLI runs may additionally export
 per-detection masks with `--mask-output-dir`.
 
+For repeated binary frames, keep Falcon Perception resident behind the generic
+loopback vision service:
+
+```bash
+mere.run vision serve --port 8091
+
+curl http://127.0.0.1:8091/v1/vision/ground \
+  -F 'stream_id=camera-1' \
+  -F 'frame_id=frame-000042' \
+  -F 'query=vehicle' \
+  -F 'query=person' \
+  -F 'image=@frame.webp;type=image/webp'
+```
+
+The service accepts PNG, JPEG, or WebP bytes and returns normalized detections,
+the input image SHA-256, request identifiers, and inference timing. It does not
+assign application semantics or preserve application-specific state; clients
+own cadence, temporal association, and policy. Loopback is the default, and
+non-loopback binds require `--api-key`.
+
 ### Track objects through a video
 
 ```bash

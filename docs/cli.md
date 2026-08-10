@@ -58,6 +58,7 @@ Public tree:
     - `mere.run vision face compare` — Compare one face from each of two images with cosine similarity.
     - `mere.run vision face batch` — Analyze many images with one warm detector/recognizer session and emit JSONL.
   - `mere.run vision ground` — Ground text queries in an image with the native Falcon Perception runtime.
+  - `mere.run vision serve` — Serve resident, binary-frame vision grounding over HTTP.
   - `mere.run vision segment` — Segment prompted objects in an image with the native SAM 3.1 runtime.
   - `mere.run vision track` — Track prompted objects through a video with the native SAM 3.1 runtime.
   - `mere.run vision track-live` — Capture from a camera and track text-prompted objects with the native SAM 3.1 runtime.
