@@ -314,6 +314,26 @@ scripts/h3-algorithm-bakeoff.sh \
   --reference video:./motion.mp4
 ```
 
+Pin reference identity for a reportable Ref2VA run with a tab-separated
+manifest. Rows are ordered and contain `order`, `kind`, `bytes`, and `sha256`;
+the header is optional and additional columns are ignored:
+
+```text
+order	kind	bytes	sha256
+1	image	110364	34ea0fee383e3b5d353f6a9556af12b5e7d3a7846c6899e768791b5354818ebd
+2	audio	663630	444afb780a0b1a8fe5b1bb90ac744669ef9086c721439c4a0d569389c2e1df80
+```
+
+```bash
+MERERUN_H3_BAKEOFF_REFERENCE_MANIFEST=./references.expected.tsv \
+  scripts/h3-algorithm-bakeoff.sh \
+  video-minimax-h3-ref2va-mlx \
+  .build/h3-bakeoff/ref2va \
+  "preserve the subject and motion" \
+  --reference image:./subject.png \
+  --reference audio:./voice.wav
+```
+
 The default 512x512 matrix includes native resolution, 384x384 (75%), 320x320
 (62.5%), 45 and 40 layers, interval-2 velocity reuse, and token reduction.
 Override geometry, seed, frame count, executable, or the comma-separated arm
@@ -321,14 +341,23 @@ list with the `MERERUN_H3_BAKEOFF_*` variables documented by the script's
 defaults. A render arm is marked skipped when an exact same-aspect scale cannot
 remain on the 32px grid; the harness never rounds it into a different aspect.
 
+The runner fails closed when a matching ML process, `mere.run` process, Swift
+compiler, or Xcode build is active. It also rejects a host starting above
+`MERERUN_H3_BAKEOFF_MAX_STARTING_SWAP_MIB`, which defaults to 1024 MiB. Raising
+that ceiling is an explicit evidence-policy change and must be reported with
+the results; it is not a way to describe swap-heavy timing as clean.
+
 `receipts.tsv` measures generation only; preflight is completed before its
 clock starts. Every passing arm records wall time, `/usr/bin/time` maximum RSS
 and peak footprint, the maximum MLX `peak_gib` reported by per-step profiling,
 the output SHA-256, and all raw logs. `environment.txt` preserves hardware, OS,
 thermal warnings, swap, VM statistics, disk headroom, the process-deny pattern,
-and the clean/dirty source state; per-arm before/after snapshots capture thermal,
-swap, and VM state around the timed region. The runner refuses to start while
-another ML workload matches that pattern.
+the exact executable SHA-256, the prompt SHA-256, the reference-manifest
+SHA-256, and the clean/dirty source state. `prompt.txt`, `arguments.tsv`, and
+`references.tsv` retain the exact request and resolved reference identities;
+`start-gate.txt` preserves rejected process and swap evidence even when no arm
+runs. Per-arm before/after snapshots capture thermal, swap, and VM state around
+the timed region.
 
 After generation, `scripts/h3-bakeoff-score.py` verifies that every MP4 matches
 the requested width, height, frame count, 24 fps video, 32 kHz stereo audio,

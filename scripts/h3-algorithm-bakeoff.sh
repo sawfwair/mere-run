@@ -10,6 +10,7 @@ fi
 
 script_dir="${0:A:h}"
 repo_root="${script_dir:h}"
+invocation_dir="${PWD:A}"
 model="$1"
 output_dir="${2:A}"
 prompt="$3"
@@ -23,11 +24,135 @@ seed="${MERERUN_H3_BAKEOFF_SEED:-42}"
 arms=",${MERERUN_H3_BAKEOFF_ARMS:-quality,render-75,render-625,layers-45,layers-40,velocity-reuse-2,token-reduction},"
 executable="${MERERUN_H3_BAKEOFF_EXECUTABLE:-$repo_root/.build/release/mere.run}"
 scorer="$repo_root/scripts/h3-bakeoff-score.py"
+reference_manifest="${MERERUN_H3_BAKEOFF_REFERENCE_MANIFEST:-}"
+max_starting_swap_mib="${MERERUN_H3_BAKEOFF_MAX_STARTING_SWAP_MIB:-1024}"
 
-contaminant_pattern='/mere\.run |mlxfast|mlx-fast|MereRunPackageTests\.xctest|python.*(mlx|train|eval)'
-if pgrep -if "$contaminant_pattern" >/dev/null; then
-  print -u2 "another ML workload is active; refusing a contaminated H3 algorithm bake-off"
-  pgrep -ifl "$contaminant_pattern" >&2
+if [[ ! "$max_starting_swap_mib" =~ '^[0-9]+([.][0-9]+)?$' ]]; then
+  print -u2 "MERERUN_H3_BAKEOFF_MAX_STARTING_SWAP_MIB must be a nonnegative number"
+  exit 64
+fi
+
+mkdir -p "$output_dir"
+
+prompt_receipt="$output_dir/prompt.txt"
+argument_receipt="$output_dir/arguments.tsv"
+reference_receipt="$output_dir/references.tsv"
+print -rn -- "$prompt" > "$prompt_receipt"
+print -r -- $'order\tzsh_quoted_value' > "$argument_receipt"
+for ((argument_index = 1; argument_index <= ${#extra_arguments}; argument_index++)); do
+  printf '%d\t%q\n' "$argument_index" "${extra_arguments[$argument_index]}" >> "$argument_receipt"
+done
+
+print -r -- $'order\tkind\tbytes\tsha256\tresolved_path\targument' > "$reference_receipt"
+reference_index=0
+for ((argument_index = 1; argument_index <= ${#extra_arguments}; argument_index++)); do
+  argument="${extra_arguments[$argument_index]}"
+  reference=""
+  if [[ "$argument" == "--reference" ]]; then
+    if (( argument_index == ${#extra_arguments} )); then
+      print -u2 "--reference is missing its kind:path value"
+      exit 64
+    fi
+    argument_index=$((argument_index + 1))
+    reference="${extra_arguments[$argument_index]}"
+  elif [[ "$argument" == --reference=* ]]; then
+    reference="${argument#--reference=}"
+  else
+    continue
+  fi
+  if [[ "$reference" != *:* ]]; then
+    print -u2 "H3 bake-off reference must use kind:path: $reference"
+    exit 64
+  fi
+  reference_kind="${reference%%:*}"
+  reference_path="${reference#*:}"
+  if [[ "$reference_kind" != "image" && "$reference_kind" != "video" && "$reference_kind" != "audio" ]]; then
+    print -u2 "unsupported H3 bake-off reference kind: $reference_kind"
+    exit 64
+  fi
+  if [[ "$reference_path" == *$'\t'* || "$reference_path" == *$'\n'* ]]; then
+    print -u2 "H3 bake-off reference paths cannot contain tabs or newlines"
+    exit 64
+  fi
+  resolved_reference="${reference_path:A}"
+  if [[ ! -f "$resolved_reference" ]]; then
+    print -u2 "H3 bake-off reference is unavailable: $resolved_reference"
+    exit 66
+  fi
+  reference_index=$((reference_index + 1))
+  reference_bytes="$(stat -f '%z' "$resolved_reference")"
+  reference_sha256="$(shasum -a 256 "$resolved_reference" | awk '{print $1}')"
+  print -r -- "$reference_index"$'\t'"$reference_kind"$'\t'"$reference_bytes"$'\t'"$reference_sha256"$'\t'"$resolved_reference"$'\t'"$reference" >> "$reference_receipt"
+done
+
+if [[ -n "$reference_manifest" ]]; then
+  reference_manifest="${reference_manifest:A}"
+  if [[ ! -f "$reference_manifest" ]]; then
+    print -u2 "H3 bake-off reference manifest is unavailable: $reference_manifest"
+    exit 66
+  fi
+  if ! diff -u \
+    <(awk -F '\t' 'NF && $1 !~ /^#/ && $1 != "order" { print $1 "\t" $2 "\t" $3 "\t" $4 }' "$reference_manifest") \
+    <(awk -F '\t' 'NR > 1 { print $1 "\t" $2 "\t" $3 "\t" $4 }' "$reference_receipt") \
+    > "$output_dir/reference-manifest.diff"; then
+    print -u2 "H3 bake-off references do not match the pinned manifest: $reference_manifest"
+    print -u2 "see $output_dir/reference-manifest.diff"
+    exit 65
+  fi
+  rm -f "$output_dir/reference-manifest.diff"
+fi
+
+swap_usage="$(sysctl -n vm.swapusage)"
+starting_swap_mib="$(print -r -- "$swap_usage" | awk '
+  {
+    for (field_index = 1; field_index <= NF; field_index++) {
+      if ($field_index == "used" && $(field_index + 1) == "=") {
+        raw = $(field_index + 2)
+        unit = substr(raw, length(raw), 1)
+        value = substr(raw, 1, length(raw) - 1) + 0
+        factor = 1
+        if (unit == "K") factor = 1 / 1024
+        else if (unit == "G") factor = 1024
+        else if (unit == "T") factor = 1024 * 1024
+        else if (unit != "M") exit 2
+        printf "%.3f\n", value * factor
+        found = 1
+        exit
+      }
+    }
+  }
+  END { if (!found) exit 2 }
+')" || {
+  print -u2 "could not parse starting swap usage: $swap_usage"
+  exit 69
+}
+
+contaminant_pattern='/mere\.run |mere\.run-node|mlxfast|mlx-fast|MereRunPackageTests\.xctest|python.*(mlx|train|eval)|swift-build|swift-driver|swift-frontend|xcodebuild'
+contaminants="$(pgrep -ifl "$contaminant_pattern" | awk -v current="$$" -v parent="$PPID" '$1 != current && $1 != parent' || true)"
+{
+  date -u '+utc=%Y-%m-%dT%H:%M:%SZ'
+  print -r -- "invocation_dir=$invocation_dir"
+  print -r -- "contaminant_pattern=$contaminant_pattern"
+  print -r -- "starting_swap_used_mib=$starting_swap_mib"
+  print -r -- "max_starting_swap_mib=$max_starting_swap_mib"
+  print -r -- "$swap_usage"
+  if [[ -n "$contaminants" ]]; then
+    print -r -- "matched_processes:"
+    print -r -- "$contaminants"
+  else
+    print -r -- "matched_processes=none"
+  fi
+} > "$output_dir/start-gate.txt"
+
+if [[ -n "$contaminants" ]]; then
+  print -u2 "another build or ML workload is active; refusing a contaminated H3 algorithm bake-off"
+  print -u2 -r -- "$contaminants"
+  print -u2 "see $output_dir/start-gate.txt"
+  exit 75
+fi
+if awk -v used="$starting_swap_mib" -v maximum="$max_starting_swap_mib" 'BEGIN { exit !(used > maximum) }'; then
+  print -u2 "starting swap is ${starting_swap_mib} MiB; refusing an H3 bake-off above the ${max_starting_swap_mib} MiB evidence ceiling"
+  print -u2 "see $output_dir/start-gate.txt"
   exit 75
 fi
 
@@ -83,7 +208,21 @@ passed_arms=()
   print -r -- "frames=$frames"
   print -r -- "seed=$seed"
   print -r -- "arms=${arms#,}"
+  print -r -- "prompt_sha256=$(shasum -a 256 "$prompt_receipt" | awk '{print $1}')"
+  print -r -- "prompt_receipt=$prompt_receipt"
+  print -r -- "argument_receipt=$argument_receipt"
+  print -r -- "reference_receipt=$reference_receipt"
+  if [[ -n "$reference_manifest" ]]; then
+    print -r -- "reference_manifest=$reference_manifest"
+    print -r -- "reference_manifest_sha256=$(shasum -a 256 "$reference_manifest" | awk '{print $1}')"
+  else
+    print -r -- "reference_manifest=unverified"
+  fi
+  print -r -- "executable=$executable"
+  print -r -- "executable_sha256=$(shasum -a 256 "$executable" | awk '{print $1}')"
   print -r -- "contaminant_pattern=$contaminant_pattern"
+  print -r -- "starting_swap_used_mib=$starting_swap_mib"
+  print -r -- "max_starting_swap_mib=$max_starting_swap_mib"
   print -r -- "competing_ml_processes=none"
   sw_vers
   uname -a
