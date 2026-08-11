@@ -61,11 +61,15 @@ final class WorkflowGraphTests: XCTestCase {
         )
         XCTAssertEqual(
             entry.outputs.map(\.name),
-            ["image", "detections"]
+            ["image", "detections", "masks"]
         )
         XCTAssertEqual(
             entry.outputs.first(where: { $0.name == "detections" })?.contentTypes,
             ["application/json"]
+        )
+        XCTAssertEqual(
+            entry.outputs.first(where: { $0.name == "masks" })?.type,
+            .assetDirectory
         )
     }
 
@@ -267,9 +271,11 @@ final class WorkflowGraphTests: XCTestCase {
         XCTAssertTrue(invocation.runArguments.contains("debris accumulation"))
         XCTAssertEqual(invocation.outputs["image"]?.type, .asset)
         XCTAssertEqual(invocation.outputs["detections"]?.contentTypes, ["application/json"])
+        XCTAssertEqual(invocation.outputs["masks"]?.type, .assetDirectory)
         XCTAssertTrue(invocation.outputs["image"]?.path?.hasSuffix("/artifacts/image.png") == true)
         XCTAssertTrue(invocation.outputs["detections"]?.path?.hasSuffix("/artifacts/detections.json") == true)
-        XCTAssertFalse(invocation.runArguments.contains("--mask-output-dir"))
+        XCTAssertTrue(invocation.outputs["masks"]?.path?.hasSuffix("/artifacts/masks") == true)
+        XCTAssertTrue(invocation.runArguments.contains("--mask-output-dir"))
     }
 
     func testVisionGroundRequiresAtLeastOneStringQuery() throws {

@@ -211,9 +211,9 @@ annotated image path.
 
 Portable graphs expose the same runtime as the built-in `vision.ground` node.
 The node accepts an image plus a JSON array of queries and produces a verified
-annotated `image` plus structured `detections` JSON. These outputs are candidate
-geometry, not authoritative evidence. Direct CLI runs may additionally export
-per-detection masks with `--mask-output-dir`.
+annotated `image`, structured `detections` JSON, and a portable `masks`
+directory containing per-detection PNG masks. These outputs are candidate
+geometry, not authoritative evidence.
 
 For repeated binary frames, keep Falcon Perception resident behind the generic
 loopback vision service:

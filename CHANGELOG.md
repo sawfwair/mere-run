@@ -346,6 +346,11 @@ artifact contracts instead of becoming a model-specific sidecar.
 
 ### Vision and portable workflows
 
+- portable `vision.ground` graph nodes now retain Falcon Perception's native
+  per-detection PNG masks as a verified `masks` artifact directory, matching
+  the existing direct CLI capability without changing their candidate-only
+  evidence boundary.
+
 - added `vision.ground` as a first-class portable graph node across local, SSH,
   and Relay execution. It defaults to the managed Falcon Perception model,
   accepts an image plus typed query array, and emits verified annotated-image

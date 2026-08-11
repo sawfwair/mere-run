@@ -863,6 +863,12 @@ enum WorkflowNodeRegistry {
                     description: "Structured candidate detections and normalized geometry.",
                     contentTypes: ["application/json"]
                 ),
+                .init(
+                    name: "masks",
+                    type: .assetDirectory,
+                    description: "Per-detection Falcon candidate masks.",
+                    contentTypes: ["image/png"]
+                ),
             ],
             requirements: .init(
                 modelIDs: [],
