@@ -85,6 +85,7 @@ public enum QuantizedModelManifestWriter {
             case .psiChat: return .psi
             case .deepseekV4Flash: return .deepseek
             case .inkling: return .inkling
+            case .museGlimmer: return .muse
             }
         }()
 
@@ -123,6 +124,8 @@ public enum QuantizedModelManifestWriter {
                     return [.txt2img]
                 case .gemma4:
                     return [.chat]
+                case .museGlimmer:
+                    return [.chat, .codeGeneration, .visionChat]
                 case .lfm2:
                     return [.chat]
                 case .laguna:
@@ -248,6 +251,8 @@ public enum QuantizedModelManifestWriter {
             case .ideogram4:
                 manifest.defaults = MereRunModelManifest.Defaults(steps: 20, cfg: 7.0)
             case .gemma4:
+                break
+            case .museGlimmer:
                 break
             case .lfm2:
                 break

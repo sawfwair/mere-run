@@ -149,7 +149,7 @@ struct TextChat: AsyncParsableCommand {
             + firstTokenSeconds
     }
 
-    @Option(name: [.long], help: "Canonical model id. Default: text-chat-gemma4-12b-4bit (Apple Silicon) / text-chat-q36-nano-gguf (Linux CUDA). Others: text-chat-laguna-s-2-1, text-chat-laguna-xs-2-1, text-chat-inkling-small, text-chat-bonsai-27b-1bit, text-chat-bonsai-27b-2bit, text-chat-q36-nano, text-agent-ornith-9b, text-agent-ornith-35b-mlx, text-chat-gemma4[-12b|-12b-4bit|-turbo|-max|-nano], text-chat-lfm25-2.6b-4bit, text-chat-lfm25-a1b-8bit, text-chat-psi-agent.")
+    @Option(name: [.long], help: "Canonical model id. Default: text-chat-gemma4-12b-4bit (Apple Silicon) / text-chat-q36-nano-gguf (Linux CUDA). Others include vision-chat-muse-glimmer-30b, text-chat-laguna-s-2-1, text-chat-inkling-small, text-chat-bonsai-27b-1bit, text-chat-q36-nano, text-agent-ornith-9b, text-chat-gemma4[-12b|-12b-4bit|-turbo|-max|-nano], and text-chat-lfm25-a1b-8bit.")
     var model: String = TextChat.defaultChatModelId
 
     @Option(
@@ -270,6 +270,7 @@ struct TextChat: AsyncParsableCommand {
 
         let recommendedSampling = Q35Resources.recommendedSampling(forModelId: model)
         let isLaguna = LagunaResources.handles(modelSpec: normalizedModelId)
+        let isMuseGlimmer = MuseGlimmerResources.handles(modelSpec: normalizedModelId)
         let q35KVCacheMode = try resolveQ35KVCacheMode(for: normalizedModelId)
         if let contextSize, contextSize <= 0 {
             throw ValidationError("--context-size must be greater than zero.")
@@ -279,16 +280,21 @@ struct TextChat: AsyncParsableCommand {
             messages: messages,
             maxTokens: maxTokens,
             temperature: temperature
+                ?? (isMuseGlimmer ? MuseGlimmerResources.recommendedTemperature : nil)
                 ?? (isLaguna ? LagunaResources.recommendedTemperature : recommendedSampling?.temperature)
                 ?? 0.7,
             topP: topP
+                ?? (isMuseGlimmer ? MuseGlimmerResources.recommendedTopP : nil)
                 ?? (isLaguna ? LagunaResources.recommendedTopP : recommendedSampling?.topP)
                 ?? 0.9,
             topK: topK
+                ?? (isMuseGlimmer ? MuseGlimmerResources.recommendedTopK : nil)
                 ?? (isLaguna ? LagunaResources.recommendedTopK : recommendedSampling?.topK),
             minP: minP ?? (isLaguna ? LagunaResources.recommendedMinP : 0),
             reasoningEffort: reasoningEffort,
-            showThinking: requiresJSON ? false : (thinking ?? Q35Resources.thinkingDefault(forModelId: model)),
+            showThinking: requiresJSON
+                ? false
+                : (thinking ?? (isMuseGlimmer ? false : Q35Resources.thinkingDefault(forModelId: model))),
             lora: lora,
             requiresJSON: requiresJSON,
             tools: toolDefs,
@@ -308,6 +314,7 @@ struct TextChat: AsyncParsableCommand {
         }
         var lastGemma4MTPStats: Gemma4MTPStats?
         var lastLagunaDFlashStats: LagunaDFlashStats?
+        var lastMuseDFlashStats: MuseGlimmerDFlashStats?
         let lagunaGenerator = isLaguna
             ? LagunaGenerator(
                 dflashModelPath: LagunaResources.installedDFlashPath(
@@ -358,6 +365,15 @@ struct TextChat: AsyncParsableCommand {
             } else if InklingResources.handles(modelSpec: normalizedModelId) {
                 let generator = InklingGenerator(modelID: normalizedModelId)
                 return try await generator.chat(req, modelPath: runtimeModelRoot, progressHandler: progressHandler)
+            } else if MuseGlimmerResources.handles(modelSpec: normalizedModelId) {
+                let generator = MuseGlimmerGenerator(modelID: normalizedModelId)
+                let response = try await generator.chat(
+                    req,
+                    modelPath: runtimeModelRoot,
+                    progressHandler: progressHandler
+                )
+                lastMuseDFlashStats = await generator.dflashStats()
+                return response
             } else if LFM2Resources.handles(modelSpec: normalizedModelId) {
                 let effectiveModelId = normalizedModelId.isEmpty ? LFM2Resources.defaultModelId : normalizedModelId
                 let generator = LFM2Generator(modelId: effectiveModelId)
@@ -476,6 +492,9 @@ struct TextChat: AsyncParsableCommand {
                     if let dflash = lastLagunaDFlashStats {
                         CLIStderr.write(Self.formatLagunaDFlashStats(dflash) + "\n")
                     }
+                    if let dflash = lastMuseDFlashStats {
+                        CLIStderr.write(Self.formatMuseDFlashStats(dflash) + "\n")
+                    }
                 } else {
                     let line = String(format: "time=%.2fs tokens=%d tps=%.2f", elapsed, result.tokensGenerated, e2eTps)
                     CLIStderr.write("\(line)\n")
@@ -484,6 +503,9 @@ struct TextChat: AsyncParsableCommand {
                     }
                     if let dflash = lastLagunaDFlashStats {
                         CLIStderr.write(Self.formatLagunaDFlashStats(dflash) + "\n")
+                    }
+                    if let dflash = lastMuseDFlashStats {
+                        CLIStderr.write(Self.formatMuseDFlashStats(dflash) + "\n")
                     }
                 }
             }
@@ -576,6 +598,32 @@ struct TextChat: AsyncParsableCommand {
         )
     }
 
+    static func formatMuseDFlashStats(_ stats: MuseGlimmerDFlashStats) -> String {
+        let state: String
+        if stats.active {
+            state = "active"
+        } else if stats.enabled {
+            state = stats.assistantModelPath == nil ? "unavailable" : "fallback"
+        } else {
+            state = "disabled"
+        }
+        let reason = stats.reason.map { " reason=\($0)" } ?? ""
+        return String(
+            format: "muse_dflash=%@ proposals=%d rounds=%d drafted=%d accepted=%d acceptance=%.1f%% verify=%d recovery=%d fallback_forwards=%d adaptive_fallbacks=%d%@",
+            state,
+            stats.speculativeTokens,
+            stats.rounds,
+            stats.draftedTokens,
+            stats.acceptedTokens,
+            stats.acceptanceRate * 100,
+            stats.targetVerificationForwards,
+            stats.targetRecoveryForwards,
+            stats.targetFallbackForwards,
+            stats.adaptiveFallbacks,
+            reason
+        )
+    }
+
     static func validate(responseFormat: TextChatResponseFormat, modelID: String) throws {
         guard responseFormat == .jsonObject else { return }
         if ManagedModelCatalog.spec(for: modelID)?.validationKind == .codegenGGUF {
@@ -585,9 +633,10 @@ struct TextChat: AsyncParsableCommand {
         }
         if modelID == Psi3ChatResources.defaultModelId
             || LFM2Resources.handles(modelSpec: modelID)
-            || InklingResources.handles(modelSpec: modelID) {
+            || InklingResources.handles(modelSpec: modelID)
+            || MuseGlimmerResources.handles(modelSpec: modelID) {
             throw ValidationError(
-                "--response-format json_object is supported by native Gemma4 and Qwen-family MLX chat models."
+                "--response-format json_object is supported by native Gemma4 and Qwen-family MLX chat models; Muse Glimmer supports structured tool schemas but not constrained JSON decoding."
             )
         }
         if LagunaResources.handles(modelSpec: modelID) {
@@ -599,11 +648,16 @@ struct TextChat: AsyncParsableCommand {
 
     static func validateReasoningEffort(_ value: Double?, modelID: String) throws {
         guard let value else { return }
-        guard InklingResources.handles(modelSpec: modelID) else {
-            throw ValidationError("--reasoning-effort is supported only for Inkling-Small.")
+        guard InklingResources.handles(modelSpec: modelID)
+                || MuseGlimmerResources.handles(modelSpec: modelID) else {
+            throw ValidationError("--reasoning-effort is supported only for Inkling-Small and Muse Glimmer.")
         }
-        guard (0...0.99).contains(value) else {
-            throw ValidationError("--reasoning-effort must be between 0 and 0.99.")
+        let allowed = InklingResources.handles(modelSpec: modelID)
+            ? (0...0.99).contains(value)
+            : (0...1).contains(value)
+        guard allowed else {
+            let upper = InklingResources.handles(modelSpec: modelID) ? "0.99" : "1"
+            throw ValidationError("--reasoning-effort must be between 0 and \(upper).")
         }
     }
 

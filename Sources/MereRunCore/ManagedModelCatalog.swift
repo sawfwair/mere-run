@@ -47,6 +47,8 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case q35
     case lfm2
     case inkling
+    case museGlimmer
+    case museGlimmerAssistant
     case qwen3TTS
     case qwen3ASR
     case parakeet
@@ -1143,6 +1145,36 @@ public enum ManagedModelCatalog {
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: InklingResources.estimatedDownloadBytes,
             defaultCLICommands: ["text chat", "text train-lora"]
+        ),
+        ManagedModelSpec(
+            id: MuseGlimmerResources.modelId,
+            category: .visionChat,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: MuseGlimmerResources.artifactRepoId,
+                revision: MuseGlimmerResources.artifactRevision,
+                patterns: MuseGlimmerResources.snapshotPatterns
+            ),
+            upstreamRepoId: MuseGlimmerResources.artifactRepoId,
+            upstreamRevision: MuseGlimmerResources.artifactRevision,
+            usageRestriction: ManagedModelUsageRestriction(
+                summary: "Apache-2.0 model subject to Meta's bundled usage policy; upstream states it is not intended for download or use by people under 18.",
+                terms: [
+                    ManagedModelUsageTerm(
+                        component: "Muse Glimmer 30B",
+                        license: "Apache-2.0 with upstream usage policy",
+                        summary: "Review LICENSE and USAGE_POLICY.md before installing or deploying.",
+                        sourceRepoId: MuseGlimmerResources.upstreamRepoId,
+                        sourceRevision: MuseGlimmerResources.upstreamRevision,
+                        licenseURL: "https://huggingface.co/meta-models/Muse-Glimmer-30B/blob/\(MuseGlimmerResources.upstreamRevision)/USAGE_POLICY.md"
+                    ),
+                ]
+            ),
+            validationKind: .museGlimmer,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: MuseGlimmerResources.estimatedDownloadBytes,
+            defaultCLICommands: ["text chat", "api serve"],
+            companionModelIDs: [MuseGlimmerResources.assistantModelId]
         ),
         ManagedModelSpec(
             id: Q35Resources.q36NanoModelId,
@@ -2661,6 +2693,34 @@ private extension ManagedModelCatalog {
                 estimatedDownloadBytes: LagunaResources.dflashEstimatedDownloadBytes
             ),
             ManagedModelSpec(
+                id: MuseGlimmerResources.assistantModelId,
+                category: .textChat,
+                installShape: .directoryRoot,
+                hubFallback: HubFallbackConfig(
+                    repoId: MuseGlimmerResources.assistantUpstreamRepoId,
+                    revision: MuseGlimmerResources.assistantUpstreamRevision,
+                    patterns: MuseGlimmerResources.assistantSnapshotPatterns
+                ),
+                upstreamRepoId: MuseGlimmerResources.assistantUpstreamRepoId,
+                upstreamRevision: MuseGlimmerResources.assistantUpstreamRevision,
+                usageRestriction: ManagedModelUsageRestriction(
+                    summary: "Apache-2.0 model subject to Meta's bundled usage policy; upstream states it is not intended for download or use by people under 18.",
+                    terms: [
+                        ManagedModelUsageTerm(
+                            component: "Muse Glimmer 30B DFlash assistant",
+                            license: "Apache-2.0 with upstream usage policy",
+                            summary: "Review LICENSE and USAGE_POLICY.md before installing or deploying.",
+                            sourceRepoId: MuseGlimmerResources.assistantUpstreamRepoId,
+                            sourceRevision: MuseGlimmerResources.assistantUpstreamRevision,
+                            licenseURL: "https://huggingface.co/meta-models/Muse-Glimmer-30B-assistant/blob/\(MuseGlimmerResources.assistantUpstreamRevision)/USAGE_POLICY.md"
+                        ),
+                    ]
+                ),
+                validationKind: .museGlimmerAssistant,
+                runtimeAutoDownloadAllowed: false,
+                estimatedDownloadBytes: MuseGlimmerResources.assistantEstimatedDownloadBytes
+            ),
+            ManagedModelSpec(
                 id: ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue,
                 category: .textChat,
                 installShape: .directoryRoot,
@@ -2841,6 +2901,13 @@ public extension ManagedModelSpec {
             return LFM2Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .inkling:
             return InklingResources.validate(rootURL: rootURL, fileManager: fileManager)
+        case .museGlimmer:
+            return MuseGlimmerResources(rootURL: rootURL).validate(fileManager: fileManager)
+        case .museGlimmerAssistant:
+            return MuseGlimmerResources.validateAssistant(
+                rootURL: rootURL,
+                fileManager: fileManager
+            )
         case .sam31:
             return SAM31Resources(modelRootURL: rootURL).missingRequiredPaths(fileManager: fileManager)
         case .falconPerception:
@@ -3155,10 +3222,14 @@ public extension ManagedModelSpec {
     func managedRuntimeURL(fileManager: FileManager = .default) -> URL? {
         switch installShape {
         case .directoryRoot, .structuredRoot:
-            guard let modelID, let resolved = ModelResolver(fileManager: fileManager).resolveIfPresent(modelID) else {
-                return nil
+            if let modelID {
+                guard let resolved = ModelResolver(fileManager: fileManager).resolveIfPresent(modelID) else {
+                    return nil
+                }
+                return resolved.rootURL
             }
-            return resolved.rootURL
+            let root = normalizedRootURL(managedInstallRootURL(), fileManager: fileManager)
+            return validateRuntimeURL(root, fileManager: fileManager).isEmpty ? root : nil
         case .singleFile(let relativePath):
             let aliasURL = MereRunModelPaths.resolveModelFile(relativePath: relativePath) { candidate in
                 self.validateRuntimeURL(candidate, fileManager: fileManager).isEmpty

@@ -8,6 +8,35 @@ The format is based on Keep a Changelog.
 
 ### Text
 
+- added `vision-chat-muse-glimmer-30b`, an exact-revision managed Sawfwair
+  selective MLX Q4 conversion of Meta Muse Glimmer 30B with a fully native
+  Swift/MLX text and perception stack,
+  interleaved local image input, ATEM tool calls, controllable reasoning
+  strength, CLI/API routing, and audited affine Q4/group-64 conversion. The
+  converter now defaults to a selective 420-matrix layout that keeps the token
+  embedding and vision tower in BF16; the previous 721-matrix compact layout
+  remains available for explicit memory/speed experiments. The native loader
+  discovers quantized modules from checkpoint scales and accepts both released
+  and common MLX Hub key layouts. Vision preprocessing now reproduces the
+  released uint8 Lanczos path, and float32 position interpolation is covered by
+  exact upstream parity fixtures.
+  Managed pulls also install the pinned official 2.56B-parameter assistant;
+  native DFlash performs lossless target verification after text or image
+  prefill, defaults to the measured 3-proposal MLX block, reports acceptance
+  through `text chat --stats`, and falls back to serial target decode when
+  acceptance is poor. A one-time load warmup materializes both the serial target
+  cache and production DFlash verification graph before the first user-visible
+  decode. Two interleaved 128-token M4 Max release diagnostics with
+  the Q4 target improved from 14.73 to 20.07 tok/s on average (1.36x, 36.2%) at
+  54.9% acceptance. In a paired 8,192-token WikiText-2 candidate check,
+  selective Q4 measured 9.535 perplexity versus 9.554 for compact Q4 (mean NLL
+  delta -0.0020, 95% bootstrap CI -0.0035 to -0.0004). This is a bounded local
+  comparison, not full release-quality proof. A separately audited assistant-Q4
+  converter is retained, but BF16 is preferred because assistant quantization
+  was slower in that test.
+  The 21.38 GB artifact carries an exact conversion receipt plus Meta's original
+  license and usage policy; implicit download remains disabled and pulls require
+  explicit acceptance.
 - fixed `text chat --stream --quiet` so `--quiet` suppresses stderr diagnostics
   without disconnecting incremental generated text from stdout.
 

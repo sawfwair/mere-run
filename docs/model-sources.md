@@ -57,6 +57,7 @@ from the runtime catalog used by `mere.run model list`,
 | `text-chat` | `text-chat-laguna-s-2-1` |
 | `text-chat` | `text-chat-laguna-xs-2-1` |
 | `text-chat` | `text-chat-inkling-small` |
+| `vision-chat` | `vision-chat-muse-glimmer-30b` |
 | `text-chat` | `text-chat-q36-nano` |
 | `text-chat` | `text-chat-bonsai-27b-1bit` |
 | `text-chat` | `text-chat-bonsai-27b-2bit` |
@@ -170,6 +171,7 @@ validates all configured models before downloading any; both accept the same
 | `image-krea2-raw`, `image-krea2-turbo` | Krea 2 Community License; commercial use is limited to entities below USD 1M trailing annual revenue, plus use/distribution conditions |
 | `image-ideogram4-sdnq-uint4` | Ideogram Non-Commercial Model Agreement |
 | `text-chat-lfm25-a1b-8bit`, `text-chat-lfm25-2.6b-4bit` | LFM Open License v1.0; commercial use by entities at or above USD 10M annual revenue is excluded |
+| `vision-chat-muse-glimmer-30b` | Apache-2.0 plus Meta's bundled usage policy; upstream says the model is not intended for download or use by people under 18 |
 | `vision-segment-sam31` | Meta SAM License custom use, trade-control, attribution, and redistribution conditions |
 | `vision-face-buffalo-l` | InsightFace pretrained weights; non-commercial research use |
 | `vision-embed-olmoearth-v12-{nano,tiny,small,base}` | OlmoEarth Artifact License; prohibited military, defense, intelligence, human-surveillance, policing, and listed extractive uses |
@@ -303,6 +305,32 @@ license and notice files.
 `Qwen3.6-35B-A3B-UD-Q4_K_M.gguf` quant. It is the llama.cpp/GGUF companion to
 the Apple Silicon MLX `text-chat-q36-nano` path and is the default chat model
 for Linux CUDA hosts.
+
+`vision-chat-muse-glimmer-30b` pins Sawfwair's 21.38 GB selective MLX Q4
+artifact at revision `6532e898dc5c1a55b51b1b108cd36728b79be751`. Its conversion
+receipt pins Meta's Apache-2.0 Muse Glimmer 30B BF16 source at revision
+`f84ecc3a0ea984a4c04542a84269e3d065350a6e`, records every source and output
+hash, and retains Meta's `LICENSE` and `USAGE_POLICY.md`. The managed artifact
+is never downloaded implicitly. The native Swift/MLX runtime implements its
+52-layer local/local/local/global text stack,
+NoPE global layers, gated attention, 50-layer perception encoder, interleaved
+image tokens, ATEM tool calls, and low/medium/high/xhigh reasoning-strength
+prompt contract. Its image path uses the released uint8 Lanczos resize behavior
+and float32 position interpolation. The released artifact and offline converter
+use selective Q4/group-64 over 420 text/output/adapter matrices while retaining
+the token
+embedding and complete vision tower in BF16; pass `--quantization-scope compact`
+to quantize all 721 eligible matrices for an explicit lower-memory experiment.
+The runtime discovers quantized modules from their `.scales` arrays, so both
+layouts use the same inference implementation. The same pull installs the 5.11
+GB official DFlash assistant
+from `meta-models/Muse-Glimmer-30B-assistant` at revision
+`2c86316d689027b91123638739743fef1d425233`; the native verifier accelerates
+eligible decode without changing target-model output. Pulls require explicit
+review and acceptance of the bundled `LICENSE` and `USAGE_POLICY.md`; upstream
+says the model is not intended for download or use by people under 18. Python
+conversion scripts are offline artifact tooling only and are not part of
+inference.
 
 `text-chat-gemma4-12b` and `vision-chat-gemma4-12b` share Google's dense Gemma
 4 12B-it checkpoint; the text id uses the native chat path, while the vision id

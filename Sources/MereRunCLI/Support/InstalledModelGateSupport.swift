@@ -175,7 +175,7 @@ enum InstalledModelSmokePlans {
                 try await runner.installedImageCheck(model: spec.id)
             }
 
-        case .gemma4, .gemma4Unified, .q35:
+        case .gemma4, .gemma4Unified, .q35, .museGlimmer:
             if spec.category == .visionOCR {
                 return direct(spec, route: "vision ocr") { runner in
                     try await runner.installedOCRCheck(model: spec.id)
@@ -219,6 +219,16 @@ enum InstalledModelSmokePlans {
                 installedIDs: installedIDs,
                 candidates: ["text-chat-laguna-s-2-1"],
                 route: "consumed by Laguna text chat"
+            ) { runner, primary in
+                try await runner.installedTextCheck(model: primary)
+            }
+
+        case .museGlimmerAssistant:
+            return companion(
+                spec,
+                installedIDs: installedIDs,
+                candidates: [MuseGlimmerResources.modelId],
+                route: "consumed by Muse Glimmer text and vision chat"
             ) { runner, primary in
                 try await runner.installedTextCheck(model: primary)
             }

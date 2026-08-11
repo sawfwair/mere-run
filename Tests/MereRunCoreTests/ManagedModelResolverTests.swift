@@ -2,6 +2,31 @@ import XCTest
 @testable import MereRunCore
 
 final class ManagedModelResolverTests: XCTestCase {
+    func testHiddenMuseAssistantResolvesFromManagedInstallRoot() throws {
+        let modelsRoot = try makeTemporaryDirectory()
+        defer {
+            MereRunModelPaths.setProcessModelsDirOverride(nil)
+            try? FileManager.default.removeItem(at: modelsRoot)
+        }
+        MereRunModelPaths.setProcessModelsDirOverride(modelsRoot)
+
+        let assistantRoot = modelsRoot.appendingPathComponent(
+            MuseGlimmerResources.assistantModelId,
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(at: assistantRoot, withIntermediateDirectories: true)
+        try Data(#"{"model_type":"muse_glimmer_assistant"}"#.utf8).write(
+            to: assistantRoot.appendingPathComponent("config.json")
+        )
+        try Data([0]).write(to: assistantRoot.appendingPathComponent("model.safetensors"))
+
+        XCTAssertNil(ModelResolver.ModelID(rawValue: MuseGlimmerResources.assistantModelId))
+        XCTAssertEqual(
+            ManagedModelResolver.resolveInstalledModel(id: MuseGlimmerResources.assistantModelId),
+            assistantRoot.standardizedFileURL
+        )
+    }
+
     func testRestrictedInstallRequiresCoreAcknowledgementBeforeDownload() async throws {
         let modelsRoot = try makeTemporaryDirectory()
         defer {
