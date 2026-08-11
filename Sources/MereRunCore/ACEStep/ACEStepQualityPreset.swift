@@ -37,35 +37,35 @@ public enum ACEStepQualityPreset: String, CaseIterable, Codable, Hashable, Senda
                 plansMetadata: !task.skipsLanguageModel,
                 automaticDuration: task == .textToMusic || task == .complete,
                 fallbackDurationSeconds: 30,
-                candidateCount: 2
+                candidateCount: 1
             )
         case .final:
             return ACEStepQualityDefaults(
                 inferenceSteps: variant.defaultInferenceSteps,
                 shift: variant.defaultShift,
                 guidanceScale: variant.defaultGuidanceScale,
-                samplerMode: .heun,
-                velocityNormThreshold: 2,
-                velocityEMAFactor: 0.1,
+                samplerMode: .euler,
+                velocityNormThreshold: 0,
+                velocityEMAFactor: 0,
                 usesLanguageModel: !task.skipsLanguageModel,
                 plansMetadata: !task.skipsLanguageModel,
                 automaticDuration: task == .textToMusic || task == .complete,
                 fallbackDurationSeconds: 60,
-                candidateCount: 4
+                candidateCount: 1
             )
         case .edit:
             return ACEStepQualityDefaults(
                 inferenceSteps: variant.defaultInferenceSteps,
                 shift: variant.defaultShift,
                 guidanceScale: variant.defaultGuidanceScale,
-                samplerMode: .heun,
-                velocityNormThreshold: 2,
-                velocityEMAFactor: 0.1,
+                samplerMode: .euler,
+                velocityNormThreshold: 0,
+                velocityEMAFactor: 0,
                 usesLanguageModel: !task.skipsLanguageModel,
                 plansMetadata: !task.skipsLanguageModel,
                 automaticDuration: false,
                 fallbackDurationSeconds: 30,
-                candidateCount: 2
+                candidateCount: 1
             )
         }
     }

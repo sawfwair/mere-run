@@ -33,17 +33,21 @@ struct ACEStepRecipeLMSampling: Codable, Equatable {
     var topK: Int
     var topP: Float
     var repetitionPenalty: Float
+    var cfgScale: Float
+    var negativePrompt: String
 
     enum CodingKeys: String, CodingKey {
         case temperature
         case topK = "top_k"
         case topP = "top_p"
         case repetitionPenalty = "repetition_penalty"
+        case cfgScale = "cfg_scale"
+        case negativePrompt = "negative_prompt"
     }
 }
 
 struct ACEStepGenerationRecipe: Codable {
-    static let currentSchemaVersion = 4
+    static let currentSchemaVersion = 5
 
     var schemaVersion: Int
     var createdAt: Date
@@ -59,9 +63,11 @@ struct ACEStepGenerationRecipe: Codable {
     var adapters: [ACEStepAdapterDescriptor]
     var task: ACEStepTask
     var quality: ACEStepQualityPreset
+    var inputCaption: String
     var caption: String
     var lyrics: String
     var instruction: String
+    var languageModelReasoning: String?
     var conditioningMetadata: ACEStepRecipeConditioningMetadata
     var languageModelSampling: ACEStepRecipeLMSampling?
     var inference: ACEStepInferenceConfig
@@ -91,9 +97,11 @@ struct ACEStepGenerationRecipe: Codable {
         case adapters
         case task
         case quality
+        case inputCaption = "input_caption"
         case caption
         case lyrics
         case instruction
+        case languageModelReasoning = "language_model_reasoning"
         case conditioningMetadata = "conditioning_metadata"
         case languageModelSampling = "language_model_sampling"
         case inference

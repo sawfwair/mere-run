@@ -2845,7 +2845,19 @@ private struct MusicGenerationOptions: View {
                         title: "LM repetition penalty",
                         value: $controller.draft.musicLMRepetitionPenalty
                     )
+                    NumberField(
+                        title: "LM CFG scale",
+                        value: $controller.draft.musicLMCFGScale
+                    )
                 }
+                TextField(
+                    "LM negative prompt",
+                    text: $controller.draft.musicLMNegativePrompt
+                )
+                    .textFieldStyle(.plain)
+                    .padding(10)
+                    .merePanel()
+                Toggle("Instrumental", isOn: $controller.draft.musicInstrumental)
                 TextField("Vocal language", text: $controller.draft.musicVocalLanguage)
                     .textFieldStyle(.plain)
                     .padding(10)

@@ -541,6 +541,9 @@ struct CommandDraft: Equatable, Codable {
     var musicLMTopK = 0
     var musicLMTopP = 0.9
     var musicLMRepetitionPenalty = 1.0
+    var musicLMCFGScale = 2.0
+    var musicLMNegativePrompt = "NO USER INPUT"
+    var musicInstrumental = false
     var musicMetadataDuration = ""
     var musicMetadataLanguage = ""
     var musicNoTiledVAE = false
@@ -1113,6 +1116,12 @@ struct CommandTemplate: Identifiable, Equatable {
                 return "Add at least two ordered views."
             }
         case .musicGenerate:
+            if draft.musicInstrumental,
+               !draft.secondaryText.isBlank || !draft.musicLyricsFile.isBlank
+                    || !draft.musicLRCFile.isBlank
+            {
+                return "Instrumental cannot be combined with lyrics."
+            }
             if !draft.musicLRCFile.isBlank
                 && (!draft.secondaryText.isBlank || !draft.musicLyricsFile.isBlank) {
                 return "Use synchronized LRC or plain lyrics, not both."
@@ -2085,9 +2094,11 @@ struct CommandTemplate: Identifiable, Equatable {
             args = ["music", "generate", draft.prompt]
             if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
             if !draft.model.isBlank { args += ["--model", draft.model] }
-            if !draft.secondaryText.isBlank { args += ["--lyrics", draft.secondaryText] }
-            if !draft.musicLyricsFile.isBlank { args += ["--lyrics-file", draft.musicLyricsFile] }
-            if !draft.musicLRCFile.isBlank { args += ["--lrc-file", draft.musicLRCFile] }
+            if !draft.musicInstrumental {
+                if !draft.secondaryText.isBlank { args += ["--lyrics", draft.secondaryText] }
+                if !draft.musicLyricsFile.isBlank { args += ["--lyrics-file", draft.musicLyricsFile] }
+                if !draft.musicLRCFile.isBlank { args += ["--lrc-file", draft.musicLRCFile] }
+            }
             if !draft.musicLRCOutput.isBlank { args += ["--lrc-output", draft.musicLRCOutput] }
             args += [
                 "--export-format", draft.musicExportFormat,
@@ -2204,8 +2215,11 @@ struct CommandTemplate: Identifiable, Equatable {
                 "--lm-temperature", format(draft.musicLMTemperature),
                 "--lm-top-k", String(draft.musicLMTopK),
                 "--lm-top-p", format(draft.musicLMTopP),
-                "--lm-repetition-penalty", format(draft.musicLMRepetitionPenalty)
+                "--lm-repetition-penalty", format(draft.musicLMRepetitionPenalty),
+                "--lm-cfg-scale", format(draft.musicLMCFGScale),
+                "--lm-negative-prompt", draft.musicLMNegativePrompt
             ]
+            if draft.musicInstrumental { args.append("--instrumental") }
             if !draft.musicMetadataDuration.isBlank {
                 args += ["--metadata-duration", draft.musicMetadataDuration]
             }
