@@ -20,8 +20,20 @@ is not achievable by further tuning the current standalone scalar kernels.
 
 The quality-sensitive algorithm arms remain non-default. Reduced canvas,
 layer thinning, complete velocity reuse, and token reduction all produced
-material same-seed trajectory changes; velocity reuse is the only candidate
-with enough Ref2VA latency benefit to justify a multi-seed blinded follow-up.
+material same-seed trajectory changes. The three-seed Ref2VA follow-up closed
+the strongest candidate: interval-2 velocity reuse saved 31.53% to 36.04% and
+preserved audio closely, but changed the visual trajectory in every seed and
+introduced a conspicuous train-light artifact in one. It remains an explicit
+research arm and is not a production default.
+
+The larger production win came from serving parity rather than approximate
+denoising. Preserving each reference image's aspect ratio, refusing to upscale
+it, and area-matching it to the render canvas reduced this fixture's packed
+sequence and MLX peak without changing the dense-quality algorithm. The first
+three post-alignment dense runs averaged 380.781 seconds versus the earlier
+1,915.547-second mean and reduced MLX peak from 88.59 GiB to about 41.15 GiB.
+Because those follow-up runs began with about 12.7 GiB of swap, the magnitude
+is a screening result pending a zero-swap retake, not a clean timing claim.
 
 ## Fixed sources
 
@@ -376,8 +388,8 @@ linearly extrapolates both complete video and audio velocity outputs from the
 two latest full evaluations on intervening odd steps, and keeps the quality
 schedule point count. Selecting it disables the adaptive tail and dynamic-sparse
 policies so its quality and timing deltas remain attributable. It is
-experimental and non-default until the fixed FL2VA and Ref2VA same-seed A/Bs
-pass.
+experimental and non-default. Fixed FL2VA and three-seed Ref2VA A/Bs found a
+repeatable speed benefit but failed the visual-trajectory promotion gate.
 
 A2 has two equally isolated arms: `--h3-acceleration layers-45` and
 `--h3-acceleration layers-40`. They reproduce the pinned oracle's ranking:
@@ -551,6 +563,10 @@ All arms used release binary SHA-256
 `bb79a419bcf508d5b732daee58214e8cf9b490bf104904625e09d9891a5e1c56`
 from commit `ee64b21c`.
 
+This first screen predates the h3.c-aligned reference-serving contract. Its
+Ref2VA latency and 88.59 GiB peak describe the former 2,048-pixel-short-edge
+reference preprocessing path, not the current dense runtime.
+
 The full FL2VA matrix began with zero swap. Every arm through A3 also began at
 zero swap; A3 caused macOS to retain 200.62 MiB, so A4 began below, but not at,
 the 1024 MiB ceiling. No arm recorded a thermal or performance warning.
@@ -600,15 +616,51 @@ against another generative output measure divergence rather than independent
 perceptual quality, this fixture does not establish that A3 is visually worse.
 A1 kept the subjects, dialogue waveform, and moving-train concept, but changed
 train trajectory/color and softened faces. Neither mode advances to ordinary
-dispatch from this single fixture; A3 remains the priority candidate for blind
-prompt-compliance, temporal-quality, and audio-sync review across multiple
-prompts and seeds.
+dispatch from this single fixture. This result selected A3 for the multi-seed
+follow-up below; it did not itself authorize promotion.
 
-The portable direction is therefore narrower, not more aggressive: evaluate a
-448x224 (87.5%) internal canvas, at most one reused middle evaluation, less
-aggressive token pairing/block spans, and true load-time pruning for A2 before
-another promotion attempt. Exact `boundary-layout` remains the only h3.c lane
-with a supported experimental execution policy in this PR.
+### Post-alignment Ref2VA multi-seed result
+
+The follow-up reran dense quality and interval-2 velocity reuse for seeds
+`20260810`, `20260811`, and `20260812` after reference preprocessing was
+aligned with the pinned h3.c serving contract. It used commit `2fe645f7`,
+release executable SHA-256
+`34854543dfacf58383e1feebaaeeced65aed3b532676e1e768979235420f9125`,
+the same prompt and pinned image/audio references, and explicitly disabled the
+exact-kernel mode. Every output passed the 512x256, 124-frame, 24 fps, stereo
+32 kHz structural gate.
+
+These runs began with 12,694.5 to 12,710.5 MiB of swap after earlier model
+work. No thermal or performance warning was recorded. They establish
+cross-seed behavior and the direction of the serving-contract improvement,
+but their wall times remain screening evidence until repeated from zero swap.
+
+| Seed | Dense wall | Velocity wall | Wall reduction | Dense / velocity MLX peak | Video SSIM | PSNR | VMAF | Audio correlation | Audio relative L2 |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `20260810` | 404.458 s | 258.673 s | 36.04% | 41.18 / 40.39 GiB | 0.857812 | 28.137487 dB | 16.863799 | 0.998590921 | 0.0534063275 |
+| `20260811` | 380.310 s | 257.649 s | 32.25% | 41.14 / 40.21 GiB | 0.784123 | 23.751878 dB | 7.906392 | 0.998063194 | 0.0629630560 |
+| `20260812` | 357.576 s | 244.846 s | 31.53% | 41.14 / 40.21 GiB | 0.849296 | 26.587013 dB | 7.901656 | 0.998182345 | 0.0602687853 |
+| Mean | 380.781 s | 253.723 s | 33.37% | 41.15 / 40.27 GiB | 0.830410 | 26.158793 dB | 10.890616 | 0.998278820 | 0.0588793900 |
+
+The dense arm now packed 5,919 rows and peaked around 41.15 GiB, compared with
+the earlier mis-sized reference path's 88.59 GiB peak. Its 380.781-second mean
+is 80.12% below the old 1,915.547-second mean. That is an exact dense-path
+serving improvement: no denoise evaluation was skipped and no approximation
+mode was selected.
+
+Velocity reuse then saved a repeatable 31.53% to 36.04% over each matched dense
+run and kept audio correlation above 0.998. It nevertheless changed train
+appearance, lighting, or trajectory in all three contact sheets; seed
+`20260811` also developed a conspicuous magenta train-light artifact late in
+the clip. The result rejects velocity reuse as an ordinary default. It stays
+available only as a named experimental policy for future research.
+
+The portable direction is therefore narrower, not more aggressive: retain the
+exact reference-serving alignment, evaluate a 448x224 (87.5%) internal canvas,
+at most one reused middle evaluation, less aggressive token pairing/block
+spans, and true load-time pruning for A2 before another promotion attempt.
+Exact `boundary-layout` remains the only h3.c kernel lane with a supported
+experimental execution policy in this PR.
 
 ## Acceptance gates
 

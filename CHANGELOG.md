@@ -37,6 +37,14 @@ The format is based on Keep a Changelog.
   reference audio retains its complete 2-15 second span. The experimental
   `velocity-reuse-2` arm now linearly extrapolates skipped velocities from its
   two latest full evaluations rather than holding the last velocity constant.
+- reduced the pinned 512x256 Ref2VA fixture's dense screening mean from about
+  1,916 to 381 seconds and MLX peak from 88.59 to about 41.15 GiB by correcting
+  reference preprocessing, without skipping a denoise evaluation. The three
+  post-alignment runs began with about 12.7 GiB of swap, so a zero-swap timing
+  retake remains required. A matched three-seed screen found another 31.5% to
+  36.0% from `velocity-reuse-2`, but rejected it as a default because every
+  seed changed visual trajectory and one produced a conspicuous train-light
+  artifact; the arm remains experimental.
 - added explicit `--h3-render-width` and `--h3-render-height` controls for
   MiniMax-H3 reduced-canvas bake-offs. FL2VA and Ref2VA now run their target
   latent grid at the same-aspect internal geometry and upscale decoded RGB
