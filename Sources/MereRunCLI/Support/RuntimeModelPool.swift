@@ -1635,6 +1635,11 @@ actor RuntimeModelPool {
                 MuseGlimmerGenerator(modelID: resolved.id),
                 modelPath: resolved.installPath
             )
+        case .textChatNemotronH:
+            return .textChatNemotronH(
+                NemotronHGenerator(),
+                modelPath: resolved.installPath
+            )
         }
     }
 
@@ -1856,7 +1861,8 @@ actor RuntimeModelPool {
              .textChatQ36,
              .textChatQ35,
              .textChatLFM2,
-             .textChatDeepseekV4Flash:
+             .textChatDeepseekV4Flash,
+             .textChatNemotronH:
             return ManagedModelCategory.textChat.rawValue
         case .textChatMuseGlimmer:
             return ManagedModelCategory.visionChat.rawValue
@@ -2179,6 +2185,7 @@ enum RuntimeLoadedModel: Sendable {
     case textChatLFM2(LFM2Generator, modelPath: String?)
     case textChatDeepseekV4Flash(DeepseekV4FlashGenerator, modelPath: String?)
     case textChatMuseGlimmer(MuseGlimmerGenerator, modelPath: String?)
+    case textChatNemotronH(NemotronHGenerator, modelPath: String?)
 
     func prepare(progressHandler: (@Sendable (ChatProgress) -> Void)?) async throws {
         switch self {
@@ -2208,6 +2215,8 @@ enum RuntimeLoadedModel: Sendable {
             try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
         case .textChatMuseGlimmer(let generator, let modelPath):
             try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
+        case .textChatNemotronH(let generator, let modelPath):
+            try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
         }
     }
 
@@ -2229,6 +2238,8 @@ enum RuntimeLoadedModel: Sendable {
             await generator.shutdown()
         case .textChatMuseGlimmer(let generator, _):
             await generator.unload()
+        case .textChatNemotronH(let generator, _):
+            await generator.unload()
         }
     }
 
@@ -2241,7 +2252,7 @@ enum RuntimeLoadedModel: Sendable {
         case .textChatLFM2(let generator, _):
             return await generator.prefixKVCacheStats()
         case .textCode, .textChatKlein, .textChatLaguna, .textChatDeepseekV4Flash,
-             .textChatMuseGlimmer:
+             .textChatMuseGlimmer, .textChatNemotronH:
             return nil
         }
     }
@@ -2256,7 +2267,8 @@ enum RuntimeLoadedModel: Sendable {
             return await generator.continuousBatchingStats()
         case .textChatLFM2(let generator, _):
             return await generator.continuousBatchingStats()
-        case .textCode, .textChatKlein, .textChatDeepseekV4Flash, .textChatMuseGlimmer:
+        case .textCode, .textChatKlein, .textChatDeepseekV4Flash, .textChatMuseGlimmer,
+             .textChatNemotronH:
             return nil
         }
     }
@@ -2266,7 +2278,7 @@ enum RuntimeLoadedModel: Sendable {
         case .textChatGemma4(let generator, _):
             return await generator.mtpStats()
         case .textCode, .textChatKlein, .textChatLaguna, .textChatQ35, .textChatLFM2,
-             .textChatDeepseekV4Flash, .textChatMuseGlimmer:
+             .textChatDeepseekV4Flash, .textChatMuseGlimmer, .textChatNemotronH:
             return nil
         }
     }
@@ -2309,6 +2321,8 @@ enum RuntimeLoadedModel: Sendable {
             return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
         case .textChatMuseGlimmer(let generator, let modelPath):
             return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
+        case .textChatNemotronH(let generator, let modelPath):
+            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
         }
     }
 
@@ -2322,7 +2336,7 @@ enum RuntimeLoadedModel: Sendable {
                 progressHandler: progressHandler
             )
         case .textCode, .textChatKlein, .textChatGemma4, .textChatLaguna, .textChatQ35,
-             .textChatLFM2, .textChatMuseGlimmer:
+             .textChatLFM2, .textChatMuseGlimmer, .textChatNemotronH:
             throw RuntimeModelPoolError.rawProxyUnavailable("")
         }
     }
@@ -2347,6 +2361,8 @@ extension RuntimeServingEngine {
             return .rawProxy
         case .textChatMuseGlimmer:
             return .localTextWithToolsVisionAndReasoning
+        case .textChatNemotronH:
+            return .localTextWithToolsAndStopSequences
         }
     }
 }

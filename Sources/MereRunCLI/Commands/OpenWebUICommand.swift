@@ -945,6 +945,8 @@ private extension APIEngine {
             self = .textChatDeepseekV4Flash
         case .textChatMuseGlimmer:
             self = .textChatMuseGlimmer
+        case .textChatNemotronH:
+            self = .textChatNemotronH
         }
     }
 }

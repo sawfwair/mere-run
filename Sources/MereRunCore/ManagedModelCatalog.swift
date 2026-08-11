@@ -49,6 +49,8 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case inkling
     case museGlimmer
     case museGlimmerAssistant
+    case nemotronH
+    case nemotronHDSpark
     case qwen3TTS
     case qwen3ASR
     case parakeet
@@ -1175,6 +1177,23 @@ public enum ManagedModelCatalog {
             estimatedDownloadBytes: MuseGlimmerResources.estimatedDownloadBytes,
             defaultCLICommands: ["text chat", "api serve"],
             companionModelIDs: [MuseGlimmerResources.assistantModelId]
+        ),
+        ManagedModelSpec(
+            id: NemotronHResources.modelID,
+            category: .textChat,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: NemotronHResources.artifactRepoID,
+                revision: NemotronHResources.artifactRevision,
+                patterns: NemotronHResources.snapshotPatterns
+            ),
+            upstreamRepoId: NemotronHResources.artifactRepoID,
+            upstreamRevision: NemotronHResources.artifactRevision,
+            validationKind: .nemotronH,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: NemotronHResources.estimatedDownloadBytes,
+            defaultCLICommands: ["text chat", "api serve", "model benchmark chat"],
+            companionModelIDs: [NemotronHResources.dsparkModelID]
         ),
         ManagedModelSpec(
             id: Q35Resources.q36NanoModelId,
@@ -2721,6 +2740,21 @@ private extension ManagedModelCatalog {
                 estimatedDownloadBytes: MuseGlimmerResources.assistantEstimatedDownloadBytes
             ),
             ManagedModelSpec(
+                id: NemotronHResources.dsparkModelID,
+                category: .textChat,
+                installShape: .directoryRoot,
+                hubFallback: HubFallbackConfig(
+                    repoId: NemotronHResources.dsparkArtifactRepoID,
+                    revision: NemotronHResources.dsparkArtifactRevision,
+                    patterns: NemotronHResources.dsparkSnapshotPatterns
+                ),
+                upstreamRepoId: NemotronHResources.dsparkArtifactRepoID,
+                upstreamRevision: NemotronHResources.dsparkArtifactRevision,
+                validationKind: .nemotronHDSpark,
+                runtimeAutoDownloadAllowed: false,
+                estimatedDownloadBytes: NemotronHResources.dsparkEstimatedDownloadBytes
+            ),
+            ManagedModelSpec(
                 id: ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue,
                 category: .textChat,
                 installShape: .directoryRoot,
@@ -2905,6 +2939,16 @@ public extension ManagedModelSpec {
             return MuseGlimmerResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .museGlimmerAssistant:
             return MuseGlimmerResources.validateAssistant(
+                rootURL: rootURL,
+                fileManager: fileManager
+            )
+        case .nemotronH:
+            return NemotronHResources.missingTargetFiles(
+                rootURL: rootURL,
+                fileManager: fileManager
+            )
+        case .nemotronHDSpark:
+            return NemotronHResources.missingDSparkFiles(
                 rootURL: rootURL,
                 fileManager: fileManager
             )

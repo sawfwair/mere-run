@@ -296,6 +296,7 @@ swift run mere.run model pull text-chat-lfm25-2.6b-4bit --accept-model-license
 swift run mere.run model pull text-chat-lfm25-a1b-8bit --accept-model-license
 swift run mere.run model pull text-chat-laguna-s-2-1
 swift run mere.run model pull text-chat-laguna-xs-2-1
+swift run mere.run model pull text-chat-nemotron-35-lightning
 swift run mere.run model pull text-chat-inkling-small
 swift run mere.run model pull vision-chat-muse-glimmer-30b --accept-model-license
 swift run mere.run model pull text-chat-bonsai-27b-1bit
@@ -326,6 +327,13 @@ swift run mere.run text chat \
   --reasoning-effort 0.8 \
   --stats \
   --prompt "Inspect this interface and propose the safest next action."
+
+# Nemotron 3.5 Lightning is a pinned native Swift/MLX hybrid Mamba/MoE target.
+# The managed pull also installs its converted DSpark speculative companion.
+swift run mere.run text chat \
+  --model text-chat-nemotron-35-lightning \
+  --stats \
+  --prompt "Design a recovery-safe Swift actor pipeline."
 
 # Pull and apply the promoted Mere Platform Assistant adapter
 swift run mere.run model pull text-chat-gemma4-12b-4bit

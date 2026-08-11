@@ -38,6 +38,7 @@ struct TextChat: AsyncParsableCommand {
           - text-chat-gemma4-nano (Gemma 4 4B native Swift runtime)
           - text-chat-laguna-s-2-1 (Poolside Laguna S 2.1 118B-A8B NVFP4 with DFlash)
           - text-chat-laguna-xs-2-1 (Poolside Laguna XS 2.1 33B-A3B NVFP4)
+          - text-chat-nemotron-35-lightning (NVIDIA Nemotron 3.5 Lightning 30B-A3B NVFP4 with DSpark)
           - text-chat-inkling-small (Inkling-Small 276B-A12B mixed MLX: routed-expert q2, non-routed BF16)
           - text-chat-lfm25-2.6b-4bit (LiquidAI LFM2.5 2.6B dense MLX 4-bit native Swift runtime)
           - text-chat-lfm25-a1b-8bit (LiquidAI LFM2.5 8B-A1B MLX 8-bit native Swift runtime)
@@ -149,7 +150,7 @@ struct TextChat: AsyncParsableCommand {
             + firstTokenSeconds
     }
 
-    @Option(name: [.long], help: "Canonical model id. Default: text-chat-gemma4-12b-4bit (Apple Silicon) / text-chat-q36-nano-gguf (Linux CUDA). Others include vision-chat-muse-glimmer-30b, text-chat-laguna-s-2-1, text-chat-inkling-small, text-chat-bonsai-27b-1bit, text-chat-q36-nano, text-agent-ornith-9b, text-chat-gemma4[-12b|-12b-4bit|-turbo|-max|-nano], and text-chat-lfm25-a1b-8bit.")
+    @Option(name: [.long], help: "Canonical model id. Default: text-chat-gemma4-12b-4bit (Apple Silicon) / text-chat-q36-nano-gguf (Linux CUDA). Others include vision-chat-muse-glimmer-30b, text-chat-nemotron-35-lightning, text-chat-laguna-s-2-1, text-chat-inkling-small, text-chat-bonsai-27b-1bit, text-chat-q36-nano, text-agent-ornith-9b, text-chat-gemma4[-12b|-12b-4bit|-turbo|-max|-nano], and text-chat-lfm25-a1b-8bit.")
     var model: String = TextChat.defaultChatModelId
 
     @Option(
@@ -271,6 +272,7 @@ struct TextChat: AsyncParsableCommand {
         let recommendedSampling = Q35Resources.recommendedSampling(forModelId: model)
         let isLaguna = LagunaResources.handles(modelSpec: normalizedModelId)
         let isMuseGlimmer = MuseGlimmerResources.handles(modelSpec: normalizedModelId)
+        let isNemotronH = NemotronHResources.handles(modelSpec: normalizedModelId)
         let q35KVCacheMode = try resolveQ35KVCacheMode(for: normalizedModelId)
         if let contextSize, contextSize <= 0 {
             throw ValidationError("--context-size must be greater than zero.")
@@ -280,10 +282,12 @@ struct TextChat: AsyncParsableCommand {
             messages: messages,
             maxTokens: maxTokens,
             temperature: temperature
+                ?? (isNemotronH ? NemotronHResources.recommendedTemperature : nil)
                 ?? (isMuseGlimmer ? MuseGlimmerResources.recommendedTemperature : nil)
                 ?? (isLaguna ? LagunaResources.recommendedTemperature : recommendedSampling?.temperature)
                 ?? 0.7,
             topP: topP
+                ?? (isNemotronH ? NemotronHResources.recommendedTopP : nil)
                 ?? (isMuseGlimmer ? MuseGlimmerResources.recommendedTopP : nil)
                 ?? (isLaguna ? LagunaResources.recommendedTopP : recommendedSampling?.topP)
                 ?? 0.9,
@@ -315,6 +319,7 @@ struct TextChat: AsyncParsableCommand {
         var lastGemma4MTPStats: Gemma4MTPStats?
         var lastLagunaDFlashStats: LagunaDFlashStats?
         var lastMuseDFlashStats: MuseGlimmerDFlashStats?
+        var lastNemotronDSparkStats: NemotronHDSparkStats?
         let lagunaGenerator = isLaguna
             ? LagunaGenerator(
                 dflashModelPath: LagunaResources.installedDFlashPath(
@@ -322,6 +327,7 @@ struct TextChat: AsyncParsableCommand {
                 )
             )
             : nil
+        let nemotronGenerator = isNemotronH ? NemotronHGenerator() : nil
 
         let chatOnce: (ChatRequest) async throws -> ChatResponse = { req in
             if normalizedModelId == Psi3ChatResources.defaultModelId {
@@ -373,6 +379,17 @@ struct TextChat: AsyncParsableCommand {
                     progressHandler: progressHandler
                 )
                 lastMuseDFlashStats = await generator.dflashStats()
+                return response
+            } else if NemotronHResources.handles(modelSpec: normalizedModelId) {
+                guard let generator = nemotronGenerator else {
+                    throw NemotronHError.generationFailed("generator is unavailable")
+                }
+                let response = try await generator.chat(
+                    req,
+                    modelPath: runtimeModelRoot,
+                    progressHandler: progressHandler
+                )
+                lastNemotronDSparkStats = await generator.dsparkStats()
                 return response
             } else if LFM2Resources.handles(modelSpec: normalizedModelId) {
                 let effectiveModelId = normalizedModelId.isEmpty ? LFM2Resources.defaultModelId : normalizedModelId
@@ -495,6 +512,9 @@ struct TextChat: AsyncParsableCommand {
                     if let dflash = lastMuseDFlashStats {
                         CLIStderr.write(Self.formatMuseDFlashStats(dflash) + "\n")
                     }
+                    if let dspark = lastNemotronDSparkStats {
+                        CLIStderr.write(Self.formatNemotronDSparkStats(dspark) + "\n")
+                    }
                 } else {
                     let line = String(format: "time=%.2fs tokens=%d tps=%.2f", elapsed, result.tokensGenerated, e2eTps)
                     CLIStderr.write("\(line)\n")
@@ -506,6 +526,9 @@ struct TextChat: AsyncParsableCommand {
                     }
                     if let dflash = lastMuseDFlashStats {
                         CLIStderr.write(Self.formatMuseDFlashStats(dflash) + "\n")
+                    }
+                    if let dspark = lastNemotronDSparkStats {
+                        CLIStderr.write(Self.formatNemotronDSparkStats(dspark) + "\n")
                     }
                 }
             }
@@ -624,6 +647,33 @@ struct TextChat: AsyncParsableCommand {
         )
     }
 
+    static func formatNemotronDSparkStats(_ stats: NemotronHDSparkStats) -> String {
+        let state: String
+        if stats.active {
+            state = "active"
+        } else if stats.enabled {
+            state = stats.adaptiveFallbacks > 0 ? "fallback" : "available"
+        } else {
+            state = "unavailable"
+        }
+        let reason = stats.reason.map { " reason=\($0)" } ?? ""
+        return String(
+            format: "dspark=%@ block=%d rounds=%d drafted=%d accepted=%d acceptance=%.1f%% rejected=%d verification=%d recoveries=%d fallback_forwards=%d adaptive_fallbacks=%d%@",
+            state,
+            stats.speculativeTokens,
+            stats.rounds,
+            stats.draftedTokens,
+            stats.acceptedDraftTokens,
+            stats.acceptanceRate * 100,
+            stats.rejectedDraftTokens,
+            stats.targetVerificationForwards,
+            stats.targetRecoveryForwards,
+            stats.targetFallbackForwards,
+            stats.adaptiveFallbacks,
+            reason
+        )
+    }
+
     static func validate(responseFormat: TextChatResponseFormat, modelID: String) throws {
         guard responseFormat == .jsonObject else { return }
         if ManagedModelCatalog.spec(for: modelID)?.validationKind == .codegenGGUF {
@@ -634,9 +684,10 @@ struct TextChat: AsyncParsableCommand {
         if modelID == Psi3ChatResources.defaultModelId
             || LFM2Resources.handles(modelSpec: modelID)
             || InklingResources.handles(modelSpec: modelID)
-            || MuseGlimmerResources.handles(modelSpec: modelID) {
+            || MuseGlimmerResources.handles(modelSpec: modelID)
+            || NemotronHResources.handles(modelSpec: modelID) {
             throw ValidationError(
-                "--response-format json_object is supported by native Gemma4 and Qwen-family MLX chat models; Muse Glimmer supports structured tool schemas but not constrained JSON decoding."
+                "--response-format json_object is supported by native Gemma4 and Qwen-family MLX chat models; Muse Glimmer and Nemotron-H support structured tool schemas but not constrained JSON decoding."
             )
         }
         if LagunaResources.handles(modelSpec: modelID) {
