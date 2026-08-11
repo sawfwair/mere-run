@@ -57,6 +57,15 @@ for ((argument_index = 1; argument_index <= ${#extra_arguments}; argument_index+
     reference="${extra_arguments[$argument_index]}"
   elif [[ "$argument" == --reference=* ]]; then
     reference="${argument#--reference=}"
+  elif [[ "$argument" == "--image" || "$argument" == "--end-image" ]]; then
+    if (( argument_index == ${#extra_arguments} )); then
+      print -u2 "$argument is missing its image path"
+      exit 64
+    fi
+    argument_index=$((argument_index + 1))
+    reference="image:${extra_arguments[$argument_index]}"
+  elif [[ "$argument" == --image=* || "$argument" == --end-image=* ]]; then
+    reference="image:${argument#*=}"
   else
     continue
   fi

@@ -409,7 +409,9 @@ preflight JSON and stderr log per arm, and records wall time plus output SHA256:
 scripts/h3-algorithm-bakeoff.sh \
   video-minimax-h3-fl2va-bf16-mlx \
   .build/h3-bakeoff/fl2va \
-  "a fixed evaluation prompt"
+  "a fixed evaluation prompt" \
+  --image ./subject.png \
+  --h3-adapter minimax-h3-lightx2v-4step
 
 scripts/h3-algorithm-bakeoff.sh \
   video-minimax-h3-ref2va-mlx \
@@ -419,9 +421,12 @@ scripts/h3-algorithm-bakeoff.sh \
   --reference video:./motion.mp4
 ```
 
-Pin reference identity for a reportable Ref2VA run with a tab-separated
-manifest. Rows are ordered and contain `order`, `kind`, `bytes`, and `sha256`;
-the header is optional and additional columns are ignored:
+Pin conditioning-input identity for a reportable run with a tab-separated
+manifest. The harness hashes FL2VA `--image` and `--end-image` inputs as well as
+every ordered Ref2VA `--reference`. Rows are ordered and contain `order`,
+`kind`, `bytes`, and `sha256`; the header is optional and additional columns
+are ignored. A FL2VA manifest contains its image rows only, while a Ref2VA
+manifest contains its ordered reference rows:
 
 ```text
 order	kind	bytes	sha256
