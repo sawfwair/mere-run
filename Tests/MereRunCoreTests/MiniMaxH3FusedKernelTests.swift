@@ -519,6 +519,129 @@ final class MiniMaxH3FusedKernelTests: MereRunCoreTestCase {
         }
     }
 
+    func testBoundaryKernelsRunInsideCompiledGraph() throws {
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip(
+                "Set MERERUN_TEST_MLX_DEVICE=gpu to run the compiled H3 boundary canary."
+            )
+        }
+
+        let rows = 7
+        let hiddenSize = 5_376
+        let heads = 56
+        let headDimension = 128
+        let rotaryDimension = 96
+        let modulationRows = 9
+        let epsilon = Float(1e-5)
+        MLXRandom.seed(2_026_081_015)
+        let residual = MLXRandom.uniform(-0.5 ..< 0.5, [1, rows, hiddenSize])
+        let attentionOutput = MLXRandom.uniform(-0.25 ..< 0.25, residual.shape)
+        let normWeight = MLXRandom.uniform(0.8 ..< 1.2, [hiddenSize]).asType(.bfloat16)
+        let modulation = MLXRandom.uniform(
+            -0.2 ..< 0.2,
+            [modulationRows, 6 * hiddenSize]
+        ).asType(.bfloat16)
+        let rowIndices = MLXArray((0..<rows).map { Int32(($0 * 4) % modulationRows) })
+        let projected = MLXRandom.normal([1, rows, 3 * heads * headDimension])
+        let queryNormWeight = MLXRandom.uniform(
+            0.8 ..< 1.2,
+            [headDimension]
+        ).asType(.bfloat16)
+        let keyNormWeight = MLXRandom.uniform(
+            0.8 ..< 1.2,
+            [headDimension]
+        ).asType(.bfloat16)
+        let angles = MLXRandom.uniform(-1 ..< 1, [1, rows, 1, rotaryDimension])
+        let ropeCosine = MLX.cos(angles)
+        let ropeSine = MLX.sin(angles)
+
+        let eagerGate = try XCTUnwrap(
+            MiniMaxH3FusedKernels.gateAttentionAndPrepareFeedForward(
+                residual: residual,
+                attentionOutput: attentionOutput,
+                normWeight: normWeight,
+                modulation: modulation,
+                rowIndices: rowIndices,
+                eps: epsilon
+            )
+        )
+        let eagerQKV = try XCTUnwrap(MiniMaxH3FusedKernels.prepareHeadMajorQKV(
+            projected: projected,
+            queryNormWeight: queryNormWeight,
+            keyNormWeight: keyNormWeight,
+            ropeCosine: ropeCosine,
+            ropeSine: ropeSine,
+            eps: epsilon
+        ))
+        let compiled = MLX.compile { (inputs: [MLXArray]) -> [MLXArray] in
+            guard let gate = MiniMaxH3FusedKernels.gateAttentionAndPrepareFeedForward(
+                residual: inputs[0],
+                attentionOutput: inputs[1],
+                normWeight: inputs[2],
+                modulation: inputs[3],
+                rowIndices: inputs[4],
+                eps: epsilon
+            ), let qkv = MiniMaxH3FusedKernels.prepareHeadMajorQKV(
+                projected: inputs[5],
+                queryNormWeight: inputs[6],
+                keyNormWeight: inputs[7],
+                ropeCosine: inputs[8],
+                ropeSine: inputs[9],
+                eps: epsilon
+            ) else {
+                preconditionFailure("compiled H3 boundary contract unexpectedly rejected")
+            }
+            return [
+                gate.residual,
+                gate.feedForwardInput,
+                gate.feedForwardGate,
+                qkv.query,
+                qkv.key,
+                qkv.value,
+            ]
+        }
+        let compiledOutputs = compiled([
+            residual,
+            attentionOutput,
+            normWeight,
+            modulation,
+            rowIndices,
+            projected,
+            queryNormWeight,
+            keyNormWeight,
+            ropeCosine,
+            ropeSine,
+        ])
+        MLX.eval(
+            eagerGate.residual,
+            eagerGate.feedForwardInput,
+            eagerGate.feedForwardGate,
+            eagerQKV.query,
+            eagerQKV.key,
+            eagerQKV.value,
+            compiledOutputs[0],
+            compiledOutputs[1],
+            compiledOutputs[2],
+            compiledOutputs[3],
+            compiledOutputs[4],
+            compiledOutputs[5]
+        )
+
+        let eagerOutputs = [
+            eagerGate.residual,
+            eagerGate.feedForwardInput,
+            eagerGate.feedForwardGate,
+            eagerQKV.query,
+            eagerQKV.key,
+            eagerQKV.value,
+        ]
+        for (eager, compiled) in zip(eagerOutputs, compiledOutputs) {
+            XCTAssertEqual(eager.shape, compiled.shape)
+            XCTAssertEqual(eager.dtype, compiled.dtype)
+            XCTAssertEqual(maximumDifference(eager, compiled), 0)
+        }
+    }
+
     func testProjectHeadMajorQKVAffineInt8MatchesManagedQ8Contract() throws {
         guard Device.defaultDevice().deviceType == .gpu else {
             throw XCTSkip(

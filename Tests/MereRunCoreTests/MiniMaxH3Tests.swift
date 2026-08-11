@@ -24,6 +24,9 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
             try MiniMaxH3ExactKernelMode.resolve(environmentValue: "AFFINE-Q8"),
             .affineQ8
         )
+        XCTAssertFalse(MiniMaxH3ExactKernelMode.disabled.requiresEagerExecution)
+        XCTAssertFalse(MiniMaxH3ExactKernelMode.boundaryLayout.requiresEagerExecution)
+        XCTAssertTrue(MiniMaxH3ExactKernelMode.affineQ8.requiresEagerExecution)
         XCTAssertThrowsError(
             try MiniMaxH3ExactKernelMode.resolve(environmentValue: "automatic")
         ) { error in

@@ -37,6 +37,10 @@ public enum MiniMaxH3GeneratorError: LocalizedError {
 }
 
 extension MiniMaxH3ExactKernelMode {
+    var requiresEagerExecution: Bool {
+        self == .affineQ8
+    }
+
     static func resolve(environmentValue: String?) throws -> Self {
         switch environmentValue?.lowercased() {
         case nil, "", "disabled": .disabled
@@ -1095,7 +1099,7 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         let tokenReduction = tokenReductionPolicy.map { _ in
             transformer.prepareTokenReduction(context: context)
         }
-        let executionMode = exactKernelMode != .disabled
+        let executionMode = exactKernelMode.requiresEagerExecution
             ? MiniMaxH3DenoiseExecutionMode.eagerStep
             : layerThinningPolicy == nil
             && velocityReusePolicy == nil
