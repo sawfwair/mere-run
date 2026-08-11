@@ -552,7 +552,7 @@ are screening timings rather than new zero-swap baselines.
 | Ref2VA arm | Wall time | Delta vs baseline mean | Process-peak delta | Video SSIM | VMAF | Audio correlation | Decision |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
 | A1 / 75% internal canvas | 1,588.565 s | -17.07% | +3.362 GiB | 0.759957 | 1.667707 | 0.995790045 | retain as research only |
-| A3 / interval-2 velocity reuse | 1,245.342 s | -34.99% | -0.505 GiB | 0.779995 | 6.565895 | 0.995529730 | reject complete reuse |
+| A3 / interval-2 velocity reuse | 1,245.342 s | -34.99% | -0.505 GiB | 0.779995 | 6.565895 | 0.995529730 | retain for blind multi-seed QA |
 
 Both candidates retained the 88.59 GiB MLX peak. A3 performed three genuine
 zero-block cache hits, executing 250 blocks instead of the dense 400. It also
@@ -561,11 +561,15 @@ preserved the generated waveform closely, and motion continues across the full
 falls from 29.073 to 23.074 (-20.6%) and the blue/rain structure changes
 substantially. The dense baseline also lacks a clearly identifiable passing
 train, so train omission is a fixture-level prompt/seed compliance limitation,
-not evidence against velocity reuse. The demonstrated regression is
-photometric and structural drift, not frozen motion. A1 kept the subjects,
-dialogue waveform, and moving-train concept,
-but changed train trajectory/color and softened faces. Neither mode advances to
-ordinary dispatch from this fixture.
+not evidence against velocity reuse. The demonstrated result is
+photometric and structural divergence, not frozen motion. Because SSIM and VMAF
+against another generative output measure divergence rather than independent
+perceptual quality, this fixture does not establish that A3 is visually worse.
+A1 kept the subjects, dialogue waveform, and moving-train concept, but changed
+train trajectory/color and softened faces. Neither mode advances to ordinary
+dispatch from this single fixture; A3 remains the priority candidate for blind
+prompt-compliance, temporal-quality, and audio-sync review across multiple
+prompts and seeds.
 
 The portable direction is therefore narrower, not more aggressive: evaluate a
 448x224 (87.5%) internal canvas, at most one reused middle evaluation, less
