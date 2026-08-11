@@ -557,9 +557,13 @@ are screening timings rather than new zero-swap baselines.
 Both candidates retained the 88.59 GiB MLX peak. A3 performed three genuine
 zero-block cache hits, executing 250 blocks instead of the dense 400. It also
 preserved the generated waveform closely, and motion continues across the full
-124-frame output, but the scene is materially darker and the requested train is
-absent. This is semantic and photometric drift, not frozen motion. A1 kept the
-subjects, dialogue waveform, and moving-train concept,
+124-frame output. Relative to the same-seed dense baseline, mean frame luma
+falls from 29.073 to 23.074 (-20.6%) and the blue/rain structure changes
+substantially. The dense baseline also lacks a clearly identifiable passing
+train, so train omission is a fixture-level prompt/seed compliance limitation,
+not evidence against velocity reuse. The demonstrated regression is
+photometric and structural drift, not frozen motion. A1 kept the subjects,
+dialogue waveform, and moving-train concept,
 but changed train trajectory/color and softened faces. Neither mode advances to
 ordinary dispatch from this fixture.
 
