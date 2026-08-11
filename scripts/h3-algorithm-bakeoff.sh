@@ -26,6 +26,7 @@ executable="${MERERUN_H3_BAKEOFF_EXECUTABLE:-$repo_root/.build/release/mere.run}
 scorer="$repo_root/scripts/h3-bakeoff-score.py"
 reference_manifest="${MERERUN_H3_BAKEOFF_REFERENCE_MANIFEST:-}"
 max_starting_swap_mib="${MERERUN_H3_BAKEOFF_MAX_STARTING_SWAP_MIB:-1024}"
+external_baseline="${MERERUN_H3_BAKEOFF_BASELINE:-}"
 
 if [[ ! "$max_starting_swap_mib" =~ '^[0-9]+([.][0-9]+)?$' ]]; then
   print -u2 "MERERUN_H3_BAKEOFF_MAX_STARTING_SWAP_MIB must be a nonnegative number"
@@ -33,6 +34,27 @@ if [[ ! "$max_starting_swap_mib" =~ '^[0-9]+([.][0-9]+)?$' ]]; then
 fi
 
 mkdir -p "$output_dir"
+
+baseline="$output_dir/quality.mp4"
+baseline_mode="generated"
+if [[ -n "$external_baseline" ]]; then
+  if [[ "$arms" == *",quality,"* ]]; then
+    print -u2 "MERERUN_H3_BAKEOFF_BASELINE cannot be combined with the quality arm"
+    exit 64
+  fi
+  baseline="${external_baseline:A}"
+  if [[ ! -f "$baseline" ]]; then
+    print -u2 "H3 bake-off baseline is unavailable: $baseline"
+    exit 66
+  fi
+  baseline_mode="external"
+elif [[ "$arms" != *",quality,"* ]]; then
+  if [[ ! -f "$baseline" ]]; then
+    print -u2 "H3 bake-off requires the quality arm or MERERUN_H3_BAKEOFF_BASELINE"
+    exit 66
+  fi
+  baseline_mode="preexisting-output"
+fi
 
 prompt_receipt="$output_dir/prompt.txt"
 argument_receipt="$output_dir/arguments.tsv"
@@ -111,8 +133,8 @@ if [[ -n "$reference_manifest" ]]; then
   rm -f "$output_dir/reference-manifest.diff"
 fi
 
-swap_usage="$(sysctl -n vm.swapusage)"
-starting_swap_mib="$(print -r -- "$swap_usage" | awk '
+swap_used_mib() {
+  print -r -- "$1" | awk '
   {
     for (field_index = 1; field_index <= NF; field_index++) {
       if ($field_index == "used" && $(field_index + 1) == "=") {
@@ -131,23 +153,36 @@ starting_swap_mib="$(print -r -- "$swap_usage" | awk '
     }
   }
   END { if (!found) exit 2 }
-')" || {
+'
+}
+
+swap_usage="$(sysctl -n vm.swapusage)"
+starting_swap_mib="$(swap_used_mib "$swap_usage")" || {
   print -u2 "could not parse starting swap usage: $swap_usage"
   exit 69
 }
 
 contaminant_pattern='/mere\.run |mere\.run-node|mlxfast|mlx-fast|MereRunPackageTests\.xctest|python.*(mlx|train|eval)|swift-build|swift-driver|swift-frontend|xcodebuild'
-contaminant_pids="$(pgrep -if "$contaminant_pattern" | awk -v current="$$" -v parent="$PPID" '$1 != current && $1 != parent' || true)"
-contaminants=""
-if [[ -n "$contaminant_pids" ]]; then
-  while IFS= read -r contaminant_pid; do
-    process_executable="$(ps -p "$contaminant_pid" -o comm= | sed -E 's/^[[:space:]]+//' || true)"
-    [[ -n "$process_executable" ]] || continue
-    process_cwd="$(lsof -a -p "$contaminant_pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1 || true)"
-    [[ -n "$contaminants" ]] && contaminants+=$'\n'
-    contaminants+="$contaminant_pid"$'\t'"$process_executable"$'\t'"${process_cwd:--}"
-  done <<< "$contaminant_pids"
-fi
+matching_contaminants() {
+  local contaminant_pids
+  local found_contaminants=""
+  local contaminant_pid
+  local process_executable
+  local process_cwd
+  contaminant_pids="$(pgrep -if "$contaminant_pattern" | awk -v current="$$" -v parent="$PPID" '$1 != current && $1 != parent' || true)"
+  if [[ -n "$contaminant_pids" ]]; then
+    while IFS= read -r contaminant_pid; do
+      process_executable="$(ps -p "$contaminant_pid" -o comm= | sed -E 's/^[[:space:]]+//' || true)"
+      [[ -n "$process_executable" ]] || continue
+      process_cwd="$(lsof -a -p "$contaminant_pid" -d cwd -Fn 2>/dev/null | sed -n 's/^n//p' | head -1 || true)"
+      [[ -n "$found_contaminants" ]] && found_contaminants+=$'\n'
+      found_contaminants+="$contaminant_pid"$'\t'"$process_executable"$'\t'"${process_cwd:--}"
+    done <<< "$contaminant_pids"
+  fi
+  print -rn -- "$found_contaminants"
+}
+
+contaminants="$(matching_contaminants)"
 {
   date -u '+utc=%Y-%m-%dT%H:%M:%SZ'
   print -r -- "invocation_dir=$invocation_dir"
@@ -223,7 +258,7 @@ capture_system_state() {
 
 receipt="$output_dir/receipts.tsv"
 quality_receipt="$output_dir/quality.tsv"
-print -r -- $'arm\tstatus\texact_kernel_mode\twall_seconds\tmax_rss_bytes\tpeak_footprint_bytes\tmlx_peak_gib\tsha256\toutput' > "$receipt"
+print -r -- $'arm\tstatus\texact_kernel_mode\tstarting_swap_mib\twall_seconds\tmax_rss_bytes\tpeak_footprint_bytes\tmlx_peak_gib\tsha256\toutput' > "$receipt"
 print -r -- $'arm\tstatus\tvideo_ssim\tvideo_psnr_db\tvideo_vmaf\taudio_zero_lag_correlation\taudio_relative_l2\treport' > "$quality_receipt"
 passed_arms=()
 {
@@ -243,6 +278,12 @@ passed_arms=()
   print -r -- "prompt_receipt=$prompt_receipt"
   print -r -- "argument_receipt=$argument_receipt"
   print -r -- "reference_receipt=$reference_receipt"
+  print -r -- "baseline_mode=$baseline_mode"
+  print -r -- "baseline=$baseline"
+  if [[ -f "$baseline" ]]; then
+    print -r -- "baseline_bytes=$(stat -f '%z' "$baseline")"
+    print -r -- "baseline_sha256=$(shasum -a 256 "$baseline" | awk '{print $1}')"
+  fi
   if [[ -n "$reference_manifest" ]]; then
     print -r -- "reference_manifest=$reference_manifest"
     print -r -- "reference_manifest_sha256=$(shasum -a 256 "$reference_manifest" | awk '{print $1}')"
@@ -278,6 +319,31 @@ run_arm() {
   local stderr_log="$output_dir/$arm.stderr.log"
   local time_log="$output_dir/$arm.time.log"
   local result_code
+  local arm_swap_usage
+  local arm_starting_swap_mib
+  local arm_contaminants
+
+  arm_swap_usage="$(sysctl -n vm.swapusage)"
+  arm_starting_swap_mib="$(swap_used_mib "$arm_swap_usage")" || {
+    print -u2 "could not parse $arm starting swap usage: $arm_swap_usage"
+    return 69
+  }
+  arm_contaminants="$(matching_contaminants)"
+  capture_system_state "$output_dir/$arm.system-before.txt"
+  if [[ -n "$arm_contaminants" ]]; then
+    {
+      print -r -- $'pid\texecutable\tcwd'
+      print -r -- "$arm_contaminants"
+    } > "$output_dir/$arm.contaminants.tsv"
+    print -r -- "$arm"$'\trejected:competing-process\t'"$exact_kernel_mode"$'\t'"$arm_starting_swap_mib"$'\t-\t-\t-\t-\t-\t'"$output" >> "$receipt"
+    print -u2 "$arm found another build or ML workload; refusing a contaminated arm"
+    return 75
+  fi
+  if awk -v used="$arm_starting_swap_mib" -v maximum="$max_starting_swap_mib" 'BEGIN { exit !(used > maximum) }'; then
+    print -r -- "$arm"$'\trejected:starting-swap\t'"$exact_kernel_mode"$'\t'"$arm_starting_swap_mib"$'\t-\t-\t-\t-\t-\t'"$output" >> "$receipt"
+    print -u2 "$arm starting swap is ${arm_starting_swap_mib} MiB; refusing to cross the ${max_starting_swap_mib} MiB evidence ceiling"
+    return 75
+  fi
 
   env MERERUN_H3_EXACT_KERNELS="$exact_kernel_mode" \
     "$executable" video generate "$prompt" \
@@ -291,7 +357,6 @@ run_arm() {
     --output "$output" \
     --preflight --json > "$preflight"
 
-  capture_system_state "$output_dir/$arm.system-before.txt"
   local start="$EPOCHREALTIME"
   set +e
   /usr/bin/time -l -o "$time_log" \
@@ -326,12 +391,12 @@ run_arm() {
     [[ -n "$mlx_peak_gib" ]] || mlx_peak_gib="-"
   fi
   if (( result_code != 0 )); then
-    print -r -- "$arm"$'\t'"failed:$result_code"$'\t'"$exact_kernel_mode"$'\t'"$wall_seconds"$'\t'"$max_rss_bytes"$'\t'"$peak_footprint_bytes"$'\t'"$mlx_peak_gib"$'\t-'$'\t'"$output" >> "$receipt"
+    print -r -- "$arm"$'\t'"failed:$result_code"$'\t'"$exact_kernel_mode"$'\t'"$arm_starting_swap_mib"$'\t'"$wall_seconds"$'\t'"$max_rss_bytes"$'\t'"$peak_footprint_bytes"$'\t'"$mlx_peak_gib"$'\t-'$'\t'"$output" >> "$receipt"
     return "$result_code"
   fi
   local checksum
   checksum="$(shasum -a 256 "$output" | awk '{print $1}')"
-  print -r -- "$arm"$'\tpassed\t'"$exact_kernel_mode"$'\t'"$wall_seconds"$'\t'"$max_rss_bytes"$'\t'"$peak_footprint_bytes"$'\t'"$mlx_peak_gib"$'\t'"$checksum"$'\t'"$output" >> "$receipt"
+  print -r -- "$arm"$'\tpassed\t'"$exact_kernel_mode"$'\t'"$arm_starting_swap_mib"$'\t'"$wall_seconds"$'\t'"$max_rss_bytes"$'\t'"$peak_footprint_bytes"$'\t'"$mlx_peak_gib"$'\t'"$checksum"$'\t'"$output" >> "$receipt"
   passed_arms+=("$arm")
 }
 
@@ -345,7 +410,7 @@ if arm_enabled render-75; then
       --h3-render-width "$((width * 3 / 4))" \
       --h3-render-height "$((height * 3 / 4))"
   else
-    print -r -- $'render-75\tskipped:incompatible-32px-grid\tdisabled\t-\t-\t-\t-\t-\t-' >> "$receipt"
+    print -r -- $'render-75\tskipped:incompatible-32px-grid\tdisabled\t-\t-\t-\t-\t-\t-\t-' >> "$receipt"
   fi
 fi
 if arm_enabled render-625; then
@@ -355,7 +420,7 @@ if arm_enabled render-625; then
       --h3-render-width "$((width * 5 / 8))" \
       --h3-render-height "$((height * 5 / 8))"
   else
-    print -r -- $'render-625\tskipped:incompatible-32px-grid\tdisabled\t-\t-\t-\t-\t-\t-' >> "$receipt"
+    print -r -- $'render-625\tskipped:incompatible-32px-grid\tdisabled\t-\t-\t-\t-\t-\t-\t-' >> "$receipt"
   fi
 fi
 if arm_enabled layers-45; then
@@ -378,11 +443,11 @@ if arm_enabled exact-boundary-layout; then
 fi
 
 quality_failures=0
-if [[ -f "$output_dir/quality.mp4" ]]; then
+if [[ -f "$baseline" ]]; then
   for arm in "${passed_arms[@]}"; do
     report="$output_dir/$arm.quality.json"
     set +e
-    score_line="$("$scorer" "$output_dir/quality.mp4" "$output_dir/$arm.mp4" \
+    score_line="$("$scorer" "$baseline" "$output_dir/$arm.mp4" \
       --json "$report" \
       --contact-sheet "$output_dir/$arm.contact.png" \
       --expected-width "$width" \

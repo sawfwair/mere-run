@@ -457,6 +457,16 @@ compiler, or Xcode build is active. It also rejects a host starting above
 that ceiling is an explicit evidence-policy change and must be reported with
 the results; it is not a way to describe swap-heavy timing as clean.
 
+The process and swap gates are checked again immediately before every arm and
+the arm's starting swap is written directly to `receipts.tsv`. A long matrix
+therefore cannot silently cross the evidence policy after its initial gate; a
+new competing process is captured as sanitized PID/executable/cwd evidence. To
+score a narrow follow-up without regenerating a byte-identical expensive
+baseline, omit the `quality` arm and set `MERERUN_H3_BAKEOFF_BASELINE` to the
+existing MP4. The runner rejects a missing baseline, records its resolved path,
+byte count, and SHA-256, and does not allow an external baseline together with
+a new `quality` arm.
+
 `receipts.tsv` measures generation only; preflight is completed before its
 clock starts. Every passing arm records wall time, `/usr/bin/time` maximum RSS
 and peak footprint, the maximum MLX `peak_gib` reported by per-step profiling,
@@ -496,6 +506,68 @@ scripts/h3-bakeoff-score.py \
   --expected-sample-rate 32000 \
   --expected-channels 2
 ```
+
+### Fixed-seed algorithm result
+
+The post-reboot algorithm screen used the same pinned railway fixture as the
+exact-kernel bake-off: 512x256, 124 frames at 24 fps, seed `20260810`, image
+SHA-256 `34ea0fee383e3b5d353f6a9556af12b5e7d3a7846c6899e768791b5354818ebd`,
+and, for Ref2VA, audio SHA-256
+`444afb780a0b1a8fe5b1bb90ac744669ef9086c721439c4a0d569389c2e1df80`.
+All arms used release binary SHA-256
+`bb79a419bcf508d5b732daee58214e8cf9b490bf104904625e09d9891a5e1c56`
+from commit `ee64b21c`.
+
+The full FL2VA matrix began with zero swap. Every arm through A3 also began at
+zero swap; A3 caused macOS to retain 200.62 MiB, so A4 began below, but not at,
+the 1024 MiB ceiling. No arm recorded a thermal or performance warning.
+
+| FL2VA arm | Wall time | Delta vs quality | Video SSIM | VMAF | Audio correlation | Decision |
+| --- | ---: | ---: | ---: | ---: | ---: | --- |
+| quality / 50 blocks | 211.995 s | baseline | 1.000000 | 99.543328 | 1.000000 | dense reference |
+| A1 / 75% internal canvas | 129.447 s | -38.94% | 0.808859 | 2.761354 | 0.398702743 | reject current scale |
+| A1 / 62.5% internal canvas | 96.570 s | -54.45% | 0.797838 | 1.490763 | 0.408785695 | reject current scale |
+| A2 / 45 active blocks | 211.230 s | -0.36% | 0.820338 | 3.437342 | 0.095347761 | no useful speed win |
+| A2 / 40 active blocks | 181.841 s | -14.22% | 0.792344 | 2.987691 | 0.082693270 | reject quality |
+| A3 / interval-2 velocity reuse | 177.169 s | -16.43% | 0.870424 | 18.213738 | 0.376719974 | reject complete reuse |
+| A4 / token reduction | 152.245 s | -28.19% | 0.844319 | 4.141657 | 0.419743523 | reject visible artifacts |
+
+Every FL2VA arm retained the same 61.78 GiB MLX peak and an effectively
+unchanged process peak footprint. The metrics are matched-seed diagnostics, so
+they penalize any trajectory change rather than directly measuring semantic
+quality. Contact-sheet review nevertheless confirmed the decision: A1 changed
+train timing and color, A2 changed carriage motion and lost audio fidelity, A3
+was the closest visual arm but changed train motion, and A4 produced visible
+facial ghosting.
+
+Only the two evidence-selected candidates were carried into Ref2VA. They were
+scored against the clean dense baseline MP4 whose SHA-256 is
+`e2a2af06e1c3b3ac4f8cfc25f46de0d8edcab2a729e40afc003a2eac572aeb9f`.
+That artifact was generated twice byte-identically in zero-swap sessions at
+1,920.079 and 1,911.015 seconds; their 1,915.547-second mean is used only as the
+timing reference below. The selected follow-up began with 200.62 MiB of swap,
+dropped to 192.62 MiB, and recorded no thermal or performance warning, so these
+are screening timings rather than new zero-swap baselines.
+
+| Ref2VA arm | Wall time | Delta vs baseline mean | Process-peak delta | Video SSIM | VMAF | Audio correlation | Decision |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
+| A1 / 75% internal canvas | 1,588.565 s | -17.07% | +3.362 GiB | 0.759957 | 1.667707 | 0.995790045 | retain as research only |
+| A3 / interval-2 velocity reuse | 1,245.342 s | -34.99% | -0.505 GiB | 0.779995 | 6.565895 | 0.995529730 | reject complete reuse |
+
+Both candidates retained the 88.59 GiB MLX peak. A3 performed three genuine
+zero-block cache hits, executing 250 blocks instead of the dense 400. It also
+preserved the generated waveform closely, and motion continues across the full
+124-frame output, but the scene is materially darker and the requested train is
+absent. This is semantic and photometric drift, not frozen motion. A1 kept the
+subjects, dialogue waveform, and moving-train concept,
+but changed train trajectory/color and softened faces. Neither mode advances to
+ordinary dispatch from this fixture.
+
+The portable direction is therefore narrower, not more aggressive: evaluate a
+448x224 (87.5%) internal canvas, at most one reused middle evaluation, less
+aggressive token pairing/block spans, and true load-time pruning for A2 before
+another promotion attempt. Exact `boundary-layout` remains the only h3.c lane
+with a supported experimental execution policy in this PR.
 
 ## Acceptance gates
 
