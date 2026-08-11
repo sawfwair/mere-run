@@ -188,7 +188,11 @@ that won their clean production-shape microbenchmarks: K1 gated AdaLN and K2a
 head-major QKV layout with fused Q/K normalization and RoPE. It retains MLX's
 quantized projections instead of selecting the slower custom affine-Q8 GEMMs.
 The mode remains explicit, requires `--h3-acceleration quality`, and falls back
-per call when the exact H3 shape or dtype contract is unavailable.
+per call when the exact H3 shape or dtype contract is unavailable. Sequences at
+or below 12,000 rows retain whole-step compilation. Larger sequences use eager
+layer evaluation because the clean Ref2VA A/B below measured a larger gain and
+lower peak footprint than embedding these custom boundaries in independently
+compiled blocks.
 
 `MERERUN_H3_EXACT_KERNELS=affine-q8` enables the exact kernel candidates inside
 the real transformer loop for controlled checkpoint A/Bs. Admission is typed
@@ -246,9 +250,10 @@ MERERUN_H3_BAKEOFF_ARMS=quality,exact-affine-q8 \
 ```
 
 This is an experimental evidence surface, not a production default. The
-50-block real-weight arithmetic pass is complete. Full generated-video quality
-review, peak-memory receipts, and uncontaminated release timing are still
-required before ordinary dispatch changes.
+50-block real-weight arithmetic pass and fixed-seed generated-media review are
+complete. The generated results below justify the shape-aware execution policy,
+but not ordinary dispatch: FL2VA has no measured speed win and Ref2VA has only
+one fixed prompt/reference fixture so far.
 
 ### Clean M4 Max kernel result
 
@@ -273,6 +278,49 @@ in the installed 50-block Ref2VA arithmetic gate. The speed regressions are
 decisive: K2b/K3/K4 remain research prototypes until their GEMM core uses a
 competitive MLX/Metal matrix path. `boundary-layout` is the only exact mode
 advanced to generated-media evaluation from this run.
+
+### Clean generated-media result
+
+The fixed railway-platform fixture used a 512x256 canvas, 124 frames at 24 fps,
+seed `20260810`, one pinned 110,364-byte image with SHA-256
+`34ea0fee383e3b5d353f6a9556af12b5e7d3a7846c6899e768791b5354818ebd`,
+and, for Ref2VA, one pinned 663,630-byte audio reference with SHA-256
+`444afb780a0b1a8fe5b1bb90ac744669ef9086c721439c4a0d569389c2e1df80`.
+FL2VA used the same image as its first-frame condition and the installed
+`minimax-h3-lightx2v-4step` adapter. Every listed arm began with zero swap, a
+clean worktree, no matched build/ML process, and no thermal or performance
+warning; all arms also ended at zero swap.
+
+| Model / boundary execution | Commit | Baseline | Boundary | Wall delta | Peak-footprint delta | Decision |
+| --- | --- | ---: | ---: | ---: | ---: | --- |
+| Ref2VA / eager | `e93bf2ab` | 1,920.079 s | 1,860.912 s | -59.167 s (-3.08%) | -1.344 GiB | Retain above 12,000 rows |
+| FL2VA / eager | `e93bf2ab` | 174.096 s | 194.674 s | +20.578 s (+11.82%) | effectively unchanged | Reject as a universal policy |
+| FL2VA / compiled | `dc14efb3` | 215.976 s | 217.275 s | +1.299 s (+0.60%) | +0.002 GiB | No demonstrated speed win |
+| Ref2VA / blockwise compiled | `dc14efb3` | 1,911.015 s | 1,905.189 s | -5.826 s (-0.30%) | +1.891 GiB | Inferior to eager Ref2VA policy |
+
+The compiled FL2VA session had unusually variable baseline steps (30.885 to
+49.190 seconds) compared with the earlier stable baseline (30.400 to 33.721
+seconds), despite the clean host receipts. It is evidence that compilation
+removes the large eager penalty, not evidence of a 0.60% regression. Likewise,
+the blockwise-compiled Ref2VA arm reduced steady MLX cache from 16.11 to 12.61
+GiB but did not reduce the 88.59 GiB MLX peak and increased process peak
+footprint, so the small wall-time delta is not a promotion candidate.
+
+All four selected outputs passed the structural gate: H.264 video at 512x256,
+124 frames, 24 fps, 5.167 seconds, plus stereo AAC at 32 kHz. Matched-seed
+quality for the selected shape-aware paths was:
+
+| Model / candidate | Video SSIM | PSNR | VMAF | Audio correlation | Audio relative L2 |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Ref2VA / eager boundary | 0.989612 | 45.954653 dB | 91.309876 | 0.999354733 | 0.0359229473 |
+| FL2VA / compiled boundary | 0.988137 | 46.453891 dB | 91.366412 | 0.998332539 | 0.0577492307 |
+
+The contact sheets preserve the two people, rain-soaked platform, train motion,
+and first-frame composition. As a narrow reference-retention check, the first
+decoded frame was compared with the same Lanczos-resized source image. Ref2VA
+SSIM moved from 0.792608 baseline to 0.792859 boundary; FL2VA moved from
+0.969759 to 0.969820. These pixel metrics and contact sheets do not replace a
+larger blinded semantic/reference-retention review.
 
 ## Quality-sensitive algorithm lane
 

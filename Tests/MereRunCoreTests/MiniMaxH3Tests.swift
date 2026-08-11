@@ -24,9 +24,19 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
             try MiniMaxH3ExactKernelMode.resolve(environmentValue: "AFFINE-Q8"),
             .affineQ8
         )
-        XCTAssertFalse(MiniMaxH3ExactKernelMode.disabled.requiresEagerExecution)
-        XCTAssertFalse(MiniMaxH3ExactKernelMode.boundaryLayout.requiresEagerExecution)
-        XCTAssertTrue(MiniMaxH3ExactKernelMode.affineQ8.requiresEagerExecution)
+        let threshold = MiniMaxH3DenoiseExecutionPolicy.blockwiseSequenceThreshold
+        XCTAssertFalse(MiniMaxH3ExactKernelMode.disabled.requiresEagerExecution(
+            sequenceLength: threshold + 1
+        ))
+        XCTAssertFalse(MiniMaxH3ExactKernelMode.boundaryLayout.requiresEagerExecution(
+            sequenceLength: threshold
+        ))
+        XCTAssertTrue(MiniMaxH3ExactKernelMode.boundaryLayout.requiresEagerExecution(
+            sequenceLength: threshold + 1
+        ))
+        XCTAssertTrue(MiniMaxH3ExactKernelMode.affineQ8.requiresEagerExecution(
+            sequenceLength: 1
+        ))
         XCTAssertThrowsError(
             try MiniMaxH3ExactKernelMode.resolve(environmentValue: "automatic")
         ) { error in
