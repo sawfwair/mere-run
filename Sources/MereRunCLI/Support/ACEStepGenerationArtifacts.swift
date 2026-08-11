@@ -35,6 +35,7 @@ struct ACEStepRecipeLMSampling: Codable, Equatable {
     var repetitionPenalty: Float
     var cfgScale: Float
     var negativePrompt: String
+    var useCotCaption: Bool
 
     enum CodingKeys: String, CodingKey {
         case temperature
@@ -43,6 +44,7 @@ struct ACEStepRecipeLMSampling: Codable, Equatable {
         case repetitionPenalty = "repetition_penalty"
         case cfgScale = "cfg_scale"
         case negativePrompt = "negative_prompt"
+        case useCotCaption = "use_cot_caption"
     }
 }
 

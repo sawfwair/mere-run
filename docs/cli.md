@@ -1396,6 +1396,7 @@ Key options:
 - `--lm-repetition-penalty`: planner and semantic-code repetition penalty; `1.0` disables it
 - `--lm-cfg-scale`: classifier-free guidance applied only during semantic-code generation (upstream default `2.0`)
 - `--lm-negative-prompt`: unconditional LM prompt used by semantic-code guidance (default `NO USER INPUT`)
+- `--no-lm-caption-rewrite`: preserve the input caption while retaining LM metadata planning and semantic audio codes (upstream `use_cot_caption=false`)
 - `--text-subdirectory`
 - `--seed`
 - `--quiet`

@@ -125,7 +125,8 @@ final class MusicServeAndExportTests: XCTestCase {
             topP: 0.85,
             repetitionPenalty: 1.08,
             cfgScale: 2,
-            negativePrompt: "NO USER INPUT"
+            negativePrompt: "NO USER INPUT",
+            useCotCaption: false
         )
         let encoded = try JSONEncoder().encode(sampling)
         let object = try XCTUnwrap(
@@ -149,6 +150,7 @@ final class MusicServeAndExportTests: XCTestCase {
             accuracy: 0.0001
         )
         XCTAssertEqual(object["negative_prompt"] as? String, "NO USER INPUT")
+        XCTAssertEqual(object["use_cot_caption"] as? Bool, false)
         XCTAssertEqual(
             try XCTUnwrap(object["repetition_penalty"] as? Double),
             1.08,

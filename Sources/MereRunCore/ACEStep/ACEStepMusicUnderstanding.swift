@@ -228,6 +228,7 @@ extension ACEStepPipeline {
         lyrics: String,
         instruction: String = ACEStepLMInstructions.defaultInstruction,
         userMetadata: ACEStep5HzLMConstrainedSampler.UserMetadata = .init(),
+        useCotCaption: Bool = true,
         lmConfig: ACEStep5HzLMGenerationConfig = .init(
             maxNewTokens: 1_024,
             temperature: 0.85,
@@ -240,7 +241,7 @@ extension ACEStepPipeline {
         }
         let sampler = lm.makeConstrainedSampler(
             enabled: true,
-            skipCaption: false,
+            skipCaption: !useCotCaption,
             skipLanguage: false,
             stopAtReasoning: true,
             generationPhase: .codes,

@@ -100,6 +100,9 @@ The format is based on Keep a Changelog.
   complete LM sampling contract. ACE-Step quality presets now keep upstream
   Euler and velocity-control defaults and generate one candidate unless
   `--candidates` explicitly opts into local technical ranking.
+- added `--no-lm-caption-rewrite`, matching upstream's
+  `use_cot_caption=false`, so LM metadata and semantic-code generation can stay
+  active without replacing an arrangement-sensitive user caption.
 
 ### Geospatial inference
 

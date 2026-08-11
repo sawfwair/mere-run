@@ -247,7 +247,7 @@ repositories and immutable revisions, adapter hashes and scales,
 original and planner-rewritten captions, lyrics/instruction, the exact planner
 reasoning prefix, the final effective BPM, duration, key/scale, vocal
 language and time signature, task/edit configuration, planner temperature,
-top-k/top-p, repetition penalty, LM CFG scale and negative prompt, diffusion controls, candidate seeds and
+top-k/top-p, repetition penalty, LM CFG scale, negative prompt, caption-rewrite policy, diffusion controls, candidate seeds and
 technical scores, export policy, and input/output hashes.
 When the 5 Hz LM is active, each candidate also records its semantic audio-code
 count. The generation seed drives both LM sampling and diffusion.

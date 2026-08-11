@@ -295,6 +295,12 @@ struct MusicGenerate: AsyncParsableCommand {
     @Option(name: [.customLong("lm-negative-prompt")], help: "LM unconditional prompt used when --lm-cfg-scale is above 1.")
     var lmNegativePrompt: String = "NO USER INPUT"
 
+    @Flag(
+        name: [.customLong("no-lm-caption-rewrite")],
+        help: "Keep the input caption authoritative while still using the LM for metadata and semantic audio codes (upstream use_cot_caption=false)."
+    )
+    var noLMCaptionRewrite: Bool = false
+
     @Option(
         name: [.customLong("metadata-duration")],
         help: "Compatibility alias for --duration; explicit duration always controls planning and rendering."
@@ -661,6 +667,7 @@ struct MusicGenerate: AsyncParsableCommand {
                 lyrics: resolvedLyrics,
                 instruction: resolvedInstruction,
                 userMetadata: planningMetadata,
+                useCotCaption: !noLMCaptionRewrite,
                 lmConfig: .init(
                     maxNewTokens: 1_024,
                     temperature: lmTemperature,
@@ -671,7 +678,9 @@ struct MusicGenerate: AsyncParsableCommand {
                 )
             )
             lmCodeGenerationContext = plan.codeGenerationContext
-            if let plannedCaption = nonEmpty(plan.metadata.caption) {
+            if !noLMCaptionRewrite,
+               let plannedCaption = nonEmpty(plan.metadata.caption)
+            {
                 effectiveCaption = plannedCaption
             }
             if shouldPlanDuration, let plannedDuration = plan.metadata.durationSeconds {
@@ -924,7 +933,8 @@ struct MusicGenerate: AsyncParsableCommand {
                         topP: lmTopP,
                         repetitionPenalty: lmRepetitionPenalty,
                         cfgScale: lmCFGScale,
-                        negativePrompt: lmNegativePrompt
+                        negativePrompt: lmNegativePrompt,
+                        useCotCaption: !noLMCaptionRewrite
                     )
                     : nil,
                 inference: inference,
