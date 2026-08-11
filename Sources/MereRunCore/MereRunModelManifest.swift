@@ -108,6 +108,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case inkling
         /// Meta Muse Glimmer multimodal agent family via native Swift/MLX.
         case museGlimmer = "muse-glimmer"
+        /// NVIDIA Nemotron-H hybrid Mamba/MoE family via native Swift/MLX.
+        case nemotronH = "nemotron-h"
     }
 
     public enum Family: String, Codable, CaseIterable, Hashable, Sendable {
@@ -143,6 +145,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case deepseek
         case inkling
         case muse
+        case nemotron
     }
 
     public enum Tier: String, Codable, CaseIterable, Hashable, Sendable {
@@ -1024,6 +1027,46 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.chat, .codeGeneration, .visionChat],
                 components: genericTextComponents,
                 upstreamRepoId: "\(MuseGlimmerResources.artifactRepoId)@\(MuseGlimmerResources.artifactRevision)",
+                createdAt: createdAt
+            )
+        case .nemotron35Lightning:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .nemotronH,
+                family: .nemotron,
+                tier: .latest,
+                variant: .standard,
+                precision: .int4,
+                quantization: Quantization(
+                    bits: 4,
+                    groupSize: 16,
+                    scheme: "modelopt-nvfp4-mlx"
+                ),
+                defaults: nil,
+                supports: [.chat, .codeGeneration],
+                components: genericTextComponents,
+                upstreamRepoId:
+                    "\(NemotronHResources.upstreamRepoID)@\(NemotronHResources.upstreamRevision)",
+                createdAt: createdAt
+            )
+        case .nemotron35LightningDSpark:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .nemotronH,
+                family: .nemotron,
+                tier: .small,
+                variant: .standard,
+                precision: .int4,
+                quantization: Quantization(
+                    bits: 4,
+                    groupSize: 16,
+                    scheme: "modelopt-nvfp4-mlx"
+                ),
+                defaults: nil,
+                supports: [],
+                components: nil,
+                upstreamRepoId:
+                    "\(NemotronHResources.dsparkUpstreamRepoID)@\(NemotronHResources.dsparkUpstreamRevision)",
                 createdAt: createdAt
             )
         case .q36Nano:

@@ -190,7 +190,7 @@ enum InstalledModelSmokePlans {
                 try await runner.installedTextCheck(model: spec.id)
             }
 
-        case .laguna, .lfm2, .inkling, .codegenGGUF, .hfTextChat:
+        case .laguna, .lfm2, .inkling, .nemotronH, .codegenGGUF, .hfTextChat:
             return direct(spec, route: "text chat") { runner in
                 try await runner.installedTextCheck(model: spec.id)
             }
@@ -229,6 +229,16 @@ enum InstalledModelSmokePlans {
                 installedIDs: installedIDs,
                 candidates: [MuseGlimmerResources.modelId],
                 route: "consumed by Muse Glimmer text and vision chat"
+            ) { runner, primary in
+                try await runner.installedTextCheck(model: primary)
+            }
+
+        case .nemotronHDSpark:
+            return companion(
+                spec,
+                installedIDs: installedIDs,
+                candidates: [NemotronHResources.modelID],
+                route: "consumed by Nemotron 3.5 Lightning text chat"
             ) { runner, primary in
                 try await runner.installedTextCheck(model: primary)
             }

@@ -395,6 +395,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 64
             ),
             descriptor(
+                NemotronHResources.modelID,
+                "Nemotron 3.5 Lightning 30B-A3B",
+                "Runs NVIDIA's hybrid Nemotron-H NVFP4 checkpoint with its verified DSpark speculative companion through native Swift/MLX.",
+                minimum: 32,
+                recommended: 64
+            ),
+            descriptor(
                 Q35Resources.q36NanoModelId,
                 "Qwen3.6 A3B chat nano",
                 "Runs the Qwen3.6 35B-A3B OptiQ 4-bit MLX/MTP snapshot through the native Qwen-family runtime.",

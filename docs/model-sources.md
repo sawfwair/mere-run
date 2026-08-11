@@ -58,6 +58,7 @@ from the runtime catalog used by `mere.run model list`,
 | `text-chat` | `text-chat-laguna-xs-2-1` |
 | `text-chat` | `text-chat-inkling-small` |
 | `vision-chat` | `vision-chat-muse-glimmer-30b` |
+| `text-chat` | `text-chat-nemotron-35-lightning` |
 | `text-chat` | `text-chat-q36-nano` |
 | `text-chat` | `text-chat-bonsai-27b-1bit` |
 | `text-chat` | `text-chat-bonsai-27b-2bit` |
@@ -331,6 +332,21 @@ review and acceptance of the bundled `LICENSE` and `USAGE_POLICY.md`; upstream
 says the model is not intended for download or use by people under 18. Python
 conversion scripts are offline artifact tooling only and are not part of
 inference.
+
+`text-chat-nemotron-35-lightning` pins Sawfwair's native MLX conversion at
+revision `6699e5fd3f0c5b392bb3f8bac2443276bb41958a`, produced from NVIDIA's
+`NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4` source revision
+`e0b753dc24903ad4d62f5696077da22020eca89a`. The receipt records the 52 pinned
+source shards and every output hash. It repacks the released ModelOpt NVFP4
+nibbles bit-for-bit into MLX's native container, retains both block and global
+scales, and materializes the 46 released FP8 projections as BF16 without a
+second quantizer. Managed pulls also install the separate Sawfwair MLX
+conversion of NVIDIA's 967M-parameter DSpark companion at artifact revision
+`d30f0914d6bbb6da36302bd9228f92824901e675`, pinned from source revision
+`e3af76fbff445ef795958bee96bc1126af70fd57`. Both artifacts retain NVIDIA's
+OpenMDW-1.1 license and upstream model cards, never download implicitly, and do
+not require an additional mere.run acceptance gate solely because the public
+repositories use a custom license identifier.
 
 `text-chat-gemma4-12b` and `vision-chat-gemma4-12b` share Google's dense Gemma
 4 12B-it checkpoint; the text id uses the native chat path, while the vision id

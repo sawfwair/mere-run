@@ -8,6 +8,21 @@ The format is based on Keep a Changelog.
 
 ### Text
 
+- added `text-chat-nemotron-35-lightning`, a pinned native Swift/MLX runtime for
+  NVIDIA Nemotron 3.5 Lightning 30B-A3B. The converter preserves released
+  ModelOpt NVFP4 values and global scales without requantization, materializes
+  the checkpoint's FP8 Mamba projections as BF16, emits exact source/output
+  receipts, and retains OpenMDW-1.1 provenance. The runtime implements all 52
+  hybrid Mamba-2, attention, and routed-MoE blocks, exposes CLI/API/benchmark
+  routing, and installs the separate 967M DSpark conversion as its managed
+  companion. Native target verification uses NVIDIA's three-token proposal
+  recipe, reports acceptance and recovery telemetry, and adaptively returns to
+  serial decode below the measured break-even threshold. In three-run warm
+  release samples on Apple Silicon, the serial target averaged 95.67 decode
+  tok/s on a 64-token profiling prompt. On a 100%-acceptance counting prompt,
+  DSpark averaged 125.94 tok/s versus 87.47 serial (1.44x); a low-acceptance
+  prompt fell back after two rounds. These are bounded local diagnostics, not
+  NVIDIA's DGX Spark throughput claim.
 - added `vision-chat-muse-glimmer-30b`, an exact-revision managed Sawfwair
   selective MLX Q4 conversion of Meta Muse Glimmer 30B with a fully native
   Swift/MLX text and perception stack,

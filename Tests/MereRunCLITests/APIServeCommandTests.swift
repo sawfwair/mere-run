@@ -107,6 +107,20 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertFalse(cmd.engine.openAICompatibility.supportsStructuredOutputs)
     }
 
+    func testAPIServeParsesNemotronHNativeEngine() throws {
+        let cmd = try APIServe.parse([
+            "--engine", "text-chat-nemotron-h",
+            "--model", NemotronHResources.modelID,
+        ])
+
+        XCTAssertEqual(cmd.engine, .textChatNemotronH)
+        XCTAssertEqual(cmd.model, NemotronHResources.modelID)
+        XCTAssertEqual(cmd.defaultRuntimeModelID(modelPath: nil), NemotronHResources.modelID)
+        XCTAssertTrue(cmd.engine.openAICompatibility.supportsTools)
+        XCTAssertFalse(cmd.engine.openAICompatibility.supportsVisionContentParts)
+        XCTAssertFalse(cmd.engine.openAICompatibility.supportsStructuredOutputs)
+    }
+
     func testAPIServeParsesPreflightJSONFlags() throws {
         let cmd = try APIServe.parse([
             "--preflight",

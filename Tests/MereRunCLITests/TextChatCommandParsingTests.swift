@@ -215,6 +215,41 @@ final class TextChatCommandParsingTests: XCTestCase {
         XCTAssertTrue(formatted.contains("verify=4"))
     }
 
+    func testNemotronParsesAndFormatsAdaptiveDSparkStats() throws {
+        let command = try TextChat.parse([
+            "--model", NemotronHResources.modelID,
+            "--stats",
+            "--prompt", "Design an actor queue",
+        ])
+
+        XCTAssertEqual(command.model, NemotronHResources.modelID)
+        XCTAssertTrue(command.stats)
+        XCTAssertTrue(TextChat.backendDescription(for: command.model).contains("native MLX"))
+        XCTAssertThrowsError(
+            try TextChat.validate(responseFormat: .jsonObject, modelID: command.model)
+        )
+
+        let formatted = TextChat.formatNemotronDSparkStats(NemotronHDSparkStats(
+            enabled: true,
+            active: false,
+            speculativeTokens: 3,
+            rounds: 2,
+            draftedTokens: 6,
+            acceptedDraftTokens: 2,
+            rejectedDraftTokens: 2,
+            targetVerificationForwards: 2,
+            targetRecoveryForwards: 2,
+            targetFallbackForwards: 57,
+            adaptiveFallbacks: 1,
+            reason: "draft acceptance fell below 67%"
+        ))
+        XCTAssertTrue(formatted.contains("dspark=fallback"))
+        XCTAssertTrue(formatted.contains("block=3"))
+        XCTAssertTrue(formatted.contains("acceptance=33.3%"))
+        XCTAssertTrue(formatted.contains("fallback_forwards=57"))
+        XCTAssertTrue(formatted.contains("adaptive_fallbacks=1"))
+    }
+
     func testTextChatBackendDescriptionIdentifiesGGUFModels() {
         let backend = TextChat.backendDescription(for: ModelResolver.ModelID.q36NanoGGUF.rawValue)
 

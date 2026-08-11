@@ -1,5 +1,39 @@
 # Native model conversion
 
+## NVIDIA Nemotron 3.5 Lightning and DSpark MLX
+
+The Nemotron converters accept only NVIDIA's exact ModelOpt releases at the
+pinned revisions embedded in each script. They verify every source file's byte
+count and SHA-256 before conversion and write transactionally so a partial
+artifact cannot be mistaken for a completed one.
+
+The target converter repacks ModelOpt's uint8-paired E2M1 values into MLX's
+uint32 NVFP4 container without changing a nibble, retains the E4M3 block and
+FP32 global scales, and materializes 46 released FP8 Mamba projections as BF16.
+It stacks the 128 routed experts per projection and omits the bundled MTP branch
+in favor of the separately managed DSpark checkpoint. The companion converter
+performs the same bit-preserving NVFP4 repack over its 20 quantized matrices.
+
+```bash
+uv run --script scripts/model-conversion/convert_nemotron35_lightning_mlx.py \
+  --source /path/to/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4 \
+  --output /path/to/text-chat-nemotron-35-lightning
+
+uv run --script scripts/model-conversion/convert_nemotron35_dspark_mlx.py \
+  --source /path/to/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-DSpark \
+  --output /path/to/text-chat-nemotron-35-lightning-dspark
+```
+
+Both outputs include `MERERUN_CONVERSION.json`, the original model card, and
+the original OpenMDW-1.1 license. Python and ModelOpt formats are offline
+conversion concerns only; inference is native Swift/MLX.
+
+The managed target is published at
+`Sawfwair/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-MLX`, pinned to commit
+`6699e5fd3f0c5b392bb3f8bac2443276bb41958a`. Its DSpark companion is
+`Sawfwair/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-DSpark-MLX`, pinned to
+commit `d30f0914d6bbb6da36302bd9228f92824901e675`.
+
 ## Muse Glimmer 30B MLX 4-bit
 
 `convert_muse_glimmer_mlx.py` accepts only Meta's exact two-shard BF16 release

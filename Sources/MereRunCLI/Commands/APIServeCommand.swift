@@ -260,6 +260,8 @@ struct APIServe: AsyncParsableCommand {
             return DeepseekV4FlashResources.defaultModelId
         case .textChatMuseGlimmer:
             return MuseGlimmerResources.modelId
+        case .textChatNemotronH:
+            return NemotronHResources.modelID
         }
     }
 
@@ -347,6 +349,11 @@ struct APIServe: AsyncParsableCommand {
                 return explicit
             }
             return ManagedModelResolver.resolveInstalledModel(id: MuseGlimmerResources.modelId)?.path
+        case .textChatNemotronH:
+            if let explicit = model {
+                return explicit
+            }
+            return ManagedModelResolver.resolveInstalledModel(id: NemotronHResources.modelID)?.path
         }
     }
 
@@ -485,6 +492,7 @@ enum APIEngine: String, ExpressibleByArgument {
     case textChatLFM2 = "text-chat-lfm2"
     case textChatDeepseekV4Flash = "text-chat-deepseek-v4-flash"
     case textChatMuseGlimmer = "text-chat-muse-glimmer"
+    case textChatNemotronH = "text-chat-nemotron-h"
 
     var runtimeServingEngine: RuntimeServingEngine {
         switch self {
@@ -506,6 +514,8 @@ enum APIEngine: String, ExpressibleByArgument {
             return .textChatDeepseekV4Flash
         case .textChatMuseGlimmer:
             return .textChatMuseGlimmer
+        case .textChatNemotronH:
+            return .textChatNemotronH
         }
     }
 
@@ -4612,7 +4622,7 @@ actor CodeGenServer {
         case .gemma, .laguna, .liquid, .qwen, .sam, .falcon, .terramind, .tessera, .olmoEarth,
              .face, .geometry, .depth, .threeD,
              .tts, .asr, .embed, .code, .ocr, .audio, .music, .sfx, .video, .psi, .privacy, .deepseek,
-             .inkling, .muse, nil:
+             .inkling, .muse, .nemotron, nil:
             throw APIRequestValidationError.invalidField(
                 "model",
                 "model \(resolved.modelID) is not an image generation model"
