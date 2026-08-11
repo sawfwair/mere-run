@@ -14,11 +14,13 @@ private func miniMaxH3Linear(_ linear: Linear, _ value: MLXArray) -> MLXArray {
 
 enum MiniMaxH3ExactKernelMode: String, Sendable, Equatable {
     case disabled
+    case boundaryLayout = "boundary-layout"
     case affineQ8 = "affine-q8"
 }
 
 enum MiniMaxH3ExactKernelStage: String, CaseIterable, Sendable, Hashable {
     case gateAdaLN = "k1-gate-adaln"
+    case qkvLayout = "k2a-qkv-layout"
     case qkvProjection = "k2b-qkv-projection"
     case attentionOutput = "k3-attention-output"
     case feedForwardInput = "k4a-feed-forward-input"
@@ -335,11 +337,36 @@ private final class MiniMaxH3Attention: Module {
                 exactKernelFallbackHandler?(.qkvProjection, "weight-or-rope-contract")
             }
         }
+        let globalProjection = queryKeyValue(input)
+        if exactKernelMode != .disabled,
+           enabledExactKernelStages.contains(.qkvLayout) {
+            if let rope {
+                if let projected = MiniMaxH3FusedKernels.prepareHeadMajorQKV(
+                    projected: globalProjection,
+                    queryNormWeight: queryNorm.weight,
+                    keyNormWeight: keyNorm.weight,
+                    ropeCosine: rope.cosine,
+                    ropeSine: rope.sine,
+                    eps: queryNorm.eps
+                ) {
+                    exactKernelDispatchHandler?(.qkvLayout)
+                    return [projected.query, projected.key, projected.value]
+                }
+                exactKernelFallbackHandler?(
+                    .qkvLayout,
+                    "projection=\(globalProjection.dtype):\(globalProjection.shape) "
+                        + "q_norm=\(queryNorm.weight.dtype) k_norm=\(keyNorm.weight.dtype) "
+                        + "rope=\(rope.cosine.dtype):\(rope.cosine.shape)"
+                )
+            } else {
+                exactKernelFallbackHandler?(.qkvLayout, "rope-unavailable")
+            }
+        }
         // The MLX-Serve artifact deinterleaves the released checkpoint's
         // per-head rows into three global Q/K/V slabs before quantization.
         // Do not apply the raw-checkpoint interleave a second time here.
         let projected = miniMaxH3SplitProjectedQKV(
-            queryKeyValue(input), heads: heads, headDimension: headDimension
+            globalProjection, heads: heads, headDimension: headDimension
         )
         var query = queryNorm(projected[0])
         var key = keyNorm(projected[1])
@@ -702,9 +729,9 @@ private final class MiniMaxH3TransformerBlock: Module {
         rope: MiniMaxH3RotaryEmbedding,
         cachedModulation: MLXArray?
     ) -> MLXArray {
-        if exactKernelMode == .affineQ8,
+        if exactKernelMode != .disabled,
            enabledExactKernelStages.contains(.gateAdaLN),
-           let exact = exactAffineQ8Call(
+           let exact = exactBoundaryCall(
                value,
                timeEmbedding: timeEmbedding,
                adaLNIndices: adaLNIndices,
@@ -728,7 +755,7 @@ private final class MiniMaxH3TransformerBlock: Module {
         )
     }
 
-    private func exactAffineQ8Call(
+    private func exactBoundaryCall(
         _ value: MLXArray,
         timeEmbedding: MLXArray,
         adaLNIndices: MLXArray,

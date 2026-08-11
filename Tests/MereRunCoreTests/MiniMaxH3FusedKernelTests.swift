@@ -336,7 +336,7 @@ final class MiniMaxH3FusedKernelTests: MereRunCoreTestCase {
             eps: -.infinity
         ))
         XCTAssertNil(MiniMaxH3FusedKernels.prepareHeadMajorQKV(
-            projected: projected.asType(.float32),
+            projected: projected.asType(.float16),
             queryNormWeight: headWeight,
             keyNormWeight: headWeight,
             ropeCosine: rope,
@@ -463,6 +463,60 @@ final class MiniMaxH3FusedKernelTests: MereRunCoreTestCase {
         XCTAssertLessThan(maximumDifference(fused.query, queryReference), 0.032)
         XCTAssertLessThan(maximumDifference(fused.key, keyReference), 0.032)
         XCTAssertEqual(maximumDifference(fused.value, valueReference), 0)
+
+        for (mixedProjected, mixedCosine, mixedSine) in [
+            (projected, ropeCosine.asType(.float32), ropeSine.asType(.float32)),
+            (
+                projected.asType(.float32),
+                ropeCosine.asType(.float32),
+                ropeSine.asType(.float32)
+            ),
+        ] {
+            let mixedParts = miniMaxH3SplitProjectedQKV(
+                mixedProjected,
+                heads: heads,
+                headDimension: headDimension
+            )
+            let mixedRope = MiniMaxH3RotaryEmbedding(
+                cosine: mixedCosine,
+                sine: mixedSine
+            )
+            let mixedQueryReference = mixedRope.apply(MLXFast.rmsNorm(
+                mixedParts[0],
+                weight: queryNormWeight,
+                eps: epsilon
+            )).transposed(0, 2, 1, 3).contiguous()
+            let mixedKeyReference = mixedRope.apply(MLXFast.rmsNorm(
+                mixedParts[1],
+                weight: keyNormWeight,
+                eps: epsilon
+            )).transposed(0, 2, 1, 3).contiguous()
+            let mixedValueReference = mixedParts[2]
+                .transposed(0, 2, 1, 3)
+                .contiguous()
+            let mixed = try XCTUnwrap(MiniMaxH3FusedKernels.prepareHeadMajorQKV(
+                projected: mixedProjected,
+                queryNormWeight: queryNormWeight,
+                keyNormWeight: keyNormWeight,
+                ropeCosine: mixedCosine,
+                ropeSine: mixedSine,
+                eps: epsilon
+            ))
+            MLX.eval(
+                mixedQueryReference,
+                mixedKeyReference,
+                mixedValueReference,
+                mixed.query,
+                mixed.key,
+                mixed.value
+            )
+            XCTAssertEqual(mixed.query.dtype, .float32)
+            XCTAssertEqual(mixed.key.dtype, .float32)
+            XCTAssertEqual(mixed.value.dtype, mixedProjected.dtype)
+            XCTAssertLessThan(maximumDifference(mixed.query, mixedQueryReference), 0.032)
+            XCTAssertLessThan(maximumDifference(mixed.key, mixedKeyReference), 0.032)
+            XCTAssertEqual(maximumDifference(mixed.value, mixedValueReference), 0)
+        }
     }
 
     func testProjectHeadMajorQKVAffineInt8MatchesManagedQ8Contract() throws {
@@ -983,8 +1037,8 @@ final class MiniMaxH3FusedKernelTests: MereRunCoreTestCase {
         let modulationRows = 9
         let epsilon = Float(1e-5)
         MLXRandom.seed(2_026_081_002)
-        let residual = MLXRandom.normal([1, rows, hiddenSize]).asType(.bfloat16)
-        let attentionOutput = MLXRandom.normal([1, rows, hiddenSize]).asType(.bfloat16)
+        let residual = MLXRandom.normal([1, rows, hiddenSize])
+        let attentionOutput = MLXRandom.normal([1, rows, hiddenSize])
         let normWeight = MLXRandom.uniform(
             0.8 ..< 1.2,
             [hiddenSize]
@@ -1045,8 +1099,8 @@ final class MiniMaxH3FusedKernelTests: MereRunCoreTestCase {
         let residualDifference = maximumDifference(reference[0], candidate[0])
         let inputDifference = maximumDifference(reference[1], candidate[1])
         let gateDifference = maximumDifference(reference[2], candidate[2])
-        print(String(
-            format: "[h3-transfer] gate-adaln rows=%d portable_ms=%.3f fused_ms=%.3f "
+        print("[h3-transfer] gate-adaln residual_dtype=\(residual.dtype) " + String(
+            format: "rows=%d portable_ms=%.3f fused_ms=%.3f "
                 + "speedup=%.3fx residual_max_abs=%.6g input_max_abs=%.6g gate_max_abs=%.6g",
             rows,
             portableSeconds * 1_000,
@@ -1200,7 +1254,7 @@ final class MiniMaxH3FusedKernelTests: MereRunCoreTestCase {
         MLXRandom.seed(2_026_081_006)
         let projected = MLXRandom.normal(
             [1, rows, 3 * heads * headDimension]
-        ).asType(.bfloat16)
+        )
         let queryNormWeight = MLXRandom.uniform(
             0.8 ..< 1.2,
             [headDimension]
@@ -1213,8 +1267,8 @@ final class MiniMaxH3FusedKernelTests: MereRunCoreTestCase {
             -1 ..< 1,
             [1, rows, 1, rotaryDimension]
         )
-        let ropeCosine = MLX.cos(angles).asType(.bfloat16)
-        let ropeSine = MLX.sin(angles).asType(.bfloat16)
+        let ropeCosine = MLX.cos(angles)
+        let ropeSine = MLX.sin(angles)
         MLX.eval(
             projected,
             queryNormWeight,
@@ -1279,8 +1333,9 @@ final class MiniMaxH3FusedKernelTests: MereRunCoreTestCase {
         let queryDifference = maximumDifference(reference[0], candidate[0])
         let keyDifference = maximumDifference(reference[1], candidate[1])
         let valueDifference = maximumDifference(reference[2], candidate[2])
-        print(String(
-            format: "[h3-transfer] qkv-layout rows=%d portable_ms=%.3f "
+        print("[h3-transfer] qkv-layout projection_dtype=\(projected.dtype) "
+            + "rope_dtype=\(ropeCosine.dtype) " + String(
+            format: "rows=%d portable_ms=%.3f "
                 + "fused_ms=%.3f speedup=%.3fx query_max_abs=%.6g "
                 + "key_max_abs=%.6g value_max_abs=%.6g",
             rows,

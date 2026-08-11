@@ -40,10 +40,12 @@ extension MiniMaxH3ExactKernelMode {
     static func resolve(environmentValue: String?) throws -> Self {
         switch environmentValue?.lowercased() {
         case nil, "", "disabled": .disabled
+        case MiniMaxH3ExactKernelMode.boundaryLayout.rawValue: .boundaryLayout
         case MiniMaxH3ExactKernelMode.affineQ8.rawValue: .affineQ8
         case .some(let value):
             throw MiniMaxH3GeneratorError.invalidOptions(
-                "MERERUN_H3_EXACT_KERNELS must be disabled or affine-q8, not \(value)"
+                "MERERUN_H3_EXACT_KERNELS must be disabled, boundary-layout, "
+                    + "or affine-q8, not \(value)"
             )
         }
     }
@@ -1004,12 +1006,14 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         let exactKernelMode = try MiniMaxH3ExactKernelMode.resolve(
             environmentValue: environment["MERERUN_H3_EXACT_KERNELS"]
         )
-        if exactKernelMode == .affineQ8 {
+        if exactKernelMode != .disabled {
             guard accelerationMode == .quality else {
                 throw MiniMaxH3GeneratorError.invalidOptions(
-                    "affine-q8 exact kernels must be measured with h3 acceleration quality"
+                    "exact H3 kernels must be measured with h3 acceleration quality"
                 )
             }
+        }
+        if exactKernelMode == .affineQ8 {
             guard transformer.supportsAffineQ8ExactKernels,
                   !transformer.usesResidentBF16 else {
                 throw MiniMaxH3GeneratorError.invalidOptions(

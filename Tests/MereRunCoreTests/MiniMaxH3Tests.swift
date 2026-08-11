@@ -17,13 +17,21 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
             .disabled
         )
         XCTAssertEqual(
+            try MiniMaxH3ExactKernelMode.resolve(environmentValue: "BOUNDARY-LAYOUT"),
+            .boundaryLayout
+        )
+        XCTAssertEqual(
             try MiniMaxH3ExactKernelMode.resolve(environmentValue: "AFFINE-Q8"),
             .affineQ8
         )
         XCTAssertThrowsError(
             try MiniMaxH3ExactKernelMode.resolve(environmentValue: "automatic")
         ) { error in
-            XCTAssertTrue(error.localizedDescription.contains("must be disabled or affine-q8"))
+            XCTAssertTrue(
+                error.localizedDescription.contains(
+                    "must be disabled, boundary-layout, or affine-q8"
+                )
+            )
         }
     }
 
@@ -1061,7 +1069,8 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
                 ))
             }
         }
-        transformer.enabledExactKernelStages = Set(MiniMaxH3ExactKernelStage.allCases)
+        let affineStages = Set(MiniMaxH3ExactKernelStage.allCases).subtracting([.qkvLayout])
+        transformer.enabledExactKernelStages = affineStages
 
         var dispatchCounts = Dictionary(
             uniqueKeysWithValues: MiniMaxH3ExactKernelStage.allCases.map { ($0, 0) }
@@ -1107,12 +1116,67 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         ))
 
         for stage in MiniMaxH3ExactKernelStage.allCases {
-            XCTAssertEqual(dispatchCounts[stage], configuration.layerCount, stage.rawValue)
+            let expected = affineStages.contains(stage) ? configuration.layerCount : 0
+            XCTAssertEqual(dispatchCounts[stage], expected, stage.rawValue)
         }
         XCTAssertTrue(videoMetrics.0.isFinite && videoMetrics.1.isFinite)
         XCTAssertTrue(audioMetrics.0.isFinite && audioMetrics.1.isFinite)
         XCTAssertLessThan(videoMetrics.1, 0.05)
         XCTAssertLessThan(audioMetrics.1, 0.05)
+
+        dispatchCounts = Dictionary(
+            uniqueKeysWithValues: MiniMaxH3ExactKernelStage.allCases.map { ($0, 0) }
+        )
+        fallbackCounts = [:]
+        let boundaryStages: Set<MiniMaxH3ExactKernelStage> = [.gateAdaLN, .qkvLayout]
+        transformer.enabledExactKernelStages = boundaryStages
+        transformer.exactKernelMode = .boundaryLayout
+        let boundaryCandidate = transformer(
+            videoRows: video,
+            audioRows: audio,
+            textStates: text,
+            layout: layout,
+            videoTimestep: 0.2,
+            audioTimestep: 0.4
+        )
+        MLX.eval(
+            boundaryCandidate.videoVelocityRows,
+            boundaryCandidate.audioVelocityRows
+        )
+        let boundaryVideoMetrics = metrics(
+            boundaryCandidate.videoVelocityRows,
+            baseline.videoVelocityRows
+        )
+        let boundaryAudioMetrics = metrics(
+            boundaryCandidate.audioVelocityRows,
+            baseline.audioVelocityRows
+        )
+        let boundaryDispatchReceipt = MiniMaxH3ExactKernelStage.allCases.map { stage in
+            "\(stage.rawValue)=\(dispatchCounts[stage, default: 0])"
+        }.joined(separator: " ")
+        let boundaryFallbackReceipt = fallbackCounts.sorted { $0.key < $1.key }.map { entry in
+            "\(entry.key)=\(entry.value)"
+        }.joined(separator: " | ")
+        print(String(
+            format: "[h3-transfer] real-weight-boundary-layout blocks=%d rows=%d "
+                + "video_max_abs=%.6g video_rel_l2=%.6g "
+                + "audio_max_abs=%.6g audio_rel_l2=%.6g %@ fallbacks=%@",
+            transformer.affineQ8ExactKernelBlockCount,
+            layout.sequenceLength,
+            boundaryVideoMetrics.0,
+            boundaryVideoMetrics.1,
+            boundaryAudioMetrics.0,
+            boundaryAudioMetrics.1,
+            boundaryDispatchReceipt,
+            boundaryFallbackReceipt
+        ))
+        for stage in MiniMaxH3ExactKernelStage.allCases {
+            let expected = boundaryStages.contains(stage) ? configuration.layerCount : 0
+            XCTAssertEqual(dispatchCounts[stage], expected, stage.rawValue)
+        }
+        XCTAssertTrue(boundaryFallbackReceipt.isEmpty)
+        XCTAssertLessThan(boundaryVideoMetrics.1, 0.05)
+        XCTAssertLessThan(boundaryAudioMetrics.1, 0.05)
     }
 
     func testInstalledRef2VAAdaLNCacheMatchesLiveBranchWhenEnabled() throws {

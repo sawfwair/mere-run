@@ -183,6 +183,13 @@ scripts/h3-kernel-lab.sh buffer-alias
 
 ### Installed-checkpoint exact-kernel dispatch
 
+`MERERUN_H3_EXACT_KERNELS=boundary-layout` enables only the exact candidates
+that won their clean production-shape microbenchmarks: K1 gated AdaLN and K2a
+head-major QKV layout with fused Q/K normalization and RoPE. It retains MLX's
+quantized projections instead of selecting the slower custom affine-Q8 GEMMs.
+The mode remains explicit, requires `--h3-acceleration quality`, and falls back
+per call when the exact H3 shape or dtype contract is unavailable.
+
 `MERERUN_H3_EXACT_KERNELS=affine-q8` enables the exact kernel candidates inside
 the real transformer loop for controlled checkpoint A/Bs. Admission is typed
 and fail-closed: the request must use `--h3-acceleration quality`, every main
@@ -242,6 +249,30 @@ This is an experimental evidence surface, not a production default. The
 50-block real-weight arithmetic pass is complete. Full generated-video quality
 review, peak-memory receipts, and uncontaminated release timing are still
 required before ordinary dispatch changes.
+
+### Clean M4 Max kernel result
+
+The 2026-08-11 clean-host run used commit `62a2c123`, zero starting swap, no
+competing build or ML process, and no thermal or performance warning. It
+established a sharp split between useful fusion boundaries and custom
+quantized GEMMs:
+
+| Candidate | Portable/unfused | Custom/fused | Result |
+| --- | ---: | ---: | ---: |
+| K1 gated AdaLN | 7.098 ms | 2.245 ms | 3.161x |
+| K1 AdaLN to activation INT8 | 2.764 ms | 1.577 ms | 1.753x |
+| K2a QKV layout/norm/RoPE | 18.426 ms | 3.561 ms | 5.174x |
+| K2b direct affine-Q8 QKV | 311.872 ms | 1,423.968 ms | 0.219x |
+| K3 affine-Q8 output projection | 109.946 ms | 536.511 ms | 0.205x |
+| K4 affine-Q8 FFN | 806.792 ms | 3,191.661 ms | 0.253x |
+
+K5 buffer donation avoided a 160,841,728-byte retained peak increment. The
+direct QKV and FFN arms also exceeded their synthetic absolute-error envelopes;
+all affine stages nevertheless remained below `0.00044` combined relative L2
+in the installed 50-block Ref2VA arithmetic gate. The speed regressions are
+decisive: K2b/K3/K4 remain research prototypes until their GEMM core uses a
+competitive MLX/Metal matrix path. `boundary-layout` is the only exact mode
+advanced to generated-media evaluation from this run.
 
 ## Quality-sensitive algorithm lane
 

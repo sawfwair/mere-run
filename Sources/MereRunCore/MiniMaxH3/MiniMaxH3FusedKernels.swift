@@ -180,7 +180,7 @@ enum MiniMaxH3FusedKernels {
         guard Device.defaultDevice().deviceType == .gpu,
               eps.isFinite,
               eps > 0,
-              projected.dtype == .bfloat16,
+              [.bfloat16, .float32].contains(projected.dtype),
               projected.ndim == 3,
               projected.dim(0) == 1,
               projected.dim(1) > 0,
@@ -189,8 +189,8 @@ enum MiniMaxH3FusedKernels {
               queryNormWeight.shape == [attentionHeadDimension],
               keyNormWeight.dtype == .bfloat16,
               keyNormWeight.shape == [attentionHeadDimension],
-              ropeCosine.dtype == .bfloat16,
-              ropeSine.dtype == .bfloat16,
+              [.bfloat16, .float32].contains(ropeCosine.dtype),
+              ropeSine.dtype == ropeCosine.dtype,
               ropeCosine.shape == [1, projected.dim(1), 1, rotaryDimension],
               ropeSine.shape == ropeCosine.shape else {
             return nil
@@ -198,12 +198,17 @@ enum MiniMaxH3FusedKernels {
 
         let rows = projected.dim(1)
         let outputShape = [1, attentionHeadCount, rows, attentionHeadDimension]
+        let queryKeyDType: DType = projected.dtype == .float32
+            || ropeCosine.dtype == .float32
+            ? .float32
+            : .bfloat16
         let outputs = prepareHeadMajorQKVKernel(
             [projected, queryNormWeight, keyNormWeight, ropeCosine, ropeSine, eps],
+            template: [("T", projected.dtype), ("Q", queryKeyDType)],
             grid: (32, attentionHeadCount, rows),
             threadGroup: (32, 1, 1),
             outputShapes: [outputShape, outputShape, outputShape],
-            outputDTypes: [.bfloat16, .bfloat16, .bfloat16]
+            outputDTypes: [queryKeyDType, queryKeyDType, projected.dtype]
         )
         return MiniMaxH3HeadMajorQKV(
             query: outputs[0],
@@ -811,7 +816,7 @@ enum MiniMaxH3FusedKernels {
     )
 
     private static let prepareHeadMajorQKVKernel = MLXFast.metalKernel(
-        name: "mere_h3_qkv_norm_rope_head_major_bf16_v1",
+        name: "mere_h3_qkv_norm_rope_head_major_mixed_v2",
         inputNames: [
             "projected", "query_norm_weight", "key_norm_weight",
             "rope_cosine", "rope_sine", "epsilon",
@@ -851,13 +856,13 @@ enum MiniMaxH3FusedKernels {
             uint output_base = (head * rows + row) * head_dimension;
             uint rope_base = row * rotary_dimension;
             for (uint dimension = lane; dimension < head_dimension; dimension += 32) {
-                bfloat16_t query_normalized = bfloat16_t(
+                T query_normalized = T(
                     float(projected[query_base + dimension]) * query_inverse);
-                bfloat16_t key_normalized = bfloat16_t(
+                T key_normalized = T(
                     float(projected[key_base + dimension]) * key_inverse);
-                bfloat16_t query_weighted = bfloat16_t(
+                T query_weighted = T(
                     float(query_normalized) * float(query_norm_weight[dimension]));
-                bfloat16_t key_weighted = bfloat16_t(
+                T key_weighted = T(
                     float(key_normalized) * float(key_norm_weight[dimension]));
                 float query_output = float(query_weighted);
                 float key_output = float(key_weighted);
@@ -866,13 +871,13 @@ enum MiniMaxH3FusedKernels {
                     uint pair = dimension < rotary_half
                         ? dimension + rotary_half
                         : dimension - rotary_half;
-                    bfloat16_t query_pair_normalized = bfloat16_t(
+                    T query_pair_normalized = T(
                         float(projected[query_base + pair]) * query_inverse);
-                    bfloat16_t key_pair_normalized = bfloat16_t(
+                    T key_pair_normalized = T(
                         float(projected[key_base + pair]) * key_inverse);
-                    bfloat16_t query_pair = bfloat16_t(
+                    T query_pair = T(
                         float(query_pair_normalized) * float(query_norm_weight[pair]));
-                    bfloat16_t key_pair = bfloat16_t(
+                    T key_pair = T(
                         float(key_pair_normalized) * float(key_norm_weight[pair]));
                     float cosine = float(rope_cosine[rope_base + dimension]);
                     float sine = float(rope_sine[rope_base + dimension]);
@@ -889,9 +894,10 @@ enum MiniMaxH3FusedKernels {
                     }
                 }
 
-                query[output_base + dimension] = bfloat16_t(query_output);
-                key[output_base + dimension] = bfloat16_t(key_output);
-                value[output_base + dimension] = projected[value_base + dimension];
+                query[output_base + dimension] = Q(query_output);
+                key[output_base + dimension] = Q(key_output);
+                value[output_base + dimension] = T(
+                    projected[value_base + dimension]);
             }
         """,
         ensureRowContiguous: true

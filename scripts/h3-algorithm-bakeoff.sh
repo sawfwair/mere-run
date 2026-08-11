@@ -364,6 +364,9 @@ fi
 if arm_enabled exact-affine-q8; then
   run_arm exact-affine-q8 --exact-kernel-mode affine-q8 --h3-acceleration quality
 fi
+if arm_enabled exact-boundary-layout; then
+  run_arm exact-boundary-layout --exact-kernel-mode boundary-layout --h3-acceleration quality
+fi
 
 quality_failures=0
 if [[ -f "$output_dir/quality.mp4" ]]; then
