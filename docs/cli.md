@@ -1920,10 +1920,17 @@ fidelity matters.
 
 `velocity-reuse-2` is a separate experimental h3.c transfer arm. It retains the
 quality schedule, runs the first and final denoise evaluations in full, and
-reuses the complete video and audio velocity outputs on intervening odd steps.
-It does not compose with dynamic-sparse attention or either block-cache policy.
-Use it only for controlled same-seed FL2VA and Ref2VA comparisons until the
-quality envelope is published.
+linearly extrapolates complete video and audio velocity outputs from the two
+latest full evaluations on intervening odd steps. The two modalities use their
+independent shifted schedules. It does not compose with dynamic-sparse
+attention or either block-cache policy. Use it only for controlled same-seed
+FL2VA and Ref2VA comparisons until the quality envelope is published.
+
+Ref2VA reference images preserve aspect ratio and are downscaled only when
+their area exceeds the internal render canvas. Standalone reference audio keeps
+its complete 2-15 second duration; all ordered reference audio remains capped
+at 15 seconds total. Condition augmentation and target video/audio latents use
+the released independent seeded streams.
 
 `layers-45` and `layers-40` are separate gate-ranked thinning arms. They rank
 the cached schedule's mean absolute attention/MLP AdaLN gates, always protect
@@ -1958,9 +1965,12 @@ then appends only new frames and samples. The output duration and all
 AdaLN table, reference encodings, and VAEs remain loaded between windows.
 
 `--h3-adapter minimax-h3-turbo-4step` selects the separately pulled EMA-850
-LoRA, while `--h3-adapter minimax-h3-lightx2v-4step` selects the LightX2V
-PEFT LoRA. Both target `video-minimax-h3-fl2va-bf16-mlx`. When `--steps` is
-omitted they use five schedule points (four transformer evaluations). EMA-850
+LoRA, while the `minimax-h3-lightx2v-*` ids select pinned LightX2V PEFT LoRAs.
+All target `video-minimax-h3-fl2va-bf16-mlx`. The legacy releases use five
+schedule points (four transformer evaluations). The v1.0 8-step release
+defaults to nine schedule points and accepts the published five-point fallback;
+the v1.0 768p release uses five points, video/audio shifts 6/3, and alpha 128.
+EMA-850
 runs in activation space; LightX2V is fused once into the BF16 transformer
 before denoising and adds no LoRA matmuls to the generation loop. Both require
 dense execution of all 50 blocks and prohibit denoise-step cache reuse, but
@@ -2269,6 +2279,8 @@ mere.run adapter pull mere-platform-assistant
 mere.run adapter pull scail2-lightx2v-4step
 mere.run adapter pull minimax-h3-turbo-4step
 mere.run adapter pull minimax-h3-lightx2v-4step
+mere.run adapter pull minimax-h3-lightx2v-8step-v1
+mere.run adapter pull minimax-h3-lightx2v-4step-v1-768p
 ```
 
 The pull verifies the cataloged byte count and SHA-256 before atomically
@@ -2277,8 +2289,8 @@ verification diagnostics go to stderr. Use the adapter id directly with
 `text chat --lora`, `api serve --lora`, or the matching SCAIL
 `video animate --distilled-adapter` option. `video animate --profile fast`
 selects `scail2-lightx2v-4step` and its fixed four-step schedule.
-Use either `minimax-h3-turbo-4step` or `minimax-h3-lightx2v-4step` with
-`video generate --h3-adapter`; their BF16 FL2VA base remains subject to the
+Use the MiniMax-H3 adapter ids with `video generate --h3-adapter`; their BF16
+FL2VA base remains subject to the
 MiniMax-H3 Community License acceptance.
 
 For a cross-command decision guide, see [Benchmarking](./benchmarking.md). The

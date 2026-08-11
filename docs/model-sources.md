@@ -895,6 +895,17 @@ per-block adapter matmuls in the generation loop. Its Apache-2.0 adapter
 license likewise does not replace the base model's MiniMax-H3 Community
 License.
 
+The v1.0 managed adapters `minimax-h3-lightx2v-8step-v1` and
+`minimax-h3-lightx2v-4step-v1-768p` pin the non-ComfyUI BF16 checkpoints at
+immutable repository revision `e6346777701aa2b64d42ed058cdd71ae00e7cd52`.
+Their exact sizes and SHA-256 digests are 1,383,677,768 bytes /
+`e16ac20824d6e6649b193806f8fb095639bd9946c97b1bb84b4248eab1cc807f`
+and 1,383,677,808 bytes /
+`1bdabc2e9fce20b1db563b96bcf6e46adcad4c1964f423676436bf266cc7416c`.
+The runtime binds each filename to the upstream recipe so the 8-step release
+uses shifts 12/3 and alpha 8, while the 1344x768 four-step release uses shifts
+6/3 and alpha 128.
+
 ### `video-wan22-ti2v-5b-mlx`
 
 The native Wan2.2 TI2V-5B model root is:

@@ -328,6 +328,13 @@ struct VideoGenerationPreflightAnalyzer {
         return !audio.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    private var h3AdapterInferenceRecipe: MiniMaxH3TurboAdapter.InferenceRecipe? {
+        guard let reference = input.h3Adapter else { return nil }
+        let filename = ManagedAdapterCatalog.spec(for: reference)?.artifact.filename
+            ?? URL(fileURLWithPath: reference).lastPathComponent
+        return MiniMaxH3TurboAdapter.inferenceRecipe(filename: filename)
+    }
+
     func envelope() -> VideoGenerationPreflightEnvelope {
         var diagnostics: [PreflightDiagnostic] = []
         validateStaticOptions(diagnostics: &diagnostics)
@@ -737,12 +744,17 @@ struct VideoGenerationPreflightAnalyzer {
                 ))
             }
             if let steps = input.steps,
-               steps != MiniMaxH3TurboAdapter.recommendedSchedulePointCount {
+               let recipe = h3AdapterInferenceRecipe,
+               !recipe.supports(schedulePointCount: steps) {
+                let supported = recipe.supportedSchedulePointCounts
+                    .sorted()
+                    .map(String.init)
+                    .joined(separator: " or ")
                 diagnostics.append(PreflightDiagnostic(
                     id: "h3_adapter_steps_invalid",
                     severity: .blocker,
-                    title: "MiniMax-H3 Turbo uses four denoise evaluations",
-                    message: "Omit --steps or set --steps 5 (five schedule points)."
+                    title: "MiniMax-H3 Turbo step recipe does not match",
+                    message: "Omit --steps or set --steps \(supported) schedule points for \(recipe.name)."
                 ))
             }
         }
@@ -1365,7 +1377,7 @@ struct VideoGenerationPreflightAnalyzer {
         let h3AccelerationMode = MiniMaxH3AccelerationMode(rawValue: input.h3AccelerationMode) ?? .quality
         let resolvedH3Steps: Int? = if usesMiniMaxH3Geometry {
             input.steps ?? (input.h3Adapter != nil
-                ? MiniMaxH3TurboAdapter.recommendedSchedulePointCount
+                ? h3AdapterInferenceRecipe?.defaultSchedulePointCount
                 : (try? MiniMaxH3StepPolicy.recommendedPointCount(
                 width: validH3RenderWidth ?? resolvedWidth,
                 height: validH3RenderHeight ?? resolvedHeight,

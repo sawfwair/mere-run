@@ -25,6 +25,18 @@ The format is based on Keep a Changelog.
 
 ### Video
 
+- added immutable managed support for LightX2V MiniMax-H3 Turbo v1.0 in both
+  its 544p eight-evaluation and 1344x768 four-evaluation recipes. Mere now
+  selects each adapter's published schedule, video/audio shifts, and LoRA alpha
+  instead of forcing every H3 adapter through the legacy four-step alpha-8 path.
+- aligned native MiniMax-H3 conditioning and sampling with the pinned h3.c
+  serving contract. Reference images now preserve their aspect ratio, never
+  upscale, and are area-matched to the internal render canvas instead of being
+  enlarged to a 2,048-pixel short edge. H3 target video/audio noise now uses
+  the released independent seeded streams and latent layouts; standalone
+  reference audio retains its complete 2-15 second span. The experimental
+  `velocity-reuse-2` arm now linearly extrapolates skipped velocities from its
+  two latest full evaluations rather than holding the last velocity constant.
 - added explicit `--h3-render-width` and `--h3-render-height` controls for
   MiniMax-H3 reduced-canvas bake-offs. FL2VA and Ref2VA now run their target
   latent grid at the same-aspect internal geometry and upscale decoded RGB

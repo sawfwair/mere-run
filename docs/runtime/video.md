@@ -107,13 +107,22 @@ mere.run video generate "a cinematic rain-soaked bus stop at night" \
   --width 1280 --height 768 --duration 10 --steps 20 \
   --output ./bus-stop-bf16.mp4
 
-# Two four-evaluation adapter lanes for the BF16 FL2VA model
+# Published adapter recipes for the BF16 FL2VA model
 mere.run adapter pull minimax-h3-turbo-4step
 mere.run adapter pull minimax-h3-lightx2v-4step
+mere.run adapter pull minimax-h3-lightx2v-8step-v1
+mere.run adapter pull minimax-h3-lightx2v-4step-v1-768p
 mere.run video generate "a superhero waits beneath an umbrella at a bus stop" \
   --model video-minimax-h3-fl2va-bf16-mlx \
-  --h3-adapter minimax-h3-lightx2v-4step \
-  --output ./bus-stop-turbo.mp4
+  --width 960 --height 544 \
+  --h3-adapter minimax-h3-lightx2v-8step-v1 \
+  --output ./bus-stop-turbo-8step.mp4
+
+mere.run video generate "a superhero waits beneath an umbrella at a bus stop" \
+  --model video-minimax-h3-fl2va-bf16-mlx \
+  --width 1344 --height 768 \
+  --h3-adapter minimax-h3-lightx2v-4step-v1-768p \
+  --output ./bus-stop-turbo-4step-768p.mp4
 
 mere.run model pull video-minimax-h3-ref2va-mlx --accept-model-license
 mere.run video generate "preserve the person and use the reference motion" \
@@ -149,19 +158,23 @@ converting, using, or redistributing any artifact. Passing
 `--accept-model-license` and continuing with the download confirms that you
 accept those terms and agree to comply with them.
 
-The `minimax-h3-turbo-4step` EMA-850 adapter and
-`minimax-h3-lightx2v-4step` LightX2V adapter are checksum-pinned separately.
+The `minimax-h3-turbo-4step` EMA-850 adapter and all three LightX2V releases
+are checksum-pinned separately.
 EMA-850 remains an activation-space adapter because its AdaLN deltas
 participate in schedule-cache construction. LightX2V has no AdaLN targets, so
 the runtime applies its published alpha/rank scale and fuses its deltas into
 the BF16 transformer once before denoising; the PEFT tensors are then released
-and add no per-block LoRA matmuls. Both default to five schedule points, which
-are four model evaluations. They were trained for FL2VA, require the BF16 base
+and add no per-block LoRA matmuls. The legacy releases default to five schedule
+points, which are four model evaluations. LightX2V v1.0 8-step defaults to nine
+schedule points (eight evaluations), accepts the upstream four-evaluation
+fallback, and uses video/audio shifts 12/3 with alpha 8. LightX2V v1.0 768p
+uses five schedule points, shifts 6/3, alpha 128, and is intended for a
+1344x768 canvas. They were trained for FL2VA, require the BF16 base
 model, and cannot be combined with Ref2VA references or H3 denoise-step cache
-reuse. Omit `--steps` (or set it to `5`). `--h3-acceleration quality` keeps the
-fully dense path; `balanced` and `maximum` may use attention-only dynamic
+reuse. Omit `--steps` to select the pinned recipe. `--h3-acceleration quality`
+keeps the fully dense path; `balanced` and `maximum` may use attention-only dynamic
 sparsity while still executing all 50 blocks on every model evaluation.
-Strength `1.0` applies either adapter's released weights exactly; the strength
+Strength `1.0` applies an adapter's released weights exactly; the strength
 control remains available for prompt-specific tuning.
 
 `--h3-frame FRAME:PATH` adds an FL2VA keyframe at an exact zero-based output
@@ -213,9 +226,20 @@ and seed; use `quality` when exact-seed fidelity matters.
 
 `--h3-acceleration velocity-reuse-2` is an isolated experimental bake-off arm.
 It keeps the quality schedule, protects the first and final full evaluations,
-and reuses the complete synchronized video/audio velocity on intervening odd
-steps. It disables the other approximation policies so its timing and quality
-deltas can be attributed directly; it is not an automatic or default mode.
+and linearly extrapolates the complete synchronized video/audio velocity from
+the two latest full evaluations on intervening odd steps. Video and audio use
+their independent shifted schedules, and the extrapolation ratio is clamped to
+`[-2, 2]`. It disables the other approximation policies so its timing and
+quality deltas can be attributed directly; it is not an automatic or default
+mode.
+
+Ref2VA reference images preserve source aspect ratio and are downscaled only
+when their area exceeds the internal render canvas, with both dimensions
+rounded to 32-pixel multiples. Standalone reference audio keeps its complete
+2-15 second duration rather than being truncated to target-video duration;
+ordered reference audio remains capped at 15 seconds in total. H3 condition
+augmentation and target video/audio latents use the released independent
+seeded streams and native latent layouts.
 
 The isolated `layers-45` and `layers-40` arms rank mean absolute attention and
 MLP gates from the exact AdaLN table, protect blocks 0, 1, and 49, and skip the

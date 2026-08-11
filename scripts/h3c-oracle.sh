@@ -3,7 +3,7 @@
 set -euo pipefail
 
 readonly H3C_REPOSITORY="https://github.com/antirez/h3.c.git"
-readonly H3C_REVISION="f0dbe7699250c4943ec148ed7c2c16031fee8d05"
+readonly H3C_REVISION="03cb1339825feb19bcafcc60685680cb9ec6e2fe"
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 oracle_root="${MERERUN_H3C_ORACLE_ROOT:-$repo_root/.build/h3c-oracle}"

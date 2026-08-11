@@ -258,6 +258,7 @@ public struct MiniMaxH3Resources: Sendable {
     public static let ref2vaArtifactRepository = "Sawfwair/MiniMax-H3-Ref2VA-MLX-8bit"
     public static let ref2vaArtifactRevision = "61dc387ef1a7166425cdacd63c2340598dcc364f"
     public static let bf16TransformerDirectory = "transformer-bf16"
+    public static let bf16TextEncoderDirectory = "text-encoder-bf16"
     public static let officialTransformerSourceIdentity =
         "MiniMaxAI/MiniMax-H3@ec19cc6daf5d8add9417c18e86b6b58cc6c55027:"
         + "FL2VA/transformer:index-sha256:fb457a26ffa6294660e249b0ddd03a337f2e5393f770b5c34c8b8f90a29a7efb"
@@ -310,6 +311,9 @@ public struct MiniMaxH3Resources: Sendable {
     public static let bf16ShardFilenames = (1...13).map {
         String(format: "model-%05d-of-00013.safetensors", $0)
     }
+    public static let bf16TextEncoderShardFilenames = (1...14).map {
+        String(format: "model-%05d-of-00014.safetensors", $0)
+    }
 
     public let rootURL: URL
 
@@ -324,6 +328,12 @@ public struct MiniMaxH3Resources: Sendable {
     }
     public var bf16TransformerIndexURL: URL {
         bf16TransformerRootURL.appending(path: "model.safetensors.index.json")
+    }
+    public var bf16TextEncoderRootURL: URL {
+        rootURL.appending(path: Self.bf16TextEncoderDirectory, directoryHint: .isDirectory)
+    }
+    public var bf16TextEncoderIndexURL: URL {
+        bf16TextEncoderRootURL.appending(path: "model.safetensors.index.json")
     }
     public var textEncoderWeightsURL: URL { rootURL.appending(path: "text_encoder.safetensors") }
     public var tokenizerURL: URL { rootURL }
@@ -345,6 +355,10 @@ public struct MiniMaxH3Resources: Sendable {
     public var usesShardedBF16Transformer: Bool {
         if case .shardedBF16 = transformerWeightsLayout() { return true }
         return false
+    }
+
+    public var usesShardedBF16Conditioner: Bool {
+        FileManager.default.fileExists(atPath: bf16TextEncoderIndexURL.path)
     }
 
     func adaLNCacheSourceIdentity() throws -> String {
@@ -418,7 +432,10 @@ public struct MiniMaxH3Resources: Sendable {
 
     public func validate(fileManager: FileManager = .default) -> [URL] {
         var missing = Self.requiredFiles
-            .filter { $0 != "transformer.safetensors" }
+            .filter { filename in
+                filename != "transformer.safetensors"
+                    && (!usesShardedBF16Conditioner || filename != "text_encoder.safetensors")
+            }
             .map { rootURL.appending(path: $0) }
             .filter { !fileManager.fileExists(atPath: $0.path) }
         switch transformerWeightsLayout(fileManager: fileManager) {
@@ -430,6 +447,14 @@ public struct MiniMaxH3Resources: Sendable {
                 .filter { !fileManager.fileExists(atPath: $0.path) }
         case nil:
             missing.append(transformerWeightsURL)
+        }
+        if usesShardedBF16Conditioner {
+            if !fileManager.fileExists(atPath: bf16TextEncoderIndexURL.path) {
+                missing.append(bf16TextEncoderIndexURL)
+            }
+            missing += Self.bf16TextEncoderShardFilenames
+                .map { bf16TextEncoderRootURL.appending(path: $0) }
+                .filter { !fileManager.fileExists(atPath: $0.path) }
         }
         return missing
     }

@@ -517,6 +517,30 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertTrue(action?.command?.argv.contains(missingAdapter.path) == true)
     }
 
+    func testMiniMaxH3LightX2VV1PreflightSelectsPublishedEightEvaluations() throws {
+        let command = try VideoGenerate.parse([
+            "a train crosses a bright alpine valley",
+            "--model", ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue,
+            "--width", "960",
+            "--height", "544",
+            "--h3-adapter", ManagedAdapterCatalog.miniMaxH3LightX2VEightStepV1ID,
+        ])
+        let envelope = command.makePreflightEnvelope(
+            outputURL: makeTempOutput(name: "h3-lightx2v-v1-8step.mp4"),
+            fileManager: .default,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.result.plan.resolvedSteps, 9)
+        XCTAssertFalse(envelope.diagnostics.contains { $0.id == "h3_adapter_steps_invalid" })
+        XCTAssertEqual(
+            envelope.result.inputs.adapter?.path,
+            ManagedAdapterCatalog.spec(
+                for: ManagedAdapterCatalog.miniMaxH3LightX2VEightStepV1ID
+            )?.installedFileURL().path
+        )
+    }
+
     func testVideoGenerateSeparatesCheckpointQualityFromOutputMode() throws {
         let finalVideo = try VideoGenerate.parse([
             "a cinematic final shot",

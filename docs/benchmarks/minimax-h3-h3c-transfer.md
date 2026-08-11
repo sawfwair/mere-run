@@ -10,7 +10,7 @@ memory, and fallback gates.
 - mere.run base: Ref2VA 8-bit commit
   `184932ae5e2788812376285a39c606c6a568ebd3`, stacked on `origin/main`.
 - h3.c repository: `https://github.com/antirez/h3.c.git`.
-- h3.c revision: `f0dbe7699250c4943ec148ed7c2c16031fee8d05`.
+- h3.c revision: `03cb1339825feb19bcafcc60685680cb9ec6e2fe`.
 - h3.c source license: MIT, with the BSD-3-Clause components identified in its
   `THIRD_PARTY_NOTICES.md`.
 - MiniMax-H3 weights remain governed by the MiniMax-H3 Community License.
@@ -29,6 +29,20 @@ on every build. It does not download checkpoint weights. h3.c expects the
 original upstream `FL2VA/` and `Ref2VA/` directory trees; mere.run consumes its
 own flat managed MLX artifacts, so output comparisons must record which weight
 representation each arm used.
+
+For a local BF16 parity run, `MiniMaxH3Resources` also accepts ignored flat
+overlays with the released shard directories at `transformer-bf16/` and
+`text-encoder-bf16/`. The remaining flat config, tokenizer, VideoVAE, and
+AudioVAE files may be symlinked from the matching managed package. This permits
+both engines to read the same verified official BF16 transformer and
+conditioner without converting or duplicating them. Validate such an overlay
+without loading weights:
+
+```bash
+MERERUN_H3_BF16_OVERLAY_ROOT=/absolute/path/to/overlay \
+  swift test --filter \
+  MiniMaxH3Tests/testInstalledShardedBF16Ref2VAOverlayWhenAvailable
+```
 
 ## Two independent lanes
 
@@ -340,11 +354,12 @@ relabelled.
 
 A3 now has its first explicit runtime arm: `--h3-acceleration
 velocity-reuse-2`. It runs the first and final denoise evaluations in full,
-reuses both complete video and audio velocity outputs on intervening odd steps,
-and keeps the quality schedule point count. Selecting it disables the adaptive
-tail and dynamic-sparse policies so its quality and timing deltas remain
-attributable. It is experimental and non-default until the fixed FL2VA and
-Ref2VA same-seed A/Bs pass.
+linearly extrapolates both complete video and audio velocity outputs from the
+two latest full evaluations on intervening odd steps, and keeps the quality
+schedule point count. Selecting it disables the adaptive tail and dynamic-sparse
+policies so its quality and timing deltas remain attributable. It is
+experimental and non-default until the fixed FL2VA and Ref2VA same-seed A/Bs
+pass.
 
 A2 has two equally isolated arms: `--h3-acceleration layers-45` and
 `--h3-acceleration layers-40`. They reproduce the pinned oracle's ranking:

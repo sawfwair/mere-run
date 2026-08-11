@@ -1,7 +1,6 @@
 import Foundation
 import MediaIO
 import MLX
-import MLXRandom
 #if canImport(Darwin)
 import Darwin
 #endif
@@ -573,6 +572,7 @@ public struct MiniMaxH3GenerationOptions: Sendable, Hashable {
     public let accelerationMode: MiniMaxH3AccelerationMode
     public let adapterURL: URL?
     public let adapterStrength: Float
+    public let adapterInferenceRecipe: MiniMaxH3TurboAdapter.InferenceRecipe?
     public let firstFrameURL: URL?
     public let lastFrameURL: URL?
     public let frameInputs: [MiniMaxH3FrameInput]
@@ -673,11 +673,12 @@ public struct MiniMaxH3GenerationOptions: Sendable, Hashable {
                 )
             }
         }
+        let adapterInferenceRecipe = adapterURL.map(MiniMaxH3TurboAdapter.inferenceRecipe(for:))
         let resolvedSteps: Int
         if let steps {
             resolvedSteps = steps
-        } else if adapterURL != nil {
-            resolvedSteps = MiniMaxH3TurboAdapter.recommendedSchedulePointCount
+        } else if let adapterInferenceRecipe {
+            resolvedSteps = adapterInferenceRecipe.defaultSchedulePointCount
         } else {
             resolvedSteps = try MiniMaxH3StepPolicy.recommendedPointCount(
                 width: renderWidth ?? width,
@@ -692,10 +693,14 @@ public struct MiniMaxH3GenerationOptions: Sendable, Hashable {
         guard resolvedSteps >= 2 else {
             throw MiniMaxH3GeneratorError.invalidOptions("steps must be at least 2")
         }
-        if adapterURL != nil,
-           resolvedSteps != MiniMaxH3TurboAdapter.recommendedSchedulePointCount {
+        if let adapterInferenceRecipe,
+           !adapterInferenceRecipe.supports(schedulePointCount: resolvedSteps) {
+            let supported = adapterInferenceRecipe.supportedSchedulePointCounts
+                .sorted()
+                .map(String.init)
+                .joined(separator: " or ")
             throw MiniMaxH3GeneratorError.invalidOptions(
-                "MiniMax-H3 Turbo requires 5 schedule points (4 denoise evaluations)"
+                "MiniMax-H3 Turbo recipe \(adapterInferenceRecipe.name) requires \(supported) schedule points"
             )
         }
         self.prompt = trimmed
@@ -710,6 +715,7 @@ public struct MiniMaxH3GenerationOptions: Sendable, Hashable {
         self.accelerationMode = accelerationMode
         self.adapterURL = adapterURL
         self.adapterStrength = adapterStrength
+        self.adapterInferenceRecipe = adapterInferenceRecipe
         self.firstFrameURL = firstFrameURL
         self.lastFrameURL = lastFrameURL
         self.frameInputs = frameInputs.sorted { $0.frameIndex < $1.frameIndex }
@@ -761,6 +767,8 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
     private struct ReferenceCacheKey: Hashable {
         let references: [MiniMaxH3ReferenceInput]
         let maximumFrameCount: Int
+        let targetWidth: Int
+        let targetHeight: Int
     }
 
     private struct ConditionerPresentation {
@@ -791,8 +799,8 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
     }
 
     private struct PreparedReferenceRows {
-        let video: MLXArray?
-        let audio: MLXArray?
+        let video: [MLXArray]
+        let audio: [MLXArray]
     }
 
     private let retainsRuntime: Bool
@@ -1250,8 +1258,12 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         var cachedStepCount = 0
         var fullStepCount = 0
         var executedBlockCount = 0
+        var previousVideoVelocity: MLXArray?
+        var previousAudioVelocity: MLXArray?
         var cachedVideoVelocity: MLXArray?
         var cachedAudioVelocity: MLXArray?
+        var previousVelocityStepIndex: Int?
+        var cachedVelocityStepIndex: Int?
 
         for index in videoSchedule.timesteps.indices {
             transformer.dynamicSparseAttentionStepIndex = index
@@ -1288,15 +1300,38 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
             ) ?? false
             if reusesVelocity,
                let cachedVideoVelocity,
-               let cachedAudioVelocity {
+               let cachedAudioVelocity,
+               let cachedVelocityStepIndex {
+                let previousVideoSigma = previousVelocityStepIndex.map {
+                    videoSchedule.sigmas[$0]
+                }
+                let previousAudioSigma = previousVelocityStepIndex.map {
+                    audioSchedule.sigmas[$0]
+                }
+                let videoRatio = MiniMaxH3ServingContract.extrapolationRatio(
+                    currentSigma: videoSchedule.sigmas[index],
+                    lastSigma: videoSchedule.sigmas[cachedVelocityStepIndex],
+                    previousSigma: previousVideoSigma
+                )
+                let audioRatio = MiniMaxH3ServingContract.extrapolationRatio(
+                    currentSigma: audioSchedule.sigmas[index],
+                    lastSigma: audioSchedule.sigmas[cachedVelocityStepIndex],
+                    previousSigma: previousAudioSigma
+                )
+                let videoVelocity = previousVideoVelocity.map {
+                    cachedVideoVelocity + videoRatio * (cachedVideoVelocity - $0)
+                } ?? cachedVideoVelocity
+                let audioVelocity = previousAudioVelocity.map {
+                    cachedAudioVelocity + audioRatio * (cachedAudioVelocity - $0)
+                } ?? cachedAudioVelocity
                 videoRows = Self.advance(
                     sample: videoRows,
-                    velocity: cachedVideoVelocity,
+                    velocity: videoVelocity,
                     coefficients: videoCoefficients
                 )
                 audioRows = Self.advance(
                     sample: audioRows,
-                    velocity: cachedAudioVelocity,
+                    velocity: audioVelocity,
                     coefficients: audioCoefficients
                 )
                 cacheHitThisStep = true
@@ -1412,8 +1447,12 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                     fullStepCount += 1
                 }
                 if velocityReusePolicy != nil {
+                    previousVideoVelocity = cachedVideoVelocity
+                    previousAudioVelocity = cachedAudioVelocity
+                    previousVelocityStepIndex = cachedVelocityStepIndex
                     cachedVideoVelocity = predicted.videoVelocityRows
                     cachedAudioVelocity = predicted.audioVelocityRows
+                    cachedVelocityStepIndex = index
                 }
                 videoRows = Self.advance(
                     sample: videoRows,
@@ -1530,7 +1569,9 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                 resources: resources,
                 configuration: configuration,
                 continuation: continuation,
-                progressHandler: progressHandler
+                progressHandler: progressHandler,
+                phaseProfileLogger: phaseProfileLogger,
+                generationStarted: generationStarted
             )
         }
         guard options.references.isEmpty else {
@@ -1652,30 +1693,37 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                 + frameConditions.map(\.anchor),
             audioConditionAnchors: continuationConditions?.audioAnchors ?? []
         )
-        MLXRandom.seed(options.seed)
         if let currentConditions = conditionVideoRows {
-            let conditionNoise = MLXRandom.normal(currentConditions.shape).asType(.float32)
-            conditionVideoRows = MiniMaxH3Schedule.noise(
-                clean: currentConditions,
-                timestep: 0.999,
-                noise: conditionNoise
+            conditionVideoRows = MiniMaxH3ServingContract.noisedCondition(
+                currentConditions,
+                seed: options.seed
             )
         }
         if let currentConditions = conditionAudioRows {
-            let conditionNoise = MLXRandom.normal(currentConditions.shape).asType(.float32)
-            conditionAudioRows = MiniMaxH3Schedule.noise(
-                clean: currentConditions,
-                timestep: 0.999,
-                noise: conditionNoise
+            conditionAudioRows = MiniMaxH3ServingContract.noisedCondition(
+                currentConditions,
+                seed: options.seed &+ 1
             )
         }
-        var video = MLXRandom.normal([
-            1, 24, latentFrames, latentHeight, latentWidth,
-        ]).asType(.float32)
+        var video = MiniMaxH3ServingContract.targetVideoNoise(
+            seed: options.seed,
+            latentFrames: latentFrames,
+            latentHeight: latentHeight,
+            latentWidth: latentWidth
+        )
         var videoRows = MiniMaxH3Geometry.patchifyVideo(video)
-        var audioRows = MLXRandom.normal([1, audioFrames * 2, 32]).asType(.float32)
-        let videoSchedule = try MiniMaxH3Schedule(pointCount: options.steps, shift: configuration.videoFlowShift)
-        let audioSchedule = try MiniMaxH3Schedule(pointCount: options.steps, shift: configuration.audioFlowShift)
+        var audioRows = MiniMaxH3ServingContract.targetAudioNoise(
+            seed: options.seed,
+            latentFrames: audioFrames
+        )
+        let videoSchedule = try MiniMaxH3Schedule(
+            pointCount: options.steps,
+            shift: options.adapterInferenceRecipe?.videoFlowShift ?? configuration.videoFlowShift
+        )
+        let audioSchedule = try MiniMaxH3Schedule(
+            pointCount: options.steps,
+            shift: options.adapterInferenceRecipe?.audioFlowShift ?? configuration.audioFlowShift
+        )
 
         progressHandler?(.init(stage: .loadingTransformer, stepIndex: 0, totalSteps: options.steps - 1))
         try withMiniMaxH3AutoreleasePool {
@@ -1768,7 +1816,9 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         resources: MiniMaxH3Resources,
         configuration: MiniMaxH3Configuration,
         continuation: MiniMaxH3ContinuationInput?,
-        progressHandler: (@Sendable (MiniMaxH3GenerationProgress) -> Void)?
+        progressHandler: (@Sendable (MiniMaxH3GenerationProgress) -> Void)?,
+        phaseProfileLogger: (@Sendable (String) -> Void)?,
+        generationStarted: CFAbsoluteTime
     ) throws -> MiniMaxH3GenerationResult {
         guard options.firstFrameURL == nil,
               options.lastFrameURL == nil,
@@ -1798,6 +1848,7 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         let prepared = try preparedReferences(options: options)
 
         progressHandler?(.init(stage: .loadingTextEncoder, stepIndex: 0, totalSteps: options.steps - 1))
+        let conditionerPreparationStarted = CFAbsoluteTimeGetCurrent()
         let tokenizer = try QwenTokenizer.load(from: resources.tokenizerURL, maxLengthOverride: 262_144)
         let presentation = try referenceConditionerPresentation(
             tokenizer: tokenizer,
@@ -1810,7 +1861,12 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         }
         let inputIDs = MLXArray(presentation.tokenIDs.map(Int32.init)).reshaped(1, presentation.tokenIDs.count)
         let attentionMask = MLXArray.ones([1, presentation.tokenIDs.count], dtype: .int32)
+        phaseProfileLogger?(String(
+            format: "phase=conditioner_preparation seconds=%.3f",
+            CFAbsoluteTimeGetCurrent() - conditionerPreparationStarted
+        ))
         let promptStates: MLXArray = try withMiniMaxH3AutoreleasePool {
+            let conditionerLoadStarted = CFAbsoluteTimeGetCurrent()
             let encoder = try loadConditioner(
                 resources: resources,
                 configuration: configuration,
@@ -1822,7 +1878,12 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                     ))
                 }
             )
+            phaseProfileLogger?(String(
+                format: "phase=conditioner_load seconds=%.3f",
+                CFAbsoluteTimeGetCurrent() - conditionerLoadStarted
+            ))
             progressHandler?(.init(stage: .encodingText, stepIndex: 0, totalSteps: options.steps - 1))
+            let textEncodingStarted = CFAbsoluteTimeGetCurrent()
             guard let states = try encoder.forwardMultimodalActivationHiddenState(
                 inputIds: inputIDs,
                 attentionMask: attentionMask,
@@ -1832,10 +1893,15 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                 throw MiniMaxH3GeneratorError.invalidOptions("text encoder did not return layer-50 states")
             }
             MLX.eval(states)
+            phaseProfileLogger?(String(
+                format: "phase=text_encoding seconds=%.3f",
+                CFAbsoluteTimeGetCurrent() - textEncodingStarted
+            ))
             return states
         }
         Memory.clearCache()
 
+        let referenceEncodingStarted = CFAbsoluteTimeGetCurrent()
         let referenceRows = try encodeReferences(
             prepared,
             options: options,
@@ -1849,14 +1915,18 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                 progressHandler: progressHandler
             )
         }
-        let conditionVideoRows = Self.concatenateRows([
-            continuationConditions?.videoRows,
-            referenceRows.video,
-        ])
-        let conditionAudioRows = Self.concatenateRows([
-            continuationConditions?.audioRows,
-            referenceRows.audio,
-        ])
+        var videoConditionSpans = referenceRows.video
+        if let continuationVideo = continuationConditions?.videoRows {
+            videoConditionSpans.insert(continuationVideo, at: 0)
+        }
+        var audioConditionSpans = referenceRows.audio
+        if let continuationAudio = continuationConditions?.audioRows {
+            audioConditionSpans.insert(continuationAudio, at: 0)
+        }
+        phaseProfileLogger?(String(
+            format: "phase=reference_encoding seconds=%.3f",
+            CFAbsoluteTimeGetCurrent() - referenceEncodingStarted
+        ))
         Memory.clearCache()
 
         let layout = try MiniMaxH3Geometry.buildRef2VA(
@@ -1869,30 +1939,36 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
             keyframeAnchors: continuationConditions?.videoAnchors ?? [],
             audioConditionAnchors: continuationConditions?.audioAnchors ?? []
         )
-        MLXRandom.seed(options.seed)
-        let noisedVideoConditions = conditionVideoRows.map {
-            MiniMaxH3Schedule.noise(
-                clean: $0,
-                timestep: 0.999,
-                noise: MLXRandom.normal($0.shape).asType(.float32)
-            )
-        }
-        let noisedAudioConditions = conditionAudioRows.map {
-            MiniMaxH3Schedule.noise(
-                clean: $0,
-                timestep: 0.999,
-                noise: MLXRandom.normal($0.shape).asType(.float32)
-            )
-        }
+        let noisedVideoConditions = Self.concatenateRows(videoConditionSpans.map {
+            MiniMaxH3ServingContract.noisedCondition($0, seed: options.seed)
+        })
+        let noisedAudioConditions = Self.concatenateRows(audioConditionSpans.map {
+            MiniMaxH3ServingContract.noisedCondition($0, seed: options.seed &+ 1)
+        })
         var videoRows = MiniMaxH3Geometry.patchifyVideo(
-            MLXRandom.normal([1, 24, latentFrames, latentHeight, latentWidth]).asType(.float32)
+            MiniMaxH3ServingContract.targetVideoNoise(
+                seed: options.seed,
+                latentFrames: latentFrames,
+                latentHeight: latentHeight,
+                latentWidth: latentWidth
+            )
         )
-        var audioRows = MLXRandom.normal([1, audioFrames * 2, 32]).asType(.float32)
-        let videoSchedule = try MiniMaxH3Schedule(pointCount: options.steps, shift: configuration.videoFlowShift)
-        let audioSchedule = try MiniMaxH3Schedule(pointCount: options.steps, shift: configuration.audioFlowShift)
+        var audioRows = MiniMaxH3ServingContract.targetAudioNoise(
+            seed: options.seed,
+            latentFrames: audioFrames
+        )
+        let videoSchedule = try MiniMaxH3Schedule(
+            pointCount: options.steps,
+            shift: options.adapterInferenceRecipe?.videoFlowShift ?? configuration.videoFlowShift
+        )
+        let audioSchedule = try MiniMaxH3Schedule(
+            pointCount: options.steps,
+            shift: options.adapterInferenceRecipe?.audioFlowShift ?? configuration.audioFlowShift
+        )
 
         progressHandler?(.init(stage: .loadingTransformer, stepIndex: 0, totalSteps: options.steps - 1))
         try withMiniMaxH3AutoreleasePool {
+            let transformerPreparationStarted = CFAbsoluteTimeGetCurrent()
             let runtime = try loadDenoisingRuntime(
                 resources: resources,
                 configuration: configuration,
@@ -1904,6 +1980,12 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                 adapterStrength: options.adapterStrength,
                 progressHandler: progressHandler
             )
+            phaseProfileLogger?(String(
+                format: "phase=transformer_preparation seconds=%.3f resident_bf16=%@",
+                CFAbsoluteTimeGetCurrent() - transformerPreparationStarted,
+                runtime.transformer.usesResidentBF16 ? "true" : "false"
+            ))
+            let denoisingStarted = CFAbsoluteTimeGetCurrent()
             (videoRows, audioRows) = try denoise(
                 transformer: runtime.transformer,
                 videoRows: videoRows,
@@ -1919,6 +2001,10 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                 permitsCacheReuse: options.adapterURL == nil,
                 progressHandler: progressHandler
             )
+            phaseProfileLogger?(String(
+                format: "phase=denoising seconds=%.3f",
+                CFAbsoluteTimeGetCurrent() - denoisingStarted
+            ))
         }
         Memory.clearCache()
         let video = MiniMaxH3Geometry.unpatchifyVideo(
@@ -1929,6 +2015,7 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         )
         let audio = MiniMaxH3Geometry.unpackAudio(audioRows[0])
         progressHandler?(.init(stage: .decodingVideo, stepIndex: options.steps - 1, totalSteps: options.steps - 1))
+        let videoDecodingStarted = CFAbsoluteTimeGetCurrent()
         let frames: MLXArray = try withMiniMaxH3AutoreleasePool {
             let decoded = Self.mediaFrames(
                 from: try loadVideoVAE(resources: resources).decode(video)
@@ -1941,14 +2028,27 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
             MLX.eval(pixels)
             return pixels
         }
+        phaseProfileLogger?(String(
+            format: "phase=video_decoding seconds=%.3f",
+            CFAbsoluteTimeGetCurrent() - videoDecodingStarted
+        ))
         Memory.clearCache()
         progressHandler?(.init(stage: .decodingAudio, stepIndex: options.steps - 1, totalSteps: options.steps - 1))
+        let audioDecodingStarted = CFAbsoluteTimeGetCurrent()
         let waveform: MLXArray = try withMiniMaxH3AutoreleasePool {
             let decoded = try loadAudioVAE(resources: resources).decode(audio)
             MLX.eval(decoded)
             return decoded
         }
+        phaseProfileLogger?(String(
+            format: "phase=audio_decoding seconds=%.3f",
+            CFAbsoluteTimeGetCurrent() - audioDecodingStarted
+        ))
         Memory.clearCache()
+        phaseProfileLogger?(String(
+            format: "phase=generation_total seconds=%.3f",
+            CFAbsoluteTimeGetCurrent() - generationStarted
+        ))
         return MiniMaxH3GenerationResult(frames: frames, audio: waveform, seed: options.seed)
     }
 
@@ -1957,7 +2057,9 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
     ) throws -> [PreparedReference] {
         let key = ReferenceCacheKey(
             references: options.references,
-            maximumFrameCount: options.numFrames
+            maximumFrameCount: options.numFrames,
+            targetWidth: options.internalWidth,
+            targetHeight: options.internalHeight
         )
         if retainsRuntime,
            let retainedPreparedReferences,
@@ -1977,7 +2079,9 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
     ) throws -> PreparedReferenceRows {
         let key = ReferenceCacheKey(
             references: options.references,
-            maximumFrameCount: options.numFrames
+            maximumFrameCount: options.numFrames,
+            targetWidth: options.internalWidth,
+            targetHeight: options.internalHeight
         )
         if retainsRuntime,
            let retainedPreparedReferenceRows,
@@ -1985,8 +2089,8 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
             return retainedPreparedReferenceRows.values
         }
         progressHandler?(.init(stage: .encodingReferences, stepIndex: 0, totalSteps: prepared.count))
-        let videoRows: MLXArray? = try withMiniMaxH3AutoreleasePool {
-            guard prepared.contains(where: { $0.visual != nil }) else { return nil }
+        let videoRows: [MLXArray] = try withMiniMaxH3AutoreleasePool {
+            guard prepared.contains(where: { $0.visual != nil }) else { return [] }
             let vae = try loadVideoVAE(resources: resources)
             var rows: [MLXArray] = []
             for (index, reference) in prepared.enumerated() {
@@ -2003,10 +2107,10 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                     totalSteps: prepared.count
                 ))
             }
-            return MLX.concatenated(rows, axis: 1)
+            return rows
         }
-        let audioRows: MLXArray? = try withMiniMaxH3AutoreleasePool {
-            guard prepared.contains(where: { $0.waveform != nil }) else { return nil }
+        let audioRows: [MLXArray] = try withMiniMaxH3AutoreleasePool {
+            guard prepared.contains(where: { $0.waveform != nil }) else { return [] }
             let vae = try loadAudioVAE(resources: resources)
             var rows: [MLXArray] = []
             for (index, reference) in prepared.enumerated() {
@@ -2022,7 +2126,7 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                     totalSteps: prepared.count
                 ))
             }
-            return MLX.concatenated(rows, axis: 1)
+            return rows
         }
         let values = PreparedReferenceRows(video: videoRows, audio: audioRows)
         if retainsRuntime { retainedPreparedReferenceRows = (key, values) }
@@ -2034,10 +2138,8 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
             .appendingPathComponent("mererun-minimax-h3-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: temporaryRoot, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: temporaryRoot) }
-        let maxSamples = Int(
-            (Double(options.numFrames) / Double(MiniMaxH3Geometry.framesPerSecond)
-                * Double(MiniMaxH3AudioVAE.samplingRate)).rounded()
-        )
+        let maximumReferenceAudioSamples = MiniMaxH3AudioVAE.samplingRate * 15
+        var totalReferenceAudioSamples = 0
         var prepared: [PreparedReference] = []
         for (referenceIndex, input) in options.references.enumerated() {
             switch input.kind {
@@ -2046,7 +2148,12 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                 do { source = try MediaImageIO.decode(input.url) } catch {
                     throw MiniMaxH3GeneratorError.mediaDecodeFailed(input.url, error.localizedDescription)
                 }
-                let size = try resolveReferenceImageSize(width: source.width, height: source.height)
+                let size = try MiniMaxH3ServingContract.referenceImageCanvas(
+                    width: source.width,
+                    height: source.height,
+                    targetWidth: options.internalWidth,
+                    targetHeight: options.internalHeight
+                )
                 let image = try MediaImageIO.resized(source, width: size.width, height: size.height)
                 let visual = Self.rgbTensor(image).expandedDimensions(axis: 0)
                 let vision = try QwenVLImageLoader.pixelValues(image: image, patchSize: 16, spatialMergeSize: 2)
@@ -2108,9 +2215,27 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                     blocks.append(MLX.concatenated([firstPixels, secondPixels], axis: 0))
                     timestamps.append((Double(start) / 2 + Double(second) / 2) / 2)
                 }
-                let waveform = MediaVideoIO.hasAudioTrack(input.url)
-                    ? try decodeReferenceAudio(input.url, maximumSamples: maxSamples)
-                    : nil
+                let waveform: MLXArray?
+                if MediaVideoIO.hasAudioTrack(input.url) {
+                    let maximumSamples = Int(
+                        (Double(alignedCount) / Double(MiniMaxH3Geometry.framesPerSecond)
+                            * Double(MiniMaxH3AudioVAE.samplingRate)).rounded()
+                    )
+                    let decoded = try decodeReferenceAudio(
+                        input.url,
+                        maximumSamples: maximumSamples,
+                        truncatesAtLimit: true
+                    )
+                    guard decoded.dim(1) <= maximumReferenceAudioSamples - totalReferenceAudioSamples else {
+                        throw MiniMaxH3GeneratorError.invalidOptions(
+                            "ordered reference audio exceeds 15 seconds in total"
+                        )
+                    }
+                    totalReferenceAudioSamples += decoded.dim(1)
+                    waveform = decoded
+                } else {
+                    waveform = nil
+                }
                 prepared.append(.init(
                     kind: .video,
                     visual: visual,
@@ -2126,7 +2251,17 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                     )
                 ))
             case .audio:
-                let waveform = try decodeReferenceAudio(input.url, maximumSamples: maxSamples)
+                let waveform = try decodeReferenceAudio(
+                    input.url,
+                    maximumSamples: maximumReferenceAudioSamples,
+                    truncatesAtLimit: false
+                )
+                guard waveform.dim(1) <= maximumReferenceAudioSamples - totalReferenceAudioSamples else {
+                    throw MiniMaxH3GeneratorError.invalidOptions(
+                        "ordered reference audio exceeds 15 seconds in total"
+                    )
+                }
+                totalReferenceAudioSamples += waveform.dim(1)
                 prepared.append(.init(
                     kind: .audio,
                     visual: nil,
@@ -2143,7 +2278,17 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         return prepared
     }
 
-    private func decodeReferenceAudio(_ url: URL, maximumSamples: Int) throws -> MLXArray {
+    private func decodeReferenceAudio(
+        _ url: URL,
+        maximumSamples: Int,
+        truncatesAtLimit: Bool
+    ) throws -> MLXArray {
+        guard maximumSamples >= MiniMaxH3AudioVAE.samplingRate * 2 else {
+            throw MiniMaxH3GeneratorError.mediaDecodeFailed(
+                url,
+                "reference audio requires at least 2 seconds at 32 kHz"
+            )
+        }
         let buffer: MediaAudioBuffer
         do {
             buffer = try MediaAudioIO.decode(
@@ -2154,9 +2299,19 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         } catch {
             throw MiniMaxH3GeneratorError.mediaDecodeFailed(url, error.localizedDescription)
         }
-        let frameCount = min(maximumSamples, buffer.samples.count / 2)
-        guard frameCount > 0 else {
-            throw MiniMaxH3GeneratorError.mediaDecodeFailed(url, "audio contains no samples")
+        let availableSamples = buffer.samples.count / 2
+        if !truncatesAtLimit, availableSamples > maximumSamples {
+            throw MiniMaxH3GeneratorError.mediaDecodeFailed(
+                url,
+                "reference audio exceeds the 15 second total limit"
+            )
+        }
+        let frameCount = min(maximumSamples, availableSamples)
+        guard frameCount >= MiniMaxH3AudioVAE.samplingRate * 2 else {
+            throw MiniMaxH3GeneratorError.mediaDecodeFailed(
+                url,
+                "reference audio requires at least 2 seconds at 32 kHz"
+            )
         }
         return MLXArray(Array(buffer.samples.prefix(frameCount * 2)))
             .reshaped(1, frameCount, 2)
@@ -2252,17 +2407,6 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         MLXArray(MediaImageIO.rgbCHWFloat(image, normalizedToMinusOneToOne: false))
             .reshaped(3, image.height, image.width)
             .transposed(1, 2, 0)
-    }
-
-    private func resolveReferenceImageSize(width: Int, height: Int) throws -> (width: Int, height: Int) {
-        guard width > 0, height > 0, width <= 4 * height, height <= 4 * width else {
-            throw MiniMaxH3GeneratorError.invalidOptions("reference image aspect ratio must be between 1:4 and 4:1")
-        }
-        let scale = 2_048 / Double(min(width, height))
-        return (
-            max(32, Int((Double(width) * scale / 32).rounded()) * 32),
-            max(32, Int((Double(height) * scale / 32).rounded()) * 32)
-        )
     }
 
     private func resolveVideoCanvas(width: Int, height: Int) throws -> (width: Int, height: Int) {
@@ -2419,7 +2563,11 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
     }
 
     private static func concatenateRows(_ arrays: [MLXArray?]) -> MLXArray? {
-        let values = arrays.compactMap { $0 }
+        concatenateRows(arrays.compactMap { $0 })
+    }
+
+    private static func concatenateRows(_ arrays: [MLXArray]) -> MLXArray? {
+        let values = arrays
         guard !values.isEmpty else { return nil }
         return values.count == 1 ? values[0] : MLX.concatenated(values, axis: 1)
     }

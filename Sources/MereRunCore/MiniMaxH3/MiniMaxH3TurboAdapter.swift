@@ -9,7 +9,60 @@ public enum MiniMaxH3TurboAdapter {
     public static let lightX2VExpectedPairCount = 312
     public static let recommendedSchedulePointCount = 5
 
-    private static let lightX2VAlpha: Float = 8
+    public struct InferenceRecipe: Sendable, Hashable {
+        public let name: String
+        public let defaultSchedulePointCount: Int
+        public let supportedSchedulePointCounts: Set<Int>
+        public let videoFlowShift: Float?
+        public let audioFlowShift: Float?
+        public let lightX2VAlpha: Float
+
+        public func supports(schedulePointCount: Int) -> Bool {
+            supportedSchedulePointCounts.contains(schedulePointCount)
+        }
+    }
+
+    public static let fourEvaluationRecipe = InferenceRecipe(
+        name: "four-evaluation",
+        defaultSchedulePointCount: 5,
+        supportedSchedulePointCounts: [5],
+        videoFlowShift: nil,
+        audioFlowShift: nil,
+        lightX2VAlpha: 8
+    )
+
+    public static let lightX2VEightStepV1Recipe = InferenceRecipe(
+        name: "lightx2v-v1-8-step",
+        defaultSchedulePointCount: 9,
+        supportedSchedulePointCounts: [5, 9],
+        videoFlowShift: 12,
+        audioFlowShift: 3,
+        lightX2VAlpha: 8
+    )
+
+    public static let lightX2VFourStepV1_768pRecipe = InferenceRecipe(
+        name: "lightx2v-v1-4-step-768p",
+        defaultSchedulePointCount: 5,
+        supportedSchedulePointCounts: [5],
+        videoFlowShift: 6,
+        audioFlowShift: 3,
+        lightX2VAlpha: 128
+    )
+
+    public static func inferenceRecipe(for url: URL) -> InferenceRecipe {
+        inferenceRecipe(filename: url.lastPathComponent)
+    }
+
+    public static func inferenceRecipe(filename: String) -> InferenceRecipe {
+        switch filename.lowercased() {
+        case "minimax_h3_fl2v_turbo_8step_v1.0_bf16.safetensors":
+            lightX2VEightStepV1Recipe
+        case "minimax_h3_fl2v_turbo_4step_v1.0_768p_bf16.safetensors":
+            lightX2VFourStepV1_768pRecipe
+        default:
+            fourEvaluationRecipe
+        }
+    }
 
     private enum SourceFormat: Equatable {
         case runtime
@@ -100,6 +153,7 @@ public enum MiniMaxH3TurboAdapter {
         expectedPairCount: Int? = nil
     ) throws -> Int {
         let sourceFormat = try sourceFormat(at: url)
+        let inferenceRecipe = inferenceRecipe(for: url)
         let suffixes = sourceFormat.pairSuffixes
         let leafModules = transformer.leafModules().flattened()
         let modulesByPath = Dictionary(uniqueKeysWithValues: leafModules)
@@ -123,7 +177,12 @@ public enum MiniMaxH3TurboAdapter {
                 )
             }
 
-            let up = scaledUp(rawUp, down: rawDown, sourceFormat: sourceFormat)
+            let up = scaledUp(
+                rawUp,
+                down: rawDown,
+                sourceFormat: sourceFormat,
+                lightX2VAlpha: inferenceRecipe.lightX2VAlpha
+            )
             if let branch = target.qkvBranch {
                 guard !fusedTargets.contains(target.modulePath) else {
                     throw AdapterError.duplicateTarget(target.modulePath)
@@ -280,7 +339,8 @@ public enum MiniMaxH3TurboAdapter {
     private static func scaledUp(
         _ up: MLXArray,
         down: MLXArray,
-        sourceFormat: SourceFormat
+        sourceFormat: SourceFormat,
+        lightX2VAlpha: Float
     ) -> MLXArray {
         guard sourceFormat == .lightX2V else { return up }
         let scale = MLXArray(lightX2VAlpha / Float(down.dim(0))).asType(up.dtype)

@@ -329,7 +329,7 @@ struct VideoGenerate: AsyncParsableCommand {
 
     @Option(
         name: [.customLong("h3-adapter")],
-        help: "Installed MiniMax-H3 adapter catalog id or local safetensors path. Turbo defaults to four denoise evaluations."
+        help: "Installed MiniMax-H3 adapter catalog id or local safetensors path. Published Turbo steps and shifts are selected from the adapter recipe."
     )
     var h3Adapter: String?
 
