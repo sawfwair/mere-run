@@ -1334,6 +1334,7 @@ enum WorkflowNodeCommandBuilder {
         case "vision.ground":
             let outputImage = artifacts.appendingPathComponent("image.png")
             let detections = artifacts.appendingPathComponent("detections.json")
+            let masks = artifacts.appendingPathComponent("masks", isDirectory: true)
             var args = [
                 "vision", "ground", try requiredString("image", in: arguments),
                 "--query",
@@ -1343,6 +1344,7 @@ enum WorkflowNodeCommandBuilder {
             args += [
                 "--output", outputImage.path,
                 "--json-output", detections.path,
+                "--mask-output-dir", masks.path,
             ]
             return .init(
                 command: ["vision", "ground"],
@@ -1352,6 +1354,7 @@ enum WorkflowNodeCommandBuilder {
                 outputs: [
                     "image": fileOutput(outputImage, contentTypes: ["image/png"]),
                     "detections": fileOutput(detections, contentTypes: ["application/json"]),
+                    "masks": directoryOutput(masks, contentTypes: ["image/png"]),
                 ],
                 streamsEvents: false
             )

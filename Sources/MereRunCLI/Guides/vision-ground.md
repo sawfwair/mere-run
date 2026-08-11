@@ -54,9 +54,9 @@ mere.run vision ground ./street.jpg \
 Use the built-in `vision.ground` graph node to keep grounding portable across
 local, SSH, and Relay execution. It accepts an image asset and a JSON array of
 queries, defaults to the managed Falcon model, and emits verified annotated
-`image` and structured `detections` artifacts. Treat detections as candidate
-geometry until an authoritative source or human review promotes them. Direct
-CLI runs may additionally request per-detection masks with `--mask-output-dir`.
+`image`, structured `detections`, and per-detection PNG `masks` artifacts.
+Treat detections and masks as candidate geometry until an authoritative source
+or human review promotes them.
 
 ## Troubleshooting
 

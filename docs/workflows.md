@@ -64,9 +64,10 @@ missing variables. `text.enhance` and `image.describe` require an explicit
 installed model and never trigger a hidden pull.
 
 `vision.ground` uses the managed `vision-ground-falcon-perception` model by
-default. It emits an annotated image and structured detections JSON as verified
-artifacts. Grounding output is candidate geometry; graph execution does not
-promote it into evidence or findings.
+default. It emits an annotated image, structured detections JSON, and a
+portable directory of per-detection PNG masks as verified artifacts. Grounding
+output is candidate geometry; graph execution does not promote it into evidence
+or findings.
 
 `vision.segment` and `vision.track` use the managed `vision-segment-sam31`
 model by default. Both emit an annotated media artifact, structured JSON, and a
