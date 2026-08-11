@@ -5,6 +5,24 @@ techniques into mere.run. It is not a performance receipt. Production behavior
 does not change until a candidate passes its tensor, checkpoint, quality,
 memory, and fallback gates.
 
+## Promotion conclusion
+
+The portable M4 result is decisive: keep stock MLX's tiled affine-Q8 matrix
+primitive and fuse the elementwise/layout boundaries around it. Promote only
+K1 gated AdaLN and K2a head-major QKV normalization/RoPE for shape-qualified
+evaluation. Do not promote K2b, K3, or K4's scalar-SIMD affine-Q8 matrix cores;
+they are roughly four to five times slower than stock MLX at H3's production
+shapes. MLX's public quantized-matmul primitive does not accept an output
+stride or custom epilogue, so eliminating the remaining projection
+materializations competitively requires an MLX/MLXFast primitive with a tiled
+quantized core and H3-specific epilogue, or an M5 TensorOps implementation. It
+is not achievable by further tuning the current standalone scalar kernels.
+
+The quality-sensitive algorithm arms remain non-default. Reduced canvas,
+layer thinning, complete velocity reuse, and token reduction all produced
+material same-seed trajectory changes; velocity reuse is the only candidate
+with enough Ref2VA latency benefit to justify a multi-seed blinded follow-up.
+
 ## Fixed sources
 
 - mere.run base: Ref2VA 8-bit commit
