@@ -64,6 +64,9 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
         XCTAssertNil(cmd.guidanceScale)
         XCTAssertEqual(cmd.lmTemperature, 0.85, accuracy: 0.0001)
         XCTAssertEqual(cmd.lmRepetitionPenalty, 1.0, accuracy: 0.0001)
+        XCTAssertEqual(cmd.lmCFGScale, 2.0, accuracy: 0.0001)
+        XCTAssertEqual(cmd.lmNegativePrompt, "NO USER INPUT")
+        XCTAssertFalse(cmd.noLMCaptionRewrite)
         XCTAssertEqual(cmd.coverNoiseStrength, 0.0, accuracy: 0.0001)
         XCTAssertFalse(cmd.resolvedACEStepIsCover)
     }
@@ -91,6 +94,10 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
             "--velocity-ema-factor", "0.1",
             "--lm-temperature", "0.7",
             "--lm-repetition-penalty", "1.08",
+            "--lm-cfg-scale", "2.5",
+            "--lm-negative-prompt", "muddy mix",
+            "--no-lm-caption-rewrite",
+            "--instrumental",
         ])
 
         XCTAssertEqual(cmd.model, "/tmp/acestep")
@@ -113,6 +120,10 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.velocityEMAFactor, 0.1)
         XCTAssertEqual(cmd.lmTemperature, 0.7, accuracy: 0.0001)
         XCTAssertEqual(cmd.lmRepetitionPenalty, 1.08, accuracy: 0.0001)
+        XCTAssertEqual(cmd.lmCFGScale, 2.5, accuracy: 0.0001)
+        XCTAssertEqual(cmd.lmNegativePrompt, "muddy mix")
+        XCTAssertTrue(cmd.noLMCaptionRewrite)
+        XCTAssertTrue(cmd.instrumental)
     }
 
     func testMusicGenerateParsesIndependentPlannerModel() throws {

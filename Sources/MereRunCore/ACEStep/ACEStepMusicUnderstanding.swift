@@ -68,19 +68,105 @@ public struct ACEStepMusicUnderstandingResult: Sendable, Hashable {
 public struct ACEStepMusicPlan: Sendable, Hashable {
     public var metadata: ACEStepMusicUnderstandingMetadata
     public var lmResult: ACEStep5HzLMResult
+    public var codeGenerationContext: ACEStepLMCodeGenerationContext
+
+    public init(
+        metadata: ACEStepMusicUnderstandingMetadata,
+        lmResult: ACEStep5HzLMResult,
+        codeGenerationContext: ACEStepLMCodeGenerationContext
+    ) {
+        self.metadata = metadata
+        self.lmResult = lmResult
+        self.codeGenerationContext = codeGenerationContext
+    }
 
     public init(
         metadata: ACEStepMusicUnderstandingMetadata,
         lmResult: ACEStep5HzLMResult
     ) {
-        self.metadata = metadata
-        self.lmResult = lmResult
+        self.init(
+            metadata: metadata,
+            lmResult: lmResult,
+            codeGenerationContext: .init(
+                caption: "",
+                lyrics: "",
+                reasoning: "<think>\n\n</think>"
+            )
+        )
+    }
+}
+
+/// Inputs that upstream carries from metadata planning into its separate
+/// semantic-code phase. The original prompt stays distinct from the rewritten
+/// caption used by the DiT.
+public struct ACEStepLMCodeGenerationContext: Sendable, Hashable {
+    public var caption: String
+    public var lyrics: String
+    public var reasoning: String
+
+    public init(caption: String, lyrics: String, reasoning: String) {
+        self.caption = caption
+        self.lyrics = lyrics
+        self.reasoning = reasoning
+    }
+
+    /// Rewrites root metadata scalars in the phase-one reasoning block with
+    /// the effective values selected by the caller. Upstream serializes its
+    /// merged metadata again before opening the semantic-code assistant turn;
+    /// doing that here prevents a malformed or stale planner scalar from
+    /// leaking into phase two.
+    public func applying(
+        userMetadata: ACEStep5HzLMConstrainedSampler.UserMetadata
+    ) -> Self {
+        var updated = self
+        updated.reasoning = ACEStepPlanningPolicy.reasoning(
+            reasoning,
+            applying: userMetadata
+        )
+        return updated
     }
 }
 
 /// Applies ACE-Step's documented metadata precedence: explicit user values win,
 /// while the language model fills only fields the caller left unspecified.
 public enum ACEStepPlanningPolicy {
+    public static func reasoning(
+        _ reasoning: String,
+        applying metadata: ACEStep5HzLMConstrainedSampler.UserMetadata
+    ) -> String {
+        var lines = reasoning.components(separatedBy: "\n")
+        guard let closingIndex = lines.lastIndex(where: {
+            $0.trimmingCharacters(in: .whitespacesAndNewlines) == "</think>"
+        }) else {
+            return reasoning
+        }
+
+        let scalars: [(String, String?)] = [
+            ("bpm", nonEmpty(metadata.bpm)),
+            ("duration", nonEmpty(metadata.duration)),
+            ("keyscale", nonEmpty(metadata.keyscale)),
+            ("language", nonEmpty(metadata.language)),
+            ("timesignature", nonEmpty(metadata.timesignature)),
+        ]
+        var insertionIndex = closingIndex
+        for (field, optionalValue) in scalars {
+            guard let value = optionalValue else { continue }
+            let canonicalValue = value
+                .components(separatedBy: .newlines)
+                .joined(separator: " ")
+            if let index = lines[..<insertionIndex].lastIndex(where: {
+                $0 == $0.trimmingCharacters(in: .whitespaces)
+                    && $0.hasPrefix("\(field):")
+            }) {
+                lines[index] = "\(field): \(canonicalValue)"
+            } else {
+                lines.insert("\(field): \(canonicalValue)", at: insertionIndex)
+                insertionIndex += 1
+            }
+        }
+        return lines.joined(separator: "\n")
+    }
+
     public static func effectiveLanguage(
         vocalLanguage: String?,
         metadataLanguage: String?,
@@ -142,35 +228,54 @@ extension ACEStepPipeline {
         lyrics: String,
         instruction: String = ACEStepLMInstructions.defaultInstruction,
         userMetadata: ACEStep5HzLMConstrainedSampler.UserMetadata = .init(),
+        useCotCaption: Bool = true,
         lmConfig: ACEStep5HzLMGenerationConfig = .init(
             maxNewTokens: 1_024,
             temperature: 0.85,
             topP: 0.9
         )
     ) throws -> ACEStepMusicPlan {
+        _ = instruction
         guard let lm else {
             throw PipelineError.lmNotConfigured
         }
         let sampler = lm.makeConstrainedSampler(
             enabled: true,
-            skipCaption: false,
+            skipCaption: !useCotCaption,
             skipLanguage: false,
             stopAtReasoning: true,
             generationPhase: .codes,
             userMetadata: userMetadata
         )
+        var planningConfig = lmConfig
+        planningConfig.cfgScale = 1
         let result = lm.generateConstrained(
             caption: caption,
             lyrics: lyrics,
-            instruction: instruction,
-            systemInstruction: instruction,
-            config: lmConfig,
+            instruction: ACEStepLMInstructions.defaultInstruction,
+            systemInstruction: ACEStepLMInstructions.defaultInstruction,
+            config: planningConfig,
             sampler: sampler
         )
+        let reasoning = Self.reasoningPrefix(from: result.generatedText)
         return ACEStepMusicPlan(
             metadata: Self.parseUnderstandingOutput(result.generatedText),
-            lmResult: result
+            lmResult: result,
+            codeGenerationContext: ACEStepLMCodeGenerationContext(
+                caption: caption,
+                lyrics: lyrics,
+                reasoning: reasoning
+            )
         )
+    }
+
+    static func reasoningPrefix(from generatedText: String) -> String {
+        guard let start = generatedText.range(of: "<think>"),
+              let end = generatedText.range(of: "</think>", range: start.lowerBound..<generatedText.endIndex)
+        else {
+            return "<think>\n\n</think>"
+        }
+        return String(generatedText[start.lowerBound..<end.upperBound])
     }
 
     public func audioCodeString(

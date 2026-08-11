@@ -41,6 +41,9 @@ struct MusicGenerate: AsyncParsableCommand {
     @Option(name: [.customLong("lyrics-file")], help: "Path to lyrics text file. Cannot be used with --lyrics.")
     var lyricsFile: String?
 
+    @Flag(name: [.customLong("instrumental")], help: "Use upstream's [Instrumental] lyric marker; cannot be combined with lyrics.")
+    var instrumental: Bool = false
+
     @Option(name: [.customLong("lrc-file")], help: "Synchronized LRC lyrics input. Cannot be combined with plain lyrics options.")
     var lrcFile: String?
 
@@ -180,7 +183,7 @@ struct MusicGenerate: AsyncParsableCommand {
 
     @Option(
         name: [.customLong("candidates"), .customLong("best-of")],
-        help: "Generate and rank this many warm-session candidates (preset default: draft 1, song/edit 2, final 4)."
+        help: "Generate and rank this many warm-session candidates (default: 1; upstream auto-scoring is opt-in)."
     )
     var candidateCount: Int?
 
@@ -285,6 +288,18 @@ struct MusicGenerate: AsyncParsableCommand {
         help: "LM repetition penalty (> 0; 1.0 = disabled)."
     )
     var lmRepetitionPenalty: Float = 1.0
+
+    @Option(name: [.customLong("lm-cfg-scale")], help: "LM classifier-free guidance for semantic audio codes (upstream default: 2.0).")
+    var lmCFGScale: Float = 2.0
+
+    @Option(name: [.customLong("lm-negative-prompt")], help: "LM unconditional prompt used when --lm-cfg-scale is above 1.")
+    var lmNegativePrompt: String = "NO USER INPUT"
+
+    @Flag(
+        name: [.customLong("no-lm-caption-rewrite")],
+        help: "Keep the input caption authoritative while still using the LM for metadata and semantic audio codes (upstream use_cot_caption=false)."
+    )
+    var noLMCaptionRewrite: Bool = false
 
     @Option(
         name: [.customLong("metadata-duration")],
@@ -427,6 +442,9 @@ struct MusicGenerate: AsyncParsableCommand {
         guard lmRepetitionPenalty > 0 else {
             throw ValidationError("--lm-repetition-penalty must be > 0")
         }
+        guard lmCFGScale >= 1, lmCFGScale.isFinite else {
+            throw ValidationError("--lm-cfg-scale must be >= 1")
+        }
         guard vaeChunkSize > 0 else {
             throw ValidationError("--vae-chunk-size must be > 0")
         }
@@ -440,6 +458,9 @@ struct MusicGenerate: AsyncParsableCommand {
             throw ValidationError(
                 "Pass --lrc-file or plain --lyrics/--lyrics-file, not both."
             )
+        }
+        if instrumental, lrcFile != nil || lyricsFile != nil || !lyrics.isEmpty {
+            throw ValidationError("--instrumental cannot be combined with lyrics options.")
         }
         guard targetPeakDB <= 0 else {
             throw ValidationError("--target-peak-db must be <= 0")
@@ -517,7 +538,9 @@ struct MusicGenerate: AsyncParsableCommand {
         try FileManager.default.createDirectory(at: outputURL.deletingLastPathComponent(), withIntermediateDirectories: true)
 
         let inputLRC = try loadLRC()
-        let resolvedLyrics = try inputLRC?.lyrics ?? loadLyrics()
+        let resolvedLyrics = instrumental
+            ? "[Instrumental]"
+            : try inputLRC?.lyrics ?? loadLyrics()
         let effectiveLMRepetitionPenalty = lmRepetitionPenalty == 1
             ? nil
             : lmRepetitionPenalty
@@ -543,6 +566,7 @@ struct MusicGenerate: AsyncParsableCommand {
             && qualityDefaults.automaticDuration
             && !effectiveTask.locksDurationToSource
         var effectiveCaption = caption
+        var lmCodeGenerationContext: ACEStepLMCodeGenerationContext?
         let effectiveLanguage = ACEStepPlanningPolicy.effectiveLanguage(
             vocalLanguage: vocalLanguage,
             metadataLanguage: metadataLanguage
@@ -626,7 +650,7 @@ struct MusicGenerate: AsyncParsableCommand {
             }
         }
 
-        if effectiveUseLM && qualityDefaults.plansMetadata {
+        if effectiveUseLM {
             if !quiet {
                 CLIStderr.write("Planning ACE-Step \(quality.rawValue) metadata with the 5Hz LM\n")
             }
@@ -643,6 +667,7 @@ struct MusicGenerate: AsyncParsableCommand {
                 lyrics: resolvedLyrics,
                 instruction: resolvedInstruction,
                 userMetadata: planningMetadata,
+                useCotCaption: !noLMCaptionRewrite,
                 lmConfig: .init(
                     maxNewTokens: 1_024,
                     temperature: lmTemperature,
@@ -652,7 +677,10 @@ struct MusicGenerate: AsyncParsableCommand {
                     seed: seed
                 )
             )
-            if let plannedCaption = nonEmpty(plan.metadata.caption) {
+            lmCodeGenerationContext = plan.codeGenerationContext
+            if !noLMCaptionRewrite,
+               let plannedCaption = nonEmpty(plan.metadata.caption)
+            {
                 effectiveCaption = plannedCaption
             }
             if shouldPlanDuration, let plannedDuration = plan.metadata.durationSeconds {
@@ -663,6 +691,9 @@ struct MusicGenerate: AsyncParsableCommand {
                 plan: plan.metadata,
                 caption: effectiveCaption,
                 durationSeconds: effectiveDurationSeconds
+            )
+            lmCodeGenerationContext = lmCodeGenerationContext?.applying(
+                userMetadata: userMetadata
             )
             if !quiet {
                 CLIStderr.write(
@@ -733,9 +764,12 @@ struct MusicGenerate: AsyncParsableCommand {
                     temperature: lmTemperature,
                     topK: lmTopK,
                     topP: lmTopP,
-                    repetitionPenalty: effectiveLMRepetitionPenalty
+                    repetitionPenalty: effectiveLMRepetitionPenalty,
+                    cfgScale: lmCFGScale,
+                    negativePrompt: lmNegativePrompt
                 ),
                 lmUserMetadata: userMetadata,
+                lmCodeGenerationContext: lmCodeGenerationContext,
                 sourceAudio48kHz: sourceAudio48kHz,
                 referenceTimbreAudio48kHz: referenceAudio48kHz,
                 audioCoverStrength: audioCoverStrength,
@@ -885,9 +919,11 @@ struct MusicGenerate: AsyncParsableCommand {
                 adapters: loadedAdapters,
                 task: effectiveTask,
                 quality: quality,
+                inputCaption: caption,
                 caption: effectiveCaption,
                 lyrics: resolvedLyrics,
                 instruction: resolvedInstruction,
+                languageModelReasoning: lmCodeGenerationContext?.reasoning,
                 conditioningMetadata:
                     ACEStepRecipeConditioningMetadata(userMetadata),
                 languageModelSampling: effectiveUseLM
@@ -895,7 +931,10 @@ struct MusicGenerate: AsyncParsableCommand {
                         temperature: lmTemperature,
                         topK: lmTopK,
                         topP: lmTopP,
-                        repetitionPenalty: lmRepetitionPenalty
+                        repetitionPenalty: lmRepetitionPenalty,
+                        cfgScale: lmCFGScale,
+                        negativePrompt: lmNegativePrompt,
+                        useCotCaption: !noLMCaptionRewrite
                     )
                     : nil,
                 inference: inference,

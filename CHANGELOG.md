@@ -87,6 +87,23 @@ The format is based on Keep a Changelog.
   Both fixed-seed outputs retained all 124 H.264 frames, synchronized 32 kHz
   stereo audio, coherent actors and motion, and the complete two-line dialogue.
 
+### Music
+
+- restored ACE-Step 1.5's upstream two-phase 5 Hz LM contract: metadata planning
+  now uses the model's semantic-token instruction with CFG disabled, while audio
+  codes continue from the planned CoT in an open assistant turn with classifier-
+  free guidance (`2.0` by default) and the training-aligned `NO USER INPUT`
+  unconditional prompt. The DiT still receives the planner's detailed caption;
+  the code phase correctly retains the user's original caption and lyrics.
+- exposed `--lm-cfg-scale`, `--lm-negative-prompt`, and `--instrumental` across
+  the CLI, resident API, recipes, and macOS Studio. Recipe schema 5 records the
+  complete LM sampling contract. ACE-Step quality presets now keep upstream
+  Euler and velocity-control defaults and generate one candidate unless
+  `--candidates` explicitly opts into local technical ranking.
+- added `--no-lm-caption-rewrite`, matching upstream's
+  `use_cot_caption=false`, so LM metadata and semantic-code generation can stay
+  active without replacing an arrangement-sensitive user caption.
+
 ### Geospatial inference
 
 - added native TerraMind ImpactMesh Fire segmentation, with an immutable

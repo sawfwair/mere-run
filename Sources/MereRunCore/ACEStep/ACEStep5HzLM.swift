@@ -10,6 +10,10 @@ public struct ACEStep5HzLMGenerationConfig: Sendable, Hashable {
     public var topP: Float
     public var repetitionPenalty: Float?
     public var repetitionContextSize: Int
+    /// Classifier-free guidance applied during audio-code generation.
+    /// Upstream keeps metadata planning at 1.0 and uses 2.0 for codes.
+    public var cfgScale: Float
+    public var negativePrompt: String
     public var stopTokenIds: Set<Int>
     public var seed: UInt64?
 
@@ -20,6 +24,8 @@ public struct ACEStep5HzLMGenerationConfig: Sendable, Hashable {
         topP: Float = 0.9,
         repetitionPenalty: Float? = nil,
         repetitionContextSize: Int = 40_960,
+        cfgScale: Float = 1.0,
+        negativePrompt: String = "NO USER INPUT",
         stopTokenIds: Set<Int> = [],
         seed: UInt64? = nil
     ) {
@@ -29,6 +35,8 @@ public struct ACEStep5HzLMGenerationConfig: Sendable, Hashable {
         self.topP = topP
         self.repetitionPenalty = repetitionPenalty
         self.repetitionContextSize = repetitionContextSize
+        self.cfgScale = cfgScale
+        self.negativePrompt = negativePrompt
         self.stopTokenIds = stopTokenIds
         self.seed = seed
     }
@@ -131,6 +139,54 @@ public final class ACEStep5HzLM {
         return tokenizer.encode(prompt, addSpecialTokens: false)
     }
 
+    /// Builds the open assistant-turn prefix used by upstream's second LM
+    /// phase. Audio codes continue immediately after the pre-generated CoT.
+    public func buildAudioCodePromptTokens(
+        caption: String,
+        lyrics: String,
+        reasoning: String,
+        isUnconditional: Bool = false,
+        negativePrompt: String = "NO USER INPUT"
+    ) -> [Int] {
+        let user: String
+        let effectiveReasoning: String
+        if isUnconditional {
+            let trimmedNegative = negativePrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+            user = trimmedNegative.isEmpty || trimmedNegative == "NO USER INPUT"
+                ? "NO USER INPUT"
+                : negativePrompt
+            effectiveReasoning = "<think>\n\n</think>"
+        } else {
+            user = "# Caption\n\(caption)\n\n# Lyric\n\(lyrics)\n"
+            effectiveReasoning = reasoning
+        }
+        let prompt = Self.audioCodePromptText(
+            user: user,
+            reasoning: effectiveReasoning
+        )
+        return tokenizer.encode(prompt, addSpecialTokens: false)
+    }
+
+    static func audioCodePromptText(user: String, reasoning: String) -> String {
+        let system = "# Instruction\n\(ACEStepLMInstructions.defaultInstruction)\n\n"
+        return Self.formatChat(
+            system: system,
+            user: user,
+            assistant: nil,
+            addGenerationPrompt: true
+        ) + reasoning + "\n\n"
+    }
+
+    static func classifierFreeGuidanceLogits(
+        conditional: MLXArray,
+        unconditional: MLXArray,
+        scale: Float
+    ) -> MLXArray {
+        let conditional = conditional.asType(.float32)
+        let unconditional = unconditional.asType(.float32)
+        return unconditional + MLXArray(scale) * (conditional - unconditional)
+    }
+
     public func generate(
         caption: String,
         lyrics: String,
@@ -225,6 +281,63 @@ public final class ACEStep5HzLM {
         )
     }
 
+    /// Generates only semantic audio codes from a pre-generated reasoning
+    /// prefix. This mirrors ACE-Step's two-phase generation path and applies
+    /// LM CFG only to the second phase.
+    public func generateAudioCodes(
+        caption: String,
+        lyrics: String,
+        reasoning: String,
+        config: ACEStep5HzLMGenerationConfig = .init(),
+        sampler: ACEStep5HzLMConstrainedSampler
+    ) -> ACEStep5HzLMResult {
+        var effectiveConfig = config
+        if effectiveConfig.stopTokenIds.isEmpty, let eos = tokenizer.eosTokenId {
+            effectiveConfig.stopTokenIds = [eos]
+        }
+
+        let conditionalPrompt = buildAudioCodePromptTokens(
+            caption: caption,
+            lyrics: lyrics,
+            reasoning: reasoning
+        )
+        sampler.beginAudioCodeGeneration()
+
+        let generated: [Int]
+        if effectiveConfig.cfgScale > 1 {
+            let unconditionalPrompt = buildAudioCodePromptTokens(
+                caption: caption,
+                lyrics: lyrics,
+                reasoning: reasoning,
+                isUnconditional: true,
+                negativePrompt: effectiveConfig.negativePrompt
+            )
+            generated = generateGuidedAudioCodeTokens(
+                conditionalPromptTokens: conditionalPrompt,
+                unconditionalPromptTokens: unconditionalPrompt,
+                config: effectiveConfig,
+                sampler: sampler
+            )
+        } else {
+            generated = generateTokens(
+                promptTokens: conditionalPrompt,
+                config: effectiveConfig,
+                logitsProcessor: { logits, tokens in
+                    sampler.processLogits(logits, tokens: tokens)
+                },
+                didSampleToken: { token in sampler.update(with: token) }
+            )
+        }
+
+        let text = tokenizer.decode(tokens: generated)
+        let values = generated.compactMap { tokenizer.audioCodeTokenIdToValue[$0] }
+        return ACEStep5HzLMResult(
+            generatedText: text,
+            generatedTokens: generated,
+            audioCodeValues: values
+        )
+    }
+
     public func generateConstrained(
         promptTokens: [Int],
         config: ACEStep5HzLMGenerationConfig = .init(),
@@ -253,24 +366,14 @@ public final class ACEStep5HzLM {
         MLX.eval(logits)
 
         let processLogits: (MLXArray, [Int]) -> MLXArray = { logits, tokens in
-            var nextLogits = logitsProcessor?(logits, tokens) ?? logits
-            let topK = max(config.topK, 0)
-            if topK > 0 && topK < nextLogits.dim(-1) {
-                // k-th largest value via argPartition — identical threshold
-                // to the full argSort without sorting the whole vocabulary
-                // every token.
-                let kth = nextLogits.dim(-1) - topK
-                let partition = argPartition(nextLogits, kth: kth, axis: -1)
-                let threshold = nextLogits.take(partition[kth..<(kth + 1)], axis: -1)
-                nextLogits = MLX.where(nextLogits .< threshold, MLXArray(-Float.infinity), nextLogits)
-            }
-            return nextLogits
+            logitsProcessor?(logits, tokens) ?? logits
         }
 
         let topP = (0.0..<1.0).contains(config.topP) ? config.topP : 1.0
         let generationConfig = GenerationConfig(
             maxTokens: config.maxNewTokens,
             temperature: config.temperature,
+            topK: max(config.topK, 0),
             topP: topP,
             repetitionPenalty: config.repetitionPenalty,
             repetitionContextSize: config.repetitionContextSize
@@ -293,6 +396,87 @@ public final class ACEStep5HzLM {
             didSampleToken: didSampleToken
         )
         return result.generatedTokens
+    }
+
+    private func generateGuidedAudioCodeTokens(
+        conditionalPromptTokens: [Int],
+        unconditionalPromptTokens: [Int],
+        config: ACEStep5HzLMGenerationConfig,
+        sampler: ACEStep5HzLMConstrainedSampler
+    ) -> [Int] {
+        let conditionalCache: [KVCache] = (0..<configNumLayers).map { _ in KVCacheSimple(step: 256) }
+        let unconditionalCache: [KVCache] = (0..<configNumLayers).map { _ in KVCacheSimple(step: 256) }
+
+        let conditionalInput = MLXArray(conditionalPromptTokens.map(Int32.init))
+            .reshaped(1, conditionalPromptTokens.count)
+        let unconditionalInput = MLXArray(unconditionalPromptTokens.map(Int32.init))
+            .reshaped(1, unconditionalPromptTokens.count)
+        var conditionalLogits = model.forwardCausal(
+            inputIds: conditionalInput,
+            cache: conditionalCache,
+            lastPositionOnly: true
+        )
+        var unconditionalLogits = model.forwardCausal(
+            inputIds: unconditionalInput,
+            cache: unconditionalCache,
+            lastPositionOnly: true
+        )
+        MLX.eval(conditionalLogits, unconditionalLogits)
+
+        let topP = (0.0..<1.0).contains(config.topP) ? config.topP : 1.0
+        let generationConfig = GenerationConfig(
+            maxTokens: config.maxNewTokens,
+            temperature: config.temperature,
+            topK: max(config.topK, 0),
+            topP: topP,
+            repetitionPenalty: config.repetitionPenalty,
+            repetitionContextSize: config.repetitionContextSize
+        )
+        if let seed = config.seed {
+            MLXRandom.seed(seed)
+        }
+
+        var generated: [Int] = []
+        generated.reserveCapacity(config.maxNewTokens)
+        var repetitionHistory = repetitionHistoryArray(
+            promptTokens: conditionalPromptTokens,
+            config: generationConfig
+        )
+
+        while generated.count < config.maxNewTokens {
+            let conditional = conditionalLogits[0, -1, 0...]
+            let unconditional = unconditionalLogits[0, -1, 0...]
+            var guided = Self.classifierFreeGuidanceLogits(
+                conditional: conditional,
+                unconditional: unconditional,
+                scale: config.cfgScale
+            )
+            guided = sampler.processLogits(guided, tokens: generated)
+
+            let tokenArray = sampledTokenArray(
+                logits: guided,
+                config: generationConfig,
+                previousTokenIndices: repetitionHistory,
+                banMask: nil
+            )
+            MLX.eval(tokenArray)
+            let token = tokenArray.item(Int.self)
+            sampler.update(with: token)
+            if config.stopTokenIds.contains(token) {
+                break
+            }
+            generated.append(token)
+            repetitionHistory = appendingRepetitionHistory(
+                repetitionHistory,
+                token: tokenArray,
+                config: generationConfig
+            )
+
+            let nextInput = tokenArray.asType(.int32).reshaped(1, 1)
+            conditionalLogits = model.forwardCausal(inputIds: nextInput, cache: conditionalCache)
+            unconditionalLogits = model.forwardCausal(inputIds: nextInput, cache: unconditionalCache)
+        }
+        return generated
     }
 
     private var configNumLayers: Int { config.numHiddenLayers }

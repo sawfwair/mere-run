@@ -292,6 +292,7 @@ public final class ACEStepPipeline {
         lmConfig: ACEStep5HzLMGenerationConfig = .init(),
         instruction: String = ACEStepLMInstructions.defaultInstruction,
         lmUserMetadata: ACEStep5HzLMConstrainedSampler.UserMetadata = .init(),
+        lmCodeGenerationContext: ACEStepLMCodeGenerationContext? = nil,
         lmSystemInstruction: String = ACEStepLMInstructions.defaultInstruction,
         audioCoverStrength: Float = 1.0
     ) throws -> (audio: MLXArray, lmResult: ACEStep5HzLMResult) {
@@ -318,7 +319,8 @@ public final class ACEStepPipeline {
             targetCodes: targetCodes,
             targetDurationSeconds: targetDurationSeconds,
             lmConfig: effectiveLMConfig,
-            lmUserMetadata: lmUserMetadata
+            lmUserMetadata: lmUserMetadata,
+            lmCodeGenerationContext: lmCodeGenerationContext
         )
 
         guard !lmResult.audioCodeValues.isEmpty else {
@@ -532,6 +534,7 @@ public final class ACEStepPipeline {
         config: ACEStepInferenceConfig = .init(),
         lmConfig: ACEStep5HzLMGenerationConfig = .init(),
         lmUserMetadata: ACEStep5HzLMConstrainedSampler.UserMetadata = .init(),
+        lmCodeGenerationContext: ACEStepLMCodeGenerationContext? = nil,
         sourceLatents25Hz: MLXArray? = nil,
         sourceAudio48kHz: MLXArray? = nil,
         referenceTimbreLatents25Hz: [MLXArray]? = nil,
@@ -556,6 +559,36 @@ public final class ACEStepPipeline {
             ? repaintConfiguration ?? .init()
             : nil
         let effectiveInstruction = instruction ?? task.instruction()
+        var effectiveCaption = caption
+        var effectiveLMUserMetadata = lmUserMetadata
+        var effectiveLMCodeGenerationContext = lmCodeGenerationContext
+        if effectiveLMCodeGenerationContext == nil {
+            var planningMetadata = lmUserMetadata
+            if planningMetadata.duration == nil {
+                planningMetadata.duration = String(
+                    max(1, Int(config.durationSeconds.rounded()))
+                )
+            }
+            if planningMetadata.language == nil {
+                planningMetadata.language = vocalLanguage
+            }
+            let plan = try planMusic(
+                caption: caption,
+                lyrics: lyrics,
+                userMetadata: planningMetadata,
+                lmConfig: lmConfig
+            )
+            effectiveCaption = plan.metadata.caption ?? caption
+            effectiveLMUserMetadata = ACEStepPlanningPolicy.merge(
+                userMetadata: lmUserMetadata,
+                plan: plan.metadata,
+                caption: effectiveCaption,
+                durationSeconds: config.durationSeconds
+            )
+            effectiveLMCodeGenerationContext = plan.codeGenerationContext.applying(
+                userMetadata: effectiveLMUserMetadata
+            )
+        }
         let T = max(1, Int((Double(config.durationSeconds) * 25.0).rounded()))
         let srcLatents = try normalizeSourceLatents(
             sourceLatents25Hz,
@@ -566,11 +599,11 @@ public final class ACEStepPipeline {
 
 
         let conditionInputs = try preparePromptConditionInputs(
-            caption: caption,
+            caption: effectiveCaption,
             lyrics: lyrics,
             srcLatents: srcLatents,
             chunkChannels: chunkChannels,
-            lmUserMetadata: lmUserMetadata,
+            lmUserMetadata: effectiveLMUserMetadata,
             referenceTimbreLatents25Hz: referenceTimbreLatents25Hz,
             referenceTimbreAudio48kHz: referenceTimbreAudio48kHz,
             sourceAudio48kHz: sourceAudio48kHz,
@@ -582,13 +615,14 @@ public final class ACEStepPipeline {
         )
 
         return try generateWithLM(
-            caption: caption,
+            caption: effectiveCaption,
             lyrics: lyrics,
             conditionInputs: conditionInputs,
             config: config,
             lmConfig: lmConfig,
             instruction: effectiveInstruction,
-            lmUserMetadata: lmUserMetadata,
+            lmUserMetadata: effectiveLMUserMetadata,
+            lmCodeGenerationContext: effectiveLMCodeGenerationContext,
             lmSystemInstruction: lmSystemInstruction,
             audioCoverStrength: audioCoverStrength
         )

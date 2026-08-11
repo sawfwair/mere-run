@@ -190,6 +190,7 @@ struct MusicAPIGenerationRequest: Codable, Sendable {
     var model: String?
     var prompt: String
     var lyrics: String?
+    var instrumental: Bool?
     var instruction: String?
     var durationSeconds: Float?
     var quality: ACEStepQualityPreset?
@@ -213,6 +214,8 @@ struct MusicAPIGenerationRequest: Codable, Sendable {
     var lmTopP: Float?
     var lmTemperature: Float?
     var lmRepetitionPenalty: Float?
+    var lmCFGScale: Float?
+    var lmNegativePrompt: String?
     var bpm: Int?
     var keyscale: String?
     var metadataLanguage: String?
@@ -243,6 +246,7 @@ struct MusicAPIGenerationRequest: Codable, Sendable {
         case model
         case prompt
         case lyrics
+        case instrumental
         case instruction
         case durationSeconds = "duration_seconds"
         case quality
@@ -266,6 +270,8 @@ struct MusicAPIGenerationRequest: Codable, Sendable {
         case lmTopP = "lm_top_p"
         case lmTemperature = "lm_temperature"
         case lmRepetitionPenalty = "lm_repetition_penalty"
+        case lmCFGScale = "lm_cfg_scale"
+        case lmNegativePrompt = "lm_negative_prompt"
         case bpm
         case keyscale
         case metadataLanguage = "metadata_language"
@@ -602,15 +608,31 @@ private final class MusicAPIServer: @unchecked Sendable {
         let lmTopP = payload.lmTopP ?? 0.9
         let lmTemperature = payload.lmTemperature ?? 0.85
         let lmRepetitionPenalty = payload.lmRepetitionPenalty ?? 1.0
+        let lmCFGScale = payload.lmCFGScale ?? 2.0
+        let lmNegativePrompt = payload.lmNegativePrompt ?? "NO USER INPUT"
         guard lmTopK >= 0,
               (0...1).contains(lmTopP),
               (0...2).contains(lmTemperature),
-              lmRepetitionPenalty > 0
+              lmRepetitionPenalty > 0,
+              lmCFGScale >= 1,
+              lmCFGScale.isFinite
         else {
             throw ValidationError(
                 "LM sampling requires lm_top_k >= 0, lm_top_p in [0, 1], "
-                    + "lm_temperature in [0, 2], and lm_repetition_penalty > 0."
+                    + "lm_temperature in [0, 2], lm_repetition_penalty > 0, "
+                    + "and lm_cfg_scale >= 1."
             )
+        }
+        let effectiveLyrics: String
+        if payload.instrumental == true {
+            guard Self.nonEmpty(payload.lyrics) == nil else {
+                throw ValidationError(
+                    "instrumental cannot be combined with lyrics."
+                )
+            }
+            effectiveLyrics = "[Instrumental]"
+        } else {
+            effectiveLyrics = payload.lyrics ?? ""
         }
         let effectiveLMRepetitionPenalty = lmRepetitionPenalty == 1
             ? nil
@@ -668,6 +690,7 @@ private final class MusicAPIServer: @unchecked Sendable {
             && !task.locksDurationToSource
             && !isFlowEdit
         var effectivePrompt = prompt
+        var lmCodeGenerationContext: ACEStepLMCodeGenerationContext?
         let effectiveLanguage = ACEStepPlanningPolicy.effectiveLanguage(
             vocalLanguage: payload.vocalLanguage,
             metadataLanguage: payload.metadataLanguage
@@ -682,10 +705,10 @@ private final class MusicAPIServer: @unchecked Sendable {
             language: effectiveLanguage,
             timesignature: Self.nonEmpty(payload.timeSignature)
         )
-        if useLM && defaults.plansMetadata {
+        if useLM {
             let plan = try session.planMusic(
                 caption: prompt,
-                lyrics: payload.lyrics ?? "",
+                lyrics: effectiveLyrics,
                 instruction: instruction,
                 userMetadata: .init(
                     bpm: metadata.bpm,
@@ -704,6 +727,7 @@ private final class MusicAPIServer: @unchecked Sendable {
                     repetitionPenalty: effectiveLMRepetitionPenalty
                 )
             )
+            lmCodeGenerationContext = plan.codeGenerationContext
             effectivePrompt = Self.nonEmpty(plan.metadata.caption) ?? prompt
             if shouldPlanDuration,
                let plannedDuration = plan.metadata.durationSeconds
@@ -716,6 +740,9 @@ private final class MusicAPIServer: @unchecked Sendable {
                 plan: plan.metadata,
                 caption: effectivePrompt,
                 durationSeconds: duration
+            )
+            lmCodeGenerationContext = lmCodeGenerationContext?.applying(
+                userMetadata: metadata
             )
         }
         let config = ACEStepInferenceConfig(
@@ -761,16 +788,19 @@ private final class MusicAPIServer: @unchecked Sendable {
         return PreparedMusicAPIRequest(
             request: ACEStepSessionRequest(
                 caption: effectivePrompt,
-                lyrics: payload.lyrics ?? "",
+                lyrics: effectiveLyrics,
                 config: config,
                 lmConfig: .init(
                     maxNewTokens: 4_096,
                     temperature: lmTemperature,
                     topK: lmTopK,
                     topP: lmTopP,
-                    repetitionPenalty: effectiveLMRepetitionPenalty
+                    repetitionPenalty: effectiveLMRepetitionPenalty,
+                    cfgScale: lmCFGScale,
+                    negativePrompt: lmNegativePrompt
                 ),
                 lmUserMetadata: metadata,
+                lmCodeGenerationContext: lmCodeGenerationContext,
                 sourceAudio48kHz: sourceAudio,
                 referenceTimbreAudio48kHz:
                     referenceAudio.isEmpty ? nil : referenceAudio,

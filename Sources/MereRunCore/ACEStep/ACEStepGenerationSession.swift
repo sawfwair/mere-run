@@ -7,6 +7,7 @@ public struct ACEStepSessionRequest {
     public var config: ACEStepInferenceConfig
     public var lmConfig: ACEStep5HzLMGenerationConfig
     public var lmUserMetadata: ACEStep5HzLMConstrainedSampler.UserMetadata
+    public var lmCodeGenerationContext: ACEStepLMCodeGenerationContext?
     public var sourceLatents25Hz: MLXArray?
     public var sourceAudio48kHz: MLXArray?
     public var referenceTimbreLatents25Hz: [MLXArray]?
@@ -25,6 +26,7 @@ public struct ACEStepSessionRequest {
         config: ACEStepInferenceConfig = .init(),
         lmConfig: ACEStep5HzLMGenerationConfig = .init(),
         lmUserMetadata: ACEStep5HzLMConstrainedSampler.UserMetadata = .init(),
+        lmCodeGenerationContext: ACEStepLMCodeGenerationContext? = nil,
         sourceLatents25Hz: MLXArray? = nil,
         sourceAudio48kHz: MLXArray? = nil,
         referenceTimbreLatents25Hz: [MLXArray]? = nil,
@@ -42,6 +44,7 @@ public struct ACEStepSessionRequest {
         self.config = config
         self.lmConfig = lmConfig
         self.lmUserMetadata = lmUserMetadata
+        self.lmCodeGenerationContext = lmCodeGenerationContext
         self.sourceLatents25Hz = sourceLatents25Hz
         self.sourceAudio48kHz = sourceAudio48kHz
         self.referenceTimbreLatents25Hz = referenceTimbreLatents25Hz
@@ -285,6 +288,7 @@ public final class ACEStepGenerationSession: @unchecked Sendable {
                 config: request.config,
                 lmConfig: request.lmConfig,
                 lmUserMetadata: request.lmUserMetadata,
+                lmCodeGenerationContext: request.lmCodeGenerationContext,
                 sourceLatents25Hz: request.sourceLatents25Hz,
                 sourceAudio48kHz: request.sourceAudio48kHz,
                 referenceTimbreLatents25Hz: request.referenceTimbreLatents25Hz,

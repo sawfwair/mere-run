@@ -109,7 +109,7 @@ final class MusicServeAndExportTests: XCTestCase {
             JSONSerialization.jsonObject(with: encoded) as? [String: String]
         )
 
-        XCTAssertEqual(ACEStepGenerationRecipe.currentSchemaVersion, 4)
+        XCTAssertEqual(ACEStepGenerationRecipe.currentSchemaVersion, 5)
         XCTAssertEqual(object["bpm"], "118")
         XCTAssertEqual(object["duration"], "12")
         XCTAssertEqual(object["keyscale"], "D major")
@@ -123,7 +123,10 @@ final class MusicServeAndExportTests: XCTestCase {
             temperature: 0.7,
             topK: 32,
             topP: 0.85,
-            repetitionPenalty: 1.08
+            repetitionPenalty: 1.08,
+            cfgScale: 2,
+            negativePrompt: "NO USER INPUT",
+            useCotCaption: false
         )
         let encoded = try JSONEncoder().encode(sampling)
         let object = try XCTUnwrap(
@@ -141,6 +144,13 @@ final class MusicServeAndExportTests: XCTestCase {
             0.85,
             accuracy: 0.0001
         )
+        XCTAssertEqual(
+            try XCTUnwrap(object["cfg_scale"] as? Double),
+            2,
+            accuracy: 0.0001
+        )
+        XCTAssertEqual(object["negative_prompt"] as? String, "NO USER INPUT")
+        XCTAssertEqual(object["use_cot_caption"] as? Bool, false)
         XCTAssertEqual(
             try XCTUnwrap(object["repetition_penalty"] as? Double),
             1.08,
@@ -230,6 +240,9 @@ final class MusicServeAndExportTests: XCTestCase {
                   "lm_top_p": 0.85,
                   "lm_temperature": 0.7,
                   "lm_repetition_penalty": 1.08,
+                  "lm_cfg_scale": 2.5,
+                  "lm_negative_prompt": "muddy mix",
+                  "instrumental": true,
                   "bpm": 118,
                   "keyscale": "D major",
                   "metadata_language": "en",
@@ -271,6 +284,9 @@ final class MusicServeAndExportTests: XCTestCase {
         XCTAssertEqual(request.lmTopP, 0.85)
         XCTAssertEqual(request.lmTemperature, 0.7)
         XCTAssertEqual(request.lmRepetitionPenalty, 1.08)
+        XCTAssertEqual(request.lmCFGScale, 2.5)
+        XCTAssertEqual(request.lmNegativePrompt, "muddy mix")
+        XCTAssertEqual(request.instrumental, true)
         XCTAssertEqual(request.bpm, 118)
         XCTAssertEqual(request.keyscale, "D major")
         XCTAssertEqual(request.metadataLanguage, "en")

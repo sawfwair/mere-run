@@ -122,4 +122,37 @@ final class ACEStepMusicUnderstandingTests: MereRunCoreTestCase {
             "ja"
         )
     }
+
+    func testCodeGenerationContextReserializesEffectivePlannerScalars() {
+        let context = ACEStepLMCodeGenerationContext(
+            caption: "original prompt",
+            lyrics: "[Instrumental]",
+            reasoning: """
+            <think>
+            bpm: 200
+            caption: A multiline cinematic description.
+              With an indented continuation.
+            duration: 55)
+            keyscale: G minor
+
+            language: zxx4388
+            </think>
+            """
+        ).applying(
+            userMetadata: .init(
+                bpm: "200",
+                duration: "85",
+                keyscale: "G minor",
+                language: "en",
+                timesignature: "4"
+            )
+        )
+
+        XCTAssertTrue(context.reasoning.contains("duration: 85\n"))
+        XCTAssertTrue(context.reasoning.contains("language: en\n"))
+        XCTAssertTrue(context.reasoning.contains("timesignature: 4\n</think>"))
+        XCTAssertFalse(context.reasoning.contains("55)"))
+        XCTAssertFalse(context.reasoning.contains("zxx4388"))
+        XCTAssertTrue(context.reasoning.contains("  With an indented continuation."))
+    }
 }
