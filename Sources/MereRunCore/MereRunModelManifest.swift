@@ -106,6 +106,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case deepseekV4Flash = "deepseek-v4-flash"
         /// Thinking Machines Lab Inkling family via the native Swift/MLX runtime.
         case inkling
+        /// Meta Muse Glimmer multimodal agent family via native Swift/MLX.
+        case museGlimmer = "muse-glimmer"
     }
 
     public enum Family: String, Codable, CaseIterable, Hashable, Sendable {
@@ -140,6 +142,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case psi
         case deepseek
         case inkling
+        case muse
     }
 
     public enum Tier: String, Codable, CaseIterable, Hashable, Sendable {
@@ -1002,6 +1005,25 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.chat, .codeGeneration],
                 components: nil,
                 upstreamRepoId: "\(InklingResources.artifactRepoID)@\(InklingResources.artifactRevision)",
+                createdAt: createdAt
+            )
+        case .museGlimmer30B:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .museGlimmer,
+                family: .muse,
+                tier: .latest,
+                variant: .standard,
+                precision: .int4,
+                quantization: Quantization(
+                    bits: 4,
+                    groupSize: 64,
+                    scheme: "mlx-affine"
+                ),
+                defaults: nil,
+                supports: [.chat, .codeGeneration, .visionChat],
+                components: genericTextComponents,
+                upstreamRepoId: "\(MuseGlimmerResources.artifactRepoId)@\(MuseGlimmerResources.artifactRevision)",
                 createdAt: createdAt
             )
         case .q36Nano:

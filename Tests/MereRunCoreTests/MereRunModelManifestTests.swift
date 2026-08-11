@@ -85,6 +85,25 @@ final class MereRunModelManifestTests: MereRunCoreTestCase {
         )
     }
 
+    func testMuseGlimmerTemplatePinsSawfwairSelectiveQ4Conversion() {
+        let manifest = MereRunModelManifest.template(
+            for: .museGlimmer30B,
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+
+        XCTAssertEqual(manifest.id, MuseGlimmerResources.modelId)
+        XCTAssertEqual(manifest.engine, .museGlimmer)
+        XCTAssertEqual(manifest.family, .muse)
+        XCTAssertEqual(manifest.precision, .int4)
+        XCTAssertEqual(manifest.quantization?.bits, 4)
+        XCTAssertEqual(manifest.quantization?.groupSize, 64)
+        XCTAssertEqual(manifest.quantization?.scheme, "mlx-affine")
+        XCTAssertEqual(
+            manifest.upstreamRepoId,
+            "\(MuseGlimmerResources.artifactRepoId)@\(MuseGlimmerResources.artifactRevision)"
+        )
+    }
+
     func testTemplateRoundTrip() throws {
         let temp = try TestFileSystem.makeTempDir()
         defer { try? FileManager.default.removeItem(at: temp) }

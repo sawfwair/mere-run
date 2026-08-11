@@ -102,6 +102,22 @@ swift run mere.run api serve \
   --model vision-chat-gemma4-12b
 ```
 
+For Muse Glimmer multimodal agent chat (explicit 21.38 GB Q4 target plus the
+5.11 GB assistant):
+
+```bash
+swift run mere.run model pull vision-chat-muse-glimmer-30b --accept-model-license
+swift run mere.run api serve \
+  --engine text-chat-muse-glimmer \
+  --model vision-chat-muse-glimmer-30b
+```
+
+This engine accepts OpenAI image content parts and function tools. It exposes
+reasoning effort, but does not claim constrained `json_object` decoding. The
+managed pull also installs Meta's pinned 5.11 GB DFlash assistant. Requests for
+at least 32 output tokens use native target-verified speculation and fall back
+losslessly when draft acceptance is poor.
+
 For the compact LiquidAI LFM2.5 2.6B MLX 4-bit model:
 
 ```bash

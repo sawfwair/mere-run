@@ -388,6 +388,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 128
             ),
             descriptor(
+                MuseGlimmerResources.modelId,
+                "Muse Glimmer 30B vision agent",
+                "Runs Sawfwair's pinned selective MLX Q4 conversion of Meta Muse Glimmer with its managed DFlash speculative companion through the native Swift/MLX stack.",
+                minimum: 32,
+                recommended: 64
+            ),
+            descriptor(
                 Q35Resources.q36NanoModelId,
                 "Qwen3.6 A3B chat nano",
                 "Runs the Qwen3.6 35B-A3B OptiQ 4-bit MLX/MTP snapshot through the native Qwen-family runtime.",

@@ -66,6 +66,8 @@ final class ManagedModelCatalogTests: XCTestCase {
             "vision-embed-olmoearth-v12-tiny",
             "vision-embed-olmoearth-v12-small",
             "vision-embed-olmoearth-v12-base",
+            MuseGlimmerResources.modelId,
+            MuseGlimmerResources.assistantModelId,
             "image-3d-trellis2-4b",
             "music-muscriptor-small",
             "music-muscriptor-medium",
@@ -621,6 +623,54 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertFalse(target.runtimeAutoDownloadAllowed)
         XCTAssertNil(target.usageRestriction)
         XCTAssertTrue(LagunaResources.snapshotPatterns.contains("LICENSE*"))
+    }
+
+    func testMuseGlimmerUsesPinnedSawfwairQ4TargetAndOfficialDFlashCompanion() throws {
+        let target = try XCTUnwrap(ManagedModelCatalog.spec(for: MuseGlimmerResources.modelId))
+        let companion = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: MuseGlimmerResources.assistantModelId)
+        )
+
+        XCTAssertEqual(target.hubFallback?.repoId, MuseGlimmerResources.artifactRepoId)
+        XCTAssertEqual(target.hubFallback?.revision, MuseGlimmerResources.artifactRevision)
+        XCTAssertEqual(target.upstreamRepoId, MuseGlimmerResources.artifactRepoId)
+        XCTAssertEqual(target.upstreamRevision, MuseGlimmerResources.artifactRevision)
+        XCTAssertEqual(target.estimatedDownloadBytes, MuseGlimmerResources.estimatedDownloadBytes)
+        XCTAssertEqual(
+            target.usageRestriction?.terms.first?.sourceRepoId,
+            MuseGlimmerResources.upstreamRepoId
+        )
+        XCTAssertEqual(
+            target.usageRestriction?.terms.first?.sourceRevision,
+            MuseGlimmerResources.upstreamRevision
+        )
+        XCTAssertEqual(target.companionModelIDs, [MuseGlimmerResources.assistantModelId])
+        XCTAssertEqual(target.validationKind, .museGlimmer)
+        XCTAssertFalse(target.runtimeAutoDownloadAllowed)
+
+        XCTAssertFalse(ManagedModelCatalog.allSpecs.contains { $0.id == companion.id })
+        XCTAssertEqual(
+            companion.hubFallback?.repoId,
+            MuseGlimmerResources.assistantUpstreamRepoId
+        )
+        XCTAssertEqual(
+            companion.hubFallback?.revision,
+            MuseGlimmerResources.assistantUpstreamRevision
+        )
+        XCTAssertEqual(
+            companion.hubFallback?.patterns,
+            MuseGlimmerResources.assistantSnapshotPatterns
+        )
+        XCTAssertEqual(companion.validationKind, .museGlimmerAssistant)
+        XCTAssertEqual(
+            companion.estimatedDownloadBytes,
+            MuseGlimmerResources.assistantEstimatedDownloadBytes
+        )
+        XCTAssertEqual(
+            companion.usageRestriction?.terms.first?.sourceRepoId,
+            MuseGlimmerResources.assistantUpstreamRepoId
+        )
+        XCTAssertFalse(companion.runtimeAutoDownloadAllowed)
     }
 
     func testQ36NanoUsesOptiQHubSource() throws {

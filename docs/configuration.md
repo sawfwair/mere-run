@@ -186,6 +186,37 @@ processes are pruned automatically. `mere.run status` shows active and queued
 entries, and the typed ledger lives under
 `~/Library/Application Support/MereRun/admission/` without prompts or content.
 
+### `MERERUN_MUSE_GLIMMER_DFLASH`
+
+Muse Glimmer DFlash is enabled by default when the official managed assistant
+companion is installed. Set this to `0`, `false`, `no`, or `off` to force
+target-only decode. The runtime uses the assistant after both text and image
+prefill, verifies every proposal with the target, and preserves the target's
+greedy or sampled output distribution.
+
+### `MERERUN_MUSE_GLIMMER_DFLASH_TOKENS`
+
+Overrides proposals per DFlash round. The checkpoint supports up to `15`, but
+the measured affine-Q4 MLX target defaults to `3`; values are clamped to the
+assistant's supported range.
+
+### `MERERUN_MUSE_GLIMMER_DFLASH_MIN_OUTPUT`
+
+Minimum requested output budget before Muse Glimmer loads DFlash prompt
+context and enters speculative decode. Defaults to `32` tokens.
+
+### `MERERUN_MUSE_GLIMMER_DFLASH_MIN_ACCEPTANCE`
+
+Minimum cumulative draft acceptance retained after the first two DFlash
+rounds. Defaults to `0.4`; lower acceptance triggers a lossless target-only
+fallback for the rest of the request.
+
+### `MERERUN_MUSE_GLIMMER_DFLASH_PATH`
+
+Selects an explicit local Muse Glimmer assistant directory. When unset, the
+runtime prefers the managed official BF16 assistant, then the optional local
+`vision-chat-muse-glimmer-30b-assistant-q4` conversion.
+
 ### `MERERUN_GEMMA4_MTP`
 
 Gemma 4 12B MTP is enabled by default when the managed

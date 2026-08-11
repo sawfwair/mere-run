@@ -175,6 +175,46 @@ final class TextChatCommandParsingTests: XCTestCase {
         )
     }
 
+    func testMuseGlimmerParsesNativeMultimodalReasoningContract() throws {
+        let command = try TextChat.parse([
+            "--model", MuseGlimmerResources.modelId,
+            "--image", "/tmp/muse-glimmer-input.png",
+            "--reasoning-effort", "1",
+            "--prompt", "Inspect this interface",
+        ])
+
+        XCTAssertEqual(command.model, MuseGlimmerResources.modelId)
+        XCTAssertEqual(command.image, "/tmp/muse-glimmer-input.png")
+        XCTAssertEqual(command.reasoningEffort, 1)
+        XCTAssertTrue(TextChat.backendDescription(for: command.model).contains("native MLX"))
+        XCTAssertNoThrow(
+            try TextChat.validateReasoningEffort(command.reasoningEffort, modelID: command.model)
+        )
+        XCTAssertThrowsError(
+            try TextChat.validate(responseFormat: .jsonObject, modelID: command.model)
+        )
+    }
+
+    func testMuseGlimmerDFlashStatsAreMachineScannable() {
+        let formatted = TextChat.formatMuseDFlashStats(MuseGlimmerDFlashStats(
+            enabled: true,
+            active: true,
+            assistantModelPath: "/tmp/muse-assistant",
+            speculativeTokens: 3,
+            rounds: 4,
+            draftedTokens: 12,
+            acceptedTokens: 7,
+            rejectedTokens: 2,
+            fullAcceptanceRounds: 1,
+            targetVerificationForwards: 4
+        ))
+
+        XCTAssertTrue(formatted.contains("muse_dflash=active"))
+        XCTAssertTrue(formatted.contains("proposals=3"))
+        XCTAssertTrue(formatted.contains("acceptance=58.3%"))
+        XCTAssertTrue(formatted.contains("verify=4"))
+    }
+
     func testTextChatBackendDescriptionIdentifiesGGUFModels() {
         let backend = TextChat.backendDescription(for: ModelResolver.ModelID.q36NanoGGUF.rawValue)
 
