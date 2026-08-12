@@ -88,7 +88,7 @@ struct ModelLocationList: ParsableCommand {
 struct ModelLocationAdd: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "add",
-        abstract: "Register a read-only root containing canonical <model-id> directories."
+        abstract: "Register a read-only root containing directories named for canonical model IDs."
     )
 
     @Argument(help: "Existing directory to search for canonical model subdirectories.")

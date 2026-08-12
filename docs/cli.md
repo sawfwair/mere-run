@@ -148,7 +148,7 @@ Public tree:
   - `mere.run model list` — List all known models with install status.
   - `mere.run model location` — Manage read-only model catalog locations.
     - `mere.run model location list` — List the writable store, search roots, and explicit bindings.
-    - `mere.run model location add` — Register a read-only root containing canonical <model-id> directories.
+    - `mere.run model location add` — Register a read-only root containing directories named for canonical model IDs.
     - `mere.run model location remove` — Unregister a search root without deleting its files.
     - `mere.run model location bind` — Bind a canonical model id to an arbitrary read-only directory.
     - `mere.run model location unbind` — Remove explicit bindings without deleting model files.
