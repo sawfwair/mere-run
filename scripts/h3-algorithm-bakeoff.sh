@@ -361,6 +361,7 @@ run_arm() {
   set +e
   /usr/bin/time -l -o "$time_log" \
     env MERERUN_H3_EXACT_KERNELS="$exact_kernel_mode" \
+    MERERUN_H3_PROFILE_PHASES=1 \
     MERERUN_H3_PROFILE_STEPS=1 \
     "$executable" video generate "$prompt" \
     --model "$model" \

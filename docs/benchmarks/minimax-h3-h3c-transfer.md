@@ -29,11 +29,12 @@ research arm and is not a production default.
 The larger production win came from serving parity rather than approximate
 denoising. Preserving each reference image's aspect ratio, refusing to upscale
 it, and area-matching it to the render canvas reduced this fixture's packed
-sequence and MLX peak without changing the dense-quality algorithm. The first
-three post-alignment dense runs averaged 380.781 seconds versus the earlier
-1,915.547-second mean and reduced MLX peak from 88.59 GiB to about 41.15 GiB.
-Because those follow-up runs began with about 12.7 GiB of swap, the magnitude
-is a screening result pending a zero-swap retake, not a clean timing claim.
+sequence and MLX peak without changing the dense-quality algorithm. The final
+zero-swap retake completed in 578.450 seconds versus the old clean
+1,920.079-second path and reduced MLX peak from 88.59 to 41.14 GiB. The output
+was byte-identical to the same-seed post-alignment screen. This is the
+production result: 69.87% lower cold-host wall time and 53.56% lower MLX peak
+without skipping an evaluation or selecting an approximation policy.
 
 ## Fixed sources
 
@@ -515,14 +516,16 @@ a new `quality` arm.
 `receipts.tsv` measures generation only; preflight is completed before its
 clock starts. Every passing arm records wall time, `/usr/bin/time` maximum RSS
 and peak footprint, the maximum MLX `peak_gib` reported by per-step profiling,
-the output SHA-256, and all raw logs. `environment.txt` preserves hardware, OS,
-thermal warnings, swap, VM statistics, disk headroom, the process-deny pattern,
-the exact executable SHA-256, the prompt SHA-256, the reference-manifest
-SHA-256, and the clean/dirty source state. `prompt.txt`, `arguments.tsv`, and
-`references.tsv` retain the exact request and resolved reference identities;
-`start-gate.txt` preserves rejected process and swap evidence even when no arm
-runs. Per-arm before/after snapshots capture thermal, swap, and VM state around
-the timed region.
+the output SHA-256, and all raw logs. The timed command enables both step and
+phase profiling so denoising, conditioner/text preparation, transformer
+preparation, video VAE, audio VAE, and generation-total values are preserved.
+`environment.txt` preserves hardware, OS, thermal warnings, swap, VM
+statistics, disk headroom, the process-deny pattern, the exact executable
+SHA-256, the prompt SHA-256, the reference-manifest SHA-256, and the clean/dirty
+source state. `prompt.txt`, `arguments.tsv`, and `references.tsv` retain the
+exact request and resolved reference identities; `start-gate.txt` preserves
+rejected process and swap evidence even when no arm runs. Per-arm before/after
+snapshots capture thermal, swap, and VM state around the timed region.
 
 After generation, `scripts/h3-bakeoff-score.py` verifies that every MP4 matches
 the requested width, height, frame count, 24 fps video, 32 kHz stereo audio,
@@ -654,6 +657,46 @@ appearance, lighting, or trajectory in all three contact sheets; seed
 `20260811` also developed a conspicuous magenta train-light artifact late in
 the clip. The result rejects velocity reuse as an ordinary default. It stays
 available only as a named experimental policy for future research.
+
+### Zero-swap finalist retake
+
+The final non-LTX retake used commit `bc2532a7`, release executable SHA-256
+`34854543dfacf58383e1feebaaeeced65aed3b532676e1e768979235420f9125`,
+an Apple M4 Max with 128 GB of unified memory, and macOS 26.5.2. Both arms
+started with zero swap, a clean worktree, no matching build or ML process, and
+no thermal or performance warning. Ref2VA also ended at zero swap; the larger
+LightX2V arm ended with 15.94 MiB.
+
+| Finalist | Geometry / evaluations | Wall time | Denoising | Non-denoise remainder | MLX peak | Process peak footprint | Output SHA-256 |
+| --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
+| Dense Ref2VA | 512x256 / 8 | 578.450 s | 528.492 s | 49.958 s | 41.14 GiB | 47,255,358,296 bytes | `7b716380a857c3203e8434db11493fbf8e9b2b26166da41bf5f84e18f95c0866` |
+| LightX2V v1.0 8-step | 960x544 / 8 | 2,457.841 s | 2,277.428 s | 180.413 s | 61.90 GiB | 68,143,584,184 bytes | `cebc0d88c80145057cd7e6daeaf45568a59122ac72173d91c94c048681995822` |
+
+The Ref2VA output is byte-identical to seed `20260810` from the post-alignment
+multi-seed screen. Compared with the old clean 1,920.079-second,
+88.59-GiB path, the corrected serving contract reduces cold-host wall time by
+69.87% and MLX peak by 53.56%. The screening runs were faster because they
+followed substantial earlier model work and began with about 12.7 GiB of swap;
+they are retained for cross-seed behavior, not averaged into this cold-host
+timing.
+
+The selected LightX2V finalist uses the released v1.0 8-step recipe at its
+960x544 training geometry: shifts 12/3, LoRA alpha 8, eight evaluations, and
+19,317 packed rows. Its output is byte-identical to the earlier screening
+artifact, including 124 H.264 frames and stereo 32 kHz AAC with mean/max levels
+of -23.2/-5.6 dB. The cold-host wall was 3.59% slower and denoising 4.54% slower
+than that swap-heavy screen. The result confirms reproducibility and the
+expected cost; it is not evidence that swap improves performance.
+
+The retake exposed a harness receipt omission: the wrapper enabled step
+profiling but not the runtime's phase profiler. Therefore the table reports the
+exact clean non-denoise remainder rather than inventing a clean load/VAE split.
+The byte-identical earlier LightX2V screen separately recorded 0.821 seconds of
+conditioner preparation, 0.105 seconds of conditioner load, 4.921 seconds of
+text encoding, 14.869 seconds of transformer preparation, 169.078 seconds of
+video VAE decode, and 1.534 seconds of audio VAE decode. Those phase values are
+useful attribution evidence but remain labeled as screening timings. The
+harness now enables both phase and step profiling for every subsequent arm.
 
 The portable direction is therefore narrower, not more aggressive: retain the
 exact reference-serving alignment, evaluate a 448x224 (87.5%) internal canvas,
