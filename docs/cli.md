@@ -227,7 +227,7 @@ are:
   `image-hidream-o1`, `image-hidream-o1-dev`, `image-krea2-raw`,
   `image-krea2-turbo`,
   `image-ideogram4-sdnq-uint4`
-- Text chat: `text-chat-gemma4`, `text-chat-mebot`, `text-chat-psi-agent`, `text-chat-q36-nano`, `text-chat-lfm25-2.6b-4bit`, `text-chat-lfm25-a1b-8bit`
+- Text chat: `text-chat-gemma4`, `text-chat-mebot`, `text-chat-psi-agent`, `text-chat-q36-nano`, `text-chat-lfm25-2.6b-4bit`, `text-chat-lfm25-a1b-8bit`, `vision-chat-lfm25-3b-8bit`
 - Text code / agents: `text-agent-qwen35-9b`, `text-agent-ornith-9b`, `text-agent-ornith-35b-mlx`, `text-agent-ornith-35b`, `text-code-north-mini`, `text-code-qwen3`
 - Text embed: `text-embed-qwen3-0.6b`
 - Text anonymize: `text-anonymize-privacy-filter`
@@ -851,6 +851,7 @@ swift run mere.run text chat --model text-agent-ornith-9b --prompt "Write a comp
 swift run mere.run text chat --model text-chat-inkling-small --reasoning-effort 0.2 --prompt "Answer directly."
 swift run mere.run text chat --model text-chat-lfm25-2.6b-4bit --prompt "Explain local inference in one paragraph."
 swift run mere.run text chat --model text-chat-lfm25-a1b-8bit --prompt "Summarize LFM2 in one paragraph."
+swift run mere.run text chat --model vision-chat-lfm25-3b-8bit --image ./photo.jpg --prompt "Describe this image."
 swift run mere.run text chat --stream --prompt "Write a short welcome message."
 swift run mere.run text chat --thinking --stats --prompt "How would you design a tokenizer?"
 ```

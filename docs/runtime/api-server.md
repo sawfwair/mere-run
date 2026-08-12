@@ -140,6 +140,13 @@ swift run mere.run model pull text-chat-lfm25-2.6b-4bit --accept-model-license
 swift run mere.run api serve --engine text-chat-lfm2 --model text-chat-lfm25-2.6b-4bit
 ```
 
+For LFM2.5-VL image content parts, select the pinned vision model explicitly:
+
+```bash
+swift run mere.run model pull vision-chat-lfm25-3b-8bit --accept-model-license
+swift run mere.run api serve --engine text-chat-lfm2 --model vision-chat-lfm25-3b-8bit
+```
+
 For the opt-in Laguna S 2.1 target with its automatically installed DFlash
 companion:
 
@@ -492,6 +499,10 @@ Engine compatibility:
 - `text-chat-lfm25-2.6b-4bit`: uses the same native LFM2 serving engine with
   LiquidAI's dense 2.6B MLX 4-bit weights, accepts function tools, and rejects
   image content parts.
+- `vision-chat-lfm25-3b-8bit`: uses the native LFM2 serving engine with
+  LiquidAI's dense language backbone, SigLIP2 vision tower, and multimodal
+  projector. It accepts local-file and base64 image content parts; it does not
+  fetch remote image URLs.
 - `text-chat-klein`: supports `response_format: {"type":"json_object"}` with
   local JSON retry behavior.
 - `text-code`: accepts plain text chat requests and OpenAI `stop` sequences;

@@ -42,6 +42,7 @@ struct TextChat: AsyncParsableCommand {
           - text-chat-inkling-small (Inkling-Small 276B-A12B mixed MLX: routed-expert q2, non-routed BF16)
           - text-chat-lfm25-2.6b-4bit (LiquidAI LFM2.5 2.6B dense MLX 4-bit native Swift runtime)
           - text-chat-lfm25-a1b-8bit (LiquidAI LFM2.5 8B-A1B MLX 8-bit native Swift runtime)
+          - vision-chat-lfm25-3b-8bit (LiquidAI LFM2.5-VL 3B MLX 8-bit native vision-language runtime)
           - text-chat-psi-agent
         Models are cached under ~/Library/Application Support/MereRun/models/<model-id>.
         Thinking output is hidden by default; pass --thinking to include it.
@@ -273,6 +274,7 @@ struct TextChat: AsyncParsableCommand {
         let isLaguna = LagunaResources.handles(modelSpec: normalizedModelId)
         let isMuseGlimmer = MuseGlimmerResources.handles(modelSpec: normalizedModelId)
         let isNemotronH = NemotronHResources.handles(modelSpec: normalizedModelId)
+        let isLFM2Vision = normalizedModelId == LFM2Resources.visionModelId
         let q35KVCacheMode = try resolveQ35KVCacheMode(for: normalizedModelId)
         if let contextSize, contextSize <= 0 {
             throw ValidationError("--context-size must be greater than zero.")
@@ -282,6 +284,7 @@ struct TextChat: AsyncParsableCommand {
             messages: messages,
             maxTokens: maxTokens,
             temperature: temperature
+                ?? (isLFM2Vision ? 0.2 : nil)
                 ?? (isNemotronH ? NemotronHResources.recommendedTemperature : nil)
                 ?? (isMuseGlimmer ? MuseGlimmerResources.recommendedTemperature : nil)
                 ?? (isLaguna ? LagunaResources.recommendedTemperature : recommendedSampling?.temperature)
@@ -292,6 +295,7 @@ struct TextChat: AsyncParsableCommand {
                 ?? (isLaguna ? LagunaResources.recommendedTopP : recommendedSampling?.topP)
                 ?? 0.9,
             topK: topK
+                ?? (isLFM2Vision ? 50 : nil)
                 ?? (isMuseGlimmer ? MuseGlimmerResources.recommendedTopK : nil)
                 ?? (isLaguna ? LagunaResources.recommendedTopK : recommendedSampling?.topK),
             minP: minP ?? (isLaguna ? LagunaResources.recommendedMinP : 0),

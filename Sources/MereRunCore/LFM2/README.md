@@ -1,12 +1,13 @@
 # LFM2 Runtime
 
-Native Swift MLX runtime for LiquidAI LFM2 text-chat checkpoints.
+Native Swift MLX runtime for LiquidAI LFM2 text and vision-language checkpoints.
 
 ## Managed models
 
 - `text-chat-lfm25-a1b-8bit` — `LiquidAI/LFM2.5-8B-A1B-MLX-8bit`
 - `text-chat-lfm25-2.6b-4bit` — the `4bit/` partition of
   `LiquidAI/LFM2.5-2.6B-MLX`
+- `vision-chat-lfm25-3b-8bit` — `LiquidAI/LFM2.5-VL-3B-MLX-8bit`
 - Serving engine: `text-chat-lfm2`
 
 The runtime loads MLX-converted directory-root snapshots with:
@@ -15,6 +16,7 @@ The runtime loads MLX-converted directory-root snapshots with:
 - `tokenizer.json`
 - `tokenizer_config.json`
 - `model.safetensors` or `model.safetensors.index.json` plus shards
+- `processor_config.json` for the vision-language checkpoint
 
 ## Architecture
 
@@ -30,6 +32,12 @@ layouts:
   dense prefix
 - sparse MoE feed-forward layers with router top-k, optional `expert_bias`, and
   `SwitchGLU` expert projections
+
+`LFM2VLModel.swift` adds the packed-patch SigLIP2 NaFlex encoder, resized
+positional embeddings, factor-2 pixel unshuffle, and multimodal projector used
+by LFM2.5-VL. `LFM2VLImageProcessor.swift` mirrors the checkpoint's smart
+resize and patch packing contract. Only the multimodal prefill uses those
+components; token decode continues through `LFM2Model` and its typed caches.
 
 `LFM2Generator.swift` is the chat entrypoint. It resolves managed installs or
 downloads through `ManagedModelResolver`, loads tokenizer/template resources,
@@ -48,8 +56,9 @@ fall back to MLX's portable gather path.
 ## Notes
 
 - This runtime is Swift-native and does not bridge to Python.
-- LFM2 is currently text-only. API requests with image content parts are rejected
-  by the `text-chat-lfm2` capability profile.
+- The two `text-chat-*` checkpoints reject image content parts. The
+  `vision-chat-lfm25-3b-8bit` catalog entry enables them through the same
+  serving engine.
 - API serving enables exact token-prefix KV reuse by default and enables
   continuous decode batching when `--max-active-requests` is greater than one.
   Ragged rows carry independent attention offsets and typed short-convolution

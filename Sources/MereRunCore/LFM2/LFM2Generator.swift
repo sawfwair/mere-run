@@ -1,11 +1,20 @@
 import Foundation
 import MLX
+import MLXNN
 
 public typealias LFM2ContinuousBatchingStats = RuntimeDecodeBatchingStats
 
 private struct LFM2PrefillOutput {
     let logits: MLXArray
     let hidden: MLXArray
+}
+
+private struct LFM2ModelTypeEnvelope: Decodable {
+    let modelType: String
+
+    private enum CodingKeys: String, CodingKey {
+        case modelType = "model_type"
+    }
 }
 
 private struct LFM2DecodeResult {
@@ -151,9 +160,12 @@ public actor LFM2Generator: ChatGenerator {
     private var prefixKVCacheReusedTokens = 0
 
     private var model: LFM2Model?
+    private var visionModel: LFM2VLModel?
     private var tokenizerAndTemplate: LFM2TokenizerAndTemplate?
     private var loadedModelPath: String?
     private var loadedConfig: LFM2Config?
+    private var loadedVisionConfig: LFM2VLConfig?
+    private var loadedVisionProcessorConfig: LFM2VLProcessorConfig?
 
     private let modelId: String
 
@@ -260,7 +272,17 @@ public actor LFM2Generator: ChatGenerator {
 
         progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading LFM2 config"))
         let configData = try Data(contentsOf: normalizedRoot.appendingPathComponent("config.json"))
-        let config = try JSONDecoder().decode(LFM2Config.self, from: configData)
+        let modelType = try JSONDecoder().decode(LFM2ModelTypeEnvelope.self, from: configData).modelType
+        let config: LFM2Config
+        let visionConfig: LFM2VLConfig?
+        if modelType == "lfm2_vl" {
+            let decoded = try JSONDecoder().decode(LFM2VLConfig.self, from: configData)
+            config = decoded.textConfig
+            visionConfig = decoded
+        } else {
+            config = try JSONDecoder().decode(LFM2Config.self, from: configData)
+            visionConfig = nil
+        }
 
         progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading LFM2 tokenizer"))
         let tokenizer = try await LFM2TokenizerAndTemplate.load(
@@ -271,15 +293,63 @@ public actor LFM2Generator: ChatGenerator {
         try requireCurrentResidency(loadEpoch)
 
         progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading LFM2 weights"))
-        let lfm2Model = LFM2Model(config: config)
         let resources = LFM2Resources(rootURL: normalizedRoot)
-        let groupSize = config.quantization?.groupSize ?? 64
-        let bits = config.quantization?.bits ?? 8
+        let groupSize = visionConfig?.quantization?.groupSize ?? config.quantization?.groupSize ?? 64
+        let bits = visionConfig?.quantization?.bits ?? config.quantization?.bits ?? 8
+        let lfm2Model: LFM2Model
+        let lfm2VisionModel: LFM2VLModel?
+        if let visionConfig {
+            let composite = LFM2VLModel(config: visionConfig)
+            try loadWeights(
+                into: composite,
+                resources: resources,
+                groupSize: groupSize,
+                bits: bits,
+                progressHandler: progressHandler
+            )
+            lfm2Model = composite.languageModel
+            lfm2VisionModel = composite
+        } else {
+            let language = LFM2Model(config: config)
+            try loadWeights(
+                into: language,
+                resources: resources,
+                groupSize: groupSize,
+                bits: bits,
+                progressHandler: progressHandler
+            )
+            lfm2Model = language
+            lfm2VisionModel = nil
+        }
 
+        try Task.checkCancellation()
+        try requireCurrentResidency(loadEpoch)
+        self.model = lfm2Model
+        self.visionModel = lfm2VisionModel
+        self.tokenizerAndTemplate = tokenizer
+        self.loadedConfig = config
+        self.loadedVisionConfig = visionConfig
+        if visionConfig != nil,
+           let data = try? Data(contentsOf: resources.processorConfigURL) {
+            self.loadedVisionProcessorConfig = try JSONDecoder().decode(
+                LFM2VLProcessorConfig.self,
+                from: data
+            )
+        }
+        self.loadedModelPath = normalizedRoot.path
+    }
+
+    private func loadWeights(
+        into model: Module,
+        resources: LFM2Resources,
+        groupSize: Int,
+        bits: Int,
+        progressHandler: (@Sendable (ChatProgress) -> Void)?
+    ) throws {
         if FileManager.default.fileExists(atPath: resources.modelIndexURL.path) {
             try HFSafetensorsWeightsLoader.applyQuantizedWeights(
                 indexURL: resources.modelIndexURL,
-                to: lfm2Model,
+                to: model,
                 groupSize: groupSize,
                 bits: bits,
                 mapper: LFM2Resources.mapWeight(key:value:),
@@ -294,19 +364,12 @@ public actor LFM2Generator: ChatGenerator {
             let arrays = try MLX.loadArrays(url: resources.modelWeightsURL)
             try HFSafetensorsWeightsLoader.applyQuantizedWeightsFromArrays(
                 arrays,
-                to: lfm2Model,
+                to: model,
                 groupSize: groupSize,
                 bits: bits,
                 mapper: LFM2Resources.mapWeight(key:value:)
             )
         }
-
-        try Task.checkCancellation()
-        try requireCurrentResidency(loadEpoch)
-        self.model = lfm2Model
-        self.tokenizerAndTemplate = tokenizer
-        self.loadedConfig = config
-        self.loadedModelPath = normalizedRoot.path
     }
 
     private func generate(
@@ -338,7 +401,49 @@ public actor LFM2Generator: ChatGenerator {
             includeThinking: request.showThinking,
             maxLength: effectiveContext
         )
-        if promptTokens.count > effectiveContext {
+        let imageReferences = request.messages.compactMap { message -> String? in
+            guard let value = message.imageUrl?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !value.isEmpty else { return nil }
+            return value
+        }
+        let inputEmbeddings: MLXArray?
+        if imageReferences.isEmpty {
+            inputEmbeddings = nil
+        } else {
+            guard let visionModel,
+                  let loadedVisionConfig,
+                  let imageStartTokenId = tokenizerAndTemplate.tokenizer.convertTokenToId("<|image_start|>"),
+                  let imageEndTokenId = tokenizerAndTemplate.tokenizer.convertTokenToId("<|image_end|>") else {
+                throw LFM2Error.generationFailed(
+                    "This LFM2 checkpoint does not provide the LFM2-VL vision tower and image tokens."
+                )
+            }
+            progressHandler?(ChatProgress(stage: .encoding, message: "Encoding \(imageReferences.count) image(s)"))
+            let batch = try LFM2VLImageProcessor.makeBatch(
+                imageReferences: imageReferences,
+                config: loadedVisionConfig,
+                processorConfig: loadedVisionProcessorConfig
+            )
+            promptTokens = try LFM2VLImageProcessor.expandedPromptTokens(
+                promptTokens,
+                grids: batch.grids,
+                downsampleFactor: loadedVisionConfig.downsampleFactor,
+                imageTokenId: loadedVisionConfig.imageTokenId,
+                imageStartTokenId: imageStartTokenId,
+                imageEndTokenId: imageEndTokenId
+            )
+            guard promptTokens.count <= effectiveContext else {
+                throw LFM2Error.generationFailed(
+                    "LFM2-VL prompt requires \(promptTokens.count) tokens after image expansion; context limit is \(effectiveContext)."
+                )
+            }
+            inputEmbeddings = try visionModel.inputEmbeddings(
+                inputTokens: promptTokens,
+                pixelValues: batch.pixelValues,
+                grids: batch.grids
+            )
+        }
+        if imageReferences.isEmpty, promptTokens.count > effectiveContext {
             promptTokens = Array(promptTokens.suffix(effectiveContext))
         }
 
@@ -349,9 +454,10 @@ public actor LFM2Generator: ChatGenerator {
         let generationConfig = GenerationConfig(
             maxTokens: request.maxTokens,
             temperature: Float(request.temperature),
+            topK: request.topK ?? (loadedVisionConfig == nil ? 0 : 50),
             topP: Float(request.topP),
             minP: Float(request.minP),
-            repetitionPenalty: 1.05,
+            repetitionPenalty: loadedVisionConfig == nil ? 1.05 : 1.0,
             repetitionContextSize: 64
         )
 
@@ -365,17 +471,19 @@ public actor LFM2Generator: ChatGenerator {
             effectiveKVCacheMode = .default
         }
         var layerCaches = makeLayerCaches(config: loadedConfig, kvCacheMode: effectiveKVCacheMode)
-        let prefixCheckpoints = semanticPrefixCheckpoints(
-            tokenizerAndTemplate: tokenizerAndTemplate,
-            messages: request.messages,
-            tools: request.tools,
-            includeThinking: request.showThinking,
-            promptTokens: promptTokens,
-            maxContextLength: effectiveContext
-        )
+        let prefixCheckpoints = imageReferences.isEmpty
+            ? semanticPrefixCheckpoints(
+                tokenizerAndTemplate: tokenizerAndTemplate,
+                messages: request.messages,
+                tools: request.tools,
+                includeThinking: request.showThinking,
+                promptTokens: promptTokens,
+                maxContextLength: effectiveContext
+            )
+            : []
         var prefillStartIndex = 0
         var prefillExistingLogits: MLXArray?
-        if let seed = prefixKVCacheSeed(
+        if imageReferences.isEmpty, let seed = prefixKVCacheSeed(
             modelPath: loadedModelPath,
             promptTokens: promptTokens,
             cacheMode: effectiveKVCacheMode
@@ -389,7 +497,8 @@ public actor LFM2Generator: ChatGenerator {
             model: model,
             promptTokens: promptTokens,
             cache: layerCaches,
-            modelPath: loadedModelPath,
+            inputEmbeddings: inputEmbeddings,
+            modelPath: imageReferences.isEmpty ? loadedModelPath : nil,
             startIndex: prefillStartIndex,
             existingLogits: prefillExistingLogits,
             checkpointTokenCounts: prefixCheckpoints,
@@ -819,6 +928,7 @@ public actor LFM2Generator: ChatGenerator {
         model: LFM2Model,
         promptTokens: [Int],
         cache: [LFM2LayerCache?],
+        inputEmbeddings: MLXArray? = nil,
         modelPath: String? = nil,
         startIndex: Int = 0,
         existingLogits: MLXArray? = nil,
@@ -844,7 +954,12 @@ public actor LFM2Generator: ChatGenerator {
             )
             let chunk = Array(promptTokens[offset..<end])
             let input = MLXArray(chunk.map(Int32.init)).reshaped(1, chunk.count)
-            let output = model.forwardPrefill(input, cache: cache)
+            let chunkEmbeddings = inputEmbeddings?[0..., offset..<end, 0...]
+            let output = model.forwardPrefill(
+                input,
+                cache: cache,
+                inputEmbeddings: chunkEmbeddings
+            )
             MLX.eval(output.logits)
             MLX.eval(output.hidden)
             logits = output.logits
@@ -1061,9 +1176,12 @@ public actor LFM2Generator: ChatGenerator {
         let epoch = decodeLoopEpochState.beginResidencyTransition()
         failQueuedDecodeRows(CancellationError())
         model = nil
+        visionModel = nil
         tokenizerAndTemplate = nil
         loadedModelPath = nil
         loadedConfig = nil
+        loadedVisionConfig = nil
+        loadedVisionProcessorConfig = nil
         prefixKVCache.removeAll(keepingCapacity: false)
         Memory.clearCache()
         return epoch

@@ -1371,6 +1371,29 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["text chat", "api serve"]
         ),
         ManagedModelSpec(
+            id: LFM2Resources.visionModelId,
+            category: .visionChat,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: LFM2Resources.visionUpstreamRepoId,
+                revision: LFM2Resources.visionUpstreamRevision,
+                patterns: LFM2Resources.visionSnapshotPatterns
+            ),
+            upstreamRepoId: LFM2Resources.visionUpstreamRepoId,
+            upstreamRevision: LFM2Resources.visionUpstreamRevision,
+            usageRestriction: usageRestriction(
+                summary: "LFM uses a custom open license; commercial use by entities with at least USD 10M annual revenue is not licensed under its community terms.",
+                license: "LFM Open License v1.0",
+                sourceRepoId: LFM2Resources.visionUpstreamRepoId,
+                sourceRevision: LFM2Resources.visionUpstreamRevision,
+                licenseURL: "https://huggingface.co/LiquidAI/LFM2.5-VL-3B-MLX-8bit/blob/\(LFM2Resources.visionUpstreamRevision)/LICENSE"
+            ),
+            validationKind: .lfm2,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: LFM2Resources.visionEstimatedDownloadBytes,
+            defaultCLICommands: ["text chat", "api serve"]
+        ),
+        ManagedModelSpec(
             id: "speech-tts-qwen3-nano",
             category: .speechTTS,
             installShape: .directoryRoot,
@@ -2968,7 +2991,10 @@ public extension ManagedModelSpec {
         case .q35:
             return Q35Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .lfm2:
-            return LFM2Resources(rootURL: rootURL).validate(fileManager: fileManager)
+            return LFM2Resources(rootURL: rootURL).validate(
+                fileManager: fileManager,
+                requireVisionProcessor: id == LFM2Resources.visionModelId
+            )
         case .inkling:
             return InklingResources.validate(rootURL: rootURL, fileManager: fileManager)
         case .museGlimmer:

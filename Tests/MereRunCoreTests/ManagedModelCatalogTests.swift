@@ -60,6 +60,7 @@ final class ManagedModelCatalogTests: XCTestCase {
             "image-ideogram4-sdnq-uint4",
             "text-chat-lfm25-a1b-8bit",
             "text-chat-lfm25-2.6b-4bit",
+            "vision-chat-lfm25-3b-8bit",
             "vision-segment-sam31",
             "vision-face-buffalo-l",
             "vision-embed-olmoearth-v12-nano",
@@ -938,6 +939,41 @@ final class ManagedModelCatalogTests: XCTestCase {
         }
 
         XCTAssertEqual(spec.normalizedRootURL(root), variant.standardizedFileURL)
+        XCTAssertTrue(spec.missingPaths(in: root).isEmpty)
+    }
+
+    func testLFM25VisionUsesPinnedLiquidAIMLXCheckpoint() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: LFM2Resources.visionModelId))
+
+        XCTAssertEqual(spec.category, .visionChat)
+        XCTAssertEqual(spec.installShape, .directoryRoot)
+        XCTAssertEqual(spec.hubFallback?.repoId, LFM2Resources.visionUpstreamRepoId)
+        XCTAssertEqual(spec.hubFallback?.revision, LFM2Resources.visionUpstreamRevision)
+        XCTAssertEqual(spec.hubFallback?.patterns, LFM2Resources.visionSnapshotPatterns)
+        XCTAssertEqual(spec.validationKind, .lfm2)
+        XCTAssertEqual(spec.defaultRuntimeServingEngine, .textChatLFM2)
+        XCTAssertEqual(spec.estimatedDownloadBytes, 3_736_739_700)
+        XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
+        XCTAssertTrue(spec.hubFallback?.patterns.contains("processor_config.json") == true)
+
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        for filename in [
+            "config.json",
+            "tokenizer.json",
+            "tokenizer_config.json",
+            "model.safetensors.index.json",
+        ] {
+            XCTAssertTrue(FileManager.default.createFile(
+                atPath: root.appendingPathComponent(filename).path,
+                contents: Data()
+            ))
+        }
+        XCTAssertEqual(spec.missingPaths(in: root).map(\.lastPathComponent), ["processor_config.json"])
+        XCTAssertTrue(FileManager.default.createFile(
+            atPath: root.appendingPathComponent("processor_config.json").path,
+            contents: Data()
+        ))
         XCTAssertTrue(spec.missingPaths(in: root).isEmpty)
     }
 
