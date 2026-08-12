@@ -78,6 +78,84 @@ The format is based on Keep a Changelog.
 
 ### Video
 
+- added immutable managed support for LightX2V MiniMax-H3 Turbo v1.0 in both
+  its 544p eight-evaluation and 1344x768 four-evaluation recipes. Mere now
+  selects each adapter's published schedule, video/audio shifts, and LoRA alpha
+  instead of forcing every H3 adapter through the legacy four-step alpha-8 path.
+- aligned native MiniMax-H3 conditioning and sampling with the pinned h3.c
+  serving contract. Reference images now preserve their aspect ratio, never
+  upscale, and are area-matched to the internal render canvas instead of being
+  enlarged to a 2,048-pixel short edge. H3 target video/audio noise now uses
+  the released independent seeded streams and latent layouts; standalone
+  reference audio retains its complete 2-15 second span. The experimental
+  `velocity-reuse-2` arm now linearly extrapolates skipped velocities from its
+  two latest full evaluations rather than holding the last velocity constant.
+- reduced the pinned 512x256 Ref2VA fixture's clean dense wall time from
+  1,920.079 to 578.450 seconds (69.87%) and MLX peak from 88.59 to 41.14 GiB
+  (53.56%) by correcting reference preprocessing, without skipping a denoise
+  evaluation. A matched three-seed screen found another 31.5% to 36.0% from
+  `velocity-reuse-2`, but rejected it as a default because every seed changed
+  visual trajectory and one produced a conspicuous train-light artifact; the
+  arm remains experimental.
+- verified the selected LightX2V v1.0 8-step recipe at zero starting swap:
+  960x544, 124 synchronized AV frames, 2,457.841 seconds wall, and 61.90 GiB
+  MLX peak. The output was byte-identical to the prior screen and retained
+  strong -23.2 dB mean / -5.6 dB maximum audio. The H3 bake-off harness now
+  captures named phase profiling together with per-step timing for future
+  clean load, denoise, video-VAE, and audio-VAE receipts.
+- added explicit `--h3-render-width` and `--h3-render-height` controls for
+  MiniMax-H3 reduced-canvas bake-offs. FL2VA and Ref2VA now run their target
+  latent grid at the same-aspect internal geometry and upscale decoded RGB
+  frames with h3.c-compatible high-quality vImage resampling. The mode remains
+  opt-in and does not yet compose with continuation or sliding windows.
+- hardened the MiniMax-H3 algorithm bake-off harness with generation-only wall
+  timing, process peak RSS and footprint, MLX peak-memory extraction, thermal
+  and swap provenance, exact output-geometry checks, and matched-seed
+  SSIM/PSNR/VMAF plus decoded-audio correlation and relative-L2 diagnostics.
+  The algorithm and kernel start gates now also reject concurrent Swift/Xcode
+  builds and more than 1 GiB of existing swap. The algorithm runner records
+  the exact prompt and ordered arguments and can verify every reference's
+  order, type, size, and SHA-256 against a pinned manifest. Structural,
+  provenance, or scoring failures preserve their outputs and receipts for
+  inspection.
+- added a resumable, repository-locked H3 exact-kernel suite. It runs the K1
+  through K5 canaries and installed Ref2VA full-forward gate in evidence order,
+  retains per-mode logs and clean-host receipts, stops immediately on a host
+  rejection, and skips only modes with durable pass markers when resumed.
+- added an isolated experimental MiniMax-H3 `token-reduction` arm. It preserves
+  every prefix, condition, reference, and audio row; horizontally pairs only
+  target-video tokens after block 3; restores before block 40 for the first ten
+  evaluations and before block 30 thereafter; and reconstructs the full grid
+  from the saved original tokens plus each reduced token's learned delta.
+- added the explicit experimental MiniMax-H3 `velocity-reuse-2` acceleration
+  arm for controlled h3.c transfer bake-offs. It preserves the quality schedule
+  and full first/final evaluations, reuses complete video/audio velocities only
+  on intervening odd steps, and does not compose with the other approximation
+  policies or become a default without FL2VA and Ref2VA quality receipts.
+- added isolated `layers-45` and `layers-40` MiniMax-H3 A/B arms that reproduce
+  h3.c's cached AdaLN gate ranking while protecting blocks 0, 1, and 49. The
+  current implementation skips execution but retains every loaded weight, so
+  it makes no transformer-residency reduction claim.
+- bundled Ref2VA's source-bound 31-point AdaLN cache in its pinned managed
+  artifact, so a normal pull can omit the schedule-only AdaLN/time-embedding
+  branch without a post-pull optimization step. Cache construction now
+  preserves live three-modality batch semantics instead of projecting every
+  schedule row together, and managed Ref2VA cache identity is bound to the
+  immutable transformer SHA-256 rather than model-store symlink metadata.
+- made managed Ref2VA pulls revision-aware. A stale installed manifest now
+  triggers an update, while exact Git/LFS objects and verified files from the
+  existing install are hard-linked into the new immutable Hub snapshot. Pull
+  preflight reports only the content-addressed revision delta instead of
+  requiring space for a duplicate 70.94 GB package.
+- added `video-minimax-h3-ref2va-mlx` as a self-contained explicit managed
+  pull from the immutable public `Sawfwair/MiniMax-H3-Ref2VA-MLX-8bit`
+  artifact. Its transformer and conditioner use MLX affine INT8/group-64;
+  8-bit is the supported Ref2VA quality floor.
+- fixed the MiniMax-H3 ConvRot converter to honor each source tensor's embedded
+  rotation group independently from MLX's output quantization group. The
+  corrected release reverses group-256 transformer matrices and group-64 AdaLN
+  matrices before requantizing to MLX affine INT8/group-64, and the managed
+  model validates the pinned source/output receipt.
 - added `minimax-h3-lightx2v-4step` as a second immutable, checksum-pinned
   MiniMax-H3 managed adapter. The native runtime reads LightX2V's published
   312-pair PEFT checkpoint directly, preserves its separate Q/K/V projections

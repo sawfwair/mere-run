@@ -1831,7 +1831,11 @@ Key options:
 - `--seed`
 - `--steps`: MiniMax-H3 schedule-point override or Wan2.2 inference steps
 - `--h3-weight-mode`: `auto`, `quantized`, or `resident-bf16`
-- `--h3-acceleration`: `quality`, `balanced`, or `maximum`
+- `--h3-acceleration`: `quality`, `balanced`, `maximum`, or the experimental
+  `layers-45`, `layers-40`, `velocity-reuse-2`, and `token-reduction` A/B arms
+- `--h3-render-width`, `--h3-render-height`: optional same-aspect internal H3
+  canvas. Both must be 32px multiples no larger than the output canvas; decoded
+  frames are high-quality upscaled back to `--width` and `--height`
 - `--h3-adapter`: installed MiniMax-H3 adapter catalog id or local safetensors
   path
 - `--h3-adapter-strength`: MiniMax-H3 runtime adapter multiplier
@@ -1901,8 +1905,9 @@ FL2VA accepts `--image`, optional `--end-image`, and up to 12 repeatable
 `--h3-frame FRAME:PATH` conditions at exact zero-based output indices. Ref2VA
 accepts ordered `--reference` values and rejects FL2VA keyframe flags. H3 dimensions snap to
 32-pixel multiples, frame counts snap upward to `17*n+5`, and its
-CFG-distilled transformer needs one evaluation per schedule step. Ref2VA roots
-are locally converted; the public managed pull exists only for FL2VA.
+CFG-distilled transformer needs one evaluation per schedule step. Ref2VA is an
+explicit managed pull with an 8-bit transformer and conditioner; 8-bit is the
+published Ref2VA quality floor.
 When `--steps` is omitted, H3 selects 9, 16, or 21 schedule points from packed
 row cost. Maximum acceleration caps the automatic schedule at 12 points. Its
 source-bound AdaLN cache resamples the exact released 31-point
@@ -1929,6 +1934,44 @@ reuse. These modes remain approximate: the same prompt and seed may follow a
 different motion or composition trajectory. Use `quality` when exact-seed
 fidelity matters.
 
+`velocity-reuse-2` is a separate experimental h3.c transfer arm. It retains the
+quality schedule, runs the first and final denoise evaluations in full, and
+linearly extrapolates complete video and audio velocity outputs from the two
+latest full evaluations on intervening odd steps. The two modalities use their
+independent shifted schedules. It does not compose with dynamic-sparse
+attention or either block-cache policy. Use it only for controlled same-seed
+FL2VA and Ref2VA comparisons until the quality envelope is published.
+
+Ref2VA reference images preserve aspect ratio and are downscaled only when
+their area exceeds the internal render canvas. Standalone reference audio keeps
+its complete 2-15 second duration; all ordered reference audio remains capped
+at 15 seconds total. Condition augmentation and target video/audio latents use
+the released independent seeded streams.
+
+`layers-45` and `layers-40` are separate gate-ranked thinning arms. They rank
+the cached schedule's mean absolute attention/MLP AdaLN gates, always protect
+blocks 0, 1, and 49, and skip the lowest remaining scores. They currently save
+block execution only: mere.run still retains every loaded transformer weight,
+so these modes do not yet claim h3.c's weight-residency reduction.
+
+`token-reduction` is the isolated h3.c token-pairing arm. Blocks 0 through 3
+run on the full packed sequence. Only adjacent horizontal target-video tokens
+are averaged; text, condition media, references, target audio, and odd trailing
+video tokens remain exact. The reduced sequence runs through block 39 for the
+first ten denoise evaluations and through block 29 afterward. Reconstruction
+adds each reduced token's change from its pooled baseline back to both saved
+full-resolution source tokens before the remaining full-grid blocks. This mode
+does not compose with sparse attention, layer thinning, or denoise-step reuse
+and remains non-default pending FL2VA and Ref2VA quality receipts.
+
+For reduced-canvas comparisons, set both internal dimensions explicitly. For
+example, `--width 512 --height 512 --h3-render-width 384
+--h3-render-height 384` runs DiT and VAE decode at 75% linear resolution, then
+uses the pinned oracle's high-quality vImage ARGB8888 scaler to emit 512x512
+frames. The internal canvas must preserve aspect exactly. Sliding-window
+continuation is rejected for now rather than silently conditioning on the wrong
+resolution.
+
 `--h3-window-frames` enables resident sliding windows for FL2VA or Ref2VA. The
 window count must be `17*n+5`; `--h3-window-overlap` must be `17*n+1` and leave
 at least 22 target frames. The runtime conditions each new window on prior
@@ -1938,9 +1981,12 @@ then appends only new frames and samples. The output duration and all
 AdaLN table, reference encodings, and VAEs remain loaded between windows.
 
 `--h3-adapter minimax-h3-turbo-4step` selects the separately pulled EMA-850
-LoRA, while `--h3-adapter minimax-h3-lightx2v-4step` selects the LightX2V
-PEFT LoRA. Both target `video-minimax-h3-fl2va-bf16-mlx`. When `--steps` is
-omitted they use five schedule points (four transformer evaluations). EMA-850
+LoRA, while the `minimax-h3-lightx2v-*` ids select pinned LightX2V PEFT LoRAs.
+All target `video-minimax-h3-fl2va-bf16-mlx`. The legacy releases use five
+schedule points (four transformer evaluations). The v1.0 8-step release
+defaults to nine schedule points and accepts the published five-point fallback;
+the v1.0 768p release uses five points, video/audio shifts 6/3, and alpha 128.
+EMA-850
 runs in activation space; LightX2V is fused once into the BF16 transformer
 before denoising and adds no LoRA matmuls to the generation loop. Both require
 dense execution of all 50 blocks and prohibit denoise-step cache reuse, but
@@ -2018,9 +2064,10 @@ swift run mere.run video generate \
   --num-frames 65 \
   --output ./car-start-to-end.mp4
 
+swift run mere.run model pull video-minimax-h3-ref2va-mlx --accept-model-license
 swift run mere.run video generate \
   "keep the reference subject and follow the camera movement" \
-  --model-root ./MiniMax-H3-Ref2VA-MLX \
+  --model video-minimax-h3-ref2va-mlx \
   --reference image:./subject.png \
   --reference video:./camera.mp4 \
   --num-frames 124 \
@@ -2107,8 +2154,8 @@ video/audio schedule's AdaLN modulation tables. Compatible H3 generations then
 skip loading the 13B-parameter AdaLN/time-embedding branch and resample that
 exact curve for their selected point count. `--force` replaces an existing
 cache atomically after the new cache has been built. The managed
-`video-minimax-h3-fl2va-mlx` artifact already includes this source-bound cache;
-no post-pull optimization is needed.
+`video-minimax-h3-fl2va-mlx` and `video-minimax-h3-ref2va-mlx` artifacts already
+include their source-bound caches; no post-pull optimization is needed.
 
 ### `mere.run model remove`
 
@@ -2248,6 +2295,8 @@ mere.run adapter pull mere-platform-assistant
 mere.run adapter pull scail2-lightx2v-4step
 mere.run adapter pull minimax-h3-turbo-4step
 mere.run adapter pull minimax-h3-lightx2v-4step
+mere.run adapter pull minimax-h3-lightx2v-8step-v1
+mere.run adapter pull minimax-h3-lightx2v-4step-v1-768p
 ```
 
 The pull verifies the cataloged byte count and SHA-256 before atomically
@@ -2256,8 +2305,8 @@ verification diagnostics go to stderr. Use the adapter id directly with
 `text chat --lora`, `api serve --lora`, or the matching SCAIL
 `video animate --distilled-adapter` option. `video animate --profile fast`
 selects `scail2-lightx2v-4step` and its fixed four-step schedule.
-Use either `minimax-h3-turbo-4step` or `minimax-h3-lightx2v-4step` with
-`video generate --h3-adapter`; their BF16 FL2VA base remains subject to the
+Use the MiniMax-H3 adapter ids with `video generate --h3-adapter`; their BF16
+FL2VA base remains subject to the
 MiniMax-H3 Community License acceptance.
 
 For a cross-command decision guide, see [Benchmarking](./benchmarking.md). The

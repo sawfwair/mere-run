@@ -23,6 +23,92 @@ public struct MiniMaxH3QuantizationConfiguration: Codable, Hashable, Sendable {
     }
 }
 
+struct MiniMaxH3Ref2VAConversionReceipt: Decodable, Sendable {
+    struct FileIdentity: Decodable, Sendable {
+        let byteCount: Int64
+        let filename: String
+        let repository: String?
+        let revision: String?
+        let sha256: String
+
+        enum CodingKeys: String, CodingKey {
+            case byteCount = "byte_count"
+            case filename
+            case repository
+            case revision
+            case sha256
+        }
+    }
+
+    let converter: String
+    let converterVersion: Int
+    let partition: String
+    let source: FileIdentity
+    let output: FileIdentity
+    let sourceConvRotGroups: [String: Int]
+    let quantization: MiniMaxH3QuantizationConfiguration
+
+    enum CodingKeys: String, CodingKey {
+        case converter
+        case converterVersion = "converter_version"
+        case partition
+        case source
+        case output
+        case sourceConvRotGroups = "source_convrot_groups"
+        case quantization
+    }
+}
+
+private struct MiniMaxH3Ref2VASourceManifest: Decodable, Sendable {
+    struct Artifact: Decodable, Sendable {
+        let format: String
+        let partition: String
+        let repository: String
+    }
+
+    struct AdaLNCache: Decodable, Sendable {
+        struct Schedule: Decodable, Sendable {
+            let audioFlowShift: Float
+            let pointCount: Int
+            let videoFlowShift: Float
+
+            enum CodingKeys: String, CodingKey {
+                case audioFlowShift = "audio_flow_shift"
+                case pointCount = "point_count"
+                case videoFlowShift = "video_flow_shift"
+            }
+        }
+
+        let byteCount: Int64
+        let format: String
+        let path: String
+        let schedule: Schedule
+        let schemaVersion: Int
+        let sha256: String
+        let sourceIdentity: String
+
+        enum CodingKeys: String, CodingKey {
+            case byteCount = "byte_count"
+            case format
+            case path
+            case schedule
+            case schemaVersion = "schema_version"
+            case sha256
+            case sourceIdentity = "source_identity"
+        }
+    }
+
+    let artifact: Artifact
+    let adaLNCache: AdaLNCache
+    let schemaVersion: Int
+
+    enum CodingKeys: String, CodingKey {
+        case artifact
+        case adaLNCache = "adaln_cache"
+        case schemaVersion = "schema_version"
+    }
+}
+
 public struct MiniMaxH3Configuration: Decodable, Hashable, Sendable {
     public let modelType: String
     public let task: String
@@ -169,14 +255,24 @@ public struct MiniMaxH3Resources: Sendable {
     public static let artifactRevision = "e1244ad93d60c737c7e0f065a1c9372f3de7caf8"
     public static let bf16ArtifactRepository = "pipenetwork/MiniMax-H3-MLX-bf16"
     public static let bf16ArtifactRevision = "1486555759eed9e3037edf29f9e055a0713bab2f"
+    public static let ref2vaArtifactRepository = "Sawfwair/MiniMax-H3-Ref2VA-MLX-8bit"
+    public static let ref2vaArtifactRevision = "61dc387ef1a7166425cdacd63c2340598dcc364f"
     public static let bf16TransformerDirectory = "transformer-bf16"
+    public static let bf16TextEncoderDirectory = "text-encoder-bf16"
     public static let officialTransformerSourceIdentity =
         "MiniMaxAI/MiniMax-H3@ec19cc6daf5d8add9417c18e86b6b58cc6c55027:"
         + "FL2VA/transformer:index-sha256:fb457a26ffa6294660e249b0ddd03a337f2e5393f770b5c34c8b8f90a29a7efb"
     public static let conversionSourceRepository = "Comfy-Org/MiniMax-H3"
     public static let conversionSourceRevision = "fd70b39279d1ae6eb214c903f53e1bec3af19a77"
+    public static let ref2vaSourceFilename = "minimax_h3_ref2va_int8_convrot.safetensors"
     public static let ref2vaSourceSHA256 = "9eef934046a0671bc8a5daf87100705e1478419c574cfde70c50fbe6885f76a9"
-    public static let ref2vaConvertedSHA256 = "c3ddde0dc29503281cd4c03c1f82b9cb640f4670da68caa5f55e3cec8f2045e8"
+    public static let ref2vaSourceByteCount: Int64 = 34_038_894_550
+    public static let ref2vaConvertedSHA256 = "234f22f69f8d40d6ed81cceed8259fa287f3c9417d40fba5274e3a7aa84e18a2"
+    public static let ref2vaConvertedByteCount: Int64 = 36_024_412_656
+    public static let ref2vaAdaLNCacheSHA256 = "2cbe9e3324ef2cc5108a3ba7f1219d84079ff00a017f604fd86300005cc64fcd"
+    public static let ref2vaAdaLNCacheByteCount: Int64 = 873_820_740
+    public static let ref2vaAdaLNCacheSourceIdentity =
+        "sha256:\(ref2vaConvertedSHA256)"
 
     public static let requiredFiles = [
         "config.json",
@@ -199,6 +295,12 @@ public struct MiniMaxH3Resources: Sendable {
     public static let bf16SupportArtifactFiles = compactArtifactFiles.filter {
         $0 != "transformer.safetensors" && $0 != MiniMaxH3AdaLNCache.filename
     }
+    public static let ref2vaArtifactFiles = requiredFiles + [
+        "adaln_cache.safetensors",
+        "SOURCE_MANIFEST.json",
+        "transformer.conversion.json",
+        "SHA256SUMS",
+    ]
     public static let bf16ArtifactFiles = [
         "README.md",
         "LICENSE",
@@ -208,6 +310,9 @@ public struct MiniMaxH3Resources: Sendable {
     ]
     public static let bf16ShardFilenames = (1...13).map {
         String(format: "model-%05d-of-00013.safetensors", $0)
+    }
+    public static let bf16TextEncoderShardFilenames = (1...14).map {
+        String(format: "model-%05d-of-00014.safetensors", $0)
     }
 
     public let rootURL: URL
@@ -224,11 +329,18 @@ public struct MiniMaxH3Resources: Sendable {
     public var bf16TransformerIndexURL: URL {
         bf16TransformerRootURL.appending(path: "model.safetensors.index.json")
     }
+    public var bf16TextEncoderRootURL: URL {
+        rootURL.appending(path: Self.bf16TextEncoderDirectory, directoryHint: .isDirectory)
+    }
+    public var bf16TextEncoderIndexURL: URL {
+        bf16TextEncoderRootURL.appending(path: "model.safetensors.index.json")
+    }
     public var textEncoderWeightsURL: URL { rootURL.appending(path: "text_encoder.safetensors") }
     public var tokenizerURL: URL { rootURL }
     public var videoVAEWeightsURL: URL { rootURL.appending(path: "video_vae.safetensors") }
     public var audioVAEWeightsURL: URL { rootURL.appending(path: "audio_vae.safetensors") }
     public var adaLNCacheURL: URL { rootURL.appending(path: MiniMaxH3AdaLNCache.filename) }
+    public var conversionReceiptURL: URL { rootURL.appending(path: "transformer.conversion.json") }
 
     public func transformerWeightsLayout(fileManager: FileManager = .default) -> TransformerWeightsLayout? {
         if fileManager.fileExists(atPath: bf16TransformerIndexURL.path) {
@@ -245,6 +357,10 @@ public struct MiniMaxH3Resources: Sendable {
         return false
     }
 
+    public var usesShardedBF16Conditioner: Bool {
+        FileManager.default.fileExists(atPath: bf16TextEncoderIndexURL.path)
+    }
+
     func adaLNCacheSourceIdentity() throws -> String {
         if usesShardedBF16Transformer {
             return Self.officialTransformerSourceIdentity
@@ -252,7 +368,11 @@ public struct MiniMaxH3Resources: Sendable {
         if let inheritedIdentity = try transformerMetadata()["adaln_cache_source_identity"] {
             return inheritedIdentity
         }
-        let values = try transformerWeightsURL.resourceValues(forKeys: [
+        if validateManagedRef2VAArtifact().isEmpty {
+            return Self.ref2vaAdaLNCacheSourceIdentity
+        }
+        let resolvedWeightsURL = transformerWeightsURL.resolvingSymlinksInPath()
+        let values = try resolvedWeightsURL.resourceValues(forKeys: [
             .fileSizeKey,
             .contentModificationDateKey,
         ])
@@ -265,12 +385,16 @@ public struct MiniMaxH3Resources: Sendable {
 
     func transformerMetadata() throws -> [String: String] {
         guard !usesShardedBF16Transformer else { return [:] }
-        let handle = try FileHandle(forReadingFrom: transformerWeightsURL)
+        return try safetensorsMetadata(at: transformerWeightsURL)
+    }
+
+    private func safetensorsMetadata(at url: URL) throws -> [String: String] {
+        let handle = try FileHandle(forReadingFrom: url)
         defer { try? handle.close() }
         guard let lengthData = try handle.read(upToCount: MemoryLayout<UInt64>.size),
               lengthData.count == MemoryLayout<UInt64>.size else {
             throw MiniMaxH3ResourcesError.invalidConfiguration(
-                transformerWeightsURL,
+                url,
                 "safetensors header length is missing"
             )
         }
@@ -280,14 +404,14 @@ public struct MiniMaxH3Resources: Sendable {
         let headerLength = UInt64(littleEndian: rawLength)
         guard headerLength > 0, headerLength <= 64 * 1_024 * 1_024 else {
             throw MiniMaxH3ResourcesError.invalidConfiguration(
-                transformerWeightsURL,
+                url,
                 "safetensors header length is invalid"
             )
         }
         guard let headerData = try handle.read(upToCount: Int(headerLength)),
               headerData.count == Int(headerLength) else {
             throw MiniMaxH3ResourcesError.invalidConfiguration(
-                transformerWeightsURL,
+                url,
                 "safetensors header is truncated"
             )
         }
@@ -295,7 +419,7 @@ public struct MiniMaxH3Resources: Sendable {
             return try JSONDecoder().decode(SafetensorsHeader.self, from: headerData).metadata ?? [:]
         } catch {
             throw MiniMaxH3ResourcesError.invalidConfiguration(
-                transformerWeightsURL,
+                url,
                 "safetensors metadata is invalid: \(error.localizedDescription)"
             )
         }
@@ -308,7 +432,10 @@ public struct MiniMaxH3Resources: Sendable {
 
     public func validate(fileManager: FileManager = .default) -> [URL] {
         var missing = Self.requiredFiles
-            .filter { $0 != "transformer.safetensors" }
+            .filter { filename in
+                filename != "transformer.safetensors"
+                    && (!usesShardedBF16Conditioner || filename != "text_encoder.safetensors")
+            }
             .map { rootURL.appending(path: $0) }
             .filter { !fileManager.fileExists(atPath: $0.path) }
         switch transformerWeightsLayout(fileManager: fileManager) {
@@ -320,6 +447,14 @@ public struct MiniMaxH3Resources: Sendable {
                 .filter { !fileManager.fileExists(atPath: $0.path) }
         case nil:
             missing.append(transformerWeightsURL)
+        }
+        if usesShardedBF16Conditioner {
+            if !fileManager.fileExists(atPath: bf16TextEncoderIndexURL.path) {
+                missing.append(bf16TextEncoderIndexURL)
+            }
+            missing += Self.bf16TextEncoderShardFilenames
+                .map { bf16TextEncoderRootURL.appending(path: $0) }
+                .filter { !fileManager.fileExists(atPath: $0.path) }
         }
         return missing
     }
@@ -339,5 +474,116 @@ public struct MiniMaxH3Resources: Sendable {
             throw MiniMaxH3ResourcesError.invalidConfiguration(configURL, issues.joined(separator: "; "))
         }
         return configuration
+    }
+
+    func validateManagedRef2VAArtifact(fileManager: FileManager = .default) -> [String] {
+        let sourceManifestURL = rootURL.appending(path: "SOURCE_MANIFEST.json")
+        let requiredProvenance = [
+            sourceManifestURL,
+            conversionReceiptURL,
+            rootURL.appending(path: "SHA256SUMS"),
+            adaLNCacheURL,
+        ]
+        let missing = requiredProvenance.filter { !fileManager.fileExists(atPath: $0.path) }
+        guard missing.isEmpty else {
+            return missing.map { "Missing required Ref2VA provenance file: \($0.lastPathComponent)" }
+        }
+
+        let sourceManifest: MiniMaxH3Ref2VASourceManifest
+        let receipt: MiniMaxH3Ref2VAConversionReceipt
+        do {
+            sourceManifest = try JSONDecoder().decode(
+                MiniMaxH3Ref2VASourceManifest.self,
+                from: Data(contentsOf: sourceManifestURL)
+            )
+            receipt = try JSONDecoder().decode(
+                MiniMaxH3Ref2VAConversionReceipt.self,
+                from: Data(contentsOf: conversionReceiptURL)
+            )
+        } catch {
+            return ["Invalid Ref2VA provenance: \(error.localizedDescription)"]
+        }
+
+        var issues: [String] = []
+        if sourceManifest.schemaVersion != 1
+            || sourceManifest.artifact.format != "mere.run.minimax-h3-ref2va-mlx-8bit"
+            || sourceManifest.artifact.partition != "ref2va"
+            || sourceManifest.artifact.repository != Self.ref2vaArtifactRepository {
+            issues.append("Ref2VA source manifest does not identify the pinned managed artifact.")
+        }
+        let cache = sourceManifest.adaLNCache
+        if cache.path != MiniMaxH3AdaLNCache.filename
+            || cache.byteCount != Self.ref2vaAdaLNCacheByteCount
+            || cache.sha256 != Self.ref2vaAdaLNCacheSHA256
+            || cache.format != "mere.run.minimax-h3-adaln-cache"
+            || cache.schemaVersion != 2
+            || cache.sourceIdentity != Self.ref2vaAdaLNCacheSourceIdentity
+            || cache.schedule.pointCount != 31
+            || cache.schedule.videoFlowShift != 12
+            || cache.schedule.audioFlowShift != 3 {
+            issues.append("Ref2VA source manifest does not match the pinned AdaLN cache.")
+        }
+        let resolvedCacheURL = adaLNCacheURL.resolvingSymlinksInPath()
+        let actualCacheBytes = try? resolvedCacheURL.resourceValues(forKeys: [.fileSizeKey]).fileSize
+        if Int64(actualCacheBytes ?? -1) != Self.ref2vaAdaLNCacheByteCount {
+            issues.append("Ref2VA AdaLN cache byte count does not match the pinned artifact.")
+        }
+        do {
+            let metadata = try safetensorsMetadata(at: adaLNCacheURL)
+            if metadata["format"] != "mere.run.minimax-h3-adaln-cache"
+                || metadata["schema_version"] != MiniMaxH3AdaLNCache.schemaVersion
+                || metadata["source_identity"] != Self.ref2vaAdaLNCacheSourceIdentity {
+                issues.append("Ref2VA AdaLN cache metadata does not match the pinned artifact.")
+            }
+        } catch {
+            issues.append("Ref2VA AdaLN cache metadata is invalid: \(error.localizedDescription)")
+        }
+        if receipt.converter != "scripts/model-conversion/convert_minimax_h3_convrot.py"
+            || receipt.converterVersion != 2 {
+            issues.append("Ref2VA conversion receipt must use the pinned ConvRot converter version 2.")
+        }
+        if receipt.partition != "ref2va" {
+            issues.append("Ref2VA conversion receipt partition must be ref2va.")
+        }
+        if receipt.source.repository != Self.conversionSourceRepository
+            || receipt.source.revision != Self.conversionSourceRevision
+            || receipt.source.filename != Self.ref2vaSourceFilename
+            || receipt.source.byteCount != Self.ref2vaSourceByteCount
+            || receipt.source.sha256 != Self.ref2vaSourceSHA256 {
+            issues.append("Ref2VA conversion receipt does not match the pinned source artifact.")
+        }
+        if receipt.output.filename != transformerWeightsURL.lastPathComponent
+            || receipt.output.repository != nil
+            || receipt.output.revision != nil
+            || receipt.output.byteCount != Self.ref2vaConvertedByteCount
+            || receipt.output.sha256 != Self.ref2vaConvertedSHA256 {
+            issues.append("Ref2VA conversion receipt does not match the pinned MLX transformer.")
+        }
+        if receipt.sourceConvRotGroups != ["64": 50, "256": 200] {
+            issues.append("Ref2VA conversion receipt has unexpected ConvRot source-group counts.")
+        }
+        if receipt.quantization != MiniMaxH3QuantizationConfiguration(
+            bits: 8,
+            groupSize: 64,
+            mode: "affine"
+        ) {
+            issues.append("Ref2VA conversion receipt must declare MLX affine INT8/group-64 output.")
+        }
+        let resolvedWeightsURL = transformerWeightsURL.resolvingSymlinksInPath()
+        let actualBytes = try? resolvedWeightsURL.resourceValues(forKeys: [.fileSizeKey]).fileSize
+        if Int64(actualBytes ?? -1) != Self.ref2vaConvertedByteCount {
+            issues.append("Ref2VA transformer byte count does not match the pinned artifact.")
+        }
+        do {
+            let metadata = try transformerMetadata()
+            if metadata["quantization"] != "affine 8-bit g64"
+                || metadata["source_repository"] != Self.conversionSourceRepository
+                || metadata["source_revision"] != Self.conversionSourceRevision {
+                issues.append("Ref2VA transformer metadata does not match the pinned conversion source.")
+            }
+        } catch {
+            issues.append("Ref2VA transformer metadata is invalid: \(error.localizedDescription)")
+        }
+        return issues
     }
 }

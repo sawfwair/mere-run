@@ -175,7 +175,18 @@ public enum MiniMaxH3ModelLoader {
             textEncoderConfig: textConfiguration,
             visionConfig: visionConfiguration
         )
-        if let quantization = configuration.textEncoderQuantization {
+        if resources.usesShardedBF16Conditioner {
+            try HFSafetensorsWeightsLoader.applyShardedWeights(
+                indexURL: resources.bf16TextEncoderIndexURL,
+                to: encoder,
+                dtype: .bfloat16,
+                verify: [.shapeMismatch],
+                mapper: { rawKey, value in
+                    conditionerWeight(key: conditionerWeightKey(rawKey), value: value)
+                },
+                progressHandler: progressHandler
+            )
+        } else if let quantization = configuration.textEncoderQuantization {
             try HFSafetensorsWeightsLoader.applyQuantizedWeightsFromArrays(
                 MLX.loadArrays(url: resources.textEncoderWeightsURL),
                 to: encoder,
@@ -230,7 +241,11 @@ public enum MiniMaxH3ModelLoader {
 
     static func conditionerWeightKey(_ rawKey: String) -> String {
         var key = rawKey
-        if key.hasPrefix("model.") {
+        if key.hasPrefix("model.language_model.") {
+            key = "textEncoder.encoder." + String(key.dropFirst("model.language_model.".count))
+        } else if key.hasPrefix("model.visual.") {
+            key = "visionTower." + String(key.dropFirst("model.visual.".count))
+        } else if key.hasPrefix("model.") {
             key = "textEncoder.encoder." + String(key.dropFirst("model.".count))
         } else if key.hasPrefix("visual.") {
             key = "visionTower." + String(key.dropFirst("visual.".count))
@@ -250,6 +265,17 @@ public enum MiniMaxH3ModelLoader {
     }
 
     static func conditionerWeight(key: String, value: MLXArray) -> [(String, MLXArray)] {
+        // The official Qwen checkpoint includes its causal language-model head,
+        // but H3 consumes encoder hidden states and has no corresponding module.
+        if key == "lm_head.weight" || key.hasPrefix("textEncoder.encoder.norm.") {
+            return []
+        }
+        if key.hasPrefix("textEncoder.encoder.layers."),
+           let suffix = key.dropFirst("textEncoder.encoder.layers.".count).split(separator: ".").first,
+           let layer = Int(suffix),
+           layer >= 50 {
+            return []
+        }
         if key == "visionTower.patch_embed.proj.weight", value.ndim == 5 {
             return [(key, value.transposed(0, 2, 3, 4, 1))]
         }

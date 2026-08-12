@@ -105,10 +105,10 @@ SHA-256
 Contact-sheet inspection confirmed a coherent approach to and departure from
 the injected composition without collapse.
 
-These receipts prove FL2VA execution. The same typed continuation layout is
-covered for Ref2VA by unit tests, including continuation rows before ordered
-references and shifted target positions, but a real Ref2VA checkpoint was not
-installed for this run.
+These receipts prove FL2VA execution. Ref2VA now has a separate real-checkpoint
+validation receipt in
+[`minimax-h3-ref2va-mlx-8bit.md`](./minimax-h3-ref2va-mlx-8bit.md), in addition
+to the typed continuation-layout coverage here.
 
 The locked MP4 predates the audio-VAE bias-loading correction documented in
 the kernel lab. Its video remains the accepted visual and timing receipt, but

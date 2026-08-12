@@ -234,22 +234,22 @@ public enum ManagedModelResolver {
             throw ResolverError.usageTermsNotAcknowledged(spec.id)
         }
 
-        if fileManager.fileExists(atPath: modelDir.path) {
-            try? fileManager.removeItem(at: modelDir)
-        }
-
         guard let hubFallback = spec.hubFallback else {
             throw ResolverError.downloadFailed(
                 ManagedModelCatalog.missingHubSourceMessage(for: spec.id)
             )
         }
 
+        let reuseRoots = fileManager.fileExists(atPath: modelDir.path) ? [modelDir] : []
         let snapshotURL = try await downloadHubSnapshotWithByteProgress(
             config: hubFallback,
+            reuseRoots: reuseRoots,
             progress: progress
         )
         let mountedSnapshots = try await downloadMountedHubSnapshots(
             for: spec,
+            modelDir: modelDir,
+            fileManager: fileManager,
             progress: progress
         )
         let storageLock = try ModelStorageFileLock.acquire(
@@ -258,6 +258,9 @@ public enum ManagedModelResolver {
         )
         defer { storageLock.unlock() }
         try normalizeManagedLayoutIfNeeded(for: spec, in: snapshotURL, fileManager: fileManager)
+        if fileManager.fileExists(atPath: modelDir.path) {
+            try fileManager.removeItem(at: modelDir)
+        }
         try fileManager.createDirectory(at: modelDir.deletingLastPathComponent(), withIntermediateDirectories: true)
         let manifest = try materializeManagedInstallRoot(
             for: spec,
@@ -292,6 +295,48 @@ public enum ManagedModelResolver {
             return false
         }
         return true
+    }
+
+    public static func estimatedManagedDownloadBytes(
+        spec: ManagedModelSpec,
+        at modelDir: URL,
+        hubCacheURL: URL? = nil,
+        fileManager: FileManager = .default
+    ) async throws -> Int64? {
+        guard let hubFallback = spec.hubFallback else { return nil }
+        let primaryReuseRoots = fileManager.fileExists(atPath: modelDir.path) ? [modelDir] : []
+        let primary = try HubSnapshot(
+            options: HubSnapshotOptions(
+                repoId: hubFallback.repoId,
+                revision: hubFallback.revision,
+                patterns: hubFallback.patterns,
+                cacheDirectory: hubCacheURL,
+                reuseRoots: primaryReuseRoots
+            )
+        )
+        var total = try await primary.estimatedDownloadBytes()
+
+        for mounted in spec.mountedHubFallbacks {
+            let mountedRoot = modelDir.appending(
+                path: mounted.destinationPath,
+                directoryHint: .isDirectory
+            )
+            let mountedReuseRoots = fileManager.fileExists(atPath: mountedRoot.path)
+                ? [mountedRoot]
+                : []
+            let snapshot = try HubSnapshot(
+                options: HubSnapshotOptions(
+                    repoId: mounted.hubFallback.repoId,
+                    revision: mounted.hubFallback.revision,
+                    patterns: mounted.hubFallback.patterns,
+                    cacheDirectory: hubCacheURL,
+                    reuseRoots: mountedReuseRoots
+                )
+            )
+            let bytes = try await snapshot.estimatedDownloadBytes()
+            total = total > Int64.max - bytes ? Int64.max : total + bytes
+        }
+        return total
     }
 
     private static func normalizedRequestedID(_ requestedModel: String?) -> String? {
@@ -356,6 +401,7 @@ public enum ManagedModelResolver {
 
     private static func downloadHubSnapshotWithByteProgress(
         config: HubFallbackConfig,
+        reuseRoots: [URL] = [],
         progress: (@Sendable (InstallProgress) -> Void)?
     ) async throws -> URL {
         do {
@@ -363,7 +409,8 @@ public enum ManagedModelResolver {
                 options: HubSnapshotOptions(
                     repoId: config.repoId,
                     revision: config.revision,
-                    patterns: config.patterns
+                    patterns: config.patterns,
+                    reuseRoots: reuseRoots
                 )
             )
             return try await snapshot.prepare { snapshotProgress in
@@ -389,14 +436,22 @@ public enum ManagedModelResolver {
 
     private static func downloadMountedHubSnapshots(
         for spec: ManagedModelSpec,
+        modelDir: URL,
+        fileManager: FileManager,
         progress: (@Sendable (InstallProgress) -> Void)?
     ) async throws -> [(MountedHubFallbackConfig, URL)] {
         var snapshots: [(MountedHubFallbackConfig, URL)] = []
         snapshots.reserveCapacity(spec.mountedHubFallbacks.count)
 
         for mounted in spec.mountedHubFallbacks {
+            let mountedRoot = modelDir.appending(
+                path: mounted.destinationPath,
+                directoryHint: .isDirectory
+            )
+            let reuseRoots = fileManager.fileExists(atPath: mountedRoot.path) ? [mountedRoot] : []
             let snapshotURL = try await downloadHubSnapshotWithByteProgress(
                 config: mounted.hubFallback,
+                reuseRoots: reuseRoots,
                 progress: progress
             )
             snapshots.append((mounted, snapshotURL))

@@ -901,17 +901,29 @@ QKV matrices are deinterleaved from MiniMax's released per-head row order into
 the global Q/K/V slabs consumed by the native runtime. Runtime auto-download is
 disabled.
 
-Ref2VA is conversion-only. The audited converter accepts only
+The explicit-pull Ref2VA root is the flat
+`Sawfwair/MiniMax-H3-Ref2VA-MLX-8bit` package pinned at immutable Hub commit
+`61dc387ef1a7166425cdacd63c2340598dcc364f`. Its 14-file managed download is exactly
+70,941,103,245 bytes and includes the complete runtime root, a source-bound
+31-point AdaLN cache, source manifest, conversion receipt, hashes, license,
+notice, and modification disclosure. Runtime auto-download is disabled.
+Eight-bit is the supported Ref2VA floor because lower precision did not meet
+the visual quality bar.
+
+The audited release converter accepts only
 `minimax_h3_ref2va_int8_convrot.safetensors` from
 `Comfy-Org/MiniMax-H3@fd70b39279d1ae6eb214c903f53e1bec3af19a77`, exactly
 34,038,894,550 bytes with SHA-256
 `9eef934046a0671bc8a5daf87100705e1478419c574cfde70c50fbe6885f76a9`.
-It reverses the regular-Hadamard ConvRot basis, reproduces MLX affine INT8
-group-64 packing, and emits a hashed receipt. The verified conversion used for
-runtime validation is 36,024,412,656 bytes with SHA-256
-`c3ddde0dc29503281cd4c03c1f82b9cb640f4670da68caa5f55e3cec8f2045e8`.
-Stage it as `transformer.safetensors` beside the exact FL conditioner, VAEs,
-tokenizer, notices, and a `config.json` whose `partition` is `ref2va`.
+It validates each tensor's embedded ConvRot group size, reverses that
+regular-Hadamard basis, reproduces MLX affine INT8 group-64 packing, and emits
+a hashed receipt. The source uses group 256 for 200 transformer matrices and
+group 64 for 50 AdaLN matrices; these source groups are independent of MLX's
+output group size. The verified CPU conversion from the script's pinned
+PyTorch 2.7.1 toolchain is 36,024,412,656 bytes with SHA-256
+`234f22f69f8d40d6ed81cceed8259fa287f3c9417d40fba5274e3a7aa84e18a2`.
+It is published as `transformer.safetensors` beside the exact FL conditioner,
+VAEs, tokenizer, notices, and a `config.json` whose `partition` is `ref2va`.
 
 `convert_minimax_h3_official_mlx.py` creates the managed FL2VA package in one
 audited pass from the official release. It computes the source-bound AdaLN
@@ -959,6 +971,17 @@ model loading and releases the LoRA tensors before denoising, leaving no
 per-block adapter matmuls in the generation loop. Its Apache-2.0 adapter
 license likewise does not replace the base model's MiniMax-H3 Community
 License.
+
+The v1.0 managed adapters `minimax-h3-lightx2v-8step-v1` and
+`minimax-h3-lightx2v-4step-v1-768p` pin the non-ComfyUI BF16 checkpoints at
+immutable repository revision `e6346777701aa2b64d42ed058cdd71ae00e7cd52`.
+Their exact sizes and SHA-256 digests are 1,383,677,768 bytes /
+`e16ac20824d6e6649b193806f8fb095639bd9946c97b1bb84b4248eab1cc807f`
+and 1,383,677,808 bytes /
+`1bdabc2e9fce20b1db563b96bcf6e46adcad4c1964f423676436bf266cc7416c`.
+The runtime binds each filename to the upstream recipe so the 8-step release
+uses shifts 12/3 and alpha 8, while the 1344x768 four-step release uses shifts
+6/3 and alpha 128.
 
 ### `video-wan22-ti2v-5b-mlx`
 

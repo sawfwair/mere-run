@@ -83,6 +83,9 @@ public enum ManagedAdapterCatalog {
     public static let miniMaxH3TurboFourStepRevision = "b604dd5fe25c4c747699f698a1e63f6c46d4a066"
     public static let miniMaxH3LightX2VFourStepID = "minimax-h3-lightx2v-4step"
     public static let miniMaxH3LightX2VFourStepRevision = "b65e359c0d128b3c5e08e0f5bf2791b794378588"
+    public static let miniMaxH3LightX2VEightStepV1ID = "minimax-h3-lightx2v-8step-v1"
+    public static let miniMaxH3LightX2VFourStepV1_768pID = "minimax-h3-lightx2v-4step-v1-768p"
+    public static let miniMaxH3LightX2VV1Revision = "e6346777701aa2b64d42ed058cdd71ae00e7cd52"
 
     public static let allSpecs: [ManagedAdapterSpec] = [
         ManagedAdapterSpec(
@@ -166,6 +169,48 @@ public enum ManagedAdapterCatalog {
                 filename: "minimax_h3_fl2v_turbo_4step_v0.1.safetensors",
                 byteCount: 1_383_677_888,
                 sha256: "5ff4a12c8b4599fec716e1b15a45e504e0d1129111896bdcde5ac4a15e395b29"
+            )
+        ),
+        ManagedAdapterSpec(
+            id: miniMaxH3LightX2VEightStepV1ID,
+            title: "MiniMax-H3 Turbo 8-step v1.0 (LightX2V)",
+            version: String(miniMaxH3LightX2VV1Revision.prefix(12)),
+            summary: "LightX2V v1.0 eight-evaluation 544p PEFT LoRA for native MiniMax-H3 BF16 FL2VA.",
+            baseModelID: ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue,
+            format: MiniMaxH3TurboAdapter.lightX2VFormat,
+            license: "Apache-2.0 (adapter); MiniMax-H3 Community License (base model)",
+            upstreamRevision: miniMaxH3LightX2VV1Revision,
+            releaseManifestURL: URL(
+                string: "https://huggingface.co/lightx2v/Minimax-h3-Turbo/commit/\(miniMaxH3LightX2VV1Revision)"
+            )!,
+            downloadURL: URL(
+                string: "https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/\(miniMaxH3LightX2VV1Revision)/minimax_h3_fl2v_turbo_8step_v1.0_bf16.safetensors?download=true"
+            )!,
+            artifact: ModelArtifactPin(
+                filename: "minimax_h3_fl2v_turbo_8step_v1.0_bf16.safetensors",
+                byteCount: 1_383_677_768,
+                sha256: "e16ac20824d6e6649b193806f8fb095639bd9946c97b1bb84b4248eab1cc807f"
+            )
+        ),
+        ManagedAdapterSpec(
+            id: miniMaxH3LightX2VFourStepV1_768pID,
+            title: "MiniMax-H3 Turbo 4-step v1.0 768p (LightX2V)",
+            version: String(miniMaxH3LightX2VV1Revision.prefix(12)),
+            summary: "LightX2V v1.0 four-evaluation 1344x768 PEFT LoRA for native MiniMax-H3 BF16 FL2VA.",
+            baseModelID: ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue,
+            format: MiniMaxH3TurboAdapter.lightX2VFormat,
+            license: "Apache-2.0 (adapter); MiniMax-H3 Community License (base model)",
+            upstreamRevision: miniMaxH3LightX2VV1Revision,
+            releaseManifestURL: URL(
+                string: "https://huggingface.co/lightx2v/Minimax-h3-Turbo/commit/\(miniMaxH3LightX2VV1Revision)"
+            )!,
+            downloadURL: URL(
+                string: "https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/\(miniMaxH3LightX2VV1Revision)/minimax_h3_fl2v_turbo_4step_v1.0_768p_bf16.safetensors?download=true"
+            )!,
+            artifact: ModelArtifactPin(
+                filename: "minimax_h3_fl2v_turbo_4step_v1.0_768p_bf16.safetensors",
+                byteCount: 1_383_677_808,
+                sha256: "1bdabc2e9fce20b1db563b96bcf6e46adcad4c1964f423676436bf266cc7416c"
             )
         ),
     ]

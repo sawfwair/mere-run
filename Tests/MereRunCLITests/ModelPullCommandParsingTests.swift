@@ -454,6 +454,34 @@ final class ModelPullCommandParsingTests: XCTestCase {
         XCTAssertNil(ModelPullDiskPreflight.requiredBytes(estimatedDownloadBytes: nil))
     }
 
+    func testStructuredPreflightUsesVerifiedRevisionDeltaOverride() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let cache = root.appendingPathComponent("hub", isDirectory: true)
+        let modelStore = root.appendingPathComponent("models", isDirectory: true)
+        let modelID = ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue
+        let deltaBytes: Int64 = 4_362
+        let command = try ModelPull.parse([
+            modelID,
+            "--allow-unsupported",
+            "--accept-model-license",
+            "--preflight",
+            "--json",
+        ])
+
+        let envelope = command.makePreflightEnvelope(
+            hubCacheURL: cache,
+            modelStoreURL: modelStore,
+            estimatedDownloadBytesOverrides: [modelID: deltaBytes],
+            diskAvailableBytes: { _ in 3 * ModelPullDiskPreflight.bytesPerGiB }
+        )
+
+        XCTAssertNotEqual(envelope.status, .blocked)
+        XCTAssertEqual(envelope.result.estimatedDownloadBytes, deltaBytes)
+        XCTAssertEqual(envelope.result.models.first?.estimatedDownloadBytes, deltaBytes)
+        XCTAssertEqual(envelope.result.models.first?.status, "will_download")
+    }
+
     func testDiskPreflightDoesNotRequireModelBytesForCompleteCachedSnapshot() throws {
         let root = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
@@ -633,6 +661,40 @@ final class ModelPullCommandParsingTests: XCTestCase {
         XCTAssertEqual(envelope.result.models.first?.installed, true)
         XCTAssertEqual(envelope.result.models.first?.runtimePath, external.path)
         XCTAssertEqual(envelope.result.models.first?.willDownload, false)
+    }
+
+    func testExternalBindingAndRevisionDeltaOverrideCompose() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let modelStore = root.appendingPathComponent("models", isDirectory: true)
+        let hubCache = root.appendingPathComponent("hub", isDirectory: true)
+        let external = root.appendingPathComponent("external-zimage", isDirectory: true)
+        try writeMinimalExternalZImage(at: external)
+        let modelID = ModelResolver.ModelID.zetaNano.rawValue
+        let deltaBytes: Int64 = 4_362
+        let locations = ModelLocationSnapshot(
+            primaryRoot: modelStore,
+            bindings: [.init(modelID: modelID, path: external.path)]
+        )
+
+        let envelope = try ModelPull.parse([
+            modelID,
+            "--allow-unsupported",
+            "--preflight",
+            "--json",
+        ]).makePreflightEnvelope(
+            hubCacheURL: hubCache,
+            modelStoreURL: modelStore,
+            estimatedDownloadBytesOverrides: [modelID: deltaBytes],
+            modelLocations: locations,
+            diskAvailableBytes: { _ in 100 * ModelPullDiskPreflight.bytesPerGiB }
+        )
+
+        XCTAssertEqual(envelope.result.models.first?.status, "installed")
+        XCTAssertEqual(envelope.result.models.first?.runtimePath, external.path)
+        XCTAssertEqual(envelope.result.models.first?.estimatedDownloadBytes, deltaBytes)
+        XCTAssertEqual(envelope.result.willDownloadCount, 0)
+        XCTAssertEqual(envelope.result.estimatedDownloadBytes, 0)
     }
 
     private func writeMinimalExternalZImage(at root: URL) throws {

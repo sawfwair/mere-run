@@ -1038,6 +1038,33 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(resolved.rootURL.resolvingSymlinksInPath(), snapshotRoot.resolvingSymlinksInPath())
     }
 
+    func testManagedRef2VARequiresTheCurrentPinnedArtifactRevision() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        for filename in MiniMaxH3Resources.requiredFiles {
+            XCTAssertTrue(FileManager.default.createFile(
+                atPath: root.appendingPathComponent(filename).path,
+                contents: Data()
+            ))
+        }
+
+        let modelID = ModelResolver.ModelID.miniMaxH3Ref2VAMLX
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: modelID.rawValue))
+        var manifest = MereRunModelManifest.template(
+            for: modelID,
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+        manifest.upstreamRepoId = "Sawfwair/MiniMax-H3-Ref2VA-MLX-8bit"
+            + "@abb9114fe9d6e3cccc6376eee1abaf09d3f2a9fe"
+        try manifest.write(to: root)
+        XCTAssertFalse(spec.isManagedRootComplete(root, fileManager: .default))
+
+        manifest.upstreamRepoId = "\(MiniMaxH3Resources.ref2vaArtifactRepository)"
+            + "@\(MiniMaxH3Resources.ref2vaArtifactRevision)"
+        try manifest.write(to: root)
+        XCTAssertTrue(spec.isManagedRootComplete(root, fileManager: .default))
+    }
+
     func testBonsaiTernaryAcceptsPrismMLPackedLayout() throws {
         let root = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }

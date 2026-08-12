@@ -2633,12 +2633,17 @@ public enum ManagedModelCatalog {
             id: ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue,
             category: .video,
             installShape: .structuredRoot,
-            upstreamRepoId: MiniMaxH3Resources.conversionSourceRepository,
-            upstreamRevision: MiniMaxH3Resources.conversionSourceRevision,
+            hubFallback: HubFallbackConfig(
+                repoId: MiniMaxH3Resources.ref2vaArtifactRepository,
+                revision: MiniMaxH3Resources.ref2vaArtifactRevision,
+                patterns: MiniMaxH3Resources.ref2vaArtifactFiles
+            ),
+            upstreamRepoId: MiniMaxH3Resources.ref2vaArtifactRepository,
+            upstreamRevision: MiniMaxH3Resources.ref2vaArtifactRevision,
             usageRestriction: miniMaxH3UsageRestriction,
             validationKind: .miniMaxH3MLX,
             runtimeAutoDownloadAllowed: false,
-            estimatedDownloadBytes: 70_060_217_720,
+            estimatedDownloadBytes: 70_941_103_245,
             defaultCLICommands: ["video generate"]
         ),
         ManagedModelSpec(
@@ -3168,6 +3173,18 @@ public extension ManagedModelSpec {
                 guard configuration.task == expectedTask else {
                     return ["MiniMax-H3 model \(id) requires partition \(expectedTask), got \(configuration.task)."]
                 }
+                if id == ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue {
+                    let expectedQuantization = MiniMaxH3QuantizationConfiguration(
+                        bits: 8,
+                        groupSize: 64,
+                        mode: "affine"
+                    )
+                    guard configuration.quantization == expectedQuantization,
+                          configuration.textEncoderQuantization == expectedQuantization else {
+                        return ["MiniMax-H3 Ref2VA requires MLX affine INT8/group-64 transformer and conditioner weights."]
+                    }
+                    return resources.validateManagedRef2VAArtifact(fileManager: fileManager)
+                }
                 return []
             } catch {
                 return [error.localizedDescription]
@@ -3274,8 +3291,9 @@ public extension ManagedModelSpec {
     }
 
     private func managedSourceMatches(_ rootURL: URL, fileManager: FileManager) -> Bool {
-        guard id == ModelResolver.ModelID.zetaNano.rawValue,
-              let expectedRepo = upstreamRepoId else {
+        let requiresPinnedSource = id == ModelResolver.ModelID.zetaNano.rawValue
+            || id == ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue
+        guard requiresPinnedSource, let expectedRepo = upstreamRepoId else {
             return true
         }
         let normalized = normalizedRootURL(rootURL, fileManager: fileManager)
@@ -3291,7 +3309,8 @@ public extension ManagedModelSpec {
            installedRepo == expectedWithRevision {
             return true
         }
-        if installedRepo == "\(expectedRepo)@\(ZImageTurboRepository.revision)" {
+        if id == ModelResolver.ModelID.zetaNano.rawValue,
+           installedRepo == "\(expectedRepo)@\(ZImageTurboRepository.revision)" {
             return true
         }
         return false

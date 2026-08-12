@@ -107,7 +107,11 @@ Examples:
 - vision: `vision-ocr-lighton`
 - music: `music-acestep`, `music-acestep-xl-turbo`, `music-acestep-xl-turbo-lm4b`, `music-acestep-xl-sft`, `music-acestep-xl-base`, `music-acestep-lm-1.7b`, `music-acestep-lm-4b`, `music-magenta-rt2-small`, `music-magenta-rt2-base`
 - sfx: `sfx-woosh-dflow`, `sfx-woosh-flow`, `sfx-woosh-clap`, `sfx-woosh-synchformer`, `sfx-woosh-dvflow-8s`, `sfx-woosh-vflow-8s`, `sfx-mmaudio-large-44k-v2`
-- video: `video-ltx-av`, `video-ltx23-av-mlx`, `video-ltx23-full-mlx`, `video-ltx23-a2vid-mlx`, `video-ltx25-distilled-bf16`, `video-wan22-ti2v-5b-mlx`, `video-scail2-14b-mlx`
+- video: `video-minimax-h3-fl2va-mlx`, `video-minimax-h3-fl2va-bf16-mlx`,
+  `video-minimax-h3-ref2va-mlx`, `video-ltx-av`, `video-ltx23-av-mlx`,
+  `video-ltx23-full-mlx`, `video-ltx23-a2vid-mlx`,
+  `video-ltx25-distilled-bf16`,
+  `video-wan22-ti2v-5b-mlx`, `video-scail2-14b-mlx`
 
 The public runtime resolves these IDs directly, so docs and examples should use
 the canonical names shown by `mere.run model list`.

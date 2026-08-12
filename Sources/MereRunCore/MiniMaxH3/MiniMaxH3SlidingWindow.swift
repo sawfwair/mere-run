@@ -137,6 +137,11 @@ extension MiniMaxH3Generator {
                 "sliding total frame count must match the generation request"
             )
         }
+        guard !options.usesReducedRenderCanvas else {
+            throw MiniMaxH3GeneratorError.invalidOptions(
+                "reduced internal rendering does not yet support continuation or sliding windows"
+            )
+        }
         let plan = MiniMaxH3SlidingWindowPlan(options: slidingWindowOptions)
         var assembledFrames: MLXArray?
         var assembledAudio: MLXArray?
@@ -154,6 +159,8 @@ extension MiniMaxH3Generator {
                 prompt: options.prompt,
                 width: options.width,
                 height: options.height,
+                renderWidth: options.renderWidth,
+                renderHeight: options.renderHeight,
                 numFrames: window.generatedFrameCount,
                 steps: options.steps,
                 seed: options.seed &+ UInt64(window.index),

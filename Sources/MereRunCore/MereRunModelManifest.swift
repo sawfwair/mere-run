@@ -2116,7 +2116,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                     vae: .local(path: "."),
                     scheduler: nil
                 ),
-                upstreamRepoId: "\(MiniMaxH3Resources.conversionSourceRepository)@\(MiniMaxH3Resources.conversionSourceRevision)",
+                upstreamRepoId: "\(MiniMaxH3Resources.ref2vaArtifactRepository)@\(MiniMaxH3Resources.ref2vaArtifactRevision)",
                 createdAt: createdAt
             )
         case .cosmos3EdgeMLX:

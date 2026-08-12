@@ -26,6 +26,12 @@ source-bound cache stores the exact released 31-point AdaLN curve and resamples
 it for explicit point-count overrides. The converted transformer stores global
 Q/K/V slabs; the unmodified video VAE retains the released per-head interleave.
 
+Ref2VA image references preserve source aspect ratio and are downscaled only
+when their area exceeds the internal render canvas. Standalone audio references
+retain their complete 2-15 second span, subject to the released 15-second total
+limit. Condition augmentation and target video/audio initialization use the
+released independent seeded streams and native latent layouts.
+
 Compact Q4 remains the automatic lane on lower-memory MacBooks. Memory-qualified
 MacBooks with at least 96 GiB of unified memory, and desktop Macs with sufficient
 headroom, expand those weights once to resident BF16 for compute-bound denoise;
@@ -33,8 +39,10 @@ the CLI can force either mode. H3 inference also raises MLX wired residency
 through the shared ticket coordinator so weights and activation workspaces do
 not silently fall out of the GPU residency set.
 
-The checksum-pinned `minimax-h3-turbo-4step` and
-`minimax-h3-lightx2v-4step` LoRAs run only with the BF16 FL2VA transformer.
+The checksum-pinned `minimax-h3-turbo-4step`,
+`minimax-h3-lightx2v-4step`, `minimax-h3-lightx2v-8step-v1`, and
+`minimax-h3-lightx2v-4step-v1-768p` LoRAs run only with the BF16 FL2VA
+transformer.
 The EMA-850 adapter's 259 mixed-rank pairs are applied as activation-space
 deltas, its fused QKV rows are deinterleaved to match the runtime's global
 slabs, and its AdaLN deltas are included while the exact four-evaluation
@@ -42,9 +50,13 @@ schedule cache is built. The LightX2V adapter's 312 native PEFT pairs retain
 their separate Q/K/V projections and published alpha/rank scale while their
 deltas are fused into the BF16 transformer once before denoising. This avoids
 both an expanded converted checkpoint and per-block LoRA matmuls. Neither
-adapter can be combined with Ref2VA or denoise-step cache reuse. They can use
-the attention-only `balanced` and `maximum` paths; their four-step schedule
-always executes all 50 blocks.
+v1.0 recipe is treated as the legacy four-step release: the 8-step adapter
+defaults to nine schedule points with shifts 12/3 and also accepts its
+published five-point fallback, while the 768p adapter uses five points, shifts
+6/3, and alpha 128. The recommended 768p canvas is 1344x768. H3 Turbo
+adapters cannot be combined with Ref2VA or denoise-step cache reuse. They can
+use the attention-only `balanced` and `maximum` paths; every scheduled
+evaluation still executes all 50 blocks.
 
 `--h3-acceleration quality` executes every transformer block and preserves the
 native same-seed trajectory. At packed sequences of at least 12,000 tokens,
@@ -104,14 +116,23 @@ source manifest and conversion hashes alongside the runtime files. Its 52
 fused transformer QKV matrices are deinterleaved from the released per-head
 rows into the global Q/K/V slabs expected by the native runtime before Q4
 packing.
-Ref2VA is a local conversion lane because this repository does not publish a
-redistributable converted snapshot. Convert the pinned
-`Comfy-Org/MiniMax-H3` ConvRot source with
-`scripts/model-conversion/convert_minimax_h3_convrot.py`, then stage the
-result as `transformer.safetensors` beside the FL package's exact conditioner,
-VAEs, tokenizer, configuration, license, notice, and modification files.
-Change only `partition` in `config.json` to `ref2va`; retain the conversion
-receipt next to the root as provenance.
+The explicit-pull Ref2VA package is published as
+`Sawfwair/MiniMax-H3-Ref2VA-MLX-8bit` and pinned to Hub commit
+`61dc387ef1a7166425cdacd63c2340598dcc364f`. Its transformer comes from the exact
+`Comfy-Org/MiniMax-H3@fd70b39279d1ae6eb214c903f53e1bec3af19a77` ConvRot
+source through `scripts/model-conversion/convert_minimax_h3_convrot.py`. The
+converter reads each tensor's embedded ConvRot group size (256 for the 200
+transformer matrices and 64 for the 50 AdaLN matrices) independently from the
+MLX affine output group size of 64. The published transformer is affine
+INT8/group-64, exactly 36,024,412,656 bytes with SHA-256
+`234f22f69f8d40d6ed81cceed8259fa287f3c9417d40fba5274e3a7aa84e18a2`.
+The conditioner is also affine INT8/group-64. Lower Ref2VA precision did not
+meet the visual quality bar, so 8-bit is the supported floor. The package is
+self-contained and retains its source-bound 31-point AdaLN cache, source
+manifest, conversion receipt, hashes, license, notice, and modification
+disclosure. The cache is tied to the immutable transformer SHA-256 and lets a
+normal managed pull omit the schedule-only AdaLN/time-embedding branch without
+running `model optimize` locally.
 
 The implementation follows the published MiniMax/Hugging Face architecture.
 No ComfyUI source is included or used at runtime.

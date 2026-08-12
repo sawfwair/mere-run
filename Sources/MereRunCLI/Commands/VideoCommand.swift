@@ -57,12 +57,20 @@ enum MiniMaxH3CLIAccelerationMode: String, CaseIterable, ExpressibleByArgument {
     case quality
     case balanced
     case maximum
+    case layers45 = "layers-45"
+    case layers40 = "layers-40"
+    case velocityReuse2 = "velocity-reuse-2"
+    case tokenReduction = "token-reduction"
 
     var generationMode: MiniMaxH3AccelerationMode {
         switch self {
         case .quality: .quality
         case .balanced: .balanced
         case .maximum: .maximum
+        case .layers45: .layers45
+        case .layers40: .layers40
+        case .velocityReuse2: .velocityReuse2
+        case .tokenReduction: .tokenReduction
         }
     }
 }
@@ -246,7 +254,7 @@ struct VideoGenerate: AsyncParsableCommand {
           swift run mere.run video generate "dialogue with clean background music" --quality final --output-mode audio-video --duration 15 --fps 24
           swift run mere.run video generate "a kinetic live performance" --audio song.wav --audio-start-time 30 --duration 5 --image performer.png
           swift run mere.run video generate "the camera walks forward" --model video-wan22-ti2v-5b-mlx --image frame.png --num-frames 41 --width 1280 --height 704
-          swift run mere.run video generate "use this subject and motion" --model-root ./MiniMax-H3-Ref2VA-MLX --reference image:subject.png --reference video:motion.mp4
+          swift run mere.run video generate "use this subject and motion" --model video-minimax-h3-ref2va-mlx --reference image:subject.png --reference video:motion.mp4
           swift run mere.run video generate "one continuous tracking shot" --model minimax-h3-fl2va-bf16-mlx --duration 15 --h3-window-frames 124 --h3-window-overlap 35
           swift run mere.run video generate "the actor crosses three sets" --model minimax-h3-fl2va-bf16-mlx --h3-frame 72:second-set.png --h3-frame 144:third-set.png
         """
@@ -305,13 +313,25 @@ struct VideoGenerate: AsyncParsableCommand {
 
     @Option(
         name: [.customLong("h3-acceleration")],
-        help: "MiniMax-H3 acceleration: quality is exact; balanced/maximum add dynamic sparse attention and, without a Turbo adapter, adaptive first-block caching."
+        help: "MiniMax-H3 acceleration: quality is exact; balanced/maximum add sparse attention and caching; layers-45/layers-40, velocity-reuse-2, and token-reduction are experimental research arms."
     )
     var h3Acceleration: MiniMaxH3CLIAccelerationMode = .quality
 
     @Option(
+        name: [.customLong("h3-render-width")],
+        help: "MiniMax-H3 internal render width. Set with --h3-render-height; output is upscaled."
+    )
+    var h3RenderWidth: Int?
+
+    @Option(
+        name: [.customLong("h3-render-height")],
+        help: "MiniMax-H3 internal render height. Set with --h3-render-width; output is upscaled."
+    )
+    var h3RenderHeight: Int?
+
+    @Option(
         name: [.customLong("h3-adapter")],
-        help: "Installed MiniMax-H3 adapter catalog id or local safetensors path. Turbo defaults to four denoise evaluations."
+        help: "Installed MiniMax-H3 adapter catalog id or local safetensors path. Published Turbo steps and shifts are selected from the adapter recipe."
     )
     var h3Adapter: String?
 
@@ -627,6 +647,12 @@ struct VideoGenerate: AsyncParsableCommand {
                 if h3Width != width || h3Height != height {
                     CLIStderr.write("Adjusted MiniMax-H3 size to \(h3Width)x\(h3Height) (must be divisible by 32)\n")
                 }
+                if let h3RenderWidth, let h3RenderHeight {
+                    CLIStderr.write(
+                        "MiniMax-H3 internal render: \(h3RenderWidth)x\(h3RenderHeight); "
+                            + "high-quality upscale to \(h3Width)x\(h3Height)\n"
+                    )
+                }
                 if h3Frames != requestedH3Frames {
                     CLIStderr.write("Adjusted MiniMax-H3 frame count to \(h3Frames) (must have form 17*n+5)\n")
                 }
@@ -644,6 +670,8 @@ struct VideoGenerate: AsyncParsableCommand {
                 prompt: trimmedPrompt,
                 width: h3Width,
                 height: h3Height,
+                renderWidth: h3RenderWidth,
+                renderHeight: h3RenderHeight,
                 numFrames: h3Frames,
                 steps: steps,
                 seed: UInt64(bitPattern: Int64(seed ?? 42)),
@@ -1406,6 +1434,8 @@ struct VideoGenerate: AsyncParsableCommand {
             steps: steps,
             h3WeightMode: h3WeightMode.rawValue,
             h3AccelerationMode: h3Acceleration.rawValue,
+            h3RenderWidth: h3RenderWidth,
+            h3RenderHeight: h3RenderHeight,
             h3Adapter: h3Adapter,
             h3AdapterStrength: h3AdapterStrength,
             h3FrameInputs: h3FrameArguments,
@@ -1487,6 +1517,12 @@ struct VideoGenerate: AsyncParsableCommand {
                 "--h3-weight-mode", h3WeightMode.rawValue,
                 "--h3-acceleration", h3Acceleration.rawValue,
             ]
+            if let h3RenderWidth, let h3RenderHeight {
+                args += [
+                    "--h3-render-width", String(h3RenderWidth),
+                    "--h3-render-height", String(h3RenderHeight),
+                ]
+            }
             if let h3Adapter {
                 args += ["--h3-adapter", h3Adapter, "--h3-adapter-strength", String(h3AdapterStrength)]
             }

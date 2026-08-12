@@ -49,7 +49,7 @@ struct ModelPull: AsyncParsableCommand {
 
     func run() async throws {
         if preflight {
-            try runPreflight()
+            try await runPreflight()
             return
         }
 
@@ -166,7 +166,21 @@ struct ModelPull: AsyncParsableCommand {
                     + "and agree to comply with them."
             )
         }
-        try ModelPullDiskPreflight.check(spec: spec, modelDir: modelDir, force: force) { warning in
+        let incrementalDownloadBytes: Int64?
+        if force {
+            incrementalDownloadBytes = nil
+        } else {
+            incrementalDownloadBytes = try? await ManagedModelResolver.estimatedManagedDownloadBytes(
+                spec: spec,
+                at: modelDir
+            )
+        }
+        try ModelPullDiskPreflight.check(
+            spec: spec,
+            modelDir: modelDir,
+            force: force,
+            estimatedDownloadBytesOverride: incrementalDownloadBytes
+        ) { warning in
             guard !quiet else { return }
             stderr("  warning: \(warning)")
         }
@@ -267,6 +281,7 @@ struct ModelPull: AsyncParsableCommand {
         fileManager: FileManager = .default,
         hubCacheURL: URL? = nil,
         modelStoreURL: URL? = nil,
+        estimatedDownloadBytesOverrides: [String: Int64] = [:],
         modelLocations: ModelLocationSnapshot? = nil,
         diskAvailableBytes: ((URL) -> Int64?)? = nil,
         now: @escaping () -> Date = Date.init
@@ -285,14 +300,28 @@ struct ModelPull: AsyncParsableCommand {
             fileManager: fileManager,
             hubCacheURL: hubCacheURL,
             modelStoreURL: modelStoreURL,
+            estimatedDownloadBytesOverrides: estimatedDownloadBytesOverrides,
             modelLocations: modelLocations,
             diskAvailableBytes: diskAvailableBytes,
             now: now
         ).envelope()
     }
 
-    private func runPreflight() throws {
-        let envelope = makePreflightEnvelope()
+    private func runPreflight() async throws {
+        var estimatedDownloadBytesOverrides: [String: Int64] = [:]
+        if !force, !all, let target, let spec = ManagedModelCatalog.spec(for: target) {
+            let modelDir = spec.managedInstallRootURL()
+            if !ManagedModelResolver.isManagedInstallComplete(spec: spec, at: modelDir),
+               let estimate = try? await ManagedModelResolver.estimatedManagedDownloadBytes(
+                   spec: spec,
+                   at: modelDir
+               ) {
+                estimatedDownloadBytesOverrides[spec.id] = estimate
+            }
+        }
+        let envelope = makePreflightEnvelope(
+            estimatedDownloadBytesOverrides: estimatedDownloadBytesOverrides
+        )
         if json {
             print(try StructuredRunOutput.encode(envelope))
         } else {
@@ -444,6 +473,7 @@ struct ModelPullDiskPreflight {
         spec: ManagedModelSpec,
         modelDir: URL,
         force: Bool = false,
+        estimatedDownloadBytesOverride: Int64? = nil,
         hubCacheURL: URL? = nil,
         fileManager: FileManager = .default,
         warn: (String) -> Void
@@ -455,7 +485,7 @@ struct ModelPullDiskPreflight {
         let modelStoreParent = modelDir.deletingLastPathComponent()
         try? fileManager.createDirectory(at: modelStoreParent, withIntermediateDirectories: true)
 
-        let estimatedDownloadBytes = estimatedDownloadBytes(
+        let estimatedDownloadBytes = estimatedDownloadBytesOverride ?? estimatedDownloadBytes(
             for: spec,
             modelDir: modelDir,
             force: force,

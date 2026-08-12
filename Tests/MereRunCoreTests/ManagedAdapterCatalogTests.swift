@@ -69,6 +69,29 @@ struct ManagedAdapterCatalogTests {
         #expect(spec.downloadURL.absoluteString.contains(spec.upstreamRevision!))
     }
 
+    @Test("MiniMax-H3 LightX2V v1.0 releases are immutable BF16 runtime pins")
+    func miniMaxH3LightX2VV1ReleasesArePinned() throws {
+        let eightStep = try #require(
+            ManagedAdapterCatalog.spec(for: ManagedAdapterCatalog.miniMaxH3LightX2VEightStepV1ID)
+        )
+        #expect(eightStep.version == "e6346777701a")
+        #expect(eightStep.baseModelID == ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue)
+        #expect(eightStep.format == MiniMaxH3TurboAdapter.lightX2VFormat)
+        #expect(eightStep.upstreamRevision == ManagedAdapterCatalog.miniMaxH3LightX2VV1Revision)
+        #expect(eightStep.artifact.byteCount == 1_383_677_768)
+        #expect(eightStep.artifact.sha256 == "e16ac20824d6e6649b193806f8fb095639bd9946c97b1bb84b4248eab1cc807f")
+
+        let fourStep = try #require(
+            ManagedAdapterCatalog.spec(for: ManagedAdapterCatalog.miniMaxH3LightX2VFourStepV1_768pID)
+        )
+        #expect(fourStep.version == "e6346777701a")
+        #expect(fourStep.baseModelID == ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue)
+        #expect(fourStep.format == MiniMaxH3TurboAdapter.lightX2VFormat)
+        #expect(fourStep.upstreamRevision == ManagedAdapterCatalog.miniMaxH3LightX2VV1Revision)
+        #expect(fourStep.artifact.byteCount == 1_383_677_808)
+        #expect(fourStep.artifact.sha256 == "1bdabc2e9fce20b1db563b96bcf6e46adcad4c1964f423676436bf266cc7416c")
+    }
+
     @Test("Catalog ids resolve case-insensitively")
     func normalizedLookup() {
         #expect(ManagedAdapterCatalog.spec(for: " MERE-PLATFORM-ASSISTANT ")?.version == "22")
