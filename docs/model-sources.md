@@ -122,6 +122,7 @@ from the runtime catalog used by `mere.run model list`,
 | `video` | `video-ltx23-av-mlx` |
 | `video` | `video-ltx23-full-mlx` |
 | `video` | `video-ltx23-a2vid-mlx` |
+| `video` | `video-ltx25-distilled-bf16` |
 | `video` | `video-wan22-ti2v-5b-mlx` |
 | `video` | `video-minimax-h3-fl2va-mlx` |
 | `video` | `video-minimax-h3-fl2va-bf16-mlx` |
@@ -181,7 +182,7 @@ validates all configured models before downloading any; both accept the same
 | `music-muscriptor-{small,medium,large}` | CC BY-NC 4.0 model weights |
 | `sfx-woosh-*` | CC BY-NC 4.0 Woosh or MMAudio Synchformer weights |
 | `sfx-mmaudio-large-44k-v2` | CC BY-NC 4.0 MMAudio checkpoints plus Apple's research-only DFN5B encoder terms |
-| `video-ltx-av`, `video-ltx23-av-mlx`, `video-ltx23-full-mlx`, `video-ltx23-a2vid-mlx` | LTX-2 Community License; entities at or above USD 10M annual revenue need a paid commercial license, plus acceptable-use conditions. The 2.3 MLX paths also install a hidden Gemma 3 text encoder under Google's Gemma Terms and Prohibited Use Policy. |
+| `video-ltx-av`, `video-ltx23-av-mlx`, `video-ltx23-full-mlx`, `video-ltx23-a2vid-mlx`, `video-ltx25-distilled-bf16` | LTX-2 Community License; entities at or above USD 10M annual revenue need a paid commercial license, plus acceptable-use conditions. The 2.3 MLX paths also install a hidden Gemma 3 text encoder; the packed 2.5 checkpoint includes Gemma 4 weights. Both are additionally governed by Google's Gemma Terms and Prohibited Use Policy. |
 
 The catalog pins every restricted download source to an immutable commit. New
 managed installs write those repository revisions, every applicable
@@ -843,6 +844,26 @@ Its legacy narrow manifest may omit the vocoder, so it can run final-quality
 video-only and source-audio A2Vid but not generated-audio output. Requests for
 either the legacy ID or the new full ID resolve to an already-installed
 compatible root when possible. New pulls should use `video-ltx23-full-mlx`.
+
+### `video-ltx25-distilled-bf16`
+
+The official packed LTX 2.5 BF16 root is:
+
+```text
+.../models/video-ltx25-distilled-bf16
+```
+
+`mere.run model pull video-ltx25-distilled-bf16 --accept-model-license` pulls
+only the native runtime subset from `Lightricks/LTX-2.5` at immutable revision
+`dd53cc2cd45bbeaa3563dfb575cba3f49cf44761`: the distilled transformer, packed
+Gemma 4 text encoder, video VAE, audio VAE/BWE vocoder, x2 spatial upscaler,
+and optional duration head. The required checkpoint payload is about 71.1 GB.
+The Hugging Face repository is gated, so the account behind `HF_TOKEN` must
+already have access in addition to the explicit local license acknowledgement.
+
+This model runs natively through Swift and MLX; no Python process or sidecar is
+dispatched. Use `--quality final --output-mode audio-video` for synchronized
+video and stereo audio. The packed LTX 2.5 root is not an A2Vid checkpoint.
 
 ### MiniMax-H3 FL2VA and Ref2VA
 

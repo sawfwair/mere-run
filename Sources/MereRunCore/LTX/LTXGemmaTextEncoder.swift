@@ -1,4 +1,5 @@
 import Foundation
+@preconcurrency import Hub
 import MLX
 import MLXFast
 import MLXNN
@@ -36,6 +37,7 @@ public enum LTXGemmaTextEncoderError: LocalizedError {
     case missingTransformerWeights(URL)
     case missingConnectorProjection(URL)
     case missingConnectorWeights(URL)
+    case invalidPackedTextEncoder(URL, String)
     case tokenizerUnavailable
     case modelNotLoaded
     case connectorNotLoaded
@@ -56,6 +58,8 @@ public enum LTXGemmaTextEncoderError: LocalizedError {
             return "Missing text embedding projection weight in \(url.path)"
         case .missingConnectorWeights(let url):
             return "Missing LTX connector weights in \(url.path)"
+        case .invalidPackedTextEncoder(let url, let reason):
+            return "Invalid packed LTX text encoder at \(url.path): \(reason)"
         case .tokenizerUnavailable:
             return "Tokenizer is not loaded."
         case .modelNotLoaded:
@@ -73,6 +77,7 @@ public enum LTXGemmaTextEncoderError: LocalizedError {
 public actor LTXGemmaTextEncoder {
     private var tokenizer: (any Tokenizer)?
     private var model: LTXGemmaLanguageModel?
+    private var gemma4Model: Gemma4LanguageModel?
     private var featureExtractor: LTXGemmaFeaturesExtractor?
     private var featureExtractorV2: LTXGemmaFeaturesExtractorV2?
     private var videoConnector: LTXEmbeddings1DConnector?
@@ -89,6 +94,10 @@ public actor LTXGemmaTextEncoder {
     ) async throws {
         let fm = FileManager.default
         let root = modelRoot.standardizedFileURL
+        if isLTX25ModelRoot(root) {
+            try await loadLTX25(modelRoot: root, dtype: dtype, loadConnectorWeights: loadConnectorWeights)
+            return
+        }
         let usesLTX23SplitConnector = isLTX23SplitModelRoot(root)
         let textRoot = (overrideTextEncoderRoot ?? root.appendingPathComponent("text_encoder", isDirectory: true))
             .standardizedFileURL
@@ -256,10 +265,127 @@ public actor LTXGemmaTextEncoder {
         }
 
         self.model = languageModel
+        self.gemma4Model = nil
         self.featureExtractor = usesLTX23SplitConnector ? nil : textFeatures
         self.featureExtractorV2 = usesLTX23SplitConnector ? textFeaturesV2 : nil
         self.videoConnector = usesLTX23SplitConnector ? nil : connector
         self.audioConnector = usesLTX23SplitConnector ? nil : audioConnector
+        self.tokenizer = loadedTokenizer
+        self.loadedRoot = root
+    }
+
+    private func loadLTX25(
+        modelRoot root: URL,
+        dtype: DType,
+        loadConnectorWeights: Bool
+    ) async throws {
+        let resources = LTX25Resources(rootURL: root)
+        let textEncoderURL = resources.textEncoderURL
+        let transformerURL = resources.transformerURL
+        let metadata = try SafetensorsStreamingLoader.fileMetadata(url: textEncoderURL)
+        guard let rawConfig = metadata["gemma_config"],
+              let configData = rawConfig.data(using: .utf8) else {
+            throw LTXGemmaTextEncoderError.invalidPackedTextEncoder(
+                textEncoderURL,
+                "missing gemma_config metadata"
+            )
+        }
+        let config = try JSONDecoder().decode(Gemma4Config.self, from: configData)
+        guard config.modelType == "gemma4_unified" else {
+            throw LTXGemmaTextEncoderError.invalidPackedTextEncoder(
+                textEncoderURL,
+                "expected gemma4_unified, got \(config.modelType)"
+            )
+        }
+
+        let languageModel = Gemma4LanguageModel(config: config.textConfig)
+        try SafetensorsStreamingLoader.applyWeightsStreaming(
+            url: textEncoderURL,
+            to: languageModel,
+            dtype: dtype,
+            verify: .none,
+            include: { key in
+                key == "model.embed_tokens.weight"
+                    || key == "model.norm.weight"
+                    || key.hasPrefix("model.layers.")
+            },
+            mapper: { key, value in
+                guard key.hasPrefix("model.") else { return [] }
+                return [(String(key.dropFirst("model.".count)), value)]
+            },
+            batchSize: 24
+        )
+
+        let textFeatures = LTXGemmaFeaturesExtractorV2(
+            captionChannels: config.textConfig.hiddenSize,
+            numGemmaLayers: config.textConfig.numHiddenLayers + 1,
+            videoDim: 4_096,
+            audioDim: 2_048,
+            numHeads: 32,
+            videoHeadDim: 128,
+            audioHeadDim: 64,
+            numConnectorLayers: 8,
+            numRegisters: 128
+        )
+        if loadConnectorWeights {
+            try SafetensorsStreamingLoader.applyWeightsStreaming(
+                url: textEncoderURL,
+                to: textFeatures,
+                dtype: dtype,
+                verify: .none,
+                include: { $0.hasPrefix("text_embedding_projection.") },
+                mapper: { key, value in [(key, value)] },
+                batchSize: 4
+            )
+            try SafetensorsStreamingLoader.applyWeightsStreaming(
+                url: transformerURL,
+                to: textFeatures,
+                dtype: dtype,
+                verify: .none,
+                include: { key in
+                    key.hasPrefix("model.diffusion_model.video_embeddings_connector.")
+                        || key.hasPrefix("model.diffusion_model.audio_embeddings_connector.")
+                },
+                mapper: { key, value in
+                    mapLTX25TextConnectorWeight(key: key, value: value, dtype: dtype)
+                },
+                batchSize: 24
+            )
+        }
+
+        let assetArrays = try SafetensorsStreamingLoader.loadArrays(
+            url: textEncoderURL,
+            where: { key in
+                key == "tokenizer_json" || key == "hf_asset__tokenizer_config.json"
+            }
+        )
+        guard let tokenizerJSON = assetArrays["tokenizer_json"],
+              let tokenizerConfigJSON = assetArrays["hf_asset__tokenizer_config.json"] else {
+            throw LTXGemmaTextEncoderError.invalidPackedTextEncoder(
+                textEncoderURL,
+                "missing embedded tokenizer assets"
+            )
+        }
+        MLX.eval(tokenizerJSON, tokenizerConfigJSON)
+        let tokenizerData = try JSONDecoder().decode(
+            Config.self,
+            from: Data(tokenizerJSON.asArray(UInt8.self))
+        )
+        let tokenizerConfig = try JSONDecoder().decode(
+            Config.self,
+            from: Data(tokenizerConfigJSON.asArray(UInt8.self))
+        )
+        let loadedTokenizer = try AutoTokenizer.from(
+            tokenizerConfig: tokenizerConfig,
+            tokenizerData: tokenizerData
+        )
+
+        self.model = nil
+        self.gemma4Model = languageModel
+        self.featureExtractor = nil
+        self.featureExtractorV2 = textFeatures
+        self.videoConnector = nil
+        self.audioConnector = nil
         self.tokenizer = loadedTokenizer
         self.loadedRoot = root
     }
@@ -275,7 +401,7 @@ public actor LTXGemmaTextEncoder {
         guard !trimmed.isEmpty else {
             throw LTXGemmaTextEncoderError.emptyPrompt
         }
-        guard let model else {
+        guard model != nil || gemma4Model != nil else {
             throw LTXGemmaTextEncoderError.modelNotLoaded
         }
         guard let tokenizer else {
@@ -286,6 +412,10 @@ public actor LTXGemmaTextEncoder {
         }
 
         var tokenIDs = tokenizer.encode(text: trimmed, addSpecialTokens: true)
+        if gemma4Model != nil, let bosTokenID = tokenizer.bosTokenId,
+           tokenIDs.first != bosTokenID {
+            tokenIDs.insert(bosTokenID, at: 0)
+        }
         if tokenIDs.count > maxLength {
             tokenIDs = Array(tokenIDs.prefix(maxLength))
         }
@@ -298,12 +428,26 @@ public actor LTXGemmaTextEncoder {
         let inputArray = MLXArray(inputIDs.map(Int32.init)).reshaped(1, maxLength)
         let maskArray = MLXArray(attention.map(Int32.init)).reshaped(1, maxLength)
 
-        let result = model.forward(
-            inputIds: inputArray,
-            attentionMask: maskArray,
-            outputHiddenStates: true
-        )
-        let hiddenStates = result.hiddenStates ?? [result.lastHiddenState]
+        let lastHiddenState: MLXArray
+        let hiddenStates: [MLXArray]
+        if let gemma4Model {
+            let result = gemma4Model.forwardHiddenStates(
+                inputIds: inputArray,
+                attentionMask: maskArray
+            )
+            lastHiddenState = result.lastHiddenState
+            hiddenStates = result.hiddenStates
+        } else if let model {
+            let result = model.forward(
+                inputIds: inputArray,
+                attentionMask: maskArray,
+                outputHiddenStates: true
+            )
+            lastHiddenState = result.lastHiddenState
+            hiddenStates = result.hiddenStates ?? [result.lastHiddenState]
+        } else {
+            throw LTXGemmaTextEncoderError.modelNotLoaded
+        }
         if let featureExtractorV2 {
             let normalized = normalizeAndConcatHiddenStatesV2(
                 hiddenStates: hiddenStates,
@@ -311,7 +455,7 @@ public actor LTXGemmaTextEncoder {
             )
             let extraction = featureExtractorV2(normalized, attentionMask: maskArray)
             return LTXGemmaTextEncoding(
-                lastHiddenState: result.lastHiddenState,
+                lastHiddenState: lastHiddenState,
                 attentionMask: maskArray,
                 normalizedStackedHiddenStates: normalized,
                 features: extraction.projectedVideo,
@@ -336,7 +480,7 @@ public actor LTXGemmaTextEncoder {
         }
 
         return LTXGemmaTextEncoding(
-            lastHiddenState: result.lastHiddenState,
+            lastHiddenState: lastHiddenState,
             attentionMask: maskArray,
             normalizedStackedHiddenStates: normalized,
             features: features,
@@ -348,6 +492,7 @@ public actor LTXGemmaTextEncoder {
     public func unload() {
         tokenizer = nil
         model = nil
+        gemma4Model = nil
         featureExtractor = nil
         featureExtractorV2 = nil
         videoConnector = nil
@@ -1178,6 +1323,31 @@ func mapLTX23TextConnectorWeight(
     } else {
         casted = value
     }
+    return [(mapped, casted)]
+}
+
+func mapLTX25TextConnectorWeight(
+    key: String,
+    value: MLXArray,
+    dtype: DType
+) -> [(String, MLXArray)] {
+    let prefix = "model.diffusion_model."
+    guard key.hasPrefix(prefix) else {
+        return []
+    }
+
+    var mapped = String(key.dropFirst(prefix.count))
+    guard mapped.hasPrefix("video_embeddings_connector.")
+            || mapped.hasPrefix("audio_embeddings_connector.") else {
+        return []
+    }
+    mapped = mapped.replacingOccurrences(of: ".ff.net.0.proj.", with: ".ff.proj_in.")
+    mapped = mapped.replacingOccurrences(of: ".ff.net.2.", with: ".ff.proj_out.")
+    mapped = mapped.replacingOccurrences(of: ".to_out.0.", with: ".to_out.")
+
+    let casted = value.dtype.isFloatingPoint && value.dtype != dtype
+        ? value.asType(dtype)
+        : value
     return [(mapped, casted)]
 }
 

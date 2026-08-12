@@ -2023,6 +2023,20 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 upstreamRepoId: "dgrauet/ltx-2.3-mlx@baa5f235ea04fd9c95899d751295c4fd825ee4e2",
                 createdAt: createdAt
             )
+        case .ltxVideo25DistilledBF16:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .ltxVideo,
+                family: .video,
+                tier: .latest,
+                variant: .distilled,
+                precision: .bf16,
+                defaults: Defaults(steps: 8, cfg: 3),
+                supports: [.videoGeneration],
+                components: nil,
+                upstreamRepoId: "\(LTX25Resources.sourceRepository)@\(LTX25Resources.sourceRevision)",
+                createdAt: createdAt
+            )
         case .wan22TI2V5BMLX:
             return MereRunModelManifest(
                 id: modelID.rawValue,

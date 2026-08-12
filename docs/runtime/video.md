@@ -72,6 +72,9 @@ are an escape hatch, not the capability contract.
   `--quality final`, generated synchronized audio, and source-audio A2Vid.
 - `video-ltx23-a2vid-mlx`: compatibility ID for existing A2Vid installs. New
   installs should use `video-ltx23-full-mlx`.
+- `video-ltx25-distilled-bf16`: official packed LTX 2.5 BF16 checkpoint for
+  native final-quality synchronized video and stereo audio. Pull it with
+  `--accept-model-license`; gated Hugging Face access is also required.
 - `video-ltx-av`: legacy merged LTX root, superseded by LTX 2.3. Only still required
   by `video export-latents`; not recommended for `video generate`.
 - `video-wan22-ti2v-5b-mlx`: native Wan2.2 TI2V image-to-video lane. `video

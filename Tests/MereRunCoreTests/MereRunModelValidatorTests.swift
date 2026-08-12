@@ -440,6 +440,36 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         XCTAssertEqual(report.manifest?.upstreamRepoId, "dgrauet/ltx-2.3-mlx@main")
     }
 
+    func testLTX25PackedRootPassesValidationWithoutDiffusersMarker() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let root = temp.appendingPathComponent(
+            ModelResolver.ModelID.ltxVideo25DistilledBF16.rawValue,
+            isDirectory: true
+        )
+        try TestFileSystem.createDirectory(root)
+        try MereRunModelManifest.template(
+            for: .ltxVideo25DistilledBF16,
+            createdAt: Date(timeIntervalSince1970: 0)
+        ).write(to: root)
+        for relativePath in LTX25Resources.requiredRelativePaths {
+            let url = root.appendingPathComponent(relativePath)
+            try TestFileSystem.createDirectory(url.deletingLastPathComponent())
+            try TestFileSystem.writeFile(url, contents: Data())
+        }
+
+        let report = MereRunModelValidator.validate(
+            modelRoot: root,
+            expectedModelID: ModelResolver.ModelID.ltxVideo25DistilledBF16.rawValue
+        )
+        XCTAssertTrue(report.isValid)
+        XCTAssertTrue(report.errors.isEmpty)
+        XCTAssertFalse(report.warnings.contains { $0.contains("model root marker") })
+        XCTAssertEqual(report.manifest?.engine, .ltxVideo)
+        XCTAssertEqual(report.manifest?.family, .video)
+    }
+
     func testLTX23FullCanonicalIDAcceptsCompatibleLegacyManifest() throws {
         let temp = try TestFileSystem.makeTempDir()
         defer { try? FileManager.default.removeItem(at: temp) }
