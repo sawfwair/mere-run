@@ -1818,7 +1818,7 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         continuation: MiniMaxH3ContinuationInput?,
         progressHandler: (@Sendable (MiniMaxH3GenerationProgress) -> Void)?,
         phaseProfileLogger: (@Sendable (String) -> Void)?,
-        generationStarted: CFAbsoluteTime
+        generationStarted: CFTimeInterval
     ) throws -> MiniMaxH3GenerationResult {
         guard options.firstFrameURL == nil,
               options.lastFrameURL == nil,
