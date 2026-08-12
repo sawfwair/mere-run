@@ -72,6 +72,29 @@ final class CLIModelStoreBootstrapTests: XCTestCase {
         XCTAssertEqual(path, "/persisted/models")
     }
 
+    func testBootstrapIncludesRegisteredLocationsForPersistedPrimaryStore() {
+        let defaults = makeDefaults()
+        defaults.set("/persisted/models", forKey: MereRunModelPaths.modelStorageActivePathDefaultsKey)
+
+        CLIModelStoreBootstrap.bootstrap(
+            arguments: ["mere.run", "model", "list"],
+            environment: [:],
+            defaults: defaults
+        )
+
+        XCTAssertTrue(MereRunModelPaths.includesRegisteredModelLocations(environment: [:]))
+    }
+
+    func testBootstrapKeepsExplicitModelsRootIsolated() {
+        CLIModelStoreBootstrap.bootstrap(
+            arguments: ["mere.run", "--models-root", "/isolated/models", "model", "list"],
+            environment: [:],
+            defaults: makeDefaults()
+        )
+
+        XCTAssertFalse(MereRunModelPaths.includesRegisteredModelLocations(environment: [:]))
+    }
+
     func testResolvedOverridePathIgnoresLegacyEnvironmentVariable() {
         let path = CLIModelStoreBootstrap.resolvedOverridePath(
             arguments: ["mere.run", "model", "list"],

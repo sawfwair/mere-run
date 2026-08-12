@@ -1732,7 +1732,10 @@ struct WorkflowRunner: @unchecked Sendable {
             }
         }
         return job.requirements.models.filter { modelIDs.contains($0.id) }.map { provenance in
-            let manifestURL = MereRunModelPaths.modelDir(provenance.id)
+            let modelRoot = ModelResolver.ModelID(rawValue: provenance.id)
+                .flatMap { ModelResolver(fileManager: fileManager).resolveIfPresent($0)?.rootURL }
+                ?? MereRunModelPaths.modelDir(provenance.id)
+            let manifestURL = modelRoot
                 .appendingPathComponent(MereRunModelManifest.filename)
             let manifestDigest = fileManager.fileExists(atPath: manifestURL.path)
                 ? try? ModelArtifactPin.fileSHA256(manifestURL)

@@ -3,9 +3,10 @@ import ArgumentParser
 struct Model: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "model",
-        abstract: "List, pull, remove, inspect, optimize, and clean up models.",
+        abstract: "List, pull, locate, remove, inspect, optimize, and clean up models.",
         subcommands: [
             ModelList.self,
+            ModelLocation.self,
             ModelPull.self,
             ModelRemove.self,
             ModelStorage.self,

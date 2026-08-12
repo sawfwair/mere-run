@@ -7,6 +7,31 @@ final class ModelStorageCommandTests: XCTestCase {
         let names = Set(Model.configuration.subcommands.map { $0.configuration.commandName })
         XCTAssertTrue(names.contains("storage"))
         XCTAssertTrue(names.contains("gc"))
+        XCTAssertTrue(names.contains("location"))
+    }
+
+    func testModelLocationSubcommandsAndFlagsParse() throws {
+        let names = Set(ModelLocation.configuration.subcommands.map { $0.configuration.commandName })
+        XCTAssertEqual(names, ["list", "add", "remove", "bind", "unbind"])
+        XCTAssertTrue(try ModelLocationList.parse(["--json"]).json)
+        XCTAssertEqual(try ModelLocationAdd.parse(["/Volumes/Models"]).path, "/Volumes/Models")
+        XCTAssertEqual(try ModelLocationRemove.parse(["/Volumes/Models"]).path, "/Volumes/Models")
+
+        let binding = try ModelLocationBind.parse([
+            "image-zimage-nano",
+            "/Volumes/Models/ZImage",
+            "--accept-model-license",
+        ])
+        XCTAssertEqual(binding.modelID, "image-zimage-nano")
+        XCTAssertEqual(binding.path, "/Volumes/Models/ZImage")
+        XCTAssertTrue(binding.acceptModelLicense)
+
+        let unbind = try ModelLocationUnbind.parse([
+            "image-zimage-nano",
+            "/Volumes/Models/ZImage",
+        ])
+        XCTAssertEqual(unbind.modelID, "image-zimage-nano")
+        XCTAssertEqual(unbind.path, "/Volumes/Models/ZImage")
     }
 
     func testStorageAndGarbageCollectionFlagsParse() throws {
