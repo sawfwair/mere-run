@@ -6,6 +6,22 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.36.0 - 2026-08-12
+
+This is a major capability and performance release spanning 19 merged pull
+requests. It adds native LTX 2.5, Nemotron 3.5 Lightning with DSpark, Muse
+Glimmer with DFlash, a humanitarian geospatial model stack, first-class
+MiniMax-H3 Ref2VA and new LightX2V adapters, and a unified catalog for models
+stored across internal and external volumes. It also restores ACE-Step's
+upstream LM generation contract, expands portable vision workflows, and lands
+the latest exact Laguna and measured diffusion-performance work.
+
+Quality-sensitive MiniMax-H3 approximation research remains explicitly opt-in;
+the dense quality path is still the default. Restricted checkpoints still
+require explicit acceptance of their upstream terms, and registered external
+model locations remain read-only unless the operator deliberately selects a
+writable primary store.
+
 ### Model management
 
 - added a unified, deterministic model catalog over one writable primary store
@@ -64,6 +80,20 @@ The format is based on Keep a Changelog.
 - fixed `text chat --stream --quiet` so `--quiet` suppresses stderr diagnostics
   without disconnecting incremental generated text from stdout.
 
+### Text performance
+
+- completed the exact Laguna XS 2.1 crown stack on supported M4 Max and M5 Max
+  systems. The runtime now certifies and reuses routed-down NVFP4 pair scales,
+  selects the exact Active64 top-8 tournament, uses native attention affine
+  side layouts, and enables fused RMSNorm/QKV, gate-aware output projection,
+  decode staging, and specialized NVFP4 qdot paths where hardware-qualified.
+  Every component retains a scoped `MERERUN_LAGUNA_*` rollback control.
+- in a controlled installed-checkpoint M4 Max comparison, the complete Laguna
+  stack improved decode from about 67.0 to 102.9-103.1 tok/s (about 54%) and
+  prefill by 16-19%, with full-logit sampling and model output preserved. The
+  Active64 router separately matched all 1,344 official correctness tokens with
+  zero maximum absolute difference.
+
 ### Image
 
 - accelerated high-resolution Z-Image generation with dynamic sparse attention.
@@ -77,6 +107,20 @@ The format is based on Keep a Changelog.
   output can differ from the dense path; smaller generations remain byte-identical.
 
 ### Video
+
+- added native Swift/MLX generation for the official packed LTX 2.5 BF16
+  checkpoint as `video-ltx25-distilled-bf16`, including its Gemma 4 text
+  encoder requirements, immutable managed-model pin, explicit terms gate,
+  checkpoint inventory, preflight, manifest repair, and external-location
+  support. A release smoke produced a 25-frame H.264/AAC MP4 through the native
+  runtime.
+- improved sustained MiniMax-H3 inference and admission on Apple Silicon:
+  resident BF16 weights are materialized truthfully, Q/K/V use contiguous
+  head-major views, practical shapes use a measured 640-row attention schedule,
+  the video VAE returns to a lower-memory 256-pixel tile, geo and benchmark jobs
+  participate in shared machine admission, and macOS disk checks reconcile
+  important-usage capacity with filesystem free space. A clean 768x448,
+  124-frame quality render completed in 20:56.4 on the qualification machine.
 
 - added immutable managed support for LightX2V MiniMax-H3 Turbo v1.0 in both
   its 544p eight-evaluation and 1344x768 four-evaluation recipes. Mere now
@@ -207,6 +251,51 @@ The format is based on Keep a Changelog.
 - evaluated THOR and deferred a runtime until a Sentinel-3/native-resolution
   workflow supplies a distinct usefulness gate beyond the validated TESSERA
   and OlmoEarth embedding routes.
+
+### Vision and portable workflows
+
+- added `mere.run vision serve`, a resident loopback-first Falcon Perception
+  service for repeated PNG, JPEG, and WebP frame grounding. It accepts binary
+  frames plus repeatable text queries, returns normalized detections, hashes,
+  model identity, request IDs, and timing, and requires an API key for
+  non-loopback binds. A warm 256-pixel installed-model request completed in
+  approximately 0.42 seconds during qualification.
+- added `vision.segment` and `vision.track` as portable SAM 3.1 graph nodes with
+  graph-safe preflight, quiet execution, structured JSON, annotated media, and
+  durable per-object or per-frame PNG mask directories. SAM outputs remain
+  candidate geometry until a downstream mission workflow accepts them.
+- portable `vision.ground` graph nodes now retain Falcon Perception's native
+  per-detection PNG masks as a verified `masks` artifact directory, matching
+  the existing direct CLI capability without changing their candidate-only
+  evidence boundary.
+
+### Maintenance
+
+- updated `pnpm/action-setup` from v4 to v6 so documentation CI runs on the
+  maintained Node 24 action runtime while continuing to install the repository's
+  package-manager-pinned pnpm release.
+
+### Included pull requests
+
+- exact release range: [#265](https://github.com/sawfwair/mere-run/pull/265),
+  [#267](https://github.com/sawfwair/mere-run/pull/267),
+  [#269](https://github.com/sawfwair/mere-run/pull/269),
+  [#270](https://github.com/sawfwair/mere-run/pull/270),
+  [#271](https://github.com/sawfwair/mere-run/pull/271),
+  [#272](https://github.com/sawfwair/mere-run/pull/272),
+  [#274](https://github.com/sawfwair/mere-run/pull/274),
+  [#275](https://github.com/sawfwair/mere-run/pull/275),
+  [#276](https://github.com/sawfwair/mere-run/pull/276),
+  [#277](https://github.com/sawfwair/mere-run/pull/277),
+  [#278](https://github.com/sawfwair/mere-run/pull/278),
+  [#280](https://github.com/sawfwair/mere-run/pull/280),
+  [#281](https://github.com/sawfwair/mere-run/pull/281),
+  [#282](https://github.com/sawfwair/mere-run/pull/282),
+  [#283](https://github.com/sawfwair/mere-run/pull/283),
+  [#284](https://github.com/sawfwair/mere-run/pull/284),
+  [#285](https://github.com/sawfwair/mere-run/pull/285), and
+  [#286](https://github.com/sawfwair/mere-run/pull/286), plus dependency update
+  [#257](https://github.com/sawfwair/mere-run/pull/257).
 
 ## 0.35.1 - 2026-08-06
 
@@ -433,11 +522,6 @@ artifact contracts instead of becoming a model-specific sidecar.
 
 ### Vision and portable workflows
 
-- portable `vision.ground` graph nodes now retain Falcon Perception's native
-  per-detection PNG masks as a verified `masks` artifact directory, matching
-  the existing direct CLI capability without changing their candidate-only
-  evidence boundary.
-
 - added `vision.ground` as a first-class portable graph node across local, SSH,
   and Relay execution. It defaults to the managed Falcon Perception model,
   accepts an image plus typed query array, and emits verified annotated-image
@@ -446,10 +530,6 @@ artifact contracts instead of becoming a model-specific sidecar.
 - added model-aware `vision ground --preflight --json` and workflow-safe
   `--quiet` behavior so agents and graph runners can validate placement,
   inputs, and artifact paths without loading the model or parsing diagnostics.
-- added `vision.segment` and `vision.track` as portable SAM 3.1 graph nodes with
-  graph-safe preflight, quiet execution, structured JSON, annotated media, and
-  durable per-object or per-frame PNG mask directories. SAM outputs remain
-  candidate geometry until a downstream mission workflow accepts them.
 - preserved TIFF provider outputs as portable `.tif` artifacts with
   `image/tiff` metadata throughout workflow materialization, run bundles, and
   fetched results instead of degrading geospatial rasters to generic binary
