@@ -467,6 +467,22 @@ enum InstalledModelSmokePlans {
                 try await runner.installedA2VidCheck(model: spec.id)
             }
 
+        case .ltxVideo25:
+            return direct(spec, route: "video generate LTX 2.5 final audio-video") { runner in
+                try await runner.installedLTXCheck(
+                    model: spec.id,
+                    id: spec.id,
+                    arguments: [
+                        "--quality", "final",
+                        "--output-mode", "audio-video",
+                        "--width", "256",
+                        "--height", "192",
+                        "--num-frames", "25",
+                    ],
+                    requireAudio: true
+                )
+            }
+
         case .wan22TI2VMLX:
             return direct(spec, route: "video generate Wan image-to-video") { runner in
                 try await runner.installedWanCheck(model: spec.id)

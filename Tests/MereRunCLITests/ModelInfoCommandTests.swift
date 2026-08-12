@@ -48,6 +48,30 @@ final class ModelInfoCommandTests: XCTestCase {
         XCTAssertFalse(lines.contains { $0.contains("(missing)") })
     }
 
+    func testLTX25ComponentLinesShowPackedRuntimeFiles() throws {
+        let root = try makeTempDirectory()
+        for relativePath in LTX25Resources.requiredRelativePaths {
+            let url = root.appendingPathComponent(relativePath)
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try Data("fixture".utf8).write(to: url)
+        }
+        let manifest = MereRunModelManifest.template(
+            for: .ltxVideo25DistilledBF16,
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+        let lines = ModelInfo.ltx25ComponentLines(rootURL: root)
+
+        XCTAssertTrue(ModelInfo.usesLTX25Layout(manifest: manifest, expectedModelID: nil))
+        XCTAssertTrue(lines.contains("  layout: official LTX 2.5 packed BF16 files"))
+        XCTAssertTrue(lines.contains { $0.contains(LTX25Resources.transformerRelativePath) })
+        XCTAssertTrue(lines.contains { $0.contains(LTX25Resources.textEncoderRelativePath) })
+        XCTAssertTrue(lines.contains { $0.contains(LTX25Resources.audioVAERelativePath) })
+        XCTAssertFalse(lines.contains { $0.contains("(missing)") })
+    }
+
     func testLTX23SplitLayoutDetectionUsesManifestID() {
         let manifest = MereRunModelManifest.template(
             for: .ltxVideo23AVMLX,

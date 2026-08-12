@@ -88,6 +88,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case ltxVideo23MLX
     case ltxVideo23FullMLX
     case ltxVideo23A2VMLX
+    case ltxVideo25
     case wan22TI2VMLX
     case miniMaxH3MLX
     case cosmos3EdgeMLX
@@ -537,7 +538,7 @@ public enum ManagedModelCatalog {
             summary: summary,
             sourceRepoId: sourceRepoId,
             sourceRevision: sourceRevision,
-            licenseURL: "https://github.com/Lightricks/LTX-2/blob/main/LICENSE"
+            licenseURL: "https://github.com/Lightricks/LTX-2/blob/main/LICENSE.md"
         )
         return ManagedModelUsageRestriction(
             summary: summary,
@@ -551,6 +552,15 @@ public enum ManagedModelCatalog {
         summary: "The LTX 2.3 text-encoder companion is distributed under the Gemma Terms of Use and Gemma Prohibited Use Policy.",
         sourceRepoId: ltxGemma3TextEncoderRepoId,
         sourceRevision: ltxGemma3TextEncoderRevision,
+        licenseURL: "https://ai.google.dev/gemma/terms"
+    )
+
+    private static let ltx25GemmaTextEncoderUsageTerm = ManagedModelUsageTerm(
+        component: "Gemma 4 text encoder",
+        license: "Gemma Terms of Use",
+        summary: "The packed LTX 2.5 text encoder includes Gemma 4 weights distributed under the Gemma Terms of Use and Gemma Prohibited Use Policy.",
+        sourceRepoId: LTX25Resources.sourceRepository,
+        sourceRevision: LTX25Resources.sourceRevision,
         licenseURL: "https://ai.google.dev/gemma/terms"
     )
 
@@ -2539,6 +2549,27 @@ public enum ManagedModelCatalog {
             companionModelIDs: [ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue]
         ),
         ManagedModelSpec(
+            id: ModelResolver.ModelID.ltxVideo25DistilledBF16.rawValue,
+            category: .video,
+            installShape: .structuredRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: LTX25Resources.sourceRepository,
+                revision: LTX25Resources.sourceRevision,
+                patterns: LTX25Resources.snapshotPatterns
+            ),
+            upstreamRepoId: LTX25Resources.sourceRepository,
+            upstreamRevision: LTX25Resources.sourceRevision,
+            usageRestriction: ltxUsageRestriction(
+                sourceRepoId: LTX25Resources.sourceRepository,
+                sourceRevision: LTX25Resources.sourceRevision,
+                additionalTerms: [ltx25GemmaTextEncoderUsageTerm]
+            ),
+            validationKind: .ltxVideo25,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: LTX25Resources.estimatedDownloadBytes,
+            defaultCLICommands: ["video generate"]
+        ),
+        ManagedModelSpec(
             id: ModelResolver.ModelID.wan22TI2V5BMLX.rawValue,
             category: .video,
             installShape: .structuredRoot,
@@ -3041,6 +3072,8 @@ public extension ManagedModelSpec {
             return Self.missingLTXVideo23FullMLXPaths(in: rootURL, fileManager: fileManager)
         case .ltxVideo23A2VMLX:
             return Self.missingLTXVideo23A2VMLXPaths(in: rootURL, fileManager: fileManager)
+        case .ltxVideo25:
+            return LTX25Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .wan22TI2VMLX:
             return Wan2Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .miniMaxH3MLX:
@@ -3109,6 +3142,11 @@ public extension ManagedModelSpec {
                 in: normalizedRootURL(rootURL, fileManager: fileManager),
                 fileManager: fileManager
             ).map { "Missing required LTX 2.3 A2Vid MLX file: \($0.path)" }
+        case .ltxVideo25:
+            return LTX25Resources(
+                rootURL: normalizedRootURL(rootURL, fileManager: fileManager)
+            ).validate(fileManager: fileManager)
+                .map { "Missing required LTX 2.5 file: \($0.path)" }
         case .wan22TI2VMLX:
             let resources = Wan2Resources(rootURL: normalizedRootURL(rootURL, fileManager: fileManager))
             let missing = resources.validate(fileManager: fileManager)

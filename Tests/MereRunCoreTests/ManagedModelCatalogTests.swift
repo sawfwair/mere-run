@@ -83,6 +83,7 @@ final class ManagedModelCatalogTests: XCTestCase {
             "video-ltx23-av-mlx",
             "video-ltx23-full-mlx",
             "video-ltx23-a2vid-mlx",
+            "video-ltx25-distilled-bf16",
             "video-minimax-h3-fl2va-mlx",
             "video-minimax-h3-fl2va-bf16-mlx",
             "video-minimax-h3-ref2va-mlx",
@@ -1572,6 +1573,38 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertTrue(manifest.supports?.contains(.audioToVideoGeneration) == true)
     }
 
+    func testLTX25SpecPinsOfficialGatedPackedRelease() throws {
+        let id = ModelResolver.ModelID.ltxVideo25DistilledBF16.rawValue
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: id))
+
+        XCTAssertEqual(id, LTX25Resources.modelID)
+        XCTAssertEqual(spec.category, .video)
+        XCTAssertEqual(spec.installShape, .structuredRoot)
+        XCTAssertEqual(spec.validationKind, .ltxVideo25)
+        XCTAssertEqual(spec.hubFallback?.repoId, LTX25Resources.sourceRepository)
+        XCTAssertEqual(spec.hubFallback?.revision, LTX25Resources.sourceRevision)
+        XCTAssertEqual(spec.hubFallback?.patterns, LTX25Resources.snapshotPatterns)
+        XCTAssertEqual(spec.upstreamRepoId, LTX25Resources.sourceRepository)
+        XCTAssertEqual(spec.upstreamRevision, LTX25Resources.sourceRevision)
+        XCTAssertEqual(spec.estimatedDownloadBytes, LTX25Resources.estimatedDownloadBytes)
+        XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
+        XCTAssertEqual(spec.usageRestriction?.terms.count, 2)
+        XCTAssertTrue(spec.usageRestriction?.terms.contains { $0.component == "Gemma 4 text encoder" } == true)
+
+        let manifest = MereRunModelManifest.template(
+            for: .ltxVideo25DistilledBF16,
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+        XCTAssertEqual(manifest.engine, .ltxVideo)
+        XCTAssertEqual(manifest.family, .video)
+        XCTAssertEqual(manifest.variant, .distilled)
+        XCTAssertEqual(manifest.precision, .bf16)
+        XCTAssertEqual(
+            manifest.upstreamRepoId,
+            "\(LTX25Resources.sourceRepository)@\(LTX25Resources.sourceRevision)"
+        )
+    }
+
     func testSCAIL2SpecPinsImmutableSawfwairRelease() throws {
         let id = ModelResolver.ModelID.scail2Video14BMLX.rawValue
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: id))
@@ -1738,6 +1771,21 @@ final class ManagedModelCatalogTests: XCTestCase {
         )
     }
 
+    func testLTX25RootValidationRequiresEveryNativeRuntimeArtifact() throws {
+        let spec = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: ModelResolver.ModelID.ltxVideo25DistilledBF16.rawValue)
+        )
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try writeMinimalLTX25Root(at: root)
+
+        XCTAssertTrue(spec.isManagedRootComplete(root, fileManager: .default))
+        let missing = root.appendingPathComponent(LTX25Resources.videoVAERelativePath)
+        try FileManager.default.removeItem(at: missing)
+        XCTAssertEqual(spec.missingPaths(in: root, fileManager: .default), [missing])
+        XCTAssertTrue(spec.validationMessages(in: root).contains { $0.contains("Missing required LTX 2.5 file") })
+    }
+
     private func makeTemporaryDirectory() throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("mere-run-managed-model-catalog-\(UUID().uuidString)", isDirectory: true)
@@ -1811,6 +1859,21 @@ final class ManagedModelCatalogTests: XCTestCase {
                 atPath: root.appendingPathComponent(file).path,
                 contents: contents
             ))
+        }
+    }
+
+    private func writeMinimalLTX25Root(at root: URL) throws {
+        try MereRunModelManifest.template(
+            for: .ltxVideo25DistilledBF16,
+            createdAt: Date(timeIntervalSince1970: 0)
+        ).write(to: root)
+        for relativePath in LTX25Resources.requiredRelativePaths {
+            let url = root.appendingPathComponent(relativePath)
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            XCTAssertTrue(FileManager.default.createFile(atPath: url.path, contents: Data()))
         }
     }
 

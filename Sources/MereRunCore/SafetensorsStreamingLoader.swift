@@ -48,6 +48,11 @@ public enum SafetensorsStreamingLoader {
         return try metadata(fileData: data, fileURL: url)
     }
 
+    public static func fileMetadata(url: URL) throws -> [String: String] {
+        let data = try Data(contentsOf: url, options: .mappedIfSafe)
+        return try parseHeader(fileData: data, fileURL: url).header.fileMetadata
+    }
+
     static func metadata(fileData data: Data, fileURL url: URL) throws -> [String: TensorMetadata] {
         let parsed = try parseHeader(fileData: data, fileURL: url)
         return try parseTensorMetadata(
@@ -262,11 +267,18 @@ public enum SafetensorsStreamingLoader {
 
     private struct SafetensorsHeader: Decodable {
         let tensors: [String: TensorHeader]
+        let fileMetadata: [String: String]
 
         init(from decoder: Decoder) throws {
             let container = try decoder.container(keyedBy: DynamicCodingKey.self)
             var tensors: [String: TensorHeader] = [:]
             tensors.reserveCapacity(container.allKeys.count)
+
+            let metadataKey = DynamicCodingKey("__metadata__")
+            self.fileMetadata = try container.decodeIfPresent(
+                [String: String].self,
+                forKey: metadataKey
+            ) ?? [:]
 
             for key in container.allKeys where key.stringValue != "__metadata__" {
                 do {

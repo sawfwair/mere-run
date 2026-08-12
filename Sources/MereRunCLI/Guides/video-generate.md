@@ -14,6 +14,8 @@ Managed ids:
   VAEs, and x2 upscaler for `--quality final`, generated synchronized audio,
   and native source-audio-conditioned video.
 - `video-ltx23-a2vid-mlx`: compatibility ID for existing A2Vid installs.
+- `video-ltx25-distilled-bf16`: official packed LTX 2.5 BF16 checkpoint for
+  native final-quality synchronized video and stereo audio.
 - `video-ltx-av`: legacy merged LTX root. Superseded by LTX 2.3; only still required by
   `video export-latents`. Not recommended for `video generate`.
 
@@ -24,6 +26,7 @@ You can also pass a local LTX model root with `--model-root`.
 ```bash
 mere.run model pull video-ltx23-av-mlx --accept-model-license
 mere.run model pull video-ltx23-full-mlx --accept-model-license
+mere.run model pull video-ltx25-distilled-bf16 --accept-model-license
 mere.run video generate --help
 ```
 

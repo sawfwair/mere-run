@@ -26,10 +26,12 @@ final class SafetensorsStreamingLoaderTests: XCTestCase {
 
         let metadata = try SafetensorsStreamingLoader.metadata(url: url)
         let tensor = try XCTUnwrap(metadata["linear.weight"])
+        let fileMetadata = try SafetensorsStreamingLoader.fileMetadata(url: url)
         XCTAssertEqual(metadata.count, 1)
         XCTAssertEqual(tensor.shape, [2])
         XCTAssertEqual(tensor.dtype, .float32)
         XCTAssertEqual(tensor.endOffset - tensor.startOffset, 8)
+        XCTAssertEqual(fileMetadata, ["format": "pt"])
     }
 
     func testMetadataRejectsMalformedTensorHeader() throws {

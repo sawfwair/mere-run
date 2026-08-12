@@ -744,7 +744,7 @@ struct VideoGenerationPreflightAnalyzer {
         model: VideoGenerationModelPreflightSummary
     ) -> LTXVideoQuality? {
         switch model.layout {
-        case "ltx23_full_split", "ltx23_a2vid_split":
+        case "ltx23_full_split", "ltx23_a2vid_split", "ltx25_distilled":
             return .final
         case "ltx23_distilled_split", "ltx_merged":
             return .draft
@@ -959,6 +959,9 @@ struct VideoGenerationPreflightAnalyzer {
         }
         if isLTX23AudioToVideoModelRoot(url, fileManager: fileManager) {
             return "ltx23_a2vid_split"
+        }
+        if isLTX25ModelRoot(url, fileManager: fileManager) {
+            return "ltx25_distilled"
         }
         return isLTX23SplitModelRoot(url, fileManager: fileManager)
             ? "ltx23_distilled_split"

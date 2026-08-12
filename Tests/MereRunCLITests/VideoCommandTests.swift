@@ -342,6 +342,19 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertNil(cmd.timingsOutput)
     }
 
+    func testVideoGenerateAcceptsManagedLTX25ModelID() throws {
+        let cmd = try VideoGenerate.parse([
+            "a small robot walks across a wooden table",
+            "--model", ModelResolver.ModelID.ltxVideo25DistilledBF16.rawValue,
+            "--quality", "final",
+            "--output-mode", "audio-video",
+        ])
+
+        XCTAssertEqual(cmd.resolvedRequestedModel, LTX25Resources.modelID)
+        XCTAssertEqual(cmd.requestedQuality, .final)
+        XCTAssertEqual(cmd.effectiveOutputMode, .audioVideo)
+    }
+
     func testVideoGenerateParsesMiniMaxH3ReferencesAndStepsInOrder() throws {
         let cmd = try VideoGenerate.parse([
             "preserve the references",
@@ -495,6 +508,29 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertEqual(finalAV.resolvedRequestedModel, ModelResolver.ModelID.ltxVideo23FullMLX.rawValue)
     }
 
+    func testVideoGenerateTreatsOfficialLTX25RootAsFinalQuality() throws {
+        let root = try makeValidLTX25ModelRoot()
+        let command = try VideoGenerate.parse([
+            "a native synchronized shot",
+            "--model-root", root.path,
+            "--quality", "final",
+            "--output-mode", "audio-video",
+        ])
+
+        XCTAssertEqual(command.requestedQuality, .final)
+        XCTAssertEqual(command.effectiveOutputMode, .audioVideo)
+
+        let envelope = command.makePreflightEnvelope(
+            outputURL: makeTempOutput(name: "ltx25.mp4"),
+            fileManager: .default,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+        XCTAssertEqual(envelope.status, .ok)
+        XCTAssertEqual(envelope.result.model.layout, "ltx25_distilled")
+        XCTAssertEqual(envelope.result.plan.quality, "final")
+        XCTAssertFalse(envelope.diagnostics.contains { $0.id == "video_quality_model_mismatch" })
+    }
+
     func testVideoGenerateLegacyVariantDefaultsRemainCompatible() throws {
         let distilled = try VideoGenerate.parse([
             "a draft",
@@ -536,7 +572,7 @@ final class VideoCommandTests: XCTestCase {
             try await cmd.run()
             XCTFail("Expected timing options with the legacy distilled lane to fail validation.")
         } catch {
-            XCTAssertTrue(String(describing: error).contains("require an LTX 2.3 split model"))
+            XCTAssertTrue(String(describing: error).contains("require a split LTX model"))
         }
     }
 
@@ -545,6 +581,7 @@ final class VideoCommandTests: XCTestCase {
         let splitRoot = try makeValidSplitDistilledModelRoot()
         let a2vRoot = try makeValidA2VidModelRoot()
         let fullRoot = try makeValidFullModelRoot()
+        let ltx25Root = try makeValidLTX25ModelRoot()
 
         let legacy = resolveLTXVideoGenerationRoute(variant: .distilled, modelRoot: legacyRoot)
         XCTAssertEqual(legacy, .legacyDistilledVideo)
@@ -564,6 +601,15 @@ final class VideoCommandTests: XCTestCase {
         let compatibleFullVideo = resolveLTXVideoGenerationRoute(outputMode: .videoOnly, modelRoot: a2vRoot)
         XCTAssertEqual(compatibleFullVideo, .fullQualityVideo)
         XCTAssertFalse(compatibleFullVideo.writesAudio)
+
+        let ltx25Video = resolveLTXVideoGenerationRoute(outputMode: .videoOnly, modelRoot: ltx25Root)
+        XCTAssertEqual(ltx25Video, .splitDistilledVideo)
+        XCTAssertFalse(ltx25Video.writesAudio)
+        XCTAssertTrue(ltx25Video.supportsPhaseTimings)
+
+        let ltx25AV = resolveLTXVideoGenerationRoute(outputMode: .audioVideo, modelRoot: ltx25Root)
+        XCTAssertEqual(ltx25AV, .unifiedAV)
+        XCTAssertTrue(ltx25AV.writesAudio)
 
         let unified = resolveLTXVideoGenerationRoute(variant: .unifiedAV, modelRoot: splitRoot)
         XCTAssertEqual(unified, .unifiedAV)
@@ -1168,6 +1214,10 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertNoThrow(try validateNativeModelRoot(makeValidA2VidModelRoot()))
     }
 
+    func testValidateNativeModelRootAcceptsOfficialLTX25Layout() throws {
+        XCTAssertNoThrow(try validateNativeModelRoot(makeValidLTX25ModelRoot()))
+    }
+
     func testWanPreflightUsesNativeSpatialAndTemporalGeometry() throws {
         let modelRoot = try makeValidWanModelRoot()
         let sourceImage = try makeTempFile(name: "start.png")
@@ -1266,6 +1316,14 @@ final class VideoCommandTests: XCTestCase {
     private func makeValidFullModelRoot() throws -> URL {
         let rootURL = try makeValidA2VidModelRoot()
         try createFile(rootURL.appendingPathComponent("vocoder.safetensors"))
+        return rootURL
+    }
+
+    private func makeValidLTX25ModelRoot() throws -> URL {
+        let rootURL = try makeTempDirectory()
+        for relativePath in LTX25Resources.requiredRelativePaths {
+            try createFile(rootURL.appendingPathComponent(relativePath))
+        }
         return rootURL
     }
 
