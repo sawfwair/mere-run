@@ -47,6 +47,7 @@ help in the repository gate.
 - `text-chat-bonsai-27b-2bit` (managed packed 2-bit ternary dense Qwen3.6 27B vision/reasoning snapshot)
 - `text-chat-lfm25-2.6b-4bit` (managed LiquidAI LFM2.5 2.6B dense MLX 4-bit snapshot)
 - `text-chat-lfm25-a1b-8bit` (managed LiquidAI LFM2.5 8B-A1B MLX 8-bit snapshot)
+- `vision-chat-lfm25-3b-8bit` (managed LiquidAI LFM2.5-VL 3B MLX 8-bit vision-language snapshot)
 - `text-agent-ornith-9b` (experimental native MLX/OptiQ coding-agent snapshot)
 - `text-agent-ornith-35b-mlx` (local native MLX Q4 coding-agent snapshot)
 - `text-agent-deepseek-v4-flash` (API/agent serving)
@@ -165,6 +166,20 @@ Concurrent serve workloads use ragged, cache-safe decode batching when
 `--max-active-requests` is above `1` (`MERERUN_LFM2_CONTINUOUS_BATCHING`
 overrides); rows at different prompt lengths share a forward only when every
 attention and short-conv cache proves compatibility.
+
+`vision-chat-lfm25-3b-8bit` adds the checkpoint's SigLIP2 vision tower and
+multimodal projector to that native LFM2 engine. Pass a local image path or
+base64 data URL through `--image`; the runtime smart-resizes the image to the
+checkpoint's 16-pixel patch grid, projects the downsampled visual tokens into
+the language prompt, then reuses the normal LFM2 decode path.
+
+```bash
+swift run mere.run model pull vision-chat-lfm25-3b-8bit --accept-model-license
+swift run mere.run text chat \
+  --model vision-chat-lfm25-3b-8bit \
+  --image ./document.png \
+  --prompt "Summarize this document and list its key figures."
+```
 
 `text-chat-laguna-s-2-1` is an opt-in 96 GB-and-up Apple Silicon lane and is
 never selected by setup or hardware-aware defaults. Its roughly 72 GB target

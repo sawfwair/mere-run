@@ -1146,6 +1146,21 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 upstreamRepoId: "\(LFM2Resources.denseUpstreamRepoId)@\(LFM2Resources.denseUpstreamRevision)",
                 createdAt: createdAt
             )
+        case .lfm25VL3B8Bit:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .lfm2,
+                family: .liquid,
+                tier: .nano,
+                variant: .standard,
+                precision: .int8,
+                quantization: Quantization(bits: 8, groupSize: 64, scheme: "mlx-affine"),
+                defaults: nil,
+                supports: [.chat, .visionChat],
+                components: q35TextComponents,
+                upstreamRepoId: "\(LFM2Resources.visionUpstreamRepoId)@\(LFM2Resources.visionUpstreamRevision)",
+                createdAt: createdAt
+            )
         case .qwen35Agent9B:
             return MereRunModelManifest(
                 id: modelID.rawValue,

@@ -454,6 +454,14 @@ public enum ManagedModelCapabilityCatalog {
                 setup: true
             ),
             descriptor(
+                LFM2Resources.visionModelId,
+                "LFM2.5-VL 3B 8-bit",
+                "Runs LiquidAI's compact LFM2.5-VL vision-language model through the native Swift LFM2 runtime.",
+                minimum: 8,
+                recommended: 16,
+                setup: true
+            ),
+            descriptor(
                 "text-chat-q36-nano-gguf",
                 "Qwen3.6 A3B chat nano (GGUF)",
                 "Runs Qwen3.6 35B-A3B GGUF through llama.cpp; the default chat model on Linux CUDA hosts.",

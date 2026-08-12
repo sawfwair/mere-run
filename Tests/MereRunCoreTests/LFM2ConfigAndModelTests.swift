@@ -12,6 +12,60 @@ final class LFM2ConfigAndModelTests: MereRunCoreTestCase {
         return try JSONDecoder().decode(LFM2Config.self, from: data)
     }
 
+    private func decodeVisionConfig(_ object: [String: Any]) throws -> LFM2VLConfig {
+        let data = try JSONSerialization.data(withJSONObject: object, options: [])
+        return try JSONDecoder().decode(LFM2VLConfig.self, from: data)
+    }
+
+    private func makeTinyVisionConfig() -> [String: Any] {
+        [
+            "architectures": ["Lfm2VlForConditionalGeneration"],
+            "model_type": "lfm2_vl",
+            "image_token_id": 63,
+            "downsample_factor": 2,
+            "encoder_patch_size": 2,
+            "min_image_tokens": 1,
+            "max_image_tokens": 1,
+            "max_num_patches": 4,
+            "projector_bias": true,
+            "projector_hidden_size": 16,
+            "projector_use_layernorm": false,
+            "quantization": [
+                "group_size": 64,
+                "bits": 8,
+                "mode": "affine",
+            ],
+            "text_config": [
+                "architectures": ["Lfm2ForCausalLM"],
+                "model_type": "lfm2",
+                "vocab_size": 64,
+                "hidden_size": 16,
+                "intermediate_size": 32,
+                "num_hidden_layers": 2,
+                "num_attention_heads": 4,
+                "num_key_value_heads": 2,
+                "max_position_embeddings": 128,
+                "norm_eps": 0.00001,
+                "conv_bias": false,
+                "conv_L_cache": 2,
+                "layer_types": ["conv", "full_attention"],
+                "eos_token_id": 62,
+                "tie_word_embeddings": true,
+            ],
+            "vision_config": [
+                "model_type": "siglip2_vision_model",
+                "hidden_size": 8,
+                "intermediate_size": 16,
+                "num_hidden_layers": 1,
+                "num_attention_heads": 2,
+                "num_channels": 3,
+                "num_patches": 4,
+                "patch_size": 2,
+                "layer_norm_eps": 0.000001,
+            ],
+        ]
+    }
+
     private func makeBaseConfig(includeQuantization: Bool = true) -> [String: Any] {
         var config: [String: Any] = [
             "architectures": ["Lfm2MoeForCausalLM"],
@@ -172,6 +226,59 @@ final class LFM2ConfigAndModelTests: MereRunCoreTestCase {
         XCTAssertEqual(config.numExpertsPerTok, 1)
         XCTAssertEqual(config.numDenseLayers, config.numHiddenLayers)
         XCTAssertEqual(config.fullAttentionLayerIndexes, Set([1, 3]))
+    }
+
+    func testDecodesLFM25VisionConfigAndFallsBackToImageTokenID() throws {
+        let config = try decodeVisionConfig(makeTinyVisionConfig())
+
+        XCTAssertEqual(config.modelType, "lfm2_vl")
+        XCTAssertEqual(config.imageTokenId, 63)
+        XCTAssertEqual(config.imageTokenIndex, 63)
+        XCTAssertEqual(config.textConfig.modelType, "lfm2")
+        XCTAssertEqual(config.textConfig.intermediateSize, 32)
+        XCTAssertEqual(config.visionConfig.modelType, "siglip2_vision_model")
+        XCTAssertEqual(config.visionConfig.patchSize, 2)
+        XCTAssertEqual(config.downsampleFactor, 2)
+        XCTAssertEqual(config.quantization?.bits, 8)
+    }
+
+    func testLFM25VisionSmartResizeAndPromptExpansionMatchDownsampledGrid() throws {
+        let size = LFM2VLImageProcessor.smartResize(
+            width: 1_600,
+            height: 900,
+            encoderPatchSize: 16,
+            downsampleFactor: 2,
+            minImageTokens: 64,
+            maxImageTokens: 256
+        )
+        XCTAssertEqual(size.width, 672)
+        XCTAssertEqual(size.height, 384)
+
+        let expanded = try LFM2VLImageProcessor.expandedPromptTokens(
+            [10, 63, 11],
+            grids: [LFM2VLImageGrid(rows: 24, columns: 42)],
+            downsampleFactor: 2,
+            imageTokenId: 63,
+            imageStartTokenId: 60,
+            imageEndTokenId: 61
+        )
+        XCTAssertEqual(expanded.count, 256)
+        XCTAssertEqual(expanded.prefix(3), [10, 60, 63])
+        XCTAssertEqual(expanded.suffix(2), [61, 11])
+        XCTAssertEqual(expanded.filter { $0 == 63 }.count, 252)
+    }
+
+    func testLFM25VisionModelReplacesImageTokenWithProjectedFeature() throws {
+        let config = try decodeVisionConfig(makeTinyVisionConfig())
+        let model = LFM2VLModel(config: config)
+        let embeddings = try model.inputEmbeddings(
+            inputTokens: [1, config.imageTokenIndex, 2],
+            pixelValues: MLXArray.zeros([1, 4, 12]),
+            grids: [LFM2VLImageGrid(rows: 2, columns: 2)]
+        )
+
+        MLX.eval(embeddings)
+        XCTAssertEqual(embeddings.shape, [1, 3, 16])
     }
 
     func testRendersLiquidAIChatTemplateShape() throws {

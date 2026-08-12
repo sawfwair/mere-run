@@ -294,6 +294,7 @@ swift run mere.run model pull image-zimage-nano
 swift run mere.run model pull image-zimage-nano --preflight --json
 swift run mere.run model pull text-chat-lfm25-2.6b-4bit --accept-model-license
 swift run mere.run model pull text-chat-lfm25-a1b-8bit --accept-model-license
+swift run mere.run model pull vision-chat-lfm25-3b-8bit --accept-model-license
 swift run mere.run model pull text-chat-laguna-s-2-1
 swift run mere.run model pull text-chat-laguna-xs-2-1
 swift run mere.run model pull text-chat-nemotron-35-lightning
@@ -422,6 +423,12 @@ swift run mere.run text chat \
 swift run mere.run text chat \
   --model text-chat-lfm25-2.6b-4bit \
   --prompt "Explain why local inference is useful in one paragraph."
+
+# Inspect an image with LiquidAI LFM2.5-VL through the same native runtime
+swift run mere.run text chat \
+  --model vision-chat-lfm25-3b-8bit \
+  --image ./photo.jpg \
+  --prompt "Describe this image and transcribe any visible text."
 
 # Redact PII locally
 swift run mere.run text anonymize \

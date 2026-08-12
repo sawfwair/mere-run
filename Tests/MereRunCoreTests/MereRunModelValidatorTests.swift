@@ -46,7 +46,15 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         try TestFileSystem.createDirectory(root)
         try MereRunModelManifest.template(for: id, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
 
-        let modelType = id == .lfm25Dense2_6B4Bit ? "lfm2" : "lfm2_moe"
+        let modelType: String
+        switch id {
+        case .lfm25Dense2_6B4Bit:
+            modelType = "lfm2"
+        case .lfm25VL3B8Bit:
+            modelType = "lfm2_vl"
+        default:
+            modelType = "lfm2_moe"
+        }
         try TestFileSystem.writeFile(
             root.appendingPathComponent("config.json"),
             contents: Data(#"{"model_type":"\#(modelType)"}"#.utf8)
@@ -54,6 +62,9 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         try TestFileSystem.writeFile(root.appendingPathComponent("tokenizer.json"), contents: Data("{}".utf8))
         try TestFileSystem.writeFile(root.appendingPathComponent("tokenizer_config.json"), contents: Data("{}".utf8))
         try TestFileSystem.writeFile(root.appendingPathComponent("model.safetensors.index.json"), contents: Data("{}".utf8))
+        if id == .lfm25VL3B8Bit {
+            try TestFileSystem.writeFile(root.appendingPathComponent("processor_config.json"), contents: Data("{}".utf8))
+        }
     }
 
     private func writeMinimalValidGemma4Model(at root: URL, id: ModelResolver.ModelID = .gemma4) throws {
@@ -627,6 +638,29 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         XCTAssertEqual(
             report.manifest?.upstreamRepoId,
             "\(LFM2Resources.denseUpstreamRepoId)@\(LFM2Resources.denseUpstreamRevision)"
+        )
+    }
+
+    func testLFM2VisionRootLayoutPassesValidation() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let root = temp.appendingPathComponent(LFM2Resources.visionModelId, isDirectory: true)
+        try writeMinimalValidLFM2Model(at: root, id: .lfm25VL3B8Bit)
+
+        let report = MereRunModelValidator.validate(
+            modelRoot: root,
+            expectedModelID: LFM2Resources.visionModelId
+        )
+        XCTAssertTrue(report.isValid, report.errors.joined(separator: "\n"))
+        XCTAssertTrue(report.errors.isEmpty)
+        XCTAssertEqual(report.manifest?.engine, .lfm2)
+        XCTAssertEqual(report.manifest?.family, .liquid)
+        XCTAssertEqual(report.manifest?.precision, .int8)
+        XCTAssertEqual(Set(report.manifest?.supports ?? []), Set([.chat, .visionChat]))
+        XCTAssertEqual(
+            report.manifest?.upstreamRepoId,
+            "\(LFM2Resources.visionUpstreamRepoId)@\(LFM2Resources.visionUpstreamRevision)"
         )
     }
 

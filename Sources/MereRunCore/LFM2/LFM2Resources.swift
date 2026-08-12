@@ -9,6 +9,10 @@ public struct LFM2Resources: Sendable, Hashable {
     public static let denseUpstreamRepoId = "LiquidAI/LFM2.5-2.6B-MLX"
     public static let denseUpstreamRevision = "58e239c769c4eb2b766fee80f0b7228bff837baf"
     public static let denseVariantSubdirectory = "4bit"
+    public static let visionModelId = "vision-chat-lfm25-3b-8bit"
+    public static let visionUpstreamRepoId = "LiquidAI/LFM2.5-VL-3B-MLX-8bit"
+    public static let visionUpstreamRevision = "4065d2c056a9c54d44fec67cf651812b55c6673f"
+    public static let visionEstimatedDownloadBytes: Int64 = 3_736_739_700
     public static let defaultContextLength = 32_768
 
     public static let snapshotPatterns = [
@@ -36,8 +40,22 @@ public struct LFM2Resources: Sendable, Hashable {
         "\(denseVariantSubdirectory)/model.safetensors.index.json",
     ]
 
-    public static let managedModelIds = [defaultModelId, denseModelId]
-    public static let upstreamRepoIds = [upstreamRepoId, denseUpstreamRepoId]
+    public static let visionSnapshotPatterns = [
+        "LICENSE*",
+        "README.md",
+        "config.json",
+        "generation_config.json",
+        "processor_config.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "chat_template.jinja",
+        "model.safetensors",
+        "model.safetensors.index.json",
+        "*.safetensors",
+    ]
+
+    public static let managedModelIds = [defaultModelId, denseModelId, visionModelId]
+    public static let upstreamRepoIds = [upstreamRepoId, denseUpstreamRepoId, visionUpstreamRepoId]
 
     public static func handles(modelSpec: String) -> Bool {
         let normalized = modelSpec.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -60,8 +78,12 @@ public struct LFM2Resources: Sendable, Hashable {
     public var tokenizerURL: URL { rootURL.appending(path: "tokenizer.json") }
     public var tokenizerConfigURL: URL { rootURL.appending(path: "tokenizer_config.json") }
     public var chatTemplateURL: URL { rootURL.appending(path: "chat_template.jinja") }
+    public var processorConfigURL: URL { rootURL.appending(path: "processor_config.json") }
 
-    public func validate(fileManager: FileManager = .default) -> [URL] {
+    public func validate(
+        fileManager: FileManager = .default,
+        requireVisionProcessor: Bool = false
+    ) -> [URL] {
         var missing: [URL] = []
         if !fileManager.fileExists(atPath: configURL.path) {
             missing.append(configURL)
@@ -76,6 +98,9 @@ public struct LFM2Resources: Sendable, Hashable {
         }
         if !fileManager.fileExists(atPath: tokenizerConfigURL.path) {
             missing.append(tokenizerConfigURL)
+        }
+        if requireVisionProcessor, !fileManager.fileExists(atPath: processorConfigURL.path) {
+            missing.append(processorConfigURL)
         }
         return missing
     }

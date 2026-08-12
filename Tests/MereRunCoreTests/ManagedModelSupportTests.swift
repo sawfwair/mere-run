@@ -250,6 +250,22 @@ final class ManagedModelSupportTests: XCTestCase {
         XCTAssertEqual(report.descriptor.recommendedUnifiedMemoryGB, 12)
     }
 
+    func testLFM25VisionRunsInCompactMemoryTier() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: LFM2Resources.visionModelId))
+        let machine = MereRunMachineProfile(
+            physicalMemoryBytes: 16 * 1_073_741_824,
+            processorName: "M2",
+            isAppleSiliconMac: true
+        )
+
+        let report = ManagedModelCapabilityCatalog.support(for: spec, on: machine)
+
+        XCTAssertTrue(report.isSupported)
+        XCTAssertTrue(report.meetsRecommendedMemory)
+        XCTAssertEqual(report.descriptor.minimumUnifiedMemoryGB, 8)
+        XCTAssertEqual(report.descriptor.recommendedUnifiedMemoryGB, 16)
+    }
+
 
     func testNorthMiniCodeIsSupportedOnThirtyTwoGBAndStartable() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: NorthMiniCodeResources.modelId))
