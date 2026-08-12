@@ -40,10 +40,13 @@ without skipping an evaluation or selecting an approximation policy.
 
 - mere.run base: Ref2VA 8-bit commit
   `184932ae5e2788812376285a39c606c6a568ebd3`, stacked on `origin/main`.
-- h3.c repository: `https://github.com/antirez/h3.c.git`.
+- external h3.c oracle repository: `https://github.com/antirez/h3.c.git`.
 - h3.c revision: `03cb1339825feb19bcafcc60685680cb9ec6e2fe`.
-- h3.c source license: MIT, with the BSD-3-Clause components identified in its
-  `THIRD_PARTY_NOTICES.md`.
+- h3.c source license: MIT. Its dynamic symmetric int8 design is included in
+  the BSD-3-Clause notice identified in upstream `THIRD_PARTY_NOTICES.md`;
+  mere.run reproduces both notices for the selected source-derived behavior and
+  activation-quantization design. No Morton decoder or TensorOps scheduler was
+  ported.
 - MiniMax-H3 weights remain governed by the MiniMax-H3 Community License.
 
 Run the source oracle without adding it to the repository:
@@ -54,12 +57,13 @@ scripts/h3c-oracle.sh pin
 scripts/h3c-oracle.sh run --help
 ```
 
-The ignored checkout lives under `.build/h3c-oracle` by default. The runner
-refuses revision drift by fetching and checking out the immutable commit above
-on every build. It does not download checkpoint weights. h3.c expects the
-original upstream `FL2VA/` and `Ref2VA/` directory trees; mere.run consumes its
-own flat managed MLX artifacts, so output comparisons must record which weight
-representation each arm used.
+No h3.c source code, binary, or library is vendored, linked, or shipped by
+mere.run. The optional runner fetches an ignored checkout under
+`.build/h3c-oracle` by default and refuses revision drift by checking out the
+immutable commit above on every build. It does not download checkpoint weights.
+h3.c expects the original upstream `FL2VA/` and `Ref2VA/` directory trees;
+mere.run consumes its own flat managed MLX artifacts, so output comparisons
+must record which weight representation each arm used.
 
 For a local BF16 parity run, `MiniMaxH3Resources` also accepts ignored flat
 overlays with the released shard directories at `transformer-bf16/` and

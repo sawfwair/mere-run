@@ -313,7 +313,7 @@ struct VideoGenerate: AsyncParsableCommand {
 
     @Option(
         name: [.customLong("h3-acceleration")],
-        help: "MiniMax-H3 acceleration: quality is exact; balanced/maximum add sparse attention and caching; layers-45/layers-40, velocity-reuse-2, and token-reduction are experimental h3.c A/B arms."
+        help: "MiniMax-H3 acceleration: quality is exact; balanced/maximum add sparse attention and caching; layers-45/layers-40, velocity-reuse-2, and token-reduction are experimental research arms."
     )
     var h3Acceleration: MiniMaxH3CLIAccelerationMode = .quality
 
