@@ -61,6 +61,18 @@ final class MereRunModelPathsTests: XCTestCase {
         )
     }
 
+    func testProcessOverrideCanOptIntoRegisteredLocations() throws {
+        let customRoot = try makeTemporaryDirectory(named: "mererun-models-with-locations")
+        defer { try? FileManager.default.removeItem(at: customRoot) }
+
+        MereRunModelPaths.setProcessModelsDirOverride(
+            customRoot,
+            includeRegisteredLocations: true
+        )
+
+        XCTAssertTrue(MereRunModelPaths.includesRegisteredModelLocations(environment: [:]))
+    }
+
     func testModelStoreResolutionUsesMissingProcessOverrideWithoutFallback() throws {
         let temp = try makeTemporaryDirectory(named: "mererun-models-missing-process-parent")
         defer { try? FileManager.default.removeItem(at: temp) }

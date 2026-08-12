@@ -7,21 +7,27 @@ enum CLIModelStoreBootstrap {
         environment: [String: String] = ProcessInfo.processInfo.environment,
         defaults: UserDefaults = .standard
     ) {
-        guard let rawPath = resolvedOverridePath(
-            arguments: arguments,
-            environment: environment,
-            defaults: defaults
-        ) else {
-            return
+        if let rawPath = modelsRootArgument(in: arguments), !rawPath.isEmpty {
+            applyOverridePath(rawPath)
+        } else if let rawPath = environment[MereRunModelPaths.modelsDirEnvironmentKey], !rawPath.isEmpty {
+            applyOverridePath(rawPath)
+        } else if let rawPath = defaults.string(
+            forKey: MereRunModelPaths.modelStorageActivePathDefaultsKey
+        ), !rawPath.isEmpty {
+            applyOverridePath(rawPath, includeRegisteredLocations: true)
         }
-
-        applyOverridePath(rawPath)
     }
 
-    static func applyOverridePath(_ rawPath: String) {
+    static func applyOverridePath(
+        _ rawPath: String,
+        includeRegisteredLocations: Bool = false
+    ) {
         let expanded = (rawPath as NSString).expandingTildeInPath
         let url = URL(fileURLWithPath: expanded).standardizedFileURL
-        MereRunModelPaths.setProcessModelsDirOverride(url)
+        MereRunModelPaths.setProcessModelsDirOverride(
+            url,
+            includeRegisteredLocations: includeRegisteredLocations
+        )
         setenv(MereRunModelPaths.modelsDirEnvironmentKey, url.path, 1)
     }
 

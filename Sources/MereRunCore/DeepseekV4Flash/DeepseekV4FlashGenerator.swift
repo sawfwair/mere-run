@@ -342,6 +342,12 @@ public actor DeepseekV4FlashGenerator: ChatGenerator {
             return aliasURL
         }
 
+        if let spec = ManagedModelCatalog.spec(for: DeepseekV4FlashResources.defaultModelId),
+           let registered = spec.managedRuntimeURL(),
+           FileManager.default.fileExists(atPath: registered.path) {
+            return registered
+        }
+
         // 2. Prefer the pinned 0731 artifact, retain older imatrix installs,
         //    then accept any other GGUF in the install directory.
         let modelDir = MereRunModelPaths.modelDir(DeepseekV4FlashResources.defaultModelId)

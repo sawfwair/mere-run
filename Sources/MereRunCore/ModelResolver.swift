@@ -129,17 +129,32 @@ public struct ModelResolver {
     public enum Source: String, Hashable, Sendable {
         /// `.../models/<id>` under the configured local mere.run model store.
         case localModelStore
+        /// An explicit canonical-model-id to directory binding.
+        case registeredBinding
+        /// A canonical `<root>/<model-id>` directory under a registered read-only root.
+        case registeredSearchRoot
     }
 
     public struct Resolution: Hashable, Sendable {
         public let modelID: ModelID
         public let rootURL: URL
         public let source: Source
+        public let catalogRootURL: URL?
 
-        public init(modelID: ModelID, rootURL: URL, source: Source) {
+        public init(
+            modelID: ModelID,
+            rootURL: URL,
+            source: Source,
+            catalogRootURL: URL? = nil
+        ) {
             self.modelID = modelID
             self.rootURL = rootURL
             self.source = source
+            self.catalogRootURL = catalogRootURL
+        }
+
+        public var isExternallyManaged: Bool {
+            source != .localModelStore
         }
     }
 
@@ -167,13 +182,18 @@ public struct ModelResolver {
     }
 
     private let fileManager: FileManager
+    private let locations: ModelLocationSnapshot
 
     public init(
         fileManager: FileManager = .default,
-        environment: [String: String] = ProcessInfo.processInfo.environment
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        locations: ModelLocationSnapshot? = nil
     ) {
         self.fileManager = fileManager
-        _ = environment
+        self.locations = locations ?? MereRunModelLocations.snapshot(
+            fileManager: fileManager,
+            environment: environment
+        )
     }
 
     public func resolve(_ modelID: ModelID) throws -> Resolution {
@@ -187,7 +207,12 @@ public struct ModelResolver {
                   let resolved = resolveDirect(fallbackModelID) else {
                 continue
             }
-            return Resolution(modelID: modelID, rootURL: resolved.rootURL, source: resolved.source)
+            return Resolution(
+                modelID: modelID,
+                rootURL: resolved.rootURL,
+                source: resolved.source,
+                catalogRootURL: resolved.catalogRootURL
+            )
         }
 
         let searchedIDs = [modelID] + (spec?.resolutionFallbackIDs.compactMap(ModelID.init(rawValue:)) ?? [])
@@ -202,8 +227,12 @@ public struct ModelResolver {
         try? resolve(modelID)
     }
 
-    private func candidateModelRoots() -> [URL] {
-        [MereRunModelPaths.modelsDir.standardizedFileURL]
+    /// Ordered locations considered for a canonical model id.
+    ///
+    /// The writable primary store is always first, followed by explicit bindings
+    /// and then canonical directories under registered search roots.
+    public func locationCandidates(for modelID: ModelID) -> [ModelLocationCandidate] {
+        locations.candidates(for: modelID.rawValue)
     }
 
     private func resolveDirect(_ modelID: ModelID) -> Resolution? {
@@ -211,26 +240,31 @@ public struct ModelResolver {
             return nil
         }
 
-        for modelsRoot in candidateModelRoots() {
-            let modelRoot = modelsRoot.appendingPathComponent(modelID.rawValue, isDirectory: true)
-            if isValidModelRoot(modelRoot, spec: spec, expectedModelID: modelID) {
-                return Resolution(modelID: modelID, rootURL: modelRoot, source: .localModelStore)
+        for candidate in locations.candidates(for: modelID.rawValue) {
+            if isValidModelRoot(candidate, spec: spec, expectedModelID: modelID) {
+                return Resolution(
+                    modelID: modelID,
+                    rootURL: candidate.rootURL,
+                    source: source(for: candidate.kind),
+                    catalogRootURL: candidate.catalogRootURL
+                )
             }
         }
         return nil
     }
 
     private func searchedPaths(for modelIDs: [ModelID]) -> [URL] {
-        candidateModelRoots().flatMap { modelsRoot in
-            modelIDs.map { modelsRoot.appendingPathComponent($0.rawValue, isDirectory: true) }
+        modelIDs.flatMap { modelID in
+            locations.candidates(for: modelID.rawValue).map(\.rootURL)
         }
     }
 
     private func isValidModelRoot(
-        _ url: URL,
+        _ candidate: ModelLocationCandidate,
         spec: ManagedModelSpec,
         expectedModelID: ModelID? = nil
     ) -> Bool {
+        let url = candidate.rootURL
         var isDir: ObjCBool = false
         guard fileManager.fileExists(atPath: url.path, isDirectory: &isDir), isDir.boolValue else {
             return false
@@ -240,13 +274,33 @@ public struct ModelResolver {
             return spec.isManagedRuntimeReady(url, fileManager: fileManager)
         }
 
-        let manifestURL = url.appendingPathComponent(MereRunModelManifest.filename)
-        if fileManager.fileExists(atPath: manifestURL.path),
-           let loaded = try? MereRunModelManifest.loadRequired(from: url, fileManager: fileManager),
-           loaded.id == expectedModelID.rawValue {
+        let manifest: MereRunModelManifest?
+        do {
+            manifest = try MereRunModelManifest.loadIfPresent(from: url, fileManager: fileManager)
+        } catch {
+            return false
+        }
+        if let manifest {
+            guard manifest.id == expectedModelID.rawValue else { return false }
+            if candidate.kind.isExternallyManaged,
+               spec.usageRestriction != nil,
+               manifest.usageTermsAcknowledged != true,
+               !candidate.usageTermsAcknowledged {
+                return false
+            }
             return spec.isManagedRuntimeReady(url, fileManager: fileManager)
         }
 
-        return false
+        guard candidate.kind == .registeredBinding else { return false }
+        guard spec.usageRestriction == nil || candidate.usageTermsAcknowledged else { return false }
+        return spec.isManagedRuntimeReady(url, fileManager: fileManager)
+    }
+
+    private func source(for kind: ModelLocationKind) -> Source {
+        switch kind {
+        case .primaryStore: .localModelStore
+        case .registeredBinding: .registeredBinding
+        case .registeredSearchRoot: .registeredSearchRoot
+        }
     }
 }

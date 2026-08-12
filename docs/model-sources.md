@@ -1,10 +1,12 @@
 # Model Sources
 
-Weights reach `mere.run` in exactly two ways:
+Weights reach `mere.run` in three local-first ways:
 
 1. **Managed pulls** — cataloged Hugging Face snapshots installed into the local
    model store by `mere.run model pull`
-2. **Local paths** — a directory you point at yourself with `--model`,
+2. **Registered locations** — read-only search roots or explicit canonical-ID
+   bindings managed by `mere.run model location`
+3. **Local paths** — a directory you point at yourself with `--model`,
    `--model-root`, or the command's equivalent option
 
 There is no private model archive, no credentialed mirror, and no central host
@@ -18,6 +20,16 @@ The canonical local model store is:
 ```
 
 Override that with `MERERUN_MODELS_DIR` or `--models-root`.
+
+Registered locations augment the normal persisted primary store without
+copying payloads or creating symlinks. Search roots use
+`<root>/<canonical-model-id>/` and require each model's managed manifest.
+Explicit bindings can point a canonical ID at an arbitrarily named directory;
+mere.run validates the checkpoint at registration time and stores its identity
+in `~/Library/Application Support/MereRun/model_locations.json` without writing
+metadata into the external directory. Externally registered files remain
+read-only and are outside `model remove`, `model gc`, manifest repair, and
+storage-reclamation ownership.
 
 ## Canonical Managed Model IDs
 

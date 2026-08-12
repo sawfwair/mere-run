@@ -78,7 +78,7 @@ links to the page that owns that command.
 | [`mere.run graph`](/workflows) | Validate, materialize, run, and submit portable workflow graphs. |
 | [`mere.run executor`](/workflows#executor-profiles) | Manage local, SSH, and relay workflow executors. |
 | [`mere.run run`](/workflows#run-directories) | Inspect durable mere.run workflow reports and run directories. |
-| [`mere.run model`](/runtime/model-management) | List, pull, remove, inspect, optimize, and clean up models. |
+| [`mere.run model`](/runtime/model-management) | List, pull, locate, remove, inspect, optimize, and clean up models. |
 | [`mere.run adapter`](/runtime/model-management) | List and pull verified LoRA adapters. |
 | [`mere.run status`](/runtime/model-management) | Show local server, loaded model, and installed model status. |
 | [`mere.run gate`](/gate) | Run the end-to-end quality gate against installed models. |

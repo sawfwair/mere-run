@@ -631,6 +631,91 @@ final class ModelPullCommandParsingTests: XCTestCase {
         XCTAssertTrue(forced.diagnostics.contains { $0.id == "hub_cache_space_insufficient" })
     }
 
+    func testPreflightTreatsExternalBindingAsInstalled() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let modelStore = root.appendingPathComponent("models", isDirectory: true)
+        let hubCache = root.appendingPathComponent("hub", isDirectory: true)
+        let external = root.appendingPathComponent("external-zimage", isDirectory: true)
+        try writeMinimalExternalZImage(at: external)
+        let locations = ModelLocationSnapshot(
+            primaryRoot: modelStore,
+            bindings: [
+                .init(modelID: ModelResolver.ModelID.zetaNano.rawValue, path: external.path),
+            ]
+        )
+
+        let envelope = try ModelPull.parse([
+            ModelResolver.ModelID.zetaNano.rawValue,
+            "--allow-unsupported",
+            "--preflight",
+            "--json",
+        ]).makePreflightEnvelope(
+            hubCacheURL: hubCache,
+            modelStoreURL: modelStore,
+            modelLocations: locations,
+            diskAvailableBytes: { _ in 100 * ModelPullDiskPreflight.bytesPerGiB }
+        )
+
+        XCTAssertEqual(envelope.result.models.first?.status, "installed")
+        XCTAssertEqual(envelope.result.models.first?.installed, true)
+        XCTAssertEqual(envelope.result.models.first?.runtimePath, external.path)
+        XCTAssertEqual(envelope.result.models.first?.willDownload, false)
+    }
+
+    func testExternalBindingAndRevisionDeltaOverrideCompose() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let modelStore = root.appendingPathComponent("models", isDirectory: true)
+        let hubCache = root.appendingPathComponent("hub", isDirectory: true)
+        let external = root.appendingPathComponent("external-zimage", isDirectory: true)
+        try writeMinimalExternalZImage(at: external)
+        let modelID = ModelResolver.ModelID.zetaNano.rawValue
+        let deltaBytes: Int64 = 4_362
+        let locations = ModelLocationSnapshot(
+            primaryRoot: modelStore,
+            bindings: [.init(modelID: modelID, path: external.path)]
+        )
+
+        let envelope = try ModelPull.parse([
+            modelID,
+            "--allow-unsupported",
+            "--preflight",
+            "--json",
+        ]).makePreflightEnvelope(
+            hubCacheURL: hubCache,
+            modelStoreURL: modelStore,
+            estimatedDownloadBytesOverrides: [modelID: deltaBytes],
+            modelLocations: locations,
+            diskAvailableBytes: { _ in 100 * ModelPullDiskPreflight.bytesPerGiB }
+        )
+
+        XCTAssertEqual(envelope.result.models.first?.status, "installed")
+        XCTAssertEqual(envelope.result.models.first?.runtimePath, external.path)
+        XCTAssertEqual(envelope.result.models.first?.estimatedDownloadBytes, deltaBytes)
+        XCTAssertEqual(envelope.result.willDownloadCount, 0)
+        XCTAssertEqual(envelope.result.estimatedDownloadBytes, 0)
+    }
+
+    private func writeMinimalExternalZImage(at root: URL) throws {
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        try Data("{}".utf8).write(to: root.appendingPathComponent("model_index.json"))
+        for component in ["text_encoder", "transformer", "vae"] {
+            let directory = root.appendingPathComponent(component, isDirectory: true)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            try Data("{}".utf8).write(to: directory.appendingPathComponent("config.json"))
+            try Data().write(to: directory.appendingPathComponent("model.safetensors"))
+        }
+        let tokenizer = root.appendingPathComponent("tokenizer", isDirectory: true)
+        try FileManager.default.createDirectory(at: tokenizer, withIntermediateDirectories: true)
+        for filename in ["tokenizer.json", "tokenizer_config.json", "merges.txt", "vocab.json"] {
+            try Data("{}".utf8).write(to: tokenizer.appendingPathComponent(filename))
+        }
+        let scheduler = root.appendingPathComponent("scheduler", isDirectory: true)
+        try FileManager.default.createDirectory(at: scheduler, withIntermediateDirectories: true)
+        try Data("{}".utf8).write(to: scheduler.appendingPathComponent("scheduler_config.json"))
+    }
+
     private func makeTemporaryDirectory() throws -> URL {
         let temp = FileManager.default.temporaryDirectory
             .appendingPathComponent("mere-run-model-pull-preflight-\(UUID().uuidString)", isDirectory: true)

@@ -26,6 +26,8 @@ enum ModelInventory {
 
             let modelID = ModelResolver.ModelID(rawValue: id)
             let resolvedViaResolver = modelID.flatMap { resolver.resolveIfPresent($0) }
+            let registeredBindings = (modelID.map { resolver.locationCandidates(for: $0) } ?? [])
+                .filter { $0.kind == .registeredBinding }
 
             let flatDir = MereRunModelPaths.modelDir(id)
             let flatInstalled = isNonEmptyDirectory(flatDir, fileManager: fileManager)
@@ -79,6 +81,17 @@ enum ModelInventory {
                 status = hasManagedManifest ? "invalid" : "installed"
                 let bytes = FileSystemHelper.directorySize(at: flatDir)
                 size = ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+            } else if !registeredBindings.isEmpty {
+                let availableBinding = registeredBindings.first {
+                    isNonEmptyDirectory($0.rootURL, fileManager: fileManager)
+                }
+                status = availableBinding == nil ? "offline" : "invalid"
+                if let availableBinding {
+                    let bytes = FileSystemHelper.directorySize(at: availableBinding.rootURL)
+                    size = ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file)
+                } else {
+                    size = "—"
+                }
             } else {
                 status = "missing"
                 size = "—"

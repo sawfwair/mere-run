@@ -912,6 +912,26 @@ export MERERUN_MODELS_DIR=/path/to/models
 swift run mere.run --models-root /path/to/models model list
 ```
 
+Keep one writable store while unifying models already held on other disks:
+
+```bash
+# Search a catalog laid out as <root>/<canonical-model-id>/
+mere.run model location add /Volumes/Models
+
+# Or bind an arbitrary folder name to one canonical model id
+mere.run model location bind video-ltx23-full-mlx /Volumes/SALVATION/models/LTX-2.3 \
+  --accept-model-license
+
+mere.run model location list
+```
+
+Registered roots and bindings are read-only. Resolution is deterministic:
+primary store, explicit bindings in registration order, then search roots in
+registration order. Pulls still write only to the primary store; removing an
+external binding only unregisters it and never deletes its payload. Explicit
+`MERERUN_MODELS_DIR` and `--models-root` overrides remain isolated for
+reproducible jobs and do not merge registered locations.
+
 ### Hugging Face snapshot cache
 
 `mere.run model pull` and runtime auto-download paths use the native Hugging
