@@ -388,6 +388,20 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 128
             ),
             descriptor(
+                MuseGlimmerResources.modelId,
+                "Muse Glimmer 30B vision agent",
+                "Runs Sawfwair's pinned selective MLX Q4 conversion of Meta Muse Glimmer with its managed DFlash speculative companion through the native Swift/MLX stack.",
+                minimum: 32,
+                recommended: 64
+            ),
+            descriptor(
+                NemotronHResources.modelID,
+                "Nemotron 3.5 Lightning 30B-A3B",
+                "Runs NVIDIA's hybrid Nemotron-H NVFP4 checkpoint with its verified DSpark speculative companion through native Swift/MLX.",
+                minimum: 32,
+                recommended: 64
+            ),
+            descriptor(
                 Q35Resources.q36NanoModelId,
                 "Qwen3.6 A3B chat nano",
                 "Runs the Qwen3.6 35B-A3B OptiQ 4-bit MLX/MTP snapshot through the native Qwen-family runtime.",
@@ -909,6 +923,13 @@ public enum ManagedModelCapabilityCatalog {
                 ModelResolver.ModelID.ltxVideo23A2VMLX.rawValue,
                 "LTX 2.3 A2Vid MLX (compatibility)",
                 "Preserves the legacy narrow A2Vid install ID; prefer video-ltx23-full-mlx for new installs.",
+                minimum: 96,
+                recommended: 128
+            ),
+            descriptor(
+                ModelResolver.ModelID.ltxVideo25DistilledBF16.rawValue,
+                "LTX 2.5 Distilled BF16",
+                "Generates final-quality video with synchronized stereo audio using the official packed LTX 2.5 release.",
                 minimum: 96,
                 recommended: 128
             ),

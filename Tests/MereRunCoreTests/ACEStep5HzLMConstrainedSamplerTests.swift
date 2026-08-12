@@ -5,6 +5,72 @@ import XCTest
 
 final class ACEStep5HzLMConstrainedSamplerTests: MereRunCoreTestCase {
 
+    func testMultilineCaptionKeepsLaterMetadataInjectionAligned() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let root = env["MERERUN_TEST_ACESTEP_5HZ_ROOT"], !root.isEmpty else {
+            throw XCTSkip("Set MERERUN_TEST_ACESTEP_5HZ_ROOT to an installed ACE-Step planner root.")
+        }
+
+        let resources = ACEStep5HzLMResources(rootURL: URL(fileURLWithPath: root))
+        let configData = try Data(contentsOf: resources.configURL)
+        let modelConfig = try JSONDecoder().decode(ACEStep5HzLMConfig.self, from: configData)
+        let tokenizer = try ACEStep5HzLMTokenizer.load(from: resources.modelRootURL)
+        let sampler = ACEStep5HzLMConstrainedSampler(
+            tokenizer: tokenizer,
+            vocabSize: modelConfig.vocabSize,
+            stopAtReasoning: true,
+            userMetadata: .init(duration: "85", language: "en")
+        )
+
+        func feed(_ text: String) {
+            for token in tokenizer.encode(text, addSpecialTokens: false) {
+                sampler.update(with: token)
+            }
+        }
+
+        feed("<think>\n")
+        feed("bpm: 200\n")
+        feed("caption:")
+        feed(" First line.\n")
+        XCTAssertEqual(sampler.state, .captionValue)
+
+        let continuation = try XCTUnwrap(
+            tokenizer.encode("  Indented continuation.\n", addSpecialTokens: false).first
+        )
+        var logits = MLXArray.full(
+            [modelConfig.vocabSize],
+            values: MLXArray(-Float.infinity),
+            dtype: .float32
+        )
+        logits[continuation] = MLXArray(0)
+        _ = sampler.processLogits(logits, tokens: [])
+        feed("  Indented continuation.\n")
+        XCTAssertEqual(sampler.state, .captionValue)
+
+        let durationFieldTokens = tokenizer.encode("duration:", addSpecialTokens: false)
+        let durationFirst = try XCTUnwrap(durationFieldTokens.first)
+        logits = MLXArray.full(
+            [modelConfig.vocabSize],
+            values: MLXArray(-Float.infinity),
+            dtype: .float32
+        )
+        logits[durationFirst] = MLXArray(0)
+        _ = sampler.processLogits(logits, tokens: [])
+        for token in durationFieldTokens {
+            sampler.update(with: token)
+        }
+        XCTAssertEqual(sampler.state, .durationValue)
+
+        let injectedDuration = try XCTUnwrap(
+            tokenizer.encode(" 85\n", addSpecialTokens: false).first
+        )
+        let masked = sampler.processLogits(
+            MLXArray.zeros([modelConfig.vocabSize], dtype: .float32),
+            tokens: []
+        )
+        XCTAssertTrue(masked[injectedDuration].item(Float.self).isFinite)
+    }
+
     func testUserMetadataInjectionWhitelistsNextToken() throws {
         let env = ProcessInfo.processInfo.environment
         guard let root = env["MERERUN_TEST_ACESTEP_5HZ_ROOT"], !root.isEmpty else {

@@ -3259,6 +3259,7 @@ public actor LTXUnifiedAVGenerator {
     private var modelWeightsURL: URL?
     private var videoEncoderWeightsURL: URL?
     private var videoVAEWeightLayout: LTXTensorWeightLayout = .pytorch
+    private var videoVAEArchitecture: LTXVideoVAEArchitecture = .legacy
     private var loadedDType: DType = .bfloat16
     private var loadedRoot: URL?
     private var audioVAEWeightsURL: URL?
@@ -3268,6 +3269,7 @@ public actor LTXUnifiedAVGenerator {
     private var loadedForFullTwoStage = false
     private var loadedForReusableFullTwoStage = false
     private var loadedForVideoOnlyOutput = false
+    private var loadedForLTX25 = false
     private var twoStageGenerationConsumed = false
 
     public init() {}
@@ -3480,13 +3482,21 @@ public actor LTXUnifiedAVGenerator {
         await unload()
         let root = modelRoot.standardizedFileURL
         let isLTX23 = isLTX23SplitModelRoot(root)
+        let isLTX25 = isLTX25ModelRoot(root)
+        let ltx25Resources = LTX25Resources(rootURL: root)
         let splitTensorLayout: LTXTensorWeightLayout = isLTX23 ? .mlx : .pytorch
-        let transformerURL = isLTX23
-            ? root.appendingPathComponent("transformer-distilled.safetensors", isDirectory: false)
-            : root.appendingPathComponent("ltx-2-19b-distilled.safetensors", isDirectory: false)
-        let upsamplerURL = isLTX23
-            ? root.appendingPathComponent("spatial_upscaler_x2_v1_1.safetensors", isDirectory: false)
-            : root.appendingPathComponent("ltx-2-spatial-upscaler-x2-1.0.safetensors", isDirectory: false)
+        let transformerURL: URL
+        let upsamplerURL: URL
+        if isLTX25 {
+            transformerURL = ltx25Resources.transformerURL
+            upsamplerURL = ltx25Resources.spatialUpsamplerURL
+        } else if isLTX23 {
+            transformerURL = root.appendingPathComponent("transformer-distilled.safetensors", isDirectory: false)
+            upsamplerURL = root.appendingPathComponent("spatial_upscaler_x2_v1_1.safetensors", isDirectory: false)
+        } else {
+            transformerURL = root.appendingPathComponent("ltx-2-19b-distilled.safetensors", isDirectory: false)
+            upsamplerURL = root.appendingPathComponent("ltx-2-spatial-upscaler-x2-1.0.safetensors", isDirectory: false)
+        }
         guard FileManager.default.fileExists(atPath: transformerURL.path) else {
             throw LTXUnifiedAVGeneratorError.transformerWeightsMissing(transformerURL)
         }
@@ -3523,6 +3533,20 @@ public actor LTXUnifiedAVGenerator {
                 batchSize: 24
             )
             model = splitModel
+        } else if isLTX25 {
+            let packedModel = LTXUnifiedAVTransformerV2()
+            try SafetensorsStreamingLoader.applyWeightsStreaming(
+                url: transformerURL,
+                to: packedModel,
+                dtype: dtype,
+                verify: .none,
+                include: { $0.hasPrefix("model.diffusion_model.") },
+                mapper: { key, value in
+                    mapUnifiedTransformerWeight(key: key, value: value, dtype: dtype)
+                },
+                batchSize: 24
+            )
+            model = packedModel
         } else {
             let mergedModel = LTXUnifiedAVTransformer()
             try SafetensorsStreamingLoader.applyWeightsStreaming(
@@ -3545,11 +3569,16 @@ public actor LTXUnifiedAVGenerator {
         let videoDecoderStart = ltxMonotonicSeconds()
         let vaeDecoder = LTXVideoDecoder(
             timestepConditioning: false,
-            architecture: isLTX23 ? .ltx23Split : .legacy
+            architecture: isLTX23 || isLTX25 ? .ltx23Split : .legacy
         )
-        let videoDecoderURL = isLTX23
-            ? root.appendingPathComponent("vae_decoder.safetensors", isDirectory: false)
-            : transformerURL
+        let videoDecoderURL: URL
+        if isLTX25 {
+            videoDecoderURL = ltx25Resources.videoVAEURL
+        } else if isLTX23 {
+            videoDecoderURL = root.appendingPathComponent("vae_decoder.safetensors", isDirectory: false)
+        } else {
+            videoDecoderURL = transformerURL
+        }
         let decoderStats = try SafetensorsStreamingLoader.loadArrays(
             url: videoDecoderURL,
             where: { key in
@@ -3561,6 +3590,8 @@ public actor LTXUnifiedAVGenerator {
                     || key == "vae_decoder.per_channel_statistics.std-of-means"
                     || key == "vae_decoder.per_channel_statistics.mean"
                     || key == "vae_decoder.per_channel_statistics.std"
+                    || key == "per_channel_statistics.mean-of-means"
+                    || key == "per_channel_statistics.std-of-means"
             },
             dtype: .float32
         )
@@ -3568,13 +3599,15 @@ public actor LTXUnifiedAVGenerator {
         if let mean = decoderStats["latents_mean"]
             ?? decoderStats["vae.per_channel_statistics.mean-of-means"]
             ?? decoderStats["vae_decoder.per_channel_statistics.mean-of-means"]
-            ?? decoderStats["vae_decoder.per_channel_statistics.mean"] {
+            ?? decoderStats["vae_decoder.per_channel_statistics.mean"]
+            ?? decoderStats["per_channel_statistics.mean-of-means"] {
             vaeDecoder.latentsMean = mean.asType(.float32)
         }
         if let std = decoderStats["latents_std"]
             ?? decoderStats["vae.per_channel_statistics.std-of-means"]
             ?? decoderStats["vae_decoder.per_channel_statistics.std-of-means"]
-            ?? decoderStats["vae_decoder.per_channel_statistics.std"] {
+            ?? decoderStats["vae_decoder.per_channel_statistics.std"]
+            ?? decoderStats["per_channel_statistics.std-of-means"] {
             vaeDecoder.latentsStd = std.asType(.float32)
         }
 
@@ -3616,9 +3649,14 @@ public actor LTXUnifiedAVGenerator {
         if loadAudioOutput {
             let audioDecoderStart = ltxMonotonicSeconds()
             let audioDecoder = LTXAudioDecoder()
-            let audioDecoderURL = isLTX23
-                ? root.appendingPathComponent("audio_vae.safetensors", isDirectory: false)
-                : transformerURL
+            let audioDecoderURL: URL
+            if isLTX25 {
+                audioDecoderURL = ltx25Resources.audioVAEURL
+            } else if isLTX23 {
+                audioDecoderURL = root.appendingPathComponent("audio_vae.safetensors", isDirectory: false)
+            } else {
+                audioDecoderURL = transformerURL
+            }
             try SafetensorsStreamingLoader.applyWeightsStreaming(
                 url: audioDecoderURL,
                 to: audioDecoder,
@@ -3639,17 +3677,26 @@ public actor LTXUnifiedAVGenerator {
                 batchSize: 24
             )
 
-            let vocoderURL = isLTX23
-                ? root.appendingPathComponent("vocoder.safetensors", isDirectory: false)
-                : transformerURL
+            let vocoderURL: URL
+            if isLTX25 {
+                vocoderURL = ltx25Resources.audioVAEURL
+            } else if isLTX23 {
+                vocoderURL = root.appendingPathComponent("vocoder.safetensors", isDirectory: false)
+            } else {
+                vocoderURL = transformerURL
+            }
             let vocoderMetadata = try SafetensorsStreamingLoader.metadata(url: vocoderURL)
             let vocoderFlavor = detectLTXVocoderFlavor(keys: vocoderMetadata.keys)
-            let vocoder: LTXAudioVocoderBase = switch vocoderFlavor {
+            let vocoder: LTXAudioVocoderBase
+            switch vocoderFlavor {
             case .legacy:
-                LTXVocoder()
+                vocoder = LTXVocoder()
             case .bandwidthExtension:
-                if let config = try loadLTXBWEVocoderConfig(modelRoot: root) {
-                    LTXVocoderWithBWE(config: config)
+                let config = isLTX25
+                    ? try loadLTXPackedBWEVocoderConfig(weightsURL: vocoderURL)
+                    : try loadLTXBWEVocoderConfig(modelRoot: root)
+                if let config {
+                    vocoder = LTXVocoderWithBWE(config: config)
                 } else {
                     throw LTXUnifiedAVGeneratorError.bweVocoderConfigMissing(root)
                 }
@@ -3688,11 +3735,13 @@ public actor LTXUnifiedAVGenerator {
         self.modelWeightsURL = transformerURL
         self.videoEncoderWeightsURL = isLTX23
             ? root.appendingPathComponent("vae_encoder.safetensors", isDirectory: false)
-            : transformerURL
+            : (isLTX25 ? ltx25Resources.videoVAEURL : transformerURL)
         self.videoVAEWeightLayout = splitTensorLayout
+        self.videoVAEArchitecture = isLTX23 || isLTX25 ? .ltx23Split : .legacy
         self.loadedDType = dtype
         self.loadedRoot = root
         self.loadedForVideoOnlyOutput = !loadAudioOutput
+        self.loadedForLTX25 = isLTX25
         return LTXLoadTimings(
             textEncoderSeconds: textEncoderSeconds,
             transformerSeconds: transformerSeconds,
@@ -3718,6 +3767,7 @@ public actor LTXUnifiedAVGenerator {
         modelWeightsURL = nil
         videoEncoderWeightsURL = nil
         videoVAEWeightLayout = .pytorch
+        videoVAEArchitecture = .legacy
         loadedRoot = nil
         audioVAEWeightsURL = nil
         distilledLoRAURL = nil
@@ -3726,6 +3776,7 @@ public actor LTXUnifiedAVGenerator {
         loadedForFullTwoStage = false
         loadedForReusableFullTwoStage = false
         loadedForVideoOnlyOutput = false
+        loadedForLTX25 = false
         twoStageGenerationConsumed = false
         Memory.clearCache()
     }
@@ -3754,9 +3805,7 @@ public actor LTXUnifiedAVGenerator {
         }
         let encoderURL = videoEncoderWeightsURL ?? modelWeightsURL
 
-        let vaeEncoder = LTXVideoEncoder(
-            architecture: videoVAEWeightLayout == .mlx ? .ltx23Split : .legacy
-        )
+        let vaeEncoder = LTXVideoEncoder(architecture: videoVAEArchitecture)
         if let decoder {
             vaeEncoder.latentsMean = decoder.latentsMean.asType(.float32)
             vaeEncoder.latentsStd = decoder.latentsStd.asType(.float32)
@@ -4543,7 +4592,8 @@ public actor LTXUnifiedAVGenerator {
                 audioContext: audioContext,
                 transformer: transformer,
                 sigmas: stage1Sigmas,
-                videoConditioning: stage1ConditioningState
+                videoConditioning: stage1ConditioningState,
+                ancestralNoiseSeed: loadedForLTX25 ? options.seed &+ 10_000 : nil
             )
         }
         MLX.eval(videoLatents, audioLatents)
@@ -5257,11 +5307,15 @@ private func denoiseAVLoop(
     audioContext: MLXArray,
     transformer: any LTXUnifiedAVTransformerRuntime,
     sigmas: [Float],
-    videoConditioning: LTXLatentConditioningState?
+    videoConditioning: LTXLatentConditioningState?,
+    ancestralNoiseSeed: Int? = nil
 ) -> (MLXArray, MLXArray) {
     var currentVideo = videoLatents
     var currentAudio = audioLatents
     let dtype = videoLatents.dtype
+    if let ancestralNoiseSeed {
+        MLXRandom.seed(UInt64(bitPattern: Int64(ancestralNoiseSeed)))
+    }
 
     for i in 0..<(max(0, sigmas.count - 1)) {
         let sigma = sigmas[i]
@@ -5324,7 +5378,29 @@ private func denoiseAVLoop(
         let denoisedAudio = toDenoised(noisy: currentAudio, velocity: audioVelocity, sigma: sigma)
         MLX.eval(denoisedVideo, denoisedAudio)
 
-        if nextSigma > 0 {
+        if nextSigma > 0, ancestralNoiseSeed != nil {
+            let videoNoise = MLXRandom.normal(currentVideo.shape).asType(dtype)
+            let audioNoise = MLXRandom.normal(currentAudio.shape).asType(dtype)
+            currentVideo = ltxAncestralEulerStep(
+                sample: currentVideo,
+                denoised: denoisedVideo,
+                sigma: sigma,
+                nextSigma: nextSigma,
+                noise: videoNoise
+            )
+            currentAudio = ltxAncestralEulerStep(
+                sample: currentAudio,
+                denoised: denoisedAudio,
+                sigma: sigma,
+                nextSigma: nextSigma,
+                noise: audioNoise
+            )
+            if let videoConditioning {
+                let one = MLXArray(1.0).asType(currentVideo.dtype)
+                currentVideo = currentVideo * videoConditioning.denoiseMask
+                    + videoConditioning.cleanLatent * (one - videoConditioning.denoiseMask)
+            }
+        } else if nextSigma > 0 {
             let sigmaArr = MLXArray(sigma).asType(dtype)
             let nextArr = MLXArray(nextSigma).asType(dtype)
             currentVideo = denoisedVideo + nextArr * (currentVideo - denoisedVideo) / sigmaArr
@@ -5337,6 +5413,33 @@ private func denoiseAVLoop(
     }
 
     return (currentVideo, currentAudio)
+}
+
+private func ltxAncestralEulerStep(
+    sample: MLXArray,
+    denoised: MLXArray,
+    sigma: Float,
+    nextSigma: Float,
+    noise: MLXArray
+) -> MLXArray {
+    guard nextSigma > 0 else {
+        return denoised.asType(sample.dtype)
+    }
+
+    let sigmaDown = nextSigma * (nextSigma / sigma)
+    let sigmaDownRatio = sigmaDown / sigma
+    let alphaNext = 1.0 - nextSigma
+    let alphaDown = 1.0 - sigmaDown
+    let alphaRatio = alphaNext / alphaDown
+    let variance = max(0, nextSigma * nextSigma - sigmaDown * sigmaDown * alphaRatio * alphaRatio)
+    let renoiseCoefficient = sqrt(variance)
+
+    let sample32 = sample.asType(.float32)
+    let denoised32 = denoised.asType(.float32)
+    var next = MLXArray(sigmaDownRatio) * sample32
+        + MLXArray(1.0 - sigmaDownRatio) * denoised32
+    next = MLXArray(alphaRatio) * next + MLXArray(renoiseCoefficient) * noise.asType(.float32)
+    return next.asType(sample.dtype)
 }
 
 private func predictJointAVDenoised(
@@ -6408,6 +6511,7 @@ private func mapUnifiedTransformerWeight(
     if mapped.hasPrefix("video_embeddings_connector")
         || mapped.hasPrefix("audio_embeddings_connector")
         || mapped.hasPrefix("text_embedding_projection")
+        || mapped.hasPrefix("keyframes_abs_pos_embedding")
     {
         return []
     }
@@ -7269,6 +7373,18 @@ func loadLTXBWEVocoderConfig(modelRoot: URL) throws -> LTXBWEVocoderRuntimeConfi
     }
 
     return nil
+}
+
+func loadLTXPackedBWEVocoderConfig(weightsURL: URL) throws -> LTXBWEVocoderRuntimeConfig? {
+    let metadata = try SafetensorsStreamingLoader.fileMetadata(url: weightsURL)
+    guard let rawConfig = metadata["config"],
+          let data = rawConfig.data(using: .utf8),
+          let envelope = try? JSONDecoder().decode(LTXVocoderConfigEnvelope.self, from: data),
+          let bwe = envelope.bwe else {
+        return nil
+    }
+    let base = envelope.baseVocoder?.runtimeArchitecture(defaultArchitecture: .defaultBWEBase)
+    return bwe.runtimeConfig(baseVocoder: base)
 }
 
 private class LTXAudioVocoderBase: Module {

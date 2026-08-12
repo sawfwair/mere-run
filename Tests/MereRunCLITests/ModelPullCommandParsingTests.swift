@@ -31,6 +31,19 @@ final class ModelPullCommandParsingTests: XCTestCase {
         XCTAssertNil(accepted.licenseAcceptanceMessage(for: restricted))
     }
 
+    func testLTX25PullRequiresExplicitLicenseAcceptance() throws {
+        let id = ModelResolver.ModelID.ltxVideo25DistilledBF16.rawValue
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: id))
+        let blocked = try ModelPull.parse([id])
+        let accepted = try ModelPull.parse([id, "--accept-model-license"])
+
+        XCTAssertEqual(spec.hubFallback?.repoId, "Lightricks/LTX-2.5")
+        XCTAssertEqual(spec.usageRestriction?.terms.count, 2)
+        XCTAssertTrue(try XCTUnwrap(blocked.licenseAcceptanceMessage(for: spec)).contains("Gemma 4"))
+        XCTAssertNil(accepted.licenseAcceptanceMessage(for: spec))
+        XCTAssertTrue(CLICommandDisplay.modelPullCommand(for: id).contains("--accept-model-license"))
+    }
+
     func testPublicOpenModelPullsDoNotRequireLicenseAcceptance() throws {
         let modelIDs = [
             LagunaResources.modelID,

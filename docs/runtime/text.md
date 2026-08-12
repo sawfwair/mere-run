@@ -38,8 +38,10 @@ help in the repository gate.
 - `text-chat-gemma4-12b` (managed dense Google Gemma 4 12B-it snapshot)
 - `text-chat-gemma4-12b-4bit` (managed MLX 4-bit Gemma 4 12B-it snapshot)
 - `text-chat-gemma4-turbo` (managed MLX NVFP4 Gemma 4 26B-A4B MoE snapshot)
+- `vision-chat-muse-glimmer-30b` (pinned Sawfwair selective MLX Q4 conversion of Meta Muse Glimmer 30B)
 - `text-chat-laguna-s-2-1` (managed Poolside Laguna S 2.1 118B-A8B NVFP4 target plus DFlash)
 - `text-chat-laguna-xs-2-1` (managed Poolside Laguna XS 2.1 33B-A3B NVFP4 target)
+- `text-chat-nemotron-35-lightning` (managed NVIDIA Nemotron 3.5 Lightning 30B-A3B NVFP4 target plus DSpark)
 - `text-chat-q36-nano`
 - `text-chat-bonsai-27b-1bit` (managed packed 1-bit dense Qwen3.6 27B vision/reasoning snapshot)
 - `text-chat-bonsai-27b-2bit` (managed packed 2-bit ternary dense Qwen3.6 27B vision/reasoning snapshot)
@@ -89,6 +91,55 @@ and verified in bursts inside the pipelined loop — output-identical, free on
 non-repetitive text, and worth ~2× when generation echoes the prompt
 (`MERERUN_GEMMA4_PROMPT_LOOKUP=0` disables; see
 [Configuration](../configuration.md#mererun_gemma4_prompt_lookup)).
+
+`vision-chat-muse-glimmer-30b` installs Sawfwair's pinned 21.38 GB selective MLX
+Q4 target plus Meta's official 2.56B-parameter DFlash assistant. The target's
+receipt pins every source and output hash and retains Meta's bundled terms.
+Native DFlash captures the five
+released target hidden-state taps during text or image prefill, drafts masked
+blocks with the assistant, and verifies them against the target without
+changing the target's output distribution. It engages for output budgets of at
+least 32 tokens, defaults to 3 proposals per round on MLX, and returns to
+target-only decode after two rounds below 40% acceptance. Add `--stats` to see
+the proposal width, acceptance, verification forwards, and fallback state.
+Loading performs one target and DFlash warmup before the first user-visible
+decode, so lazy MLX graph compilation is reported in `loadSeconds` and a
+persistent CLI/API model session pays that cost once.
+
+```bash
+swift run mere.run model pull vision-chat-muse-glimmer-30b --accept-model-license
+swift run mere.run text chat \
+  --model vision-chat-muse-glimmer-30b \
+  --prompt "Inspect this rollout plan for unsafe assumptions." \
+  --stats
+```
+
+`text-chat-nemotron-35-lightning` is an explicit native Swift/MLX lane for
+NVIDIA's 30B-total, 3B-active Nemotron-H model. The runtime implements its
+52-layer Mamba-2, attention, and routed-MoE stack directly; it consumes the
+released NVFP4 values without requantization and uses FP32 recurrent state for
+the Mamba layers. Pulling the target also installs the converted 967M DSpark
+companion:
+
+```bash
+swift run mere.run model pull text-chat-nemotron-35-lightning
+swift run mere.run text chat \
+  --model text-chat-nemotron-35-lightning \
+  --temperature 1 \
+  --top-p 0.95 \
+  --stats \
+  --prompt "Design a recovery-safe Swift actor pipeline."
+```
+
+DSpark uses NVIDIA's recommended three-token proposal width. Every proposal is
+verified by the target; after two rounds below 67% measured acceptance, the
+request continues on the faster serial target path. `--stats` reports the
+proposal, verification, recovery, and adaptive-fallback counts. Set
+`MERERUN_NEMOTRON35_DSPARK=0` to compare serial target decode, or tune the
+break-even gate with `MERERUN_NEMOTRON35_DSPARK_MIN_ACCEPTANCE`. The model is
+never selected or downloaded implicitly; 32 GB is the catalog floor and 64 GB
+is recommended for comfortable runtime headroom.
+
 Use these chat winners by RAM band instead of treating every supported model as
 equally recommended:
 

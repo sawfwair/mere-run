@@ -21,8 +21,9 @@ Hugging Face revisions:
 
 Generation recipes repeat the effective repository/revision set, adapter
 SHA-256 and scale, final effective conditioning metadata, complete inference
-configuration, candidate ranking, and input/output hashes. Recipe schema 4
-adds planner temperature, top-k/top-p, and repetition penalty to schema 3's
+configuration, candidate ranking, and input/output hashes. Recipe schema 5
+adds the semantic-code CFG scale and negative prompt to schema 4's planner
+temperature, top-k/top-p, and repetition penalty and schema 3's
 resolved planner source, root, and immutable repository/revision provenance
 and schema 2's post-planning BPM, duration, key/scale, vocal language, and time
 signature. This protects old installs whose original
@@ -44,6 +45,9 @@ The deterministic test surface covers:
 - Python-contract metadata precedence: explicit duration and language survive
   conflicting planner proposals, 1.7B is discovered before 4B, and separately
   managed planners resolve without checkpoint-store symlinks;
+- upstream two-phase LM prompting: metadata uses CFG `1.0`; code generation
+  continues from the planned CoT, guides conditional/unconditional logits at
+  `2.0`, and keeps the sampled token streams synchronized;
 - stable seed fanout, candidate metrics/ranking, batch/session serialization,
   API decoding/security, WAV headers, LRC, recipes, and DAW bundle topology;
 - PEFT LoRA and LyCORIS LoKr key mapping, numerical contributions, alpha/scale,
@@ -82,6 +86,7 @@ specific validation artifacts identifiable without committing model output.
 | XL-Base complete | one-second source, one step, `Drums,Bass` | `1c8861285bcbf0952035b11aa1676c38f516a543c700c15a896105c0f9fdea35` |
 | XL-Turbo flow edit | one-second source, one step | `ae758bdf4b940277fc09145f9340bdd852b1fd48915921ad231b86488353cb27` |
 | XL-Turbo + 4B recipe v2 | one-second LM-planned vocal, one step | `68b170220cf5849635f3f97f2b75d87d7a80045f2401edf9a707d677db2f2122` |
+| XL-Turbo + 4B upstream LM replay | 85-second trailer prompt, seed 4747, 16-step Heun | `65eaaac55db062189ab2d923ad5dcda0ecaa7287dcee00a7c2003af3b999ffad` |
 | Resident API WAV | warm one-second XL-Turbo request, one step | `9c6f3ef3752f15636aa2f4eb7b74b3dcee556e78a62158e4bc4ac344f6eaee32` |
 | Float32 artifact/DAW workflow | recipe, LRC, candidates, bundle | `d44d8386c6b479e209d169c74ff2aa69bd2b13dd980f83a708b9f381c985e629` |
 | LoRA train/save | one real backward and AdamW step, 256 layers | `b7c9c40c3b74aca7fb8f12fb4999c0be1175db82bf9e1504bb9c19794a29c8dd` |
@@ -115,6 +120,16 @@ metadata. A real LM-planned API request returned effective BPM 108, G major,
 the explicit one-second duration, and omitted unsupported planner language.
 Wrong-model, wrong-content-type, and raw-WAV batch requests returned actionable
 HTTP 400 JSON errors.
+
+The 85-second XL-Turbo + 4B replay exercised the full upstream-shaped LM path
+with one candidate: phase-one CFG `1.0`, phase-two CFG `2.0`, the
+`NO USER INPUT` unconditional prompt, temperature `0.85`, top-p `0.9`, and 425
+semantic codes. Its schema 5 recipe records the requested seed `4747`, explicit
+duration `85`, language `en`, and the same effective values inside the CoT used
+for phase two. Diffusion used the explicitly requested 16-step Heun sampler
+with velocity normalization and EMA both disabled. The output is exactly
+85 seconds of float32 stereo audio at 48 kHz; its recipe SHA-256 is
+`3530789814c6f0a98b03378fa989b7b0ebfe5419b7060817f83358a045672252`.
 
 ## Listening regression
 

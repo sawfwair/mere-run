@@ -184,6 +184,33 @@ final class ModelResolverTests: MereRunCoreTestCase {
         )
     }
 
+    func testResolvesInstalledLTX25PackedRoot() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        defer { MereRunModelPaths.setProcessModelsDirOverride(nil) }
+
+        let modelsRoot = temp.appendingPathComponent("models", isDirectory: true)
+        MereRunModelPaths.setProcessModelsDirOverride(modelsRoot)
+        let root = modelsRoot.appendingPathComponent(
+            ModelResolver.ModelID.ltxVideo25DistilledBF16.rawValue,
+            isDirectory: true
+        )
+        try TestFileSystem.createDirectory(root)
+        try MereRunModelManifest.template(
+            for: .ltxVideo25DistilledBF16,
+            createdAt: Date(timeIntervalSince1970: 0)
+        ).write(to: root)
+        for relativePath in LTX25Resources.requiredRelativePaths {
+            let url = root.appendingPathComponent(relativePath)
+            try TestFileSystem.createDirectory(url.deletingLastPathComponent())
+            try TestFileSystem.writeFile(url, contents: Data())
+        }
+
+        let resolved = try ModelResolver().resolve(.ltxVideo25DistilledBF16)
+        XCTAssertEqual(resolved.rootURL.standardizedFileURL, root.standardizedFileURL)
+        XCTAssertEqual(resolved.source, .localModelStore)
+    }
+
     func testResolvesStandaloneMebotModel() throws {
         let temp = try TestFileSystem.makeTempDir()
         defer { try? FileManager.default.removeItem(at: temp) }

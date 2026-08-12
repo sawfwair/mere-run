@@ -1021,6 +1021,7 @@ public enum MereRunCapabilityCatalog {
         options: [
             .init(flag: "--lyrics", label: "Lyrics", kind: .string),
             .init(flag: "--lyrics-file", label: "Lyrics file", kind: .file),
+            .init(flag: "--instrumental", label: "Instrumental", kind: .boolean),
             .init(flag: "--lrc-file", label: "LRC file", kind: .file),
             .init(flag: "--lrc-output", label: "LRC output", kind: .file),
             .init(flag: "--output", label: "Audio output", kind: .file),
@@ -1096,6 +1097,8 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--lm-top-k", label: "LM top-k", kind: .integer),
             .init(flag: "--lm-top-p", label: "LM top-p", kind: .number),
             .init(flag: "--lm-repetition-penalty", label: "LM repetition penalty", kind: .number),
+            .init(flag: "--lm-cfg-scale", label: "LM CFG scale", kind: .number),
+            .init(flag: "--lm-negative-prompt", label: "LM negative prompt", kind: .string),
             .init(flag: "--metadata-duration", label: "Metadata duration", kind: .string),
             .init(flag: "--metadata-language", label: "Metadata language", kind: .string),
             .init(flag: "--no-tiled-vae", label: "Disable tiled VAE", kind: .boolean),

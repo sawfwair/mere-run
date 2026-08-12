@@ -338,6 +338,10 @@ struct ModelBenchmarkVLM: AsyncParsableCommand {
             return .textChatLFM2
         case .textChatDeepseekV4Flash:
             return .textChatDeepseekV4Flash
+        case .textChatMuseGlimmer:
+            return .textChatMuseGlimmer
+        case .textChatNemotronH:
+            return .textChatNemotronH
         case .textCode:
             return .textCode
         }

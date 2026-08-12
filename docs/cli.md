@@ -241,7 +241,7 @@ are:
 - Face detection and identity embeddings: `vision-face-buffalo-l`
 - Music: `music-acestep`, `music-acestep-xl-turbo`, `music-acestep-xl-turbo-lm4b`, `music-acestep-xl-sft`, `music-acestep-xl-base`, `music-acestep-lm-1.7b`, `music-acestep-lm-4b`, `music-magenta-rt2-small`, `music-magenta-rt2-base`
 - SFX: `sfx-woosh-dflow`, `sfx-woosh-flow`
-- Video: `video-ltx-av`, `video-ltx23-av-mlx`, `video-ltx23-full-mlx`, `video-ltx23-a2vid-mlx`, `video-wan22-ti2v-5b-mlx`, `video-scail2-14b-mlx`
+- Video: `video-ltx-av`, `video-ltx23-av-mlx`, `video-ltx23-full-mlx`, `video-ltx23-a2vid-mlx`, `video-ltx25-distilled-bf16`, `video-wan22-ti2v-5b-mlx`, `video-scail2-14b-mlx`
 
 For subsystem-specific implementation guides, see:
 
@@ -1382,6 +1382,7 @@ Key options:
 - `--checkpoints-root`
 - `--lyrics`
 - `--lyrics-file`
+- `--instrumental`: pass upstream's `[Instrumental]` lyric marker; cannot be combined with lyrics
 - `--source-audio`: source song for ACE-Step cover conditioning; implies cover mode unless `--non-cover` is set
 - `--analyze-source-audio`: use ACE-Step 5 Hz LM audio understanding to fill missing cover metadata from `--source-audio`
 - `--reference-audio`: optional ACE-Step timbre reference audio file(s)
@@ -1392,7 +1393,10 @@ Key options:
 - `--lm-subdirectory` (legacy same-root component override)
 - `--lm-temperature`: planner sampling temperature from `0` to `2` (default `0.85`)
 - `--lm-top-k`, `--lm-top-p`: planner candidate and nucleus sampling
-- `--lm-repetition-penalty`: semantic-code repetition penalty; `1.0` disables it
+- `--lm-repetition-penalty`: planner and semantic-code repetition penalty; `1.0` disables it
+- `--lm-cfg-scale`: classifier-free guidance applied only during semantic-code generation (upstream default `2.0`)
+- `--lm-negative-prompt`: unconditional LM prompt used by semantic-code guidance (default `NO USER INPUT`)
+- `--no-lm-caption-rewrite`: preserve the input caption while retaining LM metadata planning and semantic audio codes (upstream `use_cot_caption=false`)
 - `--text-subdirectory`
 - `--seed`
 - `--quiet`
@@ -1431,6 +1435,12 @@ swift run mere.run music generate \
   --lm-temperature 0.7 \
   --lm-repetition-penalty 1.08 \
   --output ./controlled-phrasing.wav
+swift run mere.run music generate \
+  "cinematic electronic trailer score with rising builds and drops" \
+  --use-lm \
+  --instrumental \
+  --duration 85 \
+  --output ./instrumental-trailer.wav
 swift run mere.run music generate \
   "dream-pop cover with soft vocals" \
   --source-audio ./song.mp3 \

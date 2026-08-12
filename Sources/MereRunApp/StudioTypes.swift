@@ -344,6 +344,9 @@ struct StudioDraft: Codable, Equatable {
     var musicLMMode = "auto"
     var musicLMTemperature = 0.85
     var musicLMRepetitionPenalty = 1.0
+    var musicLMCFGScale = 2.0
+    var musicLMNegativePrompt = "NO USER INPUT"
+    var musicInstrumental = false
     var musicAnalyzeSourceAudio = false
     var musicOverrideSteps = false
     var musicCandidates = 0
@@ -460,6 +463,9 @@ struct StudioDraft: Codable, Equatable {
         musicLMMode = "auto"
         musicLMTemperature = 0.85
         musicLMRepetitionPenalty = 1
+        musicLMCFGScale = 2
+        musicLMNegativePrompt = "NO USER INPUT"
+        musicInstrumental = false
         musicAnalyzeSourceAudio = false
         musicOverrideSteps = false
         musicCandidates = 0
@@ -776,6 +782,9 @@ enum StudioCommandAdapter {
             draft.musicLMMode = studioDraft.musicLMMode
             draft.musicLMTemperature = studioDraft.musicLMTemperature
             draft.musicLMRepetitionPenalty = studioDraft.musicLMRepetitionPenalty
+            draft.musicLMCFGScale = studioDraft.musicLMCFGScale
+            draft.musicLMNegativePrompt = studioDraft.musicLMNegativePrompt
+            draft.musicInstrumental = studioDraft.musicInstrumental
             draft.musicAnalyzeSourceAudio = studioDraft.musicAnalyzeSourceAudio
             draft.musicOverrideSteps = studioDraft.musicOverrideSteps
             draft.musicCandidates = studioDraft.musicCandidates

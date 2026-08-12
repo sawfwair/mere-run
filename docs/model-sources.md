@@ -57,6 +57,8 @@ from the runtime catalog used by `mere.run model list`,
 | `text-chat` | `text-chat-laguna-s-2-1` |
 | `text-chat` | `text-chat-laguna-xs-2-1` |
 | `text-chat` | `text-chat-inkling-small` |
+| `vision-chat` | `vision-chat-muse-glimmer-30b` |
+| `text-chat` | `text-chat-nemotron-35-lightning` |
 | `text-chat` | `text-chat-q36-nano` |
 | `text-chat` | `text-chat-bonsai-27b-1bit` |
 | `text-chat` | `text-chat-bonsai-27b-2bit` |
@@ -120,6 +122,7 @@ from the runtime catalog used by `mere.run model list`,
 | `video` | `video-ltx23-av-mlx` |
 | `video` | `video-ltx23-full-mlx` |
 | `video` | `video-ltx23-a2vid-mlx` |
+| `video` | `video-ltx25-distilled-bf16` |
 | `video` | `video-wan22-ti2v-5b-mlx` |
 | `video` | `video-minimax-h3-fl2va-mlx` |
 | `video` | `video-minimax-h3-fl2va-bf16-mlx` |
@@ -170,6 +173,7 @@ validates all configured models before downloading any; both accept the same
 | `image-krea2-raw`, `image-krea2-turbo` | Krea 2 Community License; commercial use is limited to entities below USD 1M trailing annual revenue, plus use/distribution conditions |
 | `image-ideogram4-sdnq-uint4` | Ideogram Non-Commercial Model Agreement |
 | `text-chat-lfm25-a1b-8bit`, `text-chat-lfm25-2.6b-4bit` | LFM Open License v1.0; commercial use by entities at or above USD 10M annual revenue is excluded |
+| `vision-chat-muse-glimmer-30b` | Apache-2.0 plus Meta's bundled usage policy; upstream says the model is not intended for download or use by people under 18 |
 | `vision-segment-sam31` | Meta SAM License custom use, trade-control, attribution, and redistribution conditions |
 | `vision-face-buffalo-l` | InsightFace pretrained weights; non-commercial research use |
 | `vision-embed-olmoearth-v12-{nano,tiny,small,base}` | OlmoEarth Artifact License; prohibited military, defense, intelligence, human-surveillance, policing, and listed extractive uses |
@@ -178,7 +182,7 @@ validates all configured models before downloading any; both accept the same
 | `music-muscriptor-{small,medium,large}` | CC BY-NC 4.0 model weights |
 | `sfx-woosh-*` | CC BY-NC 4.0 Woosh or MMAudio Synchformer weights |
 | `sfx-mmaudio-large-44k-v2` | CC BY-NC 4.0 MMAudio checkpoints plus Apple's research-only DFN5B encoder terms |
-| `video-ltx-av`, `video-ltx23-av-mlx`, `video-ltx23-full-mlx`, `video-ltx23-a2vid-mlx` | LTX-2 Community License; entities at or above USD 10M annual revenue need a paid commercial license, plus acceptable-use conditions. The 2.3 MLX paths also install a hidden Gemma 3 text encoder under Google's Gemma Terms and Prohibited Use Policy. |
+| `video-ltx-av`, `video-ltx23-av-mlx`, `video-ltx23-full-mlx`, `video-ltx23-a2vid-mlx`, `video-ltx25-distilled-bf16` | LTX-2 Community License; entities at or above USD 10M annual revenue need a paid commercial license, plus acceptable-use conditions. The 2.3 MLX paths also install a hidden Gemma 3 text encoder; the packed 2.5 checkpoint includes Gemma 4 weights. Both are additionally governed by Google's Gemma Terms and Prohibited Use Policy. |
 
 The catalog pins every restricted download source to an immutable commit. New
 managed installs write those repository revisions, every applicable
@@ -303,6 +307,47 @@ license and notice files.
 `Qwen3.6-35B-A3B-UD-Q4_K_M.gguf` quant. It is the llama.cpp/GGUF companion to
 the Apple Silicon MLX `text-chat-q36-nano` path and is the default chat model
 for Linux CUDA hosts.
+
+`vision-chat-muse-glimmer-30b` pins Sawfwair's 21.38 GB selective MLX Q4
+artifact at revision `6532e898dc5c1a55b51b1b108cd36728b79be751`. Its conversion
+receipt pins Meta's Apache-2.0 Muse Glimmer 30B BF16 source at revision
+`f84ecc3a0ea984a4c04542a84269e3d065350a6e`, records every source and output
+hash, and retains Meta's `LICENSE` and `USAGE_POLICY.md`. The managed artifact
+is never downloaded implicitly. The native Swift/MLX runtime implements its
+52-layer local/local/local/global text stack,
+NoPE global layers, gated attention, 50-layer perception encoder, interleaved
+image tokens, ATEM tool calls, and low/medium/high/xhigh reasoning-strength
+prompt contract. Its image path uses the released uint8 Lanczos resize behavior
+and float32 position interpolation. The released artifact and offline converter
+use selective Q4/group-64 over 420 text/output/adapter matrices while retaining
+the token
+embedding and complete vision tower in BF16; pass `--quantization-scope compact`
+to quantize all 721 eligible matrices for an explicit lower-memory experiment.
+The runtime discovers quantized modules from their `.scales` arrays, so both
+layouts use the same inference implementation. The same pull installs the 5.11
+GB official DFlash assistant
+from `meta-models/Muse-Glimmer-30B-assistant` at revision
+`2c86316d689027b91123638739743fef1d425233`; the native verifier accelerates
+eligible decode without changing target-model output. Pulls require explicit
+review and acceptance of the bundled `LICENSE` and `USAGE_POLICY.md`; upstream
+says the model is not intended for download or use by people under 18. Python
+conversion scripts are offline artifact tooling only and are not part of
+inference.
+
+`text-chat-nemotron-35-lightning` pins Sawfwair's native MLX conversion at
+revision `6699e5fd3f0c5b392bb3f8bac2443276bb41958a`, produced from NVIDIA's
+`NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4` source revision
+`e0b753dc24903ad4d62f5696077da22020eca89a`. The receipt records the 52 pinned
+source shards and every output hash. It repacks the released ModelOpt NVFP4
+nibbles bit-for-bit into MLX's native container, retains both block and global
+scales, and materializes the 46 released FP8 projections as BF16 without a
+second quantizer. Managed pulls also install the separate Sawfwair MLX
+conversion of NVIDIA's 967M-parameter DSpark companion at artifact revision
+`d30f0914d6bbb6da36302bd9228f92824901e675`, pinned from source revision
+`e3af76fbff445ef795958bee96bc1126af70fd57`. Both artifacts retain NVIDIA's
+OpenMDW-1.1 license and upstream model cards, never download implicitly, and do
+not require an additional mere.run acceptance gate solely because the public
+repositories use a custom license identifier.
 
 `text-chat-gemma4-12b` and `vision-chat-gemma4-12b` share Google's dense Gemma
 4 12B-it checkpoint; the text id uses the native chat path, while the vision id
@@ -799,6 +844,26 @@ Its legacy narrow manifest may omit the vocoder, so it can run final-quality
 video-only and source-audio A2Vid but not generated-audio output. Requests for
 either the legacy ID or the new full ID resolve to an already-installed
 compatible root when possible. New pulls should use `video-ltx23-full-mlx`.
+
+### `video-ltx25-distilled-bf16`
+
+The official packed LTX 2.5 BF16 root is:
+
+```text
+.../models/video-ltx25-distilled-bf16
+```
+
+`mere.run model pull video-ltx25-distilled-bf16 --accept-model-license` pulls
+only the native runtime subset from `Lightricks/LTX-2.5` at immutable revision
+`dd53cc2cd45bbeaa3563dfb575cba3f49cf44761`: the distilled transformer, packed
+Gemma 4 text encoder, video VAE, audio VAE/BWE vocoder, x2 spatial upscaler,
+and optional duration head. The required checkpoint payload is about 71.1 GB.
+The Hugging Face repository is gated, so the account behind `HF_TOKEN` must
+already have access in addition to the explicit local license acknowledgement.
+
+This model runs natively through Swift and MLX; no Python process or sidecar is
+dispatched. Use `--quality final --output-mode audio-video` for synchronized
+video and stereo audio. The packed LTX 2.5 root is not an A2Vid checkpoint.
 
 ### MiniMax-H3 FL2VA and Ref2VA
 

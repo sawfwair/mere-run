@@ -58,6 +58,9 @@ struct APIServe: AsyncParsableCommand {
           # Start the DeepSeek V4 Flash OpenAI-compatible server
           mere.run api serve --engine text-chat-deepseek-v4-flash
 
+          # Start the native Muse Glimmer multimodal agent server
+          mere.run api serve --engine text-chat-muse-glimmer
+
           # Custom host/port (non-loopback binds require an API key)
           export MERERUN_API_KEY=change-me
           mere.run api serve --host 0.0.0.0 --port 11434 --api-key "$MERERUN_API_KEY"
@@ -139,10 +142,10 @@ struct APIServe: AsyncParsableCommand {
     @Option(name: [.long], help: "Host to bind to.")
     var host: String = "127.0.0.1"
 
-    @Option(name: [.customShort("m"), .long, .customLong("model-path")], help: "Model path. For --engine text-code, pass a GGUF file. For --engine text-chat-klein, pass a Klein-root text chat model. For --engine text-chat-gemma4, pass a Gemma 4 model root or repo ID. For --engine text-chat-laguna, pass text-chat-laguna-s-2-1, text-chat-laguna-xs-2-1, or an installed Laguna MLX root. For --engine text-chat-q36, pass a Qwen3.6 text chat model root. For --engine text-chat-lfm2, pass an LFM2 MLX model root or repo ID. For --engine text-chat-deepseek-v4-flash, pass a DS4 GGUF file or managed model root.")
+    @Option(name: [.customShort("m"), .long, .customLong("model-path")], help: "Model path. For --engine text-code, pass a GGUF file. For --engine text-chat-klein, pass a Klein-root text chat model. For --engine text-chat-gemma4, pass a Gemma 4 model root or repo ID. For --engine text-chat-laguna, pass text-chat-laguna-s-2-1, text-chat-laguna-xs-2-1, or an installed Laguna MLX root. For --engine text-chat-q36, pass a Qwen3.6 text chat model root. For --engine text-chat-lfm2, pass an LFM2 MLX model root or repo ID. For --engine text-chat-deepseek-v4-flash, pass a DS4 GGUF file or managed model root. For --engine text-chat-muse-glimmer, pass vision-chat-muse-glimmer-30b or an installed Muse Glimmer MLX root.")
     var model: String?
 
-    @Option(name: [.long], help: "Serving engine: text-chat-q36 (default; serves text-chat-q36-nano), text-code, text-chat-klein, text-chat-gemma4, text-chat-laguna, text-chat-lfm2, or text-chat-deepseek-v4-flash.")
+    @Option(name: [.long], help: "Serving engine: text-chat-q36 (default; serves text-chat-q36-nano), text-code, text-chat-klein, text-chat-gemma4, text-chat-laguna, text-chat-lfm2, text-chat-deepseek-v4-flash, or text-chat-muse-glimmer.")
     var engine: APIEngine = .textChatQ36
 
     @Option(name: [.long], help: "Default cataloged adapter id or local LoRA path for all requests.")
@@ -255,6 +258,10 @@ struct APIServe: AsyncParsableCommand {
             return CodeGenResources.defaultModelId
         case .textChatDeepseekV4Flash:
             return DeepseekV4FlashResources.defaultModelId
+        case .textChatMuseGlimmer:
+            return MuseGlimmerResources.modelId
+        case .textChatNemotronH:
+            return NemotronHResources.modelID
         }
     }
 
@@ -337,6 +344,16 @@ struct APIServe: AsyncParsableCommand {
             // DeepseekV4FlashGenerator resolves and (if needed) downloads its own GGUF.
             // Honor an explicit --model path if provided.
             return model
+        case .textChatMuseGlimmer:
+            if let explicit = model {
+                return explicit
+            }
+            return ManagedModelResolver.resolveInstalledModel(id: MuseGlimmerResources.modelId)?.path
+        case .textChatNemotronH:
+            if let explicit = model {
+                return explicit
+            }
+            return ManagedModelResolver.resolveInstalledModel(id: NemotronHResources.modelID)?.path
         }
     }
 
@@ -474,6 +491,8 @@ enum APIEngine: String, ExpressibleByArgument {
     case textChatQ35 = "text-chat-q35"
     case textChatLFM2 = "text-chat-lfm2"
     case textChatDeepseekV4Flash = "text-chat-deepseek-v4-flash"
+    case textChatMuseGlimmer = "text-chat-muse-glimmer"
+    case textChatNemotronH = "text-chat-nemotron-h"
 
     var runtimeServingEngine: RuntimeServingEngine {
         switch self {
@@ -493,6 +512,10 @@ enum APIEngine: String, ExpressibleByArgument {
             return .textChatLFM2
         case .textChatDeepseekV4Flash:
             return .textChatDeepseekV4Flash
+        case .textChatMuseGlimmer:
+            return .textChatMuseGlimmer
+        case .textChatNemotronH:
+            return .textChatNemotronH
         }
     }
 
@@ -548,6 +571,13 @@ struct APIEngineCapabilities: Equatable, Sendable {
     static let localTextWithToolsAndVision = APIEngineCapabilities(
         supportsTools: true,
         supportsToolChoice: true,
+        supportsVisionContentParts: true
+    )
+
+    static let localTextWithToolsVisionAndReasoning = APIEngineCapabilities(
+        supportsTools: true,
+        supportsToolChoice: true,
+        supportsReasoningEffort: true,
         supportsVisionContentParts: true
     )
 
@@ -4592,7 +4622,7 @@ actor CodeGenServer {
         case .gemma, .laguna, .liquid, .qwen, .sam, .falcon, .terramind, .tessera, .olmoEarth,
              .face, .geometry, .depth, .threeD,
              .tts, .asr, .embed, .code, .ocr, .audio, .music, .sfx, .video, .psi, .privacy, .deepseek,
-             .inkling, nil:
+             .inkling, .muse, .nemotron, nil:
             throw APIRequestValidationError.invalidField(
                 "model",
                 "model \(resolved.modelID) is not an image generation model"

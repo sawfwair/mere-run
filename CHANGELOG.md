@@ -8,6 +8,50 @@ The format is based on Keep a Changelog.
 
 ### Text
 
+- added `text-chat-nemotron-35-lightning`, a pinned native Swift/MLX runtime for
+  NVIDIA Nemotron 3.5 Lightning 30B-A3B. The converter preserves released
+  ModelOpt NVFP4 values and global scales without requantization, materializes
+  the checkpoint's FP8 Mamba projections as BF16, emits exact source/output
+  receipts, and retains OpenMDW-1.1 provenance. The runtime implements all 52
+  hybrid Mamba-2, attention, and routed-MoE blocks, exposes CLI/API/benchmark
+  routing, and installs the separate 967M DSpark conversion as its managed
+  companion. Native target verification uses NVIDIA's three-token proposal
+  recipe, reports acceptance and recovery telemetry, and adaptively returns to
+  serial decode below the measured break-even threshold. In three-run warm
+  release samples on Apple Silicon, the serial target averaged 95.67 decode
+  tok/s on a 64-token profiling prompt. On a 100%-acceptance counting prompt,
+  DSpark averaged 125.94 tok/s versus 87.47 serial (1.44x); a low-acceptance
+  prompt fell back after two rounds. These are bounded local diagnostics, not
+  NVIDIA's DGX Spark throughput claim.
+- added `vision-chat-muse-glimmer-30b`, an exact-revision managed Sawfwair
+  selective MLX Q4 conversion of Meta Muse Glimmer 30B with a fully native
+  Swift/MLX text and perception stack,
+  interleaved local image input, ATEM tool calls, controllable reasoning
+  strength, CLI/API routing, and audited affine Q4/group-64 conversion. The
+  converter now defaults to a selective 420-matrix layout that keeps the token
+  embedding and vision tower in BF16; the previous 721-matrix compact layout
+  remains available for explicit memory/speed experiments. The native loader
+  discovers quantized modules from checkpoint scales and accepts both released
+  and common MLX Hub key layouts. Vision preprocessing now reproduces the
+  released uint8 Lanczos path, and float32 position interpolation is covered by
+  exact upstream parity fixtures.
+  Managed pulls also install the pinned official 2.56B-parameter assistant;
+  native DFlash performs lossless target verification after text or image
+  prefill, defaults to the measured 3-proposal MLX block, reports acceptance
+  through `text chat --stats`, and falls back to serial target decode when
+  acceptance is poor. A one-time load warmup materializes both the serial target
+  cache and production DFlash verification graph before the first user-visible
+  decode. Two interleaved 128-token M4 Max release diagnostics with
+  the Q4 target improved from 14.73 to 20.07 tok/s on average (1.36x, 36.2%) at
+  54.9% acceptance. In a paired 8,192-token WikiText-2 candidate check,
+  selective Q4 measured 9.535 perplexity versus 9.554 for compact Q4 (mean NLL
+  delta -0.0020, 95% bootstrap CI -0.0035 to -0.0004). This is a bounded local
+  comparison, not full release-quality proof. A separately audited assistant-Q4
+  converter is retained, but BF16 is preferred because assistant quantization
+  was slower in that test.
+  The 21.38 GB artifact carries an exact conversion receipt plus Meta's original
+  license and usage policy; implicit download remains disabled and pulls require
+  explicit acceptance.
 - fixed `text chat --stream --quiet` so `--quiet` suppresses stderr diagnostics
   without disconnecting incremental generated text from stdout.
 
@@ -120,6 +164,23 @@ The format is based on Keep a Changelog.
   444.216 seconds of denoising and from 736.285 to 535.386 seconds end to end.
   Both fixed-seed outputs retained all 124 H.264 frames, synchronized 32 kHz
   stereo audio, coherent actors and motion, and the complete two-line dialogue.
+
+### Music
+
+- restored ACE-Step 1.5's upstream two-phase 5 Hz LM contract: metadata planning
+  now uses the model's semantic-token instruction with CFG disabled, while audio
+  codes continue from the planned CoT in an open assistant turn with classifier-
+  free guidance (`2.0` by default) and the training-aligned `NO USER INPUT`
+  unconditional prompt. The DiT still receives the planner's detailed caption;
+  the code phase correctly retains the user's original caption and lyrics.
+- exposed `--lm-cfg-scale`, `--lm-negative-prompt`, and `--instrumental` across
+  the CLI, resident API, recipes, and macOS Studio. Recipe schema 5 records the
+  complete LM sampling contract. ACE-Step quality presets now keep upstream
+  Euler and velocity-control defaults and generate one candidate unless
+  `--candidates` explicitly opts into local technical ranking.
+- added `--no-lm-caption-rewrite`, matching upstream's
+  `use_cot_caption=false`, so LM metadata and semantic-code generation can stay
+  active without replacing an arrangement-sensitive user caption.
 
 ### Geospatial inference
 
@@ -362,6 +423,11 @@ artifact contracts instead of becoming a model-specific sidecar.
   changing the converted transformer's contract.
 
 ### Vision and portable workflows
+
+- portable `vision.ground` graph nodes now retain Falcon Perception's native
+  per-detection PNG masks as a verified `masks` artifact directory, matching
+  the existing direct CLI capability without changing their candidate-only
+  evidence boundary.
 
 - added `vision.ground` as a first-class portable graph node across local, SSH,
   and Relay execution. It defaults to the managed Falcon Perception model,

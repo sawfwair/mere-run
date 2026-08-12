@@ -1,5 +1,94 @@
 # Native model conversion
 
+## NVIDIA Nemotron 3.5 Lightning and DSpark MLX
+
+The Nemotron converters accept only NVIDIA's exact ModelOpt releases at the
+pinned revisions embedded in each script. They verify every source file's byte
+count and SHA-256 before conversion and write transactionally so a partial
+artifact cannot be mistaken for a completed one.
+
+The target converter repacks ModelOpt's uint8-paired E2M1 values into MLX's
+uint32 NVFP4 container without changing a nibble, retains the E4M3 block and
+FP32 global scales, and materializes 46 released FP8 Mamba projections as BF16.
+It stacks the 128 routed experts per projection and omits the bundled MTP branch
+in favor of the separately managed DSpark checkpoint. The companion converter
+performs the same bit-preserving NVFP4 repack over its 20 quantized matrices.
+
+```bash
+uv run --script scripts/model-conversion/convert_nemotron35_lightning_mlx.py \
+  --source /path/to/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4 \
+  --output /path/to/text-chat-nemotron-35-lightning
+
+uv run --script scripts/model-conversion/convert_nemotron35_dspark_mlx.py \
+  --source /path/to/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-DSpark \
+  --output /path/to/text-chat-nemotron-35-lightning-dspark
+```
+
+Both outputs include `MERERUN_CONVERSION.json`, the original model card, and
+the original OpenMDW-1.1 license. Python and ModelOpt formats are offline
+conversion concerns only; inference is native Swift/MLX.
+
+The managed target is published at
+`Sawfwair/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-MLX`, pinned to commit
+`6699e5fd3f0c5b392bb3f8bac2443276bb41958a`. Its DSpark companion is
+`Sawfwair/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-DSpark-MLX`, pinned to
+commit `d30f0914d6bbb6da36302bd9228f92824901e675`.
+
+## Muse Glimmer 30B MLX 4-bit
+
+`convert_muse_glimmer_mlx.py` accepts only Meta's exact two-shard BF16 release
+at revision `f84ecc3a0ea984a4c04542a84269e3d065350a6e`. It verifies the byte count
+and SHA-256 of both weight shards, the index, tokenizer, template, processor,
+license, usage policy, and model card before converting to native MLX affine
+Q4/group-64. The default `selective` scope quantizes the 416 text-layer
+projections, `lm_head`, vision adapter, and vision projection (420 matrices),
+while retaining the token embedding and complete vision tower in BF16. This is
+the quality-preserving release candidate. `--quantization-scope compact`
+quantizes all 721 eligible matrices for a lower-memory experimental artifact.
+Norms, biases, and the learned vision position table remain dense BF16 in both
+variants. The transactionally written output includes a sharded index,
+managed-model manifest, and a hashed `MERERUN_CONVERSION.json` receipt naming
+the selected scope.
+
+The managed selective artifact produced by this converter is published at
+`Sawfwair/Muse-Glimmer-30B-MLX-4bit`, pinned to immutable revision
+`6532e898dc5c1a55b51b1b108cd36728b79be751`. Its five remote shard sizes and
+SHA-256 values match the bundled conversion receipt.
+
+The source snapshot is about 59.6 GB. Conversion requires room for the source,
+the new artifact, and temporary shards; inspect available storage before
+starting. Review the bundled `LICENSE` and `USAGE_POLICY.md` first.
+
+```bash
+uv run --script scripts/model-conversion/convert_muse_glimmer_mlx.py \
+  --source /path/to/meta-models--Muse-Glimmer-30B \
+  --output /path/to/vision-chat-muse-glimmer-30b-q4
+```
+
+Build the compact comparison artifact explicitly:
+
+```bash
+uv run --script scripts/model-conversion/convert_muse_glimmer_mlx.py \
+  --source /path/to/meta-models--Muse-Glimmer-30B \
+  --output /path/to/vision-chat-muse-glimmer-30b-q4-compact \
+  --quantization-scope compact
+```
+
+`convert_muse_glimmer_assistant_mlx.py` independently verifies the exact
+5.11 GB DFlash assistant at revision
+`2c86316d689027b91123638739743fef1d425233` and emits an approximately 1.44 GB
+affine Q4/group-64 artifact with its own receipt:
+
+```bash
+uv run --script scripts/model-conversion/convert_muse_glimmer_assistant_mlx.py \
+  --source /path/to/meta-models--Muse-Glimmer-30B-assistant \
+  --output /path/to/vision-chat-muse-glimmer-30b-assistant-q4
+```
+
+The native runtime prefers the official BF16 assistant: the Q4 assistant was
+slower at equal acceptance on the measured M4 Max MLX workload. This converter
+exists for reproducible size/performance experiments, not as the default.
+
 These scripts are audited release tools. They are never invoked by a
 `mere.run` inference command and never become a Python sidecar.
 

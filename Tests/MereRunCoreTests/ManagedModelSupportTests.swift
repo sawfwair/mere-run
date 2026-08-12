@@ -164,6 +164,30 @@ final class ManagedModelSupportTests: XCTestCase {
         XCTAssertEqual(accepted.descriptor.recommendedUnifiedMemoryGB, 128)
     }
 
+    func testMuseGlimmerQ4RequiresThirtyTwoGBAndRecommendsSixtyFourGB() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: MuseGlimmerResources.modelId))
+        let undersized = MereRunMachineProfile(
+            physicalMemoryBytes: 16 * 1_073_741_824,
+            processorName: "M4 Pro",
+            isAppleSiliconMac: true
+        )
+        let supported = MereRunMachineProfile(
+            physicalMemoryBytes: 64 * 1_073_741_824,
+            processorName: "M4 Max",
+            isAppleSiliconMac: true
+        )
+
+        let rejected = ManagedModelCapabilityCatalog.support(for: spec, on: undersized)
+        let accepted = ManagedModelCapabilityCatalog.support(for: spec, on: supported)
+
+        XCTAssertFalse(rejected.isSupported)
+        XCTAssertTrue(rejected.reasons.joined(separator: " ").contains("Requires at least 32 GB"))
+        XCTAssertTrue(accepted.isSupported)
+        XCTAssertTrue(accepted.meetsRecommendedMemory)
+        XCTAssertEqual(accepted.descriptor.minimumUnifiedMemoryGB, 32)
+        XCTAssertEqual(accepted.descriptor.recommendedUnifiedMemoryGB, 64)
+    }
+
     func testQ36NanoIsSupportedOnThirtyTwoGB() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Q35Resources.q36NanoModelId))
         let machine = MereRunMachineProfile(

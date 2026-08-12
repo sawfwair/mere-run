@@ -32,6 +32,7 @@ struct Gemma4LanguageModelOutput {
     let hidden: MLXArray
     let preNormHidden: MLXArray
     let sharedKVStates: [String: Gemma4SharedKVState]
+    let hiddenStates: [MLXArray]?
 }
 
 struct Gemma4ForwardOutput {
@@ -870,7 +871,8 @@ final class Gemma4Attention: Module {
     func callAsFunction(
         _ x: MLXArray,
         cache: Gemma4AttentionCache?,
-        visionBlockIDs: MLXArray? = nil
+        visionBlockIDs: MLXArray? = nil,
+        attentionMask: MLXArray? = nil
     ) -> MLXArray {
         let batchSize = x.dim(0)
         let sequenceLength = x.dim(1)
@@ -979,7 +981,8 @@ final class Gemma4Attention: Module {
             keyLength: keys.dim(2),
             windowSize: layerType == "sliding_attention" ? windowSize : nil,
             dtype: x.dtype,
-            visionBlockIDs: visionBlockIDs
+            visionBlockIDs: visionBlockIDs,
+            keyPaddingMask: attentionMask
         )
 
         let attended = MLXFast.scaledDotProductAttention(
@@ -1089,9 +1092,10 @@ final class Gemma4Attention: Module {
         keyLength: Int,
         windowSize: Int?,
         dtype: DType,
-        visionBlockIDs: MLXArray?
+        visionBlockIDs: MLXArray?,
+        keyPaddingMask: MLXArray?
     ) -> MLXFast.ScaledDotProductAttentionMaskMode {
-        guard queryLength > 1 else {
+        guard queryLength > 1 || keyPaddingMask != nil else {
             return .none
         }
 
@@ -1102,6 +1106,16 @@ final class Gemma4Attention: Module {
         var allowed = keyPositions .<= queryPositions
         if let windowSize {
             allowed = allowed .&& (keyPositions .> (queryPositions - Int32(windowSize)))
+        }
+        if let keyPaddingMask,
+           queryOffset == 0,
+           keyStart == 0,
+           keyPaddingMask.dim(-1) == keyLength {
+            let padding = keyPaddingMask
+                .asType(.int32)
+                .reshaped(-1, 1, 1, keyLength)
+            allowed = allowed.reshaped(1, 1, queryLength, keyLength)
+                .&& (padding .> MLXArray(Int32(0)))
         }
         if let visionBlockIDs,
            queryOffset == 0,
@@ -1114,8 +1128,8 @@ final class Gemma4Attention: Module {
             allowed = (allowed.asType(.int32) + sameVisionBlock.asType(.int32)) .> MLXArray(Int32(0))
         }
 
-        let allowedTyped = allowed.asType(dtype).reshaped(1, 1, queryLength, keyLength)
-        let zeros = MLXArray.zeros([1, 1, queryLength, keyLength], dtype: dtype)
+        let allowedTyped = allowed.asType(dtype).reshaped(-1, 1, queryLength, keyLength)
+        let zeros = MLXArray.zeros(allowedTyped.shape, dtype: dtype)
         let negative = zeros + MLXArray(-1e9).asType(dtype)
         return .array(MLX.where(allowedTyped .> MLXArray(0).asType(dtype), zeros, negative))
     }
@@ -1180,11 +1194,17 @@ final class Gemma4DecoderLayer: Module {
         _ x: MLXArray,
         cache: Gemma4AttentionCache?,
         perLayerInput: MLXArray?,
-        visionBlockIDs: MLXArray? = nil
+        visionBlockIDs: MLXArray? = nil,
+        attentionMask: MLXArray? = nil
     ) -> MLXArray {
         let attentionResidual = x
         var hidden = inputLayerNorm(x)
-        hidden = selfAttention(hidden, cache: cache, visionBlockIDs: visionBlockIDs)
+        hidden = selfAttention(
+            hidden,
+            cache: cache,
+            visionBlockIDs: visionBlockIDs,
+            attentionMask: attentionMask
+        )
 
         let perLayerInputActive = hasPerLayerInput && perLayerInput != nil
         if let fusedOutput = fusedDecodeFeedForward(
@@ -1442,9 +1462,12 @@ final class Gemma4LanguageModel: Module {
         inputIds: MLXArray?,
         cache: [Gemma4AttentionCache]? = nil,
         mmTokenTypeIds: MLXArray? = nil,
-        captureSharedKV: Bool = true
+        captureSharedKV: Bool = true,
+        attentionMask: MLXArray? = nil,
+        captureHiddenStates: Bool = false
     ) -> Gemma4LanguageModelOutput {
         var hidden = embeddings
+        var hiddenStates: [MLXArray]? = captureHiddenStates ? [hidden] : nil
         let perLayerInputs = inputIds.flatMap { tokenIds -> MLXArray? in
             guard config.hiddenSizePerLayerInput > 0 else { return nil }
             return projectPerLayerInputs(
@@ -1461,17 +1484,44 @@ final class Gemma4LanguageModel: Module {
                 hidden,
                 cache: cacheIndex < caches.count ? caches[cacheIndex] : nil,
                 perLayerInput: perLayerInput,
-                visionBlockIDs: visionBlockIDs
+                visionBlockIDs: visionBlockIDs,
+                attentionMask: attentionMask
             )
+            if captureHiddenStates {
+                MLX.eval(hidden)
+                hiddenStates?.append(hidden)
+            }
         }
         let preNormHidden = hidden
         let normalizedHidden = norm(hidden)
+        if captureHiddenStates, let lastIndex = hiddenStates?.indices.last {
+            hiddenStates?[lastIndex] = normalizedHidden
+        }
         let sharedKVStates = captureSharedKV ? collectSharedKVStates(from: caches) : [:]
         return Gemma4LanguageModelOutput(
             hidden: normalizedHidden,
             preNormHidden: preNormHidden,
-            sharedKVStates: sharedKVStates
+            sharedKVStates: sharedKVStates,
+            hiddenStates: hiddenStates
         )
+    }
+
+    func forwardHiddenStates(
+        inputIds: MLXArray,
+        attentionMask: MLXArray
+    ) -> (lastHiddenState: MLXArray, hiddenStates: [MLXArray]) {
+        var tokenIds = inputIds
+        if tokenIds.dtype != .int32 {
+            tokenIds = tokenIds.asType(.int32)
+        }
+        let output = forwardDetailed(
+            embeddings: embeddings(inputIds: tokenIds),
+            inputIds: tokenIds,
+            captureSharedKV: false,
+            attentionMask: attentionMask,
+            captureHiddenStates: true
+        )
+        return (output.hidden, output.hiddenStates ?? [output.hidden])
     }
 
     func logits(_ inputIds: MLXArray, cache: [Gemma4AttentionCache]? = nil) -> MLXArray {

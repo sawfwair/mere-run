@@ -106,6 +106,10 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case deepseekV4Flash = "deepseek-v4-flash"
         /// Thinking Machines Lab Inkling family via the native Swift/MLX runtime.
         case inkling
+        /// Meta Muse Glimmer multimodal agent family via native Swift/MLX.
+        case museGlimmer = "muse-glimmer"
+        /// NVIDIA Nemotron-H hybrid Mamba/MoE family via native Swift/MLX.
+        case nemotronH = "nemotron-h"
     }
 
     public enum Family: String, Codable, CaseIterable, Hashable, Sendable {
@@ -140,6 +144,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case psi
         case deepseek
         case inkling
+        case muse
+        case nemotron
     }
 
     public enum Tier: String, Codable, CaseIterable, Hashable, Sendable {
@@ -1002,6 +1008,65 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.chat, .codeGeneration],
                 components: nil,
                 upstreamRepoId: "\(InklingResources.artifactRepoID)@\(InklingResources.artifactRevision)",
+                createdAt: createdAt
+            )
+        case .museGlimmer30B:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .museGlimmer,
+                family: .muse,
+                tier: .latest,
+                variant: .standard,
+                precision: .int4,
+                quantization: Quantization(
+                    bits: 4,
+                    groupSize: 64,
+                    scheme: "mlx-affine"
+                ),
+                defaults: nil,
+                supports: [.chat, .codeGeneration, .visionChat],
+                components: genericTextComponents,
+                upstreamRepoId: "\(MuseGlimmerResources.artifactRepoId)@\(MuseGlimmerResources.artifactRevision)",
+                createdAt: createdAt
+            )
+        case .nemotron35Lightning:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .nemotronH,
+                family: .nemotron,
+                tier: .latest,
+                variant: .standard,
+                precision: .int4,
+                quantization: Quantization(
+                    bits: 4,
+                    groupSize: 16,
+                    scheme: "modelopt-nvfp4-mlx"
+                ),
+                defaults: nil,
+                supports: [.chat, .codeGeneration],
+                components: genericTextComponents,
+                upstreamRepoId:
+                    "\(NemotronHResources.upstreamRepoID)@\(NemotronHResources.upstreamRevision)",
+                createdAt: createdAt
+            )
+        case .nemotron35LightningDSpark:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .nemotronH,
+                family: .nemotron,
+                tier: .small,
+                variant: .standard,
+                precision: .int4,
+                quantization: Quantization(
+                    bits: 4,
+                    groupSize: 16,
+                    scheme: "modelopt-nvfp4-mlx"
+                ),
+                defaults: nil,
+                supports: [],
+                components: nil,
+                upstreamRepoId:
+                    "\(NemotronHResources.dsparkUpstreamRepoID)@\(NemotronHResources.dsparkUpstreamRevision)",
                 createdAt: createdAt
             )
         case .q36Nano:
@@ -1956,6 +2021,20 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.videoGeneration, .audioToVideoGeneration],
                 components: nil,
                 upstreamRepoId: "dgrauet/ltx-2.3-mlx@baa5f235ea04fd9c95899d751295c4fd825ee4e2",
+                createdAt: createdAt
+            )
+        case .ltxVideo25DistilledBF16:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .ltxVideo,
+                family: .video,
+                tier: .latest,
+                variant: .distilled,
+                precision: .bf16,
+                defaults: Defaults(steps: 8, cfg: 3),
+                supports: [.videoGeneration],
+                components: nil,
+                upstreamRepoId: "\(LTX25Resources.sourceRepository)@\(LTX25Resources.sourceRevision)",
                 createdAt: createdAt
             )
         case .wan22TI2V5BMLX:

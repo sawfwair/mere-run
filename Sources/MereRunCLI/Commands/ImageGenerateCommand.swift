@@ -390,7 +390,7 @@ struct ImageGenerate: AsyncParsableCommand {
             case .gemma, .laguna, .liquid, .qwen, .sam, .falcon, .terramind, .tessera, .olmoEarth,
                  .face, .geometry, .depth, .threeD,
                  .tts, .asr, .embed, .code, .ocr, .audio, .music, .sfx, .video, .psi, .privacy, .deepseek,
-                 .inkling, nil:
+                 .inkling, .muse, .nemotron, nil:
                 throw ValidationError("Unsupported image model family for `mere.run image generate`: \(manifest.id)")
             }
             try editPreparation?.finish(generatedURL: result.outputURL)

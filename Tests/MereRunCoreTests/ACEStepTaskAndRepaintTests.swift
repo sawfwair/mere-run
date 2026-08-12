@@ -374,11 +374,11 @@ final class ACEStepTaskAndRepaintTests: MereRunCoreTestCase {
         )
         XCTAssertEqual(baseFinal.inferenceSteps, 50)
         XCTAssertEqual(baseFinal.guidanceScale, 7)
-        XCTAssertEqual(baseFinal.samplerMode, .heun)
-        XCTAssertEqual(baseFinal.velocityNormThreshold, 2)
-        XCTAssertEqual(baseFinal.velocityEMAFactor, 0.1)
+        XCTAssertEqual(baseFinal.samplerMode, .euler)
+        XCTAssertEqual(baseFinal.velocityNormThreshold, 0)
+        XCTAssertEqual(baseFinal.velocityEMAFactor, 0)
         XCTAssertTrue(baseFinal.automaticDuration)
-        XCTAssertEqual(baseFinal.candidateCount, 4)
+        XCTAssertEqual(baseFinal.candidateCount, 1)
 
         let repaint = ACEStepQualityPreset.edit.defaults(
             for: .xlTurbo,
@@ -406,6 +406,32 @@ final class ACEStepTaskAndRepaintTests: MereRunCoreTestCase {
         XCTAssertFalse(ACEStepTask.coverNoFSQ.usesFSQCoverHints)
         XCTAssertTrue(ACEStepTask.lego.locksDurationToSource)
         XCTAssertFalse(ACEStepTask.complete.locksDurationToSource)
+    }
+
+    func testLMCodePhaseMatchesUpstreamPromptAndGuidanceContract() {
+        let prompt = ACEStep5HzLM.audioCodePromptText(
+            user: "NO USER INPUT",
+            reasoning: "<think>\n\n</think>"
+        )
+        XCTAssertTrue(prompt.contains(ACEStepLMInstructions.defaultInstruction))
+        XCTAssertTrue(prompt.contains("<|im_start|>user\nNO USER INPUT<|im_end|>"))
+        XCTAssertTrue(
+            prompt.hasSuffix("<|im_start|>assistant\n<think>\n\n</think>\n\n")
+        )
+
+        let guided = ACEStep5HzLM.classifierFreeGuidanceLogits(
+            conditional: MLXArray([2.0, 4.0]),
+            unconditional: MLXArray([1.0, 3.0]),
+            scale: 2
+        )
+        XCTAssertEqual(guided.asArray(Float.self), [3, 5])
+
+        XCTAssertEqual(
+            ACEStepPipeline.reasoningPrefix(
+                from: "noise<think>\nbpm: 120\n</think>discard"
+            ),
+            "<think>\nbpm: 120\n</think>"
+        )
     }
 
     func testCheckpointVariantDetectionUsesNameAndConfig() {

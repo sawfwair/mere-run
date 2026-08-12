@@ -47,6 +47,10 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case q35
     case lfm2
     case inkling
+    case museGlimmer
+    case museGlimmerAssistant
+    case nemotronH
+    case nemotronHDSpark
     case qwen3TTS
     case qwen3ASR
     case parakeet
@@ -84,6 +88,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case ltxVideo23MLX
     case ltxVideo23FullMLX
     case ltxVideo23A2VMLX
+    case ltxVideo25
     case wan22TI2VMLX
     case miniMaxH3MLX
     case cosmos3EdgeMLX
@@ -533,7 +538,7 @@ public enum ManagedModelCatalog {
             summary: summary,
             sourceRepoId: sourceRepoId,
             sourceRevision: sourceRevision,
-            licenseURL: "https://github.com/Lightricks/LTX-2/blob/main/LICENSE"
+            licenseURL: "https://github.com/Lightricks/LTX-2/blob/main/LICENSE.md"
         )
         return ManagedModelUsageRestriction(
             summary: summary,
@@ -547,6 +552,15 @@ public enum ManagedModelCatalog {
         summary: "The LTX 2.3 text-encoder companion is distributed under the Gemma Terms of Use and Gemma Prohibited Use Policy.",
         sourceRepoId: ltxGemma3TextEncoderRepoId,
         sourceRevision: ltxGemma3TextEncoderRevision,
+        licenseURL: "https://ai.google.dev/gemma/terms"
+    )
+
+    private static let ltx25GemmaTextEncoderUsageTerm = ManagedModelUsageTerm(
+        component: "Gemma 4 text encoder",
+        license: "Gemma Terms of Use",
+        summary: "The packed LTX 2.5 text encoder includes Gemma 4 weights distributed under the Gemma Terms of Use and Gemma Prohibited Use Policy.",
+        sourceRepoId: LTX25Resources.sourceRepository,
+        sourceRevision: LTX25Resources.sourceRevision,
         licenseURL: "https://ai.google.dev/gemma/terms"
     )
 
@@ -1143,6 +1157,53 @@ public enum ManagedModelCatalog {
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: InklingResources.estimatedDownloadBytes,
             defaultCLICommands: ["text chat", "text train-lora"]
+        ),
+        ManagedModelSpec(
+            id: MuseGlimmerResources.modelId,
+            category: .visionChat,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: MuseGlimmerResources.artifactRepoId,
+                revision: MuseGlimmerResources.artifactRevision,
+                patterns: MuseGlimmerResources.snapshotPatterns
+            ),
+            upstreamRepoId: MuseGlimmerResources.artifactRepoId,
+            upstreamRevision: MuseGlimmerResources.artifactRevision,
+            usageRestriction: ManagedModelUsageRestriction(
+                summary: "Apache-2.0 model subject to Meta's bundled usage policy; upstream states it is not intended for download or use by people under 18.",
+                terms: [
+                    ManagedModelUsageTerm(
+                        component: "Muse Glimmer 30B",
+                        license: "Apache-2.0 with upstream usage policy",
+                        summary: "Review LICENSE and USAGE_POLICY.md before installing or deploying.",
+                        sourceRepoId: MuseGlimmerResources.upstreamRepoId,
+                        sourceRevision: MuseGlimmerResources.upstreamRevision,
+                        licenseURL: "https://huggingface.co/meta-models/Muse-Glimmer-30B/blob/\(MuseGlimmerResources.upstreamRevision)/USAGE_POLICY.md"
+                    ),
+                ]
+            ),
+            validationKind: .museGlimmer,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: MuseGlimmerResources.estimatedDownloadBytes,
+            defaultCLICommands: ["text chat", "api serve"],
+            companionModelIDs: [MuseGlimmerResources.assistantModelId]
+        ),
+        ManagedModelSpec(
+            id: NemotronHResources.modelID,
+            category: .textChat,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: NemotronHResources.artifactRepoID,
+                revision: NemotronHResources.artifactRevision,
+                patterns: NemotronHResources.snapshotPatterns
+            ),
+            upstreamRepoId: NemotronHResources.artifactRepoID,
+            upstreamRevision: NemotronHResources.artifactRevision,
+            validationKind: .nemotronH,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: NemotronHResources.estimatedDownloadBytes,
+            defaultCLICommands: ["text chat", "api serve", "model benchmark chat"],
+            companionModelIDs: [NemotronHResources.dsparkModelID]
         ),
         ManagedModelSpec(
             id: Q35Resources.q36NanoModelId,
@@ -2488,6 +2549,27 @@ public enum ManagedModelCatalog {
             companionModelIDs: [ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue]
         ),
         ManagedModelSpec(
+            id: ModelResolver.ModelID.ltxVideo25DistilledBF16.rawValue,
+            category: .video,
+            installShape: .structuredRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: LTX25Resources.sourceRepository,
+                revision: LTX25Resources.sourceRevision,
+                patterns: LTX25Resources.snapshotPatterns
+            ),
+            upstreamRepoId: LTX25Resources.sourceRepository,
+            upstreamRevision: LTX25Resources.sourceRevision,
+            usageRestriction: ltxUsageRestriction(
+                sourceRepoId: LTX25Resources.sourceRepository,
+                sourceRevision: LTX25Resources.sourceRevision,
+                additionalTerms: [ltx25GemmaTextEncoderUsageTerm]
+            ),
+            validationKind: .ltxVideo25,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: LTX25Resources.estimatedDownloadBytes,
+            defaultCLICommands: ["video generate"]
+        ),
+        ManagedModelSpec(
             id: ModelResolver.ModelID.wan22TI2V5BMLX.rawValue,
             category: .video,
             installShape: .structuredRoot,
@@ -2664,6 +2746,49 @@ private extension ManagedModelCatalog {
                 validationKind: .lagunaDFlash,
                 runtimeAutoDownloadAllowed: false,
                 estimatedDownloadBytes: LagunaResources.dflashEstimatedDownloadBytes
+            ),
+            ManagedModelSpec(
+                id: MuseGlimmerResources.assistantModelId,
+                category: .textChat,
+                installShape: .directoryRoot,
+                hubFallback: HubFallbackConfig(
+                    repoId: MuseGlimmerResources.assistantUpstreamRepoId,
+                    revision: MuseGlimmerResources.assistantUpstreamRevision,
+                    patterns: MuseGlimmerResources.assistantSnapshotPatterns
+                ),
+                upstreamRepoId: MuseGlimmerResources.assistantUpstreamRepoId,
+                upstreamRevision: MuseGlimmerResources.assistantUpstreamRevision,
+                usageRestriction: ManagedModelUsageRestriction(
+                    summary: "Apache-2.0 model subject to Meta's bundled usage policy; upstream states it is not intended for download or use by people under 18.",
+                    terms: [
+                        ManagedModelUsageTerm(
+                            component: "Muse Glimmer 30B DFlash assistant",
+                            license: "Apache-2.0 with upstream usage policy",
+                            summary: "Review LICENSE and USAGE_POLICY.md before installing or deploying.",
+                            sourceRepoId: MuseGlimmerResources.assistantUpstreamRepoId,
+                            sourceRevision: MuseGlimmerResources.assistantUpstreamRevision,
+                            licenseURL: "https://huggingface.co/meta-models/Muse-Glimmer-30B-assistant/blob/\(MuseGlimmerResources.assistantUpstreamRevision)/USAGE_POLICY.md"
+                        ),
+                    ]
+                ),
+                validationKind: .museGlimmerAssistant,
+                runtimeAutoDownloadAllowed: false,
+                estimatedDownloadBytes: MuseGlimmerResources.assistantEstimatedDownloadBytes
+            ),
+            ManagedModelSpec(
+                id: NemotronHResources.dsparkModelID,
+                category: .textChat,
+                installShape: .directoryRoot,
+                hubFallback: HubFallbackConfig(
+                    repoId: NemotronHResources.dsparkArtifactRepoID,
+                    revision: NemotronHResources.dsparkArtifactRevision,
+                    patterns: NemotronHResources.dsparkSnapshotPatterns
+                ),
+                upstreamRepoId: NemotronHResources.dsparkArtifactRepoID,
+                upstreamRevision: NemotronHResources.dsparkArtifactRevision,
+                validationKind: .nemotronHDSpark,
+                runtimeAutoDownloadAllowed: false,
+                estimatedDownloadBytes: NemotronHResources.dsparkEstimatedDownloadBytes
             ),
             ManagedModelSpec(
                 id: ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue,
@@ -2846,6 +2971,23 @@ public extension ManagedModelSpec {
             return LFM2Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .inkling:
             return InklingResources.validate(rootURL: rootURL, fileManager: fileManager)
+        case .museGlimmer:
+            return MuseGlimmerResources(rootURL: rootURL).validate(fileManager: fileManager)
+        case .museGlimmerAssistant:
+            return MuseGlimmerResources.validateAssistant(
+                rootURL: rootURL,
+                fileManager: fileManager
+            )
+        case .nemotronH:
+            return NemotronHResources.missingTargetFiles(
+                rootURL: rootURL,
+                fileManager: fileManager
+            )
+        case .nemotronHDSpark:
+            return NemotronHResources.missingDSparkFiles(
+                rootURL: rootURL,
+                fileManager: fileManager
+            )
         case .sam31:
             return SAM31Resources(modelRootURL: rootURL).missingRequiredPaths(fileManager: fileManager)
         case .falconPerception:
@@ -2935,6 +3077,8 @@ public extension ManagedModelSpec {
             return Self.missingLTXVideo23FullMLXPaths(in: rootURL, fileManager: fileManager)
         case .ltxVideo23A2VMLX:
             return Self.missingLTXVideo23A2VMLXPaths(in: rootURL, fileManager: fileManager)
+        case .ltxVideo25:
+            return LTX25Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .wan22TI2VMLX:
             return Wan2Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .miniMaxH3MLX:
@@ -3003,6 +3147,11 @@ public extension ManagedModelSpec {
                 in: normalizedRootURL(rootURL, fileManager: fileManager),
                 fileManager: fileManager
             ).map { "Missing required LTX 2.3 A2Vid MLX file: \($0.path)" }
+        case .ltxVideo25:
+            return LTX25Resources(
+                rootURL: normalizedRootURL(rootURL, fileManager: fileManager)
+            ).validate(fileManager: fileManager)
+                .map { "Missing required LTX 2.5 file: \($0.path)" }
         case .wan22TI2VMLX:
             let resources = Wan2Resources(rootURL: normalizedRootURL(rootURL, fileManager: fileManager))
             let missing = resources.validate(fileManager: fileManager)
@@ -3174,10 +3323,14 @@ public extension ManagedModelSpec {
     func managedRuntimeURL(fileManager: FileManager = .default) -> URL? {
         switch installShape {
         case .directoryRoot, .structuredRoot:
-            guard let modelID, let resolved = ModelResolver(fileManager: fileManager).resolveIfPresent(modelID) else {
-                return nil
+            if let modelID {
+                guard let resolved = ModelResolver(fileManager: fileManager).resolveIfPresent(modelID) else {
+                    return nil
+                }
+                return resolved.rootURL
             }
-            return resolved.rootURL
+            let root = normalizedRootURL(managedInstallRootURL(), fileManager: fileManager)
+            return validateRuntimeURL(root, fileManager: fileManager).isEmpty ? root : nil
         case .singleFile(let relativePath):
             let aliasURL = MereRunModelPaths.resolveModelFile(relativePath: relativePath) { candidate in
                 self.validateRuntimeURL(candidate, fileManager: fileManager).isEmpty

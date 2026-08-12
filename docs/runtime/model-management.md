@@ -60,7 +60,7 @@ button opens the configured model store in Finder; it does not start a download.
 Examples:
 
 - images: `image-klein-nano`, `image-bonsai-binary`, `image-bonsai-ternary`, `image-zimage-nano`, `image-klein-max`, `image-zimage-max`
-- text: `text-chat-gemma4`, `text-chat-laguna-s-2-1`, `text-chat-laguna-xs-2-1`, `text-chat-q36-nano`, `text-chat-bonsai-27b-1bit`, `text-chat-bonsai-27b-2bit`, `text-chat-lfm25-2.6b-4bit`, `text-chat-lfm25-a1b-8bit`, `text-agent-deepseek-v4-flash`, `text-agent-qwen35-9b`, `text-agent-ornith-9b`, `text-agent-ornith-35b-mlx`, `text-agent-ornith-35b`, `text-code-north-mini`, `text-code-qwen3`, `text-embed-qwen3-0.6b`
+- text: `text-chat-gemma4`, `text-chat-laguna-s-2-1`, `text-chat-laguna-xs-2-1`, `text-chat-nemotron-35-lightning`, `text-chat-q36-nano`, `text-chat-bonsai-27b-1bit`, `text-chat-bonsai-27b-2bit`, `text-chat-lfm25-2.6b-4bit`, `text-chat-lfm25-a1b-8bit`, `text-agent-deepseek-v4-flash`, `text-agent-qwen35-9b`, `text-agent-ornith-9b`, `text-agent-ornith-35b-mlx`, `text-agent-ornith-35b`, `text-code-north-mini`, `text-code-qwen3`, `text-embed-qwen3-0.6b`
 - speech: `speech-tts-qwen3-nano`, `speech-asr-parakeet`
 - vision: `vision-ocr-lighton`
 - music: `music-acestep`, `music-acestep-xl-turbo`, `music-acestep-xl-turbo-lm4b`, `music-acestep-xl-sft`, `music-acestep-xl-base`, `music-acestep-lm-1.7b`, `music-acestep-lm-4b`, `music-magenta-rt2-small`, `music-magenta-rt2-base`
@@ -68,6 +68,7 @@ Examples:
 - video: `video-minimax-h3-fl2va-mlx`, `video-minimax-h3-fl2va-bf16-mlx`,
   `video-minimax-h3-ref2va-mlx`, `video-ltx-av`, `video-ltx23-av-mlx`,
   `video-ltx23-full-mlx`, `video-ltx23-a2vid-mlx`,
+  `video-ltx25-distilled-bf16`,
   `video-wan22-ti2v-5b-mlx`, `video-scail2-14b-mlx`
 
 The public runtime resolves these IDs directly, so docs and examples should use
@@ -162,6 +163,15 @@ separate acceptance flag while retaining the upstream license file:
 ```bash
 mere.run model pull text-chat-laguna-xs-2-1
 mere.run text chat --model text-chat-laguna-xs-2-1 --prompt "Hello"
+```
+
+Nemotron 3.5 Lightning is also an explicit, non-automatic managed pull. Its
+target and DSpark companion retain NVIDIA's OpenMDW-1.1 license files and exact
+source revisions:
+
+```bash
+mere.run model pull text-chat-nemotron-35-lightning
+mere.run text chat --model text-chat-nemotron-35-lightning --stats --prompt "Hello"
 ```
 
 ### `mere.run adapter list` and `mere.run adapter pull`

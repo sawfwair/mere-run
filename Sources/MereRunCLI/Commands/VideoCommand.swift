@@ -33,6 +33,7 @@ func resolveLTXVideoGenerationRoute(
             return .fullQualityVideo
         }
         return isLTX23SplitModelRoot(modelRoot, fileManager: fileManager)
+            || isLTX25ModelRoot(modelRoot, fileManager: fileManager)
             ? .splitDistilledVideo
             : .legacyDistilledVideo
     }
@@ -236,10 +237,11 @@ struct VideoGenerate: AsyncParsableCommand {
 
         Quality and output are separate choices. The default is a fast draft
         checkpoint with video-only output. Use --quality final for the full LTX
-        2.3 dev + distilled-LoRA quality pipeline, and --output-mode audio-video
-        when synchronized generated audio is part of the deliverable. Supplying
-        --audio uses the full model for native two-stage A2Vid and preserves the
-        selected source segment as the soundtrack.
+        2.3 dev + distilled-LoRA pipeline or the official LTX 2.5 distilled
+        checkpoint, and --output-mode audio-video when synchronized generated
+        audio is part of the deliverable. Supplying --audio uses the full LTX
+        2.3 model for native two-stage A2Vid and preserves the selected source
+        segment as the soundtrack.
 
         --variant distilled|unified-av remains available for compatibility. Do
         not combine it with --quality or --output-mode.
@@ -267,7 +269,7 @@ struct VideoGenerate: AsyncParsableCommand {
     @Option(name: [.customShort("m"), .long], help: "Managed video model id or local model root. Defaults by operation.")
     var model: String = ""
 
-    @Option(name: [.customLong("quality")], help: "LTX checkpoint quality: draft uses standalone distilled; final uses dev + distilled-LoRA.")
+    @Option(name: [.customLong("quality")], help: "LTX checkpoint quality: draft uses LTX 2.3 standalone distilled; final uses LTX 2.3 dev + distilled-LoRA or LTX 2.5 distilled.")
     var quality: LTXVideoQuality?
 
     @Option(name: [.customLong("output-mode")], help: "LTX deliverable: video-only or synchronized audio-video.")
@@ -420,6 +422,10 @@ struct VideoGenerate: AsyncParsableCommand {
 
     var requestedQuality: LTXVideoQuality {
         if audio?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+            return .final
+        }
+        if let modelRoot,
+           isLTX25ModelRoot(URL(fileURLWithPath: modelRoot).standardizedFileURL) {
             return .final
         }
         if let quality {
@@ -833,7 +839,7 @@ struct VideoGenerate: AsyncParsableCommand {
         )
         if (timings || timingsOutput != nil), !nativeRoute.supportsPhaseTimings {
             throw ValidationError(
-                "--timings and --timings-output require an LTX 2.3 split model, --quality final, --output-mode audio-video, or --audio."
+                "--timings and --timings-output require a split LTX model, --quality final, --output-mode audio-video, or --audio."
             )
         }
         try MLXBundleSupport.ensureAvailable(quiet: quiet)
@@ -878,16 +884,19 @@ struct VideoGenerate: AsyncParsableCommand {
         guard let quality else { return }
         switch quality {
         case .draft:
-            guard !isLTX23FullModelRoot(modelRoot), !isLTX23AudioToVideoModelRoot(modelRoot) else {
+            guard !isLTX23FullModelRoot(modelRoot),
+                  !isLTX23AudioToVideoModelRoot(modelRoot),
+                  !isLTX25ModelRoot(modelRoot) else {
                 throw ValidationError(
-                    "--quality draft requires \(ModelResolver.ModelID.ltxVideo23AVMLX.rawValue), not the full dev checkpoint."
+                    "--quality draft requires \(ModelResolver.ModelID.ltxVideo23AVMLX.rawValue), not a final-quality checkpoint."
                 )
             }
         case .final:
             let supportsRequestedFinalPath = isLTX23AudioToVideoModelRoot(modelRoot)
+                || isLTX25ModelRoot(modelRoot)
             guard supportsRequestedFinalPath else {
                 throw ValidationError(
-                    "--quality final requires \(ModelResolver.ModelID.ltxVideo23FullMLX.rawValue)."
+                    "--quality final requires \(ModelResolver.ModelID.ltxVideo23FullMLX.rawValue) or an official LTX 2.5 root."
                 )
             }
         }
@@ -1133,7 +1142,7 @@ struct VideoGenerate: AsyncParsableCommand {
         let route = resolveLTXVideoGenerationRoute(outputMode: outputMode, modelRoot: rootURL)
         if (timings || timingsOutput != nil), !route.supportsPhaseTimings {
             throw ValidationError(
-                "--timings and --timings-output require an LTX 2.3 split model, --quality final, --output-mode audio-video, or --audio."
+                "--timings and --timings-output require a split LTX model, --quality final, --output-mode audio-video, or --audio."
             )
         }
         if route == .unifiedAV,
@@ -1148,7 +1157,8 @@ struct VideoGenerate: AsyncParsableCommand {
 
         if !quiet {
             CLIStderr.write("Engine: native\n")
-            CLIStderr.write("Quality: \(isLTX23AudioToVideoModelRoot(rootURL) ? LTXVideoQuality.final.rawValue : LTXVideoQuality.draft.rawValue)\n")
+            let isFinalQuality = isLTX23AudioToVideoModelRoot(rootURL) || isLTX25ModelRoot(rootURL)
+            CLIStderr.write("Quality: \(isFinalQuality ? LTXVideoQuality.final.rawValue : LTXVideoQuality.draft.rawValue)\n")
             CLIStderr.write("Output mode: \(outputMode.rawValue)\n")
             CLIStderr.write("Runtime lane: \(route.rawValue)\n")
             CLIStderr.write("Model root: \(rootURL.path)\n")
@@ -1227,7 +1237,8 @@ struct VideoGenerate: AsyncParsableCommand {
         case .splitDistilledVideo:
             let endToEndStart = videoMonotonicSeconds()
             if !quiet {
-                CLIStderr.write("Loading native LTX 2.3 split distilled model for video-only output...\n")
+                let version = isLTX25ModelRoot(rootURL) ? "LTX 2.5" : "LTX 2.3"
+                CLIStderr.write("Loading native \(version) distilled model for video-only output...\n")
             }
             let generator = LTXUnifiedAVGenerator()
             do {
@@ -1601,7 +1612,9 @@ func validateNativeModelRoot(_ rootURL: URL) throws {
         return
     }
 
-    if isLTX23AudioToVideoModelRoot(rootURL) || isLTX23SplitModelRoot(rootURL) {
+    if isLTX23AudioToVideoModelRoot(rootURL)
+        || isLTX23SplitModelRoot(rootURL)
+        || isLTX25ModelRoot(rootURL) {
         return
     }
 

@@ -104,10 +104,18 @@ mere.run guide music generate --model music-magenta-rt2-small
   widest boundary fades; aggressive performs pure diffusion.
 - `--repaint-strength`: balanced-mode aggressiveness from `0` to `1`.
 - `--bpm`, `--keyscale`, `--timesignature`: musical metadata.
+- `--instrumental`: use upstream's explicit `[Instrumental]` lyric marker;
+  cannot be combined with lyrics input.
 - `--lm-temperature`, `--lm-top-k`, `--lm-top-p`,
   `--lm-repetition-penalty`: constrained planner sampling controls. Temperature
   defaults to upstream's `0.85`; repetition penalty defaults to the neutral
   upstream value `1.0`.
+- `--lm-cfg-scale`, `--lm-negative-prompt`: classifier-free guidance for the
+  semantic-code phase. Upstream defaults are `2.0` and `NO USER INPUT`;
+  metadata planning always remains unguided at `1.0`.
+- `--candidates`: explicitly opt into local best-of-N technical ranking.
+  Quality presets generate one candidate, matching upstream's disabled
+  auto-score default.
 - `--metadata-duration`: compatibility alias for `--duration`; conflicting
   values are rejected so the planner and renderer cannot diverge.
 - `--metadata-language`: compatibility override for `--vocal-language`.
@@ -266,6 +274,7 @@ mere.run music generate \
 ```bash
 mere.run music generate \
   "dark cinematic synthwave instrumental, pulsing bass, spacious drums, neon tension" \
+  --instrumental \
   --duration 12 \
   --steps 8 \
   --output ./cue.wav

@@ -9,6 +9,8 @@ public enum RuntimeServingEngine: String, Codable, CaseIterable, Hashable, Senda
     case textChatQ35 = "text-chat-q35"
     case textChatLFM2 = "text-chat-lfm2"
     case textChatDeepseekV4Flash = "text-chat-deepseek-v4-flash"
+    case textChatMuseGlimmer = "text-chat-muse-glimmer"
+    case textChatNemotronH = "text-chat-nemotron-h"
 
     public var canonical: RuntimeServingEngine {
         switch self {
@@ -419,6 +421,10 @@ public extension ManagedModelSpec {
             return .textChatQ36
         case .lfm2:
             return .textChatLFM2
+        case .museGlimmer:
+            return .textChatMuseGlimmer
+        case .nemotronH:
+            return .textChatNemotronH
         case .deepseekV4FlashIMatrixGGUF:
             return .textChatDeepseekV4Flash
         case .hfTextChat where id == ModelResolver.ModelID.mebot.rawValue:

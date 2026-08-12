@@ -66,6 +66,8 @@ final class ManagedModelCatalogTests: XCTestCase {
             "vision-embed-olmoearth-v12-tiny",
             "vision-embed-olmoearth-v12-small",
             "vision-embed-olmoearth-v12-base",
+            MuseGlimmerResources.modelId,
+            MuseGlimmerResources.assistantModelId,
             "image-3d-trellis2-4b",
             "music-muscriptor-small",
             "music-muscriptor-medium",
@@ -81,6 +83,7 @@ final class ManagedModelCatalogTests: XCTestCase {
             "video-ltx23-av-mlx",
             "video-ltx23-full-mlx",
             "video-ltx23-a2vid-mlx",
+            "video-ltx25-distilled-bf16",
             "video-minimax-h3-fl2va-mlx",
             "video-minimax-h3-fl2va-bf16-mlx",
             "video-minimax-h3-ref2va-mlx",
@@ -621,6 +624,54 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertFalse(target.runtimeAutoDownloadAllowed)
         XCTAssertNil(target.usageRestriction)
         XCTAssertTrue(LagunaResources.snapshotPatterns.contains("LICENSE*"))
+    }
+
+    func testMuseGlimmerUsesPinnedSawfwairQ4TargetAndOfficialDFlashCompanion() throws {
+        let target = try XCTUnwrap(ManagedModelCatalog.spec(for: MuseGlimmerResources.modelId))
+        let companion = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: MuseGlimmerResources.assistantModelId)
+        )
+
+        XCTAssertEqual(target.hubFallback?.repoId, MuseGlimmerResources.artifactRepoId)
+        XCTAssertEqual(target.hubFallback?.revision, MuseGlimmerResources.artifactRevision)
+        XCTAssertEqual(target.upstreamRepoId, MuseGlimmerResources.artifactRepoId)
+        XCTAssertEqual(target.upstreamRevision, MuseGlimmerResources.artifactRevision)
+        XCTAssertEqual(target.estimatedDownloadBytes, MuseGlimmerResources.estimatedDownloadBytes)
+        XCTAssertEqual(
+            target.usageRestriction?.terms.first?.sourceRepoId,
+            MuseGlimmerResources.upstreamRepoId
+        )
+        XCTAssertEqual(
+            target.usageRestriction?.terms.first?.sourceRevision,
+            MuseGlimmerResources.upstreamRevision
+        )
+        XCTAssertEqual(target.companionModelIDs, [MuseGlimmerResources.assistantModelId])
+        XCTAssertEqual(target.validationKind, .museGlimmer)
+        XCTAssertFalse(target.runtimeAutoDownloadAllowed)
+
+        XCTAssertFalse(ManagedModelCatalog.allSpecs.contains { $0.id == companion.id })
+        XCTAssertEqual(
+            companion.hubFallback?.repoId,
+            MuseGlimmerResources.assistantUpstreamRepoId
+        )
+        XCTAssertEqual(
+            companion.hubFallback?.revision,
+            MuseGlimmerResources.assistantUpstreamRevision
+        )
+        XCTAssertEqual(
+            companion.hubFallback?.patterns,
+            MuseGlimmerResources.assistantSnapshotPatterns
+        )
+        XCTAssertEqual(companion.validationKind, .museGlimmerAssistant)
+        XCTAssertEqual(
+            companion.estimatedDownloadBytes,
+            MuseGlimmerResources.assistantEstimatedDownloadBytes
+        )
+        XCTAssertEqual(
+            companion.usageRestriction?.terms.first?.sourceRepoId,
+            MuseGlimmerResources.assistantUpstreamRepoId
+        )
+        XCTAssertFalse(companion.runtimeAutoDownloadAllowed)
     }
 
     func testQ36NanoUsesOptiQHubSource() throws {
@@ -1549,6 +1600,38 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertTrue(manifest.supports?.contains(.audioToVideoGeneration) == true)
     }
 
+    func testLTX25SpecPinsOfficialGatedPackedRelease() throws {
+        let id = ModelResolver.ModelID.ltxVideo25DistilledBF16.rawValue
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: id))
+
+        XCTAssertEqual(id, LTX25Resources.modelID)
+        XCTAssertEqual(spec.category, .video)
+        XCTAssertEqual(spec.installShape, .structuredRoot)
+        XCTAssertEqual(spec.validationKind, .ltxVideo25)
+        XCTAssertEqual(spec.hubFallback?.repoId, LTX25Resources.sourceRepository)
+        XCTAssertEqual(spec.hubFallback?.revision, LTX25Resources.sourceRevision)
+        XCTAssertEqual(spec.hubFallback?.patterns, LTX25Resources.snapshotPatterns)
+        XCTAssertEqual(spec.upstreamRepoId, LTX25Resources.sourceRepository)
+        XCTAssertEqual(spec.upstreamRevision, LTX25Resources.sourceRevision)
+        XCTAssertEqual(spec.estimatedDownloadBytes, LTX25Resources.estimatedDownloadBytes)
+        XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
+        XCTAssertEqual(spec.usageRestriction?.terms.count, 2)
+        XCTAssertTrue(spec.usageRestriction?.terms.contains { $0.component == "Gemma 4 text encoder" } == true)
+
+        let manifest = MereRunModelManifest.template(
+            for: .ltxVideo25DistilledBF16,
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+        XCTAssertEqual(manifest.engine, .ltxVideo)
+        XCTAssertEqual(manifest.family, .video)
+        XCTAssertEqual(manifest.variant, .distilled)
+        XCTAssertEqual(manifest.precision, .bf16)
+        XCTAssertEqual(
+            manifest.upstreamRepoId,
+            "\(LTX25Resources.sourceRepository)@\(LTX25Resources.sourceRevision)"
+        )
+    }
+
     func testSCAIL2SpecPinsImmutableSawfwairRelease() throws {
         let id = ModelResolver.ModelID.scail2Video14BMLX.rawValue
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: id))
@@ -1715,6 +1798,21 @@ final class ManagedModelCatalogTests: XCTestCase {
         )
     }
 
+    func testLTX25RootValidationRequiresEveryNativeRuntimeArtifact() throws {
+        let spec = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: ModelResolver.ModelID.ltxVideo25DistilledBF16.rawValue)
+        )
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try writeMinimalLTX25Root(at: root)
+
+        XCTAssertTrue(spec.isManagedRootComplete(root, fileManager: .default))
+        let missing = root.appendingPathComponent(LTX25Resources.videoVAERelativePath)
+        try FileManager.default.removeItem(at: missing)
+        XCTAssertEqual(spec.missingPaths(in: root, fileManager: .default), [missing])
+        XCTAssertTrue(spec.validationMessages(in: root).contains { $0.contains("Missing required LTX 2.5 file") })
+    }
+
     private func makeTemporaryDirectory() throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("mere-run-managed-model-catalog-\(UUID().uuidString)", isDirectory: true)
@@ -1788,6 +1886,21 @@ final class ManagedModelCatalogTests: XCTestCase {
                 atPath: root.appendingPathComponent(file).path,
                 contents: contents
             ))
+        }
+    }
+
+    private func writeMinimalLTX25Root(at root: URL) throws {
+        try MereRunModelManifest.template(
+            for: .ltxVideo25DistilledBF16,
+            createdAt: Date(timeIntervalSince1970: 0)
+        ).write(to: root)
+        for relativePath in LTX25Resources.requiredRelativePaths {
+            let url = root.appendingPathComponent(relativePath)
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            XCTAssertTrue(FileManager.default.createFile(atPath: url.path, contents: Data()))
         }
     }
 

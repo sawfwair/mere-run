@@ -1076,7 +1076,12 @@ struct StudioOptionsPanel: View {
                 "LM repetition penalty",
                 value: $draft.musicLMRepetitionPenalty
             )
+            numberField("LM CFG scale", value: $draft.musicLMCFGScale)
         }
+        TextField("LM negative prompt", text: $draft.musicLMNegativePrompt)
+            .textFieldStyle(.roundedBorder)
+        Toggle("Instrumental", isOn: $draft.musicInstrumental)
+            .font(MereRunTheme.captionFont)
 
         Toggle("Set exact duration", isOn: $draft.useDuration)
             .font(MereRunTheme.captionFont)

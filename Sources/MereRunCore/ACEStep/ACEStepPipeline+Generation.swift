@@ -90,7 +90,8 @@ extension ACEStepPipeline {
         targetCodes: Int,
         targetDurationSeconds: Float,
         lmConfig: ACEStep5HzLMGenerationConfig,
-        lmUserMetadata: ACEStep5HzLMConstrainedSampler.UserMetadata
+        lmUserMetadata: ACEStep5HzLMConstrainedSampler.UserMetadata,
+        lmCodeGenerationContext: ACEStepLMCodeGenerationContext?
     ) throws -> ACEStep5HzLMResult {
         let primary = runConstrainedLM(
             lm: lm,
@@ -100,7 +101,8 @@ extension ACEStepPipeline {
             lmSystemInstruction: lmSystemInstruction,
             lmConfig: lmConfig,
             targetDurationSeconds: targetDurationSeconds,
-            userMetadata: lmUserMetadata
+            userMetadata: lmUserMetadata,
+            codeGenerationContext: lmCodeGenerationContext
         )
         if primary.audioCodeValues.count >= targetCodes {
             return primary
@@ -127,7 +129,8 @@ extension ACEStepPipeline {
             lmSystemInstruction: lmSystemInstruction,
             lmConfig: retryConfig,
             targetDurationSeconds: targetDurationSeconds,
-            userMetadata: retryMetadata
+            userMetadata: retryMetadata,
+            codeGenerationContext: lmCodeGenerationContext
         )
         return retry.audioCodeValues.count >= primary.audioCodeValues.count ? retry : primary
     }
@@ -140,7 +143,8 @@ extension ACEStepPipeline {
         lmSystemInstruction: String,
         lmConfig: ACEStep5HzLMGenerationConfig,
         targetDurationSeconds: Float,
-        userMetadata: ACEStep5HzLMConstrainedSampler.UserMetadata
+        userMetadata: ACEStep5HzLMConstrainedSampler.UserMetadata,
+        codeGenerationContext: ACEStepLMCodeGenerationContext?
     ) -> ACEStep5HzLMResult {
         let sampler = lm.makeConstrainedSampler(
             enabled: true,
@@ -149,6 +153,18 @@ extension ACEStepPipeline {
             targetDurationSeconds: targetDurationSeconds,
             userMetadata: userMetadata
         )
+        if let codeGenerationContext {
+            let effectiveContext = codeGenerationContext.applying(
+                userMetadata: userMetadata
+            )
+            return lm.generateAudioCodes(
+                caption: effectiveContext.caption,
+                lyrics: effectiveContext.lyrics,
+                reasoning: effectiveContext.reasoning,
+                config: lmConfig,
+                sampler: sampler
+            )
+        }
         return lm.generateConstrained(
             caption: caption,
             lyrics: lyrics,

@@ -57,7 +57,7 @@ current flags.
 | Vision understanding | `vision caption`, `inspect`, `face`, `ground`, `segment`, `track`, `track-live`, `pose`, `flow`, `ocr` | Captioning and VQA, local face detection/identity embeddings, LightOn/GLM/Infinity OCR, Falcon grounding, SAM 3.1 segmentation and tracking, body/hand/face landmarks, and dense optical flow |
 | Depth, geometry, and 3D | `vision depth-video`, `geometry`, `geometry-multiview`, `image-to-3d*`; `image reconstruct-3d*` | Video Depth Anything, MoGe-2, Depth Anything 3, TripoSR, InstantMesh, and TRELLIS.2; depth/confidence EXRs, cameras, point clouds, 3DGS initialization, OBJ, PLY, GLB, and PBR voxel artifacts |
 | Audio enhancement | `audio enhance` | Native AP-BWE speech bandwidth extension and UniverSR general-audio super-resolution to hashed 48 kHz mono WAVs |
-| Video and worlds | `video generate`, `video cosmos3`, `video prepare-masks`, `video animate`, `video session`, `video export-latents`, `world serve` | MiniMax-H3 FL2VA/Ref2VA synchronized video and audio, LTX video and synchronized LTX 2.3 audio/video, resident distilled and full-dev LTX workers, Wan 2.2 TI2V, native Cosmos3-Edge generation/reasoning/action dynamics, native SAM 3.1 mask preparation, native SCAIL-2 subject animation/replacement, and warm DreamX or Cosmos3 world sessions |
+| Video and worlds | `video generate`, `video cosmos3`, `video prepare-masks`, `video animate`, `video session`, `video export-latents`, `world serve` | MiniMax-H3 FL2VA/Ref2VA synchronized video and audio, native LTX 2.5 and LTX 2.3 synchronized audio/video, resident distilled and full-dev LTX workers, Wan 2.2 TI2V, native Cosmos3-Edge generation/reasoning/action dynamics, native SAM 3.1 mask preparation, native SCAIL-2 subject animation/replacement, and warm DreamX or Cosmos3 world sessions |
 | Music and sound | `music analyze`, `generate`, `realtime`, `separate`, `transcribe`; `sfx generate`, `sfx video generate` | ACE-Step generation, analysis, and covers; Magenta RT2 realtime MIDI performance; native RoFormer separation, dereverb, and denoise; MuScriptor full-mix MIDI transcription; Woosh and native MMAudio text/video-conditioned sound |
 | Speech | `speech synthesize`, `speech transcribe`, `speech diarize`, `speech listen`, `speech profile` | Qwen3 TTS, saved voice profiles, Qwen3 live ASR, Parakeet transcription, and native MLX Sortformer speaker diarization |
 | Serving and operations | `api serve`, `open-webui quickstart`, `status`, `run`, `model runtime`, `gate` | OpenAI-compatible chat, embeddings, images, TTS, and STT; resident model pooling, TTL/pinning, memory guards, durable run inspection, and installed-model quality gates |
@@ -296,7 +296,9 @@ swift run mere.run model pull text-chat-lfm25-2.6b-4bit --accept-model-license
 swift run mere.run model pull text-chat-lfm25-a1b-8bit --accept-model-license
 swift run mere.run model pull text-chat-laguna-s-2-1
 swift run mere.run model pull text-chat-laguna-xs-2-1
+swift run mere.run model pull text-chat-nemotron-35-lightning
 swift run mere.run model pull text-chat-inkling-small
+swift run mere.run model pull vision-chat-muse-glimmer-30b --accept-model-license
 swift run mere.run model pull text-chat-bonsai-27b-1bit
 swift run mere.run model pull text-chat-bonsai-27b-2bit
 swift run mere.run model pull text-code-north-mini
@@ -314,6 +316,24 @@ swift run mere.run text chat \
   --model text-chat-inkling-small \
   --context-size 32768 \
   --prompt "Plan a recovery-safe repository migration."
+
+# Muse Glimmer is a pinned native Swift/MLX multimodal agent model. The pull
+# installs Sawfwair's 21.38 GB selective MLX Q4 target and Meta's 5.11 GB
+# official DFlash companion;
+# review their shared usage policy first.
+swift run mere.run text chat \
+  --model vision-chat-muse-glimmer-30b \
+  --image ./screenshot.png \
+  --reasoning-effort 0.8 \
+  --stats \
+  --prompt "Inspect this interface and propose the safest next action."
+
+# Nemotron 3.5 Lightning is a pinned native Swift/MLX hybrid Mamba/MoE target.
+# The managed pull also installs its converted DSpark speculative companion.
+swift run mere.run text chat \
+  --model text-chat-nemotron-35-lightning \
+  --stats \
+  --prompt "Design a recovery-safe Swift actor pipeline."
 
 # Pull and apply the promoted Mere Platform Assistant adapter
 swift run mere.run model pull text-chat-gemma4-12b-4bit
@@ -746,6 +766,16 @@ swift run mere.run video generate \
   --duration 15 \
   --fps 24 \
   --output ./clip-av.mp4
+
+# Generate synchronized final-quality LTX 2.5 audio/video (gated model)
+swift run mere.run model pull video-ltx25-distilled-bf16 --accept-model-license
+swift run mere.run video generate \
+  "a small red robot walks across a wooden table, tiny mechanical footsteps" \
+  --model video-ltx25-distilled-bf16 \
+  --quality final \
+  --output-mode audio-video \
+  --fps 24 \
+  --output ./clip-ltx25.mp4
 
 # Condition video on a selected source-audio segment and preserve that soundtrack
 swift run mere.run model pull video-ltx23-full-mlx --accept-model-license

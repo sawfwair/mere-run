@@ -78,7 +78,6 @@ public final class ACEStep5HzLMConstrainedSampler {
     private let vocabSize: Int
 
     private let newlineToken: Int32?
-    private let periodToken: Int32?
     private let backtickToken: Int32?
     private let eosTokenId: Int32?
 
@@ -102,6 +101,9 @@ public final class ACEStep5HzLMConstrainedSampler {
 
     private var captionTokenCount: Int = 0
     private let maxCaptionTokens: Int = 512
+    private var captionAfterNewline = false
+    private var captionEnding = false
+    private var pendingFieldName = ""
 
     private var targetCodes: Int?
     private var codesCount: Int = 0
@@ -130,7 +132,6 @@ public final class ACEStep5HzLMConstrainedSampler {
         self.targetCodes = targetDurationSeconds.map { max(0, Int(($0 * 5.0).rounded())) }
 
         self.newlineToken = tokenizer.encode("\n", addSpecialTokens: false).last.map(Int32.init)
-        self.periodToken = tokenizer.encode(".", addSpecialTokens: false).last.map(Int32.init)
         self.backtickToken = tokenizer.encode("`", addSpecialTokens: false).last.map(Int32.init)
         self.eosTokenId = tokenizer.eosTokenId.map(Int32.init)
 
@@ -155,12 +156,34 @@ public final class ACEStep5HzLMConstrainedSampler {
         accumulatedTokenIds = []
         userFieldTokenQueue = []
         captionTokenCount = 0
+        captionAfterNewline = false
+        captionEnding = false
+        pendingFieldName = ""
+        codesCount = 0
+    }
+
+    /// Starts decoding at the audio-code phase when the reasoning block is
+    /// already present in the prompt, as in upstream's two-phase LM path.
+    public func beginAudioCodeGeneration() {
+        state = .codesGeneration
+        positionInFixedString = 0
+        accumulatedTokenIds = []
+        userFieldTokenQueue = []
+        captionTokenCount = 0
+        captionAfterNewline = false
+        captionEnding = false
+        pendingFieldName = ""
         codesCount = 0
     }
 
     public func processLogits(_ logits: MLXArray, tokens: [Int]) -> MLXArray {
         guard enabled else { return logits }
-        if state == .completed { return logits }
+        if state == .completed {
+            if stopAtReasoning, let eos = eosTokenId {
+                return whitelist(logits, allowed: [eos])
+            }
+            return logits
+        }
 
         // User field injection overrides everything else.
         if let next = userFieldTokenQueue.first {
@@ -186,10 +209,6 @@ public final class ACEStep5HzLMConstrainedSampler {
         }
 
         if let fixed = fixedStrings[state] {
-            if state == .thinkEndTag, stopAtReasoning, let eos = eosTokenId {
-                return whitelist(logits, allowed: [eos])
-            }
-
             let allowed = allowedTokensForFixedString(fixed)
             return whitelist(logits, allowed: allowed)
         }
@@ -248,6 +267,22 @@ public final class ACEStep5HzLMConstrainedSampler {
                 }
             }
 
+            if captionAfterNewline {
+                let topToken = Int(MLX.argMax(logits).item(Int32.self))
+                let topText = tokenizer.decode(tokens: [topToken])
+                if let first = topText.first, !first.isWhitespace {
+                    captionAfterNewline = false
+                    captionEnding = true
+                    pendingFieldName = ""
+                    return logits
+                }
+                captionAfterNewline = false
+            }
+
+            if captionEnding {
+                return logits
+            }
+
             let out = logits + audioCodeMask.asType(logits.dtype)
             if let backtick = backtickToken {
                 out[MLXArray([backtick])] = MLXArray([-Float.infinity]).asType(out.dtype)
@@ -255,17 +290,6 @@ public final class ACEStep5HzLMConstrainedSampler {
 
             if captionTokenCount >= maxCaptionTokens, let nl = newlineToken {
                 return whitelist(out, allowed: [nl])
-            }
-
-            if let nl = newlineToken {
-                let allowNewline: Bool = {
-                    guard let last = tokens.last else { return false }
-                    if let periodToken, Int32(last) == periodToken { return true }
-                    return false
-                }()
-                if !allowNewline {
-                    out[MLXArray([nl])] = MLXArray([-Float.infinity]).asType(out.dtype)
-                }
             }
 
             return out
@@ -281,6 +305,10 @@ public final class ACEStep5HzLMConstrainedSampler {
 
         if !userFieldTokenQueue.isEmpty {
             userFieldTokenQueue.removeFirst()
+            if userFieldTokenQueue.isEmpty {
+                transitionToNextState()
+            }
+            return
         }
 
         if state == .codesGeneration {
@@ -305,28 +333,67 @@ public final class ACEStep5HzLMConstrainedSampler {
             positionInFixedString += tokenText.count
             if positionInFixedString >= fixed.count {
                 positionInFixedString = 0
-                transitionToNextState()
+                if state == .thinkEndTag, stopAtReasoning {
+                    state = .completed
+                } else {
+                    transitionToNextState()
+                }
             }
+            return
+        }
+
+        if state == .captionValue {
+            updateCaptionState(with: token)
             return
         }
 
         if let nl = newlineToken, Int32(token) == nl {
             accumulatedTokenIds = []
-            if state == .captionValue {
-                captionTokenCount = 0
-            }
             transitionToNextState()
             return
         }
 
         switch state {
-        case .captionValue:
-            captionTokenCount += 1
         case .bpmValue, .durationValue, .timesigValue, .keyscaleValue, .languageValue:
             accumulatedTokenIds.append(Int32(token))
         default:
             break
         }
+    }
+
+    private func updateCaptionState(with token: Int) {
+        captionTokenCount += 1
+        let tokenText = tokenizer.decode(tokens: [token])
+
+        if captionEnding {
+            pendingFieldName += tokenText
+            guard pendingFieldName.contains(":") else { return }
+
+            let fieldName = pendingFieldName
+                .split(separator: ":", maxSplits: 1)
+                .first?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased()
+            let valueState: State? = switch fieldName {
+            case "duration": .durationValue
+            case "keyscale": .keyscaleValue
+            case "language": .languageValue
+            case "timesignature": .timesigValue
+            default: nil
+            }
+
+            captionEnding = false
+            pendingFieldName = ""
+            accumulatedTokenIds = []
+            if let valueState {
+                state = valueState
+            } else {
+                transitionToNextState()
+            }
+            return
+        }
+
+        captionAfterNewline = tokenText.contains("\n")
     }
 
     // MARK: - Setup
@@ -479,6 +546,12 @@ public final class ACEStep5HzLMConstrainedSampler {
         } else {
             state = .completed
         }
+        positionInFixedString = 0
+        accumulatedTokenIds = []
+        captionAfterNewline = false
+        captionTokenCount = 0
+        captionEnding = false
+        pendingFieldName = ""
     }
 
     // MARK: - Logits helpers

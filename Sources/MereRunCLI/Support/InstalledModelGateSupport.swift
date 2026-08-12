@@ -175,7 +175,7 @@ enum InstalledModelSmokePlans {
                 try await runner.installedImageCheck(model: spec.id)
             }
 
-        case .gemma4, .gemma4Unified, .q35:
+        case .gemma4, .gemma4Unified, .q35, .museGlimmer:
             if spec.category == .visionOCR {
                 return direct(spec, route: "vision ocr") { runner in
                     try await runner.installedOCRCheck(model: spec.id)
@@ -190,7 +190,7 @@ enum InstalledModelSmokePlans {
                 try await runner.installedTextCheck(model: spec.id)
             }
 
-        case .laguna, .lfm2, .inkling, .codegenGGUF, .hfTextChat:
+        case .laguna, .lfm2, .inkling, .nemotronH, .codegenGGUF, .hfTextChat:
             return direct(spec, route: "text chat") { runner in
                 try await runner.installedTextCheck(model: spec.id)
             }
@@ -219,6 +219,26 @@ enum InstalledModelSmokePlans {
                 installedIDs: installedIDs,
                 candidates: ["text-chat-laguna-s-2-1"],
                 route: "consumed by Laguna text chat"
+            ) { runner, primary in
+                try await runner.installedTextCheck(model: primary)
+            }
+
+        case .museGlimmerAssistant:
+            return companion(
+                spec,
+                installedIDs: installedIDs,
+                candidates: [MuseGlimmerResources.modelId],
+                route: "consumed by Muse Glimmer text and vision chat"
+            ) { runner, primary in
+                try await runner.installedTextCheck(model: primary)
+            }
+
+        case .nemotronHDSpark:
+            return companion(
+                spec,
+                installedIDs: installedIDs,
+                candidates: [NemotronHResources.modelID],
+                route: "consumed by Nemotron 3.5 Lightning text chat"
             ) { runner, primary in
                 try await runner.installedTextCheck(model: primary)
             }
@@ -445,6 +465,22 @@ enum InstalledModelSmokePlans {
         case .ltxVideo23A2VMLX:
             return direct(spec, route: "video generate A2Vid") { runner in
                 try await runner.installedA2VidCheck(model: spec.id)
+            }
+
+        case .ltxVideo25:
+            return direct(spec, route: "video generate LTX 2.5 final audio-video") { runner in
+                try await runner.installedLTXCheck(
+                    model: spec.id,
+                    id: spec.id,
+                    arguments: [
+                        "--quality", "final",
+                        "--output-mode", "audio-video",
+                        "--width", "256",
+                        "--height", "192",
+                        "--num-frames", "25",
+                    ],
+                    requireAudio: true
+                )
             }
 
         case .wan22TI2VMLX:

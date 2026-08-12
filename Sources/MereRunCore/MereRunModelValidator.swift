@@ -113,6 +113,7 @@ public enum MereRunModelValidator {
                     && spec.validationKind != .wooshClap
                     && spec.validationKind != .wooshSynchformer
                     && spec.validationKind != .mmaudio
+                    && spec.validationKind != .ltxVideo25
                     && spec.validationKind != .insightFaceBuffaloL
                     && spec.validationKind != .moge2
                     && spec.validationKind != .videoDepthAnything
@@ -163,6 +164,7 @@ public enum MereRunModelValidator {
             || spec?.validationKind == .ltxVideo23MLX
             || spec?.validationKind == .ltxVideo23A2VMLX
             || spec?.validationKind == .ltxVideo23FullMLX
+            || spec?.validationKind == .ltxVideo25
             || spec?.validationKind == .insightFaceBuffaloL
             || spec?.validationKind == .moge2
             || spec?.validationKind == .videoDepthAnything

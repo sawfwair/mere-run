@@ -175,7 +175,11 @@ struct ModelInfo: ParsableCommand {
 
         if components {
             print("\nComponents")
-            if Self.usesLTX23FullLayout(manifest: manifest, expectedModelID: expectedModelID) {
+            if Self.usesLTX25Layout(manifest: manifest, expectedModelID: expectedModelID) {
+                for line in Self.ltx25ComponentLines(rootURL: rootURL, fileManager: fm) {
+                    print(line)
+                }
+            } else if Self.usesLTX23FullLayout(manifest: manifest, expectedModelID: expectedModelID) {
                 let companionRoot = ModelResolver()
                     .resolveIfPresent(.ltxGemma3TwelveB4Bit)?
                     .rootURL
@@ -241,6 +245,25 @@ struct ModelInfo: ParsableCommand {
         let id = expectedModelID ?? manifest?.id
         guard let id else { return false }
         return ManagedModelCatalog.spec(for: id)?.validationKind == .ltxVideo23MLX
+    }
+
+    static func usesLTX25Layout(manifest: MereRunModelManifest?, expectedModelID: String?) -> Bool {
+        let id = expectedModelID ?? manifest?.id
+        guard let id else { return false }
+        return ManagedModelCatalog.spec(for: id)?.validationKind == .ltxVideo25
+    }
+
+    static func ltx25ComponentLines(
+        rootURL: URL,
+        fileManager: FileManager = .default
+    ) -> [String] {
+        var lines = ["  layout: official LTX 2.5 packed BF16 files"]
+        for file in ltx25ComponentFiles {
+            let url = rootURL.appendingPathComponent(file.relativePath).standardizedFileURL
+            let suffix = fileManager.fileExists(atPath: url.path) ? "" : "  (missing)"
+            lines.append("  \(file.label): \(url.path)\(suffix)")
+        }
+        return lines
     }
 
     static func usesLTX23A2VidLayout(manifest: MereRunModelManifest?, expectedModelID: String?) -> Bool {
@@ -417,6 +440,14 @@ struct ModelInfo: ParsableCommand {
         ("spatial_upscaler_x1_5_config", "spatial_upscaler_x1_5_v1_0_config.json"),
         ("temporal_upscaler_x2", "temporal_upscaler_x2_v1_0.safetensors"),
         ("temporal_upscaler_x2_config", "temporal_upscaler_x2_v1_0_config.json"),
+    ]
+
+    private static let ltx25ComponentFiles: [(label: String, relativePath: String)] = [
+        ("transformer", LTX25Resources.transformerRelativePath),
+        ("text_encoder", LTX25Resources.textEncoderRelativePath),
+        ("video_vae", LTX25Resources.videoVAERelativePath),
+        ("audio_vae_vocoder", LTX25Resources.audioVAERelativePath),
+        ("spatial_upscaler", LTX25Resources.spatialUpsamplerRelativePath),
     ]
 
     private static let ltx23A2VidComponentFiles: [(label: String, relativePath: String)] = [
