@@ -280,6 +280,12 @@ struct OpenWebUIQuickstart: AsyncParsableCommand {
                 CLIStderr.write("[open-webui] \(modelID) has no managed download source; install it from a local path.\n")
                 continue
             }
+            if spec.managedRuntimeURL() != nil {
+                if !quiet {
+                    CLIStderr.write("[open-webui] \(modelID) already available in the unified model catalog\n")
+                }
+                continue
+            }
             if !quiet {
                 CLIStderr.write("[open-webui] Pulling \(modelID)\n")
             }
@@ -326,11 +332,7 @@ struct OpenWebUIQuickstart: AsyncParsableCommand {
             .filter { spec in
                 spec.usageRestriction != nil
                     && spec.hasAnyManagedDownloadSource()
-                    && !ManagedModelResolver.isManagedInstallComplete(
-                        spec: spec,
-                        at: spec.managedInstallRootURL(),
-                        fileManager: fileManager
-                    )
+                    && spec.managedRuntimeURL(fileManager: fileManager) == nil
             }
         guard !restricted.isEmpty else { return nil }
 

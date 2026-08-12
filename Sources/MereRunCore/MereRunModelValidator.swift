@@ -339,6 +339,55 @@ public enum MereRunModelValidator {
         return MereRunModelValidationReport(rootURL: rootURL, manifest: manifest, warnings: warnings, errors: errors)
     }
 
+    /// Validates a directory whose canonical identity is supplied by an explicit
+    /// external binding rather than by a manifest stored beside the checkpoint.
+    public static func validateRegisteredBinding(
+        modelRoot rootURL: URL,
+        expectedModelID: String,
+        usageTermsAcknowledged: Bool,
+        fileManager: FileManager = .default
+    ) -> MereRunModelValidationReport {
+        if fileManager.fileExists(
+            atPath: rootURL.appendingPathComponent(MereRunModelManifest.filename).path
+        ) {
+            return validate(
+                modelRoot: rootURL,
+                expectedModelID: expectedModelID,
+                fileManager: fileManager
+            )
+        }
+
+        var isDirectory: ObjCBool = false
+        guard fileManager.fileExists(atPath: rootURL.path, isDirectory: &isDirectory),
+              isDirectory.boolValue else {
+            return MereRunModelValidationReport(
+                rootURL: rootURL,
+                manifest: nil,
+                errors: ["Missing model directory"]
+            )
+        }
+        guard let spec = ManagedModelCatalog.spec(for: expectedModelID) else {
+            return MereRunModelValidationReport(
+                rootURL: rootURL,
+                manifest: nil,
+                errors: ["Unknown canonical model id: \(expectedModelID)"]
+            )
+        }
+
+        var errors = spec.validationMessages(in: rootURL, fileManager: fileManager)
+        if spec.usageRestriction != nil, !usageTermsAcknowledged {
+            errors.append("Third-party model terms have not been acknowledged for this binding.")
+        }
+        return MereRunModelValidationReport(
+            rootURL: rootURL,
+            manifest: nil,
+            warnings: [
+                "Identity is supplied by the explicit external binding; no manifest was written to external storage.",
+            ],
+            errors: errors
+        )
+    }
+
     public static func assertValid(
         modelRoot rootURL: URL,
         expectedModelID: String? = nil,

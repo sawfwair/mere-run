@@ -6,6 +6,15 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Model management
+
+- added a unified, deterministic model catalog over one writable primary store
+  plus ordered read-only search roots and explicit canonical-ID directory
+  bindings. `model list`, `info`, pull/preflight, runtime resolution, agent and
+  Open WebUI pulls now recognize external models without copying them. New
+  `model location` commands manage registrations; remove, garbage collection,
+  manifest repair, and forced pulls never mutate externally owned payloads.
+
 ### Text
 
 - added `text-chat-nemotron-35-lightning`, a pinned native Swift/MLX runtime for

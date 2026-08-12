@@ -32,9 +32,12 @@ struct ModelRemove: ParsableCommand {
         let resolver = ModelResolver()
         let modelID = ModelResolver.ModelID(rawValue: id)
         let installURL: URL
+        let resolution: ModelResolver.Resolution?
         if let modelID, let resolved = resolver.resolveIfPresent(modelID) {
+            resolution = resolved
             installURL = resolved.rootURL
         } else {
+            resolution = nil
             if let aliasFallback = gemmaAliasInstallURL(for: id) {
                 installURL = aliasFallback
             } else {
@@ -44,6 +47,26 @@ struct ModelRemove: ParsableCommand {
                     throw ValidationError("\(id) is not installed.")
                 }
                 installURL = flatDir
+            }
+        }
+
+        if let resolution, resolution.isExternallyManaged {
+            switch resolution.source {
+            case .registeredBinding:
+                try unregisterExternalBinding(
+                    id: id,
+                    installURL: installURL,
+                    resolution: resolution
+                )
+                return
+            case .registeredSearchRoot:
+                let root = resolution.catalogRootURL?.path ?? "the registered search root"
+                throw ValidationError(
+                    "\(id) is in read-only catalog root \(root). "
+                        + "Unregister the root with `mere.run model location remove \(root)`; no model files were deleted."
+                )
+            case .localModelStore:
+                break
             }
         }
 
@@ -87,6 +110,8 @@ struct ModelRemove: ParsableCommand {
         let garbageResult = keepCache ? nil : try storageManager.execute(garbagePlan)
         let reclaimedBytes = (garbageResult?.reclaimedBytes ?? 0) + (storageUsage?.localBytes ?? 0)
         let result = ModelRemoveOutput(
+            action: "removed",
+            payloadDeleted: true,
             id: id,
             installPath: installURL.path,
             referencedBytes: referencedBytes,
@@ -111,6 +136,63 @@ struct ModelRemove: ParsableCommand {
                 message += "; Hub payload retained"
             }
             print(message)
+        }
+    }
+
+    private func unregisterExternalBinding(
+        id: String,
+        installURL: URL,
+        resolution: ModelResolver.Resolution
+    ) throws {
+        let referencedBytes = FileSystemHelper.directorySize(at: installURL)
+        if !force {
+            print("Unregister \(id)?")
+            print("  Path: \(installURL.path)")
+            print("  Ownership: external read-only")
+            print("  The model payload will be preserved.")
+            print("")
+            print("Confirm? [y/N] ", terminator: "")
+            guard let answer = readLine()?.lowercased(), answer == "y" || answer == "yes" else {
+                print("Aborted.")
+                return
+            }
+        }
+
+        var registry = try ModelLocationRegistry.load()
+        let path = installURL.standardizedFileURL.path
+        let fallbackIDs = ManagedModelCatalog.spec(for: id)?.resolutionFallbackIDs ?? []
+        let boundIDs = Set([id] + fallbackIDs)
+        var removed = 0
+        for boundID in boundIDs {
+            removed += registry.removeBindings(
+                modelID: boundID,
+                url: URL(fileURLWithPath: path, isDirectory: true)
+            )
+        }
+        guard removed > 0 else {
+            throw ValidationError(
+                "Resolved external binding is no longer registered. No model files were deleted."
+            )
+        }
+        try registry.save()
+
+        let result = ModelRemoveOutput(
+            action: "unregistered",
+            payloadDeleted: false,
+            id: id,
+            installPath: installURL.path,
+            referencedBytes: referencedBytes,
+            expectedReclaimableBytes: 0,
+            reclaimedBytes: 0,
+            retainedSharedBytes: 0,
+            retainedExternalBytes: referencedBytes,
+            cacheRetained: true,
+            deletedCacheItemCount: 0
+        )
+        if json {
+            print(try ModelStorageCommandOutput.encode(result))
+        } else {
+            print("Unregistered \(id); external payload preserved at \(installURL.path)")
         }
     }
 
@@ -162,6 +244,8 @@ struct ModelRemove: ParsableCommand {
 }
 
 struct ModelRemoveOutput: Codable, Equatable {
+    let action: String
+    let payloadDeleted: Bool
     let id: String
     let installPath: String
     let referencedBytes: Int64

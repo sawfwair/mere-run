@@ -123,6 +123,7 @@ struct ModelPullPreflightAnalyzer {
     let fileManager: FileManager
     let hubCacheURL: URL?
     let modelStoreURL: URL?
+    let modelLocations: ModelLocationSnapshot?
     let diskAvailableBytes: (URL) -> Int64?
     let now: () -> Date
 
@@ -131,6 +132,7 @@ struct ModelPullPreflightAnalyzer {
         fileManager: FileManager = .default,
         hubCacheURL: URL? = nil,
         modelStoreURL: URL? = nil,
+        modelLocations: ModelLocationSnapshot? = nil,
         diskAvailableBytes: ((URL) -> Int64?)? = nil,
         now: @escaping () -> Date = Date.init
     ) {
@@ -138,6 +140,7 @@ struct ModelPullPreflightAnalyzer {
         self.fileManager = fileManager
         self.hubCacheURL = hubCacheURL
         self.modelStoreURL = modelStoreURL
+        self.modelLocations = modelLocations
         self.diskAvailableBytes = diskAvailableBytes ?? {
             ModelPullDiskPreflight.availableBytes(onFileSystemContaining: $0, fileManager: fileManager)
         }
@@ -245,19 +248,36 @@ struct ModelPullPreflightAnalyzer {
         let support = ManagedModelCapabilityCatalog.support(for: spec)
         let hasSource = spec.hasAnyManagedDownloadSource()
         let installPath = modelStore.appendingPathComponent(spec.id, isDirectory: true).standardizedFileURL
-        let installed = ManagedModelResolver.isManagedInstallComplete(spec: spec, at: installPath, fileManager: fileManager)
-        let runtimeURL = runtimeURL(for: spec, installPath: installPath, installed: installed)
+        let installedInPrimary = ManagedModelResolver.isManagedInstallComplete(
+            spec: spec,
+            at: installPath,
+            fileManager: fileManager
+        )
+        let resolver: ModelResolver? = if let modelLocations {
+            ModelResolver(fileManager: fileManager, locations: modelLocations)
+        } else if modelStoreURL == nil {
+            ModelResolver(fileManager: fileManager)
+        } else {
+            nil
+        }
+        let unifiedResolution = spec.modelID.flatMap { resolver?.resolveIfPresent($0) }
+        let installed = installedInPrimary || unifiedResolution != nil
+        let runtimeURL = unifiedResolution?.rootURL
+            ?? runtimeURL(for: spec, installPath: installPath, installed: installedInPrimary)
         let runtimeReady = runtimeURL != nil
-        let conversionRequired = spec.requiresManagedConversion && installed && !runtimeReady
+        let conversionRequired = spec.requiresManagedConversion && installedInPrimary && !runtimeReady
         let selected = input.all || spec.id == input.target
         let blockedBySupport = !input.allowUnsupported && !support.isSupported
         let blockedBySource = !hasSource
         let requiresUsageTermsAcknowledgement = spec.usageRestriction != nil && (input.force || !installed)
         let blockedByUsageTerms = requiresUsageTermsAcknowledgement && !input.acceptUsageTerms
         let installedUsageTermsAcknowledged = (try? MereRunModelManifest.loadIfPresent(
-            from: installPath,
+            from: runtimeURL ?? installPath,
             fileManager: fileManager
-        ))?.usageTermsAcknowledged == true
+        ))?.usageTermsAcknowledged == true || bindingAcknowledgesUsageTerms(
+            resolution: unifiedResolution,
+            resolver: resolver
+        )
         let estimatedDownloadBytes = ModelPullDiskPreflight.estimatedDownloadBytes(
             for: spec,
             modelDir: installPath,
@@ -376,6 +396,22 @@ struct ModelPullPreflightAnalyzer {
         guard installed, spec.isManagedRuntimeReady(installPath, fileManager: fileManager) else { return nil }
         guard modelStoreURL == nil else { return installPath }
         return spec.managedRuntimeURL(fileManager: fileManager)
+    }
+
+    private func bindingAcknowledgesUsageTerms(
+        resolution: ModelResolver.Resolution?,
+        resolver: ModelResolver?
+    ) -> Bool {
+        guard let resolution,
+              resolution.source == .registeredBinding,
+              let resolver else {
+            return false
+        }
+        return resolver.locationCandidates(for: resolution.modelID).contains {
+            $0.kind == .registeredBinding
+                && $0.rootURL == resolution.rootURL
+                && $0.usageTermsAcknowledged
+        }
     }
 
     private func appendAggregateDiskDiagnostics(

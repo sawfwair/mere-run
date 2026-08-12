@@ -3313,6 +3313,15 @@ public extension ManagedModelSpec {
             let root = normalizedRootURL(managedInstallRootURL(), fileManager: fileManager)
             return validateRuntimeURL(root, fileManager: fileManager).isEmpty ? root : nil
         case .singleFile(let relativePath):
+            if let modelID,
+               let resolved = ModelResolver(fileManager: fileManager).resolveIfPresent(modelID),
+               let externalFile = Self.findFirstGGUFFile(
+                   in: resolved.rootURL,
+                   fileManager: fileManager
+               ),
+               validateRuntimeURL(externalFile, fileManager: fileManager).isEmpty {
+                return externalFile
+            }
             let aliasURL = MereRunModelPaths.resolveModelFile(relativePath: relativePath) { candidate in
                 self.validateRuntimeURL(candidate, fileManager: fileManager).isEmpty
             }

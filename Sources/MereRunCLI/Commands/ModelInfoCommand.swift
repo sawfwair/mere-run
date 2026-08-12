@@ -23,6 +23,7 @@ struct ModelInfo: ParsableCommand {
         let resolved: ModelResolver.Resolution?
         let rootURL: URL
         let expectedModelID: String?
+        let resolver = ModelResolver()
 
         let asPath = URL(fileURLWithPath: target).standardizedFileURL
         if fm.fileExists(atPath: asPath.path) {
@@ -31,7 +32,7 @@ struct ModelInfo: ParsableCommand {
             expectedModelID = nil
         } else if let id = ModelResolver.ModelID(rawValue: target) {
             do {
-                let r = try ModelResolver().resolve(id)
+                let r = try resolver.resolve(id)
                 resolved = r
                 rootURL = r.rootURL
                 expectedModelID = id.rawValue
@@ -39,13 +40,25 @@ struct ModelInfo: ParsableCommand {
                 if id == .gemma4 {
                     throw ValidationError("Model \(id.rawValue) is not installed in the local model store. Gemma4 resolves through the native Hugging Face snapshot path on first use, or you can point info at a local model path.")
                 }
-                throw ValidationError("Model \(id.rawValue) not found. Pull it with `\(CLICommandDisplay.modelPullCommand(for: id.rawValue))` or point info at a local model path.")
+                throw ValidationError("Model \(id.rawValue) not found. Pull it with `\(CLICommandDisplay.modelPullCommand(for: id.rawValue))`, register its catalog location, or point info at a local model path.")
             }
         } else {
             throw ValidationError("Not a path and not a known model id: \(target)")
         }
 
-        let report = MereRunModelValidator.validate(modelRoot: rootURL, expectedModelID: expectedModelID)
+        let report: MereRunModelValidationReport
+        if let resolved, resolved.source == .registeredBinding {
+            let termsAcknowledged = resolver.locationCandidates(for: resolved.modelID)
+                .first { $0.kind == .registeredBinding && $0.rootURL == resolved.rootURL }?
+                .usageTermsAcknowledged ?? false
+            report = MereRunModelValidator.validateRegisteredBinding(
+                modelRoot: rootURL,
+                expectedModelID: resolved.modelID.rawValue,
+                usageTermsAcknowledged: termsAcknowledged
+            )
+        } else {
+            report = MereRunModelValidator.validate(modelRoot: rootURL, expectedModelID: expectedModelID)
+        }
         let manifest = report.manifest
 
         if json {
@@ -68,6 +81,10 @@ struct ModelInfo: ParsableCommand {
         if let resolved {
             print("Model ID: \(resolved.modelID.rawValue)")
             print("Source: \(resolved.source.rawValue)")
+            print("Ownership: \(resolved.isExternallyManaged ? "external-read-only" : "primary-managed")")
+            if let catalogRootURL = resolved.catalogRootURL {
+                print("Catalog Root: \(catalogRootURL.path)")
+            }
         }
 
         let usage = FileSystemHelper.directoryUsage(at: rootURL)

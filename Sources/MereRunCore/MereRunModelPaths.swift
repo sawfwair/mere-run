@@ -36,6 +36,7 @@ public enum MereRunModelPaths {
     private static let resolvedBase = resolveApplicationSupportBase()
     private static let modelOverrideQueue = DispatchQueue(label: "MereRunModelPaths.modelsOverride")
     nonisolated(unsafe) private static var processModelsDirOverride: URL?
+    nonisolated(unsafe) private static var processOverrideIncludesRegisteredLocations = false
 
     public static var applicationSupportBase: URL {
         resolvedBase
@@ -46,9 +47,24 @@ public enum MereRunModelPaths {
         applicationSupportBase.appendingPathComponent("models", isDirectory: true)
     }
 
-    public static func setProcessModelsDirOverride(_ url: URL?) {
+    public static func setProcessModelsDirOverride(
+        _ url: URL?,
+        includeRegisteredLocations: Bool = false
+    ) {
         modelOverrideQueue.sync {
             processModelsDirOverride = url?.standardizedFileURL
+            processOverrideIncludesRegisteredLocations = url == nil ? false : includeRegisteredLocations
+        }
+    }
+
+    public static func includesRegisteredModelLocations(
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> Bool {
+        modelOverrideQueue.sync {
+            if processModelsDirOverride != nil {
+                return processOverrideIncludesRegisteredLocations
+            }
+            return environment[modelsDirEnvironmentKey]?.isEmpty != false
         }
     }
 
@@ -149,9 +165,7 @@ public enum MereRunModelPaths {
     /// Returns the primary `models/<id>` when no candidates validate.
     /// Callers that support nested layouts should return the nested URL from `validator`.
     public static func resolveModelDir(_ id: String, validator: (URL) -> Bool) -> URL {
-        let candidates = candidateModelRootsForLookup().map {
-            $0.appendingPathComponent(id, isDirectory: true)
-        }
+        let candidates = MereRunModelLocations.snapshot().candidates(for: id).map(\.rootURL)
 
         for candidate in candidates {
             if validator(candidate) {
@@ -249,7 +263,8 @@ public enum MereRunModelPaths {
     }
 
     private static func candidateModelRootsForLookup() -> [URL] {
-        let roots = [modelsDir.standardizedFileURL]
+        let snapshot = MereRunModelLocations.snapshot()
+        let roots = [snapshot.primaryRoot] + snapshot.searchRoots
 
         var seen: Set<String> = []
         var unique: [URL] = []

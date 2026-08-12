@@ -294,10 +294,7 @@ struct AgentOnboard: AsyncParsableCommand {
     private func pullRecommendedModels(_ reports: [ManagedModelSupportReport]) async throws {
         for report in reports {
             guard report.spec.hasAnyManagedDownloadSource() else { continue }
-            let isInstalled = ManagedModelResolver.isManagedInstallComplete(
-                spec: report.spec,
-                at: report.spec.managedInstallRootURL()
-            )
+            let isInstalled = report.spec.managedRuntimeURL() != nil
             if let restriction = report.spec.usageRestriction,
                !isInstalled,
                !acceptModelLicense {
@@ -314,6 +311,12 @@ struct AgentOnboard: AsyncParsableCommand {
                     CLIStderr.write("  \(term.component): \(term.license) \(term.licenseURL)\n")
                 }
                 CLIStderr.write("  You are responsible for determining whether your use complies.\n")
+            }
+            if isInstalled {
+                if !quiet {
+                    CLIStderr.write("[\(report.spec.id)] already available in the unified model catalog\n")
+                }
+                continue
             }
             if !quiet {
                 CLIStderr.write("[\(report.spec.id)] installing recommended model\n")

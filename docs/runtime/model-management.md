@@ -1,6 +1,6 @@
 # Model Management
 
-One store, canonical IDs, and honest accounting. `mere.run` checks whether this
+One writable store, a unified catalog, canonical IDs, and honest accounting. `mere.run` checks whether this
 machine can run a model before it spends your bandwidth on it, reports what a
 model actually costs on disk once shared payloads are counted once, and shows
 exactly what is safe to delete.
@@ -11,6 +11,7 @@ exactly what is safe to delete.
 | --- | --- |
 | `mere.run model capabilities` | Show which managed models this machine can run. |
 | `mere.run model list` | List all known models with install status. |
+| `mere.run model location` | Register read-only catalog roots and explicit model-directory bindings. |
 | `mere.run model pull` | Download a managed model into the local model store. |
 | `mere.run model info` | Print a model's manifest, validation status, and resolved component paths. |
 | `mere.run model remove` | Remove a model from the local model store. |
@@ -44,6 +45,47 @@ or:
 ```bash
 swift run mere.run --models-root /path/to/models model list
 ```
+
+Explicit `MERERUN_MODELS_DIR` and `--models-root` overrides intentionally use
+only that root. This keeps scripts, tests, and remote jobs reproducible. The
+persisted primary store selected by the macOS app participates in the unified
+catalog normally.
+
+## Registered catalog locations
+
+The primary store is the only writable location. Existing model collections on
+other disks can participate without copying files or building a symlink facade:
+
+```bash
+# A canonical catalog root: /Volumes/Models/<model-id>/
+mere.run model location add /Volumes/Models
+
+# An arbitrary existing directory name
+mere.run model location bind video-ltx23-full-mlx /Volumes/SALVATION/models/LTX-2.3 \
+  --accept-model-license
+
+mere.run model location list
+mere.run model location list --json
+```
+
+Resolution order is deterministic:
+
+1. the writable primary store
+2. explicit bindings, in registration order
+3. registered search roots, in registration order
+
+An unavailable removable disk is skipped, so the next valid location can win.
+Search-root models must live at `<root>/<canonical-model-id>/` and carry a
+matching `mererun_model.json`. A binding supplies the canonical identity for an
+arbitrarily named folder; mere.run validates it but does not write a manifest or
+any other file into external storage. Registrations live in:
+
+```text
+~/Library/Application Support/MereRun/model_locations.json
+```
+
+Use `model location remove <root>` or `model location unbind <id> [path]` to
+remove registrations. Both operations preserve every payload byte.
 
 ## macOS Studio
 
@@ -131,7 +173,9 @@ requirements.
 
 ### `mere.run model info`
 
-Shows the resolved local install for one canonical model ID.
+Shows the resolved install, source, ownership, and catalog root for one
+canonical model ID. Explicit bindings without an on-disk manifest are validated
+using the identity and terms acknowledgement stored in the registry.
 
 ### `mere.run model pull`
 
@@ -139,6 +183,10 @@ Downloads a managed model from its cataloged Hugging Face source. Pulls are
 checked against the managed capability catalog before download so low-memory
 machines do not fetch models they cannot run. Pass `--allow-unsupported` only
 when you intentionally accept that risk or are using external hardware.
+
+A valid model in a registered location satisfies a normal pull and prevents a
+duplicate download. `--force` always installs or replaces the primary-store
+copy; it never modifies the external payload.
 
 Access-gated models and models with material non-commercial, research-only, or
 revenue-limited terms require `--accept-model-license` for new downloads and
@@ -223,6 +271,12 @@ Removes a managed install and its unshared backing payloads, while preserving
 files referenced by another managed or legacy consumer. Confirmation and output
 show referenced versus reclaimable bytes. Pass `--keep-cache` to remove only the
 install links, or `--force --json` for structured automation.
+
+For an explicit external binding, the same command unregisters the binding and
+reports that the payload was preserved. Models found through an external search
+root cannot be deleted individually by mere.run; unregister the root with
+`model location remove`. `model storage`, `model gc`, and manifest repair own
+only the primary store and Mere's Hub cache.
 
 ### `mere.run model repair-manifests`
 

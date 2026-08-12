@@ -69,10 +69,7 @@ struct ModelPull: AsyncParsableCommand {
                     continue
                 }
                 let requiresUsageTermsAcknowledgement = spec.usageRestriction != nil
-                    && (force || !ManagedModelResolver.isManagedInstallComplete(
-                        spec: spec,
-                        at: spec.managedInstallRootURL()
-                    ))
+                    && (force || !isInstalledInUnifiedCatalog(spec))
                 if requiresUsageTermsAcknowledgement, !acceptModelLicense {
                     if !quiet {
                         stderr(
@@ -130,6 +127,17 @@ struct ModelPull: AsyncParsableCommand {
 
     private func pull(_ spec: ManagedModelSpec) async throws {
         let modelDir = spec.managedInstallRootURL()
+        if !force, isInstalledInUnifiedCatalog(spec) {
+            if !quiet {
+                let resolution = spec.modelID.flatMap { ModelResolver().resolveIfPresent($0) }
+                if let resolution, resolution.isExternallyManaged {
+                    stderr("[\(spec.id)] already available at read-only external location \(resolution.rootURL.path), skipping")
+                } else {
+                    stderr("[\(spec.id)] already installed, skipping (use --force to install into the primary store)")
+                }
+            }
+            return
+        }
         if !force, ManagedModelResolver.isManagedInstallComplete(spec: spec, at: modelDir) {
             if !quiet {
                 if !spec.isManagedRuntimeReady(modelDir),
@@ -204,7 +212,7 @@ struct ModelPull: AsyncParsableCommand {
                 }
             }
             var errors = report.errors
-            if spec.managedRuntimeURL() == nil {
+            if !spec.isManagedRuntimeReady(modelDir) {
                 if spec.requiresManagedConversion,
                    ManagedModelResolver.isManagedInstallComplete(spec: spec, at: modelDir),
                    let guidance = spec.managedConversionGuidance(at: modelDir) {
@@ -224,6 +232,13 @@ struct ModelPull: AsyncParsableCommand {
         }
 
         print(modelDir.path)
+    }
+
+    private func isInstalledInUnifiedCatalog(_ spec: ManagedModelSpec) -> Bool {
+        guard let modelID = spec.modelID else {
+            return spec.managedRuntimeURL() != nil
+        }
+        return ModelResolver().resolveIfPresent(modelID) != nil
     }
 
     private func stderr(_ message: String) {
@@ -252,6 +267,7 @@ struct ModelPull: AsyncParsableCommand {
         fileManager: FileManager = .default,
         hubCacheURL: URL? = nil,
         modelStoreURL: URL? = nil,
+        modelLocations: ModelLocationSnapshot? = nil,
         diskAvailableBytes: ((URL) -> Int64?)? = nil,
         now: @escaping () -> Date = Date.init
     ) -> ModelPullPreflightEnvelope {
@@ -269,6 +285,7 @@ struct ModelPull: AsyncParsableCommand {
             fileManager: fileManager,
             hubCacheURL: hubCacheURL,
             modelStoreURL: modelStoreURL,
+            modelLocations: modelLocations,
             diskAvailableBytes: diskAvailableBytes,
             now: now
         ).envelope()
