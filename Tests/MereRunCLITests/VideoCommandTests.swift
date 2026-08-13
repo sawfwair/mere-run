@@ -1229,14 +1229,14 @@ final class VideoCommandTests: XCTestCase {
 
         let envelope = command.makePreflightEnvelope(outputURL: output)
         let summary = try XCTUnwrap(envelope.result.inputs.detailingLoRAs?.first)
-        let spec = try XCTUnwrap(
-            ManagedAdapterCatalog.spec(for: ManagedAdapterCatalog.ltx25PixelSpatialUpscalerID)
-        )
         XCTAssertEqual(summary.requested, ManagedAdapterCatalog.ltx25PixelSpatialUpscalerID)
-        XCTAssertEqual(summary.path, spec.installedFileURL().path)
+        let installedFile = try XCTUnwrap(
+            ManagedAdapterCatalog.spec(for: ManagedAdapterCatalog.ltx25PixelSpatialUpscalerID)
+        ).installedFileURL()
+        XCTAssertEqual(summary.path, installedFile.path)
         XCTAssertEqual(
             envelope.diagnostics.contains { $0.id == "detailing_lora_0_missing" },
-            !spec.isInstalled()
+            !FileManager.default.fileExists(atPath: installedFile.path)
         )
     }
 
