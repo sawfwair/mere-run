@@ -2,34 +2,220 @@ import Foundation
 import MLX
 import MLXNN
 
-final class LTXRuntimeLoRALinear: Linear {
+public struct LTXLoRAConfiguration: Sendable, Equatable {
+    public let url: URL
+    public let strength: Float
+
+    public init(url: URL, strength: Float = 1) {
+        precondition(strength.isFinite, "LoRA strength must be finite")
+        self.url = url.standardizedFileURL
+        self.strength = strength
+    }
+}
+
+public struct LTXHDRLoRAConfiguration: Sendable, Hashable {
+    public let hdrTransform: LTXHDRTransfer
+    public let referenceDownscaleFactor: Int
+
+    public init(
+        hdrTransform: LTXHDRTransfer = .logC3,
+        referenceDownscaleFactor: Int = 1
+    ) {
+        precondition(referenceDownscaleFactor > 0)
+        self.hdrTransform = hdrTransform
+        self.referenceDownscaleFactor = referenceDownscaleFactor
+    }
+}
+
+public enum LTXHDRLoRAMetadataError: LocalizedError {
+    case invalidTransform(String)
+    case invalidReferenceDownscaleFactor(String)
+
+    public var errorDescription: String? {
+        switch self {
+        case .invalidTransform(let value):
+            return "Unsupported LTX HDR LoRA transform metadata: \(value)."
+        case .invalidReferenceDownscaleFactor(let value):
+            return "Invalid LTX HDR LoRA reference_downscale_factor metadata: \(value)."
+        }
+    }
+}
+
+public struct LTXLoRAReferenceScaleConfiguration: Sendable, Hashable {
+    public let downscaleFactor: Int
+    public let temporalScaleFactor: Int
+
+    public init(downscaleFactor: Int = 1, temporalScaleFactor: Int = 1) {
+        precondition(downscaleFactor > 0 && temporalScaleFactor > 0)
+        self.downscaleFactor = downscaleFactor
+        self.temporalScaleFactor = temporalScaleFactor
+    }
+}
+
+public enum LTXLoRAReferenceScaleMetadataError: LocalizedError {
+    case invalidValue(key: String, value: String, url: URL)
+    case conflictingValues(key: String, first: Int, second: Int, url: URL)
+
+    public var errorDescription: String? {
+        switch self {
+        case .invalidValue(let key, let value, let url):
+            return "Invalid \(key) metadata \(value) in LTX LoRA \(url.path)."
+        case .conflictingValues(let key, let first, let second, let url):
+            return "Conflicting \(key) values in stacked LTX LoRAs: \(first) and \(second) in \(url.path)."
+        }
+    }
+}
+
+/// Resolves the reference geometry contract shared by stacked upstream IC-LoRAs.
+/// A value of one is neutral; multiple non-neutral values must agree.
+public func ltxLoRAReferenceScaleConfiguration(
+    _ configurations: [LTXLoRAConfiguration]
+) throws -> LTXLoRAReferenceScaleConfiguration {
+    var downscaleFactor = 1
+    var temporalScaleFactor = 1
+    for configuration in configurations {
+        let metadata = try SafetensorsStreamingLoader.fileMetadata(url: configuration.url)
+        downscaleFactor = try mergeLTXLoRAReferenceScale(
+            current: downscaleFactor,
+            raw: metadata["reference_downscale_factor"],
+            key: "reference_downscale_factor",
+            url: configuration.url
+        )
+        temporalScaleFactor = try mergeLTXLoRAReferenceScale(
+            current: temporalScaleFactor,
+            raw: metadata["reference_temporal_scale_factor"],
+            key: "reference_temporal_scale_factor",
+            url: configuration.url
+        )
+    }
+    return LTXLoRAReferenceScaleConfiguration(
+        downscaleFactor: downscaleFactor,
+        temporalScaleFactor: temporalScaleFactor
+    )
+}
+
+private func mergeLTXLoRAReferenceScale(
+    current: Int,
+    raw: String?,
+    key: String,
+    url: URL
+) throws -> Int {
+    guard let raw else { return current }
+    guard let value = Int(raw), value > 0 else {
+        throw LTXLoRAReferenceScaleMetadataError.invalidValue(
+            key: key,
+            value: raw,
+            url: url
+        )
+    }
+    guard value != 1 else { return current }
+    guard current == 1 || current == value else {
+        throw LTXLoRAReferenceScaleMetadataError.conflictingValues(
+            key: key,
+            first: current,
+            second: value,
+            url: url
+        )
+    }
+    return value
+}
+
+/// Reads the exact metadata contract emitted by the upstream HDR IC-LoRA trainer.
+/// A non-empty `hdr_transform` or legacy `use_hdr_transform` enables HDR.
+public func ltxHDRLoRAConfiguration(
+    _ configuration: LTXLoRAConfiguration
+) throws -> LTXHDRLoRAConfiguration? {
+    let metadata = try SafetensorsStreamingLoader.fileMetadata(url: configuration.url)
+    let rawTransform = metadata["hdr_transform"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    let legacyEnable = metadata["use_hdr_transform"]?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    guard !rawTransform.isEmpty || !legacyEnable.isEmpty else { return nil }
+
+    let transform: LTXHDRTransfer
+    if rawTransform.isEmpty || rawTransform.lowercased() == "true" {
+        transform = .logC3
+    } else if let parsed = LTXHDRTransfer(rawValue: rawTransform.lowercased()) {
+        transform = parsed
+    } else {
+        throw LTXHDRLoRAMetadataError.invalidTransform(rawTransform)
+    }
+
+    let downscaleFactor: Int
+    if let rawScale = metadata["reference_downscale_factor"] {
+        guard let parsed = Int(rawScale), parsed > 0 else {
+            throw LTXHDRLoRAMetadataError.invalidReferenceDownscaleFactor(rawScale)
+        }
+        downscaleFactor = parsed
+    } else {
+        downscaleFactor = 1
+    }
+    return LTXHDRLoRAConfiguration(
+        hdrTransform: transform,
+        referenceDownscaleFactor: downscaleFactor
+    )
+}
+
+public func ltxLoRAReferenceDownscaleFactor(_ configuration: LTXLoRAConfiguration) -> Int {
+    guard let raw = try? SafetensorsStreamingLoader.fileMetadata(url: configuration.url)[
+        "reference_downscale_factor"
+    ], let value = Int(raw), value > 0 else {
+        return 1
+    }
+    return value
+}
+
+public func ltxLoRAReferenceTemporalScaleFactor(_ configuration: LTXLoRAConfiguration) -> Int {
+    guard let raw = try? SafetensorsStreamingLoader.fileMetadata(url: configuration.url)[
+        "reference_temporal_scale_factor"
+    ], let value = Int(raw), value > 0 else {
+        return 1
+    }
+    return value
+}
+
+private final class LTXRuntimeLoRAContribution {
     let loraDown: MLXArray
     let loraUp: MLXArray
-    let strength: Float
+    var strength: Float
     var isActive = false
 
     init(
-        base: Linear,
         loraDown: MLXArray,
         loraUp: MLXArray,
-        strength: Float
+        strength: Float,
+        dtype: DType
     ) {
-        self.loraDown = loraDown.asType(base.weight.dtype)
-        self.loraUp = loraUp.asType(base.weight.dtype)
+        self.loraDown = loraDown.asType(dtype)
+        self.loraUp = loraUp.asType(dtype)
         self.strength = strength
+    }
+}
+
+private final class LTXRuntimeLoRALinear: Linear {
+    private var contributions: [LTXRuntimeLoRAContribution]
+
+    init(
+        base: Linear,
+        contribution: LTXRuntimeLoRAContribution
+    ) {
+        self.contributions = [contribution]
         super.init(weight: base.weight, bias: base.bias)
     }
 
-    override func callAsFunction(_ x: MLXArray) -> MLXArray {
-        let baseOutput = super.callAsFunction(x)
-        guard isActive else { return baseOutput }
+    func add(_ contribution: LTXRuntimeLoRAContribution) {
+        contributions.append(contribution)
+    }
 
-        let input = x.asType(loraDown.dtype)
-        let adapterOutput = MLX.matmul(
-            MLX.matmul(input, loraDown.T),
-            loraUp.T
-        ) * MLXArray(strength).asType(loraDown.dtype)
-        return baseOutput + adapterOutput.asType(baseOutput.dtype)
+    override func callAsFunction(_ x: MLXArray) -> MLXArray {
+        var output = super.callAsFunction(x)
+        for contribution in contributions where contribution.isActive {
+            let input = x.asType(contribution.loraDown.dtype)
+            let adapterOutput = MLX.matmul(
+                MLX.matmul(input, contribution.loraDown.T),
+                contribution.loraUp.T
+            ) * MLXArray(contribution.strength).asType(contribution.loraDown.dtype)
+            output = output + adapterOutput.asType(output.dtype)
+        }
+        return output
     }
 }
 
@@ -61,23 +247,24 @@ final class LTXRuntimeLoRAAdapter {
     }
 
     let pairCount: Int
-    private let layers: [LTXRuntimeLoRALinear]
+    private let contributions: [LTXRuntimeLoRAContribution]
 
-    private init(pairCount: Int, layers: [LTXRuntimeLoRALinear]) {
+    private init(pairCount: Int, contributions: [LTXRuntimeLoRAContribution]) {
         self.pairCount = pairCount
-        self.layers = layers
+        self.contributions = contributions
     }
 
     static func install(
         url: URL,
         into transformer: Module,
         strength: Float = 1,
-        expectedPairCount: Int? = 1_660
+        expectedPairCount: Int? = 1_660,
+        ignoreMissingTargets: Bool = false
     ) throws -> LTXRuntimeLoRAAdapter {
         let leafModules = transformer.leafModules().flattened()
         let modulesByPath = Dictionary(uniqueKeysWithValues: leafModules)
         var replacements: [String: Module] = [:]
-        var layers: [LTXRuntimeLoRALinear] = []
+        var contributions: [LTXRuntimeLoRAContribution] = []
 
         let pairCount = try SafetensorsStreamingLoader.forEachTensorPair(
             url: url,
@@ -96,6 +283,9 @@ final class LTXRuntimeLoRAAdapter {
                 throw AdapterError.duplicateTarget(modulePath)
             }
             guard let module = modulesByPath[modulePath] else {
+                if ignoreMissingTargets {
+                    return
+                }
                 throw AdapterError.missingTargetModule(modulePath)
             }
             guard let linear = module as? Linear else {
@@ -108,18 +298,25 @@ final class LTXRuntimeLoRAAdapter {
                 b: b,
                 strength: strength
             )
-            let layer = LTXRuntimeLoRALinear(
-                base: linear,
+            let contribution = LTXRuntimeLoRAContribution(
                 loraDown: a,
                 loraUp: b,
-                strength: strength
+                strength: strength,
+                dtype: linear.weight.dtype
             )
-            MLX.eval(layer.loraDown, layer.loraUp)
-            replacements[modulePath] = layer
-            layers.append(layer)
+            MLX.eval(contribution.loraDown, contribution.loraUp)
+            if let layer = linear as? LTXRuntimeLoRALinear {
+                layer.add(contribution)
+            } else {
+                replacements[modulePath] = LTXRuntimeLoRALinear(
+                    base: linear,
+                    contribution: contribution
+                )
+            }
+            contributions.append(contribution)
         }
 
-        guard pairCount > 0 else {
+        guard pairCount > 0, !contributions.isEmpty else {
             throw AdapterError.noPairs(url)
         }
         if let expectedPairCount, pairCount != expectedPairCount {
@@ -128,12 +325,19 @@ final class LTXRuntimeLoRAAdapter {
 
         applyModuleReplacements(replacements, leafModules: leafModules, to: transformer)
         Memory.clearCache()
-        return LTXRuntimeLoRAAdapter(pairCount: pairCount, layers: layers)
+        return LTXRuntimeLoRAAdapter(pairCount: contributions.count, contributions: contributions)
     }
 
     func setActive(_ isActive: Bool) {
-        for layer in layers {
-            layer.isActive = isActive
+        for contribution in contributions {
+            contribution.isActive = isActive
+        }
+    }
+
+    func setStrength(_ strength: Float) {
+        precondition(strength.isFinite, "LoRA strength must be finite")
+        for contribution in contributions {
+            contribution.strength = strength
         }
     }
 

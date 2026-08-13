@@ -208,7 +208,7 @@ struct VideoSession: AsyncParsableCommand {
                 width: width,
                 height: height,
                 numFrames: numFrames,
-                fps: fps,
+                fps: Double(fps),
                 seed: seed,
                 sourceImageURL: sourceImageURL,
                 imageStrength: imageStrength,

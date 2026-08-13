@@ -62,6 +62,23 @@ final class LTXVideoDecodeTilingTests: MereRunCoreTestCase {
         XCTAssertNil(tiling)
     }
 
+    func testExplicitSpatialTileCreatesSpatialOnlyDecodePlan() throws {
+        let tiling = try XCTUnwrap(selectDecodeTilingConfig(
+            width: 1_920,
+            height: 1_080,
+            numFrames: 33,
+            fps: 24,
+            decodeBudgetGiB: 64,
+            spatialTileSizeInPixels: 768,
+            spatialTileOverlapInPixels: 128
+        ))
+
+        XCTAssertEqual(tiling.spatialTileSizeInPixels, 768)
+        XCTAssertEqual(tiling.spatialTileOverlapInPixels, 128)
+        XCTAssertNil(tiling.temporalTileSizeInFrames)
+        XCTAssertEqual(tiling.temporalTileOverlapInFrames, 0)
+    }
+
     func testRepresentative720pClipUsesTemporalOnlyTilingUnderDefaultReferenceBudget() throws {
         let tiling = try XCTUnwrap(selectDecodeTilingConfig(
             width: 1280,

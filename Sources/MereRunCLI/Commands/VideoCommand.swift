@@ -29,7 +29,8 @@ func resolveLTXVideoGenerationRoute(
     case .audioVideo:
         return .unifiedAV
     case .videoOnly:
-        if isLTX23AudioToVideoModelRoot(modelRoot, fileManager: fileManager) {
+        if isLTX23AudioToVideoModelRoot(modelRoot, fileManager: fileManager)
+            || isLTX25FullModelRoot(modelRoot, fileManager: fileManager) {
             return .fullQualityVideo
         }
         return isLTX23SplitModelRoot(modelRoot, fileManager: fileManager)
@@ -116,9 +117,11 @@ struct Video: AsyncParsableCommand {
         subcommands: [
             VideoAnimate.self,
             VideoCosmos3.self,
+            VideoDubIt.self,
             VideoExportLatents.self,
             VideoGenerate.self,
             VideoPrepareMasks.self,
+            VideoRetake.self,
             VideoSession.self
         ]
     )
@@ -236,12 +239,11 @@ struct VideoGenerate: AsyncParsableCommand {
         Progress and diagnostics are printed to stderr.
 
         Quality and output are separate choices. The default is a fast draft
-        checkpoint with video-only output. Use --quality final for the full LTX
-        2.3 dev + distilled-LoRA pipeline or the official LTX 2.5 distilled
-        checkpoint, and --output-mode audio-video when synchronized generated
-        audio is part of the deliverable. Supplying --audio uses the full LTX
-        2.3 model for native two-stage A2Vid and preserves the selected source
-        segment as the soundtrack.
+        checkpoint with video-only output. Use an official LTX 2.5 catalog id
+        for distilled, full, HQ, keyframe, DFR, IC-LoRA, HDR, and generated-AV
+        workflows. --output-mode audio-video requests synchronized generated
+        audio. Supplying --audio selects native two-stage A2Vid and preserves
+        the chosen source segment as the soundtrack.
 
         --variant distilled|unified-av remains available for compatibility. Do
         not combine it with --quality or --output-mode.
@@ -281,20 +283,84 @@ struct VideoGenerate: AsyncParsableCommand {
     @Option(name: [.customLong("model-root")], help: "Local video model root. Takes precedence over --model.")
     var modelRoot: String?
 
-    @Option(name: [.long], help: "Output width (snapped to the selected model's native geometry).")
-    var width: Int = 768
+    @Option(
+        name: [.long],
+        help: "Output width. Omitted LTX 2.5 requests use the selected upstream recipe's native canvas."
+    )
+    var width: Int?
 
-    @Option(name: [.long], help: "Output height (snapped to the selected model's native geometry).")
-    var height: Int = 512
+    @Option(
+        name: [.long],
+        help: "Output height. Omitted LTX 2.5 requests use the selected upstream recipe's native canvas."
+    )
+    var height: Int?
 
-    @Option(name: [.customLong("num-frames")], help: "Frame count (adjusted to the selected model's native cadence).")
-    var numFrames: Int = 65
+    @Option(
+        name: [.customLong("num-frames")],
+        help: "Frame count. LTX 2.5 predicts duration in the official 1...20s range when omitted."
+    )
+    var numFrames: Int?
 
     @Option(name: [.long], help: "Target output duration in seconds. Overrides --num-frames using the selected model's native cadence.")
     var duration: Double?
 
-    @Option(name: [.long], help: "Frames per second.")
-    var fps: Int = 24
+    @Option(
+        name: [.customLong("auto-duration")],
+        parsing: .upToNextOption,
+        help: "LTX 2.5 DurationHead range as MIN_SECONDS MAX_SECONDS."
+    )
+    var autoDuration: [Double] = []
+
+    @Option(
+        name: [.customLong("video-decoder")],
+        help: "LTX 2.5 VAE decoder: diffusion for maximum fidelity or convolutional for lower memory and faster decode."
+    )
+    var videoDecoder: LTXVideoDecoderKind?
+
+    @Option(
+        name: [.customLong("hdr")],
+        help: "LTX 2.5 HDR source/output space: srgb-linear, acescg, or acescct. Writes half-float EXR frames plus a tagged BT.2020/HLG Main10 MP4."
+    )
+    var hdrColorSpace: LTXHDRColorSpace?
+
+    @Option(
+        name: [.customLong("hdr-transfer")],
+        help: "LTX HDR VAE working-space transfer: acescct for native EXR workflows or logc3 for HDR IC-LoRA."
+    )
+    var hdrTransfer: LTXHDRTransfer?
+
+    @Flag(
+        name: [.customLong("high-quality-hdr")],
+        help: "HDR IC-LoRA temporal-quality mode: generate 2*N-1 internal frames, duplicate reference frames, then retain every other output frame."
+    )
+    var highQualityHDR = false
+
+    @Option(
+        name: [.customLong("text-embeddings")],
+        help: "Upstream HDR IC-LoRA safetensors containing video_context and audio_context; skips Gemma loading."
+    )
+    var textEmbeddings: String?
+
+    @Option(
+        name: [.customLong("spatial-tile")],
+        help: "HDR IC-LoRA/convolutional-VAE spatial decode tile size in pixels (upstream default: 1280)."
+    )
+    var vaeSpatialTileSize: Int?
+
+    @Option(
+        name: [.customLong("spatial-overlap")],
+        help: "Convolutional-VAE spatial decode overlap in pixels."
+    )
+    var vaeSpatialTileOverlap: Int = 256
+
+    @Flag(
+        name: [.customLong("skip-mp4")],
+        help: "Dedicated HDR IC-LoRA only: write half-float EXR frames without an HLG MP4 master."
+    )
+    var skipHDRMP4 = false
+
+    @Option(name: [.long], help: "Frames per second. LTX accepts fractional rates such as 23.976.")
+    var fps: Double = 24
 
     @Option(name: [.long], help: "Seed value.")
     var seed: Int?
@@ -362,14 +428,38 @@ struct VideoGenerate: AsyncParsableCommand {
     @Option(name: [.long], help: "Wan flow-schedule shift.")
     var shift: Float = 5
 
-    @Option(name: [.customLong("negative-prompt")], help: "Negative prompt for Wan or full LTX 2.3 generation. Defaults to the selected pipeline's official prompt.")
+    @Option(name: [.customLong("negative-prompt")], help: "Negative prompt for Wan or full LTX generation. Defaults to the selected pipeline's official prompt.")
     var negativePrompt: String?
 
-    @Option(name: [.customLong("audio")], help: "Source audio path. Automatically selects native LTX 2.3 audio-to-video.")
+    @Flag(
+        name: [.customLong("enhance-prompt")],
+        help: "Expand the prompt with the native Gemma-4 LTX-2.5 caption enhancer."
+    )
+    var enhancePrompt: Bool = false
+
+    @Option(
+        name: [.customLong("prompt-enhancer-model")],
+        help: "Managed Gemma-4 enhancer model id; defaults to text or vision Gemma-4 based on --image."
+    )
+    var promptEnhancerModel: String?
+
+    @Option(
+        name: [.customLong("prompt-enhancer-model-root")],
+        help: "Explicit local generative Gemma-4 instruct checkpoint root for prompt enhancement."
+    )
+    var promptEnhancerModelRoot: String?
+
+    @Option(name: [.customLong("audio")], help: "Source audio path. Automatically selects native LTX audio-to-video.")
     var audio: String?
 
     @Option(name: [.customLong("audio-start-time")], help: "Start time in seconds for the source audio segment.")
     var audioStartTime: Double = 0
+
+    @Option(
+        name: [.customLong("audio-max-duration")],
+        help: "Maximum source-audio duration to decode; defaults to the generated video duration."
+    )
+    var audioMaxDuration: Double?
 
     @Option(name: [.customLong("a2v-guidance-scale")], help: "LTX audio-to-video modality guidance scale, including video guidance in full unified AV.")
     var a2vGuidanceScale: Float = 3
@@ -382,6 +472,74 @@ struct VideoGenerate: AsyncParsableCommand {
 
     @Option(name: [.customLong("v2a-guidance-scale")], help: "LTX full unified-AV video-to-audio modality guidance scale.")
     var v2aGuidanceScale: Float = 3
+
+    @Option(name: [.customLong("ltx-preset")], help: "LTX full-model recipe: standard or the official 15-step Res2s hq preset.")
+    var ltxPreset: LTXGenerationPreset = .standard
+
+    @Option(
+        name: [.customLong("ltx-pipeline")],
+        help: "LTX full-model topology: two-stage, keyframe-interpolation, or dev-one-stage."
+    )
+    var ltxPipeline: LTXGenerationPipeline = .twoStage
+
+    @Option(name: [.customLong("ltx-sampler")], help: "LTX full-model sampler: euler, res2s, euler-ancestral, cfg-plus-plus, or gradient-estimating-euler.")
+    var ltxSampler: LTXSamplerMode?
+
+    @Option(
+        name: [.customLong("ltx-sigmas")],
+        parsing: .upToNextOption,
+        help: "Explicit descending LTX stage-one sigma schedule ending at zero."
+    )
+    var ltxSigmas: [Float] = []
+
+    @Option(
+        name: [.customLong("ltx-stage-2-sigmas")],
+        parsing: .upToNextOption,
+        help: "Explicit descending LTX stage-two sigma schedule ending at zero."
+    )
+    var ltxStage2Sigmas: [Float] = []
+
+    @Option(name: [.customLong("distilled-lora-strength-stage-1")], help: "Distilled LoRA strength in stage one; defaults to 0.25 for hq and 0 otherwise.")
+    var distilledLoRAStrengthStage1: Float?
+
+    @Option(name: [.customLong("distilled-lora-strength-stage-2")], help: "Distilled LoRA strength in stage two; defaults to 0.5 for hq and 1 otherwise.")
+    var distilledLoRAStrengthStage2: Float?
+
+    @Option(name: [.customLong("ltx-sampler-eta")], help: "LTX ancestral/Res2s stochasticity in [0, 1].")
+    var ltxSamplerEta: Float = 0.5
+
+    @Option(name: [.customLong("video-stg-scale")], help: "LTX video spatio-temporal guidance scale.")
+    var videoSTGScale: Float = 1
+
+    @Option(name: [.customLong("video-guidance-rescale")], help: "LTX video guidance rescale strength.")
+    var videoGuidanceRescale: Float = 0.7
+
+    @Option(name: [.customLong("video-stg-block")], help: "LTX video transformer block to perturb for STG. Repeatable.")
+    var videoSTGBlocks: [Int] = []
+
+    @Option(name: [.customLong("video-guidance-skip-step")], help: "Reuse the prior video denoised estimate for this many interleaved steps.")
+    var videoGuidanceSkipStep: Int = 0
+
+    @Option(name: [.customLong("audio-stg-scale")], help: "LTX audio spatio-temporal guidance scale.")
+    var audioSTGScale: Float = 1
+
+    @Option(name: [.customLong("audio-guidance-rescale")], help: "LTX audio guidance rescale strength.")
+    var audioGuidanceRescale: Float = 0.7
+
+    @Option(name: [.customLong("audio-stg-block")], help: "LTX audio transformer block to perturb for STG. Repeatable.")
+    var audioSTGBlocks: [Int] = []
+
+    @Option(name: [.customLong("audio-guidance-skip-step")], help: "Reuse the prior audio denoised estimate for this many interleaved steps.")
+    var audioGuidanceSkipStep: Int = 0
+
+    @Flag(name: [.customLong("no-res2s-bong-math")], help: "Disable official Res2s iterative anchor refinement.")
+    var noRes2sBongMath = false
+
+    @Option(name: [.customLong("res2s-bong-max-iterations")], help: "Maximum Res2s anchor-refinement iterations.")
+    var res2sBongMaxIterations: Int = 100
+
+    @Option(name: [.customLong("gradient-estimation-gamma")], help: "Velocity correction coefficient for gradient-estimating Euler.")
+    var gradientEstimationGamma: Float = 2
 
     @Option(name: [.customLong("a2v-steps")], help: "LTX full/A2Vid stage-one inference steps.")
     var a2vSteps: Int = 30
@@ -401,6 +559,90 @@ struct VideoGenerate: AsyncParsableCommand {
     @Option(name: [.customLong("end-image-strength")], help: "End keyframe conditioning strength in [0, 1].")
     var endImageStrength: Float = 1.0
 
+    @Option(
+        name: [.customLong("image-conditioning")],
+        help: "LTX 2.5 timed image guide as PIXEL_FRAME:PATH[:STRENGTH[:CRF]]. Repeat for arbitrary reference frames."
+    )
+    var imageConditioningArguments: [String] = []
+
+    @Option(
+        name: [.customLong("generated-keyframe")],
+        help: "LTX 2.5 pixel-frame position for a generated keyframe slot. Repeat in increasing order."
+    )
+    var generatedKeyframeIndices: [Int] = []
+
+    @Option(
+        name: [.customLong("num-generated-keyframes")],
+        help: "Number of evenly spaced interior LTX 2.5 generated keyframe slots."
+    )
+    var numGeneratedKeyframes: Int = 0
+
+    @Option(
+        name: [.customLong("lora")],
+        help: "LTX runtime LoRA as PATH[=STRENGTH]. Repeat to stack adapters."
+    )
+    var loraArguments: [String] = []
+
+    @Option(
+        name: [.customLong("video-conditioning")],
+        help: "IC-LoRA reference video as PATH[=STRENGTH]. Repeat for multiple references."
+    )
+    var videoConditioningArguments: [String] = []
+
+    @Option(
+        name: [.customLong("conditioning-attention-strength")],
+        help: "IC-LoRA target/reference attention strength in [0, 1]."
+    )
+    var conditioningAttentionStrength: Float = 1
+
+    @Option(
+        name: [.customLong("conditioning-attention-mask")],
+        help: "Grayscale mask video controlling per-region IC-LoRA attention; combines with --conditioning-attention-strength."
+    )
+    var conditioningAttentionMask: String?
+
+    @Flag(
+        name: [.customLong("skip-stage-2")],
+        help: "Skip IC-LoRA upsampling/refinement and emit the half-resolution stage-one preview."
+    )
+    var skipStage2 = false
+
+    @Option(
+        name: [.customLong("reference-downscale-factor")],
+        help: "Override IC-LoRA reference spatial downscale; adapter metadata is preferred."
+    )
+    var referenceDownscaleFactor: Int?
+
+    @Option(
+        name: [.customLong("reference-temporal-scale-factor")],
+        help: "Override IC-LoRA reference temporal subsampling; adapter metadata is preferred."
+    )
+    var referenceTemporalScaleFactor: Int?
+
+    @Flag(
+        name: [.customLong("dfr")],
+        help: "Use the official LTX 2.5 Diffusion Fidelity Rendering pipeline."
+    )
+    var dfr: Bool = false
+
+    @Option(
+        name: [.customLong("temporal-upsample-rounds")],
+        help: "LTX 2.5 DFR temporal x2 refinement rounds: 0, 1, or 2."
+    )
+    var temporalUpsampleRounds: Int = 0
+
+    @Option(
+        name: [.customLong("detailing-lora")],
+        help: "DFR stage-two IC-LoRA as PATH[=STRENGTH]. Repeat to stack detailing adapters."
+    )
+    var detailingLoRAArguments: [String] = []
+
+    @Option(
+        name: [.customLong("detailing-reference-downscale-factor")],
+        help: "Override the DFR detailing IC-LoRA reference downscale factor; metadata is preferred."
+    )
+    var detailingReferenceDownscaleFactor: Int?
+
     @Flag(name: [.customLong("preflight")], help: "Inspect the video generation request without running generation.")
     var preflight: Bool = false
 
@@ -418,6 +660,29 @@ struct VideoGenerate: AsyncParsableCommand {
 
     var variant: LTXVideoVariant {
         effectiveOutputMode.compatibilityVariant
+    }
+
+    var autoDurationRange: LTX25AutoDuration? {
+        guard autoDuration.count == 2 else { return nil }
+        return LTX25AutoDuration(
+            minimumSeconds: autoDuration[0],
+            maximumSeconds: autoDuration[1]
+        )
+    }
+
+    func effectiveAutoDurationRange(
+        modelRoot: URL,
+        hasSourceAudio: Bool
+    ) -> LTX25AutoDuration? {
+        if numFrames != nil { return nil }
+        if let autoDurationRange { return autoDurationRange }
+        guard duration == nil,
+              numFrames == nil,
+              !hasSourceAudio,
+              isLTX25ModelRoot(modelRoot) else {
+            return nil
+        }
+        return LTX25AutoDuration(minimumSeconds: 1, maximumSeconds: 20)
     }
 
     var requestedQuality: LTXVideoQuality {
@@ -441,6 +706,9 @@ struct VideoGenerate: AsyncParsableCommand {
         if let outputMode {
             return outputMode
         }
+        if dfr {
+            return .audioVideo
+        }
         return legacyVariant == .unifiedAV ? .audioVideo : .videoOnly
     }
 
@@ -463,6 +731,26 @@ struct VideoGenerate: AsyncParsableCommand {
         if !requested.isEmpty {
             return requested
         }
+        if dfr
+            || ltxPreset == .hq
+            || ltxPipeline != .twoStage
+            || ltxSampler != nil
+            || distilledLoRAStrengthStage1 != nil
+            || distilledLoRAStrengthStage2 != nil {
+            return ModelResolver.ModelID.ltxVideo25FullBF16.rawValue
+        }
+        if hdrColorSpace != nil
+            || highQualityHDR
+            || textEmbeddings != nil
+            || enhancePrompt
+            || !autoDuration.isEmpty
+            || videoDecoder != nil
+            || !imageConditioningArguments.isEmpty
+            || numGeneratedKeyframes > 0
+            || !generatedKeyframeIndices.isEmpty
+            || !videoConditioningArguments.isEmpty {
+            return ModelResolver.ModelID.ltxVideo25DistilledBF16.rawValue
+        }
         let hasAudio = audio?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
         if hasAudio || requestedQuality == .final {
             return ModelResolver.ModelID.ltxVideo23FullMLX.rawValue
@@ -470,7 +758,37 @@ struct VideoGenerate: AsyncParsableCommand {
         return ModelResolver.ModelID.ltxVideo23AVMLX.rawValue
     }
 
+    var usesLTX25RecipeGeometry: Bool {
+        if let modelRoot {
+            let root = URL(fileURLWithPath: modelRoot).standardizedFileURL
+            if isLTX25ModelRoot(root) {
+                return true
+            }
+        }
+        let requested = resolvedRequestedModel.lowercased()
+        return requested == ModelResolver.ModelID.ltxVideo25DistilledBF16.rawValue
+            || requested == ModelResolver.ModelID.ltxVideo25FullBF16.rawValue
+            || requested.contains("ltx25")
+            || requested.contains("ltx-2.5")
+    }
+
+    var resolvedOutputWidth: Int {
+        if let width { return width }
+        guard usesLTX25RecipeGeometry else { return 768 }
+        if ltxPreset == .hq { return 1_920 }
+        return ltxPipeline == .devOneStage ? 768 : 1_536
+    }
+
+    var resolvedOutputHeight: Int {
+        if let height { return height }
+        guard usesLTX25RecipeGeometry else { return 512 }
+        if ltxPreset == .hq { return 1_088 }
+        return ltxPipeline == .devOneStage ? 512 : 1_024
+    }
+
     func run() async throws {
+        let width = resolvedOutputWidth
+        let height = resolvedOutputHeight
         if json && !preflight {
             throw ValidationError("--json is only supported with --preflight for video generate.")
         }
@@ -489,12 +807,32 @@ struct VideoGenerate: AsyncParsableCommand {
         guard !trimmedPrompt.isEmpty else {
             throw ValidationError("Prompt cannot be empty.")
         }
-        guard fps > 0 else {
-            throw ValidationError("--fps must be >= 1")
+        guard fps.isFinite, fps >= 1 else {
+            throw ValidationError("--fps must be finite and >= 1")
         }
         if let duration {
             guard duration > 0 else {
                 throw ValidationError("--duration must be > 0")
+            }
+        }
+        guard autoDuration.isEmpty || autoDuration.count == 2 else {
+            throw ValidationError("--auto-duration requires MIN_SECONDS MAX_SECONDS")
+        }
+        if autoDuration.count == 2 {
+            guard autoDuration[0].isFinite,
+                  autoDuration[1].isFinite,
+                  autoDuration[0] > 0,
+                  autoDuration[1] >= autoDuration[0] else {
+                throw ValidationError("--auto-duration requires 0 < MIN_SECONDS <= MAX_SECONDS")
+            }
+            guard duration == nil else {
+                throw ValidationError("Use --duration or --auto-duration, not both.")
+            }
+            guard audio?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty != false else {
+                throw ValidationError("--auto-duration is unavailable for source-audio A2Vid.")
+            }
+            if numFrames != nil, !quiet {
+                CLIStderr.write("Warning: --auto-duration is ignored because --num-frames was supplied.\n")
             }
         }
         guard width >= 32 else {
@@ -503,7 +841,7 @@ struct VideoGenerate: AsyncParsableCommand {
         guard height >= 32 else {
             throw ValidationError("--height must be >= 32")
         }
-        guard numFrames >= 5 else {
+        if let numFrames, numFrames < 5 {
             throw ValidationError("--num-frames must be >= 5")
         }
         if let steps, steps <= 0 {
@@ -518,6 +856,10 @@ struct VideoGenerate: AsyncParsableCommand {
         guard audioStartTime.isFinite, audioStartTime >= 0 else {
             throw ValidationError("--audio-start-time must be finite and >= 0")
         }
+        if let audioMaxDuration,
+           !audioMaxDuration.isFinite || audioMaxDuration <= 0 {
+            throw ValidationError("--audio-max-duration must be finite and > 0")
+        }
         guard a2vGuidanceScale >= 0 else {
             throw ValidationError("--a2v-guidance-scale must be >= 0")
         }
@@ -530,11 +872,89 @@ struct VideoGenerate: AsyncParsableCommand {
         guard v2aGuidanceScale >= 0 else {
             throw ValidationError("--v2a-guidance-scale must be >= 0")
         }
+        guard (0...1).contains(ltxSamplerEta) else {
+            throw ValidationError("--ltx-sampler-eta must be in [0, 1]")
+        }
+        guard videoSTGScale >= 0, audioSTGScale >= 0 else {
+            throw ValidationError("--video-stg-scale and --audio-stg-scale must be >= 0")
+        }
+        guard (0...1).contains(videoGuidanceRescale),
+              (0...1).contains(audioGuidanceRescale) else {
+            throw ValidationError("LTX guidance rescale values must be in [0, 1]")
+        }
+        guard videoGuidanceSkipStep >= 0, audioGuidanceSkipStep >= 0 else {
+            throw ValidationError("LTX guidance skip-step values must be >= 0")
+        }
+        guard videoSTGBlocks.allSatisfy({ $0 >= 0 }), audioSTGBlocks.allSatisfy({ $0 >= 0 }) else {
+            throw ValidationError("LTX STG block indices must be >= 0")
+        }
+        guard res2sBongMaxIterations > 0 else {
+            throw ValidationError("--res2s-bong-max-iterations must be >= 1")
+        }
+        guard gradientEstimationGamma.isFinite else {
+            throw ValidationError("--gradient-estimation-gamma must be finite")
+        }
+        if !ltxSigmas.isEmpty {
+            _ = try validatedLTXSigmaSchedule(ltxSigmas)
+        }
         guard h3AdapterStrength > 0 else {
             throw ValidationError("--h3-adapter-strength must be > 0")
         }
         guard a2vSteps > 0 else {
             throw ValidationError("--a2v-steps must be >= 1")
+        }
+        guard (0...2).contains(temporalUpsampleRounds) else {
+            throw ValidationError("--temporal-upsample-rounds must be 0, 1, or 2")
+        }
+        if temporalUpsampleRounds > 0, !dfr {
+            throw ValidationError("--temporal-upsample-rounds requires --dfr")
+        }
+        if !detailingLoRAArguments.isEmpty, !dfr {
+            throw ValidationError("--detailing-lora requires --dfr")
+        }
+        if detailingReferenceDownscaleFactor != nil, !dfr {
+            throw ValidationError("--detailing-reference-downscale-factor requires --dfr")
+        }
+        if let detailingReferenceDownscaleFactor, detailingReferenceDownscaleFactor <= 0 {
+            throw ValidationError("--detailing-reference-downscale-factor must be positive")
+        }
+        guard (0...1).contains(conditioningAttentionStrength) else {
+            throw ValidationError("--conditioning-attention-strength must be in [0, 1]")
+        }
+        guard vaeSpatialTileOverlap >= 0 else {
+            throw ValidationError("--spatial-overlap must be nonnegative")
+        }
+        if let vaeSpatialTileSize, vaeSpatialTileSize <= vaeSpatialTileOverlap {
+            throw ValidationError("--spatial-tile must be larger than --spatial-overlap")
+        }
+        if let referenceDownscaleFactor, referenceDownscaleFactor <= 0 {
+            throw ValidationError("--reference-downscale-factor must be positive")
+        }
+        if let referenceTemporalScaleFactor, referenceTemporalScaleFactor <= 0 {
+            throw ValidationError("--reference-temporal-scale-factor must be positive")
+        }
+        if !videoConditioningArguments.isEmpty, loraArguments.isEmpty {
+            throw ValidationError("--video-conditioning requires at least one IC-LoRA via --lora")
+        }
+        if dfr, audio?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+            throw ValidationError("--dfr generates synchronized audio and cannot be combined with source --audio.")
+        }
+        if dfr,
+           numGeneratedKeyframes > 0 || !generatedKeyframeIndices.isEmpty {
+            throw ValidationError("--dfr derives its own generated-keyframe slots.")
+        }
+        if dfr, !videoConditioningArguments.isEmpty {
+            throw ValidationError("--video-conditioning is an IC-LoRA workflow and cannot be combined with --dfr.")
+        }
+        if dfr, skipStage2 {
+            throw ValidationError("--skip-stage-2 is an IC-LoRA workflow and cannot be combined with --dfr.")
+        }
+        if dfr, ltxPreset != .standard || ltxPipeline != .twoStage || ltxSampler != nil {
+            throw ValidationError("--dfr owns its distilled two-stage sampler recipe.")
+        }
+        if dfr,
+           distilledLoRAStrengthStage1 != nil || distilledLoRAStrengthStage2 != nil {
+            throw ValidationError("--dfr owns its stage-one and stage-two distilled-LoRA strengths.")
         }
         guard (0...1).contains(imageStrength) else {
             throw ValidationError("--image-strength must be between 0 and 1")
@@ -545,11 +965,32 @@ struct VideoGenerate: AsyncParsableCommand {
         if endImage != nil, image == nil {
             throw ValidationError("--end-image requires --image (the start keyframe)")
         }
+        guard numGeneratedKeyframes >= 0 else {
+            throw ValidationError("--num-generated-keyframes must be nonnegative")
+        }
+        if numGeneratedKeyframes > 0, !generatedKeyframeIndices.isEmpty {
+            throw ValidationError(
+                "Use --num-generated-keyframes or explicit --generated-keyframe positions, not both."
+            )
+        }
+        if ltxPipeline == .keyframeInterpolation {
+            if audio?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+                throw ValidationError("The keyframe-interpolation pipeline generates its own synchronized audio and cannot use source --audio.")
+            }
+            if numGeneratedKeyframes > 0 || !generatedKeyframeIndices.isEmpty {
+                throw ValidationError("The keyframe-interpolation pipeline accepts timed image guides, not generated-keyframe slots.")
+            }
+            if !videoConditioningArguments.isEmpty || skipStage2 {
+                throw ValidationError("The keyframe-interpolation pipeline cannot be combined with IC-LoRA reference-video controls.")
+            }
+        }
 
         let resolvedWidth = max(64, (width / 64) * 64)
         let resolvedHeight = max(64, (height / 64) * 64)
-        let requestedNumFrames = duration.map { nearestLTXFrameCount(duration: $0, fps: fps) } ?? numFrames
-        let resolvedNumFrames = max(9, ((requestedNumFrames - 1) / 8) * 8 + 1)
+        var requestedNumFrames = duration.map { nearestLTXFrameCount(duration: $0, fps: fps) }
+            ?? numFrames
+            ?? 65
+        var resolvedNumFrames = max(9, ((requestedNumFrames - 1) / 8) * 8 + 1)
 
         try FileManager.default.createDirectory(at: outputURL.deletingLastPathComponent(), withIntermediateDirectories: true)
 
@@ -593,7 +1034,130 @@ struct VideoGenerate: AsyncParsableCommand {
         ).path
 
         let resolvedRootURL = URL(fileURLWithPath: resolvedModelRoot).standardizedFileURL
+        if sourceAudioURL != nil, duration == nil, numFrames == nil,
+           isLTX25ModelRoot(resolvedRootURL) {
+            requestedNumFrames = 121
+            resolvedNumFrames = 121
+        }
+        let resolvedSeed = seed ?? (isLTX25ModelRoot(resolvedRootURL) ? 10 : 42)
         try validateProductSelection(modelRoot: resolvedRootURL)
+        if videoDecoder != nil, !isLTX25ModelRoot(resolvedRootURL) {
+            throw ValidationError("--video-decoder is available for official LTX 2.5 model roots.")
+        }
+        if hdrColorSpace != nil, !isLTX25ModelRoot(resolvedRootURL) {
+            throw ValidationError("--hdr requires an official LTX 2.5 model root.")
+        }
+        let resolvedVideoDecoder = videoDecoder
+            ?? (isLTX25FullModelRoot(resolvedRootURL) ? .diffusion : .convolutional)
+        if enhancePrompt, !isLTX25ModelRoot(resolvedRootURL) {
+            throw ValidationError("--enhance-prompt requires an official LTX 2.5 model root.")
+        }
+        if !autoDuration.isEmpty, !isLTX25ModelRoot(resolvedRootURL) {
+            throw ValidationError("--auto-duration requires an official LTX 2.5 model root.")
+        }
+        if dfr, !isLTX25FullModelRoot(resolvedRootURL) {
+            throw ValidationError(
+                "--dfr requires the full \(ModelResolver.ModelID.ltxVideo25FullBF16.rawValue) checkpoint."
+            )
+        }
+        let ltxAdapterBaseModelID = isLTX25FullModelRoot(resolvedRootURL)
+            ? ModelResolver.ModelID.ltxVideo25FullBF16.rawValue
+            : isLTX25ModelRoot(resolvedRootURL)
+                ? ModelResolver.ModelID.ltxVideo25DistilledBF16.rawValue
+                : resolvedRequestedModel
+        let loras = try parseLTXLoRAConfigurations(
+            loraArguments,
+            optionName: "--lora",
+            baseModelID: ltxAdapterBaseModelID
+        )
+        let detailingLoRAs = try parseLTXLoRAConfigurations(
+            detailingLoRAArguments,
+            optionName: "--detailing-lora",
+            baseModelID: ModelResolver.ModelID.ltxVideo25FullBF16.rawValue
+        )
+        let hdrLoRAConfigurations = try loras.compactMap(ltxHDRLoRAConfiguration)
+        if Set(hdrLoRAConfigurations).count > 1 {
+            throw ValidationError("Stacked HDR LoRAs must use the same HDR transform and reference downscale factor.")
+        }
+        let hdrLoRAConfiguration = hdrLoRAConfigurations.first
+        let referenceScaleConfiguration = if videoConditioningArguments.isEmpty {
+            LTXLoRAReferenceScaleConfiguration()
+        } else {
+            try ltxLoRAReferenceScaleConfiguration(loras)
+        }
+        let resolvedHDRColorSpace = hdrColorSpace
+            ?? hdrLoRAConfiguration.map { _ in LTXHDRColorSpace.srgbLinear }
+        let resolvedHDRTransfer = hdrTransfer
+            ?? hdrLoRAConfiguration?.hdrTransform
+            ?? .acesCCT
+        if resolvedHDRColorSpace != nil, !isLTX25ModelRoot(resolvedRootURL) {
+            throw ValidationError("HDR and HDR IC-LoRA workflows require an official LTX 2.5 model root.")
+        }
+        let referenceSpatialScale = referenceDownscaleFactor
+            ?? hdrLoRAConfiguration?.referenceDownscaleFactor
+            ?? referenceScaleConfiguration.downscaleFactor
+        let referenceTemporalScale = referenceTemporalScaleFactor
+            ?? referenceScaleConfiguration.temporalScaleFactor
+        let referenceVideos = try parseLTXReferenceVideoConditionings(
+            downscaleFactor: referenceSpatialScale,
+            temporalScaleFactor: referenceTemporalScale
+        )
+        if skipStage2, referenceVideos.isEmpty {
+            throw ValidationError("--skip-stage-2 requires --video-conditioning.")
+        }
+        if highQualityHDR, hdrLoRAConfiguration == nil {
+            throw ValidationError("--high-quality-hdr requires an HDR IC-LoRA with hdr_transform metadata.")
+        }
+        let hdrICLoRA: LTXHDRICLoRAOptions?
+        if hdrLoRAConfiguration != nil {
+            guard !referenceVideos.isEmpty else {
+                throw ValidationError("An HDR IC-LoRA requires at least one --video-conditioning reference.")
+            }
+            guard effectiveOutputMode == .videoOnly else {
+                throw ValidationError("HDR IC-LoRA is a video-only pipeline; use --output-mode video-only.")
+            }
+            hdrICLoRA = LTXHDRICLoRAOptions(highQuality: highQualityHDR)
+        } else {
+            hdrICLoRA = nil
+        }
+        if skipHDRMP4, hdrICLoRA == nil {
+            throw ValidationError("--skip-mp4 is available only for the dedicated HDR IC-LoRA pipeline.")
+        }
+        let resolvedLTXWidth = hdrICLoRA == nil ? resolvedWidth : width
+        let resolvedLTXHeight = hdrICLoRA == nil ? resolvedHeight : height
+        let textEmbeddingsURL = textEmbeddings.map {
+            URL(fileURLWithPath: $0).standardizedFileURL
+        }
+        if let textEmbeddingsURL {
+            guard hdrICLoRA != nil else {
+                throw ValidationError("--text-embeddings is available for the dedicated HDR IC-LoRA pipeline.")
+            }
+            guard FileManager.default.fileExists(atPath: textEmbeddingsURL.path) else {
+                throw ValidationError("LTX text embeddings file not found: \(textEmbeddingsURL.path)")
+            }
+            if enhancePrompt || !autoDuration.isEmpty {
+                throw ValidationError("--text-embeddings cannot be combined with --enhance-prompt or --auto-duration.")
+            }
+        }
+        let generationPrompt: String
+        if enhancePrompt {
+            let enhancerRoot = promptEnhancerModelRoot.map {
+                URL(fileURLWithPath: $0).standardizedFileURL
+            }
+            if !quiet {
+                let mode = sourceImageURL == nil ? "text-to-video" : "image-to-video"
+                CLIStderr.write("Enhancing prompt with native Gemma-4 (\(mode))\n")
+            }
+            generationPrompt = try await LTXPromptEnhancer.enhance(
+                prompt: trimmedPrompt,
+                modelID: promptEnhancerModel,
+                modelRoot: enhancerRoot,
+                referenceImage: sourceImageURL
+            )
+            if !quiet { CLIStderr.write("Enhanced prompt: \(generationPrompt)\n") }
+        } else {
+            generationPrompt = trimmedPrompt
+        }
         if isMiniMaxH3ModelRoot(resolvedRootURL) {
             guard sourceAudioURL == nil else {
                 throw ValidationError("MiniMax-H3 FL2VA generates its own synchronized audio and does not accept --audio.")
@@ -629,7 +1193,9 @@ struct VideoGenerate: AsyncParsableCommand {
             }
             let h3Width = max(32, (width / 32) * 32)
             let h3Height = max(32, (height / 32) * 32)
-            let requestedH3Frames = duration.map { Int(($0 * 24).rounded()) } ?? numFrames
+            let requestedH3Frames = duration.map { Int(($0 * 24).rounded()) }
+                ?? numFrames
+                ?? 65
             let h3Frames = try MiniMaxH3Geometry.alignFrameCount(max(22, requestedH3Frames))
             let slidingWindowOptions = try h3WindowFrames.map {
                 try MiniMaxH3SlidingWindowOptions(
@@ -667,7 +1233,7 @@ struct VideoGenerate: AsyncParsableCommand {
             }
             try MLXBundleSupport.ensureAvailable(quiet: quiet)
             let h3Options = try MiniMaxH3GenerationOptions(
-                prompt: trimmedPrompt,
+                prompt: generationPrompt,
                 width: h3Width,
                 height: h3Height,
                 renderWidth: h3RenderWidth,
@@ -740,20 +1306,41 @@ struct VideoGenerate: AsyncParsableCommand {
         if !references.isEmpty {
             throw ValidationError("--reference is only supported by MiniMax-H3 Ref2VA model roots.")
         }
+        let ltxImageConditionings = try parseLTXImageConditionings()
+        if (!ltxImageConditionings.isEmpty
+            || numGeneratedKeyframes > 0
+            || !generatedKeyframeIndices.isEmpty),
+           !isLTX25ModelRoot(resolvedRootURL) {
+            throw ValidationError(
+                "LTX image conditioning and generated keyframes require an official LTX 2.5 model root."
+            )
+        }
         if let sourceAudioURL {
+            if ltxPreset == .hq
+                || ltxPipeline != .twoStage
+                || ltxSampler != nil
+                || !ltxSigmas.isEmpty
+                || !ltxStage2Sigmas.isEmpty
+                || distilledLoRAStrengthStage1 != nil
+                || distilledLoRAStrengthStage2 != nil {
+                throw ValidationError(
+                    "LTX pipeline, preset, sampler, sigma, and distilled-LoRA controls select generated full-model AV, not source-audio A2Vid."
+                )
+            }
             try validateNativeAudioToVideoModelRoot(resolvedRootURL)
             try MLXBundleSupport.ensureAvailable(quiet: quiet)
             try await Stream.withNewDefaultStream {
                 try await runNativeAudioToVideoGenerate(
-                    prompt: trimmedPrompt,
+                    prompt: generationPrompt,
                     negativePrompt: negativePrompt,
                     audioURL: sourceAudioURL,
                     audioStartTime: audioStartTime,
+                    audioMaxDuration: audioMaxDuration,
                     width: resolvedWidth,
                     height: resolvedHeight,
                     numFrames: resolvedNumFrames,
                     fps: fps,
-                    seed: seed ?? 42,
+                    seed: resolvedSeed,
                     inferenceSteps: a2vSteps,
                     a2vGuidanceScale: a2vGuidanceScale,
                     videoCFGGuidanceScale: videoCFGGuidanceScale,
@@ -761,6 +1348,12 @@ struct VideoGenerate: AsyncParsableCommand {
                     imageStrength: imageStrength,
                     endImageURL: endImageURL,
                     endImageStrength: endImageStrength,
+                    imageConditionings: ltxImageConditionings,
+                    generatedKeyframeCount: numGeneratedKeyframes,
+                    generatedKeyframeIndices: generatedKeyframeIndices,
+                    hdrColorSpace: resolvedHDRColorSpace,
+                    hdrTransfer: resolvedHDRTransfer,
+                    videoDecoder: resolvedVideoDecoder,
                     modelRoot: resolvedRootURL,
                     outputURL: outputURL
                 )
@@ -779,9 +1372,15 @@ struct VideoGenerate: AsyncParsableCommand {
             guard endImageURL == nil else {
                 throw ValidationError("Wan2.2 TI2V does not support --end-image yet.")
             }
+            guard fps.rounded() == fps else {
+                throw ValidationError("Wan2.2 TI2V requires an integer --fps value.")
+            }
+            let wanFPS = Int(fps)
             let wanWidth = max(32, (width / 32) * 32)
             let wanHeight = max(32, (height / 32) * 32)
-            let requestedWanFrames = duration.map { nearestWanFrameCount(duration: $0, fps: fps) } ?? numFrames
+            let requestedWanFrames = duration.map { nearestWanFrameCount(duration: $0, fps: fps) }
+                ?? numFrames
+                ?? 65
             let wanFrames = max(5, ((requestedWanFrames - 1) / 4) * 4 + 1)
             if !quiet {
                 if wanWidth != width || wanHeight != height {
@@ -792,12 +1391,12 @@ struct VideoGenerate: AsyncParsableCommand {
                     CLIStderr.write(
                         "Resolved Wan duration \(String(format: "%.2f", duration))s to \(wanFrames) frames at \(fps) fps (~\(String(format: "%.2f", resolvedSeconds))s; must satisfy 4n+1)\n"
                     )
-                } else if wanFrames != numFrames {
+                } else if let numFrames, wanFrames != numFrames {
                     CLIStderr.write("Adjusted Wan frame count to \(wanFrames) (must satisfy 4n+1)\n")
                 }
             }
             try await runNativeWanGenerate(
-                prompt: trimmedPrompt,
+                prompt: generationPrompt,
                 negativePrompt: negativePrompt ?? Wan2Resources.defaultNegativePrompt,
                 width: wanWidth,
                 height: wanHeight,
@@ -805,8 +1404,8 @@ struct VideoGenerate: AsyncParsableCommand {
                 steps: steps ?? 40,
                 guidanceScale: guidanceScale,
                 shift: shift,
-                fps: fps,
-                seed: seed ?? 42,
+                fps: wanFPS,
+                seed: resolvedSeed,
                 sourceImageURL: sourceImageURL,
                 modelRoot: resolvedRootURL,
                 outputURL: outputURL
@@ -815,15 +1414,17 @@ struct VideoGenerate: AsyncParsableCommand {
         }
 
         if !quiet {
-            if resolvedWidth != width || resolvedHeight != height {
-                CLIStderr.write("Adjusted size to \(resolvedWidth)x\(resolvedHeight) (must be divisible by 64)\n")
+            if resolvedLTXWidth != width || resolvedLTXHeight != height {
+                CLIStderr.write(
+                    "Adjusted size to \(resolvedLTXWidth)x\(resolvedLTXHeight) (must be divisible by 64)\n"
+                )
             }
             if let duration {
                 let resolvedSeconds = Double(resolvedNumFrames) / Double(fps)
                 CLIStderr.write(
                     "Resolved duration \(String(format: "%.2f", duration))s to \(resolvedNumFrames) frames at \(fps) fps (~\(String(format: "%.2f", resolvedSeconds))s; must satisfy 8n+1)\n"
                 )
-            } else if resolvedNumFrames != numFrames {
+            } else if let numFrames, resolvedNumFrames != numFrames {
                 CLIStderr.write("Adjusted frame count to \(resolvedNumFrames) (must satisfy 8n+1)\n")
             }
             if variant == .unifiedAV && fps != 24 {
@@ -837,6 +1438,64 @@ struct VideoGenerate: AsyncParsableCommand {
             variant: variant,
             modelRoot: resolvedRootURL
         )
+        let usesAdvancedLTXPipelineControls = ltxPreset == .hq
+            || ltxPipeline != .twoStage
+            || ltxSampler != nil
+            || !ltxSigmas.isEmpty
+            || !ltxStage2Sigmas.isEmpty
+            || distilledLoRAStrengthStage1 != nil
+            || distilledLoRAStrengthStage2 != nil
+        if usesAdvancedLTXPipelineControls,
+           !isLTX25FullModelRoot(resolvedRootURL) {
+            throw ValidationError(
+                "LTX pipeline, sampler, preset, sigma, and distilled-LoRA controls require the full LTX 2.5 dev + distilled-LoRA model root."
+            )
+        }
+        let usesHQPreset = ltxPreset == .hq
+        if usesHQPreset, ltxPipeline != .twoStage {
+            throw ValidationError("The hq preset is the official two-stage Res2s pipeline.")
+        }
+        let resolvedDistilledLoRAStrengthStage1 = distilledLoRAStrengthStage1
+            ?? (dfr ? 1 : (usesHQPreset ? 0.25 : 0))
+        let resolvedDistilledLoRAStrengthStage2 = distilledLoRAStrengthStage2
+            ?? (usesHQPreset ? 0.5 : (ltxPipeline == .devOneStage ? 0 : 1))
+        guard resolvedDistilledLoRAStrengthStage1.isFinite,
+              resolvedDistilledLoRAStrengthStage2.isFinite else {
+            throw ValidationError("Distilled LoRA strengths must be finite.")
+        }
+        if ltxPipeline == .devOneStage,
+           resolvedDistilledLoRAStrengthStage1 != 0 || resolvedDistilledLoRAStrengthStage2 != 0 {
+            throw ValidationError("The dev-one-stage pipeline runs without the distilled LoRA.")
+        }
+        let resolvedVideoSTGBlocks = Set(usesHQPreset ? [] : (videoSTGBlocks.isEmpty ? [28] : videoSTGBlocks))
+        let resolvedAudioSTGBlocks = Set(usesHQPreset ? [] : (audioSTGBlocks.isEmpty ? [28] : audioSTGBlocks))
+        let resolvedSampler = LTXSamplerConfiguration(
+            mode: ltxSampler ?? (usesHQPreset ? .res2s : .euler),
+            eta: ltxSamplerEta,
+            noiseSeedOffset: usesHQPreset ? LTXSamplerConfiguration.hq.noiseSeedOffset : 10_000,
+            substepNoiseSeedOffset: usesHQPreset
+                ? LTXSamplerConfiguration.hq.substepNoiseSeedOffset
+                : 20_000,
+            res2sBongMath: !noRes2sBongMath,
+            res2sBongMathMaxIterations: res2sBongMaxIterations,
+            gradientEstimationGamma: gradientEstimationGamma
+        )
+        let resolvedVideoGuidance = LTXMultiModalGuidance(
+            classifierFreeScale: videoCFGGuidanceScale,
+            spatioTemporalScale: usesHQPreset ? 0 : videoSTGScale,
+            rescale: usesHQPreset ? 0.45 : videoGuidanceRescale,
+            modalityScale: a2vGuidanceScale,
+            spatioTemporalBlocks: resolvedVideoSTGBlocks,
+            skipStep: videoGuidanceSkipStep
+        )
+        let resolvedAudioGuidance = LTXMultiModalGuidance(
+            classifierFreeScale: audioCFGGuidanceScale,
+            spatioTemporalScale: usesHQPreset ? 0 : audioSTGScale,
+            rescale: usesHQPreset ? 1 : audioGuidanceRescale,
+            modalityScale: v2aGuidanceScale,
+            spatioTemporalBlocks: resolvedAudioSTGBlocks,
+            skipStep: audioGuidanceSkipStep
+        )
         if (timings || timingsOutput != nil), !nativeRoute.supportsPhaseTimings {
             throw ValidationError(
                 "--timings and --timings-output require a split LTX model, --quality final, --output-mode audio-video, or --audio."
@@ -845,23 +1504,52 @@ struct VideoGenerate: AsyncParsableCommand {
         try MLXBundleSupport.ensureAvailable(quiet: quiet)
         try await Stream.withNewDefaultStream {
             try await runNativeGenerate(
-                prompt: trimmedPrompt,
-                width: resolvedWidth,
-                height: resolvedHeight,
+                prompt: generationPrompt,
+                width: resolvedLTXWidth,
+                height: resolvedLTXHeight,
                 numFrames: resolvedNumFrames,
                 fps: fps,
-                seed: seed ?? 42,
+                seed: resolvedSeed,
                 outputMode: effectiveOutputMode,
+                autoDurationRange: effectiveAutoDurationRange(
+                    modelRoot: resolvedRootURL,
+                    hasSourceAudio: false
+                ),
                 negativePrompt: negativePrompt,
-                inferenceSteps: a2vSteps,
-                videoCFGGuidanceScale: videoCFGGuidanceScale,
-                audioToVideoGuidanceScale: a2vGuidanceScale,
-                audioCFGGuidanceScale: audioCFGGuidanceScale,
-                videoToAudioGuidanceScale: v2aGuidanceScale,
+                inferenceSteps: usesHQPreset ? 15 : a2vSteps,
+                videoGuidance: resolvedVideoGuidance,
+                audioGuidance: resolvedAudioGuidance,
+                sigmas: ltxSigmas.isEmpty ? nil : ltxSigmas,
+                stage2Sigmas: ltxStage2Sigmas.isEmpty ? nil : ltxStage2Sigmas,
+                sampler: resolvedSampler,
+                pipeline: ltxPipeline,
+                distilledLoRAStrengthStage1: resolvedDistilledLoRAStrengthStage1,
+                distilledLoRAStrengthStage2: resolvedDistilledLoRAStrengthStage2,
                 sourceImageURL: sourceImageURL,
                 imageStrength: imageStrength,
                 endImageURL: endImageURL,
                 endImageStrength: endImageStrength,
+                imageConditionings: ltxImageConditionings,
+                generatedKeyframeCount: numGeneratedKeyframes,
+                generatedKeyframeIndices: generatedKeyframeIndices,
+                dfrOptions: dfr
+                    ? LTX25DFROptions(
+                        temporalUpsampleRounds: temporalUpsampleRounds,
+                        detailingLoRAs: detailingLoRAs,
+                        detailingReferenceDownscaleFactor: detailingReferenceDownscaleFactor
+                    )
+                    : nil,
+                referenceVideos: referenceVideos,
+                loras: loras,
+                skipStage2: skipStage2,
+                precomputedTextEmbeddingsURL: textEmbeddingsURL,
+                hdrColorSpace: resolvedHDRColorSpace,
+                hdrTransfer: resolvedHDRTransfer,
+                hdrICLoRA: hdrICLoRA,
+                vaeSpatialTileSize: vaeSpatialTileSize,
+                vaeSpatialTileOverlap: vaeSpatialTileOverlap,
+                skipHDRMP4: skipHDRMP4,
+                videoDecoder: resolvedVideoDecoder,
                 modelRoot: resolvedModelRoot,
                 outputURL: outputURL
             )
@@ -886,6 +1574,7 @@ struct VideoGenerate: AsyncParsableCommand {
         case .draft:
             guard !isLTX23FullModelRoot(modelRoot),
                   !isLTX23AudioToVideoModelRoot(modelRoot),
+                  !isLTX25FullModelRoot(modelRoot),
                   !isLTX25ModelRoot(modelRoot) else {
                 throw ValidationError(
                     "--quality draft requires \(ModelResolver.ModelID.ltxVideo23AVMLX.rawValue), not a final-quality checkpoint."
@@ -927,6 +1616,140 @@ struct VideoGenerate: AsyncParsableCommand {
                 throw ValidationError("Reference file not found: \(url.path)")
             }
             return MiniMaxH3ReferenceInput(kind: kind, url: url)
+        }
+    }
+
+    private func parseLTXImageConditionings() throws -> [LTXVideoConditioningInput] {
+        try imageConditioningArguments.map { raw in
+            let parts = raw.split(separator: ":", maxSplits: 3, omittingEmptySubsequences: false)
+            guard parts.count >= 2,
+                  let frame = Int(parts[0]),
+                  frame >= 0 else {
+                throw ValidationError(
+                    "--image-conditioning must be PIXEL_FRAME:PATH[:STRENGTH[:CRF]] (got \(raw))."
+                )
+            }
+            let path = String(parts[1])
+            guard !path.isEmpty else {
+                throw ValidationError(
+                    "--image-conditioning must include an image path (got \(raw))."
+                )
+            }
+            let strength: Float
+            if parts.count == 3 {
+                guard let parsed = Float(parts[2]), (0...1).contains(parsed) else {
+                    throw ValidationError(
+                        "--image-conditioning strength must be in [0, 1] (got \(parts[2]))."
+                    )
+                }
+                strength = parsed
+            } else {
+                strength = 1
+            }
+            let crf: Int?
+            if parts.count == 4 {
+                guard let parsed = Int(parts[3]), (0...51).contains(parsed) else {
+                    throw ValidationError("--image-conditioning CRF must be in 0...51 (got \(parts[3])).")
+                }
+                crf = parsed
+            } else {
+                crf = nil
+            }
+            let url = URL(fileURLWithPath: path).standardizedFileURL
+            guard FileManager.default.fileExists(atPath: url.path) else {
+                throw ValidationError("Image conditioning file not found: \(url.path)")
+            }
+            return LTXVideoConditioningInput(
+                imageURL: url,
+                pixelFrameIndex: frame,
+                strength: strength,
+                crf: crf
+            )
+        }
+    }
+
+    private func parseLTXLoRAConfigurations(
+        _ arguments: [String],
+        optionName: String,
+        baseModelID: String
+    ) throws -> [LTXLoRAConfiguration] {
+        try arguments.map { raw in
+            let separator = raw.lastIndex(of: "=")
+            let path: String
+            let strength: Float
+            if let separator {
+                path = String(raw[..<separator])
+                let rawStrength = String(raw[raw.index(after: separator)...])
+                guard let parsed = Float(rawStrength), parsed.isFinite else {
+                    throw ValidationError(
+                        "\(optionName) strength must be finite (got \(rawStrength))."
+                    )
+                }
+                strength = parsed
+            } else {
+                path = raw
+                strength = 1
+            }
+            guard !path.isEmpty else {
+                throw ValidationError("\(optionName) must be PATH[=STRENGTH].")
+            }
+            let resolvedPath = try ManagedAdapterArgumentResolver.resolve(
+                path,
+                baseModelID: baseModelID
+            ) ?? path
+            let url = URL(fileURLWithPath: resolvedPath).standardizedFileURL
+            guard FileManager.default.fileExists(atPath: url.path) else {
+                throw ValidationError("LTX LoRA file not found: \(url.path)")
+            }
+            return LTXLoRAConfiguration(url: url, strength: strength)
+        }
+    }
+
+    private func parseLTXReferenceVideoConditionings(
+        downscaleFactor: Int,
+        temporalScaleFactor: Int
+    ) throws -> [LTXReferenceVideoConditioningInput] {
+        let attentionMaskURL = conditioningAttentionMask.map {
+            URL(fileURLWithPath: $0).standardizedFileURL
+        }
+        if let attentionMaskURL,
+           !FileManager.default.fileExists(atPath: attentionMaskURL.path) {
+            throw ValidationError("IC-LoRA attention mask video not found: \(attentionMaskURL.path)")
+        }
+        return try videoConditioningArguments.map { raw in
+            let separator = raw.lastIndex(of: "=")
+            let path: String
+            let strength: Float
+            if let separator {
+                path = String(raw[..<separator])
+                let rawStrength = String(raw[raw.index(after: separator)...])
+                guard let parsed = Float(rawStrength), (0...1).contains(parsed) else {
+                    throw ValidationError(
+                        "--video-conditioning strength must be in [0, 1] (got \(rawStrength))."
+                    )
+                }
+                strength = parsed
+            } else {
+                path = raw
+                strength = 1
+            }
+            guard !path.isEmpty else {
+                throw ValidationError("--video-conditioning must be PATH[=STRENGTH].")
+            }
+            let url = URL(fileURLWithPath: path).standardizedFileURL
+            guard FileManager.default.fileExists(atPath: url.path) else {
+                throw ValidationError("IC-LoRA reference video not found: \(url.path)")
+            }
+            return LTXReferenceVideoConditioningInput(
+                videoURL: url,
+                strength: strength,
+                attentionStrength: conditioningAttentionStrength == 1
+                    ? nil
+                    : conditioningAttentionStrength,
+                attentionMaskVideoURL: attentionMaskURL,
+                downscaleFactor: downscaleFactor,
+                temporalScaleFactor: temporalScaleFactor
+            )
         }
     }
 
@@ -1013,10 +1836,11 @@ struct VideoGenerate: AsyncParsableCommand {
         negativePrompt: String?,
         audioURL: URL,
         audioStartTime: Double,
+        audioMaxDuration: Double?,
         width: Int,
         height: Int,
         numFrames: Int,
-        fps: Int,
+        fps: Double,
         seed: Int,
         inferenceSteps: Int,
         a2vGuidanceScale: Float,
@@ -1025,28 +1849,43 @@ struct VideoGenerate: AsyncParsableCommand {
         imageStrength: Float,
         endImageURL: URL?,
         endImageStrength: Float,
+        imageConditionings: [LTXVideoConditioningInput],
+        generatedKeyframeCount: Int,
+        generatedKeyframeIndices: [Int],
+        hdrColorSpace: LTXHDRColorSpace?,
+        hdrTransfer: LTXHDRTransfer,
+        videoDecoder: LTXVideoDecoderKind,
         modelRoot: URL,
         outputURL: URL
     ) async throws {
         let endToEndStart = videoMonotonicSeconds()
         try MLXBundleSupport.ensureAvailable(quiet: quiet)
         if !quiet {
-            CLIStderr.write("Engine: native LTX 2.3 A2Vid\n")
+            let version = isLTX25FullModelRoot(modelRoot) ? "LTX 2.5" : "LTX 2.3"
+            CLIStderr.write("Engine: native \(version) A2Vid\n")
             CLIStderr.write("Model root: \(modelRoot.path)\n")
             CLIStderr.write(
                 "Mode: \(sourceImageURL == nil ? "audio-to-video" : "audio-and-image-to-video")\n"
             )
             CLIStderr.write("Source audio: \(audioURL.path) at \(audioStartTime)s\n")
-            CLIStderr.write("Loading LTX 2.3 dev + distilled-LoRA model...\n")
+            CLIStderr.write("Loading \(version) dev + distilled-LoRA model...\n")
         }
 
         let generator = LTXUnifiedAVGenerator()
         do {
             let loadTimings: LTXLoadTimings
-            if isLTX23FullModelRoot(modelRoot) {
-                loadTimings = try await generator.loadFull(modelRoot: modelRoot)
+            if isLTX23FullModelRoot(modelRoot) || isLTX25FullModelRoot(modelRoot) {
+                loadTimings = try await generator.loadFull(
+                    modelRoot: modelRoot,
+                    videoDecoder: videoDecoder,
+                    videoDecoderDType: hdrColorSpace == nil ? nil : .float32
+                )
             } else {
-                loadTimings = try await generator.loadAudioToVideo(modelRoot: modelRoot)
+                loadTimings = try await generator.loadAudioToVideo(
+                    modelRoot: modelRoot,
+                    videoDecoder: videoDecoder,
+                    videoDecoderDType: hdrColorSpace == nil ? nil : .float32
+                )
             }
             if !quiet {
                 CLIStderr.write("Running guided stage 1 and distilled-LoRA stage 2...\n")
@@ -1057,6 +1896,7 @@ struct VideoGenerate: AsyncParsableCommand {
                     negativePrompt: negativePrompt ?? LTXAudioToVideoGenerationOptions.defaultNegativePrompt,
                     audioURL: audioURL,
                     audioStartTime: audioStartTime,
+                    audioMaxDuration: audioMaxDuration,
                     width: width,
                     height: height,
                     numFrames: numFrames,
@@ -1070,7 +1910,12 @@ struct VideoGenerate: AsyncParsableCommand {
                     sourceImageURL: sourceImageURL,
                     imageStrength: imageStrength,
                     endImageURL: endImageURL,
-                    endImageStrength: endImageStrength
+                    endImageStrength: endImageStrength,
+                    imageConditionings: imageConditionings,
+                    generatedKeyframeCount: generatedKeyframeCount,
+                    generatedKeyframeIndices: generatedKeyframeIndices,
+                    hdrColorSpace: hdrColorSpace,
+                    hdrTransfer: hdrTransfer
                 )
             )
             let unloadStart = videoMonotonicSeconds()
@@ -1082,12 +1927,22 @@ struct VideoGenerate: AsyncParsableCommand {
                 CLIStderr.write("Writing MP4 with the original source-audio segment...\n")
             }
             let writeStart = videoMonotonicSeconds()
-            try LTXVideoMP4Writer.writeMP4(
-                frames: result.frames,
-                fps: fps,
-                to: outputURL,
-                sourceAudio: result.sourceAudio
-            )
+            if let hdrOutput = result.hdrOutput, let hdrColorSpace {
+                try LTXHDRVideoWriter.write(
+                    hdrOutput,
+                    colorSpace: hdrColorSpace,
+                    fps: fps,
+                    to: outputURL,
+                    sourceAudio: result.sourceAudio
+                )
+            } else {
+                try LTXVideoMP4Writer.writeMP4(
+                    frames: result.frames,
+                    fps: fps,
+                    to: outputURL,
+                    sourceAudio: result.sourceAudio
+                )
+            }
             guard await mediaHasAudioTrack(at: outputURL) else {
                 throw ValidationError("A2Vid output has no audio track at \(outputURL.path)")
             }
@@ -1122,23 +1977,49 @@ struct VideoGenerate: AsyncParsableCommand {
         width: Int,
         height: Int,
         numFrames: Int,
-        fps: Int,
+        fps: Double,
         seed: Int,
         outputMode: LTXVideoOutputMode,
+        autoDurationRange: LTX25AutoDuration?,
         negativePrompt: String?,
         inferenceSteps: Int,
-        videoCFGGuidanceScale: Float,
-        audioToVideoGuidanceScale: Float,
-        audioCFGGuidanceScale: Float,
-        videoToAudioGuidanceScale: Float,
+        videoGuidance: LTXMultiModalGuidance,
+        audioGuidance: LTXMultiModalGuidance,
+        sigmas: [Float]?,
+        stage2Sigmas: [Float]?,
+        sampler: LTXSamplerConfiguration,
+        pipeline: LTXGenerationPipeline,
+        distilledLoRAStrengthStage1: Float,
+        distilledLoRAStrengthStage2: Float,
         sourceImageURL: URL?,
         imageStrength: Float,
         endImageURL: URL?,
         endImageStrength: Float,
+        imageConditionings: [LTXVideoConditioningInput],
+        generatedKeyframeCount: Int,
+        generatedKeyframeIndices: [Int],
+        dfrOptions: LTX25DFROptions?,
+        referenceVideos: [LTXReferenceVideoConditioningInput],
+        loras: [LTXLoRAConfiguration],
+        skipStage2: Bool,
+        precomputedTextEmbeddingsURL: URL?,
+        hdrColorSpace: LTXHDRColorSpace?,
+        hdrTransfer: LTXHDRTransfer,
+        hdrICLoRA: LTXHDRICLoRAOptions?,
+        vaeSpatialTileSize: Int?,
+        vaeSpatialTileOverlap: Int,
+        skipHDRMP4: Bool,
+        videoDecoder: LTXVideoDecoderKind,
         modelRoot: String,
         outputURL: URL
     ) async throws {
         let rootURL = URL(fileURLWithPath: modelRoot).standardizedFileURL
+        let savedArtifactURL = skipHDRMP4
+            ? outputURL.deletingLastPathComponent().appendingPathComponent(
+                "\(outputURL.deletingPathExtension().lastPathComponent)_exr",
+                isDirectory: true
+            )
+            : outputURL
         let route = resolveLTXVideoGenerationRoute(outputMode: outputMode, modelRoot: rootURL)
         if (timings || timingsOutput != nil), !route.supportsPhaseTimings {
             throw ValidationError(
@@ -1162,31 +2043,49 @@ struct VideoGenerate: AsyncParsableCommand {
             CLIStderr.write("Output mode: \(outputMode.rawValue)\n")
             CLIStderr.write("Runtime lane: \(route.rawValue)\n")
             CLIStderr.write("Model root: \(rootURL.path)\n")
+            if isLTX25ModelRoot(rootURL) {
+                CLIStderr.write("Video decoder: \(videoDecoder.rawValue)\n")
+            }
             CLIStderr.write("Mode: \(sourceImageURL == nil ? "text-to-video" : "image-to-video")\n")
         }
 
-        let unifiedOptions = LTXUnifiedAVGenerationOptions(
-            prompt: prompt,
-            negativePrompt: negativePrompt ?? LTXUnifiedAVGenerationOptions.defaultNegativePrompt,
-            width: width,
-            height: height,
-            numFrames: numFrames,
-            fps: fps,
-            seed: seed,
-            inferenceSteps: inferenceSteps,
-            videoGuidance: LTXMultiModalGuidance(
-                classifierFreeScale: videoCFGGuidanceScale,
-                modalityScale: audioToVideoGuidanceScale
-            ),
-            audioGuidance: LTXMultiModalGuidance(
-                classifierFreeScale: audioCFGGuidanceScale,
-                modalityScale: videoToAudioGuidanceScale
-            ),
-            sourceImageURL: sourceImageURL,
-            imageStrength: imageStrength,
-            endImageURL: endImageURL,
-            endImageStrength: endImageStrength
-        )
+        let makeUnifiedOptions: (Int) -> LTXUnifiedAVGenerationOptions = { resolvedFrames in
+            LTXUnifiedAVGenerationOptions(
+                prompt: prompt,
+                negativePrompt: negativePrompt ?? LTXUnifiedAVGenerationOptions.defaultNegativePrompt,
+                width: width,
+                height: height,
+                numFrames: resolvedFrames,
+                fps: fps,
+                seed: seed,
+                inferenceSteps: inferenceSteps,
+                videoGuidance: videoGuidance,
+                audioGuidance: audioGuidance,
+                sourceImageURL: sourceImageURL,
+                imageStrength: imageStrength,
+                endImageURL: endImageURL,
+                endImageStrength: endImageStrength,
+                imageConditionings: imageConditionings,
+                generatedKeyframeCount: generatedKeyframeCount,
+                generatedKeyframeIndices: generatedKeyframeIndices,
+                referenceVideos: referenceVideos,
+                loras: loras,
+                dfr: dfrOptions,
+                sigmas: sigmas,
+                stage2Sigmas: stage2Sigmas,
+                sampler: sampler,
+                pipeline: pipeline,
+                distilledLoRAStrengthStage1: distilledLoRAStrengthStage1,
+                distilledLoRAStrengthStage2: distilledLoRAStrengthStage2,
+                hdrColorSpace: hdrColorSpace,
+                hdrTransfer: hdrTransfer,
+                hdrICLoRA: hdrICLoRA,
+                vaeSpatialTileSize: vaeSpatialTileSize,
+                vaeSpatialTileOverlap: vaeSpatialTileOverlap,
+                skipStage2: skipStage2,
+                precomputedTextEmbeddingsURL: precomputedTextEmbeddingsURL
+            )
+        }
 
         switch route {
         case .legacyDistilledVideo:
@@ -1228,7 +2127,11 @@ struct VideoGenerate: AsyncParsableCommand {
                     CLIStderr.write("Decoded frames shape: \(shapeString(result.frames.shape))\n")
                     CLIStderr.write("Writing MP4...\n")
                 }
-                try LTXVideoMP4Writer.writeMP4(frames: result.frames, fps: fps, to: outputURL)
+                try LTXVideoMP4Writer.writeMP4(
+                    frames: result.frames,
+                    fps: fps,
+                    to: outputURL
+                )
             } catch {
                 await generator.unload()
                 throw error
@@ -1242,13 +2145,27 @@ struct VideoGenerate: AsyncParsableCommand {
             }
             let generator = LTXUnifiedAVGenerator()
             do {
-                let loadTimings = try await generator.loadVideoOnly(modelRoot: rootURL)
+                let loadTimings = try await generator.loadVideoOnly(
+                    modelRoot: rootURL,
+                    videoDecoder: videoDecoder,
+                    videoDecoderDType: hdrColorSpace == nil ? nil : .float32,
+                    loadTextEncoder: precomputedTextEmbeddingsURL == nil
+                )
                 if !quiet {
                     CLIStderr.write(
                         "Running standalone distilled joint denoising + video decode (audio output disabled)...\n"
                     )
                 }
-                let result = try await generator.generateVideoOnly(options: unifiedOptions)
+                let resolvedFrames = try await resolveAutoDuration(
+                    autoDurationRange,
+                    prompt: prompt,
+                    fps: fps,
+                    generator: generator,
+                    fallback: numFrames
+                )
+                let result = try await generator.generateVideoOnly(
+                    options: makeUnifiedOptions(resolvedFrames)
+                )
                 let unloadStart = videoMonotonicSeconds()
                 await generator.unload()
                 let unloadSeconds = videoMonotonicSeconds() - unloadStart
@@ -1267,7 +2184,20 @@ struct VideoGenerate: AsyncParsableCommand {
                     CLIStderr.write("Writing video-only MP4...\n")
                 }
                 let writeStart = videoMonotonicSeconds()
-                try LTXVideoMP4Writer.writeMP4(frames: result.frames, fps: fps, to: outputURL)
+                if let hdrOutput = result.hdrOutput, let hdrColorSpace {
+                    try LTXHDRVideoWriter.write(
+                        hdrOutput,
+                        colorSpace: hdrColorSpace,
+                        fps: result.playbackFPS,
+                        to: outputURL
+                    )
+                } else {
+                    try LTXVideoMP4Writer.writeMP4(
+                        frames: result.frames,
+                        fps: result.playbackFPS,
+                        to: outputURL
+                    )
+                }
                 let mp4WriteSeconds = videoMonotonicSeconds() - writeStart
                 try emitLTXVideoTimingReport(
                     LTXVideoTimingReport(
@@ -1291,17 +2221,57 @@ struct VideoGenerate: AsyncParsableCommand {
         case .fullQualityVideo:
             let endToEndStart = videoMonotonicSeconds()
             if !quiet {
-                CLIStderr.write("Loading native LTX 2.3 full-quality model for video-only output...\n")
+                let version = isLTX25FullModelRoot(rootURL) ? "LTX 2.5" : "LTX 2.3"
+                CLIStderr.write("Loading native \(version) full-quality model for video-only output...\n")
             }
             let generator = LTXUnifiedAVGenerator()
             do {
-                let loadTimings = try await generator.loadFullVideoOnly(modelRoot: rootURL)
-                if !quiet {
-                    CLIStderr.write(
-                        "Running guided dev stage 1 + distilled-LoRA stage 2 (audio output disabled)...\n"
+                let loadTimings: LTXLoadTimings
+                if hdrICLoRA != nil {
+                    loadTimings = try await generator.loadVideoOnly(
+                        modelRoot: rootURL,
+                        videoDecoder: videoDecoder,
+                        videoDecoderDType: .float32,
+                        loadTextEncoder: precomputedTextEmbeddingsURL == nil
+                    )
+                } else if dfrOptions != nil {
+                    loadTimings = try await generator.loadDFR(
+                        modelRoot: rootURL,
+                        videoDecoder: videoDecoder,
+                        videoDecoderDType: hdrColorSpace == nil ? nil : .float32
+                    )
+                } else if distilledLoRAStrengthStage1 != 0 {
+                    loadTimings = try await generator.loadFullReusable(
+                        modelRoot: rootURL,
+                        videoDecoder: videoDecoder,
+                        videoDecoderDType: hdrColorSpace == nil ? nil : .float32
+                    )
+                } else {
+                    loadTimings = try await generator.loadFullVideoOnly(
+                        modelRoot: rootURL,
+                        videoDecoder: videoDecoder,
+                        videoDecoderDType: hdrColorSpace == nil ? nil : .float32
                     )
                 }
-                let result = try await generator.generateVideoOnly(options: unifiedOptions)
+                if !quiet {
+                    CLIStderr.write(
+                        dfrOptions != nil
+                            ? "Running LTX 2.5 DFR spatial detail and temporal refinement (audio output disabled)...\n"
+                            : (pipeline == .devOneStage
+                                ? "Running target-resolution dev one-stage generation (audio output disabled)...\n"
+                                : "Running guided dev stage 1 + distilled-LoRA stage 2 (audio output disabled)...\n")
+                    )
+                }
+                let resolvedFrames = try await resolveAutoDuration(
+                    autoDurationRange,
+                    prompt: prompt,
+                    fps: fps,
+                    generator: generator,
+                    fallback: numFrames
+                )
+                let result = try await generator.generateVideoOnly(
+                    options: makeUnifiedOptions(resolvedFrames)
+                )
                 let unloadStart = videoMonotonicSeconds()
                 await generator.unload()
                 let unloadSeconds = videoMonotonicSeconds() - unloadStart
@@ -1317,14 +2287,32 @@ struct VideoGenerate: AsyncParsableCommand {
 
                 if !quiet {
                     CLIStderr.write("Decoded frames shape: \(shapeString(result.frames.shape))\n")
-                    CLIStderr.write("Writing full-quality video-only MP4...\n")
+                    CLIStderr.write(
+                        skipHDRMP4
+                            ? "Writing full-quality half-float EXR sequence...\n"
+                            : "Writing full-quality video-only MP4...\n"
+                    )
                 }
                 let writeStart = videoMonotonicSeconds()
-                try LTXVideoMP4Writer.writeMP4(frames: result.frames, fps: fps, to: outputURL)
+                if let hdrOutput = result.hdrOutput, let hdrColorSpace {
+                    try LTXHDRVideoWriter.write(
+                        hdrOutput,
+                        colorSpace: hdrColorSpace,
+                        fps: result.playbackFPS,
+                        to: outputURL,
+                        writeHLGMaster: !skipHDRMP4
+                    )
+                } else {
+                    try LTXVideoMP4Writer.writeMP4(
+                        frames: result.frames,
+                        fps: result.playbackFPS,
+                        to: outputURL
+                    )
+                }
                 let mp4WriteSeconds = videoMonotonicSeconds() - writeStart
                 try emitLTXVideoTimingReport(
                     LTXVideoTimingReport(
-                        mode: "full-video-only",
+                        mode: dfrOptions != nil ? "ltx25-dfr-video-only" : "full-video-only",
                         modelRoot: rootURL.path,
                         residentModelReused: false,
                         load: loadTimings,
@@ -1349,18 +2337,51 @@ struct VideoGenerate: AsyncParsableCommand {
             let generator = LTXUnifiedAVGenerator()
             do {
                 let loadTimings: LTXLoadTimings
-                if isLTX23FullModelRoot(rootURL) {
-                    loadTimings = try await generator.loadFull(modelRoot: rootURL)
+                if dfrOptions != nil {
+                    loadTimings = try await generator.loadDFR(
+                        modelRoot: rootURL,
+                        videoDecoder: videoDecoder,
+                        videoDecoderDType: hdrColorSpace == nil ? nil : .float32
+                    )
+                } else if distilledLoRAStrengthStage1 != 0 {
+                    loadTimings = try await generator.loadFullReusable(
+                        modelRoot: rootURL,
+                        videoDecoder: videoDecoder,
+                        videoDecoderDType: hdrColorSpace == nil ? nil : .float32
+                    )
+                } else if isLTX23FullModelRoot(rootURL) || isLTX25FullModelRoot(rootURL) {
+                    loadTimings = try await generator.loadFull(
+                        modelRoot: rootURL,
+                        videoDecoder: videoDecoder,
+                        videoDecoderDType: hdrColorSpace == nil ? nil : .float32
+                    )
                 } else {
-                    loadTimings = try await generator.load(modelRoot: rootURL)
+                    loadTimings = try await generator.load(
+                        modelRoot: rootURL,
+                        videoDecoder: videoDecoder,
+                        videoDecoderDType: hdrColorSpace == nil ? nil : .float32
+                    )
                 }
                 if !quiet {
-                    let lane = isLTX23FullModelRoot(rootURL)
-                        ? "guided dev stage 1 + distilled-LoRA stage 2"
-                        : "standalone distilled two-stage"
+                    let lane = dfrOptions != nil
+                        ? "LTX 2.5 DFR spatial detail and temporal refinement"
+                        : (isLTX23FullModelRoot(rootURL) || isLTX25FullModelRoot(rootURL)
+                            ? (pipeline == .devOneStage
+                                ? "target-resolution dev one-stage"
+                                : "guided dev stage 1 + distilled-LoRA stage 2")
+                            : "standalone distilled two-stage")
                     CLIStderr.write("Running \(lane) unified AV denoising + decode...\n")
                 }
-                let result = try await generator.generate(options: unifiedOptions)
+                let resolvedFrames = try await resolveAutoDuration(
+                    autoDurationRange,
+                    prompt: prompt,
+                    fps: fps,
+                    generator: generator,
+                    fallback: numFrames
+                )
+                let result = try await generator.generate(
+                    options: makeUnifiedOptions(resolvedFrames)
+                )
                 let unloadStart = videoMonotonicSeconds()
                 await generator.unload()
                 let unloadSeconds = videoMonotonicSeconds() - unloadStart
@@ -1371,13 +2392,24 @@ struct VideoGenerate: AsyncParsableCommand {
                     CLIStderr.write("Writing MP4 with audio...\n")
                 }
                 let writeStart = videoMonotonicSeconds()
-                try LTXVideoMP4Writer.writeMP4(
-                    frames: result.frames,
-                    fps: fps,
-                    to: outputURL,
-                    audioWaveform: result.audioWaveform,
-                    audioSampleRate: result.audioSampleRate
-                )
+                if let hdrOutput = result.hdrOutput, let hdrColorSpace {
+                    try LTXHDRVideoWriter.write(
+                        hdrOutput,
+                        colorSpace: hdrColorSpace,
+                        fps: result.playbackFPS,
+                        to: outputURL,
+                        audioWaveform: result.audioWaveform,
+                        audioSampleRate: result.audioSampleRate
+                    )
+                } else {
+                    try LTXVideoMP4Writer.writeMP4(
+                        frames: result.frames,
+                        fps: result.playbackFPS,
+                        to: outputURL,
+                        audioWaveform: result.audioWaveform,
+                        audioSampleRate: result.audioSampleRate
+                    )
+                }
 
                 guard await mediaHasAudioTrack(at: outputURL) else {
                     throw ValidationError("Unified AV output has no audio track at \(outputURL.path)")
@@ -1385,7 +2417,11 @@ struct VideoGenerate: AsyncParsableCommand {
                 let mp4WriteSeconds = videoMonotonicSeconds() - writeStart
                 try emitLTXVideoTimingReport(
                     LTXVideoTimingReport(
-                        mode: isLTX23FullModelRoot(rootURL) ? "full-unified-av" : "standalone-distilled-unified-av",
+                        mode: dfrOptions != nil
+                            ? "ltx25-dfr-unified-av"
+                            : (isLTX23FullModelRoot(rootURL) || isLTX25FullModelRoot(rootURL)
+                                ? "full-unified-av"
+                                : "standalone-distilled-unified-av"),
                         modelRoot: rootURL.path,
                         residentModelReused: false,
                         load: loadTimings,
@@ -1404,9 +2440,33 @@ struct VideoGenerate: AsyncParsableCommand {
         }
 
         if !quiet {
-            CLIStderr.write("Saved: \(outputURL.path)\n")
+            CLIStderr.write("Saved: \(savedArtifactURL.path)\n")
         }
-        print(outputURL.path)
+        print(savedArtifactURL.path)
+    }
+
+    private func resolveAutoDuration(
+        _ range: LTX25AutoDuration?,
+        prompt: String,
+        fps: Double,
+        generator: LTXUnifiedAVGenerator,
+        fallback: Int
+    ) async throws -> Int {
+        guard let range else { return fallback }
+        let frameCount = try await generator.predictFrameCount(
+            prompt: prompt,
+            frameRate: fps,
+            range: range,
+            conditioning: .audioVideo
+        )
+        if !quiet {
+            let seconds = Double(frameCount) / fps
+            CLIStderr.write(
+                "DurationHead selected \(frameCount) frames at \(fps) fps "
+                    + "(~\(String(format: "%.2f", seconds))s)\n"
+            )
+        }
+        return frameCount
     }
 
     private func mediaHasAudioTrack(at url: URL) async -> Bool {
@@ -1428,9 +2488,10 @@ struct VideoGenerate: AsyncParsableCommand {
             legacyVariant: legacyVariant,
             productSelectionValidationMessage: productSelectionValidationMessage,
             modelRoot: modelRoot,
-            width: width,
-            height: height,
-            numFrames: numFrames,
+            width: resolvedOutputWidth,
+            height: resolvedOutputHeight,
+            numFrames: numFrames ?? 65,
+            numFramesSpecified: numFrames != nil,
             steps: steps,
             h3WeightMode: h3WeightMode.rawValue,
             h3AccelerationMode: h3Acceleration.rawValue,
@@ -1442,20 +2503,66 @@ struct VideoGenerate: AsyncParsableCommand {
             h3WindowFrames: h3WindowFrames,
             h3WindowOverlap: h3WindowOverlap,
             duration: duration,
+            autoDuration: autoDuration,
+            videoDecoder: videoDecoder,
+            hdrColorSpace: hdrColorSpace,
+            hdrTransfer: hdrTransfer,
+            highQualityHDR: highQualityHDR,
+            textEmbeddings: textEmbeddings,
+            vaeSpatialTileSize: vaeSpatialTileSize,
+            vaeSpatialTileOverlap: vaeSpatialTileOverlap,
+            skipHDRMP4: skipHDRMP4,
             fps: fps,
             seed: seed,
             negativePrompt: negativePrompt,
+            enhancePrompt: enhancePrompt,
+            promptEnhancerModel: promptEnhancerModel,
+            promptEnhancerModelRoot: promptEnhancerModelRoot,
             audio: audio,
             audioStartTime: audioStartTime,
+            audioMaxDuration: audioMaxDuration,
             a2vGuidanceScale: a2vGuidanceScale,
             videoCFGGuidanceScale: videoCFGGuidanceScale,
             audioCFGGuidanceScale: audioCFGGuidanceScale,
             v2aGuidanceScale: v2aGuidanceScale,
             a2vSteps: a2vSteps,
+            ltxPreset: ltxPreset,
+            ltxPipeline: ltxPipeline,
+            ltxSampler: ltxSampler,
+            ltxSigmas: ltxSigmas,
+            ltxStage2Sigmas: ltxStage2Sigmas,
+            distilledLoRAStrengthStage1: distilledLoRAStrengthStage1,
+            distilledLoRAStrengthStage2: distilledLoRAStrengthStage2,
+            ltxSamplerEta: ltxSamplerEta,
+            videoSTGScale: videoSTGScale,
+            videoGuidanceRescale: videoGuidanceRescale,
+            videoSTGBlocks: videoSTGBlocks,
+            videoGuidanceSkipStep: videoGuidanceSkipStep,
+            audioSTGScale: audioSTGScale,
+            audioGuidanceRescale: audioGuidanceRescale,
+            audioSTGBlocks: audioSTGBlocks,
+            audioGuidanceSkipStep: audioGuidanceSkipStep,
+            noRes2sBongMath: noRes2sBongMath,
+            res2sBongMaxIterations: res2sBongMaxIterations,
+            gradientEstimationGamma: gradientEstimationGamma,
             image: image,
             imageStrength: imageStrength,
             endImage: endImage,
             endImageStrength: endImageStrength,
+            imageConditionings: imageConditioningArguments,
+            numGeneratedKeyframes: numGeneratedKeyframes,
+            generatedKeyframeIndices: generatedKeyframeIndices,
+            loras: loraArguments,
+            videoConditionings: videoConditioningArguments,
+            conditioningAttentionStrength: conditioningAttentionStrength,
+            conditioningAttentionMask: conditioningAttentionMask,
+            skipStage2: skipStage2,
+            referenceDownscaleFactor: referenceDownscaleFactor,
+            referenceTemporalScaleFactor: referenceTemporalScaleFactor,
+            dfr: dfr,
+            temporalUpsampleRounds: temporalUpsampleRounds,
+            detailingLoRAs: detailingLoRAArguments,
+            detailingReferenceDownscaleFactor: detailingReferenceDownscaleFactor,
             references: references,
             timings: timings,
             timingsOutput: timingsOutput,
@@ -1495,14 +2602,15 @@ struct VideoGenerate: AsyncParsableCommand {
             "--model",
             resolvedRequestedModel,
             "--width",
-            String(width),
+            String(resolvedOutputWidth),
             "--height",
-            String(height),
-            "--num-frames",
-            String(numFrames),
+            String(resolvedOutputHeight),
             "--fps",
             String(fps),
         ]
+        if let numFrames {
+            args += ["--num-frames", String(numFrames)]
+        }
         if let quality {
             args += ["--quality", quality.rawValue]
         }
@@ -1539,6 +2647,35 @@ struct VideoGenerate: AsyncParsableCommand {
         if let duration {
             args += ["--duration", String(duration)]
         }
+        if autoDuration.count == 2 {
+            args += [
+                "--auto-duration",
+                String(autoDuration[0]),
+                String(autoDuration[1]),
+            ]
+        }
+        if let videoDecoder {
+            args += ["--video-decoder", videoDecoder.rawValue]
+        }
+        if let hdrColorSpace {
+            args += ["--hdr", hdrColorSpace.rawValue]
+        }
+        if let hdrTransfer {
+            args += ["--hdr-transfer", hdrTransfer.rawValue]
+        }
+        if highQualityHDR {
+            args.append("--high-quality-hdr")
+        }
+        if let textEmbeddings {
+            args += ["--text-embeddings", textEmbeddings]
+        }
+        if let vaeSpatialTileSize {
+            args += ["--spatial-tile", String(vaeSpatialTileSize)]
+            args += ["--spatial-overlap", String(vaeSpatialTileOverlap)]
+        }
+        if skipHDRMP4 {
+            args.append("--skip-mp4")
+        }
         if let seed {
             args += ["--seed", String(seed)]
         }
@@ -1547,6 +2684,15 @@ struct VideoGenerate: AsyncParsableCommand {
         }
         if let negativePrompt {
             args += ["--negative-prompt", negativePrompt]
+        }
+        if enhancePrompt {
+            args.append("--enhance-prompt")
+            if let promptEnhancerModel {
+                args += ["--prompt-enhancer-model", promptEnhancerModel]
+            }
+            if let promptEnhancerModelRoot {
+                args += ["--prompt-enhancer-model-root", promptEnhancerModelRoot]
+            }
         }
         if audio != nil || requestedQuality == .final || effectiveOutputMode == .audioVideo {
             args += [
@@ -1557,8 +2703,60 @@ struct VideoGenerate: AsyncParsableCommand {
                 "--a2v-steps", String(a2vSteps),
             ]
         }
+        if ltxPreset != .standard {
+            args += ["--ltx-preset", ltxPreset.rawValue]
+        }
+        if ltxPipeline != .twoStage {
+            args += ["--ltx-pipeline", ltxPipeline.rawValue]
+        }
+        if let ltxSampler {
+            args += ["--ltx-sampler", ltxSampler.rawValue]
+        }
+        if !ltxSigmas.isEmpty {
+            args.append("--ltx-sigmas")
+            args.append(contentsOf: ltxSigmas.map { String($0) })
+        }
+        if !ltxStage2Sigmas.isEmpty {
+            args.append("--ltx-stage-2-sigmas")
+            args.append(contentsOf: ltxStage2Sigmas.map { String($0) })
+        }
+        if let distilledLoRAStrengthStage1 {
+            args += ["--distilled-lora-strength-stage-1", String(distilledLoRAStrengthStage1)]
+        }
+        if let distilledLoRAStrengthStage2 {
+            args += ["--distilled-lora-strength-stage-2", String(distilledLoRAStrengthStage2)]
+        }
+        if ltxSamplerEta != 0.5 {
+            args += ["--ltx-sampler-eta", String(ltxSamplerEta)]
+        }
+        if videoSTGScale != 1 { args += ["--video-stg-scale", String(videoSTGScale)] }
+        if videoGuidanceRescale != 0.7 {
+            args += ["--video-guidance-rescale", String(videoGuidanceRescale)]
+        }
+        for block in videoSTGBlocks { args += ["--video-stg-block", String(block)] }
+        if videoGuidanceSkipStep != 0 {
+            args += ["--video-guidance-skip-step", String(videoGuidanceSkipStep)]
+        }
+        if audioSTGScale != 1 { args += ["--audio-stg-scale", String(audioSTGScale)] }
+        if audioGuidanceRescale != 0.7 {
+            args += ["--audio-guidance-rescale", String(audioGuidanceRescale)]
+        }
+        for block in audioSTGBlocks { args += ["--audio-stg-block", String(block)] }
+        if audioGuidanceSkipStep != 0 {
+            args += ["--audio-guidance-skip-step", String(audioGuidanceSkipStep)]
+        }
+        if noRes2sBongMath { args.append("--no-res2s-bong-math") }
+        if res2sBongMaxIterations != 100 {
+            args += ["--res2s-bong-max-iterations", String(res2sBongMaxIterations)]
+        }
+        if gradientEstimationGamma != 2 {
+            args += ["--gradient-estimation-gamma", String(gradientEstimationGamma)]
+        }
         if let audio {
             args += ["--audio", audio, "--audio-start-time", String(audioStartTime)]
+            if let audioMaxDuration {
+                args += ["--audio-max-duration", String(audioMaxDuration)]
+            }
         }
         if let modelRoot {
             args += ["--model-root", modelRoot]
@@ -1568,6 +2766,55 @@ struct VideoGenerate: AsyncParsableCommand {
         }
         if let endImage {
             args += ["--end-image", endImage, "--end-image-strength", String(endImageStrength)]
+        }
+        for conditioning in imageConditioningArguments {
+            args += ["--image-conditioning", conditioning]
+        }
+        if numGeneratedKeyframes > 0 {
+            args += ["--num-generated-keyframes", String(numGeneratedKeyframes)]
+        }
+        for frame in generatedKeyframeIndices {
+            args += ["--generated-keyframe", String(frame)]
+        }
+        for lora in loraArguments {
+            args += ["--lora", lora]
+        }
+        for reference in videoConditioningArguments {
+            args += ["--video-conditioning", reference]
+        }
+        if !videoConditioningArguments.isEmpty {
+            args += [
+                "--conditioning-attention-strength",
+                String(conditioningAttentionStrength),
+            ]
+            if let referenceDownscaleFactor {
+                args += ["--reference-downscale-factor", String(referenceDownscaleFactor)]
+            }
+            if let referenceTemporalScaleFactor {
+                args += [
+                    "--reference-temporal-scale-factor",
+                    String(referenceTemporalScaleFactor),
+                ]
+            }
+            if let conditioningAttentionMask {
+                args += ["--conditioning-attention-mask", conditioningAttentionMask]
+            }
+            if skipStage2 {
+                args.append("--skip-stage-2")
+            }
+        }
+        if dfr {
+            args.append("--dfr")
+            args += ["--temporal-upsample-rounds", String(temporalUpsampleRounds)]
+            for lora in detailingLoRAArguments {
+                args += ["--detailing-lora", lora]
+            }
+            if let detailingReferenceDownscaleFactor {
+                args += [
+                    "--detailing-reference-downscale-factor",
+                    String(detailingReferenceDownscaleFactor),
+                ]
+            }
         }
         for reference in references {
             args += ["--reference", reference]
@@ -1614,6 +2861,7 @@ func validateNativeModelRoot(_ rootURL: URL) throws {
 
     if isLTX23AudioToVideoModelRoot(rootURL)
         || isLTX23SplitModelRoot(rootURL)
+        || isLTX25FullModelRoot(rootURL)
         || isLTX25ModelRoot(rootURL) {
         return
     }
@@ -1663,6 +2911,10 @@ func validateNativeAudioToVideoModelRoot(
     guard fileManager.fileExists(atPath: root.path, isDirectory: &isDirectory),
           isDirectory.boolValue else {
         throw ValidationError("A2Vid model root directory not found: \(root.path)")
+    }
+
+    if isLTX25FullModelRoot(root, fileManager: fileManager) {
+        return
     }
 
     let required = [
@@ -1780,14 +3032,14 @@ private func suggestedVideoModelRoot(for variant: LTXVideoVariant) -> String? {
     return nil
 }
 
-func nearestLTXFrameCount(duration: Double, fps: Int) -> Int {
-    let targetFrames = max(9.0, duration * Double(max(1, fps)))
+func nearestLTXFrameCount(duration: Double, fps: Double) -> Int {
+    let targetFrames = max(9.0, duration * max(1, fps))
     let chunks = max(1, Int(((targetFrames - 1.0) / 8.0).rounded()))
     return chunks * 8 + 1
 }
 
-func nearestWanFrameCount(duration: Double, fps: Int) -> Int {
-    let targetFrames = max(5.0, duration * Double(max(1, fps)))
+func nearestWanFrameCount(duration: Double, fps: Double) -> Int {
+    let targetFrames = max(5.0, duration * max(1, fps))
     let chunks = max(1, Int(((targetFrames - 1.0) / 4.0).rounded()))
     return chunks * 4 + 1
 }

@@ -409,6 +409,9 @@ public actor Gemma4Generator: ChatGenerator {
         guard requestedContextLength > 0 else {
             throw Gemma4Error.unsupportedConfiguration("maxContextTokens must be greater than zero.")
         }
+        if let noRepeatNgramSize = request.noRepeatNgramSize, noRepeatNgramSize < 1 {
+            throw Gemma4Error.unsupportedConfiguration("noRepeatNgramSize must be greater than zero.")
+        }
         let effectiveContext = min(
             maxContextLength,
             requestedContextLength,
@@ -525,6 +528,9 @@ public actor Gemma4Generator: ChatGenerator {
             // distribution; JSON-constrained decoding must stay on the serial path.
             mtpReason = "json constrained decoding"
         }
+        if request.noRepeatNgramSize != nil, mtpReason == nil {
+            mtpReason = "no-repeat n-gram decoding"
+        }
         let useMTP = mtpReason == nil
         let layerCaches = try prefixSeed?.caches ?? makeLayerCaches(
             model: model,
@@ -601,6 +607,7 @@ public actor Gemma4Generator: ChatGenerator {
             prefillTokenCount: promptTokens.count,
             mtpStatsTemplate: mtpTemplate,
             jsonConstrained: request.requiresJSON,
+            noRepeatNgramSize: request.noRepeatNgramSize,
             progressHandler: progressHandler
         )
         lastMTPStats = decodeResult.mtpStats ?? mtpTemplate
@@ -682,6 +689,28 @@ public actor Gemma4Generator: ChatGenerator {
             result.append(token)
         }
         return result
+    }
+
+    nonisolated static func noRepeatNgramBannedTokens(
+        history: [Int],
+        size: Int
+    ) -> Set<Int> {
+        precondition(size > 0, "size must be positive")
+        if size == 1 {
+            return Set(history)
+        }
+        guard history.count >= size - 1 else { return [] }
+
+        let prefix = Array(history.suffix(size - 1))
+        guard history.count >= size else { return [] }
+        var banned = Set<Int>()
+        for start in 0...(history.count - size) {
+            let candidatePrefix = Array(history[start..<(start + size - 1)])
+            if candidatePrefix == prefix {
+                banned.insert(history[start + size - 1])
+            }
+        }
+        return banned
     }
 
     private func shouldDeferQuantizationUntilDecode(_ quantization: Gemma4KVCacheQuantization) -> Bool {
@@ -780,6 +809,7 @@ public actor Gemma4Generator: ChatGenerator {
         prefillTokenCount: Int,
         mtpStatsTemplate: Gemma4MTPStats,
         jsonConstrained: Bool = false,
+        noRepeatNgramSize: Int? = nil,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> Gemma4BatchedDecodeResult {
         guard tokenBudget > 0 else {
@@ -792,7 +822,7 @@ public actor Gemma4Generator: ChatGenerator {
         }
         // JSON-constrained requests always decode serially: the batched rows share
         // one sampling path and cannot carry per-request scanner state.
-        guard continuousBatchingEnabled, !jsonConstrained else {
+        guard continuousBatchingEnabled, !jsonConstrained, noRepeatNgramSize == nil else {
             return try await decodeTokensSerially(
                 model: model,
                 tokenizerAndTemplate: tokenizerAndTemplate,
@@ -808,6 +838,7 @@ public actor Gemma4Generator: ChatGenerator {
                 prefillTokenCount: prefillTokenCount,
                 mtpStatsTemplate: mtpStatsTemplate,
                 jsonConstrained: jsonConstrained,
+                noRepeatNgramSize: noRepeatNgramSize,
                 progressHandler: progressHandler
             )
         }
@@ -853,9 +884,10 @@ public actor Gemma4Generator: ChatGenerator {
         prefillTokenCount: Int,
         mtpStatsTemplate: Gemma4MTPStats,
         jsonConstrained: Bool = false,
+        noRepeatNgramSize: Int? = nil,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> Gemma4BatchedDecodeResult {
-        if canUsePipelinedDecode(
+        if noRepeatNgramSize == nil, canUsePipelinedDecode(
             generationConfig,
             mtpModel: mtpModel,
             jsonConstrained: jsonConstrained
@@ -898,9 +930,18 @@ public actor Gemma4Generator: ChatGenerator {
                 pendingSampledToken = nil
             } else {
                 let sampleStart = CFAbsoluteTimeGetCurrent()
+                var samplingConfig = generationConfig
+                if let noRepeatNgramSize {
+                    samplingConfig.bannedTokens.append(contentsOf:
+                        Self.noRepeatNgramBannedTokens(
+                            history: repetitionHistory,
+                            size: noRepeatNgramSize
+                        )
+                    )
+                }
                 next = sampleToken(
                     logits: logits[0, -1, 0...],
-                    config: generationConfig,
+                    config: samplingConfig,
                     previousTokens: repetitionHistory
                 )
                 if traceEnabled {

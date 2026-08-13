@@ -72,6 +72,44 @@ final class ModelInfoCommandTests: XCTestCase {
         XCTAssertFalse(lines.contains { $0.contains("(missing)") })
     }
 
+    func testLTX25FullComponentLinesShowEveryPackedParityAsset() throws {
+        let root = try makeTempDirectory()
+        for relativePath in LTX25Resources.fullRequiredRelativePaths {
+            let url = root.appendingPathComponent(relativePath)
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try Data("fixture".utf8).write(to: url)
+        }
+        let manifest = MereRunModelManifest.template(
+            for: .ltxVideo25FullBF16,
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+        let lines = ModelInfo.ltx25ComponentLines(rootURL: root, full: true)
+
+        XCTAssertTrue(ModelInfo.usesLTX25Layout(manifest: manifest, expectedModelID: nil))
+        XCTAssertTrue(lines.contains { $0.contains(LTX25Resources.devTransformerRelativePath) })
+        XCTAssertTrue(lines.contains { $0.contains(LTX25Resources.diffusionVideoVAERelativePath) })
+        XCTAssertTrue(lines.contains { $0.contains(LTX25Resources.temporalUpsamplerRelativePath) })
+        XCTAssertTrue(lines.contains { $0.contains(LTX25Resources.distilledLoRARelativePath) })
+        XCTAssertTrue(lines.contains { $0.contains(LTX25Resources.durationHeadRelativePath) })
+        XCTAssertFalse(lines.contains { $0.contains("(missing)") })
+    }
+
+    func testExternalBindingUsesCatalogManifestWithoutClaimingLocalCreation() {
+        let manifest = ModelInfo.catalogManifest(
+            modelID: .ltxVideo25FullBF16,
+            usageTermsAcknowledged: true
+        )
+
+        XCTAssertEqual(manifest.id, ModelResolver.ModelID.ltxVideo25FullBF16.rawValue)
+        XCTAssertEqual(manifest.engine, .ltxVideo)
+        XCTAssertEqual(manifest.upstreamRepoId, "\(LTX25Resources.sourceRepository)@\(LTX25Resources.sourceRevision)")
+        XCTAssertEqual(manifest.usageTermsAcknowledged, true)
+        XCTAssertNil(manifest.createdAt)
+    }
+
     func testLTX23SplitLayoutDetectionUsesManifestID() {
         let manifest = MereRunModelManifest.template(
             for: .ltxVideo23AVMLX,

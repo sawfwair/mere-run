@@ -101,6 +101,8 @@ If you are new to the repo, read these in order:
   debug toggles
 - [Model Sources](./model-sources.md): canonical model IDs, Hugging Face sources,
   and local model-store behavior
+- [LTX 2.5 Upstream Parity](./ltx25-upstream-parity.md): pinned upstream
+  pipeline matrix, native controls, and hardware-specific boundaries
 - [Benchmarking](./benchmarking.md): local quality evals, generated-code
   execution, VLM datasets, API workload, and runtime microbenchmarks
 - [Portable Workflows](./workflows.md): typed graphs, immutable job bundles,

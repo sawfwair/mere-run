@@ -5,6 +5,12 @@ import MereRunCore
 extension LTXVideoVariant: ExpressibleByArgument {}
 extension LTXVideoQuality: ExpressibleByArgument {}
 extension LTXVideoOutputMode: ExpressibleByArgument {}
+extension LTXVideoDecoderKind: ExpressibleByArgument {}
+extension LTXSamplerMode: ExpressibleByArgument {}
+extension LTXGenerationPreset: ExpressibleByArgument {}
+extension LTXGenerationPipeline: ExpressibleByArgument {}
+extension LTXHDRColorSpace: ExpressibleByArgument {}
+extension LTXHDRTransfer: ExpressibleByArgument {}
 extension ACEStepTask: ExpressibleByArgument {}
 extension ACEStepChunkMaskMode: ExpressibleByArgument {}
 extension ACEStepRepaintMode: ExpressibleByArgument {}

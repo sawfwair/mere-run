@@ -888,6 +888,87 @@ public struct OpenAIImageGenerationData: Codable, Sendable {
     }
 }
 
+// MARK: - Videos Endpoint
+
+/// Local-first video generation request. The typed fields cover the common
+/// OpenAI-style surface; `options` carries additional `mere.run video generate`
+/// flags so advanced native pipelines remain reachable without a second API.
+public struct OpenAIVideoGenerationRequest: Codable, Sendable {
+    public var prompt: String
+    public var model: String?
+    public var size: String?
+    public var seconds: Double?
+    public var num_frames: Int?
+    public var fps: Int?
+    public var seed: Int?
+    public var quality: String?
+    public var output_mode: String?
+    public var options: [String]?
+
+    public init(
+        prompt: String,
+        model: String? = nil,
+        size: String? = nil,
+        seconds: Double? = nil,
+        num_frames: Int? = nil,
+        fps: Int? = nil,
+        seed: Int? = nil,
+        quality: String? = nil,
+        output_mode: String? = nil,
+        options: [String]? = nil
+    ) {
+        self.prompt = prompt
+        self.model = model
+        self.size = size
+        self.seconds = seconds
+        self.num_frames = num_frames
+        self.fps = fps
+        self.seed = seed
+        self.quality = quality
+        self.output_mode = output_mode
+        self.options = options
+    }
+}
+
+public struct OpenAIVideoGenerationArtifact: Codable, Sendable {
+    public var url: String
+    public var media_type: String
+    public var byte_count: Int64
+    public var sha256: String
+
+    public init(url: String, media_type: String, byte_count: Int64, sha256: String) {
+        self.url = url
+        self.media_type = media_type
+        self.byte_count = byte_count
+        self.sha256 = sha256
+    }
+}
+
+public struct OpenAIVideoGenerationResponse: Codable, Sendable {
+    public var created: Int
+    public var object: String
+    public var status: String
+    public var model: String
+    public var artifact: OpenAIVideoGenerationArtifact
+    public var exr_directory_url: String?
+
+    public init(
+        created: Int,
+        object: String = "video.generation",
+        status: String = "completed",
+        model: String,
+        artifact: OpenAIVideoGenerationArtifact,
+        exr_directory_url: String? = nil
+    ) {
+        self.created = created
+        self.object = object
+        self.status = status
+        self.model = model
+        self.artifact = artifact
+        self.exr_directory_url = exr_directory_url
+    }
+}
+
 // MARK: - Audio Endpoint
 
 public struct OpenAIAudioSpeechRequest: Codable, Sendable {

@@ -846,6 +846,7 @@ struct StudioOptionsPanel: View {
         }
         if videoFamily == .ltx, !draft.audioPath.isBlank {
             numberField("Audio start seconds", value: $draft.audioStartTime)
+            numberField("Audio max seconds (0 = video)", value: $draft.audioMaxDuration)
             Stepper("A2V steps \(draft.a2vSteps)", value: $draft.a2vSteps, in: 1...100)
                 .font(MereRunTheme.captionFont)
             numberField("A2V guidance", value: $draft.a2vGuidanceScale)

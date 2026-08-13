@@ -42,6 +42,16 @@ struct AdapterCommandTests {
         #expect(command.target == ManagedAdapterCatalog.miniMaxH3LightX2VFourStepID)
     }
 
+    @Test("Gated LTX-2.5 DFR adapter pull requires explicit terms acceptance")
+    func parsesLTX25DFRAdapterPull() throws {
+        let command = try AdapterPull.parse([
+            ManagedAdapterCatalog.ltx25PixelSpatialUpscalerID,
+            "--accept-license",
+        ])
+        #expect(command.target == ManagedAdapterCatalog.ltx25PixelSpatialUpscalerID)
+        #expect(command.acceptLicense)
+    }
+
     @Test("Local LoRA paths remain supported")
     func resolvesLocalPath() throws {
         let relative = "fixtures/local-adapter.safetensors"

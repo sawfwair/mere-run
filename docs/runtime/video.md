@@ -76,6 +76,10 @@ are an escape hatch, not the capability contract.
 - `video-ltx25-distilled-bf16`: official packed LTX 2.5 BF16 checkpoint for
   native final-quality synchronized video and stereo audio. Pull it with
   `--accept-model-license`; gated Hugging Face access is also required.
+- `video-ltx25-full-bf16`: complete official LTX 2.5 BF16 root with dev and
+  distilled transformers, distilled LoRA, convolutional and diffusion VAEs,
+  spatial/temporal upsamplers, and DurationHead. It powers the native full,
+  HQ, DFR, A2Vid, Retake, HDR/EXR, Dub-It, and text-to-audio workflows.
 - `video-ltx-av`: legacy merged LTX root, superseded by LTX 2.3. Only still required
   by `video export-latents`; not recommended for `video generate`.
 - `video-wan22-ti2v-5b-mlx`: native Wan2.2 TI2V image-to-video lane. `video

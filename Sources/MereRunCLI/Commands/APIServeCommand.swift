@@ -28,6 +28,7 @@ struct APIServe: AsyncParsableCommand {
           POST /v1/embeddings       - Native Qwen3 text embeddings
           POST /v1/images/generations - Native image generation
           POST /v1/images/edits       - Native image editing
+          POST /v1/videos/generations - Native video generation (loopback artifact route)
           POST /v1/vision/geometry    - Native metric image geometry
           POST /v1/vision/geometry/multiview - Native DA3 multi-view geometry and cameras
           POST /v1/vision/image-to-3d - Native TripoSR object mesh reconstruction
@@ -88,6 +89,11 @@ struct APIServe: AsyncParsableCommand {
             -F model=image-zimage-nano \\
             -F prompt='make the workstation dusk-lit' \\
             -F image=@input.png
+
+          # Generate synchronized LTX-2.5 video and audio
+          curl http://localhost:8080/v1/videos/generations \\
+            -H "Content-Type: application/json" \\
+            --data '{"prompt":"waves break under moonlight","model":"video-ltx25-distilled-bf16","size":"768x512","num_frames":65,"output_mode":"audio-video"}'
 
           # Generate speech
           curl http://localhost:8080/v1/audio/speech \\
@@ -1036,12 +1042,15 @@ enum APIServerContract {
     static let maxSpeechPromptUTF8Bytes = 32 * 1_024
     static let maxTranscriptionTokens = 4_096
     static let defaultImageModelID = ModelResolver.ModelID.zetaNano.rawValue
+    static let defaultVideoModelID = ModelResolver.ModelID.ltxVideo25DistilledBF16.rawValue
     static let defaultSpeechModelID = Qwen3TTSResources.defaultModelId
     static let defaultTranscriptionModelID = ParakeetResources.defaultModelId
     static let defaultGeometryModelID = ModelResolver.ModelID.visionGeometryMoGe2Small.rawValue
     static let defaultMultiViewGeometryModelID = ModelResolver.ModelID.visionGeometryDA3Small.rawValue
     static let defaultImageTo3DModelID = ModelResolver.ModelID.image3DTripoSR.rawValue
     static let defaultDepthVideoModelID = ModelResolver.ModelID.visionDepthVDASmall.rawValue
+    static let videoGenerationRoutePath = "/v1/videos/generations"
+    static let videoGenerationRouterPath = RouterPath(videoGenerationRoutePath)
     static let geometryRoutePath = "/v1/vision/geometry"
     static let geometryRouterPath = RouterPath(geometryRoutePath)
     static let multiViewGeometryRoutePath = "/v1/vision/geometry/multiview"
@@ -1056,6 +1065,10 @@ enum APIServerContract {
 
     static func decodeImageGenerationRequest(from data: Data) throws -> OpenAIImageGenerationRequest {
         try decodeJSONRequest(OpenAIImageGenerationRequest.self, from: data)
+    }
+
+    static func decodeVideoGenerationRequest(from data: Data) throws -> OpenAIVideoGenerationRequest {
+        try decodeJSONRequest(OpenAIVideoGenerationRequest.self, from: data)
     }
 
     static func decodeSpeechRequest(from data: Data) throws -> OpenAIAudioSpeechRequest {
@@ -1105,6 +1118,40 @@ enum APIServerContract {
             self.additionalInputImages = additionalInputImages
             self.maskImage = maskImage
             self.strength = strength
+        }
+    }
+
+    struct VideoGenerationPlan: Equatable, Sendable {
+        let modelID: String
+        let prompt: String
+        let width: Int
+        let height: Int
+        let seconds: Double?
+        let numFrames: Int?
+        let fps: Int
+        let seed: Int?
+        let quality: String?
+        let outputMode: String?
+        let options: [String]
+
+        var commandArguments: [String] {
+            var arguments = [
+                prompt,
+                "--model", modelID,
+                "--width", String(width),
+                "--height", String(height),
+                "--fps", String(fps),
+            ]
+            if let seconds {
+                arguments += ["--duration", String(seconds)]
+            } else if let numFrames {
+                arguments += ["--num-frames", String(numFrames)]
+            }
+            if let seed { arguments += ["--seed", String(seed)] }
+            if let quality { arguments += ["--quality", quality] }
+            if let outputMode { arguments += ["--output-mode", outputMode] }
+            arguments += options
+            return arguments
         }
     }
 
@@ -2215,6 +2262,83 @@ enum APIServerContract {
         )
     }
 
+    static func videoGenerationPlan(
+        from request: OpenAIVideoGenerationRequest
+    ) throws -> VideoGenerationPlan {
+        let prompt = request.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !prompt.isEmpty else {
+            throw APIRequestValidationError.invalidField("prompt", "must not be empty")
+        }
+        let modelID = normalizedOptional(request.model) ?? defaultVideoModelID
+        let size = try videoSize(from: request.size)
+        if let seconds = request.seconds,
+           !seconds.isFinite || seconds <= 0 {
+            throw APIRequestValidationError.invalidField("seconds", "must be finite and positive")
+        }
+        if let numFrames = request.num_frames, numFrames < 9 {
+            throw APIRequestValidationError.invalidField("num_frames", "must be at least 9")
+        }
+        if request.seconds != nil, request.num_frames != nil {
+            throw APIRequestValidationError.invalidField(
+                "seconds",
+                "use seconds or num_frames, not both"
+            )
+        }
+        let fps = request.fps ?? 24
+        guard fps > 0, fps <= 240 else {
+            throw APIRequestValidationError.invalidField("fps", "must be between 1 and 240")
+        }
+        let quality = normalizedOptional(request.quality)?.lowercased()
+        if let quality, !["draft", "final"].contains(quality) {
+            throw APIRequestValidationError.invalidField("quality", "expected draft or final")
+        }
+        let outputMode = normalizedOptional(request.output_mode)?.lowercased()
+        if let outputMode, !["video-only", "audio-video"].contains(outputMode) {
+            throw APIRequestValidationError.invalidField(
+                "output_mode",
+                "expected video-only or audio-video"
+            )
+        }
+        let options = try videoGenerationOptions(request.options ?? [])
+        return VideoGenerationPlan(
+            modelID: modelID,
+            prompt: prompt,
+            width: size.width,
+            height: size.height,
+            seconds: request.seconds,
+            numFrames: request.num_frames,
+            fps: fps,
+            seed: request.seed,
+            quality: quality,
+            outputMode: outputMode,
+            options: options
+        )
+    }
+
+    static func videoGenerationResponse(
+        outputURL: URL,
+        plan: VideoGenerationPlan,
+        createdAt: Date = Date()
+    ) throws -> OpenAIVideoGenerationResponse {
+        let attributes = try FileManager.default.attributesOfItem(atPath: outputURL.path)
+        let exrDirectory = outputURL.deletingLastPathComponent().appendingPathComponent(
+            outputURL.deletingPathExtension().lastPathComponent + "_exr",
+            isDirectory: true
+        )
+        let hasEXR = FileManager.default.fileExists(atPath: exrDirectory.path)
+        return OpenAIVideoGenerationResponse(
+            created: Int(createdAt.timeIntervalSince1970),
+            model: plan.modelID,
+            artifact: OpenAIVideoGenerationArtifact(
+                url: outputURL.absoluteString,
+                media_type: "video/mp4",
+                byte_count: (attributes[.size] as? NSNumber)?.int64Value ?? 0,
+                sha256: try ModelArtifactPin.fileSHA256(outputURL)
+            ),
+            exr_directory_url: hasEXR ? exrDirectory.absoluteString : nil
+        )
+    }
+
     static func speechPlan(from request: OpenAIAudioSpeechRequest) throws -> SpeechPlan {
         let input = request.input.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !input.isEmpty else {
@@ -2806,6 +2930,64 @@ enum APIServerContract {
         return (width, height)
     }
 
+    private static func videoSize(from rawValue: String?) throws -> (width: Int, height: Int) {
+        guard let rawValue = normalizedOptional(rawValue), rawValue.lowercased() != "auto" else {
+            return (768, 512)
+        }
+        let parts = rawValue.lowercased().split(separator: "x", omittingEmptySubsequences: false)
+        guard parts.count == 2,
+              let width = Int(parts[0]),
+              let height = Int(parts[1]),
+              width >= 64,
+              height >= 64,
+              width <= 4_096,
+              height <= 4_096,
+              width.isMultiple(of: 64),
+              height.isMultiple(of: 64),
+              width <= 4_194_304 / height else {
+            throw APIRequestValidationError.invalidField(
+                "size",
+                "expected WIDTHxHEIGHT with 64-pixel alignment and at most 4194304 pixels"
+            )
+        }
+        return (width, height)
+    }
+
+    private static func videoGenerationOptions(_ options: [String]) throws -> [String] {
+        guard options.count <= 256 else {
+            throw APIRequestValidationError.invalidField("options", "must contain at most 256 arguments")
+        }
+        let protectedFlags: Set<String> = [
+            "--output", "-o", "--model", "-m", "--width", "--height",
+            "--duration", "--num-frames", "--fps", "--seed", "--quality",
+            "--output-mode", "--preflight", "--json",
+        ]
+        var totalBytes = 0
+        for option in options {
+            totalBytes += option.utf8.count
+            guard option.utf8.count <= 8_192, totalBytes <= 65_536 else {
+                throw APIRequestValidationError.invalidField(
+                    "options",
+                    "arguments must total at most 65536 UTF-8 bytes"
+                )
+            }
+            let flag = String(option.split(separator: "=", maxSplits: 1)[0])
+            if flag == "--skip-mp4" {
+                throw APIRequestValidationError.invalidField(
+                    "options",
+                    "--skip-mp4 is unavailable because this API route retains and hashes an MP4 artifact"
+                )
+            }
+            if protectedFlags.contains(flag) {
+                throw APIRequestValidationError.invalidField(
+                    "options",
+                    "\(flag) is controlled by a typed request field"
+                )
+            }
+        }
+        return options
+    }
+
     private static func imageResponseFormat(_ rawValue: String?) throws -> String {
         let value = normalizedOptional(rawValue)?.lowercased() ?? "b64_json"
         guard value == "b64_json" || value == "url" else {
@@ -3263,6 +3445,7 @@ enum APIVFXArtifactRoutePolicy {
     static var routePaths: Set<String> {
         [
             APIServerContract.geometryRoutePath,
+            APIServerContract.videoGenerationRoutePath,
             APIServerContract.multiViewGeometryRoutePath,
             APIServerContract.imageTo3DRoutePath,
             APIServerContract.instantMeshRoutePath,
@@ -3278,6 +3461,8 @@ enum APIVFXArtifactRoutePolicy {
             APIServerContract.defaultInstantMeshModelID,
             ModelResolver.ModelID.visionDepthVDASmall.rawValue,
             ModelResolver.ModelID.visionDepthVDASmallMetric.rawValue,
+            ModelResolver.ModelID.ltxVideo25DistilledBF16.rawValue,
+            ModelResolver.ModelID.ltxVideo25FullBF16.rawValue,
         ]
     }
 
@@ -3461,6 +3646,7 @@ actor CodeGenServer {
         print("Embeddings endpoint: http://\(host):\(port)/v1/embeddings")
         print("Images endpoint: http://\(host):\(port)/v1/images/generations")
         print("Image edits endpoint: http://\(host):\(port)/v1/images/edits")
+        print("Video endpoint: http://\(host):\(port)\(APIServerContract.videoGenerationRoutePath)")
         print("VFX artifact endpoints are loopback-only; local file URLs expire after one hour.")
         print("Geometry endpoint: http://\(host):\(port)/v1/vision/geometry")
         print("Multi-view geometry endpoint: http://\(host):\(port)\(APIServerContract.multiViewGeometryRoutePath)")
@@ -3511,6 +3697,13 @@ actor CodeGenServer {
 
         router.post("/v1/images/edits") { [self] request, _ in
             return try await self.handleImageEdits(request)
+        }
+
+        router.post(APIServerContract.videoGenerationRouterPath) { [self] request, context in
+            return try await self.handleVideoGenerations(
+                request,
+                remoteAddress: context.remoteAddress
+            )
         }
 
         router.post(APIServerContract.geometryRouterPath) { [self] request, context in
@@ -3841,6 +4034,80 @@ actor CodeGenServer {
             } catch {
                 await admissionLease.release()
                 throw error
+            }
+        } catch {
+            return runtimeErrorResponse(error)
+        }
+    }
+
+    private func handleVideoGenerations(
+        _ request: Request,
+        remoteAddress: SocketAddress?
+    ) async throws -> Response {
+        if let denied = vfxArtifactAccessResponseIfNeeded(
+            for: request,
+            remoteAddress: remoteAddress
+        ) {
+            return denied
+        }
+        guard APIServerContract.acceptsJSONContentType(request.headers[.contentType]) else {
+            return makeErrorResponse(
+                status: .unsupportedMediaType,
+                message: "Content-Type must be application/json.",
+                type: "invalid_request_error"
+            )
+        }
+        guard await requestLimiter.allowRequest() else {
+            return makeErrorResponse(
+                status: .tooManyRequests,
+                message: "Rate limit exceeded.",
+                type: "rate_limit_error"
+            )
+        }
+
+        let body: ByteBuffer
+        do {
+            body = try await request.body.collect(upTo: 10 * 1_024 * 1_024)
+        } catch {
+            return makeErrorResponse(
+                status: .badRequest,
+                message: "Invalid request body.",
+                type: "invalid_request_error"
+            )
+        }
+
+        do {
+            let request = try APIServerContract.decodeVideoGenerationRequest(
+                from: Data(body.readableBytesView)
+            )
+            let plan = try APIServerContract.videoGenerationPlan(from: request)
+            return try await withVFXRequestAdmission(using: requestAdmission) {
+                let outputDirectory = try temporaryOutputDirectory(
+                    directoryName: "mere-run-api-video"
+                )
+                let outputURL = outputDirectory.appendingPathComponent("output.mp4")
+                do {
+                    let command = try VideoGenerate.parse(
+                        plan.commandArguments + ["--output", outputURL.path, "--quiet"]
+                    )
+                    try await command.run()
+                    guard FileManager.default.fileExists(atPath: outputURL.path) else {
+                        throw APIRequestValidationError.invalidField(
+                            "output",
+                            "video generation completed without an MP4 artifact"
+                        )
+                    }
+                    return try retainedArtifactJSONResponse(
+                        APIServerContract.videoGenerationResponse(
+                            outputURL: outputURL,
+                            plan: plan
+                        ),
+                        outputDirectory: outputDirectory
+                    )
+                } catch {
+                    try? FileManager.default.removeItem(at: outputDirectory)
+                    throw error
+                }
             }
         } catch {
             return runtimeErrorResponse(error)

@@ -15,7 +15,10 @@ Managed ids:
   and native source-audio-conditioned video.
 - `video-ltx23-a2vid-mlx`: compatibility ID for existing A2Vid installs.
 - `video-ltx25-distilled-bf16`: official packed LTX 2.5 BF16 checkpoint for
-  native final-quality synchronized video and stereo audio.
+  native distilled synchronized video and stereo audio.
+- `video-ltx25-full-bf16`: complete official LTX 2.5 BF16 bundle for dev,
+  distilled-LoRA, HQ/Res2s, DFR, DiffVAE, duration prediction, Retake,
+  A2Vid, HDR/EXR, IC-LoRA, Dub-It, and text-to-audio workflows.
 - `video-ltx-av`: legacy merged LTX root. Superseded by LTX 2.3; only still required by
   `video export-latents`. Not recommended for `video generate`.
 
@@ -27,6 +30,7 @@ You can also pass a local LTX model root with `--model-root`.
 mere.run model pull video-ltx23-av-mlx --accept-model-license
 mere.run model pull video-ltx23-full-mlx --accept-model-license
 mere.run model pull video-ltx25-distilled-bf16 --accept-model-license
+mere.run model pull video-ltx25-full-bf16 --accept-model-license
 mere.run video generate --help
 ```
 
@@ -45,11 +49,15 @@ mere.run video generate --help
   still wins. Do not combine it with the canonical selectors.
 - `--model-root`: explicit local root, takes precedence over `--model`.
 - `--width`, `--height`: output size; snapped down to multiples of 64.
-- `--num-frames`: frame count; adjusted to `8n+1`.
-- `--fps`: frames per second.
+- `--num-frames`: frame count; adjusted to `8n+1`. When omitted for LTX 2.5,
+  DurationHead chooses within the official 1...20 second range.
+- `--auto-duration MIN MAX`: override the DurationHead range.
+- `--fps`: model and container frame rate; fractional values are supported.
 - `--seed`: deterministic generation.
-- `--audio`: source audio; automatically selects native LTX 2.3 A2Vid.
+- `--audio`: source audio; selects native full-model A2Vid and preserves the
+  original selected soundtrack.
 - `--audio-start-time`: source segment offset in seconds.
+- `--audio-max-duration`: independently cap the decoded source-audio window.
 - `--a2v-guidance-scale`: source-audio modality guidance, default `3`.
 - `--video-cfg-guidance-scale`: A2Vid text CFG, default `3`.
 - `--audio-cfg-guidance-scale`: full unified-AV audio CFG, default `7`.
@@ -61,6 +69,20 @@ mere.run video generate --help
 - `--image-strength`: image conditioning strength from `0` to `1`.
 - `--end-image`: optional ending keyframe; requires `--image`.
 - `--end-image-strength`: ending keyframe conditioning strength from `0` to `1`.
+- `--image-conditioning`: repeatable arbitrary timed image as
+  `PIXEL_FRAME:PATH[:STRENGTH[:CRF]]`.
+- `--num-generated-keyframes`, `--generated-keyframe`: generated absolute
+  keyframe slots.
+- `--ltx-pipeline two-stage|keyframe-interpolation|dev-one-stage`,
+  `--ltx-preset`, `--ltx-sampler`, `--ltx-sigmas`, and
+  guidance/LoRA controls: full/dev, HQ Res2s, and custom sampler recipes.
+- `--lora`, `--video-conditioning`, mask/reference-scale controls: stacked
+  IC-LoRA reference-video conditioning.
+- `--dfr`, `--detailing-lora`, `--temporal-upsample-rounds`: Diffusion Fidelity
+  Rendering with optional spatial detailing and temporal refinement.
+- `--video-decoder`, `--hdr`, `--hdr-transfer`, `--text-embeddings`,
+  `--high-quality-hdr`, `--spatial-tile`, `--skip-mp4`: DiffVAE and HDR/EXR
+  workflows.
 - `--preflight`: inspect the request without loading MLX, loading the model, or
   writing an MP4.
 - `--json`: with `--preflight`, emit a structured report with diagnostics and
@@ -97,6 +119,29 @@ mere.run video generate --help
   distilled roots and Wan2.2 before generation starts.
 
 ## Examples
+
+Complete LTX 2.5 full-model generation:
+
+```bash
+mere.run video generate \
+  "a harbor at blue hour, gulls and rigging audible in a soft sea breeze" \
+  --model video-ltx25-full-bf16 \
+  --output-mode audio-video \
+  --output ./harbor.mp4
+```
+
+DFR with the official separately gated detailer:
+
+```bash
+mere.run adapter pull ltx25-pixel-spatial-upscaler-x2 --accept-license
+mere.run video generate \
+  "an intricate clockwork observatory turning beneath the stars" \
+  --model video-ltx25-full-bf16 \
+  --dfr \
+  --detailing-lora ltx25-pixel-spatial-upscaler-x2 \
+  --temporal-upsample-rounds 1 \
+  --output ./observatory.mp4
+```
 
 ```bash
 mere.run video generate \
@@ -205,6 +250,9 @@ into the dev transformer in place and must reload before another generation.
 - End keyframe rejected: `--end-image` requires a starting `--image`.
 
 ## Sources
+
+See [LTX 2.5 upstream parity](../../../docs/ltx25-upstream-parity.md) for the
+pinned release, complete pipeline matrix, and native execution boundaries.
 
 - https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Commands/VideoCommand.swift
 - https://docs.ltx.video/open-source-model/usage-guides/text-to-video

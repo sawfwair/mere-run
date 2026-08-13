@@ -379,6 +379,7 @@ struct StudioDraft: Codable, Equatable {
     var videoOutputMode: LTXVideoOutputMode = .videoOnly
     var audioPath = ""
     var audioStartTime = 0.0
+    var audioMaxDuration = 0.0
     var endImagePath = ""
     var endImageStrength = 1.0
     var scheduleShift = 5.0
@@ -498,6 +499,7 @@ struct StudioDraft: Codable, Equatable {
         videoOutputMode = base?.videoOutputMode ?? .videoOnly
         audioPath = ""
         audioStartTime = base?.audioStartTime ?? 0
+        audioMaxDuration = base?.audioMaxDuration ?? 0
         endImagePath = ""
         endImageStrength = base?.endImageStrength ?? 1
         scheduleShift = base?.scheduleShift ?? 5
@@ -827,6 +829,7 @@ enum StudioCommandAdapter {
             draft.videoOutputMode = studioDraft.videoOutputMode
             draft.audioPath = studioDraft.audioPath
             draft.audioStartTime = studioDraft.audioStartTime
+            draft.audioMaxDuration = studioDraft.audioMaxDuration
             draft.endImagePath = studioDraft.endImagePath
             draft.endImageStrength = studioDraft.endImageStrength
             draft.scheduleShift = studioDraft.scheduleShift

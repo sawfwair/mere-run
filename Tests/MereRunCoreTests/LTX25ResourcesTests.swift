@@ -43,4 +43,28 @@ final class LTX25ResourcesTests: XCTestCase {
             $0.contains("dev-transformer") || $0.contains("diffusion-video-vae")
         })
     }
+
+    func testOfficialFullLayoutRequiresDevTransformerAndDistilledLoRA() throws {
+        let root = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let resources = LTX25Resources(rootURL: root)
+        for relativePath in LTX25Resources.fullRequiredRelativePaths {
+            let url = root.appendingPathComponent(relativePath)
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            XCTAssertTrue(FileManager.default.createFile(atPath: url.path, contents: Data()))
+        }
+
+        XCTAssertTrue(resources.validateFull().isEmpty)
+        XCTAssertTrue(isLTX25FullModelRoot(root))
+        XCTAssertTrue(LTX25Resources.fullSnapshotPatterns.contains(LTX25Resources.diffusionVideoVAERelativePath))
+        XCTAssertTrue(LTX25Resources.fullSnapshotPatterns.contains(LTX25Resources.temporalUpsamplerRelativePath))
+
+        try FileManager.default.removeItem(at: resources.distilledLoRAURL)
+        XCTAssertEqual(resources.validateFull(), [resources.distilledLoRAURL])
+        XCTAssertFalse(isLTX25FullModelRoot(root))
+    }
 }

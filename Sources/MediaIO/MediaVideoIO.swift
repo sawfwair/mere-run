@@ -2,6 +2,7 @@ import Foundation
 
 struct ResolvedMediaVideoFrameRate: Sendable, Equatable {
     let framesPerSecond: Double
+    let frameDurationValue: Int64
     let timeScale: Int32
 }
 
@@ -32,15 +33,32 @@ enum MediaVideoFrameRateResolver {
         }
 
         let framesPerSecond = max(minimumFramesPerSecond, selectedFPS)
-        let roundedTimeScale = framesPerSecond.rounded()
-        guard roundedTimeScale >= 1,
-              roundedTimeScale <= Double(Int32.max) else {
+        let roundedFPS = framesPerSecond.rounded()
+        guard roundedFPS >= 1,
+              roundedFPS <= Double(Int32.max) else {
             throw MediaIOError.invalidVideoFrameRate(framesPerSecond)
+        }
+
+        let frameDurationValue: Int64
+        let timeScale: Int32
+        if abs(framesPerSecond - roundedFPS) < 1e-9 || framesPerSecond > 1_000_000 {
+            frameDurationValue = 1
+            timeScale = Int32(roundedFPS)
+        } else if let ntscBase = [24, 30, 60, 120].first(where: {
+            abs(framesPerSecond - Double($0) * 1_000 / 1_001) < 0.001
+        }) {
+            frameDurationValue = 1_001
+            timeScale = Int32(ntscBase * 1_000)
+        } else {
+            let precision: Int32 = 1_000_000
+            frameDurationValue = max(1, Int64((Double(precision) / framesPerSecond).rounded()))
+            timeScale = precision
         }
 
         return ResolvedMediaVideoFrameRate(
             framesPerSecond: framesPerSecond,
-            timeScale: Int32(roundedTimeScale)
+            frameDurationValue: frameDurationValue,
+            timeScale: timeScale
         )
     }
 }
@@ -113,6 +131,26 @@ public enum MediaVideoIO {
         height: Int,
         frameCount: Int,
         fps: Int,
+        to outputURL: URL
+    ) throws {
+        try writeMP4(
+            bgra32FrameAt: frameProvider,
+            width: width,
+            height: height,
+            frameCount: frameCount,
+            fps: Double(fps),
+            to: outputURL
+        )
+    }
+
+    /// Double-precision variant used by model pipelines whose temporal RoPE
+    /// and audio duration depend on fractional container rates such as 23.976.
+    public static func writeMP4(
+        bgra32FrameAt frameProvider: BGRAFrameProvider,
+        width: Int,
+        height: Int,
+        frameCount: Int,
+        fps: Double,
         to outputURL: URL
     ) throws {
         #if canImport(AVFoundation)

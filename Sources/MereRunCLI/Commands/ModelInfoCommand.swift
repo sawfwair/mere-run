@@ -11,7 +11,10 @@ struct ModelInfo: ParsableCommand {
     @Argument(help: "Canonical model id (for example: text-chat-gemma4 or image-zimage-nano) or local model root path.")
     var target: String
 
-    @Flag(name: [.long], help: "Print the raw `mererun_model.json` (if present) to stdout.")
+    @Flag(
+        name: [.long],
+        help: "Print the stored manifest, or catalog-derived manifest for an external binding, to stdout."
+    )
     var json: Bool = false
 
     @Flag(name: [.long], help: "Resolve and print component directories (tokenizer/text_encoder/transformer/vae/scheduler).")
@@ -47,10 +50,12 @@ struct ModelInfo: ParsableCommand {
         }
 
         let report: MereRunModelValidationReport
+        var bindingTermsAcknowledged: Bool?
         if let resolved, resolved.source == .registeredBinding {
             let termsAcknowledged = resolver.locationCandidates(for: resolved.modelID)
                 .first { $0.kind == .registeredBinding && $0.rootURL == resolved.rootURL }?
                 .usageTermsAcknowledged ?? false
+            bindingTermsAcknowledged = termsAcknowledged
             report = MereRunModelValidator.validateRegisteredBinding(
                 modelRoot: rootURL,
                 expectedModelID: resolved.modelID.rawValue,
@@ -59,7 +64,14 @@ struct ModelInfo: ParsableCommand {
         } else {
             report = MereRunModelValidator.validate(modelRoot: rootURL, expectedModelID: expectedModelID)
         }
-        let manifest = report.manifest
+        let catalogManifest: MereRunModelManifest? = resolved.flatMap { resolution in
+            guard resolution.source == .registeredBinding else { return nil }
+            return Self.catalogManifest(
+                modelID: resolution.modelID,
+                usageTermsAcknowledged: bindingTermsAcknowledged ?? false
+            )
+        }
+        let manifest = report.manifest ?? catalogManifest
 
         if json {
             guard let manifest else {
@@ -106,7 +118,10 @@ struct ModelInfo: ParsableCommand {
         }
 
         if let manifest {
-            print("\nManifest (\(MereRunModelManifest.filename))")
+            let manifestLabel = report.manifest == nil
+                ? "catalog-derived; external binding"
+                : MereRunModelManifest.filename
+            print("\nManifest (\(manifestLabel))")
             print("  schemaVersion: \(manifest.schemaVersion)")
             print("  id: \(manifest.id)")
             if let engine = manifest.engine?.rawValue { print("  engine: \(engine)") }
@@ -193,7 +208,12 @@ struct ModelInfo: ParsableCommand {
         if components {
             print("\nComponents")
             if Self.usesLTX25Layout(manifest: manifest, expectedModelID: expectedModelID) {
-                for line in Self.ltx25ComponentLines(rootURL: rootURL, fileManager: fm) {
+                let id = expectedModelID ?? manifest?.id
+                for line in Self.ltx25ComponentLines(
+                    rootURL: rootURL,
+                    full: id == ModelResolver.ModelID.ltxVideo25FullBF16.rawValue,
+                    fileManager: fm
+                ) {
                     print(line)
                 }
             } else if Self.usesLTX23FullLayout(manifest: manifest, expectedModelID: expectedModelID) {
@@ -239,6 +259,18 @@ struct ModelInfo: ParsableCommand {
         }
     }
 
+    static func catalogManifest(
+        modelID: ModelResolver.ModelID,
+        usageTermsAcknowledged: Bool
+    ) -> MereRunModelManifest {
+        var manifest = MereRunModelManifest.template(for: modelID)
+        manifest.createdAt = nil
+        if manifest.usageTerms?.isEmpty == false {
+            manifest.usageTermsAcknowledged = usageTermsAcknowledged
+        }
+        return manifest
+    }
+
     private func printGenericComponents(rootURL: URL, manifest: MereRunModelManifest?) {
         let resolver = ModelComponentResolver(modelRootURL: rootURL, manifest: manifest)
         for component in ModelComponentResolver.Component.allCases {
@@ -272,10 +304,11 @@ struct ModelInfo: ParsableCommand {
 
     static func ltx25ComponentLines(
         rootURL: URL,
+        full: Bool = false,
         fileManager: FileManager = .default
     ) -> [String] {
         var lines = ["  layout: official LTX 2.5 packed BF16 files"]
-        for file in ltx25ComponentFiles {
+        for file in full ? ltx25FullComponentFiles : ltx25ComponentFiles {
             let url = rootURL.appendingPathComponent(file.relativePath).standardizedFileURL
             let suffix = fileManager.fileExists(atPath: url.path) ? "" : "  (missing)"
             lines.append("  \(file.label): \(url.path)\(suffix)")
@@ -460,11 +493,24 @@ struct ModelInfo: ParsableCommand {
     ]
 
     private static let ltx25ComponentFiles: [(label: String, relativePath: String)] = [
-        ("transformer", LTX25Resources.transformerRelativePath),
+        ("transformer_distilled", LTX25Resources.distilledTransformerRelativePath),
         ("text_encoder", LTX25Resources.textEncoderRelativePath),
-        ("video_vae", LTX25Resources.videoVAERelativePath),
+        ("video_vae_conv", LTX25Resources.videoVAERelativePath),
         ("audio_vae_vocoder", LTX25Resources.audioVAERelativePath),
         ("spatial_upscaler", LTX25Resources.spatialUpsamplerRelativePath),
+    ]
+
+    private static let ltx25FullComponentFiles: [(label: String, relativePath: String)] = [
+        ("transformer_dev", LTX25Resources.devTransformerRelativePath),
+        ("transformer_distilled", LTX25Resources.distilledTransformerRelativePath),
+        ("text_encoder", LTX25Resources.textEncoderRelativePath),
+        ("video_vae_conv", LTX25Resources.videoVAERelativePath),
+        ("video_vae_diffusion", LTX25Resources.diffusionVideoVAERelativePath),
+        ("audio_vae_vocoder", LTX25Resources.audioVAERelativePath),
+        ("spatial_upscaler", LTX25Resources.spatialUpsamplerRelativePath),
+        ("temporal_upscaler", LTX25Resources.temporalUpsamplerRelativePath),
+        ("distilled_lora", LTX25Resources.distilledLoRARelativePath),
+        ("duration_head", LTX25Resources.durationHeadRelativePath),
     ]
 
     private static let ltx23A2VidComponentFiles: [(label: String, relativePath: String)] = [

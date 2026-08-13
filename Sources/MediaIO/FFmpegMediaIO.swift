@@ -97,6 +97,178 @@ enum FFmpegMediaIO {
         )
     }
 
+    static func h264RoundTrip(_ image: MediaImage, crf: Int) throws -> MediaImage {
+        let width = image.width / 2 * 2
+        let height = image.height / 2 * 2
+        guard width > 0, height > 0 else { return image }
+
+        var rgb = [UInt8](repeating: 0, count: width * height * 3)
+        for y in 0..<height {
+            for x in 0..<width {
+                let source = (y * image.width + x) * 4
+                let destination = (y * width + x) * 3
+                rgb[destination] = image.rgba8[source]
+                rgb[destination + 1] = image.rgba8[source + 1]
+                rgb[destination + 2] = image.rgba8[source + 2]
+            }
+        }
+
+        let temporaryURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mererun-image-crf-\(UUID().uuidString)")
+            .appendingPathExtension("mp4")
+        defer { try? FileManager.default.removeItem(at: temporaryURL) }
+        _ = try FFmpegProcess.run(
+            tool: MediaTool.ffmpegPath,
+            arguments: [
+                "-v", "error",
+                "-y",
+                "-f", "rawvideo",
+                "-pix_fmt", "rgb24",
+                "-s", "\(width)x\(height)",
+                "-r", "1",
+                "-i", "pipe:0",
+                "-frames:v", "1",
+                "-an",
+                "-c:v", "libx264",
+                "-crf", String(crf),
+                "-preset", "veryfast",
+                "-pix_fmt", "yuv420p",
+                temporaryURL.path,
+            ],
+            stdin: Data(rgb)
+        )
+        return try decodeImage(temporaryURL)
+    }
+
+    static func decodeEXR(_ url: URL) throws -> MediaFloatImage {
+        let size = try imageSize(of: url)
+        let result = try FFmpegProcess.run(
+            tool: MediaTool.ffmpegPath,
+            arguments: [
+                "-v", "error",
+                "-c:v", "exr",
+                "-apply_trc", "linear",
+                "-i", url.path,
+                "-frames:v", "1",
+                "-f", "rawvideo",
+                "-pix_fmt", "gbrpf32le",
+                "pipe:1",
+            ]
+        )
+        let planar = result.stdout.withUnsafeBytes { raw -> [Float] in
+            Array(raw.bindMemory(to: Float.self))
+        }
+        let pixelCount = size.width * size.height
+        guard planar.count == pixelCount * 3 else {
+            throw MediaIOError.invalidBufferSize(
+                expected: pixelCount * 3 * MemoryLayout<Float>.size,
+                actual: result.stdout.count
+            )
+        }
+        var rgb = [Float](repeating: 0, count: pixelCount * 3)
+        for pixel in 0..<pixelCount {
+            rgb[pixel * 3] = planar[2 * pixelCount + pixel]
+            rgb[pixel * 3 + 1] = planar[pixel]
+            rgb[pixel * 3 + 2] = planar[pixelCount + pixel]
+        }
+        return try MediaFloatImage(width: size.width, height: size.height, rgb: rgb)
+    }
+
+    static func writeEXR(_ image: MediaFloatImage, to url: URL) throws {
+        try FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        _ = try FFmpegProcess.run(
+            tool: MediaTool.ffmpegPath,
+            arguments: [
+                "-v", "error",
+                "-y",
+                "-f", "rawvideo",
+                "-pix_fmt", "gbrpf32le",
+                "-s", "\(image.width)x\(image.height)",
+                "-i", "pipe:0",
+                "-frames:v", "1",
+                "-c:v", "exr",
+                "-compression", "zip16",
+                "-format", "half",
+                url.path,
+            ],
+            stdin: planarGBRData(image.rgb)
+        )
+    }
+
+    static func writeHLGMP4(
+        rgbFloatFrameAt frameProvider: MediaHDRVideoIO.RGBFloatFrameProvider,
+        width: Int,
+        height: Int,
+        frameCount: Int,
+        fps: Double,
+        to outputURL: URL
+    ) throws {
+        guard width > 0,
+              height > 0,
+              frameCount > 0,
+              fps.isFinite,
+              fps > 0 else {
+            throw MediaIOError.videoOperationFailed("Invalid HLG dimensions or frame rate.")
+        }
+        try FileManager.default.createDirectory(
+            at: outputURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        let expectedSamples = width * height * 3
+        _ = try FFmpegProcess.runStreamingInput(
+            tool: MediaTool.ffmpegPath,
+            arguments: [
+                "-v", "error",
+                "-y",
+                "-f", "rawvideo",
+                "-pix_fmt", "gbrpf32le",
+                "-s", "\(width)x\(height)",
+                "-r", String(fps),
+                "-i", "pipe:0",
+                "-an",
+                "-vf", "setparams=range=full:color_primaries=bt2020:color_trc=arib-std-b67:colorspace=gbr,colorspace=space=bt2020nc:range=tv:primaries=bt2020:trc=bt2020-10:ispace=gbr:irange=pc:iprimaries=bt2020:itrc=bt2020-10:format=yuv420p10:fast=1,setparams=range=tv:color_primaries=bt2020:color_trc=arib-std-b67:colorspace=bt2020nc",
+                "-c:v", "libx265",
+                "-tag:v", "hvc1",
+                "-preset", "ultrafast",
+                "-crf", "12",
+                "-x265-params", "colorprim=9:transfer=18:colormatrix=9:range=limited:repeat-headers=1:info=0:pools=16:frame-threads=4",
+                "-color_primaries", "bt2020",
+                "-color_trc", "arib-std-b67",
+                "-colorspace", "bt2020nc",
+                "-color_range", "tv",
+                "-pix_fmt", "yuv420p10le",
+                "-movflags", "+faststart",
+                outputURL.path,
+            ],
+            writeInput: { handle in
+                for frameIndex in 0..<frameCount {
+                    let frame = try frameProvider(frameIndex)
+                    guard frame.count == expectedSamples else {
+                        throw MediaIOError.invalidBufferSize(
+                            expected: expectedSamples * MemoryLayout<Float>.size,
+                            actual: frame.count * MemoryLayout<Float>.size
+                        )
+                    }
+                    try handle.write(contentsOf: planarGBRData(frame))
+                }
+            }
+        )
+    }
+
+    private static func planarGBRData(_ interleavedRGB: [Float]) -> Data {
+        let pixelCount = interleavedRGB.count / 3
+        var planar = [Float](repeating: 0, count: interleavedRGB.count)
+        for pixel in 0..<pixelCount {
+            planar[pixel] = interleavedRGB[pixel * 3 + 1]
+            planar[pixelCount + pixel] = interleavedRGB[pixel * 3 + 2]
+            planar[2 * pixelCount + pixel] = interleavedRGB[pixel * 3]
+        }
+        return planar.withUnsafeBufferPointer { Data(buffer: $0) }
+    }
+
     static func decodeAudio(
         _ url: URL,
         targetSampleRate: Int,
@@ -289,10 +461,10 @@ enum FFmpegMediaIO {
         width: Int,
         height: Int,
         frameCount: Int,
-        fps: Int,
+        fps: Double,
         to outputURL: URL
     ) throws {
-        guard width > 0, height > 0, frameCount > 0, fps > 0 else {
+        guard width > 0, height > 0, frameCount > 0, fps.isFinite, fps > 0 else {
             throw MediaIOError.videoOperationFailed("Invalid MP4 dimensions or frame rate.")
         }
         try FileManager.default.createDirectory(

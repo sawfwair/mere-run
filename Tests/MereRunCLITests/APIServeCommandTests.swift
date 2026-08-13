@@ -196,6 +196,7 @@ final class APIServeCommandTests: XCTestCase {
             "/v1/vision/image-to-3d",
             "/v1/vision/image-to-3d-multiview",
             "/v1/vision/depth-video",
+            "/v1/videos/generations",
         ])
         XCTAssertTrue(APIVFXArtifactRoutePolicy.denialMessage.contains("loopback-only"))
         XCTAssertTrue(APIVFXArtifactRoutePolicy.denialMessage.contains("file URLs"))
@@ -1701,6 +1702,65 @@ final class APIServeCommandTests: XCTestCase {
             )
         ) { error in
             XCTAssertTrue(error.localizedDescription.contains("between 1 and 100"))
+        }
+    }
+
+    func testVideoGenerationContractPreservesNativeLTXOptionsAndArtifactProof() throws {
+        let request = OpenAIVideoGenerationRequest(
+            prompt: "waves break under moonlight",
+            model: ModelResolver.ModelID.ltxVideo25FullBF16.rawValue,
+            size: "1024x768",
+            num_frames: 97,
+            fps: 24,
+            seed: 17,
+            quality: "final",
+            output_mode: "audio-video",
+            options: [
+                "--ltx-preset", "hq",
+                "--num-generated-keyframes", "3",
+                "--enhance-prompt",
+            ]
+        )
+        let plan = try APIServerContract.videoGenerationPlan(from: request)
+
+        XCTAssertEqual(APIServerContract.videoGenerationRoutePath, "/v1/videos/generations")
+        XCTAssertEqual(plan.width, 1_024)
+        XCTAssertEqual(plan.height, 768)
+        XCTAssertEqual(plan.numFrames, 97)
+        XCTAssertTrue(plan.commandArguments.contains("--num-generated-keyframes"))
+
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "mere-run-video-api-contract-\(UUID().uuidString)",
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: false)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let output = directory.appendingPathComponent("output.mp4")
+        try Data("video".utf8).write(to: output)
+        let response = try APIServerContract.videoGenerationResponse(
+            outputURL: output,
+            plan: plan,
+            createdAt: Date(timeIntervalSince1970: 12)
+        )
+        XCTAssertEqual(response.created, 12)
+        XCTAssertEqual(response.model, ModelResolver.ModelID.ltxVideo25FullBF16.rawValue)
+        XCTAssertEqual(response.artifact.byte_count, 5)
+        XCTAssertEqual(response.artifact.url, output.absoluteString)
+        XCTAssertEqual(response.artifact.sha256, try ModelArtifactPin.fileSHA256(output))
+
+        XCTAssertThrowsError(try APIServerContract.videoGenerationPlan(from:
+            OpenAIVideoGenerationRequest(
+                prompt: "unsafe",
+                options: ["--output", "/tmp/escape.mp4"]
+            )
+        ))
+        XCTAssertThrowsError(try APIServerContract.videoGenerationPlan(from:
+            OpenAIVideoGenerationRequest(
+                prompt: "EXR only",
+                options: ["--skip-mp4"]
+            )
+        )) { error in
+            XCTAssertTrue(error.localizedDescription.contains("retains and hashes an MP4"))
         }
     }
 

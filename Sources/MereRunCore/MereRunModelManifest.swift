@@ -2052,6 +2052,20 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 upstreamRepoId: "\(LTX25Resources.sourceRepository)@\(LTX25Resources.sourceRevision)",
                 createdAt: createdAt
             )
+        case .ltxVideo25FullBF16:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .ltxVideo,
+                family: .video,
+                tier: .latest,
+                variant: .base,
+                precision: .bf16,
+                defaults: Defaults(steps: 30, cfg: 3),
+                supports: [.videoGeneration, .audioToVideoGeneration],
+                components: nil,
+                upstreamRepoId: "\(LTX25Resources.sourceRepository)@\(LTX25Resources.sourceRevision)",
+                createdAt: createdAt
+            )
         case .wan22TI2V5BMLX:
             return MereRunModelManifest(
                 id: modelID.rawValue,

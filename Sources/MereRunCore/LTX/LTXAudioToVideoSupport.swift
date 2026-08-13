@@ -123,19 +123,22 @@ public struct LTXMultiModalGuidance: Sendable, Hashable {
     public let rescale: Float
     public let modalityScale: Float
     public let spatioTemporalBlocks: Set<Int>
+    public let skipStep: Int
 
     public init(
         classifierFreeScale: Float,
         spatioTemporalScale: Float = 1,
         rescale: Float = 0.7,
         modalityScale: Float = 3,
-        spatioTemporalBlocks: Set<Int> = [28]
+        spatioTemporalBlocks: Set<Int> = [28],
+        skipStep: Int = 0
     ) {
         self.classifierFreeScale = classifierFreeScale
         self.spatioTemporalScale = spatioTemporalScale
         self.rescale = rescale
         self.modalityScale = modalityScale
         self.spatioTemporalBlocks = spatioTemporalBlocks
+        self.skipStep = skipStep
     }
 
     func combine(
@@ -159,6 +162,10 @@ public struct LTXMultiModalGuidance: Sendable, Hashable {
             prediction = prediction * (MLXArray(rescale) * factor + MLXArray(1 - rescale))
         }
         return prediction.asType(originalDType)
+    }
+
+    func shouldSkip(step: Int) -> Bool {
+        skipStep > 0 && !step.isMultiple(of: skipStep + 1)
     }
 }
 
@@ -219,7 +226,7 @@ public enum LTX2DiffusionScheduler {
     }
 }
 
-private func sampleStandardDeviation(_ array: MLXArray) -> MLXArray {
+func sampleStandardDeviation(_ array: MLXArray) -> MLXArray {
     let count = array.shape.reduce(1, *)
     precondition(count > 1, "Guidance rescaling requires more than one latent value.")
     let mean = MLX.mean(array)

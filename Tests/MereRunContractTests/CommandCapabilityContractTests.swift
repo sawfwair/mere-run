@@ -37,6 +37,7 @@ import Testing
         "vision.geometry",
         "vision.geometry-multiview",
         "audio.enhance",
+        "audio.generate",
         "music.generate",
         "music.analyze",
         "music.transcribe",
@@ -45,6 +46,8 @@ import Testing
         "music.train-adapter",
         "music.serve",
         "video.generate",
+        "video.retake",
+        "video.dub-it",
         "video.animate",
         "video.cosmos3",
         "video.prepare-masks",
@@ -101,7 +104,7 @@ import Testing
         "config.get",
         "config.unset"
     ])
-    #expect(document.commands.count == 94)
+    #expect(document.commands.count == 97)
 
     let data = try JSONEncoder().encode(document)
     let decoded = try JSONDecoder().decode(MereRunCapabilityDocument.self, from: data)

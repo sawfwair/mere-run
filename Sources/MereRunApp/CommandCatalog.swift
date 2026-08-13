@@ -72,6 +72,7 @@ enum CommandTemplateID: String, CaseIterable, Codable {
     case visionGeometry
     case visionGeometryMultiview
     case audioEnhance
+    case audioGenerate
     case musicGenerate
     case musicAnalyze
     case musicTranscribe
@@ -80,6 +81,8 @@ enum CommandTemplateID: String, CaseIterable, Codable {
     case musicTrainAdapter
     case musicServe
     case videoGenerate
+    case videoRetake
+    case videoDubIt
     case videoAnimate
     case videoCosmos3
     case videoPrepareMasks
@@ -168,6 +171,7 @@ enum CommandTemplateID: String, CaseIterable, Codable {
         case .visionGeometry: return "vision.geometry"
         case .visionGeometryMultiview: return "vision.geometry-multiview"
         case .audioEnhance: return "audio.enhance"
+        case .audioGenerate: return "audio.generate"
         case .musicGenerate: return "music.generate"
         case .musicAnalyze: return "music.analyze"
         case .musicTranscribe: return "music.transcribe"
@@ -176,6 +180,8 @@ enum CommandTemplateID: String, CaseIterable, Codable {
         case .musicTrainAdapter: return "music.train-adapter"
         case .musicServe: return "music.serve"
         case .videoGenerate: return "video.generate"
+        case .videoRetake: return "video.retake"
+        case .videoDubIt: return "video.dub-it"
         case .videoAnimate: return "video.animate"
         case .videoCosmos3: return "video.cosmos3"
         case .videoPrepareMasks: return "video.prepare-masks"
@@ -706,6 +712,8 @@ struct CommandDraft: Equatable, Codable {
     var videoOutputMode: LTXVideoOutputMode = .videoOnly
     var audioPath = ""
     var audioStartTime = 0.0
+    /// Optional preserves saved Library rows from before source-audio max-duration parity.
+    var audioMaxDuration: Double?
     var endImagePath = ""
     var endImageStrength = 1.0
     var scheduleShift = 5.0
@@ -714,6 +722,10 @@ struct CommandDraft: Equatable, Codable {
     var audioCFGGuidanceScale = 7.0
     var v2aGuidanceScale = 3.0
     var a2vSteps = 30
+    var retakeStartTime = 0.0
+    var retakeEndTime = 4.0
+    var retakePreserveVideo = false
+    var retakePreserveAudio = false
     var preflight = false
     var timings = false
     var timingsOutputPath = ""
@@ -908,6 +920,11 @@ struct CommandTemplate: Identifiable, Equatable {
             draft.audioChunkSeconds = 10
             draft.audioDType = "float32"
             draft.seed = "42"
+        case .audioGenerate:
+            draft.useDuration = true
+            draft.durationSeconds = 10
+            draft.steps = 30
+            draft.seed = "42"
         case .musicSeparate:
             draft.audioDType = "float16"
         case .visionCaption, .visionOCR:
@@ -966,6 +983,15 @@ struct CommandTemplate: Identifiable, Equatable {
             draft.cfgScale = 5
             draft.videoQuality = .final
             draft.videoOutputMode = .videoOnly
+        case .videoRetake:
+            draft.steps = 30
+            draft.seed = "42"
+            draft.retakeStartTime = 0
+            draft.retakeEndTime = 4
+        case .videoDubIt:
+            draft.width = 768
+            draft.height = 512
+            draft.seed = "42"
         case .videoAnimate:
             draft.width = 832
             draft.height = 480
@@ -1333,6 +1359,17 @@ struct CommandTemplate: Identifiable, Equatable {
             }
             if family == .miniMaxH3FL2VA && !(draft.h3ReferenceInputs ?? []).isEmpty {
                 return "MiniMax-H3 FL2VA does not accept ordered references."
+            }
+        case .videoRetake:
+            if draft.retakeStartTime < 0 || draft.retakeStartTime >= draft.retakeEndTime {
+                return "Retake requires a nonnegative start before the end time."
+            }
+            if draft.retakePreserveVideo && draft.retakePreserveAudio {
+                return "Retake must regenerate video, audio, or both."
+            }
+        case .videoDubIt:
+            if draft.loraPath.isBlank {
+                return "Dub-It requires an IC-LoRA file."
             }
         case .imageReconstruct3DMultiview:
             let views = pathList(draft.referenceImagePaths)
@@ -2299,6 +2336,9 @@ struct CommandTemplate: Identifiable, Equatable {
                     "--v2a-guidance-scale", format(draft.v2aGuidanceScale),
                     "--a2v-steps", String(draft.a2vSteps)
                 ]
+                if let audioMaxDuration = draft.audioMaxDuration, audioMaxDuration > 0 {
+                    args += ["--audio-max-duration", format(audioMaxDuration)]
+                }
             }
             if !draft.inputPath.isBlank { args += ["--image", draft.inputPath, "--image-strength", format(draft.strength)] }
             if !draft.endImagePath.isBlank {
@@ -2315,6 +2355,41 @@ struct CommandTemplate: Identifiable, Equatable {
             if !family.isMiniMaxH3, !draft.timingsOutputPath.isBlank {
                 args += ["--timings-output", draft.timingsOutputPath]
             }
+            if draft.quiet { args.append("--quiet") }
+
+        case .videoRetake:
+            args = [
+                "video", "retake", draft.prompt,
+                "--source", draft.inputPath,
+                "--start-time", format(draft.retakeStartTime),
+                "--end-time", format(draft.retakeEndTime)
+            ]
+            if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            if !draft.modelRoot.isBlank { args += ["--model-root", draft.modelRoot] }
+            if !draft.secondaryText.isBlank {
+                args += ["--negative-prompt", draft.secondaryText]
+            }
+            args += ["--steps", String(draft.steps)]
+            if !draft.seed.isBlank { args += ["--seed", draft.seed] }
+            if draft.retakePreserveVideo { args.append("--preserve-video") }
+            if draft.retakePreserveAudio { args.append("--preserve-audio") }
+            if draft.quiet { args.append("--quiet") }
+
+        case .videoDubIt:
+            args = [
+                "video", "dub-it", draft.prompt,
+                "--reference-video", draft.inputPath,
+                "--ic-lora", draft.loraPath,
+                "--ic-lora-strength", format(draft.loraScale),
+                "--reference-strength", format(draft.strength),
+                "--width", String(draft.width),
+                "--height", String(draft.height)
+            ]
+            if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            if !draft.modelRoot.isBlank { args += ["--model-root", draft.modelRoot] }
+            if !draft.seed.isBlank { args += ["--seed", draft.seed] }
             if draft.quiet { args.append("--quiet") }
 
         case .videoAnimate:
@@ -2470,6 +2545,23 @@ struct CommandTemplate: Identifiable, Equatable {
                 args += ["--chunk-seconds", String(seconds)]
             }
             if let dtype = draft.audioDType, !dtype.isBlank { args += ["--dtype", dtype] }
+            if draft.quiet { args.append("--quiet") }
+
+        case .audioGenerate:
+            args = ["audio", "generate", draft.prompt]
+            if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            if !draft.modelRoot.isBlank { args += ["--model-root", draft.modelRoot] }
+            if !draft.secondaryText.isBlank {
+                args += ["--negative-prompt", draft.secondaryText]
+            }
+            if draft.useDuration {
+                args += ["--duration", format(draft.durationSeconds)]
+            } else {
+                args += ["--num-frames", String(draft.numFrames), "--fps", String(draft.fps)]
+            }
+            args += ["--steps", String(draft.steps)]
+            if !draft.seed.isBlank { args += ["--seed", draft.seed] }
             if draft.quiet { args.append("--quiet") }
 
         case .musicAnalyze:
@@ -3023,7 +3115,7 @@ extension CommandTemplate {
             return .speak
         case .speechTranscribe, .speechDiarize:
             return .listen
-        case .audioEnhance:
+        case .audioEnhance, .audioGenerate:
             return .listen
 
         case .visionGround:
@@ -3056,6 +3148,8 @@ extension CommandTemplate {
             return .music
 
         case .videoGenerate,
+             .videoRetake,
+             .videoDubIt,
              .videoAnimate,
              .videoCosmos3,
              .videoPrepareMasks,
@@ -3555,6 +3649,18 @@ enum CommandCatalog {
             defaultModel: "audio-enhance-ap-bwe-16kto48k"
         ),
         CommandTemplate(
+            id: .audioGenerate,
+            category: .media,
+            title: "Generate audio",
+            subtitle: "Native LTX-2.5 text-to-audio generation",
+            systemImage: "waveform.badge.sparkles",
+            promptLabel: "Audio prompt",
+            secondaryLabel: "Negative prompt",
+            outputKind: .file("wav"),
+            defaultPrompt: "a quiet forest at dawn with distant birds",
+            defaultModel: "video-ltx25-full-bf16"
+        ),
+        CommandTemplate(
             id: .musicGenerate,
             category: .media,
             title: "Generate music",
@@ -3570,14 +3676,39 @@ enum CommandCatalog {
             id: .videoGenerate,
             category: .media,
             title: "Generate video",
-            subtitle: "LTX, Wan, or synchronized MiniMax-H3 generation",
+            subtitle: "Full-power LTX-2.5, Wan, or synchronized MiniMax-H3 generation",
             systemImage: "film",
             promptLabel: "Prompt",
             secondaryLabel: "Negative prompt",
             inputKind: .image,
             outputKind: .file("mp4"),
             defaultPrompt: "a cinematic drone flythrough over snowy mountains",
-            defaultModel: "video-ltx23-full-mlx"
+            defaultModel: "video-ltx25-full-bf16"
+        ),
+        CommandTemplate(
+            id: .videoRetake,
+            category: .media,
+            title: "Retake video",
+            subtitle: "Regenerate a timed LTX-2.5 video or audio region",
+            systemImage: "timeline.selection",
+            promptLabel: "Replacement prompt",
+            secondaryLabel: "Negative prompt",
+            inputKind: .video,
+            outputKind: .file("mp4"),
+            defaultPrompt: "continue the performance with natural synchronized motion",
+            defaultModel: "video-ltx25-distilled-bf16"
+        ),
+        CommandTemplate(
+            id: .videoDubIt,
+            category: .media,
+            title: "Dub-It",
+            subtitle: "Transfer synchronized video and audio identity with LTX-2.5 IC-LoRA",
+            systemImage: "person.wave.2",
+            promptLabel: "Scene prompt",
+            inputKind: .video,
+            outputKind: .file("mp4"),
+            defaultPrompt: "the speaker performs on a rain-lit street",
+            defaultModel: "video-ltx25-distilled-bf16"
         ),
         CommandTemplate(
             id: .videoAnimate,
