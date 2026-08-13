@@ -608,7 +608,14 @@ swift run mere.run music generate \
   --duration 30 \
   --steps 30 \
   --seed 7 \
+  --memory-mode staged \
   --output ./minimax-song.wav
+
+# Keep MiniMax Music 3 warm behind its speech-compatible HTTP route
+swift run mere.run music serve \
+  --model music-minimax-music3 \
+  --memory-mode resident \
+  --port 8080
 
 # Generate with ACE-Step XL Turbo on larger Macs
 swift run mere.run model pull music-acestep-xl-turbo

@@ -13,3 +13,8 @@ This directory contains the native Swift/MLX inference path for MiniMax Music
 Keep the prompt tokens, code offsets, chunk overlap, Euler schedule, and
 weight-name mapping in parity with the pinned upstream revision declared by
 `MiniMaxMusic3Resources`.
+
+The default `staged` loading strategy releases each stage before loading the
+next one and clears the MLX cache between stages. `resident` loads the complete
+stack once for lower repeated-request latency. Both strategies execute the same
+model math and generation schedule.

@@ -707,9 +707,29 @@ Review the pinned `LICENSE` before deploying or redistributing the weights.
 
 `mere.run music generate --model music-minimax-music3` assembles the released
 caption-and-lyrics prompt contract, generates 25 Hz semantic plus residual RVQ
-codes, runs the overlap-aware flow transformer, and writes 44.1 kHz stereo WAV
-output through the released vocoder. Generation currently supports text plus
-lyrics (or `--instrumental`) for at most 360 seconds.
+codes, runs the overlap-aware flow transformer, and writes native 44.1 kHz
+stereo WAV output through the released vocoder. `--max-frames` exposes the
+upstream 1...9,000-frame contract directly, while `--duration` converts seconds
+at 25 Hz. The model card describes supported-quality generation through five
+minutes; 9,000 frames is the six-minute runtime hard limit.
+
+Generation defaults to `--memory-mode staged`, which releases the language,
+flow, and vocoder weights between stages. `--memory-mode resident` keeps the
+entire stack loaded for repeated work. Staged mode moves the catalog floor to
+32 GB unified memory; 64 GB remains recommended for practical song lengths.
+`--sample-rate 32000` produces the same stereo PCM rate exposed by the upstream
+SGLang speech route; 44,100 Hz remains the native CLI default. `music serve
+--model music-minimax-music3` exposes the non-streaming `/v1/audio/speech`
+request shape with `input`, `instructions`, `seed`, and `max_new_tokens`, plus
+explicit native duration, step, guidance, and sample-rate controls.
+
+MiniMax publishes its optional `music-caption-rewriter` agent skill separately
+in the official
+[MiniMax-Music-3 repository](https://github.com/MiniMax-AI/MiniMax-Music-3/tree/91410fb657c007ae57c60df8240f5ece5be089c7/music-caption-rewriter).
+It is not part of the checkpoint snapshot or this distribution. The
+model-specific `mere.run guide music generate --model music-minimax-music3`
+shows the official install command, the reviewed source commit, and the
+complete raw Diffusers parameter mapping.
 
 ### `music-magenta-rt2-small` and `music-magenta-rt2-base`
 

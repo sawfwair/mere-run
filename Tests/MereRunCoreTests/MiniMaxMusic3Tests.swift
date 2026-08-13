@@ -3,6 +3,39 @@ import XCTest
 @testable import MereRunCore
 
 final class MiniMaxMusic3Tests: MereRunCoreTestCase {
+    func testInstalledStagedAndResidentGenerationAreSeedEquivalent() throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard environment["MERERUN_MINIMAX_MUSIC3_E2E"] == "1",
+              let root = environment["MERERUN_MINIMAX_MUSIC3_MODEL_ROOT"]
+        else {
+            throw XCTSkip("set the MiniMax Music 3 model root and E2E flag to compare loading modes")
+        }
+        let resources = MiniMaxMusic3Resources(rootURL: URL(fileURLWithPath: root))
+        let options = MiniMaxMusic3GenerationOptions(
+            caption: "Warm acoustic instrumental, fingerpicked guitar, natural room.",
+            lyrics: "[Instrumental]",
+            durationSeconds: 0.08,
+            maximumFrames: 2,
+            inferenceSteps: 1,
+            seed: 7
+        )
+
+        let staged = try MiniMaxMusic3Pipeline(
+            resources: resources,
+            loadingStrategy: .staged
+        ).generate(options: options)
+        let resident = try MiniMaxMusic3Pipeline(
+            resources: resources,
+            loadingStrategy: .resident
+        ).generate(options: options)
+        MLX.eval(staged.waveform, resident.waveform)
+
+        XCTAssertEqual(staged.frameCount, resident.frameCount)
+        XCTAssertEqual(staged.sampleRate, resident.sampleRate)
+        XCTAssertEqual(staged.waveform.shape, resident.waveform.shape)
+        XCTAssertTrue(MLX.allClose(staged.waveform, resident.waveform, rtol: 0, atol: 0).item(Bool.self))
+    }
+
     func testInstalledConditionEncoderAndVocoderMatchUpstream() throws {
         let environment = ProcessInfo.processInfo.environment
         guard let root = environment["MERERUN_MINIMAX_MUSIC3_MODEL_ROOT"],
@@ -301,6 +334,19 @@ final class MiniMaxMusic3Tests: MereRunCoreTestCase {
         )
     }
 
+    func testCaptionCleaningMatchesUpstreamWhitespaceAndMarkdownEdges() {
+        XCTAssertEqual(
+            MiniMaxMusic3Prompt.cleanCaption(
+                "  preserved indent  \n***nested***\n---\nx *italic*  \n"
+            ),
+            "  preserved indent\nnested\nx italic"
+        )
+        XCTAssertEqual(
+            MiniMaxMusic3Prompt.cleanCaption("<|bpm 118|>\r\n# Heading"),
+            "bpm is 118\nHeading"
+        )
+    }
+
     func testChunkAndLatentTimelineMathMatchesReference() {
         XCTAssertEqual(MiniMaxMusic3Prompt.chunkStarts(frameCount: 200), [0])
         XCTAssertEqual(MiniMaxMusic3Prompt.chunkStarts(frameCount: 201), [0, 100])
@@ -394,16 +440,17 @@ final class MiniMaxMusic3Tests: MereRunCoreTestCase {
         XCTAssertEqual(spec.validationKind, .miniMaxMusic3)
         XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
         XCTAssertNotNil(spec.usageRestriction)
+        XCTAssertEqual(spec.defaultCLICommands, ["music generate", "music serve"])
         XCTAssertEqual(spec.hubFallback?.patterns.contains("qwen_7B/*"), false)
         XCTAssertEqual(spec.hubFallback?.patterns.contains("transformer/*"), true)
     }
 
-    func testCapabilityDescriptorRequiresLargeUnifiedMemory() throws {
+    func testCapabilityDescriptorReflectsStagedLoading() throws {
         let descriptor = try XCTUnwrap(
             ManagedModelCapabilityCatalog.descriptor(for: MiniMaxMusic3Resources.modelID)
         )
-        XCTAssertEqual(descriptor.minimumUnifiedMemoryGB, 64)
-        XCTAssertEqual(descriptor.recommendedUnifiedMemoryGB, 96)
+        XCTAssertEqual(descriptor.minimumUnifiedMemoryGB, 32)
+        XCTAssertEqual(descriptor.recommendedUnifiedMemoryGB, 64)
     }
 
     func testManagedInstallValidatorUsesMiniMaxComponentContract() throws {

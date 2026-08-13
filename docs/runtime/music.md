@@ -89,7 +89,18 @@ swift run mere.run music generate \
   --duration 30 \
   --steps 30 \
   --seed 7 \
+  --memory-mode staged \
   --output ./minimax-song.wav
+
+swift run mere.run music serve \
+  --model music-minimax-music3 \
+  --memory-mode resident \
+  --port 8080
+
+curl http://127.0.0.1:8080/v1/audio/speech \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"music-minimax-music3","instructions":"cinematic synth-pop, female lead","input":"[Verse]\nNeon on the avenue","max_new_tokens":750,"seed":7}' \
+  --output ./minimax-speech-route.wav
 
 swift run mere.run music generate \
   "dream-pop cover with soft vocals" \

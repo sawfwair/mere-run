@@ -83,7 +83,7 @@ Public tree:
   - `mere.run music analyze` — Analyze source audio with ACE-Step audio understanding.
   - `mere.run music generate` — Generate audio from a music prompt.
   - `mere.run music realtime` — Run Magenta RealTime 2 music generation.
-  - `mere.run music serve` — Start a warm resident ACE-Step music generation API.
+  - `mere.run music serve` — Start an ACE-Step or MiniMax Music 3 generation API.
   - `mere.run music separate` — Separate or restore audio with native RoFormer models.
   - `mere.run music train-adapter` — Train a native ACE-Step LoRA or LoKr adapter.
   - `mere.run music transcribe` — Transcribe a full music mix into instrument-separated MIDI with MuScriptor.

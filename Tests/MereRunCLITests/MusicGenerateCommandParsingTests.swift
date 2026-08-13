@@ -58,7 +58,8 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
         XCTAssertNil(cmd.lmModel)
         XCTAssertFalse(cmd.useLM)
         XCTAssertNil(cmd.durationSeconds)
-        XCTAssertEqual(cmd.quality, .song)
+        XCTAssertNil(cmd.quality)
+        XCTAssertEqual(cmd.resolvedQuality, .song)
         XCTAssertNil(cmd.steps)
         XCTAssertNil(cmd.shift)
         XCTAssertNil(cmd.guidanceScale)
@@ -77,15 +78,51 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
             "--model", MiniMaxMusic3Resources.modelID,
             "--lyrics", "[verse]\nwe glow",
             "--duration", "30",
+            "--max-frames", "750",
             "--steps", "24",
             "--seed", "7",
+            "--guidance-scale", "1.7",
+            "--sample-rate", "32000",
+            "--memory-mode", "staged",
         ])
 
         XCTAssertEqual(command.model, MiniMaxMusic3Resources.modelID)
         XCTAssertEqual(command.lyrics, "[verse]\nwe glow")
         XCTAssertEqual(command.durationSeconds, 30)
+        XCTAssertEqual(command.miniMaxMaximumFrames, 750)
         XCTAssertEqual(command.steps, 24)
         XCTAssertEqual(command.seed, 7)
+        XCTAssertEqual(command.guidanceScale, 1.7)
+        XCTAssertEqual(command.miniMaxOutputSampleRate, 32_000)
+        XCTAssertEqual(command.miniMaxLoadingStrategy, .staged)
+    }
+
+    func testMiniMaxRejectsSharedControlsInsteadOfIgnoringThem() throws {
+        let rejectedArguments = [
+            ["--quality", "final"],
+            ["--bpm", "118"],
+            ["--metadata-duration", "30 seconds"],
+            ["--lm-temperature", "0.7"],
+            ["--vae-chunk-size", "256"],
+            ["--temperature", "0.8"],
+            ["--checkpoints-root", "/tmp/checkpoints"],
+        ]
+
+        for arguments in rejectedArguments {
+            let command = try MusicGenerate.parse(
+                [
+                    "cinematic synth-pop",
+                    "--model", MiniMaxMusic3Resources.modelID,
+                    "--instrumental",
+                ] + arguments
+            )
+            XCTAssertThrowsError(
+                try command.validateMiniMaxMusic3Options(
+                    explicitDurationSeconds: nil
+                ),
+                arguments.joined(separator: " ")
+            )
+        }
     }
 
     func testMusicGenerateParsesModelAndAdvancedOverrides() throws {

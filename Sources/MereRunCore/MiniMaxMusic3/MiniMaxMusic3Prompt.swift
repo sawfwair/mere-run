@@ -27,13 +27,37 @@ public enum MiniMaxMusic3Prompt {
                 text.replaceSubrange(whole, with: replacement)
             }
         }
-        let lines = text.components(separatedBy: .newlines).map { line -> String in
+        text = text.replacingOccurrences(of: "\r\n", with: "\n")
+            .replacingOccurrences(of: "\r", with: "\n")
+        var sourceLines = text.components(separatedBy: "\n")
+        if sourceLines.last?.isEmpty == true {
+            sourceLines.removeLast()
+        }
+        let lines = sourceLines.map { line -> String in
             var value = line
             value = value.replacingOccurrences(of: #"^\s{0,3}#{1,6}\s+"#, with: "", options: .regularExpression)
             value = value.replacingOccurrences(of: #"^\s*[*+-]\s+"#, with: "", options: .regularExpression)
-            value = value.replacingOccurrences(of: #"\*\*([^*]+)\*\*"#, with: "$1", options: .regularExpression)
-            value = value.replacingOccurrences(of: #"\*([^*\n]+)\*"#, with: "$1", options: .regularExpression)
-            return value.trimmingCharacters(in: .whitespaces)
+            value = value.replacingOccurrences(of: #"^\s*\*\s+"#, with: "", options: .regularExpression)
+            while value.contains("**") {
+                let updated = value.replacingOccurrences(
+                    of: #"\*\*([^*]+)\*\*"#,
+                    with: "$1",
+                    options: .regularExpression
+                )
+                if updated == value {
+                    break
+                }
+                value = updated
+            }
+            value = value.replacingOccurrences(
+                of: #"(?<!\*)\*([^*\n]+)\*(?!\*)"#,
+                with: "$1",
+                options: .regularExpression
+            )
+            while value.last.map({ $0 == " " || $0 == "\t" }) == true {
+                value.removeLast()
+            }
+            return value
         }
         text = lines.joined(separator: "\n")
         text = text.replacingOccurrences(of: #"(?m)^\s*[-*_]{3,}\s*$"#, with: "", options: .regularExpression)

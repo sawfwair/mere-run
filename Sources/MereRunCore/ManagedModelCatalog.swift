@@ -2118,7 +2118,7 @@ public enum ManagedModelCatalog {
             validationKind: .miniMaxMusic3,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: MiniMaxMusic3Resources.estimatedDownloadBytes,
-            defaultCLICommands: ["music generate"]
+            defaultCLICommands: ["music generate", "music serve"]
         ),
         ManagedModelSpec(
             id: ModelResolver.ModelID.magentaRT2Small.rawValue,

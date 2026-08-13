@@ -2,7 +2,7 @@ import Foundation
 import MereRunCore
 
 struct MiniMaxMusic3GenerationRecipe: Codable {
-    static let currentSchemaVersion = 1
+    static let currentSchemaVersion = 2
 
     var schemaVersion: Int
     var createdAt: Date
@@ -12,11 +12,14 @@ struct MiniMaxMusic3GenerationRecipe: Codable {
     var caption: String
     var lyrics: String
     var durationSeconds: Float
+    var requestedMaximumFrames: Int?
     var generatedFrameCount: Int
     var inferenceSteps: Int
     var seed: UInt64
     var guidanceScale: Float
-    var sampleRate: Int
+    var nativeSampleRate: Int
+    var outputSampleRate: Int
+    var loadingStrategy: MiniMaxMusic3LoadingStrategy
     var export: ACEStepAudioExportOptions
     var outputFilename: String
     var outputSHA256: String
@@ -30,11 +33,14 @@ struct MiniMaxMusic3GenerationRecipe: Codable {
         case caption
         case lyrics
         case durationSeconds = "duration_seconds"
+        case requestedMaximumFrames = "requested_maximum_frames"
         case generatedFrameCount = "generated_frame_count"
         case inferenceSteps = "inference_steps"
         case seed
         case guidanceScale = "guidance_scale"
-        case sampleRate = "sample_rate"
+        case nativeSampleRate = "native_sample_rate"
+        case outputSampleRate = "output_sample_rate"
+        case loadingStrategy = "loading_strategy"
         case export
         case outputFilename = "output_filename"
         case outputSHA256 = "output_sha256"

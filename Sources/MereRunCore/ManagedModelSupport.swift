@@ -784,8 +784,8 @@ public enum ManagedModelCapabilityCatalog {
                 ModelResolver.ModelID.miniMaxMusic3.rawValue,
                 "MiniMax Music 3",
                 "Generates complete lyric-driven 44.1 kHz stereo songs with the native staged Swift/MLX runtime.",
-                minimum: 64,
-                recommended: 96
+                minimum: 32,
+                recommended: 64
             ),
             descriptor(
                 ModelResolver.ModelID.magentaRT2Small.rawValue,

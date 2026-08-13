@@ -11,13 +11,49 @@ public struct MiniMaxMusic3Models {
     public let tokenizer: ACEStep5HzLMTokenizer
 }
 
+public struct MiniMaxMusic3AutoregressiveModels {
+    public let languageModel: MiniMaxMusic3LanguageModel
+    public let depthDecoder: MiniMaxMusic3DepthDecoder
+    public let tokenizer: ACEStep5HzLMTokenizer
+}
+
+public struct MiniMaxMusic3FlowModels {
+    public let conditionEncoder: MiniMaxMusic3ConditionEncoder
+    public let transformer: MiniMaxMusic3Transformer
+}
+
+public enum MiniMaxMusic3LoadingStrategy: String, CaseIterable, Codable, Sendable {
+    case staged
+    case resident
+}
+
 public enum MiniMaxMusic3ModelLoader {
     public static func load(from resources: MiniMaxMusic3Resources) throws -> MiniMaxMusic3Models {
-        let missing = resources.validate()
-        guard missing.isEmpty else {
-            throw MiniMaxMusic3Error.missingResources(missing)
-        }
+        try validate(resources)
+        let autoregressive = try loadAutoregressive(from: resources)
+        let flow = try loadFlow(from: resources)
+        let vocoder = try loadVocoder(from: resources)
+        MLX.eval(
+            autoregressive.languageModel.parameters(),
+            autoregressive.depthDecoder.parameters(),
+            flow.conditionEncoder.parameters(),
+            flow.transformer.parameters(),
+            vocoder.parameters()
+        )
+        return MiniMaxMusic3Models(
+            languageModel: autoregressive.languageModel,
+            depthDecoder: autoregressive.depthDecoder,
+            conditionEncoder: flow.conditionEncoder,
+            transformer: flow.transformer,
+            vocoder: vocoder,
+            tokenizer: autoregressive.tokenizer
+        )
+    }
 
+    public static func loadAutoregressive(
+        from resources: MiniMaxMusic3Resources
+    ) throws -> MiniMaxMusic3AutoregressiveModels {
+        try validate(resources)
         let languageModel = MiniMaxMusic3LanguageModel(
             configuration: try resources.loadLanguageConfiguration()
         )
@@ -27,7 +63,6 @@ public enum MiniMaxMusic3ModelLoader {
             singleName: "model.safetensors",
             into: languageModel
         )
-
         let depthDecoder = MiniMaxMusic3DepthDecoder(
             configuration: try resources.loadDepthConfiguration()
         )
@@ -35,7 +70,22 @@ public enum MiniMaxMusic3ModelLoader {
             directory: resources.depthDecoderURL,
             into: depthDecoder
         )
+        let tokenizer = try ACEStep5HzLMTokenizer.load(
+            from: resources.tokenizerURL,
+            requireAudioCodeTokens: false
+        )
+        MLX.eval(languageModel.parameters(), depthDecoder.parameters())
+        return MiniMaxMusic3AutoregressiveModels(
+            languageModel: languageModel,
+            depthDecoder: depthDecoder,
+            tokenizer: tokenizer
+        )
+    }
 
+    public static func loadFlow(
+        from resources: MiniMaxMusic3Resources
+    ) throws -> MiniMaxMusic3FlowModels {
+        try validate(resources)
         let conditionEncoder = MiniMaxMusic3ConditionEncoder(
             configuration: try resources.loadConditionConfiguration()
         )
@@ -44,7 +94,6 @@ public enum MiniMaxMusic3ModelLoader {
             into: conditionEncoder,
             mapper: MiniMaxMusic3ConditionEncoder.mapWeight
         )
-
         let transformer = MiniMaxMusic3Transformer(
             configuration: try resources.loadTransformerConfiguration()
         )
@@ -53,7 +102,17 @@ public enum MiniMaxMusic3ModelLoader {
             into: transformer,
             mapper: MiniMaxMusic3Transformer.mapWeight
         )
+        MLX.eval(conditionEncoder.parameters(), transformer.parameters())
+        return MiniMaxMusic3FlowModels(
+            conditionEncoder: conditionEncoder,
+            transformer: transformer
+        )
+    }
 
+    public static func loadVocoder(
+        from resources: MiniMaxMusic3Resources
+    ) throws -> MiniMaxMusic3Vocoder {
+        try validate(resources)
         let vocoder = MiniMaxMusic3Vocoder(
             configuration: try resources.loadVocoderConfiguration()
         )
@@ -62,26 +121,15 @@ public enum MiniMaxMusic3ModelLoader {
             into: vocoder,
             mapper: MiniMaxMusic3Vocoder.mapWeight
         )
+        MLX.eval(vocoder.parameters())
+        return vocoder
+    }
 
-        let tokenizer = try ACEStep5HzLMTokenizer.load(
-            from: resources.tokenizerURL,
-            requireAudioCodeTokens: false
-        )
-        MLX.eval(
-            languageModel.parameters(),
-            depthDecoder.parameters(),
-            conditionEncoder.parameters(),
-            transformer.parameters(),
-            vocoder.parameters()
-        )
-        return MiniMaxMusic3Models(
-            languageModel: languageModel,
-            depthDecoder: depthDecoder,
-            conditionEncoder: conditionEncoder,
-            transformer: transformer,
-            vocoder: vocoder,
-            tokenizer: tokenizer
-        )
+    private static func validate(_ resources: MiniMaxMusic3Resources) throws {
+        let missing = resources.validate()
+        guard missing.isEmpty else {
+            throw MiniMaxMusic3Error.missingResources(missing)
+        }
     }
 
     private static func loadWeights(
