@@ -351,6 +351,11 @@ enum InstalledModelSmokePlans {
                 try await runner.installedACEStepCheck(model: spec.id)
             }
 
+        case .miniMaxMusic3:
+            return direct(spec, route: "music generate") { runner in
+                try await runner.installedMiniMaxMusic3Check(model: spec.id)
+            }
+
         case .aceStepLM:
             return companion(
                 spec,
@@ -1198,6 +1203,26 @@ extension GateRunner {
                 "--model", model,
                 "--duration", "2",
                 "--seed-rotation", "7",
+                "--output", output.path,
+                "--quiet",
+            ],
+            timeout: 3_600
+        )
+        return try audioObservation(output, run: run)
+    }
+
+    func installedMiniMaxMusic3Check(model: String) async throws -> GateObservation {
+        let output = artifactURL(model, extension: "wav")
+        let run = try await exec(
+            [
+                "music", "generate",
+                "A short soft electronic pulse.",
+                "--model", model,
+                "--instrumental",
+                "--duration", "2",
+                "--steps", "1",
+                "--seed", "7",
+                "--no-recipe",
                 "--output", output.path,
                 "--quiet",
             ],

@@ -78,7 +78,7 @@ public enum QuantizedModelManifestWriter {
             case .openAIPrivacyFilter: return .privacy
             case .qwen3Coder, .northMiniCode: return .code
             case .lightOnOCR: return .ocr
-            case .aceStep, .magentaRT2, .muScriptor, .roFormer: return .music
+            case .aceStep, .miniMaxMusic3, .magentaRT2, .muScriptor, .roFormer: return .music
             case .apBWE, .univerSR: return .audio
             case .woosh, .mmaudio: return .sfx
             case .ltxVideo, .wanVideo, .miniMaxH3, .cosmos3Edge: return .video
@@ -171,7 +171,7 @@ public enum QuantizedModelManifestWriter {
                     return [.chat, .codeGeneration]
                 case .lightOnOCR:
                     return [.visionOCR]
-                case .aceStep, .magentaRT2:
+                case .aceStep, .miniMaxMusic3, .magentaRT2:
                     return [.musicGeneration]
                 case .muScriptor:
                     return [.musicTranscription]
@@ -274,6 +274,8 @@ public enum QuantizedModelManifestWriter {
                 break
             case .aceStep, .magentaRT2, .ltxVideo:
                 manifest.defaults = MereRunModelManifest.Defaults(steps: 8, cfg: 1.0)
+            case .miniMaxMusic3:
+                manifest.defaults = MereRunModelManifest.Defaults(steps: 30, cfg: 1.7)
             case .wanVideo:
                 manifest.defaults = MereRunModelManifest.Defaults(steps: 40, cfg: 5.0, sigmaShift: 5.0)
             case .miniMaxH3:

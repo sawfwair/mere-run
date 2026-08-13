@@ -95,6 +95,7 @@ public struct ModelResolver {
         case aceStepXLTurboLM4B = "music-acestep-xl-turbo-lm4b"
         case aceStepLM17B = "music-acestep-lm-1.7b"
         case aceStepLM4B = "music-acestep-lm-4b"
+        case miniMaxMusic3 = "music-minimax-music3"
         case magentaRT2Small = "music-magenta-rt2-small"
         case magentaRT2Base = "music-magenta-rt2-base"
         case muScriptorSmall = "music-muscriptor-small"

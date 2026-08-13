@@ -75,6 +75,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case trellis2
     case aceStep
     case aceStepLM
+    case miniMaxMusic3
     case magentaRT2
     case muScriptor
     case roFormer
@@ -2084,6 +2085,42 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["music generate", "music analyze", "music serve"]
         ),
         ManagedModelSpec(
+            id: ModelResolver.ModelID.miniMaxMusic3.rawValue,
+            category: .music,
+            installShape: .structuredRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: MiniMaxMusic3Resources.repository,
+                revision: MiniMaxMusic3Resources.revision,
+                patterns: [
+                    "LICENSE",
+                    "README.md",
+                    "config.json",
+                    "modular_model_index.json",
+                    "condition_encoder/*",
+                    "language_model/*",
+                    "rvq_depth_decoder/*",
+                    "scheduler/*",
+                    "tokenizer/*",
+                    "transformer/*",
+                    "vocoder/*",
+                ]
+            ),
+            upstreamRepoId: MiniMaxMusic3Resources.repository,
+            upstreamRevision: MiniMaxMusic3Resources.revision,
+            usageRestriction: usageRestriction(
+                summary: "MiniMax Music 3 uses the custom MiniMax-Music3 Community License, including product attribution, revenue-threshold authorization, and hosted-generation safeguards.",
+                component: "MiniMax Music 3 weights",
+                license: "MiniMax-Music3 Community License",
+                sourceRepoId: MiniMaxMusic3Resources.repository,
+                sourceRevision: MiniMaxMusic3Resources.revision,
+                licenseURL: "https://huggingface.co/MiniMaxAI/MiniMax-Music3/blob/\(MiniMaxMusic3Resources.revision)/LICENSE"
+            ),
+            validationKind: .miniMaxMusic3,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: MiniMaxMusic3Resources.estimatedDownloadBytes,
+            defaultCLICommands: ["music generate"]
+        ),
+        ManagedModelSpec(
             id: ModelResolver.ModelID.magentaRT2Small.rawValue,
             category: .music,
             installShape: .structuredRoot,
@@ -3086,6 +3123,8 @@ public extension ManagedModelSpec {
             return Self.missingACEStepPaths(modelID: id, in: rootURL, fileManager: fileManager)
         case .aceStepLM:
             return ACEStep5HzLMResources(rootURL: rootURL).validate(fileManager: fileManager)
+        case .miniMaxMusic3:
+            return MiniMaxMusic3Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .magentaRT2:
             return Self.missingMagentaRT2Paths(modelID: id, in: rootURL, fileManager: fileManager)
         case .muScriptor:

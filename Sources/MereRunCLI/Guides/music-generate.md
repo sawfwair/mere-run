@@ -2,9 +2,10 @@
 
 ## Purpose
 
-Generate a WAV music clip from a caption. ACE-Step supports optional structured
-lyrics, while Magenta RT2 supports native Apple Silicon offline and realtime
-prompt-to-music generation.
+Generate a WAV music clip from a caption. MiniMax Music 3 generates complete
+44.1 kHz stereo songs from a caption plus structured lyrics, ACE-Step supports
+generation and source-audio editing, and Magenta RT2 supports native Apple
+Silicon offline and realtime prompt-to-music generation.
 
 ## Required Models
 
@@ -23,6 +24,8 @@ Managed ids:
 - `music-acestep-lm-1.7b`: independently pullable upstream-default 5 Hz
   planner; pairs with any ACE-Step DiT.
 - `music-acestep-lm-4b`: independently pullable optional 4B 5 Hz planner.
+- `music-minimax-music3`: MiniMax Music 3 language model, RVQ depth decoder,
+  flow transformer, condition encoder, and stereo vocoder.
 - `music-magenta-rt2-small`: Magenta RealTime 2 small exported runtime assets.
 - `music-magenta-rt2-base`: Magenta RealTime 2 base exported runtime assets.
 
@@ -33,11 +36,13 @@ mere.run model pull music-acestep
 mere.run model pull music-acestep-xl-turbo
 mere.run model pull music-acestep-xl-turbo-lm4b
 mere.run model pull music-acestep-lm-1.7b
+mere.run model pull music-minimax-music3 --accept-model-license
 mere.run model pull music-magenta-rt2-small
 mere.run music generate --help
 mere.run music analyze --help
 mere.run guide music generate --model music-acestep
 mere.run guide music generate --model music-acestep-xl-turbo
+mere.run guide music generate --model music-minimax-music3
 mere.run guide music generate --model music-magenta-rt2-small
 ```
 
@@ -72,7 +77,7 @@ mere.run guide music generate --model music-magenta-rt2-small
 - `--use-lm`: enable 5 Hz constrained LM for supported text-to-music tasks.
 - `--lm-model music-acestep-lm-4b`: explicitly select the optional 4B planner.
 - `--duration`: output seconds.
-- `--steps`, `-s`: turbo denoise steps.
+- `--steps`, `-s`: denoise steps; MiniMax Music 3 defaults to `30`.
 - `--shift`: turbo scheduler shift; ACE-Step CLI default is `3.0`, matching upstream.
 - `--seed`: deterministic generation.
 - `--source-audio`: source song for ACE-Step cover, repaint, extract, lego, or
@@ -139,6 +144,16 @@ mere.run guide music generate --model music-magenta-rt2-small
   `seed`, and `onset`.
 - `--quiet`, `-q`: suppress diagnostics.
 
+MiniMax Music 3 requires `--lyrics`, `--lyrics-file`, `--lrc-file`, or
+`--instrumental`. Its native staged runtime autoregressively generates 25 Hz
+semantic and residual codes, conditions a flow transformer, and decodes stereo
+audio without a Python process. `--duration` accepts up to 360 seconds and
+`--guidance-scale` defaults to `1.7`. ACE-Step source audio, adapters, ranked
+candidates, stems, DAW bundles, and LRC export do not apply to this model. A
+reproducibility recipe is written beside the WAV unless `--no-recipe` is used.
+The selective managed download is approximately 26.6 GiB and requires
+explicit acknowledgement of the upstream MiniMax-Music3 Community License.
+
 ACE-Step uses upstream-style native Haar DCW sampler correction by default for
 cleaner diffusion latents before VAE decode.
 
@@ -199,7 +214,22 @@ Use this guide as a command topic, then focus it with `--model` when needed:
 ```bash
 mere.run guide music generate --model music-acestep
 mere.run guide music generate --model music-acestep-xl-turbo
+mere.run guide music generate --model music-minimax-music3
 mere.run guide music generate --model music-magenta-rt2-small
+```
+
+For a MiniMax Music 3 song, make the caption describe the production and pass
+sectioned lyrics separately:
+
+```bash
+mere.run music generate \
+  "cinematic synth-pop, female lead, 118 bpm, wide guitars" \
+  --model music-minimax-music3 \
+  --lyrics-file ./lyrics.txt \
+  --duration 30 \
+  --steps 30 \
+  --seed 7 \
+  --output ./minimax-song.wav
 ```
 
 For ACE-Step text-to-music, start with a direct caption and optional structured

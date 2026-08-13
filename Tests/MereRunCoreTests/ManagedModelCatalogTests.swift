@@ -70,6 +70,7 @@ final class ManagedModelCatalogTests: XCTestCase {
             MuseGlimmerResources.modelId,
             MuseGlimmerResources.assistantModelId,
             "image-3d-trellis2-4b",
+            MiniMaxMusic3Resources.modelID,
             "music-muscriptor-small",
             "music-muscriptor-medium",
             "music-muscriptor-large",

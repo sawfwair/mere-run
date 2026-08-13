@@ -71,6 +71,23 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
         XCTAssertFalse(cmd.resolvedACEStepIsCover)
     }
 
+    func testMusicGenerateParsesMiniMaxMusic3Request() throws {
+        let command = try MusicGenerate.parse([
+            "cinematic synth-pop",
+            "--model", MiniMaxMusic3Resources.modelID,
+            "--lyrics", "[verse]\nwe glow",
+            "--duration", "30",
+            "--steps", "24",
+            "--seed", "7",
+        ])
+
+        XCTAssertEqual(command.model, MiniMaxMusic3Resources.modelID)
+        XCTAssertEqual(command.lyrics, "[verse]\nwe glow")
+        XCTAssertEqual(command.durationSeconds, 30)
+        XCTAssertEqual(command.steps, 24)
+        XCTAssertEqual(command.seed, 7)
+    }
+
     func testMusicGenerateParsesModelAndAdvancedOverrides() throws {
         let cmd = try MusicGenerate.parse([
             "club track",

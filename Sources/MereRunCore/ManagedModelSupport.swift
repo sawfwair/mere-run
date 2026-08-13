@@ -781,6 +781,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 32
             ),
             descriptor(
+                ModelResolver.ModelID.miniMaxMusic3.rawValue,
+                "MiniMax Music 3",
+                "Generates complete lyric-driven 44.1 kHz stereo songs with the native staged Swift/MLX runtime.",
+                minimum: 64,
+                recommended: 96
+            ),
+            descriptor(
                 ModelResolver.ModelID.magentaRT2Small.rawValue,
                 "Magenta RealTime 2 small",
                 "Streams controllable Magenta RT2 music on Apple Silicon with the 230M model.",

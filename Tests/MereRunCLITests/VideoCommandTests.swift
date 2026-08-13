@@ -1229,14 +1229,15 @@ final class VideoCommandTests: XCTestCase {
 
         let envelope = command.makePreflightEnvelope(outputURL: output)
         let summary = try XCTUnwrap(envelope.result.inputs.detailingLoRAs?.first)
-        XCTAssertEqual(summary.requested, ManagedAdapterCatalog.ltx25PixelSpatialUpscalerID)
-        XCTAssertEqual(
-            summary.path,
-            try XCTUnwrap(
-                ManagedAdapterCatalog.spec(for: ManagedAdapterCatalog.ltx25PixelSpatialUpscalerID)
-            ).installedFileURL().path
+        let spec = try XCTUnwrap(
+            ManagedAdapterCatalog.spec(for: ManagedAdapterCatalog.ltx25PixelSpatialUpscalerID)
         )
-        XCTAssertTrue(envelope.diagnostics.contains { $0.id == "detailing_lora_0_missing" })
+        XCTAssertEqual(summary.requested, ManagedAdapterCatalog.ltx25PixelSpatialUpscalerID)
+        XCTAssertEqual(summary.path, spec.installedFileURL().path)
+        XCTAssertEqual(
+            envelope.diagnostics.contains { $0.id == "detailing_lora_0_missing" },
+            !spec.isInstalled()
+        )
     }
 
     func testLTX25SpecificControlsSelectTheDistilledCatalogModel() throws {

@@ -113,6 +113,7 @@ from the runtime catalog used by `mere.run model list`,
 | `music` | `music-acestep-xl-turbo-lm4b` |
 | `music` | `music-acestep-lm-1.7b` |
 | `music` | `music-acestep-lm-4b` |
+| `music` | `music-minimax-music3` |
 | `music` | `music-magenta-rt2-small` |
 | `music` | `music-magenta-rt2-base` |
 | `music` | `music-muscriptor-small` |
@@ -675,6 +676,40 @@ planner in the selected checkpoint root, then reuse an installed standalone or
 `music-acestep` 1.7B planner, and finally pull `music-acestep-lm-1.7b` when LM
 planning is required. Override that resolution with `--lm-model` or the legacy
 same-root `--lm-subdirectory`.
+
+### `music-minimax-music3`
+
+MiniMax Music 3 comes from `MiniMaxAI/MiniMax-Music3` at immutable revision
+`bd348f9c49ea3c1b39f33ace3436f8fad435f24e`. The managed pull selects the 25
+runtime files needed by the native Swift/MLX implementation and omits the
+duplicate `qwen_7B/` tree and Python-only examples. The selected snapshot is
+28,517,620,807 bytes (approximately 26.6 GiB):
+
+```text
+.../models/music-minimax-music3
+├── condition_encoder/
+├── language_model/
+├── rvq_depth_decoder/
+├── scheduler/
+├── tokenizer/
+├── transformer/
+├── vocoder/
+├── config.json
+├── modular_model_index.json
+└── LICENSE
+```
+
+The checkpoint uses the MiniMax-Music3 Community License rather than an OSI
+open-source license. Managed pulls therefore require
+`--accept-model-license`, runtime auto-download is disabled, and applications
+using the model must preserve the upstream attribution and usage restrictions.
+Review the pinned `LICENSE` before deploying or redistributing the weights.
+
+`mere.run music generate --model music-minimax-music3` assembles the released
+caption-and-lyrics prompt contract, generates 25 Hz semantic plus residual RVQ
+codes, runs the overlap-aware flow transformer, and writes 44.1 kHz stereo WAV
+output through the released vocoder. Generation currently supports text plus
+lyrics (or `--instrumental`) for at most 360 seconds.
 
 ### `music-magenta-rt2-small` and `music-magenta-rt2-base`
 
