@@ -117,6 +117,7 @@ struct VideoDubIt: AsyncParsableCommand {
     }
 
     mutating func run() async throws {
+        try MLXBundleSupport.ensureAvailable(quiet: quiet)
         let referenceURL = URL(fileURLWithPath: referenceVideo).standardizedFileURL
         guard FileManager.default.fileExists(atPath: referenceURL.path) else {
             throw ValidationError("Reference video not found: \(referenceURL.path)")

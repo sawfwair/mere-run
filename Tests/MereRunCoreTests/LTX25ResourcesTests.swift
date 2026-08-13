@@ -44,6 +44,21 @@ final class LTX25ResourcesTests: XCTestCase {
         })
     }
 
+    func testStandaloneLoaderResolvesOfficialAudioVAEForReferenceEncoding() {
+        let root = URL(fileURLWithPath: "/tmp/ltx25-official")
+        let transformer = root.appendingPathComponent(LTX25Resources.transformerRelativePath)
+
+        XCTAssertEqual(
+            ltxStandaloneAudioVAEWeightsURL(
+                modelRoot: root,
+                isLTX23: false,
+                isLTX25: true,
+                transformerURL: transformer
+            ),
+            LTX25Resources(rootURL: root).audioVAEURL
+        )
+    }
+
     func testOfficialFullLayoutRequiresDevTransformerAndDistilledLoRA() throws {
         let root = try TestFileSystem.makeTempDir()
         defer { try? FileManager.default.removeItem(at: root) }
