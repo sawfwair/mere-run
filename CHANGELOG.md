@@ -6,6 +6,27 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.37.0 - 2026-08-13
+
+This release adds two substantial native Apple Silicon runtimes: LiquidAI's
+compact LFM2.5-VL 3B vision-language model and MiniMax Music 3 song generation.
+It also completes the native Swift/MLX LTX 2.5 v1.2.0 inference family and fixes
+fresh-checkout Dub-It loading against the official gated audio VAE and IC-LoRA.
+
+The new managed checkpoints remain pinned to immutable upstream revisions and
+retain their upstream license gates. MiniMax Music 3 and the full LTX 2.5 bundle
+are intentionally staged for high-memory systems; neither silently downloads
+at inference time.
+
+### Vision
+
+- added `vision-chat-lfm25-3b-8bit`, a pinned native Swift/MLX implementation of
+  LiquidAI's LFM2.5-VL 3B 8-bit checkpoint. The existing `text chat --image`
+  workflow now supports typed LFM2-VL configuration, SigLIP2 image encoding,
+  smart resizing and patch packing, multimodal projection, visual-token
+  prefill, model-aware defaults, capability reporting, and explicit LFM Open
+  License acceptance without a Python or Transformers runtime.
+
 ### Video and audio
 
 - added `music-minimax-music3`, a pinned selective MiniMax Music 3 checkpoint
@@ -32,6 +53,13 @@ The format is based on Keep a Changelog.
   LoRA weights, official seed/sampler/DFR recipes, and stacked IC-LoRA metadata.
   The local API and macOS Studio advertise and route the same native surfaces;
   no Python inference process or sidecar is used.
+
+### Included pull requests
+
+- exact release range: [#288](https://github.com/sawfwair/mere-run/pull/288),
+  [#289](https://github.com/sawfwair/mere-run/pull/289),
+  [#290](https://github.com/sawfwair/mere-run/pull/290), and
+  [#291](https://github.com/sawfwair/mere-run/pull/291).
 
 ## 0.36.0 - 2026-08-12
 
