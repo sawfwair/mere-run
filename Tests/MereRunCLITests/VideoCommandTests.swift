@@ -4,6 +4,150 @@ import XCTest
 @testable import MereRunCore
 
 final class VideoCommandTests: XCTestCase {
+    func testVideoGenerateParsesFullLTX25SamplerAndGuidanceSurface() throws {
+        let command = try VideoGenerate.parse([
+            "cinematic ocean storm",
+            "--ltx-preset", "hq",
+            "--ltx-sampler", "res2s",
+            "--ltx-sigmas", "1", "0.5", "0",
+            "--ltx-stage-2-sigmas", "0.9", "0.3", "0",
+            "--distilled-lora-strength-stage-1", "0.2",
+            "--distilled-lora-strength-stage-2", "0.45",
+            "--ltx-sampler-eta", "0.4",
+            "--video-stg-scale", "0.8",
+            "--video-guidance-rescale", "0.45",
+            "--video-stg-block", "27",
+            "--video-stg-block", "28",
+            "--video-guidance-skip-step", "1",
+            "--audio-stg-scale", "0.6",
+            "--audio-guidance-rescale", "1",
+            "--audio-stg-block", "28",
+            "--audio-guidance-skip-step", "2",
+            "--no-res2s-bong-math",
+            "--res2s-bong-max-iterations", "12",
+            "--gradient-estimation-gamma", "1.5",
+            "--video-decoder", "convolutional",
+        ])
+
+        XCTAssertEqual(command.ltxPreset, .hq)
+        XCTAssertEqual(command.ltxSampler, .res2s)
+        XCTAssertEqual(command.ltxSigmas, [1, 0.5, 0])
+        XCTAssertEqual(command.ltxStage2Sigmas, [0.9, 0.3, 0])
+        XCTAssertEqual(command.distilledLoRAStrengthStage1, 0.2)
+        XCTAssertEqual(command.distilledLoRAStrengthStage2, 0.45)
+        XCTAssertEqual(command.ltxSamplerEta, 0.4)
+        XCTAssertEqual(command.videoSTGScale, 0.8)
+        XCTAssertEqual(command.videoGuidanceRescale, 0.45)
+        XCTAssertEqual(command.videoSTGBlocks, [27, 28])
+        XCTAssertEqual(command.videoGuidanceSkipStep, 1)
+        XCTAssertEqual(command.audioSTGScale, 0.6)
+        XCTAssertEqual(command.audioGuidanceRescale, 1)
+        XCTAssertEqual(command.audioSTGBlocks, [28])
+        XCTAssertEqual(command.audioGuidanceSkipStep, 2)
+        XCTAssertTrue(command.noRes2sBongMath)
+        XCTAssertEqual(command.res2sBongMaxIterations, 12)
+        XCTAssertEqual(command.gradientEstimationGamma, 1.5)
+        XCTAssertEqual(command.videoDecoder, .convolutional)
+    }
+
+    func testVideoGenerateParsesICLoRASpatialMaskAndStageOnePreview() throws {
+        let command = try VideoGenerate.parse([
+            "restyle only the masked performer",
+            "--video-conditioning", "/tmp/reference.mp4=0.8",
+            "--conditioning-attention-mask", "/tmp/mask.mp4",
+            "--conditioning-attention-strength", "0.6",
+            "--skip-stage-2",
+        ])
+
+        XCTAssertEqual(command.videoConditioningArguments, ["/tmp/reference.mp4=0.8"])
+        XCTAssertEqual(command.conditioningAttentionMask, "/tmp/mask.mp4")
+        XCTAssertEqual(command.conditioningAttentionStrength, 0.6)
+        XCTAssertTrue(command.skipStage2)
+    }
+
+    func testVideoGenerateParsesHDRICLoRAPrecomputedEmbeddings() throws {
+        let command = try VideoGenerate.parse([
+            "unused when precomputed context is supplied",
+            "--hdr", "srgb-linear",
+            "--hdr-transfer", "logc3",
+            "--high-quality-hdr",
+            "--text-embeddings", "/tmp/contexts.safetensors",
+            "--spatial-tile", "768",
+            "--spatial-overlap", "128",
+            "--skip-mp4",
+        ])
+
+        XCTAssertEqual(command.hdrColorSpace, .srgbLinear)
+        XCTAssertEqual(command.hdrTransfer, .logC3)
+        XCTAssertTrue(command.highQualityHDR)
+        XCTAssertEqual(command.textEmbeddings, "/tmp/contexts.safetensors")
+        XCTAssertEqual(command.vaeSpatialTileSize, 768)
+        XCTAssertEqual(command.vaeSpatialTileOverlap, 128)
+        XCTAssertTrue(command.skipHDRMP4)
+    }
+
+    func testVideoGenerateParsesDevOneStagePipeline() throws {
+        let command = try VideoGenerate.parse([
+            "a still lake under moonlight",
+            "--ltx-pipeline", "dev-one-stage",
+            "--distilled-lora-strength-stage-1", "0",
+            "--distilled-lora-strength-stage-2", "0",
+        ])
+
+        XCTAssertEqual(command.ltxPipeline, .devOneStage)
+        XCTAssertEqual(command.distilledLoRAStrengthStage1, 0)
+        XCTAssertEqual(command.distilledLoRAStrengthStage2, 0)
+    }
+
+    func testVideoGenerateParsesKeyframeInterpolationPipeline() throws {
+        let command = try VideoGenerate.parse([
+            "move smoothly between the supplied moments",
+            "--ltx-pipeline", "keyframe-interpolation",
+            "--image-conditioning", "0:/tmp/opening.png:1",
+            "--image-conditioning", "120:/tmp/ending.png:1",
+        ])
+
+        XCTAssertEqual(command.ltxPipeline, .keyframeInterpolation)
+        XCTAssertEqual(command.imageConditioningArguments.count, 2)
+        XCTAssertEqual(command.resolvedRequestedModel, ModelResolver.ModelID.ltxVideo25FullBF16.rawValue)
+        XCTAssertEqual(command.resolvedOutputWidth, 1_536)
+        XCTAssertEqual(command.resolvedOutputHeight, 1_024)
+    }
+
+    func testVideoGenerateUsesOfficialLTX25RecipeGeometryWhenOmitted() throws {
+        let standard = try VideoGenerate.parse([
+            "a wide cinematic landscape",
+            "--model", ModelResolver.ModelID.ltxVideo25DistilledBF16.rawValue,
+        ])
+        XCTAssertNil(standard.width)
+        XCTAssertNil(standard.height)
+        XCTAssertEqual(standard.resolvedOutputWidth, 1_536)
+        XCTAssertEqual(standard.resolvedOutputHeight, 1_024)
+
+        let hq = try VideoGenerate.parse([
+            "a wide cinematic landscape",
+            "--ltx-preset", "hq",
+        ])
+        XCTAssertEqual(hq.resolvedOutputWidth, 1_920)
+        XCTAssertEqual(hq.resolvedOutputHeight, 1_088)
+
+        let dev = try VideoGenerate.parse([
+            "a wide cinematic landscape",
+            "--ltx-pipeline", "dev-one-stage",
+        ])
+        XCTAssertEqual(dev.resolvedOutputWidth, 768)
+        XCTAssertEqual(dev.resolvedOutputHeight, 512)
+
+        let explicit = try VideoGenerate.parse([
+            "a compact test",
+            "--model", ModelResolver.ModelID.ltxVideo25FullBF16.rawValue,
+            "--width", "320",
+            "--height", "192",
+        ])
+        XCTAssertEqual(explicit.resolvedOutputWidth, 320)
+        XCTAssertEqual(explicit.resolvedOutputHeight, 192)
+    }
+
     func testVideoCommandExposesCosmos3NativeSurface() {
         XCTAssertTrue(
             Video.configuration.subcommands.contains {
@@ -73,8 +217,84 @@ final class VideoCommandTests: XCTestCase {
         let commandNames = Set(Video.configuration.subcommands.map { $0.configuration.commandName })
         XCTAssertEqual(
             commandNames,
-            Set(["animate", "cosmos3", "generate", "prepare-masks", "export-latents", "session"])
+            Set([
+                "animate", "cosmos3", "dub-it", "generate", "prepare-masks",
+                "export-latents", "retake", "session",
+            ])
         )
+    }
+
+    func testVideoRetakeParsesNativeLTX25EditingSurface() throws {
+        let command = try VideoRetake.parse([
+            "replace the middle performance",
+            "--source", "/tmp/source.mp4",
+            "--start-time", "1.25",
+            "--end-time", "3.5",
+            "--preserve-audio",
+            "--video-decoder", "convolutional",
+            "--steps", "24",
+            "--sigmas", "1", "0.5", "0",
+            "--lora", "/tmp/style.safetensors=0.7",
+            "--enhance-prompt",
+            "--video-cfg-guidance-scale", "3.5",
+            "--video-stg-block", "28",
+            "--audio-guidance-skip-step", "2",
+        ])
+        XCTAssertEqual(command.source, "/tmp/source.mp4")
+        XCTAssertEqual(command.startTime, 1.25)
+        XCTAssertEqual(command.endTime, 3.5)
+        XCTAssertTrue(command.preserveAudio)
+        XCTAssertFalse(command.preserveVideo)
+        XCTAssertEqual(command.videoDecoder, .convolutional)
+        XCTAssertEqual(command.steps, 24)
+        XCTAssertEqual(command.sigmas, [1, 0.5, 0])
+        XCTAssertEqual(command.loraArguments, ["/tmp/style.safetensors=0.7"])
+        XCTAssertTrue(command.enhancePrompt)
+        XCTAssertEqual(command.videoCFGScale, 3.5)
+        XCTAssertEqual(command.videoSTGBlocks, [28])
+        XCTAssertEqual(command.audioSkipStep, 2)
+        XCTAssertEqual(command.model, ModelResolver.ModelID.ltxVideo25DistilledBF16.rawValue)
+    }
+
+    func testVideoRetakeUsesOfficialLTX25Defaults() throws {
+        let command = try VideoRetake.parse([
+            "replace the middle performance",
+            "--source", "/tmp/source.mp4",
+            "--start-time", "1",
+            "--end-time", "2",
+        ])
+
+        XCTAssertEqual(command.seed, 10)
+        XCTAssertEqual(command.videoSTGBlocks, [28])
+        XCTAssertEqual(command.audioSTGBlocks, [28])
+    }
+
+    func testVideoDubItParsesNativeLTX25ReferenceSurface() throws {
+        let command = try VideoDubIt.parse([
+            "restage the performance in a snowy mountain village",
+            "--reference-video", "/tmp/performer.mp4",
+            "--ic-lora", "/tmp/dub-it.safetensors",
+            "--ic-lora-strength", "0.8",
+            "--reference-strength", "0.7",
+            "--width", "1024",
+            "--height", "768",
+            "--stage-1-sigmas", "1", "0.5", "0",
+            "--stage-2-sigmas", "0.9", "0.4", "0",
+            "--enhance-prompt",
+            "--video-decoder", "convolutional",
+        ])
+
+        XCTAssertEqual(command.referenceVideo, "/tmp/performer.mp4")
+        XCTAssertEqual(command.icLoRA, "/tmp/dub-it.safetensors")
+        XCTAssertEqual(command.icLoRAStrength, 0.8)
+        XCTAssertEqual(command.referenceStrength, 0.7)
+        XCTAssertEqual(command.width, 1024)
+        XCTAssertEqual(command.height, 768)
+        XCTAssertEqual(command.stage1Sigmas, [1, 0.5, 0])
+        XCTAssertEqual(command.stage2Sigmas, [0.9, 0.4, 0])
+        XCTAssertTrue(command.enhancePrompt)
+        XCTAssertEqual(command.videoDecoder, .convolutional)
+        XCTAssertEqual(command.model, ModelResolver.ModelID.ltxVideo25DistilledBF16.rawValue)
     }
 
     func testVideoAnimateParsesNativeSCAIL2DefaultsAndReferences() throws {
@@ -321,10 +541,13 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertEqual(cmd.requestedQuality, .draft)
         XCTAssertEqual(cmd.effectiveOutputMode, .videoOnly)
         XCTAssertEqual(cmd.resolvedRequestedModel, ModelResolver.ModelID.ltxVideo23AVMLX.rawValue)
-        XCTAssertEqual(cmd.width, 768)
-        XCTAssertEqual(cmd.height, 512)
-        XCTAssertEqual(cmd.numFrames, 65)
+        XCTAssertNil(cmd.width)
+        XCTAssertNil(cmd.height)
+        XCTAssertEqual(cmd.resolvedOutputWidth, 768)
+        XCTAssertEqual(cmd.resolvedOutputHeight, 512)
+        XCTAssertNil(cmd.numFrames)
         XCTAssertNil(cmd.duration)
+        XCTAssertTrue(cmd.autoDuration.isEmpty)
         XCTAssertEqual(cmd.fps, 24)
         XCTAssertNil(cmd.steps)
         XCTAssertEqual(cmd.h3WeightMode, .automatic)
@@ -335,11 +558,51 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertEqual(cmd.imageStrength, 1.0)
         XCTAssertNil(cmd.endImage)
         XCTAssertEqual(cmd.endImageStrength, 1.0)
+        XCTAssertTrue(cmd.imageConditioningArguments.isEmpty)
+        XCTAssertEqual(cmd.numGeneratedKeyframes, 0)
+        XCTAssertTrue(cmd.generatedKeyframeIndices.isEmpty)
         XCTAssertNil(cmd.modelRoot)
         XCTAssertFalse(cmd.preflight)
         XCTAssertFalse(cmd.json)
         XCTAssertFalse(cmd.timings)
         XCTAssertNil(cmd.timingsOutput)
+    }
+
+    func testVideoGenerateParsesLTX25PromptEnhancementAndAutoDuration() throws {
+        let cmd = try VideoGenerate.parse([
+            "a fox crosses a creek",
+            "--model", ModelResolver.ModelID.ltxVideo25DistilledBF16.rawValue,
+            "--auto-duration", "2", "18",
+            "--enhance-prompt",
+            "--prompt-enhancer-model", "vision-chat-gemma4-12b",
+            "--prompt-enhancer-model-root", "/tmp/gemma4",
+        ])
+
+        XCTAssertEqual(cmd.autoDuration, [2, 18])
+        XCTAssertEqual(cmd.autoDurationRange, LTX25AutoDuration(minimumSeconds: 2, maximumSeconds: 18))
+        XCTAssertTrue(cmd.enhancePrompt)
+        XCTAssertEqual(cmd.promptEnhancerModel, "vision-chat-gemma4-12b")
+        XCTAssertEqual(cmd.promptEnhancerModelRoot, "/tmp/gemma4")
+
+        let envelope = cmd.makePreflightEnvelope(
+            outputURL: makeTempOutput(name: "ltx25-auto-duration.mp4")
+        )
+        XCTAssertEqual(envelope.request.autoDuration, [2, 18])
+        XCTAssertEqual(envelope.request.enhancePrompt, true)
+        XCTAssertEqual(envelope.request.promptEnhancerModel, "vision-chat-gemma4-12b")
+        XCTAssertEqual(envelope.request.promptEnhancerModelRoot, "/tmp/gemma4")
+    }
+
+    func testVideoGenerateParsesA2VidAudioWindow() throws {
+        let command = try VideoGenerate.parse([
+            "animate the performance",
+            "--audio", "/tmp/performance.wav",
+            "--audio-start-time", "1.25",
+            "--audio-max-duration", "6.5",
+        ])
+
+        XCTAssertEqual(command.audioStartTime, 1.25)
+        XCTAssertEqual(command.audioMaxDuration, 6.5)
     }
 
     func testVideoGenerateAcceptsManagedLTX25ModelID() throws {
@@ -604,6 +867,7 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertEqual(envelope.status, .ok)
         XCTAssertEqual(envelope.result.model.layout, "ltx25_distilled")
         XCTAssertEqual(envelope.result.plan.quality, "final")
+        XCTAssertEqual(envelope.result.plan.seed, 10)
         XCTAssertFalse(envelope.diagnostics.contains { $0.id == "video_quality_model_mismatch" })
     }
 
@@ -658,6 +922,7 @@ final class VideoCommandTests: XCTestCase {
         let a2vRoot = try makeValidA2VidModelRoot()
         let fullRoot = try makeValidFullModelRoot()
         let ltx25Root = try makeValidLTX25ModelRoot()
+        let ltx25FullRoot = try makeValidLTX25FullModelRoot()
 
         let legacy = resolveLTXVideoGenerationRoute(variant: .distilled, modelRoot: legacyRoot)
         XCTAssertEqual(legacy, .legacyDistilledVideo)
@@ -686,6 +951,12 @@ final class VideoCommandTests: XCTestCase {
         let ltx25AV = resolveLTXVideoGenerationRoute(outputMode: .audioVideo, modelRoot: ltx25Root)
         XCTAssertEqual(ltx25AV, .unifiedAV)
         XCTAssertTrue(ltx25AV.writesAudio)
+
+        let ltx25FullVideo = resolveLTXVideoGenerationRoute(outputMode: .videoOnly, modelRoot: ltx25FullRoot)
+        XCTAssertEqual(ltx25FullVideo, .fullQualityVideo)
+
+        let ltx25FullAV = resolveLTXVideoGenerationRoute(outputMode: .audioVideo, modelRoot: ltx25FullRoot)
+        XCTAssertEqual(ltx25FullAV, .unifiedAV)
 
         let unified = resolveLTXVideoGenerationRoute(variant: .unifiedAV, modelRoot: splitRoot)
         XCTAssertEqual(unified, .unifiedAV)
@@ -889,6 +1160,208 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertEqual(cmd.imageStrength, 0.85, accuracy: 0.0001)
         XCTAssertEqual(cmd.endImage, "/tmp/end.png")
         XCTAssertEqual(cmd.endImageStrength, 0.7, accuracy: 0.0001)
+    }
+
+    func testVideoGenerateParsesArbitraryLTX25ImageGuidesAndGeneratedSlots() throws {
+        let cmd = try VideoGenerate.parse([
+            "a flower opens across several guided moments",
+            "--image-conditioning", "12:/tmp/first.png:0.8",
+            "--image-conditioning", "47:/tmp/second.png",
+            "--image-conditioning", "56:/tmp/third.png:0.9:0",
+            "--generated-keyframe", "24",
+            "--generated-keyframe", "40",
+        ])
+
+        XCTAssertEqual(
+            cmd.imageConditioningArguments,
+            ["12:/tmp/first.png:0.8", "47:/tmp/second.png", "56:/tmp/third.png:0.9:0"]
+        )
+        XCTAssertEqual(cmd.generatedKeyframeIndices, [24, 40])
+    }
+
+    func testVideoGeneratePreservesGeneratedKeyframeCountInPreflight() throws {
+        let output = makeTempOutput(name: "generated-keyframes.mp4")
+        let command = try VideoGenerate.parse([
+            "a long continuous camera move",
+            "--num-generated-keyframes", "3",
+            "--preflight",
+            "--json",
+        ])
+
+        XCTAssertEqual(command.numGeneratedKeyframes, 3)
+        let envelope = command.makePreflightEnvelope(
+            outputURL: output,
+            fileManager: .default,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+        XCTAssertEqual(envelope.request.numGeneratedKeyframes, 3)
+        let action = try XCTUnwrap(
+            envelope.actions.first { $0.id == "start-video-generation" }
+        )
+        XCTAssertTrue(action.command?.argv.contains("--num-generated-keyframes") == true)
+    }
+
+    func testVideoGenerateParsesLTX25DFRControls() throws {
+        let cmd = try VideoGenerate.parse([
+            "a sweeping cinematic shoreline reveal",
+            "--dfr",
+            "--temporal-upsample-rounds", "2",
+        ])
+
+        XCTAssertTrue(cmd.dfr)
+        XCTAssertEqual(cmd.temporalUpsampleRounds, 2)
+        XCTAssertEqual(cmd.resolvedRequestedModel, ModelResolver.ModelID.ltxVideo25FullBF16.rawValue)
+        XCTAssertEqual(cmd.effectiveOutputMode, .audioVideo)
+    }
+
+    func testVideoGeneratePreflightResolvesManagedLTX25Detailer() throws {
+        let modelRoot = try makeValidLTX25FullModelRoot()
+        let output = makeTempOutput(name: "dfr-managed-detailer.mp4")
+        let command = try VideoGenerate.parse([
+            "a detailed shoreline",
+            "--model-root", modelRoot.path,
+            "--dfr",
+            "--detailing-lora", ManagedAdapterCatalog.ltx25PixelSpatialUpscalerID,
+            "--output", output.path,
+            "--preflight",
+            "--json",
+        ])
+
+        let envelope = command.makePreflightEnvelope(outputURL: output)
+        let summary = try XCTUnwrap(envelope.result.inputs.detailingLoRAs?.first)
+        XCTAssertEqual(summary.requested, ManagedAdapterCatalog.ltx25PixelSpatialUpscalerID)
+        XCTAssertEqual(
+            summary.path,
+            try XCTUnwrap(
+                ManagedAdapterCatalog.spec(for: ManagedAdapterCatalog.ltx25PixelSpatialUpscalerID)
+            ).installedFileURL().path
+        )
+        XCTAssertTrue(envelope.diagnostics.contains { $0.id == "detailing_lora_0_missing" })
+    }
+
+    func testLTX25SpecificControlsSelectTheDistilledCatalogModel() throws {
+        let command = try VideoGenerate.parse([
+            "a controlled identity transfer",
+            "--video-conditioning", "/tmp/reference.mp4=1",
+            "--lora", "/tmp/control.safetensors",
+        ])
+
+        XCTAssertEqual(
+            command.resolvedRequestedModel,
+            ModelResolver.ModelID.ltxVideo25DistilledBF16.rawValue
+        )
+    }
+
+    func testVideoGeneratePreflightPreservesLTX25AdvancedArguments() throws {
+        let output = makeTempOutput(name: "dfr-clip.mp4")
+        let cmd = try VideoGenerate.parse([
+            "a sweeping cinematic shoreline reveal",
+            "--output", output.path,
+            "--image-conditioning", "12:/tmp/first.png:0.8",
+            "--generated-keyframe", "24",
+            "--lora", "/tmp/creative.safetensors=0.7",
+            "--video-conditioning", "/tmp/reference.mp4=0.6",
+            "--conditioning-attention-strength", "0.75",
+            "--conditioning-attention-mask", "/tmp/mask.mp4",
+            "--skip-stage-2",
+            "--reference-downscale-factor", "2",
+            "--reference-temporal-scale-factor", "3",
+            "--dfr",
+            "--temporal-upsample-rounds", "1",
+            "--detailing-lora", "/tmp/detailer.safetensors=0.9",
+            "--detailing-reference-downscale-factor", "2",
+            "--hdr", "acescg",
+            "--hdr-transfer", "acescct",
+            "--high-quality-hdr",
+            "--text-embeddings", "/tmp/contexts.safetensors",
+            "--spatial-tile", "768",
+            "--spatial-overlap", "128",
+            "--skip-mp4",
+            "--ltx-preset", "hq",
+            "--ltx-pipeline", "dev-one-stage",
+            "--ltx-sampler", "res2s",
+            "--ltx-sigmas", "1", "0.5", "0",
+            "--ltx-stage-2-sigmas", "0.9", "0",
+            "--distilled-lora-strength-stage-1", "0.25",
+            "--distilled-lora-strength-stage-2", "0.5",
+            "--ltx-sampler-eta", "0.4",
+            "--video-stg-scale", "0.8",
+            "--video-guidance-rescale", "0.6",
+            "--video-stg-block", "29",
+            "--video-guidance-skip-step", "1",
+            "--audio-stg-scale", "0.7",
+            "--audio-guidance-rescale", "0.5",
+            "--audio-stg-block", "28",
+            "--audio-guidance-skip-step", "2",
+            "--no-res2s-bong-math",
+            "--res2s-bong-max-iterations", "12",
+            "--gradient-estimation-gamma", "1.5",
+            "--preflight",
+            "--json",
+        ])
+
+        let envelope = cmd.makePreflightEnvelope(
+            outputURL: output,
+            fileManager: .default,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.request.imageConditionings, ["12:/tmp/first.png:0.8"])
+        XCTAssertEqual(envelope.request.generatedKeyframeIndices, [24])
+        XCTAssertEqual(envelope.request.loras, ["/tmp/creative.safetensors=0.7"])
+        XCTAssertEqual(envelope.request.videoConditionings, ["/tmp/reference.mp4=0.6"])
+        XCTAssertEqual(envelope.request.conditioningAttentionStrength, 0.75)
+        XCTAssertEqual(envelope.request.conditioningAttentionMask, "/tmp/mask.mp4")
+        XCTAssertEqual(envelope.request.skipStage2, true)
+        XCTAssertEqual(envelope.request.referenceDownscaleFactor, 2)
+        XCTAssertEqual(envelope.request.referenceTemporalScaleFactor, 3)
+        XCTAssertEqual(envelope.request.dfr, true)
+        XCTAssertEqual(envelope.request.temporalUpsampleRounds, 1)
+        XCTAssertEqual(envelope.request.detailingLoRAs, ["/tmp/detailer.safetensors=0.9"])
+        XCTAssertEqual(envelope.request.detailingReferenceDownscaleFactor, 2)
+        XCTAssertEqual(envelope.request.hdrColorSpace, "acescg")
+        XCTAssertEqual(envelope.request.hdrTransfer, "acescct")
+        XCTAssertEqual(envelope.request.highQualityHDR, true)
+        XCTAssertEqual(envelope.request.textEmbeddings, "/tmp/contexts.safetensors")
+        XCTAssertEqual(envelope.request.vaeSpatialTileSize, 768)
+        XCTAssertEqual(envelope.request.vaeSpatialTileOverlap, 128)
+        XCTAssertEqual(envelope.request.skipHDRMP4, true)
+        XCTAssertEqual(envelope.request.ltxPreset, "hq")
+        XCTAssertEqual(envelope.request.ltxPipeline, "dev-one-stage")
+        XCTAssertEqual(envelope.request.ltxSampler, "res2s")
+        XCTAssertEqual(envelope.request.ltxSigmas, [1, 0.5, 0])
+        XCTAssertEqual(envelope.request.ltxStage2Sigmas, [0.9, 0])
+        XCTAssertEqual(envelope.request.distilledLoRAStrengthStage1, 0.25)
+        XCTAssertEqual(envelope.request.distilledLoRAStrengthStage2, 0.5)
+        XCTAssertEqual(envelope.request.ltxSamplerEta, 0.4)
+        XCTAssertEqual(envelope.request.videoSTGScale, 0.8)
+        XCTAssertEqual(envelope.request.videoGuidanceRescale, 0.6)
+        XCTAssertEqual(envelope.request.videoSTGBlocks, [29])
+        XCTAssertEqual(envelope.request.videoGuidanceSkipStep, 1)
+        XCTAssertEqual(envelope.request.audioSTGScale, 0.7)
+        XCTAssertEqual(envelope.request.audioGuidanceRescale, 0.5)
+        XCTAssertEqual(envelope.request.audioSTGBlocks, [28])
+        XCTAssertEqual(envelope.request.audioGuidanceSkipStep, 2)
+        XCTAssertEqual(envelope.request.noRes2sBongMath, true)
+        XCTAssertEqual(envelope.request.res2sBongMaxIterations, 12)
+        XCTAssertEqual(envelope.request.gradientEstimationGamma, 1.5)
+        let action = envelope.actions.first { $0.id == "start-video-generation" }
+        XCTAssertTrue(action?.command?.argv.contains("--dfr") == true)
+        XCTAssertTrue(action?.command?.argv.contains("--temporal-upsample-rounds") == true)
+        XCTAssertTrue(action?.command?.argv.contains("--image-conditioning") == true)
+        XCTAssertTrue(action?.command?.argv.contains("--generated-keyframe") == true)
+        XCTAssertTrue(action?.command?.argv.contains("--lora") == true)
+        XCTAssertTrue(action?.command?.argv.contains("--video-conditioning") == true)
+        XCTAssertTrue(action?.command?.argv.contains("--conditioning-attention-strength") == true)
+        XCTAssertTrue(action?.command?.argv.contains("--reference-downscale-factor") == true)
+        XCTAssertTrue(action?.command?.argv.contains("--reference-temporal-scale-factor") == true)
+        XCTAssertTrue(action?.command?.argv.contains("--detailing-lora") == true)
+        XCTAssertTrue(action?.command?.argv.contains("--conditioning-attention-mask") == true)
+        XCTAssertTrue(action?.command?.argv.contains("--skip-stage-2") == true)
+        XCTAssertTrue(action?.command?.argv.contains("--hdr") == true)
+        XCTAssertTrue(action?.command?.argv.contains("--text-embeddings") == true)
+        XCTAssertTrue(action?.command?.argv.contains("--ltx-preset") == true)
+        XCTAssertTrue(action?.command?.argv.contains("--ltx-sampler") == true)
     }
 
     func testVideoGenerateRejectsEndImageWithoutStartImage() async throws {
@@ -1180,6 +1653,29 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertEqual(nearestLTXFrameCount(duration: 15, fps: 24), 361)
         XCTAssertEqual(nearestLTXFrameCount(duration: 5, fps: 24), 121)
         XCTAssertEqual(nearestLTXFrameCount(duration: 15, fps: 8), 121)
+        XCTAssertEqual(nearestLTXFrameCount(duration: 5, fps: 23.976), 121)
+    }
+
+    func testVideoGeneratePreservesFractionalLTXFrameRateInPreflight() throws {
+        let modelRoot = try makeValidLTX25ModelRoot()
+        let output = makeTempOutput(name: "fractional-fps.mp4")
+        let command = try VideoGenerate.parse([
+            "a precisely timed shot",
+            "--model-root", modelRoot.path,
+            "--fps", "23.976",
+            "--output", output.path,
+            "--preflight",
+            "--json",
+        ])
+
+        let envelope = command.makePreflightEnvelope(outputURL: output)
+        XCTAssertEqual(command.fps, 23.976, accuracy: 1e-9)
+        XCTAssertEqual(envelope.request.fps, 23.976, accuracy: 1e-9)
+        XCTAssertEqual(envelope.result.plan.fps, 23.976, accuracy: 1e-9)
+        XCTAssertNil(envelope.request.numFrames)
+        XCTAssertEqual(envelope.request.autoDuration ?? [], [1, 20])
+        XCTAssertEqual(envelope.result.plan.autoDuration ?? [], [1, 20])
+        XCTAssertNil(envelope.result.plan.resolvedNumFrames)
     }
 
     func testNearestWanFrameCountUsesFourFrameLatentCadence() {
@@ -1361,6 +1857,10 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertNoThrow(try validateNativeModelRoot(makeValidLTX25ModelRoot()))
     }
 
+    func testValidateNativeAudioToVideoModelRootAcceptsOfficialFullLTX25Layout() throws {
+        XCTAssertNoThrow(try validateNativeAudioToVideoModelRoot(makeValidLTX25FullModelRoot()))
+    }
+
     func testWanPreflightUsesNativeSpatialAndTemporalGeometry() throws {
         let modelRoot = try makeValidWanModelRoot()
         let sourceImage = try makeTempFile(name: "start.png")
@@ -1465,6 +1965,14 @@ final class VideoCommandTests: XCTestCase {
     private func makeValidLTX25ModelRoot() throws -> URL {
         let rootURL = try makeTempDirectory()
         for relativePath in LTX25Resources.requiredRelativePaths {
+            try createFile(rootURL.appendingPathComponent(relativePath))
+        }
+        return rootURL
+    }
+
+    private func makeValidLTX25FullModelRoot() throws -> URL {
+        let rootURL = try makeTempDirectory()
+        for relativePath in LTX25Resources.fullRequiredRelativePaths {
             try createFile(rootURL.appendingPathComponent(relativePath))
         }
         return rootURL

@@ -67,6 +67,6 @@ final class AudioEnhanceCommandTests: XCTestCase {
     }
 
     func testAudioCommandOwnsEnhanceSubcommand() {
-        XCTAssertEqual(Audio.configuration.subcommands.map { $0.configuration.commandName }, ["enhance"])
+        XCTAssertEqual(Audio.configuration.subcommands.map { $0.configuration.commandName }, ["generate", "enhance"])
     }
 }

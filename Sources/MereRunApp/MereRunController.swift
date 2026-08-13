@@ -775,6 +775,7 @@ final class MereRunController: ObservableObject {
         draft.videoOutputMode = studioDraft.videoOutputMode
         draft.audioPath = studioDraft.audioPath
         draft.audioStartTime = studioDraft.audioStartTime
+        draft.audioMaxDuration = studioDraft.audioMaxDuration
         draft.endImagePath = studioDraft.endImagePath
         draft.endImageStrength = studioDraft.endImageStrength
         draft.scheduleShift = studioDraft.scheduleShift

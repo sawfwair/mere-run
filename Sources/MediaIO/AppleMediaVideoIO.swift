@@ -15,7 +15,7 @@ enum AppleMediaVideoIO {
         width: Int,
         height: Int,
         frameCount: Int,
-        fps: Int,
+        fps: Double,
         to outputURL: URL
     ) throws {
         try writeMP4(
@@ -59,7 +59,7 @@ enum AppleMediaVideoIO {
             width: width,
             height: height,
             frameCount: frameCount,
-            fps: fps,
+            fps: Double(fps),
             to: outputURL
         ) { frameIndex, destination, bytesPerRow in
             let srcOffset = frameIndex * frameStride
@@ -82,7 +82,7 @@ enum AppleMediaVideoIO {
         width: Int,
         height: Int,
         frameCount: Int,
-        fps: Int,
+        fps: Double,
         to outputURL: URL,
         fileType: AVFileType = .mp4,
         codec: AVVideoCodecType = .h264,
@@ -91,8 +91,8 @@ enum AppleMediaVideoIO {
         guard width > 0, height > 0, frameCount > 0 else {
             throw MediaIOError.videoOperationFailed("Invalid MP4 dimensions or frame rate.")
         }
-        let frameRate = try MediaVideoFrameRateResolver.resolve(Double(fps))
-        let integerFPS = Int(frameRate.timeScale)
+        let frameRate = try MediaVideoFrameRateResolver.resolve(fps)
+        let integerFPS = Int(frameRate.framesPerSecond.rounded())
         try FileManager.default.createDirectory(
             at: outputURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
@@ -166,14 +166,20 @@ enum AppleMediaVideoIO {
                 throw error
             }
             CVPixelBufferUnlockBaseAddress(pixelBuffer, [])
-            let time = CMTime(value: Int64(frameIndex), timescale: frameRate.timeScale)
+            let time = CMTime(
+                value: Int64(frameIndex) * frameRate.frameDurationValue,
+                timescale: frameRate.timeScale
+            )
             guard adaptor.append(pixelBuffer, withPresentationTime: time) else {
                 throw MediaIOError.videoOperationFailed("Failed to append frame \(frameIndex).")
             }
         }
 
         input.markAsFinished()
-        writer.endSession(atSourceTime: CMTime(value: Int64(frameCount), timescale: frameRate.timeScale))
+        writer.endSession(atSourceTime: CMTime(
+            value: Int64(frameCount) * frameRate.frameDurationValue,
+            timescale: frameRate.timeScale
+        ))
         let semaphore = DispatchSemaphore(value: 0)
         writer.finishWriting { semaphore.signal() }
         semaphore.wait()
@@ -279,7 +285,10 @@ enum AppleMediaVideoIO {
         var frameWidth = 0
         var frameHeight = 0
         for frameIndex in 0..<frameCount {
-            let time = CMTime(value: CMTimeValue(frameIndex), timescale: frameRate.timeScale)
+            let time = CMTime(
+                value: CMTimeValue(frameIndex) * frameRate.frameDurationValue,
+                timescale: frameRate.timeScale
+            )
             let image = try generator.copyCGImage(at: time, actualTime: nil)
             if frameWidth == 0 || frameHeight == 0 {
                 frameWidth = image.width
@@ -326,7 +335,7 @@ enum AppleMediaVideoIO {
             width: firstImage.width,
             height: firstImage.height,
             frameCount: frameURLs.count,
-            fps: Int(frameRate.timeScale),
+            fps: Int(frameRate.framesPerSecond.rounded()),
             to: outputURL
         )
     }
@@ -341,7 +350,7 @@ enum AppleMediaVideoIO {
             width: firstImage.width,
             height: firstImage.height,
             frameCount: frameURLs.count,
-            fps: Int(frameRate.timeScale),
+            fps: frameRate.framesPerSecond,
             to: outputURL,
             fileType: .mov,
             codec: .proRes4444

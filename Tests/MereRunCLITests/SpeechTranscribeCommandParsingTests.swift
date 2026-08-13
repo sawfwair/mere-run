@@ -152,8 +152,8 @@ final class SpeechTranscribeCommandParsingTests: XCTestCase {
         XCTAssertEqual(
             videoNames,
             Set([
-                "animate", "cosmos3", "generate", "session", "export-latents",
-                "prepare-masks",
+                "animate", "cosmos3", "dub-it", "generate", "session", "export-latents",
+                "prepare-masks", "retake",
             ])
         )
 

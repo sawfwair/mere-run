@@ -97,6 +97,22 @@ struct ManagedAdapterCatalogTests {
         #expect(ManagedAdapterCatalog.spec(for: " MERE-PLATFORM-ASSISTANT ")?.version == "22")
     }
 
+    @Test("Official LTX-2.5 DFR detailer is an immutable gated pin")
+    func ltx25PixelSpatialUpscalerIsPinned() throws {
+        let spec = try #require(
+            ManagedAdapterCatalog.spec(for: ManagedAdapterCatalog.ltx25PixelSpatialUpscalerID)
+        )
+        #expect(spec.version == "74c4e68ee7dd")
+        #expect(spec.baseModelID == ModelResolver.ModelID.ltxVideo25FullBF16.rawValue)
+        #expect(spec.format == "ltx-2.5-ic-lora")
+        #expect(spec.upstreamRevision == ManagedAdapterCatalog.ltx25PixelSpatialUpscalerRevision)
+        #expect(spec.usageRestriction != nil)
+        #expect(spec.artifact.byteCount == 327_322_640)
+        #expect(spec.artifact.sha256 == "984851b769ea2bcb4c9e0a239a7676239e42c6a6001ddc69943b41ff0b283c1d")
+        #expect(spec.downloadURL.host == "huggingface.co")
+        #expect(spec.downloadURL.absoluteString.contains(spec.upstreamRevision!))
+    }
+
     @Test("Resolver enforces the base model before checking disk")
     func rejectsWrongBaseModel() throws {
         let root = FileManager.default.temporaryDirectory

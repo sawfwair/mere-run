@@ -77,6 +77,7 @@ Public tree:
   - `mere.run geo tessera` — Encode local Sentinel-1/2 time series with a native TESSERA v2 student.
   - `mere.run geo olmoearth` — Encode multisensor Earth observations with native OlmoEarth v1.2.
 - [`mere.run audio`](/runtime/audio) — Enhance general audio locally.
+  - `mere.run audio generate` — Generate audio from text with the native LTX-2.5 audio-only model.
   - `mere.run audio enhance` — Extend speech or general-audio bandwidth to 48 kHz.
 - [`mere.run music`](/runtime/music) — Generate, analyze, transcribe, and separate music locally.
   - `mere.run music analyze` — Analyze source audio with ACE-Step audio understanding.
@@ -100,9 +101,11 @@ Public tree:
 - [`mere.run video`](/runtime/video) — Generate and understand video with native Swift/MLX pipelines.
   - `mere.run video animate` — Animate or replace a masked subject with native Swift/MLX SCAIL-2.
   - `mere.run video cosmos3` — Run native NVIDIA Cosmos3-Edge generation and action modes.
+  - `mere.run video dub-it` — Generate synchronized video and audio identity from one LTX 2.5 IC-LoRA reference.
   - `mere.run video export-latents` — Run native Swift/MLX distilled LTX denoising and export final latents.
   - `mere.run video generate` — Generate MP4 video with native Swift/MLX video models.
   - `mere.run video prepare-masks` — Prepare reviewable, palette-safe SCAIL-2 masks with native SAM 3.1.
+  - `mere.run video retake` — Regenerate a timed video/audio region with native LTX 2.5.
   - `mere.run video session` — Keep an LTX 2.3 runtime resident for JSONL generation requests.
 - [`mere.run world`](/runtime/world) — Run persistent local conditioned-video world sessions.
   - `mere.run world serve` — Serve one warm native world-model session over HTTP.
@@ -247,7 +250,7 @@ are:
 - Face detection and identity embeddings: `vision-face-buffalo-l`
 - Music: `music-acestep`, `music-acestep-xl-turbo`, `music-acestep-xl-turbo-lm4b`, `music-acestep-xl-sft`, `music-acestep-xl-base`, `music-acestep-lm-1.7b`, `music-acestep-lm-4b`, `music-magenta-rt2-small`, `music-magenta-rt2-base`
 - SFX: `sfx-woosh-dflow`, `sfx-woosh-flow`
-- Video: `video-ltx-av`, `video-ltx23-av-mlx`, `video-ltx23-full-mlx`, `video-ltx23-a2vid-mlx`, `video-ltx25-distilled-bf16`, `video-wan22-ti2v-5b-mlx`, `video-scail2-14b-mlx`
+- Video: `video-ltx-av`, `video-ltx23-av-mlx`, `video-ltx23-full-mlx`, `video-ltx23-a2vid-mlx`, `video-ltx25-distilled-bf16`, `video-ltx25-full-bf16`, `video-wan22-ti2v-5b-mlx`, `video-scail2-14b-mlx`
 
 For subsystem-specific implementation guides, see:
 

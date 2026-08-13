@@ -3,6 +3,18 @@ import MLX
 import XCTest
 
 final class LTXSplitMLXWeightMapperTests: XCTestCase {
+    func testLTX25UnifiedMapperPreservesLearnedKeyframeEmbedding() {
+        let mapped = mapUnifiedTransformerWeight(
+            key: "model.diffusion_model.keyframes_abs_pos_embedding",
+            value: MLXArray.zeros([1, 4_096]),
+            dtype: .bfloat16
+        )
+
+        XCTAssertEqual(mapped.map(\.0), ["keyframes_abs_pos_embedding"])
+        XCTAssertEqual(mapped[0].1.shape, [1, 4_096])
+        XCTAssertEqual(mapped[0].1.dtype, .bfloat16)
+    }
+
     func testVideoVAEDecoderPreservesSplitMLXConvLayout() {
         let mapped = mapLTXDecoderWeight(
             key: "vae_decoder.conv_in.conv.weight",
@@ -103,5 +115,25 @@ final class LTXSplitMLXWeightMapperTests: XCTestCase {
 
         XCTAssertEqual(mapped.map(\.0), ["upsampler.conv.weight"])
         XCTAssertEqual(mapped[0].1.shape, [4096, 3, 3, 1024])
+    }
+
+    func testTemporalUpsamplerMapsPyTorchConv3DLayout() {
+        let mapped = mapLTXUpsamplerWeight(
+            key: "upsampler.0.weight",
+            value: MLXArray.zeros([1024, 512, 3, 3, 3]),
+            dtype: .float32
+        )
+
+        XCTAssertEqual(mapped.map(\.0), ["upsampler.conv.weight"])
+        XCTAssertEqual(mapped[0].1.shape, [1024, 3, 3, 3, 512])
+    }
+
+    func testTemporalPixelShuffleDoublesTimeAndPreservesValues() {
+        let input = MLXArray(Array(0..<12).map(Float.init)).reshaped(1, 2, 1, 1, 6)
+        let output = ltxTemporalPixelShuffle(input, upscaleFactor: 2)
+        MLX.eval(output)
+
+        XCTAssertEqual(output.shape, [1, 4, 1, 1, 3])
+        XCTAssertEqual(output.asArray(Float.self), [0, 2, 4, 1, 3, 5, 6, 8, 10, 7, 9, 11])
     }
 }

@@ -463,6 +463,8 @@ private struct CommandEditor: View {
             VisionMultiviewOptions()
         case .audioEnhance:
             AudioEnhancementOptions()
+        case .audioGenerate:
+            LTXAudioGenerationOptions()
         case .musicGenerate:
             MusicGenerationOptions()
         case .musicAnalyze:
@@ -480,6 +482,11 @@ private struct CommandEditor: View {
         case .videoGenerate:
             DimensionsGrid()
             VideoOptions()
+        case .videoRetake:
+            LTXVideoRetakeOptions()
+        case .videoDubIt:
+            DimensionsGrid()
+            LTXVideoDubItOptions()
         case .videoAnimate:
             DimensionsGrid()
             VideoAnimateOptions()
@@ -3483,6 +3490,47 @@ private struct AudioEnhancementOptions: View {
     }
 }
 
+private struct LTXAudioGenerationOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("LTX-2.5 audio") {
+            VStack(spacing: 10) {
+                Toggle("Use duration instead of frame count", isOn: $controller.draft.useDuration)
+                AdaptiveControlRow {
+                    if controller.draft.useDuration {
+                        NumberField(title: "Duration", value: $controller.draft.durationSeconds)
+                    } else {
+                        NumberStepper(
+                            title: "Frames",
+                            value: $controller.draft.numFrames,
+                            range: 9...2_401,
+                            step: 8
+                        )
+                        NumberStepper(
+                            title: "FPS clock",
+                            value: $controller.draft.fps,
+                            range: 1...120,
+                            step: 1
+                        )
+                    }
+                    NumberStepper(
+                        title: "Steps",
+                        value: $controller.draft.steps,
+                        range: 1...200,
+                        step: 1
+                    )
+                }
+                TextField("Seed", text: $controller.draft.seed)
+                    .textFieldStyle(.plain)
+                    .padding(10)
+                    .merePanel()
+                Toggle("Quiet", isOn: $controller.draft.quiet)
+            }
+        }
+    }
+}
+
 private struct MusicSeparationOptions: View {
     @EnvironmentObject private var controller: MereRunController
 
@@ -3540,6 +3588,61 @@ private struct ModelOptimizeOptions: View {
                     Toggle("Replace compatible cache", isOn: $controller.draft.force)
                     Toggle("JSON result", isOn: $controller.draft.json)
                 }
+            }
+        }
+    }
+}
+
+private struct LTXVideoRetakeOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("LTX-2.5 Retake") {
+            VStack(spacing: 10) {
+                AdaptiveControlRow {
+                    NumberField(title: "Start time", value: $controller.draft.retakeStartTime)
+                    NumberField(title: "End time", value: $controller.draft.retakeEndTime)
+                    NumberStepper(
+                        title: "Steps",
+                        value: $controller.draft.steps,
+                        range: 1...200,
+                        step: 1
+                    )
+                }
+                AdaptiveControlRow {
+                    Toggle("Preserve source video", isOn: $controller.draft.retakePreserveVideo)
+                    Toggle("Preserve source audio", isOn: $controller.draft.retakePreserveAudio)
+                }
+                TextField("Seed", text: $controller.draft.seed)
+                    .textFieldStyle(.plain)
+                    .padding(10)
+                    .merePanel()
+                Toggle("Quiet", isOn: $controller.draft.quiet)
+            }
+        }
+    }
+}
+
+private struct LTXVideoDubItOptions: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        EditorSection("LTX-2.5 Dub-It") {
+            VStack(spacing: 10) {
+                PathField(
+                    path: $controller.draft.loraPath,
+                    placeholder: "Dub-It IC-LoRA safetensors",
+                    mode: .openFile([.data])
+                )
+                AdaptiveControlRow {
+                    NumberField(title: "IC-LoRA strength", value: $controller.draft.loraScale)
+                    NumberField(title: "Reference strength", value: $controller.draft.strength)
+                }
+                TextField("Seed", text: $controller.draft.seed)
+                    .textFieldStyle(.plain)
+                    .padding(10)
+                    .merePanel()
+                Toggle("Quiet", isOn: $controller.draft.quiet)
             }
         }
     }
@@ -3637,6 +3740,13 @@ private struct VideoOptions: View {
         if family == .ltx, !controller.draft.audioPath.isBlank {
             AdaptiveControlRow {
                 NumberField(title: "Audio start", value: $controller.draft.audioStartTime)
+                NumberField(
+                    title: "Audio max (0 = video)",
+                    value: Binding(
+                        get: { controller.draft.audioMaxDuration ?? 0 },
+                        set: { controller.draft.audioMaxDuration = $0 }
+                    )
+                )
                 NumberStepper(title: "A2V steps", value: $controller.draft.a2vSteps, range: 1...100, step: 1)
             }
             AdaptiveControlRow {

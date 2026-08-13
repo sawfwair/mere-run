@@ -47,7 +47,16 @@ final class MediaIOTests: XCTestCase {
     func testVideoFrameRateResolverClampsSubOneRate() throws {
         let resolved = try MediaVideoFrameRateResolver.resolve(0.25)
         XCTAssertEqual(resolved.framesPerSecond, 1)
+        XCTAssertEqual(resolved.frameDurationValue, 1)
         XCTAssertEqual(resolved.timeScale, 1)
+    }
+
+    func testVideoFrameRateResolverPreservesFractionalNTSCClock() throws {
+        let fps = 24_000.0 / 1_001.0
+        let resolved = try MediaVideoFrameRateResolver.resolve(fps)
+        XCTAssertEqual(resolved.framesPerSecond, fps, accuracy: 1e-9)
+        XCTAssertEqual(resolved.frameDurationValue, 1_001)
+        XCTAssertEqual(resolved.timeScale, 24_000)
     }
 
     func testVideoFrameRateResolverGuardsInt32RoundingBoundary() throws {
@@ -112,6 +121,102 @@ final class MediaIOTests: XCTestCase {
         XCTAssertEqual(cropped.width, 1)
         XCTAssertEqual(cropped.height, 1)
         XCTAssertEqual(cropped.rgba8.count, 4)
+    }
+
+    func testBilinearCenterCropMatchesAlignCornersFalseGeometry() throws {
+        let image = try MediaImage(
+            width: 2,
+            height: 1,
+            rgba8: [
+                255, 0, 0, 255,
+                0, 0, 255, 255,
+            ]
+        )
+        let values = try MediaImageIO.bilinearCenterCroppedRGBCHWFloat(
+            image,
+            width: 2,
+            height: 2,
+            normalizedToMinusOneToOne: false
+        )
+
+        XCTAssertEqual(values.count, 12)
+        XCTAssertEqual(values[0], 0.75, accuracy: 0.0001)
+        XCTAssertEqual(values[1], 0.25, accuracy: 0.0001)
+        XCTAssertEqual(values[8], 0.25, accuracy: 0.0001)
+        XCTAssertEqual(values[9], 0.75, accuracy: 0.0001)
+    }
+
+    func testEXRRoundTripPreservesUnboundedFloatRGB() throws {
+        guard isExecutableAvailable(MediaTool.ffmpegPath),
+              isExecutableAvailable(MediaTool.ffprobePath) else {
+            throw XCTSkip("ffmpeg and ffprobe are required")
+        }
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mediaio-exr-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let url = directory.appendingPathComponent("frame_00000.exr")
+        let source = try MediaFloatImage(
+            width: 2,
+            height: 2,
+            rgb: [
+                0, 0.25, 1,
+                2, 4, 8,
+                0.125, 0.5, 1.5,
+                16, 0.75, 0.01,
+            ]
+        )
+
+        try MediaHDRImageIO.writeEXR(source, to: url)
+        let decoded = try MediaHDRImageIO.decodeEXR(url)
+
+        XCTAssertEqual(decoded.width, source.width)
+        XCTAssertEqual(decoded.height, source.height)
+        XCTAssertEqual(decoded.rgb.count, source.rgb.count)
+        for (actual, expected) in zip(decoded.rgb, source.rgb) {
+            XCTAssertEqual(actual, expected, accuracy: max(0.002, abs(expected) * 0.002))
+        }
+        XCTAssertEqual(
+            try MediaHDRImageIO.exrFrameURLs(in: directory).map(\.standardizedFileURL),
+            [url.standardizedFileURL]
+        )
+        XCTAssertTrue(MediaHDRImageIO.isEXRDirectory(directory))
+    }
+
+    func testHLGWriterProducesTaggedMain10HEVC() throws {
+        guard isExecutableAvailable(MediaTool.ffmpegPath),
+              isExecutableAvailable(MediaTool.ffprobePath) else {
+            throw XCTSkip("ffmpeg and ffprobe are required")
+        }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mediaio-hlg-\(UUID().uuidString)")
+            .appendingPathExtension("mp4")
+        defer { try? FileManager.default.removeItem(at: url) }
+        let frame = [Float](repeating: 0.5, count: 64 * 64 * 3)
+
+        try MediaHDRVideoIO.writeHLGMP4(
+            rgbFloatFrameAt: { _ in frame },
+            width: 64,
+            height: 64,
+            frameCount: 2,
+            fps: 24,
+            to: url
+        )
+        let result = try FFmpegProcess.run(
+            tool: MediaTool.ffprobePath,
+            arguments: [
+                "-v", "error",
+                "-select_streams", "v:0",
+                "-show_entries", "stream=codec_name,pix_fmt,color_space,color_transfer,color_primaries",
+                "-of", "default=noprint_wrappers=1",
+                url.path,
+            ]
+        )
+        let metadata = String(decoding: result.stdout, as: UTF8.self)
+        XCTAssertTrue(metadata.contains("codec_name=hevc"))
+        XCTAssertTrue(metadata.contains("pix_fmt=yuv420p10le"))
+        XCTAssertTrue(metadata.contains("color_space=bt2020nc"))
+        XCTAssertTrue(metadata.contains("color_transfer=arib-std-b67"))
+        XCTAssertTrue(metadata.contains("color_primaries=bt2020"))
     }
 
     func testPNGRoundTripPreservesStraightAlphaBytes() throws {

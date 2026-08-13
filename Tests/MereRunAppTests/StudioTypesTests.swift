@@ -267,6 +267,25 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertEqual(try args(.musicTranscribe) { $0.inputPath = "/a.wav" }.prefix(3).map { $0 }, ["music", "transcribe", "/a.wav"])
         XCTAssertEqual(try args(.musicSeparate) { $0.inputPath = "/a.wav" }.prefix(3).map { $0 }, ["music", "separate", "/a.wav"])
         XCTAssertEqual(try args(.audioEnhance) { $0.inputPath = "/a.wav" }.prefix(3).map { $0 }, ["audio", "enhance", "/a.wav"])
+        XCTAssertEqual(
+            try args(.audioGenerate) { $0.prompt = "ocean surf" }.prefix(3).map { $0 },
+            ["audio", "generate", "ocean surf"]
+        )
+        XCTAssertEqual(
+            try args(.videoRetake) {
+                $0.prompt = "new movement"
+                $0.inputPath = "/source.mp4"
+            }.prefix(3).map { $0 },
+            ["video", "retake", "new movement"]
+        )
+        XCTAssertEqual(
+            try args(.videoDubIt) {
+                $0.prompt = "new scene"
+                $0.inputPath = "/reference.mp4"
+                $0.loraPath = "/dub-it.safetensors"
+            }.prefix(3).map { $0 },
+            ["video", "dub-it", "new scene"]
+        )
         XCTAssertEqual(try args(.musicRealtime).prefix(2).map { $0 }, ["music", "realtime"])
         XCTAssertFalse(try args(.musicRealtime).contains("--no-play"))
         XCTAssertTrue(try args(.musicRealtime) { $0.musicPlay = false }.contains("--no-play"))

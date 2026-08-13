@@ -2593,6 +2593,27 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["video generate"]
         ),
         ManagedModelSpec(
+            id: ModelResolver.ModelID.ltxVideo25FullBF16.rawValue,
+            category: .video,
+            installShape: .structuredRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: LTX25Resources.sourceRepository,
+                revision: LTX25Resources.sourceRevision,
+                patterns: LTX25Resources.fullSnapshotPatterns
+            ),
+            upstreamRepoId: LTX25Resources.sourceRepository,
+            upstreamRevision: LTX25Resources.sourceRevision,
+            usageRestriction: ltxUsageRestriction(
+                sourceRepoId: LTX25Resources.sourceRepository,
+                sourceRevision: LTX25Resources.sourceRevision,
+                additionalTerms: [ltx25GemmaTextEncoderUsageTerm]
+            ),
+            validationKind: .ltxVideo25,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: LTX25Resources.fullEstimatedDownloadBytes,
+            defaultCLICommands: ["video generate"]
+        ),
+        ManagedModelSpec(
             id: ModelResolver.ModelID.wan22TI2V5BMLX.rawValue,
             category: .video,
             installShape: .structuredRoot,
@@ -3104,7 +3125,10 @@ public extension ManagedModelSpec {
         case .ltxVideo23A2VMLX:
             return Self.missingLTXVideo23A2VMLXPaths(in: rootURL, fileManager: fileManager)
         case .ltxVideo25:
-            return LTX25Resources(rootURL: rootURL).validate(fileManager: fileManager)
+            let resources = LTX25Resources(rootURL: rootURL)
+            return id == ModelResolver.ModelID.ltxVideo25FullBF16.rawValue
+                ? resources.validateFull(fileManager: fileManager)
+                : resources.validate(fileManager: fileManager)
         case .wan22TI2VMLX:
             return Wan2Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .miniMaxH3MLX:
@@ -3174,9 +3198,12 @@ public extension ManagedModelSpec {
                 fileManager: fileManager
             ).map { "Missing required LTX 2.3 A2Vid MLX file: \($0.path)" }
         case .ltxVideo25:
-            return LTX25Resources(
+            let resources = LTX25Resources(
                 rootURL: normalizedRootURL(rootURL, fileManager: fileManager)
-            ).validate(fileManager: fileManager)
+            )
+            return (id == ModelResolver.ModelID.ltxVideo25FullBF16.rawValue
+                ? resources.validateFull(fileManager: fileManager)
+                : resources.validate(fileManager: fileManager))
                 .map { "Missing required LTX 2.5 file: \($0.path)" }
         case .wan22TI2VMLX:
             let resources = Wan2Resources(rootURL: normalizedRootURL(rootURL, fileManager: fileManager))

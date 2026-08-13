@@ -85,6 +85,7 @@ final class ManagedModelCatalogTests: XCTestCase {
             "video-ltx23-full-mlx",
             "video-ltx23-a2vid-mlx",
             "video-ltx25-distilled-bf16",
+            "video-ltx25-full-bf16",
             "video-minimax-h3-fl2va-mlx",
             "video-minimax-h3-fl2va-bf16-mlx",
             "video-minimax-h3-ref2va-mlx",
@@ -1668,6 +1669,34 @@ final class ManagedModelCatalogTests: XCTestCase {
         )
     }
 
+    func testLTX25FullSpecPinsEveryOfficialParityComponent() throws {
+        let id = ModelResolver.ModelID.ltxVideo25FullBF16.rawValue
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: id))
+
+        XCTAssertEqual(id, LTX25Resources.fullModelID)
+        XCTAssertEqual(spec.category, .video)
+        XCTAssertEqual(spec.installShape, .structuredRoot)
+        XCTAssertEqual(spec.validationKind, .ltxVideo25)
+        XCTAssertEqual(spec.hubFallback?.repoId, LTX25Resources.sourceRepository)
+        XCTAssertEqual(spec.hubFallback?.revision, LTX25Resources.sourceRevision)
+        XCTAssertEqual(spec.hubFallback?.patterns, LTX25Resources.fullSnapshotPatterns)
+        XCTAssertEqual(spec.estimatedDownloadBytes, LTX25Resources.fullEstimatedDownloadBytes)
+        XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
+        XCTAssertEqual(spec.usageRestriction?.terms.count, 2)
+
+        let manifest = MereRunModelManifest.template(
+            for: .ltxVideo25FullBF16,
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+        XCTAssertEqual(manifest.engine, .ltxVideo)
+        XCTAssertEqual(manifest.family, .video)
+        XCTAssertEqual(manifest.variant, .base)
+        XCTAssertEqual(manifest.precision, .bf16)
+        XCTAssertEqual(manifest.defaults?.steps, 30)
+        XCTAssertTrue(manifest.supports?.contains(.videoGeneration) == true)
+        XCTAssertTrue(manifest.supports?.contains(.audioToVideoGeneration) == true)
+    }
+
     func testSCAIL2SpecPinsImmutableSawfwairRelease() throws {
         let id = ModelResolver.ModelID.scail2Video14BMLX.rawValue
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: id))
@@ -1849,6 +1878,21 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertTrue(spec.validationMessages(in: root).contains { $0.contains("Missing required LTX 2.5 file") })
     }
 
+    func testLTX25FullRootValidationRequiresDevLoRAAndParityAssets() throws {
+        let spec = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: ModelResolver.ModelID.ltxVideo25FullBF16.rawValue)
+        )
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try writeMinimalLTX25FullRoot(at: root)
+
+        XCTAssertTrue(spec.isManagedRootComplete(root, fileManager: .default))
+        let missing = root.appendingPathComponent(LTX25Resources.distilledLoRARelativePath)
+        try FileManager.default.removeItem(at: missing)
+        XCTAssertEqual(spec.missingPaths(in: root, fileManager: .default), [missing])
+        XCTAssertTrue(spec.validationMessages(in: root).contains { $0.contains("Missing required LTX 2.5 file") })
+    }
+
     private func makeTemporaryDirectory() throws -> URL {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("mere-run-managed-model-catalog-\(UUID().uuidString)", isDirectory: true)
@@ -1931,6 +1975,21 @@ final class ManagedModelCatalogTests: XCTestCase {
             createdAt: Date(timeIntervalSince1970: 0)
         ).write(to: root)
         for relativePath in LTX25Resources.requiredRelativePaths {
+            let url = root.appendingPathComponent(relativePath)
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            XCTAssertTrue(FileManager.default.createFile(atPath: url.path, contents: Data()))
+        }
+    }
+
+    private func writeMinimalLTX25FullRoot(at root: URL) throws {
+        try MereRunModelManifest.template(
+            for: .ltxVideo25FullBF16,
+            createdAt: Date(timeIntervalSince1970: 0)
+        ).write(to: root)
+        for relativePath in LTX25Resources.fullRequiredRelativePaths {
             let url = root.appendingPathComponent(relativePath)
             try FileManager.default.createDirectory(
                 at: url.deletingLastPathComponent(),

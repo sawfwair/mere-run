@@ -5,6 +5,7 @@ struct Audio: ParsableCommand {
         commandName: "audio",
         abstract: "Enhance general audio locally.",
         subcommands: [
+            AudioGenerate.self,
             AudioEnhance.self,
         ]
     )

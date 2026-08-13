@@ -20,6 +20,12 @@ struct AdapterPull: AsyncParsableCommand {
     @Flag(name: [.short, .long], help: "Suppress progress output.")
     var quiet: Bool = false
 
+    @Flag(
+        name: [.customLong("accept-license")],
+        help: "Confirm that you reviewed and accept the listed adapter and repository terms."
+    )
+    var acceptLicense = false
+
     func run() async throws {
         guard let spec = ManagedAdapterCatalog.spec(for: target) else {
             throw ValidationError("Unknown canonical adapter id: \(target)")
@@ -42,6 +48,22 @@ struct AdapterPull: AsyncParsableCommand {
             }
         }
 
+        if let restriction = spec.usageRestriction {
+            guard acceptLicense else {
+                throw ValidationError(
+                    "Adapter \(spec.id) is restricted. Review \(restriction.licenseURL) and rerun with --accept-license."
+                )
+            }
+            if !quiet {
+                stderr("[\(spec.id)] third-party usage terms: \(restriction.summary)")
+                for term in restriction.terms {
+                    stderr("  \(term.component): \(term.license)")
+                    stderr("    source: \(term.sourceRepoId)@\(term.sourceRevision)")
+                    stderr("    terms: \(term.licenseURL)")
+                }
+            }
+        }
+
         let directory = spec.installDirectory()
         try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
         let partial = directory.appendingPathComponent(
@@ -55,6 +77,10 @@ struct AdapterPull: AsyncParsableCommand {
         }
         var request = URLRequest(url: spec.downloadURL)
         request.httpMethod = "GET"
+        if spec.downloadURL.host == "huggingface.co",
+           let token = huggingFaceAccessToken(), !token.isEmpty {
+            request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+        }
         let temporary = try await downloadWithTransientRetries(request, adapterID: spec.id)
         try fileManager.moveItem(at: temporary, to: partial)
 
@@ -83,6 +109,13 @@ struct AdapterPull: AsyncParsableCommand {
 
     private func stderr(_ message: String) {
         CLIStderr.write(message + "\n")
+    }
+
+    private func huggingFaceAccessToken() -> String? {
+        let environment = ProcessInfo.processInfo.environment
+        return environment["HF_TOKEN"]
+            ?? environment["HUGGING_FACE_HUB_TOKEN"]
+            ?? MereRunConfig.load().hfToken
     }
 
     private func downloadWithTransientRetries(

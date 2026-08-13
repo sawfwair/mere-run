@@ -300,6 +300,8 @@ public struct ChatRequest: Sendable, Hashable {
     public var tools: [ToolDefinition]?
     public var stopOnEOS: Bool
     public var stopSequences: [String]
+    /// Prevent generation of an n-gram already present in the full prompt and decode history.
+    public var noRepeatNgramSize: Int?
     public var kvCacheMode: RuntimeKVCacheMode?
     public var maxContextTokens: Int?
 
@@ -317,6 +319,7 @@ public struct ChatRequest: Sendable, Hashable {
         tools: [ToolDefinition]? = nil,
         stopOnEOS: Bool = true,
         stopSequences: [String] = [],
+        noRepeatNgramSize: Int? = nil,
         kvCacheMode: RuntimeKVCacheMode? = nil,
         maxContextTokens: Int? = nil
     ) {
@@ -333,6 +336,7 @@ public struct ChatRequest: Sendable, Hashable {
         self.tools = tools
         self.stopOnEOS = stopOnEOS
         self.stopSequences = stopSequences
+        self.noRepeatNgramSize = noRepeatNgramSize
         self.kvCacheMode = kvCacheMode
         self.maxContextTokens = maxContextTokens
     }

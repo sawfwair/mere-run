@@ -942,6 +942,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 128
             ),
             descriptor(
+                ModelResolver.ModelID.ltxVideo25FullBF16.rawValue,
+                "LTX 2.5 Full BF16",
+                "Installs the full LTX 2.5 dev, distilled, LoRA, VAE, upscaler, and duration components for every native pipeline.",
+                minimum: 96,
+                recommended: 128
+            ),
+            descriptor(
                 ModelResolver.ModelID.wan22TI2V5BMLX.rawValue,
                 "Wan2.2 TI2V 5B MLX",
                 "Generates text- and image-conditioned pixel video with the native Swift MLX Wan2.2 runtime.",

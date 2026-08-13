@@ -9,6 +9,7 @@ public struct ManagedAdapterSpec: Equatable, Sendable {
     public let format: String
     public let license: String
     public let upstreamRevision: String?
+    public let usageRestriction: ManagedModelUsageRestriction?
     public let releaseManifestURL: URL
     public let downloadURL: URL
     public let artifact: ModelArtifactPin
@@ -22,6 +23,7 @@ public struct ManagedAdapterSpec: Equatable, Sendable {
         format: String,
         license: String,
         upstreamRevision: String? = nil,
+        usageRestriction: ManagedModelUsageRestriction? = nil,
         releaseManifestURL: URL,
         downloadURL: URL,
         artifact: ModelArtifactPin
@@ -34,6 +36,7 @@ public struct ManagedAdapterSpec: Equatable, Sendable {
         self.format = format
         self.license = license
         self.upstreamRevision = upstreamRevision
+        self.usageRestriction = usageRestriction
         self.releaseManifestURL = releaseManifestURL
         self.downloadURL = downloadURL
         self.artifact = artifact
@@ -86,6 +89,8 @@ public enum ManagedAdapterCatalog {
     public static let miniMaxH3LightX2VEightStepV1ID = "minimax-h3-lightx2v-8step-v1"
     public static let miniMaxH3LightX2VFourStepV1_768pID = "minimax-h3-lightx2v-4step-v1-768p"
     public static let miniMaxH3LightX2VV1Revision = "e6346777701aa2b64d42ed058cdd71ae00e7cd52"
+    public static let ltx25PixelSpatialUpscalerID = "ltx25-pixel-spatial-upscaler-x2"
+    public static let ltx25PixelSpatialUpscalerRevision = "74c4e68ee7dd99f3997d5a1bb1a3784941822222"
 
     public static let allSpecs: [ManagedAdapterSpec] = [
         ManagedAdapterSpec(
@@ -211,6 +216,40 @@ public enum ManagedAdapterCatalog {
                 filename: "minimax_h3_fl2v_turbo_4step_v1.0_768p_bf16.safetensors",
                 byteCount: 1_383_677_808,
                 sha256: "1bdabc2e9fce20b1db563b96bcf6e46adcad4c1964f423676436bf266cc7416c"
+            )
+        ),
+        ManagedAdapterSpec(
+            id: ltx25PixelSpatialUpscalerID,
+            title: "LTX-2.5 Pixel Spatial Upscaler x2",
+            version: String(ltx25PixelSpatialUpscalerRevision.prefix(12)),
+            summary: "Official x2 spatial detailing IC-LoRA for the native LTX-2.5 DFR refinement stage.",
+            baseModelID: ModelResolver.ModelID.ltxVideo25FullBF16.rawValue,
+            format: "ltx-2.5-ic-lora",
+            license: "LTX-2 Community License",
+            upstreamRevision: ltx25PixelSpatialUpscalerRevision,
+            usageRestriction: ManagedModelUsageRestriction(
+                summary: "Use is governed by the LTX-2 Community License and the gated Hugging Face repository terms.",
+                terms: [
+                    ManagedModelUsageTerm(
+                        component: "LTX-2.5 Pixel Spatial Upscaler x2",
+                        license: "LTX-2 Community License",
+                        summary: "Official gated Lightricks IC-LoRA adapter for LTX-2.5.",
+                        sourceRepoId: "Lightricks/LTX-2.5-22b-IC-LoRA-Pixel-Spatial-Upscaler",
+                        sourceRevision: ltx25PixelSpatialUpscalerRevision,
+                        licenseURL: "https://github.com/Lightricks/LTX-2/blob/d151147788a9284cca791edc6ce898007e727fe6/LICENSE"
+                    ),
+                ]
+            ),
+            releaseManifestURL: URL(
+                string: "https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Pixel-Spatial-Upscaler/commit/\(ltx25PixelSpatialUpscalerRevision)"
+            )!,
+            downloadURL: URL(
+                string: "https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Pixel-Spatial-Upscaler/resolve/\(ltx25PixelSpatialUpscalerRevision)/ltx-2.5-22b-ic-lora-pixel-spatial-upscaler-x2-1.0.safetensors?download=true"
+            )!,
+            artifact: ModelArtifactPin(
+                filename: "ltx-2.5-22b-ic-lora-pixel-spatial-upscaler-x2-1.0.safetensors",
+                byteCount: 327_322_640,
+                sha256: "984851b769ea2bcb4c9e0a239a7676239e42c6a6001ddc69943b41ff0b283c1d"
             )
         ),
     ]

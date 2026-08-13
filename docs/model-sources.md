@@ -136,6 +136,7 @@ from the runtime catalog used by `mere.run model list`,
 | `video` | `video-ltx23-full-mlx` |
 | `video` | `video-ltx23-a2vid-mlx` |
 | `video` | `video-ltx25-distilled-bf16` |
+| `video` | `video-ltx25-full-bf16` |
 | `video` | `video-wan22-ti2v-5b-mlx` |
 | `video` | `video-minimax-h3-fl2va-mlx` |
 | `video` | `video-minimax-h3-fl2va-bf16-mlx` |
@@ -195,7 +196,7 @@ validates all configured models before downloading any; both accept the same
 | `music-muscriptor-{small,medium,large}` | CC BY-NC 4.0 model weights |
 | `sfx-woosh-*` | CC BY-NC 4.0 Woosh or MMAudio Synchformer weights |
 | `sfx-mmaudio-large-44k-v2` | CC BY-NC 4.0 MMAudio checkpoints plus Apple's research-only DFN5B encoder terms |
-| `video-ltx-av`, `video-ltx23-av-mlx`, `video-ltx23-full-mlx`, `video-ltx23-a2vid-mlx`, `video-ltx25-distilled-bf16` | LTX-2 Community License; entities at or above USD 10M annual revenue need a paid commercial license, plus acceptable-use conditions. The 2.3 MLX paths also install a hidden Gemma 3 text encoder; the packed 2.5 checkpoint includes Gemma 4 weights. Both are additionally governed by Google's Gemma Terms and Prohibited Use Policy. |
+| `video-ltx-av`, `video-ltx23-av-mlx`, `video-ltx23-full-mlx`, `video-ltx23-a2vid-mlx`, `video-ltx25-distilled-bf16`, `video-ltx25-full-bf16` | LTX-2 Community License; entities at or above USD 10M annual revenue need a paid commercial license, plus acceptable-use conditions. The 2.3 MLX paths also install a hidden Gemma 3 text encoder; the packed 2.5 checkpoints include Gemma 4 weights. Both are additionally governed by Google's Gemma Terms and Prohibited Use Policy. |
 
 The catalog pins every restricted download source to an immutable commit. New
 managed installs write those repository revisions, every applicable
@@ -887,7 +888,30 @@ already have access in addition to the explicit local license acknowledgement.
 
 This model runs natively through Swift and MLX; no Python process or sidecar is
 dispatched. Use `--quality final --output-mode audio-video` for synchronized
-video and stereo audio. The packed LTX 2.5 root is not an A2Vid checkpoint.
+video and stereo audio.
+
+### `video-ltx25-full-bf16`
+
+The complete official LTX 2.5 root is:
+
+```text
+.../models/video-ltx25-full-bf16
+```
+
+`mere.run model pull video-ltx25-full-bf16 --accept-model-license` uses the
+same immutable weight revision and adds the dev transformer, official
+distilled LoRA, diffusion video VAE, temporal x2 latent upsampler, and duration
+head. The complete pinned payload is exactly 123,751,083,670 bytes. This root
+supports full/dev and HQ pipelines, source-audio A2Vid, DFR, Retake, HDR/EXR,
+IC-LoRA reference video, Dub-It, and native text-to-audio.
+
+The official DFR pixel-space spatial upscaler is a separately gated managed
+adapter: `ltx25-pixel-spatial-upscaler-x2`. Its repository gate and
+`mere.run adapter pull ... --accept-license` acknowledgement are independent
+of the main model gate.
+
+See [LTX 2.5 upstream parity](./ltx25-upstream-parity.md) for the exact pinned
+code release and pipeline matrix.
 
 ### MiniMax-H3 FL2VA and Ref2VA
 

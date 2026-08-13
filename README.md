@@ -784,6 +784,20 @@ swift run mere.run video generate \
   --fps 24 \
   --output ./clip-ltx25.mp4
 
+# Install the complete LTX 2.5 bundle and run the native full/dev pipeline.
+# Omitting --num-frames invokes DurationHead over the official 1...20s range.
+swift run mere.run model pull video-ltx25-full-bf16 --accept-model-license
+swift run mere.run video generate \
+  "an intricate clockwork observatory turns under a starry sky" \
+  --model video-ltx25-full-bf16 \
+  --output-mode audio-video \
+  --output ./clip-ltx25-full.mp4
+
+# Native LTX 2.5 text-to-audio, without constructing a video modality
+swift run mere.run audio generate \
+  "ocean surf, distant gulls, and a wooden buoy bell" \
+  --output ./surf.wav
+
 # Condition video on a selected source-audio segment and preserve that soundtrack
 swift run mere.run model pull video-ltx23-full-mlx --accept-model-license
 swift run mere.run video generate \

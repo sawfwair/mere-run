@@ -110,7 +110,7 @@ Examples:
 - video: `video-minimax-h3-fl2va-mlx`, `video-minimax-h3-fl2va-bf16-mlx`,
   `video-minimax-h3-ref2va-mlx`, `video-ltx-av`, `video-ltx23-av-mlx`,
   `video-ltx23-full-mlx`, `video-ltx23-a2vid-mlx`,
-  `video-ltx25-distilled-bf16`,
+  `video-ltx25-distilled-bf16`, `video-ltx25-full-bf16`,
   `video-wan22-ti2v-5b-mlx`, `video-scail2-14b-mlx`
 
 The public runtime resolves these IDs directly, so docs and examples should use

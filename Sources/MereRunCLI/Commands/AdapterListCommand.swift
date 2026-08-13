@@ -46,6 +46,8 @@ struct ManagedAdapterListItem: Codable, Equatable {
     let format: String
     let license: String
     let upstreamRevision: String?
+    let restricted: Bool
+    let licenseURL: String?
     let releaseManifestURL: String
     let downloadURL: String
     let filename: String
@@ -64,6 +66,8 @@ struct ManagedAdapterListItem: Codable, Equatable {
         self.format = spec.format
         self.license = spec.license
         self.upstreamRevision = spec.upstreamRevision
+        self.restricted = spec.usageRestriction != nil
+        self.licenseURL = spec.usageRestriction?.licenseURL
         self.releaseManifestURL = spec.releaseManifestURL.absoluteString
         self.downloadURL = spec.downloadURL.absoluteString
         self.filename = spec.artifact.filename

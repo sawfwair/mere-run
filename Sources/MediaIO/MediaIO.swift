@@ -22,6 +22,30 @@ public struct MediaImage: Sendable, Hashable {
     }
 }
 
+/// A scene-linear or log-encoded RGB raster with unbounded float samples.
+/// Samples are interleaved RGB in row-major order; values above one are
+/// intentionally preserved for OpenEXR/HDR workflows.
+public struct MediaFloatImage: Sendable, Hashable {
+    public let width: Int
+    public let height: Int
+    public var rgb: [Float]
+
+    public init(width: Int, height: Int, rgb: [Float]) throws {
+        guard width > 0, height > 0 else {
+            throw MediaIOError.invalidImageDimensions(width: width, height: height)
+        }
+        guard rgb.count == width * height * 3 else {
+            throw MediaIOError.invalidBufferSize(
+                expected: width * height * 3 * MemoryLayout<Float>.size,
+                actual: rgb.count * MemoryLayout<Float>.size
+            )
+        }
+        self.width = width
+        self.height = height
+        self.rgb = rgb
+    }
+}
+
 public struct MediaAudioBuffer: Sendable, Hashable {
     public let samples: [Float]
     public let sampleRate: Int

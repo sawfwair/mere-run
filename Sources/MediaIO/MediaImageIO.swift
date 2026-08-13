@@ -38,6 +38,17 @@ public enum MediaImageIO {
         #endif
     }
 
+    /// Re-encodes one SDR still as a one-frame H.264/yuv420p stream and
+    /// decodes it again. LTX image conditioning uses this to reproduce the
+    /// compression distribution used during training.
+    public static func h264RoundTrip(_ image: MediaImage, crf: Int) throws -> MediaImage {
+        guard (0...51).contains(crf) else {
+            throw MediaIOError.videoOperationFailed("H.264 CRF must be in 0...51.")
+        }
+        guard crf > 0, image.width >= 2, image.height >= 2 else { return image }
+        return try FFmpegMediaIO.h264RoundTrip(image, crf: crf)
+    }
+
     public static func pngData(from image: MediaImage) throws -> Data {
         let temp = FileManager.default.temporaryDirectory
             .appendingPathComponent("mererun-image-\(UUID().uuidString)")
@@ -117,6 +128,58 @@ public enum MediaImageIO {
                 values[pixel] = r
                 values[pixel + pixelCount] = g
                 values[pixel + (pixelCount * 2)] = b
+            }
+        }
+        return values
+    }
+
+    /// PyTorch-compatible bilinear resize (`align_corners=false`) that fills
+    /// the target while preserving aspect ratio, then takes a centered crop.
+    /// The float result avoids an extra 8-bit quantization after resizing.
+    public static func bilinearCenterCroppedRGBCHWFloat(
+        _ image: MediaImage,
+        width: Int,
+        height: Int,
+        normalizedToMinusOneToOne: Bool
+    ) throws -> [Float] {
+        guard width > 0, height > 0 else {
+            throw MediaIOError.invalidImageDimensions(width: width, height: height)
+        }
+        let scale = max(Double(height) / Double(image.height), Double(width) / Double(image.width))
+        let resizedHeight = max(height, Int(ceil(Double(image.height) * scale)))
+        let resizedWidth = max(width, Int(ceil(Double(image.width) * scale)))
+        let cropTop = (resizedHeight - height) / 2
+        let cropLeft = (resizedWidth - width) / 2
+        let pixelCount = width * height
+        var values = [Float](repeating: 0, count: pixelCount * 3)
+
+        for targetY in 0..<height {
+            let resizedY = targetY + cropTop
+            let sourceY = (Double(resizedY) + 0.5) * Double(image.height) / Double(resizedHeight) - 0.5
+            let y0 = min(max(Int(floor(sourceY)), 0), image.height - 1)
+            let y1 = min(y0 + 1, image.height - 1)
+            let yWeight = Float(max(0, min(1, sourceY - Double(y0))))
+            for targetX in 0..<width {
+                let resizedX = targetX + cropLeft
+                let sourceX = (Double(resizedX) + 0.5) * Double(image.width) / Double(resizedWidth) - 0.5
+                let x0 = min(max(Int(floor(sourceX)), 0), image.width - 1)
+                let x1 = min(x0 + 1, image.width - 1)
+                let xWeight = Float(max(0, min(1, sourceX - Double(x0))))
+                let destination = targetY * width + targetX
+
+                for channel in 0..<3 {
+                    let topLeft = Float(image.rgba8[(y0 * image.width + x0) * 4 + channel])
+                    let topRight = Float(image.rgba8[(y0 * image.width + x1) * 4 + channel])
+                    let bottomLeft = Float(image.rgba8[(y1 * image.width + x0) * 4 + channel])
+                    let bottomRight = Float(image.rgba8[(y1 * image.width + x1) * 4 + channel])
+                    let top = topLeft + (topRight - topLeft) * xWeight
+                    let bottom = bottomLeft + (bottomRight - bottomLeft) * xWeight
+                    var value = (top + (bottom - top) * yWeight) / 255
+                    if normalizedToMinusOneToOne {
+                        value = value * 2 - 1
+                    }
+                    values[channel * pixelCount + destination] = value
+                }
             }
         }
         return values

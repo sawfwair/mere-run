@@ -6,7 +6,7 @@ public enum LTXVideoMP4Writer {
     static let defaultAudioBitRate = 192_000
 
     public enum WriterError: LocalizedError {
-        case invalidFPS(Int)
+        case invalidFPS(Double)
         case unsupportedShape([Int])
         case unsupportedChannels(Int)
         case unsupportedAudioShape([Int])
@@ -25,7 +25,7 @@ public enum LTXVideoMP4Writer {
         public var errorDescription: String? {
             switch self {
             case .invalidFPS(let fps):
-                return "FPS must be >= 1 (got \(fps))."
+                return "FPS must be finite and >= 1 (got \(fps))."
             case .unsupportedShape(let shape):
                 return "Expected frames shaped [F, H, W, 3] (or [1, F, H, W, 3]), got \(shape)."
             case .unsupportedChannels(let channels):
@@ -61,6 +61,22 @@ public enum LTXVideoMP4Writer {
     public static func writeMP4(
         frames: MLXArray,
         fps: Int,
+        to outputURL: URL,
+        audioWaveform: MLXArray? = nil,
+        audioSampleRate: Int = 24_000
+    ) throws {
+        try writeMP4(
+            frames: frames,
+            fps: Double(fps),
+            to: outputURL,
+            audioWaveform: audioWaveform,
+            audioSampleRate: audioSampleRate
+        )
+    }
+
+    public static func writeMP4(
+        frames: MLXArray,
+        fps: Double,
         to outputURL: URL,
         audioWaveform: MLXArray? = nil,
         audioSampleRate: Int = 24_000
@@ -110,6 +126,20 @@ public enum LTXVideoMP4Writer {
         to outputURL: URL,
         sourceAudio: MediaAudioBuffer
     ) throws {
+        try writeMP4(
+            frames: frames,
+            fps: Double(fps),
+            to: outputURL,
+            sourceAudio: sourceAudio
+        )
+    }
+
+    public static func writeMP4(
+        frames: MLXArray,
+        fps: Double,
+        to outputURL: URL,
+        sourceAudio: MediaAudioBuffer
+    ) throws {
         let fm = FileManager.default
         let tmpDir = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
         let nonce = UUID().uuidString
@@ -144,10 +174,10 @@ public enum LTXVideoMP4Writer {
 
     private static func writeVideoOnly(
         frames: MLXArray,
-        fps: Int,
+        fps: Double,
         to outputURL: URL
     ) throws {
-        guard fps >= 1 else {
+        guard fps.isFinite, fps >= 1 else {
             throw WriterError.invalidFPS(fps)
         }
 
@@ -223,11 +253,19 @@ public enum LTXVideoMP4Writer {
         return MLX.concatenated([bgr, alpha], axis: -1)
     }
 
-    static func prepareAudio(_ audio: MLXArray) throws -> (interleaved: [Float], channels: Int) {
+    public static func prepareAudio(_ audio: MLXArray) throws -> (interleaved: [Float], channels: Int) {
         let prepared = try prepareAudioTensor(audio)
         var encodedSamples = prepared.tensor.asType(.float32).reshaped(-1).asArray(Float.self)
         try validateAndClamp(samples: &encodedSamples)
         return (encodedSamples, prepared.channels)
+    }
+
+    public static func prepareSourceAudio(
+        _ audio: MediaAudioBuffer
+    ) throws -> (interleaved: [Float], channels: Int, sampleRate: Int) {
+        var samples = try interleavedSamples(audio)
+        try validateAndClamp(samples: &samples)
+        return (samples, audio.channelCount, audio.sampleRate)
     }
 
     private static func prepareAudioTensor(

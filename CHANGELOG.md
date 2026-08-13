@@ -6,6 +6,22 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Video and audio
+
+- expanded native Swift/MLX LTX 2.5 support to the complete pinned upstream
+  v1.2.0 inference family: standalone distilled, full dev plus distilled-LoRA,
+  HQ Res2s, dev one-stage, arbitrary timed images, generated keyframes,
+  source-audio A2Vid, IC-LoRA references and masks, DFR spatial/temporal
+  refinement, Retake, HDR/EXR and DiffVAE, Dub-It, and text-to-audio.
+- added `video-ltx25-full-bf16`, a 123,751,083,670-byte immutable full bundle,
+  plus the separately gated `ltx25-pixel-spatial-upscaler-x2` adapter. Managed
+  LTX LoRA IDs now resolve through CLI and preflight with base-model checks.
+- matched upstream model semantics for default DurationHead prediction,
+  fractional frame rates, independent A2Vid audio windows, arbitrary finite
+  LoRA weights, official seed/sampler/DFR recipes, and stacked IC-LoRA metadata.
+  The local API and macOS Studio advertise and route the same native surfaces;
+  no Python inference process or sidecar is used.
+
 ## 0.36.0 - 2026-08-12
 
 This is a major capability and performance release spanning 19 merged pull

@@ -6,6 +6,14 @@ import MLXNN
 import XCTest
 
 final class LTXAudioToVideoSupportTests: MereRunCoreTestCase {
+    func testMultimodalGuidanceSkipStepMatchesUpstreamCadence() {
+        let guidance = LTXMultiModalGuidance(classifierFreeScale: 3, skipStep: 2)
+        XCTAssertFalse(guidance.shouldSkip(step: 0))
+        XCTAssertTrue(guidance.shouldSkip(step: 1))
+        XCTAssertTrue(guidance.shouldSkip(step: 2))
+        XCTAssertFalse(guidance.shouldSkip(step: 3))
+    }
+
     func testParityIOReplaysTypedNoiseAndWritesNamedArtifact() throws {
         let temp = try TestFileSystem.makeTempDir()
         defer { try? FileManager.default.removeItem(at: temp) }
@@ -365,7 +373,37 @@ final class LTXAudioToVideoSupportTests: MereRunCoreTestCase {
             spectrogram: spectrogram,
             requiredFrameCount: 25,
             weightsURL: weightsURL,
-            dtype: .bfloat16
+            dtype: .bfloat16,
+            sourceLayout: .mlx
+        )
+        let latent32 = latent.asType(.float32)
+        MLX.eval(latent32)
+
+        XCTAssertEqual(latent.shape, [1, 8, 25, 16])
+        XCTAssertTrue(latent32.asArray(Float.self).allSatisfy(\.isFinite))
+    }
+
+    func testInstalledLTX25AudioEncoderCheckpointWhenAvailable() throws {
+        guard let rootPath = ProcessInfo.processInfo.environment["MERERUN_TEST_LTX25_ROOT"] else {
+            throw XCTSkip("Set MERERUN_TEST_LTX25_ROOT to exercise the official LTX-2.5 audio VAE.")
+        }
+        let weightsURL = URL(fileURLWithPath: rootPath, isDirectory: true)
+            .appendingPathComponent("vae/ltx-2.5-audio-vae-bf16.safetensors", isDirectory: false)
+        guard FileManager.default.fileExists(atPath: weightsURL.path) else {
+            throw XCTSkip("The official LTX-2.5 audio VAE is missing at \(weightsURL.path).")
+        }
+
+        let sampleRate = Float(LTXAudioMelProcessor.sampleRate)
+        let waveform = (0..<16_000).map { index in
+            Float(0.1) * sin(2 * .pi * 220 * Float(index) / sampleRate)
+        }
+        let spectrogram = LTXAudioMelProcessor().extract(channels: [waveform, waveform])
+        let latent = try encodeLTX23AudioLatents(
+            spectrogram: spectrogram,
+            requiredFrameCount: 25,
+            weightsURL: weightsURL,
+            dtype: .bfloat16,
+            sourceLayout: .pytorch
         )
         let latent32 = latent.asType(.float32)
         MLX.eval(latent32)
@@ -431,6 +469,8 @@ final class LTXAudioToVideoSupportTests: MereRunCoreTestCase {
         let inactiveAfterFirst = transformer.forward(input)
         adapter.setActive(true)
         let activeSecond = transformer.forward(input)
+        adapter.setStrength(0.25)
+        let activeAtQuarterStrength = transformer.forward(input)
         adapter.setActive(false)
         let inactiveAfterSecond = transformer.forward(input)
         MLX.eval(
@@ -438,6 +478,7 @@ final class LTXAudioToVideoSupportTests: MereRunCoreTestCase {
             activeFirst,
             inactiveAfterFirst,
             activeSecond,
+            activeAtQuarterStrength,
             inactiveAfterSecond,
             transformer.patchifyProjection.weight
         )
@@ -446,10 +487,56 @@ final class LTXAudioToVideoSupportTests: MereRunCoreTestCase {
         XCTAssertEqual(inactiveBefore.asArray(Float.self), [0, 0])
         XCTAssertEqual(activeFirst.asArray(Float.self), [28.5, 38.5])
         XCTAssertEqual(activeSecond.asArray(Float.self), activeFirst.asArray(Float.self))
+        XCTAssertEqual(activeAtQuarterStrength.asArray(Float.self), [14.25, 19.25])
         XCTAssertEqual(inactiveAfterFirst.asArray(Float.self), inactiveBefore.asArray(Float.self))
         XCTAssertEqual(inactiveAfterSecond.asArray(Float.self), inactiveBefore.asArray(Float.self))
         XCTAssertEqual(transformer.patchifyProjection.weight.asArray(Float.self), [0, 0, 0, 0])
         XCTAssertTrue(transformer.patchifyProjection.weight === originalWeight)
+    }
+
+    func testRuntimeLoRAAdaptersStackAndToggleIndependently() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let firstURL = temp.appendingPathComponent("first.safetensors")
+        let secondURL = temp.appendingPathComponent("second.safetensors")
+        try writeTinyLTXLoRA(to: firstURL)
+        try writeTinyLTXLoRA(to: secondURL)
+
+        let transformer = TinyTransformer()
+        try transformer.update(
+            parameters: ModuleParameters.unflattened([
+                ("patchify_proj.weight", MLX.zeros([2, 2], dtype: .float32)),
+            ]),
+            verify: .none
+        )
+        let first = try LTXRuntimeLoRAAdapter.install(
+            url: firstURL,
+            into: transformer,
+            strength: 0.5,
+            expectedPairCount: 1
+        )
+        let second = try LTXRuntimeLoRAAdapter.install(
+            url: secondURL,
+            into: transformer,
+            strength: 0.25,
+            expectedPairCount: 1
+        )
+        let input = MLXArray([Float(1), 1]).reshaped(1, 2)
+
+        first.setActive(true)
+        let firstOnly = transformer.forward(input)
+        second.setActive(true)
+        let both = transformer.forward(input)
+        first.setActive(false)
+        let secondOnly = transformer.forward(input)
+        second.setActive(false)
+        let neither = transformer.forward(input)
+        MLX.eval(firstOnly, both, secondOnly, neither)
+
+        XCTAssertEqual(firstOnly.asArray(Float.self), [28.5, 38.5])
+        XCTAssertEqual(secondOnly.asArray(Float.self), [14.25, 19.25])
+        XCTAssertEqual(both.asArray(Float.self), [42.75, 57.75])
+        XCTAssertEqual(neither.asArray(Float.self), [0, 0])
     }
 
     func testInstalledDistilledLoRAMatchesPinnedUpstreamFusionFixtures() throws {
@@ -580,6 +667,8 @@ final class LTXAudioToVideoSupportTests: MereRunCoreTestCase {
 private final class FrozenAudioTestTransformer: Module, LTXUnifiedAVTransformerRuntime {
     func forward(
         videoLatent: MLXArray,
+        videoKeyframesMask _: MLXArray?,
+        videoAttentionMask _: MLXArray?,
         audioLatent: MLXArray,
         timestep _: MLXArray,
         videoTimesteps _: MLXArray?,
