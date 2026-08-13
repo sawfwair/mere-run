@@ -4675,6 +4675,12 @@ public actor LTXUnifiedAVGenerator {
             transformerURL = root.appendingPathComponent("ltx-2-19b-distilled.safetensors", isDirectory: false)
             upsamplerURL = root.appendingPathComponent("ltx-2-spatial-upscaler-x2-1.0.safetensors", isDirectory: false)
         }
+        let standaloneAudioVAEURL = ltxStandaloneAudioVAEWeightsURL(
+            modelRoot: root,
+            isLTX23: isLTX23,
+            isLTX25: isLTX25,
+            transformerURL: transformerURL
+        )
         guard FileManager.default.fileExists(atPath: transformerURL.path) else {
             throw LTXUnifiedAVGeneratorError.transformerWeightsMissing(transformerURL)
         }
@@ -4849,16 +4855,8 @@ public actor LTXUnifiedAVGenerator {
         if loadAudioOutput {
             let audioDecoderStart = ltxMonotonicSeconds()
             let audioDecoder = LTXAudioDecoder()
-            let audioDecoderURL: URL
-            if isLTX25 {
-                audioDecoderURL = ltx25Resources.audioVAEURL
-            } else if isLTX23 {
-                audioDecoderURL = root.appendingPathComponent("audio_vae.safetensors", isDirectory: false)
-            } else {
-                audioDecoderURL = transformerURL
-            }
             try SafetensorsStreamingLoader.applyWeightsStreaming(
-                url: audioDecoderURL,
+                url: standaloneAudioVAEURL,
                 to: audioDecoder,
                 dtype: .float32,
                 verify: .none,
@@ -4941,6 +4939,7 @@ public actor LTXUnifiedAVGenerator {
         self.videoVAEArchitecture = isLTX23 || isLTX25 ? .ltx23Split : .legacy
         self.loadedDType = dtype
         self.loadedRoot = root
+        self.audioVAEWeightsURL = standaloneAudioVAEURL
         self.loadedForVideoOnlyOutput = !loadAudioOutput
         self.loadedForLTX25 = isLTX25
         return LTXLoadTimings(

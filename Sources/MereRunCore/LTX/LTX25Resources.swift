@@ -130,3 +130,18 @@ public func isLTX25FullModelRoot(
 ) -> Bool {
     LTX25Resources(rootURL: rootURL).validateFull(fileManager: fileManager).isEmpty
 }
+
+func ltxStandaloneAudioVAEWeightsURL(
+    modelRoot: URL,
+    isLTX23: Bool,
+    isLTX25: Bool,
+    transformerURL: URL
+) -> URL {
+    if isLTX25 {
+        return LTX25Resources(rootURL: modelRoot).audioVAEURL
+    }
+    if isLTX23 {
+        return modelRoot.appendingPathComponent("audio_vae.safetensors", isDirectory: false)
+    }
+    return transformerURL
+}
