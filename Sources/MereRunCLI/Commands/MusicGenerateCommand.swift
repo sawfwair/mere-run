@@ -12,6 +12,11 @@ struct MusicGenerate: AsyncParsableCommand {
         Prints the output WAV path to stdout.
         Progress and diagnostics are printed to stderr.
 
+        MiniMax Music 3 consumes caption, lyrics, duration/max-frames, steps,
+        seed, and guidance scale. Run `mere.run guide music generate --model
+        music-minimax-music3` for the model-specific contract; ACE-Step and
+        Magenta controls are rejected instead of silently ignored.
+
         Example:
           mere.run music generate "upbeat electronic groove" \
             --model music-acestep \
@@ -23,6 +28,12 @@ struct MusicGenerate: AsyncParsableCommand {
             --model music-magenta-rt2-small \
             --duration 4 \
             -o out.wav
+
+          mere.run music generate "cinematic synth-pop, soaring female vocal" \
+            --model music-minimax-music3 \
+            --lyrics "[verse]\nwe turn the dark into gold\n[chorus]\nwe are electric" \
+            --duration 30 \
+            -o minimax.wav
 
           mere.run music generate "dream-pop cover with soft vocals" \
             --source-audio ~/Downloads/song.mp3 \
@@ -103,7 +114,7 @@ struct MusicGenerate: AsyncParsableCommand {
     )
     var adapterScales: [Float] = []
 
-    @Option(name: [.customShort("m"), .long], help: "Managed model id or local path to the ACE-Step model root/checkpoints root.")
+    @Option(name: [.customShort("m"), .long], help: "Managed music model id or local model root.")
     var model: String = ModelResolver.ModelID.aceStep.rawValue
 
     @Option(name: [.customLong("checkpoints-root")], help: "Root directory containing ACE-Step checkpoint subdirectories. Auto-discovered if not set.")
@@ -142,13 +153,31 @@ struct MusicGenerate: AsyncParsableCommand {
     )
     var analyzeSourceAudio: Bool = false
 
-    @Option(name: [.customLong("duration")], help: "Output duration in seconds (omitting it lets song/final quality plan duration).")
+    @Option(name: [.customLong("duration")], help: "Output upper bound in seconds (MiniMax defaults to 60; ACE-Step song/final may plan it when omitted).")
     var durationSeconds: Float?
 
-    @Option(name: [.customLong("quality")], help: "Adaptive ACE-Step quality: draft, song, final, or edit.")
-    var quality: ACEStepQualityPreset = .song
+    @Option(
+        name: [.customLong("max-frames")],
+        help: "MiniMax Music 3 exact 25 Hz acoustic-frame limit (1...9000); must agree with --duration when both are set."
+    )
+    var miniMaxMaximumFrames: Int?
 
-    @Option(name: [.customShort("s"), .long], help: "Denoise steps (default: Turbo 8; Base/SFT 50).")
+    @Option(
+        name: [.customLong("sample-rate")],
+        help: "MiniMax Music 3 WAV sample rate: native 44100 or SGLang-compatible 32000."
+    )
+    var miniMaxOutputSampleRate: Int?
+
+    @Option(
+        name: [.customLong("memory-mode")],
+        help: "MiniMax Music 3 loading: staged releases each model stage before loading the next; resident keeps all weights loaded."
+    )
+    var miniMaxLoadingStrategy: MiniMaxMusic3LoadingStrategy?
+
+    @Option(name: [.customLong("quality")], help: "Adaptive ACE-Step quality: draft, song, final, or edit.")
+    var quality: ACEStepQualityPreset?
+
+    @Option(name: [.customShort("s"), .long], help: "Denoise steps (MiniMax Music 3: 30; ACE-Step Turbo: 8; Base/SFT: 50).")
     var steps: Int?
 
     @Option(name: [.customLong("shift")], help: "Flow scheduler shift (default: Turbo 3; Base/SFT 1).")
@@ -160,7 +189,7 @@ struct MusicGenerate: AsyncParsableCommand {
     @Option(name: [.customLong("sampler")], help: "ODE sampler: euler or heun (default: euler).")
     var samplerMode: ACEStepSamplerMode?
 
-    @Option(name: [.customLong("guidance-scale")], help: "Base/SFT diffusion guidance (default: 7; Turbo always uses 1).")
+    @Option(name: [.customLong("guidance-scale")], help: "Flow guidance (MiniMax Music 3: 1.7; ACE-Step Base/SFT: 7; Turbo: 1).")
     var guidanceScale: Float?
 
     @Option(name: [.customLong("guidance-mode")], help: "Base/SFT guidance: apg, adg, or cfg (default: apg).")
@@ -368,7 +397,7 @@ struct MusicGenerate: AsyncParsableCommand {
         if let shift, shift <= 0 {
             throw ValidationError("--shift must be > 0")
         }
-        if let guidanceScale, guidanceScale < 1 {
+        if let guidanceScale, guidanceScale < 1 || !guidanceScale.isFinite {
             throw ValidationError("--guidance-scale must be >= 1")
         }
         if let cfgIntervalStart, !(0...1).contains(cfgIntervalStart) {
@@ -474,6 +503,20 @@ struct MusicGenerate: AsyncParsableCommand {
             )
         }
 
+        if isMiniMaxMusic3Request {
+            try runMiniMaxMusic3(explicitDurationSeconds: explicitDurationSeconds)
+            return
+        }
+
+        if miniMaxMaximumFrames != nil
+            || miniMaxOutputSampleRate != nil
+            || miniMaxLoadingStrategy != nil
+        {
+            throw ValidationError(
+                "--max-frames, --sample-rate, and --memory-mode require MiniMax Music 3."
+            )
+        }
+
         if isMagentaRT2Request {
             try await runMagentaRT2()
             return
@@ -515,7 +558,7 @@ struct MusicGenerate: AsyncParsableCommand {
                 )
             }
         }
-        let qualityDefaults = quality.defaults(
+        let qualityDefaults = resolvedQuality.defaults(
             for: checkpointVariant,
             task: effectiveTask
         )
@@ -652,7 +695,7 @@ struct MusicGenerate: AsyncParsableCommand {
 
         if effectiveUseLM {
             if !quiet {
-                CLIStderr.write("Planning ACE-Step \(quality.rawValue) metadata with the 5Hz LM\n")
+                CLIStderr.write("Planning ACE-Step \(resolvedQuality.rawValue) metadata with the 5Hz LM\n")
             }
             let planningMetadata = ACEStep5HzLMConstrainedSampler.UserMetadata(
                 bpm: userMetadata.bpm,
@@ -918,7 +961,7 @@ struct MusicGenerate: AsyncParsableCommand {
                 textEncoderSubdirectory: resolvedTextSubdirectory ?? "",
                 adapters: loadedAdapters,
                 task: effectiveTask,
-                quality: quality,
+                quality: resolvedQuality,
                 inputCaption: caption,
                 caption: effectiveCaption,
                 lyrics: resolvedLyrics,
@@ -1059,6 +1102,278 @@ struct MusicGenerate: AsyncParsableCommand {
         return MagentaRT2Resources.looksLikeMagentaRT2Root(url)
     }
 
+    private var isMiniMaxMusic3Request: Bool {
+        if model == ModelResolver.ModelID.miniMaxMusic3.rawValue {
+            return true
+        }
+        return MiniMaxMusic3Resources.looksLikeRoot(resolveUserPath(model))
+    }
+
+    private func runMiniMaxMusic3(explicitDurationSeconds: Float?) throws {
+        try validateMiniMaxMusic3Options(explicitDurationSeconds: explicitDurationSeconds)
+        let inputLRC = try loadLRC()
+        let resolvedLyrics = instrumental
+            ? "[Instrumental]"
+            : try inputLRC?.lyrics ?? loadLyrics()
+        guard !resolvedLyrics.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw ValidationError(
+                "MiniMax Music 3 requires --lyrics, --lyrics-file, --lrc-file, or --instrumental."
+            )
+        }
+
+        let rootURL: URL
+        if model == ModelResolver.ModelID.miniMaxMusic3.rawValue {
+            do {
+                rootURL = try ModelResolver().resolve(.miniMaxMusic3).rootURL
+            } catch {
+                throw ValidationError(
+                    "MiniMax Music 3 is not installed. Review its license, then run "
+                        + "`mere.run model pull \(MiniMaxMusic3Resources.modelID) --accept-model-license`."
+                )
+            }
+        } else {
+            rootURL = resolveUserPath(model)
+        }
+        let resources = MiniMaxMusic3Resources(rootURL: rootURL)
+        let missing = resources.validate()
+        guard missing.isEmpty else {
+            throw ValidationError(
+                "Incomplete MiniMax Music 3 root at \(rootURL.path): "
+                    + missing.map(\.lastPathComponent).joined(separator: ", ")
+            )
+        }
+
+        let outputURL = CLIOutput.resolveOutputURL(
+            output,
+            defaultPrefix: "mererun-minimax-music3",
+            defaultExtension: "wav"
+        )
+        try FileManager.default.createDirectory(
+            at: outputURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        if !quiet {
+            CLIStderr.write("Loading MiniMax Music 3 from \(rootURL.path)\n")
+        }
+        let loadingStrategy = miniMaxLoadingStrategy ?? .staged
+        if !quiet {
+            CLIStderr.write("MiniMax memory mode: \(loadingStrategy.rawValue)\n")
+        }
+        let pipeline = try MiniMaxMusic3Pipeline(
+            resources: resources,
+            loadingStrategy: loadingStrategy
+        )
+        let requestedDuration = explicitDurationSeconds
+            ?? miniMaxMaximumFrames.map {
+                Float($0) / Float(MiniMaxMusic3Prompt.frameRate)
+            }
+            ?? 60
+        let result = try pipeline.generate(
+            options: MiniMaxMusic3GenerationOptions(
+                caption: caption,
+                lyrics: resolvedLyrics,
+                durationSeconds: requestedDuration,
+                maximumFrames: miniMaxMaximumFrames,
+                inferenceSteps: steps ?? 30,
+                seed: seed ?? 0,
+                guidanceScale: guidanceScale ?? 1.7
+            ),
+            progress: { event in
+                guard !quiet else { return }
+                switch event {
+                case .semantic(let frame, let maximum):
+                    if frame == 1 || frame == maximum || frame % 25 == 0 {
+                        CLIStderr.write("MiniMax semantic frames: \(frame)/\(maximum)\n")
+                    }
+                case .denoise(let chunk, let chunkCount, let step, let stepCount):
+                    if step == 1 || step == stepCount || step % 5 == 0 {
+                        CLIStderr.write(
+                            "MiniMax flow chunk \(chunk)/\(chunkCount): step \(step)/\(stepCount)\n"
+                        )
+                    }
+                case .decode(let chunk, let chunkCount):
+                    CLIStderr.write("MiniMax vocoder chunk: \(chunk)/\(chunkCount)\n")
+                }
+            }
+        )
+        let exportOptions = ACEStepAudioExportOptions(
+            format: exportFormat,
+            normalization: normalization,
+            targetPeakDB: targetPeakDB,
+            fadeInMilliseconds: fadeInMilliseconds,
+            fadeOutMilliseconds: fadeOutMilliseconds,
+            dither: !noDither
+        )
+        let outputSampleRate = miniMaxOutputSampleRate ?? result.sampleRate
+        let outputWaveform = try ACEStepWAVWriter.resample(
+            result.waveform.transposed(0, 2, 1),
+            from: result.sampleRate,
+            to: outputSampleRate
+        )
+        try ACEStepWAVWriter.writeWAV(
+            outputWaveform,
+            to: outputURL,
+            sampleRate: outputSampleRate,
+            options: exportOptions
+        )
+        if !noRecipe {
+            let recipeURL = recipeOutput.map(resolveUserPath)
+                ?? outputURL.deletingPathExtension().appendingPathExtension("recipe.json")
+            let recipe = MiniMaxMusic3GenerationRecipe(
+                schemaVersion: MiniMaxMusic3GenerationRecipe.currentSchemaVersion,
+                createdAt: Date(),
+                modelID: model,
+                sourceRepository: MiniMaxMusic3Resources.repository,
+                sourceRevision: MiniMaxMusic3Resources.revision,
+                caption: caption,
+                lyrics: resolvedLyrics,
+                durationSeconds: requestedDuration,
+                requestedMaximumFrames: miniMaxMaximumFrames,
+                generatedFrameCount: result.frameCount,
+                inferenceSteps: steps ?? 30,
+                seed: seed ?? 0,
+                guidanceScale: guidanceScale ?? 1.7,
+                nativeSampleRate: result.sampleRate,
+                outputSampleRate: outputSampleRate,
+                loadingStrategy: loadingStrategy,
+                export: exportOptions,
+                outputFilename: outputURL.lastPathComponent,
+                outputSHA256: try ModelArtifactPin.fileSHA256(outputURL)
+            )
+            try recipe.write(to: recipeURL)
+            if !quiet {
+                CLIStderr.write("Saved recipe: \(recipeURL.path)\n")
+            }
+        }
+        if !quiet {
+            CLIStderr.write(
+                "Generated \(result.frameCount) MiniMax frames at \(outputSampleRate) Hz stereo\n"
+            )
+            CLIStderr.write("Saved audio: \(outputURL.path)\n")
+        }
+        print(outputURL.path)
+    }
+
+    func validateMiniMaxMusic3Options(explicitDurationSeconds: Float?) throws {
+        if let miniMaxMaximumFrames,
+           !(1...MiniMaxMusic3Prompt.maxAudioFrames).contains(miniMaxMaximumFrames)
+        {
+            throw ValidationError("--max-frames must be between 1 and 9000.")
+        }
+        if let explicitDurationSeconds, let miniMaxMaximumFrames,
+           Int(explicitDurationSeconds * Float(MiniMaxMusic3Prompt.frameRate)) != miniMaxMaximumFrames
+        {
+            throw ValidationError(
+                "--duration and --max-frames must describe the same 25 Hz frame limit."
+            )
+        }
+        if let miniMaxOutputSampleRate,
+           miniMaxOutputSampleRate != 32_000,
+           miniMaxOutputSampleRate != 44_100
+        {
+            throw ValidationError("--sample-rate must be 32000 or 44100 for MiniMax Music 3.")
+        }
+        if let explicitDurationSeconds, explicitDurationSeconds > 360 {
+            throw ValidationError("MiniMax Music 3 supports at most 360 seconds (9,000 frames at 25 Hz).")
+        }
+        if useLM || noLM || analyzeSourceAudio || lmModel != nil || lmSubdirectory != nil {
+            throw ValidationError("MiniMax Music 3 uses its built-in autoregressive stage; ACE-Step LM options do not apply.")
+        }
+        if taskType != .textToMusic
+            || sourceAudio != nil
+            || !referenceAudio.isEmpty
+            || nonCover
+            || flowEdit
+            || trackName != nil
+            || completeTrackClasses != nil
+        {
+            throw ValidationError("MiniMax Music 3 currently supports text-and-lyrics generation only.")
+        }
+        if !adapters.isEmpty || !adapterScales.isEmpty || stems != nil {
+            throw ValidationError("MiniMax Music 3 does not support ACE-Step adapters or stem extraction.")
+        }
+        if shift != nil
+            || inferMethod != nil
+            || samplerMode != nil
+            || guidanceMode != nil
+            || cfgIntervalStart != nil
+            || cfgIntervalEnd != nil
+            || velocityNormThreshold != nil
+            || velocityEMAFactor != nil
+        {
+            throw ValidationError("MiniMax Music 3 uses its fixed flow-matching Euler schedule.")
+        }
+        if let candidateCount, candidateCount != 1 {
+            throw ValidationError("MiniMax Music 3 currently supports one candidate per invocation.")
+        }
+        if keepCandidates || dawBundle != nil || lrcOutput != nil {
+            throw ValidationError("Candidate, DAW-bundle, and LRC export are not yet available for MiniMax Music 3.")
+        }
+        if checkpointsRoot != nil
+            || turboSubdirectory != "acestep-v15-turbo"
+            || vaeSubdirectory != "vae"
+            || textSubdirectory != nil
+            || adapterKind != .auto
+        {
+            throw ValidationError("ACE-Step component-layout options do not apply to MiniMax Music 3.")
+        }
+        if quality != nil
+            || audioCoverStrength != 1
+            || coverNoiseStrength != 0
+            || retakeSeed != nil
+            || retakeVariance != 0
+            || vocalLanguage != "en"
+            || instruction != "Fill the audio semantic mask based on the given conditions:"
+        {
+            throw ValidationError("ACE-Step quality, cover, retake, language, and instruction options do not apply to MiniMax Music 3.")
+        }
+        if repaintStartSeconds != 0
+            || repaintEndSeconds != -1
+            || chunkMaskMode != .auto
+            || repaintMode != .balanced
+            || repaintStrength != 0.5
+            || sourceCaption != nil
+            || !sourceLyrics.isEmpty
+            || flowEditNMin != 0
+            || flowEditNMax != 1
+            || flowEditNAverage != 1
+        {
+            throw ValidationError("ACE-Step repaint and flow-edit controls do not apply to MiniMax Music 3.")
+        }
+        if bpm != nil
+            || keyscale != nil
+            || timesignature != nil
+            || metadataDuration != nil
+            || metadataLanguage != nil
+            || lmTopK != 0
+            || lmTopP != 0.9
+            || lmTemperature != 0.85
+            || lmRepetitionPenalty != 1
+            || lmCFGScale != 2
+            || lmNegativePrompt != "NO USER INPUT"
+            || noLMCaptionRewrite
+        {
+            throw ValidationError("ACE-Step metadata aliases and LM sampling controls do not apply to MiniMax Music 3; put musical details in the caption.")
+        }
+        if noTiledVAE
+            || vaeChunkSize != 512
+            || vaeOverlap != 64
+            || magentaTemperature != 1
+            || magentaStyleConditioning != .streaming
+            || magentaTopK != 100
+            || magentaCFGMusicCoCa != 3
+            || magentaCFGNotes != 5
+            || magentaCFGDrums != 1
+            || magentaDrumless
+            || magentaUnmaskWidth != 0
+            || magentaSeedRotation != 0
+            || magentaPrefillSilence
+            || magentaPrefillDuration != 1.64
+        {
+            throw ValidationError("ACE-Step VAE and Magenta RT2 controls do not apply to MiniMax Music 3.")
+        }
+    }
+
     private func candidateOutputURL(
         selectedOutputURL: URL,
         rank: Int,
@@ -1094,7 +1409,7 @@ struct MusicGenerate: AsyncParsableCommand {
         guard !noLM, !task.skipsLanguageModel else {
             return false
         }
-        return useLM || quality.defaults(for: .turbo, task: task).usesLanguageModel
+        return useLM || resolvedQuality.defaults(for: .turbo, task: task).usesLanguageModel
     }
 
     private func runMagentaRT2() async throws {
@@ -1301,7 +1616,7 @@ struct MusicGenerate: AsyncParsableCommand {
         fallback: Float? = nil
     ) -> Float {
         let requestedDuration = fallback ?? durationSeconds
-            ?? quality.defaults(for: .turbo, task: task).fallbackDurationSeconds
+            ?? resolvedQuality.defaults(for: .turbo, task: task).fallbackDurationSeconds
         guard task.locksDurationToSource,
               let sourceAudio48kHz,
               sourceAudio48kHz.ndim >= 2
@@ -1352,8 +1667,12 @@ struct MusicGenerate: AsyncParsableCommand {
     }
 
     func clampedAutomaticDuration(_ duration: Float) -> Float {
-        let upperBound: Float = quality == .song ? 240 : 600
+        let upperBound: Float = resolvedQuality == .song ? 240 : 600
         return min(max(duration, 10), upperBound)
+    }
+
+    var resolvedQuality: ACEStepQualityPreset {
+        quality ?? .song
     }
 
     private func nonEmpty(_ value: String?) -> String? {

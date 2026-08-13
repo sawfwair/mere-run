@@ -37,8 +37,9 @@ final class WNConv1d: Module, @unchecked Sendable {
     }
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {
-        let vNorm = MLX.sqrt(MLX.sum(weightV * weightV, axes: [1, 2], keepDims: true) + 1e-12)
-        let weight = weightG * (weightV / vNorm)
+        let value = weightV.asType(.float32)
+        let vNorm = MLX.sqrt(MLX.sum(value * value, axes: [1, 2], keepDims: true) + 1e-12)
+        let weight = (weightG.asType(.float32) * (value / vNorm)).asType(x.dtype)
 
         var result = MLX.conv1d(x, weight, stride: stride, padding: padding, dilation: dilation)
         if let bias {

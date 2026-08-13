@@ -113,6 +113,7 @@ from the runtime catalog used by `mere.run model list`,
 | `music` | `music-acestep-xl-turbo-lm4b` |
 | `music` | `music-acestep-lm-1.7b` |
 | `music` | `music-acestep-lm-4b` |
+| `music` | `music-minimax-music3` |
 | `music` | `music-magenta-rt2-small` |
 | `music` | `music-magenta-rt2-base` |
 | `music` | `music-muscriptor-small` |
@@ -675,6 +676,60 @@ planner in the selected checkpoint root, then reuse an installed standalone or
 `music-acestep` 1.7B planner, and finally pull `music-acestep-lm-1.7b` when LM
 planning is required. Override that resolution with `--lm-model` or the legacy
 same-root `--lm-subdirectory`.
+
+### `music-minimax-music3`
+
+MiniMax Music 3 comes from `MiniMaxAI/MiniMax-Music3` at immutable revision
+`bd348f9c49ea3c1b39f33ace3436f8fad435f24e`. The managed pull selects the 25
+runtime files needed by the native Swift/MLX implementation and omits the
+duplicate `qwen_7B/` tree and Python-only examples. The selected snapshot is
+28,517,620,807 bytes (approximately 26.6 GiB):
+
+```text
+.../models/music-minimax-music3
+├── condition_encoder/
+├── language_model/
+├── rvq_depth_decoder/
+├── scheduler/
+├── tokenizer/
+├── transformer/
+├── vocoder/
+├── config.json
+├── modular_model_index.json
+└── LICENSE
+```
+
+The checkpoint uses the MiniMax-Music3 Community License rather than an OSI
+open-source license. Managed pulls therefore require
+`--accept-model-license`, runtime auto-download is disabled, and applications
+using the model must preserve the upstream attribution and usage restrictions.
+Review the pinned `LICENSE` before deploying or redistributing the weights.
+
+`mere.run music generate --model music-minimax-music3` assembles the released
+caption-and-lyrics prompt contract, generates 25 Hz semantic plus residual RVQ
+codes, runs the overlap-aware flow transformer, and writes native 44.1 kHz
+stereo WAV output through the released vocoder. `--max-frames` exposes the
+upstream 1...9,000-frame contract directly, while `--duration` converts seconds
+at 25 Hz. The model card describes supported-quality generation through five
+minutes; 9,000 frames is the six-minute runtime hard limit.
+
+Generation defaults to `--memory-mode staged`, which releases the language,
+flow, and vocoder weights between stages. `--memory-mode resident` keeps the
+entire stack loaded for repeated work. Staged mode moves the catalog floor to
+32 GB unified memory; 64 GB remains recommended for practical song lengths.
+`--sample-rate 32000` produces the same stereo PCM rate exposed by the upstream
+SGLang speech route; 44,100 Hz remains the native CLI default. `music serve
+--model music-minimax-music3` exposes the non-streaming `/v1/audio/speech`
+request shape with `input`, `instructions`, `seed`, and `max_new_tokens`, plus
+explicit native duration, step, guidance, and sample-rate controls.
+
+MiniMax publishes its optional `music-caption-rewriter` agent skill separately
+in the official
+[MiniMax-Music-3 repository](https://github.com/MiniMax-AI/MiniMax-Music-3/tree/91410fb657c007ae57c60df8240f5ece5be089c7/music-caption-rewriter).
+It is not part of the checkpoint snapshot or this distribution. The
+model-specific `mere.run guide music generate --model music-minimax-music3`
+shows the official install command, the reviewed source commit, and the
+complete raw Diffusers parameter mapping.
 
 ### `music-magenta-rt2-small` and `music-magenta-rt2-base`
 

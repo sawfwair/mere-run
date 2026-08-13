@@ -8,6 +8,17 @@ The format is based on Keep a Changelog.
 
 ### Video and audio
 
+- added `music-minimax-music3`, a pinned selective MiniMax Music 3 checkpoint
+  and native Swift/MLX song-generation runtime covering caption/lyric prompt
+  normalization, Qwen3 semantic-code generation, residual RVQ depth decode,
+  overlap-aware flow matching, and 44.1 kHz stereo vocoding. The approximately
+  26.6 GiB managed pull is restricted, never auto-downloads at runtime, and
+  requires explicit acknowledgement of the upstream community license.
+- completed the MiniMax Music 3 public runtime contract with direct 25 Hz
+  `--max-frames` limit control, staged or resident model loading, native 44.1 kHz or
+  speech-compatible 32 kHz stereo WAV output, model-specific CLI guidance, and
+  a non-streaming `/v1/audio/speech` endpoint. MiniMax invocations now reject
+  ACE-Step-only flags instead of silently accepting controls the model ignores.
 - expanded native Swift/MLX LTX 2.5 support to the complete pinned upstream
   v1.2.0 inference family: standalone distilled, full dev plus distilled-LoRA,
   HQ Res2s, dev one-stage, arbitrary timed images, generated keyframes,

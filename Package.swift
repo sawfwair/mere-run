@@ -348,6 +348,7 @@ targets.append(contentsOf: [
       "MLX/README.md",
       "MMAudio/README.md",
       "MiniMaxH3/README.md",
+      "MiniMaxMusic3/README.md",
       "PrivacyFilter/README.md",
       "RoFormer/README.md",
       "UniverSR/README.md",

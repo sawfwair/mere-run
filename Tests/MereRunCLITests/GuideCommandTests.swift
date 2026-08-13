@@ -18,6 +18,27 @@ final class GuideCommandTests: XCTestCase {
         XCTAssertEqual(entry.topic, "music-generate")
     }
 
+    func testGuideRendersMiniMaxMusic3SpecificContract() throws {
+        let command = try GuideCommand.parse([
+            "music", "generate",
+            "--model", MiniMaxMusic3Resources.modelID,
+        ])
+        let entry = try GuideCommand.resolveEntry(
+            commandPath: command.commandPath,
+            model: command.model
+        )
+        let rendered = try GuideCommand.render(
+            entry: entry,
+            model: command.model,
+            json: false
+        )
+
+        XCTAssertTrue(rendered.contains("# MiniMax Music 3 Generate"))
+        XCTAssertTrue(rendered.contains("--max-frames"))
+        XCTAssertTrue(rendered.contains("/v1/audio/speech"))
+        XCTAssertTrue(rendered.contains("music-caption-rewriter"))
+    }
+
     func testGuideMusicAnalyzeParsesAndResolves() throws {
         let command = try GuideCommand.parse(["music", "analyze"])
         let entry = try GuideCommand.resolveEntry(commandPath: command.commandPath, model: command.model)
@@ -182,6 +203,7 @@ final class GuideCommandTests: XCTestCase {
                 ModelResolver.ModelID.aceStepXLSFT.rawValue,
                 ModelResolver.ModelID.aceStepXLTurbo.rawValue,
                 ModelResolver.ModelID.aceStepXLTurboLM4B.rawValue,
+                MiniMaxMusic3Resources.modelID,
                 ModelResolver.ModelID.magentaRT2Small.rawValue,
                 ModelResolver.ModelID.magentaRT2Base.rawValue,
             ]

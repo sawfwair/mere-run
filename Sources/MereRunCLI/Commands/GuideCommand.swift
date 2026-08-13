@@ -62,7 +62,7 @@ struct GuideCommand: ParsableCommand {
     }
 
     static func render(entry: GuideTopic, model: String?, json: Bool) throws -> String {
-        let rawContent = try GuideRegistry.content(for: entry)
+        let rawContent = try GuideRegistry.content(for: entry, model: model)
         let content: String
         if let model, !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             content = "> Model focus: `\(model)`\n\n" + rawContent
@@ -427,6 +427,7 @@ enum GuideRegistry {
                 "music-acestep-xl-sft",
                 "music-acestep-xl-turbo",
                 "music-acestep-xl-turbo-lm4b",
+                "music-minimax-music3",
                 "music-magenta-rt2-small",
                 "music-magenta-rt2-base",
             ],
@@ -711,8 +712,14 @@ enum GuideRegistry {
         }
     }
 
-    static func content(for topic: GuideTopic) throws -> String {
-        let resource = topic.resourceName as NSString
+    static func content(for topic: GuideTopic, model: String? = nil) throws -> String {
+        let normalizedModel = model?.trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        let resourceName = topic.topic == "music-generate"
+            && normalizedModel == "music-minimax-music3"
+            ? "music-generate-minimax-music3.md"
+            : topic.resourceName
+        let resource = resourceName as NSString
         let baseName = resource.deletingPathExtension
         let fileExtension = resource.pathExtension
         let nestedURL = Bundle.module.url(
@@ -722,7 +729,7 @@ enum GuideRegistry {
         )
         let flatURL = Bundle.module.url(forResource: baseName, withExtension: fileExtension)
         guard let url = nestedURL ?? flatURL else {
-            throw ValidationError("Guide resource missing: \(topic.resourceName)")
+            throw ValidationError("Guide resource missing: \(resourceName)")
         }
         return try String(contentsOf: url, encoding: .utf8)
     }

@@ -1,0 +1,150 @@
+# MiniMax Music 3 Generate
+
+## Purpose
+
+Generate a complete lyric-conditioned song locally with the pinned native
+Swift/MLX MiniMax Music 3 runtime.
+
+## Install
+
+Review the pinned MiniMax-Music3 Community License, then pull the selective
+Diffusers-format runtime snapshot:
+
+```bash
+mere.run model pull music-minimax-music3 --accept-model-license
+mere.run model info music-minimax-music3
+```
+
+The managed pull intentionally excludes the duplicate original SGLang weights,
+reference media, figures, and Python example. It contains every file consumed
+by the native runtime and cannot be used as an SGLang checkpoint directory.
+
+## Generation contract
+
+MiniMax Music 3 consumes only these model inputs:
+
+- positional caption: genre, emotional arc, vocals, instrumentation,
+  arrangement, and production profile
+- `--lyrics`, `--lyrics-file`, `--lrc-file`, or `--instrumental`
+- `--duration`: upper-bound seconds; defaults to 60
+- `--max-frames`: exact 25 Hz acoustic-frame upper bound; 1 through 9000
+- `--steps`: flow-Euler steps per chunk; defaults to 30
+- `--seed`: deterministic MLX seed; defaults to 0
+- `--guidance-scale`: flow classifier-free guidance; defaults to 1.7
+- `--memory-mode staged|resident`: staged loads and releases the autoregressive,
+  flow, and vocoder stages separately; resident keeps every component loaded
+- `--sample-rate 44100|32000`: native Diffusers output or SGLang-compatible WAV
+
+When both `--duration` and `--max-frames` are provided, they must describe the
+same limit. The checkpoint hard cap is 9000 frames (360 seconds), while the
+official supported-quality claim is songs up to five minutes.
+
+Incompatible ACE-Step cover, editing, LM-planner, adapter, VAE,
+candidate-ranking, stem, and DAW settings fail explicitly for this model.
+Magenta RT2 settings also fail instead of being silently ignored.
+
+## Upstream parameter map
+
+| Upstream Diffusers input | mere.run surface |
+| --- | --- |
+| `prompt` | positional caption |
+| `lyrics` | `--lyrics`, `--lyrics-file`, `--lrc-file`, or `--instrumental` |
+| `audio_duration` | `--duration` |
+| `generator` | `--seed` |
+| `num_inference_steps` | `--steps` |
+| `output_type=np|pt` | `--export-format float32` with mastering disabled as shown below |
+
+The released autoregressive CFG (`1.5`) and top-k (`50`) remain fixed because
+they are checkpoint behavior, not pipeline inputs. Flow guidance defaults to
+the released `1.7` and is available as `--guidance-scale`. The speech route
+maps upstream `max_new_tokens` to the same frame limit exposed by
+`--max-frames`, accepts only `response_format=wav`, and requires
+`stream=false`. Both upstream paths are single-sample, so mere.run does not
+invent a batch parameter.
+
+## Lyrics
+
+Put structural tags such as `[Verse]`, `[Chorus]`, `[Bridge]`, and
+`[Instrumental]` on their own lines. Text placed after a leading tag on the
+same line is discarded by the upstream checkpoint contract.
+
+```bash
+mere.run music generate \
+  "Genre: acoustic pop. BPM: 96. Warm female lead, intimate verses, wide final chorus." \
+  --model music-minimax-music3 \
+  --lyrics-file ./lyrics.txt \
+  --duration 60 \
+  --steps 30 \
+  --seed 7 \
+  --output ./song.wav
+```
+
+Use `--instrumental` to pass the upstream `[Instrumental]` marker without a
+lyrics file.
+
+## Structured caption companion
+
+MiniMax publishes a separate `music-caption-rewriter` agent skill containing
+its structured-caption workflow and static template library. It is not
+vendored because the companion repository publishes no reusable license.
+Install it directly from the official source when you want it:
+
+```bash
+npx skills add MiniMax-AI/MiniMax-Music3 --skill music-caption-rewriter
+```
+
+Pass the resulting `Global Metadata`, `Vocal Details`, and `Arrangement` text
+as the positional caption, while keeping the original lyrics separate.
+
+## Native and reference-server output
+
+The native vocoder emits 44.1 kHz stereo. `--sample-rate 32000` adds the
+reference-server compatibility resample. WAV export defaults remain mere.run's
+production profile: PCM24, peak normalization to -1 dBFS, short boundary fades,
+and deterministic dither.
+
+For an unmastered Diffusers-style float waveform, use:
+
+```bash
+--export-format float32 --normalize none --fade-in-ms 0 --fade-out-ms 0 --no-dither
+```
+
+## Resident speech API
+
+Start the SGLang-compatible speech route with all weights warm:
+
+```bash
+mere.run music serve \
+  --model music-minimax-music3 \
+  --memory-mode resident \
+  --port 8081
+```
+
+Then send lyrics as `input` and the caption as `instructions`:
+
+```bash
+curl http://127.0.0.1:8081/v1/audio/speech \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "model": "MiniMaxAI/MiniMax-Music3",
+    "input": "[Verse]\nMorning light through the pine",
+    "instructions": "Warm acoustic pop, intimate female vocal, fingerpicked guitar.",
+    "response_format": "wav",
+    "seed": 7,
+    "max_new_tokens": 750,
+    "stream": false
+  }' \
+  --output song.wav
+```
+
+The speech route defaults to 32 kHz PCM16 stereo. Add `"sample_rate": 44100`
+for the native vocoder rate. Streaming and batched generation are not offered
+because the released upstream pipeline is single-sample and non-streaming.
+
+## Provenance
+
+- Checkpoint: `MiniMaxAI/MiniMax-Music3` at the immutable revision recorded by
+  `mere.run model info music-minimax-music3`
+- Runtime reference: Hugging Face Diffusers PR #14456
+- Caption companion: `MiniMax-AI/MiniMax-Music3`, commit
+  `91410fb657c007ae57c60df8240f5ece5be089c7`

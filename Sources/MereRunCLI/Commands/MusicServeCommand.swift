@@ -7,7 +7,7 @@ import NIOCore
 struct MusicServe: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "serve",
-        abstract: "Start a warm resident ACE-Step music generation API."
+        abstract: "Start an ACE-Step or MiniMax Music 3 generation API."
     )
 
     @Option(name: [.long], help: "Host to bind to.")
@@ -16,8 +16,14 @@ struct MusicServe: AsyncParsableCommand {
     @Option(name: [.short, .long], help: "Port to listen on.")
     var port: Int = 8081
 
-    @Option(name: [.customShort("m"), .long], help: "Managed ACE-Step model id or local checkpoint root.")
+    @Option(name: [.customShort("m"), .long], help: "Managed ACE-Step/MiniMax model id or local checkpoint root.")
     var model: String = ModelResolver.ModelID.aceStep.rawValue
+
+    @Option(
+        name: [.customLong("memory-mode")],
+        help: "MiniMax Music 3 loading: resident keeps all weights warm; staged lowers peak residency by reloading stages per request."
+    )
+    var miniMaxLoadingStrategy: MiniMaxMusic3LoadingStrategy?
 
     @Option(name: [.customLong("checkpoints-root")], help: "Root containing ACE-Step checkpoint directories.")
     var checkpointsRoot: String?
@@ -72,6 +78,14 @@ struct MusicServe: AsyncParsableCommand {
             )
         }
 
+        if isMiniMaxMusic3Request {
+            try await runMiniMaxMusic3(apiKey: resolvedAPIKey)
+            return
+        }
+        if miniMaxLoadingStrategy != nil {
+            throw ValidationError("--memory-mode requires MiniMax Music 3.")
+        }
+
         let root = try await ACEStepCLIHelper.resolveCheckpointsRoot(
             model: model,
             checkpointsRoot: checkpointsRoot,
@@ -124,6 +138,68 @@ struct MusicServe: AsyncParsableCommand {
             languageModelSource: lm.source,
             adapters: loadedAdapters,
             apiKey: resolvedAPIKey
+        )
+        try await server.run(host: host, port: port)
+    }
+
+    private var isMiniMaxMusic3Request: Bool {
+        if model == ModelResolver.ModelID.miniMaxMusic3.rawValue
+            || model == MiniMaxMusic3Resources.repository
+        {
+            return true
+        }
+        return MiniMaxMusic3Resources.looksLikeRoot(
+            ACEStepCLIHelper.resolveUserPath(model)
+        )
+    }
+
+    private func runMiniMaxMusic3(apiKey: String?) async throws {
+        if checkpointsRoot != nil
+            || decoderSubdirectory != "acestep-v15-turbo"
+            || vaeSubdirectory != "vae"
+            || lmSubdirectory != nil
+            || lmModel != nil
+            || textSubdirectory != nil
+            || !adapters.isEmpty
+            || adapterKind != .auto
+            || !adapterScales.isEmpty
+        {
+            throw ValidationError(
+                "ACE-Step component, planner, and adapter options do not apply to MiniMax Music 3."
+            )
+        }
+        let rootURL: URL
+        if model == ModelResolver.ModelID.miniMaxMusic3.rawValue
+            || model == MiniMaxMusic3Resources.repository
+        {
+            do {
+                rootURL = try ModelResolver().resolve(.miniMaxMusic3).rootURL
+            } catch {
+                throw ValidationError(
+                    "MiniMax Music 3 is not installed. Review its license, then run "
+                        + "`mere.run model pull \(MiniMaxMusic3Resources.modelID) --accept-model-license`."
+                )
+            }
+        } else {
+            rootURL = ACEStepCLIHelper.resolveUserPath(model)
+        }
+        let resources = MiniMaxMusic3Resources(rootURL: rootURL)
+        let missing = resources.validate()
+        guard missing.isEmpty else {
+            throw ValidationError(
+                "Incomplete MiniMax Music 3 root at \(rootURL.path): "
+                    + missing.map(\.lastPathComponent).joined(separator: ", ")
+            )
+        }
+        let loadingStrategy = miniMaxLoadingStrategy ?? .resident
+        CLIStderr.write(
+            "Loading MiniMax Music 3 server in \(loadingStrategy.rawValue) memory mode\n"
+        )
+        let server = try MiniMaxMusic3APIServer(
+            resources: resources,
+            modelID: ModelResolver.ModelID.miniMaxMusic3.rawValue,
+            loadingStrategy: loadingStrategy,
+            apiKey: apiKey
         )
         try await server.run(host: host, port: port)
     }

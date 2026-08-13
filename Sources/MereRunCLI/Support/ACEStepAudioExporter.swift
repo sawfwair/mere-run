@@ -1,3 +1,4 @@
+import AudioCodecs
 import Foundation
 import MLX
 
@@ -172,6 +173,57 @@ enum ACEStepWAVWriter {
             sampleChannel.asType(.float32).reshaped(-1).asArray(Float.self),
             sampleChannel.dim(1)
         )
+    }
+
+    static func resample(
+        _ audio: MLXArray,
+        from sourceSampleRate: Int,
+        to targetSampleRate: Int
+    ) throws -> MLXArray {
+        guard sourceSampleRate > 0 else {
+            throw WriterError.invalidSampleRate(sourceSampleRate)
+        }
+        guard targetSampleRate > 0 else {
+            throw WriterError.invalidSampleRate(targetSampleRate)
+        }
+        guard sourceSampleRate != targetSampleRate else {
+            return audio
+        }
+        let (interleaved, channels) = try flattenToInterleaved(audio)
+        guard (1...8).contains(channels) else {
+            throw WriterError.invalidChannels(channels)
+        }
+        let frameCount = interleaved.count / channels
+        var channelSamples = [[Float]](
+            repeating: [],
+            count: channels
+        )
+        for channel in 0..<channels {
+            channelSamples[channel].reserveCapacity(frameCount)
+        }
+        for frame in 0..<frameCount {
+            for channel in 0..<channels {
+                channelSamples[channel].append(
+                    interleaved[(frame * channels) + channel]
+                )
+            }
+        }
+        let resampled = channelSamples.map {
+            PCMStreamConverter.resampleLinear(
+                $0,
+                from: sourceSampleRate,
+                to: targetSampleRate
+            )
+        }
+        let outputFrames = resampled.first?.count ?? 0
+        var output = [Float]()
+        output.reserveCapacity(outputFrames * channels)
+        for frame in 0..<outputFrames {
+            for channel in 0..<channels {
+                output.append(resampled[channel][frame])
+            }
+        }
+        return MLXArray(output, [1, outputFrames, channels])
     }
 
     private static func normalize(

@@ -78,6 +78,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case lightOnOCR = "lighton-ocr"
         /// ACE-Step music family.
         case aceStep = "ace-step"
+        /// MiniMax Music 3 autoregressive and flow-matching music family.
+        case miniMaxMusic3 = "minimax-music3"
         /// Magenta RealTime 2 streaming music family.
         case magentaRT2 = "magenta-rt2"
         /// MuScriptor multi-instrument audio transcription family.
@@ -1844,6 +1846,20 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 upstreamRepoId: modelID == .aceStepLM4B
                     ? "ACE-Step/acestep-5Hz-lm-4B"
                     : "ACE-Step/Ace-Step1.5",
+                createdAt: createdAt
+            )
+        case .miniMaxMusic3:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .miniMaxMusic3,
+                family: .music,
+                tier: .max,
+                variant: .standard,
+                precision: .bf16,
+                defaults: Defaults(steps: 30, cfg: 1.7),
+                supports: [.musicGeneration],
+                components: nil,
+                upstreamRepoId: "\(MiniMaxMusic3Resources.repository)@\(MiniMaxMusic3Resources.revision)",
                 createdAt: createdAt
             )
         case .magentaRT2Small, .magentaRT2Base:

@@ -29,6 +29,48 @@ final class MusicServeAndExportTests: XCTestCase {
         XCTAssertEqual(command.adapterScales, [0.8, 0.5])
     }
 
+    func testMusicServeParsesMiniMaxResidentSpeechAPI() throws {
+        let command = try MusicServe.parse([
+            "--model", MiniMaxMusic3Resources.modelID,
+            "--memory-mode", "resident",
+            "--port", "8091",
+        ])
+
+        XCTAssertEqual(command.model, MiniMaxMusic3Resources.modelID)
+        XCTAssertEqual(command.miniMaxLoadingStrategy, .resident)
+        XCTAssertEqual(command.port, 8_091)
+    }
+
+    func testMiniMaxSpeechRequestDecodesReferenceAndNativeControls() throws {
+        let request = try JSONDecoder().decode(
+            MiniMaxMusic3SpeechRequest.self,
+            from: Data(
+                """
+                {
+                  "model": "MiniMaxAI/MiniMax-Music3",
+                  "input": "[Verse]\\nwe glow",
+                  "instructions": "cinematic synth-pop",
+                  "response_format": "wav",
+                  "seed": 7,
+                  "max_new_tokens": 750,
+                  "stream": false,
+                  "audio_duration": 30,
+                  "num_inference_steps": 24,
+                  "guidance_scale": 1.7,
+                  "sample_rate": 44100
+                }
+                """.utf8
+            )
+        )
+
+        XCTAssertEqual(request.maxNewTokens, 750)
+        XCTAssertEqual(request.audioDuration, 30)
+        XCTAssertEqual(request.numInferenceSteps, 24)
+        XCTAssertEqual(request.guidanceScale, 1.7)
+        XCTAssertEqual(request.sampleRate, 44_100)
+        XCTAssertEqual(request.stream, false)
+    }
+
     func testMusicTrainAdapterParsesAndLoadsJSONLManifest() throws {
         let command = try MusicTrainAdapter.parse([
             "--dataset", "/tmp/music.jsonl",
@@ -333,6 +375,24 @@ final class MusicServeAndExportTests: XCTestCase {
             XCTAssertEqual(readUInt16(data, offset: 34), bits)
             XCTAssertEqual(data.count, 44 + 6 * bytesPerSample)
         }
+    }
+
+    func testStereoResamplingPreservesChannelOrderAndDuration() throws {
+        let audio = MLXArray(
+            [Float(0), 10, 1, 11, 2, 12, 3, 13],
+            [1, 4, 2]
+        )
+        let resampled = try ACEStepWAVWriter.resample(
+            audio,
+            from: 4,
+            to: 2
+        )
+
+        XCTAssertEqual(resampled.shape, [1, 2, 2])
+        XCTAssertEqual(
+            resampled.reshaped(-1).asArray(Float.self),
+            [0, 10, 2, 12]
+        )
     }
 
     func testDAWBundleContainsPortableAudioRecipeMarkersAndProject() throws {

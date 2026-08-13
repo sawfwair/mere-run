@@ -603,6 +603,29 @@ extension QwenEncoder {
     return embedTokens.asLinear(h)
   }
 
+  /// Runs cached causal decoding from caller-provided embeddings and returns
+  /// the normalized hidden state before any language-model head. Audio-token
+  /// models use this to feed composite codebook embeddings back into Qwen.
+  public func forwardCausalHidden(
+    embeddings: MLXArray,
+    cache: [KVCache]?,
+    positionIds: MLXArray? = nil,
+    lastPositionOnly: Bool = false
+  ) -> MLXArray {
+    var h = embeddings
+    let mask = createCausalMaskForGeneration(h: h, cache: cache?.first)
+
+    for (index, layer) in layers.enumerated() {
+      h = layer(h, mask: mask, cache: cache?[index], positionIds: positionIds)
+    }
+
+    h = norm(h)
+    if lastPositionOnly && h.dim(1) > 1 {
+      h = h[0..., (h.dim(1) - 1)..., 0...]
+    }
+    return h
+  }
+
   private func createCausalMaskForGeneration(h: MLXArray, cache: KVCache?) -> MLXFast.ScaledDotProductAttentionMaskMode {
     let n = h.dim(1)
     if let cache = cache {

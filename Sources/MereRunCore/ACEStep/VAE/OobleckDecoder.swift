@@ -40,9 +40,10 @@ final class OobleckWNConvTranspose1d: Module, @unchecked Sendable {
     func callAsFunction(_ x: MLXArray) -> MLXArray {
         // weightV: [out, k, in]
         // weightG: [in, 1, 1] (PyTorch weight_norm dim=0)
-        let vNorm = MLX.sqrt(MLX.sum(weightV * weightV, axes: [0, 1], keepDims: true) + 1e-12) // [1, 1, in]
-        let g = weightG.reshaped(1, 1, -1) // [1, 1, in]
-        let weight = weightV * (g / vNorm)
+        let value = weightV.asType(.float32)
+        let vNorm = MLX.sqrt(MLX.sum(value * value, axes: [0, 1], keepDims: true) + 1e-12) // [1, 1, in]
+        let g = weightG.asType(.float32).reshaped(1, 1, -1) // [1, 1, in]
+        let weight = (value * (g / vNorm)).asType(x.dtype)
 
         var result = MLX.convTransposed1d(x, weight, stride: stride, padding: padding)
         if let bias {

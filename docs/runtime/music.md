@@ -5,8 +5,9 @@ play a model live from a MIDI controller, split a mix into vocal and
 instrumental WAVs, or turn it back into instrument-separated MIDI with tempo,
 meter, and key already filled in.
 Generation, analysis, adapter training, resident serving, realtime steering,
-source separation, and transcription are native Swift and MLX paths — Magenta
-RT2 takes CC knobs while it is still generating.
+source separation, and transcription are native Swift and MLX paths. MiniMax
+Music 3 uses its staged language-model, RVQ, flow-transformer, and stereo
+vocoder stack locally; Magenta RT2 takes CC knobs while it is still generating.
 
 ## Commands
 
@@ -40,6 +41,7 @@ emitted flag absent from `mere.run catalog --json`.
 - `music-acestep-xl-base`
 - `music-acestep-lm-1.7b`
 - `music-acestep-lm-4b`
+- `music-minimax-music3`
 - `music-magenta-rt2-small`
 - `music-magenta-rt2-base`
 - `music-muscriptor-small`
@@ -59,6 +61,7 @@ Music guidance follows the command/cookbook shape used by the rest of
 mere.run guide music generate --model music-acestep
 mere.run guide music generate --model music-acestep-xl-turbo
 mere.run guide music analyze --model music-acestep-xl-turbo-lm4b
+mere.run guide music generate --model music-minimax-music3
 mere.run guide music generate --model music-magenta-rt2-small
 mere.run guide music separate --model music-separate-bs-roformer-viperx-1297
 mere.run guide music separate --model music-separate-bs-roformer-4stem
@@ -77,6 +80,27 @@ style-transfer covers, and source-audio understanding are documented under
 swift run mere.run music generate \
   "upbeat electronic groove" \
   --output ./track.wav
+
+swift run mere.run model pull music-minimax-music3 --accept-model-license
+swift run mere.run music generate \
+  "cinematic synth-pop, female lead, 118 bpm, wide guitars" \
+  --model music-minimax-music3 \
+  --lyrics-file ./lyrics.txt \
+  --duration 30 \
+  --steps 30 \
+  --seed 7 \
+  --memory-mode staged \
+  --output ./minimax-song.wav
+
+swift run mere.run music serve \
+  --model music-minimax-music3 \
+  --memory-mode resident \
+  --port 8080
+
+curl http://127.0.0.1:8080/v1/audio/speech \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"music-minimax-music3","instructions":"cinematic synth-pop, female lead","input":"[Verse]\nNeon on the avenue","max_new_tokens":750,"seed":7}' \
+  --output ./minimax-speech-route.wav
 
 swift run mere.run music generate \
   "dream-pop cover with soft vocals" \
