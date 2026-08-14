@@ -179,6 +179,63 @@ public class KVCacheSimple: KVCache {
     }
 }
 
+/// A fixed-capacity cache for generation loops whose maximum sequence length
+/// is known before prefill. Unlike `KVCacheSimple`, it never concatenates a new
+/// backing allocation while decoding.
+public final class KVCacheStatic: KVCache {
+    public let capacity: Int
+    private var keys: MLXArray?
+    private var values: MLXArray?
+    public private(set) var offset = 0
+
+    public init(capacity: Int) {
+        precondition(capacity > 0)
+        self.capacity = capacity
+    }
+
+    public var supportsVariablePositionBatching: Bool {
+        true
+    }
+
+    public func update(keys newKeys: MLXArray, values newValues: MLXArray) -> (MLXArray, MLXArray) {
+        let nextOffset = offset + newKeys.dim(2)
+        precondition(
+            nextOffset <= capacity,
+            "KV cache capacity \(capacity) is smaller than required length \(nextOffset)"
+        )
+        if keys == nil {
+            keys = MLXArray.zeros(
+                [newKeys.dim(0), newKeys.dim(1), capacity, newKeys.dim(3)],
+                dtype: newKeys.dtype
+            )
+            values = MLXArray.zeros(
+                [newValues.dim(0), newValues.dim(1), capacity, newValues.dim(3)],
+                dtype: newValues.dtype
+            )
+        }
+
+        keys?[.ellipsis, offset..<nextOffset, 0...] = newKeys
+        values?[.ellipsis, offset..<nextOffset, 0...] = newValues
+        offset = nextOffset
+        return (
+            keys![.ellipsis, ..<offset, 0...],
+            values![.ellipsis, ..<offset, 0...]
+        )
+    }
+
+    public func makeMask(n: Int) -> MLXFast.ScaledDotProductAttentionMaskMode {
+        n == 1 ? .none : .causal
+    }
+
+    public func fork() -> KVCache {
+        let copy = KVCacheStatic(capacity: capacity)
+        copy.keys = keys.map { $0.asType($0.dtype) }
+        copy.values = values.map { $0.asType($0.dtype) }
+        copy.offset = offset
+        return copy
+    }
+}
+
 public final class KVRaggedBatchCache: KVCache {
     struct RowState {
         let keys: MLXArray

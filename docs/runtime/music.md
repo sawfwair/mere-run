@@ -88,7 +88,7 @@ swift run mere.run music generate \
   --lyrics-file ./lyrics.txt \
   --duration 30 \
   --minimum-duration 30 \
-  --steps 30 \
+  --sampling-tier fast \
   --seed 7 \
   --memory-mode staged \
   --performance-mode q8 \
@@ -102,7 +102,7 @@ swift run mere.run music serve \
 
 curl http://127.0.0.1:8080/v1/audio/speech \
   -H 'Content-Type: application/json' \
-  -d '{"model":"music-minimax-music3","instructions":"cinematic synth-pop, female lead","input":"[Verse]\nNeon on the avenue","max_new_tokens":750,"seed":7}' \
+  -d '{"model":"music-minimax-music3","instructions":"cinematic synth-pop, female lead","input":"[Verse]\nNeon on the avenue","max_new_tokens":750,"sampling_tier":"fast","seed":7}' \
   --output ./minimax-speech-route.wav
 
 swift run mere.run music generate \

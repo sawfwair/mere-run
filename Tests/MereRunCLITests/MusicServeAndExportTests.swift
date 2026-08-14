@@ -59,6 +59,7 @@ final class MusicServeAndExportTests: XCTestCase {
                   "stream": false,
                   "audio_duration": 30,
                   "minimum_audio_duration": 20,
+                  "sampling_tier": "draft",
                   "num_inference_steps": 24,
                   "guidance_scale": 1.7,
                   "sample_rate": 44100
@@ -71,6 +72,7 @@ final class MusicServeAndExportTests: XCTestCase {
         XCTAssertEqual(request.minNewTokens, 500)
         XCTAssertEqual(request.audioDuration, 30)
         XCTAssertEqual(request.minimumAudioDuration, 20)
+        XCTAssertEqual(request.samplingTier, .draft)
         XCTAssertEqual(request.numInferenceSteps, 24)
         XCTAssertEqual(request.guidanceScale, 1.7)
         XCTAssertEqual(request.sampleRate, 44_100)

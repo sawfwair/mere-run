@@ -495,6 +495,36 @@ final class MiniMaxMusic3Tests: MereRunCoreTestCase {
         XCTAssertTrue(MLX.allClose(full, incremental, rtol: 1e-5, atol: 1e-5).item(Bool.self))
     }
 
+    func testDepthDecoderStaticCacheMatchesGrowingCache() {
+        let configuration = MiniMaxMusic3DepthConfiguration(
+            hiddenSize: 8,
+            numLayers: 2,
+            numAttentionHeads: 2,
+            intermediateSize: 16,
+            audioVocabSize: 16,
+            numCodebooks: 4,
+            maxPositionEmbeddings: 8
+        )
+        let model = MiniMaxMusic3DepthDecoder(configuration: configuration)
+        let input = MLXArray((0..<(2 * 4 * 8)).map { Float($0) / 100 }).reshaped(2, 4, 8)
+        let growingCache = model.makeCache()
+        let staticCache = model.makeCache(capacity: 4)
+        var growing: [MLXArray] = []
+        var fixed: [MLXArray] = []
+        for index in 0..<4 {
+            growing.append(model(input[0..., index..<(index + 1), 0...], cache: growingCache))
+            fixed.append(model(input[0..., index..<(index + 1), 0...], cache: staticCache))
+        }
+        let growingOutput = MLX.concatenated(growing, axis: 1)
+        let staticOutput = MLX.concatenated(fixed, axis: 1)
+        MLX.eval(growingOutput, staticOutput)
+
+        XCTAssertEqual(staticCache.first?.offset, 4)
+        XCTAssertTrue(
+            MLX.allClose(growingOutput, staticOutput, rtol: 1e-5, atol: 1e-5).item(Bool.self)
+        )
+    }
+
     func testDepthDecoderFusedProjectionsMatchSeparateProjections() {
         let configuration = MiniMaxMusic3DepthConfiguration(
             hiddenSize: 8,
@@ -537,7 +567,7 @@ final class MiniMaxMusic3Tests: MereRunCoreTestCase {
         XCTAssertEqual(output.shape, [1, 2, 7])
     }
 
-    func testFlowTransformerBatchedGuidanceMatchesSerialPasses() {
+    func testFlowTransformerBatchedGuidanceMatchesSerialPasses() throws {
         let configuration = MiniMaxMusic3TransformerConfiguration(
             inChannels: 2,
             conditionDim: 4,
@@ -590,6 +620,17 @@ final class MiniMaxMusic3Tests: MereRunCoreTestCase {
         )
         MLX.eval(fused)
         XCTAssertTrue(MLX.allClose(batched, fused, rtol: 1e-5, atol: 1e-5).item(Bool.self))
+
+        let batchedCondition = MLX.concatenated([condition, zeros], axis: 0)
+        let preparedCondition = try XCTUnwrap(model.prepareConditionInput(batchedCondition))
+        let prepared = model(
+            latents: MLX.concatenated([latents, latents], axis: 0),
+            timestep: MLX.repeated(timestep, count: 2, axis: 0),
+            preparedCondition: preparedCondition,
+            rotary: rotary
+        )
+        MLX.eval(prepared)
+        XCTAssertTrue(MLX.allClose(batched, prepared, rtol: 1e-5, atol: 1e-5).item(Bool.self))
     }
 
     func testLanguageModelFusedProjectionsMatchSeparateProjections() {

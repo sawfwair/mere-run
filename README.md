@@ -611,7 +611,7 @@ swift run mere.run music generate \
   --lyrics-file ./lyrics.txt \
   --duration 30 \
   --minimum-duration 30 \
-  --steps 30 \
+  --sampling-tier fast \
   --seed 7 \
   --memory-mode staged \
   --performance-mode q8 \

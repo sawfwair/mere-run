@@ -11,6 +11,7 @@ public struct MiniMaxMusic3GenerationOptions: Sendable {
     public var inferenceSteps: Int
     public var seed: UInt64
     public var guidanceScale: Float
+    public var profilingEnabled: Bool
 
     public init(
         caption: String,
@@ -20,7 +21,8 @@ public struct MiniMaxMusic3GenerationOptions: Sendable {
         maximumFrames: Int? = nil,
         inferenceSteps: Int = 30,
         seed: UInt64 = 0,
-        guidanceScale: Float = 1.7
+        guidanceScale: Float = 1.7,
+        profilingEnabled: Bool = false
     ) {
         self.caption = caption
         self.lyrics = lyrics
@@ -30,6 +32,7 @@ public struct MiniMaxMusic3GenerationOptions: Sendable {
         self.inferenceSteps = inferenceSteps
         self.seed = seed
         self.guidanceScale = guidanceScale
+        self.profilingEnabled = profilingEnabled
     }
 }
 
@@ -37,6 +40,7 @@ public struct MiniMaxMusic3GenerationResult {
     public let waveform: MLXArray
     public let sampleRate: Int
     public let frameCount: Int
+    public let profile: MiniMaxMusic3GenerationProfile?
 }
 
 public enum MiniMaxMusic3Progress: Sendable, Equatable {
@@ -117,43 +121,69 @@ public final class MiniMaxMusic3Pipeline {
             )
         }
 
+        let totalStart = ContinuousClock.now
+        let recorder = options.profilingEnabled ? MiniMaxMusic3ProfileRecorder() : nil
         let generator = MLXRandom.RandomState(seed: options.seed)
+        let autoregressiveStart = ContinuousClock.now
         let frameHiddens = try autoregressiveStage(
             options: options,
             generator: generator,
+            recorder: recorder,
             progress: progress
         )
+        recorder?.record(.autoregressive, since: autoregressiveStart)
         if loadingStrategy == .staged {
             MLX.Memory.clearCache()
         }
+        let flowStart = ContinuousClock.now
         let chunks = try flowStage(
             frameHiddens: frameHiddens,
             steps: options.inferenceSteps,
             guidanceScale: options.guidanceScale,
             generator: generator,
+            recorder: recorder,
             progress: progress
         )
+        recorder?.record(.flow, since: flowStart)
         if loadingStrategy == .staged {
             MLX.Memory.clearCache()
         }
-        let decoded = try vocoderStage(chunks: chunks, progress: progress)
+        let vocoderStart = ContinuousClock.now
+        let decoded = try vocoderStage(
+            chunks: chunks,
+            recorder: recorder,
+            progress: progress
+        )
+        recorder?.record(.vocoder, since: vocoderStart)
         if loadingStrategy == .staged {
             MLX.Memory.clearCache()
         }
         let waveform = decoded.waveform
         MLX.eval(waveform)
+        let profile = recorder.map {
+            MiniMaxMusic3GenerationProfile(
+                frameCount: frameHiddens.dim(1),
+                chunkCount: chunks.count,
+                inferenceSteps: options.inferenceSteps,
+                totalSeconds: MiniMaxMusic3ProfileRecorder.seconds(since: totalStart),
+                recorder: $0
+            )
+        }
         return MiniMaxMusic3GenerationResult(
             waveform: waveform,
             sampleRate: decoded.sampleRate,
-            frameCount: frameHiddens.dim(1)
+            frameCount: frameHiddens.dim(1),
+            profile: profile
         )
     }
 
     private func autoregressiveStage(
         options: MiniMaxMusic3GenerationOptions,
         generator: MLXRandom.RandomState,
+        recorder: MiniMaxMusic3ProfileRecorder?,
         progress: (@Sendable (MiniMaxMusic3Progress) -> Void)?
     ) throws -> MLXArray {
+        let loadStart = ContinuousClock.now
         let models = try residentModels.map {
             MiniMaxMusic3AutoregressiveModels(
                 languageModel: $0.languageModel,
@@ -164,6 +194,7 @@ public final class MiniMaxMusic3Pipeline {
             from: requiredResources(),
             performanceMode: performanceMode
         )
+        recorder?.record(.autoregressiveLoad, since: loadStart)
         let tokenIDs = try promptTokenIDs(
             caption: options.caption,
             lyrics: options.lyrics,
@@ -177,6 +208,7 @@ public final class MiniMaxMusic3Pipeline {
             languageModel: models.languageModel,
             depthDecoder: models.depthDecoder,
             generator: generator,
+            recorder: recorder,
             progress: progress
         )
         MLX.eval(frameHiddens)
@@ -188,8 +220,10 @@ public final class MiniMaxMusic3Pipeline {
         steps: Int,
         guidanceScale: Float,
         generator: MLXRandom.RandomState,
+        recorder: MiniMaxMusic3ProfileRecorder?,
         progress: (@Sendable (MiniMaxMusic3Progress) -> Void)?
     ) throws -> [MLXArray] {
+        let loadStart = ContinuousClock.now
         let models = try residentModels.map {
             MiniMaxMusic3FlowModels(
                 conditionEncoder: $0.conditionEncoder,
@@ -199,6 +233,7 @@ public final class MiniMaxMusic3Pipeline {
             from: requiredResources(),
             performanceMode: performanceMode
         )
+        recorder?.record(.flowLoad, since: loadStart)
         let chunks = denoise(
             frameHiddens: frameHiddens,
             steps: steps,
@@ -206,6 +241,7 @@ public final class MiniMaxMusic3Pipeline {
             conditionEncoder: models.conditionEncoder,
             transformer: models.transformer,
             generator: generator,
+            recorder: recorder,
             progress: progress
         )
         MLX.eval(chunks)
@@ -214,11 +250,19 @@ public final class MiniMaxMusic3Pipeline {
 
     private func vocoderStage(
         chunks: [MLXArray],
+        recorder: MiniMaxMusic3ProfileRecorder?,
         progress: (@Sendable (MiniMaxMusic3Progress) -> Void)?
     ) throws -> (waveform: MLXArray, sampleRate: Int) {
+        let loadStart = ContinuousClock.now
         let vocoder = try residentModels?.vocoder
             ?? MiniMaxMusic3ModelLoader.loadVocoder(from: requiredResources())
-        let waveform = decode(chunks: chunks, vocoder: vocoder, progress: progress)
+        recorder?.record(.vocoderLoad, since: loadStart)
+        let waveform = decode(
+            chunks: chunks,
+            vocoder: vocoder,
+            recorder: recorder,
+            progress: progress
+        )
         MLX.eval(waveform)
         return (waveform, vocoder.configuration.samplingRate)
     }
@@ -259,15 +303,9 @@ public final class MiniMaxMusic3Pipeline {
         languageModel: MiniMaxMusic3LanguageModel,
         depthDecoder: MiniMaxMusic3DepthDecoder,
         generator: MLXRandom.RandomState,
+        recorder: MiniMaxMusic3ProfileRecorder?,
         progress: (@Sendable (MiniMaxMusic3Progress) -> Void)?
     ) throws -> MLXArray {
-        let caches = languageModel.makeCache()
-        let textEmbeddings = languageModel.embed(tokenIDs: textIDs)
-        var lastHidden = languageModel.hidden(
-            embeddings: textEmbeddings,
-            cache: caches,
-            lastPositionOnly: true
-        ).squeezed(axis: 1)
         let minimumFrames = explicitMinimumFrames ?? 0
         let durationFrames = Int(durationSeconds * Float(MiniMaxMusic3Prompt.frameRate))
         let requestedFrames = explicitMaximumFrames
@@ -282,9 +320,26 @@ public final class MiniMaxMusic3Pipeline {
             )
         }
 
+        let cacheCapacity = textIDs.dim(1) + maximumFrames + 1
+        let caches = languageModel.makeCache(
+            capacity: performanceMode.usesOptimizedGraph ? cacheCapacity : nil
+        )
+        let prefillStart = ContinuousClock.now
+        let textEmbeddings = languageModel.embed(tokenIDs: textIDs)
+        var lastHidden = languageModel.hidden(
+            embeddings: textEmbeddings,
+            cache: caches,
+            lastPositionOnly: true
+        ).squeezed(axis: 1)
+        if recorder != nil {
+            MLX.eval(lastHidden)
+            recorder?.record(.promptPrefill, since: prefillStart)
+        }
+
         var frameHiddens: [MLXArray] = []
         frameHiddens.reserveCapacity(maximumFrames)
         for frameIndex in 0...maximumFrames {
+            let samplingStart = ContinuousClock.now
             let logits = languageModel.logits(lastHidden)
             let allowEnd = frameHiddens.count >= minimumFrames
             let sampled = performanceMode == .reference
@@ -296,12 +351,14 @@ public final class MiniMaxMusic3Pipeline {
                     generator: generator
                 )
             let sampledID = sampled.item(Int.self)
+            recorder?.record(.semanticSampling, since: samplingStart)
             if sampledID == MiniMaxMusic3Prompt.audioEndTokenID {
                 break
             }
 
             let semantic = sampled.asType(.int32) - MLXArray(Int32(MiniMaxMusic3Prompt.audioCodeOffset))
             let duplicatedSemantic = MLX.repeated(semantic.reshaped(1), count: 2, axis: 0)
+            let depthStart = ContinuousClock.now
             let depth = generateDepthCodes(
                 lastHidden: lastHidden,
                 semanticCode: duplicatedSemantic,
@@ -309,6 +366,10 @@ public final class MiniMaxMusic3Pipeline {
                 depthDecoder: depthDecoder,
                 generator: generator
             )
+            if recorder != nil {
+                MLX.eval(depth.codes, depth.hidden)
+                recorder?.record(.residualDepth, since: depthStart)
+            }
             var conditioningToEvaluate: MLXArray?
             if frameIndex > 0 {
                 let conditioning = MLX.concatenated([lastHidden[0..<1], depth.hidden], axis: -1)
@@ -327,6 +388,7 @@ public final class MiniMaxMusic3Pipeline {
                 }
             }
 
+            let feedbackStart = ContinuousClock.now
             let feedback = embedAudioFrame(
                 depth.codes,
                 languageModel: languageModel,
@@ -344,6 +406,7 @@ public final class MiniMaxMusic3Pipeline {
             } else {
                 MLX.eval(lastHidden)
             }
+            recorder?.record(.autoregressiveFeedback, since: feedbackStart)
         }
 
         guard !frameHiddens.isEmpty else {
@@ -480,7 +543,7 @@ public final class MiniMaxMusic3Pipeline {
         var codes = [semanticCode]
         var hiddenParts: [MLXArray] = []
         let caches = performanceMode.usesOptimizedGraph
-            ? depthDecoder.makeCache()
+            ? depthDecoder.makeCache(capacity: depthDecoder.configuration.numCodebooks)
             : nil
         for codebook in 1..<depthDecoder.configuration.numCodebooks {
             let input = if caches == nil || codebook == 1 {
@@ -552,6 +615,7 @@ public final class MiniMaxMusic3Pipeline {
         conditionEncoder: MiniMaxMusic3ConditionEncoder,
         transformer: MiniMaxMusic3Transformer,
         generator: MLXRandom.RandomState,
+        recorder: MiniMaxMusic3ProfileRecorder?,
         progress: (@Sendable (MiniMaxMusic3Progress) -> Void)?
     ) -> [MLXArray] {
         if performanceMode == .reference {
@@ -573,6 +637,7 @@ public final class MiniMaxMusic3Pipeline {
 
         for (chunkIndex, start) in starts.enumerated() {
             let end = min(start + 200, frameHiddens.dim(1))
+            let conditionStart = ContinuousClock.now
             var condition = conditionEncoder(frameHiddens[0..., start..<end, 0...])
                 .asType(.bfloat16)
             let overlap = min(previousLatent?.dim(2) ?? 0, condition.dim(1))
@@ -582,6 +647,10 @@ public final class MiniMaxMusic3Pipeline {
                     axis: 1
                 )
             }
+            if recorder != nil {
+                MLX.eval(condition)
+                recorder?.record(.conditionEncoding, since: conditionStart)
+            }
             var latents = MLXRandom.normal([
                 1,
                 transformer.configuration.inChannels,
@@ -589,6 +658,8 @@ public final class MiniMaxMusic3Pipeline {
             ], key: generator).asType(condition.dtype)
             let noisePrompt = overlap > 0 ? latents[0..., 0..., 0..<overlap] : nil
             let zeroCondition = MLXArray.zeros(condition.shape, dtype: condition.dtype)
+            let batchedCondition = MLX.concatenated([condition, zeroCondition], axis: 0)
+            let preparedCondition = transformer.prepareConditionInput(batchedCondition)
             let rotary = transformer.rotaryCache(
                 latentLength: condition.dim(1),
                 dtype: condition.dtype
@@ -596,6 +667,7 @@ public final class MiniMaxMusic3Pipeline {
             let stepSize = MLXArray(1 / Float(steps)).asType(condition.dtype)
 
             for step in 0..<steps {
+                let transformerStart = ContinuousClock.now
                 let time = Float(step) / Float(steps)
                 if overlap > 0, let previousLatent, let noisePrompt {
                     let blended = (1 - (1 - 1e-6) * time) * noisePrompt
@@ -608,18 +680,27 @@ public final class MiniMaxMusic3Pipeline {
                 let timestep = MLXArray([time]).asType(latents.dtype)
                 let batchedLatents = MLX.concatenated([latents, latents], axis: 0)
                 let batchedTimestep = MLX.repeated(timestep, count: 2, axis: 0)
-                let batchedCondition = MLX.concatenated([condition, zeroCondition], axis: 0)
-                let velocities = transformer(
-                    latents: batchedLatents,
-                    timestep: batchedTimestep,
-                    condition: batchedCondition,
-                    rotary: rotary
-                )
+                let velocities = if let preparedCondition {
+                    transformer(
+                        latents: batchedLatents,
+                        timestep: batchedTimestep,
+                        preparedCondition: preparedCondition,
+                        rotary: rotary
+                    )
+                } else {
+                    transformer(
+                        latents: batchedLatents,
+                        timestep: batchedTimestep,
+                        condition: batchedCondition,
+                        rotary: rotary
+                    )
+                }
                 let conditional = velocities[0..<1]
                 let unconditional = velocities[1..<2]
                 let velocity = unconditional + (conditional - unconditional) * MLXArray(guidanceScale)
                 latents = latents + velocity * stepSize
                 MLX.eval(latents)
+                recorder?.record(.flowTransformer, since: transformerStart)
                 progress?(.denoise(
                     chunk: chunkIndex + 1,
                     chunkCount: starts.count,
@@ -728,17 +809,20 @@ public final class MiniMaxMusic3Pipeline {
     private func decode(
         chunks: [MLXArray],
         vocoder: MiniMaxMusic3Vocoder,
+        recorder: MiniMaxMusic3ProfileRecorder?,
         progress: (@Sendable (MiniMaxMusic3Progress) -> Void)?
     ) -> MLXArray {
         var waveforms: [MLXArray] = []
         waveforms.reserveCapacity(chunks.count)
         for (index, chunk) in chunks.enumerated() {
+            let decodeStart = ContinuousClock.now
             let waveform = vocoder(chunk.asType(.bfloat16))
             let left = index == 0 ? 0 : 86 * 512
             let right = index == chunks.count - 1 ? 0 : 258 * 512
             let sampleEnd = waveform.dim(2) - right
             let cropped = waveform[0..., 0..., left..<sampleEnd]
             MLX.eval(cropped)
+            recorder?.record(.vocoderDecode, since: decodeStart)
             waveforms.append(cropped)
             progress?(.decode(chunk: index + 1, chunkCount: chunks.count))
         }
