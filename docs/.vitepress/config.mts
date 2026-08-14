@@ -35,17 +35,16 @@ export default defineConfig({
   ],
   markdown: mereMarkdown(),
   themeConfig: {
-    siteTitle: 'mere.run Docs',
+    siteTitle: 'mere.run / docs',
     search: {
       provider: 'local'
     },
     nav: [
-      { text: 'Getting Started', link: '/getting-started' },
-      { text: 'CLI', link: '/cli' },
-      { text: 'Workflows', link: '/workflows' },
-      { text: 'Runtime', link: '/runtime/image' },
-      { text: 'Plugins', link: '/plugins' },
-      { text: 'Contribute', link: '/repository-tour' }
+      { text: 'Create', link: '/runtime/image' },
+      { text: 'Understand', link: '/runtime/vision' },
+      { text: 'Automate', link: '/workflows' },
+      { text: 'Serve', link: '/runtime/api-server' },
+      { text: 'Reference', link: '/cli' }
     ],
     sidebar: [
       {

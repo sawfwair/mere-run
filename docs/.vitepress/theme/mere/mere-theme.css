@@ -1,8 +1,7 @@
 /* ────────────────────────────────────────────────────────────────────────
    Mere docs theme
-   Warm paper, ink typography, per-product key colors, and code rendered
-   as a dark instrument panel in both appearances. Shared by every Mere
-   docs host via @mere/docs-theme.
+   Crisp product UI, high-signal typography, per-product key colors, and
+   code rendered as a dark instrument panel in both appearances.
    ──────────────────────────────────────────────────────────────────────── */
 
 @import './fonts.css';
@@ -10,27 +9,27 @@
 /* ── Tokens ─────────────────────────────────────────────────────────── */
 
 :root {
-  --mere-canvas: #F3F2EE;
-  --mere-paper: #FBFBF9;
-  --mere-surface: #F7F6F2;
-  --mere-surface-raised: #EDEBE5;
-  --mere-surface-muted: #E5E3DC;
-  --mere-ink: #1B1A16;
-  --mere-ink-soft: #55534B;
-  --mere-ink-muted: #767468;
-  --mere-line: #DAD8D1;
+  --mere-canvas: #F6F7FB;
+  --mere-paper: #FFFFFF;
+  --mere-surface: #F0F2F7;
+  --mere-surface-raised: #E8EBF2;
+  --mere-surface-muted: #DEE2EB;
+  --mere-ink: #0A0C10;
+  --mere-ink-soft: #444B59;
+  --mere-ink-muted: #6D7584;
+  --mere-line: #D8DDE7;
   --mere-line-soft: color-mix(in oklch, var(--mere-line) 62%, transparent);
-  --mere-line-strong: #B8B5AC;
-  --mere-accent: #3B4EA0;
+  --mere-line-strong: #AEB6C5;
+  --mere-accent: #4658E8;
   --mere-accent-soft: color-mix(in oklch, var(--mere-accent) 11%, transparent);
-  --mere-accent-hover: #2F3E82;
-  --mere-accent-contrast: #FCFCFB;
+  --mere-accent-hover: #3042D0;
+  --mere-accent-contrast: #FFFFFF;
   --mere-warning: #96691A;
   --mere-danger: #A84E2C;
   --mere-plum: #6E3878;
   --mere-focus: #1C7373;
-  --mere-shadow: 0 18px 42px color-mix(in oklch, var(--mere-ink) 8%, transparent);
-  --mere-shadow-soft: 0 10px 26px color-mix(in oklch, var(--mere-ink) 5%, transparent);
+  --mere-shadow: 0 24px 64px color-mix(in oklch, var(--mere-ink) 13%, transparent);
+  --mere-shadow-soft: 0 12px 32px color-mix(in oklch, var(--mere-ink) 8%, transparent);
 
   /* Code — always a dark panel; light mode sets it on the paper like slate */
   --mere-code-bg: oklch(21.5% 0.014 162);
@@ -66,12 +65,12 @@
   --vp-c-danger-soft: color-mix(in oklch, var(--mere-danger) 12%, transparent);
 
   --vp-font-family-base: 'Instrument Sans', ui-sans-serif, -apple-system, 'Segoe UI', system-ui, sans-serif;
-  --vp-font-family-display: 'Newsreader', 'Iowan Old Style', Georgia, 'Times New Roman', serif;
+  --vp-font-family-display: 'Instrument Sans', ui-sans-serif, -apple-system, 'Segoe UI', system-ui, sans-serif;
   --vp-font-family-mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, 'Cascadia Code', Consolas, monospace;
 
   --vp-nav-height: 64px;
   --vp-layout-max-width: 1440px;
-  --vp-sidebar-bg-color: color-mix(in oklch, var(--mere-surface) 72%, var(--mere-canvas));
+  --vp-sidebar-bg-color: color-mix(in oklch, var(--mere-paper) 82%, var(--mere-canvas));
 
   /* Code block plumbing */
   --vp-code-block-bg: var(--mere-code-bg);
@@ -105,21 +104,21 @@
 }
 
 .dark {
-  --mere-canvas: oklch(16.5% 0.012 165);
-  --mere-paper: oklch(19.8% 0.013 165);
-  --mere-surface: oklch(22.5% 0.014 165);
-  --mere-surface-raised: oklch(25.5% 0.014 165);
-  --mere-surface-muted: oklch(29% 0.014 165);
-  --mere-ink: oklch(92.5% 0.01 110);
-  --mere-ink-soft: oklch(77% 0.011 120);
-  --mere-ink-muted: oklch(64% 0.012 125);
-  --mere-line: oklch(33% 0.014 165);
+  --mere-canvas: #0B0D12;
+  --mere-paper: #11141B;
+  --mere-surface: #171B24;
+  --mere-surface-raised: #1D222D;
+  --mere-surface-muted: #252B37;
+  --mere-ink: #F4F6FA;
+  --mere-ink-soft: #BBC2CF;
+  --mere-ink-muted: #858E9E;
+  --mere-line: #2A303C;
   --mere-line-soft: color-mix(in oklch, var(--mere-line) 70%, transparent);
-  --mere-line-strong: oklch(46% 0.016 165);
-  --mere-accent: oklch(72% 0.11 268);
+  --mere-line-strong: #434B5A;
+  --mere-accent: #91A0FF;
   --mere-accent-soft: color-mix(in oklch, var(--mere-accent) 15%, transparent);
-  --mere-accent-hover: oklch(80% 0.095 268);
-  --mere-accent-contrast: oklch(16% 0.014 170);
+  --mere-accent-hover: #B5BFFF;
+  --mere-accent-contrast: #0B0D12;
   --mere-warning: oklch(78% 0.1 72);
   --mere-danger: oklch(72% 0.13 30);
   --mere-plum: oklch(75% 0.09 320);
@@ -145,7 +144,7 @@
   --vp-c-brand-2: var(--mere-accent-hover);
   --vp-c-brand-3: color-mix(in oklch, var(--mere-accent) 78%, var(--mere-paper));
   --vp-c-brand-soft: var(--mere-accent-soft);
-  --vp-sidebar-bg-color: color-mix(in oklch, var(--mere-paper) 55%, var(--mere-canvas));
+  --vp-sidebar-bg-color: color-mix(in oklch, var(--mere-paper) 72%, var(--mere-canvas));
   --vp-home-hero-name-color: var(--mere-accent);
 }
 
@@ -1557,6 +1556,652 @@ body {
 
   .vp-code-group div[class*='language-'] {
     border-radius: 0;
+  }
+}
+
+/* ── mere.run product pass ────────────────────────────────────────────
+   A sharper, output-first layer for the public runtime docs. The shared
+   primitives above remain useful to sibling docs hosts; these rules reset
+   the product masthead and tighten the long-form reading surface.
+   ───────────────────────────────────────────────────────────────────── */
+
+.VPNav {
+  background: color-mix(in srgb, var(--mere-canvas) 78%, transparent);
+  -webkit-backdrop-filter: blur(20px) saturate(1.7);
+  backdrop-filter: blur(20px) saturate(1.7);
+}
+
+.VPNavBarTitle .title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+}
+
+.VPNavBarMenuLink,
+.VPNavBarMenuGroup .button {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.VPNavBarMenuLink.active {
+  color: var(--mere-accent);
+}
+
+.VPNavBarSearch .DocSearch-Button {
+  border-color: var(--mere-line-soft);
+  border-radius: 10px;
+  background: color-mix(in oklch, var(--mere-paper) 72%, transparent);
+}
+
+.VPSidebar {
+  border-right-color: var(--mere-line-soft);
+  background: var(--vp-sidebar-bg-color);
+}
+
+.VPSidebarItem.level-0 > .item > .link > .text,
+.VPSidebarItem.level-0 > .item > .text {
+  color: var(--mere-ink-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.VPSidebarItem:not(.level-0) .link > .text {
+  font-size: 13px;
+  font-weight: 520;
+}
+
+.VPSidebarItem.is-active > .item > .link {
+  border-radius: 4px;
+  background: transparent;
+  box-shadow: inset 2px 0 0 var(--mere-accent);
+}
+
+.VPDoc {
+  padding-top: 48px;
+}
+
+.vp-doc {
+  max-width: 80ch;
+}
+
+.vp-doc h1 {
+  max-width: 18ch;
+  font-size: clamp(38px, 4vw, 50px);
+  font-weight: 700;
+  letter-spacing: -0.045em;
+  line-height: 1.02;
+}
+
+.vp-doc h2 {
+  margin-top: 64px;
+  border-top: 0;
+  padding-top: 0;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+}
+
+.vp-doc > div > h2::before {
+  display: none;
+  content: none;
+}
+
+.vp-doc h3 {
+  margin-top: 38px;
+  font-size: 19px;
+  font-weight: 680;
+  letter-spacing: -0.018em;
+}
+
+.vp-doc p,
+.vp-doc li {
+  font-size: 15.5px;
+  line-height: 1.72;
+}
+
+.vp-doc div[class*='language-'] {
+  border-radius: 12px;
+  box-shadow: 0 18px 44px -30px #000;
+}
+
+.mere-doc-signal {
+  align-items: center;
+  margin-bottom: 40px;
+  border: 1px solid var(--mere-line-soft);
+  border-radius: 12px;
+  padding: 12px 14px;
+  background: color-mix(in oklch, var(--mere-paper) 72%, transparent);
+}
+
+.mere-doc-signal-label {
+  margin-bottom: 1px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.mere-doc-signal p {
+  font-size: 12.5px;
+}
+
+.mere-doc-signal-links a,
+.mere-doc-signal-links span {
+  font-size: 12px;
+}
+
+/* Home canvas */
+.VPHome {
+  position: relative;
+  isolation: isolate;
+}
+
+.VPHome::before {
+  position: absolute;
+  z-index: -1;
+  inset: 0 0 auto;
+  height: 820px;
+  background:
+    linear-gradient(color-mix(in oklch, var(--mere-line) 36%, transparent) 1px, transparent 1px),
+    linear-gradient(90deg, color-mix(in oklch, var(--mere-line) 36%, transparent) 1px, transparent 1px),
+    radial-gradient(circle at 76% 18%, color-mix(in oklch, var(--mere-accent) 18%, transparent), transparent 30%),
+    radial-gradient(circle at 18% 6%, color-mix(in oklch, #5DE7A5 12%, transparent), transparent 24%);
+  background-size: 48px 48px, 48px 48px, auto, auto;
+  -webkit-mask-image: linear-gradient(to bottom, #000 56%, transparent 100%);
+  mask-image: linear-gradient(to bottom, #000 56%, transparent 100%);
+  content: '';
+  pointer-events: none;
+}
+
+.VPHero {
+  padding: 88px 32px 50px;
+}
+
+.VPHero .container {
+  max-width: 1380px;
+  gap: 72px;
+}
+
+.VPHero .main {
+  max-width: 620px;
+}
+
+.VPHero .name {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  margin-bottom: 20px;
+  border: 1px solid color-mix(in oklch, var(--mere-accent) 32%, var(--mere-line));
+  border-radius: 999px;
+  padding: 6px 10px;
+  background: color-mix(in oklch, var(--mere-accent) 8%, var(--mere-paper));
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+}
+
+.VPHero .name::before {
+  width: 6px;
+  height: 6px;
+  margin-right: 8px;
+  border-radius: 50%;
+  background: #32D583;
+  box-shadow: 0 0 0 4px color-mix(in oklch, #32D583 16%, transparent);
+  content: '';
+}
+
+.VPHero .text {
+  max-width: 11ch;
+  font-size: clamp(56px, 6vw, 82px);
+  font-weight: 700;
+  letter-spacing: -0.065em;
+  line-height: 0.96;
+  text-wrap: balance;
+}
+
+.VPHero .tagline {
+  max-width: 54ch;
+  margin-top: 24px;
+  font-size: 18px;
+  font-weight: 470;
+  line-height: 1.58;
+}
+
+.VPHero .actions {
+  gap: 12px;
+  margin-top: 32px;
+}
+
+.VPHero .VPButton {
+  min-height: 46px;
+  border-radius: 10px !important;
+  padding: 0 20px;
+  font-size: 14px;
+  font-weight: 650 !important;
+}
+
+.VPHero .VPButton.brand {
+  border-color: var(--mere-ink) !important;
+  background: var(--mere-ink) !important;
+  color: var(--mere-canvas) !important;
+  box-shadow: 0 10px 28px color-mix(in oklch, var(--mere-ink) 18%, transparent);
+}
+
+.VPHero .VPButton.brand:hover {
+  border-color: var(--mere-accent) !important;
+  background: var(--mere-accent) !important;
+  color: #fff !important;
+}
+
+.VPHero .VPButton.alt {
+  border-color: var(--mere-line-strong) !important;
+  background: color-mix(in oklch, var(--mere-paper) 62%, transparent) !important;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+/* Output-first hero proof */
+.mere-launch-stage {
+  width: min(690px, 100%);
+}
+
+.mere-launch-frame {
+  overflow: hidden;
+  border: 1px solid #2D3442;
+  border-radius: 18px;
+  background: #0A0D12;
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.05) inset,
+    0 38px 90px -34px rgb(4 7 14 / 0.72),
+    0 0 80px color-mix(in oklch, var(--mere-accent) 10%, transparent);
+  color: #F0F3F8;
+  transform: perspective(1500px) rotateY(-2deg) rotateX(1deg);
+  transform-origin: center left;
+}
+
+.mere-launch-topline {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  min-height: 44px;
+  border-bottom: 1px solid rgb(255 255 255 / 0.08);
+  padding: 0 15px;
+  background: #11151C;
+  color: #8D97A8;
+  font-family: var(--vp-font-family-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mere-window-controls {
+  display: flex;
+  gap: 6px;
+}
+
+.mere-window-controls span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #343B48;
+}
+
+.mere-window-controls span:nth-child(1) { background: #FF6258; }
+.mere-window-controls span:nth-child(2) { background: #FFBF38; }
+.mere-window-controls span:nth-child(3) { background: #28C840; }
+
+.mere-launch-status {
+  justify-self: end;
+  color: #77E5A5;
+}
+
+.mere-launch-status::before {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 12px currentColor;
+  content: '';
+  animation: mere-live 2.8s ease-in-out infinite;
+}
+
+.mere-launch-media {
+  position: relative;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 50% 0, rgb(70 88 232 / 0.18), transparent 42%),
+    #080B0F;
+}
+
+.mere-launch-media::after {
+  position: absolute;
+  inset: 0;
+  border: 1px solid rgb(255 255 255 / 0.035);
+  background: linear-gradient(transparent 50%, rgb(0 0 0 / 0.08) 50%);
+  background-size: 100% 4px;
+  content: '';
+  opacity: 0.35;
+  pointer-events: none;
+}
+
+.mere-launch-media img {
+  display: block;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 10 / 7;
+  object-fit: cover;
+}
+
+.mere-proof-label {
+  position: absolute;
+  z-index: 1;
+  right: 14px;
+  bottom: 14px;
+  border: 1px solid rgb(255 255 255 / 0.14);
+  border-radius: 999px;
+  padding: 6px 9px;
+  background: rgb(5 8 12 / 0.78);
+  color: #D7DCE5;
+  font-family: var(--vp-font-family-mono);
+  font-size: 9px;
+  font-weight: 650;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+}
+
+.mere-launch-command {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 54px;
+  border-top: 1px solid rgb(255 255 255 / 0.08);
+  padding: 0 16px;
+  color: #66E59C;
+  font-family: var(--vp-font-family-mono);
+  font-size: 11px;
+}
+
+.mere-launch-command code {
+  overflow: hidden;
+  color: #D6DBE4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mere-launch-command a {
+  color: #9BA8FF;
+  font-family: var(--vp-font-family-base);
+  font-size: 11px;
+  font-weight: 620;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+/* Intent cards */
+.VPFeatures {
+  padding: 0 32px 76px;
+}
+
+.VPFeatures .container {
+  max-width: 1380px;
+}
+
+.VPFeatures .items {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin: 0;
+}
+
+.VPFeatures .item {
+  width: auto !important;
+  padding: 0 !important;
+}
+
+.VPFeature,
+.VPLink.VPFeature {
+  position: relative;
+  min-height: 188px;
+  overflow: hidden;
+  border: 1px solid var(--mere-line-soft);
+  border-radius: 14px !important;
+  padding: 56px 22px 22px;
+  background: color-mix(in oklch, var(--mere-paper) 78%, transparent) !important;
+  box-shadow: 0 18px 46px -42px var(--mere-ink) !important;
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  transition: border-color 180ms ease, transform 180ms ease, box-shadow 180ms ease !important;
+}
+
+.VPFeature .icon {
+  position: absolute;
+  top: 18px;
+  left: 22px;
+  display: block;
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  background: transparent;
+  color: var(--mere-accent);
+  font-family: var(--vp-font-family-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.VPFeature:hover,
+.VPLink.VPFeature:hover {
+  border-color: color-mix(in oklch, var(--mere-accent) 48%, var(--mere-line));
+  box-shadow: 0 24px 54px -38px color-mix(in oklch, var(--mere-accent) 48%, var(--mere-ink)) !important;
+  transform: translateY(-3px);
+}
+
+.VPFeature .title {
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+}
+
+.VPFeature .details {
+  margin-top: 9px;
+  font-size: 13.5px;
+  line-height: 1.56;
+}
+
+.VPHomeContent {
+  border-top: 1px solid var(--mere-line-soft);
+  padding-top: 74px;
+  background: color-mix(in oklch, var(--mere-paper) 42%, transparent);
+}
+
+.VPHomeContent .container {
+  max-width: 1180px;
+}
+
+.VPHomeContent .vp-doc h2 {
+  font-size: 31px;
+}
+
+@media (max-width: 1100px) {
+  .VPHero {
+    padding-top: 68px;
+  }
+
+  .VPHero .container {
+    gap: 38px;
+  }
+
+  .VPHero .text {
+    font-size: clamp(52px, 6vw, 68px);
+  }
+
+  .mere-launch-frame {
+    transform: none;
+  }
+
+  .VPFeatures .items {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 960px) {
+  .VPHero.has-image .container {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .VPHero.has-image .main {
+    order: 1;
+    max-width: 720px;
+  }
+
+  .VPHero.has-image .image {
+    order: 2;
+    width: 100% !important;
+    height: auto !important;
+    margin: 8px 0 0 !important;
+  }
+
+  .VPHero.has-image .image-container {
+    position: relative !important;
+    inset: auto !important;
+    width: 100% !important;
+    height: auto !important;
+    transform: none !important;
+  }
+
+  .mere-launch-stage {
+    width: 100%;
+    max-width: 760px;
+  }
+
+  .mere-doc-signal {
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 640px) {
+  .VPHero {
+    padding: 44px 20px 30px;
+  }
+
+  .VPHero .container {
+    gap: 34px;
+  }
+
+  .VPHero .name {
+    margin-bottom: 16px;
+  }
+
+  .VPHero .text {
+    max-width: 11ch;
+    font-size: 43px;
+    letter-spacing: -0.055em;
+  }
+
+  .VPHero .tagline {
+    margin-top: 18px;
+    font-size: 15.5px;
+  }
+
+  .VPHero .actions {
+    margin-top: 24px;
+  }
+
+  .VPHero .actions .VPButton {
+    min-height: 44px;
+  }
+
+  .mere-launch-frame {
+    border-radius: 13px;
+  }
+
+  .mere-launch-topline {
+    grid-template-columns: auto 1fr auto;
+    min-height: 38px;
+    padding: 0 10px;
+    font-size: 8px;
+  }
+
+  .mere-launch-title {
+    justify-self: center;
+  }
+
+  .mere-window-controls {
+    gap: 4px;
+  }
+
+  .mere-window-controls span {
+    width: 6px;
+    height: 6px;
+  }
+
+  .mere-proof-label {
+    right: 9px;
+    bottom: 9px;
+    font-size: 8px;
+  }
+
+  .mere-launch-command {
+    min-height: 45px;
+    padding: 0 11px;
+    font-size: 9px;
+  }
+
+  .mere-launch-command a {
+    display: none;
+  }
+
+  .VPFeatures {
+    padding: 0 20px 54px;
+  }
+
+  .VPFeatures .items {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .VPFeature,
+  .VPLink.VPFeature {
+    min-height: 0;
+    padding: 50px 18px 18px;
+  }
+
+  .VPFeature .icon {
+    top: 16px;
+    left: 18px;
+  }
+
+  .VPHomeContent {
+    padding-top: 50px;
+  }
+
+  .VPHomeContent .vp-doc h2 {
+    font-size: 26px;
+  }
+
+  .VPDoc {
+    padding-top: 30px;
+  }
+
+  .vp-doc h1 {
+    font-size: 37px;
+  }
+
+  .mere-doc-signal {
+    margin-bottom: 30px;
+    border-right: 0;
+    border-left: 0;
+    border-radius: 0;
+    padding-right: 0;
+    padding-left: 0;
+    background: transparent;
   }
 }
 

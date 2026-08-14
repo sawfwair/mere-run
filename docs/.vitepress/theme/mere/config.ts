@@ -51,7 +51,7 @@ export const mereDocsKeyColors = {
   projects: defineMereDocsKeyColor('#7A5B2A', '#614820', '#D8B876', '#E7D09B'),
   zone: defineMereDocsKeyColor('#733E93', '#5B3175', '#C9A0EC', '#DDC0F4'),
   deliver: defineMereDocsKeyColor('#A1661B', '#805014', '#E6BE6D', '#F0D493', '#171714', '#171714'),
-  run: defineMereDocsKeyColor('#3159A8', '#274687', '#93B5F4', '#B9CDF8'),
+  run: defineMereDocsKeyColor('#4658E8', '#3042D0', '#91A0FF', '#B5BFFF'),
 } satisfies Record<string, MereDocsKeyColor>
 
 export type MereDocsKeyColorName = keyof typeof mereDocsKeyColors
@@ -82,6 +82,7 @@ export interface MereDocSectionSignal {
 
 export interface MereDocsThemeConfig {
   keyColor: MereDocsKeyColor
+  hero: 'atlas' | 'run-proof'
   atlas: {
     eyebrowLeft: string
     eyebrowRight: string
@@ -97,6 +98,7 @@ export interface MereDocsThemeConfig {
 
 export type MereDocsThemeUserConfig = Partial<{
   keyColor: MereDocsKeyColorInput
+  hero: MereDocsThemeConfig['hero']
   atlas: Partial<MereDocsThemeConfig['atlas']>
   docsNetworkLabel: string
   docsNetworkLinks: MereDocsLink[]
@@ -106,6 +108,7 @@ export type MereDocsThemeUserConfig = Partial<{
 
 export const defaultMereDocsThemeConfig: MereDocsThemeConfig = {
   keyColor: mereDocsKeyColors.docs,
+  hero: 'atlas',
   atlas: {
     eyebrowLeft: 'mere-docs.mere.world',
     eyebrowRight: 'atlas online',

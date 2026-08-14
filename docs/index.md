@@ -3,35 +3,33 @@ layout: home
 
 hero:
   name: mere.run
-  text: Create anything. Locally.
-  tagline: Image, text, video, music, sound, speech, vision, 3D, and persistent worlds in one Swift CLI, on hardware you already own. No inference API key. No upload. No venv.
+  text: Your machine can make anything.
+  tagline: One native CLI for images, text, video, music, speech, vision, 3D, and persistent worlds. Your weights. Your files. Nothing leaves unless you tell it to.
   actions:
     - theme: brand
-      text: Get Started
+      text: Install and run
       link: /getting-started
     - theme: alt
-      text: CLI Reference
-      link: /cli
-    - theme: alt
-      text: Portable Workflows
-      link: /workflows
-    - theme: alt
-      text: Linux QuickStart
-      link: /linux-quickstart
+      text: Explore capabilities
+      link: /runtime/image
 
 features:
-  - title: Everything. Actually everything.
-    details: Score a track. With a unified A/V model, render a clip and its soundtrack in the same pass. Clone a voice. Follow an object through a video. Turn a photo into a textured mesh. Same CLI, same afternoon.
-  - title: No venv. Ever.
-    details: Core model paths run through Swift and MLX, with llama.cpp for explicit GGUF models — no Python worker, torch install, wheels to resolve, or environment to activate. Clone it and swift build.
-  - title: Nothing leaves
-    details: Weights live in a store you control. During local inference, prompts, photos, and audio stay on your disk. Nothing is metered or uploaded unless you explicitly use a networked action.
-  - title: Workflow runs keep their receipts
-    details: Portable workflow runs write a durable directory — plan, events, artifacts, SHA-256 manifests. Kill one halfway and resume it. Hand the immutable bundle to another executor with the same resolved inputs and fingerprints.
-  - title: Already speaks OpenAI
-    details: Serve chat, embeddings, images, speech, and transcription on localhost. Point your editor, your scripts, or Open WebUI at it. Change the base URL; change nothing else.
-  - title: One laptop now, a fleet later
-    details: The same immutable bundle runs here, over SSH to a GPU box, or across a relay fleet — with the same resolved seeds, fingerprints, and validation contract.
+  - icon: 01 / CREATE
+    title: Make
+    details: Generate images, synchronized video and audio, music, speech, sound effects, 3D assets, and persistent worlds from one executable.
+    link: /runtime/image
+  - icon: 02 / UNDERSTAND
+    title: Understand
+    details: Caption, ground, segment, track, transcribe, diarize, inspect, and embed media without uploading the source.
+    link: /runtime/vision
+  - icon: 03 / AUTOMATE
+    title: Automate
+    details: Build typed workflow graphs with resumable runs, immutable inputs, events, artifacts, and SHA-256 receipts.
+    link: /workflows
+  - icon: 04 / SERVE
+    title: Serve
+    details: Expose local chat, embeddings, images, speech, and transcription through OpenAI-compatible endpoints.
+    link: /runtime/api-server
 ---
 
 ## Six commands, six kinds of thing

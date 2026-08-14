@@ -20,6 +20,7 @@ export interface MereProductDocsThemeOptions {
   productDomain: string
   docsUrl: string
   productHref?: string
+  hero?: MereDocsThemeUserConfig['hero']
   keyColor?: MereDocsKeyColorInput
   corePrefix?: string
   coreSuffix?: string
@@ -92,6 +93,7 @@ export function createMereProductDocsTheme(options: MereProductDocsThemeOptions)
 
   return createMereDocsTheme({
     keyColor: resolveMereProductDocsKeyColor(options.productName, options.productDomain, options.keyColor),
+    hero: options.hero ?? 'atlas',
     atlas: {
       eyebrowLeft: options.docsUrl.replace(/^https?:\/\//, '').replace(/\/$/, ''),
       eyebrowRight: 'docs online',
