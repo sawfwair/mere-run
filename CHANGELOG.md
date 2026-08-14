@@ -6,6 +6,13 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Runtime
+
+- refreshed the owned MLX and mlx-swift forks onto current upstream cutoffs,
+  retained the scoped 1-bit, NVFP4, CUDA, stream-safety, and M4/H3 patches,
+  made the generated NAX optimizations source-reproducible, and regenerated
+  the provenance-locked Metal library from the new immutable revisions.
+
 ### Music
 
 - accelerated MiniMax Music 3 on Apple Silicon with a reachable 16,385-row
