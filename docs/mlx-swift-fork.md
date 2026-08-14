@@ -1,11 +1,11 @@
 # mlx-swift fork policy and compiled-call overhead
 
 mere-run pins the public `sawfwair/mlx-swift` fork at
-`f8536fe18b2e8b23cf902ce6751e4fb9a638a601`. It is rebased onto upstream
+`3e6df6d8163a8f212061d15739eeeec12d5b89e3`. It is rebased onto upstream
 `mlx-swift` `da318704cc0e972b61dcca43c62cd15e545362ae`, including the upstream
 `MLXArray` finalizer fix and generated-source-list maintenance. The embedded
 `sawfwair/mlx` revision is
-`3f6e7728eb1921d0ae98b16ca207f1655d8ec266`, based on upstream MLX
+`b57bd7640f3f7c743b76a58478faaf1e8ee084f2`, based on upstream MLX
 `bd5c3a2b170bb95340482e35b2a49fb08aea4de3` and retaining the 0.32.1 ABI.
 
 The owned patch stack carries the Linux/CUDA package bridge, executor-safe
