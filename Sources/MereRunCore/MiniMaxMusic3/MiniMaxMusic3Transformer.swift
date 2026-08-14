@@ -68,6 +68,8 @@ final class MiniMaxMusic3FlowAttention: Module {
     @ModuleInfo(key: "to_v") var value: Linear
     @ModuleInfo(key: "to_out") var output: [Linear]
 
+    private var usesFusedProjections = false
+
     init(dimensions: Int, heads: Int, headDimension: Int, rotaryDimension: Int) {
         self.heads = heads
         self.headDimension = headDimension
@@ -80,11 +82,20 @@ final class MiniMaxMusic3FlowAttention: Module {
     }
 
     func callAsFunction(_ hidden: MLXArray, rotary: (MLXArray, MLXArray)) -> MLXArray {
+        if !usesFusedProjections {
+            return reference(hidden, rotary: rotary)
+        }
         let batch = hidden.dim(0)
         let length = hidden.dim(1)
-        var q = query(hidden).reshaped(batch, length, heads, headDimension)
-        var k = key(hidden).reshaped(batch, length, heads, headDimension)
-        let v = value(hidden).reshaped(batch, length, heads, headDimension)
+        let projections: [MLXArray]
+        if usesFusedProjections {
+            projections = MLX.split(query(hidden), parts: 3, axis: -1)
+        } else {
+            projections = [query(hidden), key(hidden), value(hidden)]
+        }
+        var q = projections[0].reshaped(batch, length, heads, headDimension)
+        var k = projections[1].reshaped(batch, length, heads, headDimension)
+        let v = projections[2].reshaped(batch, length, heads, headDimension)
         q = MiniMaxMusic3RotaryEmbedding.apply(q, cos: rotary.0, sin: rotary.1, dimensions: rotaryDimension)
         k = MiniMaxMusic3RotaryEmbedding.apply(k, cos: rotary.0, sin: rotary.1, dimensions: rotaryDimension)
         let attended = MLXFast.scaledDotProductAttention(
@@ -96,6 +107,51 @@ final class MiniMaxMusic3FlowAttention: Module {
         )
         let merged = attended.asType(q.dtype).transposed(0, 2, 1, 3).reshaped(batch, length, -1)
         return output[0](merged)
+    }
+
+    private func reference(
+        _ hidden: MLXArray,
+        rotary: (MLXArray, MLXArray)
+    ) -> MLXArray {
+        let batch = hidden.dim(0)
+        let length = hidden.dim(1)
+        var q = query(hidden).reshaped(batch, length, heads, headDimension)
+        var k = key(hidden).reshaped(batch, length, heads, headDimension)
+        let v = value(hidden).reshaped(batch, length, heads, headDimension)
+        q = MiniMaxMusic3RotaryEmbedding.apply(
+            q,
+            cos: rotary.0,
+            sin: rotary.1,
+            dimensions: rotaryDimension
+        )
+        k = MiniMaxMusic3RotaryEmbedding.apply(
+            k,
+            cos: rotary.0,
+            sin: rotary.1,
+            dimensions: rotaryDimension
+        )
+        let attended = MLXFast.scaledDotProductAttention(
+            queries: q.transposed(0, 2, 1, 3).asType(.float32),
+            keys: k.transposed(0, 2, 1, 3).asType(.float32),
+            values: v.transposed(0, 2, 1, 3).asType(.float32),
+            scale: 1 / Float(headDimension).squareRoot(),
+            mask: .none
+        )
+        let merged = attended.asType(q.dtype).transposed(0, 2, 1, 3)
+            .reshaped(batch, length, -1)
+        return output[0](merged)
+    }
+
+    func prepareFusedProjections() {
+        guard !usesFusedProjections else { return }
+        let fused = MLX.concatenated([query.weight, key.weight, value.weight], axis: 0)
+        MLX.eval(fused)
+        update(modules: ModuleChildren.unflattened([
+            ("to_q", Linear(weight: fused, bias: nil)),
+            ("to_k", Linear(weight: MLXArray.zeros([1, 1], dtype: fused.dtype), bias: nil)),
+            ("to_v", Linear(weight: MLXArray.zeros([1, 1], dtype: fused.dtype), bias: nil)),
+        ]))
+        usesFusedProjections = true
     }
 }
 
@@ -124,6 +180,10 @@ final class MiniMaxMusic3TransformerBlock: Module {
         let attended = input + attention(norm1(input), rotary: rotary)
         let parts = MLX.split(feedForwardInput(norm2(attended)), parts: 2, axis: -1)
         return attended + feedForwardOutput(parts[0] * MLXNN.silu(parts[1]))
+    }
+
+    func prepareFusedProjections() {
+        attention.prepareFusedProjections()
     }
 }
 
@@ -192,6 +252,46 @@ public final class MiniMaxMusic3Transformer: Module {
         hidden = outputProjection(hidden[0..., 1..., 0...])
         let postprocessed = postprocessConvolution(hidden) + hidden
         return postprocessed.transposed(0, 2, 1)
+    }
+
+    func rotaryCache(
+        latentLength: Int,
+        dtype: DType
+    ) -> (MLXArray, MLXArray) {
+        MiniMaxMusic3RotaryEmbedding.cache(
+            length: latentLength + 1,
+            dimensions: configuration.rotaryDim,
+            theta: 10_000,
+            dtype: dtype
+        )
+    }
+
+    func callAsFunction(
+        latents: MLXArray,
+        timestep: MLXArray,
+        condition: MLXArray,
+        rotary: (MLXArray, MLXArray)
+    ) -> MLXArray {
+        let latentNLC = latents.transposed(0, 2, 1)
+        let zeros = MLXArray.zeros(latentNLC.shape, dtype: latentNLC.dtype)
+        var hidden = MLX.concatenated([latentNLC, zeros, condition], axis: -1)
+        hidden = preprocessConvolution(hidden) + hidden
+        hidden = inputProjection(hidden)
+        let time = timeEmbedding(timeProjection(timestep)).expandedDimensions(axis: 1)
+        hidden = MLX.concatenated([time, hidden], axis: 1)
+        for block in blocks {
+            hidden = block(hidden, rotary: rotary)
+        }
+        hidden = outputProjection(hidden[0..., 1..., 0...])
+        let postprocessed = postprocessConvolution(hidden) + hidden
+        return postprocessed.transposed(0, 2, 1)
+    }
+
+    public func prepareFusedProjections() {
+        for block in blocks {
+            block.prepareFusedProjections()
+        }
+        MLX.Memory.clearCache()
     }
 
     static func mapWeight(key: String, value: MLXArray) -> [(String, MLXArray)] {

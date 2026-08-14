@@ -13,6 +13,8 @@ struct MiniMaxMusic3SpeechRequest: Codable, Sendable {
     var maxNewTokens: Int?
     var stream: Bool?
     var audioDuration: Float?
+    var minimumAudioDuration: Float?
+    var minNewTokens: Int?
     var numInferenceSteps: Int?
     var guidanceScale: Float?
     var sampleRate: Int?
@@ -26,6 +28,8 @@ struct MiniMaxMusic3SpeechRequest: Codable, Sendable {
         case maxNewTokens = "max_new_tokens"
         case stream
         case audioDuration = "audio_duration"
+        case minimumAudioDuration = "minimum_audio_duration"
+        case minNewTokens = "min_new_tokens"
         case numInferenceSteps = "num_inference_steps"
         case guidanceScale = "guidance_scale"
         case sampleRate = "sample_rate"
@@ -37,6 +41,7 @@ private struct MiniMaxMusic3HealthResponse: Codable {
     var model: String
     var resident: Bool
     var memoryMode: MiniMaxMusic3LoadingStrategy
+    var performanceMode: MiniMaxMusic3PerformanceMode
     var nativeSampleRate: Int
     var speechSampleRate: Int
 
@@ -45,6 +50,7 @@ private struct MiniMaxMusic3HealthResponse: Codable {
         case model
         case resident
         case memoryMode = "memory_mode"
+        case performanceMode = "performance_mode"
         case nativeSampleRate = "native_sample_rate"
         case speechSampleRate = "speech_sample_rate"
     }
@@ -55,11 +61,13 @@ private actor MiniMaxMusic3ServerSession {
 
     init(
         resources: MiniMaxMusic3Resources,
-        loadingStrategy: MiniMaxMusic3LoadingStrategy
+        loadingStrategy: MiniMaxMusic3LoadingStrategy,
+        performanceMode: MiniMaxMusic3PerformanceMode
     ) throws {
         self.pipeline = try MiniMaxMusic3Pipeline(
             resources: resources,
-            loadingStrategy: loadingStrategy
+            loadingStrategy: loadingStrategy,
+            performanceMode: performanceMode
         )
     }
 
@@ -119,7 +127,14 @@ private actor MiniMaxMusic3ServerSession {
             throw ValidationError("audio_duration must be greater than 0 and at most 360 seconds.")
         }
         let durationFrames = Int(duration * Float(MiniMaxMusic3Prompt.frameRate))
-        let maximumFrames = request.maxNewTokens ?? durationFrames
+        let durationFloorFrames = request.minimumAudioDuration.map {
+            MiniMaxMusic3Prompt.minimumFrameCount(forDurationSeconds: $0)
+        }
+        let minimumFrames = request.minNewTokens ?? durationFloorFrames
+        let maximumFrames = request.maxNewTokens
+            ?? (request.minimumAudioDuration == nil
+                ? durationFrames
+                : max(durationFrames, minimumFrames ?? 0))
         guard (1...MiniMaxMusic3Prompt.maxAudioFrames).contains(maximumFrames) else {
             throw ValidationError("max_new_tokens must be between 1 and 9000.")
         }
@@ -130,6 +145,36 @@ private actor MiniMaxMusic3ServerSession {
             throw ValidationError(
                 "audio_duration and max_new_tokens must describe the same 25 Hz frame limit."
             )
+        }
+        if let minimumAudioDuration = request.minimumAudioDuration,
+           minimumAudioDuration <= 0 || minimumAudioDuration > 360
+        {
+            throw ValidationError(
+                "minimum_audio_duration must be greater than 0 and at most 360 seconds."
+            )
+        }
+        if request.audioDuration != nil,
+           let minimumAudioDuration = request.minimumAudioDuration,
+           minimumAudioDuration > duration
+        {
+            throw ValidationError(
+                "minimum_audio_duration cannot exceed audio_duration."
+            )
+        }
+        if let minimumFrames,
+           !(1...MiniMaxMusic3Prompt.maxAudioFrames).contains(minimumFrames)
+        {
+            throw ValidationError("min_new_tokens must be between 1 and 9000.")
+        }
+        if let durationFloorFrames, let requestedMinimum = request.minNewTokens,
+           durationFloorFrames != requestedMinimum
+        {
+            throw ValidationError(
+                "minimum_audio_duration and min_new_tokens must describe the same 25 Hz frame floor."
+            )
+        }
+        if let minimumFrames, minimumFrames > maximumFrames {
+            throw ValidationError("The requested duration floor cannot exceed the output upper bound.")
         }
         let steps = request.numInferenceSteps ?? 30
         guard steps > 0 else {
@@ -148,6 +193,7 @@ private actor MiniMaxMusic3ServerSession {
                 caption: caption,
                 lyrics: lyrics,
                 durationSeconds: duration,
+                minimumFrames: minimumFrames,
                 maximumFrames: maximumFrames,
                 inferenceSteps: steps,
                 seed: request.seed ?? 0,
@@ -162,20 +208,24 @@ final class MiniMaxMusic3APIServer: @unchecked Sendable {
     private let session: MiniMaxMusic3ServerSession
     private let modelID: String
     private let loadingStrategy: MiniMaxMusic3LoadingStrategy
+    private let performanceMode: MiniMaxMusic3PerformanceMode
     private let apiKey: String?
 
     init(
         resources: MiniMaxMusic3Resources,
         modelID: String,
         loadingStrategy: MiniMaxMusic3LoadingStrategy,
+        performanceMode: MiniMaxMusic3PerformanceMode,
         apiKey: String?
     ) throws {
         self.session = try MiniMaxMusic3ServerSession(
             resources: resources,
-            loadingStrategy: loadingStrategy
+            loadingStrategy: loadingStrategy,
+            performanceMode: performanceMode
         )
         self.modelID = modelID
         self.loadingStrategy = loadingStrategy
+        self.performanceMode = performanceMode
         self.apiKey = apiKey
     }
 
@@ -203,6 +253,7 @@ final class MiniMaxMusic3APIServer: @unchecked Sendable {
                     model: modelID,
                     resident: loadingStrategy == .resident,
                     memoryMode: loadingStrategy,
+                    performanceMode: performanceMode,
                     nativeSampleRate: 44_100,
                     speechSampleRate: 32_000
                 )

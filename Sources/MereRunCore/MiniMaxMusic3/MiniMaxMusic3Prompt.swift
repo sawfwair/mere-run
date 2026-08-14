@@ -104,4 +104,34 @@ public enum MiniMaxMusic3Prompt {
     ) -> Int {
         max(1, frameCount * outputSamplingRate * inputHopLength / inputSamplingRate / outputHopLength)
     }
+
+    public static func decodedSampleCount(
+        frameCount: Int,
+        inputSamplingRate: Int = 24_000,
+        inputHopLength: Int = 960,
+        outputSamplingRate: Int = 44_100,
+        outputHopLength: Int = 512
+    ) -> Int {
+        latentLength(
+            frameCount: frameCount,
+            inputSamplingRate: inputSamplingRate,
+            inputHopLength: inputHopLength,
+            outputSamplingRate: outputSamplingRate,
+            outputHopLength: outputHopLength
+        ) * outputHopLength
+    }
+
+    /// Returns the first semantic frame count whose decoded waveform is at
+    /// least the requested duration. The vocoder emits whole 512-sample latent
+    /// hops, so `duration * 25` can otherwise undershoot by a fraction of a hop.
+    public static func minimumFrameCount(forDurationSeconds durationSeconds: Float) -> Int {
+        let minimumSamples = Int(
+            Foundation.ceil(Double(durationSeconds) * 44_100)
+        )
+        var frames = max(1, Int(Foundation.ceil(Double(durationSeconds) * Double(frameRate))))
+        while decodedSampleCount(frameCount: frames) < minimumSamples {
+            frames += 1
+        }
+        return frames
+    }
 }

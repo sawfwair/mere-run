@@ -27,17 +27,31 @@ MiniMax Music 3 consumes only these model inputs:
   arrangement, and production profile
 - `--lyrics`, `--lyrics-file`, `--lrc-file`, or `--instrumental`
 - `--duration`: upper-bound seconds; defaults to 60
+- `--minimum-duration`: decoded-audio duration floor. The runtime rounds up to
+  the first 25 Hz frame whose whole 512-sample vocoder hops meet the request.
+- `--min-frames`: exact acoustic-frame floor; 1 through 9000
 - `--max-frames`: exact 25 Hz acoustic-frame upper bound; 1 through 9000
 - `--steps`: flow-Euler steps per chunk; defaults to 30
 - `--seed`: deterministic MLX seed; defaults to 0
 - `--guidance-scale`: flow classifier-free guidance; defaults to 1.7
 - `--memory-mode staged|resident`: staged loads and releases the autoregressive,
   flow, and vocoder stages separately; resident keeps every component loaded
+- `--performance-mode reference|optimized|q8|q4`: exact upstream graph,
+  parity-safe BF16 acceleration (default), recommended affine Q8 turbo, or
+  maximum-compression affine Q4 turbo
 - `--sample-rate 44100|32000`: native Diffusers output or SGLang-compatible WAV
 
 When both `--duration` and `--max-frames` are provided, they must describe the
 same limit. The checkpoint hard cap is 9000 frames (360 seconds), while the
 official supported-quality claim is songs up to five minutes.
+
+`optimized` keeps BF16 weights while reducing launch and memory traffic with a
+compact reachable-token head, fused projections, incremental depth KV caches,
+and batched flow guidance. `q8` additionally quantizes the autoregressive
+language and depth transformers with group-64 affine weights; `q4` applies the
+same path at four bits. Quantization changes the sampled composition, so use `reference` or
+`optimized` for upstream-parity investigations and `q8` for the normal turbo
+tradeoff.
 
 Incompatible ACE-Step cover, editing, LM-planner, adapter, VAE,
 candidate-ranking, stem, and DAW settings fail explicitly for this model.
@@ -50,6 +64,9 @@ Magenta RT2 settings also fail instead of being silently ignored.
 | `prompt` | positional caption |
 | `lyrics` | `--lyrics`, `--lyrics-file`, `--lrc-file`, or `--instrumental` |
 | `audio_duration` | `--duration` |
+| `minimum_audio_duration` | `--minimum-duration` |
+| `min_new_tokens` | `--min-frames` |
+| `max_new_tokens` | `--max-frames` |
 | `generator` | `--seed` |
 | `num_inference_steps` | `--steps` |
 | `output_type=np|pt` | `--export-format float32` with mastering disabled as shown below |
@@ -58,7 +75,9 @@ The released autoregressive CFG (`1.5`) and top-k (`50`) remain fixed because
 they are checkpoint behavior, not pipeline inputs. Flow guidance defaults to
 the released `1.7` and is available as `--guidance-scale`. The speech route
 maps upstream `max_new_tokens` to the same frame limit exposed by
-`--max-frames`, accepts only `response_format=wav`, and requires
+`--max-frames`; native `minimum_audio_duration` and `min_new_tokens` map to the
+same duration floor exposed by `--minimum-duration` and `--min-frames`. It
+accepts only `response_format=wav`, and requires
 `stream=false`. Both upstream paths are single-sample, so mere.run does not
 invent a batch parameter.
 
@@ -74,6 +93,8 @@ mere.run music generate \
   --model music-minimax-music3 \
   --lyrics-file ./lyrics.txt \
   --duration 60 \
+  --minimum-duration 60 \
+  --performance-mode q8 \
   --steps 30 \
   --seed 7 \
   --output ./song.wav
@@ -117,6 +138,7 @@ Start the SGLang-compatible speech route with all weights warm:
 mere.run music serve \
   --model music-minimax-music3 \
   --memory-mode resident \
+  --performance-mode q8 \
   --port 8081
 ```
 
@@ -132,6 +154,7 @@ curl http://127.0.0.1:8081/v1/audio/speech \
     "response_format": "wav",
     "seed": 7,
     "max_new_tokens": 750,
+    "min_new_tokens": 750,
     "stream": false
   }' \
   --output song.wav

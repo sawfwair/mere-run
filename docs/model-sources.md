@@ -713,6 +713,14 @@ upstream 1...9,000-frame contract directly, while `--duration` converts seconds
 at 25 Hz. The model card describes supported-quality generation through five
 minutes; 9,000 frames is the six-minute runtime hard limit.
 
+`--minimum-duration` and `--min-frames` add an EOS floor; duration floors round
+up across the vocoder's whole 512-sample hops so the decoded WAV does not
+undershoot. `--performance-mode optimized` is the BF16 default and uses compact
+semantic logits, fused projections, incremental depth caches, and batched flow
+guidance. The opt-in `q8` and `q4` modes apply group-64 affine quantization to
+the autoregressive transformers; `q8` is the recommended turbo tier. Flow stays
+BF16 because installed-checkpoint timing showed its quantized kernels regress.
+
 Generation defaults to `--memory-mode staged`, which releases the language,
 flow, and vocoder weights between stages. `--memory-mode resident` keeps the
 entire stack loaded for repeated work. Staged mode moves the catalog floor to

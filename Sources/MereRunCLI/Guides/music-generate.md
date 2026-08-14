@@ -77,6 +77,10 @@ mere.run guide music generate --model music-magenta-rt2-small
 - `--use-lm`: enable 5 Hz constrained LM for supported text-to-music tasks.
 - `--lm-model music-acestep-lm-4b`: explicitly select the optional 4B planner.
 - `--duration`: output seconds.
+- `--minimum-duration`: MiniMax Music 3 decoded-audio duration floor.
+- `--min-frames`, `--max-frames`: MiniMax Music 3 exact 25 Hz floor and limit.
+- `--performance-mode reference|optimized|q8|q4`: MiniMax Music 3 execution tier;
+  `optimized` is the BF16 default and `q8` is the recommended turbo tier.
 - `--steps`, `-s`: denoise steps; MiniMax Music 3 defaults to `30`.
 - `--shift`: turbo scheduler shift; ACE-Step CLI default is `3.0`, matching upstream.
 - `--seed`: deterministic generation.
@@ -147,8 +151,13 @@ mere.run guide music generate --model music-magenta-rt2-small
 MiniMax Music 3 requires `--lyrics`, `--lyrics-file`, `--lrc-file`, or
 `--instrumental`. Its native staged runtime autoregressively generates 25 Hz
 semantic and residual codes, conditions a flow transformer, and decodes stereo
-audio without a Python process. `--duration` accepts up to 360 seconds and
-`--guidance-scale` defaults to `1.7`. ACE-Step source audio, adapters, ranked
+audio without a Python process. `--duration` accepts up to 360 seconds;
+`--minimum-duration` prevents semantic EOS and rounds for the vocoder hop so
+the decoded WAV meets the requested floor. `--guidance-scale` defaults to `1.7`.
+The default `--performance-mode optimized` keeps BF16 quality while using
+compact/fused projections, cached depth decode, and batched flow guidance;
+`q8` is the recommended quantized turbo tier, with `q4` available for maximum
+memory reduction. ACE-Step source audio, adapters, ranked
 candidates, stems, DAW bundles, and LRC export do not apply to this model. A
 reproducibility recipe is written beside the WAV unless `--no-recipe` is used.
 The selective managed download is approximately 26.6 GiB and requires

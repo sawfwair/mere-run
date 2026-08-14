@@ -157,6 +157,18 @@ struct MusicGenerate: AsyncParsableCommand {
     var durationSeconds: Float?
 
     @Option(
+        name: [.customLong("minimum-duration")],
+        help: "MiniMax Music 3 minimum output duration in seconds; EOS is masked until this floor."
+    )
+    var miniMaxMinimumDurationSeconds: Float?
+
+    @Option(
+        name: [.customLong("min-frames")],
+        help: "MiniMax Music 3 minimum 25 Hz acoustic frames (1...9000); must agree with --minimum-duration."
+    )
+    var miniMaxMinimumFrames: Int?
+
+    @Option(
         name: [.customLong("max-frames")],
         help: "MiniMax Music 3 exact 25 Hz acoustic-frame limit (1...9000); must agree with --duration when both are set."
     )
@@ -173,6 +185,12 @@ struct MusicGenerate: AsyncParsableCommand {
         help: "MiniMax Music 3 loading: staged releases each model stage before loading the next; resident keeps all weights loaded."
     )
     var miniMaxLoadingStrategy: MiniMaxMusic3LoadingStrategy?
+
+    @Option(
+        name: [.customLong("performance-mode")],
+        help: "MiniMax Music 3 execution: reference, optimized (default), q8, or q4."
+    )
+    var miniMaxPerformanceMode: MiniMaxMusic3PerformanceMode?
 
     @Option(name: [.customLong("quality")], help: "Adaptive ACE-Step quality: draft, song, final, or edit.")
     var quality: ACEStepQualityPreset?
@@ -509,11 +527,14 @@ struct MusicGenerate: AsyncParsableCommand {
         }
 
         if miniMaxMaximumFrames != nil
+            || miniMaxMinimumFrames != nil
+            || miniMaxMinimumDurationSeconds != nil
             || miniMaxOutputSampleRate != nil
             || miniMaxLoadingStrategy != nil
+            || miniMaxPerformanceMode != nil
         {
             throw ValidationError(
-                "--max-frames, --sample-rate, and --memory-mode require MiniMax Music 3."
+                "MiniMax duration-frame, sample-rate, memory-mode, and performance-mode options require MiniMax Music 3."
             )
         }
 
@@ -1159,20 +1180,30 @@ struct MusicGenerate: AsyncParsableCommand {
         if !quiet {
             CLIStderr.write("MiniMax memory mode: \(loadingStrategy.rawValue)\n")
         }
+        let performanceMode = miniMaxPerformanceMode ?? .optimized
+        if !quiet {
+            CLIStderr.write("MiniMax performance mode: \(performanceMode.rawValue)\n")
+        }
         let pipeline = try MiniMaxMusic3Pipeline(
             resources: resources,
-            loadingStrategy: loadingStrategy
+            loadingStrategy: loadingStrategy,
+            performanceMode: performanceMode
         )
         let requestedDuration = explicitDurationSeconds
             ?? miniMaxMaximumFrames.map {
                 Float($0) / Float(MiniMaxMusic3Prompt.frameRate)
             }
             ?? 60
+        let requestedMinimumFrames = miniMaxMinimumFrames
+            ?? miniMaxMinimumDurationSeconds.map {
+                MiniMaxMusic3Prompt.minimumFrameCount(forDurationSeconds: $0)
+            }
         let result = try pipeline.generate(
             options: MiniMaxMusic3GenerationOptions(
                 caption: caption,
                 lyrics: resolvedLyrics,
                 durationSeconds: requestedDuration,
+                minimumFrames: requestedMinimumFrames,
                 maximumFrames: miniMaxMaximumFrames,
                 inferenceSteps: steps ?? 30,
                 seed: seed ?? 0,
@@ -1228,6 +1259,7 @@ struct MusicGenerate: AsyncParsableCommand {
                 caption: caption,
                 lyrics: resolvedLyrics,
                 durationSeconds: requestedDuration,
+                requestedMinimumFrames: requestedMinimumFrames,
                 requestedMaximumFrames: miniMaxMaximumFrames,
                 generatedFrameCount: result.frameCount,
                 inferenceSteps: steps ?? 30,
@@ -1236,6 +1268,7 @@ struct MusicGenerate: AsyncParsableCommand {
                 nativeSampleRate: result.sampleRate,
                 outputSampleRate: outputSampleRate,
                 loadingStrategy: loadingStrategy,
+                performanceMode: performanceMode,
                 export: exportOptions,
                 outputFilename: outputURL.lastPathComponent,
                 outputSHA256: try ModelArtifactPin.fileSHA256(outputURL)
@@ -1255,6 +1288,26 @@ struct MusicGenerate: AsyncParsableCommand {
     }
 
     func validateMiniMaxMusic3Options(explicitDurationSeconds: Float?) throws {
+        if let miniMaxMinimumDurationSeconds,
+           miniMaxMinimumDurationSeconds <= 0 || miniMaxMinimumDurationSeconds > 360
+        {
+            throw ValidationError("--minimum-duration must be greater than 0 and at most 360 seconds.")
+        }
+        if let miniMaxMinimumFrames,
+           !(1...MiniMaxMusic3Prompt.maxAudioFrames).contains(miniMaxMinimumFrames)
+        {
+            throw ValidationError("--min-frames must be between 1 and 9000.")
+        }
+        if let miniMaxMinimumDurationSeconds, let miniMaxMinimumFrames,
+           MiniMaxMusic3Prompt.minimumFrameCount(
+            forDurationSeconds: miniMaxMinimumDurationSeconds
+           )
+            != miniMaxMinimumFrames
+        {
+            throw ValidationError(
+                "--minimum-duration and --min-frames must describe the same 25 Hz frame floor."
+            )
+        }
         if let miniMaxMaximumFrames,
            !(1...MiniMaxMusic3Prompt.maxAudioFrames).contains(miniMaxMaximumFrames)
         {
@@ -1275,6 +1328,32 @@ struct MusicGenerate: AsyncParsableCommand {
         }
         if let explicitDurationSeconds, explicitDurationSeconds > 360 {
             throw ValidationError("MiniMax Music 3 supports at most 360 seconds (9,000 frames at 25 Hz).")
+        }
+        if let explicitDurationSeconds, let miniMaxMinimumDurationSeconds,
+           miniMaxMinimumDurationSeconds > explicitDurationSeconds
+        {
+            throw ValidationError("MiniMax Music 3 minimum duration cannot exceed its output upper bound.")
+        }
+        let resolvedMinimumFrames = miniMaxMinimumFrames
+            ?? miniMaxMinimumDurationSeconds.map {
+                MiniMaxMusic3Prompt.minimumFrameCount(forDurationSeconds: $0)
+            }
+        if let resolvedMinimumFrames,
+           resolvedMinimumFrames > MiniMaxMusic3Prompt.maxAudioFrames
+        {
+            throw ValidationError(
+                "MiniMax Music 3 minimum duration exceeds the decoded duration available from 9,000 frames."
+            )
+        }
+        let durationFrames = explicitDurationSeconds.map {
+            Int($0 * Float(MiniMaxMusic3Prompt.frameRate))
+        } ?? 60 * MiniMaxMusic3Prompt.frameRate
+        let resolvedMaximumFrames = miniMaxMaximumFrames
+            ?? (miniMaxMinimumDurationSeconds == nil
+                ? durationFrames
+                : max(durationFrames, resolvedMinimumFrames ?? 0))
+        if let resolvedMinimumFrames, resolvedMinimumFrames > resolvedMaximumFrames {
+            throw ValidationError("MiniMax Music 3 minimum duration cannot exceed its output upper bound.")
         }
         if useLM || noLM || analyzeSourceAudio || lmModel != nil || lmSubdirectory != nil {
             throw ValidationError("MiniMax Music 3 uses its built-in autoregressive stage; ACE-Step LM options do not apply.")
