@@ -5,6 +5,7 @@ export default createMereProductDocsTheme({
   productDomain: 'docs.mere.run',
   docsUrl: 'https://docs.mere.run/',
   productHref: 'https://mere.run',
+  hero: 'run-proof',
   corePrefix: 'Eight runtime families. One local CLI. No cloud in the loop.',
   guideHref: '/getting-started',
   architectureHref: '/architecture',

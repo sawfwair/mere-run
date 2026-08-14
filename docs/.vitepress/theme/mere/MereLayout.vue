@@ -4,6 +4,7 @@ import DefaultTheme from 'vitepress/theme'
 import MereAtlasMap from './components/MereAtlasMap.vue'
 import MereDocSignal from './components/MereDocSignal.vue'
 import MereDocsNetwork from './components/MereDocsNetwork.vue'
+import MereRunProof from './components/MereRunProof.vue'
 import { useMereDocsThemeConfig } from './config'
 
 const { Layout } = DefaultTheme
@@ -26,7 +27,8 @@ const keyColorStyle = computed(() => ({
         <span class="mere-nav-mark" aria-hidden="true" />
       </template>
       <template #home-hero-image>
-        <MereAtlasMap />
+        <MereRunProof v-if="themeConfig.hero === 'run-proof'" />
+        <MereAtlasMap v-else />
       </template>
       <template #doc-before>
         <MereDocSignal />
