@@ -2072,6 +2072,49 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertEqual(output, "art\n25%\n50%\n")
     }
 
+    func testStudioModelDownloadFindsLatestProgressUpdate() throws {
+        let progress = try XCTUnwrap(
+            StudioModelDownloadCommand.latestProgress(
+                in: "starting\n[image-zimage-nano] 42.5% 1.2 GB / 2.8 GB (45 MB/s)\n"
+            )
+        )
+
+        XCTAssertEqual(progress.label, "image-zimage-nano")
+        XCTAssertEqual(progress.fractionCompleted, 0.425)
+        XCTAssertEqual(progress.detail, "1.2 GB / 2.8 GB (45 MB/s)")
+    }
+
+    func testStudioModelCatalogMetadataEnrichesMissingInventoryRows() throws {
+        let rows = StudioModelInventoryParser.rows(from: "image-zimage-nano image missing —")
+        let output = """
+        {
+          "models": [
+            {
+              "id": "image-zimage-nano",
+              "title": "Image Nano",
+              "summary": "Fast local image generation.",
+              "minimumUnifiedMemoryGB": 12,
+              "recommendedUnifiedMemoryGB": 16,
+              "supported": true,
+              "reasons": [],
+              "estimatedDownloadBytes": 673193610,
+              "sourceRepository": "filipstrand/Z-Image-Turbo-mflux-4bit",
+              "publisher": "filipstrand"
+            }
+          ]
+        }
+        """
+
+        let metadata = StudioModelCatalogParser.metadataByID(from: output)
+        let row = try XCTUnwrap(StudioModelCatalogParser.applying(metadata, to: rows).first)
+
+        XCTAssertEqual(row.title, "Image Nano")
+        XCTAssertEqual(row.minimumUnifiedMemoryGB, 12)
+        XCTAssertEqual(row.estimatedDownloadBytes, 673_193_610)
+        XCTAssertEqual(row.publisher, "filipstrand")
+        XCTAssertNotEqual(row.displayedSize, "—")
+    }
+
     func testAgentOnboardTemplatePropagatesUsageTermsAcceptance() throws {
         let template = try XCTUnwrap(CommandCatalog.template(id: .agentOnboard))
         var draft = template.defaultDraft()
