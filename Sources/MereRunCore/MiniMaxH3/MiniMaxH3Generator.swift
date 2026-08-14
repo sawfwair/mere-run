@@ -663,17 +663,26 @@ public struct MiniMaxH3GenerationOptions: Sendable, Hashable {
            !references.contains(where: { $0.kind != .audio }) {
             throw MiniMaxH3GeneratorError.invalidOptions("an audio reference must be paired with an image or video")
         }
-        if adapterURL != nil {
+        let adapterInferenceRecipe = adapterURL.map(MiniMaxH3TurboAdapter.inferenceRecipe(for:))
+        if let adapterInferenceRecipe {
             guard adapterStrength > 0 else {
                 throw MiniMaxH3GeneratorError.invalidOptions("adapter strength must be greater than zero")
             }
-            guard references.isEmpty else {
-                throw MiniMaxH3GeneratorError.invalidOptions(
-                    "MiniMax-H3 Turbo supports FL2VA text/keyframe generation, not Ref2VA references"
-                )
+            switch adapterInferenceRecipe.task {
+            case .fl2va:
+                guard references.isEmpty else {
+                    throw MiniMaxH3GeneratorError.invalidOptions(
+                        "The selected MiniMax-H3 FL2VA adapter cannot be used with Ref2VA references"
+                    )
+                }
+            case .ref2va:
+                guard !references.isEmpty else {
+                    throw MiniMaxH3GeneratorError.invalidOptions(
+                        "The selected MiniMax-H3 Ref2VA adapter requires ordered references"
+                    )
+                }
             }
         }
-        let adapterInferenceRecipe = adapterURL.map(MiniMaxH3TurboAdapter.inferenceRecipe(for:))
         let resolvedSteps: Int
         if let steps {
             resolvedSteps = steps
@@ -884,12 +893,8 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                 ))
             }
         )
-        if let adapterURL {
-            guard resources.usesShardedBF16Transformer else {
-                throw MiniMaxH3GeneratorError.invalidOptions(
-                    "MiniMax-H3 Turbo currently requires the BF16 FL2VA model"
-                )
-            }
+        let adapterInferenceRecipe = adapterURL.map(MiniMaxH3TurboAdapter.inferenceRecipe(for:))
+        if let adapterURL, resources.usesShardedBF16Transformer {
             try MiniMaxH3TurboAdapter.install(
                 url: adapterURL,
                 into: transformer,
@@ -923,6 +928,23 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                 totalSteps: 1
             ))
             _ = transformer.materializeResidentBF16()
+        }
+        if let adapterURL, !resources.usesShardedBF16Transformer {
+            guard adapterInferenceRecipe?.task == .ref2va else {
+                throw MiniMaxH3GeneratorError.invalidOptions(
+                    "MiniMax-H3 FL2VA adapters require the BF16 FL2VA model"
+                )
+            }
+            guard transformer.usesResidentBF16 else {
+                throw MiniMaxH3GeneratorError.invalidOptions(
+                    "MiniMax-H3 Ref2VA Turbo requires resident BF16 weights; use --h3-weight-mode resident-bf16 on a machine with sufficient memory"
+                )
+            }
+            try MiniMaxH3TurboAdapter.install(
+                url: adapterURL,
+                into: transformer,
+                strength: adapterStrength
+            )
         }
         if retainsRuntime {
             retainedDenoisingRuntime = (cacheKey, transformer, resolvedAdaLNCache)
@@ -1563,6 +1585,12 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         let missing = resources.validate()
         guard missing.isEmpty else { throw MiniMaxH3GeneratorError.missingModelFiles(missing) }
         let configuration = try resources.loadConfiguration()
+        if let adapterInferenceRecipe = options.adapterInferenceRecipe,
+           !adapterInferenceRecipe.supports(task: configuration.task) {
+            throw MiniMaxH3GeneratorError.invalidOptions(
+                "MiniMax-H3 adapter recipe \(adapterInferenceRecipe.name) requires \(adapterInferenceRecipe.task.rawValue), not \(configuration.task)"
+            )
+        }
         if configuration.task == "ref2va" {
             return try generateRef2VA(
                 options: options,

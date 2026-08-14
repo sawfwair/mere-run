@@ -9,8 +9,14 @@ public enum MiniMaxH3TurboAdapter {
     public static let lightX2VExpectedPairCount = 312
     public static let recommendedSchedulePointCount = 5
 
+    public enum Task: String, Sendable, Hashable {
+        case fl2va
+        case ref2va
+    }
+
     public struct InferenceRecipe: Sendable, Hashable {
         public let name: String
+        public let task: Task
         public let defaultSchedulePointCount: Int
         public let supportedSchedulePointCounts: Set<Int>
         public let videoFlowShift: Float?
@@ -20,10 +26,15 @@ public enum MiniMaxH3TurboAdapter {
         public func supports(schedulePointCount: Int) -> Bool {
             supportedSchedulePointCounts.contains(schedulePointCount)
         }
+
+        public func supports(task value: String) -> Bool {
+            task.rawValue == value.lowercased()
+        }
     }
 
     public static let fourEvaluationRecipe = InferenceRecipe(
         name: "four-evaluation",
+        task: .fl2va,
         defaultSchedulePointCount: 5,
         supportedSchedulePointCounts: [5],
         videoFlowShift: nil,
@@ -33,6 +44,7 @@ public enum MiniMaxH3TurboAdapter {
 
     public static let lightX2VEightStepV1Recipe = InferenceRecipe(
         name: "lightx2v-v1-8-step",
+        task: .fl2va,
         defaultSchedulePointCount: 9,
         supportedSchedulePointCounts: [5, 9],
         videoFlowShift: 12,
@@ -42,11 +54,22 @@ public enum MiniMaxH3TurboAdapter {
 
     public static let lightX2VFourStepV1_768pRecipe = InferenceRecipe(
         name: "lightx2v-v1-4-step-768p",
+        task: .fl2va,
         defaultSchedulePointCount: 5,
         supportedSchedulePointCounts: [5],
         videoFlowShift: 6,
         audioFlowShift: 3,
         lightX2VAlpha: 128
+    )
+
+    public static let lightX2VRef2VFourStepV01Recipe = InferenceRecipe(
+        name: "lightx2v-ref2v-v0.1-4-step",
+        task: .ref2va,
+        defaultSchedulePointCount: 5,
+        supportedSchedulePointCounts: [5],
+        videoFlowShift: 12,
+        audioFlowShift: 3,
+        lightX2VAlpha: 8
     )
 
     public static func inferenceRecipe(for url: URL) -> InferenceRecipe {
@@ -55,6 +78,8 @@ public enum MiniMaxH3TurboAdapter {
 
     public static func inferenceRecipe(filename: String) -> InferenceRecipe {
         switch filename.lowercased() {
+        case "minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors":
+            lightX2VRef2VFourStepV01Recipe
         case "minimax_h3_fl2v_turbo_8step_v1.0_bf16.safetensors":
             lightX2VEightStepV1Recipe
         case "minimax_h3_fl2v_turbo_4step_v1.0_768p_bf16.safetensors":

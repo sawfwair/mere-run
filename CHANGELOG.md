@@ -31,6 +31,14 @@ The format is based on Keep a Changelog.
   requested floor, and second-based floors account for whole vocoder hops so a
   nominal 10-second request no longer decodes to 9.996 seconds.
 
+### Video
+
+- added the checksum-pinned LightX2V MiniMax-H3 Ref2VA Turbo 4-step v0.1
+  adapter to `adapter pull`. The native Ref2VA path selects the published
+  four-evaluation, video/audio shift 12/3, alpha-8 recipe and fuses its 312
+  PEFT pairs after the managed INT8 transformer is admitted and expanded to
+  resident BF16.
+
 ## 0.37.0 - 2026-08-13
 
 This release adds two substantial native Apple Silicon runtimes: LiquidAI's

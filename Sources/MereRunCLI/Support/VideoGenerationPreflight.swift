@@ -480,6 +480,20 @@ struct VideoGenerationPreflightAnalyzer {
         return resources.validate().isEmpty && (try? resources.loadConfiguration()) != nil
     }
 
+    private var usesMiniMaxH3Ref2VA: Bool {
+        let requested = input.model.trimmingCharacters(in: .whitespacesAndNewlines)
+        if requested == ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue {
+            return true
+        }
+        if requested == ModelResolver.ModelID.miniMaxH3FL2VAMLX.rawValue
+            || requested == ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue {
+            return false
+        }
+        let candidate = input.modelRoot ?? input.model
+        let resources = MiniMaxH3Resources(rootURL: URL(fileURLWithPath: candidate).standardizedFileURL)
+        return (try? resources.loadConfiguration().task) == MiniMaxH3TurboAdapter.Task.ref2va.rawValue
+    }
+
     private var usesAudioConditioning: Bool {
         guard let audio = input.audio else { return false }
         return !audio.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -801,13 +815,40 @@ struct VideoGenerationPreflightAnalyzer {
                 message: "--h3-adapter-strength must be > 0."
             ))
         }
-        if input.h3Adapter != nil, !input.references.isEmpty {
-            diagnostics.append(PreflightDiagnostic(
-                id: "h3_adapter_ref2va_unsupported",
-                severity: .blocker,
-                title: "MiniMax-H3 Turbo does not support Ref2VA",
-                message: "Use the Turbo adapter for FL2VA text or keyframe generation without --reference."
-            ))
+        if let h3AdapterInferenceRecipe {
+            let requestedTask: MiniMaxH3TurboAdapter.Task = usesMiniMaxH3Ref2VA ? .ref2va : .fl2va
+            if h3AdapterInferenceRecipe.task != requestedTask {
+                diagnostics.append(PreflightDiagnostic(
+                    id: "h3_adapter_task_mismatch",
+                    severity: .blocker,
+                    title: "MiniMax-H3 adapter task does not match the model",
+                    message: "Adapter \(h3AdapterInferenceRecipe.name) requires \(h3AdapterInferenceRecipe.task.rawValue), not \(requestedTask.rawValue)."
+                ))
+            }
+            if h3AdapterInferenceRecipe.task == .fl2va, !input.references.isEmpty {
+                diagnostics.append(PreflightDiagnostic(
+                    id: "h3_fl2va_adapter_with_references",
+                    severity: .blocker,
+                    title: "MiniMax-H3 FL2VA adapter cannot use references",
+                    message: "Use the FL2VA adapter for text or keyframe generation without --reference."
+                ))
+            }
+            if h3AdapterInferenceRecipe.task == .ref2va, input.references.isEmpty {
+                diagnostics.append(PreflightDiagnostic(
+                    id: "h3_ref2va_adapter_without_references",
+                    severity: .blocker,
+                    title: "MiniMax-H3 Ref2VA adapter requires references",
+                    message: "Add at least one ordered image or video --reference."
+                ))
+            }
+            if h3AdapterInferenceRecipe.task == .ref2va, input.h3WeightMode == "quantized" {
+                diagnostics.append(PreflightDiagnostic(
+                    id: "h3_ref2va_adapter_requires_resident_bf16",
+                    severity: .blocker,
+                    title: "MiniMax-H3 Ref2VA Turbo requires resident BF16 weights",
+                    message: "Use --h3-weight-mode resident-bf16 on a machine with sufficient memory."
+                ))
+            }
         }
         if input.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             diagnostics.append(
@@ -1054,21 +1095,36 @@ struct VideoGenerationPreflightAnalyzer {
             ))
         }
         if input.h3Adapter != nil, usesMiniMaxH3Geometry {
-            let usesBF16: Bool
-            if let path = model.path {
-                usesBF16 = MiniMaxH3Resources(
-                    rootURL: URL(fileURLWithPath: path).standardizedFileURL
-                ).usesShardedBF16Transformer
-            } else {
-                usesBF16 = model.requested == ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue
-            }
-            if !usesBF16 {
+            let expectedBaseModelID = usesMiniMaxH3Ref2VA
+                ? ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue
+                : ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue
+            if let reference = input.h3Adapter,
+               let spec = ManagedAdapterCatalog.spec(for: reference),
+               spec.baseModelID != expectedBaseModelID {
                 diagnostics.append(PreflightDiagnostic(
-                    id: "h3_adapter_requires_bf16",
+                    id: "h3_adapter_base_model_mismatch",
                     severity: .blocker,
-                    title: "MiniMax-H3 Turbo requires the BF16 base model",
-                    message: "Use --model \(ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue)."
+                    title: "MiniMax-H3 adapter base model does not match",
+                    message: "Adapter \(spec.id) requires \(spec.baseModelID), not \(expectedBaseModelID)."
                 ))
+            }
+            if h3AdapterInferenceRecipe?.task == .fl2va {
+                let usesBF16: Bool
+                if let path = model.path {
+                    usesBF16 = MiniMaxH3Resources(
+                        rootURL: URL(fileURLWithPath: path).standardizedFileURL
+                    ).usesShardedBF16Transformer
+                } else {
+                    usesBF16 = model.requested == ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue
+                }
+                if !usesBF16 {
+                    diagnostics.append(PreflightDiagnostic(
+                        id: "h3_adapter_requires_bf16",
+                        severity: .blocker,
+                        title: "MiniMax-H3 FL2VA Turbo requires the BF16 base model",
+                        message: "Use --model \(ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue)."
+                    ))
+                }
             }
             if let steps = input.steps,
                let recipe = h3AdapterInferenceRecipe,

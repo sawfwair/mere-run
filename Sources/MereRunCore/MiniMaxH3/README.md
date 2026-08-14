@@ -42,7 +42,10 @@ not silently fall out of the GPU residency set.
 The checksum-pinned `minimax-h3-turbo-4step`,
 `minimax-h3-lightx2v-4step`, `minimax-h3-lightx2v-8step-v1`, and
 `minimax-h3-lightx2v-4step-v1-768p` LoRAs run only with the BF16 FL2VA
-transformer.
+transformer. `minimax-h3-lightx2v-ref2v-4step-v0.1` instead targets Ref2VA.
+The Ref2VA managed package is expanded to resident BF16 before its 312 PEFT
+pairs are fused, so this recipe requires `resident-bf16` or a memory-qualified
+automatic selection; forced quantized execution is rejected.
 The EMA-850 adapter's 259 mixed-rank pairs are applied as activation-space
 deltas, its fused QKV rows are deinterleaved to match the runtime's global
 slabs, and its AdaLN deltas are included while the exact four-evaluation
@@ -53,10 +56,12 @@ both an expanded converted checkpoint and per-block LoRA matmuls. Neither
 v1.0 recipe is treated as the legacy four-step release: the 8-step adapter
 defaults to nine schedule points with shifts 12/3 and also accepts its
 published five-point fallback, while the 768p adapter uses five points, shifts
-6/3, and alpha 128. The recommended 768p canvas is 1344x768. H3 Turbo
-adapters cannot be combined with Ref2VA or denoise-step cache reuse. They can
-use the attention-only `balanced` and `maximum` paths; every scheduled
-evaluation still executes all 50 blocks.
+6/3, and alpha 128. The recommended 768p canvas is 1344x768. The Ref2VA v0.1
+recipe uses five schedule points, shifts 12/3, and alpha 8. FL2VA adapters
+cannot be combined with Ref2VA references, and the Ref2VA adapter requires
+them. No H3 Turbo adapter permits denoise-step cache reuse. They can use the
+attention-only `balanced` and `maximum` paths; every scheduled evaluation still
+executes all 50 blocks.
 
 `--h3-acceleration quality` executes every transformer block and preserves the
 native same-seed trajectory. At packed sequences of at least 12,000 tokens,
