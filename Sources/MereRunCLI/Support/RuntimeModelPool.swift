@@ -898,12 +898,12 @@ actor RuntimeModelPool {
         let settings: RuntimeModelSettings
         let spec: ManagedModelSpec?
 
+        var apiProfile: ManagedModelAPIProfile {
+            spec?.apiProfile ?? .runtimeFallback(for: engine)
+        }
+
         var openAICompatibility: APIEngineCapabilities {
-            var capabilities = engine.openAICompatibility
-            if spec?.category == .visionChat {
-                capabilities.supportsVisionContentParts = true
-            }
-            return capabilities
+            .catalog(apiProfile)
         }
     }
 
@@ -992,8 +992,35 @@ actor RuntimeModelPool {
         _ = try await loadModel(idOrAlias: defaultModelID)
     }
 
-    func modelsResponse(createdAt: Date = Date()) throws -> OpenAIModelsResponse {
-        APIServerContract.modelsResponse(modelIds: try listedOpenAIModelIDs(), createdAt: createdAt)
+    func modelsResponse(
+        serverContextSize: Int = 32_768,
+        createdAt: Date = Date()
+    ) throws -> OpenAIModelsResponse {
+        let models = try listedOpenAIModelIDs().map { listedID in
+            let resolved = try resolveModel(listedID, requireInstalled: false)
+            let profile = resolved.apiProfile
+            let configuredContextWindow = resolved.settings.maxContextTokens ?? serverContextSize
+            let contextWindow = min(
+                profile.contextWindow ?? configuredContextWindow,
+                configuredContextWindow
+            )
+            let catalogOutputLimit = profile.maximumOutputTokens ?? contextWindow
+            let configuredOutputLimit = resolved.settings.maxTokens ?? catalogOutputLimit
+            let maximumOutputTokens = min(
+                min(catalogOutputLimit, configuredOutputLimit),
+                contextWindow
+            )
+            let name = resolved.spec?.upstreamRepoId ?? resolved.id
+            return APIServerContract.chatModel(
+                id: listedID,
+                name: name,
+                profile: profile,
+                contextWindow: contextWindow,
+                maximumOutputTokens: maximumOutputTokens,
+                createdAt: createdAt
+            )
+        }
+        return OpenAIModelsResponse(object: "list", data: models)
     }
 
     func status() async -> RuntimeModelPoolStatus {
@@ -1192,7 +1219,8 @@ actor RuntimeModelPool {
             fallbackLoraPath: fallbackLoraPath,
             contextSize: contextSize,
             capabilities: capabilities,
-            servedModelID: resolved.id
+            servedModelID: resolved.id,
+            apiProfile: resolved.apiProfile
         )
         chatRequest.kvCacheMode = resolved.settings.kvCacheMode
         let includeUsage = try APIServerContract.includeUsageInStreaming(
@@ -2344,26 +2372,7 @@ enum RuntimeLoadedModel: Sendable {
 
 extension RuntimeServingEngine {
     var openAICompatibility: APIEngineCapabilities {
-        switch self {
-        case .textCode:
-            return .localTextWithStopSequences
-        case .textChatKlein:
-            return .localTextWithStructuredJSON
-        case .textChatGemma4:
-            return .localTextWithToolsAndStructuredJSON
-        case .textChatLaguna:
-            return .localTextWithToolsAndStopSequences
-        case .textChatQ36, .textChatQ35:
-            return .localTextWithToolsVisionAndStructuredJSON
-        case .textChatLFM2:
-            return .localTextWithTools
-        case .textChatDeepseekV4Flash:
-            return .rawProxy
-        case .textChatMuseGlimmer:
-            return .localTextWithToolsVisionAndReasoning
-        case .textChatNemotronH:
-            return .localTextWithToolsAndStopSequences
-        }
+        .catalog(.runtimeFallback(for: self))
     }
 }
 

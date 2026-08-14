@@ -289,6 +289,10 @@ swift run mere.run model capabilities --recommended
 # Choose guided, bring-your-own-agent, or manual setup
 swift run mere.run setup
 
+# Or install Pi and launch it against a self-describing local provider
+swift run mere.run agent install-pi
+swift run mere.run agent start
+
 # Pull a Hugging Face-backed model into the local model store
 swift run mere.run model pull image-zimage-nano
 swift run mere.run model pull image-zimage-nano --preflight --json
@@ -1015,6 +1019,11 @@ The public OSS build keeps local-first behavior by default and requires explicit
   model
 - `mere.run api serve` can bind to loopback without auth, but non-loopback hosts require `--api-key` or `MERERUN_API_KEY`
 - the OpenAI-compatible chat and embedding routes require `Content-Type: application/json`, support `--rate-limit-per-minute` for basic abuse control, decode the common OpenAI request shapes, and reject unsupported high-impact fields before generation
+- `/v1/models` adds task, tool-call, reasoning, modality, limit, and
+  compatibility metadata. The bundled Pi provider consumes these fields and
+  exposes only tool-capable chat models instead of guessing from model names.
+  Those fields project from typed managed-model catalog profiles; aliases and
+  active runtime limit overrides are layered on when the server responds.
 - API LoRA adapters are operator-controlled with `--lora`; it accepts a
   verified installed adapter catalog id or a local path, while per-request LoRA
   paths are rejected

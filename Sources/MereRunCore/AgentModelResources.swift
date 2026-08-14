@@ -80,7 +80,12 @@ public struct MereRunAgentModelRecommendation: Hashable, Sendable {
     public let reason: String?
 
     public var isStartableByMereRun: Bool {
-        managedModelID != nil && !sourceConfigurationRequired
+        guard let managedModelID,
+              !sourceConfigurationRequired,
+              let profile = ManagedModelCatalog.apiProfile(for: managedModelID) else {
+            return false
+        }
+        return profile.task == .chatCompletions && profile.toolCall
     }
 
     public init(
@@ -128,7 +133,7 @@ public enum MereRunAgentModelCatalog {
         on machine: MereRunMachineProfile = .current
     ) -> MereRunAgentModelRecommendation? {
         guard machine.unifiedMemoryGB >= 16 else { return nil }
-        return qwen35NineB()
+        return ornith9B()
     }
 
     public static func tierRecommendation(
@@ -138,14 +143,11 @@ public enum MereRunAgentModelCatalog {
         if machine.unifiedMemoryGB >= 96 {
             return deepseekV4Flash()
         }
-        if machine.isLinux && machine.unifiedMemoryGB >= 64 {
-            return qwen3CoderNext()
+        if machine.isLinux && machine.unifiedMemoryGB >= 24 {
+            return q36Nano()
         }
         if machine.unifiedMemoryGB >= 64 {
             return gemma12B4Bit()
-        }
-        if machine.isLinux && machine.unifiedMemoryGB >= 24 {
-            return q36Nano()
         }
         if machine.unifiedMemoryGB >= 24 {
             return gemma12B4Bit()
@@ -169,14 +171,11 @@ public enum MereRunAgentModelCatalog {
         if machine.unifiedMemoryGB >= 96 {
             return deepseekV4Flash()
         }
-        if machine.isLinux && machine.unifiedMemoryGB >= 64 {
-            return qwen3CoderNext()
+        if machine.isLinux && machine.unifiedMemoryGB >= 24 {
+            return q36Nano()
         }
         if machine.unifiedMemoryGB >= 64 {
             return gemma12B4Bit()
-        }
-        if machine.isLinux && machine.unifiedMemoryGB >= 24 {
-            return q36Nano()
         }
         if machine.unifiedMemoryGB >= 24 {
             return gemma12B4Bit()

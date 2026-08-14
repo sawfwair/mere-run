@@ -133,7 +133,13 @@ download route.
 - Request `model` resolves by runtime alias, then curated catalog id, then the
   startup default from `--engine`/`--model`.
 - `/v1/models` returns installed API-capable chat catalog ids, aliases, and
-  installed native embedding, image, TTS, and ASR sidecar model ids.
+  installed native sidecars. Mere-specific additive fields describe each
+  model's task, tool-call and reasoning support, thinking levels, input/output
+  modalities, context/output limits, and OpenAI compatibility dialect so agent
+  harnesses do not have to guess from an id.
+- Managed-model metadata comes from the typed catalog API profile. The running
+  server overlays aliases and configured context/output defaults; explicit
+  uncataloged model paths use a conservative profile for their serving engine.
 - The embedding, image/image-edit, TTS, and ASR endpoints each retain one
   bounded most-recently-used runtime. Their autonomous idle timers default to 300
   seconds and re-read managed `pinned`/`ttlSeconds` settings while idle. Active

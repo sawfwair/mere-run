@@ -26,6 +26,417 @@ public enum ManagedModelCategory: String, CaseIterable, Hashable, Sendable {
     case video = "video"
 }
 
+public enum ManagedModelAPITask: String, Hashable, Sendable {
+    case chatCompletions = "chat.completions"
+    case imageGenerations = "images.generations"
+    case imageEdits = "images.edits"
+    case audioSpeech = "audio.speech"
+    case audioTranscriptions = "audio.transcriptions"
+    case embeddings
+    case visionGeometry = "vision.geometry"
+    case visionDepth = "vision.depth"
+    case visionImageTo3D = "vision.image_to_3d"
+}
+
+public enum ManagedModelAPIModality: String, Hashable, Sendable {
+    case text
+    case image
+    case audio
+    case video
+    case embedding
+    case geometry
+    case threeD = "3d"
+}
+
+public enum ManagedModelThinkingLevel: String, CaseIterable, Hashable, Sendable {
+    case off
+    case minimal
+    case low
+    case medium
+    case high
+    case xhigh
+    case max
+}
+
+public enum ManagedModelMaxTokensField: String, Hashable, Sendable {
+    case maxTokens = "max_tokens"
+    case maxCompletionTokens = "max_completion_tokens"
+}
+
+public enum ManagedModelThinkingFormat: String, Hashable, Sendable {
+    case deepseek
+}
+
+public struct ManagedModelOpenAICompatibilityProfile: Hashable, Sendable {
+    public let supportsStore: Bool
+    public let supportsDeveloperRole: Bool
+    public let supportsReasoningEffort: Bool
+    public let supportsUsageInStreaming: Bool
+    public let supportsFinishReason: Bool
+    public let maxTokensField: ManagedModelMaxTokensField
+    public let supportsStrictMode: Bool
+    public let thinkingFormat: ManagedModelThinkingFormat?
+    public let requiresReasoningContentOnAssistantMessages: Bool
+
+    public init(
+        supportsStore: Bool = false,
+        supportsDeveloperRole: Bool = true,
+        supportsReasoningEffort: Bool = false,
+        supportsUsageInStreaming: Bool = true,
+        supportsFinishReason: Bool = true,
+        maxTokensField: ManagedModelMaxTokensField = .maxCompletionTokens,
+        supportsStrictMode: Bool = false,
+        thinkingFormat: ManagedModelThinkingFormat? = nil,
+        requiresReasoningContentOnAssistantMessages: Bool = false
+    ) {
+        self.supportsStore = supportsStore
+        self.supportsDeveloperRole = supportsDeveloperRole
+        self.supportsReasoningEffort = supportsReasoningEffort
+        self.supportsUsageInStreaming = supportsUsageInStreaming
+        self.supportsFinishReason = supportsFinishReason
+        self.maxTokensField = maxTokensField
+        self.supportsStrictMode = supportsStrictMode
+        self.thinkingFormat = thinkingFormat
+        self.requiresReasoningContentOnAssistantMessages = requiresReasoningContentOnAssistantMessages
+    }
+}
+
+/// The capabilities mere.run promises when it serves a managed model.
+///
+/// This is deliberately catalog metadata rather than a client-specific model
+/// definition. API discovery, request validation, and harness integrations all
+/// project from the same profile, then apply runtime settings such as context
+/// and output-token overrides.
+public struct ManagedModelAPIProfile: Hashable, Sendable {
+    public let task: ManagedModelAPITask
+    public let servingEngine: RuntimeServingEngine?
+    public let inputModalities: [ManagedModelAPIModality]
+    public let outputModalities: [ManagedModelAPIModality]
+    public let contextWindow: Int?
+    public let maximumOutputTokens: Int?
+    public let thinkingLevels: [ManagedModelThinkingLevel]
+    public let thinkingLevelMap: [ManagedModelThinkingLevel: ManagedModelThinkingLevel]
+    public let reasoningEffortStrengths: [ManagedModelThinkingLevel: Double]
+    public let toolCall: Bool
+    public let structuredOutput: Bool
+    public let compatibility: ManagedModelOpenAICompatibilityProfile
+    public let supportsRawProxy: Bool
+    public let supportsToolChoice: Bool
+    public let supportsStopSequences: Bool
+    public let supportsSeed: Bool
+    public let supportsPenalties: Bool
+    public let supportsLogprobs: Bool
+    public let supportsProviderThinkingControls: Bool
+
+    public var reasoning: Bool {
+        !thinkingLevels.isEmpty
+    }
+
+    public init(
+        task: ManagedModelAPITask,
+        servingEngine: RuntimeServingEngine? = nil,
+        inputModalities: [ManagedModelAPIModality],
+        outputModalities: [ManagedModelAPIModality],
+        contextWindow: Int? = nil,
+        maximumOutputTokens: Int? = nil,
+        thinkingLevels: [ManagedModelThinkingLevel] = [],
+        thinkingLevelMap: [ManagedModelThinkingLevel: ManagedModelThinkingLevel] = [:],
+        reasoningEffortStrengths: [ManagedModelThinkingLevel: Double] = [:],
+        toolCall: Bool = false,
+        structuredOutput: Bool = false,
+        compatibility: ManagedModelOpenAICompatibilityProfile = .init(),
+        supportsRawProxy: Bool = false,
+        supportsToolChoice: Bool = false,
+        supportsStopSequences: Bool = false,
+        supportsSeed: Bool = false,
+        supportsPenalties: Bool = false,
+        supportsLogprobs: Bool = false,
+        supportsProviderThinkingControls: Bool = false
+    ) {
+        self.task = task
+        self.servingEngine = servingEngine
+        self.inputModalities = inputModalities
+        self.outputModalities = outputModalities
+        self.contextWindow = contextWindow
+        self.maximumOutputTokens = maximumOutputTokens
+        self.thinkingLevels = thinkingLevels
+        self.thinkingLevelMap = thinkingLevelMap
+        self.reasoningEffortStrengths = reasoningEffortStrengths
+        self.toolCall = toolCall
+        self.structuredOutput = structuredOutput
+        self.compatibility = compatibility
+        self.supportsRawProxy = supportsRawProxy
+        self.supportsToolChoice = supportsToolChoice
+        self.supportsStopSequences = supportsStopSequences
+        self.supportsSeed = supportsSeed
+        self.supportsPenalties = supportsPenalties
+        self.supportsLogprobs = supportsLogprobs
+        self.supportsProviderThinkingControls = supportsProviderThinkingControls
+    }
+}
+
+public extension ManagedModelAPIProfile {
+    static func textCode(
+        contextWindow: Int = 32_768,
+        maximumOutputTokens: Int = 4_096
+    ) -> ManagedModelAPIProfile {
+        chat(
+            servingEngine: .textCode,
+            contextWindow: contextWindow,
+            maximumOutputTokens: maximumOutputTokens,
+            supportsStopSequences: true
+        )
+    }
+
+    static func klein(contextWindow: Int = 32_768) -> ManagedModelAPIProfile {
+        chat(
+            servingEngine: .textChatKlein,
+            contextWindow: contextWindow,
+            maximumOutputTokens: 4_096,
+            structuredOutput: true
+        )
+    }
+
+    static func gemma4(
+        inputModalities: [ManagedModelAPIModality] = [.text],
+        contextWindow: Int = Gemma4Resources.defaultContextLength
+    ) -> ManagedModelAPIProfile {
+        chat(
+            servingEngine: .textChatGemma4,
+            inputModalities: inputModalities,
+            contextWindow: contextWindow,
+            maximumOutputTokens: 4_096,
+            toolCall: true,
+            structuredOutput: true
+        )
+    }
+
+    static func laguna(contextWindow: Int = LagunaResources.defaultContextLength) -> ManagedModelAPIProfile {
+        chat(
+            servingEngine: .textChatLaguna,
+            contextWindow: contextWindow,
+            maximumOutputTokens: 4_096,
+            toolCall: true,
+            supportsStopSequences: true
+        )
+    }
+
+    static func q36(
+        contextWindow: Int,
+        fixedReasoning: Bool = false
+    ) -> ManagedModelAPIProfile {
+        chat(
+            servingEngine: .textChatQ36,
+            inputModalities: [.text, .image],
+            contextWindow: contextWindow,
+            maximumOutputTokens: 4_096,
+            thinkingLevels: fixedReasoning ? [.high] : [],
+            toolCall: true,
+            structuredOutput: true
+        )
+    }
+
+    static func lfm2(
+        inputModalities: [ManagedModelAPIModality] = [.text],
+        contextWindow: Int = LFM2Resources.defaultContextLength
+    ) -> ManagedModelAPIProfile {
+        chat(
+            servingEngine: .textChatLFM2,
+            inputModalities: inputModalities,
+            contextWindow: contextWindow,
+            maximumOutputTokens: 4_096,
+            toolCall: true
+        )
+    }
+
+    static func deepseekV4Flash(
+        contextWindow: Int = DeepseekV4FlashResources.defaultContextLength
+    ) -> ManagedModelAPIProfile {
+        chat(
+            servingEngine: .textChatDeepseekV4Flash,
+            inputModalities: [.text, .image],
+            contextWindow: contextWindow,
+            maximumOutputTokens: contextWindow,
+            thinkingLevels: [.off, .minimal, .low, .medium, .high, .xhigh],
+            thinkingLevelMap: [.minimal: .low],
+            toolCall: true,
+            compatibility: ManagedModelOpenAICompatibilityProfile(
+                supportsDeveloperRole: false,
+                supportsReasoningEffort: true,
+                maxTokensField: .maxTokens,
+                thinkingFormat: .deepseek,
+                requiresReasoningContentOnAssistantMessages: true
+            ),
+            supportsRawProxy: true,
+            supportsStopSequences: true,
+            supportsSeed: true,
+            supportsPenalties: true,
+            supportsLogprobs: true,
+            supportsProviderThinkingControls: true
+        )
+    }
+
+    static func museGlimmer(
+        contextWindow: Int = MuseGlimmerResources.defaultContextLength
+    ) -> ManagedModelAPIProfile {
+        chat(
+            servingEngine: .textChatMuseGlimmer,
+            inputModalities: [.text, .image],
+            contextWindow: contextWindow,
+            maximumOutputTokens: 4_096,
+            thinkingLevels: [.minimal, .low, .medium, .high, .xhigh, .max],
+            thinkingLevelMap: [.minimal: .low, .max: .xhigh],
+            reasoningEffortStrengths: [
+                .minimal: 0.1,
+                .low: 0.25,
+                .medium: 0.5,
+                .high: 0.8,
+                .xhigh: 1,
+                .max: 1,
+            ],
+            toolCall: true,
+            compatibility: ManagedModelOpenAICompatibilityProfile(
+                supportsReasoningEffort: true
+            )
+        )
+    }
+
+    static func nemotronH(
+        contextWindow: Int = NemotronHResources.defaultContextLength
+    ) -> ManagedModelAPIProfile {
+        chat(
+            servingEngine: .textChatNemotronH,
+            contextWindow: contextWindow,
+            maximumOutputTokens: 4_096,
+            toolCall: true,
+            supportsStopSequences: true
+        )
+    }
+
+    static func runtimeFallback(for engine: RuntimeServingEngine) -> ManagedModelAPIProfile {
+        switch engine {
+        case .textCode:
+            return .textCode()
+        case .textChatKlein:
+            return .klein()
+        case .textChatGemma4:
+            return .gemma4()
+        case .textChatLaguna:
+            return .laguna()
+        case .textChatQ36, .textChatQ35:
+            return .q36(contextWindow: Q35Resources.defaultContextLength)
+        case .textChatLFM2:
+            return .lfm2()
+        case .textChatDeepseekV4Flash:
+            return .deepseekV4Flash()
+        case .textChatMuseGlimmer:
+            return .museGlimmer()
+        case .textChatNemotronH:
+            return .nemotronH()
+        }
+    }
+
+    static func companion(
+        modelID: String,
+        category: ManagedModelCategory?
+    ) -> ManagedModelAPIProfile? {
+        if modelID == QwenImageEditRepository.modelId {
+            return ManagedModelAPIProfile(
+                task: .imageEdits,
+                inputModalities: [.text, .image],
+                outputModalities: [.image]
+            )
+        }
+        switch category {
+        case .image:
+            return ManagedModelAPIProfile(
+                task: .imageGenerations,
+                inputModalities: [.text],
+                outputModalities: [.image]
+            )
+        case .image3D:
+            return ManagedModelAPIProfile(
+                task: .visionImageTo3D,
+                inputModalities: [.image],
+                outputModalities: [.threeD]
+            )
+        case .speechTTS:
+            return ManagedModelAPIProfile(
+                task: .audioSpeech,
+                inputModalities: [.text],
+                outputModalities: [.audio]
+            )
+        case .speechASR:
+            return ManagedModelAPIProfile(
+                task: .audioTranscriptions,
+                inputModalities: [.audio],
+                outputModalities: [.text]
+            )
+        case .textEmbed:
+            return ManagedModelAPIProfile(
+                task: .embeddings,
+                inputModalities: [.text],
+                outputModalities: [.embedding]
+            )
+        case .visionGeometry:
+            return ManagedModelAPIProfile(
+                task: .visionGeometry,
+                inputModalities: [.image],
+                outputModalities: [.geometry]
+            )
+        case .visionDepth:
+            return ManagedModelAPIProfile(
+                task: .visionDepth,
+                inputModalities: [.video],
+                outputModalities: [.video]
+            )
+        default:
+            return nil
+        }
+    }
+
+    private static func chat(
+        servingEngine: RuntimeServingEngine,
+        inputModalities: [ManagedModelAPIModality] = [.text],
+        contextWindow: Int,
+        maximumOutputTokens: Int,
+        thinkingLevels: [ManagedModelThinkingLevel] = [],
+        thinkingLevelMap: [ManagedModelThinkingLevel: ManagedModelThinkingLevel] = [:],
+        reasoningEffortStrengths: [ManagedModelThinkingLevel: Double] = [:],
+        toolCall: Bool = false,
+        structuredOutput: Bool = false,
+        compatibility: ManagedModelOpenAICompatibilityProfile = .init(),
+        supportsRawProxy: Bool = false,
+        supportsStopSequences: Bool = false,
+        supportsSeed: Bool = false,
+        supportsPenalties: Bool = false,
+        supportsLogprobs: Bool = false,
+        supportsProviderThinkingControls: Bool = false
+    ) -> ManagedModelAPIProfile {
+        ManagedModelAPIProfile(
+            task: .chatCompletions,
+            servingEngine: servingEngine,
+            inputModalities: inputModalities,
+            outputModalities: [.text],
+            contextWindow: contextWindow,
+            maximumOutputTokens: maximumOutputTokens,
+            thinkingLevels: thinkingLevels,
+            thinkingLevelMap: thinkingLevelMap,
+            reasoningEffortStrengths: reasoningEffortStrengths,
+            toolCall: toolCall,
+            structuredOutput: structuredOutput,
+            compatibility: compatibility,
+            supportsRawProxy: supportsRawProxy,
+            supportsToolChoice: toolCall,
+            supportsStopSequences: supportsStopSequences,
+            supportsSeed: supportsSeed,
+            supportsPenalties: supportsPenalties,
+            supportsLogprobs: supportsLogprobs,
+            supportsProviderThinkingControls: supportsProviderThinkingControls
+        )
+    }
+}
+
 public enum ManagedModelInstallShape: Hashable, Sendable {
     case directoryRoot
     case singleFile(relativePath: String)
@@ -176,6 +587,7 @@ public struct ManagedModelSpec: Hashable, Sendable {
     public let estimatedDownloadBytes: Int64?
     public let defaultCLICommands: [String]
     public let companionModelIDs: [String]
+    public let apiProfile: ManagedModelAPIProfile?
 
     public init(
         id: String,
@@ -193,7 +605,8 @@ public struct ManagedModelSpec: Hashable, Sendable {
         resolutionFallbackIDs: [String] = [],
         estimatedDownloadBytes: Int64? = nil,
         defaultCLICommands: [String] = [],
-        companionModelIDs: [String] = []
+        companionModelIDs: [String] = [],
+        apiProfile: ManagedModelAPIProfile? = nil
     ) {
         self.id = id
         self.category = category
@@ -211,10 +624,19 @@ public struct ManagedModelSpec: Hashable, Sendable {
         self.estimatedDownloadBytes = estimatedDownloadBytes
         self.defaultCLICommands = defaultCLICommands
         self.companionModelIDs = companionModelIDs
+        self.apiProfile = apiProfile ?? ManagedModelAPIProfile.companion(
+            modelID: id,
+            category: category
+        )
     }
 }
 
 public enum ManagedModelCatalog {
+    public static func apiProfile(for modelID: String) -> ManagedModelAPIProfile? {
+        spec(for: modelID)?.apiProfile
+            ?? ManagedModelAPIProfile.companion(modelID: modelID, category: nil)
+    }
+
     private static let diffusersImageSnapshotPatterns = [
         "LICENSE*",
         "README.md",
@@ -1002,7 +1424,8 @@ public enum ManagedModelCatalog {
             installShape: .directoryRoot,
             validationKind: .hfTextChat,
             runtimeAutoDownloadAllowed: false,
-            defaultCLICommands: ["api serve"]
+            defaultCLICommands: ["api serve"],
+            apiProfile: .klein()
         ),
         ManagedModelSpec(
             id: "text-chat-psi-agent",
@@ -1023,7 +1446,8 @@ public enum ManagedModelCatalog {
             validationKind: .gemma4,
             resolutionFallbackIDs: ["text-chat-gemma4-max", "text-chat-gemma4-nano"],
             estimatedDownloadBytes: 62_578_654_199,
-            defaultCLICommands: ["text chat", "text train-lora", "api serve"]
+            defaultCLICommands: ["text chat", "text train-lora", "api serve"],
+            apiProfile: .gemma4()
         ),
         ManagedModelSpec(
             id: Gemma4Resources.turboModelId,
@@ -1037,7 +1461,8 @@ public enum ManagedModelCatalog {
             validationKind: .gemma4,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 31 * 1_073_741_824,
-            defaultCLICommands: ["text chat", "text train-lora", "api serve"]
+            defaultCLICommands: ["text chat", "text train-lora", "api serve"],
+            apiProfile: .gemma4()
         ),
         ManagedModelSpec(
             id: Gemma4Resources.twelveBModelId,
@@ -1051,7 +1476,8 @@ public enum ManagedModelCatalog {
             validationKind: .gemma4,
             estimatedDownloadBytes: 25 * 1_073_741_824,
             defaultCLICommands: ["text chat", "text train-lora", "api serve"],
-            companionModelIDs: [Gemma4MTPResources.modelId]
+            companionModelIDs: [Gemma4MTPResources.modelId],
+            apiProfile: .gemma4()
         ),
         ManagedModelSpec(
             id: Gemma4Resources.twelveB4BitModelId,
@@ -1067,7 +1493,8 @@ public enum ManagedModelCatalog {
             validationKind: .gemma4,
             estimatedDownloadBytes: 6_773_374_762,
             defaultCLICommands: ["text chat", "text train-lora", "api serve"],
-            companionModelIDs: [Gemma4MTPResources.modelId]
+            companionModelIDs: [Gemma4MTPResources.modelId],
+            apiProfile: .gemma4()
         ),
         ManagedModelSpec(
             id: Gemma4Resources.visionTwelveBModelId,
@@ -1081,7 +1508,8 @@ public enum ManagedModelCatalog {
             validationKind: .gemma4Unified,
             estimatedDownloadBytes: 25 * 1_073_741_824,
             defaultCLICommands: ["api serve"],
-            companionModelIDs: [Gemma4MTPResources.modelId]
+            companionModelIDs: [Gemma4MTPResources.modelId],
+            apiProfile: .gemma4(inputModalities: [.text, .image])
         ),
         ManagedModelSpec(
             id: "text-chat-gemma4-nano",
@@ -1094,7 +1522,8 @@ public enum ManagedModelCatalog {
             upstreamRepoId: Gemma4Resources.nanoUpstreamModelId,
             validationKind: .gemma4,
             estimatedDownloadBytes: 16_024_791_983,
-            defaultCLICommands: ["text chat", "text train-lora", "api serve"]
+            defaultCLICommands: ["text chat", "text train-lora", "api serve"],
+            apiProfile: .gemma4()
         ),
         ManagedModelSpec(
             id: "text-chat-gemma4-max",
@@ -1107,7 +1536,8 @@ public enum ManagedModelCatalog {
             upstreamRepoId: Gemma4Resources.maxUpstreamModelId,
             validationKind: .gemma4,
             estimatedDownloadBytes: 62_578_654_199,
-            defaultCLICommands: ["text chat", "text train-lora", "api serve"]
+            defaultCLICommands: ["text chat", "text train-lora", "api serve"],
+            apiProfile: .gemma4()
         ),
         ManagedModelSpec(
             id: LagunaResources.modelID,
@@ -1124,7 +1554,8 @@ public enum ManagedModelCatalog {
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: LagunaResources.estimatedDownloadBytes,
             defaultCLICommands: ["text chat", "api serve", "model benchmark chat"],
-            companionModelIDs: [LagunaResources.dflashModelID]
+            companionModelIDs: [LagunaResources.dflashModelID],
+            apiProfile: .laguna()
         ),
         ManagedModelSpec(
             id: LagunaResources.xsModelID,
@@ -1145,7 +1576,8 @@ public enum ManagedModelCatalog {
                 "text train-lora",
                 "api serve",
                 "model benchmark chat",
-            ]
+            ],
+            apiProfile: .laguna()
         ),
         ManagedModelSpec(
             id: InklingResources.modelID,
@@ -1187,7 +1619,8 @@ public enum ManagedModelCatalog {
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: MuseGlimmerResources.estimatedDownloadBytes,
             defaultCLICommands: ["text chat", "api serve"],
-            companionModelIDs: [MuseGlimmerResources.assistantModelId]
+            companionModelIDs: [MuseGlimmerResources.assistantModelId],
+            apiProfile: .museGlimmer()
         ),
         ManagedModelSpec(
             id: NemotronHResources.modelID,
@@ -1204,7 +1637,8 @@ public enum ManagedModelCatalog {
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: NemotronHResources.estimatedDownloadBytes,
             defaultCLICommands: ["text chat", "api serve", "model benchmark chat"],
-            companionModelIDs: [NemotronHResources.dsparkModelID]
+            companionModelIDs: [NemotronHResources.dsparkModelID],
+            apiProfile: .nemotronH()
         ),
         ManagedModelSpec(
             id: Q35Resources.q36NanoModelId,
@@ -1215,7 +1649,8 @@ public enum ManagedModelCatalog {
             upstreamRevision: Q35Resources.q36NanoUpstreamRevision,
             validationKind: .q35,
             estimatedDownloadBytes: 24 * 1_073_741_824,
-            defaultCLICommands: ["chat", "api serve"]
+            defaultCLICommands: ["chat", "api serve"],
+            apiProfile: .q36(contextWindow: Q35Resources.defaultContextLength)
         ),
         ManagedModelSpec(
             id: Q35Resources.bonsai27B1BitModelId,
@@ -1226,7 +1661,11 @@ public enum ManagedModelCatalog {
             upstreamRevision: Q35Resources.bonsai27B1BitUpstreamRevision,
             validationKind: .q35,
             estimatedDownloadBytes: Q35Resources.bonsai27B1BitEstimatedDownloadBytes,
-            defaultCLICommands: ["text chat", "api serve", "model benchmark chat"]
+            defaultCLICommands: ["text chat", "api serve", "model benchmark chat"],
+            apiProfile: .q36(
+                contextWindow: Q35Resources.bonsai27B1BitContextLength,
+                fixedReasoning: true
+            )
         ),
         ManagedModelSpec(
             id: Q35Resources.bonsai27B2BitModelId,
@@ -1237,7 +1676,11 @@ public enum ManagedModelCatalog {
             upstreamRevision: Q35Resources.bonsai27B2BitUpstreamRevision,
             validationKind: .q35,
             estimatedDownloadBytes: Q35Resources.bonsai27B2BitEstimatedDownloadBytes,
-            defaultCLICommands: ["text chat", "api serve", "model benchmark chat"]
+            defaultCLICommands: ["text chat", "api serve", "model benchmark chat"],
+            apiProfile: .q36(
+                contextWindow: Q35Resources.bonsai27B2BitContextLength,
+                fixedReasoning: true
+            )
         ),
         ManagedModelSpec(
             id: Q35Resources.ornith9BModelId,
@@ -1248,7 +1691,11 @@ public enum ManagedModelCatalog {
             upstreamRevision: Q35Resources.ornith9BUpstreamRevision,
             validationKind: .q35,
             estimatedDownloadBytes: Q35Resources.ornith9BEstimatedDownloadBytes,
-            defaultCLICommands: ["chat", "api serve", "agent start"]
+            defaultCLICommands: ["chat", "api serve", "agent start"],
+            apiProfile: .q36(
+                contextWindow: Q35Resources.defaultContextLength,
+                fixedReasoning: true
+            )
         ),
         ManagedModelSpec(
             id: Q35Resources.ornith35BMLXModelId,
@@ -1259,7 +1706,11 @@ public enum ManagedModelCatalog {
             validationKind: .q35,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: Q35Resources.ornith35BMLXEstimatedDownloadBytes,
-            defaultCLICommands: ["chat", "api serve", "agent start", "model benchmark code"]
+            defaultCLICommands: ["chat", "api serve", "agent start", "model benchmark code"],
+            apiProfile: .q36(
+                contextWindow: Q35Resources.defaultContextLength,
+                fixedReasoning: true
+            )
         ),
         ManagedModelSpec(
             id: AgentModelResources.qwen35NineBModelId,
@@ -1270,7 +1721,8 @@ public enum ManagedModelCatalog {
             upstreamRevision: AgentModelResources.qwen35NineBRevision,
             validationKind: .codegenGGUF,
             estimatedDownloadBytes: 5_680_522_464,
-            defaultCLICommands: ["api serve", "text code"]
+            defaultCLICommands: ["api serve", "text code"],
+            apiProfile: .textCode()
         ),
         ManagedModelSpec(
             id: NorthMiniCodeResources.modelId,
@@ -1281,7 +1733,11 @@ public enum ManagedModelCatalog {
             upstreamRevision: NorthMiniCodeResources.upstreamRevision,
             validationKind: .codegenGGUF,
             estimatedDownloadBytes: NorthMiniCodeResources.estimatedDownloadBytes,
-            defaultCLICommands: ["text code", "api serve", "agent start"]
+            defaultCLICommands: ["text code", "api serve", "agent start"],
+            apiProfile: .textCode(
+                contextWindow: NorthMiniCodeResources.runtimeContextLength,
+                maximumOutputTokens: NorthMiniCodeResources.maxOutputTokens
+            )
         ),
         ManagedModelSpec(
             id: Ornith35BCodeResources.modelId,
@@ -1292,7 +1748,11 @@ public enum ManagedModelCatalog {
             upstreamRevision: Ornith35BCodeResources.upstreamRevision,
             validationKind: .codegenGGUF,
             estimatedDownloadBytes: Ornith35BCodeResources.estimatedDownloadBytes,
-            defaultCLICommands: ["text code", "api serve", "agent start"]
+            defaultCLICommands: ["text code", "api serve", "agent start"],
+            apiProfile: .textCode(
+                contextWindow: Ornith35BCodeResources.runtimeContextLength,
+                maximumOutputTokens: Ornith35BCodeResources.maxOutputTokens
+            )
         ),
         ManagedModelSpec(
             // GGUF Qwen3.6-35B-A3B: the CUDA default chat model. Routes through
@@ -1312,7 +1772,8 @@ public enum ManagedModelCatalog {
             upstreamRevision: "main",
             validationKind: .codegenGGUF,
             estimatedDownloadBytes: 22 * 1_073_741_824,
-            defaultCLICommands: ["text chat", "api serve"]
+            defaultCLICommands: ["text chat", "api serve"],
+            apiProfile: .textCode()
         ),
         ManagedModelSpec(
             id: DeepseekV4FlashResources.defaultModelId,
@@ -1323,7 +1784,8 @@ public enum ManagedModelCatalog {
             upstreamRevision: DeepseekV4FlashResources.defaultRevision,
             validationKind: .deepseekV4FlashIMatrixGGUF,
             estimatedDownloadBytes: DeepseekV4FlashResources.defaultGGUFByteCount,
-            defaultCLICommands: ["api serve", "agent"]
+            defaultCLICommands: ["api serve", "agent"],
+            apiProfile: .deepseekV4Flash()
         ),
         ManagedModelSpec(
             id: LFM2Resources.defaultModelId,
@@ -1346,7 +1808,8 @@ public enum ManagedModelCatalog {
             validationKind: .lfm2,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 10 * 1_073_741_824,
-            defaultCLICommands: ["text chat", "api serve"]
+            defaultCLICommands: ["text chat", "api serve"],
+            apiProfile: .lfm2()
         ),
         ManagedModelSpec(
             id: LFM2Resources.denseModelId,
@@ -1369,7 +1832,8 @@ public enum ManagedModelCatalog {
             validationKind: .lfm2,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 1_601_108_788,
-            defaultCLICommands: ["text chat", "api serve"]
+            defaultCLICommands: ["text chat", "api serve"],
+            apiProfile: .lfm2()
         ),
         ManagedModelSpec(
             id: LFM2Resources.visionModelId,
@@ -1392,7 +1856,8 @@ public enum ManagedModelCatalog {
             validationKind: .lfm2,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: LFM2Resources.visionEstimatedDownloadBytes,
-            defaultCLICommands: ["text chat", "api serve"]
+            defaultCLICommands: ["text chat", "api serve"],
+            apiProfile: .lfm2(inputModalities: [.text, .image])
         ),
         ManagedModelSpec(
             id: "speech-tts-qwen3-nano",
@@ -1524,7 +1989,8 @@ public enum ManagedModelCatalog {
             validationKind: .codegenGGUF,
             aliasKind: .codegenGGUF,
             estimatedDownloadBytes: 48_410_992_032,
-            defaultCLICommands: ["text code"]
+            defaultCLICommands: ["text code"],
+            apiProfile: .textCode()
         ),
         ManagedModelSpec(
             id: "text-embed-qwen3-0.6b",

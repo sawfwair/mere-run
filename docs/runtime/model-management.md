@@ -256,12 +256,16 @@ adapter ID and its published four-step schedule automatically.
 
 Guided onboarding for the shared model store and first local agent. The command
 offers a Pi-powered Mere agent, a BYOA prompt for Claude/Codex, or manual
-commands. The small local agent model is `text-agent-qwen35-9b`; hardware-tier
-setup can select Qwen3.6 nano, Qwen3-Coder Next, or DeepSeek V4 Flash. On 96 GB+
+commands. The small local agent model is the tool-capable
+`text-agent-ornith-9b`; hardware-tier setup can select Gemma 4, Qwen3.6 nano on
+Linux, or DeepSeek V4 Flash. On 96 GB+
 Apple Silicon Macs, `text-agent-deepseek-v4-flash` is the preferred managed
-setup-agent tier; smaller Qwen agent models are alternatives, not upgrades.
+setup-agent tier; smaller tool-capable native agents are alternatives, not
+upgrades.
 `text-code-north-mini` can be pulled, inspected, and run through the native
-GGUF code runtime for coding-agent comparisons against `text-code-qwen3`.
+GGUF code runtime for direct coding comparisons against `text-code-qwen3`.
+The `text-code` API lane rejects tool calls, so these models are not Pi setup
+agents.
 `text-agent-ornith-9b` can be pulled, inspected, and run through the native
 Qwen-family MLX/OptiQ runtime for coding-agent comparisons.
 `text-agent-ornith-35b-mlx` is a local-only converted MLX Q4 Ornith target; it
