@@ -180,7 +180,8 @@ core_suite() {
   if require_model "speech-asr-qwen3" && [[ -f "$speech_tts_wav" ]]; then
     run_step "speech_transcribe_qwen3" 300 \
       "$MERERUN_BIN" speech transcribe "$speech_tts_wav" --backend qwen --model speech-asr-qwen3 --no-timestamps --quiet
-    assert_contains "speech_transcribe_qwen3_output" "$OUT_DIR/speech_transcribe_qwen3.stdout" "local inference smoke test"
+    assert_contains "speech_transcribe_qwen3_output" "$OUT_DIR/speech_transcribe_qwen3.stdout" \
+      "local inference[^[:alnum:]]+smoke[^[:alnum:]]+test"
   fi
 
   if require_model "text-chat-q36-nano"; then

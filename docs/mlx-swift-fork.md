@@ -1,23 +1,62 @@
 # mlx-swift fork policy and compiled-call overhead
 
-mere-run pins the public `sawfwair/mlx-swift` fork based on upstream 0.32.1.
-That fork carries the Linux package bridge and Prism low-bit compatibility
-needed by this repository. Its embedded `sawfwair/mlx` revision also provides
-native affine 1-bit CUDA quantize, dequantize, and QMV execution, plus the
-Metal affine 1-bit path and the generation-17 NAX correctness gate. The fork
-retains upstream's NVFP4 split-K fix and drops the old duplicate `qmv_wide`
-implementation now supplied upstream. Changes stay scoped to their bit width,
-group size, quantization mode, and backend so stock 2-bit and wider models keep
-their existing paths.
+mere-run pins the public `sawfwair/mlx-swift` fork at
+`3e6df6d8163a8f212061d15739eeeec12d5b89e3`. It is rebased onto upstream
+`mlx-swift` `da318704cc0e972b61dcca43c62cd15e545362ae`, including the upstream
+`MLXArray` finalizer fix and generated-source-list maintenance. The embedded
+`sawfwair/mlx` revision is
+`b57bd7640f3f7c743b76a58478faaf1e8ee084f2`, based on upstream MLX
+`bd5c3a2b170bb95340482e35b2a49fb08aea4de3` and retaining the 0.32.1 ABI.
+
+The owned patch stack carries the Linux/CUDA package bridge, executor-safe
+Swift streams, native affine 1-bit CUDA quantize/dequantize/QMV execution, the
+Metal affine 1-bit path, custom quantized-kernel headers, NVFP4 staging, the
+generation-17 NAX correctness gate, and M4/H3 tuning. The obsolete unaligned
+1-bit fast-kernel tail was not replayed because upstream now requires aligned
+fast dispatch; the fork instead tests matching host/kernel alignment directly.
+Changes stay scoped to their bit width, group size, quantization mode, and
+backend so stock 2-bit and wider models keep their existing paths.
 
 The current pin also lets an MLXFast custom Metal kernel explicitly request
 the core quantized helper headers. The source marker
 `MLX_INCLUDE_FP_QUANTIZED_HEADERS` exposes the NVFP4 helpers, while
 `MLX_INCLUDE_AFFINE_QUANTIZED_HEADERS` exposes the affine helpers. Kernels
-without either marker compile from the unchanged default header set. The
-embedded MLX core revision is `9bee51623d5a34806821e0f414fae293f90dda19`;
-the mlx-swift revision pinned by mere.run is
-`a9485c38b82b8e0cee76e8f1f5a3e5bf6f36d543`.
+without either marker compile from the unchanged default header set. The NAX
+attention and gather-tile optimizations now live in MLX core source, so
+regenerating mlx-swift's AOT sources reproduces them instead of depending on
+generated-file-only commits.
+
+## Refresh procedure
+
+Refresh the dependency chain from the bottom up and publish it in the same
+order:
+
+1. Record immutable upstream cutoffs for both repositories and classify every
+   fork-only commit as replay, replace with upstream, or drop with a regression
+   test. Rebase the MLX core fork first.
+2. Build an installable MLX wheel from the rebased core, run the full core gate,
+   and exercise every owned quantization mode on its actual backend. Do not
+   treat source compilation as runtime proof.
+3. Update mlx-swift's MLX submodule to the reviewed core revision, regenerate
+   AOT sources, regenerate a second time to prove the tree is idempotent, and
+   run the full Xcode test plan so the Metal shader bundle is present.
+4. Publish the reviewed core revision, then pin that immutable revision from
+   mlx-swift and publish the reviewed Swift revision. Never make mere.run depend
+   on an unpushed or floating dependency ref.
+5. Pin the immutable mlx-swift revision in `Package.swift` and
+   `Package.resolved`, rebuild the vendored Metal library, and update all three
+   provenance fields: Swift revision, core version, and generated-source hash.
+6. Run `./scripts/check.sh`, followed by both supported runtime gates:
+   `MERERUN_RUN_E2E=core ./scripts/check.sh` and
+   `MERERUN_RUN_E2E=installed ./scripts/check.sh`. Include a real generation
+   smoke for any model family implicated by the changed stream, quantization,
+   or kernel paths.
+7. Open dependency-ordered draft pull requests (MLX, mlx-swift, mere.run), link
+   them explicitly, and merge only after the downstream pin and platform CI are
+   green against the exact advertised SHAs.
+
+Perform this audit at least once per upstream minor release, and sooner for a
+security fix or a correctness/performance change in a path mere.run owns.
 
 A separate measured one-line compiled-call optimization exists on staging
 branches but is **deliberately not included in the pin**. The rest of this
@@ -75,8 +114,8 @@ architecture exercises it" is past the threshold to hold it back.
    *independent* compiled functions (and new shapes of shared ones) from
    multiple threads. Repeated calls to a single closure — including the
    existing `MLXCompiledFunctionOverheadTests` micro-bench — cannot catch
-   this class. (Prerequisite: fix the `default.metallib` packaging issue that
-   currently blocks Metal-backed concurrency tests in the test bundle.)
+   this class. Run it through Xcode, which builds the Metal shader bundle;
+   command-line SwiftPM alone cannot build that bundle.
 
 Do **not** upstream or re-pin the lock removal alone.
 

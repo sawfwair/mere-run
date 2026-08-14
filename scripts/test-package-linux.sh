@@ -50,6 +50,7 @@ if [[ "${1:-}" == "__print-env" ]]; then
   printf 'MERERUN_CUDA_CCCL_INCLUDE_PATH=%s\n' "${MERERUN_CUDA_CCCL_INCLUDE_PATH:-}"
   printf 'MERERUN_MLX_CUDA_JIT_INCLUDE_PATH=%s\n' "${MERERUN_MLX_CUDA_JIT_INCLUDE_PATH:-}"
   printf 'CPATH=%s\n' "${CPATH:-}"
+  printf 'LD_LIBRARY_PATH=%s\n' "${LD_LIBRARY_PATH:-}"
   exit 0
 fi
 echo "mere.run package fixture"
@@ -129,7 +130,9 @@ fi
 
 cuda_home_fixture="$fixture_root/cuda-13.0"
 cuda_cccl_fixture="$cuda_home_fixture/targets/sbsa-linux/include/cccl"
-mkdir -p "$cuda_cccl_fixture/cuda/std"
+cuda_lib64_fixture="$cuda_home_fixture/lib64"
+cuda_sbsa_lib_fixture="$cuda_home_fixture/targets/sbsa-linux/lib"
+mkdir -p "$cuda_cccl_fixture/cuda/std" "$cuda_lib64_fixture" "$cuda_sbsa_lib_fixture"
 wrapper_env_output="$(CUDA_HOME="$cuda_home_fixture" "$payload_dir/mere.run" __print-env)"
 if ! grep -q "^MERERUN_CUDA_CCCL_INCLUDE_PATH=$cuda_cccl_fixture$" <<<"$wrapper_env_output"; then
   echo "[test-package-linux] launcher did not export the target-specific CUDA CCCL include root:" >&2
@@ -180,6 +183,13 @@ fi
 if ! grep -q "$cuda_payload_dir/include" <<<"$cuda_wrapper_env_output" ||
    ! grep -q "$cuda_cccl_fixture" <<<"$cuda_wrapper_env_output"; then
   echo "[test-package-linux] launcher CPATH did not include both MLX JIT and CUDA CCCL headers:" >&2
+  printf '%s\n' "$cuda_wrapper_env_output" >&2
+  exit 1
+fi
+if ! grep -q "^LD_LIBRARY_PATH=$cuda_payload_dir/lib" <<<"$cuda_wrapper_env_output" ||
+   ! grep -q "$cuda_lib64_fixture" <<<"$cuda_wrapper_env_output" ||
+   ! grep -q "$cuda_sbsa_lib_fixture" <<<"$cuda_wrapper_env_output"; then
+  echo "[test-package-linux] CUDA launcher did not add both generic and SBSA toolkit libraries to LD_LIBRARY_PATH:" >&2
   printf '%s\n' "$cuda_wrapper_env_output" >&2
   exit 1
 fi

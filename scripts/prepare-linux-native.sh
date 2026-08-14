@@ -885,6 +885,7 @@ mlx_swift_cuda_link_flags() {
   local local_openblas_root="$native_root/deps/apt-root"
   local cudnn_library_path="${CUDNN_LIBRARY_PATH:-}"
   local cuda_library_path="${CUDA_LIBRARY_PATH:-}"
+  local cuda_library_paths=()
   local cuda_stub_library_path="${CUDA_STUB_LIBRARY_PATH:-}"
   local flags=()
 
@@ -931,11 +932,13 @@ mlx_swift_cuda_link_flags() {
       fi
     done
   fi
-  if [[ -z "$cuda_library_path" ]]; then
+  if [[ -n "$cuda_library_path" ]]; then
+    cuda_library_paths+=("$cuda_library_path")
+  else
     local cuda_library_candidates=()
     local cuda_root
     while IFS= read -r cuda_root; do
-      cuda_library_candidates+=("$cuda_root/lib64")
+      cuda_library_candidates+=("$cuda_root/lib64" "$cuda_root/lib")
       local cuda_target
       for cuda_target in "${cuda_target_names[@]}"; do
         cuda_library_candidates+=("$cuda_root/targets/$cuda_target/lib")
@@ -943,13 +946,18 @@ mlx_swift_cuda_link_flags() {
     done < <(cuda_toolkit_root_candidates)
     for candidate in "${cuda_library_candidates[@]}"; do
       if [[ -f "$candidate/libcublasLt.so" || -f "$candidate/libnvrtc.so" || -f "$candidate/libcudart.so" ]]; then
-        cuda_library_path="$candidate"
-        break
+        cuda_library_paths+=("$candidate")
       fi
     done
   fi
-  if [[ -z "$cuda_stub_library_path" &&
-        ( -z "$cuda_library_path" || ! -f "$cuda_library_path/libcuda.so" ) ]]; then
+  local cuda_driver_link_available=0
+  for candidate in "${cuda_library_paths[@]}"; do
+    if [[ -f "$candidate/libcuda.so" ]]; then
+      cuda_driver_link_available=1
+      break
+    fi
+  done
+  if [[ -z "$cuda_stub_library_path" && "$cuda_driver_link_available" != "1" ]]; then
     local cuda_stub_candidates=()
     local cuda_root
     while IFS= read -r cuda_root; do
@@ -966,13 +974,13 @@ mlx_swift_cuda_link_flags() {
       fi
     done
   fi
-  if [[ -n "$cuda_library_path" ]]; then
-    flags+=("-L" "$cuda_library_path")
-    if [[ "$(basename "$cuda_library_path")" != "stubs" ]]; then
-      flags+=("-Xlinker" "-rpath" "-Xlinker" "$cuda_library_path")
+  for candidate in "${cuda_library_paths[@]}"; do
+    flags+=("-L" "$candidate")
+    if [[ "$(basename "$candidate")" != "stubs" ]]; then
+      flags+=("-Xlinker" "-rpath" "-Xlinker" "$candidate")
     fi
-  fi
-  if [[ -n "$cuda_stub_library_path" && "$cuda_stub_library_path" != "$cuda_library_path" ]]; then
+  done
+  if [[ -n "$cuda_stub_library_path" ]]; then
     flags+=("-L" "$cuda_stub_library_path")
   fi
   if [[ -d /usr/lib/$deb_multiarch ]]; then
