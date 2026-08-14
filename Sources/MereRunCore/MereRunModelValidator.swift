@@ -648,7 +648,9 @@ public enum MereRunModelValidator {
             return .liquid
         }
         if modelId == ModelResolver.ModelID.q36Nano.rawValue
-            || modelId == ModelResolver.ModelID.q36NanoGGUF.rawValue {
+            || modelId == ModelResolver.ModelID.q36NanoGGUF.rawValue
+            || modelId == ModelResolver.ModelID.q38TwentySevenB.rawValue
+            || modelId == ModelResolver.ModelID.q38TwentySevenB4Bit.rawValue {
             return .qwen
         }
         return nil

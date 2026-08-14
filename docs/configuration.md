@@ -461,18 +461,25 @@ Useful for locating whether decode is CPU-, schedule-, or GPU-bound.
 
 ### `MERERUN_Q35_MTP_SPECULATION`
 
-Controls the Qwen-family MTP path used by `text-chat-q36-nano`. Set this to
+Controls the Qwen-family MTP path used by `text-chat-q36-nano` and
+the `vision-chat-q38-27b` BF16 and 4-bit lanes. Set this to
 `1`, `true`, `yes`, or `on` to force consideration when the effective context
 window is large enough; set it to `0`, `false`, or `no` to disable MTP. Any other
-value, including unset, uses the adaptive long-context threshold.
+value, including unset, uses the model-specific policy. Qwen3.8's dense head is
+embedded in the BF16 checkpoint and mounted from the pinned official final shard
+for `vision-chat-q38-27b-4bit`. Both are opt-in because multi-token verification
+can diverge from serial greedy decode; Qwen3.6 hybrid MoE retains its adaptive
+default.
 
 The `Q35` name is an internal compatibility prefix for the Qwen-family runtime;
-the public managed model id is `text-chat-q36-nano`.
+the public managed model ids retain their Qwen release names.
 
 ### `MERERUN_Q35_MTP_MIN_PROMPT_TOKENS`
 
-Minimum effective prompt length before Qwen-family MTP is considered. Defaults
-to `6144`, and the effective request context must also be at least this large.
+Minimum effective prompt length before Qwen-family MTP is considered. Hybrid
+MoE models default to `6144`; an explicitly enabled dense embedded head defaults
+to `0`. The effective request context must also be at least the selected
+threshold.
 
 ### `MERERUN_Q35_MTP_BLOCK_SIZE`
 

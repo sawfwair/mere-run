@@ -43,6 +43,8 @@ help in the repository gate.
 - `text-chat-laguna-xs-2-1` (managed Poolside Laguna XS 2.1 33B-A3B NVFP4 target)
 - `text-chat-nemotron-35-lightning` (managed NVIDIA Nemotron 3.5 Lightning 30B-A3B NVFP4 target plus DSpark)
 - `text-chat-q36-nano`
+- `vision-chat-q38-27b` (managed official Qwen3.8 27B BF16 vision-language snapshot)
+- `vision-chat-q38-27b-4bit` (managed MLX 4-bit target plus pinned official MTP shard)
 - `text-chat-bonsai-27b-1bit` (managed packed 1-bit dense Qwen3.6 27B vision/reasoning snapshot)
 - `text-chat-bonsai-27b-2bit` (managed packed 2-bit ternary dense Qwen3.6 27B vision/reasoning snapshot)
 - `text-chat-lfm25-2.6b-4bit` (managed LiquidAI LFM2.5 2.6B dense MLX 4-bit snapshot)
@@ -260,6 +262,46 @@ its model-specific quantized KV path; `text-chat-gemma4-turbo` already defaults
 to a smaller 4-bit TurboQuant cache, so forcing affine 8-bit can increase that
 model's KV residency. `default` restores the engine/model/server default rather
 than promising full precision.
+
+`vision-chat-q38-27b` is the official dense Qwen3.8 27B BF16 checkpoint. Pull
+it explicitly before use because the pinned snapshot is 55.59 GB:
+
+```bash
+swift run mere.run model pull vision-chat-q38-27b
+swift run mere.run text chat \
+  --model vision-chat-q38-27b \
+  --image ./diagram.png \
+  --prompt "Explain this diagram and verify every label."
+```
+
+The lane uses the published 262,144-token context, thinking default,
+temperature 1.0, top-p 0.95, top-k 20, both generation stop tokens, and the
+Qwen3.8 image sizing floor. The checkpoint also contains video understanding
+weights, but the current native command accepts text and local images only. Its
+embedded dense MTP head can be loaded from the official shards with
+`MERERUN_Q35_MTP_SPECULATION=1`. This materially accelerates greedy decode, but
+is experimental: BF16 multi-token verification can choose a different greedy
+path from serial target decode. The default, sampled, and JSON-constrained paths
+retain target-only decode.
+
+For the lower-residency lane, pull the separate 4-bit model ID:
+
+```bash
+swift run mere.run model pull vision-chat-q38-27b-4bit
+swift run mere.run text chat \
+  --model vision-chat-q38-27b-4bit \
+  --prompt "Implement a bounded async work queue in Swift."
+```
+
+This installs a pinned 4-bit/group-64 MLX target and Qwen's pinned final BF16
+shard under `mtp/`, totaling 19.47 GB. On the measured M4 Max coding slice,
+target-only warm decode reached about 26.5 tok/s versus 8.8 tok/s for BF16;
+explicit MTP reached 37.8–43.8 tok/s across the three short cases. All cases
+passed. On a deterministic 24-task stride through the official HumanEval set,
+target-only and explicit MTP both passed 20/24 with the same four failures, but
+one failing case generated 174 tokens with MTP versus 177 target-only. MTP also
+changed a thinking-mode token trajectory, so it remains explicitly opt-in and
+is disabled for sampled and JSON-constrained generation.
 
 `text-chat-bonsai-27b-1bit` and `text-chat-bonsai-27b-2bit` install the pinned
 5.13 GB binary and 8.52 GB ternary Prism ML snapshots. They run packed low-bit

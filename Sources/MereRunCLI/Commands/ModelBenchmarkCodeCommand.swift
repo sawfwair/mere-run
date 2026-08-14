@@ -257,7 +257,7 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
         guard let spec = ManagedModelCatalog.spec(for: modelID) else {
             return CodeBenchmarkModelResult.missing(model: modelID, reason: "Unknown model id.")
         }
-        guard spec.category == .textCode else {
+        guard Self.supportsCodingBenchmark(spec) else {
             return CodeBenchmarkModelResult.missing(model: modelID, reason: "Model is not a text-code model.")
         }
         guard let installedURL = ManagedModelResolver.resolveInstalledModel(id: modelID) else {
@@ -344,7 +344,7 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
             do {
                 let response = try await generate(request)
                 let generationSeconds = Date().timeIntervalSince(generationStart)
-                let candidate = task.candidateProgram(from: response.response)
+                let candidate = task.candidateProgram(from: Self.scoredCodeResponse(response))
                 let execution = try CodeExecutionSandbox.runPython(
                     program: task.testProgram(candidateProgram: candidate),
                     python: python,
@@ -420,6 +420,15 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
     private static func requiresMLXBundle(modelID: String) -> Bool {
         LagunaResources.handles(modelSpec: modelID)
             || ManagedModelCatalog.spec(for: modelID)?.validationKind == .q35
+    }
+
+    static func supportsCodingBenchmark(_ spec: ManagedModelSpec) -> Bool {
+        spec.category == .textCode
+            || Q35Resources.isQ38ModelId(spec.id)
+    }
+
+    static func scoredCodeResponse(_ response: ChatResponse) -> String {
+        ChatReasoningMarkup.splitThinkBlocks(in: response.response).visibleContent
     }
 
     static let systemPrompt = """

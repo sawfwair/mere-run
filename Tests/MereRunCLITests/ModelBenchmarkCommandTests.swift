@@ -191,6 +191,35 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         ])
     }
 
+    func testCodeBenchmarkAcceptsQ38CodeGenerationLane() throws {
+        for modelID in [
+            Q35Resources.q38TwentySevenBModelId,
+            Q35Resources.q38TwentySevenB4BitModelId,
+        ] {
+            let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: modelID))
+            XCTAssertEqual(spec.category, .visionChat)
+            XCTAssertTrue(ModelBenchmarkCode.supportsCodingBenchmark(spec))
+        }
+    }
+
+    func testCodeBenchmarkScoresOnlyVisibleCodeAfterImplicitThinkingPrefix() {
+        let response = ChatResponse(
+            response: """
+            from typing? The prompt already imports it. Return only code.
+            </think>
+
+            def has_close_elements(numbers, threshold):
+                return False
+            """,
+            tokensGenerated: 32
+        )
+
+        let scored = ModelBenchmarkCode.scoredCodeResponse(response)
+
+        XCTAssertFalse(scored.contains("from typing?"))
+        XCTAssertTrue(scored.hasPrefix("def has_close_elements"))
+    }
+
     func testCodeBenchmarkParsesOverrides() throws {
         let cmd = try ModelBenchmarkCode.parse([
             "--models", "text-agent-ornith-35b-mlx,text-code-north-mini",

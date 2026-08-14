@@ -215,6 +215,51 @@ final class MereRunModelManifestTests: MereRunCoreTestCase {
         )
     }
 
+    func testQ38TwentySevenBTemplatePinsOfficialBF16Checkpoint() throws {
+        let manifest = MereRunModelManifest.template(
+            for: .q38TwentySevenB,
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+
+        XCTAssertEqual(manifest.id, Q35Resources.q38TwentySevenBModelId)
+        XCTAssertEqual(manifest.engine, .qwen35HybridMoE)
+        XCTAssertEqual(manifest.family, .qwen)
+        XCTAssertEqual(manifest.precision, .bf16)
+        XCTAssertNil(manifest.quantization)
+        XCTAssertEqual(Set(manifest.supports ?? []), Set([.chat, .codeGeneration, .visionChat]))
+        XCTAssertEqual(
+            manifest.upstreamRepoId,
+            "\(Q35Resources.q38TwentySevenBUpstreamRepoId)@\(Q35Resources.q38TwentySevenBUpstreamRevision)"
+        )
+    }
+
+    func testQ38TwentySevenB4BitTemplateRecordsTargetAndMTPSources() throws {
+        let manifest = MereRunModelManifest.template(
+            for: .q38TwentySevenB4Bit,
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+
+        XCTAssertEqual(manifest.id, Q35Resources.q38TwentySevenB4BitModelId)
+        XCTAssertEqual(manifest.engine, .qwen35HybridMoE)
+        XCTAssertEqual(manifest.family, .qwen)
+        XCTAssertEqual(manifest.precision, .int4)
+        XCTAssertEqual(manifest.quantization?.bits, 4)
+        XCTAssertEqual(manifest.quantization?.groupSize, 64)
+        XCTAssertEqual(manifest.quantization?.scheme, "mlx-affine")
+        XCTAssertEqual(Set(manifest.supports ?? []), Set([.chat, .codeGeneration, .visionChat]))
+        XCTAssertEqual(
+            manifest.upstreamRepoId,
+            "\(Q35Resources.q38TwentySevenB4BitUpstreamRepoId)"
+                + "@\(Q35Resources.q38TwentySevenB4BitUpstreamRevision)"
+        )
+        XCTAssertEqual(manifest.sources?.count, 2)
+        XCTAssertEqual(manifest.sources?.first?.role, "primary")
+        XCTAssertEqual(manifest.sources?.first?.repository, Q35Resources.q38TwentySevenB4BitUpstreamRepoId)
+        XCTAssertEqual(manifest.sources?.last?.role, "component")
+        XCTAssertEqual(manifest.sources?.last?.repository, Q35Resources.q38TwentySevenBUpstreamRepoId)
+        XCTAssertEqual(manifest.sources?.last?.destinationPath, Q35Resources.q38MTPComponentPath)
+    }
+
     func testFalconPerceptionTemplateHasExpectedMetadata() throws {
         let manifest = MereRunModelManifest.template(for: .visionGroundFalconPerception, createdAt: Date(timeIntervalSince1970: 0))
 

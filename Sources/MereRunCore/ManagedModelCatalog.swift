@@ -1653,6 +1653,56 @@ public enum ManagedModelCatalog {
             apiProfile: .q36(contextWindow: Q35Resources.defaultContextLength)
         ),
         ManagedModelSpec(
+            id: Q35Resources.q38TwentySevenBModelId,
+            category: .visionChat,
+            installShape: .directoryRoot,
+            hubFallback: Q35Resources.profile(for: Q35Resources.q38TwentySevenBModelId)?.hubFallbackConfig,
+            upstreamRepoId: Q35Resources.q38TwentySevenBUpstreamRepoId,
+            upstreamRevision: Q35Resources.q38TwentySevenBUpstreamRevision,
+            validationKind: .q35,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: Q35Resources.q38TwentySevenBEstimatedDownloadBytes,
+            defaultCLICommands: [
+                "text chat",
+                "api serve",
+                "model benchmark chat",
+                "model benchmark code",
+                "model benchmark vlm",
+            ],
+            apiProfile: .q36(contextWindow: Q35Resources.q38TwentySevenBContextLength)
+        ),
+        ManagedModelSpec(
+            id: Q35Resources.q38TwentySevenB4BitModelId,
+            category: .visionChat,
+            installShape: .directoryRoot,
+            hubFallback: Q35Resources.profile(
+                for: Q35Resources.q38TwentySevenB4BitModelId
+            )?.hubFallbackConfig,
+            mountedHubFallbacks: [
+                MountedHubFallbackConfig(
+                    destinationPath: Q35Resources.q38MTPComponentPath,
+                    hubFallback: HubFallbackConfig(
+                        repoId: Q35Resources.q38TwentySevenBUpstreamRepoId,
+                        revision: Q35Resources.q38TwentySevenBUpstreamRevision,
+                        patterns: Q35Resources.q38MTPComponentSnapshotPatterns
+                    )
+                ),
+            ],
+            upstreamRepoId: Q35Resources.q38TwentySevenB4BitUpstreamRepoId,
+            upstreamRevision: Q35Resources.q38TwentySevenB4BitUpstreamRevision,
+            validationKind: .q35,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: Q35Resources.q38TwentySevenB4BitEstimatedDownloadBytes,
+            defaultCLICommands: [
+                "text chat",
+                "api serve",
+                "model benchmark chat",
+                "model benchmark code",
+                "model benchmark vlm",
+            ],
+            apiProfile: .q36(contextWindow: Q35Resources.q38TwentySevenBContextLength)
+        ),
+        ManagedModelSpec(
             id: Q35Resources.bonsai27B1BitModelId,
             category: .textChat,
             installShape: .directoryRoot,
@@ -3513,7 +3563,12 @@ public extension ManagedModelSpec {
         case .lagunaDFlash:
             return LagunaResources.missingDFlashFiles(rootURL: rootURL, fileManager: fileManager)
         case .q35:
-            return Q35Resources(rootURL: rootURL).validate(fileManager: fileManager)
+            let resources = Q35Resources(rootURL: rootURL)
+            var missing = resources.validate(fileManager: fileManager)
+            if id == Q35Resources.q38TwentySevenB4BitModelId {
+                missing.append(contentsOf: resources.validateQ38MTPComponent(fileManager: fileManager))
+            }
+            return missing
         case .lfm2:
             return LFM2Resources(rootURL: rootURL).validate(
                 fileManager: fileManager,

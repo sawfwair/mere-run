@@ -30,7 +30,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case lfm2 = "lfm2"
         /// Poolside Laguna family via the native Swift runtime.
         case laguna = "laguna"
-        /// Q35 family (Qwen3.5 hybrid MoE + hybrid attention).
+        /// Qwen3.5-family dense or MoE models with hybrid attention.
         case qwen35HybridMoE = "qwen3.5-hybrid-moe"
         /// SAM image segmentation family.
         case samSegmentation = "sam-segmentation"
@@ -1084,6 +1084,37 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.chat],
                 components: q35TextComponents,
                 upstreamRepoId: "\(Q35Resources.q36NanoUpstreamRepoId)@\(Q35Resources.q36NanoUpstreamRevision)",
+                createdAt: createdAt
+            )
+        case .q38TwentySevenB:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .qwen35HybridMoE,
+                family: .qwen,
+                tier: .latest,
+                variant: .standard,
+                precision: .bf16,
+                defaults: nil,
+                supports: [.chat, .codeGeneration, .visionChat],
+                components: q35TextComponents,
+                upstreamRepoId: "\(Q35Resources.q38TwentySevenBUpstreamRepoId)"
+                    + "@\(Q35Resources.q38TwentySevenBUpstreamRevision)",
+                createdAt: createdAt
+            )
+        case .q38TwentySevenB4Bit:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .qwen35HybridMoE,
+                family: .qwen,
+                tier: .latest,
+                variant: .standard,
+                precision: .int4,
+                quantization: Quantization(bits: 4, groupSize: 64, scheme: "mlx-affine"),
+                defaults: nil,
+                supports: [.chat, .codeGeneration, .visionChat],
+                components: q35TextComponents,
+                upstreamRepoId: "\(Q35Resources.q38TwentySevenB4BitUpstreamRepoId)"
+                    + "@\(Q35Resources.q38TwentySevenB4BitUpstreamRevision)",
                 createdAt: createdAt
             )
         case .bonsai27B1Bit:

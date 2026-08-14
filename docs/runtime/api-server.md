@@ -485,6 +485,12 @@ Engine compatibility:
   support with strict mode disabled. JSON-object mode forces thinking off and
   uses token-level constrained serial decoding; it does not implement
   `json_schema`.
+- `vision-chat-q38-27b` and `vision-chat-q38-27b-4bit`: use the same native
+  Qwen-family serving engine for the official dense Qwen3.8 27B BF16 checkpoint
+  or the pinned MLX 4-bit conversion. Both accept function tools, one
+  local/base64 image content part per message, and structured JSON output; both
+  default to thinking and the published 1.0/0.95/20 sampling. Pull the 55.59 GB
+  BF16 lane or 19.47 GB 4-bit-plus-MTP lane explicitly before serving it.
 - `text-chat-bonsai-27b-1bit` and `text-chat-bonsai-27b-2bit`: use the same
   native Qwen-family serving engine for Prism ML's dense packed binary and
   ternary 27B checkpoints. They accept function tools and one local/base64
