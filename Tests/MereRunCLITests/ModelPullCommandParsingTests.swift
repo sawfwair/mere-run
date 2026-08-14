@@ -332,6 +332,23 @@ final class ModelPullCommandParsingTests: XCTestCase {
         XCTAssertEqual(decoded.setupAgent?.id, "text-chat-gemma4-12b-4bit")
     }
 
+    func testModelCapabilitiesIncludeCheckpointAndPublisherMetadata() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: "image-zimage-nano"))
+        let machine = MereRunMachineProfile(
+            physicalMemoryBytes: 32 * 1_073_741_824,
+            processorName: "M1 Max",
+            isAppleSiliconMac: true
+        )
+        let model = ModelCapabilitiesModel(
+            ManagedModelCapabilityCatalog.support(for: spec, on: machine)
+        )
+
+        XCTAssertEqual(model.estimatedDownloadBytes, spec.estimatedDownloadBytes)
+        XCTAssertEqual(model.sourceRepository, "filipstrand/Z-Image-Turbo-mflux-4bit")
+        XCTAssertEqual(model.publisher, "filipstrand")
+        XCTAssertEqual(model.minimumUnifiedMemoryGB, 12)
+    }
+
     func testInstallValidationErrorIncludesRetryWithoutUsage() {
         let error = ModelPullInstallError(
             modelID: "image-klein-max",

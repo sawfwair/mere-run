@@ -6,6 +6,12 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Studio
+
+- enriched the Models browser with estimated checkpoint size, minimum unified
+  memory, source publisher, current-machine compatibility, and determinate
+  download progress from the existing CLI progress stream.
+
 ### Agents and API
 
 - updated the Pi integration for the current `earendil-works/pi` packages and

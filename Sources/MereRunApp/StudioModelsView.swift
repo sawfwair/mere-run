@@ -12,6 +12,15 @@ struct StudioModelInventoryRow: Identifiable, Equatable {
     let status: String
     let size: String
     let usageTerms: StudioModelUsageTerms?
+    let title: String?
+    let summary: String?
+    let estimatedDownloadBytes: Int64?
+    let minimumUnifiedMemoryGB: Int?
+    let recommendedUnifiedMemoryGB: Int?
+    let supported: Bool?
+    let supportReasons: [String]
+    let sourceRepository: String?
+    let publisher: String?
     let referencedBytes: Int64?
     let reclaimableBytes: Int64?
     let sharedBytes: Int64?
@@ -23,6 +32,15 @@ struct StudioModelInventoryRow: Identifiable, Equatable {
         status: String,
         size: String,
         usageTerms: StudioModelUsageTerms?,
+        title: String? = nil,
+        summary: String? = nil,
+        estimatedDownloadBytes: Int64? = nil,
+        minimumUnifiedMemoryGB: Int? = nil,
+        recommendedUnifiedMemoryGB: Int? = nil,
+        supported: Bool? = nil,
+        supportReasons: [String] = [],
+        sourceRepository: String? = nil,
+        publisher: String? = nil,
         referencedBytes: Int64? = nil,
         reclaimableBytes: Int64? = nil,
         sharedBytes: Int64? = nil,
@@ -33,6 +51,15 @@ struct StudioModelInventoryRow: Identifiable, Equatable {
         self.status = status
         self.size = size
         self.usageTerms = usageTerms
+        self.title = title
+        self.summary = summary
+        self.estimatedDownloadBytes = estimatedDownloadBytes
+        self.minimumUnifiedMemoryGB = minimumUnifiedMemoryGB
+        self.recommendedUnifiedMemoryGB = recommendedUnifiedMemoryGB
+        self.supported = supported
+        self.supportReasons = supportReasons
+        self.sourceRepository = sourceRepository
+        self.publisher = publisher
         self.referencedBytes = referencedBytes
         self.reclaimableBytes = reclaimableBytes
         self.sharedBytes = sharedBytes
@@ -41,6 +68,69 @@ struct StudioModelInventoryRow: Identifiable, Equatable {
 
     var isInstalled: Bool {
         status.lowercased() == "installed"
+    }
+
+    var displayedSize: String {
+        guard !isInstalled, let estimatedDownloadBytes else {
+            return size
+        }
+        return ByteCountFormatter.string(fromByteCount: estimatedDownloadBytes, countStyle: .file)
+    }
+}
+
+struct StudioModelCatalogMetadata: Decodable, Equatable {
+    let id: String
+    let title: String
+    let summary: String
+    let minimumUnifiedMemoryGB: Int
+    let recommendedUnifiedMemoryGB: Int
+    let supported: Bool
+    let reasons: [String]
+    let estimatedDownloadBytes: Int64?
+    let sourceRepository: String?
+    let publisher: String?
+}
+
+private struct StudioModelCapabilitiesOutput: Decodable {
+    let models: [StudioModelCatalogMetadata]
+}
+
+enum StudioModelCatalogParser {
+    static func metadataByID(from output: String) -> [String: StudioModelCatalogMetadata] {
+        guard let data = output.data(using: .utf8),
+              let payload = try? JSONDecoder().decode(StudioModelCapabilitiesOutput.self, from: data) else {
+            return [:]
+        }
+        return Dictionary(uniqueKeysWithValues: payload.models.map { ($0.id, $0) })
+    }
+
+    static func applying(
+        _ metadataByID: [String: StudioModelCatalogMetadata],
+        to rows: [StudioModelInventoryRow]
+    ) -> [StudioModelInventoryRow] {
+        rows.map { row in
+            guard let metadata = metadataByID[row.id] else { return row }
+            return StudioModelInventoryRow(
+                id: row.id,
+                category: row.category,
+                status: row.status,
+                size: row.size,
+                usageTerms: row.usageTerms,
+                title: metadata.title,
+                summary: metadata.summary,
+                estimatedDownloadBytes: metadata.estimatedDownloadBytes,
+                minimumUnifiedMemoryGB: metadata.minimumUnifiedMemoryGB,
+                recommendedUnifiedMemoryGB: metadata.recommendedUnifiedMemoryGB,
+                supported: metadata.supported,
+                supportReasons: metadata.reasons,
+                sourceRepository: metadata.sourceRepository,
+                publisher: metadata.publisher,
+                referencedBytes: row.referencedBytes,
+                reclaimableBytes: row.reclaimableBytes,
+                sharedBytes: row.sharedBytes,
+                externalBytes: row.externalBytes
+            )
+        }
     }
 }
 
@@ -56,6 +146,16 @@ enum StudioModelDownloadCommand {
     static func appendingOutput(_ chunk: String, to current: String, limit: Int = 32 * 1024) -> String {
         let normalized = chunk.replacingOccurrences(of: "\r", with: "\n")
         return String((current + normalized).suffix(limit))
+    }
+
+    static func latestProgress(in output: String) -> StudioRunProgress? {
+        output
+            .replacingOccurrences(of: "\r", with: "\n")
+            .components(separatedBy: .newlines)
+            .reversed()
+            .lazy
+            .compactMap(StudioProgressParser.parse)
+            .first
     }
 }
 
@@ -246,6 +346,8 @@ struct StudioModelsSheet: View {
     @State private var loadingRuntimeID: String?
     @State private var downloadingID: String?
     @State private var downloadCommandID: UUID?
+    @State private var downloadProgress: StudioRunProgress?
+    @State private var downloadProgressOutput = ""
     @State private var cancellingDownloadID: String?
     @State private var removingID: String?
     @State private var optimizingID: String?
@@ -539,11 +641,24 @@ struct StudioModelsSheet: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(row.id)
+                    Text(row.title ?? row.id)
                         .font(.system(size: 18, weight: .semibold))
-                    Text("\(row.category) · \(row.status) · \(row.size) referenced")
+                    Text(modelStatusLine(row))
                         .font(MereRunTheme.captionFont)
                         .foregroundStyle(MereRunTheme.textMuted)
+                    if let summary = row.summary {
+                        Text(summary)
+                            .font(MereRunTheme.bodyFont)
+                            .foregroundStyle(MereRunTheme.textSecondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    modelFacts(row)
+                    if row.supported == false, !row.supportReasons.isEmpty {
+                        Text(row.supportReasons.joined(separator: " "))
+                            .font(MereRunTheme.captionFont)
+                            .foregroundStyle(MereRunTheme.yellow)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
                     if let usageTerms = row.usageTerms {
                         Text("Third-party usage terms · acceptance required for new downloads")
                             .font(MereRunTheme.captionFont)
@@ -577,6 +692,37 @@ struct StudioModelsSheet: View {
                 missingModelActions(row)
             }
         }
+    }
+
+    private func modelStatusLine(_ row: StudioModelInventoryRow) -> String {
+        let sizeDescription = row.isInstalled
+            ? "\(row.size) referenced"
+            : "\(row.displayedSize) estimated download"
+        return "\(row.id) · \(row.category) · \(row.status) · \(sizeDescription)"
+    }
+
+    private func modelFacts(_ row: StudioModelInventoryRow) -> some View {
+        HStack(spacing: 12) {
+            if let estimatedDownloadBytes = row.estimatedDownloadBytes {
+                Label(
+                    "Checkpoint \(Self.bytes(estimatedDownloadBytes))",
+                    systemImage: "externaldrive"
+                )
+            }
+            if let minimumUnifiedMemoryGB = row.minimumUnifiedMemoryGB {
+                Label("\(minimumUnifiedMemoryGB) GB RAM minimum", systemImage: "memorychip")
+            }
+            if let sourceRepository = row.sourceRepository,
+               let sourceURL = URL(string: "https://huggingface.co/\(sourceRepository)") {
+                Link(destination: sourceURL) {
+                    Label("By \(row.publisher ?? sourceRepository)", systemImage: "person.crop.circle")
+                }
+            } else if let publisher = row.publisher {
+                Label("By \(publisher)", systemImage: "person.crop.circle")
+            }
+        }
+        .font(MereRunTheme.captionFont)
+        .foregroundStyle(MereRunTheme.textMuted)
     }
 
     private func installedModelActions(_ row: StudioModelInventoryRow) -> some View {
@@ -699,10 +845,31 @@ struct StudioModelsSheet: View {
 
                 Spacer()
 
-                if row.size != "—" {
-                    Text(row.size)
+                if row.displayedSize != "—" {
+                    Text("\(row.displayedSize) download")
                         .font(MereRunTheme.monoFont)
                         .foregroundStyle(MereRunTheme.textMuted)
+                }
+            }
+
+            if downloadingID == row.id, let progress = downloadProgress {
+                VStack(alignment: .leading, spacing: 5) {
+                    if let fraction = progress.fractionCompleted {
+                        ProgressView(value: fraction)
+                            .progressViewStyle(.linear)
+                    } else {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+                    HStack(spacing: 6) {
+                        Text(progress.label)
+                        if let detail = progress.detail {
+                            Text("· \(detail)")
+                        }
+                    }
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.textMuted)
+                    .lineLimit(1)
                 }
             }
 
@@ -822,6 +989,8 @@ struct StudioModelsSheet: View {
         let modelID = row.id
         downloadingID = modelID
         cancellingDownloadID = nil
+        downloadProgress = nil
+        downloadProgressOutput = ""
         let commandID = UUID()
         downloadCommandID = commandID
         statusMessage = "Downloading \(modelID)…"
@@ -834,6 +1003,13 @@ struct StudioModelsSheet: View {
             ),
             commandID: commandID,
             onOutput: { chunk in
+                downloadProgressOutput = StudioModelDownloadCommand.appendingOutput(
+                    chunk,
+                    to: downloadProgressOutput
+                )
+                if let progress = StudioModelDownloadCommand.latestProgress(in: downloadProgressOutput) {
+                    downloadProgress = progress
+                }
                 guard selectedID == modelID else { return }
                 detailText = StudioModelDownloadCommand.appendingOutput(chunk, to: detailText)
             }
@@ -843,6 +1019,8 @@ struct StudioModelsSheet: View {
         downloadCommandID = nil
         downloadingID = nil
         cancellingDownloadID = nil
+        downloadProgress = nil
+        downloadProgressOutput = ""
 
         if selectedID == modelID, !result.outputText.isEmpty {
             detailText = result.outputText
@@ -905,6 +1083,15 @@ struct StudioModelsSheet: View {
         }
 
         rows = StudioModelInventoryParser.rows(from: result.stdout)
+        let capabilitiesResult = await controller.utilityCommandResult(
+            args: ["model", "capabilities", "--all", "--json"]
+        )
+        if capabilitiesResult.exitCode == 0 {
+            rows = StudioModelCatalogParser.applying(
+                StudioModelCatalogParser.metadataByID(from: capabilitiesResult.stdout),
+                to: rows
+            )
+        }
         let storageResult = await controller.utilityCommandResult(args: ["model", "storage", "--json"])
         if storageResult.exitCode == 0,
            let data = storageResult.stdout.data(using: .utf8),
@@ -1157,6 +1344,15 @@ struct StudioModelsSheet: View {
                 status: row.status,
                 size: Self.bytes(usage.referencedBytes),
                 usageTerms: row.usageTerms,
+                title: row.title,
+                summary: row.summary,
+                estimatedDownloadBytes: row.estimatedDownloadBytes,
+                minimumUnifiedMemoryGB: row.minimumUnifiedMemoryGB,
+                recommendedUnifiedMemoryGB: row.recommendedUnifiedMemoryGB,
+                supported: row.supported,
+                supportReasons: row.supportReasons,
+                sourceRepository: row.sourceRepository,
+                publisher: row.publisher,
                 referencedBytes: usage.referencedBytes,
                 reclaimableBytes: usage.reclaimableBytes,
                 sharedBytes: usage.sharedBytes,
@@ -1265,7 +1461,7 @@ private struct StudioModelListRow: View {
 
                 Spacer(minLength: 8)
 
-                Text(row.size)
+                Text(row.displayedSize)
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundStyle(MereRunTheme.textMuted)
             }
@@ -1287,7 +1483,7 @@ private struct StudioModelListRow: View {
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .animation(MereRunTheme.Motion.quick, value: hovering)
-        .accessibilityLabel("\(row.id), \(row.category), \(row.status), \(row.size)")
+        .accessibilityLabel("\(row.id), \(row.category), \(row.status), \(row.displayedSize)")
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 

@@ -216,6 +216,9 @@ struct ModelCapabilitiesModel: Codable, Equatable {
     let recommendedForSetup: Bool
     let managedDownloadAvailable: Bool
     let download: String
+    let estimatedDownloadBytes: Int64?
+    let sourceRepository: String?
+    let publisher: String?
     let commands: [String]
 
     init(_ report: ManagedModelSupportReport) {
@@ -230,6 +233,11 @@ struct ModelCapabilitiesModel: Codable, Equatable {
         recommendedForSetup = report.descriptor.isRecommendedForSetup
         managedDownloadAvailable = report.spec.hasAnyManagedDownloadSource()
         download = report.spec.hubFallback == nil ? "local-path" : "hugging-face"
+        estimatedDownloadBytes = report.spec.estimatedDownloadBytes
+        sourceRepository = report.spec.upstreamRepoId
+            ?? report.spec.hubFallback?.repoId
+            ?? report.spec.mountedHubFallbacks.first?.hubFallback.repoId
+        publisher = sourceRepository?.split(separator: "/", maxSplits: 1).first.map(String.init)
         commands = report.spec.defaultCLICommands
     }
 }
