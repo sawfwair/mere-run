@@ -238,6 +238,7 @@ mere.run model pull text-chat-gemma4-12b-4bit
 mere.run adapter list
 mere.run adapter pull mere-platform-assistant
 mere.run adapter pull scail2-lightx2v-4step
+mere.run adapter pull minimax-h3-lightx2v-ref2v-4step-v0.1
 mere.run text chat \
   --model text-chat-gemma4-12b-4bit \
   --lora mere-platform-assistant \

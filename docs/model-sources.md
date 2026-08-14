@@ -1082,6 +1082,18 @@ The runtime binds each filename to the upstream recipe so the 8-step release
 uses shifts 12/3 and alpha 8, while the 1344x768 four-step release uses shifts
 6/3 and alpha 128.
 
+The Ref2VA-specific `minimax-h3-lightx2v-ref2v-4step-v0.1` adapter pins the
+non-ComfyUI BF16 checkpoint
+`minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors` at immutable repository
+revision `5d1d4829fe614c1b93fcfd9cc7718e9ba71f73e1`. The catalog verifies its
+exact 1,383,677,768-byte length and SHA-256
+`9e642fc8749c74f8da5e2382877ab5c7aa37b9a73b7fd0d6d457bd1b3cb1ae99`.
+The checkpoint contains 312 BF16 PEFT pairs at rank 128. mere.run applies the
+published alpha 8 and video/audio shifts 12/3, expands the managed INT8 Ref2VA
+transformer to resident BF16, and fuses the adapter once before its four
+denoise evaluations. The adapter is Apache-2.0; the required base model remains
+governed by the MiniMax-H3 Community License.
+
 ### `video-wan22-ti2v-5b-mlx`
 
 The native Wan2.2 TI2V-5B model root is:

@@ -42,6 +42,14 @@ struct AdapterCommandTests {
         #expect(command.target == ManagedAdapterCatalog.miniMaxH3LightX2VFourStepID)
     }
 
+    @Test("MiniMax-H3 LightX2V Ref2VA adapter pull parses its canonical id")
+    func parsesMiniMaxH3LightX2VRef2VAPull() throws {
+        let command = try AdapterPull.parse([
+            ManagedAdapterCatalog.miniMaxH3LightX2VRef2VFourStepV01ID,
+        ])
+        #expect(command.target == ManagedAdapterCatalog.miniMaxH3LightX2VRef2VFourStepV01ID)
+    }
+
     @Test("Gated LTX-2.5 DFR adapter pull requires explicit terms acceptance")
     func parsesLTX25DFRAdapterPull() throws {
         let command = try AdapterPull.parse([

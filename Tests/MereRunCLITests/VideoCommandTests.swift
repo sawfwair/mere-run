@@ -817,6 +817,37 @@ final class VideoCommandTests: XCTestCase {
         )
     }
 
+    func testMiniMaxH3LightX2VRef2VAPreflightSelectsPublishedRecipe() throws {
+        let reference = FileManager.default.temporaryDirectory
+            .appendingPathComponent("h3-ref2va-turbo-\(UUID().uuidString).png")
+        XCTAssertTrue(FileManager.default.createFile(atPath: reference.path, contents: Data()))
+        defer { try? FileManager.default.removeItem(at: reference) }
+        let command = try VideoGenerate.parse([
+            "preserve the reference subject in a cinematic tracking shot",
+            "--model", ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue,
+            "--reference", "image:\(reference.path)",
+            "--h3-adapter", ManagedAdapterCatalog.miniMaxH3LightX2VRef2VFourStepV01ID,
+            "--h3-weight-mode", "resident-bf16",
+        ])
+        let envelope = command.makePreflightEnvelope(
+            outputURL: makeTempOutput(name: "h3-ref2va-turbo.mp4"),
+            fileManager: .default,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.result.plan.resolvedSteps, 5)
+        XCTAssertEqual(envelope.result.plan.h3WeightMode, "resident-bf16")
+        XCTAssertFalse(envelope.diagnostics.contains { $0.id == "h3_adapter_task_mismatch" })
+        XCTAssertFalse(envelope.diagnostics.contains { $0.id == "h3_adapter_base_model_mismatch" })
+        XCTAssertFalse(envelope.diagnostics.contains { $0.id == "h3_ref2va_adapter_without_references" })
+        XCTAssertEqual(
+            envelope.result.inputs.adapter?.path,
+            ManagedAdapterCatalog.spec(
+                for: ManagedAdapterCatalog.miniMaxH3LightX2VRef2VFourStepV01ID
+            )?.installedFileURL().path
+        )
+    }
+
     func testVideoGenerateSeparatesCheckpointQualityFromOutputMode() throws {
         let finalVideo = try VideoGenerate.parse([
             "a cinematic final shot",

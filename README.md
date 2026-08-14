@@ -859,12 +859,15 @@ swift run mere.run video generate \
 
 # Managed 8-bit Ref2VA preserves reference order semantically
 swift run mere.run model pull video-minimax-h3-ref2va-mlx --accept-model-license
+swift run mere.run adapter pull minimax-h3-lightx2v-ref2v-4step-v0.1
 swift run mere.run video generate \
   "keep the subject, borrow the camera move, and follow the vocal rhythm" \
   --model video-minimax-h3-ref2va-mlx \
   --reference image:./subject.png \
   --reference video:./camera-and-soundtrack.mp4 \
   --reference audio:./voice.wav \
+  --h3-adapter minimax-h3-lightx2v-ref2v-4step-v0.1 \
+  --h3-weight-mode resident-bf16 \
   --num-frames 124 \
   --output ./referenced-h3.mp4
 

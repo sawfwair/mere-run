@@ -119,6 +119,7 @@ mere.run adapter pull minimax-h3-turbo-4step
 mere.run adapter pull minimax-h3-lightx2v-4step
 mere.run adapter pull minimax-h3-lightx2v-8step-v1
 mere.run adapter pull minimax-h3-lightx2v-4step-v1-768p
+mere.run adapter pull minimax-h3-lightx2v-ref2v-4step-v0.1
 mere.run video generate "a superhero waits beneath an umbrella at a bus stop" \
   --model video-minimax-h3-fl2va-bf16-mlx \
   --width 960 --height 544 \
@@ -136,6 +137,8 @@ mere.run video generate "preserve the person and use the reference motion" \
   --model video-minimax-h3-ref2va-mlx \
   --reference image:./person.png \
   --reference video:./motion.mp4 \
+  --h3-adapter minimax-h3-lightx2v-ref2v-4step-v0.1 \
+  --h3-weight-mode resident-bf16 \
   --output ./ref2va.mp4
 
 # Long FL2VA or Ref2VA shots keep the H3 runtime resident and condition each
@@ -165,7 +168,7 @@ converting, using, or redistributing any artifact. Passing
 `--accept-model-license` and continuing with the download confirms that you
 accept those terms and agree to comply with them.
 
-The `minimax-h3-turbo-4step` EMA-850 adapter and all three LightX2V releases
+The `minimax-h3-turbo-4step` EMA-850 adapter and all four LightX2V releases
 are checksum-pinned separately.
 EMA-850 remains an activation-space adapter because its AdaLN deltas
 participate in schedule-cache construction. LightX2V has no AdaLN targets, so
@@ -176,9 +179,15 @@ points, which are four model evaluations. LightX2V v1.0 8-step defaults to nine
 schedule points (eight evaluations), accepts the upstream four-evaluation
 fallback, and uses video/audio shifts 12/3 with alpha 8. LightX2V v1.0 768p
 uses five schedule points, shifts 6/3, alpha 128, and is intended for a
-1344x768 canvas. They were trained for FL2VA, require the BF16 base
-model, and cannot be combined with Ref2VA references or H3 denoise-step cache
-reuse. Omit `--steps` to select the pinned recipe. `--h3-acceleration quality`
+1344x768 canvas. Those four adapters were trained for FL2VA, require the BF16
+FL2VA base model, and cannot be combined with Ref2VA references. The separate
+`minimax-h3-lightx2v-ref2v-4step-v0.1` release targets Ref2VA, uses five schedule
+points with shifts 12/3 and alpha 8, and requires ordered references. mere.run
+expands the managed INT8 Ref2VA transformer to resident BF16 before fusing the
+adapter, so pass `--h3-weight-mode resident-bf16` unless automatic admission is
+known to qualify. Forced quantized execution is rejected. No H3 adapter can use
+denoise-step cache reuse. Omit `--steps` to select the pinned recipe.
+`--h3-acceleration quality`
 keeps the fully dense path; `balanced` and `maximum` may use attention-only dynamic
 sparsity while still executing all 50 blocks on every model evaluation.
 Strength `1.0` applies an adapter's released weights exactly; the strength

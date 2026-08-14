@@ -433,6 +433,38 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         XCTAssertEqual(fourStep.adapterInferenceRecipe?.lightX2VAlpha, 128)
     }
 
+    func testLightX2VRef2VARecipeSelectsPublishedTaskStepsShiftsAndAlpha() throws {
+        let adapterURL = URL(
+            fileURLWithPath: "/tmp/minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors"
+        )
+        let options = try MiniMaxH3GenerationOptions(
+            prompt: "preserve the reference subject",
+            width: 960,
+            height: 544,
+            numFrames: 124,
+            adapterURL: adapterURL,
+            references: [
+                MiniMaxH3ReferenceInput(
+                    kind: .image,
+                    url: URL(fileURLWithPath: "/tmp/reference.png")
+                ),
+            ]
+        )
+
+        XCTAssertEqual(options.steps, 5)
+        XCTAssertEqual(options.adapterInferenceRecipe?.task, .ref2va)
+        XCTAssertEqual(options.adapterInferenceRecipe?.videoFlowShift, 12)
+        XCTAssertEqual(options.adapterInferenceRecipe?.audioFlowShift, 3)
+        XCTAssertEqual(options.adapterInferenceRecipe?.lightX2VAlpha, 8)
+        XCTAssertThrowsError(try MiniMaxH3GenerationOptions(
+            prompt: "missing references",
+            width: 960,
+            height: 544,
+            numFrames: 124,
+            adapterURL: adapterURL
+        ))
+    }
+
     func testVelocityReusePolicyPreservesFirstAndFinalDenoiseEvaluations() {
         let policy = MiniMaxH3VelocityReusePolicy(interval: 2)
 

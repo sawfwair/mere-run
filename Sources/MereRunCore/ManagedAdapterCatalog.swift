@@ -89,6 +89,8 @@ public enum ManagedAdapterCatalog {
     public static let miniMaxH3LightX2VEightStepV1ID = "minimax-h3-lightx2v-8step-v1"
     public static let miniMaxH3LightX2VFourStepV1_768pID = "minimax-h3-lightx2v-4step-v1-768p"
     public static let miniMaxH3LightX2VV1Revision = "e6346777701aa2b64d42ed058cdd71ae00e7cd52"
+    public static let miniMaxH3LightX2VRef2VFourStepV01ID = "minimax-h3-lightx2v-ref2v-4step-v0.1"
+    public static let miniMaxH3LightX2VRef2VFourStepV01Revision = "5d1d4829fe614c1b93fcfd9cc7718e9ba71f73e1"
     public static let ltx25PixelSpatialUpscalerID = "ltx25-pixel-spatial-upscaler-x2"
     public static let ltx25PixelSpatialUpscalerRevision = "74c4e68ee7dd99f3997d5a1bb1a3784941822222"
 
@@ -216,6 +218,27 @@ public enum ManagedAdapterCatalog {
                 filename: "minimax_h3_fl2v_turbo_4step_v1.0_768p_bf16.safetensors",
                 byteCount: 1_383_677_808,
                 sha256: "1bdabc2e9fce20b1db563b96bcf6e46adcad4c1964f423676436bf266cc7416c"
+            )
+        ),
+        ManagedAdapterSpec(
+            id: miniMaxH3LightX2VRef2VFourStepV01ID,
+            title: "MiniMax-H3 Ref2VA Turbo 4-step v0.1 (LightX2V)",
+            version: String(miniMaxH3LightX2VRef2VFourStepV01Revision.prefix(12)),
+            summary: "LightX2V four-evaluation PEFT LoRA for native MiniMax-H3 Ref2VA.",
+            baseModelID: ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue,
+            format: MiniMaxH3TurboAdapter.lightX2VFormat,
+            license: "Apache-2.0 (adapter); MiniMax-H3 Community License (base model)",
+            upstreamRevision: miniMaxH3LightX2VRef2VFourStepV01Revision,
+            releaseManifestURL: URL(
+                string: "https://huggingface.co/lightx2v/Minimax-h3-Turbo/commit/\(miniMaxH3LightX2VRef2VFourStepV01Revision)"
+            )!,
+            downloadURL: URL(
+                string: "https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/\(miniMaxH3LightX2VRef2VFourStepV01Revision)/minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors?download=true"
+            )!,
+            artifact: ModelArtifactPin(
+                filename: "minimax_h3_ref2v_turbo_4step_v0.1_bf16.safetensors",
+                byteCount: 1_383_677_768,
+                sha256: "9e642fc8749c74f8da5e2382877ab5c7aa37b9a73b7fd0d6d457bd1b3cb1ae99"
             )
         ),
         ManagedAdapterSpec(

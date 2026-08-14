@@ -1167,13 +1167,28 @@ struct VideoGenerate: AsyncParsableCommand {
             }
             let h3Resources = MiniMaxH3Resources(rootURL: resolvedRootURL)
             let h3Configuration = try h3Resources.loadConfiguration()
-            if h3Adapter != nil, !h3Resources.usesShardedBF16Transformer {
-                throw ValidationError("--h3-adapter currently requires the MiniMax-H3 BF16 FL2VA model.")
-            }
+            let h3AdapterBaseModelID = h3Configuration.task == MiniMaxH3TurboAdapter.Task.ref2va.rawValue
+                ? ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue
+                : ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue
             let resolvedH3Adapter = try ManagedAdapterArgumentResolver.resolve(
                 h3Adapter,
-                baseModelID: ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue
+                baseModelID: h3AdapterBaseModelID
             ).map { URL(fileURLWithPath: $0).standardizedFileURL }
+            let h3AdapterRecipe = resolvedH3Adapter.map(MiniMaxH3TurboAdapter.inferenceRecipe(for:))
+            if let h3AdapterRecipe,
+               !h3AdapterRecipe.supports(task: h3Configuration.task) {
+                throw ValidationError(
+                    "MiniMax-H3 adapter \(h3AdapterRecipe.name) requires \(h3AdapterRecipe.task.rawValue), not \(h3Configuration.task)."
+                )
+            }
+            if h3AdapterRecipe?.task == .fl2va, !h3Resources.usesShardedBF16Transformer {
+                throw ValidationError("MiniMax-H3 FL2VA adapters require the BF16 FL2VA model.")
+            }
+            if h3AdapterRecipe?.task == .ref2va, h3WeightMode == .quantized {
+                throw ValidationError(
+                    "MiniMax-H3 Ref2VA Turbo requires resident BF16 weights; use --h3-weight-mode resident-bf16."
+                )
+            }
             let parsedReferences = try parseMiniMaxH3References()
             let parsedFrameInputs = try parseMiniMaxH3FrameInputs()
             if h3Configuration.task == "fl2va", !parsedReferences.isEmpty {
