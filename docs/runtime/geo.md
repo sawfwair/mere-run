@@ -1,7 +1,7 @@
 # Geospatial Runtime
 
 `mere.run geo` is a local-first inference boundary for Earth-observation and
-humanitarian workflows. It is not an OPTIC-specific surface: any authorized
+humanitarian workflows. Any 
 workflow can prepare the documented tensors, run the native model locally, and
 carry the resulting candidates or embeddings into its own evidence process.
 
