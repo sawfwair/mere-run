@@ -519,6 +519,54 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(Set(response.data.map(\.owned_by)), Set(["mere.run"]))
     }
 
+    func testChatModelContractDescribesDeepSeekForHarnesses() throws {
+        let model = APIServerContract.chatModel(
+            id: DeepseekV4FlashResources.defaultModelId,
+            name: "DeepSeek V4 Flash",
+            profile: .deepseekV4Flash(),
+            contextWindow: 32_768,
+            maximumOutputTokens: 32_768,
+            createdAt: Date(timeIntervalSince1970: 123)
+        )
+
+        XCTAssertEqual(model.task, "chat.completions")
+        XCTAssertEqual(model.reasoning, true)
+        XCTAssertEqual(model.thinking_levels, ["off", "minimal", "low", "medium", "high", "xhigh"])
+        XCTAssertEqual(model.tool_call, true)
+        XCTAssertEqual(model.modalities, OpenAIModelModalities(input: ["text", "image"], output: ["text"]))
+        XCTAssertEqual(model.limit, OpenAIModelLimit(context: 32_768, output: 32_768))
+        XCTAssertEqual(model.openai_compat?.supports_developer_role, false)
+        XCTAssertEqual(model.openai_compat?.supports_reasoning_effort, true)
+        XCTAssertEqual(model.openai_compat?.supports_finish_reason, true)
+        XCTAssertEqual(model.openai_compat?.max_tokens_field, "max_tokens")
+        XCTAssertEqual(model.openai_compat?.thinking_format, "deepseek")
+        XCTAssertEqual(model.openai_compat?.thinking_level_map, ["minimal": "low"])
+        XCTAssertEqual(model.openai_compat?.requires_reasoning_content_on_assistant_messages, true)
+
+        let json = try XCTUnwrap(String(data: JSONEncoder().encode(model), encoding: .utf8))
+        XCTAssertTrue(json.contains("\"tool_call\":true"))
+        XCTAssertTrue(json.contains("\"thinking_levels\""))
+        XCTAssertTrue(json.contains("\"openai_compat\""))
+    }
+
+    func testCompanionModelContractLabelsNonChatTasks() throws {
+        let profile = try XCTUnwrap(
+            ManagedModelCatalog.apiProfile(for: ModelResolver.ModelID.qwen3Embedding.rawValue)
+        )
+        let embedding = APIServerContract.companionModel(
+            id: ModelResolver.ModelID.qwen3Embedding.rawValue,
+            profile: profile,
+            createdAt: Date(timeIntervalSince1970: 123)
+        )
+
+        XCTAssertEqual(embedding.task, "embeddings")
+        XCTAssertEqual(embedding.tool_call, false)
+        XCTAssertEqual(
+            embedding.modalities,
+            OpenAIModelModalities(input: ["text"], output: ["embedding"])
+        )
+    }
+
     func testEmbeddingRequestDecodesStringInputAndUnknownFields() throws {
         let data = """
         {
@@ -2588,6 +2636,24 @@ final class APIServeCommandTests: XCTestCase {
                     || message.contains("thinking")
             )
         }
+    }
+
+    func testMuseReasoningEffortMapsToNativeStrength() throws {
+        let request = OpenAIChatRequest(
+            model: MuseGlimmerResources.modelId,
+            messages: [OpenAIChatMessage(role: "user", content: "hello")],
+            reasoning_effort: "high"
+        )
+
+        let chatRequest = try APIServerContract.chatRequest(
+            from: request,
+            fallbackLoraPath: nil,
+            contextSize: 4_096,
+            capabilities: RuntimeServingEngine.textChatMuseGlimmer.openAICompatibility,
+            servedModelID: MuseGlimmerResources.modelId
+        )
+
+        XCTAssertEqual(chatRequest.reasoningEffort, 0.8)
     }
 
     func testStreamingUsageOptionHonorsCapabilities() throws {

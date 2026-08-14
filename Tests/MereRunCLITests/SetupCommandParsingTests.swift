@@ -47,10 +47,12 @@ final class SetupCommandParsingTests: XCTestCase {
             )
         )
 
-        let providerModel = SetupAgentRuntime.providerModel(for: recommendation)
+        let providerModel = try SetupAgentRuntime.providerModel(for: recommendation)
 
-        XCTAssertEqual(providerModel.id, AgentModelResources.qwen35NineBModelId)
+        XCTAssertEqual(providerModel.id, Q35Resources.ornith9BModelId)
         XCTAssertNotEqual(providerModel.id, CodeGenResources.defaultModelId)
+        XCTAssertTrue(providerModel.reasoning)
+        XCTAssertTrue(providerModel.toolCall)
     }
 
     func testDeepseekProviderMatchesServedContextAndStartupTimeout() throws {
@@ -66,7 +68,7 @@ final class SetupCommandParsingTests: XCTestCase {
         )
 
         let runtime = try SetupAgentRuntime.runtime(for: recommendation)
-        let providerModel = SetupAgentRuntime.providerModel(for: recommendation)
+        let providerModel = try SetupAgentRuntime.providerModel(for: recommendation)
 
         XCTAssertEqual(providerModel.contextWindow, DeepseekV4FlashResources.defaultContextLength)
         XCTAssertEqual(providerModel.maxTokens, DeepseekV4FlashResources.defaultContextLength)
@@ -89,13 +91,13 @@ final class SetupCommandParsingTests: XCTestCase {
                 .first { $0.id == NorthMiniCodeResources.modelId }
         )
 
-        let providerModel = SetupAgentRuntime.providerModel(for: recommendation)
+        let providerModel = try SetupAgentRuntime.providerModel(for: recommendation)
 
         XCTAssertEqual(providerModel.id, NorthMiniCodeResources.modelId)
         XCTAssertEqual(providerModel.contextWindow, NorthMiniCodeResources.runtimeContextLength)
         XCTAssertEqual(providerModel.maxTokens, NorthMiniCodeResources.maxOutputTokens)
         XCTAssertFalse(providerModel.reasoning)
-        XCTAssertTrue(recommendation.isStartableByMereRun)
+        XCTAssertFalse(recommendation.isStartableByMereRun)
         XCTAssertEqual(recommendation.servingEngine, .textCode)
     }
 
@@ -112,7 +114,7 @@ final class SetupCommandParsingTests: XCTestCase {
         )
 
         let runtime = try SetupAgentRuntime.runtime(for: recommendation)
-        let providerModel = SetupAgentRuntime.providerModel(for: recommendation)
+        let providerModel = try SetupAgentRuntime.providerModel(for: recommendation)
 
         XCTAssertEqual(runtime.engine, .textChatGemma4)
         XCTAssertEqual(providerModel.id, Gemma4Resources.twelveB4BitModelId)
@@ -134,13 +136,13 @@ final class SetupCommandParsingTests: XCTestCase {
                 .first { $0.id == Ornith35BCodeResources.modelId }
         )
 
-        let providerModel = SetupAgentRuntime.providerModel(for: recommendation)
+        let providerModel = try SetupAgentRuntime.providerModel(for: recommendation)
 
         XCTAssertEqual(providerModel.id, Ornith35BCodeResources.modelId)
         XCTAssertEqual(providerModel.contextWindow, Ornith35BCodeResources.runtimeContextLength)
         XCTAssertEqual(providerModel.maxTokens, Ornith35BCodeResources.maxOutputTokens)
         XCTAssertFalse(providerModel.reasoning)
-        XCTAssertTrue(recommendation.isStartableByMereRun)
+        XCTAssertFalse(recommendation.isStartableByMereRun)
         XCTAssertEqual(recommendation.servingEngine, .textCode)
     }
 
@@ -158,11 +160,13 @@ final class SetupCommandParsingTests: XCTestCase {
         )
 
         let runtime = try SetupAgentRuntime.runtime(for: recommendation)
-        let providerModel = SetupAgentRuntime.providerModel(for: recommendation)
+        let providerModel = try SetupAgentRuntime.providerModel(for: recommendation)
 
         XCTAssertEqual(runtime.engine, .textChatQ36)
         XCTAssertEqual(providerModel.id, Q35Resources.ornith9BModelId)
         XCTAssertEqual(providerModel.contextWindow, Q35Resources.defaultContextLength)
+        XCTAssertTrue(providerModel.reasoning)
+        XCTAssertTrue(providerModel.toolCall)
         XCTAssertTrue(recommendation.isStartableByMereRun)
         XCTAssertEqual(recommendation.servingEngine, .textChatQ35)
     }
@@ -173,15 +177,17 @@ final class SetupCommandParsingTests: XCTestCase {
         defer {
             try? FileManager.default.removeItem(at: home)
         }
+        let profile = try XCTUnwrap(
+            ManagedModelCatalog.apiProfile(for: Q35Resources.ornith9BModelId)
+        )
 
         let extensionURL = try PiAgentIntegration.writeLocalProviderExtension(
             host: "127.0.0.1",
             port: 8080,
             model: PiProviderModel(
-                id: AgentModelResources.qwen35NineBModelId,
-                name: "Qwen3.5 9B",
-                contextWindow: 32_768,
-                maxTokens: 4_096
+                id: Q35Resources.ornith9BModelId,
+                name: "Ornith 9B",
+                profile: profile
             ),
             homeDirectory: home,
             persistConfiguration: false
@@ -194,6 +200,15 @@ final class SetupCommandParsingTests: XCTestCase {
                 .path
         )
         XCTAssertTrue(FileManager.default.fileExists(atPath: extensionURL.path))
+        let extensionSource = try String(contentsOf: extensionURL, encoding: .utf8)
+        XCTAssertTrue(extensionSource.contains("@earendil-works/pi-coding-agent"))
+        XCTAssertTrue(extensionSource.contains("createProvider"))
+        XCTAssertTrue(extensionSource.contains("openAICompletionsApi"))
+        XCTAssertTrue(extensionSource.contains("const initialModels = await discoverModels"))
+        XCTAssertTrue(extensionSource.contains("fetchModels"))
+        XCTAssertTrue(extensionSource.contains("entry.tool_call === true"))
+        XCTAssertTrue(extensionSource.contains("input: [\"text\", \"image\"]"))
+        XCTAssertTrue(extensionSource.contains("supportsFinishReason: true"))
     }
 
     func testAgentStartModelIsOptional() throws {
@@ -293,7 +308,7 @@ final class SetupCommandParsingTests: XCTestCase {
         XCTAssertTrue(prompt.contains("Recommended setup-agent tier for this Mac"))
         XCTAssertTrue(prompt.contains("Selected setup-agent is recommended: true"))
         XCTAssertTrue(prompt.contains("DeepSeek V4 Flash is the preferred premier setup-agent tier"))
-        XCTAssertTrue(prompt.contains("smaller Qwen agents are alternatives"))
+        XCTAssertTrue(prompt.contains("smaller tool-capable native agents are alternatives"))
         XCTAssertTrue(prompt.contains("mere.run model capabilities --recommended"))
         XCTAssertTrue(prompt.contains("mere.run model list"))
         XCTAssertTrue(prompt.contains("Do not run demo scripts"))
@@ -301,7 +316,7 @@ final class SetupCommandParsingTests: XCTestCase {
         XCTAssertTrue(prompt.contains("Never pass `--allow-unsupported`"))
     }
 
-    func testAgentStartPrefersInstalledStartableAgentModel() throws {
+    func testAgentStartDoesNotTreatTextOnlyModelAsPiStartable() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("mere-run-agent-start-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -324,7 +339,7 @@ final class SetupCommandParsingTests: XCTestCase {
             )
         )
 
-        XCTAssertEqual(recommendation?.id, AgentModelResources.qwen35NineBModelId)
+        XCTAssertNil(recommendation)
     }
 
     func testAgentStartPrefersInstalledDeepseekOverQwenCode() throws {

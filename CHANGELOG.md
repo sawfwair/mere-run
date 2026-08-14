@@ -6,6 +6,20 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Agents and API
+
+- updated the Pi integration for the current `earendil-works/pi` packages and
+  release feed, registered mere.run through Pi's native dynamic-provider API,
+  and added a reusable package under `integrations/pi`.
+- made `/v1/models` self-describing with additive task, tool-call, reasoning,
+  modality, context/output-limit, and OpenAI-dialect metadata. Pi now exposes
+  only models whose running API lane supports tools, maps model-specific
+  thinking levels, and honors Muse reasoning effort.
+- moved served-model capabilities into typed managed-model catalog profiles.
+  API request validation, `/v1/models`, agent eligibility, and Pi's offline
+  fallback now consume the same source of truth, with runtime limit settings
+  applied only when describing the active server.
+
 ### Runtime
 
 - refreshed the owned MLX and mlx-swift forks onto current upstream cutoffs,

@@ -233,8 +233,8 @@ swift run mere.run setup
 
 The setup command offers a local Mere agent powered by Pi, a bring-your-own-agent
 handoff prompt for Claude/Codex, or manual commands. Use
-`--mode agent --agent-model small` to select the Qwen3.5 9B GGUF setup agent
-explicitly. On 96 GB+ Apple Silicon Macs, the hardware-tier and premier agent
+`--mode agent --agent-model small` to select the tool-capable native Ornith 9B
+setup agent explicitly. On 96 GB+ Apple Silicon Macs, the hardware-tier and premier agent
 path selects DeepSeek V4 Flash as the preferred setup agent. On Linux, install
 or provide Pi separately with `--pi-path` or PATH before using `--start`.
 

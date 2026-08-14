@@ -2831,15 +2831,15 @@ swift run mere.run setup --mode manual
 
 Agent model choices:
 
-- `small`: `text-agent-qwen35-9b`, a Qwen3.5 9B Q4 GGUF setup agent for 16 GB machines
-- `tier`: the best supported local tier for this machine, currently 9B, Qwen3.6 nano, Qwen3-Coder Next, or DeepSeek V4 Flash on 96 GB+ machines
+- `small`: `text-agent-ornith-9b`, a tool-capable native OptiQ setup agent for 16 GB machines
+- `tier`: the best supported tool-capable local tier for this machine, currently Ornith 9B, Gemma 4, Qwen3.6 nano on Linux, or DeepSeek V4 Flash on 96 GB+ machines
 - `premier`: `text-agent-deepseek-v4-flash`, the preferred managed 96 GB+ setup-agent tier served by the bundled DS4 engine
 
 North Mini Code (`text-code-north-mini`) is available as a managed native GGUF
 coding model. It is pullable through `model pull`, can be served with
-`api serve --engine text-code --model text-code-north-mini`, and can be started
-through the Pi-backed `agent start` path like other `text-code` models once the
-installed llama.cpp runtime supports the `cohere2moe` architecture.
+`api serve --engine text-code --model text-code-north-mini`, and can be used
+for direct code sessions and evals. The `text-code` API lane rejects tool calls,
+so it is not exposed to Pi.
 
 Ornith (`text-agent-ornith-9b`) is available as an experimental native
 MLX/OptiQ coding-agent model. It uses the Qwen-family runtime, so serve it with
@@ -2871,7 +2871,6 @@ swift run mere.run agent onboard
 swift run mere.run agent onboard --pull-recommended --accept-model-license
 swift run mere.run agent onboard --install-pi --configure-pi
 swift run mere.run agent onboard --configure-pi --model text-agent-deepseek-v4-flash
-swift run mere.run agent onboard --configure-pi --model text-code-north-mini --port 8080
 swift run mere.run agent onboard --configure-pi --model text-agent-ornith-9b --port 8080
 ```
 
@@ -2893,7 +2892,7 @@ extension that the CLI will actually use.
 
 ### `mere.run agent install-pi`
 
-Install the latest `badlogic/pi-mono` release asset for the current macOS
+Install the latest `earendil-works/pi` release asset for the current macOS
 architecture into the mere.run application-support directory.
 
 ```bash
@@ -2902,9 +2901,9 @@ swift run mere.run agent install-pi
 
 ### `mere.run agent start`
 
-Start a local API server for a selected managed agent model and launch Pi
-against the `mere-run` provider. GGUF code models use `--engine text-code`,
-Qwen3.6 uses `--engine text-chat-q36`, and DeepSeek V4 Flash uses the DS4-backed
+Start a local API server for a selected tool-capable managed agent model and
+launch Pi against the native `mere-run` provider. Qwen-family models use a
+native chat engine and DeepSeek V4 Flash uses the DS4-backed
 `--engine text-chat-deepseek-v4-flash`. If `--model` is omitted, `agent start`
 uses the best installed startable setup agent first, then a valid persisted Pi
 provider model, then the current machine's startable hardware tier. On 96 GB+

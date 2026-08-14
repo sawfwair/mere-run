@@ -427,9 +427,19 @@ load/unload/settings endpoint. Sidecars still appear in `/v1/models` and in the
 `sidecars` object returned by `/runtime/status`.
 
 `GET /v1/models` returns installed API-servable chat managed IDs, configured
-aliases, and installed native sidecar model ids for embeddings, image, TTS, and
-ASR. Missing catalog models fail with an OpenAI-style error that tells the user
-to pull the model first.
+aliases, and installed native sidecars. In addition to the standard OpenAI
+fields, each entry can describe its `task`, `tool_call`, `reasoning`,
+`thinking_levels`, input/output `modalities`, context/output `limit`, and
+`openai_compat` dialect. Agent harnesses can therefore discover what the
+running server actually supports instead of inferring capabilities from a
+model name. Missing catalog models fail with an OpenAI-style error that tells
+the user to pull the model first.
+
+For managed models, these capabilities come from the typed API profile attached
+to the managed-model catalog entry. The runtime layer adds the request-facing
+ID or alias and applies configured context/output defaults to the reported
+limits. A server started from an explicit uncataloged path uses a conservative
+profile for its selected serving engine.
 
 ## OpenAI chat compatibility
 

@@ -196,7 +196,7 @@ struct Setup: AsyncParsableCommand {
         switch agentModel {
         case .small:
             print("  Unavailable.")
-            print("  Qwen3.5 9B setup agent requires at least 16 GB unified memory.")
+            print("  Ornith 1.0 9B setup agent requires at least 16 GB unified memory.")
         case .tier:
             print("  Unavailable.")
             print("  No local agent tier is supported on this machine.")
@@ -461,30 +461,26 @@ struct SetupAgentRuntime {
     }
 
     static func runtime(for recommendation: MereRunAgentModelRecommendation) throws -> SetupAgentRuntime {
+        guard recommendation.isStartableByMereRun else {
+            throw ValidationError(
+                "\(recommendation.displayName) cannot be used with Pi because its API lane does not support tool calls."
+            )
+        }
         guard let modelID = recommendation.managedModelID,
               let spec = ManagedModelCatalog.spec(for: modelID) else {
             throw ValidationError("\(recommendation.displayName) is not managed by mere.run yet.")
         }
-        let engine: APIEngine
-        switch recommendation.servingEngine {
-        case .textCode:
-            engine = .textCode
-        case .textChatGemma4:
-            engine = .textChatGemma4
-        case .textChatQ36:
-            engine = .textChatQ36
-        case .textChatQ35:
-            engine = .textChatQ36
-        case .deepseekV4Flash:
-            engine = .textChatDeepseekV4Flash
-        case .sourceConfigured:
-            throw ValidationError("\(recommendation.displayName) requires an external local model before it can be started.")
+        guard let runtimeServingEngine = spec.apiProfile?.servingEngine,
+              let engine = APIEngine(rawValue: runtimeServingEngine.rawValue) else {
+            throw ValidationError(
+                "\(recommendation.displayName) does not have a cataloged local serving engine."
+            )
         }
         return SetupAgentRuntime(
             recommendation: recommendation,
             spec: spec,
             engine: engine,
-            providerModel: providerModel(for: recommendation)
+            providerModel: try providerModel(for: recommendation)
         )
     }
 
@@ -495,32 +491,19 @@ struct SetupAgentRuntime {
         return try runtime(for: recommendation)
     }
 
-    static func providerModel(for recommendation: MereRunAgentModelRecommendation) -> PiProviderModel {
-        // DeepSeek V4 Flash has a specific Pi compat profile (DSML thinking
-        // format, reasoning effort, etc.) documented in the ds4 README.
-        if recommendation.servingEngine == .deepseekV4Flash {
-            return .deepseekV4Flash
+    static func providerModel(
+        for recommendation: MereRunAgentModelRecommendation
+    ) throws -> PiProviderModel {
+        guard let modelID = recommendation.managedModelID,
+              let profile = ManagedModelCatalog.apiProfile(for: modelID) else {
+            throw ValidationError(
+                "\(recommendation.displayName) does not have a cataloged API profile."
+            )
         }
-        return PiProviderModel(
+        return try PiProviderModel(
             id: recommendation.id,
             name: "\(recommendation.displayName) (mere.run)",
-            contextWindow: contextWindow(for: recommendation),
-            maxTokens: 4096
+            profile: profile
         )
-    }
-
-    private static func contextWindow(for recommendation: MereRunAgentModelRecommendation) -> Int {
-        switch recommendation.servingEngine {
-        case .textChatGemma4:
-            return Gemma4Resources.defaultContextLength
-        case .textChatQ36, .textChatQ35:
-            return Q35Resources.defaultContextLength
-        case .deepseekV4Flash:
-            return DeepseekV4FlashResources.defaultContextLength
-        case .sourceConfigured:
-            return 32768
-        case .textCode:
-            return 32768
-        }
     }
 }
