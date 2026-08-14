@@ -23,6 +23,8 @@ public final class QwenAttention: Module {
   @ModuleInfo(key: "q_norm") var qNorm: RMSNorm
   @ModuleInfo(key: "k_norm") var kNorm: RMSNorm
 
+  private var usesFusedProjections = false
+
   let rotaryEmb: Qwen3VLRotaryEmbedding?
   let legacyRotaryEmb: Qwen2VLRotaryEmbedding?
   let mropeSection: [Int]?
@@ -83,9 +85,25 @@ public final class QwenAttention: Module {
     let B = x.dim(0)
     let L = x.dim(1)
 
-    var queries = qProj(x)
-    var keys = kProj(x)
-    var values = vProj(x)
+    var queries: MLXArray
+    var keys: MLXArray
+    var values: MLXArray
+    if usesFusedProjections {
+      let queryRows = numAttentionHeads * headDim
+      let keyRows = numKeyValueHeads * headDim
+      let projections = MLX.split(
+        qProj(x),
+        indices: [queryRows, queryRows + keyRows],
+        axis: -1
+      )
+      queries = projections[0]
+      keys = projections[1]
+      values = projections[2]
+    } else {
+      queries = qProj(x)
+      keys = kProj(x)
+      values = vProj(x)
+    }
 
     if debug {
         eval(queries, keys, values)
@@ -191,12 +209,26 @@ public final class QwenAttention: Module {
     let shape = x.shape
     return expanded.reshaped(shape[0], shape[1] * repeats, shape[2], shape[3])
   }
+
+  func prepareFusedProjections() {
+    guard !usesFusedProjections else { return }
+    let fused = MLX.concatenated([qProj.weight, kProj.weight, vProj.weight], axis: 0)
+    MLX.eval(fused)
+    update(modules: ModuleChildren.unflattened([
+      ("q_proj", Linear(weight: fused, bias: nil)),
+      ("k_proj", Linear(weight: MLXArray.zeros([1, 1], dtype: fused.dtype), bias: nil)),
+      ("v_proj", Linear(weight: MLXArray.zeros([1, 1], dtype: fused.dtype), bias: nil)),
+    ]))
+    usesFusedProjections = true
+  }
 }
 
 public final class QwenMLP: Module {
   @ModuleInfo(key: "gate_proj") var gateProj: Linear
   @ModuleInfo(key: "down_proj") var downProj: Linear
   @ModuleInfo(key: "up_proj") var upProj: Linear
+
+  private var usesFusedProjections = false
 
   init(dimensions: Int, hiddenDimensions: Int) {
     self._gateProj.wrappedValue = Linear(dimensions, hiddenDimensions, bias: false)
@@ -209,8 +241,16 @@ public final class QwenMLP: Module {
         eval(x)
         print("[MLP] Input x: std=\(MLX.std(x.asType(.float32)).item(Float.self)), mean=\(MLX.mean(x.asType(.float32)).item(Float.self)), max=\(MLX.max(x).item(Float.self)), min=\(MLX.min(x).item(Float.self))")
     }
-    let gate = gateProj(x)
-    let up = upProj(x)
+    let gate: MLXArray
+    let up: MLXArray
+    if usesFusedProjections {
+      let parts = MLX.split(gateProj(x), parts: 2, axis: -1)
+      gate = parts[0]
+      up = parts[1]
+    } else {
+      gate = gateProj(x)
+      up = upProj(x)
+    }
     if debug {
         eval(gate, up)
         print("[MLP] gate dtype: \(gate.dtype), x dtype: \(x.dtype)")
@@ -234,6 +274,17 @@ public final class QwenMLP: Module {
         print("[MLP] After down_proj: std=\(MLX.std(out.asType(.float32)).item(Float.self))")
     }
     return out
+  }
+
+  func prepareFusedProjections() {
+    guard !usesFusedProjections else { return }
+    let fused = MLX.concatenated([gateProj.weight, upProj.weight], axis: 0)
+    MLX.eval(fused)
+    update(modules: ModuleChildren.unflattened([
+      ("gate_proj", Linear(weight: fused, bias: nil)),
+      ("up_proj", Linear(weight: MLXArray.zeros([1, 1], dtype: fused.dtype), bias: nil)),
+    ]))
+    usesFusedProjections = true
   }
 }
 
@@ -313,6 +364,14 @@ public final class QwenEncoder: Module {
     }
     self._norm.wrappedValue = RMSNorm(
       dimensions: configuration.hiddenSize, eps: configuration.rmsNormEps)
+  }
+
+  public func prepareFusedProjections() {
+    for layer in layers {
+      layer.selfAttention.prepareFusedProjections()
+      layer.mlp.prepareFusedProjections()
+    }
+    MLX.Memory.clearCache()
   }
 
   public func callAsFunction(

@@ -33,11 +33,13 @@ final class MusicServeAndExportTests: XCTestCase {
         let command = try MusicServe.parse([
             "--model", MiniMaxMusic3Resources.modelID,
             "--memory-mode", "resident",
+            "--performance-mode", "q4",
             "--port", "8091",
         ])
 
         XCTAssertEqual(command.model, MiniMaxMusic3Resources.modelID)
         XCTAssertEqual(command.miniMaxLoadingStrategy, .resident)
+        XCTAssertEqual(command.miniMaxPerformanceMode, .q4)
         XCTAssertEqual(command.port, 8_091)
     }
 
@@ -53,8 +55,10 @@ final class MusicServeAndExportTests: XCTestCase {
                   "response_format": "wav",
                   "seed": 7,
                   "max_new_tokens": 750,
+                  "min_new_tokens": 500,
                   "stream": false,
                   "audio_duration": 30,
+                  "minimum_audio_duration": 20,
                   "num_inference_steps": 24,
                   "guidance_scale": 1.7,
                   "sample_rate": 44100
@@ -64,7 +68,9 @@ final class MusicServeAndExportTests: XCTestCase {
         )
 
         XCTAssertEqual(request.maxNewTokens, 750)
+        XCTAssertEqual(request.minNewTokens, 500)
         XCTAssertEqual(request.audioDuration, 30)
+        XCTAssertEqual(request.minimumAudioDuration, 20)
         XCTAssertEqual(request.numInferenceSteps, 24)
         XCTAssertEqual(request.guidanceScale, 1.7)
         XCTAssertEqual(request.sampleRate, 44_100)

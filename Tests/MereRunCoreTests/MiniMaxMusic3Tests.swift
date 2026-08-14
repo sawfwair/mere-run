@@ -3,6 +3,82 @@ import XCTest
 @testable import MereRunCore
 
 final class MiniMaxMusic3Tests: MereRunCoreTestCase {
+    func testInstalledQuantizedSemanticLogitQuality() throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard environment["MERERUN_MINIMAX_MUSIC3_QUANTIZATION_E2E"] == "1",
+              let root = environment["MERERUN_MINIMAX_MUSIC3_MODEL_ROOT"]
+        else {
+            throw XCTSkip("set the MiniMax Music 3 model root and quantization E2E flag")
+        }
+        let resources = MiniMaxMusic3Resources(rootURL: URL(fileURLWithPath: root))
+        let prompt = MiniMaxMusic3Prompt.assemble(
+            caption: "128 BPM progressive deep house, rubbery sub bass, shuffled hats, glassy minor-seventh stabs.",
+            lyrics: "[Instrumental]"
+        )
+
+        func semanticLogits(_ mode: MiniMaxMusic3PerformanceMode) throws -> [Float] {
+            let models = try MiniMaxMusic3ModelLoader.loadAutoregressive(
+                from: resources,
+                performanceMode: mode
+            )
+            let conditional = models.tokenizer.encode(prompt, addSpecialTokens: false)
+            var unconditional = conditional
+            for index in 1..<(unconditional.count - 2) {
+                unconditional[index] = MiniMaxMusic3Prompt.audioCFGTokenID
+            }
+            let ids = MLXArray((conditional + unconditional).map(Int32.init))
+                .reshaped(2, conditional.count)
+            let hidden = models.languageModel.hidden(
+                embeddings: models.languageModel.embed(tokenIDs: ids),
+                cache: models.languageModel.makeCache(),
+                lastPositionOnly: true
+            ).squeezed(axis: 1)
+            let logits = models.languageModel.logits(hidden).asType(.float32)
+            MLX.eval(logits)
+            return logits.asArray(Float.self)
+        }
+
+        let reference = try semanticLogits(.optimized)
+        MLX.Memory.clearCache()
+        let q8 = try semanticLogits(.q8)
+        MLX.Memory.clearCache()
+        let q4 = try semanticLogits(.q4)
+        MLX.Memory.clearCache()
+
+        func cosine(_ lhs: [Float], _ rhs: [Float]) -> Double {
+            var dot = 0.0
+            var lhsSquared = 0.0
+            var rhsSquared = 0.0
+            for (left, right) in zip(lhs, rhs) {
+                let left = Double(left)
+                let right = Double(right)
+                dot += left * right
+                lhsSquared += left * left
+                rhsSquared += right * right
+            }
+            return dot / (lhsSquared.squareRoot() * rhsSquared.squareRoot())
+        }
+
+        func topIndices(_ values: [Float], count: Int) -> Set<Int> {
+            Set(values.indices.sorted { values[$0] > values[$1] }.prefix(count))
+        }
+
+        let referenceTop = topIndices(reference, count: 100)
+        let q8Cosine = cosine(reference, q8)
+        let q4Cosine = cosine(reference, q4)
+        let q8Overlap = referenceTop.intersection(topIndices(q8, count: 100)).count
+        let q4Overlap = referenceTop.intersection(topIndices(q4, count: 100)).count
+        print(
+            "[minimax-music3-q] q8 cosine=\(q8Cosine) top100=\(q8Overlap) "
+                + "q4 cosine=\(q4Cosine) top100=\(q4Overlap)"
+        )
+
+        XCTAssertGreaterThan(q8Cosine, 0.95)
+        XCTAssertGreaterThanOrEqual(q8Overlap, 80)
+        XCTAssertGreaterThan(q4Cosine, 0.80)
+        XCTAssertGreaterThanOrEqual(q4Overlap, 50)
+    }
+
     func testInstalledStagedAndResidentGenerationAreSeedEquivalent() throws {
         let environment = ProcessInfo.processInfo.environment
         guard environment["MERERUN_MINIMAX_MUSIC3_E2E"] == "1",
@@ -353,6 +429,13 @@ final class MiniMaxMusic3Tests: MereRunCoreTestCase {
         XCTAssertEqual(MiniMaxMusic3Prompt.chunkStarts(frameCount: 300), [0, 100])
         XCTAssertEqual(MiniMaxMusic3Prompt.latentLength(frameCount: 200), 689)
         XCTAssertEqual(MiniMaxMusic3Prompt.latentLength(frameCount: 100), 344)
+        XCTAssertEqual(MiniMaxMusic3Prompt.decodedSampleCount(frameCount: 250), 440_832)
+        XCTAssertEqual(MiniMaxMusic3Prompt.minimumFrameCount(forDurationSeconds: 10), 251)
+        XCTAssertLessThan(MiniMaxMusic3Prompt.decodedSampleCount(frameCount: 250), 441_000)
+        XCTAssertGreaterThanOrEqual(
+            MiniMaxMusic3Prompt.decodedSampleCount(frameCount: 251),
+            441_000
+        )
     }
 
     func testConditionEncoderProducesLatentAlignedShape() {
@@ -388,6 +471,51 @@ final class MiniMaxMusic3Tests: MereRunCoreTestCase {
         XCTAssertEqual(model.logits(output[0..., -1, 0...], codebookIndex: 0).shape, [2, 16])
     }
 
+    func testDepthDecoderIncrementalCacheMatchesFullPrefix() {
+        let configuration = MiniMaxMusic3DepthConfiguration(
+            hiddenSize: 8,
+            numLayers: 2,
+            numAttentionHeads: 2,
+            intermediateSize: 16,
+            audioVocabSize: 16,
+            numCodebooks: 4,
+            maxPositionEmbeddings: 8
+        )
+        let model = MiniMaxMusic3DepthDecoder(configuration: configuration)
+        let input = MLXArray((0..<(2 * 5 * 8)).map { Float($0) / 100 }).reshaped(2, 5, 8)
+        let full = model(input)
+        let cache = model.makeCache()
+        let prefix = model(input[0..., 0..<2, 0...], cache: cache)
+        let third = model(input[0..., 2..<3, 0...], cache: cache)
+        let fourth = model(input[0..., 3..<4, 0...], cache: cache)
+        let fifth = model(input[0..., 4..<5, 0...], cache: cache)
+        let incremental = MLX.concatenated([prefix, third, fourth, fifth], axis: 1)
+        MLX.eval(full, incremental)
+
+        XCTAssertTrue(MLX.allClose(full, incremental, rtol: 1e-5, atol: 1e-5).item(Bool.self))
+    }
+
+    func testDepthDecoderFusedProjectionsMatchSeparateProjections() {
+        let configuration = MiniMaxMusic3DepthConfiguration(
+            hiddenSize: 8,
+            numLayers: 2,
+            numAttentionHeads: 2,
+            intermediateSize: 16,
+            audioVocabSize: 16,
+            numCodebooks: 4,
+            maxPositionEmbeddings: 8
+        )
+        let model = MiniMaxMusic3DepthDecoder(configuration: configuration)
+        let input = MLXArray((0..<(2 * 5 * 8)).map { Float($0) / 100 }).reshaped(2, 5, 8)
+        let separate = model(input)
+        MLX.eval(separate)
+        model.prepareFusedProjections()
+        let fused = model(input)
+        MLX.eval(fused)
+
+        XCTAssertTrue(MLX.allClose(separate, fused, rtol: 1e-5, atol: 1e-5).item(Bool.self))
+    }
+
     func testFlowTransformerTinyConfigurationPreservesLatentShape() {
         let configuration = MiniMaxMusic3TransformerConfiguration(
             inChannels: 2,
@@ -407,6 +535,128 @@ final class MiniMaxMusic3Tests: MereRunCoreTestCase {
         )
         MLX.eval(output)
         XCTAssertEqual(output.shape, [1, 2, 7])
+    }
+
+    func testFlowTransformerBatchedGuidanceMatchesSerialPasses() {
+        let configuration = MiniMaxMusic3TransformerConfiguration(
+            inChannels: 2,
+            conditionDim: 4,
+            numLayers: 1,
+            numAttentionHeads: 2,
+            attentionHeadDim: 4,
+            ffInnerDim: 16,
+            rotaryDim: 2,
+            fourierEmbeddingDim: 4
+        )
+        let model = MiniMaxMusic3Transformer(configuration: configuration)
+        let latents = MLXArray((0..<(2 * 7)).map { Float($0) / 20 }).reshaped(1, 2, 7)
+        let condition = MLXArray((0..<(7 * 4)).map { Float($0) / 30 }).reshaped(1, 7, 4)
+        let zeros = MLXArray.zeros(condition.shape)
+        let timestep = MLXArray([Float(0.5)])
+        let rotary = model.rotaryCache(latentLength: 7, dtype: condition.dtype)
+        let conditional = model(
+            latents: latents,
+            timestep: timestep,
+            condition: condition,
+            rotary: rotary
+        )
+        let unconditional = model(
+            latents: latents,
+            timestep: timestep,
+            condition: zeros,
+            rotary: rotary
+        )
+        let batched = model(
+            latents: MLX.concatenated([latents, latents], axis: 0),
+            timestep: MLX.repeated(timestep, count: 2, axis: 0),
+            condition: MLX.concatenated([condition, zeros], axis: 0),
+            rotary: rotary
+        )
+        MLX.eval(conditional, unconditional, batched)
+
+        XCTAssertTrue(
+            MLX.allClose(conditional, batched[0..<1], rtol: 1e-5, atol: 1e-5).item(Bool.self)
+        )
+        XCTAssertTrue(
+            MLX.allClose(unconditional, batched[1..<2], rtol: 1e-5, atol: 1e-5).item(Bool.self)
+        )
+
+        model.prepareFusedProjections()
+        let fused = model(
+            latents: MLX.concatenated([latents, latents], axis: 0),
+            timestep: MLX.repeated(timestep, count: 2, axis: 0),
+            condition: MLX.concatenated([condition, zeros], axis: 0),
+            rotary: rotary
+        )
+        MLX.eval(fused)
+        XCTAssertTrue(MLX.allClose(batched, fused, rtol: 1e-5, atol: 1e-5).item(Bool.self))
+    }
+
+    func testLanguageModelFusedProjectionsMatchSeparateProjections() {
+        let configuration = MiniMaxMusic3LanguageConfiguration(
+            vocabSize: 32,
+            hiddenSize: 8,
+            intermediateSize: 16,
+            numHiddenLayers: 2,
+            numAttentionHeads: 2,
+            numKeyValueHeads: 1,
+            headDim: 4,
+            maxPositionEmbeddings: 16,
+            rmsNormEps: 1e-6,
+            ropeParameters: .init(ropeTheta: 10_000)
+        )
+        let model = MiniMaxMusic3LanguageModel(configuration: configuration)
+        let embeddings = model.embed(tokenIDs: MLXArray([Int32(1), 2, 3]).reshaped(1, 3))
+        let separate = model.hidden(
+            embeddings: embeddings,
+            cache: model.makeCache(),
+            lastPositionOnly: false
+        )
+        MLX.eval(separate)
+        model.prepareFusedProjections()
+        let fused = model.hidden(
+            embeddings: embeddings,
+            cache: model.makeCache(),
+            lastPositionOnly: false
+        )
+        MLX.eval(fused)
+
+        XCTAssertTrue(MLX.allClose(separate, fused, rtol: 1e-5, atol: 1e-5).item(Bool.self))
+    }
+
+    func testCompactSemanticHeadMatchesReachableFullVocabularyRows() {
+        let configuration = MiniMaxMusic3LanguageConfiguration(
+            vocabSize: MiniMaxMusic3Prompt.audioCodeOffset
+                + MiniMaxMusic3Prompt.semanticVocabularySize + 8,
+            hiddenSize: 8,
+            intermediateSize: 16,
+            numHiddenLayers: 1,
+            numAttentionHeads: 2,
+            numKeyValueHeads: 1,
+            headDim: 4,
+            maxPositionEmbeddings: 16,
+            rmsNormEps: 1e-6,
+            ropeParameters: .init(ropeTheta: 10_000)
+        )
+        let model = MiniMaxMusic3LanguageModel(configuration: configuration)
+        let hidden = MLXArray((0..<16).map { Float($0) / 10 }).reshaped(2, 8)
+        let full = model.logits(hidden)
+        let semanticEnd = MiniMaxMusic3Prompt.audioCodeOffset
+            + MiniMaxMusic3Prompt.semanticVocabularySize
+        let expected = MLX.concatenated(
+            [
+                full[0..., MiniMaxMusic3Prompt.audioEndTokenID..<(MiniMaxMusic3Prompt.audioEndTokenID + 1)],
+                full[0..., MiniMaxMusic3Prompt.audioCodeOffset..<semanticEnd],
+            ],
+            axis: -1
+        )
+        model.prepareCompactSemanticHead()
+        let compact = model.logits(hidden)
+        MLX.eval(expected, compact)
+
+        XCTAssertTrue(model.usesCompactSemanticHead)
+        XCTAssertEqual(compact.shape, [2, MiniMaxMusic3Prompt.semanticVocabularySize + 1])
+        XCTAssertTrue(MLX.allClose(expected, compact, rtol: 1e-5, atol: 1e-5).item(Bool.self))
     }
 
     func testSemanticTopKIgnoresTextVocabularyLogits() {
@@ -430,6 +680,28 @@ final class MiniMaxMusic3Tests: MereRunCoreTestCase {
 
         XCTAssertTrue(guided[0, MiniMaxMusic3Prompt.audioCodeOffset].item(Float.self).isFinite)
         XCTAssertFalse(guided[0, 0].item(Float.self).isFinite)
+    }
+
+    func testSemanticEndTokenCanBeMaskedUntilDurationFloor() {
+        var values = [Float](
+            repeating: -10,
+            count: 2 * (MiniMaxMusic3Prompt.semanticVocabularySize + 1)
+        )
+        values[0] = 100
+        values[MiniMaxMusic3Prompt.semanticVocabularySize + 1] = 100
+        values[1] = 10
+        values[MiniMaxMusic3Prompt.semanticVocabularySize + 2] = 10
+        let logits = MLXArray(values).reshaped(
+            2,
+            MiniMaxMusic3Prompt.semanticVocabularySize + 1
+        )
+        let masked = MiniMaxMusic3Pipeline.guidedSemanticLogits(logits, allowEnd: false)
+        let allowed = MiniMaxMusic3Pipeline.guidedSemanticLogits(logits, allowEnd: true)
+        MLX.eval(masked, allowed)
+
+        XCTAssertFalse(masked[0, 0].item(Float.self).isFinite)
+        XCTAssertTrue(masked[0, 1].item(Float.self).isFinite)
+        XCTAssertTrue(allowed[0, 0].item(Float.self).isFinite)
     }
 
     func testManagedCatalogPinsSelectiveRestrictedSnapshot() throws {

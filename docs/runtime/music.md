@@ -87,14 +87,17 @@ swift run mere.run music generate \
   --model music-minimax-music3 \
   --lyrics-file ./lyrics.txt \
   --duration 30 \
+  --minimum-duration 30 \
   --steps 30 \
   --seed 7 \
   --memory-mode staged \
+  --performance-mode q8 \
   --output ./minimax-song.wav
 
 swift run mere.run music serve \
   --model music-minimax-music3 \
   --memory-mode resident \
+  --performance-mode q8 \
   --port 8080
 
 curl http://127.0.0.1:8080/v1/audio/speech \

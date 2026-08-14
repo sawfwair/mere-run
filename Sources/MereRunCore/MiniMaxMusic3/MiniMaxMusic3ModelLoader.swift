@@ -27,11 +27,43 @@ public enum MiniMaxMusic3LoadingStrategy: String, CaseIterable, Codable, Sendabl
     case resident
 }
 
+public enum MiniMaxMusic3PerformanceMode: String, CaseIterable, Codable, Sendable {
+    /// Original upstream-equivalent graph, retained as an A/B and recovery path.
+    case reference
+    /// BF16 graph optimizations that preserve the model's sampling distribution.
+    case optimized
+    /// Optimized graph with affine 8-bit autoregressive weights.
+    case q8
+    /// Optimized graph with affine 4-bit autoregressive weights.
+    case q4
+
+    var quantizationBits: Int? {
+        switch self {
+        case .reference, .optimized:
+            nil
+        case .q8:
+            8
+        case .q4:
+            4
+        }
+    }
+
+    var usesOptimizedGraph: Bool {
+        self != .reference
+    }
+}
+
 public enum MiniMaxMusic3ModelLoader {
-    public static func load(from resources: MiniMaxMusic3Resources) throws -> MiniMaxMusic3Models {
+    public static func load(
+        from resources: MiniMaxMusic3Resources,
+        performanceMode: MiniMaxMusic3PerformanceMode = .optimized
+    ) throws -> MiniMaxMusic3Models {
         try validate(resources)
-        let autoregressive = try loadAutoregressive(from: resources)
-        let flow = try loadFlow(from: resources)
+        let autoregressive = try loadAutoregressive(
+            from: resources,
+            performanceMode: performanceMode
+        )
+        let flow = try loadFlow(from: resources, performanceMode: performanceMode)
         let vocoder = try loadVocoder(from: resources)
         MLX.eval(
             autoregressive.languageModel.parameters(),
@@ -51,7 +83,8 @@ public enum MiniMaxMusic3ModelLoader {
     }
 
     public static func loadAutoregressive(
-        from resources: MiniMaxMusic3Resources
+        from resources: MiniMaxMusic3Resources,
+        performanceMode: MiniMaxMusic3PerformanceMode = .optimized
     ) throws -> MiniMaxMusic3AutoregressiveModels {
         try validate(resources)
         let languageModel = MiniMaxMusic3LanguageModel(
@@ -70,6 +103,18 @@ public enum MiniMaxMusic3ModelLoader {
             directory: resources.depthDecoderURL,
             into: depthDecoder
         )
+        if performanceMode.usesOptimizedGraph {
+            languageModel.prepareCompactSemanticHead()
+            languageModel.prepareFusedProjections()
+            depthDecoder.prepareFusedProjections()
+        }
+        if let bits = performanceMode.quantizationBits {
+            quantizeAutoregressive(
+                languageModel: languageModel,
+                depthDecoder: depthDecoder,
+                bits: bits
+            )
+        }
         let tokenizer = try ACEStep5HzLMTokenizer.load(
             from: resources.tokenizerURL,
             requireAudioCodeTokens: false
@@ -83,7 +128,8 @@ public enum MiniMaxMusic3ModelLoader {
     }
 
     public static func loadFlow(
-        from resources: MiniMaxMusic3Resources
+        from resources: MiniMaxMusic3Resources,
+        performanceMode: MiniMaxMusic3PerformanceMode = .optimized
     ) throws -> MiniMaxMusic3FlowModels {
         try validate(resources)
         let conditionEncoder = MiniMaxMusic3ConditionEncoder(
@@ -102,11 +148,38 @@ public enum MiniMaxMusic3ModelLoader {
             into: transformer,
             mapper: MiniMaxMusic3Transformer.mapWeight
         )
+        if performanceMode.usesOptimizedGraph {
+            transformer.prepareFusedProjections()
+        }
         MLX.eval(conditionEncoder.parameters(), transformer.parameters())
         return MiniMaxMusic3FlowModels(
             conditionEncoder: conditionEncoder,
             transformer: transformer
         )
+    }
+
+    private static func quantizeAutoregressive(
+        languageModel: MiniMaxMusic3LanguageModel,
+        depthDecoder: MiniMaxMusic3DepthDecoder,
+        bits: Int
+    ) {
+        for model in [languageModel as Module, depthDecoder as Module] {
+            quantize(model: model, bits: bits)
+        }
+        MLX.eval(languageModel.parameters(), depthDecoder.parameters())
+        MLX.Memory.clearCache()
+    }
+
+    private static func quantize(model: Module, bits: Int) {
+        MLXNN.quantize(model: model, groupSize: 64, bits: bits) { _, module in
+            if let linear = module as? Linear {
+                return linear.shape.1 % 64 == 0
+            }
+            if let embedding = module as? Embedding {
+                return embedding.shape.1 % 64 == 0
+            }
+            return false
+        }
     }
 
     public static func loadVocoder(

@@ -78,23 +78,77 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
             "--model", MiniMaxMusic3Resources.modelID,
             "--lyrics", "[verse]\nwe glow",
             "--duration", "30",
+            "--minimum-duration", "20",
+            "--min-frames", "500",
             "--max-frames", "750",
             "--steps", "24",
             "--seed", "7",
             "--guidance-scale", "1.7",
             "--sample-rate", "32000",
             "--memory-mode", "staged",
+            "--performance-mode", "q8",
         ])
 
         XCTAssertEqual(command.model, MiniMaxMusic3Resources.modelID)
         XCTAssertEqual(command.lyrics, "[verse]\nwe glow")
         XCTAssertEqual(command.durationSeconds, 30)
+        XCTAssertEqual(command.miniMaxMinimumDurationSeconds, 20)
+        XCTAssertEqual(command.miniMaxMinimumFrames, 500)
         XCTAssertEqual(command.miniMaxMaximumFrames, 750)
         XCTAssertEqual(command.steps, 24)
         XCTAssertEqual(command.seed, 7)
         XCTAssertEqual(command.guidanceScale, 1.7)
         XCTAssertEqual(command.miniMaxOutputSampleRate, 32_000)
         XCTAssertEqual(command.miniMaxLoadingStrategy, .staged)
+        XCTAssertEqual(command.miniMaxPerformanceMode, .q8)
+    }
+
+    func testMiniMaxValidatesDurationFloorAgainstUpperBound() throws {
+        let valid = try MusicGenerate.parse([
+            "deep house",
+            "--model", MiniMaxMusic3Resources.modelID,
+            "--instrumental",
+            "--duration", "30",
+            "--minimum-duration", "20",
+        ])
+        XCTAssertNoThrow(
+            try valid.validateMiniMaxMusic3Options(explicitDurationSeconds: 30)
+        )
+
+        let hopRounded = try MusicGenerate.parse([
+            "deep house",
+            "--model", MiniMaxMusic3Resources.modelID,
+            "--instrumental",
+            "--duration", "10",
+            "--minimum-duration", "10",
+        ])
+        XCTAssertNoThrow(
+            try hopRounded.validateMiniMaxMusic3Options(explicitDurationSeconds: 10)
+        )
+
+        let invalid = try MusicGenerate.parse([
+            "deep house",
+            "--model", MiniMaxMusic3Resources.modelID,
+            "--instrumental",
+            "--duration", "10",
+            "--minimum-duration", "20",
+        ])
+        XCTAssertThrowsError(
+            try invalid.validateMiniMaxMusic3Options(explicitDurationSeconds: 10)
+        )
+
+        let beyondHopLimitedMaximum = try MusicGenerate.parse([
+            "deep house",
+            "--model", MiniMaxMusic3Resources.modelID,
+            "--instrumental",
+            "--duration", "360",
+            "--minimum-duration", "360",
+        ])
+        XCTAssertThrowsError(
+            try beyondHopLimitedMaximum.validateMiniMaxMusic3Options(
+                explicitDurationSeconds: 360
+            )
+        )
     }
 
     func testMiniMaxRejectsSharedControlsInsteadOfIgnoringThem() throws {

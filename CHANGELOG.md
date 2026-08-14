@@ -6,6 +6,31 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Music
+
+- accelerated MiniMax Music 3 on Apple Silicon with a reachable 16,385-row
+  semantic head, fused QKV and gate/up projections, incremental residual-depth
+  KV caches, cached rotary/zero conditioning, batched flow guidance, and fewer
+  forced evaluations. The exact upstream graph remains available through
+  `--performance-mode reference`; optimized BF16 is the default.
+- added opt-in `q8` and `q4` group-64 affine turbo modes across the language
+  and depth transformers. On an M4 Max, a matched 250-frame/30-step staged
+  render measured 143.29 s in the 0.37.0 reference runtime, 105.46 s in optimized
+  BF16 before the duration-floor correction, 52.66 s in Q8, and 51.40 s in Q4.
+  A checkpoint gate measured Q8/Q4 semantic-logit cosine 0.99985/0.99166 and
+  top-100 overlap 98/80 against optimized BF16. Whole-flow compilation and
+  affine flow quantization were measured and rejected because both regressed;
+  batched flow CFG beat the serial alternative by 6.0% on a matched probe. A
+  strict three-minute Q8 render completed in 1,413.81 s with 4.50 GB maximum
+  resident memory and decoded to 180.268 s.
+- verified `--performance-mode reference` end to end against a clean 0.37.0
+  executable: matched 250-frame renders were byte-identical after PCM24 export,
+  including deterministic dither.
+- added `--minimum-duration` and `--min-frames` plus speech-request
+  `minimum_audio_duration` and `min_new_tokens`. EOS remains masked through the
+  requested floor, and second-based floors account for whole vocoder hops so a
+  nominal 10-second request no longer decodes to 9.996 seconds.
+
 ## 0.37.0 - 2026-08-13
 
 This release adds two substantial native Apple Silicon runtimes: LiquidAI's

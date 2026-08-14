@@ -25,6 +25,12 @@ struct MusicServe: AsyncParsableCommand {
     )
     var miniMaxLoadingStrategy: MiniMaxMusic3LoadingStrategy?
 
+    @Option(
+        name: [.customLong("performance-mode")],
+        help: "MiniMax Music 3 execution: reference, optimized (default), q8, or q4."
+    )
+    var miniMaxPerformanceMode: MiniMaxMusic3PerformanceMode?
+
     @Option(name: [.customLong("checkpoints-root")], help: "Root containing ACE-Step checkpoint directories.")
     var checkpointsRoot: String?
 
@@ -82,8 +88,8 @@ struct MusicServe: AsyncParsableCommand {
             try await runMiniMaxMusic3(apiKey: resolvedAPIKey)
             return
         }
-        if miniMaxLoadingStrategy != nil {
-            throw ValidationError("--memory-mode requires MiniMax Music 3.")
+        if miniMaxLoadingStrategy != nil || miniMaxPerformanceMode != nil {
+            throw ValidationError("--memory-mode and --performance-mode require MiniMax Music 3.")
         }
 
         let root = try await ACEStepCLIHelper.resolveCheckpointsRoot(
@@ -192,13 +198,16 @@ struct MusicServe: AsyncParsableCommand {
             )
         }
         let loadingStrategy = miniMaxLoadingStrategy ?? .resident
+        let performanceMode = miniMaxPerformanceMode ?? .optimized
         CLIStderr.write(
-            "Loading MiniMax Music 3 server in \(loadingStrategy.rawValue) memory mode\n"
+            "Loading MiniMax Music 3 server in \(loadingStrategy.rawValue) memory mode "
+                + "with \(performanceMode.rawValue) execution\n"
         )
         let server = try MiniMaxMusic3APIServer(
             resources: resources,
             modelID: ModelResolver.ModelID.miniMaxMusic3.rawValue,
             loadingStrategy: loadingStrategy,
+            performanceMode: performanceMode,
             apiKey: apiKey
         )
         try await server.run(host: host, port: port)
