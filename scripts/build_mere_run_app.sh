@@ -39,6 +39,11 @@ fi
 swift_app_args=(build --product mere.run.app)
 swift_cli_args=(build --product mere.run)
 swift_bin_path_args=(build --show-bin-path)
+if [[ "${MERERUN_SWIFT_DISABLE_INDEX_STORE:-0}" == "1" ]]; then
+  swift_app_args+=(--disable-index-store)
+  swift_cli_args+=(--disable-index-store)
+  swift_bin_path_args+=(--disable-index-store)
+fi
 if [[ "$configuration" == "release" ]]; then
   swift_app_args+=(--configuration release)
   swift_cli_args+=(--configuration release)

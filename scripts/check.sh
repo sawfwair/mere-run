@@ -34,10 +34,20 @@ fi
 
 swiftlint --strict --cache-path .build/swiftlint.cache
 bash ./scripts/agent_readiness_check.sh
-swift build
+swiftpm() {
+  local subcommand="$1"
+  shift
+  if [[ "${MERERUN_SWIFT_DISABLE_INDEX_STORE:-0}" == "1" ]]; then
+    swift "$subcommand" --disable-index-store "$@"
+  else
+    swift "$subcommand" "$@"
+  fi
+}
+
+swiftpm build
 ./scripts/build_mlx_metallib.sh \
   --verify-only vendor/mlx-swift_Cmlx.bundle
-swift test
+swiftpm test
 mere_run_bin=".build/debug/mere.run"
 if [[ ! -x "$mere_run_bin" ]]; then
   echo "Expected built executable at $mere_run_bin after swift build." >&2
