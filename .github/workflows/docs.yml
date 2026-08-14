@@ -24,8 +24,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: docs-pages
-  cancel-in-progress: false
+  group: docs-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   build:
