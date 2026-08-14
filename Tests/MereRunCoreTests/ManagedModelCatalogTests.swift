@@ -42,6 +42,83 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertNil(ModelResolver.ModelID(rawValue: "text-chat-q35-nano"))
     }
 
+    func testAPIServableModelsOwnCompleteCatalogProfiles() {
+        let expectedChatModels = ManagedModelCatalog.allSpecs.filter {
+            $0.defaultCLICommands.contains("api serve")
+                || $0.id == CodeGenResources.defaultModelId
+        }
+
+        XCTAssertFalse(expectedChatModels.isEmpty)
+        for spec in expectedChatModels {
+            guard let profile = spec.apiProfile else {
+                XCTFail("API-served model \(spec.id) is missing a catalog API profile.")
+                continue
+            }
+            XCTAssertEqual(profile.task, .chatCompletions, spec.id)
+            XCTAssertNotNil(profile.servingEngine, spec.id)
+            XCTAssertGreaterThan(profile.contextWindow ?? 0, 0, spec.id)
+            XCTAssertGreaterThan(profile.maximumOutputTokens ?? 0, 0, spec.id)
+        }
+    }
+
+    func testCatalogProfilesOwnHarnessSpecificCapabilities() throws {
+        let ornith = try XCTUnwrap(
+            ManagedModelCatalog.apiProfile(for: Q35Resources.ornith9BModelId)
+        )
+        XCTAssertEqual(ornith.contextWindow, Q35Resources.defaultContextLength)
+        XCTAssertEqual(ornith.maximumOutputTokens, 4_096)
+        XCTAssertEqual(ornith.thinkingLevels, [.high])
+        XCTAssertTrue(ornith.toolCall)
+        XCTAssertTrue(ornith.inputModalities.contains(.image))
+
+        let deepseek = try XCTUnwrap(
+            ManagedModelCatalog.apiProfile(for: DeepseekV4FlashResources.defaultModelId)
+        )
+        XCTAssertEqual(deepseek.compatibility.maxTokensField, .maxTokens)
+        XCTAssertEqual(deepseek.compatibility.thinkingFormat, .deepseek)
+        XCTAssertEqual(deepseek.thinkingLevelMap, [.minimal: .low])
+        XCTAssertFalse(deepseek.compatibility.supportsDeveloperRole)
+        XCTAssertTrue(deepseek.compatibility.supportsReasoningEffort)
+        XCTAssertTrue(deepseek.toolCall)
+
+        let muse = try XCTUnwrap(
+            ManagedModelCatalog.apiProfile(for: MuseGlimmerResources.modelId)
+        )
+        XCTAssertEqual(muse.reasoningEffortStrengths[.minimal], 0.1)
+        XCTAssertEqual(muse.reasoningEffortStrengths[.high], 0.8)
+        XCTAssertEqual(muse.reasoningEffortStrengths[.max], 1)
+    }
+
+    func testQ35OCRModelsAreNotChatRuntimeModels() throws {
+        let full = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: Q35Resources.infinityParser2ProModelId)
+        )
+        let quantized = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: Q35Resources.infinityParser2ProInt8ModelId)
+        )
+
+        XCTAssertNil(full.apiProfile)
+        XCTAssertNil(full.defaultRuntimeServingEngine)
+        XCTAssertNil(quantized.apiProfile)
+        XCTAssertNil(quantized.defaultRuntimeServingEngine)
+    }
+
+    func testCompanionAPIProfilesComeFromCatalog() throws {
+        let embedding = try XCTUnwrap(
+            ManagedModelCatalog.apiProfile(for: ModelResolver.ModelID.qwen3Embedding.rawValue)
+        )
+        XCTAssertEqual(embedding.task, .embeddings)
+        XCTAssertEqual(embedding.inputModalities, [.text])
+        XCTAssertEqual(embedding.outputModalities, [.embedding])
+
+        let imageEdit = try XCTUnwrap(
+            ManagedModelCatalog.apiProfile(for: QwenImageEditRepository.modelId)
+        )
+        XCTAssertEqual(imageEdit.task, .imageEdits)
+        XCTAssertEqual(imageEdit.inputModalities, [.text, .image])
+        XCTAssertEqual(imageEdit.outputModalities, [.image])
+    }
+
     func testAllRuntimeAutoDownloadSpecsHaveManagedSource() {
         for spec in ManagedModelCatalog.allSpecs where spec.runtimeAutoDownloadAllowed {
             XCTAssertTrue(

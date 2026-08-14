@@ -1049,12 +1049,101 @@ public struct OpenAIModel: Codable, Sendable {
     public var object: String
     public var created: Int
     public var owned_by: String
+    public var name: String?
+    public var task: String?
+    public var reasoning: Bool?
+    public var thinking_levels: [String]?
+    public var tool_call: Bool?
+    public var structured_output: Bool?
+    public var modalities: OpenAIModelModalities?
+    public var limit: OpenAIModelLimit?
+    public var openai_compat: OpenAIModelCompatibility?
 
-    public init(id: String, object: String, created: Int, owned_by: String) {
+    public init(
+        id: String,
+        object: String,
+        created: Int,
+        owned_by: String,
+        name: String? = nil,
+        task: String? = nil,
+        reasoning: Bool? = nil,
+        thinking_levels: [String]? = nil,
+        tool_call: Bool? = nil,
+        structured_output: Bool? = nil,
+        modalities: OpenAIModelModalities? = nil,
+        limit: OpenAIModelLimit? = nil,
+        openai_compat: OpenAIModelCompatibility? = nil
+    ) {
         self.id = id
         self.object = object
         self.created = created
         self.owned_by = owned_by
+        self.name = name
+        self.task = task
+        self.reasoning = reasoning
+        self.thinking_levels = thinking_levels
+        self.tool_call = tool_call
+        self.structured_output = structured_output
+        self.modalities = modalities
+        self.limit = limit
+        self.openai_compat = openai_compat
+    }
+}
+
+public struct OpenAIModelModalities: Codable, Equatable, Sendable {
+    public var input: [String]
+    public var output: [String]
+
+    public init(input: [String], output: [String]) {
+        self.input = input
+        self.output = output
+    }
+}
+
+public struct OpenAIModelLimit: Codable, Equatable, Sendable {
+    public var context: Int
+    public var output: Int
+
+    public init(context: Int, output: Int) {
+        self.context = context
+        self.output = output
+    }
+}
+
+public struct OpenAIModelCompatibility: Codable, Equatable, Sendable {
+    public var supports_store: Bool
+    public var supports_developer_role: Bool
+    public var supports_reasoning_effort: Bool
+    public var supports_usage_in_streaming: Bool
+    public var supports_finish_reason: Bool
+    public var max_tokens_field: String
+    public var supports_strict_mode: Bool
+    public var thinking_format: String?
+    public var thinking_level_map: [String: String]?
+    public var requires_reasoning_content_on_assistant_messages: Bool
+
+    public init(
+        supports_store: Bool,
+        supports_developer_role: Bool,
+        supports_reasoning_effort: Bool,
+        supports_usage_in_streaming: Bool,
+        supports_finish_reason: Bool,
+        max_tokens_field: String,
+        supports_strict_mode: Bool,
+        thinking_format: String? = nil,
+        thinking_level_map: [String: String]? = nil,
+        requires_reasoning_content_on_assistant_messages: Bool = false
+    ) {
+        self.supports_store = supports_store
+        self.supports_developer_role = supports_developer_role
+        self.supports_reasoning_effort = supports_reasoning_effort
+        self.supports_usage_in_streaming = supports_usage_in_streaming
+        self.supports_finish_reason = supports_finish_reason
+        self.max_tokens_field = max_tokens_field
+        self.supports_strict_mode = supports_strict_mode
+        self.thinking_format = thinking_format
+        self.thinking_level_map = thinking_level_map
+        self.requires_reasoning_content_on_assistant_messages = requires_reasoning_content_on_assistant_messages
     }
 }
 

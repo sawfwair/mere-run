@@ -2,7 +2,10 @@
 
 ## Purpose
 
-Install the latest Pi coding-agent release so mere.run can launch a guided local setup agent. Auto-install uses the published macOS release assets; on Linux, install Pi separately and pass `--pi-path` or put `pi` on PATH.
+Install the latest Pi coding-agent release from the current
+`earendil-works/pi` upstream so mere.run can launch a guided local setup agent.
+Auto-install uses the published macOS release assets; on Linux, install Pi
+separately and pass `--pi-path` or put `pi` on PATH.
 
 ## Required Models
 
@@ -23,7 +26,8 @@ mere.run agent install-pi --help
 
 - Run before `agent start` on macOS when Pi is not on PATH or not managed by mere.run.
 - Use `--force` when the installed Pi binary is corrupt or outdated.
-- Pair with `agent onboard --configure-pi` to register the local provider.
+- Pair with `agent onboard --configure-pi` to register a native Pi provider
+  that discovers tool-capable models from mere.run.
 
 ## Examples
 
@@ -52,3 +56,4 @@ mere.run agent install-pi --force
 
 - https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Commands/AgentCommand.swift
 - https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Support/PiAgentIntegration.swift
+- https://github.com/earendil-works/pi

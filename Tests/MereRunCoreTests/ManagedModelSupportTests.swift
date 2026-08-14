@@ -267,7 +267,7 @@ final class ManagedModelSupportTests: XCTestCase {
     }
 
 
-    func testNorthMiniCodeIsSupportedOnThirtyTwoGBAndStartable() throws {
+    func testNorthMiniCodeIsSupportedOnThirtyTwoGBButNotPiStartable() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: NorthMiniCodeResources.modelId))
         let machine = MereRunMachineProfile(
             physicalMemoryBytes: 32 * 1_073_741_824,
@@ -283,7 +283,7 @@ final class ManagedModelSupportTests: XCTestCase {
         )
 
         XCTAssertTrue(report.isSupported)
-        XCTAssertTrue(recommendation.isStartableByMereRun)
+        XCTAssertFalse(recommendation.isStartableByMereRun)
         XCTAssertEqual(recommendation.servingEngine, .textCode)
     }
 
@@ -348,7 +348,7 @@ final class ManagedModelSupportTests: XCTestCase {
         XCTAssertEqual(recommendation.servingEngine, .textChatQ35)
     }
 
-    func testOrnith35BIsSupportedOnSixtyFourGBAndStartableThroughTextCode() throws {
+    func testOrnith35BIsSupportedOnSixtyFourGBButNotPiStartable() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Ornith35BCodeResources.modelId))
         let machine = MereRunMachineProfile(
             physicalMemoryBytes: 64 * 1_073_741_824,
@@ -364,7 +364,7 @@ final class ManagedModelSupportTests: XCTestCase {
         )
 
         XCTAssertTrue(report.isSupported)
-        XCTAssertTrue(recommendation.isStartableByMereRun)
+        XCTAssertFalse(recommendation.isStartableByMereRun)
         XCTAssertEqual(recommendation.servingEngine, .textCode)
     }
 
@@ -504,7 +504,7 @@ final class ManagedModelSupportTests: XCTestCase {
 
         let recommendation = try XCTUnwrap(MereRunAgentModelCatalog.recommendation(for: .tier, on: machine))
 
-        XCTAssertEqual(recommendation.id, AgentModelResources.qwen35NineBModelId)
+        XCTAssertEqual(recommendation.id, Q35Resources.ornith9BModelId)
         XCTAssertTrue(recommendation.isStartableByMereRun)
     }
 
@@ -601,7 +601,7 @@ final class ManagedModelSupportTests: XCTestCase {
         XCTAssertNil(MereRunAgentModelCatalog.recommendation(for: .tier, on: machine))
     }
 
-    func testAgentTierSelectsCoderOnLinuxWithEnoughMemory() throws {
+    func testAgentTierSelectsToolCapableQ36OnLinuxWithEnoughMemory() throws {
         let machine = MereRunMachineProfile(
             physicalMemoryBytes: 64 * 1_073_741_824,
             processorName: "Linux",
@@ -611,7 +611,7 @@ final class ManagedModelSupportTests: XCTestCase {
 
         let recommendation = try XCTUnwrap(MereRunAgentModelCatalog.recommendation(for: .tier, on: machine))
 
-        XCTAssertEqual(recommendation.id, CodeGenResources.defaultModelId)
+        XCTAssertEqual(recommendation.id, Q35Resources.q36NanoModelId)
         XCTAssertTrue(recommendation.isStartableByMereRun)
     }
 }

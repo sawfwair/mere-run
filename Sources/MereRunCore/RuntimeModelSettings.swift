@@ -410,28 +410,7 @@ public struct RuntimeModelSettingsStore {
 
 public extension ManagedModelSpec {
     var defaultRuntimeServingEngine: RuntimeServingEngine? {
-        switch validationKind {
-        case .codegenGGUF:
-            return .textCode
-        case .gemma4, .gemma4Unified:
-            return .textChatGemma4
-        case .laguna:
-            return .textChatLaguna
-        case .q35:
-            return .textChatQ36
-        case .lfm2:
-            return .textChatLFM2
-        case .museGlimmer:
-            return .textChatMuseGlimmer
-        case .nemotronH:
-            return .textChatNemotronH
-        case .deepseekV4FlashIMatrixGGUF:
-            return .textChatDeepseekV4Flash
-        case .hfTextChat where id == ModelResolver.ModelID.mebot.rawValue:
-            return .textChatKlein
-        default:
-            return nil
-        }
+        apiProfile?.servingEngine
     }
 
     var isAPIServableRuntimeModel: Bool {

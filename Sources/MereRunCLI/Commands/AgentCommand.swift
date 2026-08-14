@@ -240,13 +240,13 @@ struct AgentOnboard: AsyncParsableCommand {
         }
 
         let startable = MereRunAgentModelCatalog.fallbackStartableRecommendation(on: machine)
-        let selectedAgentID = startable?.id ?? AgentModelResources.qwen35NineBModelId
+        let selectedAgentID = startable?.id ?? Q35Resources.ornith9BModelId
         print("\nAgent readiness")
         if let startable {
             print("  Recommended setup agent: \(startable.id) (\(startable.displayName)).")
             print("  Start a guided session with: \(CLICommandDisplay.command("agent start --model \(selectedAgentID)"))")
             if startable.id == DeepseekV4FlashResources.defaultModelId {
-                print("  DeepSeek V4 Flash is the preferred 96 GB+ setup-agent tier; smaller Qwen agents are alternatives, not upgrades.")
+                print("  DeepSeek V4 Flash is the preferred 96 GB+ setup-agent tier; smaller tool-capable native agents are alternatives, not upgrades.")
             }
         }
         if let codeReport = reports.first(where: { $0.spec.id == CodeGenResources.defaultModelId }) {
@@ -362,7 +362,12 @@ struct AgentOnboard: AsyncParsableCommand {
         guard let recommendation = SetupAgentRuntime.recommendation(forManagedModelID: normalized) else {
             throw ValidationError("Unsupported Pi provider model: \(modelID)")
         }
-        return SetupAgentRuntime.providerModel(for: recommendation)
+        guard recommendation.isStartableByMereRun else {
+            throw ValidationError(
+                "Pi requires a tool-capable chat model; \(modelID) is only available through the text-code API lane."
+            )
+        }
+        return try SetupAgentRuntime.providerModel(for: recommendation)
     }
 }
 

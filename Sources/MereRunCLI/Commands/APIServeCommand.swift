@@ -547,11 +547,27 @@ struct APIEngineCapabilities: Equatable, Sendable {
     var supportsLogprobs: Bool = false
     var supportsProviderThinkingControls: Bool = false
 
-    static let localText = APIEngineCapabilities()
+    static func catalog(_ profile: ManagedModelAPIProfile) -> APIEngineCapabilities {
+        APIEngineCapabilities(
+            supportsRawProxy: profile.supportsRawProxy,
+            supportsTools: profile.toolCall,
+            supportsToolChoice: profile.supportsToolChoice,
+            supportsDeveloperRole: profile.compatibility.supportsDeveloperRole,
+            supportsStructuredOutputs: profile.structuredOutput,
+            supportsReasoningEffort: profile.compatibility.supportsReasoningEffort,
+            supportsMaxCompletionTokens: profile.compatibility.maxTokensField == .maxCompletionTokens,
+            supportsUsageInStreaming: profile.compatibility.supportsUsageInStreaming,
+            supportsVisionContentParts: profile.inputModalities.contains(.image),
+            supportsStrictMode: profile.compatibility.supportsStrictMode,
+            supportsStopSequences: profile.supportsStopSequences,
+            supportsSeed: profile.supportsSeed,
+            supportsPenalties: profile.supportsPenalties,
+            supportsLogprobs: profile.supportsLogprobs,
+            supportsProviderThinkingControls: profile.supportsProviderThinkingControls
+        )
+    }
 
-    static let localTextWithStopSequences = APIEngineCapabilities(
-        supportsStopSequences: true
-    )
+    static let localText = APIEngineCapabilities()
 
     static let localTextWithStructuredJSON = APIEngineCapabilities(
         supportsStructuredOutputs: true
@@ -562,55 +578,10 @@ struct APIEngineCapabilities: Equatable, Sendable {
         supportsToolChoice: true
     )
 
-    static let localTextWithToolsAndStopSequences = APIEngineCapabilities(
-        supportsTools: true,
-        supportsToolChoice: true,
-        supportsStopSequences: true
-    )
-
-    static let localTextWithToolsAndStructuredJSON = APIEngineCapabilities(
-        supportsTools: true,
-        supportsToolChoice: true,
-        supportsStructuredOutputs: true
-    )
-
     static let localTextWithToolsAndVision = APIEngineCapabilities(
         supportsTools: true,
         supportsToolChoice: true,
         supportsVisionContentParts: true
-    )
-
-    static let localTextWithToolsVisionAndReasoning = APIEngineCapabilities(
-        supportsTools: true,
-        supportsToolChoice: true,
-        supportsReasoningEffort: true,
-        supportsVisionContentParts: true
-    )
-
-    static let localTextWithToolsVisionAndStructuredJSON = APIEngineCapabilities(
-        supportsTools: true,
-        supportsToolChoice: true,
-        supportsStructuredOutputs: true,
-        supportsVisionContentParts: true,
-        supportsStrictMode: false
-    )
-
-    static let rawProxy = APIEngineCapabilities(
-        supportsRawProxy: true,
-        supportsTools: true,
-        supportsToolChoice: true,
-        supportsDeveloperRole: true,
-        supportsStructuredOutputs: true,
-        supportsReasoningEffort: true,
-        supportsMaxCompletionTokens: true,
-        supportsUsageInStreaming: true,
-        supportsVisionContentParts: true,
-        supportsStrictMode: false,
-        supportsStopSequences: true,
-        supportsSeed: true,
-        supportsPenalties: true,
-        supportsLogprobs: true,
-        supportsProviderThinkingControls: true
     )
 }
 
@@ -1238,6 +1209,78 @@ enum APIServerContract {
                     owned_by: "mere.run"
                 )
             }
+        )
+    }
+
+    static func chatModel(
+        id: String,
+        name: String,
+        profile: ManagedModelAPIProfile,
+        contextWindow: Int,
+        maximumOutputTokens: Int,
+        createdAt: Date = Date()
+    ) -> OpenAIModel {
+        let compatibility = profile.compatibility
+        let thinkingLevels = profile.thinkingLevels.isEmpty
+            ? nil
+            : profile.thinkingLevels.map(\.rawValue)
+        let thinkingLevelMap = profile.thinkingLevelMap.isEmpty
+            ? nil
+            : Dictionary(uniqueKeysWithValues: profile.thinkingLevelMap.map {
+                ($0.key.rawValue, $0.value.rawValue)
+            })
+
+        return OpenAIModel(
+            id: id,
+            object: "model",
+            created: Int(createdAt.timeIntervalSince1970),
+            owned_by: "mere.run",
+            name: name,
+            task: profile.task.rawValue,
+            reasoning: profile.reasoning,
+            thinking_levels: thinkingLevels,
+            tool_call: profile.toolCall,
+            structured_output: profile.structuredOutput,
+            modalities: OpenAIModelModalities(
+                input: profile.inputModalities.map(\.rawValue),
+                output: profile.outputModalities.map(\.rawValue)
+            ),
+            limit: OpenAIModelLimit(context: contextWindow, output: maximumOutputTokens),
+            openai_compat: OpenAIModelCompatibility(
+                supports_store: compatibility.supportsStore,
+                supports_developer_role: compatibility.supportsDeveloperRole,
+                supports_reasoning_effort: compatibility.supportsReasoningEffort,
+                supports_usage_in_streaming: compatibility.supportsUsageInStreaming,
+                supports_finish_reason: compatibility.supportsFinishReason,
+                max_tokens_field: compatibility.maxTokensField.rawValue,
+                supports_strict_mode: compatibility.supportsStrictMode,
+                thinking_format: compatibility.thinkingFormat?.rawValue,
+                thinking_level_map: thinkingLevelMap,
+                requires_reasoning_content_on_assistant_messages: compatibility
+                    .requiresReasoningContentOnAssistantMessages
+            )
+        )
+    }
+
+    static func companionModel(
+        id: String,
+        profile: ManagedModelAPIProfile,
+        createdAt: Date = Date()
+    ) -> OpenAIModel {
+        return OpenAIModel(
+            id: id,
+            object: "model",
+            created: Int(createdAt.timeIntervalSince1970),
+            owned_by: "mere.run",
+            name: id,
+            task: profile.task.rawValue,
+            reasoning: profile.reasoning,
+            tool_call: profile.toolCall,
+            structured_output: profile.structuredOutput,
+            modalities: OpenAIModelModalities(
+                input: profile.inputModalities.map(\.rawValue),
+                output: profile.outputModalities.map(\.rawValue)
+            )
         )
     }
 
@@ -2430,7 +2473,8 @@ enum APIServerContract {
         fallbackLoraPath: String?,
         contextSize: Int,
         capabilities: APIEngineCapabilities = .localText,
-        servedModelID: String? = nil
+        servedModelID: String? = nil,
+        apiProfile: ManagedModelAPIProfile? = nil
     ) throws -> ChatRequest {
         guard !openaiRequest.messages.isEmpty else {
             throw APIRequestValidationError.invalidField("messages", "must contain at least one message")
@@ -2476,11 +2520,18 @@ enum APIServerContract {
         // R1-style lanes degenerate without reasoning; their published top_k
         // applies only when the client did not set explicit sampling.
         let laneModelID = servedModelID ?? ""
+        let resolvedAPIProfile = apiProfile
+            ?? servedModelID.flatMap { ManagedModelCatalog.apiProfile(for: $0) }
         let recommendedSampling = Q35Resources.recommendedSampling(forModelId: laneModelID)
         let isLaguna = LagunaResources.handles(modelSpec: laneModelID)
         let usesExplicitSampling = openaiRequest.temperature != nil
             || openaiRequest.top_p != nil
             || openaiRequest.min_p != nil
+        let reasoningEffort = try reasoningEffort(
+            from: openaiRequest.reasoning_effort,
+            capabilities: capabilities,
+            profile: resolvedAPIProfile
+        )
 
         return ChatRequest(
             messages: messages,
@@ -2499,7 +2550,10 @@ enum APIServerContract {
             minP: openaiRequest.min_p == nil && isLaguna
                 ? LagunaResources.recommendedMinP
                 : minP,
-            showThinking: requiresJSON ? false : Q35Resources.thinkingDefault(forModelId: laneModelID),
+            reasoningEffort: reasoningEffort,
+            showThinking: requiresJSON
+                ? false
+                : resolvedAPIProfile?.thinkingLevels == [.high],
             lora: lora,
             requiresJSON: requiresJSON,
             tools: tools,
@@ -2800,6 +2854,28 @@ enum APIServerContract {
             )
         }
         return try validateMaxTokens(maxCompletionTokens ?? maxTokens, contextSize: contextSize)
+    }
+
+    private static func reasoningEffort(
+        from rawValue: String?,
+        capabilities: APIEngineCapabilities,
+        profile: ManagedModelAPIProfile?
+    ) throws -> Double? {
+        guard let rawValue else { return nil }
+        guard !capabilities.supportsRawProxy else { return nil }
+        let normalized = rawValue.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        guard let level = ManagedModelThinkingLevel(rawValue: normalized),
+              let strength = profile?.reasoningEffortStrengths[level] else {
+            let supportedLevels = ManagedModelThinkingLevel.allCases
+                .filter { profile?.reasoningEffortStrengths[$0] != nil }
+                .map(\.rawValue)
+                .joined(separator: ", ")
+            throw APIRequestValidationError.invalidField(
+                "reasoning_effort",
+                "must be one of \(supportedLevels)"
+            )
+        }
+        return strength
     }
 
     static func acceptsJSONContentType(_ rawValue: String?) -> Bool {
@@ -3810,7 +3886,7 @@ actor CodeGenServer {
         let includeLoopbackArtifactModels = APIVFXArtifactRoutePolicy.allows(
             remoteAddress: remoteAddress
         )
-        var models = try await pool.modelsResponse()
+        var models = try await pool.modelsResponse(serverContextSize: contextSize)
         if !includeLoopbackArtifactModels {
             models.data.removeAll { APIVFXArtifactRoutePolicy.modelIDs.contains($0.id) }
         }
@@ -3818,12 +3894,13 @@ actor CodeGenServer {
             includeLoopbackArtifactModels: includeLoopbackArtifactModels
         )
             where !models.data.contains(where: { $0.id == modelID }) {
+            guard let profile = ManagedModelCatalog.apiProfile(for: modelID) else {
+                continue
+            }
             models.data.append(
-                OpenAIModel(
+                APIServerContract.companionModel(
                     id: modelID,
-                    object: "model",
-                    created: Int(Date().timeIntervalSince1970),
-                    owned_by: "mere.run"
+                    profile: profile
                 )
             )
         }

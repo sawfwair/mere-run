@@ -208,10 +208,49 @@ final class RuntimeModelPoolTests: XCTestCase {
             settingsStore: RuntimeModelSettingsStore(modelsDir: root)
         )
 
-        let response = try await pool.modelsResponse(createdAt: Date(timeIntervalSince1970: 10))
+        let response = try await pool.modelsResponse(
+            serverContextSize: 8_192,
+            createdAt: Date(timeIntervalSince1970: 10)
+        )
 
         XCTAssertTrue(response.data.contains { $0.id == "custom.gguf" })
-        XCTAssertEqual(response.data.first { $0.id == "custom.gguf" }?.created, 10)
+        let model = try XCTUnwrap(response.data.first { $0.id == "custom.gguf" })
+        XCTAssertEqual(model.created, 10)
+        XCTAssertEqual(model.task, "chat.completions")
+        XCTAssertEqual(model.tool_call, false)
+        XCTAssertEqual(model.reasoning, false)
+        XCTAssertEqual(model.modalities, OpenAIModelModalities(input: ["text"], output: ["text"]))
+        XCTAssertEqual(model.limit, OpenAIModelLimit(context: 8_192, output: 4_096))
+    }
+
+    func testModelsResponseOverlaysRuntimeLimitsOnCatalogProfile() async throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let settingsStore = RuntimeModelSettingsStore(modelsDir: root)
+        try settingsStore.writeSettings(
+            RuntimeModelSettings(maxContextTokens: 8_192, maxTokens: 1_024),
+            for: Q35Resources.ornith9BModelId
+        )
+        let pool = RuntimeModelPool(
+            defaultModelID: Q35Resources.ornith9BModelId,
+            defaultEngine: .textChatQ36,
+            startupModelPath: nil,
+            settingsStore: settingsStore
+        )
+
+        let response = try await pool.modelsResponse(serverContextSize: 32_768)
+        let model = try XCTUnwrap(
+            response.data.first { $0.id == Q35Resources.ornith9BModelId }
+        )
+
+        XCTAssertEqual(model.limit, OpenAIModelLimit(context: 8_192, output: 1_024))
+        XCTAssertEqual(model.reasoning, true)
+        XCTAssertEqual(model.thinking_levels, ["high"])
+        XCTAssertEqual(model.tool_call, true)
+        XCTAssertEqual(
+            model.modalities,
+            OpenAIModelModalities(input: ["text", "image"], output: ["text"])
+        )
     }
 
     func testStatusReportsGemma4PrefixKVCacheCapabilityWhenEnabled() async throws {

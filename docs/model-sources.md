@@ -38,6 +38,13 @@ This is the authoritative public catalog list. It is kept in sync with
 from the runtime catalog used by `mere.run model list`,
 `mere.run model capabilities --all`, and `mere.run model pull`.
 
+API-served catalog entries also own a typed profile for their task, serving
+engine, input/output modalities, tool and structured-output support, reasoning
+levels and mappings, context/output limits, and OpenAI compatibility behavior.
+`/v1/models`, request validation, agent eligibility, and the Pi provider all
+project from that profile. Runtime aliases and configured limits are applied as
+an effective overlay; they are not a second capability catalog.
+
 <!-- managed-model-catalog:start -->
 | Catalog category | Model ID |
 | --- | --- |
@@ -262,9 +269,10 @@ existing installs and explicit local paths keep working:
 text-chat IDs listed here remain local-path-only until they have public Hugging
 Face sources.
 
-`text-agent-qwen35-9b` is the low-memory setup-agent model. It uses the public
+`text-agent-qwen35-9b` is a low-memory GGUF coding model. It uses the public
 Hugging Face source `unsloth/Qwen3.5-9B-GGUF` and selects
-`Qwen3.5-9B-Q4_K_M.gguf`.
+`Qwen3.5-9B-Q4_K_M.gguf`. Its `text-code` API lane does not expose tool calls;
+the small Pi setup-agent tier instead uses `text-agent-ornith-9b`.
 
 `text-code-north-mini` installs the Unsloth GGUF quant of Cohere Labs' North
 Mini Code 1.0 at the pinned catalog revision. North Mini Code is a 30B total /
