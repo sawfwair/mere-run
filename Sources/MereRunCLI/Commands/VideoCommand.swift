@@ -2491,6 +2491,7 @@ struct VideoGenerate: AsyncParsableCommand {
     func makePreflightEnvelope(
         outputURL: URL,
         fileManager: FileManager = .default,
+        adaptersRoot: URL = MereRunModelPaths.adaptersDir,
         now: @escaping () -> Date = Date.init
     ) -> VideoGenerationPreflightEnvelope {
         let input = VideoGenerationPreflightInput(
@@ -2587,6 +2588,7 @@ struct VideoGenerate: AsyncParsableCommand {
         return VideoGenerationPreflightAnalyzer(
             input: input,
             fileManager: fileManager,
+            adaptersRoot: adaptersRoot,
             now: now
         ).envelope()
     }
