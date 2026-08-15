@@ -6,6 +6,41 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.39.0 - 2026-08-15
+
+This release completes Qwen3.8's native Pi-agent path, adds an inline Pi harness
+for native hosts, and makes video preflight resolve managed adapters against an
+explicit root. Together these changes make installed Qwen3.8 checkpoints
+directly usable by `mere.run agent`, preserve typed tool calls end to end, and
+keep packaged native-host lifecycles and adapter discovery deterministic.
+
+### Agents and API
+
+- registered the Qwen3.8 27B BF16 and MLX 4-bit lanes in the Pi agent catalog,
+  using the native Qwen runtime and the existing tool-capable provider profile.
+- added inline Pi launch, explicit working-directory selection, repeatable
+  forwarded arguments, and native-host lifecycle handling. The harness registers
+  the selected model directly, avoids catalog probes during startup, waits for
+  actual admission before applying load timeouts, and terminates its API child
+  when the parent exits.
+- added native Qwen3.5/Qwen3.8 XML tool-call parsing with schema-aware JSON
+  restoration for strings, arrays, booleans, numbers, and objects, plus early
+  decode termination once a complete tool call is available.
+- prevented parent and child agent/API commands from deadlocking on the same
+  machine-inference admission permits.
+
+### Video
+
+- injected the managed-adapter root into video preflight analysis and resolved
+  catalog adapter paths against that explicit root, including LTX 2.5 managed
+  detailers.
+
+### Included pull requests
+
+- exact release range: [#305](https://github.com/sawfwair/mere-run/pull/305),
+  [#306](https://github.com/sawfwair/mere-run/pull/306), and
+  [#307](https://github.com/sawfwair/mere-run/pull/307).
+
 ## 0.38.0 - 2026-08-14
 
 This release adds native Qwen3.8 27B vision, reasoning, coding, and experimental
