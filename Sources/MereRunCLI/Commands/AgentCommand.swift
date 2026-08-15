@@ -402,6 +402,19 @@ struct AgentStart: AsyncParsableCommand {
     @Option(name: [.long], help: "Initial prompt sent to Pi.")
     var prompt: String = SetupAgentPrompt.defaultUserRequest
 
+    @Option(
+        name: [.customLong("pi-argument")],
+        parsing: .unconditionalSingleValue,
+        help: "Additional argument forwarded to Pi. Repeat for each argument."
+    )
+    var piArguments: [String] = []
+
+    @Option(name: [.long], help: "Working directory for the Pi process.")
+    var workingDirectory: String?
+
+    @Flag(name: [.long], help: "Run Pi in the current terminal instead of opening Terminal.app.")
+    var inline: Bool = false
+
     @Option(name: [.long], help: "Managed agent model id to serve through Pi.")
     var model: String?
 
@@ -460,20 +473,26 @@ struct AgentStart: AsyncParsableCommand {
         )
         CLIStderr.write("[agent] Pi provider extension: \(extensionURL.path)\n")
 
-        let serverProcess: Process?
+        var serverProcess: Process?
+        defer {
+            if let serverProcess, serverProcess.isRunning {
+                serverProcess.terminate()
+            }
+        }
         if skipServer {
             serverProcess = nil
         } else {
             let startedServer = try startAPIServer(modelURL: modelURL, engine: runtime.engine)
             serverProcess = startedServer.process
             CLIStderr.write("[agent] Loading \(runtime.providerModel.id). Server log: \(startedServer.logURL.path)\n")
-            try await PiAgentIntegration.waitForHealth(host: host, port: port, timeoutSeconds: runtime.healthTimeoutSeconds)
-            CLIStderr.write("[agent] Local API is ready. \(PiTerminalLauncher.launchProgressMessage)\n")
-        }
-        defer {
-            if let serverProcess, serverProcess.isRunning {
-                serverProcess.terminate()
-            }
+            try await PiAgentIntegration.waitForHealth(
+                host: host,
+                port: port,
+                timeoutSeconds: runtime.healthTimeoutSeconds,
+                serverProcess: startedServer.process,
+                serverLogURL: startedServer.logURL
+            )
+            CLIStderr.write("[agent] Local API is ready. \(PiTerminalLauncher.launchProgressMessage(inline: inline))\n")
         }
 
         try runPi(
@@ -483,8 +502,8 @@ struct AgentStart: AsyncParsableCommand {
             modelURL: modelURL
         )
         if serverProcess != nil {
-            CLIStderr.write("[agent] \(PiTerminalLauncher.runningProgressMessage)\n")
-            if PiTerminalLauncher.launchesDetached {
+            CLIStderr.write("[agent] \(PiTerminalLauncher.runningProgressMessage(inline: inline))\n")
+            if PiTerminalLauncher.launchesDetached(inline: inline) {
                 waitForServerProcess()
             }
         }
@@ -637,6 +656,7 @@ struct AgentStart: AsyncParsableCommand {
             "--port",
             String(port),
         ]
+        process.environment = Self.apiServerEnvironment()
         process.standardInput = AgentServerLog.nullInputHandle()
         process.standardOutput = log.handle
         process.standardError = log.handle
@@ -645,23 +665,51 @@ struct AgentStart: AsyncParsableCommand {
         return (process, log.url)
     }
 
+    static func apiServerEnvironment(
+        inheriting environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> [String: String] {
+        var environment = environment
+        // Agent tool turns repeatedly extend one conversation. Gemma4's
+        // cross-request prefix cache can currently retain an incompatible
+        // partial KV shape across those turns, which terminates the server.
+        // Keep the stable path as the agent default while preserving an
+        // explicit opt-in for controlled runtime experiments.
+        if environment["MERERUN_GEMMA4_PREFIX_KV_CACHE"] == nil {
+            environment["MERERUN_GEMMA4_PREFIX_KV_CACHE"] = "0"
+        }
+        return environment
+    }
+
     private static func currentExecutableURL() -> URL {
         CurrentExecutable.url()
     }
 
     private func runPi(piURL: URL, modelID: String, engine: APIEngine, modelURL: URL?) throws {
-        try PiTerminalLauncher.launch(
-            piURL: piURL,
-            modelID: modelID,
-            prompt: SetupAgentPrompt.render(
+        let directory = workingDirectory.map { URL(fileURLWithPath: $0) }
+            ?? URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: directory.path, isDirectory: &isDirectory),
+              isDirectory.boolValue else {
+            throw ValidationError("Pi working directory does not exist: \(directory.path)")
+        }
+        let initialPrompt = piArguments.isEmpty
+            ? SetupAgentPrompt.render(
                 userRequest: prompt,
                 selectedModelID: modelID,
                 engine: engine,
                 modelURL: modelURL,
                 host: host,
                 port: port
-            ),
-            homeDirectory: PiAgentIntegration.mereRunPiHomeDirectory()
+            )
+            : prompt
+        try PiTerminalLauncher.launch(
+            piURL: piURL,
+            modelID: modelID,
+            prompt: initialPrompt,
+            homeDirectory: PiAgentIntegration.mereRunPiHomeDirectory(),
+            workingDirectory: directory,
+            additionalArguments: piArguments,
+            inline: inline
         )
     }
 

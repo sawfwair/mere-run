@@ -196,6 +196,20 @@ final class SetupCommandParsingTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: extensionURL.path))
     }
 
+    func testAgentServerAdmissionMarkerDetection() throws {
+        let logURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mere-run-agent-server-\(UUID().uuidString).log")
+        defer { try? FileManager.default.removeItem(at: logURL) }
+
+        try "API server queued by machine admission.\n"
+            .write(to: logURL, atomically: true, encoding: .utf8)
+        XCTAssertFalse(PiAgentIntegration.serverAdmissionObserved(in: logURL))
+
+        try ("API server queued by machine admission.\n" + PiAgentIntegration.serverAdmissionMarker + "\n")
+            .write(to: logURL, atomically: true, encoding: .utf8)
+        XCTAssertTrue(PiAgentIntegration.serverAdmissionObserved(in: logURL))
+    }
+
     func testAgentStartModelIsOptional() throws {
         let command = try AgentStart.parse([])
 
@@ -270,6 +284,39 @@ final class SetupCommandParsingTests: XCTestCase {
         ])
 
         XCTAssertEqual(command.model, AgentModelResources.qwen35NineBModelId)
+    }
+
+    func testAgentStartParsesInlinePiHarnessArguments() throws {
+        let command = try AgentStart.parse([
+            "--inline",
+            "--working-directory", "/tmp/film",
+            "--pi-argument", "--no-extensions",
+            "--pi-argument", "--extension",
+            "--pi-argument", "/tmp/film-studio.ts",
+            "--pi-argument", "@/tmp/film/run.json",
+            "--prompt", "Open this film project.",
+        ])
+
+        XCTAssertTrue(command.inline)
+        XCTAssertEqual(command.workingDirectory, "/tmp/film")
+        XCTAssertEqual(
+            command.piArguments,
+            ["--no-extensions", "--extension", "/tmp/film-studio.ts", "@/tmp/film/run.json"]
+        )
+        XCTAssertEqual(command.prompt, "Open this film project.")
+    }
+
+    func testAgentServerDefaultsGemma4PrefixKVCacheOffButPreservesExplicitOverride() {
+        XCTAssertEqual(
+            AgentStart.apiServerEnvironment(inheriting: [:])["MERERUN_GEMMA4_PREFIX_KV_CACHE"],
+            "0"
+        )
+        XCTAssertEqual(
+            AgentStart.apiServerEnvironment(
+                inheriting: ["MERERUN_GEMMA4_PREFIX_KV_CACHE": "1"]
+            )["MERERUN_GEMMA4_PREFIX_KV_CACHE"],
+            "1"
+        )
     }
 
     func testSetupAgentPromptCarriesBoundedMachineContext() {
@@ -537,5 +584,24 @@ final class SetupCommandParsingTests: XCTestCase {
             resolved?.resolvingSymlinksInPath(),
             binaryURL.resolvingSymlinksInPath()
         )
+    }
+
+    func testPiLaunchExplicitlyKeepsLocalProviderWhenExtensionDiscoveryIsDisabled() {
+        let home = URL(fileURLWithPath: "/tmp/mere-run-pi-home", isDirectory: true)
+
+        let arguments = PiTerminalLauncher.arguments(
+            modelID: "text-chat-test",
+            prompt: "Make a film",
+            homeDirectory: home,
+            additionalArguments: ["--no-extensions", "--extension", "/tmp/film-studio.ts"]
+        )
+
+        XCTAssertEqual(arguments.prefix(4), ["--provider", "mere-run", "--model", "text-chat-test"])
+        XCTAssertEqual(
+            arguments.dropFirst(4).prefix(2),
+            ["--extension", "/tmp/mere-run-pi-home/.pi/agent/extensions/mere-run-local-provider.ts"]
+        )
+        XCTAssertTrue(arguments.contains("--no-extensions"))
+        XCTAssertEqual(arguments.suffix(1), ["Make a film"])
     }
 }

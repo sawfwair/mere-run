@@ -446,15 +446,18 @@ typealias VideoGenerationPreflightEnvelope = StructuredRunEnvelope<
 struct VideoGenerationPreflightAnalyzer {
     let input: VideoGenerationPreflightInput
     let fileManager: FileManager
+    let adaptersRoot: URL
     let now: () -> Date
 
     init(
         input: VideoGenerationPreflightInput,
         fileManager: FileManager = .default,
+        adaptersRoot: URL = MereRunModelPaths.adaptersDir,
         now: @escaping () -> Date = Date.init
     ) {
         self.input = input
         self.fileManager = fileManager
+        self.adaptersRoot = adaptersRoot
         self.now = now
     }
 
@@ -1425,7 +1428,8 @@ struct VideoGenerationPreflightAnalyzer {
             return pathSummary(requested: path)
         }
         let adapter = input.h3Adapter.map { reference -> VideoGenerationPathPreflightSummary in
-            let path = ManagedAdapterCatalog.spec(for: reference)?.installedFileURL().path ?? reference
+            let path = ManagedAdapterCatalog.spec(for: reference)?
+                .installedFileURL(adaptersRoot: adaptersRoot).path ?? reference
             return pathSummary(requested: reference, resolvedPath: path)
         }
         func loraReference(_ raw: String) -> String {
@@ -1435,7 +1439,8 @@ struct VideoGenerationPreflightAnalyzer {
         }
         func adapterPathSummary(_ raw: String) -> VideoGenerationPathPreflightSummary {
             let reference = loraReference(raw)
-            let resolved = ManagedAdapterCatalog.spec(for: reference)?.installedFileURL().path
+            let resolved = ManagedAdapterCatalog.spec(for: reference)?
+                .installedFileURL(adaptersRoot: adaptersRoot).path
                 ?? reference
             return pathSummary(requested: reference, resolvedPath: resolved)
         }

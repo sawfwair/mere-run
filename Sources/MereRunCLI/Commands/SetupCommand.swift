@@ -279,7 +279,13 @@ struct Setup: AsyncParsableCommand {
             }
         }
         CLIStderr.write("[setup] Loading \(runtime.providerModel.id). Server log: \(startedServer.logURL.path)\n")
-        try await PiAgentIntegration.waitForHealth(host: host, port: port, timeoutSeconds: runtime.healthTimeoutSeconds)
+        try await PiAgentIntegration.waitForHealth(
+            host: host,
+            port: port,
+            timeoutSeconds: runtime.healthTimeoutSeconds,
+            serverProcess: server,
+            serverLogURL: startedServer.logURL
+        )
         CLIStderr.write("[setup] Local API is ready. \(PiTerminalLauncher.launchProgressMessage)\n")
         try runPi(
             piURL: piURL,

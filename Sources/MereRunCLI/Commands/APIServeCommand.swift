@@ -225,6 +225,7 @@ struct APIServe: AsyncParsableCommand {
             )
         }
         defer { machineAdmissionLease.release() }
+        CLIStderr.write("\(PiAgentIntegration.serverAdmissionMarker)\n")
         let server = try await CodeGenServer(
             defaultModelID: defaultModelID,
             modelPath: resolvedModelPath,

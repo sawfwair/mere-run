@@ -106,6 +106,8 @@ struct PiProviderModel {
 }
 
 enum PiAgentIntegration {
+    static let serverAdmissionMarker = "API server admitted by machine admission."
+
     struct ProviderConfiguration: Codable, Hashable {
         let host: String
         let port: Int
@@ -407,18 +409,46 @@ enum PiAgentIntegration {
             .appendingPathComponent("provider.json", isDirectory: false)
     }
 
-    static func waitForHealth(host: String, port: Int, timeoutSeconds: TimeInterval) async throws {
-        let deadline = Date().addingTimeInterval(timeoutSeconds)
+    static func waitForHealth(
+        host: String,
+        port: Int,
+        timeoutSeconds: TimeInterval,
+        serverProcess: Process? = nil,
+        serverLogURL: URL? = nil
+    ) async throws {
+        var awaitingAdmission = serverProcess != nil && serverLogURL != nil
+        var deadline = awaitingAdmission ? nil : Date().addingTimeInterval(timeoutSeconds)
         let healthURL = URL(string: "http://\(host):\(port)/health")!
-        while Date() < deadline {
+        while deadline.map({ Date() < $0 }) ?? true {
             if let (_, response) = try? await URLSession.shared.data(from: healthURL),
                let http = response as? HTTPURLResponse,
                http.statusCode == 200 {
                 return
             }
+            if let serverProcess, !serverProcess.isRunning {
+                throw IntegrationError.serverDidNotBecomeReady(healthURL)
+            }
+            if awaitingAdmission,
+               let serverLogURL,
+               serverAdmissionObserved(in: serverLogURL) {
+                awaitingAdmission = false
+                deadline = Date().addingTimeInterval(timeoutSeconds)
+            }
             try await Task.sleep(nanoseconds: 500_000_000)
         }
         throw IntegrationError.serverDidNotBecomeReady(healthURL)
+    }
+
+    static func serverAdmissionObserved(
+        in logURL: URL,
+        fileManager: FileManager = .default
+    ) -> Bool {
+        guard fileManager.fileExists(atPath: logURL.path),
+              let data = try? Data(contentsOf: logURL),
+              let contents = String(data: data, encoding: .utf8) else {
+            return false
+        }
+        return contents.contains(serverAdmissionMarker)
     }
 
     private static func fetchLatestRelease() async throws -> GitHubRelease {
