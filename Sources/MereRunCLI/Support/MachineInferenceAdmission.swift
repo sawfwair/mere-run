@@ -569,6 +569,15 @@ enum CLIInferenceAdmissionClassifier {
         let subcommand = commandTokens.dropFirst().first
         let label = [topLevel, subcommand].compactMap { $0 }.joined(separator: " ")
 
+        // These orchestration commands either acquire a workload-specific
+        // lease internally or spawn a child process that does. Classifying
+        // their --model argument here would make the parent hold permits while
+        // waiting for the child to acquire the same permits.
+        if ["api", "open-webui", "run", "graph", "executor", "gate", "setup", "agent", "plugin"]
+            .contains(topLevel) {
+            return nil
+        }
+
         if tokens.contains(where: { token in
             let normalized = token.lowercased()
             return normalized.contains("deepseek-v4") || normalized.contains("ds4")
@@ -615,8 +624,6 @@ enum CLIInferenceAdmissionClassifier {
             return MachineInferenceRequest(label: label, resourceClass: .large)
         case "adapter" where subcommand != "list" && subcommand != "pull":
             return MachineInferenceRequest(label: label, resourceClass: .standard)
-        case "api", "open-webui", "run", "graph", "executor", "gate", "setup", "agent", "plugin":
-            return nil
         default:
             return nil
         }
