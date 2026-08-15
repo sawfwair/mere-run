@@ -410,6 +410,20 @@ public enum ManagedModelCapabilityCatalog {
                 setup: true
             ),
             descriptor(
+                Q35Resources.q38TwentySevenBModelId,
+                "Qwen3.8 27B vision chat",
+                "Runs Qwen's official dense 27B BF16 vision-language checkpoint through the native Qwen-family runtime.",
+                minimum: 64,
+                recommended: 96
+            ),
+            descriptor(
+                Q35Resources.q38TwentySevenB4BitModelId,
+                "Qwen3.8 27B 4-bit vision chat",
+                "Runs LM Studio's pinned MLX 4-bit conversion with Qwen's official MTP shard available for explicit speculative decode.",
+                minimum: 32,
+                recommended: 48
+            ),
+            descriptor(
                 Q35Resources.bonsai27B1BitModelId,
                 "Bonsai 27B 1-bit vision chat",
                 "Runs Prism ML's dense Qwen3.6 27B reasoning and vision model from packed 1-bit MLX weights.",

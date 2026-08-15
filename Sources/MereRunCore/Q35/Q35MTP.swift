@@ -81,28 +81,60 @@ final class Q35MTPExperts: Module {
     }
 }
 
-final class Q35MTPMoE: Module {
-    @ModuleInfo(key: "gate") var gate: Linear
-    @ModuleInfo(key: "experts") var experts: Q35MTPExperts
-    @ModuleInfo(key: "shared_expert") var sharedExpert: Q35MLP
-    @ModuleInfo(key: "shared_expert_gate") var sharedExpertGate: Linear
+final class Q35MTPFeedForward: Module {
+    @ModuleInfo(key: "gate") var gate: Linear?
+    @ModuleInfo(key: "experts") var experts: Q35MTPExperts?
+    @ModuleInfo(key: "shared_expert") var sharedExpert: Q35MLP?
+    @ModuleInfo(key: "shared_expert_gate") var sharedExpertGate: Linear?
+    @ModuleInfo(key: "gate_proj") var gateProj: Linear?
+    @ModuleInfo(key: "up_proj") var upProj: Linear?
+    @ModuleInfo(key: "down_proj") var downProj: Linear?
 
     private let topK: Int
+    private let usesMoE: Bool
 
     init(config: Q35Config) {
         let text = config.textConfig
+        self.usesMoE = text.usesMoE
         self.topK = max(1, text.numExpertsPerTok)
-        self._gate.wrappedValue = Linear(text.hiddenSize, text.numExperts, bias: false)
-        self._experts.wrappedValue = Q35MTPExperts(config: config)
-        self._sharedExpert.wrappedValue = Q35MLP(
-            hiddenSize: text.hiddenSize,
-            intermediateSize: text.sharedExpertIntermediateSize
-        )
-        self._sharedExpertGate.wrappedValue = Linear(text.hiddenSize, 1, bias: false)
+
+        if text.usesMoE {
+            self._gate.wrappedValue = Linear(text.hiddenSize, text.numExperts, bias: false)
+            self._experts.wrappedValue = Q35MTPExperts(config: config)
+            self._sharedExpert.wrappedValue = Q35MLP(
+                hiddenSize: text.hiddenSize,
+                intermediateSize: text.sharedExpertIntermediateSize
+            )
+            self._sharedExpertGate.wrappedValue = Linear(text.hiddenSize, 1, bias: false)
+            self._gateProj.wrappedValue = nil
+            self._upProj.wrappedValue = nil
+            self._downProj.wrappedValue = nil
+        } else {
+            self._gate.wrappedValue = nil
+            self._experts.wrappedValue = nil
+            self._sharedExpert.wrappedValue = nil
+            self._sharedExpertGate.wrappedValue = nil
+            self._gateProj.wrappedValue = Linear(text.hiddenSize, text.intermediateSize, bias: false)
+            self._upProj.wrappedValue = Linear(text.hiddenSize, text.intermediateSize, bias: false)
+            self._downProj.wrappedValue = Linear(text.intermediateSize, text.hiddenSize, bias: false)
+        }
         super.init()
     }
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {
+        if !usesMoE,
+           let gateProj,
+           let upProj,
+           let downProj {
+            return downProj(q35MTPSwiglu(gateProj(x), upProj(x)))
+        }
+
+        guard let gate,
+              let experts,
+              let sharedExpert,
+              let sharedExpertGate else {
+            return x
+        }
         var scores = softmax(gate(x), axis: -1)
         let k = min(topK, scores.dim(-1))
         let indices = argPartition(-scores, kth: k - 1, axis: -1)[.ellipsis, 0..<k]
@@ -120,14 +152,14 @@ final class Q35MTPMoE: Module {
 
 final class Q35MTPDecoderLayer: Module {
     @ModuleInfo(key: "self_attn") var selfAttention: Q35FullAttention
-    @ModuleInfo(key: "mlp") var mlp: Q35MTPMoE
+    @ModuleInfo(key: "mlp") var mlp: Q35MTPFeedForward
     @ModuleInfo(key: "input_layernorm") var inputLayerNorm: Q35RMSNorm
     @ModuleInfo(key: "post_attention_layernorm") var postAttentionLayerNorm: Q35RMSNorm
 
     init(config: Q35Config) {
         let text = config.textConfig
         self._selfAttention.wrappedValue = Q35FullAttention(config: config)
-        self._mlp.wrappedValue = Q35MTPMoE(config: config)
+        self._mlp.wrappedValue = Q35MTPFeedForward(config: config)
         self._inputLayerNorm.wrappedValue = Q35RMSNorm(dimensions: text.hiddenSize, eps: text.rmsNormEps)
         self._postAttentionLayerNorm.wrappedValue = Q35RMSNorm(dimensions: text.hiddenSize, eps: text.rmsNormEps)
         super.init()

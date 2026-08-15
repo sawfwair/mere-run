@@ -85,18 +85,70 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         XCTAssertTrue(rendered.contains("<|vision_start|><|image_pad|><|image_pad|><|image_pad|><|vision_end|>"))
     }
 
-    func testQ35Qwen3VLTargetSizeUsesInfinityParserPixelBudget() {
-        let target = Q35Generator.qwen3VLTargetSize(
+    func testQ35Qwen3VLTargetSizeUsesUpstreamSpatialPixelBudget() throws {
+        let target = try Q35Generator.qwen3VLTargetSize(
             originalWidth: 2_108,
             originalHeight: 1_094,
             patchSize: 16,
-            temporalPatchSize: 2,
             spatialMergeSize: 2
         )
 
         XCTAssertEqual(target.width, 2_112)
         XCTAssertEqual(target.height, 1_088)
         XCTAssertEqual((target.width / 16) * (target.height / 16) / 4, 2_244)
+    }
+
+    func testQ38ImageResizeDoesNotCountDuplicatedTemporalPatch() throws {
+        let target = try Q35Generator.qwen3VLTargetSize(
+            originalWidth: 3_072,
+            originalHeight: 3_072,
+            patchSize: 16,
+            spatialMergeSize: 2,
+            minPixels: Q35Resources.q38TwentySevenBVisionMinPixels,
+            maxPixels: Q35Resources.q38TwentySevenBVisionMaxPixels
+        )
+
+        XCTAssertEqual(target.width, 3_072)
+        XCTAssertEqual(target.height, 3_072)
+    }
+
+    func testQ38ImageResizeUpscalesFromPublishedSpatialMinimum() throws {
+        let target = try Q35Generator.qwen3VLTargetSize(
+            originalWidth: 256,
+            originalHeight: 128,
+            patchSize: 16,
+            spatialMergeSize: 2,
+            minPixels: Q35Resources.q38TwentySevenBVisionMinPixels,
+            maxPixels: Q35Resources.q38TwentySevenBVisionMaxPixels
+        )
+
+        XCTAssertEqual(target.width, 384)
+        XCTAssertEqual(target.height, 192)
+    }
+
+    func testQ35ImageResizeUsesPythonTieToEvenRounding() throws {
+        let target = try Q35Generator.qwen3VLTargetSize(
+            originalWidth: 80,
+            originalHeight: 80,
+            patchSize: 16,
+            spatialMergeSize: 2,
+            minPixels: 1,
+            maxPixels: 1_000_000
+        )
+
+        XCTAssertEqual(target.width, 64)
+        XCTAssertEqual(target.height, 64)
+    }
+
+    func testQ35ImageResizeRejectsUpstreamUnsupportedAspectRatio() {
+        XCTAssertThrowsError(
+            try Q35Generator.qwen3VLTargetSize(
+                originalWidth: 6_432,
+                originalHeight: 32,
+                patchSize: 16,
+                spatialMergeSize: 2
+            )
+        )
     }
 
     func testQ35LinearAttentionConvWeightsKeepMLXLayout() {
@@ -203,6 +255,122 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         XCTAssertTrue(Q35Generator.isOffsetRMSNormWeight("model.layers.3.self_attn.q_norm.weight"))
         XCTAssertTrue(Q35Generator.isOffsetRMSNormWeight("model.norm.weight"))
         XCTAssertFalse(Q35Generator.isOffsetRMSNormWeight("model.layers.0.linear_attn.norm.weight"))
+    }
+
+    func testQ35OfficialCheckpointKeepsZeroCenteredRMSNormWeights() {
+        let published = MLXArray([Float(-0.125), 0.25])
+        let normalized = Q35Generator.normalizedRMSNormWeight(
+            published,
+            checkpointUsesZeroCenteredNorms: true
+        )
+        MLX.eval(normalized)
+
+        XCTAssertEqual(normalized[0].item(Float.self), -0.125, accuracy: 1e-6)
+        XCTAssertEqual(normalized[1].item(Float.self), 0.25, accuracy: 1e-6)
+    }
+
+    func testQ35ConvertedCheckpointConvertsDirectRMSNormScalesToOffsets() {
+        let converted = MLXArray([Float(0.875), 1.25])
+        let normalized = Q35Generator.normalizedRMSNormWeight(
+            converted,
+            checkpointUsesZeroCenteredNorms: false
+        )
+        MLX.eval(normalized)
+
+        XCTAssertEqual(normalized[0].item(Float.self), -0.125, accuracy: 1e-6)
+        XCTAssertEqual(normalized[1].item(Float.self), 0.25, accuracy: 1e-6)
+    }
+
+    func testQ35OfficialCheckpointLayoutDetectedFromEmbeddedMTP() {
+        XCTAssertTrue(Q35Generator.checkpointUsesZeroCenteredRMSNorm(
+            weightKeys: [
+                "model.language_model.layers.0.input_layernorm.weight",
+                "model.mtp.pre_fc_norm_hidden.weight",
+            ],
+            tensorShapes: [:]
+        ))
+    }
+
+    func testQ35OfficialCheckpointLayoutDetectedFromPyTorchConv1D() {
+        let key = "model.language_model.layers.0.linear_attn.conv1d.weight"
+        XCTAssertTrue(Q35Generator.checkpointUsesZeroCenteredRMSNorm(
+            weightKeys: [key],
+            tensorShapes: [key: [12_288, 1, 4]]
+        ))
+        XCTAssertFalse(Q35Generator.checkpointUsesZeroCenteredRMSNorm(
+            weightKeys: [key],
+            tensorShapes: [key: [12_288, 4, 1]]
+        ))
+    }
+
+    func testQ35ImageTokenExpansionPreservesCanonicalTemplateTokens() throws {
+        let expanded = try Q35TokenizerAndTemplate.expandingImageTokenIds(
+            [10, 248_056, 20, 248_056, 30],
+            imageTokenId: 248_056,
+            imageTokenCounts: [3, 2]
+        )
+
+        XCTAssertEqual(expanded, [10, 248_056, 248_056, 248_056, 20, 248_056, 248_056, 30])
+    }
+
+    func testQ35ImageTokenExpansionRejectsTemplateImageMismatch() {
+        XCTAssertThrowsError(
+            try Q35TokenizerAndTemplate.expandingImageTokenIds(
+                [10, 20],
+                imageTokenId: 248_056,
+                imageTokenCounts: [3]
+            )
+        )
+    }
+
+    func testQ35TemplateMessagesPreserveReasoningAndToolCalls() throws {
+        let rendered = Q35TokenizerAndTemplate.renderMessages([
+            ChatMessage(
+                role: .assistant,
+                content: "I will inspect it.",
+                reasoningContent: "Need the exact file.",
+                toolCalls: [
+                    ChatMessageToolCall(
+                        id: "call_1",
+                        name: "inspect_file",
+                        arguments: ["path": .string("/tmp/input.png")]
+                    ),
+                ]
+            ),
+        ])
+        let message = try XCTUnwrap(rendered.first)
+        XCTAssertEqual(message["reasoning_content"] as? String, "Need the exact file.")
+        let calls = try XCTUnwrap(message["tool_calls"] as? [[String: any Sendable]])
+        let function = try XCTUnwrap(calls.first?["function"] as? [String: any Sendable])
+        XCTAssertEqual(function["name"] as? String, "inspect_file")
+    }
+
+    func testQ38PinnedTokenizerRendersCanonicalVisionPromptWhenAvailable() throws {
+        guard let rootPath = ProcessInfo.processInfo.environment["MERERUN_Q38_TOKENIZER_ROOT"] else {
+            throw XCTSkip("Set MERERUN_Q38_TOKENIZER_ROOT to run pinned Qwen3.8 tokenizer parity.")
+        }
+        let template = try Q35TokenizerAndTemplate.load(
+            from: URL(fileURLWithPath: rootPath),
+            maxLengthOverride: Q35Resources.q38TwentySevenBContextLength
+        )
+        let tokens = try template.encodeForGeneration(
+            messages: [ChatMessage(
+                role: .user,
+                content: "Read it.",
+                imageUrl: "/tmp/page.png"
+            )],
+            addGenerationPrompt: true,
+            includeThinking: true,
+            maxLength: Q35Resources.q38TwentySevenBContextLength,
+            imageTokenCounts: [3]
+        )
+        let decoded = template.decode(tokens: tokens)
+
+        XCTAssertTrue(decoded.contains("Reasoning effort is set to xhigh."))
+        XCTAssertTrue(decoded.contains(
+            "<|vision_start|><|image_pad|><|image_pad|><|image_pad|><|vision_end|>Read it."
+        ))
+        XCTAssertTrue(decoded.hasSuffix("<|im_start|>assistant\n<think>\n"))
     }
 
     func testQ35TemplateLeavesThinkingOpenWhenRequested() {
@@ -339,9 +507,16 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         XCTAssertEqual(probs.sum().item(Float.self), 1, accuracy: 0.0001)
     }
 
-    func testQ35MTPDraftLogitsSupportsDenseExpertWeightLayout() throws {
+    func testQ35MTPDraftLogitsSupportsDenseFeedForwardWeightLayout() throws {
         MLXRandom.seed(39)
-        let config = try decodeConfig(makeTinyRuntimeConfig(layerTypes: ["full_attention"]))
+        var configObject = makeTinyRuntimeConfig(layerTypes: ["full_attention"])
+        var textConfig = configObject["text_config"] as? [String: Any] ?? [:]
+        textConfig.removeValue(forKey: "num_experts")
+        textConfig.removeValue(forKey: "num_experts_per_tok")
+        textConfig.removeValue(forKey: "moe_intermediate_size")
+        textConfig.removeValue(forKey: "shared_expert_intermediate_size")
+        configObject["text_config"] = textConfig
+        let config = try decodeConfig(configObject)
         let model = Q35Model(config: config)
         let mtp = Q35MTPModel(config: config)
         let tokens = [1, 2, 3]
@@ -362,6 +537,17 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
 
         XCTAssertEqual(draftLogits.shape, [1, 1, config.textConfig.vocabSize])
         XCTAssertTrue(MLX.max(MLX.abs(draftLogits.asType(.float32))).item(Float.self).isFinite)
+    }
+
+    func testQ35EmbeddedMTPWeightsSelectOnlyContainingShards() {
+        let shards = Q35Generator.embeddedMTPShardFilenames(weightMap: [
+            "model.language_model.layers.0.mlp.down_proj.weight": "model-00001.safetensors",
+            "mtp.layers.0.mlp.down_proj.weight": "model-00018.safetensors",
+            "mtp.norm.weight": "model-00018.safetensors",
+            "mtp.fc.weight": "model-00017.safetensors",
+        ])
+
+        XCTAssertEqual(shards, ["model-00017.safetensors", "model-00018.safetensors"])
     }
 
     func testQ35MTPDraftBlockReturnsRequestedGreedyTokens() throws {
@@ -412,6 +598,27 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
                     "MERERUN_Q35_MTP_SPECULATION": "1",
                     "MERERUN_Q35_MTP_MIN_PROMPT_TOKENS": "2048",
                 ]
+            )
+        )
+    }
+
+    func testQ35DenseMTPRequiresExplicitOptIn() {
+        XCTAssertFalse(
+            Q35Generator.shouldSpeculate(
+                promptTokenCount: 32,
+                maxContextTokens: 262_144,
+                defaultMinimumPromptTokens: 0,
+                enabledByDefault: false,
+                environment: [:]
+            )
+        )
+        XCTAssertTrue(
+            Q35Generator.shouldSpeculate(
+                promptTokenCount: 32,
+                maxContextTokens: 262_144,
+                defaultMinimumPromptTokens: 0,
+                enabledByDefault: false,
+                environment: ["MERERUN_Q35_MTP_SPECULATION": "1"]
             )
         )
     }
@@ -506,21 +713,38 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         XCTAssertEqual(config.textConfig.numExperts, 256)
     }
 
-    func testQ35ConfigAllowsDenseQwen35VisionLayout() throws {
+    func testQ38PublishedDenseVisionConfigurationDecodes() throws {
         var configObject = makeBaseConfig()
         configObject["model_type"] = "qwen3_5"
         configObject["architectures"] = ["Qwen3_5ForConditionalGeneration"]
-        configObject["eos_token_id"] = 248_046
+        configObject.removeValue(forKey: "eos_token_id")
         configObject["image_token_id"] = 248_056
+        configObject["video_token_id"] = 248_057
         configObject["vision_start_token_id"] = 248_053
         configObject["vision_end_token_id"] = 248_054
         if var textConfig = configObject["text_config"] as? [String: Any] {
             textConfig["model_type"] = "qwen3_5_text"
-            textConfig["hidden_size"] = 2048
-            textConfig["num_hidden_layers"] = 24
-            textConfig["intermediate_size"] = 6144
-            textConfig["num_attention_heads"] = 8
+            textConfig["hidden_size"] = 5120
+            textConfig["num_hidden_layers"] = 64
+            textConfig["intermediate_size"] = 17_408
+            textConfig["num_attention_heads"] = 24
+            textConfig["num_key_value_heads"] = 4
             textConfig["head_dim"] = 256
+            textConfig["layer_types"] = (0..<64).map { ($0 + 1).isMultiple(of: 4) ? "full_attention" : "linear_attention" }
+            textConfig["linear_num_value_heads"] = 48
+            textConfig["linear_num_key_heads"] = 16
+            textConfig["linear_key_head_dim"] = 128
+            textConfig["linear_value_head_dim"] = 128
+            textConfig["max_position_embeddings"] = 262_144
+            textConfig["vocab_size"] = 248_320
+            textConfig["eos_token_id"] = 248_044
+            textConfig["rope_parameters"] = [
+                "mrope_interleaved": true,
+                "mrope_section": [11, 11, 10],
+                "partial_rotary_factor": 0.25,
+                "rope_theta": 10_000_000.0,
+                "rope_type": "default",
+            ]
             textConfig.removeValue(forKey: "num_experts")
             textConfig.removeValue(forKey: "num_experts_per_tok")
             textConfig.removeValue(forKey: "moe_intermediate_size")
@@ -529,9 +753,11 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         }
         if var visionConfig = configObject["vision_config"] as? [String: Any] {
             visionConfig["model_type"] = "qwen3_5"
-            visionConfig["hidden_size"] = 1024
-            visionConfig["intermediate_size"] = 4096
-            visionConfig["out_hidden_size"] = 2048
+            visionConfig["depth"] = 27
+            visionConfig["hidden_act"] = "gelu_pytorch_tanh"
+            visionConfig["hidden_size"] = 1152
+            visionConfig["intermediate_size"] = 4304
+            visionConfig["out_hidden_size"] = 5120
             visionConfig["patch_size"] = 16
             visionConfig["spatial_merge_size"] = 2
             visionConfig["num_position_embeddings"] = 2304
@@ -541,13 +767,52 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         let config = try decodeConfig(configObject)
 
         XCTAssertEqual(config.modelType, "qwen3_5")
-        XCTAssertEqual(config.eosTokenIds, [248_046])
+        XCTAssertEqual(config.eosTokenIds, [248_044])
         XCTAssertEqual(config.imageTokenId, 248_056)
         XCTAssertFalse(config.textConfig.usesMoE)
         XCTAssertEqual(config.textConfig.numExperts, 0)
         XCTAssertEqual(config.textConfig.numExpertsPerTok, 0)
+        XCTAssertEqual(config.textConfig.hiddenSize, 5120)
+        XCTAssertEqual(config.textConfig.numHiddenLayers, 64)
+        XCTAssertEqual(config.textConfig.intermediateSize, 17_408)
+        XCTAssertEqual(config.textConfig.maxPositionEmbeddings, 262_144)
+        XCTAssertEqual(config.visionConfig?.depth, 27)
+        XCTAssertEqual(config.visionConfig?.hiddenSize, 1152)
+        XCTAssertEqual(config.visionConfig?.outHiddenSize, 5120)
         XCTAssertEqual(config.visionConfig?.patchSize, 16)
         XCTAssertEqual(config.visionConfig?.spatialMergeSize, 2)
+    }
+
+    func testQ38GenerationConfigDecodesAllPublishedStopTokens() throws {
+        let data = Data(#"{"eos_token_id":[248046,248044]}"#.utf8)
+
+        let config = try JSONDecoder().decode(Q35GenerationConfig.self, from: data)
+
+        XCTAssertEqual(config.eosTokenIds, [248_046, 248_044])
+    }
+
+    func testQ38ResourceProfileUsesPublishedContextAndVisionBounds() throws {
+        let profile = try XCTUnwrap(Q35Resources.profile(for: Q35Resources.q38TwentySevenBModelId))
+        let bounds = Q35Resources.visionPixelBounds(forModelId: profile.modelId)
+
+        XCTAssertEqual(profile.upstreamRepoId, Q35Resources.q38TwentySevenBUpstreamRepoId)
+        XCTAssertEqual(profile.upstreamRevision, Q35Resources.q38TwentySevenBUpstreamRevision)
+        XCTAssertEqual(Q35Resources.defaultContextLength(forModelId: profile.modelId), 262_144)
+        XCTAssertEqual(bounds.minimum, 65_536)
+        XCTAssertEqual(bounds.maximum, 16_777_216)
+    }
+
+    func testQ38FourBitResourceProfileKeepsPublishedRuntimeBounds() throws {
+        let profile = try XCTUnwrap(
+            Q35Resources.profile(for: Q35Resources.q38TwentySevenB4BitModelId)
+        )
+        let bounds = Q35Resources.visionPixelBounds(forModelId: profile.modelId)
+
+        XCTAssertEqual(profile.upstreamRepoId, Q35Resources.q38TwentySevenB4BitUpstreamRepoId)
+        XCTAssertEqual(profile.upstreamRevision, Q35Resources.q38TwentySevenB4BitUpstreamRevision)
+        XCTAssertEqual(Q35Resources.defaultContextLength(forModelId: profile.modelId), 262_144)
+        XCTAssertEqual(bounds.minimum, 65_536)
+        XCTAssertEqual(bounds.maximum, 16_777_216)
     }
 
     func testQ35ConfigAllowsOrnithOptiQQuantizationMetadata() throws {

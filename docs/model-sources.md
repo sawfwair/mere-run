@@ -79,6 +79,8 @@ an effective overlay; they are not a second capability catalog.
 | `vision-chat` | `vision-chat-muse-glimmer-30b` |
 | `text-chat` | `text-chat-nemotron-35-lightning` |
 | `text-chat` | `text-chat-q36-nano` |
+| `vision-chat` | `vision-chat-q38-27b` |
+| `vision-chat` | `vision-chat-q38-27b-4bit` |
 | `text-chat` | `text-chat-bonsai-27b-1bit` |
 | `text-chat` | `text-chat-bonsai-27b-2bit` |
 | `text-code` | `text-agent-ornith-9b` |
@@ -314,6 +316,28 @@ snapshot. That Hugging Face repo includes an MTP head (`mtp.safetensors`) for
 OptiQ serving; mere.run loads that draft head when present, but only uses it for
 adaptive speculative decode when the effective prompt and context window are
 long enough. Short-context requests decode with the main chat weights.
+
+`vision-chat-q38-27b` installs Qwen's official `Qwen/Qwen3.8-27B` BF16
+checkpoint at immutable revision
+`1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0`. It is a dense 27B native
+vision-language model with hybrid linear/full attention, a 262,144-token
+native context window, image and video weights, and Apache-2.0 terms. mere.run
+supports text and local-image prompts through the native Qwen-family runtime;
+video input is not yet exposed. The selected snapshot is 55.59 GB, requires an
+explicit `model pull`, and is cataloged for 64 GB unified memory minimum with
+96 GB recommended. The pull retains the published generation and processor
+metadata as well as the license.
+
+`vision-chat-q38-27b-4bit` installs
+`lmstudio-community/Qwen3.8-27B-MLX-4bit` at immutable revision
+`6067b15cf581666a4aecf6af3afaba4bb5efc20c`. The target uses 4-bit/group-64
+MLX affine weights and retains the same Qwen3.8 text, code, image, context, and
+sampling contracts. The managed pull also mounts Qwen's official final BF16
+shard at revision `1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0` under `mtp/`;
+that shard contains the 15 published MTP tensors and the Apache-2.0 license.
+The two pinned sources total 19.47 GB. The MTP component is loaded only when
+`MERERUN_Q35_MTP_SPECULATION=1`; default decode remains target-only because
+greedy speculative verification is not bit-exact with serial decode.
 
 `text-chat-bonsai-27b-1bit` and `text-chat-bonsai-27b-2bit` install Prism ML's
 public `prism-ml/Bonsai-27B-mlx-1bit` and

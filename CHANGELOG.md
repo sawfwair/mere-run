@@ -28,6 +28,27 @@ The format is based on Keep a Changelog.
 
 ### Runtime
 
+- added `vision-chat-q38-27b`, pinned to Qwen's official Apache-2.0
+  Qwen3.8-27B BF16 checkpoint. The native Qwen-family runtime now exposes the
+  dense 27B hybrid-attention model's text, code, and image understanding,
+  published 262,144-token context, thinking and sampling defaults, complete
+  generation EOS set, and Qwen3.8 image sizing. The 55.59 GB pull is explicit
+  rather than an inference-time auto-download and is gated to 64 GB unified
+  memory with 96 GB recommended. The coding benchmark accepts Qwen3.8 as an
+  explicit model and scores only visible code after separating reasoning. The
+  runtime can load the checkpoint's embedded dense MTP head for opt-in
+  three-token greedy drafts. It remains experimental because BF16 multi-token
+  verification can diverge from serial greedy decode; the default, sampled,
+  and constrained requests retain the target-only path.
+- added the separate `vision-chat-q38-27b-4bit` managed lane, pinned to LM
+  Studio's 4-bit/group-64 MLX conversion. Its 19.47 GB composite pull mounts
+  only Qwen's pinned final BF16 shard under `mtp/`, retaining the official MTP
+  head and license without duplicating the 55.59 GB checkpoint. Target-only
+  decode remains the default; `MERERUN_Q35_MTP_SPECULATION=1` enables the
+  explicitly experimental fast path. A deterministic 24-task stride through
+  the official HumanEval set scored 20/24 in both modes with the same failures;
+  one failing case changed length by three tokens, so MTP remains opt-in rather
+  than claiming exact greedy-output parity.
 - refreshed the owned MLX and mlx-swift forks onto current upstream cutoffs,
   retained the scoped 1-bit, NVFP4, CUDA, stream-safety, and M4/H3 patches,
   made the generated NAX optimizations source-reproducible, and regenerated

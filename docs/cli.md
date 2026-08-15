@@ -230,7 +230,7 @@ are:
   `image-hidream-o1`, `image-hidream-o1-dev`, `image-krea2-raw`,
   `image-krea2-turbo`,
   `image-ideogram4-sdnq-uint4`
-- Text chat: `text-chat-gemma4`, `text-chat-mebot`, `text-chat-psi-agent`, `text-chat-q36-nano`, `text-chat-lfm25-2.6b-4bit`, `text-chat-lfm25-a1b-8bit`, `vision-chat-lfm25-3b-8bit`
+- Text chat: `text-chat-gemma4`, `text-chat-mebot`, `text-chat-psi-agent`, `text-chat-q36-nano`, `vision-chat-q38-27b`, `vision-chat-q38-27b-4bit`, `text-chat-lfm25-2.6b-4bit`, `text-chat-lfm25-a1b-8bit`, `vision-chat-lfm25-3b-8bit`
 - Text code / agents: `text-agent-qwen35-9b`, `text-agent-ornith-9b`, `text-agent-ornith-35b-mlx`, `text-agent-ornith-35b`, `text-code-north-mini`, `text-code-qwen3`
 - Text embed: `text-embed-qwen3-0.6b`
 - Text anonymize: `text-anonymize-privacy-filter`
@@ -790,7 +790,7 @@ Key options:
 
 ### `mere.run text chat`
 
-Run local text chat with the Gemma 4, Laguna 2.1, Inkling-Small, Qwen3.6/Bonsai,
+Run local text chat with the Gemma 4, Laguna 2.1, Inkling-Small, Qwen3.6/Qwen3.8/Bonsai,
 LFM2, or Psi family.
 
 ```bash
@@ -804,14 +804,14 @@ Key options:
 - `--model`: canonical model id
 - `--model-root`: explicit local model root
 - `--max-tokens`
-- `--context-size`: maximum prompt plus generation context. Bonsai 27B uses
-  its published 262,144-token limit by default. Inkling-Small advertises
+- `--context-size`: maximum prompt plus generation context. Qwen3.8 and Bonsai
+  27B use their published 262,144-token limit by default. Inkling-Small advertises
   1,048,576 tokens but uses a 32,768-token operational default because KV
   residency grows with context.
 - `--temperature`: defaults to 0.7, or the model's published value where one
-  exists (Bonsai: 0.7; Ornith lanes: 1.0)
-- `--top-p`: defaults to 0.9, or the model's published value (Bonsai/Ornith: 0.95)
-- `--top-k`: defaults to no cutoff, or the model's published value (Bonsai/Ornith: 20)
+  exists (Bonsai: 0.7; Qwen3.8 and Ornith lanes: 1.0)
+- `--top-p`: defaults to 0.9, or the model's published value (Qwen3.8/Bonsai/Ornith: 0.95)
+- `--top-k`: defaults to no cutoff, or the model's published value (Qwen3.8/Bonsai/Ornith: 20)
 - `--min-p`: relative probability floor from 0 through 1; `0` disables it.
   For example, `0.05` removes tokens below 5% of the leading token's
   probability. It does not change greedy generation.
@@ -822,8 +822,8 @@ Key options:
   validates each token before streaming.
 - `--thinking` / `--no-thinking`: show reasoning output / disable reasoning
   generation. R1-style lanes (`text-agent-ornith-*`) generate with thinking
-  enabled by default even though the reasoning stays hidden. Bonsai 27B also
-  defaults to thinking-enabled generation.
+  enabled by default even though the reasoning stays hidden. Qwen3.8 and
+  Bonsai 27B also default to thinking-enabled generation.
 - `--stream`
 - `--stats`: includes user-visible `ttft_s`, decode-only `first_token_s`,
   separate LFM2 prefill and decode tokens/sec, and Gemma4 MTP state and
@@ -845,6 +845,7 @@ Examples:
 
 ```bash
 swift run mere.run text chat --prompt "What is classifier-free guidance?"
+swift run mere.run text chat --model vision-chat-q38-27b --image ./diagram.png --prompt "Explain this diagram."
 swift run mere.run text chat --model text-chat-bonsai-27b-1bit --context-size 262144 --kv-bits 4 --prompt "Plan a long-context repository review."
 swift run mere.run text chat --model text-chat-bonsai-27b-2bit --context-size 262144 --kv-bits 4 --prompt "Compare two repository migration plans."
 swift run mere.run text chat --model text-chat-inkling-small --context-size 32768 --prompt "Plan a recovery-safe repository migration."
@@ -2472,10 +2473,25 @@ default suite is `humaneval-slice`, a three-task HumanEval subset covering
 uses the supported members of the coding comparison lane for this machine:
 `text-agent-ornith-9b` and `text-code-north-mini` on 32 GB Macs, with
 `text-code-qwen3` added on 64 GB and larger machines. Pass `--models` to force a
-specific explicit comparison.
+specific explicit comparison. The installed `vision-chat-q38-27b` and
+`vision-chat-q38-27b-4bit` code-generation lanes are available as explicit
+targets but are not added to the default comparison. The BF16 checkpoint is
+55.59 GB; the 4-bit target plus official MTP shard is 19.47 GB.
 
 ```bash
 swift run mere.run model benchmark code \
+  --allow-code-execution \
+  --json
+
+swift run mere.run model benchmark code \
+  --models vision-chat-q38-27b-4bit \
+  --thinking \
+  --max-tokens 3072 \
+  --allow-code-execution \
+  --json
+
+MERERUN_Q35_MTP_SPECULATION=1 swift run mere.run model benchmark code \
+  --models vision-chat-q38-27b-4bit \
   --allow-code-execution \
   --json
 ```

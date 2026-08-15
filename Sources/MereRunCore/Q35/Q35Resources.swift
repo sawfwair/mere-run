@@ -5,27 +5,32 @@ public struct Q35Resources: Sendable, Hashable {
         public let modelId: String
         public let upstreamRepoId: String
         public let upstreamRevision: String
+        public let snapshotPatterns: [String]
 
         public init(
             modelId: String,
             upstreamRepoId: String,
-            upstreamRevision: String
+            upstreamRevision: String,
+            snapshotPatterns: [String] = Q35Resources.snapshotPatterns
         ) {
             self.modelId = modelId
             self.upstreamRepoId = upstreamRepoId
             self.upstreamRevision = upstreamRevision
+            self.snapshotPatterns = snapshotPatterns
         }
 
         public var hubFallbackConfig: HubFallbackConfig {
             HubFallbackConfig(
                 repoId: upstreamRepoId,
                 revision: upstreamRevision,
-                patterns: Q35Resources.snapshotPatterns
+                patterns: snapshotPatterns
             )
         }
     }
 
     public static let q36NanoModelId = "text-chat-q36-nano"
+    public static let q38TwentySevenBModelId = "vision-chat-q38-27b"
+    public static let q38TwentySevenB4BitModelId = "vision-chat-q38-27b-4bit"
     public static let bonsai27B1BitModelId = "text-chat-bonsai-27b-1bit"
     public static let bonsai27B2BitModelId = "text-chat-bonsai-27b-2bit"
     public static let ornith9BModelId = "text-agent-ornith-9b"
@@ -39,7 +44,8 @@ public struct Q35Resources: Sendable, Hashable {
     /// (HumanEval no-think scored 1/164 on Ornith 35B vs a ~90% thinking-mode
     /// model card), so these lanes default to thinking-enabled generation.
     public static func thinkingDefault(forModelId modelId: String) -> Bool {
-        isBonsai27BModelId(modelId)
+        isQ38ModelId(modelId)
+            || isBonsai27BModelId(modelId)
             || modelId == ornith9BModelId
             || modelId == ornith35BMLXModelId
     }
@@ -64,6 +70,8 @@ public struct Q35Resources: Sendable, Hashable {
     /// one; callers use it when the user did not set explicit sampling.
     public static func recommendedSampling(forModelId modelId: String) -> RecommendedSampling? {
         switch modelId {
+        case q38TwentySevenBModelId, q38TwentySevenB4BitModelId:
+            return RecommendedSampling(temperature: 1.0, topP: 0.95, topK: 20)
         case bonsai27B1BitModelId, bonsai27B2BitModelId:
             return RecommendedSampling(temperature: 0.7, topP: 0.95, topK: 20)
         case ornith9BModelId, ornith35BMLXModelId:
@@ -75,6 +83,21 @@ public struct Q35Resources: Sendable, Hashable {
 
     public static let q36NanoUpstreamRepoId = "mlx-community/Qwen3.6-35B-A3B-OptiQ-4bit"
     public static let q36NanoUpstreamRevision = "63d520640ca7461f31ba66104612135770090340"
+    public static let q38TwentySevenBUpstreamRepoId = "Qwen/Qwen3.8-27B"
+    public static let q38TwentySevenBUpstreamRevision = "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0"
+    public static let q38TwentySevenBEstimatedDownloadBytes: Int64 = 55_586_114_863
+    public static let q38TwentySevenB4BitUpstreamRepoId = "lmstudio-community/Qwen3.8-27B-MLX-4bit"
+    public static let q38TwentySevenB4BitUpstreamRevision = "6067b15cf581666a4aecf6af3afaba4bb5efc20c"
+    public static let q38TwentySevenB4BitEstimatedDownloadBytes: Int64 = 19_473_823_081
+    public static let q38MTPComponentPath = "mtp"
+    public static let q38MTPComponentSnapshotPatterns = [
+        "LICENSE",
+        "model.safetensors.index.json",
+        "model-00018-of-00018.safetensors",
+    ]
+    public static let q38TwentySevenBContextLength = 262_144
+    public static let q38TwentySevenBVisionMinPixels = 65_536
+    public static let q38TwentySevenBVisionMaxPixels = 16_777_216
     public static let bonsai27B1BitUpstreamRepoId = "prism-ml/Bonsai-27B-mlx-1bit"
     public static let bonsai27B1BitUpstreamRevision = "ef22f239c670078e1507f9769bcaa66657332b96"
     public static let bonsai27B1BitEstimatedDownloadBytes: Int64 = 5_128_837_600
@@ -99,6 +122,29 @@ public struct Q35Resources: Sendable, Hashable {
             modelId: q36NanoModelId,
             upstreamRepoId: q36NanoUpstreamRepoId,
             upstreamRevision: q36NanoUpstreamRevision
+        ),
+        q38TwentySevenBModelId: Profile(
+            modelId: q38TwentySevenBModelId,
+            upstreamRepoId: q38TwentySevenBUpstreamRepoId,
+            upstreamRevision: q38TwentySevenBUpstreamRevision,
+            snapshotPatterns: snapshotPatterns + [
+                "generation_config.json",
+                "preprocessor_config.json",
+                "video_preprocessor_config.json",
+                "merges.txt",
+                "vocab.json",
+            ]
+        ),
+        q38TwentySevenB4BitModelId: Profile(
+            modelId: q38TwentySevenB4BitModelId,
+            upstreamRepoId: q38TwentySevenB4BitUpstreamRepoId,
+            upstreamRevision: q38TwentySevenB4BitUpstreamRevision,
+            snapshotPatterns: snapshotPatterns + [
+                "generation_config.json",
+                "preprocessor_config.json",
+                "video_preprocessor_config.json",
+                "vocab.json",
+            ]
         ),
         bonsai27B1BitModelId: Profile(
             modelId: bonsai27B1BitModelId,
@@ -145,6 +191,8 @@ public struct Q35Resources: Sendable, Hashable {
 
     public static func defaultContextLength(forModelId modelId: String) -> Int {
         switch modelId {
+        case q38TwentySevenBModelId, q38TwentySevenB4BitModelId:
+            q38TwentySevenBContextLength
         case bonsai27B1BitModelId:
             bonsai27B1BitContextLength
         case bonsai27B2BitModelId:
@@ -152,6 +200,17 @@ public struct Q35Resources: Sendable, Hashable {
         default:
             defaultContextLength
         }
+    }
+
+    public static func visionPixelBounds(forModelId modelId: String) -> (minimum: Int, maximum: Int) {
+        if isQ38ModelId(modelId) {
+            return (q38TwentySevenBVisionMinPixels, q38TwentySevenBVisionMaxPixels)
+        }
+        return (Q35Generator.qwen3VLMinPixels, Q35Generator.qwen3VLMaxPixels)
+    }
+
+    public static func isQ38ModelId(_ modelId: String) -> Bool {
+        modelId == q38TwentySevenBModelId || modelId == q38TwentySevenB4BitModelId
     }
 
     public static let snapshotPatterns = [
@@ -180,6 +239,7 @@ public struct Q35Resources: Sendable, Hashable {
     public var tokenizerURL: URL { rootURL.appending(path: "tokenizer.json") }
     public var tokenizerConfigURL: URL { rootURL.appending(path: "tokenizer_config.json") }
     public var chatTemplateURL: URL { rootURL.appending(path: "chat_template.jinja") }
+    public var generationConfigURL: URL { rootURL.appending(path: "generation_config.json") }
     public var processorConfigURL: URL { rootURL.appending(path: "processor_config.json") }
 
     public func validate(fileManager: FileManager = .default) -> [URL] {
@@ -203,6 +263,16 @@ public struct Q35Resources: Sendable, Hashable {
         }
 
         return missing
+    }
+
+    public func validateQ38MTPComponent(fileManager: FileManager = .default) -> [URL] {
+        let componentRoot = rootURL.appendingPathComponent(
+            Self.q38MTPComponentPath,
+            isDirectory: true
+        )
+        return Self.q38MTPComponentSnapshotPatterns
+            .map { componentRoot.appendingPathComponent($0, isDirectory: false) }
+            .filter { !fileManager.fileExists(atPath: $0.path) }
     }
 
     public static func normalizedRootURL(_ rootURL: URL, fileManager: FileManager = .default) -> URL {

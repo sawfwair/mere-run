@@ -151,6 +151,7 @@ public actor Q35Generator: ChatGenerator {
     private var mtpModel: Q35MTPModel?
     private var loadedModelPath: String?
     private var loadedConfig: Q35Config?
+    private var loadedGenerationEOSTokenIds: [Int] = []
     private var loadedResources: Q35Resources?
 
     private let modelId: String
@@ -179,43 +180,46 @@ public actor Q35Generator: ChatGenerator {
         modelId: String = Q35Resources.defaultModelId,
         prefixKVCacheEnabled: Bool = ProcessInfo.processInfo.environment["MERERUN_Q35_PREFIX_KV_CACHE"] == "1",
         continuousBatchingEnabled: Bool = ProcessInfo.processInfo.environment["MERERUN_Q35_CONTINUOUS_BATCHING"] == "1",
-        visionMinPixels: Int = Q35Generator.qwen3VLMinPixels,
-        visionMaxPixels: Int = Q35Generator.qwen3VLMaxPixels
+        visionMinPixels: Int? = nil,
+        visionMaxPixels: Int? = nil
     ) {
+        let visionPixelBounds = Q35Resources.visionPixelBounds(forModelId: modelId)
         self.modelId = modelId
         self.prefixKVCacheEnabled = prefixKVCacheEnabled
         self.continuousBatchingEnabled = continuousBatchingEnabled
-        self.visionMinPixels = visionMinPixels
-        self.visionMaxPixels = visionMaxPixels
+        self.visionMinPixels = visionMinPixels ?? visionPixelBounds.minimum
+        self.visionMaxPixels = visionMaxPixels ?? visionPixelBounds.maximum
     }
 
     static func qwen3VLTargetSize(
         originalWidth width: Int,
         originalHeight height: Int,
         patchSize: Int,
-        temporalPatchSize: Int,
         spatialMergeSize: Int,
         minPixels: Int = Q35Generator.qwen3VLMinPixels,
         maxPixels: Int = Q35Generator.qwen3VLMaxPixels
-    ) -> (width: Int, height: Int) {
+    ) throws -> (width: Int, height: Int) {
+        let aspectRatio = Double(max(width, height)) / Double(min(width, height))
+        guard aspectRatio <= 200 else {
+            throw Q35Error.generationFailed(
+                "Qwen-family image aspect ratio must not exceed 200; received \(aspectRatio)."
+            )
+        }
         let factor = max(1, patchSize * max(1, spatialMergeSize))
-        let temporalFactor = max(1, temporalPatchSize)
-        let frames = 1
 
         func roundedToFactor(_ value: Int) -> Int {
-            max(factor, Int((Double(value) / Double(factor)).rounded()) * factor)
+            max(factor, Int((Double(value) / Double(factor)).rounded(.toNearestOrEven)) * factor)
         }
 
         var targetHeight = roundedToFactor(height)
         var targetWidth = roundedToFactor(width)
-        let temporalPaddedFrames = Int(ceil(Double(frames) / Double(temporalFactor))) * temporalFactor
 
-        if temporalPaddedFrames * targetHeight * targetWidth > maxPixels {
-            let beta = sqrt(Double(frames * height * width) / Double(maxPixels))
+        if targetHeight * targetWidth > maxPixels {
+            let beta = sqrt(Double(height * width) / Double(maxPixels))
             targetHeight = max(factor, Int(floor(Double(height) / beta / Double(factor))) * factor)
             targetWidth = max(factor, Int(floor(Double(width) / beta / Double(factor))) * factor)
-        } else if temporalPaddedFrames * targetHeight * targetWidth < minPixels {
-            let beta = sqrt(Double(minPixels) / Double(frames * height * width))
+        } else if targetHeight * targetWidth < minPixels {
+            let beta = sqrt(Double(minPixels) / Double(height * width))
             targetHeight = Int(ceil(Double(height) * beta / Double(factor))) * factor
             targetWidth = Int(ceil(Double(width) * beta / Double(factor))) * factor
         }
@@ -298,6 +302,7 @@ public actor Q35Generator: ChatGenerator {
         mtpModel = nil
         loadedModelPath = nil
         loadedConfig = nil
+        loadedGenerationEOSTokenIds = []
         loadedResources = nil
         Memory.clearCache()
     }
@@ -342,6 +347,16 @@ public actor Q35Generator: ChatGenerator {
         progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Qwen-family config"))
         let configData = try Data(contentsOf: normalizedRoot.appendingPathComponent("config.json"))
         let config = try JSONDecoder().decode(Q35Config.self, from: configData)
+        let generationConfigURL = normalizedRoot.appendingPathComponent("generation_config.json")
+        let generationEOSTokenIds: [Int]
+        if FileManager.default.fileExists(atPath: generationConfigURL.path) {
+            let generationConfigData = try Data(contentsOf: generationConfigURL)
+            generationEOSTokenIds = try JSONDecoder()
+                .decode(Q35GenerationConfig.self, from: generationConfigData)
+                .eosTokenIds
+        } else {
+            generationEOSTokenIds = []
+        }
 
         progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Qwen-family tokenizer"))
         let tokenizer = try Q35TokenizerAndTemplate.load(
@@ -364,33 +379,27 @@ public actor Q35Generator: ChatGenerator {
         )
 
         let tower = config.visionConfig == nil ? nil : Q35VisionTower(config: config)
-        let mtpURL = normalizedRoot.appendingPathComponent("mtp.safetensors")
         // Load the MTP draft head whenever it ships with the model and isn't
         // explicitly disabled. Whether speculation is actually USED is decided
-        // per request by prompt length (see Self.shouldSpeculate): MTP speculative
-        // decode regresses at short context (measured ~-20-30%) but is a large win
-        // at long context (~+1.5-2.5x past ~6-8K tokens) on both Metal and CUDA.
-        let mtpExplicitlyDisabled = {
-            guard let raw = ProcessInfo.processInfo.environment["MERERUN_Q35_MTP_SPECULATION"]?.lowercased()
-            else { return false }
-            return raw == "0" || raw == "false" || raw == "no"
-        }()
+        // by the model-specific policy in Self.shouldSpeculate. Dense Qwen3.8
+        // benefits at short context; hybrid MoE Qwen retains the measured
+        // long-context threshold.
+        let mtpPolicy = ProcessInfo.processInfo.environment["MERERUN_Q35_MTP_SPECULATION"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let mtpExplicitlyDisabled = mtpPolicy == "0" || mtpPolicy == "false" || mtpPolicy == "no"
+        let mtpExplicitlyEnabled = mtpPolicy == "1" || mtpPolicy == "true"
+            || mtpPolicy == "yes" || mtpPolicy == "on"
+        let shouldLoadMTP = !mtpExplicitlyDisabled
+            && (config.textConfig.usesMoE || mtpExplicitlyEnabled)
         let loadedMTP: Q35MTPModel?
-        if !mtpExplicitlyDisabled, FileManager.default.fileExists(atPath: mtpURL.path) {
+        if shouldLoadMTP, let mtpResources = Self.mtpResources(primary: resources) {
             progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Qwen-family MTP weights"))
             let mtp = Q35MTPModel(config: config)
-            let arrays = try MLX.loadArrays(url: mtpURL)
-            try HFSafetensorsWeightsLoader.applyQuantizedWeightsFromArrays(
-                arrays,
-                to: mtp,
+            try loadMTPWeights(
+                into: mtp,
+                from: mtpResources,
                 groupSize: groupSize,
-                bits: bits,
-                keyMapper: { key in
-                    if key.hasPrefix("mtp.") {
-                        return String(key.dropFirst("mtp.".count))
-                    }
-                    return "__unused__.\(key)"
-                }
+                bits: bits
             )
             loadedMTP = mtp
         } else {
@@ -402,6 +411,7 @@ public actor Q35Generator: ChatGenerator {
         visionTower = tower
         mtpModel = loadedMTP
         loadedConfig = config
+        loadedGenerationEOSTokenIds = generationEOSTokenIds
         loadedResources = resources
         loadedModelPath = normalizedRoot.path
     }
@@ -463,7 +473,11 @@ public actor Q35Generator: ChatGenerator {
                 .write(toFile: dumpPath, atomically: true, encoding: .utf8)
         }
 
-        let eosSet = Set(loadedConfig.eosTokenIds + [tokenizerAndTemplate.eosTokenId].compactMap { $0 })
+        let eosSet = Set(
+            loadedConfig.eosTokenIds
+                + loadedGenerationEOSTokenIds
+                + [tokenizerAndTemplate.eosTokenId].compactMap { $0 }
+        )
         let generationConfig = GenerationConfig(
             maxTokens: request.maxTokens,
             temperature: Float(request.temperature),
@@ -655,17 +669,23 @@ public actor Q35Generator: ChatGenerator {
 
     /// Decide whether to use MTP speculative decode for a request.
     ///
-    /// Speculative decode only pays off at long context: each main-model pass gets
-    /// more expensive as the KV cache grows, so verifying several drafted tokens per
-    /// pass amortizes — but at short prompts the draft-head overhead dominates.
-    /// Measured (Qwen3.6-35B-A3B OptiQ-4bit, M4 Max): ~20-tok ctx -31%, ~4K -22%,
-    /// ~12K +1.5-2.5x. Default to speculating only when the prompt and request
-    /// context are long; MERERUN_Q35_MTP_SPECULATION can enable/disable it, and
-    /// MERERUN_Q35_MTP_MIN_PROMPT_TOKENS tunes the threshold.
-    static func shouldSpeculate(promptTokenCount: Int, maxContextTokens: Int? = nil) -> Bool {
+    /// Select the model-specific MTP break-even point. Qwen3.6 hybrid MoE uses
+    /// the measured long-context threshold (~20-token context -31%, ~4K -22%,
+    /// ~12K +1.5-2.5x on M4 Max). Dense Qwen3.8 uses a zero threshold only
+    /// after explicit opt-in because its BF16 multi-token verification is not
+    /// serial-greedy identical. MERERUN_Q35_MTP_SPECULATION can enable/disable
+    /// the path and MERERUN_Q35_MTP_MIN_PROMPT_TOKENS overrides either default.
+    static func shouldSpeculate(
+        promptTokenCount: Int,
+        maxContextTokens: Int? = nil,
+        defaultMinimumPromptTokens: Int = 6144,
+        enabledByDefault: Bool = true
+    ) -> Bool {
         shouldSpeculate(
             promptTokenCount: promptTokenCount,
             maxContextTokens: maxContextTokens,
+            defaultMinimumPromptTokens: defaultMinimumPromptTokens,
+            enabledByDefault: enabledByDefault,
             environment: ProcessInfo.processInfo.environment
         )
     }
@@ -673,16 +693,26 @@ public actor Q35Generator: ChatGenerator {
     static func shouldSpeculate(
         promptTokenCount: Int,
         maxContextTokens: Int?,
+        defaultMinimumPromptTokens: Int = 6144,
+        enabledByDefault: Bool = true,
         environment env: [String: String]
     ) -> Bool {
-        let threshold = env["MERERUN_Q35_MTP_MIN_PROMPT_TOKENS"].flatMap { Int($0) } ?? 6144
+        let rawPolicy = env["MERERUN_Q35_MTP_SPECULATION"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if rawPolicy == "0" || rawPolicy == "false" || rawPolicy == "no" {
+            return false
+        }
+        let explicitlyEnabled = rawPolicy == "1" || rawPolicy == "true"
+            || rawPolicy == "yes" || rawPolicy == "on"
+        if !enabledByDefault, !explicitlyEnabled {
+            return false
+        }
+
+        let threshold = env["MERERUN_Q35_MTP_MIN_PROMPT_TOKENS"].flatMap { Int($0) }
+            ?? defaultMinimumPromptTokens
         let contextAllowsSpeculation = maxContextTokens.map { $0 >= threshold } ?? true
-        if let raw = env["MERERUN_Q35_MTP_SPECULATION"]?.lowercased() {
-            if raw == "0" || raw == "false" || raw == "no" { return false }
-            if raw == "1" || raw == "true" || raw == "yes" || raw == "on" {
-                return contextAllowsSpeculation
-            }
-            // any other value (e.g. "auto") falls through to the adaptive threshold
+        if explicitlyEnabled {
+            return contextAllowsSpeculation
         }
         if !contextAllowsSpeculation {
             return false
@@ -719,7 +749,9 @@ public actor Q35Generator: ChatGenerator {
         }
         let speculationMTP = !jsonConstrained && Self.shouldSpeculate(
             promptTokenCount: promptTokens.count,
-            maxContextTokens: maxContextTokens
+            maxContextTokens: maxContextTokens,
+            defaultMinimumPromptTokens: model.config.textConfig.usesMoE ? 6144 : 0,
+            enabledByDefault: model.config.textConfig.usesMoE
         ) && mropeRopeDelta == nil ? mtpModel : nil
         let decodePath = Self.decodePath(
             jsonConstrained: jsonConstrained,
@@ -818,6 +850,10 @@ public actor Q35Generator: ChatGenerator {
         var streamedJSONText = ""
         var firstTokenSeconds: Double?
         var jsonGrammar = JSONObjectPrefixGrammar()
+        var mtpDraftedTokens = 0
+        var mtpAcceptedTokens = 0
+        var mtpVerificationPasses = 0
+        var mtpReplacementPasses = 0
         let decodeStart = Date()
 
         func emit(_ token: Int) {
@@ -918,6 +954,7 @@ public actor Q35Generator: ChatGenerator {
                     guard !draftTokens.isEmpty else {
                         continue
                     }
+                    mtpDraftedTokens += draftTokens.count
 
                     let candidateCaches = forkLayerCaches(layerCaches)
                     let candidateInput = MLXArray(([next] + draftTokens).map(Int32.init))
@@ -925,6 +962,7 @@ public actor Q35Generator: ChatGenerator {
                     let candidate = model.forward(candidateInput, cache: candidateCaches)
                     MLX.eval(candidate.logits)
                     MLX.eval(candidate.hidden)
+                    mtpVerificationPasses += 1
 
                     var accepted = 0
                     var verificationHistory = repetitionHistory
@@ -944,6 +982,7 @@ public actor Q35Generator: ChatGenerator {
                     }
 
                     if accepted == draftTokens.count {
+                        mtpAcceptedTokens += accepted
                         var hitEOS = false
                         for token in draftTokens {
                             if eosSet.contains(token) {
@@ -962,6 +1001,7 @@ public actor Q35Generator: ChatGenerator {
                     }
 
                     let acceptedPrefix = Array(draftTokens.prefix(accepted))
+                    mtpAcceptedTokens += accepted
                     var hitEOS = false
                     for token in acceptedPrefix {
                         if eosSet.contains(token) {
@@ -987,6 +1027,7 @@ public actor Q35Generator: ChatGenerator {
                     let replacementForward = model.forward(replacementInput, cache: replacementCaches)
                     MLX.eval(replacementForward.logits)
                     MLX.eval(replacementForward.hidden)
+                    mtpReplacementPasses += 1
                     emit(replacement)
                     layerCaches = replacementCaches
                     logits = lastTokenLogits(replacementForward.logits)
@@ -1001,6 +1042,7 @@ public actor Q35Generator: ChatGenerator {
                     baseModel: model
                 )
                 MLX.eval(draftLogits)
+                mtpDraftedTokens += 1
 
                 let draftProbs = samplingProbabilities(
                     logits: draftLogits[0, -1, 0...],
@@ -1014,6 +1056,7 @@ public actor Q35Generator: ChatGenerator {
                 let candidate = model.forward(candidateInput, cache: candidateCaches)
                 MLX.eval(candidate.logits)
                 MLX.eval(candidate.hidden)
+                mtpVerificationPasses += 1
 
                 let targetProbs = samplingProbabilities(
                     logits: candidate.logits[0, 0, 0...],
@@ -1025,6 +1068,7 @@ public actor Q35Generator: ChatGenerator {
                 let acceptProbability = min(1.0, targetProb / draftProb)
 
                 if Float.random(in: 0..<1) <= acceptProbability {
+                    mtpAcceptedTokens += 1
                     if eosSet.contains(draft) {
                         break
                     }
@@ -1049,6 +1093,7 @@ public actor Q35Generator: ChatGenerator {
                 let replacementForward = model.forward(replacementInput, cache: replacementCaches)
                 MLX.eval(replacementForward.logits)
                 MLX.eval(replacementForward.hidden)
+                mtpReplacementPasses += 1
                 emit(replacement)
                 layerCaches = replacementCaches
                 logits = lastTokenLogits(replacementForward.logits)
@@ -1078,9 +1123,25 @@ public actor Q35Generator: ChatGenerator {
             }
         }
 
+        let decodeSeconds = Date().timeIntervalSince(decodeStart)
+        if Gemma4DecodeTrace.enabled, mtpModel != nil {
+            let acceptance = mtpDraftedTokens > 0
+                ? Double(mtpAcceptedTokens) / Double(mtpDraftedTokens) * 100
+                : 0
+            Gemma4DecodeTrace.emit(String(
+                format: "[q35-decode-trace] mode=mtp tokens=%d drafted=%d accepted=%d acceptance=%.1f%% verify=%d replacement=%d wall=%.2fms/tok",
+                generated.count,
+                mtpDraftedTokens,
+                mtpAcceptedTokens,
+                acceptance,
+                mtpVerificationPasses,
+                mtpReplacementPasses,
+                decodeSeconds / Double(max(1, generated.count)) * 1000
+            ))
+        }
         return Q35BatchedDecodeResult(
             generatedTokens: generated,
-            decodeSeconds: Date().timeIntervalSince(decodeStart),
+            decodeSeconds: decodeSeconds,
             firstTokenSeconds: firstTokenSeconds
         )
     }
@@ -1762,6 +1823,7 @@ public actor Q35Generator: ChatGenerator {
         groupSize: Int,
         bits: Int
     ) throws {
+        let checkpointUsesZeroCenteredNorms = try Self.checkpointUsesZeroCenteredRMSNorm(from: resources)
         let mapper: (String, MLXArray) -> [(String, MLXArray)] = { key, value in
             guard let mapped = Self.mapTextWeightKey(key) else { return [] }
             if q35Model.config.tieWordEmbeddings, mapped == "lm_head.weight" {
@@ -1775,7 +1837,13 @@ public actor Q35Generator: ChatGenerator {
                 return [(normalizedMapped, Self.normalizedLinearAttentionConv1DWeight(value))]
             }
             if Self.isOffsetRMSNormWeight(normalizedMapped) {
-                return [(normalizedMapped, value - MLXArray(1.0).asType(value.dtype))]
+                return [(
+                    normalizedMapped,
+                    Self.normalizedRMSNormWeight(
+                        value,
+                        checkpointUsesZeroCenteredNorms: checkpointUsesZeroCenteredNorms
+                    )
+                )]
             }
             return [(normalizedMapped, value)]
         }
@@ -1792,7 +1860,13 @@ public actor Q35Generator: ChatGenerator {
                 return [(key, Self.normalizedLinearAttentionConv1DWeight(value))]
             }
             if Self.isOffsetRMSNormWeight(key) {
-                return [(key, value - MLXArray(1.0).asType(value.dtype))]
+                return [(
+                    key,
+                    Self.normalizedRMSNormWeight(
+                        value,
+                        checkpointUsesZeroCenteredNorms: checkpointUsesZeroCenteredNorms
+                    )
+                )]
             }
             return [(key, value)]
         }
@@ -1842,6 +1916,97 @@ public actor Q35Generator: ChatGenerator {
         }
     }
 
+    private static func hasMTPWeights(resources: Q35Resources) -> Bool {
+        let standalone = resources.rootURL.appendingPathComponent("mtp.safetensors")
+        if FileManager.default.fileExists(atPath: standalone.path) {
+            return true
+        }
+        guard FileManager.default.fileExists(atPath: resources.modelIndexURL.path),
+              let data = try? Data(contentsOf: resources.modelIndexURL),
+              let index = try? JSONDecoder().decode(HFSafetensorsIndex.self, from: data) else {
+            return false
+        }
+        return index.weightMap.keys.contains { $0.hasPrefix("mtp.") }
+    }
+
+    private static func mtpResources(primary resources: Q35Resources) -> Q35Resources? {
+        if hasMTPWeights(resources: resources) {
+            return resources
+        }
+        let mounted = Q35Resources(
+            rootURL: resources.rootURL.appendingPathComponent(
+                Q35Resources.q38MTPComponentPath,
+                isDirectory: true
+            )
+        )
+        return hasMTPWeights(resources: mounted) ? mounted : nil
+    }
+
+    private func loadMTPWeights(
+        into mtp: Q35MTPModel,
+        from resources: Q35Resources,
+        groupSize: Int,
+        bits: Int
+    ) throws {
+        let standalone = resources.rootURL.appendingPathComponent("mtp.safetensors")
+        if FileManager.default.fileExists(atPath: standalone.path) {
+            let metadata = try SafetensorsStreamingLoader.metadata(url: standalone)
+            if metadata.keys.contains(where: { $0.hasSuffix(".scales") }) {
+                let arrays = try MLX.loadArrays(url: standalone)
+                try HFSafetensorsWeightsLoader.applyQuantizedWeightsFromArrays(
+                    arrays,
+                    to: mtp,
+                    groupSize: groupSize,
+                    bits: bits,
+                    keyMapper: { key in
+                        Self.mapMTPWeightKey(key) ?? "__unused__.\(key)"
+                    }
+                )
+            } else {
+                try SafetensorsStreamingLoader.applyWeightsStreaming(
+                    url: standalone,
+                    to: mtp,
+                    dtype: .bfloat16,
+                    verify: .none,
+                    include: { Self.mapMTPWeightKey($0) != nil },
+                    mapper: { key, value in
+                        guard let mapped = Self.mapMTPWeightKey(key) else { return [] }
+                        return [(mapped, value)]
+                    },
+                    batchSize: 32
+                )
+            }
+            return
+        }
+
+        let data = try Data(contentsOf: resources.modelIndexURL)
+        let index = try JSONDecoder().decode(HFSafetensorsIndex.self, from: data)
+        let shardFilenames = Self.embeddedMTPShardFilenames(weightMap: index.weightMap)
+        for filename in shardFilenames {
+            try HFSafetensorsWeightsLoader.applyWeights(
+                url: resources.rootURL.appendingPathComponent(filename),
+                to: mtp,
+                dtype: .bfloat16,
+                verify: .none,
+                mapper: { key, value in
+                    guard let mapped = Self.mapMTPWeightKey(key) else { return [] }
+                    return [(mapped, value)]
+                }
+            )
+        }
+    }
+
+    static func embeddedMTPShardFilenames(weightMap: [String: String]) -> [String] {
+        Array(Set(weightMap.compactMap { key, filename in
+            key.hasPrefix("mtp.") ? filename : nil
+        })).sorted()
+    }
+
+    private static func mapMTPWeightKey(_ key: String) -> String? {
+        guard key.hasPrefix("mtp.") else { return nil }
+        return String(key.dropFirst("mtp.".count))
+    }
+
     private static func mapTextWeightKey(_ key: String) -> String? {
         if key.hasPrefix("lm_head.") {
             return key
@@ -1884,6 +2049,58 @@ public actor Q35Generator: ChatGenerator {
             || key.hasSuffix(".self_attn.q_norm.weight")
             || key.hasSuffix(".self_attn.k_norm.weight")
             || key == "model.norm.weight"
+    }
+
+    static func normalizedRMSNormWeight(
+        _ value: MLXArray,
+        checkpointUsesZeroCenteredNorms: Bool
+    ) -> MLXArray {
+        if checkpointUsesZeroCenteredNorms {
+            return value
+        }
+        return value - MLXArray(1.0).asType(value.dtype)
+    }
+
+    static func checkpointUsesZeroCenteredRMSNorm(from resources: Q35Resources) throws -> Bool {
+        if FileManager.default.fileExists(atPath: resources.modelIndexURL.path) {
+            let data = try Data(contentsOf: resources.modelIndexURL)
+            let index = try JSONDecoder().decode(HFSafetensorsIndex.self, from: data)
+            let weightKeys = Array(index.weightMap.keys)
+            if checkpointUsesZeroCenteredRMSNorm(weightKeys: weightKeys, tensorShapes: [:]) {
+                return true
+            }
+            guard let convEntry = index.weightMap.first(where: { key, _ in
+                key.hasSuffix(".linear_attn.conv1d.weight")
+            }) else {
+                return false
+            }
+            let shardURL = resources.rootURL.appending(path: convEntry.value)
+            let metadata = try SafetensorsStreamingLoader.metadata(url: shardURL)
+            return checkpointUsesZeroCenteredRMSNorm(
+                weightKeys: weightKeys,
+                tensorShapes: metadata.mapValues(\.shape)
+            )
+        }
+
+        let metadata = try SafetensorsStreamingLoader.metadata(url: resources.modelWeightsURL)
+        return checkpointUsesZeroCenteredRMSNorm(
+            weightKeys: Array(metadata.keys),
+            tensorShapes: metadata.mapValues(\.shape)
+        )
+    }
+
+    static func checkpointUsesZeroCenteredRMSNorm(
+        weightKeys: [String],
+        tensorShapes: [String: [Int]]
+    ) -> Bool {
+        if weightKeys.contains(where: { $0.hasPrefix("mtp.") || $0.contains(".mtp.") }) {
+            return true
+        }
+        return tensorShapes.contains { key, shape in
+            key.hasSuffix(".linear_attn.conv1d.weight")
+                && shape.count == 3
+                && shape.last != 1
+        }
     }
 
     private static func splitMappedExpertGateUpWeight(_ key: String, _ value: MLXArray) -> [(String, MLXArray)]? {
@@ -2201,11 +2418,10 @@ public actor Q35Generator: ChatGenerator {
         spatialMergeSize: Int
     ) throws -> (tensor: MLXArray, gridTHW: (Int, Int, Int)) {
         let image = try loadImage(from: imageRef)
-        let target = Self.qwen3VLTargetSize(
+        let target = try Self.qwen3VLTargetSize(
             originalWidth: image.width,
             originalHeight: image.height,
             patchSize: patchSize,
-            temporalPatchSize: visionTower?.temporalPatchSize ?? 2,
             spatialMergeSize: spatialMergeSize,
             minPixels: visionMinPixels,
             maxPixels: visionMaxPixels

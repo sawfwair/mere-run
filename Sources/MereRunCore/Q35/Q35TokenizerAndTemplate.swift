@@ -1,6 +1,20 @@
 import Foundation
 @preconcurrency import Tokenizers
 
+enum Q35TokenizerAndTemplateError: LocalizedError {
+    case missingImageToken
+    case imageTokenCountMismatch(expected: Int, actual: Int)
+
+    var errorDescription: String? {
+        switch self {
+        case .missingImageToken:
+            "Qwen-family tokenizer is missing the image placeholder token."
+        case .imageTokenCountMismatch(let expected, let actual):
+            "Qwen-family prompt rendered \(actual) image placeholders for \(expected) encoded images."
+        }
+    }
+}
+
 public struct Q35TokenizerAndTemplate {
     public let tokenizer: QwenTokenizer
 
@@ -21,31 +35,30 @@ public struct Q35TokenizerAndTemplate {
         maxLength: Int,
         imageTokenCounts: [Int] = []
     ) throws -> [Int] {
-        if !imageTokenCounts.isEmpty {
-            var encoded = tokenizer.encodeText(
-                Self.renderPrompt(
-                    messages: messages,
-                    tools: tools,
-                    addGenerationPrompt: addGenerationPrompt,
-                    includeThinking: includeThinking,
-                    imageTokenCounts: imageTokenCounts
-                )
-            )
-            let targetLength = min(maxLength, tokenizer.maxLength)
-            if encoded.count > targetLength {
-                encoded = Array(encoded.suffix(targetLength))
-            }
-            return encoded
-        }
-
         let toolSpecs: [ToolSpec]? = tools?.isEmpty == false ? tools!.map { $0.toToolSpec() } : nil
-        return try tokenizer.encodeChatTemplate(
+        var encoded = try tokenizer.encodeChatTemplate(
             messages: Self.renderMessages(messages),
             tools: toolSpecs,
             addGenerationPrompt: addGenerationPrompt,
             includeThinking: includeThinking,
-            maxLength: maxLength
+            maxLength: tokenizer.maxLength
         )
+        if !imageTokenCounts.isEmpty {
+            guard let imageTokenId = tokenizer.imageTokenId else {
+                throw Q35TokenizerAndTemplateError.missingImageToken
+            }
+            encoded = try Self.expandingImageTokenIds(
+                encoded,
+                imageTokenId: imageTokenId,
+                imageTokenCounts: imageTokenCounts
+            )
+        }
+
+        let targetLength = min(maxLength, tokenizer.maxLength)
+        if encoded.count > targetLength {
+            encoded = Array(encoded.suffix(targetLength))
+        }
+        return encoded
     }
 
     public func decode(tokens: [Int]) -> String {
@@ -93,7 +106,77 @@ public struct Q35TokenizerAndTemplate {
             rendered["content"] = message.content
         }
 
+        if let reasoning = message.reasoningContent, !reasoning.isEmpty {
+            rendered["reasoning_content"] = reasoning
+        }
+        if let name = message.name, !name.isEmpty {
+            rendered["name"] = name
+        }
+        if let toolCallID = message.toolCallID, !toolCallID.isEmpty {
+            rendered["tool_call_id"] = toolCallID
+        }
+        if let calls = message.toolCalls, !calls.isEmpty {
+            rendered["tool_calls"] = calls.map { call -> [String: any Sendable] in
+                var result: [String: any Sendable] = [
+                    "function": [
+                        "name": call.name,
+                        "arguments": call.arguments.mapValues(renderJSONValue),
+                    ] as [String: any Sendable],
+                ]
+                if let id = call.id, !id.isEmpty {
+                    result["id"] = id
+                }
+                return result
+            }
+        }
+
         return rendered
+    }
+
+    static func expandingImageTokenIds(
+        _ tokenIds: [Int],
+        imageTokenId: Int,
+        imageTokenCounts: [Int]
+    ) throws -> [Int] {
+        var expanded: [Int] = []
+        expanded.reserveCapacity(tokenIds.count + imageTokenCounts.reduce(0, +))
+        var imageIndex = 0
+
+        for tokenId in tokenIds {
+            guard tokenId == imageTokenId else {
+                expanded.append(tokenId)
+                continue
+            }
+            guard imageIndex < imageTokenCounts.count else {
+                throw Q35TokenizerAndTemplateError.imageTokenCountMismatch(
+                    expected: imageTokenCounts.count,
+                    actual: imageIndex + 1
+                )
+            }
+            expanded.append(
+                contentsOf: repeatElement(imageTokenId, count: max(1, imageTokenCounts[imageIndex]))
+            )
+            imageIndex += 1
+        }
+
+        guard imageIndex == imageTokenCounts.count else {
+            throw Q35TokenizerAndTemplateError.imageTokenCountMismatch(
+                expected: imageTokenCounts.count,
+                actual: imageIndex
+            )
+        }
+        return expanded
+    }
+
+    private static func renderJSONValue(_ value: OpenAIJSONValue) -> any Sendable {
+        switch value {
+        case .string(let value): value
+        case .number(let value): value
+        case .bool(let value): value
+        case .object(let value): value.mapValues(renderJSONValue)
+        case .array(let value): value.map(renderJSONValue)
+        case .null: Optional<String>.none
+        }
     }
 
     static func renderPrompt(

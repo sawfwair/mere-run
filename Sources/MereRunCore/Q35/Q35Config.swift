@@ -1,5 +1,27 @@
 import Foundation
 
+public struct Q35GenerationConfig: Codable, Sendable, Hashable {
+    public let eosTokenIds: [Int]
+
+    private enum CodingKeys: String, CodingKey {
+        case eosTokenId = "eos_token_id"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if let single = try? container.decode(Int.self, forKey: .eosTokenId) {
+            eosTokenIds = [single]
+        } else {
+            eosTokenIds = try container.decodeIfPresent([Int].self, forKey: .eosTokenId) ?? []
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(eosTokenIds, forKey: .eosTokenId)
+    }
+}
+
 public struct Q35QuantizationConfig: Codable, Sendable, Hashable {
     public let groupSize: Int
     public let bits: Int

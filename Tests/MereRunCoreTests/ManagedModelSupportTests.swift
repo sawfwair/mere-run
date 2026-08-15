@@ -202,6 +202,56 @@ final class ManagedModelSupportTests: XCTestCase {
         XCTAssertEqual(report.reasons, [])
     }
 
+    func testQ38TwentySevenBRequiresHighMemoryAppleSilicon() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Q35Resources.q38TwentySevenBModelId))
+        let undersized = MereRunMachineProfile(
+            physicalMemoryBytes: 48 * 1_073_741_824,
+            processorName: "M4 Max",
+            isAppleSiliconMac: true
+        )
+        let recommended = MereRunMachineProfile(
+            physicalMemoryBytes: 96 * 1_073_741_824,
+            processorName: "M4 Max",
+            isAppleSiliconMac: true
+        )
+
+        let rejected = ManagedModelCapabilityCatalog.support(for: spec, on: undersized)
+        let accepted = ManagedModelCapabilityCatalog.support(for: spec, on: recommended)
+
+        XCTAssertFalse(rejected.isSupported)
+        XCTAssertTrue(rejected.reasons.joined(separator: " ").contains("Requires at least 64 GB"))
+        XCTAssertTrue(accepted.isSupported)
+        XCTAssertTrue(accepted.meetsRecommendedMemory)
+        XCTAssertEqual(accepted.descriptor.minimumUnifiedMemoryGB, 64)
+        XCTAssertEqual(accepted.descriptor.recommendedUnifiedMemoryGB, 96)
+    }
+
+    func testQ38TwentySevenB4BitSupportsThirtyTwoGBAndRecommendsFortyEightGB() throws {
+        let spec = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: Q35Resources.q38TwentySevenB4BitModelId)
+        )
+        let minimum = MereRunMachineProfile(
+            physicalMemoryBytes: 32 * 1_073_741_824,
+            processorName: "M4 Pro",
+            isAppleSiliconMac: true
+        )
+        let recommended = MereRunMachineProfile(
+            physicalMemoryBytes: 48 * 1_073_741_824,
+            processorName: "M4 Max",
+            isAppleSiliconMac: true
+        )
+
+        let minimumReport = ManagedModelCapabilityCatalog.support(for: spec, on: minimum)
+        let recommendedReport = ManagedModelCapabilityCatalog.support(for: spec, on: recommended)
+
+        XCTAssertTrue(minimumReport.isSupported)
+        XCTAssertFalse(minimumReport.meetsRecommendedMemory)
+        XCTAssertTrue(recommendedReport.isSupported)
+        XCTAssertTrue(recommendedReport.meetsRecommendedMemory)
+        XCTAssertEqual(recommendedReport.descriptor.minimumUnifiedMemoryGB, 32)
+        XCTAssertEqual(recommendedReport.descriptor.recommendedUnifiedMemoryGB, 48)
+    }
+
     func testBonsai27BIsSupportedOnSixteenGB() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Q35Resources.bonsai27B1BitModelId))
         let machine = MereRunMachineProfile(

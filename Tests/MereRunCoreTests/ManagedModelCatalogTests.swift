@@ -764,6 +764,80 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.hubFallback?.patterns.contains("*.safetensors"), true)
     }
 
+    func testQ38TwentySevenBUsesPinnedOfficialBF16Source() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Q35Resources.q38TwentySevenBModelId))
+
+        XCTAssertEqual(ModelResolver.ModelID.q38TwentySevenB.rawValue, spec.id)
+        XCTAssertEqual(spec.category, .visionChat)
+        XCTAssertEqual(spec.installShape, .directoryRoot)
+        XCTAssertEqual(spec.hubFallback?.repoId, Q35Resources.q38TwentySevenBUpstreamRepoId)
+        XCTAssertEqual(spec.hubFallback?.revision, Q35Resources.q38TwentySevenBUpstreamRevision)
+        XCTAssertEqual(spec.upstreamRepoId, Q35Resources.q38TwentySevenBUpstreamRepoId)
+        XCTAssertEqual(spec.upstreamRevision, Q35Resources.q38TwentySevenBUpstreamRevision)
+        XCTAssertEqual(spec.validationKind, .q35)
+        XCTAssertEqual(spec.defaultRuntimeServingEngine, .textChatQ36)
+        XCTAssertEqual(spec.estimatedDownloadBytes, 55_586_114_863)
+        XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
+        XCTAssertTrue(spec.defaultCLICommands.contains("model benchmark code"))
+        XCTAssertEqual(spec.hubFallback?.patterns.contains("generation_config.json"), true)
+        XCTAssertEqual(spec.hubFallback?.patterns.contains("preprocessor_config.json"), true)
+        XCTAssertEqual(spec.hubFallback?.patterns.contains("video_preprocessor_config.json"), true)
+    }
+
+    func testQ38TwentySevenB4BitUsesPinnedConversionAndOfficialMTPShard() throws {
+        let spec = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: Q35Resources.q38TwentySevenB4BitModelId)
+        )
+
+        XCTAssertEqual(ModelResolver.ModelID.q38TwentySevenB4Bit.rawValue, spec.id)
+        XCTAssertEqual(spec.category, .visionChat)
+        XCTAssertEqual(spec.installShape, .directoryRoot)
+        XCTAssertEqual(spec.hubFallback?.repoId, Q35Resources.q38TwentySevenB4BitUpstreamRepoId)
+        XCTAssertEqual(spec.hubFallback?.revision, Q35Resources.q38TwentySevenB4BitUpstreamRevision)
+        XCTAssertEqual(spec.mountedHubFallbacks.count, 1)
+        XCTAssertEqual(spec.mountedHubFallbacks.first?.destinationPath, Q35Resources.q38MTPComponentPath)
+        XCTAssertEqual(
+            spec.mountedHubFallbacks.first?.hubFallback.repoId,
+            Q35Resources.q38TwentySevenBUpstreamRepoId
+        )
+        XCTAssertEqual(
+            spec.mountedHubFallbacks.first?.hubFallback.revision,
+            Q35Resources.q38TwentySevenBUpstreamRevision
+        )
+        XCTAssertEqual(
+            spec.mountedHubFallbacks.first?.hubFallback.patterns,
+            Q35Resources.q38MTPComponentSnapshotPatterns
+        )
+        XCTAssertEqual(spec.validationKind, .q35)
+        XCTAssertEqual(spec.defaultRuntimeServingEngine, .textChatQ36)
+        XCTAssertEqual(spec.estimatedDownloadBytes, 19_473_823_081)
+        XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
+        XCTAssertTrue(spec.defaultCLICommands.contains("model benchmark code"))
+    }
+
+    func testQ38TwentySevenB4BitValidationRequiresMountedMTPFiles() throws {
+        let spec = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: Q35Resources.q38TwentySevenB4BitModelId)
+        )
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        for filename in ["config.json", "model.safetensors", "tokenizer.json", "tokenizer_config.json"] {
+            try Data().write(to: root.appendingPathComponent(filename))
+        }
+
+        XCTAssertEqual(
+            Set(spec.missingPaths(in: root).map(\.lastPathComponent)),
+            Set(Q35Resources.q38MTPComponentSnapshotPatterns)
+        )
+
+        let mtpRoot = root.appendingPathComponent(Q35Resources.q38MTPComponentPath, isDirectory: true)
+        try FileManager.default.createDirectory(at: mtpRoot, withIntermediateDirectories: true)
+        for filename in Q35Resources.q38MTPComponentSnapshotPatterns {
+            try Data().write(to: mtpRoot.appendingPathComponent(filename))
+        }
+        XCTAssertTrue(spec.missingPaths(in: root).isEmpty)
+    }
+
     func testBonsai27BUsesPinnedPackedOneBitQ35Source() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Q35Resources.bonsai27B1BitModelId))
 
