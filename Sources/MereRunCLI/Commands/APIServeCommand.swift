@@ -2805,6 +2805,18 @@ enum APIServerContract {
         )
     }
 
+    static func openAIToolArgumentsJSON(_ arguments: [String: String]) -> String {
+        let normalized = arguments.mapValues { rawValue in
+            guard let data = rawValue.data(using: .utf8),
+                  let decoded = try? JSONDecoder().decode(OpenAIJSONValue.self, from: data) else {
+                return OpenAIJSONValue.string(rawValue)
+            }
+            return decoded
+        }
+        let data = (try? JSONEncoder().encode(normalized)) ?? Data("{}".utf8)
+        return String(data: data, encoding: .utf8) ?? "{}"
+    }
+
     private static func requiresJSONResponseFormat(
         _ responseFormat: OpenAIResponseFormat?,
         capabilities: APIEngineCapabilities
@@ -5553,7 +5565,7 @@ actor CodeGenServer {
                 id: "call_\(index)_\(UUID().uuidString.prefix(8))",
                 function: OpenAIChatToolCallFunction(
                     name: call.name,
-                    arguments: jsonString(from: call.arguments)
+                    arguments: APIServerContract.openAIToolArgumentsJSON(call.arguments)
                 )
             )
         }
@@ -5575,11 +5587,6 @@ actor CodeGenServer {
             completion_tokens: result.tokensGenerated,
             total_tokens: promptTokens + result.tokensGenerated
         )
-    }
-
-    private nonisolated func jsonString(from arguments: [String: String]) -> String {
-        let data = (try? JSONEncoder().encode(arguments)) ?? Data("{}".utf8)
-        return String(data: data, encoding: .utf8) ?? "{}"
     }
 
     private func unauthorizedResponseIfNeeded(for request: Request) -> Response? {
