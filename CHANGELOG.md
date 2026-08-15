@@ -6,6 +6,19 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.38.0 - 2026-08-14
+
+This release adds native Qwen3.8 27B vision, reasoning, coding, and experimental
+multi-token-prediction lanes; substantially accelerates MiniMax Music 3; and
+adds the published MiniMax-H3 Ref2VA Turbo adapter recipe. It also refreshes
+mere.run's owned MLX dependency chain, centralizes served-model capability
+metadata for the API and Pi agents, improves Studio model-download visibility,
+and ships a redesigned documentation experience.
+
+Large and restricted checkpoints remain explicit managed pulls with immutable
+upstream revisions, license gates, and machine-admission guidance. Experimental
+Qwen3.8 MTP stays opt-in; target-only decode remains the default.
+
 ### Studio
 
 - enriched the Models browser with estimated checkpoint size, minimum unified
@@ -86,6 +99,18 @@ The format is based on Keep a Changelog.
   four-evaluation, video/audio shift 12/3, alpha-8 recipe and fuses its 312
   PEFT pairs after the managed INT8 transformer is admitted and expanded to
   resident BF16.
+
+### Included pull requests
+
+- exact release range: [#293](https://github.com/sawfwair/mere-run/pull/293),
+  [#294](https://github.com/sawfwair/mere-run/pull/294),
+  [#295](https://github.com/sawfwair/mere-run/pull/295),
+  [#296](https://github.com/sawfwair/mere-run/pull/296),
+  [#297](https://github.com/sawfwair/mere-run/pull/297),
+  [#298](https://github.com/sawfwair/mere-run/pull/298),
+  [#299](https://github.com/sawfwair/mere-run/pull/299),
+  [#302](https://github.com/sawfwair/mere-run/pull/302), and
+  [#303](https://github.com/sawfwair/mere-run/pull/303).
 
 ## 0.37.0 - 2026-08-13
 
