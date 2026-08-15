@@ -6,6 +6,11 @@ import FoundationNetworking
 import CryptoKit
 #endif
 import MereRunCore
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#endif
 
 struct PiAgentInstallResult {
     let version: String
@@ -106,6 +111,34 @@ struct PiProviderModel {
 }
 
 enum PiAgentIntegration {
+    static let serverAdmissionMarker = "API server admitted by machine admission."
+    static let agentParentProcessEnvironment = "MERERUN_AGENT_PARENT_PID"
+
+    static func configuredAgentParentProcessID(
+        environment: [String: String] = ProcessInfo.processInfo.environment,
+        currentProcessID: Int32 = ProcessInfo.processInfo.processIdentifier
+    ) -> Int32? {
+        guard let raw = environment[agentParentProcessEnvironment],
+              let processID = Int32(raw),
+              processID > 1,
+              processID != currentProcessID else {
+            return nil
+        }
+        return processID
+    }
+
+    static func startAgentParentExitMonitorIfConfigured() {
+        guard let parentProcessID = configuredAgentParentProcessID() else { return }
+        Thread.detachNewThread {
+            while true {
+                Thread.sleep(forTimeInterval: 0.5)
+                if kill(parentProcessID, 0) != 0, errno != EPERM {
+                    _exit(EXIT_SUCCESS)
+                }
+            }
+        }
+    }
+
     struct ProviderConfiguration: Codable, Hashable {
         let host: String
         let port: Int
@@ -328,7 +361,6 @@ enum PiAgentIntegration {
         let quotedAPIKey = javascriptStringLiteral(apiKey)
 
         return """
-        import { createProvider, openAICompletionsApi, type Model } from "@earendil-works/pi-ai/compat";
         import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
         type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh" | "max";
@@ -377,7 +409,7 @@ enum PiAgentIntegration {
           return result;
         }
 
-        function mapModel(model: MereRunModel): Model<"openai-completions"> {
+        function mapModel(model: MereRunModel) {
           const compat = model.openai_compat;
           return {
             id: model.id,
@@ -410,7 +442,7 @@ enum PiAgentIntegration {
         async function discoverModels(
           credential: string,
           signal: AbortSignal
-        ): Promise<Model<"openai-completions">[]> {
+        ): Promise<ReturnType<typeof mapModel>[]> {
           const response = await fetch(`${baseUrl}/models`, {
             headers: { Authorization: `Bearer ${credential}` },
             signal
@@ -427,28 +459,13 @@ enum PiAgentIntegration {
             apiKey,
             AbortSignal.timeout(2_000)
           ).catch(() => fallbackModels);
-          pi.registerProvider(createProvider({
-            id: "mere-run",
+          pi.registerProvider("mere-run", {
             name: "mere.run Local",
             baseUrl,
-            auth: {
-              apiKey: {
-                name: "mere.run local API key",
-                async resolve({ credential }) {
-                  const key = credential?.key ?? apiKey;
-                  return { auth: { apiKey: key }, source: "mere.run local" };
-                }
-              }
-            },
+            apiKey,
+            api: "openai-completions",
             models: initialModels,
-            async fetchModels(context) {
-              const credential = context.credential?.type === "api_key"
-                ? context.credential.key ?? apiKey
-                : apiKey;
-              return discoverModels(credential, context.signal);
-            },
-            api: openAICompletionsApi()
-          }));
+          });
         }
         """
     }
@@ -546,18 +563,46 @@ enum PiAgentIntegration {
             .appendingPathComponent("provider.json", isDirectory: false)
     }
 
-    static func waitForHealth(host: String, port: Int, timeoutSeconds: TimeInterval) async throws {
-        let deadline = Date().addingTimeInterval(timeoutSeconds)
+    static func waitForHealth(
+        host: String,
+        port: Int,
+        timeoutSeconds: TimeInterval,
+        serverProcess: Process? = nil,
+        serverLogURL: URL? = nil
+    ) async throws {
+        var awaitingAdmission = serverProcess != nil && serverLogURL != nil
+        var deadline = awaitingAdmission ? nil : Date().addingTimeInterval(timeoutSeconds)
         let healthURL = URL(string: "http://\(host):\(port)/health")!
-        while Date() < deadline {
+        while deadline.map({ Date() < $0 }) ?? true {
             if let (_, response) = try? await URLSession.shared.data(from: healthURL),
                let http = response as? HTTPURLResponse,
                http.statusCode == 200 {
                 return
             }
+            if let serverProcess, !serverProcess.isRunning {
+                throw IntegrationError.serverDidNotBecomeReady(healthURL)
+            }
+            if awaitingAdmission,
+               let serverLogURL,
+               serverAdmissionObserved(in: serverLogURL) {
+                awaitingAdmission = false
+                deadline = Date().addingTimeInterval(timeoutSeconds)
+            }
             try await Task.sleep(nanoseconds: 500_000_000)
         }
         throw IntegrationError.serverDidNotBecomeReady(healthURL)
+    }
+
+    static func serverAdmissionObserved(
+        in logURL: URL,
+        fileManager: FileManager = .default
+    ) -> Bool {
+        guard fileManager.fileExists(atPath: logURL.path),
+              let data = try? Data(contentsOf: logURL),
+              let contents = String(data: data, encoding: .utf8) else {
+            return false
+        }
+        return contents.contains(serverAdmissionMarker)
     }
 
     private static func fetchLatestRelease() async throws -> GitHubRelease {

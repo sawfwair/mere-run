@@ -204,6 +204,7 @@ struct APIServe: AsyncParsableCommand {
             try runPreflight()
             return
         }
+        PiAgentIntegration.startAgentParentExitMonitorIfConfigured()
         guard !json else {
             throw ValidationError("--json is only supported with --preflight for api serve.")
         }
@@ -225,6 +226,7 @@ struct APIServe: AsyncParsableCommand {
             )
         }
         defer { machineAdmissionLease.release() }
+        CLIStderr.write("\(PiAgentIntegration.serverAdmissionMarker)\n")
         let server = try await CodeGenServer(
             defaultModelID: defaultModelID,
             modelPath: resolvedModelPath,
