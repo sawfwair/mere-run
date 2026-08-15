@@ -1,4 +1,9 @@
 import Foundation
+#if canImport(Darwin)
+import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#endif
 
 enum PiTerminalLauncher {
     static var launchesDetached: Bool {
@@ -9,12 +14,20 @@ enum PiTerminalLauncher {
         #endif
     }
 
+    static func launchesDetached(inline: Bool) -> Bool {
+        inline ? false : launchesDetached
+    }
+
     static var launchProgressMessage: String {
         #if os(macOS)
         return "Opening Pi in Terminal.app."
         #else
         return "Starting Pi in this terminal."
         #endif
+    }
+
+    static func launchProgressMessage(inline: Bool) -> String {
+        inline ? "Starting Pi in this terminal." : launchProgressMessage
     }
 
     static var runningProgressMessage: String {
@@ -25,30 +38,47 @@ enum PiTerminalLauncher {
         #endif
     }
 
+    static func runningProgressMessage(inline: Bool) -> String {
+        inline ? "Pi exited. Stopping the API server." : runningProgressMessage
+    }
+
     static func launch(
         piURL: URL,
         modelID: String,
         prompt: String,
         homeDirectory: URL,
-        workingDirectory: URL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
+        workingDirectory: URL = URL(fileURLWithPath: FileManager.default.currentDirectoryPath),
+        additionalArguments: [String] = [],
+        inline: Bool = false
     ) throws {
         try FileManager.default.createDirectory(at: homeDirectory, withIntermediateDirectories: true)
 
+        if inline {
+            try launchInline(
+                piURL: piURL,
+                modelID: modelID,
+                prompt: prompt,
+                homeDirectory: homeDirectory,
+                workingDirectory: workingDirectory,
+                additionalArguments: additionalArguments
+            )
+            return
+        }
+
         #if os(macOS)
+        let arguments = arguments(
+            modelID: modelID,
+            prompt: prompt,
+            homeDirectory: homeDirectory,
+            additionalArguments: additionalArguments
+        )
         let command = [
             "mkdir -p \(shellQuote(homeDirectory.path))",
             "export HOME=\(shellQuote(homeDirectory.path))",
             "export XDG_CONFIG_HOME=\(shellQuote(homeDirectory.appendingPathComponent(".config", isDirectory: true).path))",
             "export XDG_DATA_HOME=\(shellQuote(homeDirectory.appendingPathComponent(".local/share", isDirectory: true).path))",
             "cd \(shellQuote(workingDirectory.path))",
-            [
-                shellQuote(piURL.path),
-                "--provider",
-                "mere-run",
-                "--model",
-                shellQuote(modelID),
-                shellQuote(prompt),
-            ].joined(separator: " "),
+            ([piURL.path] + arguments).map(shellQuote).joined(separator: " "),
             "printf '\\nPi exited. You can close this window.\\n'",
         ].joined(separator: "; ")
 
@@ -70,15 +100,33 @@ enum PiTerminalLauncher {
             throw PiAgentIntegration.IntegrationError.terminalLaunchFailed
         }
         #else
+        try launchInline(
+            piURL: piURL,
+            modelID: modelID,
+            prompt: prompt,
+            homeDirectory: homeDirectory,
+            workingDirectory: workingDirectory,
+            additionalArguments: additionalArguments
+        )
+        #endif
+    }
+
+    private static func launchInline(
+        piURL: URL,
+        modelID: String,
+        prompt: String,
+        homeDirectory: URL,
+        workingDirectory: URL,
+        additionalArguments: [String]
+    ) throws {
         let process = Process()
         process.executableURL = piURL
-        process.arguments = [
-            "--provider",
-            "mere-run",
-            "--model",
-            modelID,
-            prompt,
-        ]
+        process.arguments = arguments(
+            modelID: modelID,
+            prompt: prompt,
+            homeDirectory: homeDirectory,
+            additionalArguments: additionalArguments
+        )
         process.currentDirectoryURL = workingDirectory
         var environment = ProcessInfo.processInfo.environment
         environment["HOME"] = homeDirectory.path
@@ -93,11 +141,55 @@ enum PiTerminalLauncher {
         process.standardOutput = FileHandle.standardOutput
         process.standardError = FileHandle.standardError
         try process.run()
-        process.waitUntilExit()
+        try waitForInteractiveProcess(process)
         guard process.terminationStatus == 0 else {
             throw PiAgentIntegration.IntegrationError.terminalLaunchFailed
         }
+    }
+
+    private static func waitForInteractiveProcess(_ process: Process) throws {
+        #if os(macOS) || os(Linux)
+        let terminal = FileHandle.standardInput.fileDescriptor
+        guard isatty(terminal) == 1 else {
+            process.waitUntilExit()
+            return
+        }
+        let originalGroup = tcgetpgrp(terminal)
+        let childGroup = getpgid(process.processIdentifier)
+        guard originalGroup > 0, childGroup > 0 else {
+            process.terminate()
+            throw PiAgentIntegration.IntegrationError.terminalLaunchFailed
+        }
+
+        let previousSIGTTOUHandler = signal(SIGTTOU, SIG_IGN)
+        guard tcsetpgrp(terminal, childGroup) == 0 else {
+            _ = signal(SIGTTOU, previousSIGTTOUHandler)
+            process.terminate()
+            throw PiAgentIntegration.IntegrationError.terminalLaunchFailed
+        }
+        _ = kill(-childGroup, SIGCONT)
+        process.waitUntilExit()
+        _ = tcsetpgrp(terminal, originalGroup)
+        _ = signal(SIGTTOU, previousSIGTTOUHandler)
+        #else
+        process.waitUntilExit()
         #endif
+    }
+
+    static func arguments(
+        modelID: String,
+        prompt: String,
+        homeDirectory: URL,
+        additionalArguments: [String]
+    ) -> [String] {
+        let providerExtension = homeDirectory
+            .appendingPathComponent(".pi/agent/extensions", isDirectory: true)
+            .appendingPathComponent("mere-run-local-provider.ts", isDirectory: false)
+        return [
+            "--provider", "mere-run",
+            "--model", modelID,
+            "--extension", providerExtension.path,
+        ] + additionalArguments + [prompt]
     }
 
     private static func shellQuote(_ value: String) -> String {

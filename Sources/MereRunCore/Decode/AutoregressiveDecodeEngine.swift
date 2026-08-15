@@ -79,6 +79,7 @@ public enum AutoregressiveDecodeEngine {
         stepForward: (MLXArray) throws -> MLXArray,
         decodeToken: ((Int) -> String)? = nil,
         emitPiece: ((Int, String) -> Void)? = nil,
+        shouldContinue: ((Int, String) -> Bool)? = nil,
         checkCancellation: (() throws -> Void)? = nil
     ) throws -> AutoregressiveDecodeResult {
         guard request.tokenBudget > 0 else {
@@ -104,18 +105,16 @@ public enum AutoregressiveDecodeEngine {
             if firstTokenSeconds == nil {
                 firstTokenSeconds = Date().timeIntervalSince(start)
             }
-            if let decodeToken, let emitPiece {
-                let piece = decodeToken(token)
-                if !piece.isEmpty {
-                    if piece.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        pendingProgressWhitespace += piece
-                    } else {
-                        emitPiece(token, pendingProgressWhitespace + piece)
-                        pendingProgressWhitespace = ""
-                    }
+            let piece = decodeToken?(token) ?? ""
+            if let emitPiece, !piece.isEmpty {
+                if piece.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    pendingProgressWhitespace += piece
+                } else {
+                    emitPiece(token, pendingProgressWhitespace + piece)
+                    pendingProgressWhitespace = ""
                 }
             }
-            return true
+            return shouldContinue?(token, piece) ?? true
         }
 
         var buildSeconds = 0.0

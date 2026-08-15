@@ -329,6 +329,16 @@ final class MachineInferenceAdmissionTests: XCTestCase {
             CLIInferenceAdmissionClassifier.request(arguments: ["mere.run", "model", "list"])
         )
         XCTAssertNil(
+            CLIInferenceAdmissionClassifier.request(
+                arguments: ["mere.run", "agent", "start", "--model", "vision-chat-q38-27b"]
+            )
+        )
+        XCTAssertNil(
+            CLIInferenceAdmissionClassifier.request(
+                arguments: ["mere.run", "api", "serve", "--model", "vision-chat-q38-27b"]
+            )
+        )
+        XCTAssertNil(
             CLIInferenceAdmissionClassifier.request(arguments: ["mere.run", "image", "generate", "--help"])
         )
     }

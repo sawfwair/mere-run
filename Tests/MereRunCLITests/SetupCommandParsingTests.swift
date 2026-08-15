@@ -217,11 +217,13 @@ final class SetupCommandParsingTests: XCTestCase {
         XCTAssertTrue(FileManager.default.fileExists(atPath: extensionURL.path))
         let extensionSource = try String(contentsOf: extensionURL, encoding: .utf8)
         XCTAssertTrue(extensionSource.contains("@earendil-works/pi-coding-agent"))
-        XCTAssertTrue(extensionSource.contains("createProvider"))
-        XCTAssertTrue(extensionSource.contains("openAICompletionsApi"))
-        XCTAssertTrue(extensionSource.contains("const initialModels = await discoverModels"))
-        XCTAssertTrue(extensionSource.contains("fetchModels"))
-        XCTAssertTrue(extensionSource.contains("entry.tool_call === true"))
+        XCTAssertTrue(extensionSource.contains("const configuredModels = ["))
+        XCTAssertTrue(extensionSource.contains("models: configuredModels"))
+        XCTAssertTrue(extensionSource.contains("pi.registerProvider(\"mere-run\""))
+        XCTAssertTrue(extensionSource.contains("api: \"openai-completions\""))
+        XCTAssertFalse(extensionSource.contains("@earendil-works/pi-ai/compat"))
+        XCTAssertFalse(extensionSource.contains("fetch("))
+        XCTAssertFalse(extensionSource.contains("discoverModels"))
         XCTAssertTrue(extensionSource.contains("input: [\"text\", \"image\"]"))
         XCTAssertTrue(extensionSource.contains("supportsFinishReason: true"))
     }
@@ -230,6 +232,22 @@ final class SetupCommandParsingTests: XCTestCase {
         let command = try AgentStart.parse([])
 
         XCTAssertNil(command.model)
+    }
+
+    func testAgentServerAdmissionMarkerDetection() throws {
+        let logURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mere-run-agent-server-\(UUID().uuidString).log")
+        defer { try? FileManager.default.removeItem(at: logURL) }
+
+        try "API server queued by machine admission.\n"
+            .write(to: logURL, atomically: true, encoding: .utf8)
+        XCTAssertTrue(PiAgentIntegration.serverQueueObserved(in: logURL))
+        XCTAssertFalse(PiAgentIntegration.serverAdmissionObserved(in: logURL))
+
+        try ("API server queued by machine admission.\n" + PiAgentIntegration.serverAdmissionMarker + "\n")
+            .write(to: logURL, atomically: true, encoding: .utf8)
+        XCTAssertTrue(PiAgentIntegration.serverQueueObserved(in: logURL))
+        XCTAssertTrue(PiAgentIntegration.serverAdmissionObserved(in: logURL))
     }
 
     func testAgentStatusParsesMachineReadableInspection() throws {
@@ -300,6 +318,71 @@ final class SetupCommandParsingTests: XCTestCase {
         ])
 
         XCTAssertEqual(command.model, AgentModelResources.qwen35NineBModelId)
+    }
+
+    func testAgentStartParsesInlinePiHarnessArguments() throws {
+        let command = try AgentStart.parse([
+            "--inline",
+            "--working-directory", "/tmp/film",
+            "--pi-argument", "--no-extensions",
+            "--pi-argument", "--extension",
+            "--pi-argument", "/tmp/film-studio.ts",
+            "--pi-argument", "@/tmp/film/run.json",
+            "--prompt", "Open this film project.",
+        ])
+
+        XCTAssertTrue(command.inline)
+        XCTAssertEqual(command.workingDirectory, "/tmp/film")
+        XCTAssertEqual(
+            command.piArguments,
+            ["--no-extensions", "--extension", "/tmp/film-studio.ts", "@/tmp/film/run.json"]
+        )
+        XCTAssertEqual(command.prompt, "Open this film project.")
+    }
+
+    func testAgentServerDefaultsGemma4PrefixKVCacheOffButPreservesExplicitOverride() {
+        XCTAssertEqual(
+            AgentStart.apiServerEnvironment(
+                inheriting: [:],
+                processID: 123
+            )[PiAgentIntegration.agentParentProcessEnvironment],
+            "123"
+        )
+        XCTAssertEqual(
+            AgentStart.apiServerEnvironment(
+                inheriting: [:],
+                processID: 123
+            )["MERERUN_GEMMA4_PREFIX_KV_CACHE"],
+            "0"
+        )
+        XCTAssertEqual(
+            AgentStart.apiServerEnvironment(
+                inheriting: ["MERERUN_GEMMA4_PREFIX_KV_CACHE": "1"]
+            )["MERERUN_GEMMA4_PREFIX_KV_CACHE"],
+            "1"
+        )
+    }
+
+    func testAgentParentProcessIDRejectsUnsafeValues() {
+        XCTAssertEqual(
+            PiAgentIntegration.configuredAgentParentProcessID(
+                environment: [PiAgentIntegration.agentParentProcessEnvironment: "123"],
+                currentProcessID: 999
+            ),
+            123
+        )
+        XCTAssertNil(
+            PiAgentIntegration.configuredAgentParentProcessID(
+                environment: [PiAgentIntegration.agentParentProcessEnvironment: "1"],
+                currentProcessID: 999
+            )
+        )
+        XCTAssertNil(
+            PiAgentIntegration.configuredAgentParentProcessID(
+                environment: [PiAgentIntegration.agentParentProcessEnvironment: "999"],
+                currentProcessID: 999
+            )
+        )
     }
 
     func testSetupAgentPromptCarriesBoundedMachineContext() {
@@ -567,5 +650,24 @@ final class SetupCommandParsingTests: XCTestCase {
             resolved?.resolvingSymlinksInPath(),
             binaryURL.resolvingSymlinksInPath()
         )
+    }
+
+    func testPiLaunchExplicitlyKeepsLocalProviderWhenExtensionDiscoveryIsDisabled() {
+        let home = URL(fileURLWithPath: "/tmp/mere-run-pi-home", isDirectory: true)
+
+        let arguments = PiTerminalLauncher.arguments(
+            modelID: "text-chat-test",
+            prompt: "Make a film",
+            homeDirectory: home,
+            additionalArguments: ["--no-extensions", "--extension", "/tmp/film-studio.ts"]
+        )
+
+        XCTAssertEqual(arguments.prefix(4), ["--provider", "mere-run", "--model", "text-chat-test"])
+        XCTAssertEqual(
+            arguments.dropFirst(4).prefix(2),
+            ["--extension", "/tmp/mere-run-pi-home/.pi/agent/extensions/mere-run-local-provider.ts"]
+        )
+        XCTAssertTrue(arguments.contains("--no-extensions"))
+        XCTAssertEqual(arguments.suffix(1), ["Make a film"])
     }
 }

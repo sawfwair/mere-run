@@ -155,6 +155,27 @@ final class AutoregressiveDecodeEngineTests: XCTestCase {
         XCTAssertEqual(pieces, [" \nhello", "world"])
     }
 
+    func testDecodeCanStopAfterAConfirmedProtocolTerminator() throws {
+        let names = [3: "<tool_call>", 7: "<function=film_status>", 2: "</function>", 9: "</tool_call>"]
+        var decoded = ""
+        let model = scriptedModel([7, 2, 9, 4, eos])
+
+        let result = try AutoregressiveDecodeEngine.decode(
+            request(firstToken: 3, budget: 8),
+            stepForward: { input in
+                return model(input)
+            },
+            decodeToken: { names[$0] ?? "trailing" },
+            shouldContinue: { _, piece in
+                decoded += piece
+                return !decoded.contains("</tool_call>")
+            }
+        )
+
+        XCTAssertEqual(result.generatedTokens, [3, 7, 2, 9])
+        XCTAssertFalse(result.generatedTokens.contains(4))
+    }
+
     func testStatefulDecodeProcessesConfirmedTokenHistory() {
         var processedHistories: [[Int]] = []
         var sampled: [Int] = []
