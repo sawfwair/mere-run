@@ -1248,6 +1248,7 @@ final class VideoCommandTests: XCTestCase {
     func testVideoGeneratePreflightResolvesManagedLTX25Detailer() throws {
         let modelRoot = try makeValidLTX25FullModelRoot()
         let output = makeTempOutput(name: "dfr-managed-detailer.mp4")
+        let adaptersRoot = try makeTempDirectory()
         let command = try VideoGenerate.parse([
             "a detailed shoreline",
             "--model-root", modelRoot.path,
@@ -1258,17 +1259,17 @@ final class VideoCommandTests: XCTestCase {
             "--json",
         ])
 
-        let envelope = command.makePreflightEnvelope(outputURL: output)
+        let envelope = command.makePreflightEnvelope(
+            outputURL: output,
+            adaptersRoot: adaptersRoot
+        )
         let summary = try XCTUnwrap(envelope.result.inputs.detailingLoRAs?.first)
         XCTAssertEqual(summary.requested, ManagedAdapterCatalog.ltx25PixelSpatialUpscalerID)
         let installedFile = try XCTUnwrap(
             ManagedAdapterCatalog.spec(for: ManagedAdapterCatalog.ltx25PixelSpatialUpscalerID)
-        ).installedFileURL()
+        ).installedFileURL(adaptersRoot: adaptersRoot)
         XCTAssertEqual(summary.path, installedFile.path)
-        XCTAssertEqual(
-            envelope.diagnostics.contains { $0.id == "detailing_lora_0_missing" },
-            !FileManager.default.fileExists(atPath: installedFile.path)
-        )
+        XCTAssertTrue(envelope.diagnostics.contains { $0.id == "detailing_lora_0_missing" })
     }
 
     func testLTX25SpecificControlsSelectTheDistilledCatalogModel() throws {
