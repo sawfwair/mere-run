@@ -639,6 +639,8 @@ final class ManagedModelSupportTests: XCTestCase {
         XCTAssertFalse(recommendations.contains { $0.id == "text-chat-q35" })
         XCTAssertFalse(recommendations.contains { $0.id == "text-chat-q35-nano" })
         XCTAssertTrue(recommendations.contains { $0.id == Q35Resources.q36NanoModelId })
+        XCTAssertTrue(recommendations.contains { $0.id == Q35Resources.q38TwentySevenBModelId })
+        XCTAssertTrue(recommendations.contains { $0.id == Q35Resources.q38TwentySevenB4BitModelId })
     }
 
     func testAgentRecommendationRejectsNonAppleSilicon() {

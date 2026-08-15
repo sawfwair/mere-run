@@ -123,6 +123,21 @@ final class SetupCommandParsingTests: XCTestCase {
         XCTAssertEqual(recommendation.servingEngine, .textChatGemma4)
     }
 
+    func testQ38ProviderUsesNativeQwenRuntime() throws {
+        let runtime = try SetupAgentRuntime.runtime(
+            forManagedModelID: Q35Resources.q38TwentySevenBModelId
+        )
+        let providerModel = runtime.providerModel
+
+        XCTAssertEqual(runtime.engine, .textChatQ36)
+        XCTAssertEqual(providerModel.id, Q35Resources.q38TwentySevenBModelId)
+        XCTAssertEqual(providerModel.contextWindow, Q35Resources.q38TwentySevenBContextLength)
+        XCTAssertEqual(providerModel.maxTokens, 4_096)
+        XCTAssertTrue(providerModel.toolCall)
+        XCTAssertTrue(runtime.recommendation.isStartableByMereRun)
+        XCTAssertEqual(runtime.recommendation.servingEngine, .textChatQ36)
+    }
+
     func testOrnith35BProviderUsesNativeManagedModelID() throws {
         let recommendation = try XCTUnwrap(
             MereRunAgentModelCatalog
