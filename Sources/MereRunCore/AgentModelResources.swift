@@ -194,6 +194,8 @@ public enum MereRunAgentModelCatalog {
             ornith35B(),
             ornith35BMLX(),
             q36Nano(),
+            q38TwentySevenB4Bit(),
+            q38TwentySevenB(),
             qwen3CoderNext(),
             deepseekV4Flash(),
         ].filter { machine.isSupportedRuntime && machine.unifiedMemoryGB >= $0.minimumUnifiedMemoryGB }
@@ -220,6 +222,30 @@ public enum MereRunAgentModelCatalog {
             recommendedUnifiedMemoryGB: 32,
             servingEngine: .textChatQ36,
             managedModelID: Q35Resources.q36NanoModelId
+        )
+    }
+
+    private static func q38TwentySevenB4Bit() -> MereRunAgentModelRecommendation {
+        MereRunAgentModelRecommendation(
+            id: Q35Resources.q38TwentySevenB4BitModelId,
+            displayName: "Qwen3.8 27B MLX 4-bit",
+            summary: "Efficient Qwen3.8 multimodal reasoning agent for Pi and local tool workflows.",
+            minimumUnifiedMemoryGB: 32,
+            recommendedUnifiedMemoryGB: 48,
+            servingEngine: .textChatQ36,
+            managedModelID: Q35Resources.q38TwentySevenB4BitModelId
+        )
+    }
+
+    private static func q38TwentySevenB() -> MereRunAgentModelRecommendation {
+        MereRunAgentModelRecommendation(
+            id: Q35Resources.q38TwentySevenBModelId,
+            displayName: "Qwen3.8 27B BF16",
+            summary: "Full-precision Qwen3.8 multimodal reasoning agent for Pi and demanding local tool workflows.",
+            minimumUnifiedMemoryGB: 64,
+            recommendedUnifiedMemoryGB: 96,
+            servingEngine: .textChatQ36,
+            managedModelID: Q35Resources.q38TwentySevenBModelId
         )
     }
 
