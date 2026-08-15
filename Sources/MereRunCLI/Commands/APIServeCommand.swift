@@ -2805,14 +2805,20 @@ enum APIServerContract {
         )
     }
 
-    static func openAIToolArgumentsJSON(_ arguments: [String: String]) -> String {
-        let normalized = arguments.mapValues { rawValue in
+    static func openAIToolArgumentsJSON(
+        _ arguments: [String: String],
+        parameterTypes: [String: String]
+    ) -> String {
+        let normalized = Dictionary(uniqueKeysWithValues: arguments.map { key, rawValue in
+            guard let parameterType = parameterTypes[key], parameterType != "string" else {
+                return (key, OpenAIJSONValue.string(rawValue))
+            }
             guard let data = rawValue.data(using: .utf8),
                   let decoded = try? JSONDecoder().decode(OpenAIJSONValue.self, from: data) else {
-                return OpenAIJSONValue.string(rawValue)
+                return (key, OpenAIJSONValue.string(rawValue))
             }
-            return decoded
-        }
+            return (key, decoded)
+        })
         let data = (try? JSONEncoder().encode(normalized)) ?? Data("{}".utf8)
         return String(data: data, encoding: .utf8) ?? "{}"
     }
@@ -4869,7 +4875,7 @@ actor CodeGenServer {
                         role: "assistant",
                         content: result.response,
                         reasoning_content: result.reasoningContent,
-                        tool_calls: openAIToolCalls(from: result.toolCalls)
+                        tool_calls: openAIToolCalls(from: result.toolCalls, tools: request.tools)
                     ),
                     finish_reason: Self.openAIFinishReason(for: result)
                 )
@@ -5450,7 +5456,8 @@ actor CodeGenServer {
                         }
                     }
                 }
-                if let toolCalls = openAIToolCalls(from: result.toolCalls), !toolCalls.isEmpty {
+                if let toolCalls = openAIToolCalls(from: result.toolCalls, tools: request.tools),
+                   !toolCalls.isEmpty {
                     let chunk = OpenAIChatResponse(
                         id: id,
                         object: "chat.completion.chunk",
@@ -5558,14 +5565,24 @@ actor CodeGenServer {
         )
     }
 
-    private nonisolated func openAIToolCalls(from toolCalls: [ToolCall]?) -> [OpenAIChatToolCall]? {
+    private nonisolated func openAIToolCalls(
+        from toolCalls: [ToolCall]?,
+        tools: [ToolDefinition]?
+    ) -> [OpenAIChatToolCall]? {
         guard let toolCalls, !toolCalls.isEmpty else { return nil }
         return toolCalls.enumerated().map { index, call in
-            OpenAIChatToolCall(
+            let parameterTypes = tools?
+                .first(where: { $0.name == call.name })?
+                .parameters
+                .mapValues(\.type) ?? [:]
+            return OpenAIChatToolCall(
                 id: "call_\(index)_\(UUID().uuidString.prefix(8))",
                 function: OpenAIChatToolCallFunction(
                     name: call.name,
-                    arguments: APIServerContract.openAIToolArgumentsJSON(call.arguments)
+                    arguments: APIServerContract.openAIToolArgumentsJSON(
+                        call.arguments,
+                        parameterTypes: parameterTypes
+                    )
                 )
             )
         }
