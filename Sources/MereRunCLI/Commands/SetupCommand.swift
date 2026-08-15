@@ -284,7 +284,8 @@ struct Setup: AsyncParsableCommand {
             port: port,
             timeoutSeconds: runtime.healthTimeoutSeconds,
             serverProcess: server,
-            serverLogURL: startedServer.logURL
+            serverLogURL: startedServer.logURL,
+            progressPrefix: "[setup]"
         )
         CLIStderr.write("[setup] Local API is ready. \(PiTerminalLauncher.launchProgressMessage)\n")
         try runPi(

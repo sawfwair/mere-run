@@ -111,6 +111,7 @@ struct PiProviderModel {
 }
 
 enum PiAgentIntegration {
+    static let serverQueueMarker = "API server queued by machine admission"
     static let serverAdmissionMarker = "API server admitted by machine admission."
     static let agentParentProcessEnvironment = "MERERUN_AGENT_PARENT_PID"
 
@@ -568,9 +569,11 @@ enum PiAgentIntegration {
         port: Int,
         timeoutSeconds: TimeInterval,
         serverProcess: Process? = nil,
-        serverLogURL: URL? = nil
+        serverLogURL: URL? = nil,
+        progressPrefix: String? = nil
     ) async throws {
         var awaitingAdmission = serverProcess != nil && serverLogURL != nil
+        var reportedQueue = false
         var deadline = awaitingAdmission ? nil : Date().addingTimeInterval(timeoutSeconds)
         let healthURL = URL(string: "http://\(host):\(port)/health")!
         while deadline.map({ Date() < $0 }) ?? true {
@@ -581,6 +584,15 @@ enum PiAgentIntegration {
             }
             if let serverProcess, !serverProcess.isRunning {
                 throw IntegrationError.serverDidNotBecomeReady(healthURL)
+            }
+            if awaitingAdmission,
+               !reportedQueue,
+               let serverLogURL,
+               serverQueueObserved(in: serverLogURL) {
+                if let progressPrefix {
+                    CLIStderr.write("\(progressPrefix) Local API is queued by machine admission; waiting for permits.\n")
+                }
+                reportedQueue = true
             }
             if awaitingAdmission,
                let serverLogURL,
@@ -597,12 +609,27 @@ enum PiAgentIntegration {
         in logURL: URL,
         fileManager: FileManager = .default
     ) -> Bool {
+        serverLogContains(serverAdmissionMarker, in: logURL, fileManager: fileManager)
+    }
+
+    static func serverQueueObserved(
+        in logURL: URL,
+        fileManager: FileManager = .default
+    ) -> Bool {
+        serverLogContains(serverQueueMarker, in: logURL, fileManager: fileManager)
+    }
+
+    private static func serverLogContains(
+        _ marker: String,
+        in logURL: URL,
+        fileManager: FileManager
+    ) -> Bool {
         guard fileManager.fileExists(atPath: logURL.path),
               let data = try? Data(contentsOf: logURL),
               let contents = String(data: data, encoding: .utf8) else {
             return false
         }
-        return contents.contains(serverAdmissionMarker)
+        return contents.contains(marker)
     }
 
     private static func fetchLatestRelease() async throws -> GitHubRelease {

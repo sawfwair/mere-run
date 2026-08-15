@@ -239,10 +239,12 @@ final class SetupCommandParsingTests: XCTestCase {
 
         try "API server queued by machine admission.\n"
             .write(to: logURL, atomically: true, encoding: .utf8)
+        XCTAssertTrue(PiAgentIntegration.serverQueueObserved(in: logURL))
         XCTAssertFalse(PiAgentIntegration.serverAdmissionObserved(in: logURL))
 
         try ("API server queued by machine admission.\n" + PiAgentIntegration.serverAdmissionMarker + "\n")
             .write(to: logURL, atomically: true, encoding: .utf8)
+        XCTAssertTrue(PiAgentIntegration.serverQueueObserved(in: logURL))
         XCTAssertTrue(PiAgentIntegration.serverAdmissionObserved(in: logURL))
     }
 

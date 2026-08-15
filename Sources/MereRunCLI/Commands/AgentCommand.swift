@@ -495,7 +495,8 @@ struct AgentStart: AsyncParsableCommand {
                 port: port,
                 timeoutSeconds: runtime.healthTimeoutSeconds,
                 serverProcess: startedServer.process,
-                serverLogURL: startedServer.logURL
+                serverLogURL: startedServer.logURL,
+                progressPrefix: "[agent]"
             )
             CLIStderr.write("[agent] Local API is ready. \(PiTerminalLauncher.launchProgressMessage(inline: inline))\n")
         }
