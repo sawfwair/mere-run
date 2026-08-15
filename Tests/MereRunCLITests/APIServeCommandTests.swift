@@ -2441,6 +2441,27 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(chatRequest.tools?.first?.required, ["query"])
     }
 
+    func testOpenAIToolArgumentsPreserveJSONTypesFromModelPayloads() throws {
+        let json = APIServerContract.openAIToolArgumentsJSON([
+            "audience": "local-AI filmmakers",
+            "references": "[\"paper craft\",\"stop motion\"]",
+            "generateScore": "false",
+            "takes": "2",
+            "metadata": "{\"color\":\"red\"}",
+        ])
+        let data = try XCTUnwrap(json.data(using: .utf8))
+        let decoded = try JSONDecoder().decode([String: OpenAIJSONValue].self, from: data)
+
+        XCTAssertEqual(decoded["audience"], .string("local-AI filmmakers"))
+        XCTAssertEqual(
+            decoded["references"],
+            .array([.string("paper craft"), .string("stop motion")])
+        )
+        XCTAssertEqual(decoded["generateScore"], .bool(false))
+        XCTAssertEqual(decoded["takes"], .number(2))
+        XCTAssertEqual(decoded["metadata"], .object(["color": .string("red")]))
+    }
+
     func testChatRequestAcceptsSpecificFunctionToolChoice() throws {
         let lookup = OpenAIChatTool(
             function: OpenAIChatToolFunction(

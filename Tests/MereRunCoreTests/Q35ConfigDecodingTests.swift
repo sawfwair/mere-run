@@ -676,6 +676,18 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         )
     }
 
+    func testQ35ToolCallsSelectEarlyStoppablePipelinedDecode() {
+        XCTAssertEqual(
+            Q35Generator.decodePath(
+                jsonConstrained: false,
+                continuousBatchingEnabled: true,
+                mtpSpeculationEnabled: true,
+                stopAtCompletedToolCall: true
+            ),
+            .pipelined
+        )
+    }
+
     func testQ35TokenBudgetExhaustionReportsLength() {
         XCTAssertEqual(
             Q35Generator.finishReason(

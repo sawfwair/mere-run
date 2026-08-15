@@ -611,6 +611,7 @@ public actor Q35Generator: ChatGenerator {
             promptTokens: promptTokens,
             maxContextTokens: effectiveContext,
             jsonConstrained: jsonConstrained,
+            stopAtCompletedToolCall: request.tools?.isEmpty == false,
             progressHandler: progressHandler
         )
 
@@ -624,7 +625,7 @@ public actor Q35Generator: ChatGenerator {
             matchedStopSequence: trimmed.matchedSequence != nil
         )
         let toolCalls: [ToolCall]? = request.tools?.isEmpty == false ? {
-            let parsed = Gemma4ToolParser.parseToolCalls(decoded)
+            let parsed = Q35ToolParser.parseToolCalls(decoded)
             return parsed.isEmpty ? nil : parsed
         }() : nil
 
@@ -659,8 +660,10 @@ public actor Q35Generator: ChatGenerator {
     static func decodePath(
         jsonConstrained: Bool,
         continuousBatchingEnabled: Bool,
-        mtpSpeculationEnabled: Bool
+        mtpSpeculationEnabled: Bool,
+        stopAtCompletedToolCall: Bool = false
     ) -> Q35DecodePath {
+        if stopAtCompletedToolCall { return .pipelined }
         if jsonConstrained { return .jsonConstrainedSerial }
         if continuousBatchingEnabled { return .continuousBatched }
         if mtpSpeculationEnabled { return .mtpSpeculativeSerial }
@@ -742,12 +745,13 @@ public actor Q35Generator: ChatGenerator {
         promptTokens: [Int],
         maxContextTokens: Int,
         jsonConstrained: Bool,
+        stopAtCompletedToolCall: Bool,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> Q35BatchedDecodeResult {
         guard tokenBudget > 0 else {
             return Q35BatchedDecodeResult(generatedTokens: [], decodeSeconds: 0)
         }
-        let speculationMTP = !jsonConstrained && Self.shouldSpeculate(
+        let speculationMTP = !jsonConstrained && !stopAtCompletedToolCall && Self.shouldSpeculate(
             promptTokenCount: promptTokens.count,
             maxContextTokens: maxContextTokens,
             defaultMinimumPromptTokens: model.config.textConfig.usesMoE ? 6144 : 0,
@@ -756,7 +760,8 @@ public actor Q35Generator: ChatGenerator {
         let decodePath = Self.decodePath(
             jsonConstrained: jsonConstrained,
             continuousBatchingEnabled: continuousBatchingEnabled,
-            mtpSpeculationEnabled: speculationMTP != nil
+            mtpSpeculationEnabled: speculationMTP != nil,
+            stopAtCompletedToolCall: stopAtCompletedToolCall
         )
 
         // JSON mode owns mutable prefix-grammar state and must validate every
@@ -777,6 +782,7 @@ public actor Q35Generator: ChatGenerator {
                 mropeRopeDelta: mropeRopeDelta,
                 promptTokens: promptTokens,
                 jsonConstrained: decodePath == .jsonConstrainedSerial,
+                stopAtCompletedToolCall: stopAtCompletedToolCall,
                 progressHandler: progressHandler
             )
         }
@@ -822,6 +828,7 @@ public actor Q35Generator: ChatGenerator {
         mropeRopeDelta: Int?,
         promptTokens: [Int],
         jsonConstrained: Bool,
+        stopAtCompletedToolCall: Bool,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> Q35BatchedDecodeResult {
         if mtpModel == nil, !jsonConstrained {
@@ -835,6 +842,7 @@ public actor Q35Generator: ChatGenerator {
                 tokenBudget: tokenBudget,
                 mropeRopeDelta: mropeRopeDelta,
                 promptTokens: promptTokens,
+                stopAtCompletedToolCall: stopAtCompletedToolCall,
                 progressHandler: progressHandler
             )
         }
@@ -1156,6 +1164,7 @@ public actor Q35Generator: ChatGenerator {
         tokenBudget: Int,
         mropeRopeDelta: Int?,
         promptTokens: [Int],
+        stopAtCompletedToolCall: Bool,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> Q35BatchedDecodeResult {
         let layerCaches = layerCaches
@@ -1167,6 +1176,7 @@ public actor Q35Generator: ChatGenerator {
 
         // Shared pipelined decode; mRoPE positions derive from the cache
         // offset, so the step closure computes them per forward.
+        var decodedToolCall = ""
         let result = try AutoregressiveDecodeEngine.decode(
             AutoregressiveDecodeRequest(
                 initialLogits: initialLogits,
@@ -1186,6 +1196,11 @@ public actor Q35Generator: ChatGenerator {
             decodeToken: { tokenizerAndTemplate.decode(token: $0) },
             emitPiece: { _, piece in
                 progressHandler?(ChatProgress(stage: .generating, message: piece))
+            },
+            shouldContinue: { _, piece in
+                guard stopAtCompletedToolCall else { return true }
+                decodedToolCall += piece
+                return !Q35ToolParser.containsCompletedToolCall(decodedToolCall)
             },
             checkCancellation: { try Task.checkCancellation() }
         )
