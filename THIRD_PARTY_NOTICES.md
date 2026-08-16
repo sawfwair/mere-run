@@ -710,6 +710,31 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+### WeeTodd MiniMax-H3 MPP projection research
+
+- purpose: the lab-only BF16 Metal Performance Primitives projection shader
+  structure and measured H3 tile choices were adapted from
+  [`wee-todd/WeeTodd-Nodes`](https://github.com/wee-todd/WeeTodd-Nodes) at
+  commit `e5b0e014db1abe4c86fedc195d12dfcd18562042` and translated to Swift/MLX
+- distribution boundary: no WeeTodd model weights, runtime package, or Python
+  source files are vendored or linked; the adapted primitive remains outside
+  production dispatch until mere.run's exactness and benchmark gates qualify it
+- license: Apache License 2.0
+
+```text
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+```
+
 ### `vendor/mlx-swift_Cmlx.bundle`
 
 - purpose: bundled MLX Metal shader resources used by MLX-backed runtime paths

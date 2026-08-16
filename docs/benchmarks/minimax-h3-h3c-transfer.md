@@ -18,6 +18,24 @@ materializations competitively requires an MLX/MLXFast primitive with a tiled
 quantized core and H3-specific epilogue, or an M5 TensorOps implementation. It
 is not achievable by further tuning the current standalone scalar kernels.
 
+Resident BF16 has a separate M3/M4 opportunity. The refreshed MLX source has
+a Metal 4 NAX GEMM implementation, but its runtime capability gate currently
+requires Apple GPU generation 18 or newer, so it does not dispatch on the local
+generation-16 M4 Max. The H3 lab now includes an independently gated MPP BF16
+projection candidate, adapted from WeeTodd's measured MiniMax-H3 tiles. Both
+tile configurations pass the deterministic small-shape M4 Max bit-exact canary.
+Production-shape timing remains unqualified because the first attempt correctly
+stopped at the clean-host guard while unrelated builds and ML workloads were
+active. The candidate is therefore not wired into model dispatch. Run the
+isolated release arm only on a clean host:
+
+```bash
+scripts/h3-kernel-lab.sh mpp-projections
+```
+
+This round deliberately targets the resident-BF16 M3/M4 path; M5-specific
+TensorOps work is out of scope.
+
 The quality-sensitive algorithm arms remain non-default. Reduced canvas,
 layer thinning, complete velocity reuse, and token reduction all produced
 material same-seed trajectory changes. The three-seed Ref2VA follow-up closed
@@ -740,8 +758,9 @@ Algorithm gates:
    or memory from a production H3 block.
 2. Add K2 as a BF16 head-major parity kernel before introducing INT8 projection
    arithmetic. This isolates layout correctness from quantization quality.
-3. Prototype M5 INT8/TensorOps work in the pinned mlx-swift/MLXFast fork; retain
-   K1/K2 portable fallbacks in mere.run.
+3. Qualify the resident-BF16 MPP projection candidate on M3/M4 at all four H3
+   projection shapes and then through one exact 50-block forward. Keep it out
+   of model dispatch until those clean-host gates pass; M5 work is out of scope.
 4. Qualify K3, K4, and K5 in that order because each consumes the preceding
    layout and activation contract.
 5. Run A1-A4 only after the exact kernel baseline is stable, beginning with A1
