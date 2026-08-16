@@ -252,12 +252,15 @@ final class MereRunModelManifestTests: MereRunCoreTestCase {
             "\(Q35Resources.q38TwentySevenB4BitUpstreamRepoId)"
                 + "@\(Q35Resources.q38TwentySevenB4BitUpstreamRevision)"
         )
-        XCTAssertEqual(manifest.sources?.count, 2)
+        XCTAssertEqual(manifest.sources?.count, 3)
         XCTAssertEqual(manifest.sources?.first?.role, "primary")
         XCTAssertEqual(manifest.sources?.first?.repository, Q35Resources.q38TwentySevenB4BitUpstreamRepoId)
+        XCTAssertEqual(manifest.sources?[1].role, "component")
+        XCTAssertEqual(manifest.sources?[1].repository, Q35Resources.q38MTP4BitUpstreamRepoId)
+        XCTAssertEqual(manifest.sources?[1].destinationPath, Q35Resources.q38MTPComponentPath)
         XCTAssertEqual(manifest.sources?.last?.role, "component")
         XCTAssertEqual(manifest.sources?.last?.repository, Q35Resources.q38TwentySevenBUpstreamRepoId)
-        XCTAssertEqual(manifest.sources?.last?.destinationPath, Q35Resources.q38MTPComponentPath)
+        XCTAssertEqual(manifest.sources?.last?.destinationPath, Q35Resources.q38LicenseComponentPath)
     }
 
     func testFalconPerceptionTemplateHasExpectedMetadata() throws {

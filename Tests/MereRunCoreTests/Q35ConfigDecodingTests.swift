@@ -550,6 +550,30 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         XCTAssertEqual(shards, ["model-00017.safetensors", "model-00018.safetensors"])
     }
 
+    func testQ35StandaloneMTPWeightMappingAcceptsBareHeadKeys() {
+        XCTAssertEqual(
+            Q35Generator.mapMTPWeightKey("layers.0.self_attn.q_proj.weight", standalone: true),
+            "layers.0.self_attn.q_proj.weight"
+        )
+        XCTAssertEqual(
+            Q35Generator.mapMTPWeightKey("mtp.layers.0.self_attn.q_proj.weight", standalone: true),
+            "layers.0.self_attn.q_proj.weight"
+        )
+        XCTAssertNil(Q35Generator.mapMTPWeightKey("lm_head.weight", standalone: true))
+        XCTAssertNil(Q35Generator.mapMTPWeightKey("layers.0.self_attn.q_proj.weight"))
+    }
+
+    func testQ35MTPRMSNormWeightInventoryMatchesHeadArchitecture() {
+        XCTAssertTrue(Q35Generator.isMTPRMSNormWeight("norm.weight"))
+        XCTAssertTrue(Q35Generator.isMTPRMSNormWeight("pre_fc_norm_embedding.weight"))
+        XCTAssertTrue(Q35Generator.isMTPRMSNormWeight("pre_fc_norm_hidden.weight"))
+        XCTAssertTrue(Q35Generator.isMTPRMSNormWeight("layers.0.input_layernorm.weight"))
+        XCTAssertTrue(Q35Generator.isMTPRMSNormWeight("layers.0.post_attention_layernorm.weight"))
+        XCTAssertTrue(Q35Generator.isMTPRMSNormWeight("layers.0.self_attn.q_norm.weight"))
+        XCTAssertTrue(Q35Generator.isMTPRMSNormWeight("layers.0.self_attn.k_norm.weight"))
+        XCTAssertFalse(Q35Generator.isMTPRMSNormWeight("layers.0.self_attn.q_proj.weight"))
+    }
+
     func testQ35MTPDraftBlockReturnsRequestedGreedyTokens() throws {
         MLXRandom.seed(40)
         let config = try decodeConfig(makeTinyRuntimeConfig(layerTypes: ["full_attention"]))
@@ -563,16 +587,116 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
 
         let lastIndex = output.hidden.dim(1) - 1
         let previousHidden = output.hidden[0..., lastIndex..<(lastIndex + 1), 0...]
+        let session = Q35MTPDraftSession()
         let draftTokens = mtp.draftBlock(
             lastToken: 4,
             hidden: previousHidden,
-            positionOffset: tokens.count,
             blockSize: 4,
+            session: session,
             baseModel: model
         )
 
         XCTAssertEqual(draftTokens.count, 3)
         XCTAssertTrue(draftTokens.allSatisfy { $0 >= 0 && $0 < config.textConfig.vocabSize })
+        XCTAssertEqual(session.committedHistoryCount, 1)
+    }
+
+    func testQ35MTPDraftSessionFlushesOnlyCommittedHistory() throws {
+        MLXRandom.seed(41)
+        let config = try decodeConfig(makeTinyRuntimeConfig(layerTypes: ["full_attention"]))
+        let model = Q35Model(config: config)
+        let mtp = Q35MTPModel(config: config)
+        let session = Q35MTPDraftSession()
+        let firstHidden = MLXRandom.uniform(-0.1..<0.1, [1, 1, config.textConfig.hiddenSize])
+
+        _ = mtp.draftBlock(
+            lastToken: 4,
+            hidden: firstHidden,
+            blockSize: 4,
+            session: session,
+            baseModel: model
+        )
+        XCTAssertEqual(session.committedHistoryCount, 1)
+
+        let committedHidden = MLXRandom.uniform(-0.1..<0.1, [1, 1, config.textConfig.hiddenSize])
+        session.recordCommittedTransitions(hiddenStates: committedHidden, nextTokens: [5])
+        XCTAssertEqual(session.committedHistoryCount, 2)
+
+        _ = mtp.draftBlock(
+            lastToken: 6,
+            hidden: committedHidden,
+            blockSize: 2,
+            session: session,
+            baseModel: model
+        )
+        XCTAssertEqual(session.committedHistoryCount, 3)
+    }
+
+    func testQ35MTPAdaptivePolicyRampsAfterFullAcceptance() {
+        var policy = Q35MTPAdaptivePolicy(maxDraftDepth: 3)
+
+        XCTAssertEqual(policy.draftDepth(offeredDepth: 3), 2)
+        policy.record(acceptedDrafts: 2, drafted: 2)
+        XCTAssertEqual(policy.draftDepth(offeredDepth: 3), 3)
+    }
+
+    func testQ35MTPAdaptivePolicyFallsBackAfterRepeatedRejection() {
+        var policy = Q35MTPAdaptivePolicy(maxDraftDepth: 3)
+
+        for _ in 0..<8 {
+            let depth = policy.draftDepth(offeredDepth: 3)
+            guard depth > 0 else { break }
+            policy.record(acceptedDrafts: 0, drafted: depth)
+        }
+
+        XCTAssertEqual(policy.draftDepth(offeredDepth: 3), 0)
+    }
+
+    func testQ35CompactDraftRowsKeepPrefixControlsAndPadding() {
+        let rows = MLXArray(
+            (0..<Q35Model.compactDraftControlEnd).map(Float.init)
+        ).reshaped(Q35Model.compactDraftControlEnd, 1)
+
+        let compact = Q35Model.compactDraftRows(rows)
+        MLX.eval(compact)
+
+        XCTAssertEqual(compact.shape, [Q35Model.compactDraftPaddedCount, 1])
+        XCTAssertEqual(
+            compact[Q35Model.compactDraftPrefixCount - 1, 0].item(Float.self),
+            Float(Q35Model.compactDraftPrefixCount - 1)
+        )
+        XCTAssertEqual(
+            compact[Q35Model.compactDraftPrefixCount, 0].item(Float.self),
+            Float(Q35Model.compactDraftControlStart)
+        )
+        XCTAssertEqual(
+            compact[Q35Model.compactDraftRealCount - 1, 0].item(Float.self),
+            Float(Q35Model.compactDraftControlEnd - 1)
+        )
+        XCTAssertEqual(compact[Q35Model.compactDraftRealCount, 0].item(Float.self), 0)
+    }
+
+    func testQ35CompactDraftSelectionMapsControlToken() {
+        var values = Array(repeating: Float(0), count: Q35Model.compactDraftPaddedCount)
+        values[Q35Model.compactDraftPrefixCount + 2] = 5
+        let logits = MLXArray(values).reshaped(1, 1, values.count)
+
+        let token = Q35Model.compactDraftTokenID(from: logits)
+        MLX.eval(token)
+
+        XCTAssertEqual(token.item(Int32.self), Int32(Q35Model.compactDraftControlStart + 2))
+    }
+
+    func testQ35CompactDraftSelectionUsesLowerIDForTie() {
+        var values = Array(repeating: Float(0), count: Q35Model.compactDraftPaddedCount)
+        values[7] = 5
+        values[9] = 5
+        let logits = MLXArray(values).reshaped(1, 1, values.count)
+
+        let token = Q35Model.compactDraftTokenID(from: logits)
+        MLX.eval(token)
+
+        XCTAssertEqual(token.item(Int32.self), 7)
     }
 
     func testQ35MTPSpeculationRequiresAdaptiveContextWindow() {

@@ -1682,9 +1682,17 @@ public enum ManagedModelCatalog {
                 MountedHubFallbackConfig(
                     destinationPath: Q35Resources.q38MTPComponentPath,
                     hubFallback: HubFallbackConfig(
+                        repoId: Q35Resources.q38MTP4BitUpstreamRepoId,
+                        revision: Q35Resources.q38MTP4BitUpstreamRevision,
+                        patterns: Q35Resources.q38MTPComponentSnapshotPatterns
+                    )
+                ),
+                MountedHubFallbackConfig(
+                    destinationPath: Q35Resources.q38LicenseComponentPath,
+                    hubFallback: HubFallbackConfig(
                         repoId: Q35Resources.q38TwentySevenBUpstreamRepoId,
                         revision: Q35Resources.q38TwentySevenBUpstreamRevision,
-                        patterns: Q35Resources.q38MTPComponentSnapshotPatterns
+                        patterns: Q35Resources.q38LicenseComponentSnapshotPatterns
                     )
                 ),
             ],

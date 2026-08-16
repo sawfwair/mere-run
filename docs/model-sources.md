@@ -329,13 +329,15 @@ explicit `model pull`, and is cataloged for 64 GB unified memory minimum with
 metadata as well as the license.
 
 `vision-chat-q38-27b-4bit` installs
-`lmstudio-community/Qwen3.8-27B-MLX-4bit` at immutable revision
-`6067b15cf581666a4aecf6af3afaba4bb5efc20c`. The target uses 4-bit/group-64
-MLX affine weights and retains the same Qwen3.8 text, code, image, context, and
-sampling contracts. The managed pull also mounts Qwen's official final BF16
-shard at revision `1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0` under `mtp/`;
-that shard contains the 15 published MTP tensors and the Apache-2.0 license.
-The two pinned sources total 19.47 GB. The MTP component is loaded only when
+`EigenLabs/Qwen3.8-27B-4bit` at immutable revision
+`eda45ab47f465d08d6558f0353a2346e2eb9d5b3`. This is the independently
+reconverted 4-bit/group-64 MLX affine target pinned by the Qwen MLX Fast track.
+It retains the same Qwen3.8 text, code, image, context, and sampling contracts.
+The managed pull mounts the track's matching proposal-only 4-bit/group-64 head,
+`lowskillcoding/qwen38-mtp-head-4bit-g64` at revision
+`0966ddaff972fd3ca2be08f3640603b47e9ce70a`, under `mtp/`. Qwen's official
+Apache-2.0 license is retained separately from the official pinned revision.
+The sources total about 15.39 GB. The MTP component is loaded only when
 `MERERUN_Q35_MTP_SPECULATION=1`; default decode remains target-only because
 greedy speculative verification is not bit-exact with serial decode.
 

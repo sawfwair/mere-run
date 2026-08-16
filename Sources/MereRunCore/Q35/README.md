@@ -18,8 +18,19 @@ both conventions compatible with the native offset RMSNorm module.
 
 The official Qwen3.8 27B shards embed a dense one-layer MTP head. The loader
 reads only the shards that contain `mtp.*` tensors, maps its dense SwiGLU layout,
-and also discovers the same pinned official shard under `mtp/` beside the
-managed 4-bit target. `MERERUN_Q35_MTP_SPECULATION=1` enables greedy speculation
-from short prompts. It stays opt-in because multi-token target verification can
-choose a different greedy path from serial target decode. Hybrid MoE Qwen models
-keep the existing adaptive long-context threshold.
+and also discovers a bare `model.safetensors` MTP component under `mtp/`. The
+managed 4-bit lane pairs the MLX Fast reference target with a matching
+4-bit/group-64 proposal head. `MERERUN_Q35_MTP_SPECULATION=1` enables greedy
+speculation from short prompts. It stays opt-in because multi-token target
+verification can choose a different greedy path from serial target decode.
+Hybrid MoE Qwen models keep the existing adaptive long-context threshold.
+
+Greedy Qwen3.8 MTP uses a proposal-only compact vocabulary projection containing
+the first 98,304 tokenizer rows and the official control-token rows. A fused
+Metal reduction maps its argmax back to the full tokenizer without materializing
+the unused vocabulary tail. A request-local MTP cache is primed from up to 4,096
+prompt hidden states and retains only target-confirmed transitions; speculative
+rows execute on a disposable fork. The exact target projection still verifies
+every emitted token. Per-request acceptance estimates adapt the draft depth and
+can fall back to target-only rounds when proposals stop paying for their repair
+cost. Sampled MTP keeps the full-vocabulary probability path.

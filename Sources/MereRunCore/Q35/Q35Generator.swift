@@ -21,6 +21,7 @@ private struct Q35PrefixKVCacheEntry {
 private struct Q35PrefillOutput {
     let logits: MLXArray
     let hidden: MLXArray?
+    let mtpHistoryHidden: MLXArray?
 }
 
 private struct Q35BatchedDecodeResult {
@@ -131,6 +132,7 @@ public actor Q35Generator: ChatGenerator {
     }()
     private static let prefixKVCacheMaxEntries = 4
     private static let defaultMTPBlockSize = 4
+    private static let mtpPromptHistoryLimit = 4_096
 
     /// Continuous-batching decode samples every row on GPU (the same sampler
     /// the serial pipelined path uses) and reads the whole batch back in one
@@ -402,6 +404,8 @@ public actor Q35Generator: ChatGenerator {
                 bits: bits
             )
             loadedMTP = mtp
+            progressHandler?(ChatProgress(stage: .loadingModel, message: "Preparing Qwen-family MTP drafting"))
+            q35Model.prepareGreedyMTPDrafting()
         } else {
             loadedMTP = nil
         }
@@ -487,11 +491,15 @@ public actor Q35Generator: ChatGenerator {
             repetitionPenalty: nil,
             repetitionContextSize: 64
         )
-        let retainPrefillHidden =
-            prefixKVCacheEnabled
-            || (!jsonConstrained
-                && Self.shouldSpeculate(promptTokenCount: promptTokens.count, maxContextTokens: effectiveContext)
-                && mtpModel != nil)
+        let mtpSpeculationEligible = !jsonConstrained
+            && request.tools?.isEmpty != false
+            && imageURLs.isEmpty
+            && Self.shouldSpeculate(promptTokenCount: promptTokens.count, maxContextTokens: effectiveContext)
+            && mtpModel != nil
+        let retainMTPPromptHistory = mtpSpeculationEligible
+            && !loadedConfig.textConfig.usesMoE
+            && promptTokens.count <= Self.mtpPromptHistoryLimit
+        let retainPrefillHidden = prefixKVCacheEnabled || mtpSpeculationEligible
         let effectiveKVCacheMode: RuntimeKVCacheMode
         switch request.kvCacheMode {
         case .affine4:
@@ -510,7 +518,7 @@ public actor Q35Generator: ChatGenerator {
         var mropeRopeDelta: Int?
 
         if imageURLs.isEmpty {
-            let prefixSeed = prefixKVCacheSeed(
+            let prefixSeed = retainMTPPromptHistory ? nil : prefixKVCacheSeed(
                 modelPath: loadedModelPath ?? "",
                 promptTokens: promptTokens,
                 cacheMode: effectiveKVCacheMode
@@ -536,6 +544,7 @@ public actor Q35Generator: ChatGenerator {
                 modelPath: loadedModelPath ?? "",
                 checkpointTokenCounts: prefixCheckpoints,
                 retainHidden: retainPrefillHidden,
+                retainMTPHistory: retainMTPPromptHistory,
                 progressHandler: progressHandler
             )
         } else {
@@ -602,6 +611,7 @@ public actor Q35Generator: ChatGenerator {
             tokenizerAndTemplate: tokenizerAndTemplate,
             initialLogits: prefillOutput.logits,
             initialHidden: prefillOutput.hidden,
+            prefillMTPHidden: prefillOutput.mtpHistoryHidden,
             layerCaches: layerCaches,
             eosSet: eosSet,
             generationConfig: generationConfig,
@@ -736,6 +746,7 @@ public actor Q35Generator: ChatGenerator {
         tokenizerAndTemplate: Q35TokenizerAndTemplate,
         initialLogits: MLXArray,
         initialHidden: MLXArray?,
+        prefillMTPHidden: MLXArray?,
         layerCaches: [Q35LayerCache?],
         eosSet: Set<Int>,
         generationConfig: GenerationConfig,
@@ -773,6 +784,7 @@ public actor Q35Generator: ChatGenerator {
                 tokenizerAndTemplate: tokenizerAndTemplate,
                 initialLogits: initialLogits,
                 initialHidden: initialHidden,
+                prefillMTPHidden: prefillMTPHidden,
                 mtpModel: decodePath == .mtpSpeculativeSerial ? speculationMTP : nil,
                 layerCaches: layerCaches,
                 eosSet: eosSet,
@@ -819,6 +831,7 @@ public actor Q35Generator: ChatGenerator {
         tokenizerAndTemplate: Q35TokenizerAndTemplate,
         initialLogits: MLXArray,
         initialHidden: MLXArray?,
+        prefillMTPHidden: MLXArray?,
         mtpModel: Q35MTPModel?,
         layerCaches: [Q35LayerCache?],
         eosSet: Set<Int>,
@@ -862,6 +875,13 @@ public actor Q35Generator: ChatGenerator {
         var mtpAcceptedTokens = 0
         var mtpVerificationPasses = 0
         var mtpReplacementPasses = 0
+        var mtpNonDraftingRounds = 0
+        let mtpBlockSize = Self.mtpBlockSize()
+        var mtpAdaptivePolicy = Q35MTPAdaptivePolicy(maxDraftDepth: mtpBlockSize - 1)
+        let mtpDraftSession = Q35MTPDraftSession(
+            promptTokens: promptTokens,
+            promptHidden: prefillMTPHidden
+        )
         let decodeStart = Date()
 
         func emit(_ token: Int) {
@@ -948,90 +968,174 @@ public actor Q35Generator: ChatGenerator {
             if let mtpModel, let hidden = previousHidden {
                 let positionOffset = prefillTokenCount + generated.count - 1
                 if generationConfig.temperature == 0 {
-                    let blockSize = min(
-                        Self.mtpBlockSize(),
-                        max(2, tokenBudget - generated.count + 1)
+                    let offeredDepth = min(
+                        mtpBlockSize - 1,
+                        tokenBudget - generated.count
                     )
-                    let draftTokens = mtpModel.draftBlock(
-                        lastToken: next,
-                        hidden: hidden,
-                        positionOffset: positionOffset,
-                        blockSize: blockSize,
-                        baseModel: model
-                    )
-                    guard !draftTokens.isEmpty else {
-                        continue
-                    }
-                    mtpDraftedTokens += draftTokens.count
-
-                    let candidateCaches = forkLayerCaches(layerCaches)
-                    let candidateInput = MLXArray(([next] + draftTokens).map(Int32.init))
-                        .reshaped(1, draftTokens.count + 1)
-                    let candidate = model.forward(candidateInput, cache: candidateCaches)
-                    MLX.eval(candidate.logits)
-                    MLX.eval(candidate.hidden)
-                    mtpVerificationPasses += 1
-
-                    var accepted = 0
-                    var verificationHistory = repetitionHistory
-                    var replacement: Int?
-                    for (index, draftToken) in draftTokens.enumerated() {
-                        let targetToken = sampleToken(
-                            logits: candidate.logits[0, index, 0...],
-                            config: generationConfig,
-                            previousTokens: verificationHistory
+                    let draftDepth = mtpAdaptivePolicy.draftDepth(offeredDepth: offeredDepth)
+                    if draftDepth > 0 {
+                        let draftTokens = mtpModel.draftBlock(
+                            lastToken: next,
+                            hidden: hidden,
+                            blockSize: draftDepth + 1,
+                            session: mtpDraftSession,
+                            baseModel: model
                         )
-                        guard targetToken == draftToken else {
-                            replacement = targetToken
-                            break
-                        }
-                        accepted += 1
-                        verificationHistory.append(draftToken)
-                    }
+                        mtpDraftedTokens += draftTokens.count
 
-                    if accepted == draftTokens.count {
+                        let candidateCaches = forkLayerCaches(layerCaches)
+                        let candidateInput = MLXArray(([next] + draftTokens).map(Int32.init))
+                            .reshaped(1, draftTokens.count + 1)
+                        let candidate = model.forward(candidateInput, cache: candidateCaches)
+                        MLX.eval(candidate.logits)
+                        MLX.eval(candidate.hidden)
+                        mtpVerificationPasses += 1
+
+                        var accepted = 0
+                        var verificationHistory = repetitionHistory
+                        var replacement: Int?
+                        for (index, draftToken) in draftTokens.enumerated() {
+                            let targetToken = sampleToken(
+                                logits: candidate.logits[0, index, 0...],
+                                config: generationConfig,
+                                previousTokens: verificationHistory
+                            )
+                            guard targetToken == draftToken else {
+                                replacement = targetToken
+                                break
+                            }
+                            accepted += 1
+                            verificationHistory.append(draftToken)
+                        }
+                        mtpAdaptivePolicy.record(
+                            acceptedDrafts: accepted,
+                            drafted: draftTokens.count
+                        )
+
+                        if accepted == draftTokens.count {
+                            mtpAcceptedTokens += accepted
+                            mtpDraftSession.recordCommittedTransitions(
+                                hiddenStates: candidate.hidden,
+                                nextTokens: draftTokens
+                            )
+                            var hitEOS = false
+                            for token in draftTokens {
+                                if eosSet.contains(token) {
+                                    hitEOS = true
+                                    break
+                                }
+                                emit(token)
+                            }
+                            layerCaches = candidateCaches
+                            logits = lastTokenLogits(candidate.logits)
+                            previousHidden = lastTokenHidden(candidate.hidden)
+                            if hitEOS || generated.count >= tokenBudget {
+                                break
+                            }
+                            continue
+                        }
+
+                        let acceptedPrefix = Array(draftTokens.prefix(accepted))
                         mtpAcceptedTokens += accepted
                         var hitEOS = false
-                        for token in draftTokens {
+                        for token in acceptedPrefix {
                             if eosSet.contains(token) {
                                 hitEOS = true
                                 break
                             }
                             emit(token)
                         }
-                        layerCaches = candidateCaches
-                        logits = lastTokenLogits(candidate.logits)
-                        previousHidden = lastTokenHidden(candidate.hidden)
                         if hitEOS || generated.count >= tokenBudget {
                             break
                         }
-                        continue
-                    }
 
-                    let acceptedPrefix = Array(draftTokens.prefix(accepted))
-                    mtpAcceptedTokens += accepted
-                    var hitEOS = false
-                    for token in acceptedPrefix {
-                        if eosSet.contains(token) {
-                            hitEOS = true
+                        guard let replacement else {
+                            continue
+                        }
+                        if eosSet.contains(replacement) {
                             break
                         }
-                        emit(token)
-                    }
-                    if hitEOS || generated.count >= tokenBudget {
-                        break
-                    }
 
-                    guard let replacement else {
+                        let replacementCaches = forkLayerCaches(layerCaches)
+                        let replacementInput = MLXArray(
+                            ([next] + acceptedPrefix + [replacement]).map(Int32.init)
+                        ).reshaped(1, acceptedPrefix.count + 2)
+                        let replacementForward = model.forward(replacementInput, cache: replacementCaches)
+                        MLX.eval(replacementForward.logits)
+                        MLX.eval(replacementForward.hidden)
+                        mtpReplacementPasses += 1
+                        mtpDraftSession.recordCommittedTransitions(
+                            hiddenStates: replacementForward.hidden,
+                            nextTokens: acceptedPrefix + [replacement]
+                        )
+                        emit(replacement)
+                        layerCaches = replacementCaches
+                        logits = lastTokenLogits(replacementForward.logits)
+                        previousHidden = lastTokenHidden(replacementForward.hidden)
                         continue
                     }
+
+                    mtpNonDraftingRounds += 1
+                    mtpDraftSession.recordCommittedTransitions(
+                        hiddenStates: hidden,
+                        nextTokens: [next]
+                    )
+                } else {
+                    let draftLogits = mtpModel.draftLogits(
+                        token: next,
+                        previousHidden: hidden,
+                        positionOffset: positionOffset,
+                        baseModel: model
+                    )
+                    MLX.eval(draftLogits)
+                    mtpDraftedTokens += 1
+
+                    let draftProbs = samplingProbabilities(
+                        logits: draftLogits[0, -1, 0...],
+                        config: generationConfig,
+                        previousTokens: repetitionHistory
+                    )
+                    let draft = sampleToken(probabilities: draftProbs)
+
+                    let candidateCaches = forkLayerCaches(layerCaches)
+                    let candidateInput = MLXArray([Int32(next), Int32(draft)]).reshaped(1, 2)
+                    let candidate = model.forward(candidateInput, cache: candidateCaches)
+                    MLX.eval(candidate.logits)
+                    MLX.eval(candidate.hidden)
+                    mtpVerificationPasses += 1
+
+                    let targetProbs = samplingProbabilities(
+                        logits: candidate.logits[0, 0, 0...],
+                        config: generationConfig,
+                        previousTokens: repetitionHistory
+                    )
+                    let draftProb = max(draftProbs[draft].item(Float.self), Float.leastNonzeroMagnitude)
+                    let targetProb = targetProbs[draft].item(Float.self)
+                    let acceptProbability = min(1.0, targetProb / draftProb)
+
+                    if Float.random(in: 0..<1) <= acceptProbability {
+                        mtpAcceptedTokens += 1
+                        if eosSet.contains(draft) {
+                            break
+                        }
+                        emit(draft)
+                        layerCaches = candidateCaches
+                        logits = lastTokenLogits(candidate.logits)
+                        previousHidden = lastTokenHidden(candidate.hidden)
+                        continue
+                    }
+
+                    let residualProbs = MLX.maximum(targetProbs - draftProbs, MLXArray(0.0))
+                    let residualMass = residualProbs.sum().item(Float.self)
+                    let replacement = residualMass > 1e-6
+                        ? sampleToken(probabilities: residualProbs / residualProbs.sum())
+                        : sampleToken(probabilities: targetProbs)
                     if eosSet.contains(replacement) {
                         break
                     }
 
                     let replacementCaches = forkLayerCaches(layerCaches)
-                    let replacementInput = MLXArray(([next] + acceptedPrefix + [replacement]).map(Int32.init))
-                        .reshaped(1, acceptedPrefix.count + 2)
+                    let replacementInput = MLXArray([Int32(next), Int32(replacement)]).reshaped(1, 2)
                     let replacementForward = model.forward(replacementInput, cache: replacementCaches)
                     MLX.eval(replacementForward.logits)
                     MLX.eval(replacementForward.hidden)
@@ -1042,71 +1146,6 @@ public actor Q35Generator: ChatGenerator {
                     previousHidden = lastTokenHidden(replacementForward.hidden)
                     continue
                 }
-
-                let draftLogits = mtpModel.draftLogits(
-                    token: next,
-                    previousHidden: hidden,
-                    positionOffset: positionOffset,
-                    baseModel: model
-                )
-                MLX.eval(draftLogits)
-                mtpDraftedTokens += 1
-
-                let draftProbs = samplingProbabilities(
-                    logits: draftLogits[0, -1, 0...],
-                    config: generationConfig,
-                    previousTokens: repetitionHistory
-                )
-                let draft = sampleToken(probabilities: draftProbs)
-
-                let candidateCaches = forkLayerCaches(layerCaches)
-                let candidateInput = MLXArray([Int32(next), Int32(draft)]).reshaped(1, 2)
-                let candidate = model.forward(candidateInput, cache: candidateCaches)
-                MLX.eval(candidate.logits)
-                MLX.eval(candidate.hidden)
-                mtpVerificationPasses += 1
-
-                let targetProbs = samplingProbabilities(
-                    logits: candidate.logits[0, 0, 0...],
-                    config: generationConfig,
-                    previousTokens: repetitionHistory
-                )
-                let draftProb = max(draftProbs[draft].item(Float.self), Float.leastNonzeroMagnitude)
-                let targetProb = targetProbs[draft].item(Float.self)
-                let acceptProbability = min(1.0, targetProb / draftProb)
-
-                if Float.random(in: 0..<1) <= acceptProbability {
-                    mtpAcceptedTokens += 1
-                    if eosSet.contains(draft) {
-                        break
-                    }
-                    emit(draft)
-                    layerCaches = candidateCaches
-                    logits = lastTokenLogits(candidate.logits)
-                    previousHidden = lastTokenHidden(candidate.hidden)
-                    continue
-                }
-
-                let residualProbs = MLX.maximum(targetProbs - draftProbs, MLXArray(0.0))
-                let residualMass = residualProbs.sum().item(Float.self)
-                let replacement = residualMass > 1e-6
-                    ? sampleToken(probabilities: residualProbs / residualProbs.sum())
-                    : sampleToken(probabilities: targetProbs)
-                if eosSet.contains(replacement) {
-                    break
-                }
-
-                let replacementCaches = forkLayerCaches(layerCaches)
-                let replacementInput = MLXArray([Int32(next), Int32(replacement)]).reshaped(1, 2)
-                let replacementForward = model.forward(replacementInput, cache: replacementCaches)
-                MLX.eval(replacementForward.logits)
-                MLX.eval(replacementForward.hidden)
-                mtpReplacementPasses += 1
-                emit(replacement)
-                layerCaches = replacementCaches
-                logits = lastTokenLogits(replacementForward.logits)
-                previousHidden = lastTokenHidden(replacementForward.hidden)
-                continue
             }
 
             let nextInput = MLXArray([Int32(next)]).reshaped(1, 1)
@@ -1137,13 +1176,14 @@ public actor Q35Generator: ChatGenerator {
                 ? Double(mtpAcceptedTokens) / Double(mtpDraftedTokens) * 100
                 : 0
             Gemma4DecodeTrace.emit(String(
-                format: "[q35-decode-trace] mode=mtp tokens=%d drafted=%d accepted=%d acceptance=%.1f%% verify=%d replacement=%d wall=%.2fms/tok",
+                format: "[q35-decode-trace] mode=mtp tokens=%d drafted=%d accepted=%d acceptance=%.1f%% verify=%d replacement=%d serial=%d wall=%.2fms/tok",
                 generated.count,
                 mtpDraftedTokens,
                 mtpAcceptedTokens,
                 acceptance,
                 mtpVerificationPasses,
                 mtpReplacementPasses,
+                mtpNonDraftingRounds,
                 decodeSeconds / Double(max(1, generated.count)) * 1000
             ))
         }
@@ -1602,6 +1642,7 @@ public actor Q35Generator: ChatGenerator {
         modelPath: String? = nil,
         checkpointTokenCounts: Set<Int> = [],
         retainHidden: Bool = true,
+        retainMTPHistory: Bool = false,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> Q35PrefillOutput {
         guard !promptTokens.isEmpty else {
@@ -1611,6 +1652,7 @@ public actor Q35Generator: ChatGenerator {
         var processed = startIndex
         var logits = existingLogits
         var hidden = existingHidden
+        var mtpHistoryChunks: [MLXArray] = []
         if processed > 0, processed < promptTokens.count {
             progressHandler?(ChatProgress(stage: .encoding, message: "Reusing \(processed) prompt KV tokens"))
         }
@@ -1628,11 +1670,18 @@ public actor Q35Generator: ChatGenerator {
             let chunk = MLXArray(promptTokens[processed..<end].map(Int32.init))
                 .reshaped(1, end - processed)
             if retainHidden {
-                let output = model.forwardPrefill(chunk, cache: cache)
+                let output = model.forwardPrefill(
+                    chunk,
+                    cache: cache,
+                    retainAllHidden: retainMTPHistory
+                )
                 MLX.eval(output.logits)
                 MLX.eval(output.hidden)
                 logits = output.logits
-                hidden = output.hidden
+                hidden = lastTokenHidden(output.hidden)
+                if retainMTPHistory {
+                    mtpHistoryChunks.append(output.hidden)
+                }
                 if let modelPath {
                     storePrefixKVCache(
                         modelPath: modelPath,
@@ -1640,7 +1689,7 @@ public actor Q35Generator: ChatGenerator {
                         tokenCount: end,
                         cache: cache,
                         logits: output.logits,
-                        hidden: output.hidden,
+                        hidden: lastTokenHidden(output.hidden),
                         priority: checkpointTokenCounts.contains(end) ? .semantic : .chunk
                     )
                 }
@@ -1657,7 +1706,17 @@ public actor Q35Generator: ChatGenerator {
         guard let logits else {
             throw Q35Error.generationFailed("Prefill did not produce logits.")
         }
-        return Q35PrefillOutput(logits: logits, hidden: hidden)
+        let mtpHistoryHidden = mtpHistoryChunks.isEmpty
+            ? nil
+            : MLX.concatenated(mtpHistoryChunks, axis: 1)
+        if let mtpHistoryHidden {
+            MLX.eval(mtpHistoryHidden)
+        }
+        return Q35PrefillOutput(
+            logits: logits,
+            hidden: hidden,
+            mtpHistoryHidden: mtpHistoryHidden
+        )
     }
 
     private func chunkedPrefillEmbeddings(
@@ -1714,7 +1773,11 @@ public actor Q35Generator: ChatGenerator {
         guard let logits else {
             throw Q35Error.generationFailed("Prefill did not produce logits.")
         }
-        return Q35PrefillOutput(logits: logits, hidden: hidden)
+        return Q35PrefillOutput(
+            logits: logits,
+            hidden: hidden,
+            mtpHistoryHidden: nil
+        )
     }
 
     private func semanticPrefixCheckpoints(
@@ -1932,8 +1995,7 @@ public actor Q35Generator: ChatGenerator {
     }
 
     private static func hasMTPWeights(resources: Q35Resources) -> Bool {
-        let standalone = resources.rootURL.appendingPathComponent("mtp.safetensors")
-        if FileManager.default.fileExists(atPath: standalone.path) {
+        if standaloneMTPWeightsURL(resources: resources) != nil {
             return true
         }
         guard FileManager.default.fileExists(atPath: resources.modelIndexURL.path),
@@ -1957,14 +2019,25 @@ public actor Q35Generator: ChatGenerator {
         return hasMTPWeights(resources: mounted) ? mounted : nil
     }
 
+    private static func standaloneMTPWeightsURL(resources: Q35Resources) -> URL? {
+        let explicit = resources.rootURL.appendingPathComponent("mtp.safetensors")
+        if FileManager.default.fileExists(atPath: explicit.path) {
+            return explicit
+        }
+        guard resources.rootURL.lastPathComponent == Q35Resources.q38MTPComponentPath,
+              FileManager.default.fileExists(atPath: resources.modelWeightsURL.path) else {
+            return nil
+        }
+        return resources.modelWeightsURL
+    }
+
     private func loadMTPWeights(
         into mtp: Q35MTPModel,
         from resources: Q35Resources,
         groupSize: Int,
         bits: Int
     ) throws {
-        let standalone = resources.rootURL.appendingPathComponent("mtp.safetensors")
-        if FileManager.default.fileExists(atPath: standalone.path) {
+        if let standalone = Self.standaloneMTPWeightsURL(resources: resources) {
             let metadata = try SafetensorsStreamingLoader.metadata(url: standalone)
             if metadata.keys.contains(where: { $0.hasSuffix(".scales") }) {
                 let arrays = try MLX.loadArrays(url: standalone)
@@ -1974,8 +2047,9 @@ public actor Q35Generator: ChatGenerator {
                     groupSize: groupSize,
                     bits: bits,
                     keyMapper: { key in
-                        Self.mapMTPWeightKey(key) ?? "__unused__.\(key)"
-                    }
+                        Self.mapMTPWeightKey(key, standalone: true) ?? "__unused__.\(key)"
+                    },
+                    mapper: Self.mapMTPWeight
                 )
             } else {
                 try SafetensorsStreamingLoader.applyWeightsStreaming(
@@ -1983,10 +2057,10 @@ public actor Q35Generator: ChatGenerator {
                     to: mtp,
                     dtype: .bfloat16,
                     verify: .none,
-                    include: { Self.mapMTPWeightKey($0) != nil },
+                    include: { Self.mapMTPWeightKey($0, standalone: true) != nil },
                     mapper: { key, value in
-                        guard let mapped = Self.mapMTPWeightKey(key) else { return [] }
-                        return [(mapped, value)]
+                        guard let mapped = Self.mapMTPWeightKey(key, standalone: true) else { return [] }
+                        return Self.mapMTPWeight(mapped, value)
                     },
                     batchSize: 32
                 )
@@ -2005,7 +2079,7 @@ public actor Q35Generator: ChatGenerator {
                 verify: .none,
                 mapper: { key, value in
                     guard let mapped = Self.mapMTPWeightKey(key) else { return [] }
-                    return [(mapped, value)]
+                    return Self.mapMTPWeight(mapped, value)
                 }
             )
         }
@@ -2017,9 +2091,37 @@ public actor Q35Generator: ChatGenerator {
         })).sorted()
     }
 
-    private static func mapMTPWeightKey(_ key: String) -> String? {
-        guard key.hasPrefix("mtp.") else { return nil }
-        return String(key.dropFirst("mtp.".count))
+    static func mapMTPWeightKey(_ key: String, standalone: Bool = false) -> String? {
+        if key.hasPrefix("mtp.") {
+            return String(key.dropFirst("mtp.".count))
+        }
+        guard standalone else { return nil }
+        let barePrefixes = [
+            "fc.",
+            "layers.",
+            "norm.",
+            "pre_fc_norm_embedding.",
+            "pre_fc_norm_hidden.",
+        ]
+        return barePrefixes.contains(where: { key.hasPrefix($0) }) ? key : nil
+    }
+
+    static func isMTPRMSNormWeight(_ key: String) -> Bool {
+        key == "norm.weight"
+            || key == "pre_fc_norm_embedding.weight"
+            || key == "pre_fc_norm_hidden.weight"
+            || key.hasSuffix(".input_layernorm.weight")
+            || key.hasSuffix(".post_attention_layernorm.weight")
+            || key.hasSuffix(".self_attn.q_norm.weight")
+            || key.hasSuffix(".self_attn.k_norm.weight")
+    }
+
+    private static func mapMTPWeight(_ key: String, _ value: MLXArray) -> [(String, MLXArray)] {
+        guard !key.hasPrefix("__unused__.") else { return [] }
+        if isMTPRMSNormWeight(key) {
+            return [(key, value - MLXArray(1.0).asType(value.dtype))]
+        }
+        return [(key, value)]
     }
 
     private static func mapTextWeightKey(_ key: String) -> String? {
