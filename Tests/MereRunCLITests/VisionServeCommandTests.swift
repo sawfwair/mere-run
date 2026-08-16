@@ -10,12 +10,16 @@ final class VisionServeCommandTests: XCTestCase {
             "--port", "9091",
             "--model", "vision-ground-falcon-perception",
             "--max-frame-bytes", "4194304",
+            "--max-batch-size", "6",
+            "--max-batch-bytes", "25165824",
         ])
 
         XCTAssertEqual(command.host, "127.0.0.1")
         XCTAssertEqual(command.port, 9_091)
         XCTAssertEqual(command.model, "vision-ground-falcon-perception")
         XCTAssertEqual(command.maxFrameBytes, 4_194_304)
+        XCTAssertEqual(command.maxBatchSize, 6)
+        XCTAssertEqual(command.maxBatchBytes, 25_165_824)
     }
 
     func testRejectsNonLoopbackServerWithoutAPIKey() {
@@ -51,6 +55,46 @@ final class VisionServeCommandTests: XCTestCase {
     func testRequiresAtLeastOneQuery() {
         let form = MultipartFormData(parts: [])
         XCTAssertThrowsError(try VisionGroundingServer.requestPlan(from: form))
+    }
+
+    func testBuildsBatchRequestPlanWithPerFrameIdentifiers() throws {
+        let form = MultipartFormData(parts: [
+            .init(name: "query", filename: nil, contentType: nil, body: Data("target".utf8)),
+            .init(name: "frame_id[]", filename: nil, contentType: nil, body: Data("frame-1".utf8)),
+            .init(name: "frame_id[]", filename: nil, contentType: nil, body: Data("frame-2".utf8)),
+            .init(name: "stream_id", filename: nil, contentType: nil, body: Data("camera-7".utf8)),
+            .init(name: "max_new_tokens", filename: nil, contentType: nil, body: Data("128".utf8)),
+        ])
+
+        let plan = try VisionGroundingServer.batchRequestPlan(from: form)
+        XCTAssertEqual(plan.queries, ["target"])
+        XCTAssertEqual(plan.frameIDs, ["frame-1", "frame-2"])
+        XCTAssertEqual(plan.streamID, "camera-7")
+        XCTAssertEqual(plan.maxNewTokens, 128)
+    }
+
+    func testRejectsInvalidBatchLimits() {
+        XCTAssertThrowsError(try VisionServe.parse(["--max-batch-size", "0"]))
+        XCTAssertThrowsError(try VisionServe.parse(["--max-batch-size", "33"]))
+        XCTAssertThrowsError(try VisionServe.parse(["--max-batch-bytes", "0"]))
+        XCTAssertThrowsError(try VisionServe.parse(["--max-batch-bytes", String(Int.max)]))
+    }
+
+    func testBatchLimitCountsImageQueryPairs() throws {
+        XCTAssertNoThrow(
+            try VisionGroundingServer.validateBatchCardinality(
+                imageCount: 4,
+                queryCount: 2,
+                maximumBatchSize: 8
+            )
+        )
+        XCTAssertThrowsError(
+            try VisionGroundingServer.validateBatchCardinality(
+                imageCount: 5,
+                queryCount: 2,
+                maximumBatchSize: 8
+            )
+        )
     }
 
     func testResponseDoesNotExposeServerLocalPaths() throws {

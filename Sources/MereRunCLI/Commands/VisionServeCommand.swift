@@ -2,6 +2,7 @@ import ArgumentParser
 import Crypto
 import Foundation
 import Hummingbird
+import MLX
 import MereRunCore
 import NIOCore
 
@@ -12,7 +13,8 @@ struct VisionServe: AsyncParsableCommand {
         discussion: """
         Starts a generic HTTP service backed by the native Falcon Perception runtime.
         The model remains resident across requests. Clients send image bytes and one or
-        more text queries as multipart/form-data to POST /v1/vision/ground.
+        more text queries as multipart/form-data to POST /v1/vision/ground, or
+        a bounded set of images to POST /v1/vision/ground-batch.
 
         The service is loopback-only by default. Non-loopback binds require --api-key.
         """
@@ -33,6 +35,15 @@ struct VisionServe: AsyncParsableCommand {
     @Option(name: [.customLong("max-frame-bytes")], help: "Maximum encoded image upload size.")
     var maxFrameBytes: Int = 16 * 1_024 * 1_024
 
+    @Option(
+        name: [.customLong("max-batch-size")],
+        help: "Maximum image-query pairs accepted by one batch request."
+    )
+    var maxBatchSize: Int = 8
+
+    @Option(name: [.customLong("max-batch-bytes")], help: "Maximum combined encoded image bytes in one batch.")
+    var maxBatchBytes: Int = 64 * 1_024 * 1_024
+
     @Flag(name: [.customLong("preflight")], help: "Validate configuration without starting the server.")
     var preflight: Bool = false
 
@@ -45,6 +56,12 @@ struct VisionServe: AsyncParsableCommand {
         }
         guard maxFrameBytes > 0 else {
             throw ValidationError("--max-frame-bytes must be greater than zero.")
+        }
+        guard (1...32).contains(maxBatchSize) else {
+            throw ValidationError("--max-batch-size must be between 1 and 32.")
+        }
+        guard maxBatchBytes > 0, maxBatchBytes <= Int.max - 1_048_576 else {
+            throw ValidationError("--max-batch-bytes is outside the supported range.")
         }
         if json && !preflight {
             throw ValidationError("--json is only supported with --preflight for vision serve.")
@@ -66,6 +83,8 @@ struct VisionServe: AsyncParsableCommand {
                 host: host,
                 port: port,
                 maximumFrameBytes: maxFrameBytes,
+                maximumBatchSize: maxBatchSize,
+                maximumBatchBytes: maxBatchBytes,
                 authenticationRequired: apiKey?.isEmpty == false
             )
             if json {
@@ -75,7 +94,10 @@ struct VisionServe: AsyncParsableCommand {
             } else {
                 print("Ready: \(report.capability) with \(report.modelID)")
                 print("Endpoint: http://\(report.host):\(report.port)/v1/vision/ground")
+                print("Batch endpoint: http://\(report.host):\(report.port)/v1/vision/ground-batch")
                 print("Maximum frame bytes: \(report.maximumFrameBytes)")
+                print("Maximum batch size: \(report.maximumBatchSize)")
+                print("Maximum batch bytes: \(report.maximumBatchBytes)")
             }
             return
         }
@@ -85,7 +107,9 @@ struct VisionServe: AsyncParsableCommand {
         let server = VisionGroundingServer(
             runtime: runtime,
             apiKey: apiKey,
-            maximumFrameBytes: maxFrameBytes
+            maximumFrameBytes: maxFrameBytes,
+            maximumBatchSize: maxBatchSize,
+            maximumBatchBytes: maxBatchBytes
         )
         try await server.run(host: host, port: port)
     }
@@ -99,6 +123,8 @@ struct VisionServePreflightReport: Codable, Equatable, Sendable {
     let host: String
     let port: Int
     let maximumFrameBytes: Int
+    let maximumBatchSize: Int
+    let maximumBatchBytes: Int
     let authenticationRequired: Bool
 
     enum CodingKeys: String, CodingKey {
@@ -109,6 +135,8 @@ struct VisionServePreflightReport: Codable, Equatable, Sendable {
         case host
         case port
         case maximumFrameBytes = "maximum_frame_bytes"
+        case maximumBatchSize = "maximum_batch_size"
+        case maximumBatchBytes = "maximum_batch_bytes"
         case authenticationRequired = "authentication_required"
     }
 }
@@ -120,6 +148,14 @@ struct VisionGroundingRequestPlan: Equatable, Sendable {
     let capturedAt: String?
     let maxNewTokens: Int
     let segmentationThreshold: Float
+}
+
+struct VisionGroundingBatchRequestPlan: Equatable, Sendable {
+    let queries: [String]
+    let streamID: String?
+    let frameIDs: [String]
+    let capturedAt: String?
+    let maxNewTokens: Int
 }
 
 struct VisionGroundingDetectionResponse: Codable, Equatable, Sendable {
@@ -167,6 +203,42 @@ struct VisionGroundingResponse: Codable, Equatable, Sendable {
     }
 }
 
+struct VisionGroundingBatchItemResponse: Codable, Equatable, Sendable {
+    let index: Int
+    let frameID: String?
+    let imageSHA256: String
+    let queries: [String]
+    let detections: [VisionGroundingDetectionResponse]
+
+    enum CodingKeys: String, CodingKey {
+        case index
+        case frameID = "frame_id"
+        case imageSHA256 = "image_sha256"
+        case queries
+        case detections
+    }
+}
+
+struct VisionGroundingBatchResponse: Codable, Equatable, Sendable {
+    let created: Int
+    let object: String
+    let model: String
+    let streamID: String?
+    let capturedAt: String?
+    let items: [VisionGroundingBatchItemResponse]
+    let timing: VisionGroundingTimingResponse
+
+    enum CodingKeys: String, CodingKey {
+        case created
+        case object
+        case model
+        case streamID = "stream_id"
+        case capturedAt = "captured_at"
+        case items
+        case timing
+    }
+}
+
 enum VisionGroundingServerError: LocalizedError, Equatable {
     case invalidField(String, String)
     case unsupportedMediaType
@@ -194,6 +266,21 @@ protocol VisionGroundingRuntime: Sendable {
         maxNewTokens: Int,
         segmentationThreshold: Float
     ) async throws -> FalconPerceptionGroundingRun
+
+    func groundBatch(
+        inputs: [VisionGroundingRuntimeInput],
+        maxNewTokens: Int
+    ) async throws -> [VisionGroundingRuntimeResult]
+}
+
+struct VisionGroundingRuntimeInput: Hashable, Sendable {
+    let imageURL: URL
+    let queries: [String]
+}
+
+struct VisionGroundingRuntimeResult: Hashable, Sendable {
+    let queries: [String]
+    let detections: [FalconPerceptionDetection]
 }
 
 actor ResidentFalconGroundingRuntime: VisionGroundingRuntime {
@@ -218,15 +305,45 @@ actor ResidentFalconGroundingRuntime: VisionGroundingRuntime {
         outputDirectoryURL: URL,
         maxNewTokens: Int,
         segmentationThreshold: Float
-    ) throws -> FalconPerceptionGroundingRun {
-        try grounder.ground(
-            imageURL: imageURL,
-            queries: queries,
-            annotatedImageURL: outputDirectoryURL.appendingPathComponent("annotated.png"),
-            jsonOutputURL: outputDirectoryURL.appendingPathComponent("detections.json"),
-            maxNewTokens: maxNewTokens,
-            segmentationThreshold: segmentationThreshold
-        )
+    ) async throws -> FalconPerceptionGroundingRun {
+        try await Stream.withNewDefaultStream {
+            await Task.yield()
+            return try grounder.ground(
+                imageURL: imageURL,
+                queries: queries,
+                annotatedImageURL: outputDirectoryURL.appendingPathComponent("annotated.png"),
+                jsonOutputURL: outputDirectoryURL.appendingPathComponent("detections.json"),
+                maxNewTokens: maxNewTokens,
+                segmentationThreshold: segmentationThreshold
+            )
+        }
+    }
+
+    func groundBatch(
+        inputs: [VisionGroundingRuntimeInput],
+        maxNewTokens: Int
+    ) async throws -> [VisionGroundingRuntimeResult] {
+        try await Stream.withNewDefaultStream {
+            await Task.yield()
+            let flattenedInputs = inputs.flatMap { input in
+                input.queries.map {
+                    FalconPerceptionBatchInput(imageURL: input.imageURL, query: $0)
+                }
+            }
+            let flattenedResults = try grounder.groundBatch(
+                inputs: flattenedInputs,
+                maxNewTokens: maxNewTokens
+            )
+            var resultIndex = 0
+            return inputs.map { input in
+                let itemResults = Array(flattenedResults[resultIndex..<(resultIndex + input.queries.count)])
+                resultIndex += input.queries.count
+                return VisionGroundingRuntimeResult(
+                    queries: input.queries,
+                    detections: itemResults.flatMap(\.detections)
+                )
+            }
+        }
     }
 }
 
@@ -234,17 +351,23 @@ final class VisionGroundingServer: @unchecked Sendable {
     private let runtime: any VisionGroundingRuntime
     private let apiKey: String?
     private let maximumFrameBytes: Int
+    private let maximumBatchSize: Int
+    private let maximumBatchBytes: Int
     private let fileManager: FileManager
 
     init(
         runtime: any VisionGroundingRuntime,
         apiKey: String?,
         maximumFrameBytes: Int,
+        maximumBatchSize: Int,
+        maximumBatchBytes: Int,
         fileManager: FileManager = .default
     ) {
         self.runtime = runtime
         self.apiKey = apiKey?.trimmingCharacters(in: .whitespacesAndNewlines)
         self.maximumFrameBytes = maximumFrameBytes
+        self.maximumBatchSize = maximumBatchSize
+        self.maximumBatchBytes = maximumBatchBytes
         self.fileManager = fileManager
     }
 
@@ -254,6 +377,7 @@ final class VisionGroundingServer: @unchecked Sendable {
             configuration: .init(address: .hostname(host, port: port))
         )
         CLIStderr.write("Resident vision service: http://\(host):\(port)/v1/vision/ground\n")
+        CLIStderr.write("Resident vision batch service: http://\(host):\(port)/v1/vision/ground-batch\n")
         CLIStderr.write("Model: \(runtime.modelID)\n")
         try await app.runService()
     }
@@ -272,6 +396,9 @@ final class VisionGroundingServer: @unchecked Sendable {
         }
         router.post("/v1/vision/ground") { [self] request, _ in
             await handleGrounding(request)
+        }
+        router.post("/v1/vision/ground-batch") { [self] request, _ in
+            await handleBatchGrounding(request)
         }
         return router
     }
@@ -313,6 +440,60 @@ final class VisionGroundingServer: @unchecked Sendable {
         )
     }
 
+    static func batchRequestPlan(from form: MultipartFormData) throws -> VisionGroundingBatchRequestPlan {
+        let queries = form.parts
+            .filter { ($0.name == "query" || $0.name == "query[]") && $0.filename == nil }
+            .compactMap { String(data: $0.body, encoding: .utf8) }
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        guard !queries.isEmpty else {
+            throw VisionGroundingServerError.invalidField(
+                "query",
+                "at least one non-empty query or query[] field is required"
+            )
+        }
+        guard queries.count <= 32 else {
+            throw VisionGroundingServerError.invalidField("query", "at most 32 queries are allowed")
+        }
+        let frameIDs = try form.parts
+            .filter { ($0.name == "frame_id" || $0.name == "frame_id[]") && $0.filename == nil }
+            .compactMap { String(data: $0.body, encoding: .utf8) }
+            .map { try identifierField($0, name: "frame_id") }
+            .compactMap { $0 }
+        return VisionGroundingBatchRequestPlan(
+            queries: queries,
+            streamID: try identifierField(form.field("stream_id"), name: "stream_id"),
+            frameIDs: frameIDs,
+            capturedAt: normalizedOptional(form.field("captured_at")),
+            maxNewTokens: try integerField(
+                form.field("max_new_tokens"),
+                name: "max_new_tokens",
+                defaultValue: 512,
+                range: 1...2_048
+            )
+        )
+    }
+
+    static func validateBatchCardinality(
+        imageCount: Int,
+        queryCount: Int,
+        maximumBatchSize: Int
+    ) throws {
+        guard imageCount > 0, imageCount <= maximumBatchSize else {
+            throw VisionGroundingServerError.invalidField(
+                "image[]",
+                "batch must contain 1...\(maximumBatchSize) image files"
+            )
+        }
+        let pairCount = imageCount.multipliedReportingOverflow(by: queryCount)
+        guard !pairCount.overflow, pairCount.partialValue <= maximumBatchSize else {
+            throw VisionGroundingServerError.invalidField(
+                "image[]",
+                "batch must not exceed \(maximumBatchSize) image-query pairs"
+            )
+        }
+    }
+
     static func response(
         from run: FalconPerceptionGroundingRun,
         plan: VisionGroundingRequestPlan,
@@ -338,6 +519,46 @@ final class VisionGroundingServer: @unchecked Sendable {
                     center: detection.xy,
                     size: detection.hw,
                     box: detection.box
+                )
+            },
+            timing: VisionGroundingTimingResponse(
+                inferenceSeconds: finishedAt.timeIntervalSince(inferenceStartedAt),
+                totalSeconds: finishedAt.timeIntervalSince(startedAt)
+            )
+        )
+    }
+
+    static func batchResponse(
+        modelID: String,
+        plan: VisionGroundingBatchRequestPlan,
+        results: [VisionGroundingRuntimeResult],
+        imageSHA256s: [String],
+        startedAt: Date,
+        inferenceStartedAt: Date,
+        finishedAt: Date
+    ) -> VisionGroundingBatchResponse {
+        VisionGroundingBatchResponse(
+            created: Int(finishedAt.timeIntervalSince1970),
+            object: "vision.grounding.batch",
+            model: modelID,
+            streamID: plan.streamID,
+            capturedAt: plan.capturedAt,
+            items: results.enumerated().map { itemIndex, result in
+                VisionGroundingBatchItemResponse(
+                    index: itemIndex,
+                    frameID: plan.frameIDs.isEmpty ? nil : plan.frameIDs[itemIndex],
+                    imageSHA256: imageSHA256s[itemIndex],
+                    queries: result.queries,
+                    detections: result.detections.enumerated().map { detectionIndex, detection in
+                        VisionGroundingDetectionResponse(
+                            index: detectionIndex,
+                            label: detection.label,
+                            score: detection.score,
+                            center: detection.xy,
+                            size: detection.hw,
+                            box: detection.box
+                        )
+                    }
                 )
             },
             timing: VisionGroundingTimingResponse(
@@ -396,6 +617,111 @@ final class VisionGroundingServer: @unchecked Sendable {
                     from: run,
                     plan: plan,
                     imageSHA256: digest,
+                    startedAt: startedAt,
+                    inferenceStartedAt: inferenceStartedAt,
+                    finishedAt: finishedAt
+                )
+            )
+        } catch {
+            return errorResponse(
+                status: error is VisionGroundingServerError || error is MultipartFormData.ParseError
+                    ? .badRequest
+                    : .internalServerError,
+                message: error.localizedDescription
+            )
+        }
+    }
+
+    private func handleBatchGrounding(_ request: Request) async -> Response {
+        guard isAuthorized(request) else {
+            return errorResponse(status: .unauthorized, message: "Invalid API key.")
+        }
+        let startedAt = Date()
+        do {
+            guard let boundary = APIServerContract.multipartBoundary(from: request.headers[.contentType]) else {
+                throw VisionGroundingServerError.unsupportedMediaType
+            }
+            let body = try await request.body.collect(upTo: maximumBatchBytes + 1_024 * 1_024)
+            let form = try MultipartFormData.parse(
+                body: Data(body.readableBytesView),
+                boundary: boundary
+            )
+            let plan = try Self.batchRequestPlan(from: form)
+            let images = form.parts.filter {
+                ["image", "image[]", "frame", "frame[]"].contains($0.name) && $0.filename != nil
+            }
+            try Self.validateBatchCardinality(
+                imageCount: images.count,
+                queryCount: plan.queries.count,
+                maximumBatchSize: maximumBatchSize
+            )
+            if !plan.frameIDs.isEmpty, plan.frameIDs.count != images.count {
+                throw VisionGroundingServerError.invalidField(
+                    "frame_id[]",
+                    "must be omitted or contain exactly one identifier per image"
+                )
+            }
+
+            var totalEncodedBytes = 0
+            for image in images {
+                guard !image.body.isEmpty, image.body.count <= maximumFrameBytes else {
+                    throw VisionGroundingServerError.invalidField(
+                        "image[]",
+                        "every encoded image must contain 1...\(maximumFrameBytes) bytes"
+                    )
+                }
+                let addition = totalEncodedBytes.addingReportingOverflow(image.body.count)
+                guard !addition.overflow, addition.partialValue <= maximumBatchBytes else {
+                    throw VisionGroundingServerError.invalidField(
+                        "image[]",
+                        "combined encoded image bytes must not exceed \(maximumBatchBytes)"
+                    )
+                }
+                totalEncodedBytes = addition.partialValue
+            }
+
+            let requestDirectory = fileManager.temporaryDirectory
+                .appendingPathComponent("mere-run-vision-serve", isDirectory: true)
+                .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            try fileManager.createDirectory(at: requestDirectory, withIntermediateDirectories: true)
+            defer { try? fileManager.removeItem(at: requestDirectory) }
+
+            var runtimeInputs = [VisionGroundingRuntimeInput]()
+            var imageSHA256s = [String]()
+            runtimeInputs.reserveCapacity(images.count)
+            imageSHA256s.reserveCapacity(images.count)
+            for (index, image) in images.enumerated() {
+                let fileExtension = try Self.imageExtension(for: image)
+                let imageURL = requestDirectory
+                    .appendingPathComponent("frame-\(index)")
+                    .appendingPathExtension(fileExtension)
+                try image.body.write(to: imageURL, options: [.atomic])
+                runtimeInputs.append(VisionGroundingRuntimeInput(imageURL: imageURL, queries: plan.queries))
+                imageSHA256s.append(
+                    SHA256.hash(data: image.body)
+                        .map { String(format: "%02x", $0) }
+                        .joined()
+                )
+            }
+
+            let inferenceStartedAt = Date()
+            let results = try await runtime.groundBatch(
+                inputs: runtimeInputs,
+                maxNewTokens: plan.maxNewTokens
+            )
+            guard results.count == images.count else {
+                throw VisionGroundingServerError.invalidField(
+                    "image[]",
+                    "runtime returned \(results.count) results for \(images.count) images"
+                )
+            }
+            let finishedAt = Date()
+            return try jsonResponse(
+                Self.batchResponse(
+                    modelID: runtime.modelID,
+                    plan: plan,
+                    results: results,
+                    imageSHA256s: imageSHA256s,
                     startedAt: startedAt,
                     inferenceStartedAt: inferenceStartedAt,
                     finishedAt: finishedAt

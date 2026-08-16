@@ -235,6 +235,27 @@ assign application semantics or preserve application-specific state; clients
 own cadence, temporal association, and policy. Loopback is the default, and
 non-loopback binds require `--api-key`.
 
+Use the bounded batch endpoint to ground several images in one native MLX
+prefill/decode pass:
+
+```bash
+curl http://127.0.0.1:8091/v1/vision/ground-batch \
+  -F 'stream_id=batch-0001' \
+  -F 'frame_id[]=frame-000042' \
+  -F 'frame_id[]=frame-000043' \
+  -F 'query=target' \
+  -F 'image[]=@frame-000042.webp;type=image/webp' \
+  -F 'image[]=@frame-000043.webp;type=image/webp'
+```
+
+`frame_id[]` is optional; when present it must provide one identifier per
+image. Every query applies to every image, and `--max-batch-size` limits the
+flattened number of image-query pairs (8 by default, at most 32). Individual
+images remain subject to `--max-frame-bytes`; their combined encoded bytes are
+bounded by `--max-batch-bytes`. The batch response contains ordered per-image
+hashes and normalized detections. It intentionally omits masks and annotated
+images; use the single-image endpoint when those artifacts are required.
+
 ### Track objects through a video
 
 ```bash

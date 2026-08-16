@@ -668,6 +668,14 @@ final class FalconPerceptionLanguageModel: Module {
     }
 }
 
+struct FalconPerceptionBatchPositionData {
+    let positionIDs: MLXArray
+    let posHW: MLXArray
+    let ropeDeltas: [Int]
+    let attentionMask: MLXArray
+    let padCounts: [Int]
+}
+
 public final class FalconPerceptionModel: Module, @unchecked Sendable {
     @ModuleInfo(key: "language_model") var languageModel: FalconPerceptionLanguageModel
     @ModuleInfo(key: "coord_encoder") var coordEncoder: FalconPerceptionFourierEncoder
@@ -769,7 +777,12 @@ public final class FalconPerceptionModel: Module, @unchecked Sendable {
             imageTokenID: config.imgID,
             imageFeatures: hiddenStates,
             inputsEmbeds: inputsEmbeds,
-            inputIDs: inputIDs
+            inputIDs: inputIDs,
+            imageGridHW: imageGridHW,
+            paddedGridHW: (
+                pixelValues.dim(1) / max(1, config.visionConfig.spatialPatchSize),
+                pixelValues.dim(2) / max(1, config.visionConfig.spatialPatchSize)
+            )
         )
     }
 
@@ -777,11 +790,15 @@ public final class FalconPerceptionModel: Module, @unchecked Sendable {
         guard let coordXY else { return embeds }
         let ids = inputIDs.asArray(Int32.self).map(Int.init)
         guard ids.contains(config.coordTokenID) else { return embeds }
-        let encoded = coordEncoder(coordXY.reshaped(-1, 2)).reshaped(1, -1, embeds.dim(-1))
+        let batchSize = inputIDs.dim(0)
+        let sequenceLength = inputIDs.dim(1)
+        let encoded = coordEncoder(coordXY.reshaped(batchSize, 2)).reshaped(batchSize, embeds.dim(-1))
         let output = embeds
-        let sequenceLength = min(ids.count, output.dim(1))
-        for index in 0..<sequenceLength where ids[index] == config.coordTokenID {
-            output[0, index] = encoded[0, 0]
+        for batchIndex in 0..<batchSize {
+            for index in 0..<sequenceLength
+            where ids[(batchIndex * sequenceLength) + index] == config.coordTokenID {
+                output[batchIndex, index] = encoded[batchIndex]
+            }
         }
         return output
     }
@@ -790,11 +807,15 @@ public final class FalconPerceptionModel: Module, @unchecked Sendable {
         guard let sizeHW else { return embeds }
         let ids = inputIDs.asArray(Int32.self).map(Int.init)
         guard ids.contains(config.sizeTokenID) else { return embeds }
-        let encoded = sizeEncoder(sizeHW.reshaped(-1, 2)).reshaped(1, -1, embeds.dim(-1))
+        let batchSize = inputIDs.dim(0)
+        let sequenceLength = inputIDs.dim(1)
+        let encoded = sizeEncoder(sizeHW.reshaped(batchSize, 2)).reshaped(batchSize, embeds.dim(-1))
         let output = embeds
-        let sequenceLength = min(ids.count, output.dim(1))
-        for index in 0..<sequenceLength where ids[index] == config.sizeTokenID {
-            output[0, index] = encoded[0, 0]
+        for batchIndex in 0..<batchSize {
+            for index in 0..<sequenceLength
+            where ids[(batchIndex * sequenceLength) + index] == config.sizeTokenID {
+                output[batchIndex, index] = encoded[batchIndex]
+            }
         }
         return output
     }
@@ -945,17 +966,135 @@ public final class FalconPerceptionModel: Module, @unchecked Sendable {
         imageTokenID: Int,
         imageFeatures: MLXArray,
         inputsEmbeds: MLXArray,
-        inputIDs: MLXArray
+        inputIDs: MLXArray,
+        imageGridHW: MLXArray,
+        paddedGridHW: (Int, Int)
     ) -> MLXArray {
         let ids = inputIDs.asArray(Int32.self).map(Int.init)
-        let positions = ids.enumerated().compactMap { index, value in
-            value == imageTokenID ? index : nil
-        }
+        let gridValues = imageGridHW.asArray(Int32.self).map(Int.init)
+        let batchSize = inputIDs.dim(0)
+        let sequenceLength = inputIDs.dim(1)
+        let hiddenSize = inputsEmbeds.dim(-1)
+        let paddedGridH = paddedGridHW.0
+        let paddedGridW = paddedGridHW.1
+        let features = imageFeatures.reshaped(batchSize, paddedGridH, paddedGridW, hiddenSize)
         let output = inputsEmbeds
-        for (featureIndex, position) in positions.enumerated() where featureIndex < imageFeatures.dim(0) {
-            output[0, position] = imageFeatures[featureIndex]
+
+        for batchIndex in 0..<batchSize {
+            let rowStart = batchIndex * sequenceLength
+            let positions = (0..<sequenceLength).filter {
+                ids[rowStart + $0] == imageTokenID
+            }
+            let gridH = min(paddedGridH, gridValues[batchIndex * 2])
+            let gridW = min(paddedGridW, gridValues[(batchIndex * 2) + 1])
+            var featureIndex = 0
+            for hIndex in 0..<gridH {
+                for wIndex in 0..<gridW where featureIndex < positions.count {
+                    output[batchIndex, positions[featureIndex]] = features[batchIndex, hIndex, wIndex]
+                    featureIndex += 1
+                }
+            }
         }
         return output
+    }
+
+    static func computeBatchPositionData(
+        inputIDs: MLXArray,
+        config: FalconPerceptionModelConfig,
+        imageGridHW: MLXArray,
+        padTokenID: Int
+    ) -> FalconPerceptionBatchPositionData {
+        precondition(inputIDs.ndim == 2, "Falcon batch input IDs must have shape [batch, sequence].")
+        precondition(imageGridHW.ndim == 2 && imageGridHW.dim(1) == 2)
+        let batchSize = inputIDs.dim(0)
+        let sequenceLength = inputIDs.dim(1)
+        let ids = inputIDs.asArray(Int32.self).map(Int.init)
+        let grids = imageGridHW.asArray(Int32.self).map(Int.init)
+
+        var allPositions = [Int32]()
+        var allPosHW = [Float]()
+        var allMask = [Bool]()
+        var ropeDeltas = [Int]()
+        var padCounts = [Int]()
+        allPositions.reserveCapacity(batchSize * sequenceLength)
+        allPosHW.reserveCapacity(batchSize * sequenceLength * 2)
+        allMask.reserveCapacity(batchSize * sequenceLength * sequenceLength)
+
+        for batchIndex in 0..<batchSize {
+            let rowStart = batchIndex * sequenceLength
+            let row = Array(ids[rowStart..<(rowStart + sequenceLength)])
+            let padCount = row.prefix { $0 == padTokenID }.count
+            padCounts.append(padCount)
+
+            var positions = [Int32](repeating: 0, count: sequenceLength)
+            var inImage = false
+            var nextPosition = 0
+            for index in padCount..<sequenceLength {
+                let token = row[index]
+                if token == config.imageCLSTokenID && !inImage {
+                    inImage = true
+                }
+                positions[index] = Int32(nextPosition)
+                if !inImage {
+                    nextPosition += 1
+                }
+                if token == config.imgEndID && inImage {
+                    inImage = false
+                    nextPosition += 1
+                }
+            }
+            allPositions.append(contentsOf: positions)
+            let maxPosition = padCount < sequenceLength
+                ? positions[padCount...].map(Int.init).max() ?? 0
+                : 0
+            ropeDeltas.append(maxPosition + 1 - sequenceLength)
+
+            let posHW = computePosHW(
+                tokenIDs: row,
+                imageTokenID: config.imgID,
+                imageGridHWS: [(grids[batchIndex * 2], grids[(batchIndex * 2) + 1])]
+            )
+            allPosHW.append(contentsOf: posHW.asArray(Float.self))
+
+            var blockIDs = [Int](repeating: 0, count: sequenceLength)
+            inImage = false
+            var block = 0
+            for index in padCount..<sequenceLength {
+                let token = row[index]
+                if token == config.imageCLSTokenID && !inImage {
+                    inImage = true
+                    block += 1
+                }
+                if inImage && token != config.imgEndID {
+                    blockIDs[index] = block
+                }
+                if token == config.imgEndID && inImage {
+                    inImage = false
+                }
+            }
+            for queryIndex in 0..<sequenceLength {
+                for keyIndex in 0..<sequenceLength {
+                    if queryIndex < padCount {
+                        allMask.append(queryIndex == keyIndex)
+                    } else if keyIndex < padCount {
+                        allMask.append(false)
+                    } else {
+                        let causal = queryIndex >= keyIndex
+                        let sameImage = blockIDs[queryIndex] > 0
+                            && blockIDs[queryIndex] == blockIDs[keyIndex]
+                        allMask.append(causal || sameImage)
+                    }
+                }
+            }
+        }
+
+        return FalconPerceptionBatchPositionData(
+            positionIDs: MLXArray(allPositions, [batchSize, sequenceLength]),
+            posHW: MLXArray(allPosHW, [batchSize, sequenceLength, 2]),
+            ropeDeltas: ropeDeltas,
+            attentionMask: MLXArray(allMask, [batchSize, 1, sequenceLength, sequenceLength]),
+            padCounts: padCounts
+        )
     }
 
     public static func computePositionData(
@@ -1071,15 +1210,17 @@ public final class FalconPerceptionModel: Module, @unchecked Sendable {
     }
 
     static func computeGoldenFrequencies(freqsGolden: MLXArray, posHW: MLXArray) -> (MLXArray, MLXArray) {
+        precondition(posHW.ndim == 3 && posHW.dim(2) == 2)
+        let batchSize = posHW.dim(0)
         let heads = freqsGolden.dim(0)
         let frequencyCount = freqsGolden.dim(1)
         let tokenCount = posHW.dim(1)
-        let positions = posHW[0].asType(.float32).reshaped(tokenCount, 1, 1, 2)
-        let frequencies = freqsGolden.asType(.float32).reshaped(1, heads, frequencyCount, 2)
+        let positions = posHW.asType(.float32).reshaped(batchSize, tokenCount, 1, 1, 2)
+        let frequencies = freqsGolden.asType(.float32).reshaped(1, 1, heads, frequencyCount, 2)
         let angles = MLX.sum(positions * frequencies, axis: -1)
         return (
-            MLX.cos(angles).reshaped(1, tokenCount, heads, frequencyCount),
-            MLX.sin(angles).reshaped(1, tokenCount, heads, frequencyCount)
+            MLX.cos(angles).reshaped(batchSize, tokenCount, heads, frequencyCount),
+            MLX.sin(angles).reshaped(batchSize, tokenCount, heads, frequencyCount)
         )
     }
 
@@ -1140,8 +1281,12 @@ public final class FalconPerceptionModel: Module, @unchecked Sendable {
         let kEven = kReshaped[.ellipsis, 0]
         let kOdd = kReshaped[.ellipsis, 1]
 
-        let cosExpanded = cos.reshaped(1, 1, cos.dim(0), cos.dim(1))
-        let sinExpanded = sin.reshaped(1, 1, sin.dim(0), sin.dim(1))
+        let cosExpanded = cos.ndim == 2
+            ? cos.reshaped(1, 1, cos.dim(0), cos.dim(1))
+            : cos.reshaped(cos.dim(0), 1, cos.dim(1), cos.dim(2))
+        let sinExpanded = sin.ndim == 2
+            ? sin.reshaped(1, 1, sin.dim(0), sin.dim(1))
+            : sin.reshaped(sin.dim(0), 1, sin.dim(1), sin.dim(2))
 
         let qOutEven = qEven * cosExpanded - qOdd * sinExpanded
         let qOutOdd = qEven * sinExpanded + qOdd * cosExpanded

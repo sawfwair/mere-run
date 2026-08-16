@@ -8,6 +8,10 @@ The format is based on Keep a Changelog.
 
 ### Runtime
 
+- added bounded dense batching to the resident Falcon Perception vision
+  service. The new endpoint performs one native MLX prefill/decode pass for up
+  to 32 image-query pairs, returns ordered per-image hashes and detections, and
+  preserves task-scoped CPU/GPU streams across asynchronous executor hops.
 - accelerated opt-in Qwen3.8 greedy MTP with committed target-history priming,
   a proposal-only compact vocabulary, fused draft-token selection, and
   acceptance-adaptive draft depth. Target logits remain authoritative for every
