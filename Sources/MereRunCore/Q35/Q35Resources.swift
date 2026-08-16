@@ -86,15 +86,15 @@ public struct Q35Resources: Sendable, Hashable {
     public static let q38TwentySevenBUpstreamRepoId = "Qwen/Qwen3.8-27B"
     public static let q38TwentySevenBUpstreamRevision = "1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0"
     public static let q38TwentySevenBEstimatedDownloadBytes: Int64 = 55_586_114_863
-    public static let q38TwentySevenB4BitUpstreamRepoId = "lmstudio-community/Qwen3.8-27B-MLX-4bit"
-    public static let q38TwentySevenB4BitUpstreamRevision = "6067b15cf581666a4aecf6af3afaba4bb5efc20c"
-    public static let q38TwentySevenB4BitEstimatedDownloadBytes: Int64 = 19_473_823_081
+    public static let q38TwentySevenB4BitUpstreamRepoId = "EigenLabs/Qwen3.8-27B-4bit"
+    public static let q38TwentySevenB4BitUpstreamRevision = "eda45ab47f465d08d6558f0353a2346e2eb9d5b3"
+    public static let q38TwentySevenB4BitEstimatedDownloadBytes: Int64 = 15_392_000_000
     public static let q38MTPComponentPath = "mtp"
-    public static let q38MTPComponentSnapshotPatterns = [
-        "LICENSE",
-        "model.safetensors.index.json",
-        "model-00018-of-00018.safetensors",
-    ]
+    public static let q38MTP4BitUpstreamRepoId = "lowskillcoding/qwen38-mtp-head-4bit-g64"
+    public static let q38MTP4BitUpstreamRevision = "0966ddaff972fd3ca2be08f3640603b47e9ce70a"
+    public static let q38MTPComponentSnapshotPatterns = ["model.safetensors"]
+    public static let q38LicenseComponentPath = "licenses/qwen3.8"
+    public static let q38LicenseComponentSnapshotPatterns = ["LICENSE"]
     public static let q38TwentySevenBContextLength = 262_144
     public static let q38TwentySevenBVisionMinPixels = 65_536
     public static let q38TwentySevenBVisionMaxPixels = 16_777_216

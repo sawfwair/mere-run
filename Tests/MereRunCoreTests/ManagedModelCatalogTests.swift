@@ -784,7 +784,7 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.hubFallback?.patterns.contains("video_preprocessor_config.json"), true)
     }
 
-    func testQ38TwentySevenB4BitUsesPinnedConversionAndOfficialMTPShard() throws {
+    func testQ38TwentySevenB4BitUsesCrownedTargetAndQuantizedMTPHead() throws {
         let spec = try XCTUnwrap(
             ManagedModelCatalog.spec(for: Q35Resources.q38TwentySevenB4BitModelId)
         )
@@ -794,23 +794,35 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.installShape, .directoryRoot)
         XCTAssertEqual(spec.hubFallback?.repoId, Q35Resources.q38TwentySevenB4BitUpstreamRepoId)
         XCTAssertEqual(spec.hubFallback?.revision, Q35Resources.q38TwentySevenB4BitUpstreamRevision)
-        XCTAssertEqual(spec.mountedHubFallbacks.count, 1)
+        XCTAssertEqual(spec.mountedHubFallbacks.count, 2)
         XCTAssertEqual(spec.mountedHubFallbacks.first?.destinationPath, Q35Resources.q38MTPComponentPath)
         XCTAssertEqual(
             spec.mountedHubFallbacks.first?.hubFallback.repoId,
-            Q35Resources.q38TwentySevenBUpstreamRepoId
+            Q35Resources.q38MTP4BitUpstreamRepoId
         )
         XCTAssertEqual(
             spec.mountedHubFallbacks.first?.hubFallback.revision,
-            Q35Resources.q38TwentySevenBUpstreamRevision
+            Q35Resources.q38MTP4BitUpstreamRevision
         )
         XCTAssertEqual(
             spec.mountedHubFallbacks.first?.hubFallback.patterns,
             Q35Resources.q38MTPComponentSnapshotPatterns
         )
+        XCTAssertEqual(
+            spec.mountedHubFallbacks.last?.destinationPath,
+            Q35Resources.q38LicenseComponentPath
+        )
+        XCTAssertEqual(
+            spec.mountedHubFallbacks.last?.hubFallback.repoId,
+            Q35Resources.q38TwentySevenBUpstreamRepoId
+        )
+        XCTAssertEqual(
+            spec.mountedHubFallbacks.last?.hubFallback.patterns,
+            Q35Resources.q38LicenseComponentSnapshotPatterns
+        )
         XCTAssertEqual(spec.validationKind, .q35)
         XCTAssertEqual(spec.defaultRuntimeServingEngine, .textChatQ36)
-        XCTAssertEqual(spec.estimatedDownloadBytes, 19_473_823_081)
+        XCTAssertEqual(spec.estimatedDownloadBytes, 15_392_000_000)
         XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
         XCTAssertTrue(spec.defaultCLICommands.contains("model benchmark code"))
     }
@@ -834,6 +846,14 @@ final class ManagedModelCatalogTests: XCTestCase {
         try FileManager.default.createDirectory(at: mtpRoot, withIntermediateDirectories: true)
         for filename in Q35Resources.q38MTPComponentSnapshotPatterns {
             try Data().write(to: mtpRoot.appendingPathComponent(filename))
+        }
+        let licenseRoot = root.appendingPathComponent(
+            Q35Resources.q38LicenseComponentPath,
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(at: licenseRoot, withIntermediateDirectories: true)
+        for filename in Q35Resources.q38LicenseComponentSnapshotPatterns {
+            try Data().write(to: licenseRoot.appendingPathComponent(filename))
         }
         XCTAssertTrue(spec.missingPaths(in: root).isEmpty)
     }

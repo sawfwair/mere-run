@@ -6,6 +6,17 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Runtime
+
+- accelerated opt-in Qwen3.8 greedy MTP with committed target-history priming,
+  a proposal-only compact vocabulary, fused draft-token selection, and
+  acceptance-adaptive draft depth. Target logits remain authoritative for every
+  emitted token, and sampled MTP retains its full-vocabulary probability path.
+- aligned the managed Qwen3.8 27B 4-bit lane with the pinned MLX Fast reference
+  target and its 4-bit/group-64 MTP head, while retaining Qwen's official
+  Apache-2.0 license. Standalone bare-name MTP weights now load and normalize
+  correctly instead of leaving an uninitialized proposal head.
+
 ## 0.39.0 - 2026-08-15
 
 This release completes Qwen3.8's native Pi-agent path, adds an inline Pi harness

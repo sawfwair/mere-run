@@ -293,8 +293,10 @@ swift run mere.run text chat \
   --prompt "Implement a bounded async work queue in Swift."
 ```
 
-This installs a pinned 4-bit/group-64 MLX target and Qwen's pinned final BF16
-shard under `mtp/`, totaling 19.47 GB. On the measured M4 Max coding slice,
+This installs the pinned MLX Fast 4-bit/group-64 target and its matching
+proposal-only 4-bit/group-64 MTP head under `mtp/`, totaling about 15.39 GB;
+the managed install also retains Qwen's official Apache-2.0 license. On the
+measured M4 Max coding slice,
 target-only warm decode reached about 26.5 tok/s versus 8.8 tok/s for BF16;
 explicit MTP reached 37.8–43.8 tok/s across the three short cases. All cases
 passed. On a deterministic 24-task stride through the official HumanEval set,

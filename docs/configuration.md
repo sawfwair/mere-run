@@ -466,10 +466,10 @@ the `vision-chat-q38-27b` BF16 and 4-bit lanes. Set this to
 `1`, `true`, `yes`, or `on` to force consideration when the effective context
 window is large enough; set it to `0`, `false`, or `no` to disable MTP. Any other
 value, including unset, uses the model-specific policy. Qwen3.8's dense head is
-embedded in the BF16 checkpoint and mounted from the pinned official final shard
-for `vision-chat-q38-27b-4bit`. Both are opt-in because multi-token verification
-can diverge from serial greedy decode; Qwen3.6 hybrid MoE retains its adaptive
-default.
+embedded in the BF16 checkpoint; `vision-chat-q38-27b-4bit` mounts the matching
+4-bit/group-64 MLX Fast proposal head. Both are opt-in because multi-token
+verification can diverge from serial greedy decode; Qwen3.6 hybrid MoE retains
+its adaptive default.
 
 The `Q35` name is an internal compatibility prefix for the Qwen-family runtime;
 the public managed model ids retain their Qwen release names.

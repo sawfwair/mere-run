@@ -195,14 +195,13 @@ final class Q35MTPModel: Module {
     func callAsFunction(
         inputEmbeddings: MLXArray,
         hiddenStates: MLXArray,
-        positionOffset: Int
+        cache: KVCache
     ) -> MLXArray {
         let normalizedEmbeddings = preFCNormEmbedding(inputEmbeddings)
         let normalizedHidden = preFCNormHidden(hiddenStates)
         var hidden = MLX.concatenated([normalizedEmbeddings, normalizedHidden], axis: -1)
         hidden = fc(hidden)
 
-        let cache = Q35MTPPositionCache(offset: positionOffset)
         let mask = cache.makeMask(n: hidden.dim(1))
         for layer in layers {
             hidden = layer(hidden, mask: mask, cache: cache)
@@ -218,10 +217,11 @@ final class Q35MTPModel: Module {
     ) -> MLXArray {
         let inputIds = MLXArray([Int32(token)]).reshaped(1, 1)
         let embeddings = baseModel.embeddings(for: inputIds)
+        let cache = Q35MTPPositionCache(offset: positionOffset)
         let hidden = self(
             inputEmbeddings: embeddings,
             hiddenStates: previousHidden,
-            positionOffset: positionOffset
+            cache: cache
         )
         return baseModel.logits(from: hidden)
     }
@@ -229,29 +229,96 @@ final class Q35MTPModel: Module {
     func draftBlock(
         lastToken: Int,
         hidden: MLXArray,
-        positionOffset: Int,
         blockSize: Int,
+        session: Q35MTPDraftSession,
+        baseModel: Q35Model
+    ) -> [Int] {
+        session.draftBlock(
+            lastToken: lastToken,
+            hidden: hidden,
+            blockSize: blockSize,
+            mtpModel: self,
+            baseModel: baseModel
+        )
+    }
+}
+
+/// Request-local committed-history cache for greedy MTP proposals.
+///
+/// The persistent cache contains only target-confirmed transitions. Draft-only
+/// rows run on a fork and are discarded after the round, so proposal history
+/// can improve acceptance without becoming an output authority.
+final class Q35MTPDraftSession {
+    private let historyCache = KVCacheSimple(step: 256)
+    private var backlogHidden: [MLXArray] = []
+    private var backlogTokens: [Int] = []
+
+    init(promptTokens: [Int] = [], promptHidden: MLXArray? = nil) {
+        guard let promptHidden,
+              promptTokens.count > 1,
+              promptHidden.dim(1) == promptTokens.count else {
+            return
+        }
+        backlogHidden.append(promptHidden[0..., 0..<(promptTokens.count - 1), 0...])
+        backlogTokens.append(contentsOf: promptTokens.dropFirst())
+    }
+
+    var committedHistoryCount: Int {
+        historyCache.offset + backlogTokens.count
+    }
+
+    func recordCommittedTransitions(hiddenStates: MLXArray, nextTokens: [Int]) {
+        guard !nextTokens.isEmpty,
+              hiddenStates.dim(1) >= nextTokens.count else {
+            return
+        }
+        backlogHidden.append(hiddenStates[0..., 0..<nextTokens.count, 0...])
+        backlogTokens.append(contentsOf: nextTokens)
+    }
+
+    func draftBlock(
+        lastToken: Int,
+        hidden: MLXArray,
+        blockSize: Int,
+        mtpModel: Q35MTPModel,
         baseModel: Q35Model
     ) -> [Int] {
         let total = max(1, blockSize) - 1
-        guard total > 0 else {
-            return []
-        }
+        guard total > 0 else { return [] }
 
-        var tokenArray = MLXArray([Int32(lastToken)]).reshaped(1, 1)
-        var previousHidden = hidden
-        var tokenArrays: [MLXArray] = []
+        backlogHidden.append(hidden)
+        backlogTokens.append(lastToken)
+        let flushHidden = backlogHidden.count == 1
+            ? backlogHidden[0]
+            : MLX.concatenated(backlogHidden, axis: 1)
+        let flushTokens = MLXArray(backlogTokens.map(Int32.init))
+            .reshaped(1, backlogTokens.count)
+        backlogHidden.removeAll(keepingCapacity: true)
+        backlogTokens.removeAll(keepingCapacity: true)
+
+        let flushEmbeddings = baseModel.embeddings(for: flushTokens)
+        let flushed = mtpModel(
+            inputEmbeddings: flushEmbeddings,
+            hiddenStates: flushHidden,
+            cache: historyCache
+        )
+        var previousHidden = flushed[0..., (flushed.dim(1) - 1)..., 0...]
+        var tokenArray = baseModel.greedyDraftToken(from: previousHidden)
+        var tokenArrays = [tokenArray]
         tokenArrays.reserveCapacity(total)
-        for index in 0..<total {
-            let embeddings = baseModel.embeddings(for: tokenArray)
-            previousHidden = self(
-                inputEmbeddings: embeddings,
-                hiddenStates: previousHidden,
-                positionOffset: positionOffset + index
-            )
-            let draftLogits = baseModel.logits(from: previousHidden)[0, -1, 0...]
-            tokenArray = argMax(draftLogits, axis: -1).asType(.int32).reshaped(1, 1)
-            tokenArrays.append(tokenArray)
+
+        if total > 1 {
+            let speculativeCache = historyCache.fork()
+            for _ in 1..<total {
+                let embeddings = baseModel.embeddings(for: tokenArray)
+                previousHidden = mtpModel(
+                    inputEmbeddings: embeddings,
+                    hiddenStates: previousHidden,
+                    cache: speculativeCache
+                )
+                tokenArray = baseModel.greedyDraftToken(from: previousHidden)
+                tokenArrays.append(tokenArray)
+            }
         }
 
         let draftTokens = MLX.concatenated(tokenArrays, axis: 1)
