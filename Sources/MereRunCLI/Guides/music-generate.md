@@ -81,7 +81,11 @@ mere.run guide music generate --model music-magenta-rt2-small
 - `--min-frames`, `--max-frames`: MiniMax Music 3 exact 25 Hz floor and limit.
 - `--performance-mode reference|optimized|q8|q4`: MiniMax Music 3 execution tier;
   `optimized` is the BF16 default and `q8` is the recommended turbo tier.
-- `--steps`, `-s`: denoise steps; MiniMax Music 3 defaults to `30`.
+- `--sampling-tier quality|fast|draft`: MiniMax Music 3 flow schedule with 30,
+  20, or 16 steps.
+- `--steps`, `-s`: exact denoise steps; overrides a MiniMax sampling tier.
+- `--profile-output`: MiniMax Music 3 synchronized stage-timing JSON for
+  benchmarks; profiling can affect wall time.
 - `--shift`: turbo scheduler shift; ACE-Step CLI default is `3.0`, matching upstream.
 - `--seed`: deterministic generation.
 - `--source-audio`: source song for ACE-Step cover, repaint, extract, lego, or

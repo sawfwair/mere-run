@@ -198,6 +198,9 @@ public final class MiniMaxMusic3Transformer: Module {
     @ModuleInfo(key: "proj_out") var outputProjection: Linear
     @ModuleInfo(key: "postprocess_conv") var postprocessConvolution: Conv1d
 
+    private var latentInputProjection: Linear?
+    private var conditionInputProjection: Linear?
+
     public init(configuration: MiniMaxMusic3TransformerConfiguration) {
         self.configuration = configuration
         let inner = configuration.numAttentionHeads * configuration.attentionHeadDim
@@ -273,10 +276,40 @@ public final class MiniMaxMusic3Transformer: Module {
         rotary: (MLXArray, MLXArray)
     ) -> MLXArray {
         let latentNLC = latents.transposed(0, 2, 1)
-        let zeros = MLXArray.zeros(latentNLC.shape, dtype: latentNLC.dtype)
-        var hidden = MLX.concatenated([latentNLC, zeros, condition], axis: -1)
-        hidden = preprocessConvolution(hidden) + hidden
-        hidden = inputProjection(hidden)
+        var hidden: MLXArray
+        if let latentInputProjection, let conditionInputProjection {
+            hidden = latentInputProjection(latentNLC) + conditionInputProjection(condition)
+        } else {
+            let zeros = MLXArray.zeros(latentNLC.shape, dtype: latentNLC.dtype)
+            hidden = MLX.concatenated([latentNLC, zeros, condition], axis: -1)
+            hidden = preprocessConvolution(hidden) + hidden
+            hidden = inputProjection(hidden)
+        }
+        let time = timeEmbedding(timeProjection(timestep)).expandedDimensions(axis: 1)
+        hidden = MLX.concatenated([time, hidden], axis: 1)
+        for block in blocks {
+            hidden = block(hidden, rotary: rotary)
+        }
+        hidden = outputProjection(hidden[0..., 1..., 0...])
+        let postprocessed = postprocessConvolution(hidden) + hidden
+        return postprocessed.transposed(0, 2, 1)
+    }
+
+    func prepareConditionInput(_ condition: MLXArray) -> MLXArray? {
+        conditionInputProjection?(condition)
+    }
+
+    func callAsFunction(
+        latents: MLXArray,
+        timestep: MLXArray,
+        preparedCondition: MLXArray,
+        rotary: (MLXArray, MLXArray)
+    ) -> MLXArray {
+        guard let latentInputProjection else {
+            preconditionFailure("prepared flow conditioning requires fused input projections")
+        }
+        let latentNLC = latents.transposed(0, 2, 1)
+        var hidden = latentInputProjection(latentNLC) + preparedCondition
         let time = timeEmbedding(timeProjection(timestep)).expandedDimensions(axis: 1)
         hidden = MLX.concatenated([time, hidden], axis: 1)
         for block in blocks {
@@ -288,10 +321,27 @@ public final class MiniMaxMusic3Transformer: Module {
     }
 
     public func prepareFusedProjections() {
+        prepareFusedInputProjection()
         for block in blocks {
             block.prepareFusedProjections()
         }
         MLX.Memory.clearCache()
+    }
+
+    private func prepareFusedInputProjection() {
+        guard latentInputProjection == nil, conditionInputProjection == nil else { return }
+        let convolution = preprocessConvolution.weight.squeezed(axis: 1)
+        let dimensions = convolution.dim(0)
+        let residualConvolution = convolution
+            + MLXArray.eye(dimensions, dtype: convolution.dtype)
+        let combined = MLX.matmul(inputProjection.weight, residualConvolution)
+        let latentChannels = configuration.inChannels
+        let conditionStart = 2 * latentChannels
+        let latentWeight = combined[0..., 0..<latentChannels]
+        let conditionWeight = combined[0..., conditionStart...]
+        MLX.eval(latentWeight, conditionWeight)
+        latentInputProjection = Linear(weight: latentWeight, bias: nil)
+        conditionInputProjection = Linear(weight: conditionWeight, bias: nil)
     }
 
     static func mapWeight(key: String, value: MLXArray) -> [(String, MLXArray)] {

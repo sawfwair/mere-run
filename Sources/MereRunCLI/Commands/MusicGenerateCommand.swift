@@ -192,6 +192,30 @@ struct MusicGenerate: AsyncParsableCommand {
     )
     var miniMaxPerformanceMode: MiniMaxMusic3PerformanceMode?
 
+    @Option(
+        name: [.customLong("sampling-tier")],
+        help: "MiniMax Music 3 flow sampling: quality (30 steps), fast (20), or draft (16); --steps overrides."
+    )
+    var miniMaxSamplingTier: MiniMaxMusic3SamplingTier?
+
+    @Option(
+        name: [.customLong("flow-strategy")],
+        help: "MiniMax Music 3 long-form flow: sequential (default) or experimental overlap-average."
+    )
+    var miniMaxFlowStrategy: MiniMaxMusic3FlowStrategy?
+
+    @Option(
+        name: [.customLong("seed-strategy")],
+        help: "MiniMax Music 3 randomness: legacy (default) or stage-separated-v1."
+    )
+    var miniMaxSeedStrategy: MiniMaxMusic3SeedStrategy?
+
+    @Option(
+        name: [.customLong("profile-output")],
+        help: "Write detailed MiniMax Music 3 stage timings as JSON; profiling adds synchronization overhead."
+    )
+    var miniMaxProfileOutput: String?
+
     @Option(name: [.customLong("quality")], help: "Adaptive ACE-Step quality: draft, song, final, or edit.")
     var quality: ACEStepQualityPreset?
 
@@ -532,9 +556,13 @@ struct MusicGenerate: AsyncParsableCommand {
             || miniMaxOutputSampleRate != nil
             || miniMaxLoadingStrategy != nil
             || miniMaxPerformanceMode != nil
+            || miniMaxSamplingTier != nil
+            || miniMaxFlowStrategy != nil
+            || miniMaxSeedStrategy != nil
+            || miniMaxProfileOutput != nil
         {
             throw ValidationError(
-                "MiniMax duration-frame, sample-rate, memory-mode, and performance-mode options require MiniMax Music 3."
+                "MiniMax duration-frame, sample-rate, memory-mode, performance-mode, flow, seed, sampling-tier, and profiling options require MiniMax Music 3."
             )
         }
 
@@ -1184,6 +1212,19 @@ struct MusicGenerate: AsyncParsableCommand {
         if !quiet {
             CLIStderr.write("MiniMax performance mode: \(performanceMode.rawValue)\n")
         }
+        let inferenceSteps = resolvedMiniMaxInferenceSteps
+        let flowStrategy = miniMaxFlowStrategy ?? .sequential
+        let seedStrategy = miniMaxSeedStrategy ?? .legacy
+        if !quiet {
+            CLIStderr.write("MiniMax flow strategy: \(flowStrategy.rawValue)\n")
+            CLIStderr.write("MiniMax seed strategy: \(seedStrategy.rawValue)\n")
+        }
+        if !quiet {
+            let samplingLabel = miniMaxSamplingTier?.rawValue ?? "quality"
+            CLIStderr.write(
+                "MiniMax sampling tier: \(samplingLabel) (\(inferenceSteps) flow steps)\n"
+            )
+        }
         let pipeline = try MiniMaxMusic3Pipeline(
             resources: resources,
             loadingStrategy: loadingStrategy,
@@ -1205,9 +1246,12 @@ struct MusicGenerate: AsyncParsableCommand {
                 durationSeconds: requestedDuration,
                 minimumFrames: requestedMinimumFrames,
                 maximumFrames: miniMaxMaximumFrames,
-                inferenceSteps: steps ?? 30,
+                inferenceSteps: inferenceSteps,
                 seed: seed ?? 0,
-                guidanceScale: guidanceScale ?? 1.7
+                guidanceScale: guidanceScale ?? 1.7,
+                profilingEnabled: miniMaxProfileOutput != nil,
+                flowStrategy: flowStrategy,
+                seedStrategy: seedStrategy
             ),
             progress: { event in
                 guard !quiet else { return }
@@ -1227,6 +1271,22 @@ struct MusicGenerate: AsyncParsableCommand {
                 }
             }
         )
+        if let miniMaxProfileOutput {
+            guard let profile = result.profile else {
+                throw ValidationError("MiniMax Music 3 profiling did not produce a receipt.")
+            }
+            let profileURL = resolveUserPath(miniMaxProfileOutput)
+            try FileManager.default.createDirectory(
+                at: profileURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            try encoder.encode(profile).write(to: profileURL, options: .atomic)
+            if !quiet {
+                CLIStderr.write("Saved MiniMax profile: \(profileURL.path)\n")
+            }
+        }
         let exportOptions = ACEStepAudioExportOptions(
             format: exportFormat,
             normalization: normalization,
@@ -1262,13 +1322,17 @@ struct MusicGenerate: AsyncParsableCommand {
                 requestedMinimumFrames: requestedMinimumFrames,
                 requestedMaximumFrames: miniMaxMaximumFrames,
                 generatedFrameCount: result.frameCount,
-                inferenceSteps: steps ?? 30,
+                samplingTier: miniMaxSamplingTier,
+                inferenceSteps: inferenceSteps,
                 seed: seed ?? 0,
                 guidanceScale: guidanceScale ?? 1.7,
                 nativeSampleRate: result.sampleRate,
                 outputSampleRate: outputSampleRate,
                 loadingStrategy: loadingStrategy,
                 performanceMode: performanceMode,
+                flowStrategy: flowStrategy,
+                seedStrategy: seedStrategy,
+                audioHealth: result.audioHealth,
                 export: exportOptions,
                 outputFilename: outputURL.lastPathComponent,
                 outputSHA256: try ModelArtifactPin.fileSHA256(outputURL)
@@ -1285,6 +1349,10 @@ struct MusicGenerate: AsyncParsableCommand {
             CLIStderr.write("Saved audio: \(outputURL.path)\n")
         }
         print(outputURL.path)
+    }
+
+    var resolvedMiniMaxInferenceSteps: Int {
+        steps ?? miniMaxSamplingTier?.inferenceSteps ?? MiniMaxMusic3SamplingTier.quality.inferenceSteps
     }
 
     func validateMiniMaxMusic3Options(explicitDurationSeconds: Float?) throws {

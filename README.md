@@ -611,11 +611,21 @@ swift run mere.run music generate \
   --lyrics-file ./lyrics.txt \
   --duration 30 \
   --minimum-duration 30 \
-  --steps 30 \
+  --sampling-tier fast \
   --seed 7 \
   --memory-mode staged \
   --performance-mode q8 \
   --output ./minimax-song.wav
+
+# Compare the experimental whole-song flow windowing recipe without changing defaults
+swift run mere.run music generate \
+  "cinematic synth-pop, female lead, 118 bpm, wide guitars" \
+  --model music-minimax-music3 \
+  --lyrics-file ./lyrics.txt \
+  --duration 30 \
+  --flow-strategy overlap-average \
+  --seed-strategy stage-separated-v1 \
+  --output ./minimax-overlap-average.wav
 
 # Keep MiniMax Music 3 warm behind its speech-compatible HTTP route
 swift run mere.run music serve \

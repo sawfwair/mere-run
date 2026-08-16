@@ -88,11 +88,20 @@ swift run mere.run music generate \
   --lyrics-file ./lyrics.txt \
   --duration 30 \
   --minimum-duration 30 \
-  --steps 30 \
+  --sampling-tier fast \
   --seed 7 \
   --memory-mode staged \
   --performance-mode q8 \
   --output ./minimax-song.wav
+
+swift run mere.run music generate \
+  "cinematic synth-pop, female lead, 118 bpm, wide guitars" \
+  --model music-minimax-music3 \
+  --lyrics-file ./lyrics.txt \
+  --duration 30 \
+  --flow-strategy overlap-average \
+  --seed-strategy stage-separated-v1 \
+  --output ./minimax-overlap-average.wav
 
 swift run mere.run music serve \
   --model music-minimax-music3 \
@@ -102,7 +111,7 @@ swift run mere.run music serve \
 
 curl http://127.0.0.1:8080/v1/audio/speech \
   -H 'Content-Type: application/json' \
-  -d '{"model":"music-minimax-music3","instructions":"cinematic synth-pop, female lead","input":"[Verse]\nNeon on the avenue","max_new_tokens":750,"seed":7}' \
+  -d '{"model":"music-minimax-music3","instructions":"cinematic synth-pop, female lead","input":"[Verse]\nNeon on the avenue","max_new_tokens":750,"sampling_tier":"fast","seed":7}' \
   --output ./minimax-speech-route.wav
 
 swift run mere.run music generate \
@@ -168,6 +177,35 @@ swift run mere.run music separate ./noisy.wav \
   --model music-separate-mel-roformer-denoise \
   --output-dir ./noise-restored
 ```
+
+MiniMax Music 3 keeps `--flow-strategy sequential` and
+`--seed-strategy legacy` as its released defaults. The experimental
+`overlap-average` strategy denoises one song-length latent and averages the
+velocities from overlapping flow windows at every Euler step; it then decodes
+the long latent in bounded DAV chunks. `stage-separated-v1` derives stable,
+independent autoregressive and flow random streams so changes in one stage do
+not perturb the other. Both choices are recorded in schema 5 recipe JSON.
+The speech-compatible HTTP route accepts the same choices as
+`flow_strategy` and `seed_strategy`.
+
+Optimized MiniMax modes periodically return completed autoregressive attention
+buffers to MLX while preserving live KV state. This bounds unified-memory use
+for long songs without changing seeded output. On an M4 Max, a matched forced
+120-second Q8/draft render dropped from 110.20 GB to 23.78 GB peak physical
+footprint with a byte-identical float32 WAV; its autoregressive stage changed
+from 144.75 to 151.05 seconds. Process RSS alone does not include this Metal
+footprint, so long-form memory validation must use the macOS physical-footprint
+counter.
+
+On the same 120-second fixture, sequential and overlap-average flow measured
+454.31 and 464.38 seconds. Keep `sequential` as the performance default;
+`overlap-average` is available for explicit continuity experiments rather than
+as an acceleration preset.
+
+Every MiniMax result is checked before export for non-finite samples, silence,
+implausible peaks, and a near-missing stereo channel. The recipe records RMS,
+peak, sample count, and stereo-collapse fraction. These checks fail generation
+instead of saving a corrupted long-form render.
 
 `music separate` decodes the source at 44.1 kHz stereo, runs the pinned ViperX
 1297 BS-RoFormer checkpoint, and writes `vocals.wav`, `instrumental.wav`, and

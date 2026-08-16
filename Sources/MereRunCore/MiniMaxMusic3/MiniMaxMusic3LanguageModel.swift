@@ -32,8 +32,13 @@ public final class MiniMaxMusic3LanguageModel: Module {
         )
     }
 
-    public func makeCache() -> [KVCache] {
-        (0..<configuration.numHiddenLayers).map { _ in KVCacheSimple(step: 256) }
+    public func makeCache(capacity: Int? = nil) -> [KVCache] {
+        (0..<configuration.numHiddenLayers).map { _ in
+            if let capacity {
+                return KVCacheStatic(capacity: capacity)
+            }
+            return KVCacheSimple(step: 256)
+        }
     }
 
     public func embed(tokenIDs: MLXArray) -> MLXArray {

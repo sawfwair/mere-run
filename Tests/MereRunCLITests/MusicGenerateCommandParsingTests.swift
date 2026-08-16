@@ -87,6 +87,10 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
             "--sample-rate", "32000",
             "--memory-mode", "staged",
             "--performance-mode", "q8",
+            "--sampling-tier", "fast",
+            "--flow-strategy", "overlap-average",
+            "--seed-strategy", "stage-separated-v1",
+            "--profile-output", "/tmp/minimax-profile.json",
         ])
 
         XCTAssertEqual(command.model, MiniMaxMusic3Resources.modelID)
@@ -101,6 +105,27 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
         XCTAssertEqual(command.miniMaxOutputSampleRate, 32_000)
         XCTAssertEqual(command.miniMaxLoadingStrategy, .staged)
         XCTAssertEqual(command.miniMaxPerformanceMode, .q8)
+        XCTAssertEqual(command.miniMaxSamplingTier, .fast)
+        XCTAssertEqual(command.miniMaxFlowStrategy, .overlapAverage)
+        XCTAssertEqual(command.miniMaxSeedStrategy, .stageSeparatedV1)
+        XCTAssertEqual(command.resolvedMiniMaxInferenceSteps, 24)
+        XCTAssertEqual(command.miniMaxProfileOutput, "/tmp/minimax-profile.json")
+    }
+
+    func testMiniMaxSamplingTiersResolveDocumentedStepCounts() throws {
+        for (tier, expectedSteps) in [
+            ("quality", 30),
+            ("fast", 20),
+            ("draft", 16),
+        ] {
+            let command = try MusicGenerate.parse([
+                "deep house",
+                "--model", MiniMaxMusic3Resources.modelID,
+                "--instrumental",
+                "--sampling-tier", tier,
+            ])
+            XCTAssertEqual(command.resolvedMiniMaxInferenceSteps, expectedSteps)
+        }
     }
 
     func testMiniMaxValidatesDurationFloorAgainstUpperBound() throws {

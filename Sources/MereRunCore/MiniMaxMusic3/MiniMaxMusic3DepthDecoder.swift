@@ -208,8 +208,13 @@ public final class MiniMaxMusic3DepthDecoder: Module {
         return norm(hidden)
     }
 
-    public func makeCache() -> [KVCache] {
-        (0..<configuration.numLayers).map { _ in KVCacheSimple(step: 8) }
+    public func makeCache(capacity: Int? = nil) -> [KVCache] {
+        (0..<configuration.numLayers).map { _ in
+            if let capacity {
+                return KVCacheStatic(capacity: capacity)
+            }
+            return KVCacheSimple(step: 8)
+        }
     }
 
     public func prepareFusedProjections() {

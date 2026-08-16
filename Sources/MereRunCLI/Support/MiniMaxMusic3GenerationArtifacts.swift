@@ -2,7 +2,7 @@ import Foundation
 import MereRunCore
 
 struct MiniMaxMusic3GenerationRecipe: Codable {
-    static let currentSchemaVersion = 3
+    static let currentSchemaVersion = 5
 
     var schemaVersion: Int
     var createdAt: Date
@@ -15,6 +15,7 @@ struct MiniMaxMusic3GenerationRecipe: Codable {
     var requestedMinimumFrames: Int?
     var requestedMaximumFrames: Int?
     var generatedFrameCount: Int
+    var samplingTier: MiniMaxMusic3SamplingTier?
     var inferenceSteps: Int
     var seed: UInt64
     var guidanceScale: Float
@@ -22,6 +23,9 @@ struct MiniMaxMusic3GenerationRecipe: Codable {
     var outputSampleRate: Int
     var loadingStrategy: MiniMaxMusic3LoadingStrategy
     var performanceMode: MiniMaxMusic3PerformanceMode
+    var flowStrategy: MiniMaxMusic3FlowStrategy
+    var seedStrategy: MiniMaxMusic3SeedStrategy
+    var audioHealth: MiniMaxMusic3AudioHealthReport
     var export: ACEStepAudioExportOptions
     var outputFilename: String
     var outputSHA256: String
@@ -38,6 +42,7 @@ struct MiniMaxMusic3GenerationRecipe: Codable {
         case requestedMinimumFrames = "requested_minimum_frames"
         case requestedMaximumFrames = "requested_maximum_frames"
         case generatedFrameCount = "generated_frame_count"
+        case samplingTier = "sampling_tier"
         case inferenceSteps = "inference_steps"
         case seed
         case guidanceScale = "guidance_scale"
@@ -45,6 +50,9 @@ struct MiniMaxMusic3GenerationRecipe: Codable {
         case outputSampleRate = "output_sample_rate"
         case loadingStrategy = "loading_strategy"
         case performanceMode = "performance_mode"
+        case flowStrategy = "flow_strategy"
+        case seedStrategy = "seed_strategy"
+        case audioHealth = "audio_health"
         case export
         case outputFilename = "output_filename"
         case outputSHA256 = "output_sha256"

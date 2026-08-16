@@ -31,7 +31,11 @@ MiniMax Music 3 consumes only these model inputs:
   the first 25 Hz frame whose whole 512-sample vocoder hops meet the request.
 - `--min-frames`: exact acoustic-frame floor; 1 through 9000
 - `--max-frames`: exact 25 Hz acoustic-frame upper bound; 1 through 9000
-- `--steps`: flow-Euler steps per chunk; defaults to 30
+- `--sampling-tier quality|fast|draft`: named flow-Euler schedules with 30,
+  20, or 16 steps; defaults to `quality`
+- `--steps`: exact flow-Euler steps per chunk; overrides `--sampling-tier`
+- `--profile-output`: write synchronized stage timings as JSON; intended for
+  benchmarking because the extra evaluations can affect wall time
 - `--seed`: deterministic MLX seed; defaults to 0
 - `--guidance-scale`: flow classifier-free guidance; defaults to 1.7
 - `--memory-mode staged|resident`: staged loads and releases the autoregressive,
@@ -52,6 +56,10 @@ language and depth transformers with group-64 affine weights; `q4` applies the
 same path at four bits. Quantization changes the sampled composition, so use `reference` or
 `optimized` for upstream-parity investigations and `q8` for the normal turbo
 tradeoff.
+
+The `quality`, `fast`, and `draft` sampling tiers use the same model and fixed
+Euler schedule with 30, 20, and 16 evaluations respectively. Use `--steps`
+when you need an exact custom count; it takes precedence over the named tier.
 
 Incompatible ACE-Step cover, editing, LM-planner, adapter, VAE,
 candidate-ranking, stem, and DAW settings fail explicitly for this model.
@@ -155,6 +163,7 @@ curl http://127.0.0.1:8081/v1/audio/speech \
     "seed": 7,
     "max_new_tokens": 750,
     "min_new_tokens": 750,
+    "sampling_tier": "fast",
     "stream": false
   }' \
   --output song.wav

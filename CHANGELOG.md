@@ -115,6 +115,18 @@ Qwen3.8 MTP stays opt-in; target-only decode remains the default.
 
 ### Music
 
+- added an opt-in MiniMax Music 3 whole-song flow path that averages
+  overlapping window velocities at every Euler step, bounded long-latent DAV
+  decode, and a versioned stage-separated random recipe. Released sequential
+  windowing and shared-stream seeded output remain the defaults.
+- added mandatory MiniMax output-integrity validation for non-finite samples,
+  silence, implausible peaks, and stereo-channel collapse. Schema 5 recipes
+  record the measured peak, RMS, sample count, and collapse fraction.
+- bounded optimized MiniMax autoregressive allocator growth by returning
+  completed variable-length attention buffers every 64 frames. A matched
+  forced 120-second Q8/draft render reduced peak physical footprint from
+  110.20 GB to 23.78 GB with zero swaps and a byte-identical float32 WAV; the
+  autoregressive stage changed from 144.75 to 151.05 seconds.
 - accelerated MiniMax Music 3 on Apple Silicon with a reachable 16,385-row
   semantic head, fused QKV and gate/up projections, incremental residual-depth
   KV caches, cached rotary/zero conditioning, batched flow guidance, and fewer
@@ -128,8 +140,8 @@ Qwen3.8 MTP stays opt-in; target-only decode remains the default.
   top-100 overlap 98/80 against optimized BF16. Whole-flow compilation and
   affine flow quantization were measured and rejected because both regressed;
   batched flow CFG beat the serial alternative by 6.0% on a matched probe. A
-  strict three-minute Q8 render completed in 1,413.81 s with 4.50 GB maximum
-  resident memory and decoded to 180.268 s.
+  strict three-minute Q8 render completed in 1,413.81 s with 4.50 GB process
+  RSS (which excludes unified Metal footprint) and decoded to 180.268 s.
 - verified `--performance-mode reference` end to end against a clean 0.37.0
   executable: matched 250-frame renders were byte-identical after PCM24 export,
   including deterministic dither.
