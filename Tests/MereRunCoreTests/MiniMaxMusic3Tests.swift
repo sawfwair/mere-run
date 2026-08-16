@@ -3,6 +3,13 @@ import XCTest
 @testable import MereRunCore
 
 final class MiniMaxMusic3Tests: MereRunCoreTestCase {
+    func testAutoregressiveCacheClearingUsesBoundedIntervals() {
+        XCTAssertFalse(MiniMaxMusic3Pipeline.shouldClearAutoregressiveCache(generatedFrameCount: 0))
+        XCTAssertFalse(MiniMaxMusic3Pipeline.shouldClearAutoregressiveCache(generatedFrameCount: 63))
+        XCTAssertTrue(MiniMaxMusic3Pipeline.shouldClearAutoregressiveCache(generatedFrameCount: 64))
+        XCTAssertTrue(MiniMaxMusic3Pipeline.shouldClearAutoregressiveCache(generatedFrameCount: 128))
+    }
+
     func testInstalledQuantizedSemanticLogitQuality() throws {
         let environment = ProcessInfo.processInfo.environment
         guard environment["MERERUN_MINIMAX_MUSIC3_QUANTIZATION_E2E"] == "1",
@@ -436,6 +443,86 @@ final class MiniMaxMusic3Tests: MereRunCoreTestCase {
             MiniMaxMusic3Prompt.decodedSampleCount(frameCount: 251),
             441_000
         )
+    }
+
+    func testOverlapAverageWindowPlanCoversLongLatent() {
+        let window = MiniMaxMusic3Prompt.latentLength(frameCount: 200)
+        let hop = MiniMaxMusic3Prompt.latentLength(frameCount: 100)
+
+        XCTAssertEqual(MiniMaxMusic3Pipeline.overlapAverageStarts(latentLength: window), [0])
+        XCTAssertEqual(
+            MiniMaxMusic3Pipeline.overlapAverageStarts(latentLength: window + 1),
+            [0, hop]
+        )
+        let starts = MiniMaxMusic3Pipeline.overlapAverageStarts(latentLength: 2_500)
+        XCTAssertEqual(starts, [0, 344, 688, 1_032, 1_376, 1_720, 2_064])
+        XCTAssertGreaterThanOrEqual(starts.last! + window, 2_500)
+    }
+
+    func testDAVDecodePlanRetainsEveryLongLatentFrameOnce() {
+        let slices = MiniMaxMusic3DAVDecodeSlice.plan(frameCount: 2_500)
+
+        XCTAssertEqual(slices.count, 3)
+        XCTAssertEqual(slices[0], .init(context: 0..<960, retained: 0..<896))
+        XCTAssertEqual(slices[1], .init(context: 832..<1_856, retained: 64..<960))
+        XCTAssertEqual(slices[2], .init(context: 1_728..<2_500, retained: 64..<772))
+        XCTAssertEqual(slices.reduce(0) { $0 + $1.retained.count }, 2_500)
+        XCTAssertTrue(slices.allSatisfy { $0.context.count <= 1_024 })
+    }
+
+    func testAudioHealthAcceptsBalancedStereoAndReportsSignal() throws {
+        let waveform = MLXArray([
+            Float(0.2), -0.2, 0.1, -0.1, 0.3, -0.3, 0.2, -0.2,
+            Float(0.1), -0.1, 0.2, -0.2, 0.2, -0.2, 0.3, -0.3,
+        ]).reshaped(1, 2, 8)
+
+        let report = try MiniMaxMusic3AudioHealth.validate(waveform, sampleRate: 4)
+
+        XCTAssertEqual(report.sampleCount, 8)
+        XCTAssertEqual(report.peak, 0.3, accuracy: 1e-6)
+        XCTAssertGreaterThan(report.rms, 0.1)
+        XCTAssertEqual(report.stereoCollapseFraction, 0, accuracy: 1e-6)
+    }
+
+    func testAudioHealthRejectsSilentNonFinitePeakingAndCollapsedAudio() {
+        XCTAssertThrowsError(
+            try MiniMaxMusic3AudioHealth.validate(MLXArray.zeros([1, 2, 8]), sampleRate: 4)
+        )
+        XCTAssertThrowsError(
+            try MiniMaxMusic3AudioHealth.validate(
+                MLXArray([Float.nan, 0, 0, 0, 0, 0, 0, 0]).reshaped(1, 2, 4),
+                sampleRate: 4
+            )
+        )
+        XCTAssertThrowsError(
+            try MiniMaxMusic3AudioHealth.validate(
+                MLXArray([Float(9), 1, 1, 1, 1, 1, 1, 1]).reshaped(1, 2, 4),
+                sampleRate: 4
+            )
+        )
+        XCTAssertThrowsError(
+            try MiniMaxMusic3AudioHealth.validate(
+                MLXArray([
+                    Float(0.2), -0.2, 0.2, -0.2, 0.2, -0.2, 0.2, -0.2,
+                    Float(0), 0, 0, 0, 0, 0, 0, 0,
+                ]).reshaped(1, 2, 8),
+                sampleRate: 4
+            )
+        )
+    }
+
+    func testStageSeparatedSeedRecipeIsStableAndIndependent() {
+        let legacy = MiniMaxMusic3SeedStrategy.legacy.stageSeeds(seed: 37)
+        let first = MiniMaxMusic3SeedStrategy.stageSeparatedV1.stageSeeds(seed: 37)
+        let second = MiniMaxMusic3SeedStrategy.stageSeparatedV1.stageSeeds(seed: 37)
+
+        XCTAssertEqual(legacy.autoregressive, 37)
+        XCTAssertEqual(legacy.flow, 37)
+        XCTAssertEqual(first.autoregressive, second.autoregressive)
+        XCTAssertEqual(first.flow, second.flow)
+        XCTAssertNotEqual(first.autoregressive, first.flow)
+        XCTAssertNotEqual(first.autoregressive, 37)
+        XCTAssertNotEqual(first.flow, 37)
     }
 
     func testConditionEncoderProducesLatentAlignedShape() {

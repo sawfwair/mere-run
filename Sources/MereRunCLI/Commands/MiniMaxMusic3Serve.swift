@@ -16,6 +16,8 @@ struct MiniMaxMusic3SpeechRequest: Codable, Sendable {
     var minimumAudioDuration: Float?
     var minNewTokens: Int?
     var samplingTier: MiniMaxMusic3SamplingTier?
+    var flowStrategy: MiniMaxMusic3FlowStrategy?
+    var seedStrategy: MiniMaxMusic3SeedStrategy?
     var numInferenceSteps: Int?
     var guidanceScale: Float?
     var sampleRate: Int?
@@ -32,6 +34,8 @@ struct MiniMaxMusic3SpeechRequest: Codable, Sendable {
         case minimumAudioDuration = "minimum_audio_duration"
         case minNewTokens = "min_new_tokens"
         case samplingTier = "sampling_tier"
+        case flowStrategy = "flow_strategy"
+        case seedStrategy = "seed_strategy"
         case numInferenceSteps = "num_inference_steps"
         case guidanceScale = "guidance_scale"
         case sampleRate = "sample_rate"
@@ -201,7 +205,9 @@ private actor MiniMaxMusic3ServerSession {
                 maximumFrames: maximumFrames,
                 inferenceSteps: steps,
                 seed: request.seed ?? 0,
-                guidanceScale: guidanceScale
+                guidanceScale: guidanceScale,
+                flowStrategy: request.flowStrategy ?? .sequential,
+                seedStrategy: request.seedStrategy ?? .legacy
             ),
             sampleRate
         )

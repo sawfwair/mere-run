@@ -226,6 +226,7 @@ public enum MiniMaxMusic3ModelLoader {
 public enum MiniMaxMusic3Error: LocalizedError {
     case missingResources([URL])
     case invalidPrompt(String)
+    case invalidAudio(String)
     case generatedNoFrames
 
     public var errorDescription: String? {
@@ -234,6 +235,8 @@ public enum MiniMaxMusic3Error: LocalizedError {
             return "MiniMax Music 3 is missing required files: \(urls.map(\.path).joined(separator: ", "))"
         case .invalidPrompt(let reason):
             return "Invalid MiniMax Music 3 prompt: \(reason)"
+        case .invalidAudio(let reason):
+            return "Invalid MiniMax Music 3 audio: \(reason)"
         case .generatedNoFrames:
             return "MiniMax Music 3 ended before generating an audio frame."
         }

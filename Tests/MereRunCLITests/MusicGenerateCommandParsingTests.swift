@@ -88,6 +88,8 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
             "--memory-mode", "staged",
             "--performance-mode", "q8",
             "--sampling-tier", "fast",
+            "--flow-strategy", "overlap-average",
+            "--seed-strategy", "stage-separated-v1",
             "--profile-output", "/tmp/minimax-profile.json",
         ])
 
@@ -104,6 +106,8 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
         XCTAssertEqual(command.miniMaxLoadingStrategy, .staged)
         XCTAssertEqual(command.miniMaxPerformanceMode, .q8)
         XCTAssertEqual(command.miniMaxSamplingTier, .fast)
+        XCTAssertEqual(command.miniMaxFlowStrategy, .overlapAverage)
+        XCTAssertEqual(command.miniMaxSeedStrategy, .stageSeparatedV1)
         XCTAssertEqual(command.resolvedMiniMaxInferenceSteps, 24)
         XCTAssertEqual(command.miniMaxProfileOutput, "/tmp/minimax-profile.json")
     }

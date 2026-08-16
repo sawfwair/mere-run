@@ -199,6 +199,18 @@ struct MusicGenerate: AsyncParsableCommand {
     var miniMaxSamplingTier: MiniMaxMusic3SamplingTier?
 
     @Option(
+        name: [.customLong("flow-strategy")],
+        help: "MiniMax Music 3 long-form flow: sequential (default) or experimental overlap-average."
+    )
+    var miniMaxFlowStrategy: MiniMaxMusic3FlowStrategy?
+
+    @Option(
+        name: [.customLong("seed-strategy")],
+        help: "MiniMax Music 3 randomness: legacy (default) or stage-separated-v1."
+    )
+    var miniMaxSeedStrategy: MiniMaxMusic3SeedStrategy?
+
+    @Option(
         name: [.customLong("profile-output")],
         help: "Write detailed MiniMax Music 3 stage timings as JSON; profiling adds synchronization overhead."
     )
@@ -545,10 +557,12 @@ struct MusicGenerate: AsyncParsableCommand {
             || miniMaxLoadingStrategy != nil
             || miniMaxPerformanceMode != nil
             || miniMaxSamplingTier != nil
+            || miniMaxFlowStrategy != nil
+            || miniMaxSeedStrategy != nil
             || miniMaxProfileOutput != nil
         {
             throw ValidationError(
-                "MiniMax duration-frame, sample-rate, memory-mode, performance-mode, sampling-tier, and profiling options require MiniMax Music 3."
+                "MiniMax duration-frame, sample-rate, memory-mode, performance-mode, flow, seed, sampling-tier, and profiling options require MiniMax Music 3."
             )
         }
 
@@ -1199,6 +1213,12 @@ struct MusicGenerate: AsyncParsableCommand {
             CLIStderr.write("MiniMax performance mode: \(performanceMode.rawValue)\n")
         }
         let inferenceSteps = resolvedMiniMaxInferenceSteps
+        let flowStrategy = miniMaxFlowStrategy ?? .sequential
+        let seedStrategy = miniMaxSeedStrategy ?? .legacy
+        if !quiet {
+            CLIStderr.write("MiniMax flow strategy: \(flowStrategy.rawValue)\n")
+            CLIStderr.write("MiniMax seed strategy: \(seedStrategy.rawValue)\n")
+        }
         if !quiet {
             let samplingLabel = miniMaxSamplingTier?.rawValue ?? "quality"
             CLIStderr.write(
@@ -1229,7 +1249,9 @@ struct MusicGenerate: AsyncParsableCommand {
                 inferenceSteps: inferenceSteps,
                 seed: seed ?? 0,
                 guidanceScale: guidanceScale ?? 1.7,
-                profilingEnabled: miniMaxProfileOutput != nil
+                profilingEnabled: miniMaxProfileOutput != nil,
+                flowStrategy: flowStrategy,
+                seedStrategy: seedStrategy
             ),
             progress: { event in
                 guard !quiet else { return }
@@ -1308,6 +1330,9 @@ struct MusicGenerate: AsyncParsableCommand {
                 outputSampleRate: outputSampleRate,
                 loadingStrategy: loadingStrategy,
                 performanceMode: performanceMode,
+                flowStrategy: flowStrategy,
+                seedStrategy: seedStrategy,
+                audioHealth: result.audioHealth,
                 export: exportOptions,
                 outputFilename: outputURL.lastPathComponent,
                 outputSHA256: try ModelArtifactPin.fileSHA256(outputURL)
