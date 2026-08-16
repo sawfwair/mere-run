@@ -273,6 +273,154 @@ final class FalconPerceptionProcessorTests: MereRunCoreTestCase {
         XCTAssertEqual(selected.1?.asArray(Float.self), [14, 15, 10, 11, 16, 17])
     }
 
+    func testFalconBatchPositionDataLeftPadsWithoutExposingPaddingKeys() {
+        let config = FalconPerceptionModelConfig()
+        let padID = 0
+        let first = [
+            padID,
+            padID,
+            17,
+            config.imageCLSTokenID,
+            config.imageReg1TokenID,
+            config.imageReg2TokenID,
+            config.imageReg3TokenID,
+            config.imageReg4TokenID,
+            config.imgID,
+            config.imgEndID,
+            23,
+        ]
+        let second = [
+            19,
+            config.imageCLSTokenID,
+            config.imageReg1TokenID,
+            config.imageReg2TokenID,
+            config.imageReg3TokenID,
+            config.imageReg4TokenID,
+            config.imgID,
+            config.imgID,
+            config.imgID,
+            config.imgEndID,
+            29,
+        ]
+        let inputIDs = MLXArray((first + second).map(Int32.init), [2, first.count])
+        let imageGridHW = MLXArray([
+            Int32(1), Int32(1),
+            Int32(1), Int32(3),
+        ], [2, 2])
+
+        let result = FalconPerceptionModel.computeBatchPositionData(
+            inputIDs: inputIDs,
+            config: config,
+            imageGridHW: imageGridHW,
+            padTokenID: padID
+        )
+
+        XCTAssertEqual(result.positionIDs.shape, [2, first.count])
+        XCTAssertEqual(result.posHW.shape, [2, first.count, 2])
+        XCTAssertEqual(result.attentionMask.shape, [2, 1, first.count, first.count])
+        XCTAssertEqual(result.padCounts, [2, 0])
+        XCTAssertEqual(result.ropeDeltas.count, 2)
+
+        let mask = result.attentionMask.asArray(Bool.self)
+        let side = first.count
+        func value(batch: Int, query: Int, key: Int) -> Bool {
+            mask[(batch * side * side) + (query * side) + key]
+        }
+        XCTAssertFalse(value(batch: 0, query: side - 1, key: 0))
+        XCTAssertFalse(value(batch: 0, query: side - 1, key: 1))
+        XCTAssertTrue(value(batch: 0, query: side - 1, key: 2))
+        XCTAssertTrue(value(batch: 1, query: side - 1, key: 0))
+    }
+
+    func testFalconBatchRotaryTablesPreserveBatchDimension() {
+        let frequencies = MLXArray([
+            Float(1), 0, 0, 1,
+            0.5, 0.25, -1, 1,
+        ], [2, 2, 2])
+        let positions = MLXArray([
+            Float(1), 2,
+            -1, 0.5,
+            0.25, -0.75,
+            2, 1,
+        ], [2, 2, 2])
+
+        let (cosines, sines) = FalconPerceptionModel.computeGoldenFrequencies(
+            freqsGolden: frequencies,
+            posHW: positions
+        )
+        MLX.eval(cosines, sines)
+
+        XCTAssertEqual(cosines.shape, [2, 2, 2, 2])
+        XCTAssertEqual(sines.shape, [2, 2, 2, 2])
+
+        let cosineTable = MLXArray((0..<10).map(Float.init), [5, 2])
+        let selected = FalconPerceptionModel.selectCosSinTables(
+            positionIDs: MLXArray([Int32(2), 0, 3, 1], [2, 2]),
+            cosTable: cosineTable,
+            sinTable: cosineTable + 10
+        )
+        XCTAssertEqual(selected.0?.shape, [2, 2, 2])
+        XCTAssertEqual(selected.0?.asArray(Float.self), [4, 5, 0, 1, 6, 7, 2, 3])
+    }
+
+    func testFalconMergeImageFeaturesKeepsPaddedBatchPatchesOutOfOtherRows() {
+        let config = FalconPerceptionModelConfig(
+            textConfig: FalconPerceptionTextConfig(
+                hiddenSize: 2,
+                numHiddenLayers: 1,
+                numAttentionHeads: 1,
+                headDim: 2,
+                numKeyValueHeads: 1,
+                vocabSize: 512,
+                intermediateSize: 4,
+                maxPositionEmbeddings: 32
+            ),
+            visionConfig: FalconPerceptionVisionConfig(
+                spatialPatchSize: 1,
+                temporalPatchSize: 1,
+                channelSize: 3
+            ),
+            vocabSize: 512,
+            coordEncDim: 2,
+            coordDecDim: 2,
+            coordOutDim: 4,
+            sizeEncDim: 2,
+            sizeDecDim: 2,
+            sizeOutDim: 4
+        )
+        let model = FalconPerceptionModel(config: config)
+        let inputIDs = MLXArray([
+            Int32(config.imgID), Int32(config.imgID), 9, 9,
+            Int32(config.imgID), 9, 9, 9,
+        ], [2, 4])
+        let inputEmbeds = MLX.zeros([2, 4, 2], dtype: .float32)
+        let imageFeatures = MLXArray([
+            Float(1), 2,
+            3, 4,
+            5, 6,
+            7, 8,
+        ], [4, 2])
+        let imageGridHW = MLXArray([
+            Int32(1), Int32(2),
+            Int32(1), Int32(1),
+        ], [2, 2])
+
+        let merged = model.mergeImageFeatures(
+            imageTokenID: config.imgID,
+            imageFeatures: imageFeatures,
+            inputsEmbeds: inputEmbeds,
+            inputIDs: inputIDs,
+            imageGridHW: imageGridHW,
+            paddedGridHW: (1, 2)
+        )
+        MLX.eval(merged)
+
+        XCTAssertEqual(merged[0, 0].asArray(Float.self), [1, 2])
+        XCTAssertEqual(merged[0, 1].asArray(Float.self), [3, 4])
+        XCTAssertEqual(merged[1, 0].asArray(Float.self), [5, 6])
+        XCTAssertEqual(merged[1, 1].asArray(Float.self), [0, 0])
+    }
+
     func testCachedDecodeMatchesFullForwardForPresenceStep() {
         let config = FalconPerceptionModelConfig(
             textConfig: FalconPerceptionTextConfig(

@@ -21,6 +21,13 @@ public struct FalconPerceptionProcessedInput: @unchecked Sendable {
     }
 }
 
+struct FalconPerceptionProcessedBatch: @unchecked Sendable {
+    let inputIDs: MLXArray
+    let pixelValues: MLXArray
+    let imageGridHW: MLXArray
+    let processedSizes: [(width: Int, height: Int)]
+}
+
 public enum FalconPerceptionProcessorError: LocalizedError {
     case unsupportedPlatform
     case invalidImage(URL)
@@ -59,6 +66,51 @@ public struct FalconPerceptionProcessor: @unchecked Sendable {
             throw FalconPerceptionProcessorError.invalidImage(imageURL)
         }
         return process(imageRGBA: image, query: query)
+    }
+
+    func processBatch(_ inputs: [FalconPerceptionBatchInput]) throws -> FalconPerceptionProcessedBatch {
+        precondition(!inputs.isEmpty, "Falcon batch preprocessing requires at least one input.")
+        let processed = try inputs.map { try process(imageURL: $0.imageURL, query: $0.query) }
+        let maximumSequenceLength = processed.map { $0.inputIDs.dim(1) }.max() ?? 0
+        let maximumHeight = processed.map { $0.pixelValues.dim(1) }.max() ?? 0
+        let maximumWidth = processed.map { $0.pixelValues.dim(2) }.max() ?? 0
+
+        var tokenValues = [Int32]()
+        var pixelRows = [MLXArray]()
+        var gridValues = [Int32]()
+        var processedSizes = [(width: Int, height: Int)]()
+        tokenValues.reserveCapacity(inputs.count * maximumSequenceLength)
+        pixelRows.reserveCapacity(inputs.count)
+        gridValues.reserveCapacity(inputs.count * 2)
+        processedSizes.reserveCapacity(inputs.count)
+
+        for item in processed {
+            let ids = item.inputIDs.asArray(Int32.self)
+            tokenValues.append(
+                contentsOf: Array(repeating: Int32(tokenizer.padTokenID), count: maximumSequenceLength - ids.count)
+            )
+            tokenValues.append(contentsOf: ids)
+            pixelRows.append(
+                padded(
+                    item.pixelValues,
+                    widths: [
+                        [0, 0],
+                        [0, maximumHeight - item.pixelValues.dim(1)],
+                        [0, maximumWidth - item.pixelValues.dim(2)],
+                        [0, 0],
+                    ]
+                )
+            )
+            gridValues.append(contentsOf: item.imageGridHW.asArray(Int32.self))
+            processedSizes.append(item.processedSize)
+        }
+
+        return FalconPerceptionProcessedBatch(
+            inputIDs: MLXArray(tokenValues, [inputs.count, maximumSequenceLength]),
+            pixelValues: concatenated(pixelRows, axis: 0),
+            imageGridHW: MLXArray(gridValues, [inputs.count, 2]),
+            processedSizes: processedSizes
+        )
     }
 
     public func process(imageRGBA: MediaImage, query: String) -> FalconPerceptionProcessedInput {

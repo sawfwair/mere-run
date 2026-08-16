@@ -70,6 +70,35 @@ public struct FalconPerceptionGroundingRun: Hashable, Sendable {
     public let metadata: FalconPerceptionGroundingMetadata
 }
 
+public struct FalconPerceptionBatchInput: Hashable, Sendable {
+    public let imageURL: URL
+    public let query: String
+
+    public init(imageURL: URL, query: String) {
+        self.imageURL = imageURL
+        self.query = query
+    }
+}
+
+public struct FalconPerceptionBatchResult: Hashable, Sendable {
+    public let modelID: String
+    public let imageURL: URL
+    public let query: String
+    public let detections: [FalconPerceptionDetection]
+
+    public init(
+        modelID: String,
+        imageURL: URL,
+        query: String,
+        detections: [FalconPerceptionDetection]
+    ) {
+        self.modelID = modelID
+        self.imageURL = imageURL
+        self.query = query
+        self.detections = detections
+    }
+}
+
 public final class FalconPerceptionGrounder: @unchecked Sendable {
     public enum GrounderError: LocalizedError, Sendable {
         case invalidModelRoot(URL, details: [String])
@@ -309,6 +338,228 @@ public final class FalconPerceptionGrounder: @unchecked Sendable {
             detections: detections,
             metadata: metadata
         )
+    }
+
+    public func groundBatch(
+        inputs: [FalconPerceptionBatchInput],
+        maxNewTokens: Int = 512
+    ) throws -> [FalconPerceptionBatchResult] {
+        guard !inputs.isEmpty else {
+            throw GrounderError.failedToEncodeMetadata("At least one batch input is required.")
+        }
+        let normalizedInputs = try inputs.map { input in
+            let query = input.query.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !query.isEmpty else {
+                throw GrounderError.failedToEncodeMetadata("Every batch input requires a non-empty query.")
+            }
+            return FalconPerceptionBatchInput(imageURL: input.imageURL, query: query)
+        }
+        guard maxNewTokens > 0 else {
+            throw GrounderError.failedToEncodeMetadata("maxNewTokens must be greater than zero.")
+        }
+        defer { clearCache() }
+
+        let state = try ensureLoaded()
+        let processed = try state.processor.processBatch(normalizedInputs)
+        let model = state.model
+        let config = state.config
+        let batchSize = normalizedInputs.count
+        model.resetGroundingState()
+        defer { model.resetGroundingState() }
+
+        let positionData = FalconPerceptionModel.computeBatchPositionData(
+            inputIDs: processed.inputIDs,
+            config: config,
+            imageGridHW: processed.imageGridHW,
+            padTokenID: state.tokenizer.padTokenID
+        )
+        let caches = model.makeCaches()
+        let inputsEmbeds = model.makeInputEmbeddings(
+            inputIDs: processed.inputIDs,
+            pixelValues: processed.pixelValues,
+            imageGridHW: processed.imageGridHW
+        )
+        var logits = model.forward(
+            inputIDs: processed.inputIDs,
+            inputsEmbeds: inputsEmbeds,
+            mask: positionData.attentionMask,
+            caches: caches,
+            positionIDs: positionData.positionIDs,
+            posHW: positionData.posHW,
+            lastPositionOnly: true
+        )
+        MLX.eval(logits)
+
+        var preparedDetections = Array(repeating: [PreparedDetection](), count: batchSize)
+        var currentXY = [FalconPerceptionCenter?](repeating: nil, count: batchSize)
+        var currentHW = [FalconPerceptionSize?](repeating: nil, count: batchSize)
+        var stopped = [Bool](repeating: false, count: batchSize)
+
+        for _ in 0..<maxNewTokens where stopped.contains(false) {
+            let lastLogits = logits[0..., logits.dim(1) - 1, 0...]
+            var tokenIDs = MLX.argMax(lastLogits, axis: -1).asArray(Int32.self).map(Int.init)
+            guard tokenIDs.count == batchSize else {
+                throw GrounderError.failedToEncodeMetadata("Falcon batch decode returned an invalid token batch.")
+            }
+
+            let needsCoordinates = tokenIDs.contains(config.coordTokenID)
+            let needsSizes = tokenIDs.contains(config.sizeTokenID)
+            let hiddenLast: MLXArray?
+            if needsCoordinates || needsSizes {
+                guard let hiddenState = model.lastHiddenState else {
+                    throw GrounderError.failedToEncodeMetadata("Falcon batch decode did not expose hidden state.")
+                }
+                hiddenLast = hiddenState[0..., hiddenState.dim(1) - 1, 0...]
+            } else {
+                hiddenLast = nil
+            }
+            let coordLogits = needsCoordinates ? hiddenLast.map(model.decodeCoordinates) : nil
+            let coordBins = coordLogits.map {
+                MLX.argMax($0, axis: -1).asArray(Int32.self).map(Int.init)
+            } ?? []
+            let coordBinCount = max(1, (coordLogits?.dim(-1) ?? 1) - 1)
+            let sizeValues = needsSizes
+                ? hiddenLast.map { model.processSizes(model.decodeSizes(from: $0)).asArray(Float.self) } ?? []
+                : []
+
+            var encodedCoordinates = [Float](repeating: 0, count: batchSize * 2)
+            var encodedSizes = [Float](repeating: 0, count: batchSize * 2)
+            for batchIndex in 0..<batchSize {
+                if stopped[batchIndex] {
+                    tokenIDs[batchIndex] = state.tokenizer.padTokenID
+                    continue
+                }
+                let tokenID = tokenIDs[batchIndex]
+                if tokenID == config.eosID {
+                    stopped[batchIndex] = true
+                    tokenIDs[batchIndex] = state.tokenizer.padTokenID
+                    continue
+                }
+
+                if tokenID == config.coordTokenID {
+                    if let xy = currentXY[batchIndex], let hw = currentHW[batchIndex] {
+                        preparedDetections[batchIndex].append(
+                            PreparedDetection(
+                                label: normalizedInputs[batchIndex].query,
+                                xy: xy,
+                                hw: hw,
+                                box: Self.boundingBox(xy: xy, hw: hw),
+                                score: nil,
+                                binaryMask: nil,
+                                maskPath: nil
+                            )
+                        )
+                    }
+                    let valueOffset = batchIndex * 2
+                    let xy = FalconPerceptionCenter(
+                        x: Float(coordBins[valueOffset]) / Float(coordBinCount),
+                        y: Float(coordBins[valueOffset + 1]) / Float(coordBinCount)
+                    )
+                    currentXY[batchIndex] = xy
+                    currentHW[batchIndex] = nil
+                    encodedCoordinates[valueOffset] = xy.x
+                    encodedCoordinates[valueOffset + 1] = xy.y
+                } else if tokenID == config.sizeTokenID {
+                    let valueOffset = batchIndex * 2
+                    let hw = FalconPerceptionSize(
+                        h: sizeValues[valueOffset],
+                        w: sizeValues[valueOffset + 1]
+                    )
+                    currentHW[batchIndex] = hw
+                    encodedSizes[valueOffset] = hw.h
+                    encodedSizes[valueOffset + 1] = hw.w
+                } else if tokenID == config.segTokenID {
+                    if let xy = currentXY[batchIndex], let hw = currentHW[batchIndex] {
+                        preparedDetections[batchIndex].append(
+                            PreparedDetection(
+                                label: normalizedInputs[batchIndex].query,
+                                xy: xy,
+                                hw: hw,
+                                box: Self.boundingBox(xy: xy, hw: hw),
+                                score: nil,
+                                binaryMask: nil,
+                                maskPath: nil
+                            )
+                        )
+                    }
+                    currentXY[batchIndex] = nil
+                    currentHW[batchIndex] = nil
+                }
+            }
+
+            if stopped.allSatisfy({ $0 }) {
+                break
+            }
+
+            let tokenArray = MLXArray(tokenIDs.map(Int32.init), [batchSize, 1])
+            var tokenEmbeds = model.embedTokens(tokenArray)
+            if needsCoordinates {
+                tokenEmbeds = model.encodeCoordinates(
+                    into: tokenEmbeds,
+                    inputIDs: tokenArray,
+                    coordXY: MLXArray(encodedCoordinates, [batchSize, 2])
+                )
+            }
+            if needsSizes {
+                tokenEmbeds = model.encodeSizes(
+                    into: tokenEmbeds,
+                    inputIDs: tokenArray,
+                    sizeHW: MLXArray(encodedSizes, [batchSize, 2])
+                )
+            }
+
+            let cacheOffset = caches.first??.offset ?? 0
+            let decodePositions = positionData.ropeDeltas.map { Int32(cacheOffset + $0) }
+            let totalKeys = cacheOffset + 1
+            var decodeMask = [Bool]()
+            decodeMask.reserveCapacity(batchSize * totalKeys)
+            for batchIndex in 0..<batchSize {
+                for keyIndex in 0..<totalKeys {
+                    decodeMask.append(keyIndex >= positionData.padCounts[batchIndex])
+                }
+            }
+            logits = model.forward(
+                inputIDs: tokenArray,
+                inputsEmbeds: tokenEmbeds,
+                mask: MLXArray(decodeMask, [batchSize, 1, 1, totalKeys]),
+                caches: caches,
+                positionIDs: MLXArray(decodePositions, [batchSize, 1]),
+                posHW: MLX.zeros([batchSize, 1, 2], dtype: .float32),
+                lastPositionOnly: true
+            )
+            MLX.eval(logits)
+        }
+
+        return normalizedInputs.enumerated().map { batchIndex, input in
+            if let xy = currentXY[batchIndex], let hw = currentHW[batchIndex] {
+                preparedDetections[batchIndex].append(
+                    PreparedDetection(
+                        label: input.query,
+                        xy: xy,
+                        hw: hw,
+                        box: Self.boundingBox(xy: xy, hw: hw),
+                        score: nil,
+                        binaryMask: nil,
+                        maskPath: nil
+                    )
+                )
+            }
+            return FalconPerceptionBatchResult(
+                modelID: modelID,
+                imageURL: input.imageURL.standardizedFileURL,
+                query: input.query,
+                detections: preparedDetections[batchIndex].map {
+                    FalconPerceptionDetection(
+                        label: $0.label,
+                        xy: $0.xy,
+                        hw: $0.hw,
+                        box: $0.box,
+                        score: $0.score,
+                        maskPath: nil
+                    )
+                }
+            )
+        }
     }
 
     private func createParentDirectoryIfNeeded(for url: URL) throws {
