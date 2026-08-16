@@ -6,20 +6,69 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
-### Runtime
+## 0.40.0 - 2026-08-16
+
+This release adds bounded native Falcon Perception batching, promotes the
+Qwen3.8 MTP crown into the managed 4-bit runtime, and makes long-form MiniMax
+Music 3 generation substantially more memory-bounded. It also refreshes the
+owned MLX dependency chain and adds a guarded MiniMax-H3 Metal projection lab
+without changing production H3 dispatch.
+
+### Vision and API
 
 - added bounded dense batching to the resident Falcon Perception vision
   service. The new endpoint performs one native MLX prefill/decode pass for up
   to 32 image-query pairs, returns ordered per-image hashes and detections, and
   preserves task-scoped CPU/GPU streams across asynchronous executor hops.
+
+### Text runtime
+
 - accelerated opt-in Qwen3.8 greedy MTP with committed target-history priming,
   a proposal-only compact vocabulary, fused draft-token selection, and
   acceptance-adaptive draft depth. Target logits remain authoritative for every
   emitted token, and sampled MTP retains its full-vocabulary probability path.
+  A matched warm 256-token native run improved decode from 26.81 to 43.69
+  tokens/second (`1.63x`) with identical visible output; a 64-token pair did not
+  amortize MTP setup, so no short-generation speedup is claimed.
 - aligned the managed Qwen3.8 27B 4-bit lane with the pinned MLX Fast reference
   target and its 4-bit/group-64 MTP head, while retaining Qwen's official
   Apache-2.0 license. Standalone bare-name MTP weights now load and normalize
   correctly instead of leaving an uninitialized proposal head.
+
+### Music
+
+- added an opt-in MiniMax Music 3 whole-song flow path that averages
+  overlapping window velocities at every Euler step, bounded long-latent DAV
+  decode, and a versioned stage-separated random recipe. Released sequential
+  windowing and shared-stream seeded output remain the defaults.
+- added mandatory MiniMax output-integrity validation for non-finite samples,
+  silence, implausible peaks, and stereo-channel collapse. Schema 5 recipes
+  record the measured peak, RMS, sample count, and collapse fraction.
+- bounded optimized MiniMax autoregressive allocator growth by returning
+  completed variable-length attention buffers every 64 frames. A matched
+  forced 120-second Q8/draft render reduced peak physical footprint from
+  110.20 GB to 23.78 GB with zero swaps and a byte-identical float32 WAV; the
+  autoregressive stage changed from 144.75 to 151.05 seconds.
+- accelerated bounded DAV decoding on the same 120-second fixture from 15.95
+  to 9.43 seconds. The exact post-refresh replay remained byte-identical, while
+  the full inference run was 6.8% slower, so no dependency-refresh speedup is
+  claimed.
+
+### Dependencies and research
+
+- refreshed the owned MLX and mlx-swift revisions and rebuilt the vendored
+  provenance-stamped Metal library from those immutable pins.
+- added a lab-only BF16 MPP projection kernel candidate for MiniMax-H3 on
+  current Metal 4 Macs. Production dispatch is unchanged; the practical-shape
+  benchmark correctly refused a loaded host, so this release makes no H3
+  performance claim from the candidate.
+
+### Included pull requests
+
+- exact release range: [#309](https://github.com/sawfwair/mere-run/pull/309),
+  [#310](https://github.com/sawfwair/mere-run/pull/310),
+  [#311](https://github.com/sawfwair/mere-run/pull/311), and
+  [#312](https://github.com/sawfwair/mere-run/pull/312).
 
 ## 0.39.0 - 2026-08-15
 
@@ -119,18 +168,6 @@ Qwen3.8 MTP stays opt-in; target-only decode remains the default.
 
 ### Music
 
-- added an opt-in MiniMax Music 3 whole-song flow path that averages
-  overlapping window velocities at every Euler step, bounded long-latent DAV
-  decode, and a versioned stage-separated random recipe. Released sequential
-  windowing and shared-stream seeded output remain the defaults.
-- added mandatory MiniMax output-integrity validation for non-finite samples,
-  silence, implausible peaks, and stereo-channel collapse. Schema 5 recipes
-  record the measured peak, RMS, sample count, and collapse fraction.
-- bounded optimized MiniMax autoregressive allocator growth by returning
-  completed variable-length attention buffers every 64 frames. A matched
-  forced 120-second Q8/draft render reduced peak physical footprint from
-  110.20 GB to 23.78 GB with zero swaps and a byte-identical float32 WAV; the
-  autoregressive stage changed from 144.75 to 151.05 seconds.
 - accelerated MiniMax Music 3 on Apple Silicon with a reachable 16,385-row
   semantic head, fused QKV and gate/up projections, incremental residual-depth
   KV caches, cached rotary/zero conditioning, batched flow guidance, and fewer
