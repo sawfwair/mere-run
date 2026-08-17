@@ -668,6 +668,25 @@ enum WorkflowNodeCommandBuilder {
                 ],
                 streamsEvents: false
             )
+        case "text.generate":
+            var args = [
+                "text", "chat",
+                "--prompt", try requiredString("prompt", in: arguments),
+            ]
+            appendString("model", flag: "--model", from: arguments, to: &args)
+            appendString("system", flag: "--system", from: arguments, to: &args)
+            appendInteger("max_tokens", flag: "--max-tokens", from: arguments, to: &args)
+            appendNumber("temperature", flag: "--temperature", from: arguments, to: &args)
+            args += ["--require-installed", "--quiet"]
+            return .init(
+                command: ["text", "chat"],
+                executable: CurrentExecutable.url(),
+                preflightArguments: args + ["--preflight", "--json"],
+                runArguments: args,
+                outputs: ["text": valueOutput(.string)],
+                streamsEvents: false,
+                stdoutOutputName: "text"
+            )
         case "text.embed":
             let output = artifacts.appendingPathComponent("embeddings.json")
             var args = ["text", "embed", try requiredString("text", in: arguments), "--output", output.path]
