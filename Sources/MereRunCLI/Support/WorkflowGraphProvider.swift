@@ -1,7 +1,7 @@
 import ArgumentParser
+import MereRunRelayKit
 import Foundation
 import MereRunCore
-import MereRunRelayKit
 
 struct WorkflowPluginGraphProviderDocument: Codable, Equatable, Sendable {
     static let contractVersion = "mere.run/plugin-graph-provider.v1"

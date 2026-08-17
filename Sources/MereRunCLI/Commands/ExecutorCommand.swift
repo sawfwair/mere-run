@@ -1,10 +1,10 @@
 import ArgumentParser
+import MereRunRelayKit
 import Foundation
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
 import MereRunCore
-import MereRunRelayKit
 
 struct WorkflowExecutorListResult: Codable, Equatable {
     let profiles: [WorkflowExecutorProfile]

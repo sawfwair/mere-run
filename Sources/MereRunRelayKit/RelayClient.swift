@@ -360,3 +360,208 @@ package func encodedPathSegment(_ value: String) throws -> String {
     }
     return encoded
 }
+
+public extension RelayWorkflowExecutor {
+    /// Materialized-bundle submission: create, upload missing assets by
+    /// digest, commit, and record the local run. `pluginNodes` feeds the
+    /// validation pass for the local run record; clients without plugin
+    /// discovery pass an empty list.
+    func submit(
+        bundleDirectory: URL,
+        localRunDirectory: URL,
+        pluginNodes: [WorkflowNodeCatalogEntry]
+    ) async throws -> WorkflowRemoteJob {
+        let graph = try WorkflowGraphDocument.load(from: bundleDirectory.appendingPathComponent("graph.json"))
+        let inputs = try WorkflowInputsDocument.load(from: bundleDirectory.appendingPathComponent("inputs.json"))
+        let assets = try WorkflowBundleCodec.decoder().decode(
+            WorkflowAssetManifest.self,
+            from: Data(contentsOf: bundleDirectory.appendingPathComponent(WorkflowAssetManifest.filename))
+        )
+        let job = try WorkflowBundleCodec.decoder().decode(
+            WorkflowJobManifest.self,
+            from: Data(contentsOf: bundleDirectory.appendingPathComponent(WorkflowJobManifest.filename))
+        )
+        try validateWorker(try await probe(), for: job, executor: "relay:\(profile.name)", allowMixedBackend: true)
+        let createBody = RelayGraphCreateRequest(
+            job: job,
+            graph: graph,
+            inputs: inputs,
+            assets: assets,
+            bundleDocuments: try Dictionary(uniqueKeysWithValues: [
+                WorkflowJobManifest.filename,
+                "graph.json",
+                "inputs.json",
+                WorkflowAssetManifest.filename,
+            ].map { path in
+                (path, try Data(contentsOf: bundleDirectory.appendingPathComponent(path)))
+            })
+        )
+        let createData = try await request(
+            path: "/api/graph-jobs",
+            method: "POST",
+            body: try WorkflowBundleCodec.encoder().encode(createBody)
+        )
+        let created = try JSONDecoder().decode(RelayGraphCreateResponse.self, from: createData)
+        let assetRoot = bundleDirectory.appendingPathComponent("assets/sha256", isDirectory: true)
+        for digest in created.missingAssetDigests {
+            let url = assetRoot.appendingPathComponent(digest)
+            let data = try Data(contentsOf: url)
+            guard ModelArtifactPinDigest.sha256(data) == digest else {
+                throw RelayClientError("Job bundle asset digest mismatch before relay upload: \(digest)")
+            }
+            _ = try await request(
+                path: "/api/graph-jobs/\(created.jobID)/assets/\(digest)",
+                method: "PUT",
+                contentType: "application/octet-stream",
+                body: data,
+                transientRetryAttempts: 3
+            )
+        }
+        let commitData = try await request(
+            path: "/api/graph-jobs/\(created.jobID)/commit",
+            method: "POST",
+            body: Data("{}".utf8)
+        )
+        let committed = try WorkflowBundleCodec.decoder().decode(RelayGraphJobResponse.self, from: commitData)
+        let reference = "relay://\(profile.name)/\(committed.jobID)"
+        try initializeRemoteRunRecord(
+            bundleDirectory: bundleDirectory,
+            runDirectory: localRunDirectory,
+            executor: .init(kind: "relay", profile: profile.name, jobReference: reference),
+            state: committed.state,
+            pluginNodes: pluginNodes
+        )
+        return committed.remoteJob(profile: profile.name, localRunDirectory: localRunDirectory.path)
+    }
+}
+
+package struct RelayGraphCreateRequest: Codable {
+    let job: WorkflowJobManifest
+    let graph: WorkflowGraphDocument
+    let inputs: WorkflowInputsDocument
+    let assets: WorkflowAssetManifest
+    let bundleDocuments: [String: Data]
+
+    enum CodingKeys: String, CodingKey {
+        case job
+        case graph
+        case inputs
+        case assets
+        case bundleDocuments = "bundle_documents"
+    }
+}
+
+package func initializeRemoteRunRecord(
+    bundleDirectory: URL,
+    runDirectory: URL,
+    executor: GraphRunExecutorRecord,
+    state: GraphRunState,
+    pluginNodes: [WorkflowNodeCatalogEntry]
+) throws {
+    let graph = try WorkflowGraphDocument.load(from: bundleDirectory.appendingPathComponent("graph.json"))
+    let inputs = try WorkflowInputsDocument.load(from: bundleDirectory.appendingPathComponent("inputs.json"))
+    let job = try WorkflowBundleCodec.decoder().decode(
+        WorkflowJobManifest.self,
+        from: Data(contentsOf: bundleDirectory.appendingPathComponent(WorkflowJobManifest.filename))
+    )
+    let validation = WorkflowGraphValidator.validate(graph: graph, inputs: inputs, pluginNodes: pluginNodes)
+    let nodesByID = Dictionary(uniqueKeysWithValues: graph.nodes.map { ($0.id, $0) })
+    let now = Date()
+    let manifest = GraphRunManifest(
+        contractVersion: GraphRunManifest.contractVersion,
+        jobID: job.jobID,
+        graphName: graph.name,
+        graphFingerprint: job.graphFingerprint,
+        state: state,
+        createdAt: now,
+        updatedAt: now,
+        attempt: 1,
+        executor: executor,
+        nodes: validation.order.compactMap { id in
+            nodesByID[id].map {
+                GraphRunNodeRecord(
+                    id: id,
+                    kind: $0.kind,
+                    state: .planned,
+                    startedAt: nil,
+                    completedAt: nil,
+                    exitStatus: nil,
+                    attempt: 0,
+                    maxAttempts: $0.execution?.resolvedMaxAttempts ?? 1,
+                    fingerprint: "",
+                    artifacts: [],
+                    error: nil
+                )
+            }
+        },
+        outputs: [],
+        error: nil
+    )
+    try WorkflowBundleCodec.write(manifest, to: runDirectory.appendingPathComponent(GraphRunManifest.filename))
+    // The declarative-action type stays with the CLI; an empty action list
+    // encodes identically regardless of element type.
+    try WorkflowBundleCodec.write([String](), to: runDirectory.appendingPathComponent("actions.json"))
+}
+
+public func validateWorker(
+    _ worker: WorkflowExecutorProbe,
+    for job: WorkflowJobManifest,
+    executor: String,
+    allowMixedBackend: Bool = false
+) throws {
+    guard worker.contractVersions.contains(job.contractVersion) else {
+        throw RelayClientError("Executor '\(executor)' does not support \(job.contractVersion).")
+    }
+    guard workflowVersion(worker.workerVersion, satisfiesMinimum: job.requirements.minimumMereRunVersion) else {
+        throw RelayClientError(
+            "Executor '\(executor)' reports mere.run \(worker.workerVersion); job requires \(job.requirements.minimumMereRunVersion) or newer."
+        )
+    }
+    let missingKinds = job.requirements.nodeKinds.filter { !worker.nodeKinds.contains($0) }
+    guard missingKinds.isEmpty else {
+        throw RelayClientError("Executor '\(executor)' is missing node kinds: \(missingKinds.joined(separator: ", ")).")
+    }
+    let missingProviders = job.requirements.providers.filter { !worker.providers.contains($0) }
+    guard missingProviders.isEmpty else {
+        let descriptions = missingProviders.map { "\($0.id)@\($0.version) [\($0.catalogSHA256)]" }
+        throw RelayClientError(
+            "Executor '\(executor)' is missing exact graph providers: \(descriptions.joined(separator: ", "))."
+        )
+    }
+    let missingModels = job.requirements.modelIDs.filter { !worker.installedModelIDs.contains($0) }
+    guard missingModels.isEmpty else {
+        throw RelayClientError("Executor '\(executor)' is missing models: \(missingModels.joined(separator: ", ")).")
+    }
+    let missingSecrets = job.requirements.secretNames.filter { !worker.availableSecretNames.contains($0) }
+    guard missingSecrets.isEmpty else {
+        throw RelayClientError(
+            "Executor '\(executor)' is missing configured secrets: \(missingSecrets.joined(separator: ", "))."
+        )
+    }
+    let backendAccepted = job.requirements.acceleratorBackends.contains(worker.acceleratorBackend)
+        || (allowMixedBackend && worker.acceleratorBackend == "mixed")
+    guard backendAccepted else {
+        throw RelayClientError(
+            "Executor '\(executor)' uses \(worker.acceleratorBackend); accepted backends are \(job.requirements.acceleratorBackends.joined(separator: ", "))."
+        )
+    }
+    if let minimum = job.requirements.minimumAcceleratorMemoryBytes,
+       worker.memoryBytes < UInt64(minimum) {
+        throw RelayClientError("Executor '\(executor)' does not have the required accelerator memory.")
+    }
+    if let minimum = job.requirements.minimumSystemMemoryBytes,
+       worker.systemMemoryBytes < UInt64(minimum) {
+        throw RelayClientError("Executor '\(executor)' does not have the required system memory.")
+    }
+    if let minimum = job.requirements.minimumCPUCores,
+       worker.logicalCPUCores < minimum {
+        throw RelayClientError("Executor '\(executor)' does not have the required CPU cores.")
+    }
+    if let minimum = job.requirements.minimumDiskBytes,
+       worker.availableDiskBytes.map({ $0 < minimum }) != false {
+        throw RelayClientError("Executor '\(executor)' does not report the required free disk space.")
+    }
+    if job.requirements.networkAccess, !worker.networkAccess {
+        throw RelayClientError("Executor '\(executor)' does not allow required network access.")
+    }
+}

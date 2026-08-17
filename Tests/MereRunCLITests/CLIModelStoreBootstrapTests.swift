@@ -1,4 +1,5 @@
 import Foundation
+import MereRunRelayKit
 import XCTest
 import MereRunCore
 @testable import MereRunCLI

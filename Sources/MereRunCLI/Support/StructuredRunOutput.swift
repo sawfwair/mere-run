@@ -1,4 +1,5 @@
 import ArgumentParser
+import MereRunRelayKit
 import Foundation
 
 enum StructuredRunMode: String, Codable, Equatable, Sendable {
@@ -9,19 +10,6 @@ enum StructuredRunMode: String, Codable, Equatable, Sendable {
     case inspection
     case materialize
 }
-enum StructuredRunStatus: String, Codable, Equatable, Sendable {
-    case ok
-    case warning
-    case blocked
-    case planned
-    case queued
-    case assigned
-    case running
-    case finished
-    case failed
-    case cancelled
-}
-
 struct StructuredRunEnvelope<Request: Codable & Equatable, Result: Codable & Equatable>: Codable, Equatable {
     let schemaVersion: Int
     let mereRunVersion: String
@@ -49,70 +37,6 @@ struct StructuredRunEnvelope<Request: Codable & Equatable, Result: Codable & Equ
         case result
         case diagnostics
         case actions
-    }
-}
-
-enum PreflightDiagnosticSeverity: String, Codable, Equatable, Sendable {
-    case blocker
-    case warning
-    case note
-    case estimate
-}
-
-struct PreflightDiagnostic: Codable, Equatable, Sendable {
-    let id: String
-    let severity: PreflightDiagnosticSeverity
-    let title: String
-    let message: String
-    let locations: [DiagnosticLocation]
-    let suggestedActionIDs: [String]
-
-    init(
-        id: String,
-        severity: PreflightDiagnosticSeverity,
-        title: String,
-        message: String,
-        locations: [DiagnosticLocation] = [],
-        suggestedActionIDs: [String] = []
-    ) {
-        self.id = id
-        self.severity = severity
-        self.title = title
-        self.message = message
-        self.locations = locations
-        self.suggestedActionIDs = suggestedActionIDs
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case id
-        case severity
-        case title
-        case message
-        case locations
-        case suggestedActionIDs = "suggested_action_ids"
-    }
-
-    func withSuggestedActionIDs(_ actionIDs: [String]) -> PreflightDiagnostic {
-        PreflightDiagnostic(
-            id: id,
-            severity: severity,
-            title: title,
-            message: message,
-            locations: locations,
-            suggestedActionIDs: actionIDs
-        )
-    }
-}
-
-struct DiagnosticLocation: Codable, Equatable, Sendable {
-    let kind: String
-    let path: String?
-    let line: Int?
-
-    init(kind: String, path: String? = nil, line: Int? = nil) {
-        self.kind = kind
-        self.path = path
-        self.line = line
     }
 }
 
@@ -274,12 +198,6 @@ enum StructuredRunOutput {
     }
 
     static func status(for diagnostics: [PreflightDiagnostic]) -> StructuredRunStatus {
-        if diagnostics.contains(where: { $0.severity == .blocker }) {
-            return .blocked
-        }
-        if diagnostics.contains(where: { $0.severity == .warning }) {
-            return .warning
-        }
-        return .ok
+        .forDiagnostics(diagnostics)
     }
 }

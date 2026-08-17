@@ -1,11 +1,11 @@
 import ArgumentParser
+import MereRunRelayKit
 import Crypto
 import Foundation
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
 import MereRunCore
-import MereRunRelayKit
 
 struct SSHWorkflowExecutor {
     let profile: WorkflowExecutorProfile
@@ -114,7 +114,8 @@ struct SSHWorkflowExecutor {
             bundleDirectory: bundleDirectory,
             runDirectory: localRunDirectory,
             executor: .init(kind: "ssh", profile: profile.name, jobReference: reference),
-            state: .queued
+            state: .queued,
+            pluginNodes: WorkflowGraphProviderRegistry.discoveredCatalog().nodes
         )
         return WorkflowRemoteJob(
             jobID: job.jobID,
@@ -376,87 +377,15 @@ struct SSHWorkflowExecutor {
     }
 }
 
-// Submission stays CLI-side: it reads materialized bundle documents and
-// writes the local run record, both of which depend on the graph document
-// layer that has not moved into MereRunRelayKit yet.
+// Submission logic lives in MereRunRelayKit; the CLI supplies discovered
+// plugin nodes for the local run record's validation pass.
 extension RelayWorkflowExecutor {
     func submit(bundleDirectory: URL, localRunDirectory: URL) async throws -> WorkflowRemoteJob {
-        let graph = try WorkflowGraphDocument.load(from: bundleDirectory.appendingPathComponent("graph.json"))
-        let inputs = try WorkflowInputsDocument.load(from: bundleDirectory.appendingPathComponent("inputs.json"))
-        let assets = try WorkflowBundleCodec.decoder().decode(
-            WorkflowAssetManifest.self,
-            from: Data(contentsOf: bundleDirectory.appendingPathComponent(WorkflowAssetManifest.filename))
-        )
-        let job = try WorkflowBundleCodec.decoder().decode(
-            WorkflowJobManifest.self,
-            from: Data(contentsOf: bundleDirectory.appendingPathComponent(WorkflowJobManifest.filename))
-        )
-        try validateWorker(try await probe(), for: job, executor: "relay:\(profile.name)", allowMixedBackend: true)
-        let createBody = RelayGraphCreateRequest(
-            job: job,
-            graph: graph,
-            inputs: inputs,
-            assets: assets,
-            bundleDocuments: try Dictionary(uniqueKeysWithValues: [
-                WorkflowJobManifest.filename,
-                "graph.json",
-                "inputs.json",
-                WorkflowAssetManifest.filename,
-            ].map { path in
-                (path, try Data(contentsOf: bundleDirectory.appendingPathComponent(path)))
-            })
-        )
-        let createData = try await request(
-            path: "/api/graph-jobs",
-            method: "POST",
-            body: try WorkflowBundleCodec.encoder().encode(createBody)
-        )
-        let created = try JSONDecoder().decode(RelayGraphCreateResponse.self, from: createData)
-        let assetRoot = bundleDirectory.appendingPathComponent("assets/sha256", isDirectory: true)
-        for digest in created.missingAssetDigests {
-            let url = assetRoot.appendingPathComponent(digest)
-            let data = try Data(contentsOf: url)
-            guard ModelArtifactPinDigest.sha256(data) == digest else {
-                throw ValidationError("Job bundle asset digest mismatch before relay upload: \(digest)")
-            }
-            _ = try await request(
-                path: "/api/graph-jobs/\(created.jobID)/assets/\(digest)",
-                method: "PUT",
-                contentType: "application/octet-stream",
-                body: data,
-                transientRetryAttempts: 3
-            )
-        }
-        let commitData = try await request(
-            path: "/api/graph-jobs/\(created.jobID)/commit",
-            method: "POST",
-            body: Data("{}".utf8)
-        )
-        let committed = try WorkflowBundleCodec.decoder().decode(RelayGraphJobResponse.self, from: commitData)
-        let reference = "relay://\(profile.name)/\(committed.jobID)"
-        try initializeRemoteRunRecord(
+        try await submit(
             bundleDirectory: bundleDirectory,
-            runDirectory: localRunDirectory,
-            executor: .init(kind: "relay", profile: profile.name, jobReference: reference),
-            state: committed.state
+            localRunDirectory: localRunDirectory,
+            pluginNodes: WorkflowGraphProviderRegistry.discoveredCatalog().nodes
         )
-        return committed.remoteJob(profile: profile.name, localRunDirectory: localRunDirectory.path)
-    }
-}
-
-private struct RelayGraphCreateRequest: Codable {
-    let job: WorkflowJobManifest
-    let graph: WorkflowGraphDocument
-    let inputs: WorkflowInputsDocument
-    let assets: WorkflowAssetManifest
-    let bundleDocuments: [String: Data]
-
-    enum CodingKeys: String, CodingKey {
-        case job
-        case graph
-        case inputs
-        case assets
-        case bundleDocuments = "bundle_documents"
     }
 }
 
@@ -486,117 +415,5 @@ func runExecutable(
 
 func shellQuote(_ value: String) -> String {
     "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
-}
-
-private func initializeRemoteRunRecord(
-    bundleDirectory: URL,
-    runDirectory: URL,
-    executor: GraphRunExecutorRecord,
-    state: GraphRunState
-) throws {
-    let graph = try WorkflowGraphDocument.load(from: bundleDirectory.appendingPathComponent("graph.json"))
-    let inputs = try WorkflowInputsDocument.load(from: bundleDirectory.appendingPathComponent("inputs.json"))
-    let job = try WorkflowBundleCodec.decoder().decode(
-        WorkflowJobManifest.self,
-        from: Data(contentsOf: bundleDirectory.appendingPathComponent(WorkflowJobManifest.filename))
-    )
-    let validation = WorkflowGraphValidator.validate(graph: graph, inputs: inputs)
-    let nodesByID = Dictionary(uniqueKeysWithValues: graph.nodes.map { ($0.id, $0) })
-    let now = Date()
-    let manifest = GraphRunManifest(
-        contractVersion: GraphRunManifest.contractVersion,
-        jobID: job.jobID,
-        graphName: graph.name,
-        graphFingerprint: job.graphFingerprint,
-        state: state,
-        createdAt: now,
-        updatedAt: now,
-        attempt: 1,
-        executor: executor,
-        nodes: validation.order.compactMap { id in
-            nodesByID[id].map {
-                GraphRunNodeRecord(
-                    id: id,
-                    kind: $0.kind,
-                    state: .planned,
-                    startedAt: nil,
-                    completedAt: nil,
-                    exitStatus: nil,
-                    attempt: 0,
-                    maxAttempts: $0.execution?.resolvedMaxAttempts ?? 1,
-                    fingerprint: "",
-                    artifacts: [],
-                    error: nil
-                )
-            }
-        },
-        outputs: [],
-        error: nil
-    )
-    try WorkflowBundleCodec.write(manifest, to: runDirectory.appendingPathComponent(GraphRunManifest.filename))
-    try WorkflowBundleCodec.write([DeclarativeAction](), to: runDirectory.appendingPathComponent("actions.json"))
-}
-
-func validateWorker(
-    _ worker: WorkflowExecutorProbe,
-    for job: WorkflowJobManifest,
-    executor: String,
-    allowMixedBackend: Bool = false
-) throws {
-    guard worker.contractVersions.contains(job.contractVersion) else {
-        throw ValidationError("Executor '\(executor)' does not support \(job.contractVersion).")
-    }
-    guard workflowVersion(worker.workerVersion, satisfiesMinimum: job.requirements.minimumMereRunVersion) else {
-        throw ValidationError(
-            "Executor '\(executor)' reports mere.run \(worker.workerVersion); job requires \(job.requirements.minimumMereRunVersion) or newer."
-        )
-    }
-    let missingKinds = job.requirements.nodeKinds.filter { !worker.nodeKinds.contains($0) }
-    guard missingKinds.isEmpty else {
-        throw ValidationError("Executor '\(executor)' is missing node kinds: \(missingKinds.joined(separator: ", ")).")
-    }
-    let missingProviders = job.requirements.providers.filter { !worker.providers.contains($0) }
-    guard missingProviders.isEmpty else {
-        let descriptions = missingProviders.map { "\($0.id)@\($0.version) [\($0.catalogSHA256)]" }
-        throw ValidationError(
-            "Executor '\(executor)' is missing exact graph providers: \(descriptions.joined(separator: ", "))."
-        )
-    }
-    let missingModels = job.requirements.modelIDs.filter { !worker.installedModelIDs.contains($0) }
-    guard missingModels.isEmpty else {
-        throw ValidationError("Executor '\(executor)' is missing models: \(missingModels.joined(separator: ", ")).")
-    }
-    let missingSecrets = job.requirements.secretNames.filter { !worker.availableSecretNames.contains($0) }
-    guard missingSecrets.isEmpty else {
-        throw ValidationError(
-            "Executor '\(executor)' is missing configured secrets: \(missingSecrets.joined(separator: ", "))."
-        )
-    }
-    let backendAccepted = job.requirements.acceleratorBackends.contains(worker.acceleratorBackend)
-        || (allowMixedBackend && worker.acceleratorBackend == "mixed")
-    guard backendAccepted else {
-        throw ValidationError(
-            "Executor '\(executor)' uses \(worker.acceleratorBackend); accepted backends are \(job.requirements.acceleratorBackends.joined(separator: ", "))."
-        )
-    }
-    if let minimum = job.requirements.minimumAcceleratorMemoryBytes,
-       worker.memoryBytes < UInt64(minimum) {
-        throw ValidationError("Executor '\(executor)' does not have the required accelerator memory.")
-    }
-    if let minimum = job.requirements.minimumSystemMemoryBytes,
-       worker.systemMemoryBytes < UInt64(minimum) {
-        throw ValidationError("Executor '\(executor)' does not have the required system memory.")
-    }
-    if let minimum = job.requirements.minimumCPUCores,
-       worker.logicalCPUCores < minimum {
-        throw ValidationError("Executor '\(executor)' does not have the required CPU cores.")
-    }
-    if let minimum = job.requirements.minimumDiskBytes,
-       worker.availableDiskBytes.map({ $0 < minimum }) != false {
-        throw ValidationError("Executor '\(executor)' does not report the required free disk space.")
-    }
-    if job.requirements.networkAccess, !worker.networkAccess {
-        throw ValidationError("Executor '\(executor)' does not allow required network access.")
-    }
 }
 
