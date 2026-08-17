@@ -32,6 +32,7 @@ public struct Q35TokenizerAndTemplate {
         tools: [ToolDefinition]? = nil,
         addGenerationPrompt: Bool = true,
         includeThinking: Bool = true,
+        reasoningEffort: String? = nil,
         maxLength: Int,
         imageTokenCounts: [Int] = []
     ) throws -> [Int] {
@@ -41,6 +42,7 @@ public struct Q35TokenizerAndTemplate {
             tools: toolSpecs,
             addGenerationPrompt: addGenerationPrompt,
             includeThinking: includeThinking,
+            reasoningEffort: reasoningEffort,
             maxLength: tokenizer.maxLength
         )
         if !imageTokenCounts.isEmpty {

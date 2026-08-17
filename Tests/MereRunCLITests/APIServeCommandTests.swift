@@ -2689,6 +2689,28 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(chatRequest.reasoningEffort, 0.8)
     }
 
+    func testQ38ReasoningAliasesMapToNativeXHighStrength() throws {
+        let profile = try XCTUnwrap(
+            ManagedModelCatalog.apiProfile(for: Q35Resources.q38TwentySevenB4BitModelId)
+        )
+        let request = OpenAIChatRequest(
+            model: Q35Resources.q38TwentySevenB4BitModelId,
+            messages: [OpenAIChatMessage(role: "user", content: "hello")],
+            reasoning_effort: "high"
+        )
+
+        let chatRequest = try APIServerContract.chatRequest(
+            from: request,
+            fallbackLoraPath: nil,
+            contextSize: 4_096,
+            capabilities: .catalog(profile),
+            servedModelID: Q35Resources.q38TwentySevenB4BitModelId
+        )
+
+        XCTAssertEqual(chatRequest.reasoningEffort, 1)
+        XCTAssertTrue(chatRequest.showThinking)
+    }
+
     func testStreamingUsageOptionHonorsCapabilities() throws {
         let request = OpenAIChatRequest(
             model: "mererun-test-model",

@@ -782,6 +782,9 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.hubFallback?.patterns.contains("generation_config.json"), true)
         XCTAssertEqual(spec.hubFallback?.patterns.contains("preprocessor_config.json"), true)
         XCTAssertEqual(spec.hubFallback?.patterns.contains("video_preprocessor_config.json"), true)
+        XCTAssertEqual(spec.apiProfile?.thinkingLevels, [.low, .medium, .xhigh])
+        XCTAssertEqual(spec.apiProfile?.thinkingLevelMap[.high], .xhigh)
+        XCTAssertEqual(spec.apiProfile?.compatibility.supportsReasoningEffort, true)
     }
 
     func testQ38TwentySevenB4BitUsesCrownedTargetAndQuantizedMTPHead() throws {
@@ -825,6 +828,9 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.estimatedDownloadBytes, 15_392_000_000)
         XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
         XCTAssertTrue(spec.defaultCLICommands.contains("model benchmark code"))
+        XCTAssertEqual(spec.apiProfile?.thinkingLevels, [.low, .medium, .xhigh])
+        XCTAssertEqual(spec.apiProfile?.thinkingLevelMap[.minimal], .low)
+        XCTAssertEqual(spec.apiProfile?.thinkingLevelMap[.max], .xhigh)
     }
 
     func testQ38TwentySevenB4BitValidationRequiresMountedMTPFiles() throws {

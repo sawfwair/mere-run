@@ -133,7 +133,17 @@ final class SetupCommandParsingTests: XCTestCase {
         XCTAssertEqual(providerModel.id, Q35Resources.q38TwentySevenBModelId)
         XCTAssertEqual(providerModel.contextWindow, Q35Resources.q38TwentySevenBContextLength)
         XCTAssertEqual(providerModel.maxTokens, 4_096)
+        XCTAssertTrue(providerModel.reasoning)
         XCTAssertTrue(providerModel.toolCall)
+        XCTAssertTrue(providerModel.supportsReasoningEffort)
+        XCTAssertEqual(
+            providerModel.thinkingLevelMap?.first { $0.key == "high" }?.value,
+            "xhigh"
+        )
+        XCTAssertEqual(
+            providerModel.thinkingLevelMap?.first { $0.key == "max" }?.value,
+            "xhigh"
+        )
         XCTAssertTrue(runtime.recommendation.isStartableByMereRun)
         XCTAssertEqual(runtime.recommendation.servingEngine, .textChatQ36)
     }

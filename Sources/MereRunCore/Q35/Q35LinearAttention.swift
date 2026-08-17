@@ -32,18 +32,191 @@ private func q35Swiglu(_ gate: MLXArray, _ up: MLXArray) -> MLXArray {
     MLXNN.silu(gate) * up
 }
 
-private let q35RmsNormNoWeightCompiled = compile(shapeless: true) { x in
-    let squaredMean = (x * x).mean(axis: -1, keepDims: true)
-    return x * rsqrt(squaredMean + MLXArray(1e-6).asType(x.dtype))
+private func q35RmsNormNoWeight(
+    _ x: MLXArray,
+    weight: MLXArray? = nil,
+    eps: Float = 1e-6
+) -> MLXArray {
+    MLXFast.rmsNorm(
+        x,
+        weight: weight ?? MLXArray.ones([x.dim(x.ndim - 1)], dtype: x.dtype),
+        eps: eps
+    )
 }
 
-private func q35RmsNormNoWeight(_ x: MLXArray, eps: Float = 1e-6) -> MLXArray {
-    guard eps == 1e-6 else {
-        let squaredMean = (x * x).mean(axis: -1, keepDims: true)
-        return x * rsqrt(squaredMean + MLXArray(eps).asType(x.dtype))
-    }
-    return q35RmsNormNoWeightCompiled(x)
+struct Q35GDNPreworkOutput {
+    let q: MLXArray
+    let k: MLXArray
+    let v: MLXArray
+    let convState: MLXArray
 }
+
+func q35GDNPreworkOps(
+    qkv: MLXArray,
+    convState: MLXArray,
+    convWeight: MLXArray,
+    numKeyHeads: Int,
+    numValueHeads: Int,
+    keyHeadDim: Int,
+    valueHeadDim: Int,
+    rmsNormWeight: MLXArray? = nil
+) -> Q35GDNPreworkOutput {
+    let batch = qkv.dim(0)
+    let sequence = qkv.dim(1)
+    let convDim = qkv.dim(2)
+    let keep = convWeight.dim(1) - 1
+    let convInput = MLX.concatenated([convState, qkv], axis: 1)
+    let nextState = convInput[0..., (convInput.dim(1) - keep)..., 0...]
+    let convOut = MLXNN.silu(
+        MLX.conv1d(convInput, convWeight, groups: convDim)
+    )
+    let keyDim = numKeyHeads * keyHeadDim
+    let qConv = convOut[.ellipsis, 0..<keyDim]
+    let kConv = convOut[.ellipsis, keyDim..<(2 * keyDim)]
+    let vConv = convOut[.ellipsis, (2 * keyDim)...]
+
+    var q = qConv.reshaped(batch, sequence, numKeyHeads, keyHeadDim)
+    var k = kConv.reshaped(batch, sequence, numKeyHeads, keyHeadDim)
+    let v = vConv.reshaped(batch, sequence, numValueHeads, valueHeadDim)
+    let invScale = 1.0 / sqrt(Float(max(1, keyHeadDim)))
+    q = q35RmsNormNoWeight(q, weight: rmsNormWeight) * MLXArray(invScale * invScale).asType(q.dtype)
+    k = q35RmsNormNoWeight(k, weight: rmsNormWeight) * MLXArray(invScale).asType(k.dtype)
+
+    return Q35GDNPreworkOutput(q: q, k: k, v: v, convState: nextState)
+}
+
+#if os(macOS)
+private enum Q35GDNPreworkMetalKernel {
+    // Adapted under Apache-2.0 from the Qwen GDN verification prework source
+    // documented in THIRD_PARTY_NOTICES.md.
+    static let kernel = MLXFast.metalKernel(
+        name: "q35_gdn_verify_prework",
+        inputNames: ["qkv", "conv_state", "conv_w", "q_scale", "k_scale"],
+        outputNames: ["q_out", "k_out", "v_out", "conv_out"],
+        source: """
+            uint lane = thread_position_in_threadgroup.x;
+            uint row = threadgroup_position_in_grid.y;
+            uint logical_head = threadgroup_position_in_grid.z;
+            constexpr uint q_heads = uint(HK);
+            constexpr uint k_head_base = uint(HK);
+            constexpr uint v_head_base = 2 * uint(HK);
+            bool is_q = logical_head < q_heads;
+            bool is_k = logical_head >= k_head_base && logical_head < v_head_base;
+            uint head = is_q ? logical_head
+                       : (is_k ? logical_head - k_head_base : logical_head - v_head_base);
+            uint channel_base = is_q ? head * uint(DK)
+                               : (is_k ? uint(HK) * uint(DK) + head * uint(DK)
+                                       : 2 * uint(HK) * uint(DK) + head * uint(DV));
+            T activated[4];
+            float sumsq = 0.0f;
+            for (uint i = 0; i < 4; ++i) {
+                uint channel = channel_base + lane * 4 + i;
+                float acc = 0.0f;
+                for (uint tap = 0; tap < 4; ++tap) {
+                    uint input_row = row + tap;
+                    const T xv = input_row < uint(NKEEP)
+                        ? conv_state[input_row * uint(C) + channel]
+                        : qkv[(input_row - uint(NKEEP)) * uint(C) + channel];
+                    acc += float(xv) * float(conv_w[channel * 4 + tap]);
+                }
+                const T conv = T(acc);
+                T sy = T(1) / (T(1) + metal::exp(metal::abs(conv)));
+                const T act = conv * ((conv < T(0)) ? sy : T(1) - sy);
+                activated[i] = act;
+                float value = float(act);
+                sumsq += value * value;
+            }
+            if (is_q || is_k) {
+                sumsq = simd_sum(sumsq);
+                float inv = metal::precise::rsqrt(sumsq / float(DK) + 1e-6f);
+                const T scale = is_q ? q_scale : k_scale;
+                uint out_base = (row * uint(HK) + head) * uint(DK) + lane * 4;
+                for (uint i = 0; i < 4; ++i) {
+                    const T rms = T(1) * T(float(activated[i]) * inv);
+                    const T value = scale * rms;
+                    if (is_q) {
+                        q_out[out_base + i] = value;
+                    } else {
+                        k_out[out_base + i] = value;
+                    }
+                }
+            } else {
+                uint out_base = (row * uint(HV) + head) * uint(DV) + lane * 4;
+                for (uint i = 0; i < 4; ++i) {
+                    v_out[out_base + i] = activated[i];
+                }
+            }
+            if (row + uint(NKEEP) >= uint(S)) {
+                uint state_row = row + uint(NKEEP) - uint(S);
+                uint raw_base = row * uint(C) + channel_base + lane * 4;
+                uint state_base = state_row * uint(C) + channel_base + lane * 4;
+                for (uint i = 0; i < 4; ++i) {
+                    conv_out[state_base + i] = qkv[raw_base + i];
+                }
+            }
+            """
+    )
+}
+
+func q35GDNPreworkMetal(
+    qkv: MLXArray,
+    convState: MLXArray,
+    convWeight: MLXArray,
+    numKeyHeads: Int,
+    numValueHeads: Int,
+    keyHeadDim: Int,
+    valueHeadDim: Int
+) -> Q35GDNPreworkOutput? {
+    guard Device.defaultDevice().deviceType == .gpu,
+          qkv.ndim == 3,
+          qkv.dim(0) == 1,
+          (3...9).contains(qkv.dim(1)),
+          qkv.dtype == .bfloat16,
+          convState.shape == [1, 3, qkv.dim(2)],
+          convState.dtype == .bfloat16,
+          convWeight.shape == [qkv.dim(2), 4, 1],
+          convWeight.dtype == .bfloat16,
+          keyHeadDim == 128,
+          valueHeadDim == 128,
+          qkv.dim(2) == 2 * numKeyHeads * keyHeadDim + numValueHeads * valueHeadDim else {
+        return nil
+    }
+
+    let sequence = qkv.dim(1)
+    let convDim = qkv.dim(2)
+    let invScale = 1.0 / sqrt(Float(keyHeadDim))
+    let qScale = MLXArray(invScale * invScale).asType(.bfloat16)
+    let kScale = MLXArray(invScale).asType(.bfloat16)
+    let outputs = Q35GDNPreworkMetalKernel.kernel(
+        [qkv, convState, convWeight, qScale, kScale],
+        template: [
+            ("T", qkv.dtype),
+            ("HK", numKeyHeads),
+            ("HV", numValueHeads),
+            ("DK", keyHeadDim),
+            ("DV", valueHeadDim),
+            ("NKEEP", 3),
+            ("C", convDim),
+            ("S", sequence),
+        ],
+        grid: (32, sequence, 2 * numKeyHeads + numValueHeads),
+        threadGroup: (32, 1, 1),
+        outputShapes: [
+            [1, sequence, numKeyHeads, keyHeadDim],
+            [1, sequence, numKeyHeads, keyHeadDim],
+            [1, sequence, numValueHeads, valueHeadDim],
+            [1, 3, convDim],
+        ],
+        outputDTypes: Array(repeating: qkv.dtype, count: 4)
+    )
+    return Q35GDNPreworkOutput(
+        q: outputs[0],
+        k: outputs[1],
+        v: outputs[2],
+        convState: outputs[3]
+    )
+}
+#endif
 
 private func q35ConcatenatedOptional(_ lhs: MLXArray?, _ rhs: MLXArray?) -> MLXArray?? {
     switch (lhs, rhs) {
@@ -441,6 +614,7 @@ final class Q35LinearAttention: Module {
     private let valueDim: Int
     private let convDim: Int
     private let convKernelSize: Int
+    private let qkNormWeightBF16: MLXArray
     private var fusedInProjQKVZ: Linear?
     private var fusedInProjBA: Linear?
 
@@ -455,6 +629,7 @@ final class Q35LinearAttention: Module {
         self.valueDim = text.linearNumValueHeads * text.linearValueHeadDim
         self.convDim = self.keyDim * 2 + self.valueDim
         self.convKernelSize = max(1, text.linearConvKernelDim)
+        self.qkNormWeightBF16 = MLXArray.ones([self.keyHeadDim], dtype: .bfloat16)
 
         precondition(
             self.numValueHeads % max(1, self.numKeyHeads) == 0,
@@ -485,7 +660,8 @@ final class Q35LinearAttention: Module {
 
     func callAsFunction(
         _ x: MLXArray,
-        cache: Q35LinearCache?
+        cache: Q35LinearCache?,
+        targetVerify: Bool = false
     ) -> MLXArray {
         let batch = x.dim(0)
         let sequence = x.dim(1)
@@ -521,34 +697,51 @@ final class Q35LinearAttention: Module {
 
         let convState = cache?.convState
             ?? MLXArray.zeros([batch, keep, convDim], dtype: x.dtype)
-        let convInput = MLX.concatenated([convState, qkv], axis: 1)
-
-        if let cache {
-            if keep > 0 {
-                cache.convState = convInput[0..., (convInput.dim(1) - keep)..., 0...]
-            } else {
-                cache.convState = MLXArray.zeros([batch, 0, convDim], dtype: x.dtype)
-            }
+        let rmsNormWeight = qkv.dtype == .bfloat16 ? qkNormWeightBF16 : nil
+        let prework: Q35GDNPreworkOutput
+        #if os(macOS)
+        if targetVerify,
+           cache != nil,
+           let fused = q35GDNPreworkMetal(
+               qkv: qkv,
+               convState: convState,
+               convWeight: conv1d.weight,
+               numKeyHeads: numKeyHeads,
+               numValueHeads: numValueHeads,
+               keyHeadDim: keyHeadDim,
+               valueHeadDim: valueHeadDim
+           ) {
+            prework = fused
+        } else {
+            prework = q35GDNPreworkOps(
+                qkv: qkv,
+                convState: convState,
+                convWeight: conv1d.weight,
+                numKeyHeads: numKeyHeads,
+                numValueHeads: numValueHeads,
+                keyHeadDim: keyHeadDim,
+                valueHeadDim: valueHeadDim,
+                rmsNormWeight: rmsNormWeight
+            )
         }
-
-        let convOut = MLXNN.silu(conv1d(convInput))
-
-        let qConv = convOut[.ellipsis, 0..<keyDim]
-        let kConv = convOut[.ellipsis, keyDim..<(2 * keyDim)]
-        let vConv = convOut[.ellipsis, (2 * keyDim)...]
-
-        var q = qConv.reshaped(batch, sequence, numKeyHeads, keyHeadDim)
-        var k = kConv.reshaped(batch, sequence, numKeyHeads, keyHeadDim)
-        let v = vConv.reshaped(batch, sequence, numValueHeads, valueHeadDim)
-
-        let invScale = 1.0 / sqrt(Float(max(1, keyHeadDim)))
-        q = q35RmsNormNoWeight(q) * MLXArray(invScale * invScale).asType(q.dtype)
-        k = q35RmsNormNoWeight(k) * MLXArray(invScale).asType(k.dtype)
+        #else
+        prework = q35GDNPreworkOps(
+            qkv: qkv,
+            convState: convState,
+            convWeight: conv1d.weight,
+            numKeyHeads: numKeyHeads,
+            numValueHeads: numValueHeads,
+            keyHeadDim: keyHeadDim,
+            valueHeadDim: valueHeadDim,
+            rmsNormWeight: rmsNormWeight
+        )
+        #endif
+        cache?.convState = prework.convState
 
         let (updated, state) = q35GatedDeltaUpdate(
-            q: q,
-            k: k,
-            v: v,
+            q: prework.q,
+            k: prework.k,
+            v: prework.v,
             a: a,
             b: b,
             aLog: aLog,

@@ -301,6 +301,18 @@ SOFTWARE.
 
 ## Source-derived runtime implementations
 
+### Qwen3.5/3.6 GDN verification prework provenance
+
+- purpose: the macOS Metal kernel that fuses Qwen-family gated-delta
+  convolution, SiLU, q/k/v preparation, RMS normalization, scaling, and
+  convolution-state advance during MTP target verification
+- upstream project: [`jundot/omlx`](https://github.com/jundot/omlx), tag
+  `v0.6.1`, revision `b587575f3696fbc86c236b906684a48a92f8b118`
+- upstream file: `omlx/patches/qwen35_gdn_prework.py`
+- lineage noted by the upstream project: adapted from `mlx-serve`, itself a port of the
+  `mlxfast-challenge` Qwen3.5 packed GDN prework kernel
+- license: [Apache License 2.0](https://www.apache.org/licenses/LICENSE-2.0)
+
 ### Poolside Laguna 2.1 native runtime
 
 - purpose: native Swift/MLX loading, attention, routed-MoE, tokenizer/template,

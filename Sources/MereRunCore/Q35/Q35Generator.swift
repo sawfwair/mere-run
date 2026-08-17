@@ -1,6 +1,9 @@
 import Foundation
 import MediaIO
 import MLX
+#if canImport(Darwin)
+import Darwin
+#endif
 
 public typealias Q35ContinuousBatchingStats = RuntimeDecodeBatchingStats
 
@@ -118,18 +121,9 @@ private final class Q35BatchedDecodeRow: @unchecked Sendable {
 }
 
 public actor Q35Generator: ChatGenerator {
-    /// MERERUN_Q35_PREFILL_CHUNK_TOKENS overrides the prefill chunk length.
-    /// Larger chunks batch more routed-expert rows per gather matmul: on
-    /// Ornith 35B (M4 Max) a 6.8K-token prefill runs 1116 tok/s at 512,
-    /// 1238 tok/s at 1024, and regresses at 2048; outputs are byte-identical
-    /// across chunk sizes (causal chunking is exact).
-    private static let prefillChunkSize: Int = {
-        if let raw = ProcessInfo.processInfo.environment["MERERUN_Q35_PREFILL_CHUNK_TOKENS"],
-           let value = Int(raw), (64...8192).contains(value) {
-            return value
-        }
-        return 1024
-    }()
+    private static let contendedPrefillChunkSize = 512
+    private static let q38LowPrefillHeadroomBytes = UInt64(16) * 1_024 * 1_024 * 1_024
+    private static let minimumReclaimableCacheBytes = 256 * 1_024 * 1_024
     private static let prefixKVCacheMaxEntries = 4
     private static let defaultMTPBlockSize = 4
     private static let mtpPromptHistoryLimit = 4_096
@@ -171,6 +165,7 @@ public actor Q35Generator: ChatGenerator {
     private var decodeQueue: [Q35BatchedDecodeRow] = []
     private var activeDecodeRows: [Q35BatchedDecodeRow] = []
     private var decodeLoopRunning = false
+    private var activeChatRequestCount = 0
     private var batchedDecodeSteps = 0
     private var samePositionBatchedSteps = 0
     private var variablePositionBatchedSteps = 0
@@ -191,6 +186,77 @@ public actor Q35Generator: ChatGenerator {
         self.continuousBatchingEnabled = continuousBatchingEnabled
         self.visionMinPixels = visionMinPixels ?? visionPixelBounds.minimum
         self.visionMaxPixels = visionMaxPixels ?? visionPixelBounds.maximum
+    }
+
+    /// Select a prefill width from the model, live machine headroom, and current
+    /// scheduler contention. Q38's dense BF16 path must not infer activation
+    /// headroom from total physical memory: model residency and concurrent work
+    /// can consume most unified memory before prefill starts. The environment
+    /// override remains an upper bound, not permission to ignore live pressure.
+    static func prefillChunkSize(
+        modelId: String,
+        availableMemory: UInt64? = currentHostAvailableMemoryBytes(),
+        activeRequestCount: Int = 1,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> Int {
+        let configured = environment["MERERUN_Q35_PREFILL_CHUNK_TOKENS"]
+            .flatMap(Int.init)
+            .flatMap { (64...8192).contains($0) ? $0 : nil }
+        let base = configured ?? 1_024
+        if activeRequestCount > 1 {
+            return min(base, contendedPrefillChunkSize)
+        }
+        if Q35Resources.isQ38ModelId(modelId),
+           let availableMemory,
+           availableMemory < q38LowPrefillHeadroomBytes {
+            return min(base, contendedPrefillChunkSize)
+        }
+        return base
+    }
+
+    static func currentHostAvailableMemoryBytes() -> UInt64? {
+        #if canImport(Darwin)
+        var stats = vm_statistics64()
+        var count = mach_msg_type_number_t(MemoryLayout<vm_statistics64>.size) / 4
+        let result = withUnsafeMutablePointer(to: &stats) { pointer in
+            pointer.withMemoryRebound(to: integer_t.self, capacity: Int(count)) { rebound in
+                host_statistics64(mach_host_self(), HOST_VM_INFO64, rebound, &count)
+            }
+        }
+        guard result == KERN_SUCCESS else { return nil }
+        let pageSize = UInt64(getpagesize())
+        let availablePages = UInt64(stats.free_count) + UInt64(stats.inactive_count)
+        let availableBytes = availablePages.multipliedReportingOverflow(by: pageSize)
+        return availableBytes.overflow ? UInt64.max : availableBytes.partialValue
+        #else
+        return nil
+        #endif
+    }
+
+    static func shouldClearMLXCache(
+        activeMemory: Int,
+        cacheMemory: Int,
+        memoryLimit: Int
+    ) -> Bool {
+        guard activeMemory >= 0,
+              cacheMemory >= minimumReclaimableCacheBytes,
+              memoryLimit > 0 else {
+            return false
+        }
+        let total = activeMemory.addingReportingOverflow(cacheMemory)
+        guard !total.overflow else { return true }
+        return total.partialValue >= memoryLimit * 9 / 10
+    }
+
+    private func clearMLXCacheUnderPressureIfNeeded() {
+        let snapshot = Memory.snapshot()
+        if Self.shouldClearMLXCache(
+            activeMemory: snapshot.activeMemory,
+            cacheMemory: snapshot.cacheMemory,
+            memoryLimit: Memory.memoryLimit
+        ) {
+            Memory.clearCache()
+        }
     }
 
     static func qwen3VLTargetSize(
@@ -233,7 +299,9 @@ public actor Q35Generator: ChatGenerator {
         _ request: ChatRequest,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> ChatResponse {
-        try await Stream.withNewDefaultStream {
+        activeChatRequestCount += 1
+        defer { activeChatRequestCount = max(0, activeChatRequestCount - 1) }
+        return try await Stream.withNewDefaultStream {
             let rootURL = try await resolveModelRoot(modelPath: nil, progressHandler: progressHandler)
             let loadStart = Date()
             try await ensureLoaded(rootURL: rootURL, progressHandler: progressHandler)
@@ -260,7 +328,9 @@ public actor Q35Generator: ChatGenerator {
         modelPath: String?,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> ChatResponse {
-        try await Stream.withNewDefaultStream {
+        activeChatRequestCount += 1
+        defer { activeChatRequestCount = max(0, activeChatRequestCount - 1) }
+        return try await Stream.withNewDefaultStream {
             let rootURL = try await resolveModelRoot(modelPath: modelPath, progressHandler: progressHandler)
             let loadStart = Date()
             try await ensureLoaded(rootURL: rootURL, progressHandler: progressHandler)
@@ -434,6 +504,9 @@ public actor Q35Generator: ChatGenerator {
         let messages = request.messages
         let jsonConstrained = request.requiresJSON
         let includeThinking = request.showThinking && !jsonConstrained
+        let nativeReasoningEffort = Q35Resources.isQ38ModelId(modelId)
+            ? Q35Resources.q38ReasoningEffortLabel(for: request.reasoningEffort)
+            : nil
         let requestedContextLength = request.maxContextTokens ?? maxContextLength
         guard requestedContextLength > 0 else {
             throw Q35Error.generationFailed("maxContextTokens must be greater than zero.")
@@ -466,6 +539,7 @@ public actor Q35Generator: ChatGenerator {
             tools: request.tools,
             addGenerationPrompt: true,
             includeThinking: includeThinking,
+            reasoningEffort: nativeReasoningEffort,
             maxLength: effectiveContext,
             imageTokenCounts: visionReplacements.map { max(1, $0.embeddings.dim(0)) }
         )
@@ -528,6 +602,7 @@ public actor Q35Generator: ChatGenerator {
                 messages: messages,
                 tools: request.tools,
                 includeThinking: includeThinking,
+                reasoningEffort: nativeReasoningEffort,
                 promptTokens: promptTokens,
                 maxContextLength: effectiveContext
             )
@@ -671,10 +746,12 @@ public actor Q35Generator: ChatGenerator {
         jsonConstrained: Bool,
         continuousBatchingEnabled: Bool,
         mtpSpeculationEnabled: Bool,
+        schedulerContended: Bool = false,
         stopAtCompletedToolCall: Bool = false
     ) -> Q35DecodePath {
         if stopAtCompletedToolCall { return .pipelined }
         if jsonConstrained { return .jsonConstrainedSerial }
+        if mtpSpeculationEnabled, !schedulerContended { return .mtpSpeculativeSerial }
         if continuousBatchingEnabled { return .continuousBatched }
         if mtpSpeculationEnabled { return .mtpSpeculativeSerial }
         return .pipelined
@@ -772,6 +849,9 @@ public actor Q35Generator: ChatGenerator {
             jsonConstrained: jsonConstrained,
             continuousBatchingEnabled: continuousBatchingEnabled,
             mtpSpeculationEnabled: speculationMTP != nil,
+            schedulerContended: activeChatRequestCount > 1
+                || !decodeQueue.isEmpty
+                || !activeDecodeRows.isEmpty,
             stopAtCompletedToolCall: stopAtCompletedToolCall
         )
 
@@ -986,7 +1066,11 @@ public actor Q35Generator: ChatGenerator {
                         let candidateCaches = forkLayerCaches(layerCaches)
                         let candidateInput = MLXArray(([next] + draftTokens).map(Int32.init))
                             .reshaped(1, draftTokens.count + 1)
-                        let candidate = model.forward(candidateInput, cache: candidateCaches)
+                        let candidate = model.forward(
+                            candidateInput,
+                            cache: candidateCaches,
+                            targetVerify: true
+                        )
                         MLX.eval(candidate.logits)
                         MLX.eval(candidate.hidden)
                         mtpVerificationPasses += 1
@@ -1099,7 +1183,11 @@ public actor Q35Generator: ChatGenerator {
 
                     let candidateCaches = forkLayerCaches(layerCaches)
                     let candidateInput = MLXArray([Int32(next), Int32(draft)]).reshaped(1, 2)
-                    let candidate = model.forward(candidateInput, cache: candidateCaches)
+                    let candidate = model.forward(
+                        candidateInput,
+                        cache: candidateCaches,
+                        targetVerify: true
+                    )
                     MLX.eval(candidate.logits)
                     MLX.eval(candidate.hidden)
                     mtpVerificationPasses += 1
@@ -1216,7 +1304,7 @@ public actor Q35Generator: ChatGenerator {
 
         // Shared pipelined decode; mRoPE positions derive from the cache
         // offset, so the step closure computes them per forward.
-        var decodedToolCall = ""
+        var toolCallCompletionDetector = Q35ToolParser.StreamingCompletionDetector()
         let result = try AutoregressiveDecodeEngine.decode(
             AutoregressiveDecodeRequest(
                 initialLogits: initialLogits,
@@ -1239,8 +1327,7 @@ public actor Q35Generator: ChatGenerator {
             },
             shouldContinue: { _, piece in
                 guard stopAtCompletedToolCall else { return true }
-                decodedToolCall += piece
-                return !Q35ToolParser.containsCompletedToolCall(decodedToolCall)
+                return !toolCallCompletionDetector.feed(piece)
             },
             checkCancellation: { try Task.checkCancellation() }
         )
@@ -1658,13 +1745,17 @@ public actor Q35Generator: ChatGenerator {
         }
         while processed < promptTokens.count {
             try Task.checkCancellation()
+            let chunkSize = Self.prefillChunkSize(
+                modelId: modelId,
+                activeRequestCount: activeChatRequestCount
+            )
             let end = RuntimePrefillCheckpointPlanner.nextEnd(
                 processed: processed,
                 total: promptTokens.count,
-                chunkSize: Self.prefillChunkSize,
+                chunkSize: chunkSize,
                 checkpoints: checkpointTokenCounts
             )
-            if promptTokens.count > Self.prefillChunkSize {
+            if promptTokens.count > chunkSize {
                 progressHandler?(ChatProgress(stage: .encoding, message: "Prefilling \(end)/\(promptTokens.count) tokens"))
             }
             let chunk = MLXArray(promptTokens[processed..<end].map(Int32.init))
@@ -1699,6 +1790,7 @@ public actor Q35Generator: ChatGenerator {
                 logits = output.logits
                 hidden = nil
             }
+            clearMLXCacheUnderPressureIfNeeded()
             processed = end
             await Task.yield()
         }
@@ -1737,8 +1829,12 @@ public actor Q35Generator: ChatGenerator {
         var hidden: MLXArray?
         while processed < tokenCount {
             try Task.checkCancellation()
-            let end = min(processed + Self.prefillChunkSize, tokenCount)
-            if tokenCount > Self.prefillChunkSize {
+            let chunkSize = Self.prefillChunkSize(
+                modelId: modelId,
+                activeRequestCount: activeChatRequestCount
+            )
+            let end = min(processed + chunkSize, tokenCount)
+            if tokenCount > chunkSize {
                 progressHandler?(ChatProgress(stage: .encoding, message: "Prefilling \(end)/\(tokenCount) tokens"))
             }
             let chunkEmbeddings = inputEmbeddings[0..., processed..<end, 0...]
@@ -1766,6 +1862,7 @@ public actor Q35Generator: ChatGenerator {
                 logits = output.logits
                 hidden = nil
             }
+            clearMLXCacheUnderPressureIfNeeded()
             processed = end
             await Task.yield()
         }
@@ -1785,6 +1882,7 @@ public actor Q35Generator: ChatGenerator {
         messages: [ChatMessage],
         tools: [ToolDefinition]?,
         includeThinking: Bool,
+        reasoningEffort: String?,
         promptTokens: [Int],
         maxContextLength: Int
     ) -> Set<Int> {
@@ -1800,6 +1898,7 @@ public actor Q35Generator: ChatGenerator {
             tools: tools,
             addGenerationPrompt: false,
             includeThinking: includeThinking,
+            reasoningEffort: reasoningEffort,
             maxLength: maxContextLength
         ) else {
             return []
@@ -2006,7 +2105,7 @@ public actor Q35Generator: ChatGenerator {
         return index.weightMap.keys.contains { $0.hasPrefix("mtp.") }
     }
 
-    private static func mtpResources(primary resources: Q35Resources) -> Q35Resources? {
+    static func mtpResources(primary resources: Q35Resources) -> Q35Resources? {
         if hasMTPWeights(resources: resources) {
             return resources
         }

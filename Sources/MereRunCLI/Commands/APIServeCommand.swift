@@ -2555,7 +2555,8 @@ enum APIServerContract {
             reasoningEffort: reasoningEffort,
             showThinking: requiresJSON
                 ? false
-                : resolvedAPIProfile?.thinkingLevels == [.high],
+                : Q35Resources.thinkingDefault(forModelId: laneModelID)
+                    || resolvedAPIProfile?.thinkingLevels == [.high],
             lora: lora,
             requiresJSON: requiresJSON,
             tools: tools,

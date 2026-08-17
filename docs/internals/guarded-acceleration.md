@@ -235,6 +235,49 @@ numerically equivalent for per-row affine quantization, but retains a second
 gate/up weight copy, so it is opt-in until a real checkpoint shows a worthwhile
 end-to-end gain.
 
+### Qwen3.8 runtime applicability review
+
+The relevant Qwen3.8 runtime techniques were reviewed against the native Swift
+implementation:
+
+| Technique | mere.run disposition |
+| --- | --- |
+| Structural streamed XML tool parsing | Adopted with bounded reparsing and adversarial literal-tag tests. |
+| Native Qwen3.8 reasoning effort | Adopted as `low`, `medium`, and `xhigh`, with explicit Pi aliases. |
+| GDN target-verification prework | Ported to a macOS BF16 Metal kernel, explicitly marked by the verifier and bit-exact at sequence widths 3, 4, 5, 7, and 9. |
+| 4096-token Qwen hybrid prefill floor | Not auto-promoted. Qwen3.8 retains 1024 and shrinks to 512 under low live headroom or contention; a configured wider value remains a pressure-capped upper bound. |
+| MTP versus batching admission | Adopted: MTP is selected only without an admitted peer; contended requests remain batchable. |
+| Conv3d vision weight conversion | Already present for both MLX and PyTorch layouts. |
+| Embedded and mounted MTP weights | Already present for official `mtp.*` shards and the managed `mtp/model.safetensors` component. |
+| One-block scaled dot-product attention | Already present through one `MLXFast.scaledDotProductAttention` call per full-attention layer. |
+| Private ANE/GPU hybrid prefill | Research only. It depends on a private fixed-shape ANE runtime and a separate native extension, so production mere.run does not depend on or advertise it. |
+
+The ANE path may be reconsidered only with a public supported runtime contract,
+fixed-shape parity, failure fallback, and matched end-to-end measurements. Its
+existence upstream is not production evidence here.
+
+The fused GDN prework has an opt-in, post-warmup GPU microbenchmark:
+
+```bash
+MERERUN_TEST_MLX_DEVICE=gpu \
+MERERUN_TEST_Q35_GDN_BENCHMARK=1 \
+  swift test --filter Q35ConfigDecodingTests/testQ35GDNVerifyPreworkBenchmarkWhenEnabled
+```
+
+On an M4 Max, 50 iterations per width measured 0.4106 ms composed versus
+0.2406 ms fused at width 4 (1.706x), and 0.3954 ms versus 0.2221 ms at width 9
+(1.780x). The separate GPU parity gate remained bit-exact at every claimed
+width.
+
+The installed Qwen3.8 BF16 long-context safety gate did not justify the wider
+default. With MTP disabled, the deterministic 6,463-token / one-output-token
+baseline at a 1,024-token chunk completed with `load=0.60s`,
+`prefill=551.41s`, and `time=552.25s`, returning `READY`. The matched 4,096
+attempt reached the final prefill checkpoint but destabilized an already busy
+host before returning a stats line. That attempt is a failed safety gate, not a
+performance result; no speedup is claimed. A clean post-reboot rerun is required
+before any automatic wide-chunk promotion.
+
 ## Already covered
 
 - Gemma4 12B uses a managed verifier-compatible MTP assistant and falls back to

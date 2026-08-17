@@ -93,7 +93,8 @@ final class Q35DecoderLayer: Module {
         _ x: MLXArray,
         fullMask: MLXFast.ScaledDotProductAttentionMaskMode,
         cache: Q35LayerCache?,
-        positionIds: MLXArray? = nil
+        positionIds: MLXArray? = nil,
+        targetVerify: Bool = false
     ) -> MLXArray {
         var h = x
         if !isMLPOnly {
@@ -107,7 +108,11 @@ final class Q35DecoderLayer: Module {
                 } else {
                     linearCache = nil
                 }
-                attentionOut = linearAttention(normed, cache: linearCache)
+                attentionOut = linearAttention(
+                    normed,
+                    cache: linearCache,
+                    targetVerify: targetVerify
+                )
             case .full:
                 let fullCache: KVCache?
                 if case .full(let cache)? = cache {
@@ -165,7 +170,8 @@ final class Q35Transformer: Module {
         _ inputIds: MLXArray,
         cache: [Q35LayerCache?]?,
         inputEmbeddings: MLXArray? = nil,
-        positionIds: MLXArray? = nil
+        positionIds: MLXArray? = nil,
+        targetVerify: Bool = false
     ) -> MLXArray {
         var hidden = inputEmbeddings ?? embeddings(for: inputIds)
 
@@ -178,7 +184,8 @@ final class Q35Transformer: Module {
                 hidden,
                 fullMask: fullMask,
                 cache: layerCache,
-                positionIds: positionIds
+                positionIds: positionIds,
+                targetVerify: targetVerify
             )
             Q35DebugLayerDump.record(stage: "layer\(index)", hidden)
         }
@@ -418,13 +425,15 @@ public final class Q35Model: Module, @unchecked Sendable {
         _ inputIds: MLXArray,
         cache: [Q35LayerCache?]?,
         inputEmbeddings: MLXArray? = nil,
-        positionIds: MLXArray? = nil
+        positionIds: MLXArray? = nil,
+        targetVerify: Bool = false
     ) -> Q35ForwardOutput {
         let hidden = model(
             inputIds,
             cache: cache,
             inputEmbeddings: inputEmbeddings,
-            positionIds: positionIds
+            positionIds: positionIds,
+            targetVerify: targetVerify
         )
         return Q35ForwardOutput(hidden: hidden, logits: logits(from: hidden))
     }

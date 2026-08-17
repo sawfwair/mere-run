@@ -43,6 +43,38 @@ The format is based on Keep a Changelog.
   verified artifact fetch) built on `MereRunRelayKit`, with the architecture
   and phasing documented in `docs/ios-studio.md`.
 
+### Agents and Qwen3.8
+
+- exposed Qwen3.8's native `low`, `medium`, and `xhigh` reasoning-effort
+  profile through Pi, `text chat`, and the OpenAI-compatible API, including
+  stable aliases for Pi's broader effort vocabulary.
+- replaced delimiter/regex early stopping for Qwen XML tool calls with a
+  bounded structural streaming parser. Literal closing-tag text inside
+  parameter values no longer truncates a call, and adversarial streams cannot
+  trigger unbounded reparsing.
+
+### Qwen-family acceleration and serving
+
+- added a macOS BF16 Metal kernel for the Qwen3.8 gated-delta prework used by
+  MTP target verification. It is explicitly gated to target-verification
+  forwards and sequence widths 3–9; decode and prefill retain the composed
+  path. GPU parity is bit-exact at every claimed width.
+- made Qwen-family decode routing request-aware: an eligible uncontended
+  request may use MTP, while a request admitted alongside a waiting, running,
+  or prefilling peer stays on continuous batching.
+- made Qwen3.8 prefill live-headroom aware instead of selecting a wide chunk
+  from total physical RAM. It retains the 1,024-token default and caps chunks
+  at 512 below 16 GiB of reclaimable memory or under request contention; the
+  explicit environment value remains a pressure-capped upper bound.
+- made reusable MLX-buffer reclamation pressure-gated. Prefill clears only
+  after a reclaimable cache crosses 90% of the MLX memory limit, and the API
+  runtime clears reusable buffers before evicting a resident model.
+
+### Attribution
+
+- documented the Apache-2.0 provenance of the adapted Qwen GDN verification
+  kernel in `THIRD_PARTY_NOTICES.md`.
+
 ## 0.40.1 - 2026-08-16
 
 This patch release makes model health and discovery fast even when checkpoints

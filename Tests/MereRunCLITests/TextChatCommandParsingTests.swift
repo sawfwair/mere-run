@@ -195,6 +195,21 @@ final class TextChatCommandParsingTests: XCTestCase {
         )
     }
 
+    func testQ38AcceptsContinuousReasoningEffort() throws {
+        XCTAssertNoThrow(
+            try TextChat.validateReasoningEffort(
+                0.5,
+                modelID: Q35Resources.q38TwentySevenB4BitModelId
+            )
+        )
+        XCTAssertThrowsError(
+            try TextChat.validateReasoningEffort(
+                1.1,
+                modelID: Q35Resources.q38TwentySevenBModelId
+            )
+        )
+    }
+
     func testMuseGlimmerDFlashStatsAreMachineScannable() {
         let formatted = TextChat.formatMuseDFlashStats(MuseGlimmerDFlashStats(
             enabled: true,

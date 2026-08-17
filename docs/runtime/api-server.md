@@ -313,7 +313,9 @@ swift run mere.run api serve \
   weighted machine reservation
 - Gemma4, Qwen-family, and LFM2 prefills are chunked with cancellation and
   progress checkpoints before decode; this is cooperative single-request
-  prefill, not continuous batching
+  prefill, not continuous batching. Qwen3.8 defaults to 1,024-token chunks and
+  caps them at 512 when live reclaimable memory falls below 16 GiB or a peer is
+  admitted, so a live decoder is not held behind a pressure-heavy prefill
 - Gemma4 uses in-memory prefix KV reuse by default in `api serve`; set
   `MERERUN_GEMMA4_PREFIX_KV_CACHE=0` for a baseline. `/runtime/status` reports
   cache entries, hits, and reused tokens when the Gemma4 model is loaded; the
@@ -338,7 +340,10 @@ swift run mere.run api serve \
   `--max-active-requests` is above `1`. Their engine-specific continuous-batching
   variables can force the implementation on or force the serial path, and
   `/runtime/status` reports actual batched decode steps instead of assuming the
-  scheduler is active. Gemma4 full-attention rows remain same-position because
+  scheduler is active. An eligible Qwen MTP request takes its speculative lane
+  only when no peer is already admitted; contended arrivals use ordinary
+  batching, and a late arrival does not migrate an MTP request already in
+  progress. Gemma4 full-attention rows remain same-position because
   that engine still uses scalar RoPE/cache offsets. Qwen-family and LFM2
   full-attention rows use row-offset-aware ragged KV caches; Qwen-family linear
   attention and LFM2 short-convolution layers use typed recurrent state, so
