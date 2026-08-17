@@ -276,13 +276,25 @@ swift run mere.run text chat \
 
 The lane uses the published 262,144-token context, thinking default,
 temperature 1.0, top-p 0.95, top-k 20, both generation stop tokens, and the
-Qwen3.8 image sizing floor. The checkpoint also contains video understanding
-weights, but the current native command accepts text and local images only. Its
-embedded dense MTP head can be loaded from the official shards with
+Qwen3.8 image sizing floor. Its native reasoning-effort values are `low`,
+`medium`, and `xhigh`; Pi's `minimal`, `high`, and `max` aliases map to those
+native values without inventing unsupported template labels. Tool calls use a
+streaming structural Qwen XML parser, including when parameter strings contain
+tag-like text. The checkpoint also contains video understanding weights, but
+the current native command accepts text and local images only. Its embedded
+dense MTP head can be loaded from the official shards with
 `MERERUN_Q35_MTP_SPECULATION=1`. This materially accelerates greedy decode, but
 is experimental: BF16 multi-token verification can choose a different greedy
 path from serial target decode. The default, sampled, and JSON-constrained paths
-retain target-only decode.
+retain target-only decode. With API concurrency enabled, an eligible MTP request
+uses speculation only while uncontended; peers use the continuous-batching lane.
+
+Qwen3.8 prefill defaults to 1,024-token chunks. Live reclaimable host-memory
+headroom below 16 GiB, or an admitted peer, caps a chunk at 512 tokens. This
+uses current pressure rather than total physical RAM because the dense BF16
+checkpoint and concurrent workloads can consume most unified memory before
+prefill begins. `MERERUN_Q35_PREFILL_CHUNK_TOKENS` remains an explicit upper
+bound and is still pressure-capped.
 
 For the lower-residency lane, pull the separate 4-bit model ID:
 

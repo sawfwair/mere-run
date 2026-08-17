@@ -1,4 +1,5 @@
 import Foundation
+import MLX
 import MereRunCore
 #if canImport(Darwin)
 import Darwin
@@ -930,6 +931,7 @@ actor RuntimeModelPool {
     private let ensureMLXAvailable: @Sendable () throws -> Void
     private let prepareLoadedModel: @Sendable (RuntimeLoadedModel) async throws -> Void
     private let unloadLoadedModel: @Sendable (RuntimeLoadedModel) async -> Void
+    private let clearMLXCache: @Sendable () -> Void
 
     private var loadedModels: [String: RuntimeLoadedModel] = [:]
     private var loadedModelTokens: [String: UUID] = [:]
@@ -966,6 +968,9 @@ actor RuntimeModelPool {
         },
         unloadLoadedModel: @escaping @Sendable (RuntimeLoadedModel) async -> Void = { loaded in
             await loaded.unload()
+        },
+        clearMLXCache: @escaping @Sendable () -> Void = {
+            Memory.clearCache()
         }
     ) {
         self.defaultModelID = defaultModelID
@@ -986,6 +991,7 @@ actor RuntimeModelPool {
         self.ensureMLXAvailable = ensureMLXAvailable
         self.prepareLoadedModel = prepareLoadedModel
         self.unloadLoadedModel = unloadLoadedModel
+        self.clearMLXCache = clearMLXCache
     }
 
     func preloadDefault() async throws {
@@ -1176,6 +1182,7 @@ actor RuntimeModelPool {
             protectedIDs.insert(defaultModelID)
         }
         var evicted: [String] = []
+        var clearedReusableBuffers = false
         while true {
             let pressure = memoryPressurePolicy.pressure(for: currentMemorySample())
             switch pressure {
@@ -1183,6 +1190,12 @@ actor RuntimeModelPool {
                 return evicted.sorted()
             case .elevated, .critical:
                 break
+            }
+            if !clearedReusableBuffers {
+                clearMLXCache()
+                clearedReusableBuffers = true
+                await Task.yield()
+                continue
             }
             guard let id = await evictOldestIdleUnpinnedModel(excluding: protectedIDs) else {
                 return evicted.sorted()
@@ -1324,8 +1337,15 @@ actor RuntimeModelPool {
         sample: RuntimeMemorySample? = nil,
         excluding excludedIDs: Set<String> = []
     ) async -> [String] {
-        let memorySample = sample ?? currentMemorySample()
-        let pressure = memoryPressurePolicy.pressure(for: memorySample)
+        var memorySample = sample ?? currentMemorySample()
+        var pressure = memoryPressurePolicy.pressure(for: memorySample)
+        if pressure == .elevated || pressure == .critical {
+            clearMLXCache()
+            if sample == nil {
+                memorySample = currentMemorySample()
+                pressure = memoryPressurePolicy.pressure(for: memorySample)
+            }
+        }
         let evictionLimit: Int?
         switch pressure {
         case .disabled, .unknown, .nominal:

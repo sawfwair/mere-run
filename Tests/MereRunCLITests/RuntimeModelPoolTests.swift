@@ -822,6 +822,7 @@ final class RuntimeModelPoolTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: root) }
         let samples = RuntimeMemorySampleSequenceProbe([
             RuntimeMemorySample(physicalBytes: 100 * gib, residentBytes: 95 * gib),
+            RuntimeMemorySample(physicalBytes: 100 * gib, residentBytes: 95 * gib),
             RuntimeMemorySample(physicalBytes: 100 * gib, residentBytes: 10 * gib),
         ])
         let pool = RuntimeModelPool(
@@ -843,13 +844,43 @@ final class RuntimeModelPoolTests: XCTestCase {
         let evicted = await pool.relieveMemoryPressure()
 
         XCTAssertEqual(evicted, [Gemma4Resources.defaultModelId])
-        XCTAssertEqual(samples.readCount(), 2)
+        XCTAssertEqual(samples.readCount(), 3)
         let status = await pool.status()
         let gemma = try XCTUnwrap(status.models.first { $0.id == Gemma4Resources.defaultModelId })
         let q35 = try XCTUnwrap(status.models.first { $0.id == Q35Resources.defaultModelId })
         XCTAssertFalse(gemma.loaded)
         XCTAssertTrue(q35.loaded)
         XCTAssertEqual(q35.ready, true)
+    }
+
+    func testPressureReliefClearsReusableBuffersBeforeEvictingModels() async throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let samples = RuntimeMemorySampleSequenceProbe([
+            RuntimeMemorySample(physicalBytes: 100 * gib, residentBytes: 95 * gib),
+            RuntimeMemorySample(physicalBytes: 100 * gib, residentBytes: 10 * gib),
+        ])
+        let clears = RuntimeSynchronousCounterProbe()
+        let pool = RuntimeModelPool(
+            defaultModelID: "custom.gguf",
+            defaultEngine: .textCode,
+            startupModelPath: root.appendingPathComponent("custom.gguf").path,
+            settingsStore: RuntimeModelSettingsStore(modelsDir: root),
+            currentMemorySample: { samples.next() },
+            clearMLXCache: { clears.increment() }
+        )
+        await pool.seedLoadedModelForTesting(
+            id: Gemma4Resources.defaultModelId,
+            lastAccess: Date(timeIntervalSince1970: 10)
+        )
+
+        let evicted = await pool.relieveMemoryPressure()
+
+        XCTAssertTrue(evicted.isEmpty)
+        XCTAssertEqual(clears.value(), 1)
+        XCTAssertEqual(samples.readCount(), 2)
+        let status = await pool.status()
+        XCTAssertTrue(status.models.first { $0.id == Gemma4Resources.defaultModelId }?.loaded ?? false)
     }
 
     func testPressureReliefPreservesStartupDefaultByDefault() async throws {
@@ -888,6 +919,7 @@ final class RuntimeModelPoolTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: root) }
         let samples = RuntimeMemorySampleSequenceProbe([
             RuntimeMemorySample(physicalBytes: 100 * gib, residentBytes: 95 * gib),
+            RuntimeMemorySample(physicalBytes: 100 * gib, residentBytes: 95 * gib),
             RuntimeMemorySample(physicalBytes: 100 * gib, residentBytes: 10 * gib),
         ])
         let pool = RuntimeModelPool(
@@ -909,7 +941,7 @@ final class RuntimeModelPoolTests: XCTestCase {
         let evicted = await pool.relieveMemoryPressure(preserveDefault: false)
 
         XCTAssertEqual(evicted, ["custom.gguf"])
-        XCTAssertEqual(samples.readCount(), 2)
+        XCTAssertEqual(samples.readCount(), 3)
     }
 
     func testMemoryPressureLRUHonorsExcludedModel() async throws {
@@ -1471,5 +1503,22 @@ private final class RuntimeMemorySampleSequenceProbe: @unchecked Sendable {
         lock.lock()
         defer { lock.unlock() }
         return index
+    }
+}
+
+private final class RuntimeSynchronousCounterProbe: @unchecked Sendable {
+    private let lock = NSLock()
+    private var count = 0
+
+    func increment() {
+        lock.lock()
+        count += 1
+        lock.unlock()
+    }
+
+    func value() -> Int {
+        lock.lock()
+        defer { lock.unlock() }
+        return count
     }
 }

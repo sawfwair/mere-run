@@ -54,6 +54,15 @@ public struct Q35Resources: Sendable, Hashable {
         modelId == bonsai27B1BitModelId || modelId == bonsai27B2BitModelId
     }
 
+    /// Convert the public continuous reasoning control into the three native
+    /// levels accepted by the pinned Qwen3.8 chat template.
+    public static func q38ReasoningEffortLabel(for strength: Double?) -> String? {
+        guard let strength else { return nil }
+        if strength < 1.0 / 3.0 { return "low" }
+        if strength < 2.0 / 3.0 { return "medium" }
+        return "xhigh"
+    }
+
     public struct RecommendedSampling: Sendable, Hashable {
         public let temperature: Double
         public let topP: Double

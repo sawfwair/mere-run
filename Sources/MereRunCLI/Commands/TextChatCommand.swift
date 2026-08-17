@@ -85,7 +85,7 @@ struct TextChat: AsyncParsableCommand {
 
     @Option(
         name: [.customLong("reasoning-effort")],
-        help: "Inkling-Small reasoning effort from 0 through 0.99. Default: 0.9."
+        help: "Reasoning effort from 0 through 1 for Qwen3.8, or 0 through 0.99 for Inkling-Small and Muse Glimmer."
     )
     var reasoningEffort: Double?
 
@@ -705,8 +705,11 @@ struct TextChat: AsyncParsableCommand {
     static func validateReasoningEffort(_ value: Double?, modelID: String) throws {
         guard let value else { return }
         guard InklingResources.handles(modelSpec: modelID)
-                || MuseGlimmerResources.handles(modelSpec: modelID) else {
-            throw ValidationError("--reasoning-effort is supported only for Inkling-Small and Muse Glimmer.")
+                || MuseGlimmerResources.handles(modelSpec: modelID)
+                || Q35Resources.isQ38ModelId(modelID) else {
+            throw ValidationError(
+                "--reasoning-effort is supported only for Qwen3.8, Inkling-Small, and Muse Glimmer."
+            )
         }
         let allowed = InklingResources.handles(modelSpec: modelID)
             ? (0...0.99).contains(value)

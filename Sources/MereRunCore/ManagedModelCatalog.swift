@@ -236,6 +236,30 @@ public extension ManagedModelAPIProfile {
         )
     }
 
+    static func q38(contextWindow: Int) -> ManagedModelAPIProfile {
+        chat(
+            servingEngine: .textChatQ36,
+            inputModalities: [.text, .image],
+            contextWindow: contextWindow,
+            maximumOutputTokens: 4_096,
+            thinkingLevels: [.low, .medium, .xhigh],
+            thinkingLevelMap: [.minimal: .low, .high: .xhigh, .max: .xhigh],
+            reasoningEffortStrengths: [
+                .minimal: 0.2,
+                .low: 0.2,
+                .medium: 0.5,
+                .high: 1,
+                .xhigh: 1,
+                .max: 1,
+            ],
+            toolCall: true,
+            structuredOutput: true,
+            compatibility: ManagedModelOpenAICompatibilityProfile(
+                supportsReasoningEffort: true
+            )
+        )
+    }
+
     static func lfm2(
         inputModalities: [ManagedModelAPIModality] = [.text],
         contextWindow: Int = LFM2Resources.defaultContextLength
@@ -1669,7 +1693,7 @@ public enum ManagedModelCatalog {
                 "model benchmark code",
                 "model benchmark vlm",
             ],
-            apiProfile: .q36(contextWindow: Q35Resources.q38TwentySevenBContextLength)
+            apiProfile: .q38(contextWindow: Q35Resources.q38TwentySevenBContextLength)
         ),
         ManagedModelSpec(
             id: Q35Resources.q38TwentySevenB4BitModelId,
@@ -1708,7 +1732,7 @@ public enum ManagedModelCatalog {
                 "model benchmark code",
                 "model benchmark vlm",
             ],
-            apiProfile: .q36(contextWindow: Q35Resources.q38TwentySevenBContextLength)
+            apiProfile: .q38(contextWindow: Q35Resources.q38TwentySevenBContextLength)
         ),
         ManagedModelSpec(
             id: Q35Resources.bonsai27B1BitModelId,

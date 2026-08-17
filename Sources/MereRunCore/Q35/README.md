@@ -34,3 +34,17 @@ rows execute on a disposable fork. The exact target projection still verifies
 every emitted token. Per-request acceptance estimates adapt the draft depth and
 can fall back to target-only rounds when proposals stop paying for their repair
 cost. Sampled MTP keeps the full-vocabulary probability path.
+
+Qwen3.8 target verification marks its model forward explicitly. On macOS, only
+that marked path may use the fused BF16 GDN prework kernel, and only for batch
+one, a four-tap depthwise convolution, 128-wide key/value heads, and sequence
+widths 3–9. The kernel replaces convolution-state concatenation, depthwise
+Conv1d, SiLU, q/k/v preparation, RMS normalization, scaling, and next-state
+capture. Decode, prefill, unsupported shapes, and non-Metal platforms retain
+the composed operations. Metal tests require bit-exact parity for widths 3, 4,
+5, 7, and 9.
+
+The streaming tool-call parser walks the Qwen XML structure rather than using
+delimiter search. A closing tag is accepted only at its structural position,
+so strings containing tag-like text remain parameter data. Streaming reparses
+are bounded; EOS still receives a final structural parse.

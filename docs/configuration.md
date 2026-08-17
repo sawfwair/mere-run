@@ -290,12 +290,14 @@ Gemma case where the same fusion bought +17%.
 ### `MERERUN_Q35_PREFILL_CHUNK_TOKENS`
 
 Prefill chunk length for Qwen-family models, accepted range 64–8192, default
-1024. Larger chunks batch more routed-expert rows per gather matmul: on the
-Ornith 35B MoE (M4 Max) a 6.8K-token prefill measured 1116 tok/s at 512,
-1238 tok/s at 1024, and regressed at 2048. Chunked causal prefill is exact,
-so outputs are byte-identical across chunk sizes; the setting only trades
-throughput against progress-report granularity and per-chunk activation
-memory.
+1024. Qwen3.8 uses live host-memory headroom rather than total physical RAM: it
+caps the current chunk at 512 below 16 GiB of reclaimable headroom. The same cap
+applies when another request is admitted so a decoder is not stalled behind a
+wide prefill. An explicit value remains an upper bound and is still reduced
+under memory pressure or contention. On the Ornith 35B MoE (M4 Max), a
+6.8K-token prefill measured 1116 tok/s at 512, 1238 tok/s at 1024, and regressed
+at 2048. Chunked causal prefill is exact, so the setting trades throughput
+against progress-report granularity and per-chunk activation memory.
 
 ### `MERERUN_Q35_BATCHED_GPU_SAMPLING`
 
@@ -469,7 +471,10 @@ value, including unset, uses the model-specific policy. Qwen3.8's dense head is
 embedded in the BF16 checkpoint; `vision-chat-q38-27b-4bit` mounts the matching
 4-bit/group-64 MLX Fast proposal head. Both are opt-in because multi-token
 verification can diverge from serial greedy decode; Qwen3.6 hybrid MoE retains
-its adaptive default.
+its adaptive default. When continuous batching is enabled, an eligible MTP
+request takes the speculative lane only if no peer is already admitted. A
+contended request uses ordinary continuous batching; a late peer does not
+migrate an MTP request that is already running.
 
 The `Q35` name is an internal compatibility prefix for the Qwen-family runtime;
 the public managed model ids retain their Qwen release names.

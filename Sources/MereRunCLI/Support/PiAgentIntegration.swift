@@ -72,13 +72,13 @@ struct PiProviderModel {
         let supportedThinkingLevels = Set(profile.thinkingLevels)
         let thinkingLevelMap = profile.reasoning
             ? ManagedModelThinkingLevel.allCases.compactMap { level -> (key: String, value: String?)? in
+                if let mapped = profile.thinkingLevelMap[level] {
+                    return (level.rawValue, mapped.rawValue)
+                }
                 guard supportedThinkingLevels.contains(level) else {
                     return (level.rawValue, nil)
                 }
-                guard let mapped = profile.thinkingLevelMap[level] else {
-                    return nil
-                }
-                return (level.rawValue, mapped.rawValue)
+                return nil
             }
             : nil
         let compatibility = profile.compatibility

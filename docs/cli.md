@@ -2925,7 +2925,9 @@ native chat engine and DeepSeek V4 Flash uses the DS4-backed
 uses the best installed startable setup agent first, then a valid persisted Pi
 provider model, then the current machine's startable hardware tier. On 96 GB+
 Apple Silicon Macs, DeepSeek V4 Flash is the preferred setup-agent tier; smaller
-Qwen models are alternatives, not upgrades.
+Qwen models are alternatives, not upgrades. Qwen3.8 advertises its native
+`low`, `medium`, and `xhigh` reasoning levels to Pi; Pi's `minimal`, `high`, and
+`max` selections map to the nearest native level.
 
 ```bash
 swift run mere.run model pull text-agent-deepseek-v4-flash

@@ -48,8 +48,15 @@ public final class QwenTokenizer {
     tools: [ToolSpec]? = nil,
     addGenerationPrompt: Bool = true,
     includeThinking: Bool = true,
+    reasoningEffort: String? = nil,
     maxLength: Int? = nil
   ) throws -> [Int] {
+    var additionalContext: [String: any Sendable] = [
+      "enable_thinking": includeThinking
+    ]
+    if let reasoningEffort {
+      additionalContext["reasoning_effort"] = reasoningEffort
+    }
     var encoded = try tokenizer.applyChatTemplate(
       messages: messages,
       chatTemplate: nil,
@@ -57,7 +64,7 @@ public final class QwenTokenizer {
       truncation: false,
       maxLength: nil,
       tools: tools,
-      additionalContext: ["enable_thinking": includeThinking]
+      additionalContext: additionalContext
     )
     let targetLength = min(maxLength ?? self.maxLength, self.maxLength)
     if encoded.count > targetLength {

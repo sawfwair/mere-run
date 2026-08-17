@@ -247,6 +247,157 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         XCTAssertEqual(outputMaxDiff, 0, accuracy: 1e-5)
         XCTAssertEqual(stateMaxDiff, 0, accuracy: 1e-5)
     }
+
+    func testQ35GDNVerifyPreworkMetalIsBitExactAtClaimedWidths() throws {
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip("Q35 GDN prework Metal parity requires MERERUN_TEST_MLX_DEVICE=gpu.")
+        }
+
+        let numKeyHeads = 16
+        let numValueHeads = 48
+        let keyHeadDim = 128
+        let valueHeadDim = 128
+        let convDim = 2 * numKeyHeads * keyHeadDim + numValueHeads * valueHeadDim
+
+        for sequence in [3, 4, 5, 7, 9] {
+            MLXRandom.seed(11)
+            let qkv = MLXRandom.uniform(-0.5 ..< 0.5, [1, sequence, convDim]).asType(.bfloat16)
+            let state = MLXRandom.uniform(-0.5 ..< 0.5, [1, 3, convDim]).asType(.bfloat16)
+            let weight = MLXRandom.uniform(-0.2 ..< 0.2, [convDim, 4, 1]).asType(.bfloat16)
+            let reference = q35GDNPreworkOps(
+                qkv: qkv,
+                convState: state,
+                convWeight: weight,
+                numKeyHeads: numKeyHeads,
+                numValueHeads: numValueHeads,
+                keyHeadDim: keyHeadDim,
+                valueHeadDim: valueHeadDim
+            )
+            let fast = try XCTUnwrap(q35GDNPreworkMetal(
+                qkv: qkv,
+                convState: state,
+                convWeight: weight,
+                numKeyHeads: numKeyHeads,
+                numValueHeads: numValueHeads,
+                keyHeadDim: keyHeadDim,
+                valueHeadDim: valueHeadDim
+            ))
+
+            for (name, expected, actual) in [
+                ("q", reference.q, fast.q),
+                ("k", reference.k, fast.k),
+                ("v", reference.v, fast.v),
+                ("convState", reference.convState, fast.convState),
+            ] {
+                MLX.eval(expected, actual)
+                XCTAssertEqual(actual.shape, expected.shape, "\(name), S=\(sequence)")
+                XCTAssertTrue(
+                    MLX.allClose(expected, actual, rtol: 0, atol: 0).item(Bool.self),
+                    "\(name) was not bit-exact at S=\(sequence)"
+                )
+            }
+        }
+    }
+
+    func testQ35GDNVerifyPreworkBenchmarkWhenEnabled() throws {
+        guard ProcessInfo.processInfo.environment["MERERUN_TEST_Q35_GDN_BENCHMARK"] == "1" else {
+            throw XCTSkip("Set MERERUN_TEST_Q35_GDN_BENCHMARK=1 to measure fused GDN prework.")
+        }
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip("Q35 GDN prework benchmark requires MERERUN_TEST_MLX_DEVICE=gpu.")
+        }
+
+        let numKeyHeads = 16
+        let numValueHeads = 48
+        let keyHeadDim = 128
+        let valueHeadDim = 128
+        let convDim = 2 * numKeyHeads * keyHeadDim + numValueHeads * valueHeadDim
+        let iterations = 50
+        let rmsNormWeight = MLXArray.ones([keyHeadDim], dtype: .bfloat16)
+
+        for sequence in [4, 9] {
+            MLXRandom.seed(17)
+            let qkv = MLXRandom.uniform(-0.5 ..< 0.5, [1, sequence, convDim]).asType(.bfloat16)
+            let state = MLXRandom.uniform(-0.5 ..< 0.5, [1, 3, convDim]).asType(.bfloat16)
+            let weight = MLXRandom.uniform(-0.2 ..< 0.2, [convDim, 4, 1]).asType(.bfloat16)
+
+            func reference() -> Q35GDNPreworkOutput {
+                q35GDNPreworkOps(
+                    qkv: qkv,
+                    convState: state,
+                    convWeight: weight,
+                    numKeyHeads: numKeyHeads,
+                    numValueHeads: numValueHeads,
+                    keyHeadDim: keyHeadDim,
+                    valueHeadDim: valueHeadDim,
+                    rmsNormWeight: rmsNormWeight
+                )
+            }
+
+            func fused() throws -> Q35GDNPreworkOutput {
+                try XCTUnwrap(q35GDNPreworkMetal(
+                    qkv: qkv,
+                    convState: state,
+                    convWeight: weight,
+                    numKeyHeads: numKeyHeads,
+                    numValueHeads: numValueHeads,
+                    keyHeadDim: keyHeadDim,
+                    valueHeadDim: valueHeadDim
+                ))
+            }
+
+            func evaluate(_ output: Q35GDNPreworkOutput) {
+                MLX.eval(output.q, output.k, output.v, output.convState)
+            }
+
+            for _ in 0..<3 {
+                evaluate(reference())
+                evaluate(try fused())
+            }
+
+            let referenceStart = Date()
+            for _ in 0..<iterations {
+                evaluate(reference())
+            }
+            let referenceSeconds = Date().timeIntervalSince(referenceStart)
+
+            let fusedStart = Date()
+            for _ in 0..<iterations {
+                evaluate(try fused())
+            }
+            let fusedSeconds = Date().timeIntervalSince(fusedStart)
+            let referenceMilliseconds = referenceSeconds * 1_000 / Double(iterations)
+            let fusedMilliseconds = fusedSeconds * 1_000 / Double(iterations)
+            let speedup = referenceMilliseconds / fusedMilliseconds
+            print(String(
+                format: "q35_gdn_prework_benchmark sequence=%d iterations=%d reference_ms=%.4f fused_ms=%.4f speedup=%.3fx",
+                sequence,
+                iterations,
+                referenceMilliseconds,
+                fusedMilliseconds,
+                speedup
+            ))
+        }
+    }
+
+    func testQ35GDNVerifyPreworkRejectsDecodeWidth() throws {
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip("Q35 GDN prework eligibility requires MERERUN_TEST_MLX_DEVICE=gpu.")
+        }
+        let qkv = MLXArray.zeros([1, 1, 10_240], dtype: .bfloat16)
+        let state = MLXArray.zeros([1, 3, 10_240], dtype: .bfloat16)
+        let weight = MLXArray.zeros([10_240, 4, 1], dtype: .bfloat16)
+
+        XCTAssertNil(q35GDNPreworkMetal(
+            qkv: qkv,
+            convState: state,
+            convWeight: weight,
+            numKeyHeads: 16,
+            numValueHeads: 48,
+            keyHeadDim: 128,
+            valueHeadDim: 128
+        ))
+    }
     #endif
 
     func testQ35RMSNormOffsetConversionSkipsLinearAttentionGateNorm() {
@@ -371,6 +522,34 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
             "<|vision_start|><|image_pad|><|image_pad|><|image_pad|><|vision_end|>Read it."
         ))
         XCTAssertTrue(decoded.hasSuffix("<|im_start|>assistant\n<think>\n"))
+    }
+
+    func testQ38PinnedTokenizerRendersNativeReasoningEffortWhenAvailable() throws {
+        guard let rootPath = ProcessInfo.processInfo.environment["MERERUN_Q38_TOKENIZER_ROOT"] else {
+            throw XCTSkip("Set MERERUN_Q38_TOKENIZER_ROOT to run pinned Qwen3.8 tokenizer parity.")
+        }
+        let template = try Q35TokenizerAndTemplate.load(
+            from: URL(fileURLWithPath: rootPath),
+            maxLengthOverride: Q35Resources.q38TwentySevenBContextLength
+        )
+        let tokens = try template.encodeForGeneration(
+            messages: [ChatMessage(role: .user, content: "Answer directly.")],
+            addGenerationPrompt: true,
+            includeThinking: true,
+            reasoningEffort: "low",
+            maxLength: Q35Resources.q38TwentySevenBContextLength
+        )
+
+        XCTAssertTrue(template.decode(tokens: tokens).contains("Reasoning effort is set to low."))
+    }
+
+    func testQ38ContinuousReasoningEffortMapsToNativeLevels() {
+        XCTAssertNil(Q35Resources.q38ReasoningEffortLabel(for: nil))
+        XCTAssertEqual(Q35Resources.q38ReasoningEffortLabel(for: 0), "low")
+        XCTAssertEqual(Q35Resources.q38ReasoningEffortLabel(for: 0.2), "low")
+        XCTAssertEqual(Q35Resources.q38ReasoningEffortLabel(for: 0.5), "medium")
+        XCTAssertEqual(Q35Resources.q38ReasoningEffortLabel(for: 0.8), "xhigh")
+        XCTAssertEqual(Q35Resources.q38ReasoningEffortLabel(for: 1), "xhigh")
     }
 
     func testQ35TemplateLeavesThinkingOpenWhenRequested() {
@@ -548,6 +727,23 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         ])
 
         XCTAssertEqual(shards, ["model-00017.safetensors", "model-00018.safetensors"])
+    }
+
+    func testQ38MountedMTPComponentIsDiscovered() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "q38-mtp-\(UUID().uuidString)",
+            isDirectory: true
+        )
+        defer { try? FileManager.default.removeItem(at: root) }
+        let mtpRoot = root.appendingPathComponent(Q35Resources.q38MTPComponentPath, isDirectory: true)
+        try FileManager.default.createDirectory(at: mtpRoot, withIntermediateDirectories: true)
+        try Data().write(to: mtpRoot.appendingPathComponent("model.safetensors"))
+
+        let resources = try XCTUnwrap(
+            Q35Generator.mtpResources(primary: Q35Resources(rootURL: root))
+        )
+
+        XCTAssertEqual(resources.rootURL.standardizedFileURL, mtpRoot.standardizedFileURL)
     }
 
     func testQ35StandaloneMTPWeightMappingAcceptsBareHeadKeys() {
@@ -780,6 +976,15 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
                 continuousBatchingEnabled: true,
                 mtpSpeculationEnabled: true
             ),
+            .mtpSpeculativeSerial
+        )
+        XCTAssertEqual(
+            Q35Generator.decodePath(
+                jsonConstrained: false,
+                continuousBatchingEnabled: true,
+                mtpSpeculationEnabled: true,
+                schedulerContended: true
+            ),
             .continuousBatched
         )
         XCTAssertEqual(
@@ -798,6 +1003,98 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
             ),
             .pipelined
         )
+    }
+
+    func testQ38PrefillChunkUsesSafeDefaultAndShrinksWithLowLiveHeadroom() {
+        let gibibyte = UInt64(1_024 * 1_024 * 1_024)
+        XCTAssertEqual(
+            Q35Generator.prefillChunkSize(
+                modelId: Q35Resources.q38TwentySevenBModelId,
+                availableMemory: 64 * gibibyte,
+                environment: [:]
+            ),
+            1_024
+        )
+        XCTAssertEqual(
+            Q35Generator.prefillChunkSize(
+                modelId: Q35Resources.q38TwentySevenBModelId,
+                availableMemory: 16 * gibibyte - 1,
+                environment: [:]
+            ),
+            512
+        )
+        XCTAssertEqual(
+            Q35Generator.prefillChunkSize(
+                modelId: Q35Resources.defaultModelId,
+                availableMemory: 1,
+                environment: [:]
+            ),
+            1_024
+        )
+        XCTAssertEqual(
+            Q35Generator.prefillChunkSize(
+                modelId: Q35Resources.q38TwentySevenBModelId,
+                availableMemory: nil,
+                environment: [:]
+            ),
+            1_024
+        )
+    }
+
+    func testQ38PrefillChunkShrinksUnderContentionAndHonorsOverride() {
+        XCTAssertEqual(
+            Q35Generator.prefillChunkSize(
+                modelId: Q35Resources.q38TwentySevenBModelId,
+                availableMemory: UInt64.max,
+                activeRequestCount: 2,
+                environment: [:]
+            ),
+            512
+        )
+        XCTAssertEqual(
+            Q35Generator.prefillChunkSize(
+                modelId: Q35Resources.q38TwentySevenBModelId,
+                availableMemory: UInt64.max,
+                activeRequestCount: 2,
+                environment: ["MERERUN_Q35_PREFILL_CHUNK_TOKENS": "256"]
+            ),
+            256
+        )
+        XCTAssertEqual(
+            Q35Generator.prefillChunkSize(
+                modelId: Q35Resources.q38TwentySevenBModelId,
+                availableMemory: 1,
+                environment: ["MERERUN_Q35_PREFILL_CHUNK_TOKENS": "4096"]
+            ),
+            512
+        )
+        XCTAssertEqual(
+            Q35Generator.prefillChunkSize(
+                modelId: Q35Resources.q38TwentySevenBModelId,
+                availableMemory: UInt64.max,
+                environment: ["MERERUN_Q35_PREFILL_CHUNK_TOKENS": "4096"]
+            ),
+            4_096
+        )
+    }
+
+    func testQ35MLXCacheClearRequiresReclaimablePressure() {
+        let gib = 1_024 * 1_024 * 1_024
+        XCTAssertFalse(Q35Generator.shouldClearMLXCache(
+            activeMemory: 7 * gib,
+            cacheMemory: 128 * 1_024 * 1_024,
+            memoryLimit: 8 * gib
+        ))
+        XCTAssertFalse(Q35Generator.shouldClearMLXCache(
+            activeMemory: 5 * gib,
+            cacheMemory: 1 * gib,
+            memoryLimit: 8 * gib
+        ))
+        XCTAssertTrue(Q35Generator.shouldClearMLXCache(
+            activeMemory: 7 * gib,
+            cacheMemory: 1 * gib,
+            memoryLimit: 8 * gib
+        ))
     }
 
     func testQ35ToolCallsSelectEarlyStoppablePipelinedDecode() {
