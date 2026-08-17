@@ -6,6 +6,12 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.40.1 - 2026-08-16
+
+This patch release makes model health and discovery fast even when checkpoints
+live in large or external stores. It separates availability from exact storage
+accounting and keeps verification explicit.
+
 ### Model inventory
 
 - split fast model availability from recursive storage accounting. `status` and
@@ -13,6 +19,10 @@ The format is based on Keep a Changelog.
   completeness, duration, and verification state in status JSON, and reserve
   recursive referenced-size scans for `model list --measure-sizes` and the
   dedicated storage commands.
+
+### Included pull requests
+
+- exact release range: [#314](https://github.com/sawfwair/mere-run/pull/314).
 
 ## 0.40.0 - 2026-08-16
 
