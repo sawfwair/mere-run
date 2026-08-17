@@ -534,6 +534,166 @@ enum WorkflowNodeCommandBuilder {
                 outputs: ["text": fileOutput(output, contentTypes: ["text/plain"])],
                 streamsEvents: false
             )
+        case "vision.caption":
+            let output = artifacts.appendingPathComponent("captions", isDirectory: true)
+            var args = ["vision", "caption", try requiredString("image", in: arguments), "--output-dir", output.path]
+            appendString("model", flag: "--model", from: arguments, to: &args)
+            appendString("prompt", flag: "--prompt", from: arguments, to: &args)
+            appendInteger("max_tokens", flag: "--max-tokens", from: arguments, to: &args)
+            appendNumber("temperature", flag: "--temperature", from: arguments, to: &args)
+            return .init(
+                command: ["vision", "caption"],
+                executable: CurrentExecutable.url(),
+                preflightArguments: [],
+                runArguments: args,
+                outputs: ["captions": directoryOutput(output, contentTypes: ["text/plain"])],
+                streamsEvents: false
+            )
+        case "vision.ocr":
+            let output = artifacts.appendingPathComponent("ocr", isDirectory: true)
+            var args = ["vision", "ocr", try requiredString("image", in: arguments), "--output-dir", output.path]
+            appendString("model", flag: "--model", from: arguments, to: &args)
+            appendString("backend", flag: "--backend", from: arguments, to: &args)
+            return .init(
+                command: ["vision", "ocr"],
+                executable: CurrentExecutable.url(),
+                preflightArguments: [],
+                runArguments: args,
+                outputs: ["text": directoryOutput(output, contentTypes: ["text/plain", "text/markdown", "application/json"])],
+                streamsEvents: false
+            )
+        case "vision.geometry":
+            let output = artifacts.appendingPathComponent("geometry", isDirectory: true)
+            var args = ["vision", "geometry", try requiredString("image", in: arguments), "--output", output.path]
+            appendString("model", flag: "--model", from: arguments, to: &args)
+            appendInteger("resolution_level", flag: "--resolution-level", from: arguments, to: &args)
+            appendInteger("max_points", flag: "--max-points", from: arguments, to: &args)
+            return .init(
+                command: ["vision", "geometry"],
+                executable: CurrentExecutable.url(),
+                preflightArguments: [],
+                runArguments: args,
+                outputs: [
+                    "geometry": directoryOutput(
+                        output,
+                        contentTypes: ["image/x-exr", "application/json", "application/octet-stream"]
+                    ),
+                ],
+                streamsEvents: false
+            )
+        case "vision.image-to-3d":
+            let output = artifacts.appendingPathComponent("mesh", isDirectory: true)
+            var args = ["vision", "image-to-3d", try requiredString("image", in: arguments), "--output", output.path]
+            appendString("model", flag: "--model", from: arguments, to: &args)
+            appendInteger("resolution", flag: "--resolution", from: arguments, to: &args)
+            appendNumber("foreground_ratio", flag: "--foreground-ratio", from: arguments, to: &args)
+            return .init(
+                command: ["vision", "image-to-3d"],
+                executable: CurrentExecutable.url(),
+                preflightArguments: [],
+                runArguments: args,
+                outputs: [
+                    "mesh": directoryOutput(
+                        output,
+                        contentTypes: ["model/gltf-binary", "model/obj", "application/octet-stream"]
+                    ),
+                ],
+                streamsEvents: false
+            )
+        case "audio.enhance":
+            let output = artifacts.appendingPathComponent("enhanced.wav")
+            var args = ["audio", "enhance", try requiredString("audio", in: arguments), "--output", output.path]
+            appendString("model", flag: "--model", from: arguments, to: &args)
+            appendInteger("seed", flag: "--seed", from: arguments, to: &args)
+            return .init(
+                command: ["audio", "enhance"],
+                executable: CurrentExecutable.url(),
+                preflightArguments: [],
+                runArguments: args,
+                outputs: ["audio": fileOutput(output, contentTypes: ["audio/wav"])],
+                streamsEvents: false
+            )
+        case "music.separate":
+            let output = artifacts.appendingPathComponent("stems", isDirectory: true)
+            var args = ["music", "separate", try requiredString("audio", in: arguments), "--output-dir", output.path]
+            appendString("model", flag: "--model", from: arguments, to: &args)
+            args += ["--quiet"]
+            return .init(
+                command: ["music", "separate"],
+                executable: CurrentExecutable.url(),
+                preflightArguments: [],
+                runArguments: args,
+                outputs: ["stems": directoryOutput(output, contentTypes: ["audio/wav"])],
+                streamsEvents: false
+            )
+        case "music.transcribe":
+            let format = arguments["format"]?.stringValue ?? "midi"
+            let filename = format == "midi" ? "transcription.mid" : "transcription.\(format)"
+            let contentType = format == "midi" ? "audio/midi" : "application/json"
+            let output = artifacts.appendingPathComponent(filename)
+            var args = [
+                "music", "transcribe", try requiredString("audio", in: arguments),
+                "--output", output.path,
+                "--format", format,
+            ]
+            appendString("model", flag: "--model", from: arguments, to: &args)
+            return .init(
+                command: ["music", "transcribe"],
+                executable: CurrentExecutable.url(),
+                preflightArguments: [],
+                runArguments: args,
+                outputs: ["transcription": fileOutput(output, contentTypes: [contentType])],
+                streamsEvents: false
+            )
+        case "speech.diarize":
+            let format = arguments["format"]?.stringValue ?? "json"
+            let output = artifacts.appendingPathComponent("diarization.\(format)")
+            var args = [
+                "speech", "diarize", try requiredString("audio", in: arguments),
+                "--output", output.path,
+                "--format", format,
+                "--quiet",
+            ]
+            appendString("model", flag: "--model", from: arguments, to: &args)
+            return .init(
+                command: ["speech", "diarize"],
+                executable: CurrentExecutable.url(),
+                preflightArguments: [],
+                runArguments: args,
+                outputs: [
+                    "segments": fileOutput(
+                        output,
+                        contentTypes: [format == "json" ? "application/json" : "text/plain"]
+                    ),
+                ],
+                streamsEvents: false
+            )
+        case "text.embed":
+            let output = artifacts.appendingPathComponent("embeddings.json")
+            var args = ["text", "embed", try requiredString("text", in: arguments), "--output", output.path]
+            appendString("model", flag: "--model", from: arguments, to: &args)
+            appendInteger("max_tokens", flag: "--max-tokens", from: arguments, to: &args)
+            return .init(
+                command: ["text", "embed"],
+                executable: CurrentExecutable.url(),
+                preflightArguments: [],
+                runArguments: args,
+                outputs: ["embeddings": fileOutput(output, contentTypes: ["application/json"])],
+                streamsEvents: false
+            )
+        case "text.anonymize":
+            let output = artifacts.appendingPathComponent("anonymized.txt")
+            var args = ["text", "anonymize", try requiredString("text", in: arguments), "--output", output.path]
+            appendString("model", flag: "--model", from: arguments, to: &args)
+            appendString("replacement", flag: "--replacement", from: arguments, to: &args)
+            return .init(
+                command: ["text", "anonymize"],
+                executable: CurrentExecutable.url(),
+                preflightArguments: [],
+                runArguments: args,
+                outputs: ["text": fileOutput(output, contentTypes: ["text/plain"])],
+                streamsEvents: false
+            )
         default:
             throw ValidationError("Unsupported workflow node kind '\(node.kind)'.")
         }

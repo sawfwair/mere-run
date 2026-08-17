@@ -1010,6 +1010,169 @@ public enum WorkflowNodeRegistry {
                 minimumAcceleratorMemoryBytes: nil
             )
         ),
+        WorkflowNodeCatalogEntry(
+            kind: "vision.caption",
+            title: "Caption image",
+            category: "vision",
+            inputs: [
+                .init(name: "image", type: .asset, required: true, acceptedContentTypes: ["image/png", "image/jpeg", "image/webp"]),
+                .init(name: "model", type: .string, required: false),
+                .init(name: "prompt", type: .string, required: false),
+                .init(name: "max_tokens", type: .integer, required: false),
+                .init(name: "temperature", type: .number, required: false),
+            ],
+            outputs: [.init(name: "captions", type: .assetDirectory, contentTypes: ["text/plain"])],
+            requirements: .init(
+                modelIDs: [],
+                acceleratorBackends: ["metal", "cuda"],
+                minimumAcceleratorMemoryBytes: nil
+            )
+        ),
+        WorkflowNodeCatalogEntry(
+            kind: "vision.ocr",
+            title: "Read text",
+            category: "vision",
+            inputs: [
+                .init(name: "image", type: .asset, required: true, acceptedContentTypes: ["image/png", "image/jpeg", "image/webp"]),
+                .init(name: "model", type: .string, required: false),
+                .init(name: "backend", type: .enumeration, required: false, values: ["lighton", "glm", "infinity"]),
+            ],
+            outputs: [.init(name: "text", type: .assetDirectory, contentTypes: ["text/plain", "text/markdown", "application/json"])],
+            requirements: .init(
+                modelIDs: [],
+                acceleratorBackends: ["metal", "cuda"],
+                minimumAcceleratorMemoryBytes: nil
+            )
+        ),
+        WorkflowNodeCatalogEntry(
+            kind: "vision.geometry",
+            title: "Estimate geometry",
+            category: "vision",
+            inputs: [
+                .init(name: "image", type: .asset, required: true, acceptedContentTypes: ["image/png", "image/jpeg", "image/webp"]),
+                .init(name: "model", type: .string, required: false),
+                .init(name: "resolution_level", type: .integer, required: false),
+                .init(name: "max_points", type: .integer, required: false),
+            ],
+            outputs: [.init(name: "geometry", type: .assetDirectory, contentTypes: ["image/x-exr", "application/json", "application/octet-stream"])],
+            requirements: .init(
+                modelIDs: [],
+                acceleratorBackends: ["metal", "cuda"],
+                minimumAcceleratorMemoryBytes: nil
+            )
+        ),
+        WorkflowNodeCatalogEntry(
+            kind: "vision.image-to-3d",
+            title: "Image to 3D",
+            category: "vision",
+            inputs: [
+                .init(name: "image", type: .asset, required: true, acceptedContentTypes: ["image/png", "image/jpeg", "image/webp"]),
+                .init(name: "model", type: .string, required: false),
+                .init(name: "resolution", type: .integer, required: false),
+                .init(name: "foreground_ratio", type: .number, required: false),
+            ],
+            outputs: [.init(name: "mesh", type: .assetDirectory, contentTypes: ["model/gltf-binary", "model/obj", "application/octet-stream"])],
+            requirements: .init(
+                modelIDs: [],
+                acceleratorBackends: ["metal", "cuda"],
+                minimumAcceleratorMemoryBytes: nil
+            )
+        ),
+        WorkflowNodeCatalogEntry(
+            kind: "audio.enhance",
+            title: "Enhance audio",
+            category: "audio",
+            inputs: [
+                .init(name: "audio", type: .asset, required: true, acceptedContentTypes: ["audio/wav", "audio/mpeg", "audio/mp4", "audio/x-m4a", "audio/flac"]),
+                .init(name: "model", type: .string, required: false),
+                .init(name: "seed", type: .integer, required: false),
+            ],
+            outputs: [.init(name: "audio", type: .asset, contentTypes: ["audio/wav"])],
+            requirements: .init(
+                modelIDs: [],
+                acceleratorBackends: ["metal", "cuda"],
+                minimumAcceleratorMemoryBytes: nil
+            )
+        ),
+        WorkflowNodeCatalogEntry(
+            kind: "music.separate",
+            title: "Separate stems",
+            category: "music",
+            inputs: [
+                .init(name: "audio", type: .asset, required: true, acceptedContentTypes: ["audio/wav", "audio/mpeg", "audio/mp4", "audio/x-m4a", "audio/flac"]),
+                .init(name: "model", type: .string, required: false),
+            ],
+            outputs: [.init(name: "stems", type: .assetDirectory, contentTypes: ["audio/wav"])],
+            requirements: .init(
+                modelIDs: [],
+                acceleratorBackends: ["metal", "cuda"],
+                minimumAcceleratorMemoryBytes: nil
+            )
+        ),
+        WorkflowNodeCatalogEntry(
+            kind: "music.transcribe",
+            title: "Transcribe music",
+            category: "music",
+            inputs: [
+                .init(name: "audio", type: .asset, required: true, acceptedContentTypes: ["audio/wav", "audio/mpeg", "audio/mp4", "audio/x-m4a", "audio/flac"]),
+                .init(name: "model", type: .string, required: false),
+                .init(name: "format", type: .enumeration, required: false, values: ["midi", "json", "jsonl"]),
+            ],
+            outputs: [.init(name: "transcription", type: .asset, contentTypes: ["audio/midi", "application/json", "application/jsonl"])],
+            requirements: .init(
+                modelIDs: [],
+                acceleratorBackends: ["metal", "cuda"],
+                minimumAcceleratorMemoryBytes: nil
+            )
+        ),
+        WorkflowNodeCatalogEntry(
+            kind: "speech.diarize",
+            title: "Diarize speakers",
+            category: "speech",
+            inputs: [
+                .init(name: "audio", type: .asset, required: true, acceptedContentTypes: ["audio/wav", "audio/mpeg", "audio/mp4", "audio/x-m4a", "audio/flac"]),
+                .init(name: "model", type: .string, required: false),
+                .init(name: "format", type: .enumeration, required: false, values: ["json", "rttm"]),
+            ],
+            outputs: [.init(name: "segments", type: .asset, contentTypes: ["application/json", "text/plain"])],
+            requirements: .init(
+                modelIDs: [],
+                acceleratorBackends: ["metal", "cuda"],
+                minimumAcceleratorMemoryBytes: nil
+            )
+        ),
+        WorkflowNodeCatalogEntry(
+            kind: "text.embed",
+            title: "Embed text",
+            category: "text",
+            inputs: [
+                .init(name: "text", type: .string, required: true, multiline: true),
+                .init(name: "model", type: .string, required: false),
+                .init(name: "max_tokens", type: .integer, required: false),
+            ],
+            outputs: [.init(name: "embeddings", type: .asset, contentTypes: ["application/json"])],
+            requirements: .init(
+                modelIDs: [],
+                acceleratorBackends: ["metal", "cuda"],
+                minimumAcceleratorMemoryBytes: nil
+            )
+        ),
+        WorkflowNodeCatalogEntry(
+            kind: "text.anonymize",
+            title: "Anonymize text",
+            category: "text",
+            inputs: [
+                .init(name: "text", type: .string, required: true, multiline: true),
+                .init(name: "model", type: .string, required: false),
+                .init(name: "replacement", type: .string, required: false),
+            ],
+            outputs: [.init(name: "text", type: .asset, contentTypes: ["text/plain"])],
+            requirements: .init(
+                modelIDs: [],
+                acceleratorBackends: ["metal", "cuda"],
+                minimumAcceleratorMemoryBytes: nil
+            )
+        ),
     ]
 
     public static func entry(for kind: String) -> WorkflowNodeCatalogEntry? {
