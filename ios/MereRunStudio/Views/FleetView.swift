@@ -15,6 +15,10 @@ struct FleetView: View {
                         LabeledContent("Available", value: "\(summary.availableNodes)/\(summary.totalNodes) nodes")
                         LabeledContent("Queued", value: "\(summary.queueDepth)")
                         LabeledContent("Routable models", value: "\(summary.routableModels)")
+                    } footer: {
+                        if summary.totalNodes == 0 {
+                            Text(emptyFleetHint)
+                        }
                     }
                 }
                 Section("Online") {
@@ -86,6 +90,12 @@ struct FleetView: View {
     private var offlineNodes: [RelayFleetNode] {
         (snapshot?.nodes ?? []).filter { $0.status.lowercased() == "offline" }
             .sorted { $0.deviceName < $1.deviceName }
+    }
+
+    private var emptyFleetHint: String {
+        let account = relay.accountEmail.map { "This phone is signed in as \($0)." }
+            ?? "This phone's account could not be read from its credential."
+        return account + " Nodes appear only for the account that approved them — if your fleet lives on a different account, sign out in Settings and pair again with that account."
     }
 
     private func load() async {

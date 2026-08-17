@@ -125,6 +125,22 @@ public struct RelayOAuthTokenSet: Codable, Equatable, Sendable {
         )
     }
 
+    /// The `email` claim of the access token, when it is a JWT. Lets clients
+    /// show which account a pairing belongs to — fleet visibility is scoped
+    /// by account, so a surprising empty fleet is usually a wrong account.
+    public var accountEmail: String? {
+        let pieces = accessToken.split(separator: ".", omittingEmptySubsequences: false)
+        guard pieces.count == 3 else { return nil }
+        var payload = String(pieces[1]).replacingOccurrences(of: "-", with: "+")
+            .replacingOccurrences(of: "_", with: "/")
+        payload.append(String(repeating: "=", count: (4 - payload.count % 4) % 4))
+        guard let data = Data(base64Encoded: payload),
+              let claims = try? JSONDecoder().decode(RelayJWTEmailPayload.self, from: data) else {
+            return nil
+        }
+        return claims.email
+    }
+
     private static func jwtExpiration(_ token: String) -> Int64? {
         let pieces = token.split(separator: ".", omittingEmptySubsequences: false)
         guard pieces.count == 3 else { return nil }
@@ -277,6 +293,10 @@ private struct RelayOAuthTokenResponse: Decodable, Sendable {
 
 private struct RelayJWTPayload: Decodable {
     let exp: Int64?
+}
+
+private struct RelayJWTEmailPayload: Decodable {
+    let email: String?
 }
 
 private struct RelayDeviceAuthorizationRequest: Encodable {

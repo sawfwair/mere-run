@@ -72,6 +72,17 @@ final class RelayStore: ObservableObject {
         authStatus = RelayAuthentication.status(profile: profile)
     }
 
+    /// The mere.world account this pairing belongs to, from the token's
+    /// email claim. Fleet visibility is scoped by account.
+    var accountEmail: String? {
+        guard let tokenFile = profile?.tokenFile,
+              let data = try? Data(contentsOf: URL(fileURLWithPath: tokenFile)),
+              let tokenSet = try? WorkflowBundleCodec.decoder().decode(RelayOAuthTokenSet.self, from: data) else {
+            return nil
+        }
+        return tokenSet.accountEmail
+    }
+
     /// Runs discovery and the OAuth device grant against a relay base URL,
     /// then persists the profile and token set on approval.
     func pair(urlString: String, profileName: String = "phone") async {

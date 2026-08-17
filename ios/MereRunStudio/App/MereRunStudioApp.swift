@@ -42,6 +42,7 @@ struct SettingsView: View {
         NavigationStack {
             List {
                 Section("Relay") {
+                    LabeledContent("Account", value: relay.accountEmail ?? "—")
                     LabeledContent("Profile", value: relay.profile?.name ?? "—")
                     LabeledContent("URL", value: relay.profile?.url ?? "—")
                     LabeledContent(
