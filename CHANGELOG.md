@@ -6,6 +6,14 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Model inventory
+
+- split fast model availability from recursive storage accounting. `status` and
+  `model list` now avoid referenced-size traversal by default, expose inventory
+  completeness, duration, and verification state in status JSON, and reserve
+  recursive referenced-size scans for `model list --measure-sizes` and the
+  dedicated storage commands.
+
 ## 0.40.0 - 2026-08-16
 
 This release adds bounded native Falcon Perception batching, promotes the

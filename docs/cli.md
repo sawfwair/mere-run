@@ -2117,12 +2117,13 @@ swift run mere.run video export-latents \
 
 ### `mere.run model list`
 
-List all managed model IDs, whether they are installed, and their referenced
-payload size. Referenced sizes follow symlinks and are not additive when models
-share payloads.
+List all managed model IDs and their shallow availability without recursively
+scanning payloads. Pass `--measure-sizes` to calculate referenced sizes; those
+values follow symlinks and are not additive when models share payloads.
 
 ```bash
 swift run mere.run model list
+swift run mere.run model list --measure-sizes
 ```
 
 ### `mere.run model storage` and `mere.run model gc`

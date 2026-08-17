@@ -2,8 +2,8 @@
 
 ## Purpose
 
-Show all known managed model ids, categories, install status, and resolved local
-referenced payload size. Use this before pulling or running models.
+Show all known managed model ids, categories, and shallow availability without
+recursively measuring model payloads. Use this before pulling or running models.
 Use `mere.run status` when you also need the active API server and currently
 served model.
 
@@ -15,13 +15,15 @@ No model is required.
 
 ```bash
 mere.run model list
+mere.run model list --measure-sizes
 mere.run status
 mere.run guide model list
 ```
 
 ## Parameters
 
-This command has no flags. It reads the configured model store.
+- `--measure-sizes`: recursively measure referenced payloads. This is slower
+  and follows model-store symlinks, including external stores.
 
 ## Usage Patterns
 
@@ -44,8 +46,10 @@ MERERUN_MODELS_DIR=/Volumes/Models/mere.run mere.run model list
 ## Iteration Tips
 
 - Look for `missing` vs `installed`, not just whether the id exists.
-- Referenced sizes follow symlinked payloads and are not additive when models
-  share files. Use `model storage` for physical and reclaimable byte counts.
+- The default `not measured` value keeps availability checks fast.
+- With `--measure-sizes`, referenced sizes follow symlinked payloads and are
+  not additive when models share files. Use `model storage` for physical and
+  reclaimable byte counts.
 - If validation looks wrong, inspect with `model info` or repair manifests.
 
 ## Troubleshooting

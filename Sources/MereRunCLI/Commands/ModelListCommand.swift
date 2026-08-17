@@ -8,14 +8,22 @@ struct ModelList: ParsableCommand {
         abstract: "List all known models with install status."
     )
 
+    @Flag(
+        name: [.long],
+        help: "Measure referenced payload sizes (slower; follows model-store symlinks)."
+    )
+    var measureSizes = false
+
     func run() throws {
-        let rows = ModelInventory.rows()
+        let mode: ModelInventoryMode = measureSizes ? .measured : .fast
+        let rows = ModelInventory.snapshot(mode: mode).rows
 
         let widths = ModelListColumnWidths(rows: rows)
         printRow("ID", "Category", "Status", "Referenced", widths: widths)
         print(String(repeating: "-", count: widths.totalWidth))
         for row in rows {
-            printRow(row.id, row.category, row.status, row.size, widths: widths)
+            let size = row.size ?? (row.isInstalled ? "not measured" : "—")
+            printRow(row.id, row.category, row.status, size, widths: widths)
         }
         for line in Self.usageRestrictionLines() {
             print("\n\(line)")

@@ -126,8 +126,10 @@ the canonical names shown by `mere.run model list`.
 
 ### `mere.run model list`
 
-Shows the canonical managed model table, installed status, and referenced size.
-Referenced sizes are not additive because multiple models can share payload files.
+Shows the canonical managed model table and shallow availability without
+recursively scanning payload files. Pass `--measure-sizes` when referenced
+sizes are needed; those values follow symlinks and are not additive because
+multiple models can share payload files.
 
 ### `mere.run model storage`
 
