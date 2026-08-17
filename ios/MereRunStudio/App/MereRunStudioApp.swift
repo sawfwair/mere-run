@@ -19,6 +19,8 @@ struct RootView: View {
     var body: some View {
         if relay.pairing == .paired {
             TabView {
+                CreateView()
+                    .tabItem { Label("Create", systemImage: "sparkles") }
                 RunsView()
                     .tabItem { Label("Runs", systemImage: "tray.full") }
                 FleetView()

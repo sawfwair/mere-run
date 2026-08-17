@@ -101,6 +101,64 @@ final class RelayStore: ObservableObject {
         }
     }
 
+    /// Cached worker capabilities for the paired fleet: node kinds and
+    /// installed models drive the Create form.
+    @Published private(set) var workerProbe: WorkflowExecutorProbe?
+
+    func refreshWorkerProbe() async {
+        guard let client else { return }
+        workerProbe = try? await client.probe()
+    }
+
+    /// Builds a single-node graph from the Create form, materializes it with
+    /// the portable environment (models are always pinned explicitly on the
+    /// phone), and submits it through relay. Returns the created job.
+    func submit(kind: String, arguments: [String: WorkflowValue]) async throws -> WorkflowRemoteJob {
+        guard let client else {
+            throw RelayClientError("Pair with a relay before submitting.")
+        }
+        guard let entry = WorkflowNodeRegistry.entry(for: kind) else {
+            throw RelayClientError("Unknown node kind '\(kind)'.")
+        }
+        let nodeID = "generate"
+        let outputName = entry.outputs.first?.name ?? "output"
+        let graph = WorkflowGraphDocument(
+            schemaVersion: WorkflowGraphDocument.schemaVersion,
+            kind: WorkflowGraphDocument.kind,
+            name: "phone-\(kind.replacingOccurrences(of: ".", with: "-"))",
+            inputs: [:],
+            nodes: [
+                WorkflowNode(
+                    id: nodeID,
+                    kind: kind,
+                    arguments: arguments,
+                    dependsOn: nil
+                )
+            ],
+            outputs: [outputName: .reference("nodes.\(nodeID).outputs.\(outputName)")],
+            metadata: nil
+        )
+        let scratch = FileManager.default.temporaryDirectory
+            .appendingPathComponent("bundles", isDirectory: true)
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let bundle = try WorkflowBundleMaterializer(
+            graph: graph,
+            suppliedInputs: WorkflowInputsDocument(values: [:]),
+            destination: scratch,
+            environment: .portable
+        ).materialize()
+        let runDirectory = supportBase
+            .appendingPathComponent("submitted", isDirectory: true)
+            .appendingPathComponent(bundle.job.jobID, isDirectory: true)
+        try FileManager.default.createDirectory(at: runDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: scratch) }
+        return try await client.submit(
+            bundleDirectory: bundle.directory,
+            localRunDirectory: runDirectory,
+            pluginNodes: []
+        )
+    }
+
     func unpair() {
         if let tokenFile = profile?.tokenFile {
             try? FileManager.default.removeItem(atPath: tokenFile)
