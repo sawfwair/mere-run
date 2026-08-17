@@ -55,6 +55,11 @@ The V1 node catalog contains:
 - `image.train-lora`
 - `image.generate`
 - `video.generate`
+- `music.generate`, `sfx.generate`, `music.separate`, `music.transcribe`
+- `speech.synthesize`, `speech.transcribe`, `speech.diarize`
+- `vision.caption`, `vision.ocr`, `vision.geometry`, `vision.image-to-3d`
+- `audio.enhance`
+- `text.embed`, `text.anonymize`
 
 The value and text nodes make authored creative material reusable without
 turning it into a runtime graph input. Literal values, seeds, joins, and

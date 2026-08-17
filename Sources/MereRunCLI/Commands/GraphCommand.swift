@@ -1,4 +1,5 @@
 import ArgumentParser
+import MereRunRelayKit
 import Foundation
 import MereRunCore
 #if canImport(Darwin)
@@ -53,26 +54,28 @@ struct GraphCatalog: ParsableCommand {
     var json = false
 
     func run() throws {
-        let pluginCatalog = WorkflowGraphProviderRegistry.discoveredCatalog()
-        let pluginProviders = pluginCatalog.providers.map(\.requirement)
-        let builtIn = WorkflowGraphProviderRequirement(
-            id: WorkflowNodeProviderIdentity.builtInID,
-            version: WorkflowNodeRegistry.builtInProvider.version,
-            catalogSHA256: WorkflowNodeRegistry.builtInProvider.catalogSHA256,
-            nodeKinds: WorkflowNodeRegistry.entries.map(\.kind).sorted()
-        )
-        let result = GraphCatalogResult(
-            graphSchemaVersion: WorkflowGraphDocument.schemaVersion,
-            graphKind: WorkflowGraphDocument.kind,
-            jobContractVersion: WorkflowJobManifest.contractVersion,
-            providers: [builtIn] + pluginProviders,
-            nodes: WorkflowNodeRegistry.catalogEntries(pluginNodes: pluginCatalog.nodes)
-        )
-        if json {
-            print(try StructuredRunOutput.encode(result))
-        } else {
-            for node in result.nodes {
-                print("\(node.kind): \(node.title)")
+        try mapRelayErrors {
+            let pluginCatalog = WorkflowGraphProviderRegistry.discoveredCatalog()
+            let pluginProviders = pluginCatalog.providers.map(\.requirement)
+            let builtIn = WorkflowGraphProviderRequirement(
+                id: WorkflowNodeProviderIdentity.builtInID,
+                version: WorkflowNodeRegistry.builtInProvider.version,
+                catalogSHA256: WorkflowNodeRegistry.builtInProvider.catalogSHA256,
+                nodeKinds: WorkflowNodeRegistry.entries.map(\.kind).sorted()
+            )
+            let result = GraphCatalogResult(
+                graphSchemaVersion: WorkflowGraphDocument.schemaVersion,
+                graphKind: WorkflowGraphDocument.kind,
+                jobContractVersion: WorkflowJobManifest.contractVersion,
+                providers: [builtIn] + pluginProviders,
+                nodes: WorkflowNodeRegistry.catalogEntries(pluginNodes: pluginCatalog.nodes)
+            )
+            if json {
+                print(try StructuredRunOutput.encode(result))
+            } else {
+                for node in result.nodes {
+                    print("\(node.kind): \(node.title)")
+                }
             }
         }
     }
@@ -124,14 +127,16 @@ struct GraphValidate: ParsableCommand {
     var json = false
 
     func run() throws {
-        let envelope = try makeEnvelope()
-        if json {
-            print(try StructuredRunOutput.encode(envelope))
-        } else {
-            print(envelope.summary)
-            emitDiagnostics(envelope.diagnostics)
+        try mapRelayErrors {
+            let envelope = try makeEnvelope()
+            if json {
+                print(try StructuredRunOutput.encode(envelope))
+            } else {
+                print(envelope.summary)
+                emitDiagnostics(envelope.diagnostics)
+            }
+            if envelope.status == .blocked { throw ExitCode.failure }
         }
-        if envelope.status == .blocked { throw ExitCode.failure }
     }
 
     func makeEnvelope(now: @escaping () -> Date = Date.init) throws -> GraphValidationEnvelope {
@@ -229,14 +234,16 @@ struct GraphPreflight: AsyncParsableCommand {
     var json = false
 
     func run() async throws {
-        let envelope = try await makeEnvelope()
-        if json {
-            print(try StructuredRunOutput.encode(envelope))
-        } else {
-            print(envelope.summary)
-            emitDiagnostics(envelope.diagnostics)
+        try await mapRelayErrors {
+            let envelope = try await makeEnvelope()
+            if json {
+                print(try StructuredRunOutput.encode(envelope))
+            } else {
+                print(envelope.summary)
+                emitDiagnostics(envelope.diagnostics)
+            }
+            if envelope.status == .blocked { throw ExitCode.failure }
         }
-        if envelope.status == .blocked { throw ExitCode.failure }
     }
 
     func makeEnvelope(now: @escaping () -> Date = Date.init) async throws -> GraphPreflightEnvelope {
@@ -455,8 +462,10 @@ struct GraphMaterialize: ParsableCommand {
     var json = false
 
     func run() throws {
-        let envelope = try makeEnvelope()
-        if json { print(try StructuredRunOutput.encode(envelope)) } else { print(envelope.summary) }
+        try mapRelayErrors {
+            let envelope = try makeEnvelope()
+            if json { print(try StructuredRunOutput.encode(envelope)) } else { print(envelope.summary) }
+        }
     }
 
     func makeEnvelope(now: @escaping () -> Date = Date.init) throws -> GraphMaterializationEnvelope {
@@ -489,13 +498,15 @@ struct GraphExportJob: ParsableCommand {
     var json = false
 
     func run() throws {
-        let envelope = try materializationEnvelope(
-            file: file,
-            inputsJSON: inputsJSON,
-            destination: output,
-            command: ["graph", "export-job"]
-        )
-        if json { print(try StructuredRunOutput.encode(envelope)) } else { print(envelope.summary) }
+        try mapRelayErrors {
+            let envelope = try materializationEnvelope(
+                file: file,
+                inputsJSON: inputsJSON,
+                destination: output,
+                command: ["graph", "export-job"]
+            )
+            if json { print(try StructuredRunOutput.encode(envelope)) } else { print(envelope.summary) }
+        }
     }
 }
 
@@ -540,53 +551,55 @@ struct GraphRun: AsyncParsableCommand {
     var jsonStream = false
 
     func run() async throws {
-        guard !(json && jsonStream) else {
-            throw ValidationError("--json and --json-stream are mutually exclusive.")
+        try await mapRelayErrors {
+            guard !(json && jsonStream) else {
+                throw ValidationError("--json and --json-stream are mutually exclusive.")
+            }
+            let runURL = URL(fileURLWithPath: runDirectory).standardizedFileURL
+            if !resume {
+                let loaded = try loadGraphRequest(file: file, inputsJSON: inputsJSON)
+                _ = try WorkflowBundleMaterializer(
+                    graph: loaded.graph,
+                    suppliedInputs: loaded.inputs,
+                    destination: runURL
+                ).materialize()
+            }
+            let outcome = try WorkflowRunner(
+                bundleDirectory: runURL,
+                runDirectory: runURL,
+                resume: resume,
+                eventHandler: jsonStream ? { event in
+                    emitGraphStreamEvent(event)
+                } : nil
+            ).execute()
+            let envelope = GraphRunEnvelope(
+                schemaVersion: 1,
+                mereRunVersion: MereRunCLIVersion.current,
+                command: ["graph", "run"],
+                mode: .run,
+                status: structuredStatus(outcome.state),
+                createdAt: Date(),
+                cwd: FileManager.default.currentDirectoryPath,
+                summary: "Workflow \(outcome.state.rawValue): \(outcome.jobID)",
+                request: .init(
+                    graphPath: URL(fileURLWithPath: file).standardizedFileURL.path,
+                    inputsPath: inputsJSON.map { URL(fileURLWithPath: $0).standardizedFileURL.path },
+                    runDirectory: runURL.path,
+                    resume: resume
+                ),
+                result: outcome,
+                diagnostics: outcome.state == .failed ? [.init(
+                    id: "workflow_run_failed",
+                    severity: .blocker,
+                    title: "Workflow run failed",
+                    message: "Inspect \(runURL.appendingPathComponent(GraphRunManifest.filename).path) for node details."
+                )] : [],
+                actions: []
+            )
+            if json { print(try StructuredRunOutput.encode(envelope)) }
+            if !json && !jsonStream { print(envelope.summary) }
+            if outcome.state == .failed || outcome.state == .cancelled { throw ExitCode.failure }
         }
-        let runURL = URL(fileURLWithPath: runDirectory).standardizedFileURL
-        if !resume {
-            let loaded = try loadGraphRequest(file: file, inputsJSON: inputsJSON)
-            _ = try WorkflowBundleMaterializer(
-                graph: loaded.graph,
-                suppliedInputs: loaded.inputs,
-                destination: runURL
-            ).materialize()
-        }
-        let outcome = try WorkflowRunner(
-            bundleDirectory: runURL,
-            runDirectory: runURL,
-            resume: resume,
-            eventHandler: jsonStream ? { event in
-                emitGraphStreamEvent(event)
-            } : nil
-        ).execute()
-        let envelope = GraphRunEnvelope(
-            schemaVersion: 1,
-            mereRunVersion: MereRunCLIVersion.current,
-            command: ["graph", "run"],
-            mode: .run,
-            status: structuredStatus(outcome.state),
-            createdAt: Date(),
-            cwd: FileManager.default.currentDirectoryPath,
-            summary: "Workflow \(outcome.state.rawValue): \(outcome.jobID)",
-            request: .init(
-                graphPath: URL(fileURLWithPath: file).standardizedFileURL.path,
-                inputsPath: inputsJSON.map { URL(fileURLWithPath: $0).standardizedFileURL.path },
-                runDirectory: runURL.path,
-                resume: resume
-            ),
-            result: outcome,
-            diagnostics: outcome.state == .failed ? [.init(
-                id: "workflow_run_failed",
-                severity: .blocker,
-                title: "Workflow run failed",
-                message: "Inspect \(runURL.appendingPathComponent(GraphRunManifest.filename).path) for node details."
-            )] : [],
-            actions: []
-        )
-        if json { print(try StructuredRunOutput.encode(envelope)) }
-        if !json && !jsonStream { print(envelope.summary) }
-        if outcome.state == .failed || outcome.state == .cancelled { throw ExitCode.failure }
     }
 }
 
@@ -640,16 +653,18 @@ struct GraphRunJob: AsyncParsableCommand {
     var jsonStream = false
 
     func run() async throws {
-        guard !(json && jsonStream) else {
-            throw ValidationError("--json and --json-stream are mutually exclusive.")
+        try await mapRelayErrors {
+            guard !(json && jsonStream) else {
+                throw ValidationError("--json and --json-stream are mutually exclusive.")
+            }
+            let eventHandler: ((GraphRunEvent) -> Void)? = jsonStream ? { event in
+                emitGraphStreamEvent(event)
+            } : nil
+            let envelope: GraphRunJobEnvelope = try makeEnvelope(eventHandler: eventHandler)
+            if json { print(try StructuredRunOutput.encode(envelope)) }
+            if !json && !jsonStream { print(envelope.summary) }
+            if envelope.result.state == .failed || envelope.result.state == .cancelled { throw ExitCode.failure }
         }
-        let eventHandler: ((GraphRunEvent) -> Void)? = jsonStream ? { event in
-            emitGraphStreamEvent(event)
-        } : nil
-        let envelope: GraphRunJobEnvelope = try makeEnvelope(eventHandler: eventHandler)
-        if json { print(try StructuredRunOutput.encode(envelope)) }
-        if !json && !jsonStream { print(envelope.summary) }
-        if envelope.result.state == .failed || envelope.result.state == .cancelled { throw ExitCode.failure }
     }
 
     func makeEnvelope(
@@ -727,8 +742,10 @@ struct GraphSubmitJob: AsyncParsableCommand {
     var json = false
 
     func run() async throws {
-        let envelope = try await makeEnvelope()
-        if json { print(try StructuredRunOutput.encode(envelope)) } else { print(envelope.result.jobReference) }
+        try await mapRelayErrors {
+            let envelope = try await makeEnvelope()
+            if json { print(try StructuredRunOutput.encode(envelope)) } else { print(envelope.result.jobReference) }
+        }
     }
 
     func makeEnvelope(
@@ -792,38 +809,40 @@ struct GraphSubmit: AsyncParsableCommand {
     var json = false
 
     func run() async throws {
-        let loaded = try loadGraphRequest(file: file, inputsJSON: inputsJSON)
-        let runURL = URL(fileURLWithPath: runDirectory).standardizedFileURL
-        let bundle = try WorkflowBundleMaterializer(
-            graph: loaded.graph,
-            suppliedInputs: loaded.inputs,
-            destination: runURL
-        ).materialize()
-        let remoteJob = try await WorkflowExecutorController.submit(
-            reference: executor,
-            bundleDirectory: bundle.directory,
-            localRunDirectory: runURL
-        )
-        let envelope = GraphSubmitEnvelope(
-            schemaVersion: 1,
-            mereRunVersion: MereRunCLIVersion.current,
-            command: ["graph", "submit"],
-            mode: .run,
-            status: structuredStatus(remoteJob.state),
-            createdAt: Date(),
-            cwd: FileManager.default.currentDirectoryPath,
-            summary: "Submitted workflow job \(remoteJob.jobID) to \(executor).",
-            request: .init(
-                graphPath: loaded.graphURL.path,
-                inputsPath: loaded.inputsURL?.path,
-                runDirectory: runURL.path,
-                executor: executor
-            ),
-            result: remoteJob,
-            diagnostics: [],
-            actions: []
-        )
-        if json { print(try StructuredRunOutput.encode(envelope)) } else { print(remoteJob.jobReference) }
+        try await mapRelayErrors {
+            let loaded = try loadGraphRequest(file: file, inputsJSON: inputsJSON)
+            let runURL = URL(fileURLWithPath: runDirectory).standardizedFileURL
+            let bundle = try WorkflowBundleMaterializer(
+                graph: loaded.graph,
+                suppliedInputs: loaded.inputs,
+                destination: runURL
+            ).materialize()
+            let remoteJob = try await WorkflowExecutorController.submit(
+                reference: executor,
+                bundleDirectory: bundle.directory,
+                localRunDirectory: runURL
+            )
+            let envelope = GraphSubmitEnvelope(
+                schemaVersion: 1,
+                mereRunVersion: MereRunCLIVersion.current,
+                command: ["graph", "submit"],
+                mode: .run,
+                status: structuredStatus(remoteJob.state),
+                createdAt: Date(),
+                cwd: FileManager.default.currentDirectoryPath,
+                summary: "Submitted workflow job \(remoteJob.jobID) to \(executor).",
+                request: .init(
+                    graphPath: loaded.graphURL.path,
+                    inputsPath: loaded.inputsURL?.path,
+                    runDirectory: runURL.path,
+                    executor: executor
+                ),
+                result: remoteJob,
+                diagnostics: [],
+                actions: []
+            )
+            if json { print(try StructuredRunOutput.encode(envelope)) } else { print(remoteJob.jobReference) }
+        }
     }
 }
 
@@ -842,8 +861,10 @@ struct GraphWorkerProbe: ParsableCommand {
     var json = false
 
     func run() throws {
-        let probe = WorkflowExecutorProbe.local()
-        if json { print(try StructuredRunOutput.encode(probe)) } else { print(probe.summary) }
+        try mapRelayErrors {
+            let probe = WorkflowExecutorProbe.local()
+            if json { print(try StructuredRunOutput.encode(probe)) } else { print(probe.summary) }
+        }
     }
 }
 
@@ -863,23 +884,25 @@ struct GraphWorkerExecute: ParsableCommand {
     var resume = false
 
     func run() throws {
-        let bundleURL = URL(fileURLWithPath: bundle).standardizedFileURL
-        let job = try WorkflowBundleCodec.decoder().decode(
-            WorkflowJobManifest.self,
-            from: Data(contentsOf: bundleURL.appendingPathComponent(WorkflowJobManifest.filename))
-        )
-        try validateWorker(.local(), for: job, executor: "worker")
-        let outcome = try WorkflowRunner(
-            bundleDirectory: bundleURL,
-            runDirectory: URL(fileURLWithPath: runDirectory),
-            resume: resume,
-            executor: .init(kind: "worker", profile: nil, jobReference: nil),
-            eventHandler: jsonStream ? { event in
-                emitGraphStreamEvent(event)
-            } : nil
-        ).execute()
-        if !jsonStream { print(try StructuredRunOutput.encode(outcome)) }
-        if outcome.state == .failed || outcome.state == .cancelled { throw ExitCode.failure }
+        try mapRelayErrors {
+            let bundleURL = URL(fileURLWithPath: bundle).standardizedFileURL
+            let job = try WorkflowBundleCodec.decoder().decode(
+                WorkflowJobManifest.self,
+                from: Data(contentsOf: bundleURL.appendingPathComponent(WorkflowJobManifest.filename))
+            )
+            try validateWorker(.local(), for: job, executor: "worker")
+            let outcome = try WorkflowRunner(
+                bundleDirectory: bundleURL,
+                runDirectory: URL(fileURLWithPath: runDirectory),
+                resume: resume,
+                executor: .init(kind: "worker", profile: nil, jobReference: nil),
+                eventHandler: jsonStream ? { event in
+                    emitGraphStreamEvent(event)
+                } : nil
+            ).execute()
+            if !jsonStream { print(try StructuredRunOutput.encode(outcome)) }
+            if outcome.state == .failed || outcome.state == .cancelled { throw ExitCode.failure }
+        }
     }
 }
 
@@ -893,9 +916,11 @@ struct GraphWorkerInspect: ParsableCommand {
     var json = false
 
     func run() throws {
-        let url = URL(fileURLWithPath: runDirectory).appendingPathComponent(GraphRunManifest.filename)
-        let manifest = try WorkflowBundleCodec.decoder().decode(GraphRunManifest.self, from: Data(contentsOf: url))
-        if json { print(try StructuredRunOutput.encode(manifest)) } else { print("\(manifest.jobID) \(manifest.state.rawValue)") }
+        try mapRelayErrors {
+            let url = URL(fileURLWithPath: runDirectory).appendingPathComponent(GraphRunManifest.filename)
+            let manifest = try WorkflowBundleCodec.decoder().decode(GraphRunManifest.self, from: Data(contentsOf: url))
+            if json { print(try StructuredRunOutput.encode(manifest)) } else { print("\(manifest.jobID) \(manifest.state.rawValue)") }
+        }
     }
 }
 
@@ -909,11 +934,13 @@ struct GraphWorkerCancel: ParsableCommand {
     var json = false
 
     func run() throws {
-        let url = URL(fileURLWithPath: runDirectory).appendingPathComponent("cancel.request")
-        try Data(Date().ISO8601Format().utf8).write(to: url, options: .atomic)
-        WorkflowChildProcessRegistry.terminateAll(in: url.deletingLastPathComponent())
-        let result = GraphCancellationResult(cancelled: true, runDirectory: url.deletingLastPathComponent().path)
-        if json { print(try StructuredRunOutput.encode(result)) } else { print("Cancellation requested.") }
+        try mapRelayErrors {
+            let url = URL(fileURLWithPath: runDirectory).appendingPathComponent("cancel.request")
+            try Data(Date().ISO8601Format().utf8).write(to: url, options: .atomic)
+            WorkflowChildProcessRegistry.terminateAll(in: url.deletingLastPathComponent())
+            let result = GraphCancellationResult(cancelled: true, runDirectory: url.deletingLastPathComponent().path)
+            if json { print(try StructuredRunOutput.encode(result)) } else { print("Cancellation requested.") }
+        }
     }
 }
 

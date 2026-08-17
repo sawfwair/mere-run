@@ -1,587 +1,10 @@
 import ArgumentParser
+import MereRunRelayKit
 import Foundation
 #if canImport(FoundationNetworking)
 import FoundationNetworking
 #endif
 import MereRunCore
-
-enum WorkflowExecutorKind: String, Codable, Equatable, Sendable {
-    case ssh
-    case relay
-}
-
-struct WorkflowExecutorProfile: Codable, Equatable, Sendable {
-    let name: String
-    let kind: WorkflowExecutorKind
-    let destination: String?
-    let remoteRoot: String?
-    let port: Int?
-    let identityFile: String?
-    let mereRunPath: String?
-    let url: String?
-    let tokenFile: String?
-
-    enum CodingKeys: String, CodingKey {
-        case name
-        case kind
-        case destination
-        case remoteRoot = "remote_root"
-        case port
-        case identityFile = "identity_file"
-        case mereRunPath = "mere_run_path"
-        case url
-        case tokenFile = "token_file"
-    }
-}
-
-struct WorkflowExecutorProfiles: Codable, Equatable {
-    let schemaVersion: Int
-    var profiles: [WorkflowExecutorProfile]
-
-    enum CodingKeys: String, CodingKey {
-        case schemaVersion = "schema_version"
-        case profiles
-    }
-}
-
-enum WorkflowExecutorProfileStore {
-    static var fileURL: URL {
-        MereRunModelPaths.applicationSupportBase.appendingPathComponent("executors.json")
-    }
-
-    static func load(
-        from url: URL = fileURL,
-        fileManager: FileManager = .default
-    ) throws -> WorkflowExecutorProfiles {
-        guard fileManager.fileExists(atPath: url.path) else {
-            return WorkflowExecutorProfiles(schemaVersion: 1, profiles: [])
-        }
-        let profiles = try JSONDecoder().decode(WorkflowExecutorProfiles.self, from: Data(contentsOf: url))
-        guard profiles.schemaVersion == 1 else {
-            throw ValidationError("Unsupported executor profile schema_version \(profiles.schemaVersion).")
-        }
-        return profiles
-    }
-
-    static func save(
-        _ value: WorkflowExecutorProfiles,
-        to url: URL = fileURL,
-        fileManager: FileManager = .default
-    ) throws {
-        try fileManager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        try WorkflowBundleCodec.encoder().encode(value).write(to: url, options: .atomic)
-        try fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
-    }
-
-    static func require(_ reference: String) throws -> WorkflowExecutorProfile {
-        let parsed = try WorkflowExecutorReference(reference)
-        guard parsed.kind != nil else {
-            throw ValidationError("Executor profile references must include ssh: or relay:.")
-        }
-        guard let profile = try load().profiles.first(where: { $0.name == parsed.name }) else {
-            throw ValidationError("Executor profile not found: \(parsed.name)")
-        }
-        guard profile.kind == parsed.kind else {
-            throw ValidationError("Executor profile '\(parsed.name)' is not a \(parsed.kind!.rawValue) profile.")
-        }
-        return profile
-    }
-}
-
-struct WorkflowExecutorReference: Equatable {
-    let kind: WorkflowExecutorKind?
-    let name: String
-
-    init(_ value: String) throws {
-        if value == "local" {
-            kind = nil
-            name = "local"
-            return
-        }
-        let parts = value.split(separator: ":", maxSplits: 1).map(String.init)
-        guard parts.count == 2,
-              let parsedKind = WorkflowExecutorKind(rawValue: parts[0]),
-              isValidExecutorName(parts[1]) else {
-            throw ValidationError("Executor must be local, ssh:<profile>, or relay:<profile>.")
-        }
-        kind = parsedKind
-        name = parts[1]
-    }
-}
-
-struct WorkflowRemoteReference: Equatable {
-    let kind: WorkflowExecutorKind
-    let profile: String
-    let jobID: String
-
-    init(_ value: String) throws {
-        guard let url = URL(string: value),
-              let scheme = url.scheme,
-              let kind = WorkflowExecutorKind(rawValue: scheme),
-              let profile = url.host,
-              isValidExecutorName(profile),
-              url.query == nil,
-              url.fragment == nil else {
-            throw ValidationError("Run reference must be ssh://<profile>/<job-id> or relay://<profile>/<job-id>.")
-        }
-        let jobID = url.path.trimmingCharacters(in: CharacterSet(charactersIn: "/"))
-        guard !jobID.isEmpty,
-              !jobID.contains("/"),
-              jobID.range(of: "^[A-Za-z0-9][A-Za-z0-9-]{0,127}$", options: .regularExpression) != nil else {
-            throw ValidationError("Remote job id is invalid.")
-        }
-        self.kind = kind
-        self.profile = profile
-        self.jobID = jobID
-    }
-
-    var executorReference: String { "\(kind.rawValue):\(profile)" }
-    var rawValue: String { "\(kind.rawValue)://\(profile)/\(jobID)" }
-}
-
-struct WorkflowExecutorProbe: Codable, Equatable, Sendable {
-    let schemaVersion: Int
-    let workerVersion: String
-    let contractVersions: [String]
-    let platform: String
-    let architecture: String
-    let acceleratorBackend: String
-    let memoryBytes: UInt64
-    let systemMemoryBytes: UInt64
-    let logicalCPUCores: Int
-    let availableDiskBytes: Int64?
-    let networkAccess: Bool
-    let nodeKinds: [String]
-    let installedModelIDs: [String]
-    let availableSecretNames: [String]
-    let providers: [WorkflowGraphProviderRequirement]
-
-    enum CodingKeys: String, CodingKey {
-        case schemaVersion = "schema_version"
-        case workerVersion = "worker_version"
-        case contractVersions = "contract_versions"
-        case platform
-        case architecture
-        case acceleratorBackend = "accelerator_backend"
-        case memoryBytes = "memory_bytes"
-        case systemMemoryBytes = "system_memory_bytes"
-        case logicalCPUCores = "logical_cpu_cores"
-        case availableDiskBytes = "available_disk_bytes"
-        case networkAccess = "network_access"
-        case nodeKinds = "node_kinds"
-        case installedModelIDs = "installed_model_ids"
-        case availableSecretNames = "available_secret_names"
-        case providers
-    }
-
-    init(
-        schemaVersion: Int,
-        workerVersion: String,
-        contractVersions: [String],
-        platform: String,
-        architecture: String,
-        acceleratorBackend: String,
-        memoryBytes: UInt64,
-        systemMemoryBytes: UInt64 = ProcessInfo.processInfo.physicalMemory,
-        logicalCPUCores: Int = ProcessInfo.processInfo.processorCount,
-        availableDiskBytes: Int64?,
-        networkAccess: Bool = true,
-        nodeKinds: [String],
-        installedModelIDs: [String],
-        availableSecretNames: [String] = [],
-        providers: [WorkflowGraphProviderRequirement] = []
-    ) {
-        self.schemaVersion = schemaVersion
-        self.workerVersion = workerVersion
-        self.contractVersions = contractVersions
-        self.platform = platform
-        self.architecture = architecture
-        self.acceleratorBackend = acceleratorBackend
-        self.memoryBytes = memoryBytes
-        self.systemMemoryBytes = systemMemoryBytes
-        self.logicalCPUCores = logicalCPUCores
-        self.availableDiskBytes = availableDiskBytes
-        self.networkAccess = networkAccess
-        self.nodeKinds = nodeKinds
-        self.installedModelIDs = installedModelIDs
-        self.availableSecretNames = availableSecretNames
-        self.providers = providers
-    }
-
-    init(from decoder: Decoder) throws {
-        let container = try decoder.container(keyedBy: CodingKeys.self)
-        schemaVersion = try container.decode(Int.self, forKey: .schemaVersion)
-        workerVersion = try container.decode(String.self, forKey: .workerVersion)
-        contractVersions = try container.decode([String].self, forKey: .contractVersions)
-        platform = try container.decode(String.self, forKey: .platform)
-        architecture = try container.decode(String.self, forKey: .architecture)
-        acceleratorBackend = try container.decode(String.self, forKey: .acceleratorBackend)
-        memoryBytes = try container.decode(UInt64.self, forKey: .memoryBytes)
-        systemMemoryBytes = try container.decodeIfPresent(UInt64.self, forKey: .systemMemoryBytes)
-            ?? 0
-        logicalCPUCores = try container.decodeIfPresent(Int.self, forKey: .logicalCPUCores)
-            ?? 0
-        availableDiskBytes = try container.decodeIfPresent(Int64.self, forKey: .availableDiskBytes)
-        networkAccess = try container.decodeIfPresent(Bool.self, forKey: .networkAccess) ?? false
-        nodeKinds = try container.decode([String].self, forKey: .nodeKinds)
-        installedModelIDs = try container.decode([String].self, forKey: .installedModelIDs)
-        availableSecretNames = try container.decodeIfPresent([String].self, forKey: .availableSecretNames) ?? []
-        providers = try container.decodeIfPresent(
-            [WorkflowGraphProviderRequirement].self,
-            forKey: .providers
-        ) ?? []
-    }
-
-    var summary: String {
-        "\(platform)/\(architecture) \(acceleratorBackend), \(installedModelIDs.count) installed model(s)"
-    }
-
-    static func local(fileManager: FileManager = .default) -> WorkflowExecutorProbe {
-        #if os(Linux)
-        let platform = "linux"
-        let backend = ProcessInfo.processInfo.environment["MERERUN_LINUX_ACCEL"] ?? "cpu"
-        let memoryBytes = backend == "cuda"
-            ? linuxNVIDIAMemoryBytes() ?? ProcessInfo.processInfo.physicalMemory
-            : ProcessInfo.processInfo.physicalMemory
-        #else
-        let platform = "macos"
-        let backend = "metal"
-        let memoryBytes = ProcessInfo.processInfo.physicalMemory
-        #endif
-        #if arch(arm64)
-        let architecture = "arm64"
-        #elseif arch(x86_64)
-        let architecture = "x86_64"
-        #else
-        let architecture = "unknown"
-        #endif
-        let fileSystemAttributes = try? FileManager.default.attributesOfFileSystem(
-            forPath: MereRunModelPaths.applicationSupportBase.path
-        )
-        let disk = (fileSystemAttributes?[.systemFreeSize] as? NSNumber)?.int64Value
-        let graphProviders = WorkflowGraphProviderRegistry.discoveredCatalog().providers
-        return WorkflowExecutorProbe(
-            schemaVersion: 1,
-            workerVersion: MereRunCLIVersion.current,
-            contractVersions: [WorkflowJobManifest.contractVersion],
-            platform: platform,
-            architecture: architecture,
-            acceleratorBackend: backend,
-            memoryBytes: memoryBytes,
-            systemMemoryBytes: ProcessInfo.processInfo.physicalMemory,
-            logicalCPUCores: ProcessInfo.processInfo.processorCount,
-            availableDiskBytes: disk ?? nil,
-            networkAccess: true,
-            nodeKinds: Array(Set(
-                WorkflowNodeRegistry.entries.map(\.kind) + graphProviders.flatMap { $0.nodes.map(\.kind) }
-            )).sorted(),
-            installedModelIDs: ModelInventory.snapshot(
-                mode: .verified,
-                fileManager: fileManager
-            ).rows.filter(\.isInstalled).map(\.id).sorted(),
-            availableSecretNames: availableWorkflowSecretNames(),
-            providers: graphProviders.map(\.requirement)
-        )
-    }
-
-    private static func availableWorkflowSecretNames(
-        environment: [String: String] = ProcessInfo.processInfo.environment
-    ) -> [String] {
-        let prefix = "MERERUN_SECRET_"
-        return environment.keys.compactMap { key -> String? in
-            guard key.hasPrefix(prefix), environment[key]?.isEmpty == false else { return nil }
-            return key.dropFirst(prefix.count).lowercased().replacingOccurrences(of: "_", with: "-")
-        }.sorted()
-    }
-
-    #if os(Linux)
-    private static func linuxNVIDIAMemoryBytes() -> UInt64? {
-        let process = Process()
-        let output = Pipe()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = [
-            "nvidia-smi",
-            "--query-gpu=memory.total",
-            "--format=csv,noheader,nounits",
-        ]
-        process.standardOutput = output
-        process.standardError = Pipe()
-        guard (try? process.run()) != nil else { return nil }
-        process.waitUntilExit()
-        guard process.terminationStatus == 0 else { return nil }
-        let data = output.fileHandleForReading.readDataToEndOfFile()
-        return parseNVIDIAMemoryBytes(String(decoding: data, as: UTF8.self))
-    }
-    #endif
-
-    static func parseNVIDIAMemoryBytes(_ output: String) -> UInt64? {
-        output.split(whereSeparator: \Character.isNewline)
-            .compactMap { line in
-                line.split(whereSeparator: \Character.isWhitespace).first.flatMap { UInt64($0) }
-            }
-            .max()
-            .map { $0 * 1_024 * 1_024 }
-    }
-}
-
-struct WorkflowRemoteJob: Codable, Equatable, Sendable {
-    let jobID: String
-    let jobReference: String
-    let state: GraphRunState
-    let executor: String
-    let runDirectory: String?
-    let createdAt: Date?
-    let updatedAt: Date?
-    let artifacts: [GraphRunArtifact]
-    let error: String?
-    let placement: WorkflowGraphPlacement?
-    let metrics: WorkflowGraphExecutionMetrics?
-
-    enum CodingKeys: String, CodingKey {
-        case jobID = "job_id"
-        case jobReference = "job_reference"
-        case state
-        case executor
-        case runDirectory = "run_directory"
-        case createdAt = "created_at"
-        case updatedAt = "updated_at"
-        case artifacts
-        case error
-        case placement
-        case metrics
-    }
-}
-
-struct WorkflowGraphExecutionMetrics: Codable, Equatable, Sendable {
-    let bundleBytesDownloaded: UInt64
-    let downloadMilliseconds: UInt64
-    let executionMilliseconds: UInt64
-    let uploadMilliseconds: UInt64
-    let totalMilliseconds: UInt64
-    let artifactBytesUploaded: UInt64
-    let artifactPartsUploaded: UInt64
-    let artifactBytesReused: UInt64
-    let artifactPartsReused: UInt64
-
-    enum CodingKeys: String, CodingKey {
-        case bundleBytesDownloaded = "bundle_bytes_downloaded"
-        case downloadMilliseconds = "download_ms"
-        case executionMilliseconds = "execution_ms"
-        case uploadMilliseconds = "upload_ms"
-        case totalMilliseconds = "total_ms"
-        case artifactBytesUploaded = "artifact_bytes_uploaded"
-        case artifactPartsUploaded = "artifact_parts_uploaded"
-        case artifactBytesReused = "artifact_bytes_reused"
-        case artifactPartsReused = "artifact_parts_reused"
-    }
-}
-
-struct WorkflowGraphPlacementBlocker: Codable, Equatable, Sendable {
-    let code: String
-    let message: String
-}
-
-struct WorkflowGraphPlacementNode: Codable, Equatable, Sendable {
-    let agentID: String
-    let deviceID: String
-    let deviceName: String
-    let status: String
-    let eligible: Bool
-    let blockers: [WorkflowGraphPlacementBlocker]
-
-    enum CodingKeys: String, CodingKey {
-        case agentID = "agent_id"
-        case deviceID = "device_id"
-        case deviceName = "device_name"
-        case status
-        case eligible
-        case blockers
-    }
-}
-
-struct WorkflowGraphPlacement: Codable, Equatable, Sendable {
-    let connectedNodes: Int
-    let graphWorkerNodes: Int
-    let eligibleNodes: Int
-    let diagnostic: String?
-    let nodes: [WorkflowGraphPlacementNode]
-
-    enum CodingKeys: String, CodingKey {
-        case connectedNodes = "connected_nodes"
-        case graphWorkerNodes = "graph_worker_nodes"
-        case eligibleNodes = "eligible_nodes"
-        case diagnostic
-        case nodes
-    }
-}
-
-struct RelayFleetGraphWorker: Codable, Equatable, Sendable {
-    let workerVersion: String
-    let contractVersions: [String]
-    let acceleratorBackend: String
-    let memoryBytes: UInt64
-    let availableDiskBytes: Int64?
-    let nodeKinds: [String]
-    let installedModelIDs: [String]
-
-    enum CodingKeys: String, CodingKey {
-        case workerVersion = "worker_version"
-        case contractVersions = "contract_versions"
-        case acceleratorBackend = "accelerator_backend"
-        case memoryBytes = "memory_bytes"
-        case availableDiskBytes = "available_disk_bytes"
-        case nodeKinds = "node_kinds"
-        case installedModelIDs = "installed_model_ids"
-    }
-}
-
-struct RelayFleetCapabilities: Codable, Equatable, Sendable {
-    let models: [String]
-    let graphWorker: RelayFleetGraphWorker?
-
-    enum CodingKeys: String, CodingKey {
-        case models
-        case graphWorker = "graph_worker"
-    }
-}
-
-struct RelayFleetRuntime: Codable, Equatable, Sendable {
-    let mereRunVersion: String?
-    let installedModels: [String]
-
-    enum CodingKeys: String, CodingKey {
-        case mereRunVersion = "mere_run_version"
-        case installedModels = "installed_models"
-    }
-}
-
-struct RelayFleetPolicy: Codable, Equatable, Sendable {
-    let enabled: Bool
-    let draining: Bool
-    let revoked: Bool
-    let priority: Int
-    let preferredModels: [String]
-    let displayName: String?
-
-    enum CodingKeys: String, CodingKey {
-        case enabled
-        case draining
-        case revoked
-        case priority
-        case preferredModels = "preferred_models"
-        case displayName = "display_name"
-    }
-}
-
-struct RelayFleetNode: Codable, Equatable, Sendable {
-    let agentID: String
-    let deviceID: String
-    let deviceName: String
-    let reportedName: String
-    let version: String
-    let status: String
-    let currentJobID: String?
-    let lastSeen: String
-    let capabilities: RelayFleetCapabilities
-    let runtime: RelayFleetRuntime?
-    let policy: RelayFleetPolicy
-
-    enum CodingKeys: String, CodingKey {
-        case agentID = "agent_id"
-        case deviceID = "device_id"
-        case deviceName = "device_name"
-        case reportedName = "reported_name"
-        case version
-        case status
-        case currentJobID = "current_job_id"
-        case lastSeen = "last_seen"
-        case capabilities
-        case runtime
-        case policy
-    }
-}
-
-struct RelayFleetActivity: Codable, Equatable, Sendable {
-    let id: String
-    let kind: String
-    let status: String
-    let agentID: String?
-    let model: String?
-    let label: String
-    let createdAt: String
-    let durationMilliseconds: Int?
-    let error: String?
-
-    enum CodingKeys: String, CodingKey {
-        case id
-        case kind
-        case status
-        case agentID = "agent_id"
-        case model
-        case label
-        case createdAt = "created_at"
-        case durationMilliseconds = "duration_ms"
-        case error
-    }
-}
-
-struct RelayFleetSummary: Codable, Equatable, Sendable {
-    let totalNodes: Int
-    let onlineNodes: Int
-    let busyNodes: Int
-    let availableNodes: Int
-    let queueDepth: Int
-    let installedModels: Int
-    let routableModels: Int
-
-    enum CodingKeys: String, CodingKey {
-        case totalNodes = "total_nodes"
-        case onlineNodes = "online_nodes"
-        case busyNodes = "busy_nodes"
-        case availableNodes = "available_nodes"
-        case queueDepth = "queue_depth"
-        case installedModels = "installed_models"
-        case routableModels = "routable_models"
-    }
-}
-
-struct RelayFleetSnapshot: Codable, Equatable, Sendable {
-    let generatedAt: String
-    let summary: RelayFleetSummary
-    let nodes: [RelayFleetNode]
-    let activity: [RelayFleetActivity]
-
-    enum CodingKeys: String, CodingKey {
-        case generatedAt = "generated_at"
-        case summary
-        case nodes
-        case activity
-    }
-}
-
-struct RelayFleetRefreshResult: Codable, Equatable, Sendable {
-    let deviceID: String
-    let requested: Bool
-
-    enum CodingKeys: String, CodingKey {
-        case deviceID = "device_id"
-        case requested
-    }
-}
-
-struct RelayFleetNodePolicyPatch: Codable, Equatable, Sendable {
-    let enabled: Bool?
-    let draining: Bool?
-    let priority: Int?
-    let displayName: String?
-
-    enum CodingKeys: String, CodingKey {
-        case enabled
-        case draining
-        case priority
-        case displayName = "display_name"
-    }
-}
 
 struct WorkflowExecutorListResult: Codable, Equatable {
     let profiles: [WorkflowExecutorProfile]
@@ -736,13 +159,15 @@ struct ExecutorLogin: AsyncParsableCommand {
         let profile = try requireRelayProfile(reference)
         let tokenFile = profile.tokenFile.map { URL(fileURLWithPath: $0) }
             ?? RelayAuthentication.defaultTokenFile(profileName: profile.name)
-        let result = try await RelayAuthentication.login(
-            profile: profile,
-            tokenFile: tokenFile,
-            progress: { message in
-                FileHandle.standardError.write(Data("\(message)\n".utf8))
-            }
-        )
+        let result = try await mapRelayErrors {
+            try await RelayAuthentication.login(
+                profile: profile,
+                tokenFile: tokenFile,
+                progress: { message in
+                    FileHandle.standardError.write(Data("\(message)\n".utf8))
+                }
+            )
+        }
         if profile.tokenFile == nil {
             try saveProfile(profile.withTokenFile(tokenFile.path))
         }
@@ -810,7 +235,7 @@ struct ExecutorFleet: AsyncParsableCommand {
 
     func run() async throws {
         let profile = try requireRelayProfile(reference)
-        let fleet = try await RelayWorkflowExecutor(profile: profile).fleet()
+        let fleet = try await mapRelayErrors { try await RelayWorkflowExecutor(profile: profile).fleet() }
         if json {
             print(try StructuredRunOutput.encode(fleet))
             return
@@ -841,7 +266,9 @@ struct ExecutorNodeRefresh: AsyncParsableCommand {
 
     func run() async throws {
         let profile = try requireRelayProfile(reference)
-        let result = try await RelayWorkflowExecutor(profile: profile).refreshNode(deviceID: deviceID)
+        let result = try await mapRelayErrors {
+            try await RelayWorkflowExecutor(profile: profile).refreshNode(deviceID: deviceID)
+        }
         if json {
             print(try StructuredRunOutput.encode(result))
         } else {
@@ -883,10 +310,12 @@ struct ExecutorNodeConfigure: AsyncParsableCommand {
             throw ValidationError("Specify at least one node policy change.")
         }
         let profile = try requireRelayProfile(reference)
-        let node = try await RelayWorkflowExecutor(profile: profile).configureNode(
-            deviceID: deviceID,
-            patch: patch
-        )
+        let node = try await mapRelayErrors {
+            try await RelayWorkflowExecutor(profile: profile).configureNode(
+                deviceID: deviceID,
+                patch: patch
+            )
+        }
         if json {
             print(try StructuredRunOutput.encode(node))
         } else {
@@ -920,14 +349,14 @@ struct ExecutorRemovalResult: Codable, Equatable {
 
 enum WorkflowExecutorController {
     static func probe(reference: String) async throws -> WorkflowExecutorProbe {
-        let parsed = try WorkflowExecutorReference(reference)
+        let parsed = try mapRelayErrors { try WorkflowExecutorReference(reference) }
         guard let kind = parsed.kind else { return .local() }
         let profile = try WorkflowExecutorProfileStore.require(reference)
         switch kind {
         case .ssh:
             return try SSHWorkflowExecutor(profile: profile).probe()
         case .relay:
-            return try await RelayWorkflowExecutor(profile: profile).probe()
+            return try await mapRelayErrors { try await RelayWorkflowExecutor(profile: profile).probe() }
         }
     }
 
@@ -936,7 +365,7 @@ enum WorkflowExecutorController {
         bundleDirectory: URL,
         localRunDirectory: URL
     ) async throws -> WorkflowRemoteJob {
-        let parsed = try WorkflowExecutorReference(reference)
+        let parsed = try mapRelayErrors { try WorkflowExecutorReference(reference) }
         guard let kind = parsed.kind else {
             throw ValidationError("Use `graph run` for local execution.")
         }
@@ -948,10 +377,12 @@ enum WorkflowExecutorController {
                 localRunDirectory: localRunDirectory
             )
         case .relay:
-            return try await RelayWorkflowExecutor(profile: profile).submit(
-                bundleDirectory: bundleDirectory,
-                localRunDirectory: localRunDirectory
-            )
+            return try await mapRelayErrors {
+                try await RelayWorkflowExecutor(profile: profile).submit(
+                    bundleDirectory: bundleDirectory,
+                    localRunDirectory: localRunDirectory
+                )
+            }
         }
     }
 }
@@ -963,7 +394,9 @@ enum WorkflowRemoteJobController {
         case .ssh:
             return try SSHWorkflowExecutor(profile: profile).inspect(jobID: reference.jobID)
         case .relay:
-            return try await RelayWorkflowExecutor(profile: profile).inspect(jobID: reference.jobID)
+            return try await mapRelayErrors {
+                try await RelayWorkflowExecutor(profile: profile).inspect(jobID: reference.jobID)
+            }
         }
     }
 
@@ -973,7 +406,9 @@ enum WorkflowRemoteJobController {
         case .ssh:
             return try SSHWorkflowExecutor(profile: profile).events(jobID: reference.jobID)
         case .relay:
-            return try await RelayWorkflowExecutor(profile: profile).events(jobID: reference.jobID)
+            return try await mapRelayErrors {
+                try await RelayWorkflowExecutor(profile: profile).events(jobID: reference.jobID)
+            }
         }
     }
 
@@ -983,7 +418,9 @@ enum WorkflowRemoteJobController {
         case .ssh:
             return try SSHWorkflowExecutor(profile: profile).cancel(jobID: reference.jobID)
         case .relay:
-            return try await RelayWorkflowExecutor(profile: profile).cancel(jobID: reference.jobID)
+            return try await mapRelayErrors {
+                try await RelayWorkflowExecutor(profile: profile).cancel(jobID: reference.jobID)
+            }
         }
     }
 
@@ -992,7 +429,9 @@ enum WorkflowRemoteJobController {
             throw ValidationError("Remote retry is supported for relay jobs; resubmit the immutable bundle for SSH.")
         }
         let profile = try WorkflowExecutorProfileStore.require(reference.executorReference)
-        return try await RelayWorkflowExecutor(profile: profile).retry(jobID: reference.jobID)
+        return try await mapRelayErrors {
+            try await RelayWorkflowExecutor(profile: profile).retry(jobID: reference.jobID)
+        }
     }
 
     static func fetch(
@@ -1011,22 +450,26 @@ enum WorkflowRemoteJobController {
                 artifactNames: artifactNames
             )
         case .relay:
-            return try await RelayWorkflowExecutor(profile: profile).fetch(
-                jobID: reference.jobID,
-                into: destination,
-                allArtifacts: allArtifacts,
-                artifactNames: artifactNames
-            )
+            return try await mapRelayErrors {
+                try await RelayWorkflowExecutor(profile: profile).fetch(
+                    jobID: reference.jobID,
+                    into: destination,
+                    allArtifacts: allArtifacts,
+                    artifactNames: artifactNames
+                )
+            }
         }
     }
 
     static func list(executor reference: String, limit: Int) async throws -> [WorkflowRemoteJob] {
-        let parsed = try WorkflowExecutorReference(reference)
+        let parsed = try mapRelayErrors { try WorkflowExecutorReference(reference) }
         guard parsed.kind == .relay else {
             throw ValidationError("Remote run listing is supported for relay executor profiles.")
         }
         let profile = try WorkflowExecutorProfileStore.require(reference)
-        return try await RelayWorkflowExecutor(profile: profile).list(limit: limit)
+        return try await mapRelayErrors {
+            try await RelayWorkflowExecutor(profile: profile).list(limit: limit)
+        }
     }
 }
 
@@ -1060,10 +503,6 @@ private extension WorkflowExecutorProfile {
             tokenFile: path
         )
     }
-}
-
-private func isValidExecutorName(_ name: String) -> Bool {
-    name.range(of: "^[a-z][a-z0-9-]{0,63}$", options: .regularExpression) != nil
 }
 
 private func validateExecutorName(_ name: String) throws {

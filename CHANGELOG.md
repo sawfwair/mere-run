@@ -6,6 +6,34 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Workflow graphs
+
+- grew the built-in workflow node catalog across the batch-shaped command
+  surface: `music.generate`, `sfx.generate`, `speech.synthesize`,
+  `speech.transcribe`, `music.separate`, `music.transcribe`,
+  `speech.diarize`, `vision.caption`, `vision.ocr`, `vision.geometry`,
+  `vision.image-to-3d`, `audio.enhance`, `text.embed`, and
+  `text.anonymize`, each mapping to its existing CLI command with typed
+  inputs and digest-verified file or directory artifacts. Workers advertise
+  the new kinds through the existing capability probe, so older workers
+  reject jobs that use them at validation instead of at runtime.
+  Interactive and resident surfaces (chat sessions, realtime music, live
+  tracking, serving) stay outside the job vocabulary by design.
+
+### Relay client and iOS
+
+- extracted the relay client into a new `MereRunRelayKit` library target:
+  executor profiles and references, OAuth device-grant authentication, the
+  relay graph-job and fleet HTTP client with digest-verified artifact fetch,
+  the serialized workflow contract types, and shared SSE event-text
+  normalization. The CLI consumes the library with unchanged commands,
+  messages, and exit codes; job submission stays CLI-side with bundle
+  materialization.
+- added the iOS Studio scaffold under `ios/` — a relay client app (pairing
+  via device grant, fleet view, run inbox, live run events, cancel/retry,
+  verified artifact fetch) built on `MereRunRelayKit`, with the architecture
+  and phasing documented in `docs/ios-studio.md`.
+
 ## 0.40.1 - 2026-08-16
 
 This patch release makes model health and discovery fast even when checkpoints

@@ -1,4 +1,5 @@
 import ArgumentParser
+import MereRunRelayKit
 
 private let _mereRunCLIModelStoreBootstrap: Void = {
     CLIModelStoreBootstrap.bootstrap(arguments: CommandLine.arguments)

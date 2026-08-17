@@ -1,4 +1,5 @@
 import ArgumentParser
+import MereRunRelayKit
 import Foundation
 import MereRunCore
 #if canImport(Darwin)
@@ -2315,25 +2316,6 @@ private func isConfinedRelativeWorkflowPath(_ path: String) -> Bool {
         && path.split(separator: "/", omittingEmptySubsequences: false).allSatisfy { component in
             !component.isEmpty && component != "." && component != ".."
         }
-}
-
-func workflowVersion(_ current: String, satisfiesMinimum minimum: String) -> Bool {
-    func components(_ value: String) -> [Int] {
-        value
-            .split(separator: ".")
-            .prefix(3)
-            .map { component in
-                Int(component.prefix(while: \Character.isNumber)) ?? 0
-            }
-    }
-    let currentParts = components(current)
-    let minimumParts = components(minimum)
-    for index in 0..<max(currentParts.count, minimumParts.count) {
-        let lhs = index < currentParts.count ? currentParts[index] : 0
-        let rhs = index < minimumParts.count ? minimumParts[index] : 0
-        if lhs != rhs { return lhs > rhs }
-    }
-    return true
 }
 
 private struct WorkflowCancellationError: Error {}

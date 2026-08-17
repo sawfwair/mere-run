@@ -1,0 +1,39 @@
+# XcodeGen manifest for the iOS Studio app.
+# Generate the project on a Mac:  cd ios && xcodegen generate
+# The app links only the portable MereRunRelayKit product from the root
+# package; no inference runtime is built for the phone in this phase.
+name: MereRunStudio
+options:
+  bundleIdPrefix: run.mere
+  deploymentTarget:
+    iOS: "18.0"
+  xcodeVersion: "16.0"
+packages:
+  MereRun:
+    path: ..
+targets:
+  MereRunStudio:
+    type: application
+    platform: iOS
+    sources:
+      - MereRunStudio
+    dependencies:
+      - package: MereRun
+        product: MereRunRelayKit
+    settings:
+      base:
+        PRODUCT_NAME: mere.run
+        PRODUCT_BUNDLE_IDENTIFIER: run.mere.studio.ios
+        GENERATE_INFOPLIST_FILE: YES
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: 0.1.0
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait
+        INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
+        INFOPLIST_KEY_CFBundleDisplayName: mere.run
+        SWIFT_VERSION: "6.0"
+        ENABLE_USER_SCRIPT_SANDBOXING: YES
+        CODE_SIGN_STYLE: Automatic
+        # Set for device builds: MERERUN_IOS_TEAM=<team id> xcodegen generate
+        # Simulator builds need no team.
+        DEVELOPMENT_TEAM: ${MERERUN_IOS_TEAM}

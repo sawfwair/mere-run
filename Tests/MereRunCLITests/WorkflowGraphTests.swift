@@ -1,6 +1,7 @@
 import Foundation
 import XCTest
 @testable import MereRunCLI
+@testable import MereRunRelayKit
 
 final class WorkflowGraphTests: XCTestCase {
     func testCatalogFieldRoundTripsStructuredValueSchema() throws {

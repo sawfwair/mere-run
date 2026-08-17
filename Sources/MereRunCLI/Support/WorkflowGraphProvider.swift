@@ -1,4 +1,5 @@
 import ArgumentParser
+import MereRunRelayKit
 import Foundation
 import MereRunCore
 
@@ -15,20 +16,6 @@ struct WorkflowPluginGraphProviderDocument: Codable, Equatable, Sendable {
         case providerID = "provider_id"
         case providerVersion = "provider_version"
         case nodes
-    }
-}
-
-struct WorkflowGraphProviderRequirement: Codable, Equatable, Hashable, Sendable {
-    let id: String
-    let version: String
-    let catalogSHA256: String
-    let nodeKinds: [String]
-
-    enum CodingKeys: String, CodingKey {
-        case id
-        case version
-        case catalogSHA256 = "catalog_sha256"
-        case nodeKinds = "node_kinds"
     }
 }
 
