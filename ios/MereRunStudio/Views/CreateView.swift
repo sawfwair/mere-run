@@ -1,19 +1,55 @@
+import PhotosUI
 import SwiftUI
 import MereRunRelayKit
+import UniformTypeIdentifiers
 
-/// Prompt-first creation in the Studio language: pick a mode, describe the
-/// result, run it on your fleet. Modes, fields, and options all come from the
-/// shared node catalog; availability comes from what the paired fleet
-/// actually reports, and an out-of-date fleet is said out loud rather than
-/// hidden. Asset inputs (photos, audio files) are the next step.
+/// Prompt-first creation in the Studio language: pick a mode, describe or
+/// attach the source, run it on your fleet. Modes, fields, and options come
+/// from the shared node catalog; availability comes from what the paired
+/// fleet reports, and an out-of-date fleet is said out loud rather than
+/// hidden. Photos arrive through the system picker and audio through the
+/// file importer; both are hashed into the job bundle and uploaded by digest.
 struct CreateView: View {
+    enum AssetMedia {
+        case image
+        case audio
+    }
+
     struct Mode: Identifiable {
         let kind: String
         let symbol: String
         let headline: String
-        let promptPlaceholder: String
-        let promptField: String
+        let promptPlaceholder: String?
+        let promptField: String?
+        let promptRequired: Bool
         let modelPrefix: String
+        let assetField: String?
+        let assetRequired: Bool
+        let assetMedia: AssetMedia
+
+        init(
+            kind: String,
+            symbol: String,
+            headline: String,
+            promptPlaceholder: String? = nil,
+            promptField: String? = nil,
+            promptRequired: Bool = false,
+            modelPrefix: String,
+            assetField: String? = nil,
+            assetRequired: Bool = false,
+            assetMedia: AssetMedia = .image
+        ) {
+            self.kind = kind
+            self.symbol = symbol
+            self.headline = headline
+            self.promptPlaceholder = promptPlaceholder
+            self.promptField = promptField
+            self.promptRequired = promptRequired
+            self.modelPrefix = modelPrefix
+            self.assetField = assetField
+            self.assetRequired = assetRequired
+            self.assetMedia = assetMedia
+        }
 
         var id: String { kind }
         var entry: WorkflowNodeCatalogEntry? { WorkflowNodeRegistry.entry(for: kind) }
@@ -26,7 +62,9 @@ struct CreateView: View {
             headline: "Make something\nvisible.",
             promptPlaceholder: "Describe the image…",
             promptField: "prompt",
-            modelPrefix: "image-"
+            promptRequired: true,
+            modelPrefix: "image-",
+            assetField: "input"
         ),
         Mode(
             kind: "video.generate",
@@ -34,7 +72,9 @@ struct CreateView: View {
             headline: "Set it in motion.",
             promptPlaceholder: "Describe the shot…",
             promptField: "prompt",
-            modelPrefix: "video-"
+            promptRequired: true,
+            modelPrefix: "video-",
+            assetField: "image"
         ),
         Mode(
             kind: "music.generate",
@@ -42,6 +82,7 @@ struct CreateView: View {
             headline: "Score the moment.",
             promptPlaceholder: "Describe the music…",
             promptField: "prompt",
+            promptRequired: true,
             modelPrefix: "music-"
         ),
         Mode(
@@ -50,6 +91,7 @@ struct CreateView: View {
             headline: "Shape a sound.",
             promptPlaceholder: "Describe the sound effect…",
             promptField: "prompt",
+            promptRequired: true,
             modelPrefix: "sfx-"
         ),
         Mode(
@@ -58,7 +100,70 @@ struct CreateView: View {
             headline: "Give it a voice.",
             promptPlaceholder: "Write what should be spoken…",
             promptField: "text",
+            promptRequired: true,
             modelPrefix: "speech-tts-"
+        ),
+        Mode(
+            kind: "vision.image-to-3d",
+            symbol: "cube",
+            headline: "Give it depth.",
+            modelPrefix: "image-3d-",
+            assetField: "image",
+            assetRequired: true
+        ),
+        Mode(
+            kind: "vision.caption",
+            symbol: "text.below.photo",
+            headline: "Say what you see.",
+            promptPlaceholder: "Optional: guide the caption…",
+            promptField: "prompt",
+            modelPrefix: "vision-",
+            assetField: "image",
+            assetRequired: true
+        ),
+        Mode(
+            kind: "vision.ocr",
+            symbol: "doc.text.viewfinder",
+            headline: "Read every word.",
+            modelPrefix: "vision-ocr-",
+            assetField: "image",
+            assetRequired: true
+        ),
+        Mode(
+            kind: "speech.transcribe",
+            symbol: "text.quote",
+            headline: "Write it down.",
+            modelPrefix: "speech-asr-",
+            assetField: "audio",
+            assetRequired: true,
+            assetMedia: .audio
+        ),
+        Mode(
+            kind: "speech.diarize",
+            symbol: "person.2.wave.2",
+            headline: "Who said what.",
+            modelPrefix: "speech-diarization-",
+            assetField: "audio",
+            assetRequired: true,
+            assetMedia: .audio
+        ),
+        Mode(
+            kind: "music.separate",
+            symbol: "square.stack.3d.down.right",
+            headline: "Pull it apart.",
+            modelPrefix: "music-separate-",
+            assetField: "audio",
+            assetRequired: true,
+            assetMedia: .audio
+        ),
+        Mode(
+            kind: "audio.enhance",
+            symbol: "wand.and.stars",
+            headline: "Make it shine.",
+            modelPrefix: "audio-",
+            assetField: "audio",
+            assetRequired: true,
+            assetMedia: .audio
         ),
     ]
 
@@ -73,6 +178,12 @@ struct CreateView: View {
     @State private var submitting = false
     @State private var errorMessage: String?
     @State private var submittedJobID: String?
+
+    @State private var photoItem: PhotosPickerItem?
+    @State private var showAudioImporter = false
+    @State private var assetURL: URL?
+    @State private var assetLabel: String?
+    @State private var assetPreview: UIImage?
 
     private var fleetKinds: Set<String>? {
         relay.workerProbe.map { Set($0.nodeKinds) }
@@ -98,6 +209,12 @@ struct CreateView: View {
 
     private var enumInputs: [WorkflowNodeField] {
         selected.entry?.inputs.filter { $0.type == .enumeration && !$0.required } ?? []
+    }
+
+    private var canRun: Bool {
+        let promptSatisfied = !selected.promptRequired || !prompt.isEmpty
+        let assetSatisfied = !selected.assetRequired || assetURL != nil
+        return promptSatisfied && assetSatisfied && !submitting && isAvailable(selected)
     }
 
     var body: some View {
@@ -126,7 +243,7 @@ struct CreateView: View {
 
                     runButton
 
-                    Text("Runs on your machines. Prompts and outputs stay between your devices.")
+                    Text("Runs on your machines. Prompts, photos, and outputs stay between your devices.")
                         .font(.footnote)
                         .foregroundStyle(MereTheme.textMuted)
                         .frame(maxWidth: .infinity, alignment: .center)
@@ -140,6 +257,18 @@ struct CreateView: View {
                 RunDetailView(jobID: jobID)
             }
             .sheet(isPresented: $showOptions) { optionsSheet }
+            .fileImporter(
+                isPresented: $showAudioImporter,
+                allowedContentTypes: [.audio],
+                allowsMultipleSelection: false
+            ) { result in
+                if case .success(let urls) = result, let url = urls.first {
+                    importAudio(url)
+                }
+            }
+            .onChange(of: photoItem) {
+                Task { await importPhoto() }
+            }
             .task {
                 await relay.refreshWorkerProbe()
             }
@@ -152,12 +281,7 @@ struct CreateView: View {
                 ForEach(Self.modes) { mode in
                     let isSelected = mode.kind == selected.kind
                     Button {
-                        selected = mode
-                        model = ""
-                        textFields = [:]
-                        numberFields = [:]
-                        enumFields = [:]
-                        errorMessage = nil
+                        select(mode)
                     } label: {
                         HStack(spacing: 6) {
                             Image(systemName: mode.symbol)
@@ -187,15 +311,20 @@ struct CreateView: View {
 
     private var composer: some View {
         VStack(alignment: .leading, spacing: MereTheme.Spacing.m) {
-            TextField(
-                "",
-                text: $prompt,
-                prompt: Text(selected.promptPlaceholder).foregroundColor(MereTheme.textMuted),
-                axis: .vertical
-            )
-            .font(.body)
-            .foregroundStyle(MereTheme.textPrimary)
-            .lineLimit(4...9)
+            if selected.assetField != nil {
+                attachRow
+            }
+            if let placeholder = selected.promptPlaceholder {
+                TextField(
+                    "",
+                    text: $prompt,
+                    prompt: Text(placeholder).foregroundColor(MereTheme.textMuted),
+                    axis: .vertical
+                )
+                .font(.body)
+                .foregroundStyle(MereTheme.textPrimary)
+                .lineLimit(3...9)
+            }
 
             Divider().overlay(MereTheme.border.opacity(0.5))
 
@@ -228,6 +357,58 @@ struct CreateView: View {
         .merePanel()
     }
 
+    @ViewBuilder
+    private var attachRow: some View {
+        if let assetURL {
+            HStack(spacing: MereTheme.Spacing.s) {
+                if let assetPreview {
+                    Image(uiImage: assetPreview)
+                        .resizable()
+                        .scaledToFill()
+                        .frame(width: 52, height: 52)
+                        .clipShape(RoundedRectangle(cornerRadius: MereTheme.Radius.field))
+                } else {
+                    Image(systemName: "waveform")
+                        .frame(width: 52, height: 52)
+                        .background(
+                            RoundedRectangle(cornerRadius: MereTheme.Radius.field)
+                                .fill(MereTheme.surfaceRaised)
+                        )
+                        .foregroundStyle(MereTheme.accent)
+                }
+                Text(assetLabel ?? assetURL.lastPathComponent)
+                    .font(.footnote)
+                    .foregroundStyle(MereTheme.textSecondary)
+                    .lineLimit(1)
+                Spacer()
+                Button {
+                    clearAsset()
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(MereTheme.textMuted)
+                }
+                .accessibilityLabel("Remove attachment")
+            }
+        } else {
+            switch selected.assetMedia {
+            case .image:
+                PhotosPicker(selection: $photoItem, matching: .images) {
+                    AttachLabel(
+                        title: selected.assetRequired ? "Choose a photo" : "Add a photo (optional)",
+                        symbol: "photo.badge.plus"
+                    )
+                }
+            case .audio:
+                Button {
+                    showAudioImporter = true
+                } label: {
+                    AttachLabel(title: "Choose an audio file", symbol: "waveform.badge.plus")
+                }
+            }
+        }
+    }
+
+
     private var runButton: some View {
         Button {
             Task { await submit() }
@@ -244,7 +425,7 @@ struct CreateView: View {
             .padding(.vertical, 6)
         }
         .buttonStyle(.borderedProminent)
-        .disabled(prompt.isEmpty || submitting || !isAvailable(selected))
+        .disabled(!canRun)
     }
 
     private var optionsSheet: some View {
@@ -305,6 +486,75 @@ struct CreateView: View {
         .presentationDetents([.medium, .large])
     }
 
+    private func select(_ mode: Mode) {
+        selected = mode
+        model = ""
+        textFields = [:]
+        numberFields = [:]
+        enumFields = [:]
+        errorMessage = nil
+        clearAsset()
+    }
+
+    private func clearAsset() {
+        if let assetURL {
+            try? FileManager.default.removeItem(at: assetURL)
+        }
+        assetURL = nil
+        assetLabel = nil
+        assetPreview = nil
+        photoItem = nil
+    }
+
+    private func importPhoto() async {
+        guard let photoItem else { return }
+        guard let data = try? await photoItem.loadTransferable(type: Data.self),
+              let image = UIImage(data: data),
+              let jpeg = image.jpegData(compressionQuality: 0.92) else {
+            errorMessage = "Could not load that photo."
+            return
+        }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("attachments", isDirectory: true)
+            .appendingPathComponent("photo-\(UUID().uuidString).jpg")
+        do {
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try jpeg.write(to: url)
+            assetURL = url
+            assetLabel = "Photo"
+            assetPreview = image
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func importAudio(_ source: URL) {
+        let scoped = source.startAccessingSecurityScopedResource()
+        defer {
+            if scoped { source.stopAccessingSecurityScopedResource() }
+        }
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("attachments", isDirectory: true)
+            .appendingPathComponent("audio-\(UUID().uuidString).\(source.pathExtension.isEmpty ? "wav" : source.pathExtension)")
+        do {
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try FileManager.default.copyItem(at: source, to: url)
+            assetURL = url
+            assetLabel = source.lastPathComponent
+            assetPreview = nil
+            errorMessage = nil
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
     private func fieldTitle(_ name: String) -> String {
         name.replacingOccurrences(of: "_", with: " ")
     }
@@ -319,7 +569,13 @@ struct CreateView: View {
     private func submit() async {
         submitting = true
         defer { submitting = false }
-        var arguments: [String: WorkflowValue] = [selected.promptField: .string(prompt)]
+        var arguments: [String: WorkflowValue] = [:]
+        if let promptField = selected.promptField, !prompt.isEmpty {
+            arguments[promptField] = .string(prompt)
+        }
+        if let assetField = selected.assetField, let assetURL {
+            arguments[assetField] = .string(assetURL.path)
+        }
         if !model.isEmpty {
             arguments["model"] = .string(model)
         }
@@ -347,6 +603,23 @@ struct CreateView: View {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+}
+
+private struct AttachLabel: View {
+    let title: String
+    let symbol: String
+
+    var body: some View {
+        HStack(spacing: MereTheme.Spacing.s) {
+            Image(systemName: symbol)
+                .foregroundStyle(MereTheme.accent)
+            Text(title)
+                .font(.subheadline)
+                .foregroundStyle(MereTheme.textSecondary)
+            Spacer()
+        }
+        .padding(.vertical, MereTheme.Spacing.s)
     }
 }
 

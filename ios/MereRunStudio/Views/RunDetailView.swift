@@ -1,5 +1,6 @@
 import SwiftUI
 import MereRunRelayKit
+import UIKit
 
 /// One run: live state, worker events with progress, cancel/retry, and
 /// digest-verified artifact fetch once finished.
@@ -89,8 +90,18 @@ struct RunDetailView: View {
             if !fetchedFiles.isEmpty {
                 Section("Artifacts") {
                     ForEach(fetchedFiles, id: \.self) { file in
-                        ShareLink(item: file) {
-                            Label(file.lastPathComponent, systemImage: "square.and.arrow.up")
+                        VStack(alignment: .leading, spacing: MereTheme.Spacing.s) {
+                            if ["png", "jpg", "jpeg", "webp"].contains(file.pathExtension.lowercased()),
+                               let image = UIImage(contentsOfFile: file.path) {
+                                Image(uiImage: image)
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(maxHeight: 320)
+                                    .clipShape(RoundedRectangle(cornerRadius: MereTheme.Radius.panel))
+                            }
+                            ShareLink(item: file) {
+                                Label(file.lastPathComponent, systemImage: "square.and.arrow.up")
+                            }
                         }
                     }
                 }
