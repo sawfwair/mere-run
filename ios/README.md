@@ -23,7 +23,8 @@ Requires Xcode 16+ on macOS and [XcodeGen](https://github.com/yonaskolb/XcodeGen
 ```bash
 brew install xcodegen
 cd ios
-xcodegen generate
+xcodegen generate                              # simulator builds
+MERERUN_IOS_TEAM=<team id> xcodegen generate   # device builds (automatic signing)
 open MereRunStudio.xcodeproj
 ```
 
