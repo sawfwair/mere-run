@@ -22,7 +22,12 @@ struct PairingView: View {
             switch relay.pairing {
             case .unpaired, .failed, .discovering:
                 VStack(spacing: MereTheme.Spacing.m) {
-                    TextField("https://relay.mere.run", text: $urlString)
+                    TextField(
+                        "",
+                        text: $urlString,
+                        prompt: Text("Your relay address").foregroundColor(MereTheme.textMuted)
+                    )
+                    .foregroundStyle(MereTheme.textPrimary)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .keyboardType(.URL)

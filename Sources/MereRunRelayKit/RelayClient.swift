@@ -8,7 +8,7 @@ import FoundationNetworking
 /// Submission stays with the CLI, which owns bundle materialization; every
 /// other operation — probe, fleet, inspect, events, cancel, retry, list, and
 /// verified artifact fetch — lives here and needs no local runtime.
-public struct RelayWorkflowExecutor {
+public struct RelayWorkflowExecutor: Sendable {
     public let profile: WorkflowExecutorProfile
 
     public init(profile: WorkflowExecutorProfile) {
