@@ -43,6 +43,8 @@ struct RunsView: View {
                         .foregroundStyle(MereTheme.failure)
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(MereTheme.background.ignoresSafeArea())
             .navigationTitle("Runs")
             .navigationDestination(for: String.self) { jobID in
                 RunDetailView(jobID: jobID)

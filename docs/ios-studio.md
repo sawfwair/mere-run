@@ -40,11 +40,16 @@ covers building.
 
 ## Phasing
 
-- **Phase A — run inbox (current).** Pair, watch, fetch, cancel/retry,
-  fleet. Add prompt-first submission next: JSON-value inputs plus photo
-  upload need the bundle-materialization layer (graph documents, fingerprint
-  hashing, asset manifests) extracted from `MereRunCLI` the same way the
-  relay client was; provider-qualified nodes stay excluded on iOS.
+- **Phase A — run inbox and prompt-first submission (current).** Pair,
+  watch, fetch, cancel/retry, fleet, and Create: the graph documents, node
+  registry, validator, and bundle materializer now live in
+  `MereRunRelayKit`, so the phone materializes byte-identical bundles and
+  submits through the same create/upload/commit path as the CLI. The Create
+  surface generates its forms from the shared node catalog (image, video,
+  music, SFX, and speech synthesis), reports per-kind fleet availability
+  from the worker probe, and pins models from the fleet's installed list.
+  Provider-qualified nodes stay excluded on iOS, and modes whose required
+  inputs are assets wait for the photo/file picker step.
 - **Phase B — chat.** Route chat to the best available transport: on-device
   small models when present, a Mac's `api serve` over the LAN when reachable
   (real SSE token streaming today), relay jobs otherwise. Token streaming

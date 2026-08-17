@@ -104,6 +104,8 @@ struct RunDetailView: View {
                 }
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(MereTheme.background.ignoresSafeArea())
         .navigationTitle("Run")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {

@@ -57,6 +57,8 @@ struct SettingsView: View {
                     Text("Work runs on your paired nodes. Prompts and outputs move only between this phone and your relay.")
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(MereTheme.background.ignoresSafeArea())
             .navigationTitle("Settings")
             .onAppear { relay.refreshAuthStatus() }
         }

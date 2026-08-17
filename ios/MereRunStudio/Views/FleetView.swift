@@ -17,8 +17,8 @@ struct FleetView: View {
                         LabeledContent("Routable models", value: "\(summary.routableModels)")
                     }
                 }
-                Section("Nodes") {
-                    ForEach(snapshot?.nodes ?? [], id: \.deviceID) { node in
+                Section("Online") {
+                    ForEach(onlineNodes, id: \.deviceID) { node in
                         VStack(alignment: .leading, spacing: 4) {
                             HStack {
                                 Text(node.deviceName)
@@ -30,6 +30,21 @@ struct FleetView: View {
                                 .font(.footnote)
                                 .foregroundStyle(MereTheme.textMuted)
                                 .lineLimit(2)
+                        }
+                    }
+                }
+                if !offlineNodes.isEmpty {
+                    Section("Offline") {
+                        ForEach(offlineNodes, id: \.deviceID) { node in
+                            HStack {
+                                Text(node.deviceName)
+                                    .font(.footnote)
+                                    .foregroundStyle(MereTheme.textMuted)
+                                Spacer()
+                                Text(node.status)
+                                    .font(.footnote)
+                                    .foregroundStyle(MereTheme.textMuted)
+                            }
                         }
                     }
                 }
@@ -55,10 +70,22 @@ struct FleetView: View {
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
+            .background(MereTheme.background.ignoresSafeArea())
             .navigationTitle("Fleet")
             .refreshable { await load() }
             .task { await load() }
         }
+    }
+
+    private var onlineNodes: [RelayFleetNode] {
+        (snapshot?.nodes ?? []).filter { $0.status.lowercased() != "offline" }
+            .sorted { $0.deviceName < $1.deviceName }
+    }
+
+    private var offlineNodes: [RelayFleetNode] {
+        (snapshot?.nodes ?? []).filter { $0.status.lowercased() == "offline" }
+            .sorted { $0.deviceName < $1.deviceName }
     }
 
     private func load() async {

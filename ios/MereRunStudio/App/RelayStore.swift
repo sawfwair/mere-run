@@ -37,6 +37,13 @@ final class RelayStore: ObservableObject {
             pairing = .paired
             refreshAuthStatus()
         }
+        #if DEBUG
+        // UI preview without a paired relay (simulator screenshots, design
+        // iteration): `simctl launch <sim> run.mere.studio.ios MERERUN_UI_PREVIEW`
+        if ProcessInfo.processInfo.arguments.contains("MERERUN_UI_PREVIEW") {
+            pairing = .paired
+        }
+        #endif
     }
 
     var client: RelayWorkflowExecutor? {
