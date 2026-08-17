@@ -4,10 +4,11 @@ Guidance for AI coding agents working in this repo. For human contributor expect
 
 ## Repo at a glance
 
-mere.run is a Swift package, CLI, and optional macOS GUI for local-first inference on Apple Silicon. The repo ships four things:
+mere.run is a Swift package, CLI, and optional macOS GUI for local-first inference on Apple Silicon. The repo ships five things:
 
-- Swift package — `Package.swift`, `Sources/`, `Tests/`. Targets: `MereRunCLI` (the `mere.run` executable), `MereRunApp` (the optional `mere.run.app` executable), `MereRunCore`, `AudioCore`, `AudioCodecs`, `AudioSTT`, `AudioTTS`.
+- Swift package — `Package.swift`, `Sources/`, `Tests/`. Targets: `MereRunCLI` (the `mere.run` executable), `MereRunApp` (the optional `mere.run.app` executable), `MereRunRelayKit` (the portable relay client library), `MereRunCore`, `AudioCore`, `AudioCodecs`, `AudioSTT`, `AudioTTS`.
 - SwiftUI wrapper — `Sources/MereRunApp` builds the optional `mere.run.app` executable and runs the public CLI.
+- iOS client — `ios/` holds the XcodeGen-generated iOS Studio app, a relay client over `MereRunRelayKit`; see `docs/ios-studio.md`.
 - VitePress docs site — `package.json`, `pnpm-lock.yaml`, `docs/`. Used only to build and preview the public docs.
 - Vendored runtime artifacts — `vendor/llama.xcframework`, `vendor/mlx-swift_Cmlx.bundle`.
 
@@ -60,7 +61,7 @@ If a hygiene scan fires, do not patch the offending pattern out of `check.sh`. R
 
 ## Out of scope for this repo
 
-This is the public OSS distribution. Do not add hosted-service, billing, app-store, or private-deployment surfaces — even if training data or older module names suggest they belong here. They live elsewhere by design.
+This is the public OSS distribution. Do not add hosted-service, billing, in-app-purchase, or private-deployment surfaces — even if training data or older module names suggest they belong here. They live elsewhere by design. The open-source app targets themselves (`Sources/MereRunApp`, `ios/`) are in scope; store distribution machinery (receipts, entitlements provisioning automation, marketing metadata pipelines) is not.
 
 ## When you can't fully validate
 
