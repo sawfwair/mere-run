@@ -1,11 +1,20 @@
 import SwiftUI
 
-/// First-run pairing: relay URL in, device-grant approval out. The
-/// verification code is shown large so it can be typed on another device;
-/// opening the link on this phone also works.
+/// First-run pairing. One tap pairs with the public relay; the device-grant
+/// approval handles the account, so nobody types infrastructure by hand. A
+/// quiet disclosure reveals the address field for self-hosted or development
+/// relays. The verification code is shown large so it can be typed on another
+/// device; opening the link on this phone also works.
 struct PairingView: View {
+    static let defaultRelayURL = "https://relay.mere.run"
+
     @EnvironmentObject private var relay: RelayStore
+    @State private var customRelay = false
     @State private var urlString = ""
+
+    private var pairingURL: String {
+        customRelay ? urlString : Self.defaultRelayURL
+    }
 
     var body: some View {
         VStack(spacing: MereTheme.Spacing.xl) {
@@ -22,17 +31,19 @@ struct PairingView: View {
             switch relay.pairing {
             case .unpaired, .failed, .discovering:
                 VStack(spacing: MereTheme.Spacing.m) {
-                    TextField(
-                        "",
-                        text: $urlString,
-                        prompt: Text("Your relay address").foregroundColor(MereTheme.textMuted)
-                    )
-                    .foregroundStyle(MereTheme.textPrimary)
+                    if customRelay {
+                        TextField(
+                            "",
+                            text: $urlString,
+                            prompt: Text("Your relay address").foregroundColor(MereTheme.textMuted)
+                        )
+                        .foregroundStyle(MereTheme.textPrimary)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .keyboardType(.URL)
                         .padding(MereTheme.Spacing.m)
                         .merePanel()
+                    }
                     if case .failed(let message) = relay.pairing {
                         Text(message)
                             .font(.footnote)
@@ -40,17 +51,24 @@ struct PairingView: View {
                             .multilineTextAlignment(.center)
                     }
                     Button {
-                        let url = urlString
+                        let url = pairingURL
                         Task { await relay.pair(urlString: url) }
                     } label: {
                         if relay.pairing == .discovering {
                             ProgressView().frame(maxWidth: .infinity)
                         } else {
-                            Text("Pair").frame(maxWidth: .infinity)
+                            Text(customRelay ? "Pair" : "Pair with relay.mere.run")
+                                .frame(maxWidth: .infinity)
                         }
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(urlString.isEmpty || relay.pairing == .discovering)
+                    .disabled(pairingURL.isEmpty || relay.pairing == .discovering)
+                    Button(customRelay ? "Use relay.mere.run" : "Use a different relay") {
+                        customRelay.toggle()
+                    }
+                    .font(.footnote)
+                    .foregroundStyle(MereTheme.textMuted)
+                    .disabled(relay.pairing == .discovering)
                 }
             case .awaitingApproval(let verificationURL, let userCode):
                 VStack(spacing: MereTheme.Spacing.m) {
