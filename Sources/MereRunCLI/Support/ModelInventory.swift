@@ -185,7 +185,11 @@ enum ModelInventory {
         let registeredBindings = (modelID.map { resolver.locationCandidates(for: $0) } ?? [])
             .filter { $0.kind == .registeredBinding }
 
-        let flatDir = MereRunModelPaths.modelDir(id)
+        let flatDir = modelID.flatMap { modelID in
+            resolver.locationCandidates(for: modelID)
+                .first { $0.kind == .primaryStore }?
+                .rootURL
+        } ?? MereRunModelPaths.modelDir(id)
         let flatInstalled = isNonEmptyDirectory(flatDir, fileManager: fileManager)
         let hasManagedManifest = fileManager.fileExists(
             atPath: flatDir.appendingPathComponent(MereRunModelManifest.filename).path
