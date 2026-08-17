@@ -1,6 +1,7 @@
 import ArgumentParser
 import Foundation
 import MereRunCore
+import MereRunRelayKit
 #if canImport(Darwin)
 import Darwin
 #elseif canImport(Glibc)

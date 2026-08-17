@@ -1,6 +1,9 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 import XCTest
-@testable import MereRunCLI
+@testable import MereRunRelayKit
 
 final class WorkflowRelayExecutorTests: XCTestCase {
     func testTransientServerFailuresRetryUntilSuccess() async throws {

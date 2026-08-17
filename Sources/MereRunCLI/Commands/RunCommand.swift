@@ -1,5 +1,6 @@
 import ArgumentParser
 import Foundation
+import MereRunRelayKit
 #if canImport(Darwin)
 import Darwin
 #elseif canImport(Glibc)
@@ -111,7 +112,7 @@ struct RunInspect: AsyncParsableCommand {
 
     func run() async throws {
         if path.hasPrefix("ssh://") || path.hasPrefix("relay://") {
-            let job = try await WorkflowRemoteJobController.inspect(WorkflowRemoteReference(path))
+            let job = try await WorkflowRemoteJobController.inspect(mapRelayErrors { try WorkflowRemoteReference(path) })
             if json {
                 print(try StructuredRunOutput.encode(job))
             } else {
@@ -195,11 +196,11 @@ struct RunWatch: AsyncParsableCommand {
     func run() async throws {
         guard pollInterval >= 0.25 else { throw ValidationError("--poll-interval must be at least 0.25 seconds.") }
         guard !(json && jsonStream) else { throw ValidationError("--json and --json-stream are mutually exclusive.") }
-        let parsed = try WorkflowRemoteReference(reference)
+        let parsed = try mapRelayErrors { try WorkflowRemoteReference(reference) }
         var emittedLineCount = 0
         var previousState: GraphRunState?
         while true {
-            let lines = normalizedEventLines(try await WorkflowRemoteJobController.events(parsed))
+            let lines = RelayEventText.normalizedEventLines(try await WorkflowRemoteJobController.events(parsed))
             if emittedLineCount > lines.count { emittedLineCount = 0 }
             for line in lines.dropFirst(emittedLineCount) {
                 if jsonStream { stdout(line) } else { stderr(line) }
@@ -246,7 +247,7 @@ struct RunFetch: AsyncParsableCommand {
         }
         let destination = URL(fileURLWithPath: into).standardizedFileURL
         let job = try await WorkflowRemoteJobController.fetch(
-            WorkflowRemoteReference(reference),
+            mapRelayErrors { try WorkflowRemoteReference(reference) },
             into: destination,
             allArtifacts: allArtifacts,
             artifactNames: Set(artifacts)
@@ -262,7 +263,7 @@ struct RunCancel: AsyncParsableCommand {
 
     func run() async throws {
         if reference.hasPrefix("ssh://") || reference.hasPrefix("relay://") {
-            let job = try await WorkflowRemoteJobController.cancel(WorkflowRemoteReference(reference))
+            let job = try await WorkflowRemoteJobController.cancel(mapRelayErrors { try WorkflowRemoteReference(reference) })
             if json { print(try StructuredRunOutput.encode(job)) } else { print("[\(job.state.rawValue)] \(job.jobReference)") }
             return
         }
@@ -284,7 +285,7 @@ struct RunRetry: AsyncParsableCommand {
     @Flag(name: [.customLong("json")], help: "Emit the retry job as JSON.") var json = false
 
     func run() async throws {
-        let job = try await WorkflowRemoteJobController.retry(WorkflowRemoteReference(reference))
+        let job = try await WorkflowRemoteJobController.retry(mapRelayErrors { try WorkflowRemoteReference(reference) })
         if json { print(try StructuredRunOutput.encode(job)) } else { print("[\(job.state.rawValue)] \(job.jobReference)") }
     }
 }
@@ -307,19 +308,6 @@ private struct LocalCancellationResult: Codable {
 private extension GraphRunState {
     var isTerminal: Bool {
         self == .finished || self == .failed || self == .cancelled
-    }
-}
-
-private func normalizedEventLines(_ raw: String) -> [String] {
-    raw.split(whereSeparator: \Character.isNewline).compactMap { substring in
-        let line = substring.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !line.isEmpty, !line.hasPrefix("event:"), !line.hasPrefix("id:"), line != "data: [DONE]" else {
-            return nil
-        }
-        if line.hasPrefix("data:") {
-            return line.dropFirst(5).trimmingCharacters(in: .whitespaces)
-        }
-        return line
     }
 }
 

@@ -3,7 +3,7 @@ import Foundation
 import FoundationNetworking
 #endif
 import XCTest
-@testable import MereRunCLI
+@testable import MereRunRelayKit
 
 final class RelayAuthenticationTests: XCTestCase {
     func testExpiredOAuthTokenSetRefreshesAtomically() async throws {

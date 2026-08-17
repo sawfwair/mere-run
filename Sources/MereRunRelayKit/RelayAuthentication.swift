@@ -1,4 +1,3 @@
-import ArgumentParser
 import Foundation
 #if canImport(FoundationNetworking)
 import FoundationNetworking
@@ -8,26 +7,31 @@ import Darwin
 #elseif canImport(Glibc)
 import Glibc
 #endif
-import MereRunCore
 
-struct RelayDiscoveryDocument: Codable, Equatable, Sendable {
-    let schemaVersion: Int
-    let kind: String
-    let auth: RelayAuthConfiguration
+public struct RelayDiscoveryDocument: Codable, Equatable, Sendable {
+    public let schemaVersion: Int
+    public let kind: String
+    public let auth: RelayAuthConfiguration
 
     enum CodingKeys: String, CodingKey {
         case schemaVersion = "schema_version"
         case kind
         case auth
     }
+
+    public init(schemaVersion: Int, kind: String, auth: RelayAuthConfiguration) {
+        self.schemaVersion = schemaVersion
+        self.kind = kind
+        self.auth = auth
+    }
 }
 
-struct RelayAuthConfiguration: Codable, Equatable, Sendable {
-    let issuer: String
-    let deviceAuthorizationEndpoint: String
-    let tokenEndpoint: String
-    let clientID: String
-    let scope: String
+public struct RelayAuthConfiguration: Codable, Equatable, Sendable {
+    public let issuer: String
+    public let deviceAuthorizationEndpoint: String
+    public let tokenEndpoint: String
+    public let clientID: String
+    public let scope: String
 
     enum CodingKeys: String, CodingKey {
         case issuer
@@ -36,18 +40,32 @@ struct RelayAuthConfiguration: Codable, Equatable, Sendable {
         case clientID = "client_id"
         case scope
     }
+
+    public init(
+        issuer: String,
+        deviceAuthorizationEndpoint: String,
+        tokenEndpoint: String,
+        clientID: String,
+        scope: String
+    ) {
+        self.issuer = issuer
+        self.deviceAuthorizationEndpoint = deviceAuthorizationEndpoint
+        self.tokenEndpoint = tokenEndpoint
+        self.clientID = clientID
+        self.scope = scope
+    }
 }
 
-struct RelayOAuthTokenSet: Codable, Equatable, Sendable {
-    let accessToken: String
-    let refreshToken: String?
-    let tokenType: String?
-    let expiresIn: Int64?
-    let obtainedAtEpochSeconds: Int64?
-    let issuer: String?
-    let tokenEndpoint: String?
-    let clientID: String?
-    let scope: String?
+public struct RelayOAuthTokenSet: Codable, Equatable, Sendable {
+    public let accessToken: String
+    public let refreshToken: String?
+    public let tokenType: String?
+    public let expiresIn: Int64?
+    public let obtainedAtEpochSeconds: Int64?
+    public let issuer: String?
+    public let tokenEndpoint: String?
+    public let clientID: String?
+    public let scope: String?
 
     enum CodingKeys: String, CodingKey {
         case accessToken = "access_token"
@@ -61,17 +79,39 @@ struct RelayOAuthTokenSet: Codable, Equatable, Sendable {
         case scope
     }
 
-    func expiresAtEpochSeconds() -> Int64? {
+    public init(
+        accessToken: String,
+        refreshToken: String?,
+        tokenType: String?,
+        expiresIn: Int64?,
+        obtainedAtEpochSeconds: Int64?,
+        issuer: String? = nil,
+        tokenEndpoint: String? = nil,
+        clientID: String? = nil,
+        scope: String? = nil
+    ) {
+        self.accessToken = accessToken
+        self.refreshToken = refreshToken
+        self.tokenType = tokenType
+        self.expiresIn = expiresIn
+        self.obtainedAtEpochSeconds = obtainedAtEpochSeconds
+        self.issuer = issuer
+        self.tokenEndpoint = tokenEndpoint
+        self.clientID = clientID
+        self.scope = scope
+    }
+
+    public func expiresAtEpochSeconds() -> Int64? {
         Self.jwtExpiration(accessToken) ?? obtainedAtEpochSeconds.flatMap { obtained in
             expiresIn.map { obtained + $0 }
         }
     }
 
-    func isFresh(now: Int64, skewSeconds: Int64 = 60) -> Bool {
+    public func isFresh(now: Int64, skewSeconds: Int64 = 60) -> Bool {
         expiresAtEpochSeconds().map { $0 > now + skewSeconds } ?? true
     }
 
-    func withConfiguration(_ configuration: RelayAuthConfiguration, obtainedAt: Int64) -> RelayOAuthTokenSet {
+    public func withConfiguration(_ configuration: RelayAuthConfiguration, obtainedAt: Int64) -> RelayOAuthTokenSet {
         RelayOAuthTokenSet(
             accessToken: accessToken,
             refreshToken: refreshToken,
@@ -99,13 +139,13 @@ struct RelayOAuthTokenSet: Codable, Equatable, Sendable {
     }
 }
 
-struct RelayAuthStatusResult: Codable, Equatable, Sendable {
-    let executor: String
-    let credentialKind: String
-    let authenticated: Bool
-    let refreshable: Bool
-    let expiresAtEpochSeconds: Int64?
-    let tokenFile: String?
+public struct RelayAuthStatusResult: Codable, Equatable, Sendable {
+    public let executor: String
+    public let credentialKind: String
+    public let authenticated: Bool
+    public let refreshable: Bool
+    public let expiresAtEpochSeconds: Int64?
+    public let tokenFile: String?
 
     enum CodingKeys: String, CodingKey {
         case executor
@@ -115,14 +155,30 @@ struct RelayAuthStatusResult: Codable, Equatable, Sendable {
         case expiresAtEpochSeconds = "expires_at_epoch_seconds"
         case tokenFile = "token_file"
     }
+
+    public init(
+        executor: String,
+        credentialKind: String,
+        authenticated: Bool,
+        refreshable: Bool,
+        expiresAtEpochSeconds: Int64?,
+        tokenFile: String?
+    ) {
+        self.executor = executor
+        self.credentialKind = credentialKind
+        self.authenticated = authenticated
+        self.refreshable = refreshable
+        self.expiresAtEpochSeconds = expiresAtEpochSeconds
+        self.tokenFile = tokenFile
+    }
 }
 
-struct RelayLoginResult: Codable, Equatable, Sendable {
-    let executor: String
-    let issuer: String
-    let tokenFile: String
-    let refreshable: Bool
-    let expiresAtEpochSeconds: Int64?
+public struct RelayLoginResult: Codable, Equatable, Sendable {
+    public let executor: String
+    public let issuer: String
+    public let tokenFile: String
+    public let refreshable: Bool
+    public let expiresAtEpochSeconds: Int64?
 
     enum CodingKeys: String, CodingKey {
         case executor
@@ -131,25 +187,49 @@ struct RelayLoginResult: Codable, Equatable, Sendable {
         case refreshable
         case expiresAtEpochSeconds = "expires_at_epoch_seconds"
     }
+
+    public init(
+        executor: String,
+        issuer: String,
+        tokenFile: String,
+        refreshable: Bool,
+        expiresAtEpochSeconds: Int64?
+    ) {
+        self.executor = executor
+        self.issuer = issuer
+        self.tokenFile = tokenFile
+        self.refreshable = refreshable
+        self.expiresAtEpochSeconds = expiresAtEpochSeconds
+    }
 }
 
-struct RelayLogoutResult: Codable, Equatable, Sendable {
-    let executor: String
-    let removed: Bool
+public struct RelayLogoutResult: Codable, Equatable, Sendable {
+    public let executor: String
+    public let removed: Bool
+
+    public init(executor: String, removed: Bool) {
+        self.executor = executor
+        self.removed = removed
+    }
 }
 
-struct RelayResolvedCredential: Sendable {
-    let accessToken: String
-    let refreshable: Bool
+public struct RelayResolvedCredential: Sendable {
+    public let accessToken: String
+    public let refreshable: Bool
+
+    public init(accessToken: String, refreshable: Bool) {
+        self.accessToken = accessToken
+        self.refreshable = refreshable
+    }
 }
 
-struct RelayDeviceAuthorization: Decodable, Sendable {
-    let deviceCode: String
-    let userCode: String
-    let verificationURI: String
-    let verificationURIComplete: String?
-    let interval: Int64?
-    let expiresIn: Int64?
+public struct RelayDeviceAuthorization: Decodable, Sendable {
+    public let deviceCode: String
+    public let userCode: String
+    public let verificationURI: String
+    public let verificationURIComplete: String?
+    public let interval: Int64?
+    public let expiresIn: Int64?
 
     enum CodingKeys: String, CodingKey {
         case deviceCode = "device_code"
@@ -158,6 +238,22 @@ struct RelayDeviceAuthorization: Decodable, Sendable {
         case verificationURIComplete = "verification_uri_complete"
         case interval
         case expiresIn = "expires_in"
+    }
+
+    public init(
+        deviceCode: String,
+        userCode: String,
+        verificationURI: String,
+        verificationURIComplete: String?,
+        interval: Int64?,
+        expiresIn: Int64?
+    ) {
+        self.deviceCode = deviceCode
+        self.userCode = userCode
+        self.verificationURI = verificationURI
+        self.verificationURIComplete = verificationURIComplete
+        self.interval = interval
+        self.expiresIn = expiresIn
     }
 }
 
@@ -214,11 +310,11 @@ private final class RelayCredentialFileLock: @unchecked Sendable {
         let lockPath = tokenFile.path + ".lock"
         descriptor = lockPath.withCString { open($0, O_CREAT | O_RDWR, S_IRUSR | S_IWUSR) }
         guard descriptor >= 0 else {
-            throw ValidationError("Could not create relay credential lock file.")
+            throw RelayClientError("Could not create relay credential lock file.")
         }
         guard flock(descriptor, LOCK_EX) == 0 else {
             close(descriptor)
-            throw ValidationError("Could not lock relay credentials for refresh.")
+            throw RelayClientError("Could not lock relay credentials for refresh.")
         }
         _ = fchmod(descriptor, S_IRUSR | S_IWUSR)
     }
@@ -229,40 +325,42 @@ private final class RelayCredentialFileLock: @unchecked Sendable {
     }
 }
 
-enum RelayAuthentication {
-    typealias HTTPRequester = @Sendable (URLRequest) async throws -> (Data, HTTPURLResponse)
-    typealias Sleeper = @Sendable (UInt64) async throws -> Void
+public enum RelayAuthentication {
+    public typealias HTTPRequester = @Sendable (URLRequest) async throws -> (Data, HTTPURLResponse)
+    public typealias Sleeper = @Sendable (UInt64) async throws -> Void
 
-    static func defaultTokenFile(profileName: String) -> URL {
-        MereRunModelPaths.applicationSupportBase
+    /// Token file inside the caller-supplied application-support base. The CLI
+    /// passes its store root; app clients pass their sandbox container.
+    public static func defaultTokenFile(profileName: String, applicationSupportBase: URL) -> URL {
+        applicationSupportBase
             .appendingPathComponent("executor-auth", isDirectory: true)
             .appendingPathComponent("\(profileName).json")
     }
 
-    static func discover(
+    public static func discover(
         profile: WorkflowExecutorProfile,
         requester: HTTPRequester = send
     ) async throws -> RelayAuthConfiguration {
         guard let baseURL = profile.url,
               let url = URL(string: "\(baseURL)/.well-known/mere-run-relay") else {
-            throw ValidationError("Relay executor profile has an invalid URL.")
+            throw RelayClientError("Relay executor profile has an invalid URL.")
         }
         var request = URLRequest(url: url)
         request.timeoutInterval = 30
         request.setValue("application/json", forHTTPHeaderField: "Accept")
         let (data, response) = try await requester(request)
         guard (200..<300).contains(response.statusCode) else {
-            throw ValidationError("Relay authentication discovery failed with HTTP \(response.statusCode).")
+            throw RelayClientError("Relay authentication discovery failed with HTTP \(response.statusCode).")
         }
         let document = try WorkflowBundleCodec.decoder().decode(RelayDiscoveryDocument.self, from: data)
         guard document.schemaVersion == 1, document.kind == "mere.run/relay" else {
-            throw ValidationError("Relay returned an unsupported discovery contract.")
+            throw RelayClientError("Relay returned an unsupported discovery contract.")
         }
         try validate(configuration: document.auth)
         return document.auth
     }
 
-    static func login(
+    public static func login(
         profile: WorkflowExecutorProfile,
         tokenFile: URL,
         progress: @Sendable (String) -> Void,
@@ -292,7 +390,7 @@ enum RelayAuthentication {
         )
     }
 
-    static func resolveCredential(
+    public static func resolveCredential(
         profile: WorkflowExecutorProfile,
         forceRefresh: Bool = false,
         environment: [String: String] = ProcessInfo.processInfo.environment,
@@ -329,12 +427,12 @@ enum RelayAuthentication {
            !token.isEmpty {
             return RelayResolvedCredential(accessToken: token, refreshable: false)
         }
-        throw ValidationError(
+        throw RelayClientError(
             "Relay authentication requires `executor login`, --token-file, or MERERUN_RELAY_TOKEN."
         )
     }
 
-    static func status(
+    public static func status(
         profile: WorkflowExecutorProfile,
         environment: [String: String] = ProcessInfo.processInfo.environment,
         now: Int64 = currentEpochSeconds()
@@ -375,7 +473,7 @@ enum RelayAuthentication {
         )
     }
 
-    static func save(
+    public static func save(
         _ tokenSet: RelayOAuthTokenSet,
         to url: URL,
         fileManager: FileManager = .default
@@ -386,12 +484,12 @@ enum RelayAuthentication {
         try fileManager.setAttributes([.posixPermissions: 0o600], ofItemAtPath: url.path)
     }
 
-    static func beginDeviceAuthorization(
+    public static func beginDeviceAuthorization(
         configuration: RelayAuthConfiguration,
         requester: HTTPRequester = send
     ) async throws -> RelayDeviceAuthorization {
         guard let url = URL(string: configuration.deviceAuthorizationEndpoint) else {
-            throw ValidationError("Relay device authorization endpoint is invalid.")
+            throw RelayClientError("Relay device authorization endpoint is invalid.")
         }
         var request = URLRequest(url: url)
         request.httpMethod = "POST"
@@ -403,12 +501,12 @@ enum RelayAuthentication {
         )
         let (data, response) = try await requester(request)
         guard (200..<300).contains(response.statusCode) else {
-            throw ValidationError("Relay device sign-in failed with HTTP \(response.statusCode).")
+            throw RelayClientError("Relay device sign-in failed with HTTP \(response.statusCode).")
         }
         return try WorkflowBundleCodec.decoder().decode(RelayDeviceAuthorization.self, from: data)
     }
 
-    static func pollDeviceAuthorization(
+    public static func pollDeviceAuthorization(
         _ authorization: RelayDeviceAuthorization,
         configuration: RelayAuthConfiguration,
         now: @Sendable () -> Int64 = currentEpochSeconds,
@@ -416,7 +514,7 @@ enum RelayAuthentication {
         sleeper: Sleeper = sleep
     ) async throws -> RelayOAuthTokenSet {
         guard let url = URL(string: configuration.tokenEndpoint) else {
-            throw ValidationError("Relay token endpoint is invalid.")
+            throw RelayClientError("Relay token endpoint is invalid.")
         }
         let startedAt = now()
         let expiresAt = startedAt + max(authorization.expiresIn ?? 600, 1)
@@ -451,13 +549,13 @@ enum RelayAuthentication {
             switch payload.error {
             case "authorization_pending": continue
             case "slow_down": interval += 5
-            case "access_denied": throw ValidationError("Relay device sign-in was denied.")
-            case "expired_token": throw ValidationError("Relay device sign-in expired.")
+            case "access_denied": throw RelayClientError("Relay device sign-in was denied.")
+            case "expired_token": throw RelayClientError("Relay device sign-in expired.")
             default:
                 throw tokenError(payload, status: response.statusCode)
             }
         }
-        throw ValidationError("Relay device sign-in expired before approval.")
+        throw RelayClientError("Relay device sign-in expired before approval.")
     }
 
     private static func refreshLocked(
@@ -480,7 +578,7 @@ enum RelayAuthentication {
             )
         }
         guard let refreshToken = current.refreshToken, !refreshToken.isEmpty else {
-            throw ValidationError("Relay session expired. Run `mere.run executor login relay:\(profile.name)`." )
+            throw RelayClientError("Relay session expired. Run `mere.run executor login relay:\(profile.name)`." )
         }
         let configuration: RelayAuthConfiguration
         if let issuer = current.issuer,
@@ -498,7 +596,7 @@ enum RelayAuthentication {
             configuration = try await discover(profile: profile, requester: requester)
         }
         guard let url = URL(string: configuration.tokenEndpoint) else {
-            throw ValidationError("Relay token endpoint is invalid.")
+            throw RelayClientError("Relay token endpoint is invalid.")
         }
         let (data, response) = try await requestToken(
             url: url,
@@ -549,13 +647,13 @@ enum RelayAuthentication {
         do {
             return try WorkflowBundleCodec.decoder().decode(RelayOAuthTokenResponse.self, from: data)
         } catch {
-            throw ValidationError("Relay token endpoint returned invalid JSON with HTTP \(status).")
+            throw RelayClientError("Relay token endpoint returned invalid JSON with HTTP \(status).")
         }
     }
 
-    private static func tokenError(_ payload: RelayOAuthTokenResponse, status: Int) -> ValidationError {
+    private static func tokenError(_ payload: RelayOAuthTokenResponse, status: Int) -> RelayClientError {
         let reason = payload.errorDescription ?? payload.error ?? "missing_access_token"
-        return ValidationError("Relay token request failed with HTTP \(status): \(reason)")
+        return RelayClientError("Relay token request failed with HTTP \(status): \(reason)")
     }
 
     private static func validate(configuration: RelayAuthConfiguration) throws {
@@ -567,7 +665,7 @@ enum RelayAuthentication {
               issuer.scheme == "https" || isLoopback(issuer),
               deviceEndpoint.scheme == "https" || isLoopback(deviceEndpoint),
               tokenEndpoint.scheme == "https" || isLoopback(tokenEndpoint) else {
-            throw ValidationError("Relay returned an invalid authentication configuration.")
+            throw RelayClientError("Relay returned an invalid authentication configuration.")
         }
     }
 
@@ -575,19 +673,19 @@ enum RelayAuthentication {
         url.scheme == "http" && ["127.0.0.1", "localhost", "::1"].contains(url.host)
     }
 
-    private static func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+    public static func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
         let (data, response) = try await URLSession.shared.data(for: request)
         guard let http = response as? HTTPURLResponse else {
-            throw ValidationError("Relay authentication endpoint returned a non-HTTP response.")
+            throw RelayClientError("Relay authentication endpoint returned a non-HTTP response.")
         }
         return (data, http)
     }
 
-    private static func sleep(seconds: UInt64) async throws {
+    public static func sleep(seconds: UInt64) async throws {
         try await Task<Never, Never>.sleep(nanoseconds: seconds * 1_000_000_000)
     }
 
-    private static func currentEpochSeconds() -> Int64 {
+    public static func currentEpochSeconds() -> Int64 {
         Int64(Date().timeIntervalSince1970)
     }
 }
