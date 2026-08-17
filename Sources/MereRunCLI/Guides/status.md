@@ -39,6 +39,12 @@ mere.run guide status
 - `--timeout-seconds`: network probe timeout, default `1.0`.
 - `--json`: emit a structured snapshot.
 
+Installed-model inventory is shallow and does not recursively measure payload
+sizes. JSON includes `inventoryMode`, `inventoryComplete`,
+`inventoryDurationMs`, and per-model `verification`. A `not_checked` value
+means `runtimeAvailable` reflects a reachable model root without full runtime
+validation.
+
 ## Usage Patterns
 
 - Run before connecting an editor, agent, or local integration to the API server.
@@ -106,6 +112,8 @@ MERERUN_API_KEY=change-me mere.run status --json
   state rather than treating residency alone as request readiness.
 - The installed model list follows the same shared inventory path as
   `mere.run model list`.
+- Use `model list --measure-sizes` or `model storage` when byte accounting is
+  required; `status` deliberately stays on the startup-safe fast path.
 - `runtime settings` points at
   `<active model store>/.mere-run/runtime-model-settings.json`.
 

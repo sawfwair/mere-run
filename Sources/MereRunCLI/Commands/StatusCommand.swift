@@ -79,6 +79,9 @@ struct StatusSnapshot: Codable, Equatable {
     let modelStore: StatusModelStoreSnapshot
     let knownModelCount: Int
     let installedModels: [StatusInstalledModelSnapshot]
+    var inventoryMode: ModelInventoryMode = .fast
+    var inventoryComplete: Bool = true
+    var inventoryDurationMs: Int = 0
     var capabilities: StatusCapabilitiesSnapshot = .current
     var machineAdmission: MachineInferenceAdmissionSnapshot? = nil
     var machineAdmissionDetail: String? = nil
@@ -116,7 +119,10 @@ struct StatusModelStoreSnapshot: Codable, Equatable {
 struct StatusInstalledModelSnapshot: Codable, Equatable {
     let id: String
     let category: String
-    let size: String
+    let size: String?
+    var manifestPresent: Bool = false
+    var runtimeAvailable: Bool? = nil
+    var verification: ModelInventoryVerification = .notChecked
 }
 
 struct StatusSnapshotBuilder {
@@ -126,14 +132,18 @@ struct StatusSnapshotBuilder {
     let timeoutSeconds: Double
 
     func snapshot() async -> StatusSnapshot {
-        let inventoryRows = ModelInventory.rows()
+        let inventory = ModelInventory.snapshot(mode: .fast)
+        let inventoryRows = inventory.rows
         let installedModels = inventoryRows
             .filter(\.isInstalled)
             .map {
                 StatusInstalledModelSnapshot(
                     id: $0.id,
                     category: $0.category,
-                    size: $0.size
+                    size: $0.size,
+                    manifestPresent: $0.manifestPresent,
+                    runtimeAvailable: $0.runtimeAvailable,
+                    verification: $0.verification
                 )
             }
         let modelStore = MereRunModelPaths.modelStoreResolution()
@@ -158,6 +168,9 @@ struct StatusSnapshotBuilder {
             ),
             knownModelCount: inventoryRows.count,
             installedModels: installedModels,
+            inventoryMode: inventory.mode,
+            inventoryComplete: inventory.complete,
+            inventoryDurationMs: inventory.durationMs,
             machineAdmission: machineAdmission,
             machineAdmissionDetail: machineAdmissionDetail
         )
@@ -404,12 +417,21 @@ enum StatusFormatter {
             lines.append("  runtime settings: unavailable (\(detail))")
         }
         lines.append("  installed models: \(snapshot.installedModels.count)/\(snapshot.knownModelCount)")
+        let completeness = snapshot.inventoryComplete ? "complete" : "incomplete"
+        lines.append(
+            "  model inventory: \(snapshot.inventoryMode.rawValue), \(completeness), "
+                + "\(snapshot.inventoryDurationMs) ms"
+        )
 
         if snapshot.installedModels.isEmpty {
             lines.append("    none")
         } else {
             for model in snapshot.installedModels {
-                lines.append("    - \(model.id) (\(model.category), \(model.size))")
+                let size = model.size ?? "size not measured"
+                lines.append(
+                    "    - \(model.id) (\(model.category), \(size), "
+                        + "verification \(model.verification.rawValue))"
+                )
             }
         }
 

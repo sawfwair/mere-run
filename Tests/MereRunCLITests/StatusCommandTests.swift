@@ -34,6 +34,11 @@ final class StatusCommandTests: XCTestCase {
         XCTAssertTrue(cmd.json)
     }
 
+    func testModelListMeasuresSizesOnlyWhenRequested() throws {
+        XCTAssertFalse(try ModelList.parse([]).measureSizes)
+        XCTAssertTrue(try ModelList.parse(["--measure-sizes"]).measureSizes)
+    }
+
     func testStatusAdvertisesLiveASRProtocol() {
         XCTAssertEqual(StatusCapabilitiesSnapshot.current.asrStreamingProtocols, [1])
         XCTAssertEqual(StatusCapabilitiesSnapshot.current.asrStreamingBackends, ["parakeet", "qwen"])
@@ -72,7 +77,54 @@ final class StatusCommandTests: XCTestCase {
         XCTAssertTrue(output.contains("server: up (http://127.0.0.1:8080)"))
         XCTAssertTrue(output.contains("loaded models: text-chat-gemma4"))
         XCTAssertTrue(output.contains("installed models: 1/2"))
-        XCTAssertTrue(output.contains("text-chat-gemma4 (text-chat, 12 GB)"))
+        XCTAssertTrue(output.contains("text-chat-gemma4 (text-chat, 12 GB, verification not_checked)"))
+        XCTAssertTrue(output.contains("model inventory: fast, complete, 0 ms"))
+    }
+
+    func testJSONDescribesFastUnmeasuredInventory() throws {
+        let snapshot = StatusSnapshot(
+            server: StatusServerSnapshot(
+                url: "http://127.0.0.1:8080",
+                health: "down",
+                detail: nil,
+                loadedModels: [],
+                modelsDetail: nil,
+                runtime: nil,
+                runtimeDetail: nil
+            ),
+            modelStore: StatusModelStoreSnapshot(
+                path: "/tmp/models",
+                source: "default",
+                configuredPath: nil,
+                isFallbackToDefault: false
+            ),
+            knownModelCount: 1,
+            installedModels: [
+                StatusInstalledModelSnapshot(
+                    id: "text-chat-ornith-3.5b-mlx",
+                    category: "text-chat",
+                    size: nil,
+                    manifestPresent: true,
+                    runtimeAvailable: true,
+                    verification: .notChecked
+                ),
+            ],
+            inventoryMode: .fast,
+            inventoryComplete: true,
+            inventoryDurationMs: 12
+        )
+
+        let data = try JSONEncoder().encode(snapshot)
+        let object = try XCTUnwrap(JSONSerialization.jsonObject(with: data) as? [String: Any])
+        let installed = try XCTUnwrap((object["installedModels"] as? [[String: Any]])?.first)
+
+        XCTAssertEqual(object["inventoryMode"] as? String, "fast")
+        XCTAssertEqual(object["inventoryComplete"] as? Bool, true)
+        XCTAssertEqual(object["inventoryDurationMs"] as? Int, 12)
+        XCTAssertEqual(installed["verification"] as? String, "not_checked")
+        XCTAssertEqual(installed["manifestPresent"] as? Bool, true)
+        XCTAssertNil(installed["size"])
+        XCTAssertEqual(installed["runtimeAvailable"] as? Bool, true)
     }
 
     func testFormatterShowsUnavailableLoadedModels() {

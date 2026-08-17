@@ -275,7 +275,10 @@ struct WorkflowExecutorProbe: Codable, Equatable, Sendable {
             nodeKinds: Array(Set(
                 WorkflowNodeRegistry.entries.map(\.kind) + graphProviders.flatMap { $0.nodes.map(\.kind) }
             )).sorted(),
-            installedModelIDs: ModelInventory.rows(fileManager: fileManager).filter(\.isInstalled).map(\.id).sorted(),
+            installedModelIDs: ModelInventory.snapshot(
+                mode: .verified,
+                fileManager: fileManager
+            ).rows.filter(\.isInstalled).map(\.id).sorted(),
             availableSecretNames: availableWorkflowSecretNames(),
             providers: graphProviders.map(\.requirement)
         )

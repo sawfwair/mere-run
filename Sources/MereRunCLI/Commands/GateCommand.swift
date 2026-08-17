@@ -95,7 +95,7 @@ struct Gate: AsyncParsableCommand {
         let checks: [GateCheck]
         if allInstalled {
             let installedIDs = Set(
-                ModelInventory.rows()
+                ModelInventory.snapshot(mode: .verified).rows
                     .filter(\.isInstalled)
                     .map(\.id)
             )
