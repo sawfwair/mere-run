@@ -243,6 +243,45 @@ final class WorkflowGraphTests: XCTestCase {
         XCTAssertEqual(invocation.stdoutOutputName, "text")
     }
 
+    func testTextGenerateBuildsInstalledTextChatValueInvocation() throws {
+        let root = try temporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let node = WorkflowNode(
+            id: "reply",
+            kind: "text.generate",
+            arguments: [
+                "prompt": .string("Answer briefly."),
+                "system": .string("Be precise."),
+                "model": .string("text-chat-qwen38-27b-4bit"),
+                "max_tokens": .integer(256),
+                "temperature": .number(0.25),
+            ],
+            dependsOn: nil
+        )
+        let invocation = try WorkflowNodeCommandBuilder.invocation(
+            node: node,
+            arguments: node.arguments,
+            nodeDirectory: root
+        )
+        let runArguments = [
+            "text", "chat",
+            "--prompt", "Answer briefly.",
+            "--model", "text-chat-qwen38-27b-4bit",
+            "--system", "Be precise.",
+            "--max-tokens", "256",
+            "--temperature", "0.25",
+            "--require-installed", "--quiet",
+        ]
+
+        XCTAssertEqual(invocation.command, ["text", "chat"])
+        XCTAssertEqual(invocation.runArguments, runArguments)
+        XCTAssertEqual(invocation.preflightArguments, runArguments + ["--preflight", "--json"])
+        XCTAssertEqual(invocation.outputs["text"]?.type, .string)
+        XCTAssertNil(invocation.outputs["text"]?.path)
+        XCTAssertEqual(invocation.stdoutOutputName, "text")
+        XCTAssertFalse(invocation.streamsEvents)
+    }
+
     func testVisionGroundBuildsPreflightAndArtifactInvocation() throws {
         let root = try temporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }
