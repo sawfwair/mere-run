@@ -21,6 +21,8 @@ struct RootView: View {
             TabView {
                 CreateView()
                     .tabItem { Label("Create", systemImage: "sparkles") }
+                ChatView(relay: relay)
+                    .tabItem { Label("Chat", systemImage: "bubble.left.and.bubble.right") }
                 RunsView()
                     .tabItem { Label("Runs", systemImage: "tray.full") }
                 FleetView()

@@ -1142,6 +1142,24 @@ public enum WorkflowNodeRegistry {
             )
         ),
         WorkflowNodeCatalogEntry(
+            kind: "text.generate",
+            title: "Generate text",
+            category: "text",
+            inputs: [
+                .init(name: "prompt", type: .string, required: true, multiline: true),
+                .init(name: "model", type: .string, required: false),
+                .init(name: "system", type: .string, required: false, multiline: true),
+                .init(name: "max_tokens", type: .integer, required: false),
+                .init(name: "temperature", type: .number, required: false),
+            ],
+            outputs: [.init(name: "text", type: .string)],
+            requirements: .init(
+                modelIDs: [],
+                acceleratorBackends: ["metal", "cuda"],
+                minimumAcceleratorMemoryBytes: nil
+            )
+        ),
+        WorkflowNodeCatalogEntry(
             kind: "text.embed",
             title: "Embed text",
             category: "text",

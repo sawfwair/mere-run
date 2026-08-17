@@ -52,6 +52,17 @@ public struct RelayWorkflowExecutor: Sendable {
             .remoteJob(profile: profile.name, localRunDirectory: nil)
     }
 
+    /// The run manifest for a job: states, per-node records, and node output
+    /// values — the way text-valued results come back without artifact fetch.
+    public func manifest(jobID: String) async throws -> GraphRunManifest {
+        let data = try await request(path: "/api/graph-jobs/\(jobID)/run-manifest", method: "GET")
+        let manifest = try WorkflowBundleCodec.decoder().decode(GraphRunManifest.self, from: data)
+        guard manifest.jobID == jobID else {
+            throw RelayClientError("Relay returned a run manifest for a different job.")
+        }
+        return manifest
+    }
+
     public func events(jobID: String) async throws -> String {
         let data = try await request(path: "/api/graph-jobs/\(jobID)/events", method: "GET")
         return String(decoding: data, as: UTF8.self)
@@ -92,11 +103,7 @@ public struct RelayWorkflowExecutor: Sendable {
             throw RelayClientError("Relay job \(jobID) is not finished.")
         }
         try prepareFetchDestination(destination, expectedJobID: jobID)
-        let manifestData = try await request(path: "/api/graph-jobs/\(jobID)/run-manifest", method: "GET")
-        var manifest = try WorkflowBundleCodec.decoder().decode(GraphRunManifest.self, from: manifestData)
-        guard manifest.jobID == jobID else {
-            throw RelayClientError("Relay returned a run manifest for a different job.")
-        }
+        var manifest = try await manifest(jobID: jobID)
         manifest.executor = .init(
             kind: "relay",
             profile: profile.name,

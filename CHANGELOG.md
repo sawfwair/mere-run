@@ -8,6 +8,10 @@ The format is based on Keep a Changelog.
 
 ### Workflow graphs
 
+- added `text.generate` to the built-in node catalog: single-turn text
+  generation through `text chat` with prompt, optional system prompt,
+  model, and sampling controls, returning the reply as a typed string
+  output readable from the run manifest without artifact fetch.
 - grew the built-in workflow node catalog across the batch-shaped command
   surface: `music.generate`, `sfx.generate`, `speech.synthesize`,
   `speech.transcribe`, `music.separate`, `music.transcribe`,
@@ -22,6 +26,11 @@ The format is based on Keep a Changelog.
 
 ### Relay client and iOS
 
+- `RelayWorkflowExecutor` gains a public `manifest(jobID:)` accessor for
+  run manifests, and the iOS app adds a Chat tab: multi-turn
+  conversations threaded through stateless `text.generate` jobs with the
+  same transcript rendering, character budgeting, and think-tag
+  stripping as the macOS Studio.
 - extracted the relay client into a new `MereRunRelayKit` library target:
   executor profiles and references, OAuth device-grant authentication, the
   relay graph-job and fleet HTTP client with digest-verified artifact fetch,
