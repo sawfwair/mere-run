@@ -31,9 +31,26 @@ final class RelayStore: ObservableObject {
             withIntermediateDirectories: true,
             attributes: [.protectionKey: FileProtectionType.complete]
         )
-        profile = (try? WorkflowExecutorProfileStore.load(from: profilesURL))?
-            .profiles.first { $0.kind == .relay }
-        if profile != nil {
+        // iOS moves the data container to a new absolute path on app updates,
+        // so the persisted token-file path is advisory only: recompute it from
+        // the current container (the file itself migrates with the app).
+        if let stored = (try? WorkflowExecutorProfileStore.load(from: profilesURL))?
+            .profiles.first(where: { $0.kind == .relay }) {
+            let tokenFile = RelayAuthentication.defaultTokenFile(
+                profileName: stored.name,
+                applicationSupportBase: base
+            )
+            profile = WorkflowExecutorProfile(
+                name: stored.name,
+                kind: stored.kind,
+                destination: stored.destination,
+                remoteRoot: stored.remoteRoot,
+                port: stored.port,
+                identityFile: stored.identityFile,
+                mereRunPath: stored.mereRunPath,
+                url: stored.url,
+                tokenFile: tokenFile.path
+            )
             pairing = .paired
             refreshAuthStatus()
         }
