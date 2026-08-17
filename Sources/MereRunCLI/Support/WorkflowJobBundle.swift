@@ -473,6 +473,67 @@ enum WorkflowNodeCommandBuilder {
                 outputs: ["video": fileOutput(output, contentTypes: ["video/mp4"])],
                 streamsEvents: false
             )
+        case "music.generate":
+            let output = artifacts.appendingPathComponent("music.wav")
+            var args = ["music", "generate", try requiredString("prompt", in: arguments), "--output", output.path]
+            appendString("model", flag: "--model", from: arguments, to: &args)
+            appendString("lyrics", flag: "--lyrics", from: arguments, to: &args)
+            appendNumber("duration", flag: "--duration", from: arguments, to: &args)
+            appendInteger("steps", flag: "--steps", from: arguments, to: &args)
+            appendInteger("seed", flag: "--seed", from: arguments, to: &args)
+            return .init(
+                command: ["music", "generate"],
+                executable: CurrentExecutable.url(),
+                preflightArguments: [],
+                runArguments: args,
+                outputs: ["audio": fileOutput(output, contentTypes: ["audio/wav"])],
+                streamsEvents: false
+            )
+        case "sfx.generate":
+            let output = artifacts.appendingPathComponent("sfx.wav")
+            var args = ["sfx", "generate", try requiredString("prompt", in: arguments), "--output", output.path]
+            appendString("negative_prompt", flag: "--negative-prompt", from: arguments, to: &args)
+            appendString("model", flag: "--model", from: arguments, to: &args)
+            appendNumber("duration", flag: "--duration", from: arguments, to: &args)
+            appendInteger("steps", flag: "--steps", from: arguments, to: &args)
+            appendNumber("cfg_scale", flag: "--cfg", from: arguments, to: &args)
+            appendInteger("seed", flag: "--seed", from: arguments, to: &args)
+            args += ["--quiet"]
+            return .init(
+                command: ["sfx", "generate"],
+                executable: CurrentExecutable.url(),
+                preflightArguments: [],
+                runArguments: args,
+                outputs: ["audio": fileOutput(output, contentTypes: ["audio/wav"])],
+                streamsEvents: false
+            )
+        case "speech.synthesize":
+            let output = artifacts.appendingPathComponent("speech.wav")
+            var args = ["speech", "synthesize", try requiredString("text", in: arguments), "--output", output.path]
+            appendString("model", flag: "--model", from: arguments, to: &args)
+            appendString("voice", flag: "--voice", from: arguments, to: &args)
+            appendString("language", flag: "--language", from: arguments, to: &args)
+            return .init(
+                command: ["speech", "synthesize"],
+                executable: CurrentExecutable.url(),
+                preflightArguments: [],
+                runArguments: args,
+                outputs: ["audio": fileOutput(output, contentTypes: ["audio/wav"])],
+                streamsEvents: false
+            )
+        case "speech.transcribe":
+            let output = artifacts.appendingPathComponent("transcript.txt")
+            var args = ["speech", "transcribe", try requiredString("audio", in: arguments), "--output", output.path]
+            appendString("model", flag: "--model", from: arguments, to: &args)
+            appendString("backend", flag: "--backend", from: arguments, to: &args)
+            return .init(
+                command: ["speech", "transcribe"],
+                executable: CurrentExecutable.url(),
+                preflightArguments: [],
+                runArguments: args,
+                outputs: ["text": fileOutput(output, contentTypes: ["text/plain"])],
+                streamsEvents: false
+            )
         default:
             throw ValidationError("Unsupported workflow node kind '\(node.kind)'.")
         }

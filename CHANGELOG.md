@@ -6,6 +6,16 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Workflow graphs
+
+- added `music.generate`, `sfx.generate`, `speech.synthesize`, and
+  `speech.transcribe` to the built-in workflow node catalog, mapping to the
+  existing `music generate`, `sfx generate`, `speech synthesize`, and
+  `speech transcribe` commands with typed inputs and verified WAV or
+  transcript artifacts. Workers advertise the new kinds through the existing
+  capability probe, so older workers reject jobs that use them at
+  validation instead of at runtime.
+
 ### Relay client and iOS
 
 - extracted the relay client into a new `MereRunRelayKit` library target:

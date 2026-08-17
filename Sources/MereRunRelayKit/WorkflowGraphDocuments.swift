@@ -933,6 +933,83 @@ public enum WorkflowNodeRegistry {
                 minimumAcceleratorMemoryBytes: nil
             )
         ),
+        WorkflowNodeCatalogEntry(
+            kind: "music.generate",
+            title: "Generate music",
+            category: "music",
+            inputs: [
+                .init(name: "prompt", type: .string, required: true),
+                .init(name: "model", type: .string, required: false),
+                .init(name: "lyrics", type: .string, required: false, multiline: true),
+                .init(name: "duration", type: .number, required: false),
+                .init(name: "steps", type: .integer, required: false),
+                .init(name: "seed", type: .integer, required: false),
+            ],
+            outputs: [.init(name: "audio", type: .asset, contentTypes: ["audio/wav"])],
+            requirements: .init(
+                modelIDs: [],
+                acceleratorBackends: ["metal", "cuda"],
+                minimumAcceleratorMemoryBytes: nil
+            )
+        ),
+        WorkflowNodeCatalogEntry(
+            kind: "sfx.generate",
+            title: "Generate sound",
+            category: "sfx",
+            inputs: [
+                .init(name: "prompt", type: .string, required: true),
+                .init(name: "negative_prompt", type: .string, required: false),
+                .init(name: "model", type: .string, required: false),
+                .init(name: "duration", type: .number, required: false),
+                .init(name: "steps", type: .integer, required: false),
+                .init(name: "cfg_scale", type: .number, required: false),
+                .init(name: "seed", type: .integer, required: false),
+            ],
+            outputs: [.init(name: "audio", type: .asset, contentTypes: ["audio/wav"])],
+            requirements: .init(
+                modelIDs: [],
+                acceleratorBackends: ["metal", "cuda"],
+                minimumAcceleratorMemoryBytes: nil
+            )
+        ),
+        WorkflowNodeCatalogEntry(
+            kind: "speech.synthesize",
+            title: "Speak",
+            category: "speech",
+            inputs: [
+                .init(name: "text", type: .string, required: true, multiline: true),
+                .init(name: "model", type: .string, required: false),
+                .init(name: "voice", type: .string, required: false),
+                .init(name: "language", type: .string, required: false),
+            ],
+            outputs: [.init(name: "audio", type: .asset, contentTypes: ["audio/wav"])],
+            requirements: .init(
+                modelIDs: [],
+                acceleratorBackends: ["metal", "cuda"],
+                minimumAcceleratorMemoryBytes: nil
+            )
+        ),
+        WorkflowNodeCatalogEntry(
+            kind: "speech.transcribe",
+            title: "Transcribe",
+            category: "speech",
+            inputs: [
+                .init(
+                    name: "audio",
+                    type: .asset,
+                    required: true,
+                    acceptedContentTypes: ["audio/wav", "audio/mpeg", "audio/mp4", "audio/x-m4a"]
+                ),
+                .init(name: "model", type: .string, required: false),
+                .init(name: "backend", type: .enumeration, required: false, values: ["auto", "parakeet", "qwen"]),
+            ],
+            outputs: [.init(name: "text", type: .asset, contentTypes: ["text/plain"])],
+            requirements: .init(
+                modelIDs: [],
+                acceleratorBackends: ["metal", "cuda"],
+                minimumAcceleratorMemoryBytes: nil
+            )
+        ),
     ]
 
     public static func entry(for kind: String) -> WorkflowNodeCatalogEntry? {
