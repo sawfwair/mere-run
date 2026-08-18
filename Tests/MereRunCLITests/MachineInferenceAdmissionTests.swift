@@ -341,6 +341,11 @@ final class MachineInferenceAdmissionTests: XCTestCase {
         XCTAssertNil(
             CLIInferenceAdmissionClassifier.request(arguments: ["mere.run", "image", "generate", "--help"])
         )
+        XCTAssertNil(
+            CLIInferenceAdmissionClassifier.request(
+                arguments: ["mere.run", "model", "benchmark", "fused", "--dry-run", "--json"]
+            )
+        )
     }
 
     func testAPIServerKeepsInternalConcurrencyInsideWeightedReservation() {

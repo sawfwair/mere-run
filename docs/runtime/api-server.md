@@ -474,6 +474,18 @@ blocks out of `message.content` and expose them as OpenAI-compatible
 `message.reasoning_content` when present. Streaming responses still emit token
 chunks as they are produced.
 
+Native Qwen-family, Nemotron Lightning, and Laguna catalog profiles accept
+`logprobs: true` for non-streaming requests, with `top_logprobs` from 0 through
+20. Logprob capture currently requires unconstrained text output rather than
+`json_object` or `json_schema`. The response keeps the OpenAI
+`choices[].logprobs.content[]` shape and adds
+explicit `raw_logprob`, `policy_logprob`, entropy, margin, region, summary, and
+capture-overhead fields. Raw measures the target model before sampling
+transforms; policy measures the exact distribution after temperature/top-k/
+top-p/min-p. Reasoning token text is omitted. Capture routes through serial
+final-target decode, so speculative draft distributions never appear as model
+confidence.
+
 Engine compatibility:
 
 - `text-chat-deepseek-v4-flash`: raw-proxies the original request body to

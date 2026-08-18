@@ -454,7 +454,8 @@ targets.append(contentsOf: [
       "Support/README.md"
     ],
     resources: [
-      .process("Guides")
+      .process("Guides"),
+      .process("BenchmarkSuites")
     ],
     swiftSettings: commonSwiftSettings,
     linkerSettings: linuxNativeLinkerSettings

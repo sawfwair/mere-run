@@ -2534,6 +2534,16 @@ enum APIServerContract {
             capabilities: capabilities,
             profile: resolvedAPIProfile
         )
+        let logprobCapture: ChatLogprobCapture
+        if openaiRequest.logprobs == true {
+            if let topLogprobs = openaiRequest.top_logprobs, topLogprobs > 0 {
+                logprobCapture = .top(topLogprobs)
+            } else {
+                logprobCapture = .tokens
+            }
+        } else {
+            logprobCapture = .none
+        }
 
         return ChatRequest(
             messages: messages,
@@ -2561,7 +2571,8 @@ enum APIServerContract {
             requiresJSON: requiresJSON,
             tools: tools,
             stopSequences: openaiRequest.stop?.values ?? [],
-            maxContextTokens: contextSize
+            maxContextTokens: contextSize,
+            logprobCapture: logprobCapture
         )
     }
 
@@ -2734,8 +2745,36 @@ enum APIServerContract {
         if request.logprobs == true, !capabilities.supportsLogprobs {
             throw APIRequestValidationError.invalidField("logprobs", "token log probabilities are not supported by this engine")
         }
+        if request.stream == true, request.logprobs == true {
+            throw APIRequestValidationError.invalidField(
+                "logprobs",
+                "native token log probabilities currently require stream=false"
+            )
+        }
+        if request.logprobs == true,
+           let responseType = request.response_format?.type,
+           responseType != "text" {
+            throw APIRequestValidationError.invalidField(
+                "logprobs",
+                "native token log probabilities currently require an unconstrained text response"
+            )
+        }
         if request.top_logprobs != nil, !capabilities.supportsLogprobs {
             throw APIRequestValidationError.invalidField("top_logprobs", "token log probabilities are not supported by this engine")
+        }
+        if let topLogprobs = request.top_logprobs {
+            guard request.logprobs == true else {
+                throw APIRequestValidationError.invalidField(
+                    "top_logprobs",
+                    "requires logprobs=true"
+                )
+            }
+            guard (0...20).contains(topLogprobs) else {
+                throw APIRequestValidationError.invalidField(
+                    "top_logprobs",
+                    "must be between 0 and 20"
+                )
+            }
         }
         if request.reasoning_effort != nil, !capabilities.supportsReasoningEffort {
             throw APIRequestValidationError.invalidField("reasoning_effort", "reasoning effort is not supported by this engine")
@@ -4878,7 +4917,8 @@ actor CodeGenServer {
                         reasoning_content: result.reasoningContent,
                         tool_calls: openAIToolCalls(from: result.toolCalls, tools: request.tools)
                     ),
-                    finish_reason: Self.openAIFinishReason(for: result)
+                    finish_reason: Self.openAIFinishReason(for: result),
+                    logprobs: OpenAIChatLogprobs(result.logprobs)
                 )
             ],
             usage: Self.openAIUsage(for: result)

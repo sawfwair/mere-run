@@ -31,6 +31,8 @@ private struct Q35BatchedDecodeResult {
     let generatedTokens: [Int]
     let decodeSeconds: Double
     var firstTokenSeconds: Double? = nil
+    var logprobs: ChatLogprobDiagnostics? = nil
+    var acceleration: ChatAccelerationDiagnostics? = nil
 }
 
 enum Q35DecodePath: Equatable {
@@ -110,7 +112,8 @@ private final class Q35BatchedDecodeRow: @unchecked Sendable {
             returning: Q35BatchedDecodeResult(
                 generatedTokens: generatedTokens,
                 decodeSeconds: Date().timeIntervalSince(decodeStart),
-                firstTokenSeconds: firstTokenSeconds
+                firstTokenSeconds: firstTokenSeconds,
+                acceleration: ChatAccelerationDiagnostics(route: "continuous-batched")
             )
         )
     }
@@ -565,7 +568,8 @@ public actor Q35Generator: ChatGenerator {
             repetitionPenalty: nil,
             repetitionContextSize: 64
         )
-        let mtpSpeculationEligible = !jsonConstrained
+        let mtpSpeculationEligible = !request.logprobCapture.isEnabled
+            && !jsonConstrained
             && request.tools?.isEmpty != false
             && imageURLs.isEmpty
             && Self.shouldSpeculate(promptTokenCount: promptTokens.count, maxContextTokens: effectiveContext)
@@ -697,6 +701,8 @@ public actor Q35Generator: ChatGenerator {
             maxContextTokens: effectiveContext,
             jsonConstrained: jsonConstrained,
             stopAtCompletedToolCall: request.tools?.isEmpty == false,
+            logprobCapture: request.logprobCapture,
+            logprobRegion: request.logprobRegionHint ?? .visible,
             progressHandler: progressHandler
         )
 
@@ -729,7 +735,9 @@ public actor Q35Generator: ChatGenerator {
             ),
             toolCalls: toolCalls,
             promptTokens: promptTokens.count,
-            finishReason: finishReason
+            finishReason: finishReason,
+            logprobs: decodeResult.logprobs,
+            acceleration: decodeResult.acceleration
         )
     }
 
@@ -834,12 +842,15 @@ public actor Q35Generator: ChatGenerator {
         maxContextTokens: Int,
         jsonConstrained: Bool,
         stopAtCompletedToolCall: Bool,
+        logprobCapture: ChatLogprobCapture,
+        logprobRegion: ChatLogprobRegion,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> Q35BatchedDecodeResult {
         guard tokenBudget > 0 else {
             return Q35BatchedDecodeResult(generatedTokens: [], decodeSeconds: 0)
         }
-        let speculationMTP = !jsonConstrained && !stopAtCompletedToolCall && Self.shouldSpeculate(
+        let speculationMTP = !logprobCapture.isEnabled
+            && !jsonConstrained && !stopAtCompletedToolCall && Self.shouldSpeculate(
             promptTokenCount: promptTokens.count,
             maxContextTokens: maxContextTokens,
             defaultMinimumPromptTokens: model.config.textConfig.usesMoE ? 6144 : 0,
@@ -847,7 +858,7 @@ public actor Q35Generator: ChatGenerator {
         ) && mropeRopeDelta == nil ? mtpModel : nil
         let decodePath = Self.decodePath(
             jsonConstrained: jsonConstrained,
-            continuousBatchingEnabled: continuousBatchingEnabled,
+            continuousBatchingEnabled: continuousBatchingEnabled && !logprobCapture.isEnabled,
             mtpSpeculationEnabled: speculationMTP != nil,
             schedulerContended: activeChatRequestCount > 1
                 || !decodeQueue.isEmpty
@@ -875,6 +886,8 @@ public actor Q35Generator: ChatGenerator {
                 promptTokens: promptTokens,
                 jsonConstrained: decodePath == .jsonConstrainedSerial,
                 stopAtCompletedToolCall: stopAtCompletedToolCall,
+                logprobCapture: logprobCapture,
+                logprobRegion: logprobRegion,
                 progressHandler: progressHandler
             )
         }
@@ -922,6 +935,8 @@ public actor Q35Generator: ChatGenerator {
         promptTokens: [Int],
         jsonConstrained: Bool,
         stopAtCompletedToolCall: Bool,
+        logprobCapture: ChatLogprobCapture,
+        logprobRegion: ChatLogprobRegion,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> Q35BatchedDecodeResult {
         if mtpModel == nil, !jsonConstrained {
@@ -936,6 +951,8 @@ public actor Q35Generator: ChatGenerator {
                 mropeRopeDelta: mropeRopeDelta,
                 promptTokens: promptTokens,
                 stopAtCompletedToolCall: stopAtCompletedToolCall,
+                logprobCapture: logprobCapture,
+                logprobRegion: logprobRegion,
                 progressHandler: progressHandler
             )
         }
@@ -1278,7 +1295,18 @@ public actor Q35Generator: ChatGenerator {
         return Q35BatchedDecodeResult(
             generatedTokens: generated,
             decodeSeconds: decodeSeconds,
-            firstTokenSeconds: firstTokenSeconds
+            firstTokenSeconds: firstTokenSeconds,
+            acceleration: mtpModel.map { _ in
+                ChatAccelerationDiagnostics(
+                    route: "mtp-speculative",
+                    draftModel: "qwen-mtp",
+                    rounds: mtpVerificationPasses,
+                    draftedTokens: mtpDraftedTokens,
+                    acceptedDraftTokens: mtpAcceptedTokens
+                )
+            } ?? ChatAccelerationDiagnostics(
+                route: jsonConstrained ? "json-constrained-serial" : "serial"
+            )
         )
     }
 
@@ -1293,6 +1321,8 @@ public actor Q35Generator: ChatGenerator {
         mropeRopeDelta: Int?,
         promptTokens: [Int],
         stopAtCompletedToolCall: Bool,
+        logprobCapture: ChatLogprobCapture,
+        logprobRegion: ChatLogprobRegion,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> Q35BatchedDecodeResult {
         let layerCaches = layerCaches
@@ -1312,7 +1342,9 @@ public actor Q35Generator: ChatGenerator {
                 eosTokens: eosSet,
                 tokenBudget: tokenBudget,
                 historySeedTokens: promptTokens,
-                banMask: banMask
+                banMask: banMask,
+                logprobCapture: logprobCapture,
+                logprobRegion: logprobRegion
             ),
             stepForward: { token in
                 model(
@@ -1346,7 +1378,9 @@ public actor Q35Generator: ChatGenerator {
         return Q35BatchedDecodeResult(
             generatedTokens: result.generatedTokens,
             decodeSeconds: result.decodeSeconds,
-            firstTokenSeconds: result.firstTokenSeconds
+            firstTokenSeconds: result.firstTokenSeconds,
+            logprobs: result.logprobs,
+            acceleration: ChatAccelerationDiagnostics(route: "final-target-pipelined")
         )
     }
 

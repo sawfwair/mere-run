@@ -538,6 +538,19 @@ swift run mere.run model benchmark code \
   --allow-code-execution \
   --json
 
+# Versioned 24-case Lite quality plan; no model load in dry-run mode
+swift run mere.run model benchmark fused \
+  --suite lite \
+  --dry-run \
+  --json
+
+# 110-case chat/code/tools/long-context/vision suite with calibration diagnostics
+swift run mere.run model benchmark fused \
+  --suite comprehensive \
+  --logprobs summary \
+  --allow-code-execution \
+  --json
+
 # Small grounded-chat eval: local email/workspace evidence, abstention, and format checks
 swift run mere.run model benchmark chat --json
 

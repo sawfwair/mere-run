@@ -18,6 +18,24 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         XCTAssertTrue(commandNames.contains("chat"))
     }
 
+    func testBenchmarkCommandExposesFusedSubcommands() {
+        let commandNames = Set(ModelBenchmark.configuration.subcommands.map { $0.configuration.commandName })
+        XCTAssertTrue(commandNames.contains("fused"))
+        XCTAssertTrue(commandNames.contains("fused-fixture"))
+    }
+
+    func testFusedBenchmarkParsesQualityDefaultsWithoutGreedyControls() throws {
+        let command = try ModelBenchmarkFused.parse(["--dry-run"])
+
+        XCTAssertEqual(command.suite, .lite)
+        XCTAssertNil(command.trials)
+        XCTAssertEqual(command.logprobs, .summary)
+        XCTAssertEqual(command.topLogprobs, 5)
+        XCTAssertEqual(command.performanceLane, .none)
+        XCTAssertTrue(command.dryRun)
+        XCTAssertFalse(command.allowCodeExecution)
+    }
+
     func testBenchmarkCommandExposesToolCallsSubcommand() {
         let commandNames = Set(ModelBenchmark.configuration.subcommands.map { $0.configuration.commandName })
         XCTAssertTrue(commandNames.contains("tool-calls"))
@@ -617,8 +635,8 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         XCTAssertTrue(cmd.json)
     }
 
-    func testChatBenchmarkSuiteHasFortyCases() {
-        XCTAssertEqual(ChatBenchmarkCase.mereChatSlice.count, 40)
+    func testChatBenchmarkSuiteHasFiftyTwoCases() {
+        XCTAssertEqual(ChatBenchmarkCase.mereChatSlice.count, 52)
     }
 
     func testChatBenchmarkSelectsCaseSubset() throws {
@@ -666,6 +684,34 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         )
 
         XCTAssertTrue(evaluation.passed, evaluation.failedChecks.joined(separator: "\n"))
+    }
+
+    func testChatFlavorScenariosAcceptGroundedReferenceResponses() throws {
+        let responses = [
+            "MereChat/40": "The reply was faster because the model was already loaded; generation still ran for this answer.",
+            "MereChat/41": "Could you please send the invoice by Friday? Thank you.",
+            "MereChat/42": "I'm sorry—that's frustrating. First check autosave, then check the local backup.",
+            "MereChat/43": "It did not fail; deployment dep_812 succeeded at 2026-08-17T14:22:00Z.",
+            "MereChat/44": "Both estimates are preliminary: one range is 6 to 8 hours and the other is 10 to 12 hours, so timing remains uncertain.",
+            "MereChat/45": "Choose local because private offline operation is the priority; the main tradeoff is slower setup.",
+            "MereChat/46": "1. Run tests\n2. Build artifacts\n3. Verify signatures\n4. Publish",
+            "MereChat/47": "The supported inventory total is 317.",
+            "MereChat/48": "Build passed; signature not checked; release not published.",
+            "MereChat/49": "No. job_b is the counterexample: 47 seconds exceeds the 30-second target.",
+            "MereChat/50": "- Local AI.\n- Private by default.\n- Fast on device.",
+            "MereChat/51": "Which object do you mean: project proj_harbor or email mail_901? Please clarify.",
+        ]
+
+        for (caseID, response) in responses {
+            let benchmarkCase = try XCTUnwrap(
+                ChatBenchmarkCase.mereChatSlice.first { $0.caseID == caseID }
+            )
+            let evaluation = benchmarkCase.evaluate(response)
+            XCTAssertTrue(
+                evaluation.passed,
+                "\(caseID): \(evaluation.failedChecks.joined(separator: ", "))"
+            )
+        }
     }
 
     func testToolCallsBenchmarkParsesDefaults() throws {

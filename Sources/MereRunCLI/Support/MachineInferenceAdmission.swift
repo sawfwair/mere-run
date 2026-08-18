@@ -561,7 +561,10 @@ enum CLIInferenceAdmissionClassifier {
 
     static func request(arguments: [String]) -> MachineInferenceRequest? {
         let tokens = Array(arguments.dropFirst())
-        guard !tokens.contains("--help"), !tokens.contains("-h"), !tokens.contains("--version") else {
+        guard !tokens.contains("--help"),
+              !tokens.contains("-h"),
+              !tokens.contains("--version"),
+              !tokens.contains("--dry-run") else {
             return nil
         }
         let commandTokens = commandPath(tokens)

@@ -12,6 +12,8 @@ public struct AutoregressiveDecodeRequest {
     public let historySeedTokens: [Int]
     /// Optional additive logit bias applied every step (e.g. token bans).
     public let banMask: MLXArray?
+    public let logprobCapture: ChatLogprobCapture
+    public let logprobRegion: ChatLogprobRegion
 
     public init(
         initialLogits: MLXArray,
@@ -19,7 +21,9 @@ public struct AutoregressiveDecodeRequest {
         eosTokens: Set<Int>,
         tokenBudget: Int,
         historySeedTokens: [Int] = [],
-        banMask: MLXArray? = nil
+        banMask: MLXArray? = nil,
+        logprobCapture: ChatLogprobCapture = .none,
+        logprobRegion: ChatLogprobRegion = .visible
     ) {
         self.initialLogits = initialLogits
         self.generationConfig = generationConfig
@@ -27,6 +31,8 @@ public struct AutoregressiveDecodeRequest {
         self.tokenBudget = tokenBudget
         self.historySeedTokens = historySeedTokens
         self.banMask = banMask
+        self.logprobCapture = logprobCapture
+        self.logprobRegion = logprobRegion
     }
 }
 
@@ -42,19 +48,66 @@ public struct AutoregressiveDecodeResult {
     public let buildSeconds: Double
     /// Host time spent blocked on step confirmation readbacks.
     public let waitSeconds: Double
+    public let logprobs: ChatLogprobDiagnostics?
 
     public init(
         generatedTokens: [Int],
         decodeSeconds: Double,
         firstTokenSeconds: Double? = nil,
         buildSeconds: Double = 0,
-        waitSeconds: Double = 0
+        waitSeconds: Double = 0,
+        logprobs: ChatLogprobDiagnostics? = nil
     ) {
         self.generatedTokens = generatedTokens
         self.decodeSeconds = decodeSeconds
         self.firstTokenSeconds = firstTokenSeconds
         self.buildSeconds = buildSeconds
         self.waitSeconds = waitSeconds
+        self.logprobs = logprobs
+    }
+}
+
+private struct PendingAutoregressiveSample {
+    let token: MLXArray
+    let logits: MLXArray
+}
+
+private struct ChatLogprobRegionTracker {
+    private let defaultRegion: ChatLogprobRegion
+    private var reasoning = false
+    private var toolCall = false
+
+    init(defaultRegion: ChatLogprobRegion) {
+        self.defaultRegion = defaultRegion
+    }
+
+    mutating func classify(_ piece: String) -> ChatLogprobRegion {
+        let normalized = piece.lowercased()
+        if normalized.contains("<think>") {
+            reasoning = true
+            return .markup
+        }
+        if normalized.contains("</think>") {
+            reasoning = false
+            return .markup
+        }
+        if normalized.contains("<tool_call>") || normalized.contains("</tool_call>") {
+            toolCall = !normalized.contains("</tool_call>")
+            return .markup
+        }
+        if normalized.contains("<function=") {
+            toolCall = true
+            return .toolName
+        }
+        if normalized.contains("<parameter=") || normalized.contains("</parameter>") {
+            return .toolArgument
+        }
+        if normalized.hasPrefix("<") && normalized.contains(">") {
+            return .markup
+        }
+        if reasoning { return .reasoning }
+        if toolCall { return .toolArgument }
+        return defaultRegion
     }
 }
 
@@ -87,17 +140,51 @@ public enum AutoregressiveDecodeEngine {
         }
 
         let start = Date()
+        var samplingConfig = request.generationConfig
+        if request.logprobCapture.isEnabled {
+            // The measured policy must be the policy that selected the token.
+            // Disable the optional top-p prefilter in quality/calibration runs.
+            samplingConfig.topPPrefilter = 0
+        }
         var generated: [Int] = []
         generated.reserveCapacity(request.tokenBudget)
+        var diagnosticHistory = request.historySeedTokens
+        var measuredTokens: [ChatTokenLogprob] = []
+        measuredTokens.reserveCapacity(request.tokenBudget)
+        var logprobCaptureSeconds = 0.0
+        var regionTracker = ChatLogprobRegionTracker(defaultRegion: request.logprobRegion)
         var firstTokenSeconds: Double?
         var repetitionHistory = repetitionHistoryArray(
             promptTokens: request.historySeedTokens,
-            config: request.generationConfig
+            config: samplingConfig
         )
         var pendingProgressWhitespace = ""
 
-        func confirm(_ tokenArray: MLXArray) -> Bool {
-            let token = tokenArray.item(Int.self)
+        func capturedDiagnostics() -> ChatLogprobDiagnostics? {
+            guard request.logprobCapture.isEnabled else { return nil }
+            return ChatLogprobDiagnostics(
+                capture: request.logprobCapture,
+                measuredTokens: measuredTokens,
+                captureSeconds: logprobCaptureSeconds
+            )
+        }
+
+        func result(
+            buildSeconds: Double,
+            waitSeconds: Double
+        ) -> AutoregressiveDecodeResult {
+            AutoregressiveDecodeResult(
+                generatedTokens: generated,
+                decodeSeconds: Date().timeIntervalSince(start),
+                firstTokenSeconds: firstTokenSeconds,
+                buildSeconds: buildSeconds,
+                waitSeconds: waitSeconds,
+                logprobs: capturedDiagnostics()
+            )
+        }
+
+        func confirm(_ sample: PendingAutoregressiveSample) -> Bool {
+            let token = sample.token.item(Int.self)
             if request.eosTokens.contains(token) {
                 return false
             }
@@ -106,6 +193,31 @@ public enum AutoregressiveDecodeEngine {
                 firstTokenSeconds = Date().timeIntervalSince(start)
             }
             let piece = decodeToken?(token) ?? ""
+            let region = regionTracker.classify(piece)
+            if request.logprobCapture.isEnabled {
+                let captureStart = CFAbsoluteTimeGetCurrent()
+                var measurement = tokenLogprobMeasurement(
+                    logits: sample.logits,
+                    selectedToken: token,
+                    config: samplingConfig,
+                    previousTokens: diagnosticHistory,
+                    topLogprobs: request.logprobCapture.topLogprobs
+                )
+                measurement.region = region
+                if request.logprobCapture.includesTokens, region != .reasoning {
+                    measurement.token = piece
+                    if !measurement.topLogprobs.isEmpty, let decodeToken {
+                        for index in measurement.topLogprobs.indices {
+                            measurement.topLogprobs[index].token = decodeToken(
+                                measurement.topLogprobs[index].tokenID
+                            )
+                        }
+                    }
+                }
+                measuredTokens.append(measurement)
+                logprobCaptureSeconds += CFAbsoluteTimeGetCurrent() - captureStart
+            }
+            diagnosticHistory.append(token)
             if let emitPiece, !piece.isEmpty {
                 if piece.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                     pendingProgressWhitespace += piece
@@ -121,7 +233,7 @@ public enum AutoregressiveDecodeEngine {
         var waitSeconds = 0.0
 
         var logits = request.initialLogits
-        var pending: MLXArray?
+        var pending: PendingAutoregressiveSample?
 
         while generated.count < request.tokenBudget {
             try checkCancellation?()
@@ -136,13 +248,7 @@ public enum AutoregressiveDecodeEngine {
                 let confirmed = confirm(first)
                 waitSeconds += CFAbsoluteTimeGetCurrent() - waitStart
                 guard confirmed else {
-                    return AutoregressiveDecodeResult(
-                        generatedTokens: generated,
-                        decodeSeconds: Date().timeIntervalSince(start),
-                        firstTokenSeconds: firstTokenSeconds,
-                        buildSeconds: buildSeconds,
-                        waitSeconds: waitSeconds
-                    )
+                    return result(buildSeconds: buildSeconds, waitSeconds: waitSeconds)
                 }
                 if generated.count >= request.tokenBudget {
                     break
@@ -153,12 +259,14 @@ public enum AutoregressiveDecodeEngine {
             let isFinalSample = (!hasPending && generated.count == request.tokenBudget - 1)
                 || (hasPending && generated.count == request.tokenBudget - 2)
             let buildStart = CFAbsoluteTimeGetCurrent()
+            let sampleLogits = logits[0, -1, 0...]
             let tokenArray = sampledTokenArray(
-                logits: logits[0, -1, 0...],
-                config: request.generationConfig,
+                logits: sampleLogits,
+                config: samplingConfig,
                 previousTokenIndices: repetitionHistory,
                 banMask: request.banMask
             )
+            let sample = PendingAutoregressiveSample(token: tokenArray, logits: sampleLogits)
 
             if isFinalSample {
                 asyncEval(tokenArray)
@@ -169,18 +277,12 @@ public enum AutoregressiveDecodeEngine {
                     let confirmed = confirm(previous)
                     waitSeconds += CFAbsoluteTimeGetCurrent() - waitStart
                     guard confirmed else {
-                        return AutoregressiveDecodeResult(
-                            generatedTokens: generated,
-                            decodeSeconds: Date().timeIntervalSince(start),
-                            firstTokenSeconds: firstTokenSeconds,
-                            buildSeconds: buildSeconds,
-                            waitSeconds: waitSeconds
-                        )
+                        return result(buildSeconds: buildSeconds, waitSeconds: waitSeconds)
                     }
                 }
                 if generated.count < request.tokenBudget {
                     let waitStart = CFAbsoluteTimeGetCurrent()
-                    _ = confirm(tokenArray)
+                    _ = confirm(sample)
                     waitSeconds += CFAbsoluteTimeGetCurrent() - waitStart
                 }
                 break
@@ -189,7 +291,7 @@ public enum AutoregressiveDecodeEngine {
             repetitionHistory = appendingRepetitionHistory(
                 repetitionHistory,
                 token: tokenArray,
-                config: request.generationConfig
+                config: samplingConfig
             )
             logits = try stepForward(tokenArray.asType(.int32).reshaped(1, 1))
             asyncEval([logits, tokenArray])
@@ -201,29 +303,17 @@ public enum AutoregressiveDecodeEngine {
                 let confirmed = confirm(previous)
                 waitSeconds += CFAbsoluteTimeGetCurrent() - buildEnd
                 guard confirmed else {
-                    return AutoregressiveDecodeResult(
-                        generatedTokens: generated,
-                        decodeSeconds: Date().timeIntervalSince(start),
-                        firstTokenSeconds: firstTokenSeconds,
-                        buildSeconds: buildSeconds,
-                        waitSeconds: waitSeconds
-                    )
+                    return result(buildSeconds: buildSeconds, waitSeconds: waitSeconds)
                 }
             }
-            pending = tokenArray
+            pending = sample
         }
 
         if let previous = pending, generated.count < request.tokenBudget {
             _ = confirm(previous)
         }
 
-        return AutoregressiveDecodeResult(
-            generatedTokens: generated,
-            decodeSeconds: Date().timeIntervalSince(start),
-            firstTokenSeconds: firstTokenSeconds,
-            buildSeconds: buildSeconds,
-            waitSeconds: waitSeconds
-        )
+        return result(buildSeconds: buildSeconds, waitSeconds: waitSeconds)
     }
 
     /// Pipelined decode for generators whose next-step logits transform or

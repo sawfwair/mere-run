@@ -707,17 +707,82 @@ public struct OpenAIChatChoice: Codable, Sendable {
     public var message: OpenAIChatMessage?
     public var delta: OpenAIChatDelta?
     public var finish_reason: String?
+    public var logprobs: OpenAIChatLogprobs?
 
     public init(
         index: Int,
         message: OpenAIChatMessage? = nil,
         delta: OpenAIChatDelta? = nil,
-        finish_reason: String? = nil
+        finish_reason: String? = nil,
+        logprobs: OpenAIChatLogprobs? = nil
     ) {
         self.index = index
         self.message = message
         self.delta = delta
         self.finish_reason = finish_reason
+        self.logprobs = logprobs
+    }
+}
+
+public struct OpenAIChatLogprobs: Codable, Sendable {
+    public var content: [OpenAIChatTokenLogprob]
+    public var mere_summary: ChatLogprobSummary?
+    public var mere_capture_seconds: Double?
+    public var mere_source: String?
+
+    public init?(_ diagnostics: ChatLogprobDiagnostics?) {
+        guard let diagnostics else { return nil }
+        self.content = (diagnostics.tokens ?? []).compactMap(OpenAIChatTokenLogprob.init)
+        self.mere_summary = diagnostics.summary
+        self.mere_capture_seconds = diagnostics.captureSeconds
+        self.mere_source = diagnostics.source.rawValue
+    }
+}
+
+public struct OpenAIChatTokenLogprob: Codable, Sendable {
+    public var token: String
+    public var bytes: [Int]
+    /// OpenAI-compatible intrinsic model log probability.
+    public var logprob: Double
+    public var top_logprobs: [OpenAIChatTopLogprob]
+    public var raw_logprob: Double
+    public var policy_logprob: Double
+    public var raw_entropy: Double
+    public var policy_entropy: Double
+    public var raw_top1_top2_margin: Double
+    public var policy_top1_top2_margin: Double
+    public var region: String
+
+    public init?(_ measurement: ChatTokenLogprob) {
+        guard let token = measurement.token else { return nil }
+        self.token = token
+        self.bytes = token.utf8.map(Int.init)
+        self.logprob = measurement.rawLogprob
+        self.top_logprobs = measurement.topLogprobs.compactMap(OpenAIChatTopLogprob.init)
+        self.raw_logprob = measurement.rawLogprob
+        self.policy_logprob = measurement.policyLogprob
+        self.raw_entropy = measurement.rawEntropy
+        self.policy_entropy = measurement.policyEntropy
+        self.raw_top1_top2_margin = measurement.rawTop1Top2Margin
+        self.policy_top1_top2_margin = measurement.policyTop1Top2Margin
+        self.region = measurement.region.rawValue
+    }
+}
+
+public struct OpenAIChatTopLogprob: Codable, Sendable {
+    public var token: String
+    public var bytes: [Int]
+    public var logprob: Double
+    public var raw_logprob: Double
+    public var policy_logprob: Double
+
+    public init?(_ candidate: ChatTopLogprob) {
+        guard let token = candidate.token else { return nil }
+        self.token = token
+        self.bytes = token.utf8.map(Int.init)
+        self.logprob = candidate.rawLogprob
+        self.raw_logprob = candidate.rawLogprob
+        self.policy_logprob = candidate.policyLogprob
     }
 }
 

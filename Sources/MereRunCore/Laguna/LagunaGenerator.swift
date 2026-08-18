@@ -33,6 +33,8 @@ private struct LagunaDecodeResult {
     let generatedTokens: [Int]
     let decodeSeconds: Double
     let firstTokenSeconds: Double?
+    var logprobs: ChatLogprobDiagnostics? = nil
+    var acceleration: ChatAccelerationDiagnostics? = nil
 }
 
 private struct LagunaPrefillResult {
@@ -88,7 +90,8 @@ private final class LagunaBatchedDecodeRow: @unchecked Sendable {
         continuation.resume(returning: LagunaDecodeResult(
             generatedTokens: generatedTokens,
             decodeSeconds: Date().timeIntervalSince(decodeStart),
-            firstTokenSeconds: firstTokenSeconds
+            firstTokenSeconds: firstTokenSeconds,
+            acceleration: ChatAccelerationDiagnostics(route: "continuous-batched")
         ))
     }
 
@@ -148,7 +151,11 @@ private final class LagunaDFlashBatchedDecodeRow: @unchecked Sendable {
         continuation.resume(returning: LagunaDecodeResult(
             generatedTokens: generatedTokens,
             decodeSeconds: Date().timeIntervalSince(decodeStart),
-            firstTokenSeconds: firstTokenSeconds
+            firstTokenSeconds: firstTokenSeconds,
+            acceleration: ChatAccelerationDiagnostics(
+                route: "dflash-continuous-batched",
+                draftModel: LagunaResources.dflashModelID
+            )
         ))
     }
 
@@ -595,7 +602,7 @@ public actor LagunaGenerator: ChatGenerator {
             request.maxTokens,
             effectiveContext - promptTokens.count
         ))
-        let activeDFlash = dflashModel.flatMap { dflash in
+        let activeDFlash = request.logprobCapture.isEnabled ? nil : dflashModel.flatMap { dflash in
             let enabled = switch dflashRouting {
             case .automatic:
                 LagunaDFlashRouting.shouldUseDFlash(
@@ -654,6 +661,8 @@ public actor LagunaGenerator: ChatGenerator {
             tokenBudget: tokenBudget,
             promptTokens: promptTokens,
             dflashRouting: dflashRouting,
+            logprobCapture: request.logprobCapture,
+            logprobRegion: request.logprobRegionHint ?? .visible,
             progressHandler: progressHandler
         )
 
@@ -690,7 +699,9 @@ public actor LagunaGenerator: ChatGenerator {
             ),
             toolCalls: toolCalls,
             promptTokens: promptTokens.count,
-            finishReason: finishReason
+            finishReason: finishReason,
+            logprobs: decode.logprobs,
+            acceleration: decode.acceleration
         )
     }
 
@@ -715,6 +726,8 @@ public actor LagunaGenerator: ChatGenerator {
         tokenBudget: Int,
         promptTokens: [Int],
         dflashRouting: LagunaDFlashRoutingMode,
+        logprobCapture: ChatLogprobCapture,
+        logprobRegion: ChatLogprobRegion,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> LagunaDecodeResult {
         if let dflash, let dflashCache {
@@ -788,18 +801,27 @@ public actor LagunaGenerator: ChatGenerator {
             return LagunaDecodeResult(
                 generatedTokens: result.generatedTokens,
                 decodeSeconds: result.decodeSeconds,
-                firstTokenSeconds: result.firstTokenSeconds
+                firstTokenSeconds: result.firstTokenSeconds,
+                acceleration: ChatAccelerationDiagnostics(
+                    route: "dflash-speculative",
+                    draftModel: LagunaResources.dflashModelID,
+                    rounds: result.stats.rounds,
+                    draftedTokens: result.stats.draftedTokens,
+                    acceptedDraftTokens: result.stats.acceptedDraftTokens
+                )
             )
         }
 
-        guard continuousBatchingEnabled else {
+        guard continuousBatchingEnabled && !logprobCapture.isEnabled else {
             let result = try AutoregressiveDecodeEngine.decode(
                 AutoregressiveDecodeRequest(
                     initialLogits: initialLogits,
                     generationConfig: generationConfig,
                     eosTokens: eosTokens,
                     tokenBudget: tokenBudget,
-                    historySeedTokens: promptTokens
+                    historySeedTokens: promptTokens,
+                    logprobCapture: logprobCapture,
+                    logprobRegion: logprobRegion
                 ),
                 stepForward: { token in
                     model.lastPositionLogits(token, cache: caches)
@@ -813,7 +835,9 @@ public actor LagunaGenerator: ChatGenerator {
             return LagunaDecodeResult(
                 generatedTokens: result.generatedTokens,
                 decodeSeconds: result.decodeSeconds,
-                firstTokenSeconds: result.firstTokenSeconds
+                firstTokenSeconds: result.firstTokenSeconds,
+                logprobs: result.logprobs,
+                acceleration: ChatAccelerationDiagnostics(route: "final-target-pipelined")
             )
         }
 
