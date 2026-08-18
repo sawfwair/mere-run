@@ -68,7 +68,7 @@ struct ChatView: View {
                                     HStack(spacing: MereTheme.Spacing.s) {
                                         ProgressView()
                                         Text(chat.runLocally
-                                            ? "Thinking on this iPhone…"
+                                            ? (local.chatStatus ?? "Thinking on this iPhone…")
                                             : "Running on your fleet…")
                                             .font(.footnote)
                                             .foregroundStyle(MereTheme.textMuted)
@@ -113,7 +113,10 @@ struct ChatView: View {
                         .disabled(chat.messages.isEmpty || chat.awaitingReply)
                 }
             }
-            .task { await relay.refreshWorkerProbe() }
+            .task {
+                await relay.refreshWorkerProbe()
+                if chat.runLocally { local.warmChat() }
+            }
             .sheet(isPresented: $showOnDeviceModels) { OnDeviceModelsView() }
         }
     }
@@ -216,6 +219,7 @@ struct ChatView: View {
                                     Button(candidate.title) {
                                         local.selectedChatModelID = candidate.id
                                         chat.runLocally = true
+                                        local.warmChat()
                                     }
                                 }
                             }
