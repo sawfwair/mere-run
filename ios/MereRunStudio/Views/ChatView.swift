@@ -50,8 +50,9 @@ struct ChatView: View {
                                 if let partial = chat.streamingReply {
                                     HStack {
                                         Text(partial)
-                                            .font(.body)
-                                            .foregroundStyle(MereTheme.textPrimary)
+                                            .font(chat.runLocally ? .callout.italic() : .body)
+                                            .foregroundStyle(chat.runLocally ? MereTheme.textSecondary : MereTheme.textPrimary)
+                                            .accessibilityIdentifier("chat.partial")
                                             .padding(MereTheme.Spacing.m)
                                             .background(
                                                 RoundedRectangle(cornerRadius: MereTheme.Radius.panel)
@@ -198,6 +199,15 @@ struct ChatView: View {
                 )
                 .accessibilityLabel("Send")
             }
+            #if DEBUG
+            if chat.runLocally, !local.debugStreamInfo.isEmpty {
+                Text(local.debugStreamInfo)
+                    .font(.caption2.monospaced())
+                    .foregroundStyle(MereTheme.textMuted)
+                    .accessibilityIdentifier("chat.debug")
+                    .lineLimit(2)
+            }
+            #endif
             HStack {
                 Menu {
                     Section("Your fleet") {

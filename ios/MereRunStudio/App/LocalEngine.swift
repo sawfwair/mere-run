@@ -125,6 +125,10 @@ final class LocalEngine: ObservableObject {
     @Published private(set) var warmChatModelID: String?
     /// Human status for the pending bubble ("Loading Liquid Chat…").
     @Published private(set) var chatStatus: String?
+    #if DEBUG
+    /// Streaming pipeline telemetry for on-device diagnostics.
+    @Published var debugStreamInfo = ""
+    #endif
     @Published private(set) var lastError: String?
 
     private lazy var imageGenerator = Flux2KleinGeneratoriOS()
@@ -163,7 +167,11 @@ final class LocalEngine: ObservableObject {
 
     private func chatGenerator(for model: Model) -> AnyChatGenerator {
         if model.id.hasPrefix("text-chat-lfm") {
-            let generator = lfm2Generators[model.id] ?? LFM2Generator(modelId: model.id)
+            // Prefix KV cache: each turn re-sends the whole transcript, and
+            // without it the entire history prefills again — the spinner the
+            // user stares at. With it, only the newest turn prefills.
+            let generator = lfm2Generators[model.id]
+                ?? LFM2Generator(modelId: model.id, prefixKVCacheEnabled: true)
             lfm2Generators[model.id] = generator
             return .lfm2(generator)
         }
@@ -396,13 +404,18 @@ final class LocalEngine: ObservableObject {
 
         let accumulated = StreamedText()
         let progressHandler: @Sendable (ChatProgress) -> Void = { progress in
+            #if DEBUG
+            Task { @MainActor in
+                LocalEngine.shared.debugRecord(stage: progress.stage, piece: progress.message)
+            }
+            #endif
             guard progress.stage == .generating,
                   let piece = progress.message, !piece.isEmpty else { return }
             Task { @MainActor in
                 LocalEngine.shared.chatStatus = nil
                 let text = accumulated.append(piece)
                 let visible = GeneratedTextFilters.strippingThinking(text, streaming: true)
-                if !visible.isEmpty { onDelta(visible) }
+                onDelta(visible.isEmpty ? text : visible)
             }
         }
         if warmChatModelID != model.id {
@@ -419,6 +432,25 @@ final class LocalEngine: ObservableObject {
         return cleaned
     }
 }
+
+#if DEBUG
+extension LocalEngine {
+    private static var debugRaw = 0
+    private static var debugGenerating = 0
+    private static var debugFirstPiece = ""
+
+    func debugRecord(stage: ChatStage, piece: String?) {
+        Self.debugRaw += 1
+        if stage == .generating, let piece, !piece.isEmpty {
+            Self.debugGenerating += 1
+            if Self.debugFirstPiece.count < 60 {
+                Self.debugFirstPiece += piece
+            }
+        }
+        debugStreamInfo = "raw \(Self.debugRaw) gen \(Self.debugGenerating) first: \(Self.debugFirstPiece.prefix(60))"
+    }
+}
+#endif
 
 /// Accumulates streamed pieces on the main actor.
 @MainActor
