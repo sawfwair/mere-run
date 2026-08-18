@@ -6,6 +6,14 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.41.0 - 2026-08-18
+
+This release puts mere.run on iPhone with a portable relay client, a full-width
+creation surface, live chat and run activity, secure browser sign-in, direct
+machine pairing, and the first on-device image and text model lineup. It also
+accelerates native LTX 2.5, hardens Qwen3.8 and the MLX runtime, and introduces
+reproducible fused evaluation with model-native confidence diagnostics.
+
 ### MLX v0.32.1 runtime refresh
 
 - refreshed the maintained MLX and mlx-swift forks through upstream MLX
@@ -16,6 +24,20 @@ The format is based on Keep a Changelog.
   mlx-swift revision, MLX fork revision, upstream release tag and revision,
   generated-kernel source digest, and bundled metallib digest before builds or
   runtime startup.
+
+### LTX 2.5 video acceleration
+
+- added source-bound native LTX 2.5 transformer and connector packs with
+  streaming safetensors loading, resident video sessions, exact bounded Gemma
+  connector prompt caching, and explicit timing reports.
+- added shared compiled transformer execution, reusable positive-context
+  guidance projections, and calibrated TeaCache controls with unified-memory
+  admission and safe eager fallbacks. Exact eager execution remains the
+  default wherever an optimization changes floating-point order or output.
+- added a fused Metal DiffVAE 3D neighborhood-attention kernel with MLX
+  fallback. The measured release proof retained sample-identical audio and
+  reached 1.59x faster decode at 0.989548 video SSIM; a repeated resident
+  prompt reused the exact cached connector result and completed 23.8x faster.
 
 ### Fused model evaluation and logprobs
 
@@ -126,6 +148,9 @@ The format is based on Keep a Changelog.
   a `RelayCredentialStorage` protocol with file and Keychain backends,
   and executor-level storage injection so refreshed tokens persist
   wherever the credential came from.
+- restored the signed app's associated-domains and increased-memory
+  entitlements, completing the `mere.world` universal-link/passkey binding and
+  enabling the declared on-device Bonsai 27B chat memory budget.
 - the on-device lane grows into a lineup: Bonsai 1-bit and Bonsai
   ternary image models join Klein nano behind a model picker in Create,
   and Chat gains a fully on-device option running Bonsai 27B 1-bit with
@@ -188,6 +213,19 @@ The format is based on Keep a Changelog.
 
 - documented the Apache-2.0 provenance of the adapted Qwen GDN verification
   kernel in `THIRD_PARTY_NOTICES.md`.
+
+### Included pull requests
+
+- exact release range: [#316](https://github.com/sawfwair/mere-run/pull/316),
+  [#317](https://github.com/sawfwair/mere-run/pull/317),
+  [#318](https://github.com/sawfwair/mere-run/pull/318),
+  [#319](https://github.com/sawfwair/mere-run/pull/319),
+  [#320](https://github.com/sawfwair/mere-run/pull/320),
+  [#321](https://github.com/sawfwair/mere-run/pull/321),
+  [#322](https://github.com/sawfwair/mere-run/pull/322),
+  [#323](https://github.com/sawfwair/mere-run/pull/323),
+  [#324](https://github.com/sawfwair/mere-run/pull/324), and
+  [#325](https://github.com/sawfwair/mere-run/pull/325).
 
 ## 0.40.1 - 2026-08-16
 
