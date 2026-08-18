@@ -29,6 +29,16 @@ targets:
         NSLocalNetworkUsageDescription: mere.run connects to your own machines on your network to run the work you submit.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
+    entitlements:
+      path: MereRunStudio/MereRunStudio.entitlements
+      properties:
+        # ?mode=developer bypasses Apple's AASA CDN on Developer Mode
+        # devices; drop the suffix for release signing.
+        com.apple.developer.associated-domains:
+          - applinks:mere.world?mode=developer
+          - webcredentials:mere.world
+        # Bonsai 27B 1-bit chat needs the expanded per-app memory ceiling.
+        com.apple.developer.kernel.increased-memory-limit: true
     settings:
       base:
         PRODUCT_NAME: mere.run
