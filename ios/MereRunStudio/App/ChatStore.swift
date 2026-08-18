@@ -19,12 +19,32 @@ final class ChatStore: ObservableObject {
         let role: Role
         var content: String
         var failed: Bool
+        /// The model's reasoning for this reply, kept behind a disclosure.
+        var thinking: String?
 
-        init(role: Role, content: String, failed: Bool = false) {
+        init(role: Role, content: String, failed: Bool = false, thinking: String? = nil) {
             self.id = UUID()
             self.role = role
             self.content = content
             self.failed = failed
+            self.thinking = thinking
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case id
+            case role
+            case content
+            case failed
+            case thinking
+        }
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: CodingKeys.self)
+            id = try container.decode(UUID.self, forKey: .id)
+            role = try container.decode(Role.self, forKey: .role)
+            content = try container.decode(String.self, forKey: .content)
+            failed = try container.decodeIfPresent(Bool.self, forKey: .failed) ?? false
+            thinking = try container.decodeIfPresent(String.self, forKey: .thinking)
         }
     }
 
@@ -72,13 +92,17 @@ final class ChatStore: ObservableObject {
         }
         do {
             if runLocally {
-                let reply = try await LocalEngine.shared.chat(
+                let result = try await LocalEngine.shared.chat(
                     messages: nativeMessages(),
                     onDelta: { [weak self] partial in
                         self?.streamingReply = partial
                     }
                 )
-                messages.append(Message(role: .assistant, content: reply))
+                messages.append(Message(
+                    role: .assistant,
+                    content: result.reply,
+                    thinking: result.thinking
+                ))
             } else {
                 let prompt = renderTranscript()
                 var arguments: [String: WorkflowValue] = ["prompt": .string(prompt)]
