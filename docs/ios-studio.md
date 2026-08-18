@@ -14,7 +14,12 @@ covers building.
    hosted-Studio pattern — never from local discovery, which needs process
    spawning that iOS forbids), and reads the same `graph-event-v1` /
    `graph-run-v1` documents published in `docs/public/schemas/`.
-2. **On-device lane (later).** Small models genuinely fit Pro-class devices:
+2. **On-device lane (experimental, landed).** `MereRunCore` builds for
+   iOS; the app's image mode offers "This iPhone" alongside the fleet,
+   installing FLUX.2 Klein nano through the managed store into the app
+   sandbox and generating through the memory-optimized iOS pipeline. First
+   on-device generation still needs real-device validation of the MLX Metal
+   kernel path. The original sizing notes: Small models genuinely fit Pro-class devices:
    the Bonsai image binary (4B, 1-bit, ~3.4 GB) runs through the same FLUX.2
    Klein pipeline that already has a memory-constrained iOS generator in
    `MereRunCore` (`Flux2KleinGeneratoriOS`, ~2 GB peak via sequential

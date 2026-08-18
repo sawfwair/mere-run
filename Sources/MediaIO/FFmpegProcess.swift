@@ -9,6 +9,25 @@ enum FFmpegProcess {
         let stderr: String
     }
 
+    #if os(iOS)
+    // ffmpeg tool spawning needs child processes, which iOS forbids; media
+    // conversion happens on nodes, never on the phone.
+    static func run(
+        tool: String,
+        arguments: [String],
+        stdin: Data? = nil
+    ) throws -> Result {
+        throw FFmpegProcessUnavailableError()
+    }
+
+    static func runStreamingInput(
+        tool: String,
+        arguments: [String],
+        writeInput: (FileHandle) throws -> Void
+    ) throws -> Result {
+        throw FFmpegProcessUnavailableError()
+    }
+    #else
     static func run(
         tool: String,
         arguments: [String],
@@ -184,4 +203,7 @@ enum FFmpegProcess {
     private static func shellQuote(_ value: String) -> String {
         "'\(value.replacingOccurrences(of: "'", with: "'\\''"))'"
     }
+    #endif
 }
+
+struct FFmpegProcessUnavailableError: Error {}
