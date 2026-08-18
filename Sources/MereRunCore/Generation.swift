@@ -283,6 +283,154 @@ public struct ToolCall: Sendable, Hashable {
     }
 }
 
+public struct ChatLogprobCapture: Codable, Sendable, Hashable {
+    public enum Mode: String, Codable, Sendable, Hashable {
+        case none
+        case summary
+        case tokens
+        case top
+    }
+
+    public let mode: Mode
+    public let topLogprobs: Int
+
+    public static let none = ChatLogprobCapture(mode: .none)
+    public static let summary = ChatLogprobCapture(mode: .summary)
+    public static let tokens = ChatLogprobCapture(mode: .tokens)
+
+    public static func top(_ count: Int) -> ChatLogprobCapture {
+        ChatLogprobCapture(mode: .top, topLogprobs: count)
+    }
+
+    public init(mode: Mode, topLogprobs: Int = 0) {
+        self.mode = mode
+        self.topLogprobs = mode == .top ? min(max(topLogprobs, 1), 20) : 0
+    }
+
+    public var isEnabled: Bool { mode != .none }
+    public var includesTokens: Bool { mode == .tokens || mode == .top }
+}
+
+public enum ChatLogprobRegion: String, Codable, Sendable, Hashable {
+    case reasoning
+    case visible
+    case code
+    case toolName = "tool_name"
+    case toolArgument = "tool_argument"
+    case markup
+    case unknown
+}
+
+public struct ChatTopLogprob: Codable, Sendable, Hashable {
+    public var tokenID: Int
+    public var token: String?
+    public var rawLogprob: Double
+    public var policyLogprob: Double
+
+    public init(
+        tokenID: Int,
+        token: String? = nil,
+        rawLogprob: Double,
+        policyLogprob: Double
+    ) {
+        self.tokenID = tokenID
+        self.token = token
+        self.rawLogprob = rawLogprob
+        self.policyLogprob = policyLogprob
+    }
+}
+
+public struct ChatTokenLogprob: Codable, Sendable, Hashable {
+    public var tokenID: Int
+    public var token: String?
+    public var region: ChatLogprobRegion
+    public var rawLogprob: Double
+    public var policyLogprob: Double
+    public var rawEntropy: Double
+    public var policyEntropy: Double
+    public var rawTop1Top2Margin: Double
+    public var policyTop1Top2Margin: Double
+    public var topLogprobs: [ChatTopLogprob]
+
+    public init(
+        tokenID: Int,
+        token: String? = nil,
+        region: ChatLogprobRegion = .unknown,
+        rawLogprob: Double,
+        policyLogprob: Double,
+        rawEntropy: Double,
+        policyEntropy: Double,
+        rawTop1Top2Margin: Double,
+        policyTop1Top2Margin: Double,
+        topLogprobs: [ChatTopLogprob] = []
+    ) {
+        self.tokenID = tokenID
+        self.token = token
+        self.region = region
+        self.rawLogprob = rawLogprob
+        self.policyLogprob = policyLogprob
+        self.rawEntropy = rawEntropy
+        self.policyEntropy = policyEntropy
+        self.rawTop1Top2Margin = rawTop1Top2Margin
+        self.policyTop1Top2Margin = policyTop1Top2Margin
+        self.topLogprobs = topLogprobs
+    }
+}
+
+public struct ChatLogprobSummary: Codable, Sendable, Hashable {
+    public let tokenCount: Int
+    public let meanRawLogprob: Double
+    public let minimumRawLogprob: Double
+    public let meanPolicyLogprob: Double
+    public let minimumPolicyLogprob: Double
+    public let meanRawEntropy: Double
+    public let meanPolicyEntropy: Double
+    public let meanRawTop1Top2Margin: Double
+    public let meanPolicyTop1Top2Margin: Double
+
+    public init(tokens: [ChatTokenLogprob]) {
+        tokenCount = tokens.count
+        meanRawLogprob = Self.mean(tokens.map(\.rawLogprob))
+        minimumRawLogprob = tokens.map(\.rawLogprob).min() ?? 0
+        meanPolicyLogprob = Self.mean(tokens.map(\.policyLogprob))
+        minimumPolicyLogprob = tokens.map(\.policyLogprob).min() ?? 0
+        meanRawEntropy = Self.mean(tokens.map(\.rawEntropy))
+        meanPolicyEntropy = Self.mean(tokens.map(\.policyEntropy))
+        meanRawTop1Top2Margin = Self.mean(tokens.map(\.rawTop1Top2Margin))
+        meanPolicyTop1Top2Margin = Self.mean(tokens.map(\.policyTop1Top2Margin))
+    }
+
+    private static func mean(_ values: [Double]) -> Double {
+        guard !values.isEmpty else { return 0 }
+        return values.reduce(0, +) / Double(values.count)
+    }
+}
+
+public struct ChatLogprobDiagnostics: Codable, Sendable, Hashable {
+    public enum Source: String, Codable, Sendable, Hashable {
+        case finalTarget = "final_target"
+    }
+
+    public let capture: ChatLogprobCapture
+    public let source: Source
+    public let summary: ChatLogprobSummary
+    public let tokens: [ChatTokenLogprob]?
+    public let captureSeconds: Double
+
+    public init(
+        capture: ChatLogprobCapture,
+        source: Source = .finalTarget,
+        measuredTokens: [ChatTokenLogprob],
+        captureSeconds: Double
+    ) {
+        self.capture = capture
+        self.source = source
+        self.summary = ChatLogprobSummary(tokens: measuredTokens)
+        self.tokens = capture.includesTokens ? measuredTokens : nil
+        self.captureSeconds = captureSeconds
+    }
+}
+
 public struct ChatRequest: Sendable, Hashable {
     public var messages: [ChatMessage]
     public var maxTokens: Int
@@ -304,6 +452,12 @@ public struct ChatRequest: Sendable, Hashable {
     public var noRepeatNgramSize: Int?
     public var kvCacheMode: RuntimeKVCacheMode?
     public var maxContextTokens: Int?
+    /// Optional token-distribution diagnostics. Quality runs use the final
+    /// target distribution and exact sampling-policy transforms.
+    public var logprobCapture: ChatLogprobCapture
+    /// Optional semantic region for visible generated tokens. Reasoning and
+    /// protocol markup detected by the runtime override this hint.
+    public var logprobRegionHint: ChatLogprobRegion?
 
     public init(
         messages: [ChatMessage],
@@ -321,7 +475,9 @@ public struct ChatRequest: Sendable, Hashable {
         stopSequences: [String] = [],
         noRepeatNgramSize: Int? = nil,
         kvCacheMode: RuntimeKVCacheMode? = nil,
-        maxContextTokens: Int? = nil
+        maxContextTokens: Int? = nil,
+        logprobCapture: ChatLogprobCapture = .none,
+        logprobRegionHint: ChatLogprobRegion? = nil
     ) {
         self.messages = messages
         self.maxTokens = maxTokens
@@ -339,6 +495,8 @@ public struct ChatRequest: Sendable, Hashable {
         self.noRepeatNgramSize = noRepeatNgramSize
         self.kvCacheMode = kvCacheMode
         self.maxContextTokens = maxContextTokens
+        self.logprobCapture = logprobCapture
+        self.logprobRegionHint = logprobRegionHint
     }
 }
 
@@ -379,6 +537,34 @@ public struct ChatTiming: Sendable, Hashable {
     }
 }
 
+public struct ChatAccelerationDiagnostics: Codable, Sendable, Hashable {
+    public let route: String
+    public let draftModel: String?
+    public let rounds: Int?
+    public let draftedTokens: Int?
+    public let acceptedDraftTokens: Int?
+    public let acceptanceRate: Double?
+
+    public init(
+        route: String,
+        draftModel: String? = nil,
+        rounds: Int? = nil,
+        draftedTokens: Int? = nil,
+        acceptedDraftTokens: Int? = nil
+    ) {
+        self.route = route
+        self.draftModel = draftModel
+        self.rounds = rounds
+        self.draftedTokens = draftedTokens
+        self.acceptedDraftTokens = acceptedDraftTokens
+        if let draftedTokens, let acceptedDraftTokens, draftedTokens > 0 {
+            self.acceptanceRate = Double(acceptedDraftTokens) / Double(draftedTokens)
+        } else {
+            self.acceptanceRate = nil
+        }
+    }
+}
+
 public struct ChatResponse: Sendable, Hashable {
     public var response: String
     public var tokensGenerated: Int
@@ -390,6 +576,8 @@ public struct ChatResponse: Sendable, Hashable {
     public var hasIncompleteReasoning: Bool
     public var reasoningBlockCount: Int
     public var hasReopenedReasoning: Bool
+    public var logprobs: ChatLogprobDiagnostics?
+    public var acceleration: ChatAccelerationDiagnostics?
 
     public init(
         response: String,
@@ -401,7 +589,9 @@ public struct ChatResponse: Sendable, Hashable {
         reasoningContent: String? = nil,
         hasIncompleteReasoning: Bool = false,
         reasoningBlockCount: Int = 0,
-        hasReopenedReasoning: Bool = false
+        hasReopenedReasoning: Bool = false,
+        logprobs: ChatLogprobDiagnostics? = nil,
+        acceleration: ChatAccelerationDiagnostics? = nil
     ) {
         self.response = response
         self.tokensGenerated = tokensGenerated
@@ -414,6 +604,8 @@ public struct ChatResponse: Sendable, Hashable {
         self.hasIncompleteReasoning = hasIncompleteReasoning
         self.reasoningBlockCount = reasoningBlockCount
         self.hasReopenedReasoning = hasReopenedReasoning
+        self.logprobs = logprobs
+        self.acceleration = acceleration
     }
 
     public init(
@@ -423,7 +615,9 @@ public struct ChatResponse: Sendable, Hashable {
         timing: ChatTiming? = nil,
         toolCalls: [ToolCall]? = nil,
         promptTokens: Int? = nil,
-        finishReason: ChatFinishReason? = nil
+        finishReason: ChatFinishReason? = nil,
+        logprobs: ChatLogprobDiagnostics? = nil,
+        acceleration: ChatAccelerationDiagnostics? = nil
     ) {
         let split = ChatReasoningMarkup.splitThinkBlocks(in: generatedText)
         let visibleResponse = showThinking
@@ -439,7 +633,9 @@ public struct ChatResponse: Sendable, Hashable {
             reasoningContent: split.reasoningContent,
             hasIncompleteReasoning: split.hasIncompleteReasoning,
             reasoningBlockCount: split.reasoningBlockCount,
-            hasReopenedReasoning: split.hasReopenedReasoning
+            hasReopenedReasoning: split.hasReopenedReasoning,
+            logprobs: logprobs,
+            acceleration: acceleration
         )
     }
 }

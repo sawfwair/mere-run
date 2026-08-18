@@ -5,6 +5,8 @@ private struct NemotronHDecodeResult {
     let tokens: [Int]
     let decodeSeconds: Double
     let firstTokenSeconds: Double?
+    let logprobs: ChatLogprobDiagnostics?
+    let acceleration: ChatAccelerationDiagnostics
 }
 
 public actor NemotronHGenerator: ChatGenerator {
@@ -153,8 +155,10 @@ public actor NemotronHGenerator: ChatGenerator {
             throw NemotronHError.generationFailed("prompt tokenization produced no tokens")
         }
         let targetCache = model.makeCache()
-        let captureIndices = dspark.map { Set($0.config.speculation.targetLayerIDs) } ?? []
-        let draftCache = dspark?.makeCache()
+        let captureIndices = request.logprobCapture.isEnabled
+            ? []
+            : dspark.map { Set($0.config.speculation.targetLayerIDs) } ?? []
+        let draftCache = request.logprobCapture.isEnabled ? nil : dspark?.makeCache()
         let prefillStart = Date()
         var offset = 0
         var initialLogits: MLXArray?
@@ -202,6 +206,7 @@ public actor NemotronHGenerator: ChatGenerator {
         let decode: NemotronHDecodeResult
         if let dspark,
            let draftCache,
+           !request.logprobCapture.isEnabled,
            NemotronHDSparkPolicy.enabled(),
            tokenBudget >= NemotronHDSparkPolicy.minimumOutputTokens() {
             let result = try NemotronHDSparkDecoder.decode(
@@ -225,14 +230,24 @@ public actor NemotronHGenerator: ChatGenerator {
             decode = NemotronHDecodeResult(
                 tokens: result.generatedTokens,
                 decodeSeconds: result.decodeSeconds,
-                firstTokenSeconds: result.firstTokenSeconds
+                firstTokenSeconds: result.firstTokenSeconds,
+                logprobs: nil,
+                acceleration: ChatAccelerationDiagnostics(
+                    route: "dspark-speculative",
+                    draftModel: NemotronHResources.dsparkModelID,
+                    rounds: result.stats.rounds,
+                    draftedTokens: result.stats.draftedTokens,
+                    acceptedDraftTokens: result.stats.acceptedDraftTokens
+                )
             )
         } else {
             latestDSparkStats = NemotronHDSparkStats(
                 enabled: dspark != nil,
                 active: false,
                 speculativeTokens: NemotronHResources.defaultSpeculativeTokens,
-                reason: dspark == nil ? "companion model is not installed" : nil
+                reason: request.logprobCapture.isEnabled
+                    ? "logprob capture requires final-target decode"
+                    : dspark == nil ? "companion model is not installed" : nil
             )
             let result = try AutoregressiveDecodeEngine.decode(
                 AutoregressiveDecodeRequest(
@@ -240,7 +255,9 @@ public actor NemotronHGenerator: ChatGenerator {
                     generationConfig: generationConfig,
                     eosTokens: eosTokens,
                     tokenBudget: tokenBudget,
-                    historySeedTokens: promptTokens
+                    historySeedTokens: promptTokens,
+                    logprobCapture: request.logprobCapture,
+                    logprobRegion: request.logprobRegionHint ?? .visible
                 ),
                 stepForward: { token in model.lastPositionLogits(token, cache: targetCache) },
                 decodeToken: { tokenizer.decode(token: $0) },
@@ -252,7 +269,9 @@ public actor NemotronHGenerator: ChatGenerator {
             decode = NemotronHDecodeResult(
                 tokens: result.generatedTokens,
                 decodeSeconds: result.decodeSeconds,
-                firstTokenSeconds: result.firstTokenSeconds
+                firstTokenSeconds: result.firstTokenSeconds,
+                logprobs: result.logprobs,
+                acceleration: ChatAccelerationDiagnostics(route: "final-target-pipelined")
             )
         }
         let raw = tokenizer.decode(tokens: decode.tokens)
@@ -278,7 +297,9 @@ public actor NemotronHGenerator: ChatGenerator {
             ),
             toolCalls: toolCalls,
             promptTokens: promptTokens.count,
-            finishReason: decode.tokens.count >= tokenBudget ? .length : .stop
+            finishReason: decode.tokens.count >= tokenBudget ? .length : .stop,
+            logprobs: decode.logprobs,
+            acceleration: decode.acceleration
         )
     }
 }

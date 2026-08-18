@@ -73,7 +73,8 @@ export default defineConfig({
       {
         text: 'Benchmarks',
         items: [
-          { text: 'Benchmarking Overview', link: '/benchmarking' }
+          { text: 'Benchmarking Overview', link: '/benchmarking' },
+          { text: 'Fused Model Evaluation', link: '/benchmark-fused' }
         ]
       },
       {

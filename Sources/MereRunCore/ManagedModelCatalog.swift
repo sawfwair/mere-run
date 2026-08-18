@@ -217,7 +217,8 @@ public extension ManagedModelAPIProfile {
             contextWindow: contextWindow,
             maximumOutputTokens: 4_096,
             toolCall: true,
-            supportsStopSequences: true
+            supportsStopSequences: true,
+            supportsLogprobs: true
         )
     }
 
@@ -232,7 +233,8 @@ public extension ManagedModelAPIProfile {
             maximumOutputTokens: 4_096,
             thinkingLevels: fixedReasoning ? [.high] : [],
             toolCall: true,
-            structuredOutput: true
+            structuredOutput: true,
+            supportsLogprobs: true
         )
     }
 
@@ -256,7 +258,8 @@ public extension ManagedModelAPIProfile {
             structuredOutput: true,
             compatibility: ManagedModelOpenAICompatibilityProfile(
                 supportsReasoningEffort: true
-            )
+            ),
+            supportsLogprobs: true
         )
     }
 
@@ -333,7 +336,8 @@ public extension ManagedModelAPIProfile {
             contextWindow: contextWindow,
             maximumOutputTokens: 4_096,
             toolCall: true,
-            supportsStopSequences: true
+            supportsStopSequences: true,
+            supportsLogprobs: true
         )
     }
 
