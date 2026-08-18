@@ -32,6 +32,7 @@ public struct RelayAuthConfiguration: Codable, Equatable, Sendable {
     public let tokenEndpoint: String
     public let clientID: String
     public let scope: String
+    public let authorizationEndpoint: String?
 
     enum CodingKeys: String, CodingKey {
         case issuer
@@ -39,6 +40,7 @@ public struct RelayAuthConfiguration: Codable, Equatable, Sendable {
         case tokenEndpoint = "token_endpoint"
         case clientID = "client_id"
         case scope
+        case authorizationEndpoint = "authorization_endpoint"
     }
 
     public init(
@@ -46,13 +48,15 @@ public struct RelayAuthConfiguration: Codable, Equatable, Sendable {
         deviceAuthorizationEndpoint: String,
         tokenEndpoint: String,
         clientID: String,
-        scope: String
+        scope: String,
+        authorizationEndpoint: String? = nil
     ) {
         self.issuer = issuer
         self.deviceAuthorizationEndpoint = deviceAuthorizationEndpoint
         self.tokenEndpoint = tokenEndpoint
         self.clientID = clientID
         self.scope = scope
+        self.authorizationEndpoint = authorizationEndpoint
     }
 }
 
@@ -578,6 +582,34 @@ public enum RelayAuthentication {
         throw RelayClientError("Relay device sign-in expired before approval.")
     }
 
+    /// Storage-backed resolution for app clients: loads from the supplied
+    /// storage, refreshing (and saving back) when stale.
+    public static func resolveCredential(
+        profile: WorkflowExecutorProfile,
+        storage: any RelayCredentialStorage,
+        forceRefresh: Bool = false,
+        now: @Sendable () -> Int64 = currentEpochSeconds,
+        requester: HTTPRequester = send
+    ) async throws -> RelayResolvedCredential {
+        guard let current = try storage.load() else {
+            throw RelayClientError("No saved relay credential. Sign in again.")
+        }
+        if !forceRefresh, current.isFresh(now: now()) {
+            return RelayResolvedCredential(
+                accessToken: current.accessToken,
+                refreshable: current.refreshToken?.isEmpty == false
+            )
+        }
+        let refreshed = try await refreshedTokenSet(
+            current: current,
+            profile: profile,
+            now: now,
+            requester: requester
+        )
+        try storage.save(refreshed)
+        return RelayResolvedCredential(accessToken: refreshed.accessToken, refreshable: true)
+    }
+
     private static func refreshLocked(
         tokenFile: URL,
         profile: WorkflowExecutorProfile,
@@ -597,6 +629,22 @@ public enum RelayAuthentication {
                 refreshable: current.refreshToken?.isEmpty == false
             )
         }
+        let refreshed = try await refreshedTokenSet(
+            current: current,
+            profile: profile,
+            now: now,
+            requester: requester
+        )
+        try save(refreshed, to: tokenFile)
+        return RelayResolvedCredential(accessToken: refreshed.accessToken, refreshable: true)
+    }
+
+    private static func refreshedTokenSet(
+        current: RelayOAuthTokenSet,
+        profile: WorkflowExecutorProfile,
+        now: @Sendable () -> Int64,
+        requester: HTTPRequester
+    ) async throws -> RelayOAuthTokenSet {
         guard let refreshToken = current.refreshToken, !refreshToken.isEmpty else {
             throw RelayClientError("Relay session expired. Run `mere.run executor login relay:\(profile.name)`." )
         }
@@ -633,7 +681,7 @@ public enum RelayAuthentication {
         guard let accessToken = payload.accessToken else {
             throw tokenError(payload, status: response.statusCode)
         }
-        let refreshed = RelayOAuthTokenSet(
+        return RelayOAuthTokenSet(
             accessToken: accessToken,
             refreshToken: payload.refreshToken ?? refreshToken,
             tokenType: payload.tokenType ?? current.tokenType,
@@ -644,8 +692,6 @@ public enum RelayAuthentication {
             clientID: configuration.clientID,
             scope: configuration.scope
         )
-        try save(refreshed, to: tokenFile)
-        return RelayResolvedCredential(accessToken: accessToken, refreshable: true)
     }
 
     private static func requestToken(

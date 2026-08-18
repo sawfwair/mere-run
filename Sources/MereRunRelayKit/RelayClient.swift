@@ -10,9 +10,22 @@ import FoundationNetworking
 /// verified artifact fetch — lives here and needs no local runtime.
 public struct RelayWorkflowExecutor: Sendable {
     public let profile: WorkflowExecutorProfile
+    public let credentialStorage: (any RelayCredentialStorage)?
 
-    public init(profile: WorkflowExecutorProfile) {
+    public init(profile: WorkflowExecutorProfile, credentialStorage: (any RelayCredentialStorage)? = nil) {
         self.profile = profile
+        self.credentialStorage = credentialStorage
+    }
+
+    private func resolveCredential(forceRefresh: Bool = false) async throws -> RelayResolvedCredential {
+        if let credentialStorage {
+            return try await RelayAuthentication.resolveCredential(
+                profile: profile,
+                storage: credentialStorage,
+                forceRefresh: forceRefresh
+            )
+        }
+        return try await RelayAuthentication.resolveCredential(profile: profile, forceRefresh: forceRefresh)
     }
 
     public func probe() async throws -> WorkflowExecutorProbe {
@@ -161,7 +174,7 @@ public struct RelayWorkflowExecutor: Sendable {
         guard let baseURL = profile.url, let url = URL(string: "\(baseURL)\(path)") else {
             throw RelayClientError("Relay executor profile has an invalid URL.")
         }
-        let credential = authorize ? try await RelayAuthentication.resolveCredential(profile: profile) : nil
+        let credential = authorize ? try await resolveCredential() : nil
         var result = try await Self.performWithTransientRetries(maximumAttempts: transientRetryAttempts) {
             try await performRequest(
                 url: url,
@@ -172,7 +185,7 @@ public struct RelayWorkflowExecutor: Sendable {
             )
         }
         if result.response.statusCode == 401, credential?.refreshable == true {
-            let refreshed = try await RelayAuthentication.resolveCredential(profile: profile, forceRefresh: true)
+            let refreshed = try await resolveCredential(forceRefresh: true)
             result = try await Self.performWithTransientRetries(maximumAttempts: transientRetryAttempts) {
                 try await performRequest(
                     url: url,
