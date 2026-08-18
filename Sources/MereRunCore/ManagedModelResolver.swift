@@ -587,8 +587,79 @@ public enum ManagedModelResolver {
             if fileManager.fileExists(atPath: linkURL.path) {
                 try fileManager.removeItem(at: linkURL)
             }
-            try fileManager.createSymbolicLink(at: linkURL, withDestinationURL: entry)
+            try createRelocatableSymlink(at: linkURL, to: entry, fileManager: fileManager)
         }
+    }
+
+    /// Managed installs must survive the app container moving (iOS relocates
+    /// it on every update), so links into the store are created relative.
+    static func createRelocatableSymlink(
+        at linkURL: URL,
+        to target: URL,
+        fileManager: FileManager
+    ) throws {
+        // Resolve real paths on both sides (macOS aliases /var into
+        // /private/var) so the shared prefix is found and the link comes out
+        // relative rather than falling back to absolute.
+        let linkComponents = linkURL.deletingLastPathComponent()
+            .resolvingSymlinksInPath().standardizedFileURL.pathComponents
+        let targetComponents = target
+            .resolvingSymlinksInPath().standardizedFileURL.pathComponents
+        var shared = 0
+        while shared < min(linkComponents.count, targetComponents.count),
+              linkComponents[shared] == targetComponents[shared] {
+            shared += 1
+        }
+        guard shared > 1 else {
+            try fileManager.createSymbolicLink(at: linkURL, withDestinationURL: target)
+            return
+        }
+        let ups = Array(repeating: "..", count: linkComponents.count - shared)
+        let destination = (ups + targetComponents[shared...]).joined(separator: "/")
+        try fileManager.createSymbolicLink(atPath: linkURL.path, withDestinationPath: destination)
+    }
+
+    /// Re-points symlinks under the model store that still carry an absolute
+    /// path from a previous app container. The payloads live at the same
+    /// suffix under the current Application Support base; dangling links are
+    /// recreated relative so they never break again.
+    @discardableResult
+    public static func repairRelocatedInstalls(
+        modelsRoot: URL = MereRunModelPaths.modelsDir,
+        applicationSupportBase: URL = MereRunModelPaths.applicationSupportBase,
+        fileManager: FileManager = .default
+    ) -> Int {
+        guard let enumerator = fileManager.enumerator(
+            at: modelsRoot,
+            includingPropertiesForKeys: [.isSymbolicLinkKey],
+            options: []
+        ) else { return 0 }
+        let marker = "/Application Support/"
+        let basePath = applicationSupportBase.standardizedFileURL.path
+        guard let baseMarkerRange = basePath.range(of: marker, options: .backwards) else { return 0 }
+        let currentRoot = String(basePath[..<baseMarkerRange.upperBound])
+        var repaired = 0
+        for case let url as URL in enumerator {
+            guard let values = try? url.resourceValues(forKeys: [.isSymbolicLinkKey]),
+                  values.isSymbolicLink == true,
+                  let destination = try? fileManager.destinationOfSymbolicLink(atPath: url.path),
+                  destination.hasPrefix("/"),
+                  !fileManager.fileExists(atPath: url.resolvingSymlinksInPath().path),
+                  let oldMarkerRange = destination.range(of: marker, options: .backwards) else {
+                continue
+            }
+            let suffix = String(destination[oldMarkerRange.upperBound...])
+            let candidate = currentRoot + suffix
+            guard fileManager.fileExists(atPath: candidate) else { continue }
+            try? fileManager.removeItem(at: url)
+            try? createRelocatableSymlink(
+                at: url,
+                to: URL(fileURLWithPath: candidate),
+                fileManager: fileManager
+            )
+            repaired += 1
+        }
+        return repaired
     }
 
     private static func mountedPatterns(
@@ -687,7 +758,7 @@ public enum ManagedModelResolver {
                 try? fileManager.removeItem(at: aliasURL)
             }
             try fileManager.createDirectory(at: aliasURL.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try fileManager.createSymbolicLink(at: aliasURL, withDestinationURL: targetURL)
+            try createRelocatableSymlink(at: aliasURL, to: targetURL, fileManager: fileManager)
         }
     }
 

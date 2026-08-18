@@ -144,6 +144,9 @@ final class LocalEngine: ObservableObject {
             return
         }
         guard Self.isSupported else { return }
+        // The app container moves on every update, dangling any absolute
+        // symlinks a previous install wrote; heal them before scanning.
+        ManagedModelResolver.repairRelocatedInstalls()
         for model in Self.allModels {
             if case .downloading = states[model.id] { continue }
             states[model.id] = ManagedModelResolver.resolveInstalledModel(id: model.id) != nil

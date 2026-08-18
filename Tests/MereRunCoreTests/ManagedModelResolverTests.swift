@@ -143,13 +143,11 @@ final class ManagedModelResolverTests: XCTestCase {
         let defaultTokenizer = defaultInstall.appendingPathComponent("tokenizer.json")
         let maxTokenizer = maxInstall.appendingPathComponent("tokenizer.json")
         XCTAssertEqual(
-            URL(fileURLWithPath: try FileManager.default.destinationOfSymbolicLink(atPath: defaultTokenizer.path))
-                .standardizedFileURL.path,
+            defaultTokenizer.resolvingSymlinksInPath().standardizedFileURL.path,
             snapshot.appendingPathComponent("tokenizer.json").standardizedFileURL.path
         )
         XCTAssertEqual(
-            URL(fileURLWithPath: try FileManager.default.destinationOfSymbolicLink(atPath: maxTokenizer.path))
-                .standardizedFileURL.path,
+            maxTokenizer.resolvingSymlinksInPath().standardizedFileURL.path,
             snapshot.appendingPathComponent("tokenizer.json").standardizedFileURL.path
         )
     }
@@ -202,8 +200,7 @@ final class ManagedModelResolverTests: XCTestCase {
         XCTAssertEqual(manifest?.id, ModelResolver.ModelID.aceStepXLTurbo.rawValue)
         let mountedConfig = install.appendingPathComponent("acestep-v15-xl-turbo/config.json")
         XCTAssertEqual(
-            URL(fileURLWithPath: try FileManager.default.destinationOfSymbolicLink(atPath: mountedConfig.path))
-                .standardizedFileURL.path,
+            mountedConfig.resolvingSymlinksInPath().standardizedFileURL.path,
             mountedSnapshot.appendingPathComponent("config.json").standardizedFileURL.path
         )
         XCTAssertTrue(spec.isManagedRootComplete(install, fileManager: .default))
@@ -243,8 +240,7 @@ final class ManagedModelResolverTests: XCTestCase {
         XCTAssertEqual(manifest?.usageTermsAcknowledged, true)
         let mountedTextConfig = install.appendingPathComponent("text_encoder/config.json")
         XCTAssertEqual(
-            URL(fileURLWithPath: try FileManager.default.destinationOfSymbolicLink(atPath: mountedTextConfig.path))
-                .standardizedFileURL.path,
+            mountedTextConfig.resolvingSymlinksInPath().standardizedFileURL.path,
             sharedSnapshot.appendingPathComponent("text_encoder/config.json").standardizedFileURL.path
         )
         XCTAssertFalse(FileManager.default.fileExists(
