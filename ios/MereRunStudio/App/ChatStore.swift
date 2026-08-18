@@ -1,4 +1,5 @@
 import Foundation
+import MereRunCore
 import MereRunRelayKit
 
 /// A chat thread carried over stateless `text.generate` jobs: history lives
@@ -31,7 +32,9 @@ final class ChatStore: ObservableObject {
 
     @Published private(set) var messages: [Message] = []
     @Published private(set) var awaitingReply = false
+    @Published private(set) var streamingReply: String?
     @Published var model = ""
+    @Published var runLocally = false
     @Published private(set) var errorMessage: String?
 
     private let store: RelayStore
@@ -61,19 +64,33 @@ final class ChatStore: ObservableObject {
         persist()
         awaitingReply = true
         errorMessage = nil
-        defer { awaitingReply = false }
+        defer {
+            awaitingReply = false
+            streamingReply = nil
+        }
         do {
-            let prompt = renderTranscript()
-            var arguments: [String: WorkflowValue] = ["prompt": .string(prompt)]
-            if !model.isEmpty {
-                arguments["model"] = .string(model)
+            if runLocally {
+                let reply = try await LocalEngine.shared.chat(
+                    messages: nativeMessages(),
+                    onDelta: { [weak self] partial in
+                        self?.streamingReply = partial
+                    }
+                )
+                messages.append(Message(role: .assistant, content: reply))
+            } else {
+                let prompt = renderTranscript()
+                var arguments: [String: WorkflowValue] = ["prompt": .string(prompt)]
+                if !model.isEmpty {
+                    arguments["model"] = .string(model)
+                }
+                let job = try await store.submit(kind: "text.generate", arguments: arguments)
+                let reply = try await awaitReply(jobID: job.jobID)
+                messages.append(Message(role: .assistant, content: reply))
             }
-            let job = try await store.submit(kind: "text.generate", arguments: arguments)
-            let reply = try await awaitReply(jobID: job.jobID)
-            messages.append(Message(role: .assistant, content: reply))
         } catch let error as RelayClientError {
-            errorMessage = error.message
-            messages.append(Message(role: .assistant, content: error.message, failed: true))
+            let text = AppErrorText.presentable(error.message)
+            errorMessage = text
+            messages.append(Message(role: .assistant, content: text, failed: true))
         } catch {
             errorMessage = error.localizedDescription
             messages.append(Message(role: .assistant, content: error.localizedDescription, failed: true))
@@ -87,6 +104,19 @@ final class ChatStore: ObservableObject {
         }
         while true {
             let job = try await client.inspect(jobID: jobID)
+            if job.state == .running || job.state == .assigned {
+                // The worker streams node_output_delta events whose message is
+                // the accumulated text so far; render it as it grows.
+                if let raw = try? await client.events(jobID: jobID) {
+                    let delta = RelayEventText.decodedEvents(raw)
+                        .last(where: { $0.type == "node_output_delta" })?
+                        .message
+                    if let delta, !delta.isEmpty {
+                        let visible = GeneratedTextFilters.strippingThinking(delta, streaming: true)
+                        if !visible.isEmpty { streamingReply = visible }
+                    }
+                }
+            }
             switch job.state {
             case .finished:
                 let manifest = try await client.manifest(jobID: jobID)
@@ -96,7 +126,7 @@ final class ChatStore: ObservableObject {
                     .value?.stringValue else {
                     throw RelayClientError("The reply did not include a text output.")
                 }
-                let cleaned = Self.stripThinkTags(value)
+                let cleaned = GeneratedTextFilters.strippingThinking(value)
                 guard !cleaned.isEmpty else {
                     throw RelayClientError("The model returned an empty reply.")
                 }
@@ -108,6 +138,30 @@ final class ChatStore: ObservableObject {
             default:
                 try await Task.sleep(for: .seconds(1))
             }
+        }
+    }
+
+    /// The thread as native chat messages for the on-device engine, budgeted
+    /// the same way as the rendered transcript: oldest turns drop first.
+    private func nativeMessages() -> [ChatMessage] {
+        let usable = messages.filter { !$0.failed }
+        var included: [Message] = []
+        var used = 0
+        for message in usable.reversed() {
+            let cost = message.content.count + 12
+            if included.isEmpty || used + cost <= Self.budgetChars {
+                included.append(message)
+                used += cost
+            } else {
+                break
+            }
+        }
+        included.reverse()
+        return included.map { message in
+            ChatMessage(
+                role: message.role == .user ? .user : .assistant,
+                content: message.content
+            )
         }
     }
 
@@ -139,17 +193,6 @@ final class ChatStore: ObservableObject {
         }.joined(separator: "\n\n")
     }
 
-    static func stripThinkTags(_ text: String) -> String {
-        var result = text.replacingOccurrences(
-            of: "<think>[\\s\\S]*?</think>",
-            with: "",
-            options: .regularExpression
-        )
-        if !result.contains("<think>"), let close = result.range(of: "</think>") {
-            result = String(result[close.upperBound...])
-        }
-        return result.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
 
     private func persist() {
         try? JSONEncoder().encode(messages).write(to: threadURL, options: .atomic)

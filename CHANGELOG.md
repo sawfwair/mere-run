@@ -8,6 +8,12 @@ The format is based on Keep a Changelog.
 
 ### Workflow graphs
 
+- workers now stream generation for `text.generate`: the node runs
+  `text chat --stream` and emits throttled `node_output_delta` events whose
+  message carries the accumulated text so far (added to the graph-event-v1
+  schema), with reasoning stripped from the stored value to match the
+  non-streamed contract. Serial execution only; deltas coalesce to the
+  latest per node downstream.
 - added `text.generate` to the built-in node catalog: single-turn text
   generation through `text chat` with prompt, optional system prompt,
   model, and sampling controls, returning the reply as a typed string
@@ -24,8 +30,43 @@ The format is based on Keep a Changelog.
   Interactive and resident surfaces (chat sessions, realtime music, live
   tracking, serving) stay outside the job vocabulary by design.
 
+### iOS runtime enablement
+
+- `MereRunCore` now builds for iOS: platform conditions gate the
+  macOS-only Magenta RT2 binary and IOKit linkage, process-spawning paths
+  (ffmpeg tools, the DS4 sidecar) compile out on iOS, the physical-footprint
+  probe is scoped to macOS libproc, and the pinned mlx-swift revision
+  advances to carry an iOS guard around the CPU JIT toolchain probe (Metal
+  kernel sources unchanged; the vendored metallib stamp advances with the
+  pin).
+
 ### Relay client and iOS
 
+- the iOS app signs in with the browser: Authorization Code + PKCE
+  through `ASWebAuthenticationSession` against the broker's advertised
+  `authorization_endpoint`, returning over an `https://mere.world`
+  universal link, with tokens in the device Keychain
+  (after-first-unlock, this-device-only) and a silent migration for
+  existing file-stored device-grant credentials. The device-code flow
+  stays available behind a footnote for browserless pairing.
+  `MereRunRelayKit` gains `RelayAuthorizationCodeFlow`,
+  a `RelayCredentialStorage` protocol with file and Keychain backends,
+  and executor-level storage injection so refreshed tokens persist
+  wherever the credential came from.
+- the on-device lane grows into a lineup: Bonsai 1-bit and Bonsai
+  ternary image models join Klein nano behind a model picker in Create,
+  and Chat gains a fully on-device option running Bonsai 27B 1-bit with
+  streamed token deltas — download once, then prompts never leave the
+  phone.
+- artifact fetch streams downloads straight to disk on Darwin with
+  post-transfer digest verification instead of buffering whole artifacts
+  in memory.
+- the iOS app renders generation live in Chat and run detail, starts a
+  Live Activity for every submitted job (Dynamic Island progress,
+  app-driven updates; push updates await relay APNs support), plays audio
+  artifacts inline, speaks app-voice error copy, and gains an experimental
+  on-device lane: FLUX.2 Klein nano installs through the managed store
+  into the app sandbox and generates entirely on the phone.
 - `RelayWorkflowExecutor` gains a public `manifest(jobID:)` accessor for
   run manifests, and the iOS app adds a Chat tab: multi-turn
   conversations threaded through stateless `text.generate` jobs with the

@@ -74,7 +74,8 @@ public enum LoRATrainingEnvironment {
     /// Physical memory footprint (the metric jetsam actually enforces —
     /// resident plus compressed), in gigabytes.
     public static func currentPhysicalFootprintGB() -> Double? {
-        #if canImport(Darwin)
+        // proc_pid_rusage is libproc, which iOS does not expose.
+        #if os(macOS)
         var usage = rusage_info_current()
         let status = withUnsafeMutablePointer(to: &usage) { pointer in
             pointer.withMemoryRebound(to: (rusage_info_t?).self, capacity: 1) { reboundPointer in

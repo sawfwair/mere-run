@@ -123,6 +123,7 @@ dynamic_boundary_files=(
   "Sources/MereRunCore/ZImageTurbo/Model/TextEncoder/LLMGeneration/QwenGeneration.swift"
   "Sources/MereRunCore/ZImageTurbo/Tokenizer/QwenTokenizer.swift"
   "Sources/MereRunCore/ZImageTurbo/ZImageTurboGenerator.swift"
+  "Sources/MereRunRelayKit/RelayCredentialStorage.swift"
 )
 
 is_dynamic_boundary_file() {

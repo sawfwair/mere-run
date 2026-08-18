@@ -52,19 +52,25 @@ struct PairingView: View {
                     }
                     Button {
                         let url = pairingURL
-                        Task { await relay.pair(urlString: url) }
+                        Task { await relay.signIn(urlString: url) }
                     } label: {
                         if relay.pairing == .discovering {
                             ProgressView().frame(maxWidth: .infinity)
                         } else {
-                            Text(customRelay ? "Pair" : "Pair with relay.mere.run")
+                            Text(customRelay ? "Sign in" : "Sign in with mere.world")
                                 .frame(maxWidth: .infinity)
                         }
                     }
                     .buttonStyle(.borderedProminent)
                     .disabled(pairingURL.isEmpty || relay.pairing == .discovering)
-                    Button(customRelay ? "Use relay.mere.run" : "Use a different relay") {
-                        customRelay.toggle()
+                    HStack(spacing: MereTheme.Spacing.l) {
+                        Button(customRelay ? "Use relay.mere.run" : "Use a different relay") {
+                            customRelay.toggle()
+                        }
+                        Button("Use a device code") {
+                            let url = pairingURL
+                            Task { await relay.pair(urlString: url) }
+                        }
                     }
                     .font(.footnote)
                     .foregroundStyle(MereTheme.textMuted)

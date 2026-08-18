@@ -1,5 +1,5 @@
 {
-  "originHash" : "3c37bc1e7e3ec1a0e3a286cf5bf0f62289add03ddf860edb4d8b94f84a1bcfdb",
+  "originHash" : "7912f84701402566a75a301de11864f91f792625c61b28f258704fb4d46e4d71",
   "pins" : [
     {
       "identity" : "async-http-client",
@@ -33,7 +33,7 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/sawfwair/mlx-swift",
       "state" : {
-        "revision" : "5bf3e46fecfb69cd3b559025fa99885ddd188731"
+        "revision" : "30be5d59f194d5f7c67500509bf13bdfa1f26b3b"
       }
     },
     {

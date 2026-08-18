@@ -14,7 +14,12 @@ covers building.
    hosted-Studio pattern — never from local discovery, which needs process
    spawning that iOS forbids), and reads the same `graph-event-v1` /
    `graph-run-v1` documents published in `docs/public/schemas/`.
-2. **On-device lane (later).** Small models genuinely fit Pro-class devices:
+2. **On-device lane (experimental, landed).** `MereRunCore` builds for
+   iOS; the app's image mode offers "This iPhone" alongside the fleet,
+   installing FLUX.2 Klein nano through the managed store into the app
+   sandbox and generating through the memory-optimized iOS pipeline. First
+   on-device generation still needs real-device validation of the MLX Metal
+   kernel path. Sizing: small models genuinely fit Pro-class devices —
    the Bonsai image binary (4B, 1-bit, ~3.4 GB) runs through the same FLUX.2
    Klein pipeline that already has a memory-constrained iOS generator in
    `MereRunCore` (`Flux2KleinGeneratoriOS`, ~2 GB peak via sequential
@@ -65,14 +70,14 @@ covers building.
 ## iOS-specific follow-ups
 
 - Keychain-backed credential storage and Authorization Code + PKCE sign-in
-  (hosted Studio's flow; a phone has a browser, so the device grant is a
-  working but non-idiomatic first step).
-- Streaming artifact downloads (`URLSession.downloadTask` with incremental
-  SHA-256) before video/3D outputs; the current fetch buffers whole
-  artifacts in memory.
-- Completion pushes and Live Activities for long renders need APNs support
-  in the relay repository; until then the app polls in the foreground and
-  can adopt background refresh.
+  (done: `ASWebAuthenticationSession` over the broker's advertised
+  `authorization_endpoint`, universal-link callback on `mere.world`,
+  tokens in the Keychain with file→Keychain migration; the device grant
+  remains as the browserless fallback).
+- Artifact downloads stream to disk with digest verification (done);
+  incremental in-flight hashing remains a refinement.
+- Live Activities ship with app-driven updates; completion pushes and
+  push-updated activities need APNs support in the relay repository.
 
 ## Boundaries
 

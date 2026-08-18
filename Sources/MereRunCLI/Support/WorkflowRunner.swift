@@ -286,6 +286,36 @@ protocol WorkflowStreamingProcessRunning {
         timeoutSeconds: Int?,
         stdoutLineHandler: ((String) throws -> Void)?
     ) throws -> WorkflowProcessResult
+
+    func run(
+        executable: URL,
+        arguments: [String],
+        currentDirectory: URL,
+        timeoutSeconds: Int?,
+        stdoutLineHandler: ((String) throws -> Void)?,
+        stdoutChunkHandler: ((Data) throws -> Void)?
+    ) throws -> WorkflowProcessResult
+}
+
+extension WorkflowStreamingProcessRunning {
+    // Chunk delivery is opt-in for runners that support it; others keep
+    // line-based behavior and ignore raw chunks.
+    func run(
+        executable: URL,
+        arguments: [String],
+        currentDirectory: URL,
+        timeoutSeconds: Int?,
+        stdoutLineHandler: ((String) throws -> Void)?,
+        stdoutChunkHandler: ((Data) throws -> Void)?
+    ) throws -> WorkflowProcessResult {
+        try run(
+            executable: executable,
+            arguments: arguments,
+            currentDirectory: currentDirectory,
+            timeoutSeconds: timeoutSeconds,
+            stdoutLineHandler: stdoutLineHandler
+        )
+    }
 }
 
 struct WorkflowProcessRunner: WorkflowProcessRunning, WorkflowStreamingProcessRunning {
@@ -309,6 +339,24 @@ struct WorkflowProcessRunner: WorkflowProcessRunning, WorkflowStreamingProcessRu
         currentDirectory: URL,
         timeoutSeconds: Int?,
         stdoutLineHandler: ((String) throws -> Void)?
+    ) throws -> WorkflowProcessResult {
+        try run(
+            executable: executable,
+            arguments: arguments,
+            currentDirectory: currentDirectory,
+            timeoutSeconds: timeoutSeconds,
+            stdoutLineHandler: stdoutLineHandler,
+            stdoutChunkHandler: nil
+        )
+    }
+
+    func run(
+        executable: URL,
+        arguments: [String],
+        currentDirectory: URL,
+        timeoutSeconds: Int?,
+        stdoutLineHandler: ((String) throws -> Void)?,
+        stdoutChunkHandler: ((Data) throws -> Void)?
     ) throws -> WorkflowProcessResult {
         let process = Process()
         process.executableURL = executable
@@ -368,6 +416,7 @@ struct WorkflowProcessRunner: WorkflowProcessRunning, WorkflowStreamingProcessRu
             let data = stdout.fileHandleForReading.availableData
             if data.isEmpty { break }
             captured.append(data)
+            try stdoutChunkHandler?(data)
             guard stdoutLineHandler != nil else { continue }
             pending.append(data)
             while let newline = pending.firstIndex(of: 0x0A) {
@@ -682,6 +731,8 @@ struct WorkflowRunner: @unchecked Sendable {
                     do {
                         var providerOutputs: [String: WorkflowValue]?
                         var providerSequence = -1
+                        var deltaBytes = Data()
+                        var lastDeltaAt = Date.distantPast
                         let execution = try executeInvocation(
                             invocation,
                             currentDirectory: nodeDirectory,
@@ -720,6 +771,24 @@ struct WorkflowRunner: @unchecked Sendable {
                                     ))
                                     sequence += 1
                                 }
+                            } : nil,
+                            stdoutChunkHandler: invocation.streamsStdoutDeltas ? { chunk in
+                                // Each delta carries the accumulated text so far, so
+                                // downstream retention can coalesce to the latest
+                                // event without losing content.
+                                deltaBytes.append(chunk)
+                                let stamp = now()
+                                guard stamp.timeIntervalSince(lastDeltaAt) >= 0.3 else { return }
+                                lastDeltaAt = stamp
+                                try record(.init(
+                                    sequence: sequence,
+                                    createdAt: stamp,
+                                    type: "node_output_delta",
+                                    state: .running,
+                                    nodeID: nodeID,
+                                    message: String(decoding: deltaBytes, as: UTF8.self)
+                                ))
+                                sequence += 1
                             } : nil
                         )
                         let result = execution.result
@@ -1319,7 +1388,8 @@ struct WorkflowRunner: @unchecked Sendable {
         _ invocation: WorkflowNodeInvocation,
         currentDirectory: URL,
         timeoutSeconds: Int?,
-        stdoutLineHandler: ((String) throws -> Void)?
+        stdoutLineHandler: ((String) throws -> Void)?,
+        stdoutChunkHandler: ((Data) throws -> Void)? = nil
     ) throws -> (result: WorkflowProcessResult, outputs: [String: WorkflowValue]?) {
         if let intrinsic = invocation.intrinsic {
             try throwIfCancellationRequested()
@@ -1335,12 +1405,18 @@ struct WorkflowRunner: @unchecked Sendable {
             arguments: invocation.runArguments,
             currentDirectory: currentDirectory,
             timeoutSeconds: timeoutSeconds,
-            stdoutLineHandler: stdoutLineHandler
+            stdoutLineHandler: stdoutLineHandler,
+            stdoutChunkHandler: stdoutChunkHandler
         )
         guard result.status == 0, let outputName = invocation.stdoutOutputName else {
             return (result, nil)
         }
         var scalar = result.stdout
+        if invocation.streamsStdoutDeltas {
+            // Streamed generation emits reasoning inline; the stored value is
+            // the clean reply, matching the non-streamed path's contract.
+            scalar = GeneratedTextFilters.strippingThinking(scalar)
+        }
         if scalar.hasSuffix("\r\n") {
             scalar.removeLast(2)
         } else if scalar.hasSuffix("\n") {
@@ -1354,7 +1430,8 @@ struct WorkflowRunner: @unchecked Sendable {
         arguments: [String],
         currentDirectory: URL,
         timeoutSeconds: Int?,
-        stdoutLineHandler: ((String) throws -> Void)?
+        stdoutLineHandler: ((String) throws -> Void)?,
+        stdoutChunkHandler: ((Data) throws -> Void)? = nil
     ) throws -> WorkflowProcessResult {
         if let streamingRunner = processRunner as? any WorkflowStreamingProcessRunning {
             return try streamingRunner.run(
@@ -1362,7 +1439,8 @@ struct WorkflowRunner: @unchecked Sendable {
                 arguments: arguments,
                 currentDirectory: currentDirectory,
                 timeoutSeconds: timeoutSeconds,
-                stdoutLineHandler: stdoutLineHandler
+                stdoutLineHandler: stdoutLineHandler,
+                stdoutChunkHandler: stdoutChunkHandler
             )
         }
         if timeoutSeconds != nil {

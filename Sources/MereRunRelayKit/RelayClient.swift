@@ -10,9 +10,22 @@ import FoundationNetworking
 /// verified artifact fetch — lives here and needs no local runtime.
 public struct RelayWorkflowExecutor: Sendable {
     public let profile: WorkflowExecutorProfile
+    public let credentialStorage: (any RelayCredentialStorage)?
 
-    public init(profile: WorkflowExecutorProfile) {
+    public init(profile: WorkflowExecutorProfile, credentialStorage: (any RelayCredentialStorage)? = nil) {
         self.profile = profile
+        self.credentialStorage = credentialStorage
+    }
+
+    private func resolveCredential(forceRefresh: Bool = false) async throws -> RelayResolvedCredential {
+        if let credentialStorage {
+            return try await RelayAuthentication.resolveCredential(
+                profile: profile,
+                storage: credentialStorage,
+                forceRefresh: forceRefresh
+            )
+        }
+        return try await RelayAuthentication.resolveCredential(profile: profile, forceRefresh: forceRefresh)
     }
 
     public func probe() async throws -> WorkflowExecutorProbe {
@@ -118,17 +131,16 @@ public struct RelayWorkflowExecutor: Sendable {
             let url = try confinedFetchURL(root: destination, relativePath: artifact.path)
             if try verifiedExistingArtifact(artifact, at: url) { continue }
             let encodedName = try encodedPathSegment(artifact.name)
-            let data = try await request(
+            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try await downloadArtifact(
                 path: "/api/graph-jobs/\(jobID)/artifacts/\(encodedName)",
-                method: "GET",
-                authorize: true
+                to: url
             )
-            guard Int64(data.count) == artifact.sizeBytes,
-                  ModelArtifactPinDigest.sha256(data) == artifact.sha256 else {
+            guard try ModelArtifactPinDigest.fileByteCount(url) == artifact.sizeBytes,
+                  try ModelArtifactPinDigest.fileSHA256(url) == artifact.sha256 else {
+                try? FileManager.default.removeItem(at: url)
                 throw RelayClientError("Fetched relay artifact failed verification: \(artifact.name)")
             }
-            try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-            try data.write(to: url, options: .atomic)
         }
         try WorkflowBundleCodec.write(manifest, to: destination.appendingPathComponent(GraphRunManifest.filename))
         let fetchedOutputs = manifest.outputs.filter { output in
@@ -161,7 +173,7 @@ public struct RelayWorkflowExecutor: Sendable {
         guard let baseURL = profile.url, let url = URL(string: "\(baseURL)\(path)") else {
             throw RelayClientError("Relay executor profile has an invalid URL.")
         }
-        let credential = authorize ? try await RelayAuthentication.resolveCredential(profile: profile) : nil
+        let credential = authorize ? try await resolveCredential() : nil
         var result = try await Self.performWithTransientRetries(maximumAttempts: transientRetryAttempts) {
             try await performRequest(
                 url: url,
@@ -172,7 +184,7 @@ public struct RelayWorkflowExecutor: Sendable {
             )
         }
         if result.response.statusCode == 401, credential?.refreshable == true {
-            let refreshed = try await RelayAuthentication.resolveCredential(profile: profile, forceRefresh: true)
+            let refreshed = try await resolveCredential(forceRefresh: true)
             result = try await Self.performWithTransientRetries(maximumAttempts: transientRetryAttempts) {
                 try await performRequest(
                     url: url,
@@ -214,6 +226,48 @@ public struct RelayWorkflowExecutor: Sendable {
 
     private static func isTransientHTTPStatus(_ statusCode: Int) -> Bool {
         statusCode == 408 || statusCode == 429 || (500...599).contains(statusCode)
+    }
+
+    /// Streams a GET straight to disk. On Darwin the transfer never buffers
+    /// the artifact in memory (video and 3D outputs can be large); platforms
+    /// without URLSession's async download fall back to a buffered fetch.
+    private func downloadArtifact(path: String, to fileURL: URL) async throws {
+        #if canImport(FoundationNetworking)
+        let data = try await request(path: path, method: "GET", authorize: true)
+        try data.write(to: fileURL, options: .atomic)
+        #else
+        guard let baseURL = profile.url, let url = URL(string: "\(baseURL)\(path)") else {
+            throw RelayClientError("Relay executor profile has an invalid URL.")
+        }
+        var credential = try await RelayAuthentication.resolveCredential(profile: profile)
+        var attempt = 0
+        while true {
+            attempt += 1
+            var request = URLRequest(url: url)
+            request.httpMethod = "GET"
+            request.timeoutInterval = 300
+            request.setValue("Bearer \(credential.accessToken)", forHTTPHeaderField: "Authorization")
+            let (temporary, response) = try await URLSession.shared.download(for: request)
+            guard let http = response as? HTTPURLResponse else {
+                try? FileManager.default.removeItem(at: temporary)
+                throw RelayClientError("Relay returned a non-HTTP response.")
+            }
+            if http.statusCode == 401, credential.refreshable, attempt == 1 {
+                try? FileManager.default.removeItem(at: temporary)
+                credential = try await RelayAuthentication.resolveCredential(profile: profile, forceRefresh: true)
+                continue
+            }
+            guard (200..<300).contains(http.statusCode) else {
+                try? FileManager.default.removeItem(at: temporary)
+                throw RelayClientError("Relay request failed with HTTP \(http.statusCode).")
+            }
+            if FileManager.default.fileExists(atPath: fileURL.path) {
+                try FileManager.default.removeItem(at: fileURL)
+            }
+            try FileManager.default.moveItem(at: temporary, to: fileURL)
+            return
+        }
+        #endif
     }
 
     private func performRequest(

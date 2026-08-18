@@ -104,7 +104,7 @@ struct FleetView: View {
             snapshot = try await client.fleet()
             errorMessage = nil
         } catch let error as RelayClientError {
-            errorMessage = error.message
+            errorMessage = AppErrorText.presentable(error.message)
         } catch {
             errorMessage = error.localizedDescription
         }
