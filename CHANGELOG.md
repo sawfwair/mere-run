@@ -42,6 +42,22 @@ The format is based on Keep a Changelog.
 
 ### Relay client and iOS
 
+- the iOS app signs in with the browser: Authorization Code + PKCE
+  through `ASWebAuthenticationSession` against the broker's advertised
+  `authorization_endpoint`, returning over an `https://mere.world`
+  universal link, with tokens in the device Keychain
+  (after-first-unlock, this-device-only) and a silent migration for
+  existing file-stored device-grant credentials. The device-code flow
+  stays available behind a footnote for browserless pairing.
+  `MereRunRelayKit` gains `RelayAuthorizationCodeFlow`,
+  a `RelayCredentialStorage` protocol with file and Keychain backends,
+  and executor-level storage injection so refreshed tokens persist
+  wherever the credential came from.
+- the on-device lane grows into a lineup: Bonsai 1-bit and Bonsai
+  ternary image models join Klein nano behind a model picker in Create,
+  and Chat gains a fully on-device option running Bonsai 27B 1-bit with
+  streamed token deltas — download once, then prompts never leave the
+  phone.
 - artifact fetch streams downloads straight to disk on Darwin with
   post-transfer digest verification instead of buffering whole artifacts
   in memory.

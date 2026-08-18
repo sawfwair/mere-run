@@ -70,8 +70,10 @@ covers building.
 ## iOS-specific follow-ups
 
 - Keychain-backed credential storage and Authorization Code + PKCE sign-in
-  (hosted Studio's flow; a phone has a browser, so the device grant is a
-  working but non-idiomatic first step).
+  (done: `ASWebAuthenticationSession` over the broker's advertised
+  `authorization_endpoint`, universal-link callback on `mere.world`,
+  tokens in the Keychain with file→Keychain migration; the device grant
+  remains as the browserless fallback).
 - Artifact downloads stream to disk with digest verification (done);
   incremental in-flight hashing remains a refinement.
 - Live Activities ship with app-driven updates; completion pushes and

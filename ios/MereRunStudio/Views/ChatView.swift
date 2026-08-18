@@ -7,6 +7,7 @@ import MereRunRelayKit
 struct ChatView: View {
     @EnvironmentObject private var relay: RelayStore
     @StateObject private var chat: ChatStore
+    @ObservedObject private var local = LocalEngine.shared
     @State private var draft = ""
 
     init(relay: RelayStore) {
@@ -21,6 +22,14 @@ struct ChatView: View {
 
     private var fleetOffersChat: Bool {
         relay.workerProbe.map { $0.nodeKinds.contains("text.generate") } ?? true
+    }
+
+    private var localChatReady: Bool {
+        local.state(of: LocalEngine.chatModel.id) == .ready
+    }
+
+    private var canSend: Bool {
+        chat.runLocally ? localChatReady : fleetOffersChat
     }
 
     var body: some View {
@@ -57,7 +66,9 @@ struct ChatView: View {
                                 } else {
                                     HStack(spacing: MereTheme.Spacing.s) {
                                         ProgressView()
-                                        Text("Running on your fleet…")
+                                        Text(chat.runLocally
+                                            ? "Thinking on this iPhone…"
+                                            : "Running on your fleet…")
                                             .font(.footnote)
                                             .foregroundStyle(MereTheme.textMuted)
                                     }
@@ -80,13 +91,19 @@ struct ChatView: View {
                     }
                 }
 
-                if !fleetOffersChat {
+                if !chat.runLocally, !fleetOffersChat {
                     MereBannerView(
                         text: "Your fleet's nodes don't offer text generation yet. Update mere.run on your nodes to add it.",
                         color: MereTheme.caution
                     )
                     .padding(.horizontal, MereTheme.Spacing.l)
                     .padding(.bottom, MereTheme.Spacing.s)
+                }
+
+                if chat.runLocally, !localChatReady {
+                    localChatSetup
+                        .padding(.horizontal, MereTheme.Spacing.l)
+                        .padding(.bottom, MereTheme.Spacing.s)
                 }
 
                 composer
@@ -101,6 +118,34 @@ struct ChatView: View {
                 }
             }
             .task { await relay.refreshWorkerProbe() }
+        }
+    }
+
+    @ViewBuilder
+    private var localChatSetup: some View {
+        switch local.state(of: LocalEngine.chatModel.id) {
+        case .notInstalled:
+            VStack(alignment: .leading, spacing: MereTheme.Spacing.s) {
+                MereBannerView(
+                    text: "\(LocalEngine.chatModel.title) (\(LocalEngine.chatModel.sizeLabel)) chats entirely on this iPhone. Download once over Wi-Fi; it stays in this app's storage.",
+                    color: MereTheme.accent
+                )
+                Button {
+                    Task { await local.download(LocalEngine.chatModel.id) }
+                } label: {
+                    Text("Download \(LocalEngine.chatModel.title)").frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.bordered)
+            }
+        case .downloading(let label):
+            HStack(spacing: MereTheme.Spacing.s) {
+                ProgressView()
+                Text("Downloading — \(label)")
+                    .font(.footnote)
+                    .foregroundStyle(MereTheme.textSecondary)
+            }
+        case .ready:
+            EmptyView()
         }
     }
 
@@ -147,7 +192,8 @@ struct ChatView: View {
                 TextField(
                     "",
                     text: $draft,
-                    prompt: Text("Ask your fleet…").foregroundColor(MereTheme.textMuted),
+                    prompt: Text(chat.runLocally ? "Ask this iPhone…" : "Ask your fleet…")
+                        .foregroundColor(MereTheme.textMuted),
                     axis: .vertical
                 )
                 .lineLimit(1...5)
@@ -166,20 +212,35 @@ struct ChatView: View {
                 .disabled(
                     draft.trimmingCharacters(in: .whitespaces).isEmpty
                         || chat.awaitingReply
-                        || !fleetOffersChat
+                        || !canSend
                 )
                 .accessibilityLabel("Send")
             }
             HStack {
                 Menu {
-                    Button("Fleet default") { chat.model = "" }
-                    ForEach(chatModels, id: \.self) { id in
-                        Button(id) { chat.model = id }
+                    Section("Your fleet") {
+                        Button("Fleet default") {
+                            chat.runLocally = false
+                            chat.model = ""
+                        }
+                        ForEach(chatModels, id: \.self) { id in
+                            Button(id) {
+                                chat.runLocally = false
+                                chat.model = id
+                            }
+                        }
+                    }
+                    Section("This iPhone") {
+                        Button("\(LocalEngine.chatModel.title) — on device") {
+                            chat.runLocally = true
+                        }
                     }
                 } label: {
                     HStack(spacing: 5) {
-                        Image(systemName: "cpu")
-                        Text(chat.model.isEmpty ? "Fleet default" : chat.model)
+                        Image(systemName: chat.runLocally ? "iphone" : "cpu")
+                        Text(chat.runLocally
+                            ? "\(LocalEngine.chatModel.title) — on device"
+                            : (chat.model.isEmpty ? "Fleet default" : chat.model))
                             .lineLimit(1)
                     }
                     .font(.footnote)

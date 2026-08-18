@@ -168,7 +168,7 @@ struct CreateView: View {
     ]
 
     @EnvironmentObject private var relay: RelayStore
-    @StateObject private var local = LocalEngine()
+    @ObservedObject private var local = LocalEngine.shared
     @State private var runLocally = false
     @State private var selected = Self.modes[0]
     @State private var prompt = ""
@@ -430,37 +430,22 @@ struct CreateView: View {
 
     @ViewBuilder
     private var localLane: some View {
-        switch local.state {
-        case .checking:
-            EmptyView()
-        case .notInstalled:
-            MereBannerView(
-                text: "Klein nano (about 2 GB) runs entirely on this iPhone. Download once over Wi-Fi; it stays in this app's storage.",
-                color: MereTheme.accent
-            )
-            Button {
-                Task { await local.download() }
-            } label: {
-                Text("Download Klein nano").frame(maxWidth: .infinity)
+        VStack(alignment: .leading, spacing: MereTheme.Spacing.m) {
+            ForEach(LocalEngine.imageModels) { candidate in
+                localModelRow(candidate)
             }
-            .buttonStyle(.bordered)
-        case .downloading(let label):
-            HStack(spacing: MereTheme.Spacing.s) {
-                ProgressView()
-                Text("Downloading — \(label)")
-                    .font(.footnote)
-                    .foregroundStyle(MereTheme.textSecondary)
+
+            if let message = local.lastError {
+                MereBannerView(text: message, color: MereTheme.failure)
             }
-        case .failed(let message):
-            MereBannerView(text: message, color: MereTheme.failure)
-        case .ready, .generating:
+
             if let image = local.lastImage {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFit()
                     .clipShape(RoundedRectangle(cornerRadius: MereTheme.Radius.panel))
             }
-            if local.state == .generating {
+            if local.activity == .generatingImage {
                 HStack(spacing: MereTheme.Spacing.s) {
                     ProgressView()
                     Text("Generating on this iPhone…")
@@ -471,16 +456,62 @@ struct CreateView: View {
         }
     }
 
+    @ViewBuilder
+    private func localModelRow(_ candidate: LocalEngine.Model) -> some View {
+        let state = local.state(of: candidate.id)
+        HStack(spacing: MereTheme.Spacing.m) {
+            Image(systemName: local.selectedImageModelID == candidate.id
+                ? "largecircle.fill.circle"
+                : "circle")
+                .foregroundStyle(local.selectedImageModelID == candidate.id
+                    ? MereTheme.accent
+                    : MereTheme.textMuted)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(candidate.title)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(MereTheme.textPrimary)
+                Text(candidate.detail)
+                    .font(.caption)
+                    .foregroundStyle(MereTheme.textMuted)
+            }
+            Spacer()
+            switch state {
+            case .notInstalled:
+                Button("Get \(candidate.sizeLabel)") {
+                    Task { await local.download(candidate.id) }
+                }
+                .font(.caption.weight(.semibold))
+                .buttonStyle(.bordered)
+            case .downloading(let label):
+                HStack(spacing: MereTheme.Spacing.xs) {
+                    ProgressView().controlSize(.small)
+                    Text(label)
+                        .font(.caption2)
+                        .foregroundStyle(MereTheme.textSecondary)
+                }
+            case .ready:
+                Image(systemName: "checkmark.circle.fill")
+                    .foregroundStyle(MereTheme.success)
+            }
+        }
+        .contentShape(Rectangle())
+        .onTapGesture {
+            if state == .ready {
+                local.selectedImageModelID = candidate.id
+            }
+        }
+    }
+
     private var runButton: some View {
         Button {
             if runLocally, selected.kind == "image.generate" {
-                Task { await local.generate(prompt: prompt) }
+                Task { await local.generateImage(prompt: prompt) }
             } else {
                 Task { await submit() }
             }
         } label: {
             Group {
-                if submitting || local.state == .generating {
+                if submitting || local.activity == .generatingImage {
                     ProgressView().tint(.white)
                 } else {
                     Text(runLocally && selected.kind == "image.generate" ? "Run on this iPhone" : "Run on your fleet")
@@ -492,7 +523,9 @@ struct CreateView: View {
         }
         .buttonStyle(.borderedProminent)
         .disabled(runLocally && selected.kind == "image.generate"
-            ? (prompt.isEmpty || local.state != .ready)
+            ? (prompt.isEmpty
+                || local.state(of: local.selectedImageModelID) != .ready
+                || local.activity != .idle)
             : !canRun)
     }
 
