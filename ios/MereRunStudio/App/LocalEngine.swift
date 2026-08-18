@@ -118,14 +118,98 @@ final class LocalEngine: ObservableObject {
     @Published private(set) var lastImage: UIImage?
     @Published private(set) var lastImageURL: URL?
     @Published var selectedImageModelID = LocalEngine.imageModels[0].id
-    @Published var selectedChatModelID = LocalEngine.chatModels[0].id
+    @Published var selectedChatModelID: String {
+        didSet { UserDefaults.standard.set(selectedChatModelID, forKey: "local.selectedChatModelID") }
+    }
+    /// Which chat model currently has its weights resident, if any.
+    @Published private(set) var warmChatModelID: String?
+    /// Human status for the pending bubble ("Loading Liquid Chat…").
+    @Published private(set) var chatStatus: String?
     @Published private(set) var lastError: String?
 
     private lazy var imageGenerator = Flux2KleinGeneratoriOS()
     private var q35Generators: [String: Q35Generator] = [:]
     private var lfm2Generators: [String: LFM2Generator] = [:]
 
+    private enum AnyChatGenerator {
+        case q35(Q35Generator)
+        case lfm2(LFM2Generator)
+
+        func prepare(modelPath: String, progressHandler: (@Sendable (ChatProgress) -> Void)?) async throws {
+            switch self {
+            case .q35(let generator): try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
+            case .lfm2(let generator): try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
+            }
+        }
+
+        func chat(
+            _ request: ChatRequest,
+            modelPath: String,
+            progressHandler: (@Sendable (ChatProgress) -> Void)?
+        ) async throws -> ChatResponse {
+            switch self {
+            case .q35(let generator): try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
+            case .lfm2(let generator): try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
+            }
+        }
+
+        func unload() async {
+            switch self {
+            case .q35(let generator): await generator.unload()
+            case .lfm2(let generator): await generator.unload()
+            }
+        }
+    }
+
+    private func chatGenerator(for model: Model) -> AnyChatGenerator {
+        if model.id.hasPrefix("text-chat-lfm") {
+            let generator = lfm2Generators[model.id] ?? LFM2Generator(modelId: model.id)
+            lfm2Generators[model.id] = generator
+            return .lfm2(generator)
+        }
+        let generator = q35Generators[model.id] ?? Q35Generator(modelId: model.id)
+        q35Generators[model.id] = generator
+        return .q35(generator)
+    }
+
+    /// Loads the selected chat model's weights ahead of the first message so
+    /// it answers immediately. Safe to call repeatedly; the generators cache.
+    func warmChat() {
+        guard Self.isSupported,
+              let model = Self.model(withID: selectedChatModelID),
+              warmChatModelID != model.id,
+              let root = ManagedModelResolver.resolveInstalledModel(id: model.id) else { return }
+        let generator = chatGenerator(for: model)
+        chatStatus = "Loading \(model.title)…"
+        Task { [weak self] in
+            do {
+                try await generator.prepare(modelPath: root.path, progressHandler: nil)
+                await MainActor.run {
+                    self?.warmChatModelID = model.id
+                    self?.chatStatus = nil
+                }
+            } catch {
+                await MainActor.run { self?.chatStatus = nil }
+            }
+        }
+    }
+
+    /// Frees resident chat weights (an image generation is about to need the
+    /// memory, or the user left the on-device lane).
+    func coolChat() {
+        let generators = lfm2Generators.values.map(AnyChatGenerator.lfm2)
+            + q35Generators.values.map(AnyChatGenerator.q35)
+        warmChatModelID = nil
+        Task {
+            for generator in generators {
+                await generator.unload()
+            }
+        }
+    }
+
     init() {
+        let saved = UserDefaults.standard.string(forKey: "local.selectedChatModelID")
+        selectedChatModelID = Self.chatModels.first { $0.id == saved }?.id ?? Self.chatModels[0].id
         refresh()
     }
 
@@ -252,6 +336,9 @@ final class LocalEngine: ObservableObject {
         guard Self.isSupported else { return }
         let modelID = selectedImageModelID
         guard state(of: modelID) == .ready, activity == .idle else { return }
+        if warmChatModelID != nil {
+            coolChat()
+        }
         activity = .generatingImage
         lastError = nil
         defer { activity = .idle }
@@ -312,21 +399,19 @@ final class LocalEngine: ObservableObject {
             guard progress.stage == .generating,
                   let piece = progress.message, !piece.isEmpty else { return }
             Task { @MainActor in
+                LocalEngine.shared.chatStatus = nil
                 let text = accumulated.append(piece)
                 let visible = GeneratedTextFilters.strippingThinking(text, streaming: true)
                 if !visible.isEmpty { onDelta(visible) }
             }
         }
-        let response: ChatResponse
-        if model.id.hasPrefix("text-chat-lfm") {
-            let generator = lfm2Generators[model.id] ?? LFM2Generator(modelId: model.id)
-            lfm2Generators[model.id] = generator
-            response = try await generator.chat(request, modelPath: root.path, progressHandler: progressHandler)
-        } else {
-            let generator = q35Generators[model.id] ?? Q35Generator(modelId: model.id)
-            q35Generators[model.id] = generator
-            response = try await generator.chat(request, modelPath: root.path, progressHandler: progressHandler)
+        if warmChatModelID != model.id {
+            chatStatus = "Loading \(model.title)…"
         }
+        defer { chatStatus = nil }
+        let generator = chatGenerator(for: model)
+        let response = try await generator.chat(request, modelPath: root.path, progressHandler: progressHandler)
+        warmChatModelID = model.id
         let cleaned = GeneratedTextFilters.strippingThinking(response.response)
         guard !cleaned.isEmpty else {
             throw RelayAppError("The model returned an empty reply.")

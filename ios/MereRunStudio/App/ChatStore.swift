@@ -34,7 +34,9 @@ final class ChatStore: ObservableObject {
     @Published private(set) var awaitingReply = false
     @Published private(set) var streamingReply: String?
     @Published var model = ""
-    @Published var runLocally = false
+    @Published var runLocally = UserDefaults.standard.bool(forKey: "chat.runLocally") {
+        didSet { UserDefaults.standard.set(runLocally, forKey: "chat.runLocally") }
+    }
     @Published private(set) var errorMessage: String?
 
     private let store: RelayStore
