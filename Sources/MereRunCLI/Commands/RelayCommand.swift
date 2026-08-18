@@ -69,7 +69,7 @@ struct RelayServe: AsyncParsableCommand {
             print("\(pairedCount) device\(pairedCount == 1 ? "" : "s") already paired.")
         }
         print("Press Ctrl+C to stop.")
-        fflush(stdout)
+        fflush(nil)
 
         try await withThrowingTaskGroup(of: Void.self) { group in
             group.addTask {
