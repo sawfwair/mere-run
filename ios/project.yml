@@ -44,6 +44,7 @@ targets:
         PRODUCT_NAME: mere.run
         PRODUCT_BUNDLE_IDENTIFIER: run.mere.studio.ios
         GENERATE_INFOPLIST_FILE: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         CURRENT_PROJECT_VERSION: 1
         MARKETING_VERSION: 0.1.0
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
