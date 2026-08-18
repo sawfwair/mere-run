@@ -231,7 +231,7 @@ struct CreateView: View {
 
                     modeRail
 
-                    if selected.kind == "image.generate" {
+                    if selected.kind == "image.generate", LocalEngine.isSupported {
                         destinationToggle
                     }
 

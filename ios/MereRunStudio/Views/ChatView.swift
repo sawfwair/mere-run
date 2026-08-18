@@ -201,6 +201,7 @@ struct ChatView: View {
                 .foregroundStyle(MereTheme.textPrimary)
                 .padding(MereTheme.Spacing.m)
                 .merePanel()
+                .accessibilityIdentifier("chat.composer")
                 Button {
                     let text = draft
                     draft = ""
@@ -230,9 +231,11 @@ struct ChatView: View {
                             }
                         }
                     }
-                    Section("This iPhone") {
-                        Button("\(LocalEngine.chatModel.title) — on device") {
-                            chat.runLocally = true
+                    if LocalEngine.isSupported {
+                        Section("This iPhone") {
+                            Button("\(LocalEngine.chatModel.title) — on device") {
+                                chat.runLocally = true
+                            }
                         }
                     }
                 } label: {

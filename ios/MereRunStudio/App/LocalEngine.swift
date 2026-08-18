@@ -13,6 +13,17 @@ final class LocalEngine: ObservableObject {
     /// One shared engine so Create and Chat agree on what is installed.
     static let shared = LocalEngine()
 
+    /// MLX cannot create a Metal device in the simulator; the on-device lane
+    /// exists only on hardware. Constructing a generator in the simulator
+    /// aborts the process, so every entry point gates on this first.
+    static let isSupported: Bool = {
+        #if targetEnvironment(simulator)
+        return false
+        #else
+        return true
+        #endif
+    }()
+
     struct Model: Identifiable, Equatable {
         enum Kind { case image, chat }
 
@@ -75,7 +86,7 @@ final class LocalEngine: ObservableObject {
     @Published var selectedImageModelID = LocalEngine.imageModels[0].id
     @Published private(set) var lastError: String?
 
-    private let imageGenerator = Flux2KleinGeneratoriOS()
+    private lazy var imageGenerator = Flux2KleinGeneratoriOS()
     private var chatGenerator: Q35Generator?
 
     init() {
@@ -83,6 +94,7 @@ final class LocalEngine: ObservableObject {
     }
 
     func refresh() {
+        guard Self.isSupported else { return }
         for model in Self.imageModels + [Self.chatModel] {
             if case .downloading = states[model.id] { continue }
             states[model.id] = ManagedModelResolver.resolveInstalledModel(id: model.id) != nil
@@ -132,6 +144,7 @@ final class LocalEngine: ObservableObject {
     }
 
     func generateImage(prompt: String, width: Int = 512, height: Int = 512, steps: Int = 4) async {
+        guard Self.isSupported else { return }
         let modelID = selectedImageModelID
         guard state(of: modelID) == .ready, activity == .idle else { return }
         activity = .generatingImage
@@ -161,6 +174,9 @@ final class LocalEngine: ObservableObject {
         messages: [ChatMessage],
         onDelta: @escaping @MainActor (String) -> Void
     ) async throws -> String {
+        guard Self.isSupported else {
+            throw RelayAppError("On-device chat needs a physical iPhone.")
+        }
         let model = Self.chatModel
         guard let root = ManagedModelResolver.resolveInstalledModel(id: model.id) else {
             throw RelayAppError("Download \(model.title) before chatting on-device.")
