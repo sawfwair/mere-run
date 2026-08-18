@@ -56,3 +56,34 @@ final class RelayEventTextTests: XCTestCase {
         XCTAssertEqual(try ModelArtifactPinDigest.fileByteCount(url), Int64(payload.count))
     }
 }
+
+final class GeneratedTextFiltersTests: XCTestCase {
+    func testCompleteThinkingBlocksAreRemoved() {
+        XCTAssertEqual(
+            GeneratedTextFilters.strippingThinking("<think>plan</think>Hello."),
+            "Hello."
+        )
+    }
+
+    func testLeadingOrphanCloseTagIsRemoved() {
+        XCTAssertEqual(
+            GeneratedTextFiltersTests.strip("reasoning</think>Answer."),
+            "Answer."
+        )
+    }
+
+    func testTrailingUnclosedBlockIsStrippedOnlyWhileStreaming() {
+        XCTAssertEqual(
+            GeneratedTextFilters.strippingThinking("Partial <think>still going", streaming: true),
+            "Partial"
+        )
+        XCTAssertEqual(
+            GeneratedTextFilters.strippingThinking("Done. <think>literal tag talk"),
+            "Done. <think>literal tag talk"
+        )
+    }
+
+    private static func strip(_ text: String) -> String {
+        GeneratedTextFilters.strippingThinking(text)
+    }
+}

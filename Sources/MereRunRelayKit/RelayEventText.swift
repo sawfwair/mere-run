@@ -32,3 +32,29 @@ public enum RelayEventText {
         }
     }
 }
+
+/// Removes model reasoning blocks from generated text. Complete
+/// `<think>…</think>` blocks are always removed, as is a leading orphan
+/// close tag (some models pre-fill the opening tag). A trailing unclosed
+/// block is stripped only while `streaming` — at finalize it is kept, since
+/// a completed reply's leftover tag is almost certainly literal content.
+public enum GeneratedTextFilters {
+    public static func strippingThinking(_ text: String, streaming: Bool = false) -> String {
+        var result = text.replacingOccurrences(
+            of: "<think>[\\s\\S]*?</think>",
+            with: "",
+            options: .regularExpression
+        )
+        if !result.contains("<think>"), let close = result.range(of: "</think>") {
+            result = String(result[close.upperBound...])
+        }
+        if streaming {
+            result = result.replacingOccurrences(
+                of: "<think>[\\s\\S]*$",
+                with: "",
+                options: .regularExpression
+            )
+        }
+        return result.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+}
