@@ -20,12 +20,10 @@ final class DownloadDiagnosticsUITests: XCTestCase {
         XCTAssertTrue(createTab.waitForExistence(timeout: 20), "App must be paired before this diagnostic.")
         createTab.tap()
 
-        let phoneSegment = app.buttons["This iPhone"]
-        if phoneSegment.waitForExistence(timeout: 5) {
-            phoneSegment.tap()
-        } else {
-            app.segmentedControls.buttons.element(boundBy: 1).tap()
-        }
+        app.buttons["create.model"].tap()
+        let manage = app.buttons["Get on-device models…"]
+        XCTAssertTrue(manage.waitForExistence(timeout: 5), "The model menu must offer the on-device sheet.")
+        manage.tap()
         snapshot(app, "lane")
 
         // Tap the first available "Get …" button (Klein nano is smallest).
@@ -42,7 +40,7 @@ final class DownloadDiagnosticsUITests: XCTestCase {
         while Date() < deadline {
             RunLoop.current.run(until: Date().addingTimeInterval(10))
             tick += 1
-            let labels = app.scrollViews.staticTexts.allElementsBoundByIndex
+            let labels = app.staticTexts.allElementsBoundByIndex
                 .map { $0.label }
                 .filter { $0.contains("%") || $0.contains("MB") || $0.contains("…")
                     || $0.localizedCaseInsensitiveContains("error")

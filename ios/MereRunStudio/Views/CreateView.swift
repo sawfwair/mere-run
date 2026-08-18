@@ -169,7 +169,12 @@ struct CreateView: View {
 
     @EnvironmentObject private var relay: RelayStore
     @ObservedObject private var local = LocalEngine.shared
-    @State private var runLocally = false
+    @State private var localModelID: String?
+    @State private var showOnDeviceModels = false
+
+    private var runsOnThisPhone: Bool {
+        localModelID != nil && selected.kind == "image.generate"
+    }
     @State private var selected = Self.modes[0]
     @State private var prompt = ""
     @State private var model = ""
@@ -231,14 +236,10 @@ struct CreateView: View {
 
                     modeRail
 
-                    if selected.kind == "image.generate", LocalEngine.isSupported {
-                        destinationToggle
-                    }
-
                     composer
 
-                    if runLocally, selected.kind == "image.generate" {
-                        localLane
+                    if selected.kind == "image.generate", runsOnThisPhone {
+                        localResult
                     }
 
                     if !isAvailable(selected) {
@@ -268,6 +269,7 @@ struct CreateView: View {
                 RunDetailView(jobID: jobID)
             }
             .sheet(isPresented: $showOptions) { optionsSheet }
+            .sheet(isPresented: $showOnDeviceModels) { OnDeviceModelsView() }
             .fileImporter(
                 isPresented: $showAudioImporter,
                 allowedContentTypes: [.audio],
@@ -341,19 +343,44 @@ struct CreateView: View {
 
             HStack {
                 Menu {
-                    Button("Fleet default") { model = "" }
-                    ForEach(installedModels, id: \.self) { id in
-                        Button(id) { model = id }
+                    Section("Your fleet") {
+                        Button("Fleet default") {
+                            model = ""
+                            localModelID = nil
+                        }
+                        ForEach(installedModels, id: \.self) { id in
+                            Button(fleetDisplayName(for: id)) {
+                                model = id
+                                localModelID = nil
+                            }
+                        }
+                    }
+                    if selected.kind == "image.generate", LocalEngine.showsOnDeviceUI {
+                        Section("This iPhone") {
+                            ForEach(LocalEngine.imageModels) { candidate in
+                                if local.state(of: candidate.id) == .ready {
+                                    Button(candidate.title) {
+                                        localModelID = candidate.id
+                                        local.selectedImageModelID = candidate.id
+                                        model = ""
+                                    }
+                                }
+                            }
+                            Button("Get on-device models…") {
+                                showOnDeviceModels = true
+                            }
+                        }
                     }
                 } label: {
                     HStack(spacing: 5) {
-                        Image(systemName: "cpu")
-                        Text(model.isEmpty ? "Fleet default" : model)
+                        Image(systemName: runsOnThisPhone ? "iphone" : "cpu")
+                        Text(modelChipTitle)
                             .lineLimit(1)
                     }
                     .font(.footnote)
                     .foregroundStyle(MereTheme.textSecondary)
                 }
+                .accessibilityIdentifier("create.model")
                 Spacer()
                 Button {
                     showOptions = true
@@ -420,91 +447,54 @@ struct CreateView: View {
     }
 
 
-    private var destinationToggle: some View {
-        Picker("Runs on", selection: $runLocally) {
-            Text("Your fleet").tag(false)
-            Text("This iPhone").tag(true)
-        }
-        .pickerStyle(.segmented)
-    }
-
+    /// On-device results render right here: the phone is the runner, so the
+    /// image lands where the prompt was written, with save and share to hand.
     @ViewBuilder
-    private var localLane: some View {
-        VStack(alignment: .leading, spacing: MereTheme.Spacing.m) {
-            ForEach(LocalEngine.imageModels) { candidate in
-                localModelRow(candidate)
+    private var localResult: some View {
+        if let message = local.lastError {
+            MereBannerView(text: message, color: MereTheme.failure)
+        }
+        if local.activity == .generatingImage {
+            HStack(spacing: MereTheme.Spacing.s) {
+                ProgressView()
+                Text("Creating on this iPhone…")
+                    .font(.footnote)
+                    .foregroundStyle(MereTheme.textSecondary)
             }
-
-            if let message = local.lastError {
-                MereBannerView(text: message, color: MereTheme.failure)
-            }
-
-            if let image = local.lastImage {
+            .frame(maxWidth: .infinity, alignment: .center)
+        }
+        if let image = local.lastImage {
+            VStack(alignment: .trailing, spacing: MereTheme.Spacing.s) {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFit()
                     .clipShape(RoundedRectangle(cornerRadius: MereTheme.Radius.panel))
-            }
-            if local.activity == .generatingImage {
-                HStack(spacing: MereTheme.Spacing.s) {
-                    ProgressView()
-                    Text("Generating on this iPhone…")
-                        .font(.footnote)
-                        .foregroundStyle(MereTheme.textSecondary)
+                if let url = local.lastImageURL {
+                    ShareLink(item: url) {
+                        Label("Save or share", systemImage: "square.and.arrow.up")
+                            .font(.footnote)
+                    }
                 }
             }
         }
     }
 
-    @ViewBuilder
-    private func localModelRow(_ candidate: LocalEngine.Model) -> some View {
-        let state = local.state(of: candidate.id)
-        HStack(spacing: MereTheme.Spacing.m) {
-            Image(systemName: local.selectedImageModelID == candidate.id
-                ? "largecircle.fill.circle"
-                : "circle")
-                .foregroundStyle(local.selectedImageModelID == candidate.id
-                    ? MereTheme.accent
-                    : MereTheme.textMuted)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(candidate.title)
-                    .font(.subheadline.weight(.medium))
-                    .foregroundStyle(MereTheme.textPrimary)
-                Text(candidate.detail)
-                    .font(.caption)
-                    .foregroundStyle(MereTheme.textMuted)
-            }
-            Spacer()
-            switch state {
-            case .notInstalled:
-                Button("Get \(candidate.sizeLabel)") {
-                    Task { await local.download(candidate.id) }
-                }
-                .font(.caption.weight(.semibold))
-                .buttonStyle(.bordered)
-            case .downloading(let label):
-                HStack(spacing: MereTheme.Spacing.xs) {
-                    ProgressView().controlSize(.small)
-                    Text(label)
-                        .font(.caption2)
-                        .foregroundStyle(MereTheme.textSecondary)
-                }
-            case .ready:
-                Image(systemName: "checkmark.circle.fill")
-                    .foregroundStyle(MereTheme.success)
-            }
+    private var modelChipTitle: String {
+        if runsOnThisPhone, let id = localModelID, let candidate = LocalEngine.model(withID: id) {
+            return "\(candidate.title) — this iPhone"
         }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            if state == .ready {
-                local.selectedImageModelID = candidate.id
-            }
-        }
+        return model.isEmpty ? "Fleet default" : fleetDisplayName(for: model)
+    }
+
+    /// The menu already says which kind of model this is; show just the
+    /// model's own name, not its catalog prefix.
+    private func fleetDisplayName(for id: String) -> String {
+        id.hasPrefix(selected.modelPrefix) ? String(id.dropFirst(selected.modelPrefix.count)) : id
     }
 
     private var runButton: some View {
         Button {
-            if runLocally, selected.kind == "image.generate" {
+            if runsOnThisPhone {
                 Task { await local.generateImage(prompt: prompt) }
             } else {
                 Task { await submit() }
@@ -514,7 +504,7 @@ struct CreateView: View {
                 if submitting || local.activity == .generatingImage {
                     ProgressView().tint(.white)
                 } else {
-                    Text(runLocally && selected.kind == "image.generate" ? "Run on this iPhone" : "Run on your fleet")
+                    Text("Create")
                         .font(.body.weight(.semibold))
                 }
             }
@@ -522,7 +512,7 @@ struct CreateView: View {
             .padding(.vertical, 6)
         }
         .buttonStyle(.borderedProminent)
-        .disabled(runLocally && selected.kind == "image.generate"
+        .disabled(runsOnThisPhone
             ? (prompt.isEmpty
                 || local.state(of: local.selectedImageModelID) != .ready
                 || local.activity != .idle)
@@ -590,6 +580,7 @@ struct CreateView: View {
     private func select(_ mode: Mode) {
         selected = mode
         model = ""
+        localModelID = nil
         textFields = [:]
         numberFields = [:]
         enumFields = [:]
