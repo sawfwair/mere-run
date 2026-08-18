@@ -37,13 +37,32 @@ struct ChatView: View {
                                     .id(message.id)
                             }
                             if chat.awaitingReply {
-                                HStack(spacing: MereTheme.Spacing.s) {
-                                    ProgressView()
-                                    Text("Running on your fleet…")
-                                        .font(.footnote)
-                                        .foregroundStyle(MereTheme.textMuted)
+                                if let partial = chat.streamingReply {
+                                    HStack {
+                                        Text(partial)
+                                            .font(.body)
+                                            .foregroundStyle(MereTheme.textPrimary)
+                                            .padding(MereTheme.Spacing.m)
+                                            .background(
+                                                RoundedRectangle(cornerRadius: MereTheme.Radius.panel)
+                                                    .fill(MereTheme.surface)
+                                            )
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: MereTheme.Radius.panel)
+                                                    .stroke(MereTheme.accent.opacity(0.35), lineWidth: 1)
+                                            )
+                                        Spacer(minLength: 40)
+                                    }
+                                    .id("pending")
+                                } else {
+                                    HStack(spacing: MereTheme.Spacing.s) {
+                                        ProgressView()
+                                        Text("Running on your fleet…")
+                                            .font(.footnote)
+                                            .foregroundStyle(MereTheme.textMuted)
+                                    }
+                                    .id("pending")
                                 }
-                                .id("pending")
                             }
                         }
                         .padding(MereTheme.Spacing.l)
@@ -52,6 +71,11 @@ struct ChatView: View {
                     .onChange(of: chat.messages.count) {
                         if let last = chat.messages.last?.id {
                             withAnimation { proxy.scrollTo(last, anchor: .bottom) }
+                        }
+                    }
+                    .onChange(of: chat.streamingReply) {
+                        if chat.streamingReply != nil {
+                            proxy.scrollTo("pending", anchor: .bottom)
                         }
                     }
                 }

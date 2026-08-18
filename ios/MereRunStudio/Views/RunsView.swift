@@ -60,7 +60,7 @@ struct RunsView: View {
             jobs = try await client.list(limit: 50)
             errorMessage = nil
         } catch let error as RelayClientError {
-            errorMessage = error.message
+            errorMessage = AppErrorText.presentable(error.message)
         } catch {
             errorMessage = error.localizedDescription
         }

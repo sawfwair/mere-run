@@ -220,7 +220,9 @@ if hasMagentaRT2Binary {
       path: "vendor/magentart.xcframework"
     )
   )
-  mereRunCoreDependencies.append(.target(name: "magentart"))
+  // The Magenta RT2 binary ships macOS slices only; iOS builds of the core
+  // exclude realtime music.
+  mereRunCoreDependencies.append(.target(name: "magentart", condition: .when(platforms: [.macOS])))
 }
 if !isLinuxPackage {
   targets.append(
@@ -254,7 +256,8 @@ if !isLinuxPackage {
   mereRunCoreLinkerSettings.append(.linkedFramework("Vision"))
   mereRunCoreLinkerSettings.append(.linkedFramework("ImageIO"))
   mereRunCoreLinkerSettings.append(.linkedFramework("CoreVideo"))
-  mereRunCoreLinkerSettings.append(.linkedFramework("IOKit"))
+  // IOKit does not exist on iOS.
+  mereRunCoreLinkerSettings.append(.linkedFramework("IOKit", .when(platforms: [.macOS])))
 }
 
 var audioCodecsDependencies: [Target.Dependency] = mlxDependency("MLX")
@@ -527,7 +530,7 @@ if !isLinuxPackage {
 var packageDependencies: [Package.Dependency] = (useLinuxPrebuiltMLX ? [] : [
   .package(
     url: "https://github.com/sawfwair/mlx-swift",
-    revision: "5bf3e46fecfb69cd3b559025fa99885ddd188731"
+    revision: "30be5d59f194d5f7c67500509bf13bdfa1f26b3b"
   )
 ]) + [
   .package(

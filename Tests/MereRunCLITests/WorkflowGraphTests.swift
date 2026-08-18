@@ -274,12 +274,13 @@ final class WorkflowGraphTests: XCTestCase {
         ]
 
         XCTAssertEqual(invocation.command, ["text", "chat"])
-        XCTAssertEqual(invocation.runArguments, runArguments)
+        XCTAssertEqual(invocation.runArguments, runArguments + ["--stream"])
         XCTAssertEqual(invocation.preflightArguments, runArguments + ["--preflight", "--json"])
         XCTAssertEqual(invocation.outputs["text"]?.type, .string)
         XCTAssertNil(invocation.outputs["text"]?.path)
         XCTAssertEqual(invocation.stdoutOutputName, "text")
         XCTAssertFalse(invocation.streamsEvents)
+        XCTAssertTrue(invocation.streamsStdoutDeltas)
     }
 
     func testVisionGroundBuildsPreflightAndArtifactInvocation() throws {
@@ -1074,6 +1075,21 @@ final class WorkflowGraphTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: root) }
         let nodeDirectory = root.appendingPathComponent("run/nodes/000-fixture", isDirectory: true)
         try FileManager.default.createDirectory(at: nodeDirectory, withIntermediateDirectories: true)
+
+        var chunks: [String] = []
+        let streamed = try WorkflowProcessRunner().run(
+            executable: URL(fileURLWithPath: "/bin/sh"),
+            arguments: ["-c", "printf 'hello '; sleep 0.2; printf 'world'"],
+            currentDirectory: nodeDirectory,
+            timeoutSeconds: nil,
+            stdoutLineHandler: nil,
+            stdoutChunkHandler: { chunk in
+                chunks.append(String(decoding: chunk, as: UTF8.self))
+            }
+        )
+        XCTAssertEqual(streamed.stdout, "hello world")
+        XCTAssertGreaterThanOrEqual(chunks.count, 2)
+        XCTAssertEqual(chunks.joined(), "hello world")
 
         let result = try WorkflowProcessRunner().run(
             executable: URL(fileURLWithPath: "/bin/sh"),

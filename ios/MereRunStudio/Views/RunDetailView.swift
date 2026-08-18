@@ -1,3 +1,4 @@
+import AVFoundation
 import SwiftUI
 import MereRunRelayKit
 import UIKit
@@ -41,6 +42,15 @@ struct RunDetailView: View {
                     Text(placement.diagnostic ?? "No eligible nodes for this job.")
                         .font(.footnote)
                         .foregroundStyle(MereTheme.caution)
+                }
+            }
+
+            if isActive, let live = liveOutput {
+                Section("Live output") {
+                    Text(live)
+                        .font(.body)
+                        .foregroundStyle(MereTheme.textPrimary)
+                        .textSelection(.enabled)
                 }
             }
 
@@ -99,6 +109,9 @@ struct RunDetailView: View {
                                     .frame(maxHeight: 320)
                                     .clipShape(RoundedRectangle(cornerRadius: MereTheme.Radius.panel))
                             }
+                            if ["wav", "mp3", "m4a", "aiff"].contains(file.pathExtension.lowercased()) {
+                                ArtifactAudioPlayer(url: file)
+                            }
                             ShareLink(item: file) {
                                 Label(file.lastPathComponent, systemImage: "square.and.arrow.up")
                             }
@@ -145,6 +158,14 @@ struct RunDetailView: View {
         events.last { $0.progress != nil }
     }
 
+    private var liveOutput: String? {
+        guard let message = events.last(where: { $0.type == "node_output_delta" })?.message else {
+            return nil
+        }
+        let visible = GeneratedTextFilters.strippingThinking(message, streaming: true)
+        return visible.isEmpty ? nil : visible
+    }
+
     private func progressLine(_ event: GraphRunEvent) -> String {
         let phase = event.progress?.phase ?? event.type
         guard let current = event.progress?.current, let total = event.progress?.total else {
@@ -162,7 +183,7 @@ struct RunDetailView: View {
                 events = RelayEventText.decodedEvents(try await client.events(jobID: jobID))
                 errorMessage = nil
             } catch let error as RelayClientError {
-                errorMessage = error.message
+                errorMessage = AppErrorText.presentable(error.message)
             } catch {
                 errorMessage = error.localizedDescription
             }
@@ -178,7 +199,7 @@ struct RunDetailView: View {
         do {
             job = try await client.cancel(jobID: jobID)
         } catch let error as RelayClientError {
-            errorMessage = error.message
+            errorMessage = AppErrorText.presentable(error.message)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -191,7 +212,7 @@ struct RunDetailView: View {
         do {
             job = try await client.retry(jobID: jobID)
         } catch let error as RelayClientError {
-            errorMessage = error.message
+            errorMessage = AppErrorText.presentable(error.message)
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -214,9 +235,55 @@ struct RunDetailView: View {
                 return FileManager.default.fileExists(atPath: url.path) ? url : nil
             }
         } catch let error as RelayClientError {
-            errorMessage = error.message
+            errorMessage = AppErrorText.presentable(error.message)
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+}
+
+
+/// Minimal transport for audio artifacts: play/pause and elapsed time.
+struct ArtifactAudioPlayer: View {
+    let url: URL
+
+    @State private var player: AVAudioPlayer?
+    @State private var playing = false
+
+    var body: some View {
+        HStack(spacing: MereTheme.Spacing.m) {
+            Button {
+                toggle()
+            } label: {
+                Image(systemName: playing ? "pause.circle.fill" : "play.circle.fill")
+                    .font(.system(size: 34))
+                    .foregroundStyle(MereTheme.accent)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(playing ? "Pause" : "Play")
+            Text(url.lastPathComponent)
+                .font(.footnote)
+                .foregroundStyle(MereTheme.textSecondary)
+                .lineLimit(1)
+            Spacer()
+        }
+        .onDisappear {
+            player?.stop()
+        }
+    }
+
+    private func toggle() {
+        if playing {
+            player?.pause()
+            playing = false
+            return
+        }
+        if player == nil {
+            try? AVAudioSession.sharedInstance().setCategory(.playback)
+            try? AVAudioSession.sharedInstance().setActive(true)
+            player = try? AVAudioPlayer(contentsOf: url)
+        }
+        player?.play()
+        playing = true
     }
 }

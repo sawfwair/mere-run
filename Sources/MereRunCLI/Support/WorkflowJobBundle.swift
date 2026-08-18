@@ -117,6 +117,7 @@ struct WorkflowNodeInvocation: Equatable {
     let streamsEvents: Bool
     let intrinsic: WorkflowIntrinsicInvocation?
     let stdoutOutputName: String?
+    let streamsStdoutDeltas: Bool
 
     init(
         command: [String],
@@ -126,7 +127,8 @@ struct WorkflowNodeInvocation: Equatable {
         outputs: [String: WorkflowInvocationOutput],
         streamsEvents: Bool,
         intrinsic: WorkflowIntrinsicInvocation? = nil,
-        stdoutOutputName: String? = nil
+        stdoutOutputName: String? = nil,
+        streamsStdoutDeltas: Bool = false
     ) {
         self.command = command
         self.executable = executable
@@ -136,6 +138,7 @@ struct WorkflowNodeInvocation: Equatable {
         self.streamsEvents = streamsEvents
         self.intrinsic = intrinsic
         self.stdoutOutputName = stdoutOutputName
+        self.streamsStdoutDeltas = streamsStdoutDeltas
     }
 }
 
@@ -682,10 +685,11 @@ enum WorkflowNodeCommandBuilder {
                 command: ["text", "chat"],
                 executable: CurrentExecutable.url(),
                 preflightArguments: args + ["--preflight", "--json"],
-                runArguments: args,
+                runArguments: args + ["--stream"],
                 outputs: ["text": valueOutput(.string)],
                 streamsEvents: false,
-                stdoutOutputName: "text"
+                stdoutOutputName: "text",
+                streamsStdoutDeltas: true
             )
         case "text.embed":
             let output = artifacts.appendingPathComponent("embeddings.json")

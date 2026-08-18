@@ -1,3 +1,6 @@
+// The DS4 engine is a macOS/Linux sidecar process; iOS builds of the
+// core exclude it (phones reach premier-tier agents through the fleet).
+#if !os(iOS)
 import Foundation
 #if canImport(FoundationNetworking)
 import FoundationNetworking
@@ -485,3 +488,4 @@ public actor DeepseekV4FlashGenerator: ChatGenerator {
 
 // Wire types `OpenAIChatRequest`, `OpenAIChatMessage`, and `OpenAIChatResponse`
 // are defined in `MereRunCore/CodeGen/OpenAITypes.swift` and reused here.
+#endif
