@@ -10,10 +10,12 @@ struct PairingView: View {
 
     @EnvironmentObject private var relay: RelayStore
     @State private var customRelay = false
+    @State private var directConnect = false
     @State private var urlString = ""
+    @State private var pairCode = ""
 
     private var pairingURL: String {
-        customRelay ? urlString : Self.defaultRelayURL
+        customRelay || directConnect ? urlString : Self.defaultRelayURL
     }
 
     var body: some View {
@@ -31,16 +33,28 @@ struct PairingView: View {
             switch relay.pairing {
             case .unpaired, .failed, .discovering:
                 VStack(spacing: MereTheme.Spacing.m) {
-                    if customRelay {
+                    if customRelay || directConnect {
                         TextField(
                             "",
                             text: $urlString,
-                            prompt: Text("Your relay address").foregroundColor(MereTheme.textMuted)
+                            prompt: Text(directConnect ? "Machine address, like lab.local:6373" : "Your relay address")
+                                .foregroundColor(MereTheme.textMuted)
                         )
                         .foregroundStyle(MereTheme.textPrimary)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                         .keyboardType(.URL)
+                        .padding(MereTheme.Spacing.m)
+                        .merePanel()
+                    }
+                    if directConnect {
+                        TextField(
+                            "",
+                            text: $pairCode,
+                            prompt: Text("Pairing code from the terminal").foregroundColor(MereTheme.textMuted)
+                        )
+                        .foregroundStyle(MereTheme.textPrimary)
+                        .keyboardType(.numbersAndPunctuation)
                         .padding(MereTheme.Spacing.m)
                         .merePanel()
                     }
@@ -52,29 +66,53 @@ struct PairingView: View {
                     }
                     Button {
                         let url = pairingURL
-                        Task { await relay.signIn(urlString: url) }
+                        if directConnect {
+                            let code = pairCode
+                            Task { await relay.pairDirect(urlString: url, code: code) }
+                        } else {
+                            Task { await relay.signIn(urlString: url) }
+                        }
                     } label: {
                         if relay.pairing == .discovering {
                             ProgressView().frame(maxWidth: .infinity)
                         } else {
-                            Text(customRelay ? "Sign in" : "Sign in with mere.world")
+                            Text(directConnect
+                                ? "Connect"
+                                : (customRelay ? "Sign in" : "Sign in with mere.world"))
                                 .frame(maxWidth: .infinity)
                         }
                     }
                     .buttonStyle(.borderedProminent)
-                    .disabled(pairingURL.isEmpty || relay.pairing == .discovering)
+                    .disabled(
+                        pairingURL.isEmpty
+                            || relay.pairing == .discovering
+                            || (directConnect && pairCode.isEmpty)
+                    )
                     HStack(spacing: MereTheme.Spacing.l) {
                         Button(customRelay ? "Use relay.mere.run" : "Use a different relay") {
                             customRelay.toggle()
+                            directConnect = false
                         }
-                        Button("Use a device code") {
-                            let url = pairingURL
-                            Task { await relay.pair(urlString: url) }
+                        Button(directConnect ? "Use a hosted relay" : "Connect to a machine") {
+                            directConnect.toggle()
+                            customRelay = false
+                        }
+                        if !directConnect {
+                            Button("Use a device code") {
+                                let url = pairingURL
+                                Task { await relay.pair(urlString: url) }
+                            }
                         }
                     }
                     .font(.footnote)
                     .foregroundStyle(MereTheme.textMuted)
                     .disabled(relay.pairing == .discovering)
+                    if directConnect {
+                        Text("Run `mere.run relay serve` on your machine, then enter its address and the code it prints. Works over your network or Tailscale.")
+                            .font(.caption)
+                            .foregroundStyle(MereTheme.textMuted)
+                            .multilineTextAlignment(.center)
+                    }
                 }
             case .awaitingApproval(let verificationURL, let userCode):
                 VStack(spacing: MereTheme.Spacing.m) {

@@ -140,6 +140,8 @@ Public tree:
   - `mere.run executor node-refresh` — Ask a connected relay node to rescan its capabilities and installed models.
   - `mere.run executor node-configure` — Update relay scheduling policy for a fleet node.
   - `mere.run executor remove` — Remove an executor profile.
+- [`mere.run relay`](/workflows#direct-relay-relay-serve) — Host the relay API surface directly on this machine.
+  - `mere.run relay serve` — Serve the relay graph-job API from this machine and run submitted jobs locally.
 - [`mere.run run`](/workflows#run-directories) — Inspect durable mere.run workflow reports and run directories.
   - `mere.run run list` — Find durable run directories, structured reports, and run plans under a root.
   - `mere.run run inspect` — Inspect a run directory, structured report, or run plan.

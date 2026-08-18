@@ -41,6 +41,7 @@ struct MereRunCLI: AsyncParsableCommand {
             World.self,
             Graph.self,
             Executor.self,
+            Relay.self,
             Run.self,
             Model.self,
             Adapter.self,

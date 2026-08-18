@@ -56,8 +56,11 @@ covers building.
   Provider-qualified nodes stay excluded on iOS, and modes whose required
   inputs are assets wait for the photo/file picker step.
 - **Phase B — chat.** Route chat to the best available transport: on-device
-  small models when present, a Mac's `api serve` over the LAN when reachable
-  (real SSE token streaming today), relay jobs otherwise. Token streaming
+  small models when present, a machine reached directly when paired (the
+  `mere.run relay serve` direct lane — the app's "Connect to a machine"
+  pairing serves the full job vocabulary over the LAN or a tailnet with no
+  cloud hop, superseding the earlier `api serve`-over-LAN idea), relay jobs
+  otherwise. Token streaming
   *through relay* is an additive event-type revision, not an architecture
   change: the node→relay leg is a persistent WebSocket, relay serves
   `/events` SSE-framed, and the event `type` is an open string in the

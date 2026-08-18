@@ -14,6 +14,7 @@ video	/runtime/video
 world	/runtime/world
 graph	/workflows
 executor	/workflows#executor-profiles
+relay	/workflows#direct-relay-relay-serve
 run	/workflows#run-directories
 model	/runtime/model-management
 adapter	/runtime/model-management

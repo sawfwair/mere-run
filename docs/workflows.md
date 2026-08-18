@@ -401,6 +401,44 @@ Interrupted multipart uploads resume from relay-verified parts after retry.
 Each job reports download, execution, upload, total timing, transferred bytes,
 and reused bytes and parts.
 
+## Direct relay (`relay serve`)
+
+`mere.run relay serve` hosts the same client-facing graph-job HTTP surface
+directly on a machine and runs submitted jobs there — no broker, no cloud
+hop. It is the single-machine, self-sovereign lane: reach it over the LAN or
+a tailnet (Tailscale users can front it with `tailscale serve` for HTTPS),
+and prompts, inputs, and outputs never leave your network.
+
+```bash
+# On the machine that will run the work:
+mere.run relay serve
+# → prints the address and a six-digit pairing code
+
+# On any other machine, exchange the code for a bearer token:
+curl -X POST http://lab.local:6373/api/pair \
+  -H 'Content-Type: application/json' \
+  -d '{"code": "123-456", "device_name": "laptop"}'
+
+# Save the token and add a normal relay executor profile:
+mere.run executor add relay lab --url http://lab.local:6373 --token-file ./lab-token
+mere.run graph submit workflow.json --executor relay:lab --run-dir ./runs/job
+```
+
+The iOS app pairs through **Connect to a machine** on its pairing screen.
+Because the API is byte-identical to the hosted relay's, every client —
+`graph submit`, fetch, events polling, the phone — works unchanged against
+either.
+
+Pairing accepts new devices for a bounded window after startup (default 15
+minutes, `--pairing-window`) and locks after ten failed codes; issued tokens
+are stored hashed in the spool directory and survive restarts. Jobs are
+validated against the machine's live capability probe at commit, execute
+strictly serially through the same `WorkflowRunner` as every other lane
+(events stream through `events.jsonl`, including `node_output_delta` for
+`text.generate`), and artifacts are served with digest verification from the
+run directory. Jobs interrupted by a shutdown come back as failed with an
+explanatory error and can be retried.
+
 ## Remote lifecycle
 
 ```bash

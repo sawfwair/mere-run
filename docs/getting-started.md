@@ -154,6 +154,7 @@ itself, so it always matches the binary you just built:
 | [`mere.run world`](/runtime/world) | Run persistent local conditioned-video world sessions. |
 | [`mere.run graph`](/workflows) | Validate, materialize, run, and submit portable workflow graphs. |
 | [`mere.run executor`](/workflows#executor-profiles) | Manage local, SSH, and relay workflow executors. |
+| [`mere.run relay`](/workflows#direct-relay-relay-serve) | Host the relay API surface directly on this machine. |
 | [`mere.run run`](/workflows#run-directories) | Inspect durable mere.run workflow reports and run directories. |
 | [`mere.run model`](/runtime/model-management) | List, pull, locate, remove, inspect, optimize, and clean up models. |
 | [`mere.run adapter`](/runtime/model-management) | List and pull verified LoRA adapters. |

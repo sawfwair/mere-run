@@ -23,6 +23,12 @@ targets:
       - package: MereRun
         product: MereRunCore
       - target: MereRunWidgets
+    info:
+      path: MereRunStudio/Info.plist
+      properties:
+        NSLocalNetworkUsageDescription: mere.run connects to your own machines on your network to run the work you submit.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
     settings:
       base:
         PRODUCT_NAME: mere.run
