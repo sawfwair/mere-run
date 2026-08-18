@@ -168,6 +168,8 @@ struct CreateView: View {
     ]
 
     @EnvironmentObject private var relay: RelayStore
+    @StateObject private var local = LocalEngine()
+    @State private var runLocally = false
     @State private var selected = Self.modes[0]
     @State private var prompt = ""
     @State private var model = ""
@@ -228,7 +230,16 @@ struct CreateView: View {
                         .animation(nil, value: selected.kind)
 
                     modeRail
+
+                    if selected.kind == "image.generate" {
+                        destinationToggle
+                    }
+
                     composer
+
+                    if runLocally, selected.kind == "image.generate" {
+                        localLane
+                    }
 
                     if !isAvailable(selected) {
                         MereBannerView(
@@ -409,15 +420,70 @@ struct CreateView: View {
     }
 
 
+    private var destinationToggle: some View {
+        Picker("Runs on", selection: $runLocally) {
+            Text("Your fleet").tag(false)
+            Text("This iPhone").tag(true)
+        }
+        .pickerStyle(.segmented)
+    }
+
+    @ViewBuilder
+    private var localLane: some View {
+        switch local.state {
+        case .checking:
+            EmptyView()
+        case .notInstalled:
+            MereBannerView(
+                text: "Klein nano (about 2 GB) runs entirely on this iPhone. Download once over Wi-Fi; it stays in this app's storage.",
+                color: MereTheme.accent
+            )
+            Button {
+                Task { await local.download() }
+            } label: {
+                Text("Download Klein nano").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+        case .downloading(let label):
+            HStack(spacing: MereTheme.Spacing.s) {
+                ProgressView()
+                Text("Downloading — \(label)")
+                    .font(.footnote)
+                    .foregroundStyle(MereTheme.textSecondary)
+            }
+        case .failed(let message):
+            MereBannerView(text: message, color: MereTheme.failure)
+        case .ready, .generating:
+            if let image = local.lastImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFit()
+                    .clipShape(RoundedRectangle(cornerRadius: MereTheme.Radius.panel))
+            }
+            if local.state == .generating {
+                HStack(spacing: MereTheme.Spacing.s) {
+                    ProgressView()
+                    Text("Generating on this iPhone…")
+                        .font(.footnote)
+                        .foregroundStyle(MereTheme.textSecondary)
+                }
+            }
+        }
+    }
+
     private var runButton: some View {
         Button {
-            Task { await submit() }
+            if runLocally, selected.kind == "image.generate" {
+                Task { await local.generate(prompt: prompt) }
+            } else {
+                Task { await submit() }
+            }
         } label: {
             Group {
-                if submitting {
+                if submitting || local.state == .generating {
                     ProgressView().tint(.white)
                 } else {
-                    Text("Run on your fleet")
+                    Text(runLocally && selected.kind == "image.generate" ? "Run on this iPhone" : "Run on your fleet")
                         .font(.body.weight(.semibold))
                 }
             }
@@ -425,7 +491,9 @@ struct CreateView: View {
             .padding(.vertical, 6)
         }
         .buttonStyle(.borderedProminent)
-        .disabled(!canRun)
+        .disabled(runLocally && selected.kind == "image.generate"
+            ? (prompt.isEmpty || local.state != .ready)
+            : !canRun)
     }
 
     private var optionsSheet: some View {
@@ -599,7 +667,7 @@ struct CreateView: View {
             errorMessage = nil
             submittedJobID = job.jobID
         } catch let error as RelayClientError {
-            errorMessage = error.message
+            errorMessage = AppErrorText.presentable(error.message)
         } catch {
             errorMessage = error.localizedDescription
         }

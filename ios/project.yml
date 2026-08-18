@@ -20,6 +20,9 @@ targets:
     dependencies:
       - package: MereRun
         product: MereRunRelayKit
+      - package: MereRun
+        product: MereRunCore
+      - target: MereRunWidgets
     settings:
       base:
         PRODUCT_NAME: mere.run
@@ -28,12 +31,36 @@ targets:
         CURRENT_PROJECT_VERSION: 1
         MARKETING_VERSION: 0.1.0
         INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_NSSupportsLiveActivities: YES
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone: UIInterfaceOrientationPortrait
         INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad: UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight
         INFOPLIST_KEY_CFBundleDisplayName: mere.run
         SWIFT_VERSION: "6.0"
+        # MereRunCore builds with C++ interoperability; importers must match.
+        OTHER_SWIFT_FLAGS: -cxx-interoperability-mode=default
         ENABLE_USER_SCRIPT_SANDBOXING: YES
         CODE_SIGN_STYLE: Automatic
         # Set for device builds: MERERUN_IOS_TEAM=<team id> xcodegen generate
         # Simulator builds need no team.
         DEVELOPMENT_TEAM: ${MERERUN_IOS_TEAM}
+  MereRunWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - MereRunWidgets
+      - MereRunStudio/Shared
+    info:
+      path: MereRunWidgets/Info.plist
+      properties:
+        CFBundleDisplayName: mere.run
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: run.mere.studio.ios.widgets
+        SWIFT_VERSION: "6.0"
+        CURRENT_PROJECT_VERSION: 1
+        MARKETING_VERSION: 0.1.0
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: ${MERERUN_IOS_TEAM}
+        SKIP_INSTALL: YES

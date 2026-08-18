@@ -187,11 +187,15 @@ final class RelayStore: ObservableObject {
             .appendingPathComponent(bundle.job.jobID, isDirectory: true)
         try FileManager.default.createDirectory(at: runDirectory, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: scratch) }
-        return try await client.submit(
+        let job = try await client.submit(
             bundleDirectory: bundle.directory,
             localRunDirectory: runDirectory,
             pluginNodes: []
         )
+        #if canImport(ActivityKit)
+        RunActivityTracker.track(job: job, title: entry.title, client: client)
+        #endif
+        return job
     }
 
     func unpair() {
@@ -206,5 +210,25 @@ final class RelayStore: ObservableObject {
 
     private func isLoopback(_ url: URL) -> Bool {
         url.scheme == "http" && ["127.0.0.1", "localhost", "::1"].contains(url.host ?? "")
+    }
+}
+
+/// Translates client errors into the app's voice. RelayKit speaks the CLI's
+/// language ("executor login", flag names); the phone never should.
+enum AppErrorText {
+    static func presentable(_ message: String) -> String {
+        if message.contains("executor login") || message.contains("MERERUN_RELAY_TOKEN") {
+            return "Your session expired. Sign out in Settings and pair again."
+        }
+        if message.contains("Relay session expired") {
+            return "Your session expired. Sign out in Settings and pair again."
+        }
+        if message.contains("missing node kinds") {
+            return "Your fleet's nodes don't support this yet. Update mere.run on your nodes."
+        }
+        if message.contains("missing models") {
+            return "The selected model isn't installed on any online node."
+        }
+        return message
     }
 }
