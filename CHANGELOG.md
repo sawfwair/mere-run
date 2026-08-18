@@ -6,6 +6,17 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### MLX v0.32.1 runtime refresh
+
+- refreshed the maintained MLX and mlx-swift forks through upstream MLX
+  v0.32.1. The Swift bridge now follows MLX's thread-local compile-cache API,
+  preserves cross-executor compiled-function erasure, and no longer serializes
+  unrelated compiled calls behind a process-wide lock.
+- expanded the vendored Metal-library provenance contract to verify the exact
+  mlx-swift revision, MLX fork revision, upstream release tag and revision,
+  generated-kernel source digest, and bundled metallib digest before builds or
+  runtime startup.
+
 ### Fused model evaluation and logprobs
 
 - added versioned `model benchmark fused` Lite and Comprehensive suites. The

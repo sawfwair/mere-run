@@ -15,6 +15,9 @@ enum MLXBundleSupport {
 
     struct MetallibProvenance: Equatable {
       let coreVersion: String
+      let coreRevision: String
+      let upstreamTag: String
+      let upstreamRevision: String
       let swiftRevision: String
       let kernelSourcesSHA256: String
     }
@@ -27,8 +30,11 @@ enum MLXBundleSupport {
 
     static let expectedProvenance = MetallibProvenance(
       coreVersion: "0.32.1",
-      swiftRevision: "30be5d59f194d5f7c67500509bf13bdfa1f26b3b",
-      kernelSourcesSHA256: "b791ce523bec5e6612766d9b00004fa66d3f3b1dbbbabd725b5d3c36cefbce41"
+      coreRevision: "11da2b33a51772c023e2f7d7bc4ba9b3ff7e03ef",
+      upstreamTag: "v0.32.1",
+      upstreamRevision: "3a6219917e4535575ce5bce2fc2ba27a483a709b",
+      swiftRevision: "7558b9cff75746e3ce25802aecbdc498b240af7f",
+      kernelSourcesSHA256: "acfb87b05e097f03cecffcd084b988d99fb0321ea923cd561a482d114d75a895"
     )
 
     /// Relationship between a bundle's metallib version stamp
@@ -267,6 +273,9 @@ enum MLXBundleSupport {
     static func stampStatus(contents: String) -> MetallibStamp {
       let fields = [
         ("mlx-core-version", stampField("mlx-core-version", in: contents)),
+        ("mlx-core-revision", stampField("mlx-core-revision", in: contents)),
+        ("mlx-upstream-tag", stampField("mlx-upstream-tag", in: contents)),
+        ("mlx-upstream-revision", stampField("mlx-upstream-revision", in: contents)),
         ("mlx-swift-revision", stampField("mlx-swift-revision", in: contents)),
         ("kernel-sources-sha256", stampField("kernel-sources-sha256", in: contents)),
       ]
@@ -275,20 +284,29 @@ enum MLXBundleSupport {
       }
       guard missingFields.isEmpty,
         let coreVersion = fields[0].1,
-        let swiftRevision = fields[1].1,
-        let kernelSourcesSHA256 = fields[2].1
+        let coreRevision = fields[1].1,
+        let upstreamTag = fields[2].1,
+        let upstreamRevision = fields[3].1,
+        let swiftRevision = fields[4].1,
+        let kernelSourcesSHA256 = fields[5].1
       else {
         return .unstamped(missingFields: missingFields)
       }
 
       let stamped = MetallibProvenance(
         coreVersion: coreVersion,
+        coreRevision: coreRevision,
+        upstreamTag: upstreamTag,
+        upstreamRevision: upstreamRevision,
         swiftRevision: swiftRevision,
         kernelSourcesSHA256: kernelSourcesSHA256
       )
       let expected = expectedProvenance
       let comparisons = [
         ("mlx-core-version", stamped.coreVersion, expected.coreVersion),
+        ("mlx-core-revision", stamped.coreRevision, expected.coreRevision),
+        ("mlx-upstream-tag", stamped.upstreamTag, expected.upstreamTag),
+        ("mlx-upstream-revision", stamped.upstreamRevision, expected.upstreamRevision),
         ("mlx-swift-revision", stamped.swiftRevision, expected.swiftRevision),
         ("kernel-sources-sha256", stamped.kernelSourcesSHA256, expected.kernelSourcesSHA256),
       ]

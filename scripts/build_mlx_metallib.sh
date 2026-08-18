@@ -13,9 +13,9 @@ set -euo pipefail
 # text model once the KV length crossed 1024 (2-pass SDPA kernel ABI change).
 #
 # The produced library is accompanied by a `default.metallib.version` sidecar
-# recording the mlx core version, the mlx-swift pin, and a hash of the kernel
-# sources. `mere.run` validates the sidecar at startup (MLXBundleSupport) and
-# refuses to run against a mismatched library.
+# recording the exact mlx-swift/core revisions, the incorporated upstream MLX
+# release, and a hash of the kernel sources. `mere.run` validates the sidecar
+# at startup (MLXBundleSupport) and refuses to run against a mismatched library.
 #
 # Usage:
 #   scripts/build_mlx_metallib.sh                       Build and install into
@@ -37,9 +37,12 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 checkout="${MERERUN_MLX_SWIFT_CHECKOUT:-$repo_root/.build/checkouts/mlx-swift}"
 gen_dir="$checkout/Source/Cmlx/mlx-generated/metal"
+core_checkout="$checkout/Source/Cmlx/mlx"
 version_header="$checkout/Source/Cmlx/mlx/mlx/version.h"
 resolved="$repo_root/Package.resolved"
 stamp_name="default.metallib.version"
+upstream_tag="v0.32.1"
+upstream_revision="3a6219917e4535575ce5bce2fc2ba27a483a709b"
 
 usage() {
   sed -n '3,36p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
@@ -128,6 +131,16 @@ if [[ -n "$(git -C "$checkout" status --porcelain --untracked-files=no)" ]]; the
   exit 1
 fi
 
+core_revision="$(git -C "$core_checkout" rev-parse HEAD)"
+if [[ -n "$(git -C "$core_checkout" status --porcelain --untracked-files=no)" ]]; then
+  echo "error: MLX core checkout has tracked modifications; refusing to build unverifiable Metal kernels" >&2
+  exit 1
+fi
+if ! git -C "$core_checkout" merge-base --is-ancestor "$upstream_revision" "$core_revision"; then
+  echo "error: MLX core $core_revision does not contain upstream $upstream_tag ($upstream_revision)" >&2
+  exit 1
+fi
+
 # Fingerprint the clean tracked blobs instead of the checked-out bytes. Git may
 # represent those bytes differently across fresh CI checkouts (for example,
 # through platform line-ending settings), while the blobs still identify the
@@ -185,10 +198,16 @@ if [[ "$mode" == "verify" ]]; then
     exit 1
   fi
   stamped_core="$(stamp_field "mlx-core-version" "$sidecar")"
+  stamped_core_revision="$(stamp_field "mlx-core-revision" "$sidecar")"
+  stamped_upstream_tag="$(stamp_field "mlx-upstream-tag" "$sidecar")"
+  stamped_upstream_revision="$(stamp_field "mlx-upstream-revision" "$sidecar")"
   stamped_rev="$(stamp_field "mlx-swift-revision" "$sidecar")"
   stamped_hash="$(stamp_field "kernel-sources-sha256" "$sidecar")"
   status=0
   [[ "$stamped_core" == "$core_version" ]] || { echo "STALE: mlx core version $stamped_core != checkout $core_version" >&2; status=1; }
+  [[ "$stamped_core_revision" == "$core_revision" ]] || { echo "STALE: mlx core revision $stamped_core_revision != checkout $core_revision" >&2; status=1; }
+  [[ "$stamped_upstream_tag" == "$upstream_tag" ]] || { echo "STALE: upstream tag $stamped_upstream_tag != required $upstream_tag" >&2; status=1; }
+  [[ "$stamped_upstream_revision" == "$upstream_revision" ]] || { echo "STALE: upstream revision $stamped_upstream_revision != required $upstream_revision" >&2; status=1; }
   [[ "$stamped_rev" == "$swift_pin_revision" ]] || { echo "STALE: mlx-swift revision $stamped_rev != pinned $swift_pin_revision" >&2; status=1; }
   [[ "$stamped_hash" == "$sources_hash" ]] || { echo "STALE: kernel source hash mismatch" >&2; status=1; }
   if [[ $status -eq 0 ]]; then
@@ -236,6 +255,9 @@ xcrun -sdk macosx metallib "$workdir"/*.air -o "$workdir/default.metallib"
 metal_compiler="$(xcrun -sdk macosx metal --version 2>/dev/null | head -1 || echo unknown)"
 cat > "$workdir/$stamp_name" <<EOF
 mlx-core-version: $core_version
+mlx-core-revision: $core_revision
+mlx-upstream-tag: $upstream_tag
+mlx-upstream-revision: $upstream_revision
 mlx-swift-version: $swift_pin_version
 mlx-swift-revision: $swift_pin_revision
 kernel-sources-sha256: $sources_hash
@@ -309,7 +331,10 @@ if [[ -d "$vendor_bundle" ]]; then
   if [[ -f "$vendor_stamp" ]] \
     && [[ "$(stamp_field "kernel-sources-sha256" "$vendor_stamp")" == "$sources_hash" ]] \
     && [[ "$(stamp_field "mlx-swift-revision" "$vendor_stamp")" == "$swift_pin_revision" ]] \
-    && [[ "$(stamp_field "mlx-core-version" "$vendor_stamp")" == "$core_version" ]]; then
+    && [[ "$(stamp_field "mlx-core-version" "$vendor_stamp")" == "$core_version" ]] \
+    && [[ "$(stamp_field "mlx-core-revision" "$vendor_stamp")" == "$core_revision" ]] \
+    && [[ "$(stamp_field "mlx-upstream-tag" "$vendor_stamp")" == "$upstream_tag" ]] \
+    && [[ "$(stamp_field "mlx-upstream-revision" "$vendor_stamp")" == "$upstream_revision" ]]; then
     echo "[metallib] vendored $vendor_bundle already current; left untouched"
   else
     install_pair "$vendor_bundle/Contents/Resources"
@@ -318,4 +343,4 @@ if [[ -d "$vendor_bundle" ]]; then
   fi
 fi
 
-echo "[metallib] stamp: mlx core $core_version, mlx-swift $swift_pin_version ($swift_pin_revision)"
+echo "[metallib] stamp: mlx core $core_version ($core_revision), upstream $upstream_tag ($upstream_revision), mlx-swift $swift_pin_version ($swift_pin_revision)"

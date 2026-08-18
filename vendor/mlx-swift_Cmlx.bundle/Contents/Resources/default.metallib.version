@@ -1,6 +1,9 @@
 mlx-core-version: 0.32.1
+mlx-core-revision: 11da2b33a51772c023e2f7d7bc4ba9b3ff7e03ef
+mlx-upstream-tag: v0.32.1
+mlx-upstream-revision: 3a6219917e4535575ce5bce2fc2ba27a483a709b
 mlx-swift-version: unknown
-mlx-swift-revision: 30be5d59f194d5f7c67500509bf13bdfa1f26b3b
-kernel-sources-sha256: b791ce523bec5e6612766d9b00004fa66d3f3b1dbbbabd725b5d3c36cefbce41
-built-at: 2026-08-18T00:18:56Z
+mlx-swift-revision: 7558b9cff75746e3ce25802aecbdc498b240af7f
+kernel-sources-sha256: acfb87b05e097f03cecffcd084b988d99fb0321ea923cd561a482d114d75a895
+built-at: 2026-08-18T12:13:53Z
 metal-compiler: Apple metal version 32023.883 (metalfe-32023.883)
