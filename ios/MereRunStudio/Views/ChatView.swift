@@ -26,7 +26,7 @@ struct ChatView: View {
     }
 
     private var localChatReady: Bool {
-        local.state(of: LocalEngine.chatModel.id) == .ready
+        local.state(of: local.selectedChatModelID) == .ready
     }
 
     private var canSend: Bool {
@@ -211,14 +211,16 @@ struct ChatView: View {
                     }
                     if LocalEngine.showsOnDeviceUI {
                         Section("This iPhone") {
-                            if localChatReady {
-                                Button(LocalEngine.chatModel.title) {
-                                    chat.runLocally = true
+                            ForEach(LocalEngine.chatModels.filter(\.isCompatible)) { candidate in
+                                if local.state(of: candidate.id) == .ready {
+                                    Button(candidate.title) {
+                                        local.selectedChatModelID = candidate.id
+                                        chat.runLocally = true
+                                    }
                                 }
-                            } else {
-                                Button("Get \(LocalEngine.chatModel.title) (\(LocalEngine.chatModel.sizeLabel))…") {
-                                    showOnDeviceModels = true
-                                }
+                            }
+                            Button("Get on-device models…") {
+                                showOnDeviceModels = true
                             }
                         }
                     }
@@ -226,7 +228,7 @@ struct ChatView: View {
                     HStack(spacing: 5) {
                         Image(systemName: chat.runLocally ? "iphone" : "cpu")
                         Text(chat.runLocally
-                            ? "\(LocalEngine.chatModel.title) — this iPhone"
+                            ? "\(LocalEngine.model(withID: local.selectedChatModelID)?.title ?? "On-device") — this iPhone"
                             : (chat.model.isEmpty ? "Fleet default" : Self.displayName(for: chat.model)))
                             .lineLimit(1)
                     }

@@ -22,6 +22,7 @@ struct OnDeviceModelsView: View {
 /// The list itself, pushable from Settings or wrapped in a sheet.
 struct OnDeviceModelsList: View {
     @ObservedObject private var local = LocalEngine.shared
+    @State private var confirmingModel: LocalEngine.Model?
 
     var body: some View {
         List {
@@ -32,15 +33,39 @@ struct OnDeviceModelsList: View {
                 } header: {
                     Text("Images")
                 } footer: {
-                    Text("Pick which one creates your images from the model menu in Create.")
+                    Text("Pick which one creates your images from the model menu in Create. Swipe a downloaded model to remove it.")
                 }
 
                 Section {
-                    row(LocalEngine.chatModel)
+                    ForEach(LocalEngine.chatModels) { model in
+                        row(model)
+                    }
                 } header: {
                     Text("Chat")
                 } footer: {
-                    Text("Choose it from the model menu in Chat to talk entirely on-device.")
+                    Text("Choose one from the model menu in Chat to talk entirely on-device.")
+                }
+
+                if local.reclaimableBytes > 0 {
+                    Section {
+                        Button {
+                            local.reclaimSpace()
+                        } label: {
+                            HStack {
+                                Label("Reclaim unused space", systemImage: "trash")
+                                Spacer()
+                                Text(ByteCountFormatter.string(
+                                    fromByteCount: local.reclaimableBytes,
+                                    countStyle: .file
+                                ))
+                                .foregroundStyle(MereTheme.textMuted)
+                            }
+                        }
+                    } header: {
+                        Text("Storage")
+                    } footer: {
+                        Text("Frees partial downloads and payloads no installed model uses.")
+                    }
                 }
 
                 if let message = local.lastError {
@@ -55,7 +80,26 @@ struct OnDeviceModelsList: View {
         .background(MereTheme.background.ignoresSafeArea())
         .navigationTitle("On this iPhone")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { local.refresh() }
+        .onAppear {
+            local.refresh()
+            local.refreshReclaimable()
+        }
+        .confirmationDialog(
+            confirmingModel?.licenseNote ?? "",
+            isPresented: Binding(
+                get: { confirmingModel != nil },
+                set: { if !$0 { confirmingModel = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Accept and download") {
+                if let model = confirmingModel {
+                    Task { await LocalEngine.shared.download(model.id, acceptedTerms: true) }
+                }
+                confirmingModel = nil
+            }
+            Button("Cancel", role: .cancel) { confirmingModel = nil }
+        }
     }
 
     @ViewBuilder
@@ -70,10 +114,26 @@ struct OnDeviceModelsList: View {
                     .foregroundStyle(MereTheme.textMuted)
             }
             Spacer()
+            if !model.isCompatible {
+                HStack(spacing: MereTheme.Spacing.s) {
+                    Text("Needs \(model.minimumMemoryGB ?? 0) GB\nof memory")
+                        .font(.caption2)
+                        .multilineTextAlignment(.trailing)
+                        .foregroundStyle(MereTheme.textMuted)
+                    if local.state(of: model.id) == .ready {
+                        Image(systemName: "checkmark.circle")
+                            .foregroundStyle(MereTheme.textMuted)
+                    }
+                }
+            } else {
             switch local.state(of: model.id) {
             case .notInstalled:
                 Button {
-                    Task { await local.download(model.id) }
+                    if model.licenseNote != nil {
+                        confirmingModel = model
+                    } else {
+                        Task { await local.download(model.id) }
+                    }
                 } label: {
                     Text("Get")
                         .font(.subheadline.weight(.semibold))
@@ -96,7 +156,17 @@ struct OnDeviceModelsList: View {
                 Image(systemName: "checkmark.circle.fill")
                     .foregroundStyle(MereTheme.success)
             }
+            }
         }
         .padding(.vertical, 4)
+        .swipeActions(edge: .trailing, allowsFullSwipe: false) {
+            if local.state(of: model.id) == .ready {
+                Button(role: .destructive) {
+                    local.delete(model.id)
+                } label: {
+                    Label("Remove", systemImage: "trash")
+                }
+            }
+        }
     }
 }

@@ -39,6 +39,15 @@ final class LocalEngine: ObservableObject {
         let kind: Kind
         let title: String
         let detail: String
+        /// Minimum device memory this model can realistically wire; nil = any.
+        var minimumMemoryGB: Int?
+        /// Shown before download when the upstream license carries terms.
+        var licenseNote: String?
+
+        var isCompatible: Bool {
+            guard let minimumMemoryGB else { return true }
+            return ProcessInfo.processInfo.physicalMemory >= UInt64(minimumMemoryGB) * 1_000_000_000
+        }
 
         var sizeLabel: String {
             guard let bytes = ManagedModelCatalog.spec(for: id)?.estimatedDownloadBytes else {
@@ -69,15 +78,27 @@ final class LocalEngine: ObservableObject {
         ),
     ]
 
-    static let chatModel = Model(
-        id: "text-chat-bonsai-27b-1bit",
-        kind: .chat,
-        title: "Bonsai Chat",
-        detail: "A 27-billion-parameter assistant. Your words never leave the phone."
-    )
+    static let chatModels: [Model] = [
+        Model(
+            id: "text-chat-lfm25-2.6b-4bit",
+            kind: .chat,
+            title: "Liquid Chat",
+            detail: "A quick assistant sized for a phone. Your words never leave it.",
+            licenseNote: "LFM Open License: free for personal use and for companies under USD 10M revenue."
+        ),
+        Model(
+            id: "text-chat-bonsai-27b-1bit",
+            kind: .chat,
+            title: "Bonsai Chat",
+            detail: "A 27-billion-parameter assistant for devices with 12 GB of memory or more.",
+            minimumMemoryGB: 12
+        ),
+    ]
+
+    static var allModels: [Model] { imageModels + chatModels }
 
     static func model(withID id: String) -> Model? {
-        (imageModels + [chatModel]).first { $0.id == id }
+        allModels.first { $0.id == id }
     }
 
     enum ModelState: Equatable {
@@ -97,10 +118,12 @@ final class LocalEngine: ObservableObject {
     @Published private(set) var lastImage: UIImage?
     @Published private(set) var lastImageURL: URL?
     @Published var selectedImageModelID = LocalEngine.imageModels[0].id
+    @Published var selectedChatModelID = LocalEngine.chatModels[0].id
     @Published private(set) var lastError: String?
 
     private lazy var imageGenerator = Flux2KleinGeneratoriOS()
-    private var chatGenerator: Q35Generator?
+    private var q35Generators: [String: Q35Generator] = [:]
+    private var lfm2Generators: [String: LFM2Generator] = [:]
 
     init() {
         refresh()
@@ -114,13 +137,17 @@ final class LocalEngine: ObservableObject {
                     Self.imageModels[0].id: .ready,
                     Self.imageModels[1].id: .downloading("1204 of 3269 MB"),
                     Self.imageModels[2].id: .notInstalled,
-                    Self.chatModel.id: .notInstalled,
+                    Self.chatModels[0].id: .notInstalled,
+                    Self.chatModels[1].id: .notInstalled,
                 ]
             }
             return
         }
         guard Self.isSupported else { return }
-        for model in Self.imageModels + [Self.chatModel] {
+        // The app container moves on every update, dangling any absolute
+        // symlinks a previous install wrote; heal them before scanning.
+        ManagedModelResolver.repairRelocatedInstalls()
+        for model in Self.allModels {
             if case .downloading = states[model.id] { continue }
             states[model.id] = ManagedModelResolver.resolveInstalledModel(id: model.id) != nil
                 ? .ready
@@ -136,7 +163,7 @@ final class LocalEngine: ObservableObject {
         states[modelID] ?? .notInstalled
     }
 
-    func download(_ modelID: String) async {
+    func download(_ modelID: String, acceptedTerms: Bool = false) async {
         states[modelID] = .downloading("Starting…")
         lastError = nil
         // A locked screen suspends the app and kills the transfer; keep the
@@ -146,6 +173,7 @@ final class LocalEngine: ObservableObject {
         do {
             _ = try await ManagedModelResolver.installManagedModel(
                 id: modelID,
+                usageTermsAcknowledged: acceptedTerms,
                 progress: { progress in
                     let label: String
                     switch progress {
@@ -170,6 +198,54 @@ final class LocalEngine: ObservableObject {
             states[modelID] = .notInstalled
             lastError = error.localizedDescription
         }
+    }
+
+    /// Removes an installed model and reclaims its unshared hub-cache
+    /// payloads, mirroring `mere.run model remove`. Blobs shared with another
+    /// installed model are preserved.
+    func delete(_ modelID: String) {
+        guard Self.isSupported, activity == .idle,
+              let installURL = ManagedModelResolver.resolveInstalledModel(id: modelID) else { return }
+        lastError = nil
+        do {
+            let storage = try ModelStorageManager()
+            let cacheUnits = try storage.cacheUnitsReferenced(by: modelID)
+            try FileManager.default.removeItem(at: installURL)
+            let plan = try storage.garbageCollectionPlan(limitingTo: cacheUnits)
+            _ = try storage.execute(plan)
+        } catch {
+            lastError = error.localizedDescription
+        }
+        q35Generators[modelID] = nil
+        lfm2Generators[modelID] = nil
+        refresh()
+        refreshReclaimable()
+    }
+
+    /// Bytes a full garbage-collection pass would free: orphaned payloads
+    /// (deleted or partially downloaded models) plus incomplete downloads.
+    @Published private(set) var reclaimableBytes: Int64 = 0
+
+    func refreshReclaimable() {
+        guard Self.isSupported else { return }
+        let plan = try? ModelStorageManager().garbageCollectionPlan()
+        reclaimableBytes = (plan?.reclaimableBytes ?? 0) + (plan?.incompleteDownloadBytes ?? 0)
+    }
+
+    /// Frees everything no installed model references — the way partial
+    /// downloads and crash leftovers come back.
+    func reclaimSpace() {
+        guard Self.isSupported, activity == .idle else { return }
+        lastError = nil
+        do {
+            let storage = try ModelStorageManager()
+            let plan = try storage.garbageCollectionPlan()
+            _ = try storage.execute(plan)
+        } catch {
+            lastError = error.localizedDescription
+        }
+        refresh()
+        refreshReclaimable()
     }
 
     func generateImage(prompt: String, width: Int = 512, height: Int = 512, steps: Int = 4) async {
@@ -207,7 +283,9 @@ final class LocalEngine: ObservableObject {
         guard Self.isSupported else {
             throw RelayAppError("On-device chat needs a physical iPhone.")
         }
-        let model = Self.chatModel
+        guard let model = Self.model(withID: selectedChatModelID) else {
+            throw RelayAppError("Pick an on-device chat model first.")
+        }
         guard let root = ManagedModelResolver.resolveInstalledModel(id: model.id) else {
             throw RelayAppError("Download \(model.title) before chatting on-device.")
         }
@@ -217,32 +295,38 @@ final class LocalEngine: ObservableObject {
         activity = .chatting
         defer { activity = .idle }
 
-        let generator = chatGenerator ?? Q35Generator(modelId: model.id)
-        chatGenerator = generator
-
         let sampling = Q35Resources.recommendedSampling(forModelId: model.id)
         let request = ChatRequest(
             messages: messages,
             maxTokens: 1024,
             temperature: sampling?.temperature ?? 0.7,
             topP: sampling?.topP ?? 0.9,
-            showThinking: false
+            showThinking: false,
+            // The model's native context is 262k; a phone-sized KV budget
+            // keeps the 27B's working set inside the app memory ceiling.
+            maxContextTokens: 4096
         )
 
         let accumulated = StreamedText()
-        let response = try await generator.chat(
-            request,
-            modelPath: root.path,
-            progressHandler: { progress in
-                guard progress.stage == .generating,
-                      let piece = progress.message, !piece.isEmpty else { return }
-                Task { @MainActor in
-                    let text = accumulated.append(piece)
-                    let visible = GeneratedTextFilters.strippingThinking(text, streaming: true)
-                    if !visible.isEmpty { onDelta(visible) }
-                }
+        let progressHandler: @Sendable (ChatProgress) -> Void = { progress in
+            guard progress.stage == .generating,
+                  let piece = progress.message, !piece.isEmpty else { return }
+            Task { @MainActor in
+                let text = accumulated.append(piece)
+                let visible = GeneratedTextFilters.strippingThinking(text, streaming: true)
+                if !visible.isEmpty { onDelta(visible) }
             }
-        )
+        }
+        let response: ChatResponse
+        if model.id.hasPrefix("text-chat-lfm") {
+            let generator = lfm2Generators[model.id] ?? LFM2Generator(modelId: model.id)
+            lfm2Generators[model.id] = generator
+            response = try await generator.chat(request, modelPath: root.path, progressHandler: progressHandler)
+        } else {
+            let generator = q35Generators[model.id] ?? Q35Generator(modelId: model.id)
+            q35Generators[model.id] = generator
+            response = try await generator.chat(request, modelPath: root.path, progressHandler: progressHandler)
+        }
         let cleaned = GeneratedTextFilters.strippingThinking(response.response)
         guard !cleaned.isEmpty else {
             throw RelayAppError("The model returned an empty reply.")
