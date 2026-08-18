@@ -602,9 +602,12 @@ public actor HubSnapshot {
         for _ in 0..<8 {
             var request = authorizedRequest(url: currentURL)
             request.httpMethod = "GET"
+            // A classic delegate-driven download task: the async
+            // `download(for:)` convenience never delivers `didWriteData` on
+            // iOS, so byte progress froze at zero for multi-gigabyte pulls.
             let session = URLSession(configuration: .default, delegate: delegate, delegateQueue: nil)
             defer { session.invalidateAndCancel() }
-            let (tempURL, response) = try await session.download(for: request)
+            let (tempURL, response) = try await delegate.perform(request, in: session)
             let http = try Self.validateDownloadedResponse(
                 response,
                 errorBodyURL: tempURL,
@@ -1171,9 +1174,26 @@ private final class HubSnapshotDownloadDelegate: NSObject, URLSessionTaskDelegat
     private let startedAt = Date()
     private let progressHandler: @Sendable (Int64, Int64, Double?) -> Void
     private(set) var lastSpeedBytesPerSecond: Double?
+    private let lock = NSLock()
+    private var continuation: CheckedContinuation<(URL, URLResponse), Error>?
+    private var movedURL: URL?
 
     init(progressHandler: @escaping @Sendable (Int64, Int64, Double?) -> Void) {
         self.progressHandler = progressHandler
+    }
+
+    /// Runs one download as a classic delegate-driven task. The async
+    /// `download(for:)` convenience never delivers `didWriteData` on iOS
+    /// (macOS happens to), so byte progress must ride the original delegate
+    /// path on every platform.
+    func perform(_ request: URLRequest, in session: URLSession) async throws -> (URL, URLResponse) {
+        try await withCheckedThrowingContinuation { newContinuation in
+            lock.lock()
+            continuation = newContinuation
+            movedURL = nil
+            lock.unlock()
+            session.downloadTask(with: request).resume()
+        }
     }
 
     func urlSession(
@@ -1189,8 +1209,45 @@ private final class HubSnapshotDownloadDelegate: NSObject, URLSessionTaskDelegat
     func urlSession(
         _: URLSession,
         downloadTask _: URLSessionDownloadTask,
-        didFinishDownloadingTo _: URL
-    ) {}
+        didFinishDownloadingTo location: URL
+    ) {
+        // The system deletes `location` when this callback returns; claim it
+        // synchronously and hand the stable path over at task completion.
+        let stable = FileManager.default.temporaryDirectory
+            .appendingPathComponent("hub-download-\(UUID().uuidString)")
+        do {
+            try FileManager.default.moveItem(at: location, to: stable)
+            lock.lock()
+            movedURL = stable
+            lock.unlock()
+        } catch {
+            lock.lock()
+            movedURL = nil
+            lock.unlock()
+        }
+    }
+
+    func urlSession(_: URLSession, task: URLSessionTask, didCompleteWithError error: Error?) {
+        lock.lock()
+        let pending = continuation
+        continuation = nil
+        let stable = movedURL
+        movedURL = nil
+        lock.unlock()
+        guard let pending else { return }
+        if let error {
+            if let stable { try? FileManager.default.removeItem(at: stable) }
+            pending.resume(throwing: error)
+            return
+        }
+        guard let response = task.response, let stable else {
+            pending.resume(throwing: Hub.HubClientError.downloadError(
+                "Download completed without a response or payload file."
+            ))
+            return
+        }
+        pending.resume(returning: (stable, response))
+    }
 
     func urlSession(
         _: URLSession,

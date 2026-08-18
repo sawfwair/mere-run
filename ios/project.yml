@@ -60,6 +60,22 @@ targets:
         # Set for device builds: MERERUN_IOS_TEAM=<team id> xcodegen generate
         # Simulator builds need no team.
         DEVELOPMENT_TEAM: ${MERERUN_IOS_TEAM}
+  MereRunStudioTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - MereRunStudioTests
+    dependencies:
+      - target: MereRunStudio
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: run.mere.studio.ios.tests
+        SWIFT_VERSION: "6.0"
+        GENERATE_INFOPLIST_FILE: YES
+        TEST_HOST: $(BUILT_PRODUCTS_DIR)/mere.run.app/mere.run
+        BUNDLE_LOADER: $(TEST_HOST)
+        CODE_SIGN_STYLE: Automatic
+        DEVELOPMENT_TEAM: ${MERERUN_IOS_TEAM}
   MereRunStudioUITests:
     type: bundle.ui-testing
     platform: iOS
@@ -106,4 +122,5 @@ schemes:
     test:
       config: Debug
       targets:
+        - MereRunStudioTests
         - MereRunStudioUITests

@@ -6,6 +6,18 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Model downloads
+
+- fixed Hub download progress freezing at zero on iOS: the Swift-concurrency
+  `URLSession.download(for:)` convenience never delivers `didWriteData`
+  there (macOS happens to), so multi-gigabyte pulls looked hung while bytes
+  flowed. Downloads now run as classic delegate-driven download tasks, which
+  report byte progress on every platform; behavior on macOS and Linux is
+  unchanged. The iOS app additionally keeps the display awake during a pull
+  (a locked screen suspends the app and kills the transfer), surfaces
+  download failures in Chat's on-device row, and shows absolute megabytes
+  instead of a percent that rounds to zero for most of a large pull.
+
 ## 0.41.0 - 2026-08-18
 
 This release puts mere.run on iPhone with a portable relay client, a full-width
