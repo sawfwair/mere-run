@@ -46,6 +46,7 @@ struct PairingView: View {
                         .keyboardType(.URL)
                         .padding(MereTheme.Spacing.m)
                         .merePanel()
+                        .accessibilityIdentifier("pairing.address")
                     }
                     if directConnect {
                         TextField(
@@ -57,6 +58,7 @@ struct PairingView: View {
                         .keyboardType(.numbersAndPunctuation)
                         .padding(MereTheme.Spacing.m)
                         .merePanel()
+                        .accessibilityIdentifier("pairing.code")
                     }
                     if case .failed(let message) = relay.pairing {
                         Text(message)
@@ -83,6 +85,7 @@ struct PairingView: View {
                         }
                     }
                     .buttonStyle(.borderedProminent)
+                    .accessibilityIdentifier("pairing.primary")
                     .disabled(
                         pairingURL.isEmpty
                             || relay.pairing == .discovering
