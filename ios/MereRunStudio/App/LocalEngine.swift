@@ -15,7 +15,7 @@ final class LocalEngine: ObservableObject {
 
     /// MLX cannot create a Metal device in the simulator; the on-device lane
     /// exists only on hardware. Constructing a generator in the simulator
-    /// aborts the process, so every entry point gates on this first.
+    /// aborts the process, so every compute entry point gates on this first.
     static let isSupported: Bool = {
         #if targetEnvironment(simulator)
         return false
@@ -23,6 +23,14 @@ final class LocalEngine: ObservableObject {
         return true
         #endif
     }()
+
+    /// UI preview in the simulator (`MERERUN_UI_PREVIEW` launch argument):
+    /// the on-device surfaces render with mocked install states so the design
+    /// can be iterated without hardware. Compute stays gated on hardware.
+    static let isPreview = ProcessInfo.processInfo.arguments.contains("MERERUN_UI_PREVIEW")
+
+    /// Whether on-device surfaces appear at all.
+    static var showsOnDeviceUI: Bool { isSupported || isPreview }
 
     struct Model: Identifiable, Equatable {
         enum Kind { case image, chat }
@@ -44,29 +52,33 @@ final class LocalEngine: ObservableObject {
         Model(
             id: "image-klein-nano",
             kind: .image,
-            title: "Klein nano",
-            detail: "FLUX.2 Klein distilled to nano. The fastest local option."
+            title: "Klein Nano",
+            detail: "Makes images. The fastest one."
         ),
         Model(
             id: "image-bonsai-binary",
             kind: .image,
-            title: "Bonsai 1-bit",
-            detail: "Bonsai 4B with binary weights. Small download, full pipeline."
+            title: "Bonsai Binary",
+            detail: "Makes images. The smallest download."
         ),
         Model(
             id: "image-bonsai-ternary",
             kind: .image,
-            title: "Bonsai ternary",
-            detail: "Bonsai 4B with ternary weights. A quality step up from 1-bit."
+            title: "Bonsai Ternary",
+            detail: "Makes images. The best-looking of the three."
         ),
     ]
 
     static let chatModel = Model(
         id: "text-chat-bonsai-27b-1bit",
         kind: .chat,
-        title: "Bonsai 27B 1-bit",
-        detail: "A 27B chat model in binary weights, running entirely on this iPhone."
+        title: "Bonsai Chat",
+        detail: "A 27-billion-parameter assistant. Your words never leave the phone."
     )
+
+    static func model(withID id: String) -> Model? {
+        (imageModels + [chatModel]).first { $0.id == id }
+    }
 
     enum ModelState: Equatable {
         case notInstalled
@@ -83,6 +95,7 @@ final class LocalEngine: ObservableObject {
     @Published private(set) var states: [String: ModelState] = [:]
     @Published private(set) var activity: Activity = .idle
     @Published private(set) var lastImage: UIImage?
+    @Published private(set) var lastImageURL: URL?
     @Published var selectedImageModelID = LocalEngine.imageModels[0].id
     @Published private(set) var lastError: String?
 
@@ -94,6 +107,18 @@ final class LocalEngine: ObservableObject {
     }
 
     func refresh() {
+        if Self.isPreview {
+            // Mocked variety for design iteration in the simulator.
+            if states.isEmpty {
+                states = [
+                    Self.imageModels[0].id: .ready,
+                    Self.imageModels[1].id: .downloading("1204 of 3269 MB"),
+                    Self.imageModels[2].id: .notInstalled,
+                    Self.chatModel.id: .notInstalled,
+                ]
+            }
+            return
+        }
         guard Self.isSupported else { return }
         for model in Self.imageModels + [Self.chatModel] {
             if case .downloading = states[model.id] { continue }
@@ -167,6 +192,7 @@ final class LocalEngine: ObservableObject {
         do {
             let result = try await imageGenerator.generate(request, progressHandler: nil)
             lastImage = UIImage(contentsOfFile: result.outputURL.path)
+            lastImageURL = result.outputURL
         } catch {
             lastError = error.localizedDescription
         }

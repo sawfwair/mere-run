@@ -52,6 +52,13 @@ struct SettingsView: View {
                         value: relay.authStatus?.authenticated == true ? "Yes" : "No"
                     )
                 }
+                if LocalEngine.showsOnDeviceUI {
+                    Section("On this iPhone") {
+                        NavigationLink("On-device models") {
+                            OnDeviceModelsList()
+                        }
+                    }
+                }
                 Section {
                     Button("Sign out and unpair", role: .destructive) {
                         relay.unpair()

@@ -9,6 +9,7 @@ struct ChatView: View {
     @StateObject private var chat: ChatStore
     @ObservedObject private var local = LocalEngine.shared
     @State private var draft = ""
+    @State private var showOnDeviceModels = false
 
     init(relay: RelayStore) {
         _chat = StateObject(wrappedValue: ChatStore(relay: relay))
@@ -100,11 +101,6 @@ struct ChatView: View {
                     .padding(.bottom, MereTheme.Spacing.s)
                 }
 
-                if chat.runLocally, !localChatReady {
-                    localChatSetup
-                        .padding(.horizontal, MereTheme.Spacing.l)
-                        .padding(.bottom, MereTheme.Spacing.s)
-                }
 
                 composer
             }
@@ -118,38 +114,17 @@ struct ChatView: View {
                 }
             }
             .task { await relay.refreshWorkerProbe() }
+            .sheet(isPresented: $showOnDeviceModels) { OnDeviceModelsView() }
         }
     }
 
-    @ViewBuilder
-    private var localChatSetup: some View {
-        switch local.state(of: LocalEngine.chatModel.id) {
-        case .notInstalled:
-            VStack(alignment: .leading, spacing: MereTheme.Spacing.s) {
-                if let message = local.lastError {
-                    MereBannerView(text: message, color: MereTheme.failure)
-                }
-                MereBannerView(
-                    text: "\(LocalEngine.chatModel.title) (\(LocalEngine.chatModel.sizeLabel)) chats entirely on this iPhone. Download once over Wi-Fi; it stays in this app's storage.",
-                    color: MereTheme.accent
-                )
-                Button {
-                    Task { await local.download(LocalEngine.chatModel.id) }
-                } label: {
-                    Text("Download \(LocalEngine.chatModel.title)").frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-            }
-        case .downloading(let label):
-            HStack(spacing: MereTheme.Spacing.s) {
-                ProgressView()
-                Text("Downloading — \(label)")
-                    .font(.footnote)
-                    .foregroundStyle(MereTheme.textSecondary)
-            }
-        case .ready:
-            EmptyView()
+    /// Fleet model IDs carry their kind as a prefix; the menu already says
+    /// what kind this is, so display just the model's own name.
+    static func displayName(for id: String) -> String {
+        for prefix in ["text-chat-", "text-agent-"] where id.hasPrefix(prefix) {
+            return String(id.dropFirst(prefix.count))
         }
+        return id
     }
 
     private var emptyState: some View {
@@ -228,16 +203,22 @@ struct ChatView: View {
                             chat.model = ""
                         }
                         ForEach(chatModels, id: \.self) { id in
-                            Button(id) {
+                            Button(Self.displayName(for: id)) {
                                 chat.runLocally = false
                                 chat.model = id
                             }
                         }
                     }
-                    if LocalEngine.isSupported {
+                    if LocalEngine.showsOnDeviceUI {
                         Section("This iPhone") {
-                            Button("\(LocalEngine.chatModel.title) — on device") {
-                                chat.runLocally = true
+                            if localChatReady {
+                                Button(LocalEngine.chatModel.title) {
+                                    chat.runLocally = true
+                                }
+                            } else {
+                                Button("Get \(LocalEngine.chatModel.title) (\(LocalEngine.chatModel.sizeLabel))…") {
+                                    showOnDeviceModels = true
+                                }
                             }
                         }
                     }
@@ -245,8 +226,8 @@ struct ChatView: View {
                     HStack(spacing: 5) {
                         Image(systemName: chat.runLocally ? "iphone" : "cpu")
                         Text(chat.runLocally
-                            ? "\(LocalEngine.chatModel.title) — on device"
-                            : (chat.model.isEmpty ? "Fleet default" : chat.model))
+                            ? "\(LocalEngine.chatModel.title) — this iPhone"
+                            : (chat.model.isEmpty ? "Fleet default" : Self.displayName(for: chat.model)))
                             .lineLimit(1)
                     }
                     .font(.footnote)
