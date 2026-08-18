@@ -4,10 +4,8 @@ import MLX
 @testable import MereRunCore
 
 /// Micro-benchmark for the per-call cost of mlx-swift compiled functions,
-/// used to evaluate CompiledFunction.call patches (it rebuilds a closure
-/// trampoline and takes the global evalLock on every invocation in
-/// mlx-swift 0.31.4). Skipped unless explicitly requested — it prints timing,
-/// it does not assert performance.
+/// used to evaluate CompiledFunction.call patches. Skipped unless explicitly
+/// requested — it prints timing, it does not assert performance.
 final class MLXCompiledFunctionOverheadTests: MereRunCoreTestCase {
     func testCompiledCallOverheadMicrobench() throws {
         guard ProcessInfo.processInfo.environment["MERERUN_BENCHMARK_COMPILE_OVERHEAD"] == "1" else {

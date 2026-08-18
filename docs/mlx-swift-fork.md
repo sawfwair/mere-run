@@ -1,17 +1,18 @@
 # mlx-swift fork policy and compiled-call overhead
 
 mere-run pins the public `sawfwair/mlx-swift` fork at
-`5bf3e46fecfb69cd3b559025fa99885ddd188731`. It is rebased onto upstream
-`mlx-swift` `da318704cc0e972b61dcca43c62cd15e545362ae`, including the upstream
-`MLXArray` finalizer fix and generated-source-list maintenance. The embedded
+`7558b9cff75746e3ce25802aecbdc498b240af7f`. It contains upstream
+`mlx-swift` through `97cf19efeaa4e929415e75982e999adb34f62c0d`. The embedded
 `sawfwair/mlx` revision is
-`31af89c4c21642236b8a2bc1358438512d9521e3`, based on upstream MLX
-`9ab977b5649154590d598ea5d545aa1b3c97f883` and retaining the 0.32.1 ABI.
+`11da2b33a51772c023e2f7d7bc4ba9b3ff7e03ef`, which contains the exact
+upstream MLX v0.32.1 release commit
+`3a6219917e4535575ce5bce2fc2ba27a483a709b`.
 
 The owned patch stack carries the Linux/CUDA package bridge, executor-safe
 Swift streams, native affine 1-bit CUDA quantize/dequantize/QMV execution, the
 Metal affine 1-bit path, custom quantized-kernel headers, NVFP4 staging, the
-generation-17 NAX correctness gate, and M4/H3 tuning. The obsolete unaligned
+generation-17 NAX correctness gate, M4/H3 tuning, and executor-safe compile
+cache bridging. The obsolete unaligned
 1-bit fast-kernel tail was not replayed because upstream now requires aligned
 fast dispatch; the fork instead tests matching host/kernel alignment directly.
 Changes stay scoped to their bit width, group size, quantization mode, and
@@ -44,8 +45,9 @@ order:
    mlx-swift and publish the reviewed Swift revision. Never make mere.run depend
    on an unpushed or floating dependency ref.
 5. Pin the immutable mlx-swift revision in `Package.swift` and
-   `Package.resolved`, rebuild the vendored Metal library, and update all three
-   provenance fields: Swift revision, core version, and generated-source hash.
+   `Package.resolved`, rebuild the vendored Metal library, and update its
+   enforced provenance: Swift revision, core version and revision, upstream
+   release tag and revision, and generated-source hash.
 6. Run `./scripts/check.sh`, followed by both supported runtime gates:
    `MERERUN_RUN_E2E=core ./scripts/check.sh` and
    `MERERUN_RUN_E2E=installed ./scripts/check.sh`. Include a real generation
@@ -58,9 +60,20 @@ order:
 Perform this audit at least once per upstream minor release, and sooner for a
 security fix or a correctness/performance change in a path mere.run owns.
 
-A separate measured one-line compiled-call optimization exists on staging
-branches but is **deliberately not included in the pin**. The rest of this
-document records why, and what a safe version of that fix requires.
+The previously staged compiled-call optimization is now included: MLX v0.32.1
+makes compile caches thread-local and cache erasure thread-safe, and the Swift
+bridge retains the originating cache identities across executors. With that
+core prerequisite in place, independent compiled functions no longer take the
+global Swift evaluation lock. The regression suite covers concurrent first
+traces, shape changes, numerical evaluation, and cross-thread cache erasure.
+
+An eight-worker, 2,000-call-per-worker A/B on the same machine isolates that
+lock change on the same v0.32.1 core. Across five alternating trials, median
+compiled graph-build wall time fell from 7.56 us/call to 1.38 us/call (5.5x
+higher concurrent call throughput); median build-plus-evaluation wall time fell
+from 13.53 us/call to 7.61 us/call. Reproduce it in mlx-swift with
+`MLX_SWIFT_BENCHMARK_COMPILE_CONCURRENCY=1 swift test --filter
+TransformTests.testConcurrentCompiledCallOverheadMicrobench`.
 
 ## The finding
 
@@ -78,7 +91,7 @@ Every MLXNN compiled activation (`geluApproximate`, swiglu helpers, …) pays
 this cost per call, not just explicit `compile(...)` users. Confirmed present
 through upstream v0.31.6 (the file is unchanged upstream since 2026-05-07).
 
-## Why the one-line fix is not shipped
+## Why the one-line fix was previously held back
 
 Removing the global lock is only proven safe for the paths our benchmarks
 exercised: repeated calls to already-traced functions from one generator at a
@@ -117,7 +130,8 @@ architecture exercises it" is past the threshold to hold it back.
    this class. Run it through Xcode, which builds the Metal shader bundle;
    command-line SwiftPM alone cannot build that bundle.
 
-Do **not** upstream or re-pin the lock removal alone.
+Do **not** replay the lock removal onto an older core without the cache-scoped
+erase bridge and the concurrency regressions.
 
 ## Staging branches (kept on the fork)
 
@@ -135,8 +149,9 @@ Do **not** upstream or re-pin the lock removal alone.
 - The Linux/CUDA prebuilt path builds the exact embedded MLX revision selected
   by this pin; do not replace it with a floating checkout.
 - The vendored Metal library is accepted only when its stamp matches the exact
-  mlx-swift revision, MLX core version, and generated-kernel source hash
-  compiled into `mere.run`. `scripts/check.sh` recomputes the same provenance
-  from the clean pinned checkout.
+  mlx-swift revision, MLX core version and revision, incorporated upstream
+  release, and generated-kernel source hash compiled into `mere.run`.
+  `scripts/check.sh` recomputes the same provenance and release ancestry from
+  the clean pinned checkout.
 - Never edit `.build/checkouts/` to change dependency behavior — checkout
   edits silently vanish on the next `swift package resolve/update`.

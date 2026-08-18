@@ -37,7 +37,13 @@ final class MLXBundleSupportTests: XCTestCase {
 
     XCTAssertEqual(
       status,
-      .unstamped(missingFields: ["mlx-swift-revision", "kernel-sources-sha256"])
+      .unstamped(missingFields: [
+        "mlx-core-revision",
+        "mlx-upstream-tag",
+        "mlx-upstream-revision",
+        "mlx-swift-revision",
+        "kernel-sources-sha256",
+      ])
     )
   }
 
@@ -46,6 +52,9 @@ final class MLXBundleSupportTests: XCTestCase {
     let status = MLXBundleSupport.stampStatus(
       contents: """
         mlx-core-version: \(expected.coreVersion)
+        mlx-core-revision: \(expected.coreRevision)
+        mlx-upstream-tag: \(expected.upstreamTag)
+        mlx-upstream-revision: \(expected.upstreamRevision)
         mlx-swift-revision: \(String(repeating: "0", count: 40))
         kernel-sources-sha256: \(expected.kernelSourcesSHA256)
         """
@@ -63,11 +72,42 @@ final class MLXBundleSupportTests: XCTestCase {
     )
   }
 
+  func testCoreAndUpstreamRevisionMismatchesAreRejected() {
+    let expected = MLXBundleSupport.expectedProvenance
+    let wrongCore = String(repeating: "1", count: 40)
+    let wrongUpstream = String(repeating: "2", count: 40)
+    let status = MLXBundleSupport.stampStatus(
+      contents: """
+        mlx-core-version: \(expected.coreVersion)
+        mlx-core-revision: \(wrongCore)
+        mlx-upstream-tag: \(expected.upstreamTag)
+        mlx-upstream-revision: \(wrongUpstream)
+        mlx-swift-revision: \(expected.swiftRevision)
+        kernel-sources-sha256: \(expected.kernelSourcesSHA256)
+        """
+    )
+
+    XCTAssertEqual(
+      status,
+      .mismatched([
+        .init(field: "mlx-core-revision", stamped: wrongCore, expected: expected.coreRevision),
+        .init(
+          field: "mlx-upstream-revision",
+          stamped: wrongUpstream,
+          expected: expected.upstreamRevision
+        ),
+      ])
+    )
+  }
+
   func testKernelSourceHashMismatchIsRejected() {
     let expected = MLXBundleSupport.expectedProvenance
     let status = MLXBundleSupport.stampStatus(
       contents: """
         mlx-core-version: \(expected.coreVersion)
+        mlx-core-revision: \(expected.coreRevision)
+        mlx-upstream-tag: \(expected.upstreamTag)
+        mlx-upstream-revision: \(expected.upstreamRevision)
         mlx-swift-revision: \(expected.swiftRevision)
         kernel-sources-sha256: \(String(repeating: "0", count: 64))
         """

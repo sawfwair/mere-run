@@ -333,9 +333,10 @@ training) — enable explicitly for that scenario.
 ### `MERERUN_GEMMA4_COMPILED_SEGMENTS`
 
 Opt-in (`1`, `true`, or `on`) MLX-compiled per-layer decode segments. Off by
-default: with mlx-swift 0.31.4 every compiled call serializes on the global
-eval lock, which measured slower than the interpreted path at decode call
-rates. Kept for evaluation against future mlx-swift releases.
+default pending a full-model quality and throughput requalification. The pinned
+mlx-swift fork no longer serializes unrelated compiled functions on the global
+eval lock; its concurrency benchmark is documented in
+[`mlx-swift-fork.md`](./mlx-swift-fork.md).
 
 ### Magenta RT2 prompt swaps (no switch)
 
