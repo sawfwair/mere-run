@@ -126,6 +126,9 @@ struct ChatView: View {
         switch local.state(of: LocalEngine.chatModel.id) {
         case .notInstalled:
             VStack(alignment: .leading, spacing: MereTheme.Spacing.s) {
+                if let message = local.lastError {
+                    MereBannerView(text: message, color: MereTheme.failure)
+                }
                 MereBannerView(
                     text: "\(LocalEngine.chatModel.title) (\(LocalEngine.chatModel.sizeLabel)) chats entirely on this iPhone. Download once over Wi-Fi; it stays in this app's storage.",
                     color: MereTheme.accent

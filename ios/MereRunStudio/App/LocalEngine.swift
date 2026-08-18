@@ -114,6 +114,10 @@ final class LocalEngine: ObservableObject {
     func download(_ modelID: String) async {
         states[modelID] = .downloading("Starting…")
         lastError = nil
+        // A locked screen suspends the app and kills the transfer; keep the
+        // display on for the duration of the pull.
+        UIApplication.shared.isIdleTimerDisabled = true
+        defer { UIApplication.shared.isIdleTimerDisabled = false }
         do {
             _ = try await ManagedModelResolver.installManagedModel(
                 id: modelID,
@@ -122,7 +126,7 @@ final class LocalEngine: ObservableObject {
                     switch progress {
                     case .downloadingBytes(let completed, let total):
                         if let total, total > 0 {
-                            label = "\(Int(Double(completed) / Double(total) * 100))% of \(total / 1_048_576) MB"
+                            label = "\(completed / 1_048_576) of \(total / 1_048_576) MB"
                         } else {
                             label = "\(completed / 1_048_576) MB"
                         }
