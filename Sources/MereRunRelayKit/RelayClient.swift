@@ -303,6 +303,12 @@ package struct RelayGraphCreateResponse: Codable {
         case state
         case missingAssetDigests = "missing_asset_digests"
     }
+
+    package init(jobID: String, state: GraphRunState, missingAssetDigests: [String]) {
+        self.jobID = jobID
+        self.state = state
+        self.missingAssetDigests = missingAssetDigests
+    }
 }
 
 package struct RelayGraphJobResponse: Codable {
@@ -326,6 +332,26 @@ package struct RelayGraphJobResponse: Codable {
         case metrics
     }
 
+    package init(
+        jobID: String,
+        state: GraphRunState,
+        createdAt: Date?,
+        updatedAt: Date?,
+        artifacts: [GraphRunArtifact],
+        error: String?,
+        placement: WorkflowGraphPlacement?,
+        metrics: WorkflowGraphExecutionMetrics?
+    ) {
+        self.jobID = jobID
+        self.state = state
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.artifacts = artifacts
+        self.error = error
+        self.placement = placement
+        self.metrics = metrics
+    }
+
     package func remoteJob(profile: String, localRunDirectory: String?) -> WorkflowRemoteJob {
         WorkflowRemoteJob(
             jobID: jobID,
@@ -345,6 +371,10 @@ package struct RelayGraphJobResponse: Codable {
 
 package struct RelayGraphJobListResponse: Codable {
     package let jobs: [RelayGraphJobResponse]
+
+    package init(jobs: [RelayGraphJobResponse]) {
+        self.jobs = jobs
+    }
 }
 
 package func prepareFetchDestination(_ destination: URL, expectedJobID: String) throws {
@@ -497,11 +527,11 @@ public extension RelayWorkflowExecutor {
 }
 
 package struct RelayGraphCreateRequest: Codable {
-    let job: WorkflowJobManifest
-    let graph: WorkflowGraphDocument
-    let inputs: WorkflowInputsDocument
-    let assets: WorkflowAssetManifest
-    let bundleDocuments: [String: Data]
+    package let job: WorkflowJobManifest
+    package let graph: WorkflowGraphDocument
+    package let inputs: WorkflowInputsDocument
+    package let assets: WorkflowAssetManifest
+    package let bundleDocuments: [String: Data]
 
     enum CodingKeys: String, CodingKey {
         case job
@@ -509,6 +539,20 @@ package struct RelayGraphCreateRequest: Codable {
         case inputs
         case assets
         case bundleDocuments = "bundle_documents"
+    }
+
+    package init(
+        job: WorkflowJobManifest,
+        graph: WorkflowGraphDocument,
+        inputs: WorkflowInputsDocument,
+        assets: WorkflowAssetManifest,
+        bundleDocuments: [String: Data]
+    ) {
+        self.job = job
+        self.graph = graph
+        self.inputs = inputs
+        self.assets = assets
+        self.bundleDocuments = bundleDocuments
     }
 }
 

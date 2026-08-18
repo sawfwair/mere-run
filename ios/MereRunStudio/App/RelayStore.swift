@@ -1,6 +1,7 @@
 import AuthenticationServices
 import Foundation
 import MereRunRelayKit
+import UIKit
 
 /// Owns the relay profile, authentication state, and client access for the
 /// app. Storage mirrors the CLI's JSON shapes inside the app sandbox's
@@ -97,6 +98,61 @@ final class RelayStore: ObservableObject {
             return
         }
         authStatus = RelayAuthentication.status(profile: profile)
+    }
+
+    /// The direct lane: pair straight to a machine running
+    /// `mere.run relay serve` over the LAN or a tailnet, exchanging the
+    /// terminal's pairing code for a long-lived bearer token in the Keychain.
+    /// No broker, no cloud hop — prompts and outputs stay on your network.
+    func pairDirect(urlString: String, code: String, profileName: String = "direct") async {
+        var trimmed = urlString.trimmingCharacters(in: .whitespacesAndNewlines)
+            .trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        if !trimmed.contains("://") {
+            trimmed = "http://\(trimmed)"
+        }
+        guard let parsed = URL(string: trimmed), parsed.scheme == "http" || parsed.scheme == "https" else {
+            pairing = .failed("Enter the machine's address, like lab.local:6373 or a tailnet name.")
+            return
+        }
+        pairing = .discovering
+        do {
+            _ = try await RelayAuthentication.discoverLocalRelay(url: trimmed)
+            let paired = try await RelayAuthentication.pairLocalRelay(
+                url: trimmed,
+                code: code,
+                deviceName: UIDevice.current.name
+            )
+            let tokenSet = RelayOAuthTokenSet(
+                accessToken: paired.token,
+                refreshToken: nil,
+                tokenType: "Bearer",
+                expiresIn: nil,
+                obtainedAtEpochSeconds: Int64(Date().timeIntervalSince1970)
+            )
+            let candidate = WorkflowExecutorProfile(
+                name: profileName,
+                kind: .relay,
+                destination: nil,
+                remoteRoot: nil,
+                port: nil,
+                identityFile: nil,
+                mereRunPath: nil,
+                url: trimmed,
+                tokenFile: nil
+            )
+            try keychain(for: profileName).save(tokenSet)
+            try WorkflowExecutorProfileStore.save(
+                WorkflowExecutorProfiles(schemaVersion: 1, profiles: [candidate]),
+                to: profilesURL
+            )
+            profile = candidate
+            pairing = .paired
+            refreshAuthStatus()
+        } catch let error as RelayClientError {
+            pairing = .failed(AppErrorText.presentable(error.message))
+        } catch {
+            pairing = .failed(error.localizedDescription)
+        }
     }
 
     /// Browser sign-in: Authorization Code + PKCE through an in-app sheet,

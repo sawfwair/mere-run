@@ -125,6 +125,7 @@ final class SpeechTranscribeCommandParsingTests: XCTestCase {
             "geo",
             "graph",
             "executor",
+            "relay",
             "run",
             "model",
             "adapter",

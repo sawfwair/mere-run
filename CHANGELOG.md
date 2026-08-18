@@ -42,6 +42,17 @@ The format is based on Keep a Changelog.
 
 ### Relay client and iOS
 
+- added the direct lane: `mere.run relay serve` hosts the client-facing
+  relay graph-job HTTP surface on the machine itself and runs submitted
+  jobs there through the same worker runner — no broker, no cloud hop.
+  Devices pair with a short-lived terminal code (bounded window, attempt
+  limit, hashed token storage that survives restarts), jobs validate
+  against the live capability probe at commit, and events, run manifests,
+  and digest-verified artifacts serve from the run directory. The API is
+  byte-identical to the hosted relay's, so `graph submit`, fetch, and the
+  iOS app work unchanged over the LAN or a tailnet; the phone pairs
+  through a new "Connect to a machine" lane and stores the bearer token
+  in the Keychain.
 - the iOS app signs in with the browser: Authorization Code + PKCE
   through `ASWebAuthenticationSession` against the broker's advertised
   `authorization_endpoint`, returning over an `https://mere.world`
