@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 
 /// Wire types for the direct lane: `mere.run relay serve` hosts the relay
 /// HTTP surface on the machine itself, and a client pairs straight to it over
