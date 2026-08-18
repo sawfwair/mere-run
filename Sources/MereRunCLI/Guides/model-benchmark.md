@@ -4,6 +4,29 @@
 
 Run focused local model benchmarks that measure implementation tradeoffs without changing serving defaults.
 
+Run the versioned, sampled Mere Lite fused quality plan without loading models:
+
+```bash
+mere.run model benchmark fused --suite lite --dry-run --json
+```
+
+Run the Comprehensive fused suite with final-target logprob summaries and
+explicit sandboxed coding evaluation:
+
+```bash
+mere.run model benchmark fused \
+  --suite comprehensive \
+  --logprobs summary \
+  --allow-code-execution \
+  --json
+```
+
+Lite contains 24 cases and Comprehensive contains 110 cases across
+chat/long-context, code, tool-use, and vision. The fused quality lane uses
+native non-greedy model profiles and repeated trials. `--performance-lane
+native` adds separately labeled timing rows with logprob capture off; those
+rows never contribute correctness scores.
+
 ```bash
 mere.run model benchmark gemma4-kv \
   --model text-chat-gemma4-turbo \

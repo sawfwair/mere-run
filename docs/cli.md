@@ -169,6 +169,8 @@ Public tree:
   - `mere.run model optimize` — Build inference-only caches for a supported installed model.
   - `mere.run model benchmark` — Run focused local model benchmarks.
     - `mere.run model benchmark chat` — Run a small grounded-chat eval slice against local assistant models.
+    - `mere.run model benchmark fused` — Run the versioned Mere Lite or Mere Comprehensive fused quality suite.
+    - `mere.run model benchmark fused-fixture` — Stamp or verify normalized fused-benchmark JSONL fixture hashes.
     - `mere.run model benchmark tool-calls` — Run a small tool-call selection eval against local chat models.
     - `mere.run model benchmark tool-continuations` — Evaluate Gemma 4 continuation after completed tool calls.
     - `mere.run model benchmark code` — Run a real coding-eval slice against local coding models.

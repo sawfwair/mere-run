@@ -32,7 +32,11 @@ final class AutoregressiveDecodeEngineTests: XCTestCase {
         }
     }
 
-    private func request(firstToken: Int, budget: Int) -> AutoregressiveDecodeRequest {
+    private func request(
+        firstToken: Int,
+        budget: Int,
+        logprobCapture: ChatLogprobCapture = .none
+    ) -> AutoregressiveDecodeRequest {
         AutoregressiveDecodeRequest(
             initialLogits: oneHotLogits(firstToken),
             generationConfig: GenerationConfig(
@@ -43,7 +47,8 @@ final class AutoregressiveDecodeEngineTests: XCTestCase {
                 repetitionContextSize: 0
             ),
             eosTokens: [eos],
-            tokenBudget: budget
+            tokenBudget: budget,
+            logprobCapture: logprobCapture
         )
     }
 
@@ -153,6 +158,37 @@ final class AutoregressiveDecodeEngineTests: XCTestCase {
         )
         // Whitespace-only pieces buffer until visible text arrives.
         XCTAssertEqual(pieces, [" \nhello", "world"])
+    }
+
+    func testSummaryLogprobsMeasureEveryEmittedToken() throws {
+        let result = try AutoregressiveDecodeEngine.decode(
+            request(firstToken: 3, budget: 8, logprobCapture: .summary),
+            stepForward: scriptedModel([7, 2, eos])
+        )
+
+        let diagnostics = try XCTUnwrap(result.logprobs)
+        XCTAssertEqual(diagnostics.capture.mode, .summary)
+        XCTAssertEqual(diagnostics.source, .finalTarget)
+        XCTAssertEqual(diagnostics.summary.tokenCount, 3)
+        XCTAssertNil(diagnostics.tokens)
+        XCTAssertGreaterThanOrEqual(diagnostics.captureSeconds, 0)
+        XCTAssertTrue(diagnostics.summary.meanRawLogprob.isFinite)
+        XCTAssertTrue(diagnostics.summary.meanPolicyEntropy.isFinite)
+    }
+
+    func testTokenLogprobsRedactReasoningText() throws {
+        let names = [3: "<think>", 7: "private chain", 2: "</think>", 9: "answer"]
+        let result = try AutoregressiveDecodeEngine.decode(
+            request(firstToken: 3, budget: 8, logprobCapture: .top(3)),
+            stepForward: scriptedModel([7, 2, 9, eos]),
+            decodeToken: { names[$0] ?? "" }
+        )
+
+        let tokens = try XCTUnwrap(result.logprobs?.tokens)
+        XCTAssertEqual(tokens.map(\.region), [.markup, .reasoning, .markup, .visible])
+        XCTAssertNil(tokens[1].token)
+        XCTAssertEqual(tokens[3].token, "answer")
+        XCTAssertEqual(tokens[3].topLogprobs.count, 3)
     }
 
     func testDecodeCanStopAfterAConfirmedProtocolTerminator() throws {

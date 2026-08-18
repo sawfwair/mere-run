@@ -2671,6 +2671,75 @@ final class APIServeCommandTests: XCTestCase {
         }
     }
 
+    func testQ38LogprobRequestMapsToTopCapture() throws {
+        let profile = try XCTUnwrap(
+            ManagedModelCatalog.apiProfile(for: Q35Resources.q38TwentySevenB4BitModelId)
+        )
+        let request = OpenAIChatRequest(
+            model: Q35Resources.q38TwentySevenB4BitModelId,
+            messages: [OpenAIChatMessage(role: "user", content: "hello")],
+            logprobs: true,
+            top_logprobs: 5
+        )
+
+        let chatRequest = try APIServerContract.chatRequest(
+            from: request,
+            fallbackLoraPath: nil,
+            contextSize: 4_096,
+            capabilities: .catalog(profile),
+            servedModelID: Q35Resources.q38TwentySevenB4BitModelId,
+            apiProfile: profile
+        )
+
+        XCTAssertEqual(chatRequest.logprobCapture.mode, .top)
+        XCTAssertEqual(chatRequest.logprobCapture.topLogprobs, 5)
+    }
+
+    func testTopLogprobsRequiresLogprobsTrue() throws {
+        let profile = try XCTUnwrap(
+            ManagedModelCatalog.apiProfile(for: LagunaResources.xsModelID)
+        )
+        let request = OpenAIChatRequest(
+            model: LagunaResources.xsModelID,
+            messages: [OpenAIChatMessage(role: "user", content: "hello")],
+            top_logprobs: 5
+        )
+
+        XCTAssertThrowsError(try APIServerContract.chatRequest(
+            from: request,
+            fallbackLoraPath: nil,
+            contextSize: 4_096,
+            capabilities: .catalog(profile),
+            servedModelID: LagunaResources.xsModelID,
+            apiProfile: profile
+        )) { error in
+            XCTAssertTrue(error.localizedDescription.contains("requires logprobs=true"))
+        }
+    }
+
+    func testLogprobsRejectStructuredOutputUntilConstrainedPolicyIsMeasured() throws {
+        let profile = try XCTUnwrap(
+            ManagedModelCatalog.apiProfile(for: Q35Resources.q38TwentySevenB4BitModelId)
+        )
+        let request = OpenAIChatRequest(
+            model: Q35Resources.q38TwentySevenB4BitModelId,
+            messages: [OpenAIChatMessage(role: "user", content: "Return JSON")],
+            logprobs: true,
+            response_format: OpenAIResponseFormat(type: "json_object")
+        )
+
+        XCTAssertThrowsError(try APIServerContract.chatRequest(
+            from: request,
+            fallbackLoraPath: nil,
+            contextSize: 4_096,
+            capabilities: .catalog(profile),
+            servedModelID: Q35Resources.q38TwentySevenB4BitModelId,
+            apiProfile: profile
+        )) { error in
+            XCTAssertTrue(error.localizedDescription.contains("unconstrained text"))
+        }
+    }
+
     func testMuseReasoningEffortMapsToNativeStrength() throws {
         let request = OpenAIChatRequest(
             model: MuseGlimmerResources.modelId,

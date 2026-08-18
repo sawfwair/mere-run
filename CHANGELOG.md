@@ -6,6 +6,41 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Fused model evaluation and logprobs
+
+- added versioned `model benchmark fused` Lite and Comprehensive suites. The
+  Mere-owned manifest records source/version/original id, license and
+  redistribution status, reference and content hashes, capability tags,
+  difficulty, and selection rationale. Lite is a fixed 24-case stratified
+  subset of every source family; Comprehensive contains 110 cases across 59
+  chat/long-context, 21 code, 20 tool-use, and 10 vision cases. Chat includes
+  explanation, rewriting, empathy, uncertainty, tradeoffs, planning,
+  prompt-injection resistance, and constrained creativity—not only extraction.
+  Reports expose lane, source, and capability breakdowns. A `fused-fixture`
+  helper stamps and verifies canonical external-fixture hashes without loading
+  a model.
+- added 10 deterministic generated PNG vision fixtures and wired their image
+  paths through the managed chat plan into the runtime request. OCR, chart,
+  spatial, counting, document-layout, negative-evidence, multi-panel,
+  dense-caption, and action-boundary cases now contain real image input. Exact
+  image-byte hashes are included in provenance, and mutated image fixtures are
+  rejected before any model loads.
+- made fused quality runs sampled and model-native instead of greedy: Qwen3.8
+  uses its published sampling across low/medium/xhigh reasoning tiers,
+  Nemotron Lightning and Laguna use their published policies, and repeated
+  trials are part of the suite contract. A separate opt-in native performance
+  lane disables logprob capture and never contributes correctness scores.
+- added opt-in final-target token diagnostics to native Qwen-family, Nemotron
+  Lightning, and Laguna serial decode. Reports distinguish raw model and
+  post-policy logprob, entropy, top-1/top-2 margin, low-confidence spans,
+  calibration error, selective accuracy, fragile passes, and confident
+  failures. Reasoning-token text is redacted from token capture.
+- added OpenAI-compatible non-streaming chat logprob responses for those
+  managed models, including standard token fields plus explicit raw/policy
+  Mere diagnostics. Quality capture disables speculative decoding so MTP,
+  DSpark, and DFlash draft distributions cannot be mistaken for target-model
+  confidence.
+
 ### Workflow graphs
 
 - workers now stream generation for `text.generate`: the node runs

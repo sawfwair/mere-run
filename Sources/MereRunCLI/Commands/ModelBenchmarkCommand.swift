@@ -13,6 +13,8 @@ struct ModelBenchmark: ParsableCommand {
         abstract: "Run focused local model benchmarks.",
         subcommands: [
             ModelBenchmarkChat.self,
+            ModelBenchmarkFused.self,
+            ModelBenchmarkFusedFixture.self,
             ModelBenchmarkToolCalls.self,
             ModelBenchmarkToolContinuations.self,
             ModelBenchmarkCode.self,

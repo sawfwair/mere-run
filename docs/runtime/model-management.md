@@ -358,6 +358,12 @@ Runs focused local model benchmarks. This is a developer and performance tool,
 not part of the everyday inference workflow. Lanes:
 
 - `chat` — runs a small grounded-chat eval slice against local assistant models.
+- `fused` — runs the versioned 24-case Lite or 110-case Comprehensive
+  chat/code/tools/long-context/vision quality suite with native sampled
+  profiles, repeated trials, provenance, and optional final-target logprob
+  calibration diagnostics.
+- `fused-fixture` — stamps or verifies normalized reference-only fixture
+  content hashes without loading a model.
 - `tool-calls` — runs a small tool-call selection eval against local chat models.
 - `tool-continuations` — evaluates Gemma 4 continuation after completed tool
   calls.
