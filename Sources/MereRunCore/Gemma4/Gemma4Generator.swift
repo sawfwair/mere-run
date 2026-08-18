@@ -1139,7 +1139,9 @@ public actor Gemma4Generator: ChatGenerator {
                     }
 
                     let replacementCaches = forkLayerCaches(baseCaches)
-                    let replacementInput = MLXArray(([next] + acceptedPrefix + [replacement]).map(Int32.init))
+                    let replacementTokens = [next] + acceptedPrefix + [replacement]
+                    let replacementInputValues = replacementTokens.map { Int32($0) }
+                    let replacementInput = MLXArray(replacementInputValues)
                         .reshaped(1, acceptedPrefix.count + 2)
                     let replacementForward = model.forwardForSpeculation(
                         inputIds: replacementInput,

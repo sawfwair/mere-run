@@ -1158,9 +1158,10 @@ public actor Q35Generator: ChatGenerator {
                         }
 
                         let replacementCaches = forkLayerCaches(layerCaches)
-                        let replacementInput = MLXArray(
-                            ([next] + acceptedPrefix + [replacement]).map(Int32.init)
-                        ).reshaped(1, acceptedPrefix.count + 2)
+                        let replacementTokens = [next] + acceptedPrefix + [replacement]
+                        let replacementInputValues = replacementTokens.map { Int32($0) }
+                        let replacementInput = MLXArray(replacementInputValues)
+                            .reshaped(1, acceptedPrefix.count + 2)
                         let replacementForward = model.forward(replacementInput, cache: replacementCaches)
                         MLX.eval(replacementForward.logits)
                         MLX.eval(replacementForward.hidden)
