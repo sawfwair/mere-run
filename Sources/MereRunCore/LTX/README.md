@@ -5,6 +5,8 @@ This directory owns native video generation for mere.run.
 - `LTXDistilledLatentGenerator.swift`: distilled text-to-video and image-to-video path
 - `LTXInferenceTimings.swift`: typed model-load and generation phase timings
 - `LTXGemmaTextEncoder.swift`: text encoder support for LTX models
+- `LTXPromptEmbeddingCache.swift`: bounded resident-session prompt embedding cache
+- `LTXGuidanceProjectionCache.swift`: low-memory-safe full-guidance prompt projection reuse policy
 - `LTX25Resources.swift`: immutable official LTX 2.5 source pins and packed-component layout validation
 - `LTXVideoMP4Writer.swift`: final MP4 assembly
 

@@ -6,6 +6,8 @@ extension LTXVideoVariant: ExpressibleByArgument {}
 extension LTXVideoQuality: ExpressibleByArgument {}
 extension LTXVideoOutputMode: ExpressibleByArgument {}
 extension LTXVideoDecoderKind: ExpressibleByArgument {}
+extension LTXTransformerExecution: ExpressibleByArgument {}
+extension LTXGuidanceProjectionCacheMode: ExpressibleByArgument {}
 extension LTXSamplerMode: ExpressibleByArgument {}
 extension LTXGenerationPreset: ExpressibleByArgument {}
 extension LTXGenerationPipeline: ExpressibleByArgument {}

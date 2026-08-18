@@ -281,7 +281,10 @@ public actor LTXGemmaTextEncoder {
     ) async throws {
         let resources = LTX25Resources(rootURL: root)
         let textEncoderURL = resources.textEncoderURL
-        let transformerURL = resources.transformerURL
+        let connectorURL = LTX25NativeModelPack.optimizedURLIfValid(
+            resources: resources,
+            kind: .connector
+        ) ?? resources.transformerURL
         let metadata = try SafetensorsStreamingLoader.fileMetadata(url: textEncoderURL)
         guard let rawConfig = metadata["gemma_config"],
               let configData = rawConfig.data(using: .utf8) else {
@@ -299,10 +302,9 @@ public actor LTXGemmaTextEncoder {
         }
 
         let languageModel = Gemma4LanguageModel(config: config.textConfig)
-        try SafetensorsStreamingLoader.applyWeightsStreaming(
+        try SafetensorsStreamingLoader.applyWeightsLazyMaterialized(
             url: textEncoderURL,
             to: languageModel,
-            dtype: dtype,
             verify: .none,
             include: { key in
                 key == "model.embed_tokens.weight"
@@ -311,7 +313,10 @@ public actor LTXGemmaTextEncoder {
             },
             mapper: { key, value in
                 guard key.hasPrefix("model.") else { return [] }
-                return [(String(key.dropFirst("model.".count)), value)]
+                return [(
+                    String(key.dropFirst("model.".count)),
+                    HFSafetensorsWeightsLoader.castIfNeeded(value, dtype: dtype)
+                )]
             },
             batchSize: 24
         )
@@ -328,19 +333,19 @@ public actor LTXGemmaTextEncoder {
             numRegisters: 128
         )
         if loadConnectorWeights {
-            try SafetensorsStreamingLoader.applyWeightsStreaming(
+            try SafetensorsStreamingLoader.applyWeightsLazyMaterialized(
                 url: textEncoderURL,
                 to: textFeatures,
-                dtype: dtype,
                 verify: .none,
                 include: { $0.hasPrefix("text_embedding_projection.") },
-                mapper: { key, value in [(key, value)] },
+                mapper: { key, value in
+                    [(key, HFSafetensorsWeightsLoader.castIfNeeded(value, dtype: dtype))]
+                },
                 batchSize: 4
             )
-            try SafetensorsStreamingLoader.applyWeightsStreaming(
-                url: transformerURL,
+            try SafetensorsStreamingLoader.applyWeightsLazyMaterialized(
+                url: connectorURL,
                 to: textFeatures,
-                dtype: dtype,
                 verify: .none,
                 include: { key in
                     key.hasPrefix("model.diffusion_model.video_embeddings_connector.")

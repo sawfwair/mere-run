@@ -19,18 +19,49 @@ struct ModelOptimize: ParsableCommand {
 
     func run() throws {
         let rootURL = try resolveRootURL()
-        let resources = MiniMaxH3Resources(rootURL: rootURL)
-        let outputURL = try MiniMaxH3ModelOptimizer.optimize(
-            resources: resources,
-            replacing: force,
-            progressHandler: { completed, total in
-                CLIStderr.write("MiniMax-H3 AdaLN cache: \(completed)/\(total)\n")
+        let artifacts: [URL]
+        let optimization: String
+        if isLTX25ModelRoot(rootURL) {
+            let resources = LTX25Resources(rootURL: rootURL)
+            var kinds: [LTX25NativeModelPackKind] = [.distilled, .connector]
+            if isLTX25FullModelRoot(rootURL) {
+                kinds.append(.dev)
             }
-        )
-        let bytes = (try? outputURL.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+            artifacts = try kinds.map { kind in
+                let result = try LTX25NativeModelPack.optimize(
+                    resources: resources,
+                    kind: kind,
+                    replacing: force,
+                    progressHandler: { completed, total in
+                        if completed == total || completed.isMultiple(of: 100) {
+                            CLIStderr.write(
+                                "LTX 2.5 native \(kind.rawValue) pack: \(completed)/\(total) tensors\n"
+                            )
+                        }
+                    }
+                )
+                return result.outputURL
+            }
+            optimization = "ltx25-native-model-pack"
+        } else {
+            let resources = MiniMaxH3Resources(rootURL: rootURL)
+            artifacts = [try MiniMaxH3ModelOptimizer.optimize(
+                resources: resources,
+                replacing: force,
+                progressHandler: { completed, total in
+                    CLIStderr.write("MiniMax-H3 AdaLN cache: \(completed)/\(total)\n")
+                }
+            )]
+            optimization = "minimax-h3-adaln-cache"
+        }
+        let bytes = artifacts.reduce(0) { total, url in
+            total + ((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+        }
         let output = ModelOptimizeOutput(
             modelRoot: rootURL.path,
-            artifact: outputURL.path,
+            optimization: optimization,
+            artifact: artifacts[0].path,
+            artifacts: artifacts.map(\.path),
             bytes: bytes
         )
         if json {
@@ -44,7 +75,10 @@ struct ModelOptimize: ParsableCommand {
         } else {
             print("Model optimization complete")
             print("  model: \(output.modelRoot)")
-            print("  artifact: \(output.artifact)")
+            print("  optimization: \(output.optimization)")
+            for artifact in output.artifacts {
+                print("  artifact: \(artifact)")
+            }
             print("  size: \(ByteCountFormatter.string(fromByteCount: Int64(output.bytes), countStyle: .file))")
         }
     }
@@ -59,8 +93,10 @@ struct ModelOptimize: ParsableCommand {
         }
         guard modelID == .miniMaxH3FL2VAMLX
                 || modelID == .miniMaxH3FL2VABF16MLX
-                || modelID == .miniMaxH3Ref2VAMLX else {
-            throw ValidationError("Model optimization currently supports MiniMax-H3 MLX models.")
+                || modelID == .miniMaxH3Ref2VAMLX
+                || modelID == .ltxVideo25DistilledBF16
+                || modelID == .ltxVideo25FullBF16 else {
+            throw ValidationError("Model optimization supports MiniMax-H3 MLX and LTX 2.5 models.")
         }
         do {
             return try ModelResolver().resolve(modelID).rootURL
@@ -72,6 +108,8 @@ struct ModelOptimize: ParsableCommand {
 
 private struct ModelOptimizeOutput: Codable {
     let modelRoot: String
+    let optimization: String
     let artifact: String
+    let artifacts: [String]
     let bytes: Int
 }

@@ -106,7 +106,7 @@ Public tree:
   - `mere.run video generate` — Generate MP4 video with native Swift/MLX video models.
   - `mere.run video prepare-masks` — Prepare reviewable, palette-safe SCAIL-2 masks with native SAM 3.1.
   - `mere.run video retake` — Regenerate a timed video/audio region with native LTX 2.5.
-  - `mere.run video session` — Keep an LTX 2.3 runtime resident for JSONL generation requests.
+  - `mere.run video session` — Keep an LTX 2.3 or LTX 2.5 runtime resident for JSONL generation requests.
 - [`mere.run world`](/runtime/world) — Run persistent local conditioned-video world sessions.
   - `mere.run world serve` — Serve one warm native world-model session over HTTP.
 - [`mere.run graph`](/workflows) — Validate, materialize, run, and submit portable workflow graphs.
@@ -2151,11 +2151,11 @@ revision-addressed layout without copying matching payload bytes on a later pull
 
 ### `mere.run model optimize`
 
-Build a reusable inference-only cache for a compatible locally converted
-MiniMax-H3 MLX model that still contains the full AdaLN branch:
+Build reusable inference-only artifacts for MiniMax-H3 MLX or LTX 2.5:
 
 ```bash
 mere.run model optimize ./MiniMax-H3-FL2VA-full-MLX
+mere.run model optimize video-ltx25-full-bf16
 mere.run model optimize ./MiniMax-H3-FL2VA-full-MLX --json
 ```
 
@@ -2166,6 +2166,13 @@ exact curve for their selected point count. `--force` replaces an existing
 cache atomically after the new cache has been built. The managed
 `video-minimax-h3-fl2va-mlx` and `video-minimax-h3-ref2va-mlx` artifacts already
 include their source-bound caches; no post-pull optimization is needed.
+
+For LTX 2.5, the command streams the distilled transformer and, for a full
+root, the dev transformer into source-bound BF16 native packs. It also writes a
+compact connector pack so text setup does not open the 42 GB official
+transformer. Transformer packs use mere.run's module-key namespace and every
+artifact preserves its tensor payload bytes. Compatible loads prefer validated
+packs automatically and otherwise fall back to the official checkpoint.
 
 ### `mere.run model remove`
 

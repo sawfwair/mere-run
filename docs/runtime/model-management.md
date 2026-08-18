@@ -148,11 +148,12 @@ keep their backing payloads live.
 
 ### `mere.run model optimize`
 
-For compatible locally converted MiniMax-H3 roots that still contain the full
-AdaLN branch, precompute the released 31-point schedule's modulation tables:
+For compatible MiniMax-H3 or LTX 2.5 roots, build the model-specific native
+inference artifact:
 
 ```bash
 mere.run model optimize ./MiniMax-H3-FL2VA-full-MLX
+mere.run model optimize video-ltx25-full-bf16
 ```
 
 The cache is written beside the installed model. Compatible generation runs use
@@ -161,6 +162,14 @@ resample its exact released curve for the selected schedule-point count. The
 managed `video-minimax-h3-fl2va-mlx` artifact already bundles a cache computed
 from the official BF16/F32 projections, so it does not require this command
 after pull.
+
+LTX 2.5 optimization streams the official BF16 transformer payloads into the
+exact native module namespace without materializing the 22B checkpoint or
+changing precision. A full root produces distilled and dev packs under
+`.mere-run/ltx25-native-v1`, plus a compact connector pack so text setup avoids
+opening the official transformer. Compatible loads validate the source revision
+and prefer those packs automatically. Use `--force` for an explicit atomic
+rebuild.
 
 ### `mere.run status`
 
