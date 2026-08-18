@@ -33,6 +33,20 @@ func emitLTXVideoTimingReport(
         CLIStderr.write("    LoRA adapter: \(formatLTXSeconds(report.load.loraAdapterSeconds))s\n")
         CLIStderr.write("  generation total: \(formatLTXSeconds(report.generation.totalSeconds))s\n")
         CLIStderr.write("    text encoding: \(formatLTXSeconds(report.generation.textEncodingSeconds))s\n")
+        CLIStderr.write("    prompt cache: \(report.generation.promptCacheHits) hit(s), \(report.generation.promptCacheMisses) miss(es)\n")
+        CLIStderr.write(
+            "    guidance projection cache: "
+                + "\(formatLTXSeconds(report.generation.guidanceProjectionCacheBuildSeconds))s build, "
+                + "\(report.generation.guidanceProjectionCacheBuilds) build(s), "
+                + "\(report.generation.guidanceProjectionCacheReuses) reuse(s), "
+                + "\(report.generation.guidanceProjectionCacheFallbacks) fallback(s)\n"
+        )
+        CLIStderr.write(
+            "    TeaCache: "
+                + "\(formatLTXSeconds(report.generation.teaCacheDecisionSeconds))s decisions, "
+                + "\(report.generation.teaCacheComputedBlockStacks) computed stack(s), "
+                + "\(report.generation.teaCacheReusedBlockStacks) reused stack(s)\n"
+        )
         CLIStderr.write("    preparation: \(formatLTXSeconds(report.generation.preparationSeconds))s\n")
         CLIStderr.write("    stage 1 denoise: \(formatLTXSeconds(report.generation.stage1DenoiseSeconds))s\n")
         CLIStderr.write("    LoRA fusion: \(formatLTXSeconds(report.generation.loraFusionSeconds))s\n")

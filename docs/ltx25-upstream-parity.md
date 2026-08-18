@@ -81,6 +81,56 @@ The native surface includes the model-affecting upstream controls:
 repeatable `--image-conditioning PIXEL_FRAME:PATH[:STRENGTH[:CRF]]` for the
 complete upstream conditioning surface.
 
+## Native acceleration controls
+
+The acceleration surface remains native Swift, MLX, and Metal:
+
+- `video session` keeps the LTX 2.5 transformer, decoders, and LoRA adapters
+  resident. Its exact-key bounded prompt cache retains materialized Gemma 4
+  connector outputs; repeat prompts avoid text-encoder reload and execution.
+- `--ltx-transformer-execution compiled` reuses one compiled MLX graph across
+  all 48 V2 transformer blocks by rebinding each block's parameters. Eager is
+  the compatibility default because fusion order can change floating-point
+  results slightly.
+- `--ltx-guidance-projection-cache automatic|enabled` materializes the positive
+  prompt's per-block text K/V projections once per denoising evaluation and
+  reuses them across STG and modality-guidance passes. It has an explicit
+  unified-memory reserve and falls back rather than overcommitting memory.
+- `--ltx-teacache` enables calibrated block-residual reuse for the full
+  two-stage Euler and HQ Res2s paths. First and last steps always compute;
+  conditioned, unconditional, perturbed, and isolated guidance branches reuse
+  their own residuals under one synchronized guidance-group decision. Res2s
+  primary and midpoint evaluations keep separate state. TeaCache is opt-in and
+  requires eager execution. `--ltx-teacache-threshold` makes the speed/quality
+  tradeoff explicit, while
+  `--ltx-teacache-calibration-output` records full-compute drift data without
+  skipping any block. Five corrected-checkpoint trajectories fit the maximum
+  drift across each synchronized guidance group; defaults are `0.235` for
+  Euler and `0.39` for Res2s. This is a deterministic approximate mode, not a
+  pixel-identical acceleration, and remains disabled unless requested.
+- DiffVAE neighborhood attention routes to a fused three-dimensional Metal
+  online-softmax kernel on supported Apple GPUs. The bounded MLX SDPA tiling
+  path remains the automatic compatibility fallback.
+- `mere.run model optimize video-ltx25-full-bf16` creates source-bound native
+  transformer and compact text-connector packs under
+  `.mere-run/ltx25-native-v1`. It streams tensor bytes in physical file order,
+  rewrites transformer keys to the native module namespace, and does not
+  quantize or rewrite payload bytes. Loading applies the same requested BF16
+  normalization as the official path, including the checkpoint's FP32 tensors.
+  Connector loading no longer has to touch the 42 GB official transformer
+  checkpoint.
+
+TeaCache and guidance-projection caching are not stacked: enabling TeaCache
+uses the exact projection path against which its drift calibration was
+measured. Timing JSON reports cache builds/reuses/fallbacks, TeaCache decisions,
+and computed versus reused transformer stacks.
+
+The residual-reuse policy follows the
+[TeaCache paper](https://arxiv.org/abs/2411.19108) and
+[official implementation](https://github.com/ali-vilab/TeaCache), with new
+coefficients measured against the pinned LTX 2.5 checkpoint and this native
+transformer rather than copied from an older LTX release.
+
 ## Hardware-specific upstream options
 
 The following upstream switches are CUDA/PyTorch execution strategies, not
@@ -90,10 +140,10 @@ model capabilities, and therefore have no one-for-one Apple-Silicon switch:
 | --- | --- |
 | CPU/disk offload | Swift loaders stream large safetensors and release phases under unified-memory admission |
 | FP8 and NVFP4 policies | The pinned native catalog uses the BF16 checkpoints; no silent precision substitution |
-| `torch.compile` | Not applicable to MLX execution |
-| DiffVAE CUDA optimization presets | The architecture and tiled decode are native; CUTLASS/CuTe presets are CUDA-only |
-| `max_batch_size` | Native guidance passes use the MLX execution plan rather than CUDA transfer batching |
-| prompt-enhancer static KV cache | Performance-only; prompt enhancement output is unchanged |
+| `torch.compile` | `--ltx-transformer-execution compiled` provides shared compiled MLX block execution; eager remains the exact-default path |
+| DiffVAE CUDA optimization presets | Apple GPUs use the native fused 3D Metal neighborhood-attention kernel with an MLX fallback; CUTLASS/CuTe remain CUDA-only |
+| `max_batch_size` | `--ltx-guidance-projection-cache` removes repeated positive-context projections without CUDA transfer batching and preserves a unified-memory reserve |
+| prompt-enhancer static KV cache | Resident `video session` prompt embeddings provide exact reuse after the first materialization |
 | multi-GPU runners | Apple Silicon uses one unified-memory device |
 
 The upstream HDR command also accepts a directory for batch convenience.

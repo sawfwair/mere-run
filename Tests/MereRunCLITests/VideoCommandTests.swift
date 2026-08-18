@@ -27,6 +27,11 @@ final class VideoCommandTests: XCTestCase {
             "--res2s-bong-max-iterations", "12",
             "--gradient-estimation-gamma", "1.5",
             "--video-decoder", "convolutional",
+            "--ltx-transformer-execution", "compiled",
+            "--ltx-guidance-projection-cache", "enabled",
+            "--ltx-teacache",
+            "--ltx-teacache-threshold", "0.75",
+            "--ltx-teacache-calibration-output", "/tmp/ltx25-teacache.json",
         ])
 
         XCTAssertEqual(command.ltxPreset, .hq)
@@ -48,6 +53,11 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertEqual(command.res2sBongMaxIterations, 12)
         XCTAssertEqual(command.gradientEstimationGamma, 1.5)
         XCTAssertEqual(command.videoDecoder, .convolutional)
+        XCTAssertEqual(command.ltxTransformerExecution, .compiled)
+        XCTAssertEqual(command.ltxGuidanceProjectionCache, .enabled)
+        XCTAssertTrue(command.ltxTeaCache)
+        XCTAssertEqual(command.ltxTeaCacheThreshold, 0.75)
+        XCTAssertEqual(command.ltxTeaCacheCalibrationOutput, "/tmp/ltx25-teacache.json")
     }
 
     func testVideoGenerateParsesICLoRASpatialMaskAndStageOnePreview() throws {
@@ -1000,7 +1010,33 @@ final class VideoCommandTests: XCTestCase {
 
         XCTAssertEqual(cmd.model, ModelResolver.ModelID.ltxVideo23AVMLX.rawValue)
         XCTAssertNil(cmd.modelRoot)
+        XCTAssertNil(cmd.videoDecoder)
+        XCTAssertEqual(cmd.transformerExecution, .eager)
+        XCTAssertEqual(cmd.guidanceProjectionCache, .disabled)
+        XCTAssertFalse(cmd.teaCache)
+        XCTAssertNil(cmd.teaCacheThreshold)
+        XCTAssertEqual(cmd.promptCacheCapacity, 8)
         XCTAssertFalse(cmd.quiet)
+    }
+
+    func testVideoSessionParsesLTX25ResidentControls() throws {
+        let cmd = try VideoSession.parse([
+            "--model", "video-ltx25-distilled-bf16",
+            "--video-decoder", "convolutional",
+            "--ltx-transformer-execution", "compiled",
+            "--ltx-guidance-projection-cache", "disabled",
+            "--ltx-teacache",
+            "--ltx-teacache-threshold", "0.6",
+            "--prompt-cache-capacity", "4",
+        ])
+
+        XCTAssertEqual(cmd.model, ModelResolver.ModelID.ltxVideo25DistilledBF16.rawValue)
+        XCTAssertEqual(cmd.videoDecoder, .convolutional)
+        XCTAssertEqual(cmd.transformerExecution, .compiled)
+        XCTAssertEqual(cmd.guidanceProjectionCache, .disabled)
+        XCTAssertTrue(cmd.teaCache)
+        XCTAssertEqual(cmd.teaCacheThreshold, 0.6)
+        XCTAssertEqual(cmd.promptCacheCapacity, 4)
     }
 
     func testVideoSessionRequestDecodesSnakeCase() throws {
@@ -1016,14 +1052,27 @@ final class VideoCommandTests: XCTestCase {
               "fps": 24,
               "seed": 7,
               "image_strength": 0.8,
-              "end_image_strength": 0.7
+              "end_image_strength": 0.7,
+              "transformer_execution": "compiled",
+              "guidance_projection_cache": "enabled",
+              "tea_cache": true,
+              "tea_cache_threshold": 0.7,
+              "tea_cache_calibration_output": "/tmp/calibration.json",
+              "inference_steps": 2,
+              "pipeline": "dev-one-stage",
+              "sampler": "res2s",
+              "video_cfg_guidance_scale": 1,
+              "audio_cfg_guidance_scale": 2,
+              "video_stg_scale": 0.1,
+              "audio_stg_scale": 0.2,
+              "audio_to_video_scale": 1.5,
+              "video_to_audio_scale": 1.75,
+              "distilled_lora_strength_stage_1": 0,
+              "distilled_lora_strength_stage_2": 0
             }
             """.utf8
         )
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-
-        let request = try decoder.decode(LTXVideoSessionRequest.self, from: data)
+        let request = try JSONDecoder().decode(LTXVideoSessionRequest.self, from: data)
 
         XCTAssertEqual(request.id, "fox-1")
         XCTAssertEqual(request.prompt, "a fox runs across snow")
@@ -1033,6 +1082,22 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertEqual(request.numFrames, 33)
         XCTAssertEqual(request.imageStrength ?? 0, 0.8, accuracy: 0.0001)
         XCTAssertEqual(request.endImageStrength ?? 0, 0.7, accuracy: 0.0001)
+        XCTAssertEqual(request.transformerExecution, .compiled)
+        XCTAssertEqual(request.guidanceProjectionCache, .enabled)
+        XCTAssertEqual(request.teaCache, true)
+        XCTAssertEqual(request.teaCacheThreshold, 0.7)
+        XCTAssertEqual(request.teaCacheCalibrationOutput, "/tmp/calibration.json")
+        XCTAssertEqual(request.inferenceSteps, 2)
+        XCTAssertEqual(request.pipeline, .devOneStage)
+        XCTAssertEqual(request.sampler, .res2s)
+        XCTAssertEqual(request.videoCFGGuidanceScale, 1)
+        XCTAssertEqual(request.audioCFGGuidanceScale, 2)
+        XCTAssertEqual(request.videoSTGScale ?? 0, 0.1, accuracy: 0.0001)
+        XCTAssertEqual(request.audioSTGScale ?? 0, 0.2, accuracy: 0.0001)
+        XCTAssertEqual(request.audioToVideoScale ?? 0, 1.5, accuracy: 0.0001)
+        XCTAssertEqual(request.videoToAudioScale ?? 0, 1.75, accuracy: 0.0001)
+        XCTAssertEqual(request.distilledLoRAStrengthStage1, 0)
+        XCTAssertEqual(request.distilledLoRAStrengthStage2, 0)
     }
 
     func testVideoGenerateParsesPreflightJSONFlags() throws {

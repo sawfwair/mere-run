@@ -82,6 +82,32 @@ final class SafetensorsStreamingLoaderTests: XCTestCase {
         }
     }
 
+    func testMetadataUsesTargetSizeForSymbolicLink() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let target = temp.appendingPathComponent("target.safetensors")
+        try writeSafetensors(
+            header: """
+            {
+              "linear.weight": {
+                "dtype": "F32",
+                "shape": [2],
+                "data_offsets": [0, 8]
+              }
+            }
+            """,
+            payloadByteCount: 8,
+            to: target
+        )
+        let link = temp.appendingPathComponent("model.safetensors")
+        try FileManager.default.createSymbolicLink(at: link, withDestinationURL: target)
+
+        let metadata = try SafetensorsStreamingLoader.metadata(url: link)
+
+        XCTAssertEqual(metadata["linear.weight"]?.shape, [2])
+    }
+
     private func writeSafetensors(header: String, payloadByteCount: Int, to url: URL) throws {
         let headerData = Data(header.utf8)
         var headerSize = UInt64(headerData.count).littleEndian

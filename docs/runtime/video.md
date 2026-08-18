@@ -14,7 +14,7 @@ checkpoint resident and render take after take without paying for the reload.
 | `mere.run video cosmos3` | Run native NVIDIA Cosmos3-Edge generation and action modes. |
 | `mere.run video animate` | Animate or replace a masked subject with native Swift/MLX SCAIL-2. |
 | `mere.run video prepare-masks` | Prepare reviewable, palette-safe SCAIL-2 masks with native SAM 3.1. |
-| `mere.run video session` | Keep an LTX 2.3 runtime resident for JSONL generation requests. |
+| `mere.run video session` | Keep an LTX 2.3 or LTX 2.5 runtime resident for JSONL generation requests. |
 | `mere.run video export-latents` | Run native Swift/MLX distilled LTX denoising and export final latents. |
 
 ## macOS Studio
@@ -513,10 +513,11 @@ including model-component loading, text encoding, each denoising stage, LoRA
 fusion where applicable, upsampling, video/audio decode, MP4 writing, unload,
 and total wall time.
 
-### Resident LTX 2.3 generation
+### Resident LTX generation
 
 `video session` amortizes checkpoint loading across serial synchronized-AV
-generations on either the standalone distilled model or the full dev model. It
+generations on LTX 2.3 or LTX 2.5, using either the standalone distilled model
+or the full dev model. It
 reads typed snake-case JSONL requests from stdin and writes one typed JSON
 result or error to stdout for each input line.
 
@@ -532,6 +533,18 @@ keeps the dev transformer and official distilled LoRA resident, leaves the dev
 weights unchanged for Stage 1, and activates the adapter only during Stage 2.
 This avoids permanent BF16 weight fusion and permits repeat requests without
 checkpoint reload or accumulated weight drift.
+
+LTX 2.5 sessions additionally accept typed `transformer_execution`,
+`guidance_projection_cache`, `sampler`, `tea_cache`, `tea_cache_threshold`, and
+`tea_cache_calibration_output` request fields. The session-level
+`--prompt-cache-capacity` controls exact materialized Gemma connector reuse.
+TeaCache is limited to the full two-stage Euler and Res2s paths, remains
+disabled by default, and reports computed/reused 48-block stacks in timings.
+Its corrected BF16 calibration uses the maximum drift across each synchronized
+four-branch guidance group, with conservative default thresholds of `0.235`
+for Euler and `0.39` for Res2S. TeaCache is an approximate generation mode:
+it is deterministic for a fixed request, but cached and uncached videos are
+not pixel-identical. Keep it disabled when exact output reproduction matters.
 
 The first result includes checkpoint-load time. Later results set
 `resident_model_reused` to `true` and report zero load time. Full-model requests

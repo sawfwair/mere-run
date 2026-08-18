@@ -318,6 +318,36 @@ struct VideoGenerate: AsyncParsableCommand {
     var videoDecoder: LTXVideoDecoderKind?
 
     @Option(
+        name: [.customLong("ltx-transformer-execution")],
+        help: "LTX 2.5 transformer blocks: eager or opt-in shared-graph compiled execution; fusion can change floating-point results slightly."
+    )
+    var ltxTransformerExecution: LTXTransformerExecution = .eager
+
+    @Option(
+        name: [.customLong("ltx-guidance-projection-cache")],
+        help: "Reuse positive-prompt attention projections across full-model guidance passes: automatic, disabled, or enabled."
+    )
+    var ltxGuidanceProjectionCache: LTXGuidanceProjectionCacheMode = .disabled
+
+    @Flag(
+        name: [.customLong("ltx-teacache")],
+        help: "Enable calibrated TeaCache block-residual reuse for full LTX 2.5 Euler or HQ Res2S generation."
+    )
+    var ltxTeaCache = false
+
+    @Option(
+        name: [.customLong("ltx-teacache-threshold")],
+        help: "Override the calibrated TeaCache reuse threshold; larger values skip more transformer stacks."
+    )
+    var ltxTeaCacheThreshold: Float?
+
+    @Option(
+        name: [.customLong("ltx-teacache-calibration-output")],
+        help: "Run full-compute TeaCache instrumentation and write native LTX 2.5 drift samples as JSON."
+    )
+    var ltxTeaCacheCalibrationOutput: String?
+
+    @Option(
         name: [.customLong("hdr")],
         help: "LTX 2.5 HDR source/output space: srgb-linear, acescg, or acescct. Writes half-float EXR frames plus a tagged BT.2020/HLG Main10 MP4."
     )
@@ -1369,6 +1399,7 @@ struct VideoGenerate: AsyncParsableCommand {
                     hdrColorSpace: resolvedHDRColorSpace,
                     hdrTransfer: resolvedHDRTransfer,
                     videoDecoder: resolvedVideoDecoder,
+                    transformerExecution: ltxTransformerExecution,
                     modelRoot: resolvedRootURL,
                     outputURL: outputURL
                 )
@@ -1565,6 +1596,16 @@ struct VideoGenerate: AsyncParsableCommand {
                 vaeSpatialTileOverlap: vaeSpatialTileOverlap,
                 skipHDRMP4: skipHDRMP4,
                 videoDecoder: resolvedVideoDecoder,
+                transformerExecution: ltxTransformerExecution,
+                guidanceProjectionCache: ltxGuidanceProjectionCache,
+                teaCache: ltxTeaCache || ltxTeaCacheCalibrationOutput != nil
+                    ? LTXTeaCacheConfiguration(
+                        threshold: ltxTeaCacheThreshold,
+                        calibrationOutputURL: ltxTeaCacheCalibrationOutput.map {
+                            URL(fileURLWithPath: $0).standardizedFileURL
+                        }
+                    )
+                    : nil,
                 modelRoot: resolvedModelRoot,
                 outputURL: outputURL
             )
@@ -1870,6 +1911,7 @@ struct VideoGenerate: AsyncParsableCommand {
         hdrColorSpace: LTXHDRColorSpace?,
         hdrTransfer: LTXHDRTransfer,
         videoDecoder: LTXVideoDecoderKind,
+        transformerExecution: LTXTransformerExecution,
         modelRoot: URL,
         outputURL: URL
     ) async throws {
@@ -1930,7 +1972,8 @@ struct VideoGenerate: AsyncParsableCommand {
                     generatedKeyframeCount: generatedKeyframeCount,
                     generatedKeyframeIndices: generatedKeyframeIndices,
                     hdrColorSpace: hdrColorSpace,
-                    hdrTransfer: hdrTransfer
+                    hdrTransfer: hdrTransfer,
+                    transformerExecution: transformerExecution
                 )
             )
             let unloadStart = videoMonotonicSeconds()
@@ -2025,6 +2068,9 @@ struct VideoGenerate: AsyncParsableCommand {
         vaeSpatialTileOverlap: Int,
         skipHDRMP4: Bool,
         videoDecoder: LTXVideoDecoderKind,
+        transformerExecution: LTXTransformerExecution,
+        guidanceProjectionCache: LTXGuidanceProjectionCacheMode,
+        teaCache: LTXTeaCacheConfiguration?,
         modelRoot: String,
         outputURL: URL
     ) async throws {
@@ -2098,7 +2144,10 @@ struct VideoGenerate: AsyncParsableCommand {
                 vaeSpatialTileSize: vaeSpatialTileSize,
                 vaeSpatialTileOverlap: vaeSpatialTileOverlap,
                 skipStage2: skipStage2,
-                precomputedTextEmbeddingsURL: precomputedTextEmbeddingsURL
+                precomputedTextEmbeddingsURL: precomputedTextEmbeddingsURL,
+                transformerExecution: transformerExecution,
+                guidanceProjectionCache: guidanceProjectionCache,
+                teaCache: teaCache
             )
         }
 
@@ -2673,6 +2722,9 @@ struct VideoGenerate: AsyncParsableCommand {
         }
         if let videoDecoder {
             args += ["--video-decoder", videoDecoder.rawValue]
+        }
+        if ltxTransformerExecution != .eager {
+            args += ["--ltx-transformer-execution", ltxTransformerExecution.rawValue]
         }
         if let hdrColorSpace {
             args += ["--hdr", hdrColorSpace.rawValue]

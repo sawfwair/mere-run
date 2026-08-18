@@ -44,13 +44,17 @@ public enum SafetensorsStreamingLoader {
     }
 
     public static func metadata(url: URL) throws -> [String: TensorMetadata] {
-        let data = try Data(contentsOf: url, options: .mappedIfSafe)
-        return try metadata(fileData: data, fileURL: url)
+        let parsed = try parseHeader(fileURL: url)
+        return try parseTensorMetadata(
+            header: parsed.header,
+            dataOffset: parsed.dataOffset,
+            fileDataCount: parsed.fileSize,
+            fileURL: url
+        )
     }
 
     public static func fileMetadata(url: URL) throws -> [String: String] {
-        let data = try Data(contentsOf: url, options: .mappedIfSafe)
-        return try parseHeader(fileData: data, fileURL: url).header.fileMetadata
+        try parseHeader(fileURL: url).header.fileMetadata
     }
 
     static func metadata(fileData data: Data, fileURL url: URL) throws -> [String: TensorMetadata] {
@@ -68,22 +72,29 @@ public enum SafetensorsStreamingLoader {
         where shouldInclude: (String) -> Bool = { _ in true },
         dtype: DType? = nil
     ) throws -> [String: MLXArray] {
-        let fileData = try Data(contentsOf: url, options: .mappedIfSafe)
-        let parsed = try parseHeader(fileData: fileData, fileURL: url)
+        let parsed = try parseHeader(fileURL: url)
         let tensorMetadata = try parseTensorMetadata(
             header: parsed.header,
             dataOffset: parsed.dataOffset,
-            fileDataCount: fileData.count,
+            fileDataCount: parsed.fileSize,
             fileURL: url
         )
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
 
         var arrays: [String: MLXArray] = [:]
         arrays.reserveCapacity(tensorMetadata.count)
 
-        for (key, metadata) in tensorMetadata where shouldInclude(key) {
-            let tensorData = fileData.subdata(in: metadata.startOffset..<metadata.endOffset)
-            let rawArray = MLXArray(tensorData, metadata.shape, dtype: metadata.dtype)
-            arrays[key] = HFSafetensorsWeightsLoader.castIfNeeded(rawArray, dtype: dtype)
+        let orderedMetadata = tensorMetadata.sorted { lhs, rhs in
+            lhs.value.startOffset < rhs.value.startOffset
+        }
+        for (key, metadata) in orderedMetadata where shouldInclude(key) {
+            arrays[key] = try makeArray(
+                metadata: metadata,
+                fileHandle: handle,
+                fileURL: url,
+                dtype: dtype
+            )
         }
 
         return arrays
@@ -98,22 +109,29 @@ public enum SafetensorsStreamingLoader {
         mapper: (String, MLXArray) -> [(String, MLXArray)] = { key, value in [(key, value)] },
         batchSize: Int = 32
     ) throws {
-        let fileData = try Data(contentsOf: url, options: .mappedIfSafe)
-        let parsed = try parseHeader(fileData: fileData, fileURL: url)
+        let parsed = try parseHeader(fileURL: url)
         let tensorMetadata = try parseTensorMetadata(
             header: parsed.header,
             dataOffset: parsed.dataOffset,
-            fileDataCount: fileData.count,
+            fileDataCount: parsed.fileSize,
             fileURL: url
         )
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
 
         var updates: [(String, MLXArray)] = []
         updates.reserveCapacity(max(1, batchSize))
 
-        for (key, metadata) in tensorMetadata where include(key) {
-            let tensorData = fileData.subdata(in: metadata.startOffset..<metadata.endOffset)
-            let rawArray = MLXArray(tensorData, metadata.shape, dtype: metadata.dtype)
-            let casted = HFSafetensorsWeightsLoader.castIfNeeded(rawArray, dtype: dtype)
+        let orderedMetadata = tensorMetadata.sorted { lhs, rhs in
+            lhs.value.startOffset < rhs.value.startOffset
+        }
+        for (key, metadata) in orderedMetadata where include(key) {
+            let casted = try makeArray(
+                metadata: metadata,
+                fileHandle: handle,
+                fileURL: url,
+                dtype: dtype
+            )
             let mapped = mapper(key, casted)
             if mapped.isEmpty {
                 continue
@@ -122,17 +140,61 @@ public enum SafetensorsStreamingLoader {
             if updates.count >= batchSize {
                 try model.update(parameters: ModuleParameters.unflattened(updates), verify: verify)
                 updates.removeAll(keepingCapacity: true)
+                Memory.clearCache()
             }
         }
 
         if !updates.isEmpty {
             try model.update(parameters: ModuleParameters.unflattened(updates), verify: verify)
+            Memory.clearCache()
         }
     }
 
-    /// Maps the file once and yields one named tensor pair at a time. This is
-    /// intended for very large LoRA checkpoints where loading all adapters at
-    /// once would double resident memory before fusion even begins.
+    /// Installs file-backed MLX load nodes and materializes them in bounded
+    /// batches. Native packs use model parameter names directly, so this path
+    /// avoids the extra Foundation `Data` copy required by mapped checkpoints.
+    public static func applyWeightsLazyMaterialized(
+        url: URL,
+        to model: Module,
+        verify: Module.VerifyUpdate = .none,
+        include: (String) -> Bool = { _ in true },
+        mapper: (String, MLXArray) -> [(String, MLXArray)] = { key, value in [(key, value)] },
+        batchSize: Int = 32
+    ) throws {
+        let metadata = try metadata(url: url)
+        let arrays = try MLX.loadArrays(url: url)
+        let orderedKeys = metadata
+            .sorted { lhs, rhs in lhs.value.startOffset < rhs.value.startOffset }
+            .map(\.key)
+
+        var updates: [(String, MLXArray)] = []
+        updates.reserveCapacity(max(1, batchSize))
+
+        func applyPendingUpdates() throws {
+            guard !updates.isEmpty else { return }
+            let values = updates.map(\.1)
+            try model.update(parameters: ModuleParameters.unflattened(updates), verify: verify)
+            Memory.clearCache()
+            MLX.eval(values)
+            updates.removeAll(keepingCapacity: true)
+            Memory.clearCache()
+        }
+
+        for key in orderedKeys where include(key) {
+            guard let value = arrays[key] else {
+                throw LoaderError.missingTensorPair(url, key)
+            }
+            updates.append(contentsOf: mapper(key, value))
+            if updates.count >= batchSize {
+                try applyPendingUpdates()
+            }
+        }
+        try applyPendingUpdates()
+    }
+
+    /// Reads and yields one named tensor pair at a time. This is intended for
+    /// very large LoRA checkpoints where loading all adapters at once would
+    /// double resident memory before fusion even begins.
     @discardableResult
     public static func forEachTensorPair(
         url: URL,
@@ -141,17 +203,19 @@ public enum SafetensorsStreamingLoader {
         dtype: DType? = nil,
         body: (_ baseKey: String, _ first: MLXArray, _ second: MLXArray) throws -> Void
     ) throws -> Int {
-        let fileData = try Data(contentsOf: url, options: .mappedIfSafe)
-        let parsed = try parseHeader(fileData: fileData, fileURL: url)
+        let parsed = try parseHeader(fileURL: url)
         let tensorMetadata = try parseTensorMetadata(
             header: parsed.header,
             dataOffset: parsed.dataOffset,
-            fileDataCount: fileData.count,
+            fileDataCount: parsed.fileSize,
             fileURL: url
         )
-        let firstKeys = tensorMetadata.keys
-            .filter { $0.hasSuffix(firstSuffix) }
-            .sorted()
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+        let firstKeys = tensorMetadata
+            .filter { $0.key.hasSuffix(firstSuffix) }
+            .sorted { lhs, rhs in lhs.value.startOffset < rhs.value.startOffset }
+            .map(\.key)
         var pairCount = 0
 
         for firstKey in firstKeys {
@@ -161,14 +225,16 @@ public enum SafetensorsStreamingLoader {
                   let secondMetadata = tensorMetadata[secondKey] else {
                 throw LoaderError.missingTensorPair(url, firstKey)
             }
-            let first = makeArray(
+            let first = try makeArray(
                 metadata: firstMetadata,
-                fileData: fileData,
+                fileHandle: handle,
+                fileURL: url,
                 dtype: dtype
             )
-            let second = makeArray(
+            let second = try makeArray(
                 metadata: secondMetadata,
-                fileData: fileData,
+                fileHandle: handle,
+                fileURL: url,
                 dtype: dtype
             )
             try body(baseKey, first, second)
@@ -179,10 +245,16 @@ public enum SafetensorsStreamingLoader {
 
     private static func makeArray(
         metadata: TensorMetadata,
-        fileData: Data,
+        fileHandle: FileHandle,
+        fileURL: URL,
         dtype: DType?
-    ) -> MLXArray {
-        let tensorData = fileData.subdata(in: metadata.startOffset..<metadata.endOffset)
+    ) throws -> MLXArray {
+        let byteCount = metadata.endOffset - metadata.startOffset
+        try fileHandle.seek(toOffset: UInt64(metadata.startOffset))
+        guard let tensorData = try fileHandle.read(upToCount: byteCount),
+              tensorData.count == byteCount else {
+            throw LoaderError.invalidTensorDataRange(fileURL, "offset-\(metadata.startOffset)")
+        }
         let rawArray = MLXArray(tensorData, metadata.shape, dtype: metadata.dtype)
         return HFSafetensorsWeightsLoader.castIfNeeded(rawArray, dtype: dtype)
     }
@@ -206,15 +278,50 @@ public enum SafetensorsStreamingLoader {
         }
 
         let headerData = fileData.subdata(in: 8..<(8 + headerSize))
-        let header: SafetensorsHeader
+        return (try decodeHeader(headerData, fileURL: fileURL), 8 + headerSize)
+    }
+
+    private static func parseHeader(
+        fileURL: URL
+    ) throws -> (header: SafetensorsHeader, dataOffset: Int, fileSize: Int) {
+        let handle = try FileHandle(forReadingFrom: fileURL)
+        defer { try? handle.close() }
+        let fileSize = Int(try handle.seekToEnd())
+        guard fileSize >= 8 else {
+            throw LoaderError.fileTooSmall(fileURL)
+        }
+        try handle.seek(toOffset: 0)
+        guard let prefix = try handle.read(upToCount: 8), prefix.count == 8 else {
+            throw LoaderError.fileTooSmall(fileURL)
+        }
+        var headerSizeLE: UInt64 = 0
+        _ = withUnsafeMutableBytes(of: &headerSizeLE) { destination in
+            prefix.copyBytes(to: destination)
+        }
+        let headerSize = Int(UInt64(littleEndian: headerSizeLE))
+        guard fileSize >= 8 + headerSize,
+              let headerData = try handle.read(upToCount: headerSize),
+              headerData.count == headerSize else {
+            throw LoaderError.truncatedHeader(fileURL)
+        }
+        return (
+            try decodeHeader(headerData, fileURL: fileURL),
+            8 + headerSize,
+            fileSize
+        )
+    }
+
+    private static func decodeHeader(
+        _ headerData: Data,
+        fileURL: URL
+    ) throws -> SafetensorsHeader {
         do {
-            header = try JSONDecoder().decode(SafetensorsHeader.self, from: headerData)
+            return try JSONDecoder().decode(SafetensorsHeader.self, from: headerData)
         } catch let error as SafetensorsHeader.DecodingFailure {
             throw LoaderError.malformedTensorMetadata(fileURL, error.key)
         } catch {
             throw LoaderError.invalidHeader(fileURL)
         }
-        return (header, 8 + headerSize)
     }
 
     private static func parseTensorMetadata(
