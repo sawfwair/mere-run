@@ -216,6 +216,33 @@ final class LocalEngine: ObservableObject {
         q35Generators[modelID] = nil
         lfm2Generators[modelID] = nil
         refresh()
+        refreshReclaimable()
+    }
+
+    /// Bytes a full garbage-collection pass would free: orphaned payloads
+    /// (deleted or partially downloaded models) plus incomplete downloads.
+    @Published private(set) var reclaimableBytes: Int64 = 0
+
+    func refreshReclaimable() {
+        guard Self.isSupported else { return }
+        let plan = try? ModelStorageManager().garbageCollectionPlan()
+        reclaimableBytes = (plan?.reclaimableBytes ?? 0) + (plan?.incompleteDownloadBytes ?? 0)
+    }
+
+    /// Frees everything no installed model references — the way partial
+    /// downloads and crash leftovers come back.
+    func reclaimSpace() {
+        guard Self.isSupported, activity == .idle else { return }
+        lastError = nil
+        do {
+            let storage = try ModelStorageManager()
+            let plan = try storage.garbageCollectionPlan()
+            _ = try storage.execute(plan)
+        } catch {
+            lastError = error.localizedDescription
+        }
+        refresh()
+        refreshReclaimable()
     }
 
     func generateImage(prompt: String, width: Int = 512, height: Int = 512, steps: Int = 4) async {

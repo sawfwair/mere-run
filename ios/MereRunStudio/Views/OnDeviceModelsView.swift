@@ -46,6 +46,28 @@ struct OnDeviceModelsList: View {
                     Text("Choose one from the model menu in Chat to talk entirely on-device.")
                 }
 
+                if local.reclaimableBytes > 0 {
+                    Section {
+                        Button {
+                            local.reclaimSpace()
+                        } label: {
+                            HStack {
+                                Label("Reclaim unused space", systemImage: "trash")
+                                Spacer()
+                                Text(ByteCountFormatter.string(
+                                    fromByteCount: local.reclaimableBytes,
+                                    countStyle: .file
+                                ))
+                                .foregroundStyle(MereTheme.textMuted)
+                            }
+                        }
+                    } header: {
+                        Text("Storage")
+                    } footer: {
+                        Text("Frees partial downloads and payloads no installed model uses.")
+                    }
+                }
+
                 if let message = local.lastError {
                     Section {
                         Text(message)
@@ -58,7 +80,10 @@ struct OnDeviceModelsList: View {
         .background(MereTheme.background.ignoresSafeArea())
         .navigationTitle("On this iPhone")
         .navigationBarTitleDisplayMode(.inline)
-        .onAppear { local.refresh() }
+        .onAppear {
+            local.refresh()
+            local.refreshReclaimable()
+        }
         .confirmationDialog(
             confirmingModel?.licenseNote ?? "",
             isPresented: Binding(
@@ -90,10 +115,16 @@ struct OnDeviceModelsList: View {
             }
             Spacer()
             if !model.isCompatible {
-                Text("Needs \(model.minimumMemoryGB ?? 0) GB\nof memory")
-                    .font(.caption2)
-                    .multilineTextAlignment(.trailing)
-                    .foregroundStyle(MereTheme.textMuted)
+                HStack(spacing: MereTheme.Spacing.s) {
+                    Text("Needs \(model.minimumMemoryGB ?? 0) GB\nof memory")
+                        .font(.caption2)
+                        .multilineTextAlignment(.trailing)
+                        .foregroundStyle(MereTheme.textMuted)
+                    if local.state(of: model.id) == .ready {
+                        Image(systemName: "checkmark.circle")
+                            .foregroundStyle(MereTheme.textMuted)
+                    }
+                }
             } else {
             switch local.state(of: model.id) {
             case .notInstalled:
