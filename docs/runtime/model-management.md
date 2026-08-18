@@ -362,8 +362,10 @@ not part of the everyday inference workflow. Lanes:
   chat/code/tools/long-context/vision quality suite with native sampled
   profiles, repeated trials, provenance, and optional final-target logprob
   calibration diagnostics.
-- `fused-fixture` — stamps or verifies normalized reference-only fixture
-  content hashes without loading a model.
+- `fused-fixture` — stamps or verifies normalized pinned-fixture content hashes
+  without loading a model. The external source material remains non-vendored;
+  `scripts/import-fused-benchmark-fixtures.py` regenerates the selected cases
+  from the revision- and hash-locked source manifest.
 - `tool-calls` — runs a small tool-call selection eval against local chat models.
 - `tool-continuations` — evaluates Gemma 4 continuation after completed tool
   calls.

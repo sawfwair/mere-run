@@ -1,0 +1,67 @@
+{
+  "schemaVersion": 1,
+  "evalplus": {
+    "repositoryRevision": "26d6d00bb1fd0fa37f39c99d5290da67891d1c5e",
+    "humanEval": {
+      "version": "v0.1.10",
+      "url": "https://github.com/evalplus/humanevalplus_release/releases/download/v0.1.10/HumanEvalPlus.jsonl.gz",
+      "sha256": "272720b90ac375502c8ed23cd791c2a93dfb22a911641a494da74a426c09f101"
+    },
+    "mbpp": {
+      "version": "v0.2.0",
+      "url": "https://github.com/evalplus/mbppplus_release/releases/download/v0.2.0/MbppPlus.jsonl.gz",
+      "sha256": "af43697e8791c4c149bdfd6b489d8b5412507551ac20e28a439f650b8225db63"
+    }
+  },
+  "liveCodeBench": {
+    "repositoryRevision": "28fef95ea8c9f7a547c8329f2cd3d32b92c1fa24",
+    "datasetRevision": "0fe84c3912ea0c4d4a78037083943e8f0c4dd505",
+    "version": "release_v5",
+    "url": "https://huggingface.co/datasets/livecodebench/code_generation_lite/resolve/0fe84c3912ea0c4d4a78037083943e8f0c4dd505/test.jsonl",
+    "selectedRows": [
+      {"index": 0, "questionID": "1873_A", "fixtureID": "lcb.release-v5.stratum-0", "rawSHA256": "eba9fa95de36e7eb53bfb392826ea4d335a9b65347abeed1c5f6a034c0580b5d"},
+      {"index": 3, "questionID": "1883_B", "fixtureID": "lcb.release-v5.stratum-1", "rawSHA256": "5140d51e51553d947ed9f7131542042c73fa681a761458951f0d05e9c4d98740"},
+      {"index": 6, "questionID": "1899_B", "fixtureID": "lcb.release-v5.stratum-2", "rawSHA256": "7ea74a8879662bdc9658d48d7be67621d245d9a397bdd002508ceaaf14f68f5d"},
+      {"index": 9, "questionID": "2727", "fixtureID": "lcb.release-v5.stratum-3", "rawSHA256": "cc8db8ed098d199d78ac5be072be5bd5bf6e43f6b0b4f6811338226b1aaffc8a"},
+      {"index": 10, "questionID": "2728", "fixtureID": "lcb.release-v5.stratum-4", "rawSHA256": "6eabfaa2132f7f299653c53a593a91777f8e32b90e2e43fcbf3f8bd6a848fb31"},
+      {"index": 15, "questionID": "2757", "fixtureID": "lcb.release-v5.stratum-5", "rawSHA256": "c16b00fc43bb38983cd484fb65f4f2eb089963550b95814cbc3a66fe46397cbe"}
+    ]
+  },
+  "bfcl": {
+    "version": "v3",
+    "repositoryRevision": "ea13468e4423454d0c213704fb87cf7cb3990433",
+    "rawBaseURL": "https://raw.githubusercontent.com/ShishirPatil/gorilla/ea13468e4423454d0c213704fb87cf7cb3990433/berkeley-function-call-leaderboard/bfcl_eval/data/",
+    "resources": {
+      "BFCL_v3_simple.json": "fbc37b2ad252bf9af985582e0e07b456173fe627d957491472ea9cef5fb83158",
+      "possible_answer/BFCL_v3_simple.json": "2911a2bc00df82c4f999ffa64fedb0164cb88e96212ffa5972087eb91fd496ee",
+      "BFCL_v3_java.json": "261d327d50c1bb505614dd5f75a29167d5bd9f938e5cefefef989c325cb67848",
+      "possible_answer/BFCL_v3_java.json": "692c16dac988f24f41e26591b7c7ad9596d0d7f05d3c94d15dbf7de3f48025e5",
+      "BFCL_v3_parallel.json": "fad375d68295776efb63e5aa331dd884f8635e7bb50e05908113c74f14281c3c",
+      "possible_answer/BFCL_v3_parallel.json": "3af54bf04e5b7640b03a9b6a82440f52474feb24b398f94435fd2b155c7727de",
+      "BFCL_v3_multiple.json": "aef168155ebd74b7ac2401198b201343bc7d16d7a3d7e0d4e6d8ee82c6969b2a",
+      "possible_answer/BFCL_v3_multiple.json": "244e00ce9395df948bcafc7bee64e8f9c87ef70887587d83cae45b13699f3047",
+      "BFCL_v3_parallel_multiple.json": "8863ea8433239f55c5f016154cf0830853c89f693c6ea270396a2fa121960579",
+      "possible_answer/BFCL_v3_parallel_multiple.json": "5ebf24f458c1f16300c05505d83d6f0a1b68b79be273a033febd0d4f840507e3",
+      "BFCL_v3_irrelevance.json": "8237162db28f3cf2e3f7d0b0380333fdf829c2ff15234506b0f2205399c8c655",
+      "BFCL_v3_multi_turn_base.json": "fe5c442849bdb2c2cdedc91f377411ff7fc6cd11af299766f4554d71d3d40f98",
+      "possible_answer/BFCL_v3_multi_turn_base.json": "6ea6bf48a2fc6067b57a289d314e7dc0582b12e22be53c8f7681599fba84a028",
+      "BFCL_v3_multi_turn_miss_func.json": "4a3a862f3e897d121ad94aa2c3f29ea752b7f7ac4eac6a23c8d502d1143e3492",
+      "possible_answer/BFCL_v3_multi_turn_miss_func.json": "e47b7f29224e43b8991ef6f5e6e01a936a4dccad17d1484610e6a33f27998b34",
+      "BFCL_v3_multi_turn_miss_param.json": "25509d5c441017c51de784e7670647dbec11a22fe0640990b0dafabf32e8c8d1",
+      "possible_answer/BFCL_v3_multi_turn_miss_param.json": "585d97fd579965a14b63d09882a680bcfbd1826ccf3e3a5de6fa68363c98a704",
+      "BFCL_v3_multi_turn_long_context.json": "17898c71fc5ceca4538e812602bc0338efafe665594380094bd4288f10394f51",
+      "possible_answer/BFCL_v3_multi_turn_long_context.json": "387fae6ec3146c1fd4cce8b901a69b1ec7a0844aa211f425f79049d35dd0b433",
+      "multi_turn_func_doc/gorilla_file_system.json": "26c01bed25bf7affbc8d281cc8124ccdc220a64c374ac4a7a9181dea0a0468ee",
+      "multi_turn_func_doc/posting_api.json": "87f9fc404a06e4107d7c366f1399c596440e84c16cb119faf374b2f532d86e8b"
+    }
+  },
+  "longBench": {
+    "version": "v1",
+    "repositoryRevision": "2e00731f8d0bff23dc4325161044d0ed8af94c1e",
+    "datasetRevision": "5e628be450b7e67fb7ae6e201bd6d8f7056f7672",
+    "dataURL": "https://huggingface.co/datasets/THUDM/LongBench/resolve/5e628be450b7e67fb7ae6e201bd6d8f7056f7672/data.zip",
+    "dataSHA256": "cb45b11a4133c6bc1d6a44b0f8e701335ff1e543195db1103472e575857f7f64",
+    "promptURL": "https://raw.githubusercontent.com/THUDM/LongBench/2e00731f8d0bff23dc4325161044d0ed8af94c1e/LongBench/config/dataset2prompt.json",
+    "promptSHA256": "56d22ad4f382169c2b8a11ff4c982a4a1bea096c8152b0f0b85b64686b157c30"
+  }
+}

@@ -27,6 +27,45 @@ native non-greedy model profiles and repeated trials. `--performance-lane
 native` adds separately labeled timing rows with logprob capture off; those
 rows never contribute correctness scores.
 
+The upstream HumanEval+, MBPP+, LiveCodeBench, BFCL, and LongBench datasets are
+not vendored. Generate the pinned 35-case normalized selection from the
+hash-verified source lock, stamp it, and verify it before model loading:
+
+```bash
+python3 scripts/import-fused-benchmark-fixtures.py
+mere.run model benchmark fused-fixture \
+  .tmp/fused-benchmark-fixtures/unstamped.jsonl \
+  > .tmp/fused-benchmark-fixtures/selected.jsonl
+mere.run model benchmark fused-fixture \
+  .tmp/fused-benchmark-fixtures/selected.jsonl --check
+```
+
+Pass the frozen file to `fused` with `--external-cases`. The selection exercises
+Plus tests, LiveCodeBench public/private execution, BFCL multi-call and no-call
+semantics, and LongBench QA-F1, ROUGE-L, and retrieval scoring. It is a Mere
+subset with pinned provenance, not an upstream leaderboard reproduction.
+
+Fused runs never download missing models. For a long run, checkpoint every
+completed case-trial and yield cleanly after a bounded slice:
+
+```bash
+mere.run model benchmark fused \
+  --suite comprehensive \
+  --models vision-chat-q38-27b \
+  --external-cases .tmp/fused-benchmark-fixtures/selected.jsonl \
+  --allow-code-execution \
+  --checkpoint .tmp/fused-benchmark-results/qwen38.json \
+  --case-trial-limit 5 \
+  --json
+```
+
+Repeat the exact command with `--resume`. Resume verifies the complete plan and
+installed model-manifest hashes before skipping completed rows. The plan also
+binds the exact runner binary, host identity, resolved Python binary, and
+resolved sandbox backend. Model preparation or generation failures preserve
+prior rows but leave the current row pending for retry. `--dry-run` can create
+or validate an empty checkpoint without model loading or Metal work.
+
 ```bash
 mere.run model benchmark gemma4-kv \
   --model text-chat-gemma4-turbo \

@@ -1,6 +1,7 @@
 import ArgumentParser
 import Foundation
 import MereRunCore
+import MereRunRelayKit
 
 enum FusedBenchmarkPerformanceLane: String, CaseIterable, ExpressibleByArgument, Codable {
     case none
@@ -70,6 +71,21 @@ struct ModelBenchmarkFused: AsyncParsableCommand {
     @Flag(name: [.long], help: "Print the complete plan without loading or running models.")
     var dryRun: Bool = false
 
+    @Option(
+        name: [.long],
+        help: "Atomically persist the run plan and every completed case-trial as JSON."
+    )
+    var checkpoint: String?
+
+    @Flag(name: [.long], help: "Resume a checkpoint whose complete run plan exactly matches this invocation.")
+    var resume: Bool = false
+
+    @Option(
+        name: [.customLong("case-trial-limit")],
+        help: "Stop cleanly after this many new case-trials; requires --checkpoint."
+    )
+    var caseTrialLimit: Int?
+
     @Flag(name: [.long], help: "Emit machine-readable JSON.")
     var json: Bool = false
 
@@ -88,6 +104,15 @@ struct ModelBenchmarkFused: AsyncParsableCommand {
         }
         guard executionTimeout > 0, executionTimeout.isFinite else {
             throw ValidationError("--execution-timeout must be a positive finite number.")
+        }
+        guard !resume || checkpoint != nil else {
+            throw ValidationError("--resume requires --checkpoint.")
+        }
+        guard caseTrialLimit == nil || caseTrialLimit! > 0 else {
+            throw ValidationError("--case-trial-limit must be greater than zero.")
+        }
+        guard caseTrialLimit == nil || checkpoint != nil else {
+            throw ValidationError("--case-trial-limit requires --checkpoint.")
         }
         let manifest = try loadedManifest()
         let selected = try selectedCases(in: manifest)
@@ -124,35 +149,101 @@ struct ModelBenchmarkFused: AsyncParsableCommand {
         }
         let repeatedTrials = trials ?? suiteManifest.defaultTrials(for: suite)
         let capture = logprobs.capture(topLogprobs: topLogprobs)
+        let runner = try FusedBenchmarkRunnerIdentity.current()
+        let host = FusedBenchmarkHost.current()
+        let includesExecutableCode = selected.contains { descriptor in
+            descriptor.adapter == .humanEval || descriptor.adapter == .externalCode
+        }
+        let codeRuntime = try includesExecutableCode && allowCodeExecution
+            ? FusedBenchmarkCodeRuntimeIdentity.resolve(python: python, sandbox: sandbox)
+            : nil
         let plan = FusedBenchmarkPlan(
+            runnerVersion: runner.version,
+            runnerExecutableByteCount: runner.executableByteCount,
+            runnerExecutableSHA256: runner.executableSHA256,
+            host: host,
             manifestID: suiteManifest.id,
             manifestVersion: suiteManifest.version,
             manifestSHA256: try suiteManifest.contentSHA256(),
             suite: suite.rawValue,
-            models: modelIDs.map { modelID in
-                FusedBenchmarkPlannedModel(
+            models: try modelIDs.map { modelID in
+                try FusedBenchmarkPlannedModel.resolve(
                     id: modelID,
-                    profiles: FusedBenchmarkSamplingProfile.nativeProfiles(
-                        modelID: modelID,
-                        suite: suite
-                    )
+                    suite: suite
                 )
             },
             trials: repeatedTrials,
             qualityLane: "sampled-final-target; exact-policy; logprobs=\(capture.mode.rawValue)",
             performanceLane: performanceLane.rawValue,
+            settings: FusedBenchmarkRunSettings(
+                maxTokensOverride: maxTokens,
+                contextSize: contextSize,
+                logprobs: logprobs.rawValue,
+                topLogprobs: topLogprobs,
+                executionTimeout: executionTimeout,
+                pythonExecutable: python,
+                pythonResolvedPath: codeRuntime?.pythonResolvedPath,
+                pythonExecutableSHA256: codeRuntime?.pythonExecutableSHA256,
+                sandbox: sandbox.rawValue,
+                sandboxBackend: codeRuntime?.sandboxBackend,
+                allowCodeExecution: allowCodeExecution,
+                logResponses: logResponses
+            ),
             cases: resolvedCases.map(\.plan),
             importedFixtureFiles: fixturePaths
         )
 
+        let checkpointStore = checkpoint.map {
+            FusedBenchmarkCheckpointStore(
+                url: URL(fileURLWithPath: $0).standardizedFileURL
+            )
+        }
+        var results: [FusedBenchmarkCaseResult]
+        if let checkpointStore {
+            if resume {
+                results = try checkpointStore.loadResults(validating: plan)
+            } else {
+                try checkpointStore.initialize(plan: plan)
+                results = []
+            }
+        } else {
+            results = []
+        }
+
         if dryRun {
-            try printReport(FusedBenchmarkReport(plan: plan, results: []), dryRun: true)
+            try printReport(FusedBenchmarkReport(plan: plan, results: results), dryRun: true)
             return
         }
 
+        var completedKeys = Set(results.map(\.key))
+        let expectedKeys = plan.expectedResultKeys
+        let pendingKeys = expectedKeys.subtracting(completedKeys)
+        if pendingKeys.isEmpty {
+            try printReport(FusedBenchmarkReport(plan: plan, results: results), dryRun: false)
+            return
+        }
+        let pendingModelIDs = Set(pendingKeys.map(\.model))
+        let unavailable = plan.models.filter {
+            pendingModelIDs.contains($0.id) && !$0.installed
+        }.map(\.id)
+        guard unavailable.isEmpty else {
+            throw ValidationError(
+                "Fused benchmarks never download models. Mount or install these models under the selected "
+                    + "--models-root before running: \(unavailable.joined(separator: ", "))."
+            )
+        }
+
         try MLXBundleSupport.ensureAvailable(quiet: json)
-        var results: [FusedBenchmarkCaseResult] = []
+        var completedThisInvocation = 0
+        var reachedCaseTrialLimit = false
         for modelID in modelIDs {
+            if reachedCaseTrialLimit {
+                break
+            }
+            let modelHasPendingResults = pendingKeys.contains { $0.model == modelID }
+            if !modelHasPendingResults {
+                continue
+            }
             if !json {
                 CLIStderr.write("Fused quality benchmark: \(modelID)\n")
             }
@@ -169,35 +260,90 @@ struct ModelBenchmarkFused: AsyncParsableCommand {
                 modelID: modelID,
                 suite: suite
             )
-            for profile in profiles {
-                for trial in 1...repeatedTrials {
-                    for benchmarkCase in resolvedCases {
-                        results.append(try await runCase(
-                            benchmarkCase,
-                            modelID: modelID,
-                            profile: profile,
-                            trial: trial,
-                            capture: capture,
-                            lane: "quality-final-target",
-                            scoreQuality: true,
-                            pool: pool
-                        ))
+            do {
+                profileLoop: for profile in profiles {
+                    for trial in 1...repeatedTrials {
+                        for benchmarkCase in resolvedCases {
+                            let key = FusedBenchmarkResultKey(
+                                lane: "quality-final-target",
+                                model: modelID,
+                                profile: profile.name,
+                                trial: trial,
+                                caseID: benchmarkCase.descriptor.id
+                            )
+                            if completedKeys.contains(key) {
+                                continue
+                            }
+                            let result = try await runCase(
+                                benchmarkCase,
+                                modelID: modelID,
+                                profile: profile,
+                                trial: trial,
+                                capture: capture,
+                                lane: "quality-final-target",
+                                scoreQuality: true,
+                                pool: pool
+                            )
+                            results.append(result)
+                            completedKeys.insert(result.key)
+                            completedThisInvocation += 1
+                            try checkpointStore?.write(plan: plan, results: results)
+                            if let checkpointStore {
+                                CLIStderr.write(
+                                    "Checkpointed \(results.count)/\(expectedKeys.count) case-trials at "
+                                        + "\(checkpointStore.url.path).\n"
+                                )
+                            }
+                            if let caseTrialLimit,
+                               completedThisInvocation >= caseTrialLimit {
+                                reachedCaseTrialLimit = true
+                                break profileLoop
+                            }
+                        }
+                    }
+                    if performanceLane == .native {
+                        for benchmarkCase in resolvedCases {
+                            let key = FusedBenchmarkResultKey(
+                                lane: "performance-native-runtime",
+                                model: modelID,
+                                profile: profile.name,
+                                trial: 1,
+                                caseID: benchmarkCase.descriptor.id
+                            )
+                            if completedKeys.contains(key) {
+                                continue
+                            }
+                            let result = try await runCase(
+                                benchmarkCase,
+                                modelID: modelID,
+                                profile: profile,
+                                trial: 1,
+                                capture: .none,
+                                lane: "performance-native-runtime",
+                                scoreQuality: false,
+                                pool: pool
+                            )
+                            results.append(result)
+                            completedKeys.insert(result.key)
+                            completedThisInvocation += 1
+                            try checkpointStore?.write(plan: plan, results: results)
+                            if let checkpointStore {
+                                CLIStderr.write(
+                                    "Checkpointed \(results.count)/\(expectedKeys.count) case-trials at "
+                                        + "\(checkpointStore.url.path).\n"
+                                )
+                            }
+                            if let caseTrialLimit,
+                               completedThisInvocation >= caseTrialLimit {
+                                reachedCaseTrialLimit = true
+                                break profileLoop
+                            }
+                        }
                     }
                 }
-                if performanceLane == .native {
-                    for benchmarkCase in resolvedCases {
-                        results.append(try await runCase(
-                            benchmarkCase,
-                            modelID: modelID,
-                            profile: profile,
-                            trial: 1,
-                            capture: .none,
-                            lane: "performance-native-runtime",
-                            scoreQuality: false,
-                            pool: pool
-                        ))
-                    }
-                }
+            } catch {
+                _ = try? await pool.unloadModel(idOrAlias: modelID)
+                throw error
             }
             _ = try? await pool.unloadModel(idOrAlias: modelID)
         }
@@ -259,12 +405,12 @@ struct ModelBenchmarkFused: AsyncParsableCommand {
                 serverContextSize: contextSize
             )
         } catch {
-            return benchmarkCase.failedResult(
+            throw FusedBenchmarkRuntimeError.modelPreparation(
                 model: modelID,
                 profile: profile.name,
                 trial: trial,
-                lane: lane,
-                error: String(describing: error)
+                caseID: benchmarkCase.descriptor.id,
+                detail: String(describing: error)
             )
         }
 
@@ -275,13 +421,12 @@ struct ModelBenchmarkFused: AsyncParsableCommand {
             await plan.lease.release()
         } catch {
             await plan.lease.release()
-            return benchmarkCase.failedResult(
+            throw FusedBenchmarkRuntimeError.generation(
                 model: modelID,
                 profile: profile.name,
                 trial: trial,
-                lane: lane,
-                error: String(describing: error),
-                generationSeconds: Date().timeIntervalSince(started)
+                caseID: benchmarkCase.descriptor.id,
+                detail: String(describing: error)
             )
         }
         let generationSeconds = Date().timeIntervalSince(started)
@@ -381,14 +526,54 @@ struct ModelBenchmarkFused: AsyncParsableCommand {
     }
 }
 
-private struct FusedBenchmarkScoring {
+struct FusedBenchmarkScoring {
     let passed: Bool?
     let score: Double?
     let executionSeconds: Double?
     let error: String?
 }
 
-private enum FusedResolvedBenchmarkPayload {
+enum FusedBenchmarkRuntimeError: LocalizedError {
+    case modelPreparation(model: String, profile: String, trial: Int, caseID: String, detail: String)
+    case generation(model: String, profile: String, trial: Int, caseID: String, detail: String)
+
+    var errorDescription: String? {
+        switch self {
+        case .modelPreparation(let model, let profile, let trial, let caseID, let detail):
+            return Self.message(
+                stage: "model preparation",
+                model: model,
+                profile: profile,
+                trial: trial,
+                caseID: caseID,
+                detail: detail
+            )
+        case .generation(let model, let profile, let trial, let caseID, let detail):
+            return Self.message(
+                stage: "generation",
+                model: model,
+                profile: profile,
+                trial: trial,
+                caseID: caseID,
+                detail: detail
+            )
+        }
+    }
+
+    private static func message(
+        stage: String,
+        model: String,
+        profile: String,
+        trial: Int,
+        caseID: String,
+        detail: String
+    ) -> String {
+        "Fused benchmark \(stage) failed for \(model) [\(profile)] trial \(trial), case \(caseID); "
+            + "the row remains pending: \(detail)"
+    }
+}
+
+enum FusedResolvedBenchmarkPayload {
     case chat(ChatBenchmarkCase)
     case tool(ToolBenchmarkCase)
     case code(CodeBenchmarkTask)
@@ -396,7 +581,7 @@ private enum FusedResolvedBenchmarkPayload {
     case unresolved(String)
 }
 
-private struct FusedResolvedBenchmarkCase {
+struct FusedResolvedBenchmarkCase {
     let descriptor: FusedBenchmarkCaseDescriptor
     let provenance: FusedBenchmarkProvenance
     let payload: FusedResolvedBenchmarkPayload
@@ -485,13 +670,14 @@ private struct FusedResolvedBenchmarkCase {
                 contentSHA256: contentHash,
                 imageSHA256: imageSHA256,
                 sourceVersion: imported[descriptor.id]?.sourceVersion,
+                sourceRevision: imported[descriptor.id]?.sourceRevision,
                 originalID: imported[descriptor.id]?.originalID
             ),
             payload: payload
         )
     }
 
-    var plan: FusedBenchmarkPlannedCase {
+    fileprivate var plan: FusedBenchmarkPlannedCase {
         let resolved: Bool
         let reason: String?
         if case .unresolved(let detail) = payload {
@@ -549,7 +735,8 @@ private struct FusedResolvedBenchmarkCase {
         case .external(let benchmarkCase):
             messages = benchmarkCase.messages
             tools = benchmarkCase.tools
-            defaultBudget = benchmarkCase.kind == .code ? 1_024 : 256
+            defaultBudget = benchmarkCase.generationBudget
+                ?? (benchmarkCase.kind == .code ? 1_024 : 256)
             logprobRegionHint = benchmarkCase.kind == .code ? .code : .visible
         case .unresolved:
             return nil
@@ -655,26 +842,59 @@ private struct FusedResolvedBenchmarkCase {
     ) throws -> FusedBenchmarkScoring {
         switch benchmarkCase.kind {
         case .chat, .vision:
-            let normalized = visibleResponse.lowercased()
-            let required = benchmarkCase.requiredPhrases ?? []
-            let forbidden = benchmarkCase.forbiddenPhrases ?? []
-            let passedChecks = required.filter { normalized.contains($0.lowercased()) }.count
-                + forbidden.filter { !normalized.contains($0.lowercased()) }.count
-            let total = required.count + forbidden.count
+            let metric = benchmarkCase.textMetric ?? .phraseChecks
+            if metric != .phraseChecks {
+                let references = benchmarkCase.referenceAnswers ?? []
+                let score = references.map { reference in
+                    Self.textScore(metric: metric, prediction: visibleResponse, reference: reference)
+                }.max() ?? 0
+                let threshold = benchmarkCase.passThreshold ?? 1
+                let passed = score >= threshold
+                return FusedBenchmarkScoring(
+                    passed: passed,
+                    score: score,
+                    executionSeconds: nil,
+                    error: passed ? nil : "external text score was below \(threshold)"
+                )
+            }
+            let phraseResult = Self.phraseChecks(
+                response: visibleResponse,
+                required: benchmarkCase.requiredPhrases ?? [],
+                forbidden: benchmarkCase.forbiddenPhrases ?? []
+            )
             return FusedBenchmarkScoring(
-                passed: total > 0 ? passedChecks == total : nil,
-                score: total > 0 ? Double(passedChecks) / Double(total) : nil,
+                passed: phraseResult.total > 0 ? phraseResult.passed == phraseResult.total : nil,
+                score: phraseResult.total > 0
+                    ? Double(phraseResult.passed) / Double(phraseResult.total)
+                    : nil,
                 executionSeconds: nil,
-                error: total > 0 && passedChecks != total ? "external text checks failed" : nil
+                error: phraseResult.total > 0 && phraseResult.passed != phraseResult.total
+                    ? "external text checks failed"
+                    : nil
             )
         case .tool:
             let calls = response.toolCalls ?? []
-            let match = calls.first { $0.name == benchmarkCase.expectedToolName }
-            let argumentChecks = benchmarkCase.expectedArguments ?? [:]
-            let argumentsPassed = match.map { call in
-                argumentChecks.allSatisfy { call.arguments[$0.key] == $0.value }
-            } ?? false
-            let passed = match != nil && argumentsPassed
+            let phraseResult = Self.phraseChecks(
+                response: visibleResponse,
+                required: benchmarkCase.requiredPhrases ?? [],
+                forbidden: benchmarkCase.forbiddenPhrases ?? []
+            )
+            let phrasesPassed = phraseResult.passed == phraseResult.total
+            let expectedCalls: [FusedExternalToolExpectation]
+            if let declared = benchmarkCase.expectedToolCalls {
+                expectedCalls = declared
+            } else if let name = benchmarkCase.expectedToolName {
+                expectedCalls = [FusedExternalToolExpectation(
+                    name: name,
+                    arguments: (benchmarkCase.expectedArguments ?? [:]).mapValues { [$0] }
+                )]
+            } else {
+                expectedCalls = []
+            }
+            let callsPassed = benchmarkCase.expectsNoToolCalls == true
+                ? calls.isEmpty
+                : Self.toolCallsMatch(expected: expectedCalls, observed: calls)
+            let passed = callsPassed && phrasesPassed
             return FusedBenchmarkScoring(
                 passed: passed,
                 score: passed ? 1 : 0,
@@ -682,18 +902,45 @@ private struct FusedResolvedBenchmarkCase {
                 error: passed ? nil : "external tool expectation failed"
             )
         case .code:
-            guard allowCodeExecution,
-                  let entryPoint = benchmarkCase.entryPoint,
-                  let tests = benchmarkCase.tests else {
+            guard allowCodeExecution else {
                 return FusedBenchmarkScoring(
                     passed: nil,
                     score: nil,
                     executionSeconds: nil,
-                    error: "external code fixture is incomplete or execution was not authorized"
+                    error: "external code execution was not authorized"
                 )
             }
-            let code = Self.extractCode(visibleResponse, entryPoint: entryPoint)
-            let program = "\(code)\n\n\(tests)\n\ncheck(\(entryPoint))\n"
+            let code = Self.extractCode(visibleResponse)
+            let evaluation = benchmarkCase.codeEvaluation ?? .function
+            let program: String
+            switch evaluation {
+            case .function:
+                guard let entryPoint = benchmarkCase.entryPoint,
+                      let tests = benchmarkCase.tests else {
+                    return FusedBenchmarkScoring(
+                        passed: nil,
+                        score: nil,
+                        executionSeconds: nil,
+                        error: "external function fixture is incomplete"
+                    )
+                }
+                program = "\(code)\n\n_mere_candidate = \(entryPoint)\n\n\(tests)\n\ncheck(_mere_candidate)\n"
+            case .stdin, .functional:
+                guard let codeTests = benchmarkCase.codeTests else {
+                    return FusedBenchmarkScoring(
+                        passed: nil,
+                        score: nil,
+                        executionSeconds: nil,
+                        error: "external program fixture is incomplete"
+                    )
+                }
+                program = try Self.programHarness(
+                    candidate: code,
+                    evaluation: evaluation,
+                    entryPoint: benchmarkCase.entryPoint,
+                    tests: codeTests
+                )
+            }
             let execution = try CodeExecutionSandbox.runPython(
                 program: program,
                 python: python,
@@ -705,6 +952,197 @@ private struct FusedResolvedBenchmarkCase {
                 score: execution.passed ? 1 : 0,
                 executionSeconds: execution.seconds,
                 error: execution.errorSummary
+            )
+        }
+    }
+
+    private static func phraseChecks(
+        response: String,
+        required: [String],
+        forbidden: [String]
+    ) -> (passed: Int, total: Int) {
+        let normalized = response.lowercased()
+        let passed = required.filter { normalized.contains($0.lowercased()) }.count
+            + forbidden.filter { !normalized.contains($0.lowercased()) }.count
+        return (passed, required.count + forbidden.count)
+    }
+
+    private static func textScore(
+        metric: FusedExternalTextMetric,
+        prediction: String,
+        reference: String
+    ) -> Double {
+        switch metric {
+        case .phraseChecks:
+            return prediction.localizedCaseInsensitiveContains(reference) ? 1 : 0
+        case .qaF1:
+            let predicted = normalizedAnswerTokens(prediction)
+            let expected = normalizedAnswerTokens(reference)
+            guard !predicted.isEmpty, !expected.isEmpty else {
+                return predicted == expected ? 1 : 0
+            }
+            var remaining = Dictionary(grouping: expected, by: { $0 }).mapValues(\.count)
+            var overlap = 0
+            for token in predicted where remaining[token, default: 0] > 0 {
+                overlap += 1
+                remaining[token, default: 0] -= 1
+            }
+            guard overlap > 0 else { return 0 }
+            let precision = Double(overlap) / Double(predicted.count)
+            let recall = Double(overlap) / Double(expected.count)
+            return 2 * precision * recall / (precision + recall)
+        case .rougeL:
+            let predicted = normalizedAnswerTokens(prediction)
+            let expected = normalizedAnswerTokens(reference)
+            guard !predicted.isEmpty, !expected.isEmpty else { return 0 }
+            var previous = Array(repeating: 0, count: expected.count + 1)
+            for predictedToken in predicted {
+                var current = Array(repeating: 0, count: expected.count + 1)
+                for (index, expectedToken) in expected.enumerated() {
+                    current[index + 1] = predictedToken == expectedToken
+                        ? previous[index] + 1
+                        : max(previous[index + 1], current[index])
+                }
+                previous = current
+            }
+            let overlap = previous[expected.count]
+            let precision = Double(overlap) / Double(predicted.count)
+            let recall = Double(overlap) / Double(expected.count)
+            return overlap == 0 ? 0 : 2 * precision * recall / (precision + recall)
+        case .retrieval:
+            let expectedNumbers = numericTokens(reference)
+            guard let expected = expectedNumbers.first else { return 0 }
+            let predicted = numericTokens(prediction)
+            guard !predicted.isEmpty else { return 0 }
+            return Double(predicted.filter { $0 == expected }.count) / Double(predicted.count)
+        }
+    }
+
+    private static func normalizedAnswerTokens(_ text: String) -> [String] {
+        let lowered = text.lowercased()
+        let scalars = lowered.unicodeScalars.map { scalar -> Character in
+            CharacterSet.punctuationCharacters.contains(scalar) ? " " : Character(String(scalar))
+        }
+        return String(scalars).split(whereSeparator: { $0.isWhitespace }).map(String.init)
+            .filter { $0 != "a" && $0 != "an" && $0 != "the" }
+    }
+
+    private static func numericTokens(_ text: String) -> [String] {
+        text.components(separatedBy: CharacterSet.decimalDigits.inverted).filter { !$0.isEmpty }
+    }
+
+    private static func toolCallsMatch(
+        expected: [FusedExternalToolExpectation],
+        observed: [ToolCall]
+    ) -> Bool {
+        guard expected.count == observed.count else { return false }
+
+        func expectationMatches(
+            _ expectation: FusedExternalToolExpectation,
+            _ call: ToolCall
+        ) -> Bool {
+            guard expectation.name == call.name,
+                  call.arguments.keys.allSatisfy({ expectation.arguments[$0] != nil }) else {
+                return false
+            }
+            return expectation.arguments.allSatisfy { key, accepted in
+                guard let value = call.arguments[key] else { return accepted.contains("") }
+                let canonical = canonicalToolArgument(value)
+                return accepted.contains { canonicalToolArgument($0) == canonical }
+            }
+        }
+
+        func match(_ index: Int, remaining: [Int]) -> Bool {
+            guard index < expected.count else { return remaining.isEmpty }
+            for observedIndex in remaining where expectationMatches(expected[index], observed[observedIndex]) {
+                if match(index + 1, remaining: remaining.filter { $0 != observedIndex }) {
+                    return true
+                }
+            }
+            return false
+        }
+
+        return match(0, remaining: Array(observed.indices))
+    }
+
+    private static func canonicalToolArgument(_ value: String) -> String {
+        var trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.count >= 2,
+           (trimmed.hasPrefix("'") && trimmed.hasSuffix("'")) {
+            trimmed.removeFirst()
+            trimmed.removeLast()
+        }
+        guard let data = trimmed.data(using: .utf8),
+              let value = try? JSONDecoder().decode(OpenAIJSONValue.self, from: data) else {
+            return trimmed
+        }
+        if case .string(let string) = value {
+            return string
+        }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        guard let canonical = try? encoder.encode(value) else { return trimmed }
+        return String(decoding: canonical, as: UTF8.self)
+    }
+
+    private static func programHarness(
+        candidate: String,
+        evaluation: FusedExternalCodeEvaluation,
+        entryPoint: String?,
+        tests: [FusedExternalCodeTest]
+    ) throws -> String {
+        let encodedCandidate = Data(candidate.utf8).base64EncodedString()
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        let encodedTests = (try encoder.encode(tests)).base64EncodedString()
+        switch evaluation {
+        case .stdin:
+            return """
+            import base64, contextlib, io, json, sys, typing
+            candidate_source = base64.b64decode(\"\(encodedCandidate)\").decode(\"utf-8\")
+            cases = json.loads(base64.b64decode(\"\(encodedTests)\").decode(\"utf-8\"))
+
+            def normalize_output(value):
+                return [line.rstrip().split() for line in value.strip().splitlines()]
+
+            for case in cases:
+                namespace = {\"__name__\": \"__main__\"}
+                namespace.update(vars(typing))
+                input_stream = io.StringIO(case[\"input\"])
+                output_stream = io.StringIO()
+                previous_stdin = sys.stdin
+                sys.stdin = input_stream
+                try:
+                    with contextlib.redirect_stdout(output_stream):
+                        exec(compile(candidate_source, \"candidate.py\", \"exec\"), namespace)
+                finally:
+                    sys.stdin = previous_stdin
+                assert normalize_output(output_stream.getvalue()) == normalize_output(case[\"output\"])
+            """
+        case .functional:
+            guard let entryPoint else {
+                throw FusedBenchmarkError.invalidExternalFixture(
+                    "functional code evaluation is missing its entry point"
+                )
+            }
+            let encodedEntryPoint = Data(entryPoint.utf8).base64EncodedString()
+            return """
+            import base64, json, typing
+            candidate_source = base64.b64decode(\"\(encodedCandidate)\").decode(\"utf-8\")
+            entry_point = base64.b64decode(\"\(encodedEntryPoint)\").decode(\"utf-8\")
+            cases = json.loads(base64.b64decode(\"\(encodedTests)\").decode(\"utf-8\"))
+            namespace = {\"__name__\": \"candidate\"}
+            namespace.update(vars(typing))
+            exec(compile(candidate_source, \"candidate.py\", \"exec\"), namespace)
+            for case in cases:
+                args = [json.loads(line) for line in case[\"input\"].splitlines()]
+                expected = json.loads(case[\"output\"])
+                actual = getattr(namespace[\"Solution\"](), entry_point)(*args)
+                assert actual == expected, (actual, expected)
+            """
+        case .function:
+            throw FusedBenchmarkError.invalidExternalFixture(
+                "function code evaluation does not use the program harness"
             )
         }
     }
@@ -766,34 +1204,7 @@ private struct FusedResolvedBenchmarkCase {
         )
     }
 
-    func failedResult(
-        model: String,
-        profile: String,
-        trial: Int,
-        lane: String,
-        error: String,
-        generationSeconds: Double? = nil
-    ) -> FusedBenchmarkCaseResult {
-        FusedBenchmarkCaseResult(
-            lane: lane,
-            model: model,
-            profile: profile,
-            trial: trial,
-            caseID: descriptor.id,
-            provenance: provenance,
-            passed: false,
-            score: 0,
-            generationSeconds: generationSeconds,
-            executionSeconds: nil,
-            tokensGenerated: nil,
-            logprobs: nil,
-            acceleration: nil,
-            response: nil,
-            error: error
-        )
-    }
-
-    private static func extractCode(_ response: String, entryPoint: String) -> String {
+    private static func extractCode(_ response: String) -> String {
         var text = response
         if let opening = text.range(of: "```") {
             let afterOpening = text[opening.upperBound...]
@@ -802,9 +1213,6 @@ private struct FusedResolvedBenchmarkCase {
             let tail = text[start...]
             text = tail.range(of: "```").map { String(tail[..<$0.lowerBound]) }
                 ?? String(tail)
-        }
-        if let definition = text.range(of: "def \(entryPoint)") {
-            text = String(text[definition.lowerBound...])
         }
         return text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -832,12 +1240,60 @@ private extension JSONEncoder {
     }
 }
 
-private struct FusedBenchmarkPlannedModel: Codable {
+struct FusedBenchmarkPlannedModel: Codable, Hashable {
     let id: String
     let profiles: [FusedBenchmarkSamplingProfile]
+    let catalogRepository: String?
+    let catalogRevision: String?
+    let installed: Bool
+    let runtimeManifestID: String?
+    let runtimeManifestSchemaVersion: Int?
+    let runtimeManifestSHA256: String?
+    let runtimeManifestSources: [MereRunModelManifest.SourceProvenance]?
+
+    static func resolve(
+        id: String,
+        suite: FusedBenchmarkSuiteSelection,
+        fileManager: FileManager = .default
+    ) throws -> FusedBenchmarkPlannedModel {
+        let spec = ManagedModelCatalog.spec(for: id)
+        let runtimeRoot = ManagedModelResolver.resolveInstalledModel(
+            id: id,
+            fileManager: fileManager
+        )
+        let manifestURL = runtimeRoot.map(MereRunModelManifest.url(in:))
+        let manifestData: Data?
+        let manifest: MereRunModelManifest?
+        if let runtimeRoot,
+           let manifestURL,
+           fileManager.fileExists(atPath: manifestURL.path) {
+            manifestData = try Data(contentsOf: manifestURL)
+            manifest = try MereRunModelManifest.loadRequired(
+                from: runtimeRoot,
+                fileManager: fileManager
+            )
+        } else {
+            manifestData = nil
+            manifest = nil
+        }
+        return FusedBenchmarkPlannedModel(
+            id: id,
+            profiles: FusedBenchmarkSamplingProfile.nativeProfiles(
+                modelID: id,
+                suite: suite
+            ),
+            catalogRepository: spec?.upstreamRepoId,
+            catalogRevision: spec?.upstreamRevision,
+            installed: runtimeRoot != nil,
+            runtimeManifestID: manifest?.id,
+            runtimeManifestSchemaVersion: manifest?.schemaVersion,
+            runtimeManifestSHA256: manifestData.map(FusedBenchmarkHash.sha256),
+            runtimeManifestSources: manifest?.sources
+        )
+    }
 }
 
-private struct FusedBenchmarkPlannedCase: Codable {
+struct FusedBenchmarkPlannedCase: Codable, Hashable {
     let id: String
     let adapter: String
     let lane: String
@@ -846,7 +1302,72 @@ private struct FusedBenchmarkPlannedCase: Codable {
     let provenance: FusedBenchmarkProvenance
 }
 
-private struct FusedBenchmarkPlan: Codable {
+struct FusedBenchmarkRunnerIdentity: Codable, Hashable {
+    let version: String
+    let executableByteCount: Int64
+    let executableSHA256: String
+
+    static func current() throws -> FusedBenchmarkRunnerIdentity {
+        let executable = CurrentExecutable.url().standardizedFileURL.resolvingSymlinksInPath()
+        return FusedBenchmarkRunnerIdentity(
+            version: MereRunCLIVersion.current,
+            executableByteCount: try ModelArtifactPin.fileByteCount(executable),
+            executableSHA256: try ModelArtifactPin.fileSHA256(executable)
+        )
+    }
+}
+
+struct FusedBenchmarkHost: Codable, Hashable {
+    let processorName: String
+    let physicalMemoryBytes: UInt64
+    let architecture: String
+    let operatingSystemVersion: String
+    let logicalProcessorCount: Int
+
+    static func current(
+        machine: MereRunMachineProfile = .current,
+        processInfo: ProcessInfo = .processInfo
+    ) -> FusedBenchmarkHost {
+        #if arch(arm64)
+        let architecture = "arm64"
+        #elseif arch(x86_64)
+        let architecture = "x86_64"
+        #else
+        let architecture = "unknown"
+        #endif
+        return FusedBenchmarkHost(
+            processorName: machine.processorName,
+            physicalMemoryBytes: machine.physicalMemoryBytes,
+            architecture: architecture,
+            operatingSystemVersion: processInfo.operatingSystemVersionString,
+            logicalProcessorCount: processInfo.processorCount
+        )
+    }
+}
+
+struct FusedBenchmarkCodeRuntimeIdentity: Codable, Hashable {
+    let pythonResolvedPath: String
+    let pythonExecutableSHA256: String
+    let sandboxBackend: String
+
+    static func resolve(
+        python: String,
+        sandbox: CodeExecutionSandboxMode
+    ) throws -> FusedBenchmarkCodeRuntimeIdentity {
+        let executable = try CodeExecutionSandbox.resolvedPythonExecutable(python)
+        return FusedBenchmarkCodeRuntimeIdentity(
+            pythonResolvedPath: executable.path,
+            pythonExecutableSHA256: try ModelArtifactPin.fileSHA256(executable),
+            sandboxBackend: try CodeExecutionSandbox.resolvedBackend(mode: sandbox).rawValue
+        )
+    }
+}
+
+struct FusedBenchmarkPlan: Codable, Hashable {
+    let runnerVersion: String
+    let runnerExecutableByteCount: Int64
+    let runnerExecutableSHA256: String
+    let host: FusedBenchmarkHost
     let manifestID: String
     let manifestVersion: String
     let manifestSHA256: String
@@ -855,8 +1376,201 @@ private struct FusedBenchmarkPlan: Codable {
     let trials: Int
     let qualityLane: String
     let performanceLane: String
+    let settings: FusedBenchmarkRunSettings
     let cases: [FusedBenchmarkPlannedCase]
     let importedFixtureFiles: [String]
+
+    var expectedResultKeys: Set<FusedBenchmarkResultKey> {
+        var keys: Set<FusedBenchmarkResultKey> = []
+        for model in models {
+            for profile in model.profiles {
+                for trial in 1...trials {
+                    for benchmarkCase in cases {
+                        keys.insert(FusedBenchmarkResultKey(
+                            lane: "quality-final-target",
+                            model: model.id,
+                            profile: profile.name,
+                            trial: trial,
+                            caseID: benchmarkCase.id
+                        ))
+                    }
+                }
+                if performanceLane == FusedBenchmarkPerformanceLane.native.rawValue {
+                    for benchmarkCase in cases {
+                        keys.insert(FusedBenchmarkResultKey(
+                            lane: "performance-native-runtime",
+                            model: model.id,
+                            profile: profile.name,
+                            trial: 1,
+                            caseID: benchmarkCase.id
+                        ))
+                    }
+                }
+            }
+        }
+        return keys
+    }
+
+    func contentSHA256() throws -> String {
+        FusedBenchmarkHash.sha256(try JSONEncoder.sorted.encode(self))
+    }
+}
+
+struct FusedBenchmarkRunSettings: Codable, Hashable {
+    let maxTokensOverride: Int?
+    let contextSize: Int
+    let logprobs: String
+    let topLogprobs: Int
+    let executionTimeout: Double
+    let pythonExecutable: String
+    let pythonResolvedPath: String?
+    let pythonExecutableSHA256: String?
+    let sandbox: String
+    let sandboxBackend: String?
+    let allowCodeExecution: Bool
+    let logResponses: Bool
+}
+
+struct FusedBenchmarkResultKey: Codable, Hashable {
+    let lane: String
+    let model: String
+    let profile: String
+    let trial: Int
+    let caseID: String
+}
+
+extension FusedBenchmarkCaseResult {
+    var key: FusedBenchmarkResultKey {
+        FusedBenchmarkResultKey(
+            lane: lane,
+            model: model,
+            profile: profile,
+            trial: trial,
+            caseID: caseID
+        )
+    }
+}
+
+struct FusedBenchmarkCheckpoint: Codable {
+    static let currentSchemaVersion = 2
+
+    let schemaVersion: Int
+    let createdAt: Date
+    let updatedAt: Date
+    let planSHA256: String
+    let plan: FusedBenchmarkPlan
+    let results: [FusedBenchmarkCaseResult]
+
+    init(
+        plan: FusedBenchmarkPlan,
+        results: [FusedBenchmarkCaseResult],
+        createdAt: Date = Date(),
+        updatedAt: Date = Date()
+    ) throws {
+        self.schemaVersion = Self.currentSchemaVersion
+        self.createdAt = createdAt
+        self.updatedAt = updatedAt
+        self.planSHA256 = try plan.contentSHA256()
+        self.plan = plan
+        self.results = results
+    }
+
+    func validatedResults(for expectedPlan: FusedBenchmarkPlan) throws -> [FusedBenchmarkCaseResult] {
+        guard schemaVersion == Self.currentSchemaVersion else {
+            throw FusedBenchmarkCheckpointError.invalid(
+                "unsupported schema version \(schemaVersion)"
+            )
+        }
+        let storedPlanSHA256 = try plan.contentSHA256()
+        guard planSHA256 == storedPlanSHA256 else {
+            throw FusedBenchmarkCheckpointError.invalid(
+                "stored plan hash \(planSHA256) does not match its payload \(storedPlanSHA256)"
+            )
+        }
+        let expectedPlanSHA256 = try expectedPlan.contentSHA256()
+        guard planSHA256 == expectedPlanSHA256 else {
+            throw FusedBenchmarkCheckpointError.invalid(
+                "run plan changed (checkpoint \(planSHA256), invocation \(expectedPlanSHA256))"
+            )
+        }
+        let keys = results.map(\.key)
+        guard Set(keys).count == keys.count else {
+            throw FusedBenchmarkCheckpointError.invalid("duplicate completed case-trials")
+        }
+        let unexpected = Set(keys).subtracting(expectedPlan.expectedResultKeys)
+        guard unexpected.isEmpty else {
+            throw FusedBenchmarkCheckpointError.invalid(
+                "contains \(unexpected.count) result(s) outside the run plan"
+            )
+        }
+        return results
+    }
+}
+
+enum FusedBenchmarkCheckpointError: LocalizedError {
+    case invalid(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .invalid(let detail):
+            return "Invalid fused benchmark checkpoint: \(detail)."
+        }
+    }
+}
+
+struct FusedBenchmarkCheckpointStore {
+    let url: URL
+    private let fileManager: FileManager
+
+    init(url: URL, fileManager: FileManager = .default) {
+        self.url = url
+        self.fileManager = fileManager
+    }
+
+    func initialize(plan: FusedBenchmarkPlan) throws {
+        guard !fileManager.fileExists(atPath: url.path) else {
+            throw FusedBenchmarkCheckpointError.invalid(
+                "file already exists at \(url.path); use --resume or choose a new path"
+            )
+        }
+        try write(plan: plan, results: [])
+    }
+
+    func loadResults(validating plan: FusedBenchmarkPlan) throws -> [FusedBenchmarkCaseResult] {
+        guard fileManager.fileExists(atPath: url.path) else {
+            throw FusedBenchmarkCheckpointError.invalid("file does not exist at \(url.path)")
+        }
+        let checkpoint = try loadCheckpoint()
+        return try checkpoint.validatedResults(for: plan)
+    }
+
+    func write(plan: FusedBenchmarkPlan, results: [FusedBenchmarkCaseResult]) throws {
+        let now = Date()
+        let createdAt = if fileManager.fileExists(atPath: url.path) {
+            try loadCheckpoint().createdAt
+        } else {
+            now
+        }
+        let checkpoint = try FusedBenchmarkCheckpoint(
+            plan: plan,
+            results: results,
+            createdAt: createdAt,
+            updatedAt: now
+        )
+        let parent = url.deletingLastPathComponent()
+        try fileManager.createDirectory(at: parent, withIntermediateDirectories: true)
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        try encoder.encode(checkpoint).write(to: url, options: .atomic)
+    }
+
+    private func loadCheckpoint() throws -> FusedBenchmarkCheckpoint {
+        let data = try Data(contentsOf: url)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        return try decoder.decode(FusedBenchmarkCheckpoint.self, from: data)
+    }
 }
 
 private struct FusedBenchmarkBreakdown: Codable {
@@ -875,9 +1589,17 @@ private struct FusedBenchmarkCalibrationGroup: Codable {
     let calibration: FusedBenchmarkCalibration
 }
 
+private struct FusedBenchmarkProgress: Codable {
+    let expectedCaseTrials: Int
+    let completedCaseTrials: Int
+    let remainingCaseTrials: Int
+    let complete: Bool
+}
+
 private struct FusedBenchmarkReport: Codable {
     let plan: FusedBenchmarkPlan
     let results: [FusedBenchmarkCaseResult]
+    let progress: FusedBenchmarkProgress
     let calibrationByModelProfile: [FusedBenchmarkCalibrationGroup]
     let laneBreakdown: [FusedBenchmarkBreakdown]
     let capabilityBreakdown: [FusedBenchmarkBreakdown]
@@ -886,6 +1608,14 @@ private struct FusedBenchmarkReport: Codable {
     init(plan: FusedBenchmarkPlan, results: [FusedBenchmarkCaseResult]) {
         self.plan = plan
         self.results = results
+        let expected = plan.expectedResultKeys.count
+        let completed = Set(results.map(\.key)).intersection(plan.expectedResultKeys).count
+        self.progress = FusedBenchmarkProgress(
+            expectedCaseTrials: expected,
+            completedCaseTrials: completed,
+            remainingCaseTrials: max(0, expected - completed),
+            complete: completed == expected
+        )
         let quality = results.filter { $0.lane == "quality-final-target" }
         self.calibrationByModelProfile = Self.groups(in: quality).map { group in
             FusedBenchmarkCalibrationGroup(
@@ -929,6 +1659,10 @@ private struct FusedBenchmarkReport: Codable {
         }.joined(separator: ", ")
         var lines = [
             "Mere fused benchmark \(plan.manifestID)@\(plan.manifestVersion)",
+            "mere.run version: \(plan.runnerVersion)",
+            "runner executable sha256: \(plan.runnerExecutableSHA256)",
+            "host: \(plan.host.processorName), \(plan.host.physicalMemoryBytes) bytes, "
+                + "\(plan.host.architecture), \(plan.host.operatingSystemVersion)",
             "manifest sha256: \(plan.manifestSHA256)",
             "suite: \(plan.suite)",
             "models: \(plan.models.map(\.id).joined(separator: ", "))",
@@ -952,6 +1686,10 @@ private struct FusedBenchmarkReport: Codable {
             return lines.joined(separator: "\n")
         }
 
+        lines.append(
+            "progress: \(progress.completedCaseTrials)/\(progress.expectedCaseTrials) case-trials "
+                + "(\(progress.complete ? "complete" : "partial"))"
+        )
         let quality = results.filter { $0.lane == "quality-final-target" && $0.passed != nil }
         let passes = quality.filter { $0.passed == true }.count
         lines.append("quality: \(passes)/\(quality.count) case-trials passed")

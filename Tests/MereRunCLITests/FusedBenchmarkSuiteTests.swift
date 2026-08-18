@@ -2,20 +2,241 @@ import Foundation
 import XCTest
 @testable import MereRunCLI
 @testable import MereRunCore
+import MereRunRelayKit
 
 final class FusedBenchmarkSuiteTests: XCTestCase {
+    func testRuntimeInfrastructureFailureLeavesCaseTrialPending() {
+        let preparation = FusedBenchmarkRuntimeError.modelPreparation(
+            model: "test-model",
+            profile: "test-profile",
+            trial: 2,
+            caseID: "test-case",
+            detail: "model unavailable"
+        )
+        let generation = FusedBenchmarkRuntimeError.generation(
+            model: "test-model",
+            profile: "test-profile",
+            trial: 2,
+            caseID: "test-case",
+            detail: "runtime interrupted"
+        )
+
+        XCTAssertTrue(preparation.localizedDescription.contains("model preparation failed"))
+        XCTAssertTrue(preparation.localizedDescription.contains("the row remains pending"))
+        XCTAssertTrue(generation.localizedDescription.contains("generation failed"))
+        XCTAssertTrue(generation.localizedDescription.contains("the row remains pending"))
+    }
+
     func testBundledManifestIsVersionedAndLiteCoversEverySourceFamily() throws {
         let manifest = try FusedBenchmarkManifest.bundled()
         let comprehensive = manifest.selectedCases(for: .comprehensive)
         let lite = manifest.selectedCases(for: .lite)
 
         XCTAssertEqual(manifest.schemaVersion, 1)
-        XCTAssertEqual(manifest.version, "1.1.0")
+        XCTAssertEqual(manifest.version, "1.2.0")
         XCTAssertEqual(comprehensive.count, 110)
         XCTAssertEqual(lite.count, 24)
         XCTAssertEqual(Set(comprehensive.map(\.sourceID)), Set(lite.map(\.sourceID)))
         XCTAssertTrue(comprehensive.allSatisfy { !$0.capabilityTags.isEmpty })
         XCTAssertTrue(comprehensive.allSatisfy { !$0.selectionRationale.isEmpty })
+    }
+
+    func testCheckpointRequiresExactPlanAndRejectsDuplicateRows() throws {
+        let manifest = try FusedBenchmarkManifest.bundled()
+        let descriptor = try XCTUnwrap(manifest.selectedCases(for: .lite).first)
+        let source = try XCTUnwrap(manifest.source(id: descriptor.sourceID))
+        let provenance = FusedBenchmarkProvenance(
+            descriptor: descriptor,
+            source: source,
+            contentSHA256: nil
+        )
+        let profile = FusedBenchmarkSamplingProfile(
+            name: "test-native",
+            temperature: 1,
+            topP: 0.95,
+            topK: 20,
+            minP: 0,
+            reasoningEffort: nil,
+            reasoningTier: nil,
+            showThinking: false
+        )
+        let model = FusedBenchmarkPlannedModel(
+            id: "test-model",
+            profiles: [profile],
+            catalogRepository: "example/test-model",
+            catalogRevision: "0123456789abcdef",
+            installed: true,
+            runtimeManifestID: "test-model",
+            runtimeManifestSchemaVersion: 3,
+            runtimeManifestSHA256: String(repeating: "a", count: 64),
+            runtimeManifestSources: nil
+        )
+        let plannedCase = FusedBenchmarkPlannedCase(
+            id: descriptor.id,
+            adapter: descriptor.adapter.rawValue,
+            lane: descriptor.adapter.lane.rawValue,
+            resolved: true,
+            unresolvedReason: nil,
+            provenance: provenance
+        )
+        let plan = FusedBenchmarkPlan(
+            runnerVersion: MereRunCLIVersion.current,
+            runnerExecutableByteCount: 123,
+            runnerExecutableSHA256: String(repeating: "b", count: 64),
+            host: FusedBenchmarkHost(
+                processorName: "test-processor",
+                physicalMemoryBytes: 128 * 1_073_741_824,
+                architecture: "arm64",
+                operatingSystemVersion: "test-os",
+                logicalProcessorCount: 12
+            ),
+            manifestID: manifest.id,
+            manifestVersion: manifest.version,
+            manifestSHA256: try manifest.contentSHA256(),
+            suite: "lite",
+            models: [model],
+            trials: 1,
+            qualityLane: "sampled-final-target; exact-policy; logprobs=summary",
+            performanceLane: "none",
+            settings: FusedBenchmarkRunSettings(
+                maxTokensOverride: nil,
+                contextSize: 32_768,
+                logprobs: "summary",
+                topLogprobs: 5,
+                executionTimeout: 5,
+                pythonExecutable: "python3",
+                pythonResolvedPath: "/usr/bin/python3",
+                pythonExecutableSHA256: String(repeating: "c", count: 64),
+                sandbox: "auto",
+                sandboxBackend: "macos-sandbox-exec",
+                allowCodeExecution: true,
+                logResponses: false
+            ),
+            cases: [plannedCase],
+            importedFixtureFiles: []
+        )
+        let result = FusedBenchmarkCaseResult(
+            lane: "quality-final-target",
+            model: model.id,
+            profile: profile.name,
+            trial: 1,
+            caseID: descriptor.id,
+            provenance: provenance,
+            passed: true,
+            score: 1,
+            generationSeconds: 0.1,
+            executionSeconds: nil,
+            tokensGenerated: 3,
+            logprobs: nil,
+            acceleration: nil,
+            response: nil,
+            error: nil
+        )
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("fused-checkpoint-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = FusedBenchmarkCheckpointStore(
+            url: directory.appendingPathComponent("checkpoint.json")
+        )
+
+        try store.initialize(plan: plan)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let initialized = try decoder.decode(
+            FusedBenchmarkCheckpoint.self,
+            from: Data(contentsOf: store.url)
+        )
+        XCTAssertEqual(try store.loadResults(validating: plan), [])
+        try store.write(plan: plan, results: [result])
+        let updated = try decoder.decode(
+            FusedBenchmarkCheckpoint.self,
+            from: Data(contentsOf: store.url)
+        )
+        XCTAssertEqual(initialized.createdAt, updated.createdAt)
+        XCTAssertGreaterThanOrEqual(updated.updatedAt, initialized.updatedAt)
+        XCTAssertEqual(try store.loadResults(validating: plan), [result])
+        XCTAssertThrowsError(try store.initialize(plan: plan))
+
+        let changedPlan = FusedBenchmarkPlan(
+            runnerVersion: plan.runnerVersion,
+            runnerExecutableByteCount: plan.runnerExecutableByteCount,
+            runnerExecutableSHA256: plan.runnerExecutableSHA256,
+            host: plan.host,
+            manifestID: plan.manifestID,
+            manifestVersion: plan.manifestVersion,
+            manifestSHA256: plan.manifestSHA256,
+            suite: "comprehensive",
+            models: plan.models,
+            trials: plan.trials,
+            qualityLane: plan.qualityLane,
+            performanceLane: plan.performanceLane,
+            settings: plan.settings,
+            cases: plan.cases,
+            importedFixtureFiles: plan.importedFixtureFiles
+        )
+        XCTAssertThrowsError(try store.loadResults(validating: changedPlan)) { error in
+            XCTAssertTrue(error.localizedDescription.contains("run plan changed"))
+        }
+
+        let changedRunnerPlan = FusedBenchmarkPlan(
+            runnerVersion: plan.runnerVersion,
+            runnerExecutableByteCount: plan.runnerExecutableByteCount,
+            runnerExecutableSHA256: String(repeating: "d", count: 64),
+            host: plan.host,
+            manifestID: plan.manifestID,
+            manifestVersion: plan.manifestVersion,
+            manifestSHA256: plan.manifestSHA256,
+            suite: plan.suite,
+            models: plan.models,
+            trials: plan.trials,
+            qualityLane: plan.qualityLane,
+            performanceLane: plan.performanceLane,
+            settings: plan.settings,
+            cases: plan.cases,
+            importedFixtureFiles: plan.importedFixtureFiles
+        )
+        XCTAssertThrowsError(try store.loadResults(validating: changedRunnerPlan)) { error in
+            XCTAssertTrue(error.localizedDescription.contains("run plan changed"))
+        }
+
+        let changedSettingsPlan = FusedBenchmarkPlan(
+            runnerVersion: plan.runnerVersion,
+            runnerExecutableByteCount: plan.runnerExecutableByteCount,
+            runnerExecutableSHA256: plan.runnerExecutableSHA256,
+            host: plan.host,
+            manifestID: plan.manifestID,
+            manifestVersion: plan.manifestVersion,
+            manifestSHA256: plan.manifestSHA256,
+            suite: plan.suite,
+            models: plan.models,
+            trials: plan.trials,
+            qualityLane: plan.qualityLane,
+            performanceLane: plan.performanceLane,
+            settings: FusedBenchmarkRunSettings(
+                maxTokensOverride: plan.settings.maxTokensOverride,
+                contextSize: 4_096,
+                logprobs: plan.settings.logprobs,
+                topLogprobs: plan.settings.topLogprobs,
+                executionTimeout: plan.settings.executionTimeout,
+                pythonExecutable: plan.settings.pythonExecutable,
+                pythonResolvedPath: plan.settings.pythonResolvedPath,
+                pythonExecutableSHA256: plan.settings.pythonExecutableSHA256,
+                sandbox: plan.settings.sandbox,
+                sandboxBackend: plan.settings.sandboxBackend,
+                allowCodeExecution: plan.settings.allowCodeExecution,
+                logResponses: plan.settings.logResponses
+            ),
+            cases: plan.cases,
+            importedFixtureFiles: plan.importedFixtureFiles
+        )
+        XCTAssertThrowsError(try store.loadResults(validating: changedSettingsPlan)) { error in
+            XCTAssertTrue(error.localizedDescription.contains("run plan changed"))
+        }
+
+        let duplicate = try FusedBenchmarkCheckpoint(plan: plan, results: [result, result])
+        XCTAssertThrowsError(try duplicate.validatedResults(for: plan)) { error in
+            XCTAssertTrue(error.localizedDescription.contains("duplicate completed case-trials"))
+        }
     }
 
     func testComprehensiveHasBalancedLaneFloors() throws {
@@ -238,6 +459,209 @@ final class FusedBenchmarkSuiteTests: XCTestCase {
         )) { error in
             XCTAssertTrue(error.localizedDescription.contains("original id"))
         }
+    }
+
+    func testExternalLongBenchUsesQAF1InsteadOfPhrasePresence() throws {
+        let manifest = try FusedBenchmarkManifest.bundled()
+        let descriptor = try XCTUnwrap(
+            manifest.cases.first { $0.id == "longbench.hotpotqa-0" }
+        )
+        let fixture = try FusedExternalBenchmarkCase(
+            id: descriptor.id,
+            kind: .chat,
+            sourceVersion: "v1",
+            originalID: descriptor.sourceCaseID,
+            messages: [ChatMessage(role: .user, content: "Question")],
+            tools: nil,
+            requiredPhrases: nil,
+            forbiddenPhrases: nil,
+            expectedToolName: nil,
+            expectedArguments: nil,
+            entryPoint: nil,
+            tests: nil,
+            imageSHA256: nil,
+            contentSHA256: "",
+            sourceRevision: "dataset@0123456789abcdef",
+            textMetric: .qaF1,
+            referenceAnswers: ["Miller v. California"],
+            passThreshold: 0.5
+        ).stamped()
+        let resolved = try FusedResolvedBenchmarkCase.resolve(
+            descriptor: descriptor,
+            manifest: manifest,
+            imported: [fixture.id: fixture]
+        )
+        let scoring = try resolved.score(
+            response: ChatResponse(response: "Miller v California", tokensGenerated: 3),
+            visibleResponse: "Miller v California",
+            allowCodeExecution: false,
+            python: "python3",
+            sandbox: .none,
+            executionTimeout: 1
+        )
+
+        XCTAssertEqual(scoring.score, 1)
+        XCTAssertEqual(scoring.passed, true)
+    }
+
+    func testExternalBFCLRequiresEveryParallelCallWithoutExtras() throws {
+        let manifest = try FusedBenchmarkManifest.bundled()
+        let descriptor = try XCTUnwrap(
+            manifest.cases.first { $0.id == "bfcl.v3.parallel-0" }
+        )
+        let fixture = try FusedExternalBenchmarkCase(
+            id: descriptor.id,
+            kind: .tool,
+            sourceVersion: "v3",
+            originalID: descriptor.sourceCaseID,
+            messages: [ChatMessage(role: .user, content: "Play both artists")],
+            tools: nil,
+            requiredPhrases: nil,
+            forbiddenPhrases: nil,
+            expectedToolName: nil,
+            expectedArguments: nil,
+            entryPoint: nil,
+            tests: nil,
+            imageSHA256: nil,
+            contentSHA256: "",
+            sourceRevision: "ea13468e4423454d0c213704fb87cf7cb3990433",
+            expectedToolCalls: [
+                FusedExternalToolExpectation(
+                    name: "spotify.play",
+                    arguments: [
+                        "artist": ["Taylor Swift"],
+                        "duration": ["20"],
+                        "options": ["{\"fade\":true,\"volume\":0.5}"],
+                    ]
+                ),
+                FusedExternalToolExpectation(
+                    name: "spotify.play",
+                    arguments: ["artist": ["Maroon 5"], "duration": ["15"]]
+                ),
+            ]
+        ).stamped()
+        let resolved = try FusedResolvedBenchmarkCase.resolve(
+            descriptor: descriptor,
+            manifest: manifest,
+            imported: [fixture.id: fixture]
+        )
+        let response = ChatResponse(
+            response: "",
+            tokensGenerated: 2,
+            toolCalls: [
+                ToolCall(name: "spotify.play", arguments: ["artist": "Maroon 5", "duration": "15"]),
+                ToolCall(
+                    name: "spotify.play",
+                    arguments: [
+                        "artist": "Taylor Swift",
+                        "duration": "20",
+                        "options": "{\"volume\":0.5,\"fade\":true}",
+                    ]
+                ),
+            ]
+        )
+        let scoring = try resolved.score(
+            response: response,
+            visibleResponse: "",
+            allowCodeExecution: false,
+            python: "python3",
+            sandbox: .none,
+            executionTimeout: 1
+        )
+
+        XCTAssertEqual(scoring.passed, true)
+        XCTAssertEqual(scoring.score, 1)
+    }
+
+    func testExternalLiveCodeBenchStdinHarnessRunsEveryCase() throws {
+        let manifest = try FusedBenchmarkManifest.bundled()
+        let descriptor = try XCTUnwrap(
+            manifest.cases.first { $0.id == "lcb.release-v5.stratum-0" }
+        )
+        let fixture = try FusedExternalBenchmarkCase(
+            id: descriptor.id,
+            kind: .code,
+            sourceVersion: "release_v5",
+            originalID: descriptor.sourceCaseID,
+            messages: [ChatMessage(role: .user, content: "Echo uppercased input")],
+            tools: nil,
+            requiredPhrases: nil,
+            forbiddenPhrases: nil,
+            expectedToolName: nil,
+            expectedArguments: nil,
+            entryPoint: nil,
+            tests: nil,
+            imageSHA256: nil,
+            contentSHA256: "",
+            sourceRevision: "dataset@0fe84c3912ea0c4d4a78037083943e8f0c4dd505",
+            codeEvaluation: .stdin,
+            codeTests: [
+                FusedExternalCodeTest(input: "mere\n", output: "MERE\n"),
+                FusedExternalCodeTest(input: "run\n", output: "RUN\n"),
+            ]
+        ).stamped()
+        let resolved = try FusedResolvedBenchmarkCase.resolve(
+            descriptor: descriptor,
+            manifest: manifest,
+            imported: [fixture.id: fixture]
+        )
+        let source = "print(input().upper())"
+        let scoring = try resolved.score(
+            response: ChatResponse(response: source, tokensGenerated: 4),
+            visibleResponse: source,
+            allowCodeExecution: true,
+            python: "/usr/bin/python3",
+            sandbox: .none,
+            executionTimeout: 2
+        )
+
+        XCTAssertEqual(scoring.passed, true, scoring.error ?? "")
+        XCTAssertEqual(scoring.score, 1)
+    }
+
+    func testExternalFunctionHarnessPreservesCandidateNamedCheck() throws {
+        let manifest = try FusedBenchmarkManifest.bundled()
+        let descriptor = try XCTUnwrap(
+            manifest.cases.first { $0.id == "mbpp-plus.56" }
+        )
+        let fixture = try FusedExternalBenchmarkCase(
+            id: descriptor.id,
+            kind: .code,
+            sourceVersion: "v0.2.0",
+            originalID: descriptor.sourceCaseID,
+            messages: [ChatMessage(role: .user, content: "Implement check")],
+            tools: nil,
+            requiredPhrases: nil,
+            forbiddenPhrases: nil,
+            expectedToolName: nil,
+            expectedArguments: nil,
+            entryPoint: "check",
+            tests: "def check(candidate):\n    assert candidate(3) == 6",
+            imageSHA256: nil,
+            contentSHA256: "",
+            sourceRevision: "pinned",
+            codeEvaluation: .function
+        ).stamped()
+        let resolved = try FusedResolvedBenchmarkCase.resolve(
+            descriptor: descriptor,
+            manifest: manifest,
+            imported: [fixture.id: fixture]
+        )
+
+        let scoring = try resolved.score(
+            response: ChatResponse(
+                response: "def check(value):\n    return value * 2",
+                tokensGenerated: 8
+            ),
+            visibleResponse: "def check(value):\n    return value * 2",
+            allowCodeExecution: true,
+            python: "/usr/bin/python3",
+            sandbox: .none,
+            executionTimeout: 5
+        )
+
+        XCTAssertEqual(scoring.passed, true, scoring.error ?? "")
+        XCTAssertNil(scoring.error)
     }
 
     func testCalibrationSeparatesFragilePassesAndConfidentFailures() throws {

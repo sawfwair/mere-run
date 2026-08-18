@@ -30,6 +30,22 @@ The format is based on Keep a Changelog.
   Reports expose lane, source, and capability breakdowns. A `fused-fixture`
   helper stamps and verifies canonical external-fixture hashes without loading
   a model.
+- added a deterministic, license-aware importer and immutable source lock for
+  the selected 35 HumanEval+, MBPP+, LiveCodeBench, BFCL, and LongBench cases.
+  Normalized fixtures retain exact upstream revisions and source hashes while
+  the datasets remain non-vendored. Typed scoring covers Plus tests,
+  stdin/functional code, parallel and zero-call tools, QA-F1, ROUGE-L, and
+  retrieval. Fixture work and fused dry-runs now bypass machine inference
+  admission because they cannot load a model.
+- made long fused runs interruption-safe: `--checkpoint` atomically records
+  each completed case-trial, `--resume` requires an exact plan and installed
+  model-manifest hash match, and `--case-trial-limit` yields cleanly after a
+  bounded slice. Fused evaluation now refuses missing models instead of
+  downloading them during a benchmark. Model preparation or generation
+  failures preserve prior rows but leave the current row pending for retry,
+  and reports expose explicit partial/complete progress. Receipt plans now bind
+  the exact runner executable, host identity, resolved Python binary and
+  sandbox backend, and preserve checkpoint creation/update timestamps.
 - added 10 deterministic generated PNG vision fixtures and wired their image
   paths through the managed chat plan into the runtime request. OCR, chart,
   spatial, counting, document-layout, negative-evidence, multi-panel,

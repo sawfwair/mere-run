@@ -570,6 +570,7 @@ enum CLIInferenceAdmissionClassifier {
         let commandTokens = commandPath(tokens)
         guard let topLevel = commandTokens.first else { return nil }
         let subcommand = commandTokens.dropFirst().first
+        let nestedSubcommand = commandTokens.dropFirst(2).first
         let label = [topLevel, subcommand].compactMap { $0 }.joined(separator: " ")
 
         // These orchestration commands either acquire a workload-specific
@@ -624,6 +625,9 @@ enum CLIInferenceAdmissionClassifier {
         case "geo":
             return MachineInferenceRequest(label: label, resourceClass: .large)
         case "model" where subcommand == "benchmark":
+            if nestedSubcommand == "fused-fixture" {
+                return nil
+            }
             return MachineInferenceRequest(label: label, resourceClass: .large)
         case "adapter" where subcommand != "list" && subcommand != "pull":
             return MachineInferenceRequest(label: label, resourceClass: .standard)
@@ -686,7 +690,7 @@ enum CLIInferenceAdmissionClassifier {
                 continue
             }
             result.append(token)
-            if result.count == 2 {
+            if result.count == 3 {
                 break
             }
         }
