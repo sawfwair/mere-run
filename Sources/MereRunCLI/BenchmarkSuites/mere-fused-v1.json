@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "mere-fused-v1",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Mere-owned fused quality suite. Comprehensive is a balanced 100-plus-case evaluation across chat, code, tools, long context, and vision; Lite is a fixed stratified subset, never a random or easiest-case sample.",
   "defaultLiteTrials": 2,
   "defaultComprehensiveTrials": 5,
@@ -11,9 +11,9 @@
     {"id":"openai-humaneval","name":"OpenAI HumanEval","version":"v1","license":"MIT","sourceURL":"https://github.com/openai/human-eval","redistribution":"embedded-selected-cases"},
     {"id":"evalplus-humaneval-plus","name":"EvalPlus HumanEval+","version":"pinned-by-import","license":"Apache-2.0 AND MIT","sourceURL":"https://github.com/evalplus/evalplus","redistribution":"reference-only"},
     {"id":"evalplus-mbpp-plus","name":"EvalPlus MBPP+","version":"pinned-by-import","license":"Apache-2.0 AND MIT","sourceURL":"https://github.com/evalplus/evalplus","redistribution":"reference-only"},
-    {"id":"livecodebench","name":"LiveCodeBench","version":"release_v5","license":"MIT","sourceURL":"https://github.com/LiveCodeBench/LiveCodeBench","redistribution":"reference-only"},
+    {"id":"livecodebench","name":"LiveCodeBench","version":"release_v5","license":"MIT code; dataset card declares cc","sourceURL":"https://huggingface.co/datasets/livecodebench/code_generation_lite","redistribution":"reference-only"},
     {"id":"bfcl","name":"Berkeley Function Calling Leaderboard","version":"v3","license":"Apache-2.0","sourceURL":"https://github.com/ShishirPatil/gorilla","redistribution":"reference-only"},
-    {"id":"longbench","name":"LongBench","version":"v1","license":"MIT","sourceURL":"https://github.com/THUDM/LongBench","redistribution":"reference-only"},
+    {"id":"longbench","name":"LongBench","version":"v1","license":"MIT repository; constituent datasets retain their source terms","sourceURL":"https://huggingface.co/datasets/THUDM/LongBench","redistribution":"reference-only"},
     {"id":"mere-vision","name":"Mere authored local vision scenarios","version":"2026-08-17","license":"MIT","sourceURL":"https://github.com/sawfwair/mere-run","redistribution":"generated-fixtures"}
   ],
   "cases": [
@@ -99,12 +99,12 @@
     {"id":"mbpp-plus.7","sourceID":"evalplus-mbpp-plus","sourceCaseID":"Mbpp/7","adapter":"external-code","capabilityTags":["code","mbpp-plus","algorithms"],"difficulty":"hard","selectionRationale":"Adds a more algorithmic short-specification task.","lite":false},
     {"id":"mbpp-plus.56","sourceID":"evalplus-mbpp-plus","sourceCaseID":"Mbpp/56","adapter":"external-code","capabilityTags":["code","mbpp-plus","edge-cases"],"difficulty":"hard","selectionRationale":"Adds a distant edge-case stratum.","lite":false},
 
-    {"id":"lcb.release-v5.stratum-0","sourceID":"livecodebench","sourceCaseID":"release_v5:test:0","adapter":"external-code","capabilityTags":["code","livecodebench","generation","recent-problems"],"difficulty":"medium","selectionRationale":"Deterministic recent code-generation stratum selected by the importer.","lite":true},
-    {"id":"lcb.release-v5.stratum-1","sourceID":"livecodebench","sourceCaseID":"release_v5:test:1","adapter":"external-code","capabilityTags":["code","livecodebench","generation","recent-problems"],"difficulty":"hard","selectionRationale":"Second recent code-generation difficulty stratum.","lite":false},
-    {"id":"lcb.release-v5.stratum-2","sourceID":"livecodebench","sourceCaseID":"release_v5:test:2","adapter":"external-code","capabilityTags":["code","livecodebench","execution","recent-problems"],"difficulty":"medium","selectionRationale":"Recent code-execution reasoning stratum.","lite":false},
-    {"id":"lcb.release-v5.stratum-3","sourceID":"livecodebench","sourceCaseID":"release_v5:test:3","adapter":"external-code","capabilityTags":["code","livecodebench","execution","recent-problems"],"difficulty":"hard","selectionRationale":"Harder code-execution reasoning stratum.","lite":false},
-    {"id":"lcb.release-v5.stratum-4","sourceID":"livecodebench","sourceCaseID":"release_v5:test:4","adapter":"external-code","capabilityTags":["code","livecodebench","test-output","recent-problems"],"difficulty":"medium","selectionRationale":"Test-output prediction stratum distinct from generation.","lite":false},
-    {"id":"lcb.release-v5.stratum-5","sourceID":"livecodebench","sourceCaseID":"release_v5:test:5","adapter":"external-code","capabilityTags":["code","livecodebench","test-output","recent-problems"],"difficulty":"hard","selectionRationale":"Hard test-output prediction stratum.","lite":false},
+    {"id":"lcb.release-v5.stratum-0","sourceID":"livecodebench","sourceCaseID":"release_v5:test:1873_A","adapter":"external-code","capabilityTags":["code","livecodebench","generation","stdin","codeforces"],"difficulty":"easy","selectionRationale":"Pinned stdin-style Codeforces easy stratum from the cumulative release-v5 set.","lite":true},
+    {"id":"lcb.release-v5.stratum-1","sourceID":"livecodebench","sourceCaseID":"release_v5:test:1883_B","adapter":"external-code","capabilityTags":["code","livecodebench","generation","stdin","codeforces"],"difficulty":"medium","selectionRationale":"Pinned stdin-style Codeforces medium stratum.","lite":false},
+    {"id":"lcb.release-v5.stratum-2","sourceID":"livecodebench","sourceCaseID":"release_v5:test:1899_B","adapter":"external-code","capabilityTags":["code","livecodebench","generation","stdin","codeforces"],"difficulty":"hard","selectionRationale":"Pinned stdin-style Codeforces hard stratum.","lite":false},
+    {"id":"lcb.release-v5.stratum-3","sourceID":"livecodebench","sourceCaseID":"release_v5:test:2727","adapter":"external-code","capabilityTags":["code","livecodebench","generation","functional","leetcode"],"difficulty":"easy","selectionRationale":"Pinned functional LeetCode easy stratum with public and private tests.","lite":false},
+    {"id":"lcb.release-v5.stratum-4","sourceID":"livecodebench","sourceCaseID":"release_v5:test:2728","adapter":"external-code","capabilityTags":["code","livecodebench","generation","functional","leetcode"],"difficulty":"medium","selectionRationale":"Pinned functional LeetCode medium stratum with public and private tests.","lite":false},
+    {"id":"lcb.release-v5.stratum-5","sourceID":"livecodebench","sourceCaseID":"release_v5:test:2757","adapter":"external-code","capabilityTags":["code","livecodebench","generation","functional","leetcode"],"difficulty":"hard","selectionRationale":"Pinned functional LeetCode hard stratum with public and private tests.","lite":false},
 
     {"id":"bfcl.v3.simple-python-0","sourceID":"bfcl","sourceCaseID":"v3:simple_python:0","adapter":"external-tool","capabilityTags":["tools","bfcl","single-turn","python"],"difficulty":"medium","selectionRationale":"Simple Python function-selection stratum.","lite":true},
     {"id":"bfcl.v3.simple-java-0","sourceID":"bfcl","sourceCaseID":"v3:simple_java:0","adapter":"external-tool","capabilityTags":["tools","bfcl","single-turn","java"],"difficulty":"medium","selectionRationale":"Cross-language simple-call stratum.","lite":false},

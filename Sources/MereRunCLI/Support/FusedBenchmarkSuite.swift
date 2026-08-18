@@ -192,6 +192,7 @@ struct FusedBenchmarkManifest: Codable {
 struct FusedBenchmarkProvenance: Codable, Hashable {
     let source: String
     let sourceVersion: String
+    let sourceRevision: String?
     let originalID: String
     let license: String
     let sourceURL: String
@@ -209,18 +210,20 @@ struct FusedBenchmarkProvenance: Codable, Hashable {
         contentSHA256: String?,
         imageSHA256: String? = nil,
         sourceVersion: String? = nil,
+        sourceRevision: String? = nil,
         originalID: String? = nil
     ) {
         let resolvedVersion = sourceVersion ?? source.version
         let resolvedOriginalID = originalID ?? descriptor.sourceCaseID
         self.source = source.name
         self.sourceVersion = resolvedVersion
+        self.sourceRevision = sourceRevision
         self.originalID = resolvedOriginalID
         self.license = source.license
         self.sourceURL = source.sourceURL
         self.redistribution = source.redistribution
         self.referenceSHA256 = FusedBenchmarkHash.sha256(
-            "\(source.id)|\(resolvedVersion)|\(resolvedOriginalID)|\(descriptor.adapter.rawValue)"
+            "\(source.id)|\(resolvedVersion)|\(sourceRevision ?? "")|\(resolvedOriginalID)|\(descriptor.adapter.rawValue)"
         )
         self.contentSHA256 = contentSHA256
         self.imageSHA256 = imageSHA256
@@ -228,6 +231,30 @@ struct FusedBenchmarkProvenance: Codable, Hashable {
         self.difficulty = descriptor.difficulty
         self.selectionRationale = descriptor.selectionRationale
     }
+}
+
+enum FusedExternalTextMetric: String, Codable {
+    case phraseChecks = "phrase-checks"
+    case qaF1 = "qa-f1"
+    case rougeL = "rouge-l"
+    case retrieval = "retrieval"
+}
+
+enum FusedExternalCodeEvaluation: String, Codable {
+    case function
+    case stdin
+    case functional
+}
+
+struct FusedExternalCodeTest: Codable, Hashable {
+    let input: String
+    let output: String
+}
+
+struct FusedExternalToolExpectation: Codable, Hashable {
+    let name: String
+    /// Accepted canonical string renderings for each required argument.
+    let arguments: [String: [String]]
 }
 
 struct FusedBenchmarkSamplingProfile: Codable, Hashable {
@@ -322,6 +349,7 @@ struct FusedExternalBenchmarkCase: Codable {
     let id: String
     let kind: Kind
     let sourceVersion: String
+    let sourceRevision: String?
     let originalID: String
     let messages: [ChatMessage]
     let tools: [ToolDefinition]?
@@ -332,7 +360,65 @@ struct FusedExternalBenchmarkCase: Codable {
     let entryPoint: String?
     let tests: String?
     let imageSHA256: String?
+    let textMetric: FusedExternalTextMetric?
+    let referenceAnswers: [String]?
+    let passThreshold: Double?
+    let expectedToolCalls: [FusedExternalToolExpectation]?
+    let expectsNoToolCalls: Bool?
+    let codeEvaluation: FusedExternalCodeEvaluation?
+    let codeTests: [FusedExternalCodeTest]?
+    let generationBudget: Int?
     let contentSHA256: String
+
+    init(
+        id: String,
+        kind: Kind,
+        sourceVersion: String,
+        originalID: String,
+        messages: [ChatMessage],
+        tools: [ToolDefinition]?,
+        requiredPhrases: [String]?,
+        forbiddenPhrases: [String]?,
+        expectedToolName: String?,
+        expectedArguments: [String: String]?,
+        entryPoint: String?,
+        tests: String?,
+        imageSHA256: String?,
+        contentSHA256: String,
+        sourceRevision: String? = nil,
+        textMetric: FusedExternalTextMetric? = nil,
+        referenceAnswers: [String]? = nil,
+        passThreshold: Double? = nil,
+        expectedToolCalls: [FusedExternalToolExpectation]? = nil,
+        expectsNoToolCalls: Bool? = nil,
+        codeEvaluation: FusedExternalCodeEvaluation? = nil,
+        codeTests: [FusedExternalCodeTest]? = nil,
+        generationBudget: Int? = nil
+    ) {
+        self.id = id
+        self.kind = kind
+        self.sourceVersion = sourceVersion
+        self.sourceRevision = sourceRevision
+        self.originalID = originalID
+        self.messages = messages
+        self.tools = tools
+        self.requiredPhrases = requiredPhrases
+        self.forbiddenPhrases = forbiddenPhrases
+        self.expectedToolName = expectedToolName
+        self.expectedArguments = expectedArguments
+        self.entryPoint = entryPoint
+        self.tests = tests
+        self.imageSHA256 = imageSHA256
+        self.textMetric = textMetric
+        self.referenceAnswers = referenceAnswers
+        self.passThreshold = passThreshold
+        self.expectedToolCalls = expectedToolCalls
+        self.expectsNoToolCalls = expectsNoToolCalls
+        self.codeEvaluation = codeEvaluation
+        self.codeTests = codeTests
+        self.generationBudget = generationBudget
+        self.contentSHA256 = contentSHA256
+    }
 
     func computedContentSHA256() throws -> String {
         let encoder = JSONEncoder()
@@ -341,6 +427,7 @@ struct FusedExternalBenchmarkCase: Codable {
             id: id,
             kind: kind,
             sourceVersion: sourceVersion,
+            sourceRevision: sourceRevision,
             originalID: originalID,
             messages: messages,
             tools: tools,
@@ -350,7 +437,15 @@ struct FusedExternalBenchmarkCase: Codable {
             expectedArguments: expectedArguments,
             entryPoint: entryPoint,
             tests: tests,
-            imageSHA256: imageSHA256
+            imageSHA256: imageSHA256,
+            textMetric: textMetric,
+            referenceAnswers: referenceAnswers,
+            passThreshold: passThreshold,
+            expectedToolCalls: expectedToolCalls,
+            expectsNoToolCalls: expectsNoToolCalls,
+            codeEvaluation: codeEvaluation,
+            codeTests: codeTests,
+            generationBudget: generationBudget
         )
         return FusedBenchmarkHash.sha256(try encoder.encode(payload))
     }
@@ -371,7 +466,16 @@ struct FusedExternalBenchmarkCase: Codable {
             entryPoint: entryPoint,
             tests: tests,
             imageSHA256: imageSHA256,
-            contentSHA256: ""
+            contentSHA256: "",
+            sourceRevision: sourceRevision,
+            textMetric: textMetric,
+            referenceAnswers: referenceAnswers,
+            passThreshold: passThreshold,
+            expectedToolCalls: expectedToolCalls,
+            expectsNoToolCalls: expectsNoToolCalls,
+            codeEvaluation: codeEvaluation,
+            codeTests: codeTests,
+            generationBudget: generationBudget
         )
         return FusedExternalBenchmarkCase(
             id: unstamped.id,
@@ -387,7 +491,16 @@ struct FusedExternalBenchmarkCase: Codable {
             entryPoint: unstamped.entryPoint,
             tests: unstamped.tests,
             imageSHA256: unstamped.imageSHA256,
-            contentSHA256: try unstamped.computedContentSHA256()
+            contentSHA256: try unstamped.computedContentSHA256(),
+            sourceRevision: unstamped.sourceRevision,
+            textMetric: unstamped.textMetric,
+            referenceAnswers: unstamped.referenceAnswers,
+            passThreshold: unstamped.passThreshold,
+            expectedToolCalls: unstamped.expectedToolCalls,
+            expectsNoToolCalls: unstamped.expectsNoToolCalls,
+            codeEvaluation: unstamped.codeEvaluation,
+            codeTests: unstamped.codeTests,
+            generationBudget: unstamped.generationBudget
         )
     }
 
@@ -426,6 +539,7 @@ private struct FusedExternalBenchmarkHashPayload: Codable {
     let id: String
     let kind: FusedExternalBenchmarkCase.Kind
     let sourceVersion: String
+    let sourceRevision: String?
     let originalID: String
     let messages: [ChatMessage]
     let tools: [ToolDefinition]?
@@ -436,6 +550,14 @@ private struct FusedExternalBenchmarkHashPayload: Codable {
     let entryPoint: String?
     let tests: String?
     let imageSHA256: String?
+    let textMetric: FusedExternalTextMetric?
+    let referenceAnswers: [String]?
+    let passThreshold: Double?
+    let expectedToolCalls: [FusedExternalToolExpectation]?
+    let expectsNoToolCalls: Bool?
+    let codeEvaluation: FusedExternalCodeEvaluation?
+    let codeTests: [FusedExternalCodeTest]?
+    let generationBudget: Int?
 }
 
 enum FusedExternalBenchmarkLoader {
@@ -515,6 +637,64 @@ enum FusedExternalBenchmarkContract {
             throw FusedBenchmarkError.invalidExternalFixture(
                 "\(descriptor.id) has source version \(benchmarkCase.sourceVersion); expected \(source.version)"
             )
+        }
+        guard let revision = benchmarkCase.sourceRevision,
+              !revision.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw FusedBenchmarkError.invalidExternalFixture(
+                "\(descriptor.id) must declare an immutable source revision"
+            )
+        }
+        if let generationBudget = benchmarkCase.generationBudget,
+           generationBudget <= 0 {
+            throw FusedBenchmarkError.invalidExternalFixture(
+                "\(descriptor.id) has a non-positive generation budget"
+            )
+        }
+        switch benchmarkCase.kind {
+        case .chat:
+            let metric = benchmarkCase.textMetric ?? .phraseChecks
+            if metric != .phraseChecks {
+                guard benchmarkCase.referenceAnswers?.isEmpty == false,
+                      let threshold = benchmarkCase.passThreshold,
+                      (0...1).contains(threshold) else {
+                    throw FusedBenchmarkError.invalidExternalFixture(
+                        "\(descriptor.id) text metric needs reference answers and a 0...1 pass threshold"
+                    )
+                }
+            }
+        case .tool:
+            let hasExpectedCalls = benchmarkCase.expectedToolCalls?.isEmpty == false
+                || benchmarkCase.expectedToolName != nil
+            let expectsNone = benchmarkCase.expectsNoToolCalls == true
+            guard hasExpectedCalls != expectsNone else {
+                throw FusedBenchmarkError.invalidExternalFixture(
+                    "\(descriptor.id) must declare expected tool calls or expectsNoToolCalls"
+                )
+            }
+        case .code:
+            switch benchmarkCase.codeEvaluation ?? .function {
+            case .function:
+                guard benchmarkCase.entryPoint?.isEmpty == false,
+                      benchmarkCase.tests?.isEmpty == false else {
+                    throw FusedBenchmarkError.invalidExternalFixture(
+                        "\(descriptor.id) function scoring needs an entry point and tests"
+                    )
+                }
+            case .stdin, .functional:
+                guard benchmarkCase.codeTests?.isEmpty == false else {
+                    throw FusedBenchmarkError.invalidExternalFixture(
+                        "\(descriptor.id) program scoring needs code tests"
+                    )
+                }
+                if benchmarkCase.codeEvaluation == .functional,
+                   benchmarkCase.entryPoint?.isEmpty != false {
+                    throw FusedBenchmarkError.invalidExternalFixture(
+                        "\(descriptor.id) functional scoring needs an entry point"
+                    )
+                }
+            }
+        case .vision:
+            break
         }
     }
 }

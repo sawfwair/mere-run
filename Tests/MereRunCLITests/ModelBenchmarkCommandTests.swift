@@ -36,6 +36,32 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         XCTAssertFalse(command.allowCodeExecution)
     }
 
+    func testFusedBenchmarkParsesCheckpointedBoundedResume() throws {
+        let command = try ModelBenchmarkFused.parse([
+            "--dry-run",
+            "--checkpoint", "/tmp/mere-fused-checkpoint.json",
+            "--resume",
+            "--case-trial-limit", "3",
+        ])
+
+        XCTAssertEqual(command.checkpoint, "/tmp/mere-fused-checkpoint.json")
+        XCTAssertTrue(command.resume)
+        XCTAssertEqual(command.caseTrialLimit, 3)
+    }
+
+    func testFusedBenchmarkRejectsUnboundedResumeControls() {
+        XCTAssertThrowsError(try ModelBenchmarkFused.parse(["--dry-run", "--resume"]))
+        XCTAssertThrowsError(try ModelBenchmarkFused.parse([
+            "--dry-run",
+            "--case-trial-limit", "1",
+        ]))
+        XCTAssertThrowsError(try ModelBenchmarkFused.parse([
+            "--dry-run",
+            "--checkpoint", "/tmp/mere-fused-checkpoint.json",
+            "--case-trial-limit", "0",
+        ]))
+    }
+
     func testBenchmarkCommandExposesToolCallsSubcommand() {
         let commandNames = Set(ModelBenchmark.configuration.subcommands.map { $0.configuration.commandName })
         XCTAssertTrue(commandNames.contains("tool-calls"))

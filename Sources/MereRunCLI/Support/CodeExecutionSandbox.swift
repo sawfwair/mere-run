@@ -59,6 +59,24 @@ enum CodeExecutionSandbox {
         _ = try resolveBackend(mode: mode)
     }
 
+    static func resolvedBackend(mode: CodeExecutionSandboxMode) throws -> CodeExecutionSandboxBackend {
+        try resolveBackend(mode: mode)
+    }
+
+    static func resolvedPythonExecutable(_ python: String) throws -> URL {
+        if python.contains("/") {
+            let url = URL(fileURLWithPath: python).standardizedFileURL
+            guard executableExists(at: url.path) else {
+                throw ValidationError("Python executable not found or not executable: \(python).")
+            }
+            return url.resolvingSymlinksInPath()
+        }
+        guard let path = findExecutable(named: python) else {
+            throw ValidationError("Python executable not found on PATH: \(python).")
+        }
+        return URL(fileURLWithPath: path).standardizedFileURL.resolvingSymlinksInPath()
+    }
+
     static func runPython(
         program: String,
         python: String,
