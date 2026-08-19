@@ -1647,7 +1647,7 @@ public enum ManagedModelCatalog {
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: MuseGlimmerResources.estimatedDownloadBytes,
             defaultCLICommands: ["text chat", "api serve"],
-            companionModelIDs: [MuseGlimmerResources.assistantModelId],
+            companionModelIDs: [MuseGlimmerResources.dflash2ModelId],
             apiProfile: .museGlimmer()
         ),
         ManagedModelSpec(
@@ -3386,6 +3386,21 @@ private extension ManagedModelCatalog {
                 validationKind: .lagunaDFlash,
                 runtimeAutoDownloadAllowed: false,
                 estimatedDownloadBytes: LagunaResources.dflashEstimatedDownloadBytes
+            ),
+            ManagedModelSpec(
+                id: MuseGlimmerResources.dflash2ModelId,
+                category: .textChat,
+                installShape: .directoryRoot,
+                hubFallback: HubFallbackConfig(
+                    repoId: MuseGlimmerResources.dflash2UpstreamRepoId,
+                    revision: MuseGlimmerResources.dflash2UpstreamRevision,
+                    patterns: MuseGlimmerResources.dflash2SnapshotPatterns
+                ),
+                upstreamRepoId: MuseGlimmerResources.dflash2UpstreamRepoId,
+                upstreamRevision: MuseGlimmerResources.dflash2UpstreamRevision,
+                validationKind: .museGlimmerAssistant,
+                runtimeAutoDownloadAllowed: false,
+                estimatedDownloadBytes: MuseGlimmerResources.dflash2EstimatedDownloadBytes
             ),
             ManagedModelSpec(
                 id: MuseGlimmerResources.assistantModelId,

@@ -22,6 +22,23 @@ The format is based on Keep a Changelog.
   authorization, execute without a shell in a reduced environment, and are
   bounded by timeout and output validation.
 
+### Muse Glimmer DFlash2
+
+- added native Swift/MLX support for Inco's Muse Glimmer DFlash2 companion:
+  nested configuration decoding, two-phase grouped dynamic causal convolution
+  around assistant attention and MLP blocks, predecessor-aware sparse candidate
+  selection, exact sparse rejection correction for sampled decoding, and
+  published checkpoint-key normalization.
+- made the immutable 5.54 GB
+  `z-lab/Muse-Glimmer-30B-DFlash2` revision the managed companion installed
+  with Muse Glimmer; existing original Meta DFlash and local Q4 companions
+  remain compatible fallbacks. A real selective-Q4 check reached 17.01 tok/s
+  and 67.7% acceptance versus 7.54 tok/s target-only decode. Its 64-token
+  greedy output was byte-identical to the existing DFlash v1 path. Both
+  speculative paths share MLX's pre-existing quantized block-verification
+  rounding at an observed near-tie, so the implementation does not claim
+  bit-exact equivalence to one-token execution.
+
 ### iOS Studio
 
 - fixed verified artifact downloads on Apple platforms to use the iOS

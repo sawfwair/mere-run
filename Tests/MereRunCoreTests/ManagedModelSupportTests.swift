@@ -11,6 +11,17 @@ final class ManagedModelSupportTests: XCTestCase {
         }
     }
 
+    func testManagedCompanionsHaveCapabilityDescriptors() throws {
+        let companionIDs = Set(ManagedModelCatalog.allSpecs.flatMap(\.companionModelIDs))
+        for companionID in companionIDs {
+            let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: companionID))
+            XCTAssertNotNil(
+                ManagedModelCapabilityCatalog.descriptor(for: spec.id),
+                "Missing capability descriptor for \(spec.id)"
+            )
+        }
+    }
+
     func testTerraMindFloodSupportRequiresAppleSiliconAndSixteenGB() throws {
         let spec = try XCTUnwrap(
             ManagedModelCatalog.spec(for: ModelResolver.ModelID.visionFloodTerraMindBase.rawValue)

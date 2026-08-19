@@ -143,7 +143,8 @@ public enum MereRunModelValidator {
             vaeDir = nil
             tokenizerDir = nil
         } else if spec?.validationKind == .gemma4MTPAssistant
-            || spec?.validationKind == .lagunaDFlash {
+            || spec?.validationKind == .lagunaDFlash
+            || spec?.validationKind == .museGlimmerAssistant {
             errors.append(contentsOf: spec?.validationMessages(in: rootURL, fileManager: fileManager) ?? [])
             transformerDir = nil
             textEncoderDir = nil
@@ -553,7 +554,8 @@ public enum MereRunModelValidator {
         }()
         let skipsComponentValidation = {
             if ManagedModelCatalog.spec(for: manifest.id)?.validationKind == .gemma4MTPAssistant
-                || ManagedModelCatalog.spec(for: manifest.id)?.validationKind == .lagunaDFlash {
+                || ManagedModelCatalog.spec(for: manifest.id)?.validationKind == .lagunaDFlash
+                || ManagedModelCatalog.spec(for: manifest.id)?.validationKind == .museGlimmerAssistant {
                 return true
             }
             switch manifest.engine {

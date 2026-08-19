@@ -337,20 +337,30 @@ public actor MuseGlimmerGenerator: ChatGenerator {
                     indexURL: index,
                     to: assistant,
                     groupSize: quantization.groupSize,
-                    bits: quantization.bits
+                    bits: quantization.bits,
+                    mapper: MuseGlimmerDFlash2WeightKeys.mapped
                 )
             } else {
-                try HFSafetensorsWeightsLoader.applyShardedWeights(indexURL: index, to: assistant)
+                try HFSafetensorsWeightsLoader.applyShardedWeights(
+                    indexURL: index,
+                    to: assistant,
+                    mapper: MuseGlimmerDFlash2WeightKeys.mapped
+                )
             }
         } else if let quantization = config.quantization {
             try HFSafetensorsWeightsLoader.applyQuantizedWeightsFromArrays(
                 try MLX.loadArrays(url: weights),
                 to: assistant,
                 groupSize: quantization.groupSize,
-                bits: quantization.bits
+                bits: quantization.bits,
+                mapper: MuseGlimmerDFlash2WeightKeys.mapped
             )
         } else {
-            try HFSafetensorsWeightsLoader.applyWeights(url: weights, to: assistant)
+            try HFSafetensorsWeightsLoader.applyWeights(
+                url: weights,
+                to: assistant,
+                mapper: MuseGlimmerDFlash2WeightKeys.mapped
+            )
         }
         assistantModel = assistant
         loadedAssistantPath = root.path
@@ -371,10 +381,13 @@ public actor MuseGlimmerGenerator: ChatGenerator {
         let quantized = MereRunModelPaths.modelsDir
             .appendingPathComponent(MuseGlimmerResources.assistantQuantizedModelId, isDirectory: true)
             .standardizedFileURL
-        let managed = ManagedModelResolver.resolveInstalledModel(
+        let dflash2 = ManagedModelResolver.resolveInstalledModel(
+            id: MuseGlimmerResources.dflash2ModelId
+        )?.standardizedFileURL
+        let legacy = ManagedModelResolver.resolveInstalledModel(
             id: MuseGlimmerResources.assistantModelId
         )?.standardizedFileURL
-        return [configured, managed, quantized]
+        return [configured, dflash2, legacy, quantized]
             .compactMap { $0 }
             .first { MuseGlimmerResources.validateAssistant(rootURL: $0).isEmpty }
     }
@@ -383,9 +396,17 @@ public actor MuseGlimmerGenerator: ChatGenerator {
         _ assistant: MuseGlimmerAssistantConfig,
         target: MuseGlimmerTextConfig
     ) throws {
-        guard assistant.modelType == "muse_glimmer_assistant" else {
+        let supportedModelType = assistant.modelType == "muse_glimmer_assistant"
+            || (assistant.isDFlash2 && assistant.modelType == "qwen3")
+        guard supportedModelType else {
             throw MuseGlimmerError.unsupportedConfiguration(
-                "Expected a muse_glimmer_assistant companion."
+                "Expected a Muse Glimmer DFlash or DFlash2 companion."
+            )
+        }
+        if assistant.isDFlash2,
+           assistant.isCausal != false {
+            throw MuseGlimmerError.unsupportedConfiguration(
+                "Muse DFlash2 requires non-causal block attention."
             )
         }
         guard assistant.hiddenSize == target.hiddenSize else {
@@ -396,6 +417,19 @@ public actor MuseGlimmerGenerator: ChatGenerator {
         guard assistant.targetLayerIds.allSatisfy({ (0..<target.numHiddenLayers).contains($0) }) else {
             throw MuseGlimmerError.unsupportedConfiguration(
                 "Muse DFlash target_layer_ids are outside the target layer range."
+            )
+        }
+        if let vocabularySize = assistant.vocabSize,
+           vocabularySize != target.vocabSize {
+            throw MuseGlimmerError.unsupportedConfiguration(
+                "Muse DFlash vocabulary size \(vocabularySize) does not match target \(target.vocabSize)."
+            )
+        }
+        if let dflash2 = assistant.dflash2,
+           dflash2.outputMultiplier != target.outputMultiplier
+            || dflash2.finalLogitSoftcapping != target.finalLogitSoftcapping {
+            throw MuseGlimmerError.unsupportedConfiguration(
+                "Muse DFlash2 logit scaling does not match the target."
             )
         }
         guard assistant.hiddenActivation == "silu",

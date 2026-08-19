@@ -103,7 +103,7 @@ swift run mere.run api serve \
 ```
 
 For Muse Glimmer multimodal agent chat (explicit 21.38 GB Q4 target plus the
-5.11 GB assistant):
+5.54 GB DFlash2 assistant):
 
 ```bash
 swift run mere.run model pull vision-chat-muse-glimmer-30b --accept-model-license
@@ -114,9 +114,17 @@ swift run mere.run api serve \
 
 This engine accepts OpenAI image content parts and function tools. It exposes
 reasoning effort, but does not claim constrained `json_object` decoding. The
-managed pull also installs Meta's pinned 5.11 GB DFlash assistant. Requests for
-at least 32 output tokens use native target-verified speculation and fall back
-losslessly when draft acceptance is poor.
+managed pull also installs z-lab's pinned DFlash2 assistant. Requests for
+at least 32 output tokens use target-verified speculation and return to
+target-only decode when draft acceptance is poor.
+
+The native DFlash2 companion can be refreshed independently:
+
+```bash
+swift run mere.run model pull vision-chat-muse-glimmer-30b-dflash2
+swift run mere.run api serve \
+  --model vision-chat-muse-glimmer-30b
+```
 
 For NVIDIA Nemotron 3.5 Lightning with its automatically installed DSpark
 companion:

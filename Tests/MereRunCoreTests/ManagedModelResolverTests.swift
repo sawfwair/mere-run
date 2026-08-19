@@ -2,7 +2,7 @@ import XCTest
 @testable import MereRunCore
 
 final class ManagedModelResolverTests: XCTestCase {
-    func testHiddenMuseAssistantResolvesFromManagedInstallRoot() throws {
+    func testHiddenMuseDFlash2AssistantResolvesFromManagedInstallRoot() throws {
         let modelsRoot = try makeTemporaryDirectory()
         defer {
             MereRunModelPaths.setProcessModelsDirOverride(nil)
@@ -11,7 +11,7 @@ final class ManagedModelResolverTests: XCTestCase {
         MereRunModelPaths.setProcessModelsDirOverride(modelsRoot)
 
         let assistantRoot = modelsRoot.appendingPathComponent(
-            MuseGlimmerResources.assistantModelId,
+            MuseGlimmerResources.dflash2ModelId,
             isDirectory: true
         )
         try FileManager.default.createDirectory(at: assistantRoot, withIntermediateDirectories: true)
@@ -19,12 +19,24 @@ final class ManagedModelResolverTests: XCTestCase {
             to: assistantRoot.appendingPathComponent("config.json")
         )
         try Data([0]).write(to: assistantRoot.appendingPathComponent("model.safetensors"))
+        try MereRunModelManifest.template(
+            for: .museGlimmer30BDFlash2,
+            createdAt: Date(timeIntervalSince1970: 0)
+        ).write(to: assistantRoot)
 
-        XCTAssertNil(ModelResolver.ModelID(rawValue: MuseGlimmerResources.assistantModelId))
         XCTAssertEqual(
-            ManagedModelResolver.resolveInstalledModel(id: MuseGlimmerResources.assistantModelId),
+            ModelResolver.ModelID(rawValue: MuseGlimmerResources.dflash2ModelId),
+            .museGlimmer30BDFlash2
+        )
+        XCTAssertEqual(
+            ManagedModelResolver.resolveInstalledModel(id: MuseGlimmerResources.dflash2ModelId),
             assistantRoot.standardizedFileURL
         )
+        let report = MereRunModelValidator.validate(
+            modelRoot: assistantRoot,
+            expectedModelID: MuseGlimmerResources.dflash2ModelId
+        )
+        XCTAssertTrue(report.isValid, report.errors.joined(separator: "\n"))
     }
 
     func testRestrictedInstallRequiresCoreAcknowledgementBeforeDownload() async throws {

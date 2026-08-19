@@ -201,6 +201,46 @@ public struct MuseGlimmerConfig: Decodable, Sendable, Hashable {
     }
 }
 
+public struct MuseGlimmerDFlash2Config: Decodable, Sendable, Hashable {
+    public let blockSize: Int
+    public let convGroupSize: Int
+    public let convKernelSize: Int
+    public let finalLogitSoftcapping: Float
+    public let inputEmbeddingScale: Float
+    public let maskTokenId: Int
+    public let outputMultiplier: Float
+    public let selectorRank: Int
+    public let selectorTopK: Int
+    public let targetLayerIds: [Int]
+
+    private enum CodingKeys: String, CodingKey {
+        case blockSize = "block_size"
+        case convGroupSize = "conv_group_size"
+        case convKernelSize = "conv_kernel_size"
+        case finalLogitSoftcapping = "final_logit_softcapping"
+        case inputEmbeddingScale = "input_embedding_scale"
+        case maskTokenId = "mask_token_id"
+        case outputMultiplier = "output_multiplier"
+        case selectorRank = "selector_rank"
+        case selectorTopK = "selector_top_k"
+        case targetLayerIds = "target_layer_ids"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        blockSize = try container.decode(Int.self, forKey: .blockSize)
+        convGroupSize = try container.decode(Int.self, forKey: .convGroupSize)
+        convKernelSize = try container.decode(Int.self, forKey: .convKernelSize)
+        finalLogitSoftcapping = try container.decode(Float.self, forKey: .finalLogitSoftcapping)
+        inputEmbeddingScale = try container.decodeIfPresent(Float.self, forKey: .inputEmbeddingScale) ?? 1
+        maskTokenId = try container.decode(Int.self, forKey: .maskTokenId)
+        outputMultiplier = try container.decode(Float.self, forKey: .outputMultiplier)
+        selectorRank = try container.decode(Int.self, forKey: .selectorRank)
+        selectorTopK = try container.decode(Int.self, forKey: .selectorTopK)
+        targetLayerIds = try container.decode([Int].self, forKey: .targetLayerIds)
+    }
+}
+
 public struct MuseGlimmerAssistantConfig: Decodable, Sendable, Hashable {
     public let modelType: String
     public let architectures: [String]
@@ -217,13 +257,20 @@ public struct MuseGlimmerAssistantConfig: Decodable, Sendable, Hashable {
     public let layerTypes: [String]
     public let attentionDropout: Float
     public let hiddenActivation: String
+    public let vocabSize: Int?
     public let bosTokenId: Int?
     public let eosTokenId: Int?
     public let padTokenId: Int?
     public let blockSize: Int
     public let maskTokenId: Int
     public let targetLayerIds: [Int]
+    public let isCausal: Bool?
+    public let dflash2: MuseGlimmerDFlash2Config?
     public let quantization: MuseGlimmerQuantizationConfig?
+
+    public var isDFlash2: Bool {
+        architectures.contains("DFlash2DraftModel")
+    }
 
     private enum CodingKeys: String, CodingKey {
         case modelType = "model_type"
@@ -241,12 +288,15 @@ public struct MuseGlimmerAssistantConfig: Decodable, Sendable, Hashable {
         case layerTypes = "layer_types"
         case attentionDropout = "attention_dropout"
         case hiddenActivation = "hidden_act"
+        case vocabSize = "vocab_size"
         case bosTokenId = "bos_token_id"
         case eosTokenId = "eos_token_id"
         case padTokenId = "pad_token_id"
         case blockSize = "block_size"
         case maskTokenId = "mask_token_id"
         case targetLayerIds = "target_layer_ids"
+        case isCausal = "is_causal"
+        case dflash2 = "dflash_config"
         case quantization
         case quantizationConfig = "quantization_config"
     }
@@ -268,12 +318,21 @@ public struct MuseGlimmerAssistantConfig: Decodable, Sendable, Hashable {
         layerTypes = try container.decode([String].self, forKey: .layerTypes)
         attentionDropout = try container.decodeIfPresent(Float.self, forKey: .attentionDropout) ?? 0
         hiddenActivation = try container.decode(String.self, forKey: .hiddenActivation)
+        vocabSize = try container.decodeIfPresent(Int.self, forKey: .vocabSize)
         bosTokenId = try container.decodeIfPresent(Int.self, forKey: .bosTokenId)
         eosTokenId = try container.decodeIfPresent(Int.self, forKey: .eosTokenId)
         padTokenId = try container.decodeIfPresent(Int.self, forKey: .padTokenId)
-        blockSize = try container.decode(Int.self, forKey: .blockSize)
-        maskTokenId = try container.decode(Int.self, forKey: .maskTokenId)
-        targetLayerIds = try container.decode([Int].self, forKey: .targetLayerIds)
+        dflash2 = try container.decodeIfPresent(MuseGlimmerDFlash2Config.self, forKey: .dflash2)
+        blockSize = try container.decodeIfPresent(Int.self, forKey: .blockSize)
+            ?? dflash2?.blockSize
+            ?? Self.missingInteger(.blockSize, in: container)
+        maskTokenId = try container.decodeIfPresent(Int.self, forKey: .maskTokenId)
+            ?? dflash2?.maskTokenId
+            ?? Self.missingInteger(.maskTokenId, in: container)
+        targetLayerIds = try container.decodeIfPresent([Int].self, forKey: .targetLayerIds)
+            ?? dflash2?.targetLayerIds
+            ?? []
+        isCausal = try container.decodeIfPresent(Bool.self, forKey: .isCausal)
         quantization = try container.decodeIfPresent(MuseGlimmerQuantizationConfig.self, forKey: .quantization)
             ?? container.decodeIfPresent(MuseGlimmerQuantizationConfig.self, forKey: .quantizationConfig)
 
@@ -292,6 +351,36 @@ public struct MuseGlimmerAssistantConfig: Decodable, Sendable, Hashable {
                 debugDescription: "Muse Glimmer DFlash requires a block larger than one token and target layers."
             )
         }
+        if architectures.contains("DFlash2DraftModel") {
+            guard let dflash2,
+                  let vocabSize,
+                  vocabSize > 0,
+                  dflash2.convKernelSize > 0,
+                  dflash2.convGroupSize > 0,
+                  hiddenSize.isMultiple(of: dflash2.convGroupSize),
+                  dflash2.selectorRank > 0,
+                  dflash2.selectorTopK > 0,
+                  dflash2.selectorTopK <= vocabSize else {
+                throw DecodingError.dataCorruptedError(
+                    forKey: .dflash2,
+                    in: container,
+                    debugDescription: "Muse Glimmer DFlash2 requires valid convolution, vocabulary, and selector dimensions."
+                )
+            }
+        }
+    }
+
+    private static func missingInteger(
+        _ key: CodingKeys,
+        in container: KeyedDecodingContainer<CodingKeys>
+    ) throws -> Int {
+        throw DecodingError.keyNotFound(
+            key,
+            DecodingError.Context(
+                codingPath: container.codingPath,
+                debugDescription: "Muse Glimmer DFlash requires \(key.stringValue)."
+            )
+        )
     }
 }
 

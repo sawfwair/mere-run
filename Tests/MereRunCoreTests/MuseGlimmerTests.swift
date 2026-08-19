@@ -1,4 +1,5 @@
 import MLX
+import MLXNN
 import MediaIO
 @testable import MereRunCore
 import XCTest
@@ -278,6 +279,15 @@ final class MuseGlimmerTests: MereRunCoreTestCase {
         )
         XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
         XCTAssertEqual(spec.defaultRuntimeServingEngine, .textChatMuseGlimmer)
+        XCTAssertEqual(spec.companionModelIDs, [MuseGlimmerResources.dflash2ModelId])
+
+        let dflash2 = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: MuseGlimmerResources.dflash2ModelId)
+        )
+        XCTAssertEqual(dflash2.upstreamRepoId, MuseGlimmerResources.dflash2UpstreamRepoId)
+        XCTAssertEqual(dflash2.upstreamRevision, MuseGlimmerResources.dflash2UpstreamRevision)
+        XCTAssertEqual(dflash2.validationKind, .museGlimmerAssistant)
+        XCTAssertFalse(dflash2.runtimeAutoDownloadAllowed)
 
         let manifest = MereRunModelManifest.template(for: .museGlimmer30B)
         XCTAssertEqual(manifest.engine, .museGlimmer)
@@ -302,7 +312,100 @@ final class MuseGlimmerTests: MereRunCoreTestCase {
         XCTAssertTrue(names.contains("norm.weight"))
     }
 
-    func testAssistantDraftBlockUsesTargetContextAndRawTargetEmbeddings() throws {
+    func testDFlash2ConfigAndWeightPathsMatchPublishedCheckpoint() throws {
+        let config = try Self.dflash2Config()
+        XCTAssertTrue(config.isDFlash2)
+        XCTAssertEqual(config.modelType, "qwen3")
+        XCTAssertEqual(config.blockSize, 4)
+        XCTAssertEqual(config.maskTokenId, 31)
+        XCTAssertEqual(config.targetLayerIds, [0, 2])
+        XCTAssertEqual(config.dflash2?.convKernelSize, 2)
+        XCTAssertEqual(config.dflash2?.convGroupSize, 2)
+        XCTAssertEqual(config.dflash2?.selectorRank, 1)
+        XCTAssertEqual(config.dflash2?.selectorTopK, 2)
+
+        let assistant = MuseGlimmerAssistantModel(config: config)
+        let names = Set(assistant.parameters().flattened().map(\.0))
+        XCTAssertTrue(names.contains("layers.0.attention_conv.base_kernel"))
+        XCTAssertTrue(names.contains("layers.0.attention_conv.kernel_projection.weight"))
+        XCTAssertTrue(names.contains("layers.0.mlp_conv.base_kernel"))
+        XCTAssertTrue(names.contains("candidate_selector.hidden_projection.weight"))
+        XCTAssertTrue(names.contains("candidate_selector.predecessor_codebook.weight"))
+        XCTAssertTrue(names.contains("candidate_selector.successor_codebook.weight"))
+
+        XCTAssertEqual(MuseGlimmerDFlash2WeightKeys.normalized("fc.weight"), "encoder.fc.weight")
+        XCTAssertEqual(
+            MuseGlimmerDFlash2WeightKeys.normalized("hidden_norm.weight"),
+            "encoder.output_norm_enc.weight"
+        )
+        XCTAssertEqual(
+            MuseGlimmerDFlash2WeightKeys.normalized("candidate_selector.predecessor_codebook"),
+            "candidate_selector.predecessor_codebook.weight"
+        )
+    }
+
+    func testDFlash2GroupedDynamicConvolutionIsBlockLocalAndCausal() {
+        let hidden = MLXArray([Float(1), 2, 3, 4, 5, 6], [1, 3, 2])
+        let dynamic = MLXArray.zeros([1, 3, 2, 1])
+        let base = MLXArray([Float(1), 1, 10, 10], [2, 2])
+        let output = museGlimmerGroupedDynamicConvolution(
+            hidden: hidden,
+            dynamic: dynamic,
+            base: base,
+            groupSize: 2
+        )
+        MLX.eval(output)
+
+        XCTAssertEqual(output.asArray(Float.self), [1, 2, 13, 24, 35, 46])
+    }
+
+    func testDFlash2SelectorUsesPredecessorEdgesAcrossPositions() throws {
+        let selector = MuseGlimmerDFlash2CandidateSelector(
+            vocabularySize: 4,
+            hiddenSize: 4,
+            rank: 1,
+            topK: 2
+        )
+        try selector.update(
+            parameters: ModuleParameters.unflattened([
+                ("hidden_projection.weight", MLXArray([Float(1), 0, 0, 0], [1, 4])),
+                ("predecessor_codebook.weight", MLXArray([Float(1), 2, 3, 4], [4, 1])),
+                ("successor_codebook.weight", MLXArray([Float(-2), -1, 1, 2], [4, 1])),
+            ]),
+            verify: .all
+        )
+        let hidden = MLXArray(
+            [Float(1), 0, 0, 0, 1, 0, 0, 0],
+            [1, 2, 4]
+        )
+        let logits = MLXArray(
+            [Float(0), 0, 5, 4, 5, 4, 0, 0],
+            [1, 2, 4]
+        )
+        let selection = selector.select(
+            hidden: hidden,
+            logits: logits,
+            anchorTokenIds: MLXArray([Int32(1)]),
+            temperature: 0
+        )
+        MLX.eval(selection.tokens)
+
+        XCTAssertEqual(selection.tokens.asArray(Int32.self), [3, 1])
+        XCTAssertNil(selection.candidateProbabilities)
+    }
+
+    func testDFlash2SparseRejectionDistributionSubtractsOnlyCandidates() {
+        let residual = MuseGlimmerDFlashDecoder.sparseRejectionDistribution(
+            target: MLXArray([Float(0), 1]),
+            candidateTokenIds: MLXArray([Int32(0)]),
+            draft: MLXArray([Float(1)])
+        )
+        MLX.eval(residual)
+
+        XCTAssertEqual(residual.asArray(Float.self), [0, 1])
+    }
+
+    func testAssistantDraftBlockUsesTargetContextAndTargetEmbeddings() throws {
         let target = MuseGlimmerModel(config: try Self.config())
         let assistant = MuseGlimmerAssistantModel(config: try Self.assistantConfig())
         let targetCache = target.makeCache()
@@ -355,7 +458,7 @@ final class MuseGlimmerTests: MereRunCoreTestCase {
             topK: 0,
             topP: 1,
             minP: 0,
-            repetitionPenalty: nil,
+            repetitionPenalty: 1,
             repetitionContextSize: 8
         )
         let serial = try AutoregressiveDecodeEngine.decode(
@@ -384,6 +487,105 @@ final class MuseGlimmerTests: MereRunCoreTestCase {
 
         XCTAssertEqual(speculative.generatedTokens, serial.generatedTokens)
         XCTAssertGreaterThan(speculative.stats.targetVerificationForwards, 0)
+    }
+
+    func testGreedyDFlash2DecodeMatchesSerialTargetTokens() throws {
+        let target = MuseGlimmerModel(config: try Self.config())
+        let assistant = MuseGlimmerAssistantModel(config: try Self.dflash2Config())
+        let prompt = [1, 4, 7]
+        let serialCache = target.makeCache()
+        let serialInitial = try target.forwardPrefill(
+            inputIds: MLXArray(prompt.map(Int32.init)).reshaped(1, prompt.count),
+            imageBatch: nil,
+            cache: serialCache
+        )
+        let speculativeCache = target.makeCache()
+        let speculativeInitial = try target.forwardPrefillDetailed(
+            inputIds: MLXArray(prompt.map(Int32.init)).reshaped(1, prompt.count),
+            imageBatch: nil,
+            cache: speculativeCache,
+            captureLayerIndices: [0, 2]
+        )
+        let assistantCache = assistant.makeCache()
+        assistant.appendTargetContext(
+            speculativeInitial.capturedHiddenStates,
+            cache: assistantCache
+        )
+        let generation = GenerationConfig(
+            maxTokens: 8,
+            temperature: 0,
+            topK: 0,
+            topP: 1,
+            minP: 0,
+            repetitionPenalty: 1,
+            repetitionContextSize: 8
+        )
+        let serial = try AutoregressiveDecodeEngine.decode(
+            AutoregressiveDecodeRequest(
+                initialLogits: serialInitial,
+                generationConfig: generation,
+                eosTokens: [],
+                tokenBudget: 8,
+                historySeedTokens: prompt
+            ),
+            stepForward: { token in target(token, cache: serialCache) }
+        )
+        let speculative = try MuseGlimmerDFlashDecoder.decode(
+            initialLogits: speculativeInitial.logits,
+            target: target,
+            targetCache: speculativeCache,
+            assistant: assistant,
+            assistantCache: assistantCache,
+            generationConfig: generation,
+            eosTokens: [],
+            tokenBudget: 8,
+            historySeedTokens: prompt,
+            speculativeTokens: 3,
+            assistantModelPath: nil
+        )
+
+        XCTAssertEqual(speculative.generatedTokens, serial.generatedTokens)
+        XCTAssertGreaterThan(speculative.stats.targetVerificationForwards, 0)
+    }
+
+    func testSampledDFlash2DecodeUsesSparseProposalPath() throws {
+        MLXRandom.seed(7_103)
+        let target = MuseGlimmerModel(config: try Self.config())
+        let assistant = MuseGlimmerAssistantModel(config: try Self.dflash2Config())
+        let prompt = [1, 4, 7]
+        let targetCache = target.makeCache()
+        let initial = try target.forwardPrefillDetailed(
+            inputIds: MLXArray(prompt.map(Int32.init)).reshaped(1, prompt.count),
+            imageBatch: nil,
+            cache: targetCache,
+            captureLayerIndices: [0, 2]
+        )
+        let assistantCache = assistant.makeCache()
+        assistant.appendTargetContext(initial.capturedHiddenStates, cache: assistantCache)
+        let result = try MuseGlimmerDFlashDecoder.decode(
+            initialLogits: initial.logits,
+            target: target,
+            targetCache: targetCache,
+            assistant: assistant,
+            assistantCache: assistantCache,
+            generationConfig: GenerationConfig(
+                maxTokens: 8,
+                temperature: 1,
+                topK: 0,
+                topP: 1,
+                minP: 0,
+                repetitionPenalty: nil,
+                repetitionContextSize: 8
+            ),
+            eosTokens: [],
+            tokenBudget: 8,
+            historySeedTokens: prompt,
+            speculativeTokens: 3,
+            assistantModelPath: nil
+        )
+
+        XCTAssertEqual(result.generatedTokens.count, 8)
+        XCTAssertGreaterThan(result.stats.targetVerificationForwards, 0)
     }
 
     func testWarmUpMaterializesSerialAndProductionDFlashPaths() throws {
@@ -438,6 +640,13 @@ final class MuseGlimmerTests: MereRunCoreTestCase {
         )
     }
 
+    private static func dflash2Config() throws -> MuseGlimmerAssistantConfig {
+        try JSONDecoder().decode(
+            MuseGlimmerAssistantConfig.self,
+            from: Data(dflash2ConfigJSON.utf8)
+        )
+    }
+
     private static let assistantConfigJSON = #"""
     {
       "model_type":"muse_glimmer_assistant",
@@ -461,6 +670,42 @@ final class MuseGlimmerTests: MereRunCoreTestCase {
       "block_size":4,
       "mask_token_id":31,
       "target_layer_ids":[0,2]
+    }
+    """#
+
+    private static let dflash2ConfigJSON = #"""
+    {
+      "model_type":"qwen3",
+      "architectures":["DFlash2DraftModel"],
+      "is_causal":false,
+      "hidden_size":16,
+      "intermediate_size":32,
+      "num_hidden_layers":2,
+      "num_attention_heads":4,
+      "num_key_value_heads":2,
+      "head_dim":4,
+      "rms_norm_eps":0.00001,
+      "rope_parameters":{"rope_theta":500000,"rope_type":"default"},
+      "max_position_embeddings":64,
+      "sliding_window":8,
+      "layer_types":["sliding_attention","sliding_attention"],
+      "attention_dropout":0,
+      "hidden_act":"silu",
+      "vocab_size":32,
+      "bos_token_id":1,
+      "eos_token_id":2,
+      "pad_token_id":0,
+      "dflash_config":{
+        "block_size":4,
+        "conv_group_size":2,
+        "conv_kernel_size":2,
+        "final_logit_softcapping":20,
+        "mask_token_id":31,
+        "output_multiplier":0.19611613513818404,
+        "selector_rank":1,
+        "selector_top_k":2,
+        "target_layer_ids":[0,2]
+      }
     }
     """#
 

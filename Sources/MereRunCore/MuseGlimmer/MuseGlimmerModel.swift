@@ -774,8 +774,16 @@ public final class MuseGlimmerModel: Module, @unchecked Sendable {
         model.languageModel.embedTokens(inputIds.asType(.int32))
     }
 
+    func inputEmbeddings(for inputIds: MLXArray) -> MLXArray {
+        model.languageModel.embeddings(inputIds)
+    }
+
     func rawOutputLogits(from hidden: MLXArray) -> MLXArray {
         lmHead(hidden)
+    }
+
+    func outputLogits(from hidden: MLXArray) -> MLXArray {
+        logits(hidden)
     }
 
     private func logits(_ hidden: MLXArray) -> MLXArray {
