@@ -30,8 +30,10 @@ public enum HubDownloadNetworkPolicy: String, Codable, Equatable, Sendable {
         var request = request
         let unrestricted = self == .allNetworks
         request.allowsCellularAccess = unrestricted
+        #if !canImport(FoundationNetworking)
         request.allowsExpensiveNetworkAccess = unrestricted
         request.allowsConstrainedNetworkAccess = unrestricted
+        #endif
         return request
     }
 }
