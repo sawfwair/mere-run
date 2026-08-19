@@ -34,6 +34,7 @@ fi
 
 swiftlint --strict --cache-path .build/swiftlint.cache
 bash ./scripts/agent_readiness_check.sh
+bash ./scripts/check-evaluation-boundary.sh
 swiftpm() {
   local subcommand="$1"
   shift
@@ -82,6 +83,10 @@ fi
 "$mere_run_bin" model runtime --help >/dev/null
 "$mere_run_bin" model runtime get --help >/dev/null
 "$mere_run_bin" model runtime set --help >/dev/null
+"$mere_run_bin" eval --help >/dev/null
+"$mere_run_bin" eval pack validate --help >/dev/null
+"$mere_run_bin" eval run --help >/dev/null
+"$mere_run_bin" eval promote --help >/dev/null
 "$mere_run_bin" status --help >/dev/null
 "$mere_run_bin" api serve --help >/dev/null
 

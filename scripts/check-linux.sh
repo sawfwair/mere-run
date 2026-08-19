@@ -80,6 +80,8 @@ check_linux_package_view() {
   fi
 }
 
+bash ./scripts/check-evaluation-boundary.sh
+
 if [[ "$manifest_only" == "1" ]]; then
   check_linux_package_view
   bash ./scripts/prepare-linux-native.sh --check
@@ -191,6 +193,10 @@ fi
 "$mere_run_bin" model --help >/dev/null
 "$mere_run_bin" model storage --help >/dev/null
 "$mere_run_bin" model gc --help >/dev/null
+"$mere_run_bin" eval --help >/dev/null
+"$mere_run_bin" eval pack validate --help >/dev/null
+"$mere_run_bin" eval run --help >/dev/null
+"$mere_run_bin" eval promote --help >/dev/null
 "$mere_run_bin" status --help >/dev/null
 "$mere_run_bin" api serve --help >/dev/null
 

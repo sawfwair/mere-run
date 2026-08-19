@@ -6,6 +6,22 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### External evaluation packs
+
+- added the public `MereRunEvaluation` contract and `eval pack validate`,
+  `eval run`, and `eval promote` lifecycle for content-addressed external
+  text-chat evaluation packs. Runs support matched model, prompt, and adapter
+  arms, repeated sampled and deterministic profiles, logprob calibration,
+  exact-plan checkpoint/resume, typed gates, and promotion receipts.
+- kept pack questions, prompts, scorers, and release criteria in their owning
+  repositories. The public tree contains only a synthetic contract fixture,
+  and its boundary check rejects other bundled packs while allowing private CI
+  to inject organization-owned marker lists from outside the repository.
+- pinned adjacent native text-LoRA training provenance without serializing
+  training examples or machine-local paths. External scorers require explicit
+  authorization, execute without a shell in a reduced environment, and are
+  bounded by timeout and output validation.
+
 ### iOS Studio
 
 - fixed verified artifact downloads on Apple platforms to use the iOS
