@@ -3240,26 +3240,33 @@ public enum ManagedModelCatalog {
             category: .video,
             installShape: .structuredRoot,
             hubFallback: HubFallbackConfig(
-                repoId: MiniMaxH3Resources.artifactRepository,
-                revision: MiniMaxH3Resources.artifactRevision,
-                patterns: MiniMaxH3Resources.bf16SupportArtifactFiles
+                repoId: MiniMaxH3Resources.compactBF16ArtifactRepository,
+                revision: MiniMaxH3Resources.compactBF16ArtifactRevision,
+                patterns: MiniMaxH3Resources.compactBF16AndQ8ArtifactFiles
             ),
-            mountedHubFallbacks: [
-                MountedHubFallbackConfig(
-                    destinationPath: MiniMaxH3Resources.bf16TransformerDirectory,
-                    hubFallback: HubFallbackConfig(
-                        repoId: MiniMaxH3Resources.bf16ArtifactRepository,
-                        revision: MiniMaxH3Resources.bf16ArtifactRevision,
-                        patterns: MiniMaxH3Resources.bf16ArtifactFiles
-                    )
-                ),
-            ],
-            upstreamRepoId: MiniMaxH3Resources.bf16ArtifactRepository,
-            upstreamRevision: MiniMaxH3Resources.bf16ArtifactRevision,
+            upstreamRepoId: MiniMaxH3Resources.compactBF16ArtifactRepository,
+            upstreamRevision: MiniMaxH3Resources.compactBF16ArtifactRevision,
             usageRestriction: miniMaxH3UsageRestriction,
             validationKind: .miniMaxH3MLX,
             runtimeAutoDownloadAllowed: false,
-            estimatedDownloadBytes: 100_279_671_824,
+            estimatedDownloadBytes: 76_861_026_073,
+            defaultCLICommands: ["video generate"]
+        ),
+        ManagedModelSpec(
+            id: ModelResolver.ModelID.miniMaxH3FL2VAQ8MLX.rawValue,
+            category: .video,
+            installShape: .structuredRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: MiniMaxH3Resources.q8ArtifactRepository,
+                revision: MiniMaxH3Resources.q8ArtifactRevision,
+                patterns: MiniMaxH3Resources.compactBF16AndQ8ArtifactFiles
+            ),
+            upstreamRepoId: MiniMaxH3Resources.q8ArtifactRepository,
+            upstreamRevision: MiniMaxH3Resources.q8ArtifactRevision,
+            usageRestriction: miniMaxH3UsageRestriction,
+            validationKind: .miniMaxH3MLX,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 58_075_175_639,
             defaultCLICommands: ["video generate"]
         ),
         ManagedModelSpec(
@@ -3834,6 +3841,26 @@ public extension ManagedModelSpec {
                     }
                     return resources.validateManagedRef2VAArtifact(fileManager: fileManager)
                 }
+                if id == ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue {
+                    guard try resources.transformerStorage() == .compactBF16,
+                          configuration.quantization == nil else {
+                        return ["MiniMax-H3 BF16 requires an unquantized compact BF16 transformer."]
+                    }
+                    return resources.validateCompactCachePack(fileManager: fileManager)
+                }
+                if id == ModelResolver.ModelID.miniMaxH3FL2VAQ8MLX.rawValue {
+                    let expectedQuantization = MiniMaxH3QuantizationConfiguration(
+                        bits: 8,
+                        groupSize: 64,
+                        mode: "affine"
+                    )
+                    guard try resources.transformerStorage() == .affineQ8,
+                          configuration.quantization == expectedQuantization,
+                          configuration.textEncoderQuantization == expectedQuantization else {
+                        return ["MiniMax-H3 Q8 requires MLX affine INT8/group-64 transformer and conditioner weights."]
+                    }
+                    return resources.validateCompactCachePack(fileManager: fileManager)
+                }
                 return []
             } catch {
                 return [error.localizedDescription]
@@ -3939,23 +3966,31 @@ public extension ManagedModelSpec {
         }
     }
 
-    private func managedSourceMatches(_ rootURL: URL, fileManager: FileManager) -> Bool {
+    func managedSourceMatches(_ rootURL: URL, fileManager: FileManager) -> Bool {
         let requiresPinnedSource = id == ModelResolver.ModelID.zetaNano.rawValue
             || id == ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue
+            || id == ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue
+            || id == ModelResolver.ModelID.miniMaxH3FL2VAQ8MLX.rawValue
         guard requiresPinnedSource, let expectedRepo = upstreamRepoId else {
             return true
         }
         let normalized = normalizedRootURL(rootURL, fileManager: fileManager)
         guard let manifest = try? MereRunModelManifest.loadIfPresent(from: normalized, fileManager: fileManager),
               let installedRepo = manifest.upstreamRepoId else {
-            return true
+            return id != ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue
+                && id != ModelResolver.ModelID.miniMaxH3FL2VAQ8MLX.rawValue
         }
 
-        if installedRepo == expectedRepo {
+        let requiresExactRevision = id == ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue
+            || id == ModelResolver.ModelID.miniMaxH3FL2VAQ8MLX.rawValue
+        if installedRepo == expectedRepo, !requiresExactRevision {
             return true
         }
         if let expectedWithRevision = upstreamRevision.map({ "\(expectedRepo)@\($0)" }),
            installedRepo == expectedWithRevision {
+            return true
+        }
+        if upstreamRevision == nil, installedRepo == expectedRepo {
             return true
         }
         if id == ModelResolver.ModelID.zetaNano.rawValue,

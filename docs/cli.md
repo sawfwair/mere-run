@@ -1918,10 +1918,12 @@ CFG-distilled transformer needs one evaluation per schedule step. Ref2VA is an
 explicit managed pull with an 8-bit transformer and conditioner; 8-bit is the
 published Ref2VA quality floor.
 When `--steps` is omitted, H3 selects 9, 16, or 21 schedule points from packed
-row cost. Maximum acceleration caps the automatic schedule at 12 points. Its
-source-bound AdaLN cache resamples the exact released 31-point
-curve for explicit overrides. `--h3-weight-mode auto` keeps compact Q4 on
-MacBooks below 96 GiB and expands to the faster resident BF16 path on memory-qualified
+row cost. Maximum acceleration caps the automatic schedule at 12 points. The
+compact BF16 and Q8 cache pack selects exact 5, 9, 12, 16, 21, or 31-point
+tables at shifts 12/3 and an exact 5-point shifts-6/3 table for the LightX2V
+768p recipe. Custom schedules interpolate from the densest table and disclose
+that they are not bit-exact. `--h3-weight-mode auto` keeps compact quantized
+weights on MacBooks below 96 GiB and expands to the faster resident BF16 path on memory-qualified
 desktops and 96+ GiB MacBooks when the requested geometry leaves the required
 runtime reserve.
 
@@ -2163,13 +2165,14 @@ mere.run model optimize video-ltx25-full-bf16
 mere.run model optimize ./MiniMax-H3-FL2VA-full-MLX --json
 ```
 
-The generated `adaln_cache.safetensors` contains the released 31-point
-video/audio schedule's AdaLN modulation tables. Compatible H3 generations then
-skip loading the 13B-parameter AdaLN/time-embedding branch and resample that
-exact curve for their selected point count. `--force` replaces an existing
-cache atomically after the new cache has been built. The managed
-`video-minimax-h3-fl2va-mlx` and `video-minimax-h3-ref2va-mlx` artifacts already
-include their source-bound caches; no post-pull optimization is needed.
+The generated `adaln_cache.index.json` binds exact AdaLN tables for 5, 9, 12,
+16, 21, and 31 points at shifts 12/3 plus the LightX2V 768p 5-point schedule at
+shifts 6/3. Compatible H3 generations skip the 13B-parameter
+AdaLN/time-embedding branch. A custom schedule interpolates from the densest
+compatible table and emits a visible non-bit-exact diagnostic. `--force`
+atomically rebuilds a pack from a full legacy root; a pruned root can validate
+its existing pack but cannot synthesize a missing exact table. Managed compact
+BF16, Q8, legacy Q4, and Ref2VA artifacts already include source-bound caches.
 
 For LTX 2.5, the command streams the distilled transformer and, for a full
 root, the dev transformer into source-bound BF16 native packs. It also writes a
@@ -2283,6 +2286,9 @@ machines do not pull models they cannot run and tight disks fail with a useful c
 ```bash
 swift run mere.run model pull image-zimage-nano
 swift run mere.run model pull image-zimage-nano --preflight --json
+swift run mere.run model pull video-minimax-h3-fl2va-bf16-mlx \
+  --cache-dir /Volumes/Models/MereRun/hub \
+  --accept-model-license
 swift run mere.run model pull --all
 ```
 
@@ -2290,6 +2296,11 @@ Use `--preflight --json` to check support, install state, download source,
 model store path, hub cache path, disk headroom, and next actions before any
 download starts. The report includes `pull-model` or `pull-models` actions and
 exits nonzero after printing JSON when hard blockers are present.
+
+`--cache-dir PATH` selects the content-addressed Hub cache for that pull,
+including disk estimates and downloads. The installed model root links to the
+selected cache, so disconnecting an external cache volume makes the model
+unavailable until it is reconnected.
 
 Use `--allow-unsupported` only when you intentionally accept the runtime risk.
 
@@ -2328,9 +2339,10 @@ verification diagnostics go to stderr. Use the adapter id directly with
 `video animate --distilled-adapter` option. `video animate --profile fast`
 selects `scail2-lightx2v-4step` and its fixed four-step schedule.
 Use the MiniMax-H3 adapter ids with `video generate --h3-adapter`. FL2VA
-adapters use the BF16 FL2VA base; the Ref2V adapter uses the managed Ref2VA
-base expanded to resident BF16. Both base models remain subject to MiniMax-H3
-Community License acceptance.
+adapters support the compact BF16 and affine Q8 FL2VA bases and reject the
+legacy Q4 compatibility package. The Ref2V adapter uses the managed Ref2VA base
+expanded to resident BF16. All bases remain subject to MiniMax-H3 Community
+License acceptance.
 
 For a cross-command decision guide, see [Benchmarking](./benchmarking.md). The
 sections below are the command reference for each benchmark lane.

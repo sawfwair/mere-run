@@ -1479,7 +1479,38 @@ private func miniMaxH3ResidentBF16Linear(
     let shape = quantized.shape
     let weightBytes = UInt64(shape.0) * UInt64(shape.1) * 2
     let biasBytes = UInt64(quantized.bias?.size ?? 0) * 2
-    return (Linear(weight: weight, bias: bias), weightBytes + biasBytes)
+    let base = Linear(weight: weight, bias: bias)
+    if let lora = quantized as? MiniMaxH3RuntimeQuantizedLoRALinear {
+        let adapterBytes = UInt64(lora.loraDown.size + lora.loraUp.size) * 2
+        return (
+            MiniMaxH3RuntimeLoRALinear(
+                base: base,
+                loraDown: lora.loraDown,
+                loraUp: lora.loraUp,
+                strength: lora.strength
+            ),
+            weightBytes + biasBytes + adapterBytes
+        )
+    }
+    if let lora = quantized as? MiniMaxH3RuntimeQuantizedQKVLoRALinear {
+        let adapterCount = lora.queryDown.size + lora.queryUp.size
+            + lora.keyDown.size + lora.keyUp.size
+            + lora.valueDown.size + lora.valueUp.size
+        return (
+            MiniMaxH3RuntimeQKVLoRALinear(
+                base: base,
+                queryDown: lora.queryDown,
+                queryUp: lora.queryUp,
+                keyDown: lora.keyDown,
+                keyUp: lora.keyUp,
+                valueDown: lora.valueDown,
+                valueUp: lora.valueUp,
+                strength: lora.strength
+            ),
+            weightBytes + biasBytes + UInt64(adapterCount) * 2
+        )
+    }
+    return (base, weightBytes + biasBytes)
 }
 
 private func miniMaxH3MaterializeResidentBF16(
@@ -1502,8 +1533,18 @@ private func miniMaxH3MaterializeResidentBF16(
 private func miniMaxH3ResidentBF16ByteCount(_ linear: Linear) -> UInt64 {
     if let quantized = linear as? QuantizedLinear {
         let shape = quantized.shape
-        return UInt64(shape.0) * UInt64(shape.1) * 2
+        var byteCount = UInt64(shape.0) * UInt64(shape.1) * 2
             + UInt64(quantized.bias?.size ?? 0) * 2
+        if let lora = quantized as? MiniMaxH3RuntimeQuantizedLoRALinear {
+            byteCount += UInt64(lora.loraDown.size + lora.loraUp.size) * 2
+        } else if let lora = quantized as? MiniMaxH3RuntimeQuantizedQKVLoRALinear {
+            byteCount += UInt64(
+                lora.queryDown.size + lora.queryUp.size
+                    + lora.keyDown.size + lora.keyUp.size
+                    + lora.valueDown.size + lora.valueUp.size
+            ) * 2
+        }
+        return byteCount
     }
     return linear.parameters().flattened().reduce(into: UInt64(0)) { total, entry in
         total += UInt64(entry.1.size) * 2
@@ -2344,6 +2385,71 @@ public final class MiniMaxH3Transformer: Module {
         runner.exactKernelDispatchHandler = block.exactKernelDispatchHandler
         runner.exactKernelFallbackHandler = block.exactKernelFallbackHandler
         let replacements: [(String, Module)] = block.leafModules().flattened().compactMap { path, module in
+            if let lora = module as? MiniMaxH3RuntimeQuantizedQKVLoRALinear {
+                let base = QuantizedLinear(
+                    weight: MLXArray.zeros(lora.weight.shape, dtype: lora.weight.dtype),
+                    bias: lora.bias.map { MLXArray.zeros($0.shape, dtype: $0.dtype) },
+                    scales: MLXArray.zeros(lora.scales.shape, dtype: lora.scales.dtype),
+                    biases: lora.biases.map { MLXArray.zeros($0.shape, dtype: $0.dtype) },
+                    groupSize: lora.groupSize,
+                    bits: lora.bits,
+                    mode: lora.mode,
+                    globalScale: lora.globalScale.map { MLXArray.zeros($0.shape, dtype: $0.dtype) }
+                )
+                return (
+                    path,
+                    MiniMaxH3RuntimeQuantizedQKVLoRALinear(
+                        base: base,
+                        queryDown: MLXArray.zeros(lora.queryDown.shape, dtype: lora.queryDown.dtype),
+                        queryUp: MLXArray.zeros(lora.queryUp.shape, dtype: lora.queryUp.dtype),
+                        keyDown: MLXArray.zeros(lora.keyDown.shape, dtype: lora.keyDown.dtype),
+                        keyUp: MLXArray.zeros(lora.keyUp.shape, dtype: lora.keyUp.dtype),
+                        valueDown: MLXArray.zeros(lora.valueDown.shape, dtype: lora.valueDown.dtype),
+                        valueUp: MLXArray.zeros(lora.valueUp.shape, dtype: lora.valueUp.dtype),
+                        strength: lora.strength
+                    )
+                )
+            }
+            if let lora = module as? MiniMaxH3RuntimeQuantizedLoRALinear {
+                let base = QuantizedLinear(
+                    weight: MLXArray.zeros(lora.weight.shape, dtype: lora.weight.dtype),
+                    bias: lora.bias.map { MLXArray.zeros($0.shape, dtype: $0.dtype) },
+                    scales: MLXArray.zeros(lora.scales.shape, dtype: lora.scales.dtype),
+                    biases: lora.biases.map { MLXArray.zeros($0.shape, dtype: $0.dtype) },
+                    groupSize: lora.groupSize,
+                    bits: lora.bits,
+                    mode: lora.mode,
+                    globalScale: lora.globalScale.map { MLXArray.zeros($0.shape, dtype: $0.dtype) }
+                )
+                return (
+                    path,
+                    MiniMaxH3RuntimeQuantizedLoRALinear(
+                        base: base,
+                        loraDown: MLXArray.zeros(lora.loraDown.shape, dtype: lora.loraDown.dtype),
+                        loraUp: MLXArray.zeros(lora.loraUp.shape, dtype: lora.loraUp.dtype),
+                        strength: lora.strength
+                    )
+                )
+            }
+            if let lora = module as? MiniMaxH3RuntimeQKVLoRALinear {
+                let base = Linear(
+                    weight: MLXArray.zeros(lora.weight.shape, dtype: lora.weight.dtype),
+                    bias: lora.bias.map { MLXArray.zeros($0.shape, dtype: $0.dtype) }
+                )
+                return (
+                    path,
+                    MiniMaxH3RuntimeQKVLoRALinear(
+                        base: base,
+                        queryDown: MLXArray.zeros(lora.queryDown.shape, dtype: lora.queryDown.dtype),
+                        queryUp: MLXArray.zeros(lora.queryUp.shape, dtype: lora.queryUp.dtype),
+                        keyDown: MLXArray.zeros(lora.keyDown.shape, dtype: lora.keyDown.dtype),
+                        keyUp: MLXArray.zeros(lora.keyUp.shape, dtype: lora.keyUp.dtype),
+                        valueDown: MLXArray.zeros(lora.valueDown.shape, dtype: lora.valueDown.dtype),
+                        valueUp: MLXArray.zeros(lora.valueUp.shape, dtype: lora.valueUp.dtype),
+                        strength: lora.strength
+                    )
+                )
+            }
             if let lora = module as? MiniMaxH3RuntimeLoRALinear {
                 let base = Linear(
                     weight: MLXArray.zeros(lora.weight.shape, dtype: lora.weight.dtype),

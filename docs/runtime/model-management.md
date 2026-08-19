@@ -156,12 +156,13 @@ mere.run model optimize ./MiniMax-H3-FL2VA-full-MLX
 mere.run model optimize video-ltx25-full-bf16
 ```
 
-The cache is written beside the installed model. Compatible generation runs use
-it to avoid loading the inference-redundant AdaLN/time-embedding weights and
-resample its exact released curve for the selected schedule-point count. The
-managed `video-minimax-h3-fl2va-mlx` artifact already bundles a cache computed
-from the official BF16/F32 projections, so it does not require this command
-after pull.
+The versioned cache pack is written beside the installed model. It contains
+exact tables for 5, 9, 12, 16, 21, and 31 points at shifts 12/3 plus the
+LightX2V 768p 5-point table at shifts 6/3. Custom schedules interpolate from
+the densest compatible table and emit a visible non-bit-exact diagnostic. Full
+legacy roots can synthesize the pack; pruned roots can validate an existing
+complete pack but cannot recreate a missing exact table. Managed compact BF16,
+Q8, legacy Q4, and Ref2VA packages already bundle source-bound caches.
 
 LTX 2.5 optimization streams the official BF16 transformer payloads into the
 exact native module namespace without materializing the 22B checkpoint or
@@ -202,6 +203,13 @@ when you intentionally accept that risk or are using external hardware.
 A valid model in a registered location satisfies a normal pull and prevents a
 duplicate download. `--force` always installs or replaces the primary-store
 copy; it never modifies the external payload.
+
+Pass `--cache-dir PATH` to put one pull's content-addressed payload on a
+specific volume. Preflight, disk estimates, downloads, and the installed links
+all use that path. Disconnecting an external cache volume makes the model
+unavailable. Managed replacement is transactional: the complete staged root is
+validated before the old root is renamed, and a failed final validation or
+alias installation restores the old root.
 
 Access-gated models and models with material non-commercial, research-only, or
 revenue-limited terms require `--accept-model-license` for new downloads and

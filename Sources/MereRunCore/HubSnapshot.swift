@@ -250,6 +250,59 @@ public actor HubSnapshot {
         return fileManager.fileExists(atPath: requested.path) ? requested : nil
     }
 
+    /// Reports whether every requested Hub pattern already has a materialized
+    /// payload in a cached snapshot. This is intentionally a closure check,
+    /// not an artifact-validity check: online preparation still verifies the
+    /// selected files against their remote identities before model validation.
+    public static func containsAllMaterializedPatterns(
+        at snapshotURL: URL,
+        patterns: [String],
+        fileManager: FileManager = .default
+    ) -> Bool {
+        guard !patterns.isEmpty else { return false }
+
+        var unmatched = Set(patterns)
+        for pattern in patterns where !containsGlob(pattern) {
+            var isDirectory: ObjCBool = false
+            if fileManager.fileExists(
+                atPath: snapshotURL.appending(path: pattern).path,
+                isDirectory: &isDirectory
+            ), !isDirectory.boolValue {
+                unmatched.remove(pattern)
+            }
+        }
+        guard !unmatched.isEmpty else { return true }
+
+        let keys: [URLResourceKey] = [.isDirectoryKey]
+        guard let enumerator = fileManager.enumerator(
+            at: snapshotURL,
+            includingPropertiesForKeys: keys,
+            options: [.skipsHiddenFiles]
+        ) else {
+            return false
+        }
+        let snapshotComponents = snapshotURL.standardizedFileURL.pathComponents
+        for case let candidate as URL in enumerator {
+            guard (try? candidate.resourceValues(forKeys: Set(keys)).isDirectory) != true else {
+                continue
+            }
+            let components = candidate.standardizedFileURL.pathComponents
+            guard components.starts(with: snapshotComponents) else { continue }
+            let relativePath = components.dropFirst(snapshotComponents.count).joined(separator: "/")
+            for pattern in unmatched where Self.matchesPath(relativePath, patterns: [pattern]) {
+                unmatched.remove(pattern)
+            }
+            if unmatched.isEmpty { return true }
+        }
+        return false
+    }
+
+    private static func containsGlob(_ pattern: String) -> Bool {
+        pattern.contains { character in
+            character == "*" || character == "?" || character == "["
+        }
+    }
+
     private static func resolveDownloadBase(
         requested: URL?,
         fileManager: FileManager
@@ -312,6 +365,11 @@ public actor HubSnapshot {
             if Self.fileExists(at: destination, expectedBytes: expectedBytes),
                let metadata = Self.readDownloadMetadata(at: metadataDestination),
                metadata.commitHash == resolvedRevision {
+                try canonicalizeCachedPayload(
+                    destination: destination,
+                    expectedBytes: expectedBytes,
+                    metadata: metadata
+                )
                 completedBytes += max(expectedBytes, Self.fileSize(at: destination))
                 receiptFiles.append(
                     HubSnapshotReceipt.File(
@@ -670,7 +728,7 @@ public actor HubSnapshot {
             }
             try? FileManager.default.removeItem(at: temporaryURL)
         }
-        try FileManager.default.linkItem(at: blobURL, to: destination)
+        try Self.materializeContentReference(from: blobURL, to: destination)
     }
 
     private func reusableBlobURL(
@@ -718,7 +776,7 @@ public actor HubSnapshot {
             withIntermediateDirectories: true
         )
         try? FileManager.default.removeItem(at: destination)
-        try FileManager.default.linkItem(at: blobURL, to: destination)
+        try Self.materializeContentReference(from: blobURL, to: destination)
         try writeDownloadMetadata(remote, to: metadataDestination)
         return HubSnapshotDownloadMetadata(commitHash: remote.commitHash, etag: remote.etag)
     }
@@ -745,12 +803,22 @@ public actor HubSnapshot {
         )
         if !FileManager.default.fileExists(atPath: blobURL.path) {
             do {
-                try FileManager.default.linkItem(at: payload, to: blobURL)
+                try FileManager.default.linkItem(
+                    at: payload.resolvingSymlinksInPath(),
+                    to: blobURL
+                )
             } catch {
-                guard FileManager.default.fileExists(atPath: blobURL.path),
-                      Self.fileSize(at: blobURL) == expectedBytes else {
-                    throw error
+                if !FileManager.default.fileExists(atPath: blobURL.path) {
+                    try FileManager.default.copyItem(
+                        at: payload.resolvingSymlinksInPath(),
+                        to: blobURL
+                    )
                 }
+            }
+            guard Self.fileExists(at: blobURL, expectedBytes: expectedBytes) else {
+                throw Hub.HubClientError.downloadError(
+                    "Reusable Hub blob materialization failed for \(etag)"
+                )
             }
         }
         return try materializeReusableBlob(
@@ -793,11 +861,21 @@ public actor HubSnapshot {
                 withIntermediateDirectories: true
             )
             if !FileManager.default.fileExists(atPath: blobURL.path) {
-                try FileManager.default.linkItem(at: legacyPayload, to: blobURL)
+                do {
+                    try FileManager.default.linkItem(
+                        at: legacyPayload.resolvingSymlinksInPath(),
+                        to: blobURL
+                    )
+                } catch {
+                    try FileManager.default.copyItem(
+                        at: legacyPayload.resolvingSymlinksInPath(),
+                        to: blobURL
+                    )
+                }
             }
-            try FileManager.default.linkItem(at: blobURL, to: destination)
+            try Self.materializeContentReference(from: blobURL, to: destination)
         } else {
-            try FileManager.default.linkItem(at: legacyPayload, to: destination)
+            try Self.materializeContentReference(from: legacyPayload, to: destination)
         }
         try FileManager.default.createDirectory(
             at: metadataDestination.deletingLastPathComponent(),
@@ -836,10 +914,49 @@ public actor HubSnapshot {
                 )
             }
         } else {
-            try FileManager.default.linkItem(at: destination, to: blobURL)
+            do {
+                try FileManager.default.linkItem(at: destination, to: blobURL)
+            } catch {
+                try FileManager.default.moveItem(at: destination, to: blobURL)
+                try Self.materializeContentReference(from: blobURL, to: destination)
+            }
         }
         try writeDownloadMetadata(remote, to: metadataDestination)
         return HubSnapshotDownloadMetadata(commitHash: remote.commitHash, etag: etag)
+    }
+
+    private func canonicalizeCachedPayload(
+        destination: URL,
+        expectedBytes: Int64,
+        metadata: HubSnapshotDownloadMetadata
+    ) throws {
+        guard let etag = metadata.etag, !etag.isEmpty else { return }
+        let blobURL = contentBlobURL(etag: etag)
+        if destination.resolvingSymlinksInPath().standardizedFileURL
+            == blobURL.standardizedFileURL {
+            return
+        }
+        try FileManager.default.createDirectory(
+            at: blobURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        if FileManager.default.fileExists(atPath: blobURL.path) {
+            guard Self.fileExists(at: blobURL, expectedBytes: expectedBytes) else {
+                throw Hub.HubClientError.downloadError(
+                    "Hub blob identity collision for \(etag)"
+                )
+            }
+        } else {
+            do {
+                try FileManager.default.linkItem(at: destination, to: blobURL)
+            } catch {
+                try FileManager.default.moveItem(at: destination, to: blobURL)
+            }
+        }
+        if FileManager.default.fileExists(atPath: destination.path) {
+            try FileManager.default.removeItem(at: destination)
+        }
+        try Self.materializeContentReference(from: blobURL, to: destination)
     }
 
     private func writeSnapshotReceipt(_ receipt: HubSnapshotReceipt, to snapshotURL: URL) throws {
@@ -1050,8 +1167,34 @@ public actor HubSnapshot {
         return expectedBytes <= 0 || fileSize(at: url) == expectedBytes
     }
 
-    private static func fileSize(at url: URL) -> Int64 {
-        let size = (try? FileManager.default.attributesOfItem(atPath: url.path)[.size] as? NSNumber)?
+    static func materializeContentReference(
+        from sourceURL: URL,
+        to destinationURL: URL,
+        fileManager: FileManager = .default,
+        hardLink: (URL, URL) throws -> Void = { source, destination in
+            try FileManager.default.linkItem(at: source, to: destination)
+        }
+    ) throws {
+        let resolvedSource = sourceURL.standardizedFileURL.resolvingSymlinksInPath()
+        if destinationURL.standardizedFileURL.resolvingSymlinksInPath() == resolvedSource {
+            return
+        }
+        if fileManager.fileExists(atPath: destinationURL.path) {
+            try fileManager.removeItem(at: destinationURL)
+        }
+        do {
+            try hardLink(sourceURL, destinationURL)
+        } catch {
+            try fileManager.createSymbolicLink(
+                at: destinationURL,
+                withDestinationURL: resolvedSource
+            )
+        }
+    }
+
+    static func fileSize(at url: URL) -> Int64 {
+        let resolvedURL = url.standardizedFileURL.resolvingSymlinksInPath()
+        let size = (try? FileManager.default.attributesOfItem(atPath: resolvedURL.path)[.size] as? NSNumber)?
             .int64Value
         return size ?? 0
     }

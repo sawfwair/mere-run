@@ -123,6 +123,11 @@ public enum MiniMaxH3TurboAdapter {
         let up: MLXArray
     }
 
+    struct Installation {
+        let pairCount: Int
+        let adaLNCache: MiniMaxH3AdaLNCache?
+    }
+
     private struct LightX2VTarget {
         let modulePath: String
         let qkvBranch: QKVBranch?
@@ -134,7 +139,7 @@ public enum MiniMaxH3TurboAdapter {
         case unexpectedPairCount(expected: Int, actual: Int)
         case unsupportedSourceModule(String)
         case missingTargetModule(String)
-        case targetIsNotDenseLinear(String)
+        case targetIsNotLinear(String)
         case duplicateTarget(String)
         case duplicateQKVBranch(String, QKVBranch)
         case incompleteQKVTarget(String, missing: [QKVBranch])
@@ -153,8 +158,8 @@ public enum MiniMaxH3TurboAdapter {
                 return "Unsupported MiniMax-H3 LoRA source module: \(path)"
             case .missingTargetModule(let path):
                 return "MiniMax-H3 LoRA target module is missing: \(path)"
-            case .targetIsNotDenseLinear(let path):
-                return "MiniMax-H3 Turbo currently requires the BF16 transformer; target \(path) is not a dense Linear layer."
+            case .targetIsNotLinear(let path):
+                return "MiniMax-H3 LoRA target \(path) is not a supported Linear layer."
             case .duplicateTarget(let path):
                 return "MiniMax-H3 LoRA contains a duplicate target: \(path)"
             case .duplicateQKVBranch(let path, let branch):
@@ -177,6 +182,22 @@ public enum MiniMaxH3TurboAdapter {
         strength: Float,
         expectedPairCount: Int? = nil
     ) throws -> Int {
+        try installForInference(
+            url: url,
+            into: transformer,
+            strength: strength,
+            adaLNCache: nil,
+            expectedPairCount: expectedPairCount
+        ).pairCount
+    }
+
+    static func installForInference(
+        url: URL,
+        into transformer: MiniMaxH3Transformer,
+        strength: Float,
+        adaLNCache: MiniMaxH3AdaLNCache?,
+        expectedPairCount: Int? = nil
+    ) throws -> Installation {
         let sourceFormat = try sourceFormat(at: url)
         let inferenceRecipe = inferenceRecipe(for: url)
         let suffixes = sourceFormat.pairSuffixes
@@ -184,7 +205,7 @@ public enum MiniMaxH3TurboAdapter {
         let modulesByPath = Dictionary(uniqueKeysWithValues: leafModules)
         var replacements: [String: Module] = [:]
         var qkvPairs: [String: [QKVBranch: LoRAPair]] = [:]
-        var fusedTargets: Set<String> = []
+        var adaLNPairs: [String: LoRAPair] = [:]
 
         let pairCount = try SafetensorsStreamingLoader.forEachTensorPair(
             url: url,
@@ -208,10 +229,14 @@ public enum MiniMaxH3TurboAdapter {
                 sourceFormat: sourceFormat,
                 lightX2VAlpha: inferenceRecipe.lightX2VAlpha
             )
-            if let branch = target.qkvBranch {
-                guard !fusedTargets.contains(target.modulePath) else {
+            if sourceFormat == .runtime, isAdaLNTarget(target.modulePath) {
+                guard adaLNPairs[target.modulePath] == nil else {
                     throw AdapterError.duplicateTarget(target.modulePath)
                 }
+                adaLNPairs[target.modulePath] = LoRAPair(down: rawDown, up: up)
+                return
+            }
+            if let branch = target.qkvBranch {
                 var branches = qkvPairs[target.modulePath] ?? [:]
                 guard branches[branch] == nil else {
                     throw AdapterError.duplicateQKVBranch(target.modulePath, branch)
@@ -224,7 +249,7 @@ public enum MiniMaxH3TurboAdapter {
                     guard replacements[target.modulePath] == nil else {
                         throw AdapterError.duplicateTarget(target.modulePath)
                     }
-                    let linear = try denseLinear(at: target.modulePath, in: modulesByPath)
+                    let linear = try targetLinear(at: target.modulePath, in: modulesByPath)
                     let query = branches[.query]!
                     let key = branches[.key]!
                     let value = branches[.value]!
@@ -235,14 +260,13 @@ public enum MiniMaxH3TurboAdapter {
                         value: value,
                         base: linear
                     )
-                    fuseQKVLinear(
+                    replacements[target.modulePath] = runtimeQKVLayer(
                         base: linear,
                         query: query,
                         key: key,
                         value: value,
                         strength: strength
                     )
-                    fusedTargets.insert(target.modulePath)
                     qkvPairs.removeValue(forKey: target.modulePath)
                 } else {
                     qkvPairs[target.modulePath] = branches
@@ -250,11 +274,10 @@ public enum MiniMaxH3TurboAdapter {
                 return
             }
 
-            guard replacements[target.modulePath] == nil,
-                  !fusedTargets.contains(target.modulePath) else {
+            guard replacements[target.modulePath] == nil else {
                 throw AdapterError.duplicateTarget(target.modulePath)
             }
-            let linear = try denseLinear(at: target.modulePath, in: modulesByPath)
+            let linear = try targetLinear(at: target.modulePath, in: modulesByPath)
             let mappedUp = target.modulePath.hasSuffix(".attn.qkv_proj")
                 ? MiniMaxH3ModelLoader.deinterleavedQKVOutputRows(
                     up,
@@ -268,25 +291,12 @@ public enum MiniMaxH3TurboAdapter {
                 up: mappedUp,
                 base: linear
             )
-            switch sourceFormat {
-            case .runtime:
-                let runtimeLayer = MiniMaxH3RuntimeLoRALinear(
-                    base: linear,
-                    loraDown: rawDown,
-                    loraUp: mappedUp,
-                    strength: strength
-                )
-                MLX.eval(runtimeLayer.loraDown, runtimeLayer.loraUp)
-                replacements[target.modulePath] = runtimeLayer
-            case .lightX2V:
-                fuseLinear(
-                    base: linear,
-                    down: rawDown,
-                    up: mappedUp,
-                    strength: strength
-                )
-                fusedTargets.insert(target.modulePath)
-            }
+            replacements[target.modulePath] = runtimeLayer(
+                base: linear,
+                down: rawDown,
+                up: mappedUp,
+                strength: strength
+            )
         }
 
         guard pairCount > 0 else { throw AdapterError.noPairs(url) }
@@ -300,9 +310,36 @@ public enum MiniMaxH3TurboAdapter {
             throw AdapterError.incompleteQKVTarget(modulePath, missing: missing)
         }
 
+        var resolvedAdaLNCache = adaLNCache
+        if !adaLNPairs.isEmpty {
+            if let adaLNCache {
+                resolvedAdaLNCache = try augmentedAdaLNCache(
+                    adaLNCache,
+                    pairs: adaLNPairs,
+                    configuration: transformer.configuration,
+                    strength: strength
+                )
+            } else {
+                for (path, pair) in adaLNPairs {
+                    guard replacements[path] == nil else {
+                        throw AdapterError.duplicateTarget(path)
+                    }
+                    let linear = try targetLinear(at: path, in: modulesByPath)
+                    try validate(path, down: pair.down, up: pair.up, base: linear)
+                    replacements[path] = runtimeLayer(
+                        base: linear,
+                        down: pair.down,
+                        up: pair.up,
+                        strength: strength
+                    )
+                }
+            }
+        }
+
         applyModuleReplacements(replacements, leafModules: leafModules, to: transformer)
+        transformer.exactKernelMode = .disabled
         Memory.clearCache()
-        return pairCount
+        return Installation(pairCount: pairCount, adaLNCache: resolvedAdaLNCache)
     }
 
     private static func sourceFormat(at url: URL) throws -> SourceFormat {
@@ -372,16 +409,15 @@ public enum MiniMaxH3TurboAdapter {
         return up * scale
     }
 
-    private static func denseLinear(
+    private static func targetLinear(
         at path: String,
         in modulesByPath: [String: Module]
     ) throws -> Linear {
         guard let module = modulesByPath[path] else {
             throw AdapterError.missingTargetModule(path)
         }
-        guard let linear = module as? Linear,
-              !(linear is QuantizedLinear) else {
-            throw AdapterError.targetIsNotDenseLinear(path)
+        guard let linear = module as? Linear else {
+            throw AdapterError.targetIsNotLinear(path)
         }
         return linear
     }
@@ -429,38 +465,136 @@ public enum MiniMaxH3TurboAdapter {
         }
     }
 
-    private static func fuseLinear(
+    private static func runtimeLayer(
         base: Linear,
         down: MLXArray,
         up: MLXArray,
         strength: Float
-    ) {
-        let dtype = base.weight.dtype
-        let delta = MLX.matmul(up.asType(dtype), down.asType(dtype))
-            * MLXArray(strength).asType(dtype)
-        let fusedWeight = base.weight + delta
-        MLX.eval(fusedWeight)
-        base.update(parameters: ModuleParameters.unflattened([("weight", fusedWeight)]))
-        Memory.clearCache()
+    ) -> Module {
+        if let quantized = base as? QuantizedLinear {
+            let layer = MiniMaxH3RuntimeQuantizedLoRALinear(
+                base: quantized,
+                loraDown: down,
+                loraUp: up,
+                strength: strength
+            )
+            MLX.eval(layer.loraDown, layer.loraUp)
+            return layer
+        }
+        let layer = MiniMaxH3RuntimeLoRALinear(
+            base: base,
+            loraDown: down,
+            loraUp: up,
+            strength: strength
+        )
+        MLX.eval(layer.loraDown, layer.loraUp)
+        return layer
     }
 
-    private static func fuseQKVLinear(
+    private static func runtimeQKVLayer(
         base: Linear,
         query: LoRAPair,
         key: LoRAPair,
         value: LoRAPair,
         strength: Float
-    ) {
-        let dtype = base.weight.dtype
-        let deltas = [query, key, value].map { pair in
-            MLX.matmul(pair.up.asType(dtype), pair.down.asType(dtype))
+    ) -> Module {
+        if let quantized = base as? QuantizedLinear {
+            let layer = MiniMaxH3RuntimeQuantizedQKVLoRALinear(
+                base: quantized,
+                queryDown: query.down,
+                queryUp: query.up,
+                keyDown: key.down,
+                keyUp: key.up,
+                valueDown: value.down,
+                valueUp: value.up,
+                strength: strength
+            )
+            layer.evaluateAdapterParameters()
+            return layer
         }
-        let delta = MLX.concatenated(deltas, axis: 0)
-            * MLXArray(strength).asType(dtype)
-        let fusedWeight = base.weight + delta
-        MLX.eval(fusedWeight)
-        base.update(parameters: ModuleParameters.unflattened([("weight", fusedWeight)]))
-        Memory.clearCache()
+        let layer = MiniMaxH3RuntimeQKVLoRALinear(
+            base: base,
+            queryDown: query.down,
+            queryUp: query.up,
+            keyDown: key.down,
+            keyUp: key.up,
+            valueDown: value.down,
+            valueUp: value.up,
+            strength: strength
+        )
+        layer.evaluateAdapterParameters()
+        return layer
+    }
+
+    private static func isAdaLNTarget(_ path: String) -> Bool {
+        path == "final_layer.adaln_proj.linear"
+            || (path.hasPrefix("blocks.") && path.hasSuffix(".adaln_proj.linear"))
+    }
+
+    private static func augmentedAdaLNCache(
+        _ cache: MiniMaxH3AdaLNCache,
+        pairs: [String: LoRAPair],
+        configuration: MiniMaxH3TransformerConfiguration,
+        strength: Float
+    ) throws -> MiniMaxH3AdaLNCache {
+        let activated = MLXNN.silu(cache.timeEmbeddings)
+            .reshaped(cache.stepCount * 3, configuration.timeEmbeddingDimension)
+        var blocks = cache.blockModulations
+        var final = cache.finalModulations
+        for (path, pair) in pairs {
+            guard pair.down.dim(1) == configuration.timeEmbeddingDimension else {
+                throw AdapterError.targetShapeMismatch(
+                    path,
+                    expected: [pair.up.dim(0), configuration.timeEmbeddingDimension],
+                    actual: [pair.up.dim(0), pair.down.dim(1)]
+                )
+            }
+            let delta = MLX.matmul(
+                MLX.matmul(activated.asType(pair.down.dtype), pair.down.T),
+                pair.up.T
+            ) * MLXArray(strength).asType(pair.down.dtype)
+            if path == "final_layer.adaln_proj.linear" {
+                guard pair.up.dim(0) == 2 * configuration.hiddenSize else {
+                    throw AdapterError.targetShapeMismatch(
+                        path,
+                        expected: [2 * configuration.hiddenSize, configuration.timeEmbeddingDimension],
+                        actual: [pair.up.dim(0), pair.down.dim(1)]
+                    )
+                }
+                final = final + delta.reshaped(
+                    cache.stepCount,
+                    3,
+                    2 * configuration.hiddenSize
+                ).asType(final.dtype)
+                continue
+            }
+            let components = path.split(separator: ".")
+            guard components.count == 4,
+                  components[0] == "blocks",
+                  let index = Int(components[1]),
+                  blocks.indices.contains(index),
+                  pair.up.dim(0) == 18 * configuration.hiddenSize else {
+                throw AdapterError.targetShapeMismatch(
+                    path,
+                    expected: [18 * configuration.hiddenSize, configuration.timeEmbeddingDimension],
+                    actual: [pair.up.dim(0), pair.down.dim(1)]
+                )
+            }
+            blocks[index] = blocks[index] + delta.reshaped(
+                cache.stepCount,
+                9,
+                6 * configuration.hiddenSize
+            ).asType(blocks[index].dtype)
+        }
+        MLX.eval([final] + blocks)
+        return MiniMaxH3AdaLNCache(
+            timeEmbeddings: cache.timeEmbeddings,
+            blockModulations: blocks,
+            finalModulations: final,
+            videoSigmas: cache.videoSigmas,
+            audioSigmas: cache.audioSigmas,
+            sourceIdentity: cache.sourceIdentity
+        )
     }
 
     private static func applyModuleReplacements(
@@ -517,5 +651,184 @@ final class MiniMaxH3RuntimeLoRALinear: Linear {
             loraUp.T
         ) * MLXArray(strength).asType(loraDown.dtype)
         return baseOutput + adapterOutput.asType(baseOutput.dtype)
+    }
+}
+
+final class MiniMaxH3RuntimeQuantizedLoRALinear: QuantizedLinear {
+    @ParameterInfo(key: "lora_down") var loraDown: MLXArray
+    @ParameterInfo(key: "lora_up") var loraUp: MLXArray
+    let strength: Float
+
+    init(base: QuantizedLinear, loraDown: MLXArray, loraUp: MLXArray, strength: Float) {
+        self._loraDown.wrappedValue = loraDown.asType(base.scales.dtype)
+        self._loraUp.wrappedValue = loraUp.asType(base.scales.dtype)
+        self.strength = strength
+        super.init(
+            weight: base.weight,
+            bias: base.bias,
+            scales: base.scales,
+            biases: base.biases,
+            groupSize: base.groupSize,
+            bits: base.bits,
+            mode: base.mode,
+            globalScale: base.globalScale
+        )
+    }
+
+    override func callAsFunction(_ input: MLXArray) -> MLXArray {
+        let baseOutput = super.callAsFunction(input)
+        let adapterOutput = MiniMaxH3RuntimeLoRAMath.project(
+            input,
+            down: loraDown,
+            up: loraUp,
+            strength: strength
+        )
+        return baseOutput + adapterOutput.asType(baseOutput.dtype)
+    }
+}
+
+final class MiniMaxH3RuntimeQKVLoRALinear: Linear {
+    @ParameterInfo(key: "query_down") var queryDown: MLXArray
+    @ParameterInfo(key: "query_up") var queryUp: MLXArray
+    @ParameterInfo(key: "key_down") var keyDown: MLXArray
+    @ParameterInfo(key: "key_up") var keyUp: MLXArray
+    @ParameterInfo(key: "value_down") var valueDown: MLXArray
+    @ParameterInfo(key: "value_up") var valueUp: MLXArray
+    let strength: Float
+
+    init(
+        base: Linear,
+        queryDown: MLXArray,
+        queryUp: MLXArray,
+        keyDown: MLXArray,
+        keyUp: MLXArray,
+        valueDown: MLXArray,
+        valueUp: MLXArray,
+        strength: Float
+    ) {
+        let dtype = base.weight.dtype
+        self._queryDown.wrappedValue = queryDown.asType(dtype)
+        self._queryUp.wrappedValue = queryUp.asType(dtype)
+        self._keyDown.wrappedValue = keyDown.asType(dtype)
+        self._keyUp.wrappedValue = keyUp.asType(dtype)
+        self._valueDown.wrappedValue = valueDown.asType(dtype)
+        self._valueUp.wrappedValue = valueUp.asType(dtype)
+        self.strength = strength
+        super.init(weight: base.weight, bias: base.bias)
+    }
+
+    override func callAsFunction(_ input: MLXArray) -> MLXArray {
+        let baseOutput = super.callAsFunction(input)
+        return baseOutput + adapterOutput(input).asType(baseOutput.dtype)
+    }
+
+    func evaluateAdapterParameters() {
+        MLX.eval(queryDown, queryUp, keyDown, keyUp, valueDown, valueUp)
+    }
+
+    private func adapterOutput(_ input: MLXArray) -> MLXArray {
+        MLX.concatenated([
+            MiniMaxH3RuntimeLoRAMath.project(
+                input,
+                down: queryDown,
+                up: queryUp,
+                strength: strength
+            ),
+            MiniMaxH3RuntimeLoRAMath.project(
+                input,
+                down: keyDown,
+                up: keyUp,
+                strength: strength
+            ),
+            MiniMaxH3RuntimeLoRAMath.project(
+                input,
+                down: valueDown,
+                up: valueUp,
+                strength: strength
+            ),
+        ], axis: -1)
+    }
+}
+
+final class MiniMaxH3RuntimeQuantizedQKVLoRALinear: QuantizedLinear {
+    @ParameterInfo(key: "query_down") var queryDown: MLXArray
+    @ParameterInfo(key: "query_up") var queryUp: MLXArray
+    @ParameterInfo(key: "key_down") var keyDown: MLXArray
+    @ParameterInfo(key: "key_up") var keyUp: MLXArray
+    @ParameterInfo(key: "value_down") var valueDown: MLXArray
+    @ParameterInfo(key: "value_up") var valueUp: MLXArray
+    let strength: Float
+
+    init(
+        base: QuantizedLinear,
+        queryDown: MLXArray,
+        queryUp: MLXArray,
+        keyDown: MLXArray,
+        keyUp: MLXArray,
+        valueDown: MLXArray,
+        valueUp: MLXArray,
+        strength: Float
+    ) {
+        let dtype = base.scales.dtype
+        self._queryDown.wrappedValue = queryDown.asType(dtype)
+        self._queryUp.wrappedValue = queryUp.asType(dtype)
+        self._keyDown.wrappedValue = keyDown.asType(dtype)
+        self._keyUp.wrappedValue = keyUp.asType(dtype)
+        self._valueDown.wrappedValue = valueDown.asType(dtype)
+        self._valueUp.wrappedValue = valueUp.asType(dtype)
+        self.strength = strength
+        super.init(
+            weight: base.weight,
+            bias: base.bias,
+            scales: base.scales,
+            biases: base.biases,
+            groupSize: base.groupSize,
+            bits: base.bits,
+            mode: base.mode,
+            globalScale: base.globalScale
+        )
+    }
+
+    override func callAsFunction(_ input: MLXArray) -> MLXArray {
+        let baseOutput = super.callAsFunction(input)
+        let adapterOutput = MLX.concatenated([
+            MiniMaxH3RuntimeLoRAMath.project(
+                input,
+                down: queryDown,
+                up: queryUp,
+                strength: strength
+            ),
+            MiniMaxH3RuntimeLoRAMath.project(
+                input,
+                down: keyDown,
+                up: keyUp,
+                strength: strength
+            ),
+            MiniMaxH3RuntimeLoRAMath.project(
+                input,
+                down: valueDown,
+                up: valueUp,
+                strength: strength
+            ),
+        ], axis: -1)
+        return baseOutput + adapterOutput.asType(baseOutput.dtype)
+    }
+
+    func evaluateAdapterParameters() {
+        MLX.eval(queryDown, queryUp, keyDown, keyUp, valueDown, valueUp)
+    }
+}
+
+private enum MiniMaxH3RuntimeLoRAMath {
+    static func project(
+        _ input: MLXArray,
+        down: MLXArray,
+        up: MLXArray,
+        strength: Float
+    ) -> MLXArray {
+        MLX.matmul(
+            MLX.matmul(input.asType(down.dtype), down.T),
+            up.T
+        ) * MLXArray(strength).asType(down.dtype)
     }
 }

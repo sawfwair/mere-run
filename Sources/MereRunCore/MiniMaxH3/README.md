@@ -22,9 +22,11 @@ runtime therefore performs a single model evaluation per denoising step.
 The default schedule adapts to packed-row cost at 9, 16, or 21 points. The
 maximum acceleration mode caps automatic schedules at 12 points (11 model
 evaluations). A
-source-bound cache stores the exact released 31-point AdaLN curve and resamples
-it for explicit point-count overrides. The converted transformer stores global
-Q/K/V slabs; the unmodified video VAE retains the released per-head interleave.
+source-bound cache pack stores exact production schedules at 5, 9, 12, 16, 21,
+and 31 points for shifts 12/3 plus the LightX2V 5-point 6/3 schedule. Custom
+schedules resample the densest table and emit a visible not-bit-exact
+diagnostic. The converted transformer stores global Q/K/V slabs; the
+unmodified video VAE retains the released per-head interleave.
 
 Ref2VA image references preserve source aspect ratio and are downscaled only
 when their area exceeds the internal render canvas. Standalone audio references
@@ -32,36 +34,41 @@ retain their complete 2-15 second span, subject to the released 15-second total
 limit. Condition augmentation and target video/audio initialization use the
 released independent seeded streams and native latent layouts.
 
-Compact Q4 remains the automatic lane on lower-memory MacBooks. Memory-qualified
-MacBooks with at least 96 GiB of unified memory, and desktop Macs with sufficient
-headroom, expand those weights once to resident BF16 for compute-bound denoise;
-the CLI can force either mode. H3 inference also raises MLX wired residency
-through the shared ticket coordinator so weights and activation workspaces do
-not silently fall out of the GPU residency set.
+Compact BF16 is the maximum-fidelity lane and affine Q8/group-64 is the smaller
+high-quality lane. Legacy Q4 remains installable for compatibility but is no
+longer recommended. Memory-qualified hosts may expand Q8 once to resident BF16
+for compute-bound denoise; the CLI can force quantized or resident execution.
+H3 inference also raises MLX wired residency through the shared ticket
+coordinator so weights and activation workspaces do not silently fall out of
+the GPU residency set.
 
 The checksum-pinned `minimax-h3-turbo-4step`,
 `minimax-h3-lightx2v-4step`, `minimax-h3-lightx2v-8step-v1`, and
-`minimax-h3-lightx2v-4step-v1-768p` LoRAs run only with the BF16 FL2VA
-transformer. `minimax-h3-lightx2v-ref2v-4step-v0.1` instead targets Ref2VA.
-The Ref2VA managed package is expanded to resident BF16 before its 312 PEFT
-pairs are fused, so this recipe requires `resident-bf16` or a memory-qualified
-automatic selection; forced quantized execution is rejected.
-The EMA-850 adapter's 259 mixed-rank pairs are applied as activation-space
-deltas, its fused QKV rows are deinterleaved to match the runtime's global
-slabs, and its AdaLN deltas are included while the exact four-evaluation
-schedule cache is built. The LightX2V adapter's 312 native PEFT pairs retain
-their separate Q/K/V projections and published alpha/rank scale while their
-deltas are fused into the BF16 transformer once before denoising. This avoids
-both an expanded converted checkpoint and per-block LoRA matmuls. Neither
+`minimax-h3-lightx2v-4step-v1-768p` LoRAs run with compact BF16 or affine Q8
+FL2VA and reject the legacy Q4 package. `minimax-h3-lightx2v-ref2v-4step-v0.1`
+instead targets Ref2VA. Ref2VA behavior is unchanged: its managed package is
+expanded to resident BF16 before the adapter is installed, so this recipe
+requires `resident-bf16` or a memory-qualified automatic selection; forced
+quantized execution is rejected.
+
+All standard projection pairs execute as activation-space low-rank wrappers
+around the dense or stock MLX quantized base linear. QKV keeps independent
+query, key, and value pairs while preserving the runtime's global-QKV slab
+order. The EMA-850 adapter's 51 AdaLN pairs augment the selected in-memory
+source-bound cache from `silu(cached time embedding)`; the 26 GB base
+projections are never restored or fused. Adapter use disables the incompatible
+affine-Q8 exact kernels but retains blockwise compilation, adaptive reuse, and
+dynamic-sparse scheduling. Neither
 v1.0 recipe is treated as the legacy four-step release: the 8-step adapter
 defaults to nine schedule points with shifts 12/3 and also accepts its
 published five-point fallback, while the 768p adapter uses five points, shifts
 6/3, and alpha 128. The recommended 768p canvas is 1344x768. The Ref2VA v0.1
 recipe uses five schedule points, shifts 12/3, and alpha 8. FL2VA adapters
 cannot be combined with Ref2VA references, and the Ref2VA adapter requires
-them. No H3 Turbo adapter permits denoise-step cache reuse. They can use the
-attention-only `balanced` and `maximum` paths; every scheduled evaluation still
-executes all 50 blocks.
+them. Adapters retain blockwise compilation, dynamic-sparse attention, and the
+existing guarded adaptive-reuse policy in `balanced` and `maximum`; the policy's
+warm-up, streak, and final-refresh requirements still apply to the shortened
+adapter schedules.
 
 `--h3-acceleration quality` executes every transformer block and preserves the
 native same-seed trajectory. At packed sequences of at least 12,000 tokens,
@@ -76,8 +83,8 @@ softmax accumulator. The first two transformer layers, leading denoise region,
 and final evaluation remain dense. A once-per-shape all-dense Metal comparison
 must pass before the sparse path can run.
 
-Without a Turbo adapter, `balanced` and `maximum` also trade exact trajectory
-identity for speed through a modality-aware adaptive cache.
+`balanced` and `maximum` can also trade exact trajectory identity for speed
+through a modality-aware adaptive cache.
 Every step executes the first transformer block. The runtime then compares its
 target-only residual with the last full refresh using separate global and
 worst-time-slice drift measurements for video and audio. A cache hit reuses the
@@ -111,7 +118,7 @@ Kingdom, and Republic of Korea. Managed artifacts are explicit-pull only and
 require the user to acknowledge the model license. Conversion must likewise
 run in an allowed territory. See `scripts/model-conversion/README.md`.
 
-The explicit-pull FL2VA package is published as
+The legacy explicit-pull FL2VA package is published as
 `Sawfwair/MiniMax-H3-FL2VA-MLX-4bit` and pinned to its immutable verified Hub
 commit `e1244ad93d60c737c7e0f065a1c9372f3de7caf8`. It is produced only from
 `MiniMaxAI/MiniMax-H3@ec19cc6daf5d8add9417c18e86b6b58cc6c55027` by
@@ -120,7 +127,20 @@ quantized third-party checkpoint is a weight input. The package includes the
 source manifest and conversion hashes alongside the runtime files. Its 52
 fused transformer QKV matrices are deinterleaved from the released per-head
 rows into the global Q/K/V slabs expected by the native runtime before Q4
-packing.
+packing. Q4 remains a compatibility path but is no longer recommended for
+quality-sensitive generation.
+
+The compact maximum-fidelity BF16 and smaller affine Q8/group-64 packages are
+published separately as
+`Sawfwair/MiniMax-H3-FL2VA-MLX-BF16@6f2c1edb4d31d9110d4a51457ba1d6401a05dfd0`
+and
+`Sawfwair/MiniMax-H3-FL2VA-MLX-8bit@57a926c2422e09c8563cd2e0c43b2e94ef791de4`.
+Both use only the same pinned official
+source, keep the Q8 conditioner, FP16 video VAE, and FP32 audio VAE, and omit
+the schedule-only AdaLN, timestep-MLP, and reconstructed RoPE weights. Their
+source-bound cache pack contains exact 5, 9, 12, 16, 21, and 31-point tables at
+shifts 12/3 plus the LightX2V 5-point 6/3 table. Custom schedules interpolate
+from the densest table with a visible not-bit-exact diagnostic.
 The explicit-pull Ref2VA package is published as
 `Sawfwair/MiniMax-H3-Ref2VA-MLX-8bit` and pinned to Hub commit
 `61dc387ef1a7166425cdacd63c2340598dcc364f`. Its transformer comes from the exact

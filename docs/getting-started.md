@@ -223,7 +223,10 @@ swift run mere.run model pull image-zimage-nano
 swift run mere.run model pull image-bonsai-binary
 ```
 
-Set `MERERUN_HUB_CACHE` when you want the Hugging Face cache on another disk.
+Set `MERERUN_HUB_CACHE` when you want every Hugging Face cache operation on
+another disk, or pass `model pull --cache-dir PATH` for one explicit pull. A
+model installed through an external cache is unavailable while that volume is
+disconnected.
 See [Model Sources](./model-sources.md) for the full matrix.
 
 For guided onboarding, run:

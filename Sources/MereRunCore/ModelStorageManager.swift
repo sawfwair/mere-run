@@ -374,7 +374,16 @@ public final class ModelStorageManager {
         }
 
         let blobRoot = hubDirectory.appendingPathComponent("blobs", isDirectory: true)
+        let referencedBlobPaths = Set(
+            references
+                .map(\.target)
+                .filter { isDescendant($0, of: blobRoot) }
+                .map(Self.pathKey)
+        )
         for blob in fileRecords(at: blobRoot) {
+            if referencedBlobPaths.contains(Self.pathKey(blob.url)) {
+                continue
+            }
             let allLinks = hubRecordsByIdentity[blob.identity] ?? []
             let plannedLinks = allLinks.filter { plannedFilePaths.contains($0.url.path) }.count
             let canDeleteOrphan = cacheUnitPaths == nil && blob.linkCount == 1

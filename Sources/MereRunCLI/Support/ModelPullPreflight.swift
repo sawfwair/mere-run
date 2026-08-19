@@ -8,6 +8,7 @@ struct ModelPullPreflightInput {
     let force: Bool
     let allowUnsupported: Bool
     let acceptUsageTerms: Bool
+    let cacheDirectory: String?
     let pullArgv: [String]
     let cwd: String
 }
@@ -18,6 +19,7 @@ struct ModelPullPreflightRequest: Codable, Equatable {
     let force: Bool
     let allowUnsupported: Bool
     let acceptUsageTerms: Bool
+    let cacheDirectory: String?
 
     enum CodingKeys: String, CodingKey {
         case target
@@ -25,6 +27,7 @@ struct ModelPullPreflightRequest: Codable, Equatable {
         case force
         case allowUnsupported = "allow_unsupported"
         case acceptUsageTerms = "accept_usage_terms"
+        case cacheDirectory = "cache_directory"
     }
 }
 
@@ -155,6 +158,14 @@ struct ModelPullPreflightAnalyzer {
         var diagnostics: [PreflightDiagnostic] = []
         let specs = selectedSpecs(diagnostics: &diagnostics)
         let hubCache = resolvedHubCache(diagnostics: &diagnostics)
+        if input.cacheDirectory != nil {
+            diagnostics.append(PreflightDiagnostic(
+                id: "external_hub_cache_availability",
+                severity: .note,
+                title: "External model storage",
+                message: "Model payloads will resolve through \(hubCache.path); disconnecting that volume makes them unavailable."
+            ))
+        }
         let modelStore = (modelStoreURL ?? MereRunModelPaths.modelsDir).standardizedFileURL
         let models = specs.map {
             modelSummary(
@@ -187,7 +198,8 @@ struct ModelPullPreflightAnalyzer {
                 all: input.all,
                 force: input.force,
                 allowUnsupported: input.allowUnsupported,
-                acceptUsageTerms: input.acceptUsageTerms
+                acceptUsageTerms: input.acceptUsageTerms,
+                cacheDirectory: input.cacheDirectory
             ),
             result: result,
             diagnostics: diagnostics,

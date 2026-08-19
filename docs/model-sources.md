@@ -150,6 +150,7 @@ an effective overlay; they are not a second capability catalog.
 | `video` | `video-wan22-ti2v-5b-mlx` |
 | `video` | `video-minimax-h3-fl2va-mlx` |
 | `video` | `video-minimax-h3-fl2va-bf16-mlx` |
+| `video` | `video-minimax-h3-fl2va-8bit-mlx` |
 | `video` | `video-minimax-h3-ref2va-mlx` |
 | `video` | `video-cosmos3-edge-mlx` |
 | `video` | `video-scail2-14b-mlx` |
@@ -201,7 +202,7 @@ validates all configured models before downloading any; both accept the same
 | `vision-segment-sam31` | Meta SAM License custom use, trade-control, attribution, and redistribution conditions |
 | `vision-face-buffalo-l` | InsightFace pretrained weights; non-commercial research use |
 | `vision-embed-olmoearth-v12-{nano,tiny,small,base}` | OlmoEarth Artifact License; prohibited military, defense, intelligence, human-surveillance, policing, and listed extractive uses |
-| `video-minimax-h3-fl2va-mlx`, `video-minimax-h3-fl2va-bf16-mlx`, `video-minimax-h3-ref2va-mlx` | MiniMax-H3 Community License; use, distribution, and display are excluded in the United States, European Union, United Kingdom, and Republic of Korea, with downstream notice and safeguard obligations |
+| `video-minimax-h3-fl2va-mlx`, `video-minimax-h3-fl2va-bf16-mlx`, `video-minimax-h3-fl2va-8bit-mlx`, `video-minimax-h3-ref2va-mlx` | MiniMax-H3 Community License; use, distribution, and display are excluded in the United States, European Union, United Kingdom, and Republic of Korea, with downstream notice and safeguard obligations |
 | `image-3d-trellis2-4b` | the mounted DINOv3 encoder is gated under Meta's custom DINOv3 License |
 | `music-muscriptor-{small,medium,large}` | CC BY-NC 4.0 model weights |
 | `sfx-woosh-*` | CC BY-NC 4.0 Woosh or MMAudio Synchformer weights |
@@ -1018,7 +1019,7 @@ image/video/audio conditioning. It jointly denoises 24-channel video and
 32-channel stereo-as-batch audio latents, then decodes 24 fps RGB video and
 32 kHz stereo audio into one MP4.
 
-The explicit-pull FL2VA root is the flat
+The legacy explicit-pull FL2VA root is the flat
 `Sawfwair/MiniMax-H3-FL2VA-MLX-4bit` package pinned at immutable Hub commit
 `e1244ad93d60c737c7e0f065a1c9372f3de7caf8`.
 Every tensor in that package is derived directly from
@@ -1032,7 +1033,34 @@ configuration, source manifest, conversion receipt, hashes, `LICENSE`,
 `NOTICE`, and `MODIFICATIONS.md`. Before Q4 packing, all 52 fused transformer
 QKV matrices are deinterleaved from MiniMax's released per-head row order into
 the global Q/K/V slabs consumed by the native runtime. Runtime auto-download is
-disabled.
+disabled. This compatibility ID remains installable, but Q4 did not meet the
+current visual-quality bar and is no longer recommended.
+
+The maximum-fidelity `video-minimax-h3-fl2va-bf16-mlx` ID now resolves to the
+single-root `Sawfwair/MiniMax-H3-FL2VA-MLX-BF16` compact artifact pinned at
+immutable Hub commit `6f2c1edb4d31d9110d4a51457ba1d6401a05dfd0`. Its active
+20.11B-parameter denoising core remains BF16 while the Q8 conditioner, FP16
+video VAE, FP32 audio VAE, tokenizer, license, provenance, and cache pack live
+beside it. The verified runtime payload is exactly 76,861,026,073 bytes. The old
+full transformer overlay remains recoverable from
+`pipenetwork/MiniMax-H3-MLX-bf16@1486555759eed9e3037edf29f9e055a0713bab2f`,
+but is no longer a managed download source.
+
+The production AdaLN tables in both compact artifacts are generated from the
+pinned official projection tensors by `mere.run model optimize` on MLX Metal.
+Their source-closure receipt includes exact matched 9- and 21-point real-media
+hashes. CUDA is still used to reproduce and quantize the large transformer
+cores, but CUDA-generated BF16 modulation tables are rejected because backend
+reduction order is not bit-identical to Apple Silicon.
+
+`video-minimax-h3-fl2va-8bit-mlx` uses the sibling
+`Sawfwair/MiniMax-H3-FL2VA-MLX-8bit` artifact pinned at immutable Hub commit
+`57a926c2422e09c8563cd2e0c43b2e94ef791de4`. Eligible core linears use MLX
+affine INT8/group-64; the conditioner, VAEs, tokenizer, cache tables, and
+official-source provenance remain the same as compact BF16. Its independently
+verified runtime payload is exactly 58,075,175,639 bytes. Q8 is a disk and
+memory option rather than a speed claim. Both new packages are explicit-pull
+only and runtime auto-download remains disabled.
 
 The explicit-pull Ref2VA root is the flat
 `Sawfwair/MiniMax-H3-Ref2VA-MLX-8bit` package pinned at immutable Hub commit
@@ -1058,14 +1086,16 @@ PyTorch 2.7.1 toolchain is 36,024,412,656 bytes with SHA-256
 It is published as `transformer.safetensors` beside the exact FL conditioner,
 VAEs, tokenizer, notices, and a `config.json` whose `partition` is `ref2va`.
 
-`convert_minimax_h3_official_mlx.py` creates the managed FL2VA package in one
-audited pass from the official release. It computes the source-bound AdaLN
-cache from the original BF16/F32 projections, directly quantizes the active
-transformer and conditioner matrices once, and emits the cache, weights,
-configuration, receipts, and source manifest as one unit. The runtime resamples
-the cache's exact released 31-point modulation curve, so the package supports
-arbitrary valid schedule-point counts without restoring the omitted
-inference-redundant branch.
+`convert_minimax_h3_official_mlx.py` creates the managed FL2VA packages in one
+audited pass from the official release. It preserves the active transformer as
+BF16 or directly quantizes eligible core linears to affine Q8/group-64 and
+always quantizes the conditioner to Q8 once. Before omitting the schedule-only
+AdaLN projections, timestep MLP, and reconstructed RoPE tensors, it evaluates
+source-bound exact tables for 5, 9, 12, 16, 21, and 31 points at video/audio
+shifts 12/3 plus the LightX2V 5-point shifts 6/3 schedule. The versioned pack
+index binds each geometry to its filename, byte count, SHA-256, and official
+transformer identity. Custom schedules interpolate from the densest table and
+are visibly disclosed as not bit-exact.
 
 The model weights use the MiniMax-H3 Community License, not Apache-2.0. At the
 pinned official source revision
@@ -1100,8 +1130,9 @@ The runtime consumes its 312 published PEFT pairs directly, applies the
 published alpha/rank scale, and projects its separate Q, K, and V deltas into
 the base transformer's global slabs without producing an expanded converted
 checkpoint. It fuses each scaled delta into the BF16 transformer once during
-model loading and releases the LoRA tensors before denoising, leaving no
-per-block adapter matmuls in the generation loop. Its Apache-2.0 adapter
+checkpoint. Standard and QKV projections run as activation-space low-rank
+wrappers around dense or stock MLX affine linears; base weights are never fused
+or expanded. Its Apache-2.0 adapter
 license likewise does not replace the base model's MiniMax-H3 Community
 License.
 

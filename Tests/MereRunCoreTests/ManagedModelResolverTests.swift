@@ -50,6 +50,61 @@ final class ManagedModelResolverTests: XCTestCase {
         ))
     }
 
+    func testTransactionalInstallRollsBackInjectedFinalValidationFailure() throws {
+        enum InjectedFailure: Error { case validation }
+
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let modelDir = root.appending(path: "model", directoryHint: .isDirectory)
+        let staging = root.appending(path: ".model.staging.test", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: modelDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
+        try Data("old".utf8).write(to: modelDir.appending(path: "identity"))
+        try Data("new".utf8).write(to: staging.appending(path: "identity"))
+
+        XCTAssertThrowsError(try ManagedModelResolver.commitStagedManagedInstall(
+            stagingURL: staging,
+            modelDir: modelDir
+        ) { installedURL in
+            XCTAssertEqual(
+                try String(contentsOf: installedURL.appending(path: "identity"), encoding: .utf8),
+                "new"
+            )
+            throw InjectedFailure.validation
+        })
+        XCTAssertEqual(
+            try String(contentsOf: modelDir.appending(path: "identity"), encoding: .utf8),
+            "old"
+        )
+        XCTAssertFalse(FileManager.default.fileExists(atPath: staging.path))
+        let siblings = try FileManager.default.contentsOfDirectory(atPath: root.path)
+        XCTAssertFalse(siblings.contains { $0.contains(".previous.") })
+    }
+
+    func testTransactionalInstallRollsBackInjectedAliasFailure() throws {
+        enum InjectedFailure: Error { case alias }
+
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let modelDir = root.appending(path: "model", directoryHint: .isDirectory)
+        let staging = root.appending(path: ".model.staging.alias", directoryHint: .isDirectory)
+        try FileManager.default.createDirectory(at: modelDir, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: staging, withIntermediateDirectories: true)
+        try Data("old".utf8).write(to: modelDir.appending(path: "identity"))
+        try Data("new".utf8).write(to: staging.appending(path: "identity"))
+
+        XCTAssertThrowsError(try ManagedModelResolver.commitStagedManagedInstall(
+            stagingURL: staging,
+            modelDir: modelDir
+        ) { _ in
+            throw InjectedFailure.alias
+        })
+        XCTAssertEqual(
+            try String(contentsOf: modelDir.appending(path: "identity"), encoding: .utf8),
+            "old"
+        )
+    }
+
     func testMaterializedGeometryInstallsExactBundledLicenseEvidence() throws {
         let root = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }

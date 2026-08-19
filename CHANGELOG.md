@@ -18,6 +18,25 @@ The format is based on Keep a Changelog.
   download failures in Chat's on-device row, and shows absolute megabytes
   instead of a percent that rounds to zero for most of a large pull.
 
+### MiniMax-H3 compact BF16 and Q8
+
+- replaced the FL2VA BF16 transformer's mounted third-party overlay with a
+  single-root, official-source compact BF16 package and added the managed
+  `video-minimax-h3-fl2va-8bit-mlx` affine Q8/group-64 quality fallback. The
+  original Q4 ID remains available as an explicitly labeled legacy option.
+- added source-bound exact AdaLN cache packs for all production schedules,
+  evaluated by the native optimizer on MLX Metal and bound to official-source
+  closure plus real 9-/21-point parity receipts. CUDA-built packs are rejected
+  because BF16 GEMM reduction order is backend-specific. Activation-space dense
+  and quantized LightX2V wrappers, global-slab QKV handling, and in-memory Larry
+  AdaLN deltas avoid restoring the omitted projection weights. Compact BF16 and
+  Q8 support FL2VA adapters; Q4 remains rejected and Ref2VA behavior is
+  unchanged.
+- added `model pull --cache-dir PATH`, source-revision freshness checks, and
+  transactional managed replacement with rollback after final validation or
+  alias-install failures. External cache use is explicit in preflight and
+  reports that disconnecting the volume makes the model unavailable.
+
 ## 0.41.0 - 2026-08-18
 
 This release puts mere.run on iPhone with a portable relay client, a full-width

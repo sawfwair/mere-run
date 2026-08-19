@@ -978,8 +978,8 @@ public enum ManagedModelCapabilityCatalog {
             ),
             descriptor(
                 ModelResolver.ModelID.miniMaxH3FL2VAMLX.rawValue,
-                "MiniMax-H3 FL2VA MLX",
-                "Generates native 24 fps video with synchronized 32 kHz stereo audio from text and optional first/last keyframes.",
+                "MiniMax-H3 FL2VA MLX (legacy Q4)",
+                "Preserves compatibility with the original compact Q4 package; prefer the BF16 or 8-bit model for quality.",
                 minimum: 96,
                 recommended: 128
             ),
@@ -987,6 +987,13 @@ public enum ManagedModelCapabilityCatalog {
                 ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue,
                 "MiniMax-H3 FL2VA BF16 MLX",
                 "Uses the faithful BF16 H3 transformer for maximum visual quality while reusing the native tokenizer, conditioner, and audio/video decoders.",
+                minimum: 96,
+                recommended: 128
+            ),
+            descriptor(
+                ModelResolver.ModelID.miniMaxH3FL2VAQ8MLX.rawValue,
+                "MiniMax-H3 FL2VA 8-bit MLX",
+                "Uses affine Q8 core linears with the compact exact-cache package as the smaller high-quality H3 option.",
                 minimum: 96,
                 recommended: 128
             ),

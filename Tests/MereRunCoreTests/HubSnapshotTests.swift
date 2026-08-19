@@ -45,6 +45,30 @@ final class HubSnapshotTests: XCTestCase {
         XCTAssertEqual(HubSnapshot.revisionKey("main").count, 64)
     }
 
+    func testMaterializedPatternClosureSupportsExactAndGlobSelections() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mere-run-hub-closure-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(
+            at: root.appendingPathComponent("cache", isDirectory: true),
+            withIntermediateDirectories: true
+        )
+        try Data("config".utf8).write(to: root.appendingPathComponent("config.json"))
+        try Data("weights".utf8).write(
+            to: root.appendingPathComponent("cache/adaln-9.safetensors")
+        )
+
+        XCTAssertTrue(HubSnapshot.containsAllMaterializedPatterns(
+            at: root,
+            patterns: ["config.json", "cache/*.safetensors"]
+        ))
+        XCTAssertFalse(HubSnapshot.containsAllMaterializedPatterns(
+            at: root,
+            patterns: ["config.json", "transformer.safetensors"]
+        ))
+        XCTAssertFalse(HubSnapshot.containsAllMaterializedPatterns(at: root, patterns: []))
+    }
+
     func testNextPageLinkResolution() throws {
         let source = try XCTUnwrap(URL(string: "https://huggingface.co/api/models/org/repo/tree/main"))
         let header = "<https://huggingface.co/api/models/org/repo/tree/main?cursor=abc>; rel=\"next\", <https://example.test/end>; rel=\"last\""
@@ -90,5 +114,33 @@ final class HubSnapshotTests: XCTestCase {
             etag: "opaque-etag",
             byteCount: 3
         ))
+    }
+
+    func testContentReferenceFallsBackToSymlinkWhenHardLinksAreUnavailable() throws {
+        enum UnsupportedLink: Error { case unavailable }
+
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mere-run-hub-reference-\(UUID().uuidString)", isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let source = root.appendingPathComponent("blob")
+        let destination = root.appendingPathComponent("snapshot-payload")
+        try Data("shared".utf8).write(to: source)
+        try Data("stale".utf8).write(to: destination)
+
+        try HubSnapshot.materializeContentReference(
+            from: source,
+            to: destination,
+            hardLink: { _, _ in throw UnsupportedLink.unavailable }
+        )
+
+        XCTAssertEqual(
+            URL(fileURLWithPath: try FileManager.default.destinationOfSymbolicLink(
+                atPath: destination.path
+            )).standardizedFileURL,
+            source.standardizedFileURL
+        )
+        XCTAssertEqual(try Data(contentsOf: destination), Data("shared".utf8))
+        XCTAssertEqual(HubSnapshot.fileSize(at: destination), 6)
     }
 }

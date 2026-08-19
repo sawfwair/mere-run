@@ -17,6 +17,12 @@ struct ModelPull: AsyncParsableCommand {
     @Flag(name: [.long], help: "Re-download even if the model is already installed.")
     var force: Bool = false
 
+    @Option(
+        name: [.customLong("cache-dir")],
+        help: "Store downloaded Hub payloads in this cache directory (for example, on an external volume)."
+    )
+    var cacheDir: String?
+
     @Flag(name: [.short, .long], help: "Suppress progress output.")
     var quiet: Bool = false
 
@@ -172,14 +178,16 @@ struct ModelPull: AsyncParsableCommand {
         } else {
             incrementalDownloadBytes = try? await ManagedModelResolver.estimatedManagedDownloadBytes(
                 spec: spec,
-                at: modelDir
+                at: modelDir,
+                hubCacheURL: requestedHubCacheURL
             )
         }
         try ModelPullDiskPreflight.check(
             spec: spec,
             modelDir: modelDir,
             force: force,
-            estimatedDownloadBytesOverride: incrementalDownloadBytes
+            estimatedDownloadBytesOverride: incrementalDownloadBytes,
+            hubCacheURL: requestedHubCacheURL
         ) { warning in
             guard !quiet else { return }
             stderr("  warning: \(warning)")
@@ -192,6 +200,7 @@ struct ModelPull: AsyncParsableCommand {
                 id: spec.id,
                 force: force,
                 usageTermsAcknowledged: acceptModelLicense,
+                hubCacheURL: requestedHubCacheURL,
                 progress: { progress in
                     guard !quiet else { return }
                     stderrRaw("\r\(progressPrinter.render(progress))          ")
@@ -245,6 +254,12 @@ struct ModelPull: AsyncParsableCommand {
             }
         }
 
+        if let requestedHubCacheURL, !quiet {
+            stderr(
+                "  model payload is stored in \(requestedHubCacheURL.path); disconnecting that volume makes this model unavailable"
+            )
+        }
+
         print(modelDir.path)
     }
 
@@ -252,7 +267,16 @@ struct ModelPull: AsyncParsableCommand {
         guard let modelID = spec.modelID else {
             return spec.managedRuntimeURL() != nil
         }
-        return ModelResolver().resolveIfPresent(modelID) != nil
+        guard let resolution = ModelResolver().resolveIfPresent(modelID) else {
+            return false
+        }
+        if resolution.isExternallyManaged {
+            return true
+        }
+        return ManagedModelResolver.isManagedInstallComplete(
+            spec: spec,
+            at: spec.managedInstallRootURL()
+        )
     }
 
     private func stderr(_ message: String) {
@@ -292,13 +316,14 @@ struct ModelPull: AsyncParsableCommand {
             force: force,
             allowUnsupported: allowUnsupported,
             acceptUsageTerms: acceptModelLicense,
+            cacheDirectory: requestedHubCacheURL?.path,
             pullArgv: pullActionArguments(),
             cwd: fileManager.currentDirectoryPath
         )
         return ModelPullPreflightAnalyzer(
             input: input,
             fileManager: fileManager,
-            hubCacheURL: hubCacheURL,
+            hubCacheURL: hubCacheURL ?? requestedHubCacheURL,
             modelStoreURL: modelStoreURL,
             estimatedDownloadBytesOverrides: estimatedDownloadBytesOverrides,
             modelLocations: modelLocations,
@@ -314,7 +339,8 @@ struct ModelPull: AsyncParsableCommand {
             if !ManagedModelResolver.isManagedInstallComplete(spec: spec, at: modelDir),
                let estimate = try? await ManagedModelResolver.estimatedManagedDownloadBytes(
                    spec: spec,
-                   at: modelDir
+                   at: modelDir,
+                   hubCacheURL: requestedHubCacheURL
                ) {
                 estimatedDownloadBytesOverrides[spec.id] = estimate
             }
@@ -354,7 +380,16 @@ struct ModelPull: AsyncParsableCommand {
         if acceptModelLicense {
             args.append("--accept-model-license")
         }
+        if let cacheDir {
+            args += ["--cache-dir", cacheDir]
+        }
         return args
+    }
+
+    private var requestedHubCacheURL: URL? {
+        cacheDir.map {
+            URL(fileURLWithPath: $0).standardizedFileURL
+        }
     }
 }
 
@@ -410,10 +445,14 @@ struct ModelPullDiskPreflight {
                 patterns: config.patterns,
                 cacheDirectory: hubCacheURL,
                 offline: true
-            ),
-            fileManager: fileManager
            ),
-           spec.missingPaths(in: cachedSnapshot, fileManager: fileManager).isEmpty {
+           fileManager: fileManager
+           ),
+           HubSnapshot.containsAllMaterializedPatterns(
+               at: cachedSnapshot,
+               patterns: config.patterns,
+               fileManager: fileManager
+           ) || spec.missingPaths(in: cachedSnapshot, fileManager: fileManager).isEmpty {
             return 0
         }
 

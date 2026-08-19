@@ -47,18 +47,21 @@ are an escape hatch, not the capability contract.
 
 ## Model family
 
-- `video-minimax-h3-fl2va-mlx`: explicit-pull MiniMax-H3 FL2VA package with a
-  direct-from-official Q4 transformer core, Q8 conditioner, and bundled
+- `video-minimax-h3-fl2va-mlx`: legacy compatibility MiniMax-H3 FL2VA package
+  with a direct-from-official Q4 transformer core, Q8 conditioner, and bundled
   source-bound AdaLN cache. It generates 24 fps RGB and synchronized 32 kHz
   stereo audio from text, a first frame, or directed first/last frames. Frame
-  counts follow `17*n+5`; width and height are multiples of 32.
-- `video-minimax-h3-fl2va-bf16-mlx`: maximum-fidelity FL2VA package. It streams
-  PipeNetwork's pinned 13-shard BF16 MLX transformer directly, discards the
-  schedule-only AdaLN tensors after building an exact cache for the requested
-  schedule, and deinterleaves the released per-head QKV layout in memory. The tokenizer,
-  Q8 conditioner, FP16 video VAE, and FP32 audio VAE come from the same pinned
-  native support package. The managed install is about 100 GB on disk; the
-  active transformer is about 40 GB after the cached AdaLN tensors are omitted.
+  counts follow `17*n+5`; width and height are multiples of 32. It remains
+  installable but is no longer the recommended quality path.
+- `video-minimax-h3-fl2va-bf16-mlx`: maximum-fidelity compact FL2VA package.
+  Its official-source BF16 denoising core omits the schedule-only AdaLN,
+  timestep-MLP, and reconstructed RoPE tensors and uses a source-bound pack of
+  exact production schedules. The Q8 conditioner, FP16 video VAE, and FP32
+  audio VAE are stored in the same single-root immutable artifact.
+- `video-minimax-h3-fl2va-8bit-mlx`: smaller high-quality FL2VA fallback. It
+  uses MLX affine INT8/group-64 for eligible core linears while retaining the
+  same conditioner, VAEs, cache pack, and provenance as compact BF16. Q8 is a
+  storage and memory option, not an advertised speedup without measurements.
 - `video-minimax-h3-ref2va-mlx`: explicit-pull 8-bit Ref2VA package. Repeated
   `--reference image:path|video:path|audio:path` options retain request order.
   Video soundtracks are conditioned with their video; a standalone audio
@@ -111,17 +114,20 @@ mere.run video generate "a glass marble rolls across wood with a delicate rattle
 mere.run model pull video-minimax-h3-fl2va-bf16-mlx --accept-model-license
 mere.run video generate "a cinematic rain-soaked bus stop at night" \
   --model video-minimax-h3-fl2va-bf16-mlx \
-  --width 1280 --height 768 --duration 10 --steps 20 \
+  --width 1280 --height 768 --duration 10 --steps 21 \
   --output ./bus-stop-bf16.mp4
 
-# Published adapter recipes for the BF16 FL2VA model
+# Smaller high-quality Q8 core; the same FL2VA adapters are supported
+mere.run model pull video-minimax-h3-fl2va-8bit-mlx --accept-model-license
+
+# Published adapter recipes for compact BF16 or Q8 FL2VA
 mere.run adapter pull minimax-h3-turbo-4step
 mere.run adapter pull minimax-h3-lightx2v-4step
 mere.run adapter pull minimax-h3-lightx2v-8step-v1
 mere.run adapter pull minimax-h3-lightx2v-4step-v1-768p
 mere.run adapter pull minimax-h3-lightx2v-ref2v-4step-v0.1
 mere.run video generate "a superhero waits beneath an umbrella at a bus stop" \
-  --model video-minimax-h3-fl2va-bf16-mlx \
+  --model video-minimax-h3-fl2va-8bit-mlx \
   --width 960 --height 544 \
   --h3-adapter minimax-h3-lightx2v-8step-v1 \
   --output ./bus-stop-turbo-8step.mp4
@@ -170,17 +176,19 @@ accept those terms and agree to comply with them.
 
 The `minimax-h3-turbo-4step` EMA-850 adapter and all four LightX2V releases
 are checksum-pinned separately.
-EMA-850 remains an activation-space adapter because its AdaLN deltas
-participate in schedule-cache construction. LightX2V has no AdaLN targets, so
-the runtime applies its published alpha/rank scale and fuses its deltas into
-the BF16 transformer once before denoising; the PEFT tensors are then released
-and add no per-block LoRA matmuls. The legacy releases default to five schedule
+EMA-850 remains an activation-space adapter because its 51 AdaLN deltas
+participate in schedule-cache construction. For compact models those deltas are
+computed from `silu(cached time embedding)` and added to an in-memory augmented
+table keyed by source, schedule, adapter hash, and strength. LightX2V standard
+and QKV projections also run as activation-space low-rank wrappers around dense
+or stock MLX quantized linears; base weights are never expanded or fused. The
+legacy releases default to five schedule
 points, which are four model evaluations. LightX2V v1.0 8-step defaults to nine
 schedule points (eight evaluations), accepts the upstream four-evaluation
 fallback, and uses video/audio shifts 12/3 with alpha 8. LightX2V v1.0 768p
 uses five schedule points, shifts 6/3, alpha 128, and is intended for a
-1344x768 canvas. Those four adapters were trained for FL2VA, require the BF16
-FL2VA base model, and cannot be combined with Ref2VA references. The separate
+1344x768 canvas. Those four adapters were trained for FL2VA, support compact
+BF16 and Q8, reject legacy Q4, and cannot be combined with Ref2VA references. The separate
 `minimax-h3-lightx2v-ref2v-4step-v0.1` release targets Ref2VA, uses five schedule
 points with shifts 12/3 and alpha 8, and requires ordered references. mere.run
 expands the managed INT8 Ref2VA transformer to resident BF16 before fusing the
@@ -206,16 +214,17 @@ and boundary audio latents. Only new frames and samples are appended, so the
 final MP4 has the exact aligned global duration. Conditioner, transformer,
 AdaLN table, reference encodings, and both VAEs remain resident across windows.
 
-The compact FL2VA and Ref2VA managed packages already include their
-inference-only AdaLN caches; no post-pull optimization step is required.
-Generation skips loading and executing the transformer's
-13B-parameter AdaLN/time-embedding branch and resamples its exact released
-31-point curve for the selected schedule. By default H3 uses 9 points through
+The compact BF16, Q8, legacy Q4, and Ref2VA managed packages already include
+source-bound inference-only AdaLN caches; no post-pull optimization is
+required. New BF16 and Q8 packages select exact tables for 5, 9, 12, 16, 21,
+or 31 points at shifts 12/3 and the LightX2V 768p 5-point schedule at shifts
+6/3. A custom schedule interpolates from the densest table and emits a visible
+non-bit-exact diagnostic. Generation skips the 13B-parameter
+AdaLN/time-embedding branch. By default H3 uses 9 points through
 13,500 packed rows, 16 through 26,000, and 21 above that. Maximum acceleration
 caps the automatic schedule at 12 points; `--steps` remains an
-explicit schedule-point override. Compact cache-backed INT4 transformers
-therefore remain correct at arbitrary point counts. MacBooks below 96 GiB keep
-Q4 resident by default; memory-qualified desktops and 96+ GiB MacBooks select the
+explicit schedule-point override. MacBooks below 96 GiB keep quantized weights
+resident by default; memory-qualified desktops and 96+ GiB MacBooks select the
 faster resident BF16 path when the requested geometry leaves the required
 runtime reserve. `--h3-weight-mode` can force either path. `model optimize`
 remains available for compatible locally converted roots that still contain

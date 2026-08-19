@@ -290,7 +290,7 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         XCTAssertEqual(output.asArray(Float.self), [8, 11])
     }
 
-    func testLightX2VPEFTAdapterFusesOnceIntoNativeRuntime() throws {
+    func testLightX2VPEFTAdapterRunsInActivationSpaceWithoutMutatingBaseWeights() throws {
         let temp = try TestFileSystem.makeTempDir()
         defer { try? FileManager.default.removeItem(at: temp) }
         let adapterURL = temp.appendingPathComponent("lightx2v-h3.safetensors")
@@ -347,6 +347,10 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         ).weight
         MLX.eval(originalQKV)
         let originalQKVValues = originalQKV.asArray(Float.self)
+        let input = MLXArray([Float(2), 3]).reshaped(1, 2)
+        let originalOutput = try XCTUnwrap(
+            originalLeaves["blocks.0.attn.qkv_proj"] as? Linear
+        )(input)
         let count = try MiniMaxH3TurboAdapter.install(
             url: adapterURL,
             into: transformer,
@@ -355,20 +359,318 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         )
         let leaves = Dictionary(uniqueKeysWithValues: transformer.leafModules().flattened())
         let qkv = try XCTUnwrap(leaves["blocks.0.attn.qkv_proj"] as? Linear)
-        MLX.eval(qkv.weight)
-        let qkvDelta = zip(qkv.weight.asArray(Float.self), originalQKVValues).map {
-            $0.0 - $0.1
-        }
+        let adaptedOutput = qkv(input)
+        MLX.eval(qkv.weight, originalOutput, adaptedOutput)
 
         XCTAssertEqual(count, 6)
-        XCTAssertEqual(qkvDelta.count, 12)
-        for value in qkvDelta {
-            XCTAssertEqual(value, 8, accuracy: 1e-5)
+        XCTAssertEqual(qkv.weight.asArray(Float.self), originalQKVValues)
+        let outputDelta = zip(
+            adaptedOutput.asArray(Float.self),
+            originalOutput.asArray(Float.self)
+        ).map { $0.0 - $0.1 }
+        XCTAssertEqual(outputDelta.count, 6)
+        for value in outputDelta {
+            XCTAssertEqual(value, 40, accuracy: 1e-5)
         }
-        XCTAssertFalse(qkv is MiniMaxH3RuntimeLoRALinear)
-        XCTAssertFalse(leaves["blocks.0.attn.out_proj"] is MiniMaxH3RuntimeLoRALinear)
-        XCTAssertFalse(leaves["blocks.0.mlp.fc1"] is MiniMaxH3RuntimeLoRALinear)
-        XCTAssertFalse(leaves["blocks.0.mlp.fc2"] is MiniMaxH3RuntimeLoRALinear)
+        XCTAssertTrue(qkv is MiniMaxH3RuntimeQKVLoRALinear)
+        XCTAssertTrue(leaves["blocks.0.attn.out_proj"] is MiniMaxH3RuntimeLoRALinear)
+        XCTAssertTrue(leaves["blocks.0.mlp.fc1"] is MiniMaxH3RuntimeLoRALinear)
+        XCTAssertTrue(leaves["blocks.0.mlp.fc2"] is MiniMaxH3RuntimeLoRALinear)
+        XCTAssertEqual(transformer.exactKernelMode, .disabled)
+    }
+
+    func testQuantizedRuntimeLoRAUsesStockQuantizedBaseMath() {
+        let inputSize = 32
+        let outputSize = 4
+        let dense = Linear(
+            weight: MLXArray((0..<(inputSize * outputSize)).map { Float($0) / 128 })
+                .reshaped(outputSize, inputSize),
+            bias: MLXArray.zeros([outputSize])
+        )
+        let base = QuantizedLinear(dense, groupSize: 32, bits: 8)
+        var downValues = [Float](repeating: 0, count: inputSize)
+        downValues[0] = 1
+        downValues[1] = 1
+        let down = MLXArray(downValues).reshaped(1, inputSize)
+        let up = MLXArray([Float(1), 2, 3, 4]).reshaped(4, 1)
+        let layer = MiniMaxH3RuntimeQuantizedLoRALinear(
+            base: base,
+            loraDown: down,
+            loraUp: up,
+            strength: 0.5
+        )
+        let input = MLXArray((0..<inputSize).map { Float($0 + 1) }).reshaped(1, inputSize)
+        let candidate = layer(input)
+        let reference = base(input)
+            + MLX.matmul(MLX.matmul(input, down.T), up.T) * 0.5
+        MLX.eval(candidate, reference)
+        XCTAssertLessThanOrEqual(
+            MLX.abs(candidate.asType(.float32) - reference.asType(.float32))
+                .max().item(Float.self),
+            1e-5
+        )
+    }
+
+    func testRuntimeLoRACompiledCloneAndResidentMaterializationPreserveAdapter() throws {
+        let configuration = MiniMaxH3TransformerConfiguration(
+            hiddenSize: 32,
+            layerCount: 1,
+            refinerLayerCount: 0,
+            attentionHeadCount: 4,
+            attentionHeadDimension: 8,
+            feedForwardSize: 64,
+            videoLatentChannels: 3,
+            audioLatentChannels: 4,
+            patchSize: [1, 2, 2],
+            textDimension: 32,
+            timeFrequencyDimension: 8,
+            timeEmbeddingHiddenSize: 32,
+            timeEmbeddingDimension: 32,
+            ropeFrequencyCount: 1
+        )
+        let model = MiniMaxH3Transformer(configuration: configuration)
+        quantize(
+            model: model,
+            groupSize: 32,
+            bits: 8,
+            filter: { path, _ in path == "blocks.0.attn.out_proj" }
+        )
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let adapterURL = temp.appending(path: "runtime-lora.safetensors")
+        try MLX.save(
+            arrays: [
+                "blocks.0.attn.out_proj.lora_A.weight": MLXArray.ones([1, 32]),
+                "blocks.0.attn.out_proj.lora_B.weight": MLXArray.ones([32, 1]),
+            ],
+            url: adapterURL
+        )
+        _ = try MiniMaxH3TurboAdapter.installForInference(
+            url: adapterURL,
+            into: model,
+            strength: 0.25,
+            adaLNCache: nil,
+            expectedPairCount: 1
+        )
+        var leaves = Dictionary(uniqueKeysWithValues: model.leafModules().flattened())
+        let quantized = try XCTUnwrap(
+            leaves["blocks.0.attn.out_proj"] as? MiniMaxH3RuntimeQuantizedLoRALinear
+        )
+        let projectedInput = MLXArray.ones([1, 32])
+        let beforeMaterialization = quantized(projectedInput)
+
+        let layout = try MiniMaxH3Geometry.buildFL2VA(
+            textTokenTags: [1],
+            videoLatentFrames: 2,
+            latentHeight: 4,
+            latentWidth: 4,
+            audioLatentFrames: 3,
+            keyframeAnchors: [.first]
+        )
+        let video = MLXArray.zeros([1, 12, 12])
+        let audio = MLXArray.zeros([1, 6, 4])
+        let text = MLXArray.zeros([1, 1, 32])
+        let timesteps = MLXArray([Float(0.2), 0.4, 0.999])
+        let context = model.prepare(textStates: text, layout: layout)
+        let direct = model(
+            videoRows: video,
+            audioRows: audio,
+            context: context,
+            timesteps: timesteps,
+            cachedAdaLN: nil
+        )
+        model.usesBlockwiseCompilation = true
+        let compiled = model(
+            videoRows: video,
+            audioRows: audio,
+            context: context,
+            timesteps: timesteps,
+            cachedAdaLN: nil
+        )
+        MLX.eval(
+            direct.videoVelocityRows,
+            direct.audioVelocityRows,
+            compiled.videoVelocityRows,
+            compiled.audioVelocityRows
+        )
+        XCTAssertLessThanOrEqual(
+            MLX.abs(direct.videoVelocityRows - compiled.videoVelocityRows)
+                .max().item(Float.self),
+            1e-5
+        )
+        XCTAssertLessThanOrEqual(
+            MLX.abs(direct.audioVelocityRows - compiled.audioVelocityRows)
+                .max().item(Float.self),
+            1e-5
+        )
+
+        model.usesBlockwiseCompilation = false
+        _ = model.materializeResidentBF16()
+        leaves = Dictionary(uniqueKeysWithValues: model.leafModules().flattened())
+        let resident = try XCTUnwrap(
+            leaves["blocks.0.attn.out_proj"] as? MiniMaxH3RuntimeLoRALinear
+        )
+        let afterMaterialization = resident(projectedInput)
+        MLX.eval(beforeMaterialization, afterMaterialization)
+        XCTAssertEqual(resident.strength, 0.25)
+        XCTAssertLessThanOrEqual(
+            MLX.abs(beforeMaterialization.asType(.float32) - afterMaterialization.asType(.float32))
+                .max().item(Float.self),
+            0.02
+        )
+    }
+
+    func testQuantizedRuntimeQKVLoRAPreservesGlobalSlabOrdering() {
+        let inputSize = 32
+        let branchSize = 32
+        let dense = Linear(
+            weight: MLXArray.zeros([branchSize * 3, inputSize]),
+            bias: MLXArray.zeros([branchSize * 3])
+        )
+        let base = QuantizedLinear(dense, groupSize: 32, bits: 8)
+        let down = MLXArray.ones([1, inputSize])
+        let queryUp = MLXArray.ones([branchSize, 1])
+        let keyUp = MLXArray.ones([branchSize, 1]) * 2
+        let valueUp = MLXArray.ones([branchSize, 1]) * 3
+        let layer = MiniMaxH3RuntimeQuantizedQKVLoRALinear(
+            base: base,
+            queryDown: down,
+            queryUp: queryUp,
+            keyDown: down,
+            keyUp: keyUp,
+            valueDown: down,
+            valueUp: valueUp,
+            strength: 0.5
+        )
+        let input = MLXArray.ones([1, inputSize])
+        let candidate = layer(input)
+        let reference = base(input) + MLX.concatenated([
+            MLX.matmul(MLX.matmul(input, down.T), queryUp.T) * 0.5,
+            MLX.matmul(MLX.matmul(input, down.T), keyUp.T) * 0.5,
+            MLX.matmul(MLX.matmul(input, down.T), valueUp.T) * 0.5,
+        ], axis: -1)
+        MLX.eval(candidate, reference)
+        XCTAssertLessThanOrEqual(
+            MLX.abs(candidate.asType(.float32) - reference.asType(.float32))
+                .max().item(Float.self),
+            1e-5
+        )
+        let values = candidate.asArray(Float.self)
+        XCTAssertEqual(Array(values[0..<branchSize]), [Float](repeating: 16, count: branchSize))
+        XCTAssertEqual(
+            Array(values[branchSize..<(branchSize * 2)]),
+            [Float](repeating: 32, count: branchSize)
+        )
+        XCTAssertEqual(
+            Array(values[(branchSize * 2)..<(branchSize * 3)]),
+            [Float](repeating: 48, count: branchSize)
+        )
+    }
+
+    func testRuntimeAdaLNLoRAAugmentsCompactCacheWithoutRestoringProjectionWeights() throws {
+        let configuration = MiniMaxH3TransformerConfiguration(
+            hiddenSize: 2,
+            layerCount: 1,
+            refinerLayerCount: 0,
+            attentionHeadCount: 1,
+            attentionHeadDimension: 2,
+            feedForwardSize: 3,
+            videoLatentChannels: 1,
+            audioLatentChannels: 1,
+            patchSize: [1, 1, 1],
+            textDimension: 2,
+            timeFrequencyDimension: 2,
+            timeEmbeddingHiddenSize: 2,
+            timeEmbeddingDimension: 2,
+            ropeFrequencyCount: 1
+        )
+        let full = MiniMaxH3Transformer(configuration: configuration)
+        let videoSchedule = try MiniMaxH3Schedule(pointCount: 5, shift: 12)
+        let audioSchedule = try MiniMaxH3Schedule(pointCount: 5, shift: 3)
+        let baseCache = full.precomputeAdaLN(
+            videoSchedule: videoSchedule,
+            audioSchedule: audioSchedule,
+            sourceIdentity: "test-source"
+        )
+        let compact = MiniMaxH3Transformer(configuration: configuration, includeAdaLN: false)
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let adapterURL = temp.appending(path: "minimax_h3_turbo_4step.safetensors")
+        let down = MLXArray.ones([1, 2], dtype: .float32)
+        let blockUp = MLXArray.ones([36, 1], dtype: .float32)
+        let finalUp = MLXArray.ones([4, 1], dtype: .float32) * 2
+        try MLX.save(
+            arrays: [
+                "blocks.0.adaln_proj.linear.lora_A.weight": down,
+                "blocks.0.adaln_proj.linear.lora_B.weight": blockUp,
+                "final_layer.adaln_proj.linear.lora_A.weight": down,
+                "final_layer.adaln_proj.linear.lora_B.weight": finalUp,
+            ],
+            url: adapterURL
+        )
+
+        let installation = try MiniMaxH3TurboAdapter.installForInference(
+            url: adapterURL,
+            into: compact,
+            strength: 0.5,
+            adaLNCache: baseCache,
+            expectedPairCount: 2
+        )
+        let adapted = try XCTUnwrap(installation.adaLNCache)
+        _ = try MiniMaxH3TurboAdapter.installForInference(
+            url: adapterURL,
+            into: full,
+            strength: 0.5,
+            adaLNCache: nil,
+            expectedPairCount: 2
+        )
+        let liveAdapted = full.precomputeAdaLN(
+            videoSchedule: videoSchedule,
+            audioSchedule: audioSchedule,
+            sourceIdentity: "test-source"
+        )
+        let activated = MLXNN.silu(baseCache.timeEmbeddings)
+            .reshaped(baseCache.stepCount * 3, 2)
+        let blockDelta = MLX.matmul(MLX.matmul(activated, down.T), blockUp.T)
+            .reshaped(baseCache.stepCount, 9, 12) * 0.5
+        let finalDelta = MLX.matmul(MLX.matmul(activated, down.T), finalUp.T)
+            .reshaped(baseCache.stepCount, 3, 4) * 0.5
+        MLX.eval(adapted.blockModulations[0], adapted.finalModulations, blockDelta, finalDelta)
+
+        XCTAssertEqual(installation.pairCount, 2)
+        XCTAssertFalse(compact.leafModules().flattened().contains {
+            $0.0.contains("adaln_proj")
+        })
+        XCTAssertLessThanOrEqual(
+            MLX.abs(
+                adapted.blockModulations[0].asType(.float32)
+                    - baseCache.blockModulations[0].asType(.float32)
+                    - blockDelta.asType(.float32)
+            ).max().item(Float.self),
+            0.02
+        )
+        XCTAssertLessThanOrEqual(
+            MLX.abs(
+                adapted.blockModulations[0].asType(.float32)
+                    - liveAdapted.blockModulations[0].asType(.float32)
+            ).max().item(Float.self),
+            0.02
+        )
+        XCTAssertLessThanOrEqual(
+            MLX.abs(
+                adapted.finalModulations.asType(.float32)
+                    - liveAdapted.finalModulations.asType(.float32)
+            ).max().item(Float.self),
+            0.02
+        )
+        XCTAssertLessThanOrEqual(
+            MLX.abs(
+                adapted.finalModulations.asType(.float32)
+                    - baseCache.finalModulations.asType(.float32)
+                    - finalDelta.asType(.float32)
+            ).max().item(Float.self),
+            0.02
+        )
     }
 
     func testTurboAdapterUsesFourDenoiseEvaluationsByDefault() throws {
@@ -965,38 +1267,57 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         XCTAssertEqual(spec.hubFallback?.patterns, MiniMaxH3Resources.compactArtifactFiles)
     }
 
-    func testManagedBF16ProfileUsesPinnedExistingMLXArtifact() throws {
+    func testManagedBF16AndQ8ProfilesUsePinnedOfficialSourceArtifacts() throws {
         XCTAssertEqual(
-            MiniMaxH3Resources.bf16ArtifactRepository,
+            MiniMaxH3Resources.legacyBF16ArtifactRepository,
             "pipenetwork/MiniMax-H3-MLX-bf16"
         )
         XCTAssertEqual(
-            MiniMaxH3Resources.bf16ArtifactRevision,
+            MiniMaxH3Resources.legacyBF16ArtifactRevision,
             "1486555759eed9e3037edf29f9e055a0713bab2f"
         )
-        XCTAssertEqual(MiniMaxH3Resources.bf16ShardFilenames.count, 13)
-        XCTAssertFalse(MiniMaxH3Resources.bf16SupportArtifactFiles.contains("transformer.safetensors"))
-        XCTAssertFalse(MiniMaxH3Resources.bf16SupportArtifactFiles.contains("adaln_cache.safetensors"))
 
-        let spec = try XCTUnwrap(
+        let bf16 = try XCTUnwrap(
             ManagedModelCatalog.spec(for: MiniMaxH3Resources.fl2vaBF16ModelID)
         )
-        XCTAssertEqual(spec.hubFallback?.repoId, MiniMaxH3Resources.artifactRepository)
-        XCTAssertEqual(spec.hubFallback?.patterns, MiniMaxH3Resources.bf16SupportArtifactFiles)
-        let transformer = try XCTUnwrap(spec.mountedHubFallbacks.first)
-        XCTAssertEqual(transformer.destinationPath, MiniMaxH3Resources.bf16TransformerDirectory)
-        XCTAssertEqual(transformer.hubFallback.repoId, MiniMaxH3Resources.bf16ArtifactRepository)
-        XCTAssertEqual(transformer.hubFallback.revision, MiniMaxH3Resources.bf16ArtifactRevision)
+        XCTAssertEqual(bf16.hubFallback?.repoId, MiniMaxH3Resources.compactBF16ArtifactRepository)
+        XCTAssertEqual(bf16.hubFallback?.revision, MiniMaxH3Resources.compactBF16ArtifactRevision)
+        XCTAssertEqual(bf16.hubFallback?.patterns, MiniMaxH3Resources.compactBF16AndQ8ArtifactFiles)
+        XCTAssertTrue(bf16.mountedHubFallbacks.isEmpty)
+        XCTAssertEqual(bf16.estimatedDownloadBytes, 76_861_026_073)
 
-        let manifest = MereRunModelManifest.template(
+        let bf16Manifest = MereRunModelManifest.template(
             for: .miniMaxH3FL2VABF16MLX,
             createdAt: Date(timeIntervalSince1970: 0)
         )
-        XCTAssertEqual(manifest.precision, .bf16)
-        XCTAssertNil(manifest.quantization)
+        XCTAssertEqual(bf16Manifest.precision, .bf16)
+        XCTAssertNil(bf16Manifest.quantization)
         XCTAssertEqual(
-            manifest.upstreamRepoId,
-            "\(MiniMaxH3Resources.bf16ArtifactRepository)@\(MiniMaxH3Resources.bf16ArtifactRevision)"
+            bf16Manifest.upstreamRepoId,
+            "\(MiniMaxH3Resources.compactBF16ArtifactRepository)"
+                + "@\(MiniMaxH3Resources.compactBF16ArtifactRevision)"
+        )
+
+        let q8 = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: MiniMaxH3Resources.fl2vaQ8ModelID)
+        )
+        XCTAssertEqual(q8.hubFallback?.repoId, MiniMaxH3Resources.q8ArtifactRepository)
+        XCTAssertEqual(q8.hubFallback?.revision, MiniMaxH3Resources.q8ArtifactRevision)
+        XCTAssertEqual(q8.hubFallback?.patterns, MiniMaxH3Resources.compactBF16AndQ8ArtifactFiles)
+        XCTAssertTrue(q8.mountedHubFallbacks.isEmpty)
+        XCTAssertEqual(q8.estimatedDownloadBytes, 58_075_175_639)
+
+        let q8Manifest = MereRunModelManifest.template(
+            for: .miniMaxH3FL2VAQ8MLX,
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+        XCTAssertEqual(q8Manifest.precision, .int8)
+        XCTAssertEqual(q8Manifest.quantization?.bits, 8)
+        XCTAssertEqual(q8Manifest.quantization?.groupSize, 64)
+        XCTAssertEqual(q8Manifest.quantization?.scheme, "mlx-affine")
+        XCTAssertEqual(
+            q8Manifest.upstreamRepoId,
+            "\(MiniMaxH3Resources.q8ArtifactRepository)@\(MiniMaxH3Resources.q8ArtifactRevision)"
         )
     }
 
@@ -3251,5 +3572,172 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         let result = decoder(MLXArray.zeros([1, 2, 2, 2, 2]))
         MLX.eval(result)
         XCTAssertEqual(result.shape, [1, 3, 4, 4, 4])
+    }
+
+    func testAdaLNCachePackSelectsExactAndDisclosesCustomInterpolation() throws {
+        let root = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let configuration = MiniMaxH3TransformerConfiguration(
+            hiddenSize: 2,
+            layerCount: 1,
+            refinerLayerCount: 0,
+            attentionHeadCount: 1,
+            attentionHeadDimension: 2,
+            feedForwardSize: 3,
+            videoLatentChannels: 1,
+            audioLatentChannels: 1,
+            patchSize: [1, 1, 1],
+            textDimension: 2,
+            timeFrequencyDimension: 2,
+            timeEmbeddingHiddenSize: 2,
+            timeEmbeddingDimension: 2,
+            ropeFrequencyCount: 1
+        )
+        let transformer = MiniMaxH3Transformer(configuration: configuration)
+        var entries: [MiniMaxH3AdaLNCachePack.Entry] = []
+        var expectedCaches: [MiniMaxH3AdaLNCachePack.Schedule: MiniMaxH3AdaLNCache] = [:]
+        for descriptor in MiniMaxH3AdaLNCachePack.productionSchedules {
+            let schedules = try descriptor.schedules()
+            let cache = transformer.precomputeAdaLN(
+                videoSchedule: schedules.video,
+                audioSchedule: schedules.audio,
+                sourceIdentity: "test-source"
+            )
+            let url = root.appending(path: descriptor.filename)
+            try cache.save(to: url, replacing: false)
+            entries.append(try MiniMaxH3AdaLNCachePack.entry(schedule: descriptor, url: url))
+            expectedCaches[descriptor] = cache
+        }
+        _ = try MiniMaxH3AdaLNCachePack.write(
+            entries: entries,
+            sourceIdentity: "test-source",
+            to: root
+        )
+
+        for entry in entries {
+            let exactSchedules = try entry.schedule.schedules()
+            let exact = try MiniMaxH3AdaLNCachePack.load(
+                from: root,
+                configuration: configuration,
+                videoSchedule: exactSchedules.video,
+                audioSchedule: exactSchedules.audio,
+                sourceIdentity: "test-source"
+            )
+            let expected = try XCTUnwrap(expectedCaches[entry.schedule])
+            XCTAssertTrue(exact.exact)
+            XCTAssertEqual(exact.sourceSchedule, entry.schedule)
+            XCTAssertEqual(
+                exact.cache.timeEmbeddings.asArray(Float.self),
+                expected.timeEmbeddings.asArray(Float.self)
+            )
+            XCTAssertEqual(
+                exact.cache.finalModulations.asArray(Float.self),
+                expected.finalModulations.asArray(Float.self)
+            )
+            XCTAssertEqual(
+                exact.cache.blockModulations[0].asArray(Float.self),
+                expected.blockModulations[0].asArray(Float.self)
+            )
+        }
+
+        let exactSchedules = try entries[0].schedule.schedules()
+
+        let customVideo = try MiniMaxH3Schedule(pointCount: 3, shift: 12)
+        let customAudio = try MiniMaxH3Schedule(pointCount: 3, shift: 3)
+        let interpolated = try MiniMaxH3AdaLNCachePack.load(
+            from: root,
+            configuration: configuration,
+            videoSchedule: customVideo,
+            audioSchedule: customAudio,
+            sourceIdentity: "test-source"
+        )
+        XCTAssertFalse(interpolated.exact)
+        XCTAssertEqual(interpolated.sourceSchedule.pointCount, 31)
+        XCTAssertTrue(interpolated.cache.isCompatible(
+            configuration: configuration,
+            videoSchedule: customVideo,
+            audioSchedule: customAudio
+        ))
+        XCTAssertThrowsError(try MiniMaxH3AdaLNCachePack.load(
+            from: root,
+            configuration: configuration,
+            videoSchedule: exactSchedules.video,
+            audioSchedule: exactSchedules.audio,
+            sourceIdentity: "stale-source"
+        ))
+
+        let exactURL = root.appending(path: entries[0].filename)
+        let handle = try FileHandle(forWritingTo: exactURL)
+        try handle.seekToEnd()
+        try handle.write(contentsOf: Data([0]))
+        try handle.close()
+        XCTAssertThrowsError(try MiniMaxH3AdaLNCachePack.load(
+            from: root,
+            configuration: configuration,
+            videoSchedule: exactSchedules.video,
+            audioSchedule: exactSchedules.audio,
+            sourceIdentity: "test-source"
+        ))
+    }
+
+    func testAdaLNCachePackClosureValidationDoesNotEvaluateTensors() throws {
+        let root = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: root) }
+        var entries: [MiniMaxH3AdaLNCachePack.Entry] = []
+        for descriptor in MiniMaxH3AdaLNCachePack.productionSchedules {
+            let url = root.appending(path: descriptor.filename)
+            try Data("cache-\(descriptor.filename)".utf8).write(to: url)
+            entries.append(try MiniMaxH3AdaLNCachePack.entry(schedule: descriptor, url: url))
+        }
+        _ = try MiniMaxH3AdaLNCachePack.write(
+            entries: entries,
+            sourceIdentity: "test-source",
+            to: root
+        )
+
+        XCTAssertNoThrow(try MiniMaxH3AdaLNCachePack.validateClosure(
+            from: root,
+            sourceIdentity: "test-source"
+        ))
+
+        let changed = root.appending(path: MiniMaxH3AdaLNCachePack.productionSchedules[0].filename)
+        try Data("changed".utf8).write(to: changed)
+        XCTAssertThrowsError(try MiniMaxH3AdaLNCachePack.validateClosure(
+            from: root,
+            sourceIdentity: "test-source"
+        ))
+    }
+
+    func testTransformerStorageClassificationSeparatesFidelityFromLayout() throws {
+        let root = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: root) }
+        for (precision, expected, supportsTurbo) in [
+            ("bf16", MiniMaxH3Resources.TransformerStorage.compactBF16, true),
+            ("q8", .affineQ8, true),
+            ("q4", .affineQ4, false),
+        ] {
+            let child = root.appending(path: precision, directoryHint: .isDirectory)
+            try FileManager.default.createDirectory(at: child, withIntermediateDirectories: true)
+            try MLX.save(
+                arrays: ["probe": MLXArray.zeros([1])],
+                metadata: ["precision": precision],
+                url: child.appending(path: "transformer.safetensors")
+            )
+            let storage = try MiniMaxH3Resources(rootURL: child).transformerStorage()
+            XCTAssertEqual(storage, expected)
+            XCTAssertEqual(storage.supportsFL2VATurboAdapters, supportsTurbo)
+        }
+
+        let shardedRoot = root.appending(path: "sharded", directoryHint: .isDirectory)
+        let transformerRoot = shardedRoot.appending(
+            path: MiniMaxH3Resources.bf16TransformerDirectory,
+            directoryHint: .isDirectory
+        )
+        try FileManager.default.createDirectory(at: transformerRoot, withIntermediateDirectories: true)
+        try Data().write(to: transformerRoot.appending(path: "model.safetensors.index.json"))
+        XCTAssertEqual(
+            try MiniMaxH3Resources(rootURL: shardedRoot).transformerStorage(),
+            .shardedBF16
+        )
     }
 }
