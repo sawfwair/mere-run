@@ -9,6 +9,9 @@ struct ChatView: View {
     @StateObject private var chat: ChatStore
     @ObservedObject private var local = LocalEngine.shared
     @State private var draft = ""
+    /// Whether the live thought bubble streams open; the preference sticks.
+    @AppStorage("chat.watchThinking") private var watchThinking = false
+    @State private var expandedThoughts: Set<UUID> = []
     @State private var showOnDeviceModels = false
 
     init(relay: RelayStore) {
@@ -47,11 +50,14 @@ struct ChatView: View {
                                     .id(message.id)
                             }
                             if chat.awaitingReply {
-                                if let partial = chat.streamingReply {
+                                if chat.runLocally {
+                                    thoughtBubble
+                                        .id("pending")
+                                } else if let partial = chat.streamingReply {
                                     HStack {
                                         Text(partial)
-                                            .font(chat.runLocally ? .callout.italic() : .body)
-                                            .foregroundStyle(chat.runLocally ? MereTheme.textSecondary : MereTheme.textPrimary)
+                                            .font(.body)
+                                            .foregroundStyle(MereTheme.textPrimary)
                                             .accessibilityIdentifier("chat.partial")
                                             .padding(MereTheme.Spacing.m)
                                             .background(
@@ -68,9 +74,7 @@ struct ChatView: View {
                                 } else {
                                     HStack(spacing: MereTheme.Spacing.s) {
                                         ProgressView()
-                                        Text(chat.runLocally
-                                            ? (local.chatStatus ?? "Thinking on this iPhone…")
-                                            : "Running on your fleet…")
+                                        Text("Running on your fleet…")
                                             .font(.footnote)
                                             .foregroundStyle(MereTheme.textMuted)
                                     }
@@ -143,10 +147,86 @@ struct ChatView: View {
         .padding(.top, MereTheme.Spacing.xxl)
     }
 
+    /// Live thinking, folded into a quiet pill so answers feel instant; tap
+    /// to watch the model think.
+    private var thoughtBubble: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: MereTheme.Spacing.s) {
+                Button {
+                    withAnimation(.easeInOut(duration: 0.18)) { watchThinking.toggle() }
+                } label: {
+                    HStack(spacing: MereTheme.Spacing.s) {
+                        ProgressView().controlSize(.small)
+                        Text(local.chatStatus ?? "Thinking…")
+                            .font(.footnote.weight(.medium))
+                            .foregroundStyle(MereTheme.textSecondary)
+                        Image(systemName: watchThinking ? "chevron.down" : "chevron.right")
+                            .font(.caption2)
+                            .foregroundStyle(MereTheme.textMuted)
+                    }
+                }
+                .buttonStyle(.plain)
+                .accessibilityIdentifier("chat.thinking")
+                if watchThinking, let stream = chat.streamingReply, !stream.isEmpty {
+                    Text(stream)
+                        .font(.callout.italic())
+                        .foregroundStyle(MereTheme.textMuted)
+                        .lineLimit(10)
+                        .accessibilityIdentifier("chat.partial")
+                }
+            }
+            .padding(MereTheme.Spacing.m)
+            .background(
+                RoundedRectangle(cornerRadius: MereTheme.Radius.panel)
+                    .fill(MereTheme.surface.opacity(0.7))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: MereTheme.Radius.panel)
+                    .stroke(MereTheme.border.opacity(0.5), lineWidth: 1)
+            )
+            Spacer(minLength: 40)
+        }
+    }
+
     private func bubble(_ message: ChatStore.Message) -> some View {
         HStack {
             if message.role == .user { Spacer(minLength: 40) }
-            Text(message.content)
+            VStack(alignment: .leading, spacing: MereTheme.Spacing.s) {
+                if let thinking = message.thinking {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.18)) {
+                            if expandedThoughts.contains(message.id) {
+                                expandedThoughts.remove(message.id)
+                            } else {
+                                expandedThoughts.insert(message.id)
+                            }
+                        }
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "sparkle")
+                            Text("Thoughts")
+                            Image(systemName: expandedThoughts.contains(message.id)
+                                ? "chevron.down" : "chevron.right")
+                        }
+                        .font(.caption)
+                        .foregroundStyle(MereTheme.textMuted)
+                    }
+                    .buttonStyle(.plain)
+                    if expandedThoughts.contains(message.id) {
+                        Text(thinking)
+                            .font(.callout.italic())
+                            .foregroundStyle(MereTheme.textMuted)
+                            .textSelection(.enabled)
+                    }
+                }
+                messageText(message)
+            }
+            if message.role == .assistant { Spacer(minLength: 40) }
+        }
+    }
+
+    private func messageText(_ message: ChatStore.Message) -> some View {
+        Text(message.content)
                 .font(.body)
                 .foregroundStyle(message.failed ? MereTheme.failure : MereTheme.textPrimary)
                 .textSelection(.enabled)
@@ -164,8 +244,6 @@ struct ChatView: View {
                             lineWidth: 1
                         )
                 )
-            if message.role == .assistant { Spacer(minLength: 40) }
-        }
     }
 
     private var composer: some View {
@@ -200,7 +278,8 @@ struct ChatView: View {
                 .accessibilityLabel("Send")
             }
             #if DEBUG
-            if chat.runLocally, !local.debugStreamInfo.isEmpty {
+            if chat.runLocally, !local.debugStreamInfo.isEmpty,
+               ProcessInfo.processInfo.arguments.contains("MERERUN_STREAM_DEBUG") {
                 Text(local.debugStreamInfo)
                     .font(.caption2.monospaced())
                     .foregroundStyle(MereTheme.textMuted)

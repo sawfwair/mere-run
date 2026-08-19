@@ -9,6 +9,7 @@ final class ChatDeviceDiagnosticsUITests: XCTestCase {
             throw XCTSkip("Set MERERUN_TEST_CHAT_DIAG to run the on-device chat diagnostic.")
         }
         let app = XCUIApplication()
+        app.launchArguments = ["MERERUN_STREAM_DEBUG"]
         app.launch()
 
         let chatTab = app.tabBars.buttons["Chat"]

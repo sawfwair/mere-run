@@ -374,7 +374,7 @@ final class LocalEngine: ObservableObject {
     func chat(
         messages: [ChatMessage],
         onDelta: @escaping @MainActor (String) -> Void
-    ) async throws -> String {
+    ) async throws -> (reply: String, thinking: String?) {
         guard Self.isSupported else {
             throw RelayAppError("On-device chat needs a physical iPhone.")
         }
@@ -429,7 +429,19 @@ final class LocalEngine: ObservableObject {
         guard !cleaned.isEmpty else {
             throw RelayAppError("The model returned an empty reply.")
         }
-        return cleaned
+        // The stream is reasoning followed by the answer, with no markers;
+        // whatever precedes the clean answer in the raw text is the thinking.
+        let raw = accumulated.current
+        var thinking: String?
+        if let answerRange = raw.range(of: cleaned) {
+            let head = String(raw[..<answerRange.lowerBound])
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            thinking = head.isEmpty ? nil : head
+        } else if raw != cleaned {
+            let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+            thinking = trimmed.isEmpty || trimmed == cleaned ? nil : trimmed
+        }
+        return (cleaned, thinking)
     }
 }
 
@@ -461,6 +473,8 @@ private final class StreamedText {
         text += piece
         return text
     }
+
+    var current: String { text }
 }
 
 struct RelayAppError: LocalizedError {
