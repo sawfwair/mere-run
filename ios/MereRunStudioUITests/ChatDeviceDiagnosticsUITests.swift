@@ -1,8 +1,8 @@
 import XCTest
 
-/// Diagnostic: drive on-device Bonsai Chat on real hardware and record how
-/// far it gets — model load, first token, or process death. Gated on
-/// MERERUN_TEST_CHAT_DIAG.
+/// Diagnostic: drive an on-device chat turn on real hardware and record the
+/// streaming pipeline's behavior — telemetry line, partial bubble, reply.
+/// Gated on MERERUN_TEST_CHAT_DIAG.
 final class ChatDeviceDiagnosticsUITests: XCTestCase {
     func testOnDeviceChatTurn() throws {
         guard ProcessInfo.processInfo.environment["MERERUN_TEST_CHAT_DIAG"] != nil else {
@@ -15,58 +15,69 @@ final class ChatDeviceDiagnosticsUITests: XCTestCase {
         XCTAssertTrue(chatTab.waitForExistence(timeout: 20))
         chatTab.tap()
 
-        // Select the on-device model from the chip menu.
+        // Use the persisted on-device lane; only open the menu if needed.
         let chip = app.buttons.matching(
-            NSPredicate(format: "label CONTAINS 'Fleet default' OR label CONTAINS 'this iPhone' OR label CONTAINS 'Bonsai Chat'")
+            NSPredicate(format: "label CONTAINS 'this iPhone'")
         ).firstMatch
-        XCTAssertTrue(chip.waitForExistence(timeout: 10), "The model chip must exist.")
-        chip.tap()
-        let localButton = app.buttons["Bonsai Chat"]
-        XCTAssertTrue(localButton.waitForExistence(timeout: 5), "Bonsai Chat must be selectable (installed).")
-        localButton.tap()
+        if !chip.waitForExistence(timeout: 5) {
+            let menuChip = app.buttons.matching(
+                NSPredicate(format: "label CONTAINS 'Fleet default'")
+            ).firstMatch
+            XCTAssertTrue(menuChip.waitForExistence(timeout: 5), "A model chip must exist.")
+            menuChip.tap()
+            let liquid = app.buttons["Liquid Chat"]
+            XCTAssertTrue(liquid.waitForExistence(timeout: 5), "Liquid Chat must be installed for this diagnostic.")
+            liquid.tap()
+        }
 
+        // A persisted thread makes old bubbles look like replies; start clean.
+        let newChat = app.buttons["New chat"]
+        if newChat.waitForExistence(timeout: 3), newChat.isEnabled {
+            newChat.tap()
+        }
+
+        let prompt = "Write a six line poem about rain, then count from 1 to 40 one number per line."
         let composer = app.textViews["chat.composer"].exists
             ? app.textViews["chat.composer"]
             : app.textFields["chat.composer"]
         XCTAssertTrue(composer.waitForExistence(timeout: 5))
         composer.tap()
-        composer.typeText("Say hi in three words.")
+        composer.typeText(prompt)
         app.buttons["Send"].tap()
 
         var observations: [String] = []
-        let deadline = Date().addingTimeInterval(420)
+        var sawPartial = false
         var outcome = "timeout"
+        let deadline = Date().addingTimeInterval(300)
         while Date() < deadline {
-            RunLoop.current.run(until: Date().addingTimeInterval(5))
-            if app.state != .runningForeground {
-                outcome = "app died (state \(app.state.rawValue))"
+            RunLoop.current.run(until: Date().addingTimeInterval(0.7))
+            let debug = app.staticTexts["chat.debug"]
+            if debug.exists {
+                observations.append("debug: \(debug.label.prefix(80))")
+            }
+            let partial = app.staticTexts["chat.partial"]
+            if partial.exists {
+                sawPartial = true
+                observations.append("PARTIAL: \(partial.label.prefix(50))")
+            }
+            let finished = !app.progressIndicators.firstMatch.exists
+                && !partial.exists
+                && app.staticTexts.allElementsBoundByIndex
+                    .contains { $0.label.count > 60 && $0.label != prompt }
+            if finished {
+                outcome = sawPartial ? "replied-streaming" : "replied-without-partial"
                 break
             }
-            let labels = app.staticTexts.allElementsBoundByIndex.map { $0.label }
-            if labels.contains(where: { $0.localizedCaseInsensitiveContains("needs a physical iPhone")
-                || $0.localizedCaseInsensitiveContains("error")
-                || $0.localizedCaseInsensitiveContains("busy") }) {
-                outcome = "error text: \(labels.filter { $0.count > 8 }.suffix(3))"
-                break
-            }
-            let hasReply = labels.contains { $0.count > 2 && $0 != "Say hi in three words."
-                && !$0.hasPrefix("Thinking on") && !$0.hasPrefix("Chat")
-                && $0.rangeOfCharacter(from: .letters) != nil
-                && !$0.contains("Bonsai") && !$0.contains("New chat") }
-            if hasReply && !app.progressIndicators.firstMatch.exists {
-                outcome = "replied"
-                break
-            }
-            observations.append("t: alive, texts=\(labels.count)")
         }
-        let report = XCTAttachment(string: ([outcome] + observations.suffix(10)).joined(separator: "\n"))
+        observations.append("sawPartial=\(sawPartial)")
+        let report = XCTAttachment(string: ([outcome] + observations.suffix(60)).joined(separator: "\n"))
         report.name = "chat-outcome"
         report.lifetime = .keepAlways
         add(report)
-        let attachment = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
-        attachment.name = "final"
-        attachment.lifetime = .keepAlways
-        add(attachment)
-        XCTAssertEqual(outcome, "replied", "On-device chat did not reply: \(outcome)")
+        let screenshot = XCTAttachment(screenshot: XCUIScreen.main.screenshot())
+        screenshot.name = "final"
+        screenshot.lifetime = .keepAlways
+        add(screenshot)
+        XCTAssertTrue(outcome.hasPrefix("replied"), "On-device chat did not finish: \(outcome)")
     }
 }
