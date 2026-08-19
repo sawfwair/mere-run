@@ -40,11 +40,12 @@ If you are new to the repo, read these in order:
 5. [Portable Workflows](./workflows.md), if you are automating local or remote jobs
 6. [Graph Studio](./graph/studio.md), if you want to author Graph v2 workflows visually
 7. [Benchmarking](./benchmarking.md)
-8. [Cookbooks](./cookbooks.md)
-9. [Configuration](./configuration.md)
-10. [Model Sources](./model-sources.md)
-11. [Companion Plugins](./plugins.md)
-12. [Repository Tour](./repository-tour.md)
+8. [External evaluation packs](./evaluation-packs.md)
+9. [Cookbooks](./cookbooks.md)
+10. [Configuration](./configuration.md)
+11. [Model Sources](./model-sources.md)
+12. [Companion Plugins](./plugins.md)
+13. [Repository Tour](./repository-tour.md)
 
 ## Choose your path
 
@@ -55,6 +56,7 @@ If you are new to the repo, read these in order:
 - [Linux QuickStart](./linux-quickstart.md)
 - [CLI Reference](./cli.md)
 - [Benchmarking](./benchmarking.md)
+- [External evaluation packs](./evaluation-packs.md)
 - [Cookbooks](./cookbooks.md)
 - [Portable Workflows](./workflows.md)
 - [Graph Studio](./graph/studio.md)
@@ -105,6 +107,8 @@ If you are new to the repo, read these in order:
   pipeline matrix, native controls, and hardware-specific boundaries
 - [Benchmarking](./benchmarking.md): local quality evals, generated-code
   execution, VLM datasets, API workload, and runtime microbenchmarks
+- [External evaluation packs](./evaluation-packs.md): content-addressed private
+  packs, adapter comparisons, calibration, gates, and promotion receipts
 - [Portable Workflows](./workflows.md): typed graphs, immutable job bundles,
   local execution, SSH and relay executors, run artifacts, and remote lifecycle
 - [Graph Studio](./graph/studio.md): visual Graph v2 authoring in the browser or

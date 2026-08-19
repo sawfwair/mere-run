@@ -149,6 +149,11 @@ Public tree:
   - `mere.run run fetch` — Fetch a remote graph run into the standard local run-directory format.
   - `mere.run run cancel` — Cancel a graph run.
   - `mere.run run retry` — Retry an immutable relay graph job.
+- [`mere.run eval`](/evaluation-packs) — Run reproducible evaluations from external, content-addressed packs.
+  - `mere.run eval pack` — Inspect external evaluation packs without running models.
+    - `mere.run eval pack validate` — Validate and hash an external evaluation pack.
+  - `mere.run eval run` — Run a matched, adapter-aware evaluation from an external pack.
+  - `mere.run eval promote` — Create a content-addressed receipt for a complete, gate-passing report.
 - [`mere.run model`](/runtime/model-management) — List, pull, locate, remove, inspect, optimize, and clean up models.
   - `mere.run model list` — List all known models with install status.
   - `mere.run model location` — Manage read-only model catalog locations.

@@ -96,6 +96,9 @@ enum CommandTemplateID: String, CaseIterable, Codable {
     case runFetch
     case runCancel
     case runRetry
+    case evaluationPackValidate
+    case evaluationRun
+    case evaluationPromote
     case worldServe
     case statusSnapshot
     case qualityGate
@@ -195,6 +198,9 @@ enum CommandTemplateID: String, CaseIterable, Codable {
         case .runFetch: return "run.fetch"
         case .runCancel: return "run.cancel"
         case .runRetry: return "run.retry"
+        case .evaluationPackValidate: return "eval.pack.validate"
+        case .evaluationRun: return "eval.run"
+        case .evaluationPromote: return "eval.promote"
         case .worldServe: return "world.serve"
         case .statusSnapshot: return "status"
         case .qualityGate: return "gate"
@@ -1045,6 +1051,9 @@ struct CommandTemplate: Identifiable, Equatable {
             draft.json = true
         case .runInspect, .runFetch, .runCancel, .runRetry:
             draft.json = true
+        case .evaluationPackValidate, .evaluationRun, .evaluationPromote:
+            draft.json = true
+            if id == .evaluationRun { draft.dryRun = true }
         case .worldServe:
             draft.port = 8791
             draft.model = "video-dreamx-world-5b-ar-mlx"
@@ -1214,6 +1223,21 @@ struct CommandTemplate: Identifiable, Equatable {
             }
             if draft.operationsAllArtifacts && !lineList(draft.operationsArtifacts).isEmpty {
                 return "Choose all artifacts or named artifacts, not both."
+            }
+        case .evaluationPackValidate:
+            if draft.inputPath.isBlank {
+                return "Evaluation pack directory is required."
+            }
+        case .evaluationRun:
+            if draft.inputPath.isBlank {
+                return "Evaluation pack directory is required."
+            }
+            if lineList(draft.prompt).isEmpty {
+                return "At least one model binding is required."
+            }
+        case .evaluationPromote:
+            if draft.inputPath.isBlank {
+                return "Evaluation report is required."
             }
         case .worldServe:
             if draft.model.isBlank || draft.operationsBaseModel.isBlank {
@@ -2775,6 +2799,27 @@ struct CommandTemplate: Identifiable, Equatable {
             args = ["run", "retry", draft.operationsReference]
             if draft.json { args.append("--json") }
 
+        case .evaluationPackValidate:
+            args = ["eval", "pack", "validate", draft.inputPath]
+            if draft.json { args.append("--json") }
+
+        case .evaluationRun:
+            args = ["eval", "run", draft.inputPath]
+            for binding in lineList(draft.prompt) {
+                args += ["--model", binding]
+            }
+            for binding in lineList(draft.secondaryText) {
+                args += ["--adapter", binding]
+            }
+            if draft.dryRun { args.append("--dry-run") }
+            if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            if draft.json { args.append("--json") }
+
+        case .evaluationPromote:
+            args = ["eval", "promote", draft.inputPath]
+            if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            if draft.json { args.append("--json") }
+
         case .worldServe:
             args = [
                 "world", "serve",
@@ -3186,6 +3231,9 @@ extension CommandTemplate {
              .runFetch,
              .runCancel,
              .runRetry,
+             .evaluationPackValidate,
+             .evaluationRun,
+             .evaluationPromote,
              .statusSnapshot,
              .qualityGate,
              .modelStorage,
@@ -3822,6 +3870,34 @@ enum CommandCatalog {
             title: "Retry Relay run",
             subtitle: "Retry the same immutable job bundle",
             systemImage: "arrow.clockwise.circle"
+        ),
+        CommandTemplate(
+            id: .evaluationPackValidate,
+            category: .operations,
+            title: "Validate evaluation pack",
+            subtitle: "Verify and content-hash an external pack",
+            systemImage: "checkmark.seal",
+            inputKind: .directory
+        ),
+        CommandTemplate(
+            id: .evaluationRun,
+            category: .operations,
+            title: "Run evaluation pack",
+            subtitle: "Plan or run matched model, prompt, and adapter arms",
+            systemImage: "chart.bar.doc.horizontal",
+            promptLabel: "Model bindings (one slot=id per line)",
+            secondaryLabel: "Adapter bindings (one slot=reference per line)",
+            inputKind: .directory,
+            outputKind: .file("json")
+        ),
+        CommandTemplate(
+            id: .evaluationPromote,
+            category: .operations,
+            title: "Promote evaluation report",
+            subtitle: "Issue a receipt for a complete gate-passing report",
+            systemImage: "checkmark.shield",
+            inputKind: .file([.json]),
+            outputKind: .file("json")
         ),
         CommandTemplate(
             id: .worldServe,

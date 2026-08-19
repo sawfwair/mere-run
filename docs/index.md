@@ -77,6 +77,7 @@ links to the page that owns that command.
 | [`mere.run executor`](/workflows#executor-profiles) | Manage local, SSH, and relay workflow executors. |
 | [`mere.run relay`](/workflows#direct-relay-relay-serve) | Host the relay API surface directly on this machine. |
 | [`mere.run run`](/workflows#run-directories) | Inspect durable mere.run workflow reports and run directories. |
+| [`mere.run eval`](/evaluation-packs) | Run reproducible evaluations from external, content-addressed packs. |
 | [`mere.run model`](/runtime/model-management) | List, pull, locate, remove, inspect, optimize, and clean up models. |
 | [`mere.run adapter`](/runtime/model-management) | List and pull verified LoRA adapters. |
 | [`mere.run status`](/runtime/model-management) | Show local server, loaded model, and installed model status. |

@@ -61,6 +61,9 @@ import Testing
         "run.fetch",
         "run.cancel",
         "run.retry",
+        "eval.pack.validate",
+        "eval.run",
+        "eval.promote",
         "world.serve",
         "status",
         "gate",
@@ -104,7 +107,7 @@ import Testing
         "config.get",
         "config.unset"
     ])
-    #expect(document.commands.count == 97)
+    #expect(document.commands.count == 100)
 
     let data = try JSONEncoder().encode(document)
     let decoded = try JSONDecoder().decode(MereRunCapabilityDocument.self, from: data)
@@ -166,4 +169,6 @@ import Testing
     #expect(MereRunCapabilityCatalog.modelOptimize.command == ["model", "optimize"])
     #expect(MereRunCapabilityCatalog.textChat.options.contains { $0.flag == "--reasoning-effort" })
     #expect(MereRunCapabilityCatalog.textTrainLoRA.options.contains { $0.flag == "--reasoning-effort" })
+    #expect(MereRunCapabilityCatalog.evaluationRun.command == ["eval", "run"])
+    #expect(MereRunCapabilityCatalog.evaluationRun.options.contains { $0.flag == "--adapter" })
 }

@@ -43,6 +43,7 @@ struct MereRunCLI: AsyncParsableCommand {
             Executor.self,
             Relay.self,
             Run.self,
+            EvaluationCommand.self,
             Model.self,
             Adapter.self,
             Status.self,

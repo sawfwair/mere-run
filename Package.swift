@@ -130,6 +130,7 @@ let prebuiltMLXLinkerSettings: [LinkerSetting] = useLinuxPrebuiltMLX
 
 var products: [Product] = [
   .library(name: "MereRunContract", targets: ["MereRunContract"]),
+  .library(name: "MereRunEvaluation", targets: ["MereRunEvaluation"]),
   .library(name: "MereRunRelayKit", targets: ["MereRunRelayKit"]),
   .library(name: "MereRunCore", targets: ["MereRunCore"]),
   .library(name: "AudioCore", targets: ["AudioCore"]),
@@ -294,6 +295,7 @@ audioRuntimeDependencies.append(contentsOf: mlxDependency("MLXRandom"))
 
 var mereRunCLIDependencies: [Target.Dependency] = [
   "MereRunContract",
+  "MereRunEvaluation",
   "MereRunRelayKit",
   "MereRunCore",
   "AudioCore",
@@ -313,6 +315,16 @@ targets.append(contentsOf: [
     name: "MereRunContract",
     dependencies: [],
     path: "Sources/MereRunContract",
+    exclude: [
+      "README.md"
+    ]
+  ),
+  .target(
+    name: "MereRunEvaluation",
+    dependencies: [
+      .product(name: "Crypto", package: "swift-crypto")
+    ],
+    path: "Sources/MereRunEvaluation",
     exclude: [
       "README.md"
     ]
@@ -469,6 +481,14 @@ targets.append(contentsOf: [
     path: "Tests/MereRunContractTests"
   ),
   .testTarget(
+    name: "MereRunEvaluationTests",
+    dependencies: ["MereRunEvaluation"],
+    path: "Tests/MereRunEvaluationTests",
+    resources: [
+      .copy("Fixtures")
+    ]
+  ),
+  .testTarget(
     name: "MereRunRelayKitTests",
     dependencies: ["MereRunRelayKit"],
     path: "Tests/MereRunRelayKitTests"
@@ -485,7 +505,7 @@ targets.append(contentsOf: [
   ),
   .testTarget(
     name: "MereRunCLITests",
-    dependencies: ["MereRunCLI", "MediaIO"],
+    dependencies: ["MereRunCLI", "MereRunEvaluation", "MediaIO"],
     path: "Tests/MereRunCLITests",
     resources: [
       .copy("Fixtures")

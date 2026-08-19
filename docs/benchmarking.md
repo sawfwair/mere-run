@@ -21,10 +21,15 @@ picking a lane and reading what it tells you.
 | API serving throughput | `model benchmark api-workload` | End-to-end `/v1/chat/completions` request latency, TTFT, cache, and batching counters |
 | Runtime microbenchmarks | `model benchmark gemma4-kv`, `gemma4-mtp`, `q36-mtp` | KV-cache and speculative-decode modes against real checkpoints |
 | Fused model quality | `model benchmark fused` | Versioned 24-case Lite and 110-case Comprehensive chat/code/tools/long-context/vision suites, native sampled profiles, repeated trials, and calibration diagnostics |
+| External/private evals | `eval pack validate`, `eval run`, `eval promote` | Content-addressed external cases, matched model/adapter/prompt arms, logprob calibration, gates, and promotion receipts without importing pack content |
 
 For the model-comparison contract, provenance format, external fixture import,
 and raw-versus-policy logprob semantics, see
 [Mere fused model evaluation](benchmark-fused.md).
+
+For repository-owned cases, prompts, scorers, and qualification gates that must
+remain outside this public repository, use the open
+[external evaluation-pack interface](evaluation-packs.md).
 
 ## Recommended Workflow
 
