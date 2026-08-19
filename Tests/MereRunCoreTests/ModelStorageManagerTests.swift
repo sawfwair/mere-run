@@ -169,6 +169,34 @@ final class ModelStorageManagerTests: XCTestCase {
         XCTAssertFalse(fileManager.fileExists(atPath: reference.path))
     }
 
+    func testSymlinkBackedSnapshotKeepsReferencedBlobLiveWithoutHardLinks() throws {
+        let snapshot = hub
+            .appendingPathComponent("snapshots/models/org/symlinked", isDirectory: true)
+            .appendingPathComponent(HubSnapshot.revisionKey("commit"), isDirectory: true)
+        let blob = try writePayload(
+            at: hub.appendingPathComponent("blobs/bb/content", isDirectory: false),
+            bytes: 144
+        )
+        let payload = snapshot.appendingPathComponent("model.bin", isDirectory: false)
+        try fileManager.createDirectory(at: snapshot, withIntermediateDirectories: true)
+        try fileManager.createSymbolicLink(at: payload, withDestinationURL: blob)
+        try linkModel("model-a", to: payload)
+
+        let manager = try ModelStorageManager(
+            modelsDirectory: models,
+            hubDirectory: hub,
+            applicationSupportDirectory: applicationSupport,
+            fileManager: fileManager,
+            unreferencedGracePeriod: 0
+        )
+        let livePlan = try manager.garbageCollectionPlan()
+        XCTAssertFalse(livePlan.items.contains { $0.path == blob.path })
+
+        try fileManager.removeItem(at: models.appendingPathComponent("model-a"))
+        let removedPlan = try manager.garbageCollectionPlan()
+        XCTAssertTrue(removedPlan.items.contains { $0.kind == .blob && $0.path == blob.path })
+    }
+
     func testModelRootSymlinkDoesNotCountHubPayloadAsLocalBytes() throws {
         let unit = legacyUnit(repository: "directory-root")
         _ = try writePayload(at: unit.appendingPathComponent("config.json"), bytes: 40)

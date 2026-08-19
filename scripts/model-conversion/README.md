@@ -169,25 +169,66 @@ and hashes every official input, verifies the MiniMax license bytes, and
 self-tests MLX Q4/Q8 packing against an Apple Silicon byte-level fixture before
 conversion. No converted or quantized third-party checkpoint is accepted.
 
-The transformer core is quantized directly from official BF16 to affine
-Q4/group-64 while precision-sensitive projections remain dense. Before
-quantization, all 52 fused QKV matrices are deinterleaved from MiniMax's raw
+The compact package and staged residency design were informed by Phosphene's
+[H3 engine notes](https://github.com/mrbizarro/Phosphene/blob/ee278e03acccdcce56cf2166608b25dfafaaa496/docs/H3_ENGINE.md)
+and the pinned
+[staged MLX runner](https://github.com/mrbizarro/minimax-h3-mlx/blob/c45a8d4da83eb943f174630751ed3261f86aa0ea/scripts/generate_staged.py).
+Those projects are architecture references only: their weights, caches, and
+conversion outputs are not artifact inputs.
+
+The transformer core can remain BF16 or be quantized directly from official
+BF16 to MLX affine Q8/group-64 (the legacy Q4 mode remains reproducible) while
+precision-sensitive projections remain dense. Before conversion, all 52 fused
+QKV matrices are deinterleaved from MiniMax's raw
 per-head checkpoint rows into the official reference model's
 `[all-q; all-k; all-v]` layout expected by the native runtime. A deterministic
 QKV permutation fixture fails the conversion if that contract changes. The
 Qwen3-VL conditioner is quantized directly from official BF16 to affine
-Q8/group-64. The AdaLN cache is evaluated from the original released
-projections before those inference-redundant weights are omitted. The official
+Q8/group-64. Exact AdaLN tables are evaluated from the original released
+projections for 5, 9, 12, 16, 21, and 31 points at video/audio shifts 12/3 and
+the LightX2V 5-point shifts 6/3 schedule. The source-bound pack index records
+each geometry, byte count, and SHA-256 before the schedule-only projections,
+timestep MLP, and reconstructed RoPE tensors are omitted. The official
 video VAE is cast to FP16 and the official audio VAE has weight normalization
 folded exactly as required by the native runtime.
+
+Production cache packs are evaluated by `mere.run model optimize` on MLX Metal.
+CUDA and Metal can reduce the same BF16 matrix product in a different order, so
+a CUDA-evaluated modulation table is structurally valid but not bit-identical
+to live Apple Silicon inference. CUDA release builds therefore fail closed
+unless both the Metal pack and its source-closure/real-parity receipt are
+supplied. The independent validator requires the Metal receipt and exact 9- and
+21-point real-generation hashes.
 
 ```bash
 HF_HOME=/workspace/hf-cache HF_XET_CHUNK_CACHE_SIZE_BYTES=0 \
   python3 scripts/model-conversion/convert_minimax_h3_official_mlx.py \
     --cache-dir /workspace/hf-cache \
     --conversion-location "CA-MTL-3, Canada" \
+    --transformer-precision bf16 \
+    --metal-cache-pack /workspace/metal-cache-pack \
+    --metal-cache-receipt /workspace/metal-cache-pack/adaln_cache.receipt.json \
     --output /workspace/minimax-h3-sawfwair
 ```
+
+When only the transformer is rebuilt, compose it with the already validated
+official-source conditioner and VAEs before publication:
+
+```bash
+python3 scripts/model-conversion/compose_minimax_h3_official_artifact.py \
+  --base /workspace/previous-complete-artifact \
+  --overlay /workspace/minimax-h3-transformer-v5 \
+  --output /workspace/minimax-h3-release \
+  --base-repository Sawfwair/MiniMax-H3-FL2VA-MLX-BF16 \
+  --base-revision IMMUTABLE_BASE_REVISION \
+  --base-transformer-precision bf16 \
+  --transformer-precision bf16
+```
+
+The composer rehashes the previous complete bundle, hard-links or copies only
+the three unchanged official-source components, overlays the reproduced core
+and Metal cache files, and emits a complete source-bound receipt. It never
+accepts Phosphene or another third-party model artifact.
 
 The output carries `SOURCE_MANIFEST.json`, conversion metadata, the exact
 upstream license and notices, and SHA-256 receipts for the publishable bundle.
@@ -198,13 +239,14 @@ Before publication, run the fail-closed structural and hash gate:
 ```bash
 python3 scripts/model-conversion/validate_minimax_h3_official_artifact.py \
   /workspace/minimax-h3-sawfwair \
-  --conversion-location "CA-MTL-3, Canada"
+  --conversion-location "CA-MTL-3, Canada" \
+  --transformer-precision bf16
 ```
 
 The validator rehashes every distributed file and checks the complete official
 source manifest, license bytes, Q4/Q8 and QKV fixture receipts, component tensor
-counts, dtypes, retained 50-layer conditioner, cache geometry, and forbidden
-omitted branches.
+counts, dtypes, retained 50-layer conditioner, Metal evaluation provenance,
+every exact cache-pack entry, and forbidden omitted branches.
 
 ## Gemma 4 12B MLX 4-bit
 

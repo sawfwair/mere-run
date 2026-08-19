@@ -6,6 +6,7 @@ public struct ManagedAdapterSpec: Equatable, Sendable {
     public let version: String
     public let summary: String
     public let baseModelID: String
+    public let compatibleBaseModelIDs: Set<String>
     public let format: String
     public let license: String
     public let upstreamRevision: String?
@@ -20,6 +21,7 @@ public struct ManagedAdapterSpec: Equatable, Sendable {
         version: String,
         summary: String,
         baseModelID: String,
+        compatibleBaseModelIDs: Set<String>? = nil,
         format: String,
         license: String,
         upstreamRevision: String? = nil,
@@ -33,6 +35,7 @@ public struct ManagedAdapterSpec: Equatable, Sendable {
         self.version = version
         self.summary = summary
         self.baseModelID = baseModelID
+        self.compatibleBaseModelIDs = (compatibleBaseModelIDs ?? []).union([baseModelID])
         self.format = format
         self.license = license
         self.upstreamRevision = upstreamRevision
@@ -48,6 +51,10 @@ public struct ManagedAdapterSpec: Equatable, Sendable {
         adaptersRoot
             .appendingPathComponent(id, isDirectory: true)
             .appendingPathComponent(version, isDirectory: true)
+    }
+
+    public func supports(baseModelID: String) -> Bool {
+        compatibleBaseModelIDs.contains(baseModelID)
     }
 
     public func installedFileURL(
@@ -140,8 +147,12 @@ public enum ManagedAdapterCatalog {
             id: miniMaxH3TurboFourStepID,
             title: "MiniMax-H3 Turbo 4-step (EMA-850)",
             version: String(miniMaxH3TurboFourStepRevision.prefix(12)),
-            summary: "Four-evaluation runtime LoRA for the native MiniMax-H3 BF16 FL2VA model.",
+            summary: "Four-evaluation runtime LoRA for native MiniMax-H3 compact BF16 and Q8 FL2VA models.",
             baseModelID: ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue,
+            compatibleBaseModelIDs: [
+                ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue,
+                MiniMaxH3Resources.fl2vaQ8ModelID,
+            ],
             format: MiniMaxH3TurboAdapter.format,
             license: "Apache-2.0 (adapter); MiniMax-H3 Community License (base model)",
             upstreamRevision: miniMaxH3TurboFourStepRevision,
@@ -161,8 +172,12 @@ public enum ManagedAdapterCatalog {
             id: miniMaxH3LightX2VFourStepID,
             title: "MiniMax-H3 Turbo 4-step (LightX2V)",
             version: String(miniMaxH3LightX2VFourStepRevision.prefix(12)),
-            summary: "LightX2V four-evaluation PEFT LoRA for the native MiniMax-H3 BF16 FL2VA model.",
+            summary: "LightX2V four-evaluation PEFT LoRA for native MiniMax-H3 compact BF16 and Q8 FL2VA models.",
             baseModelID: ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue,
+            compatibleBaseModelIDs: [
+                ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue,
+                MiniMaxH3Resources.fl2vaQ8ModelID,
+            ],
             format: MiniMaxH3TurboAdapter.lightX2VFormat,
             license: "Apache-2.0 (adapter); MiniMax-H3 Community License (base model)",
             upstreamRevision: miniMaxH3LightX2VFourStepRevision,
@@ -182,8 +197,12 @@ public enum ManagedAdapterCatalog {
             id: miniMaxH3LightX2VEightStepV1ID,
             title: "MiniMax-H3 Turbo 8-step v1.0 (LightX2V)",
             version: String(miniMaxH3LightX2VV1Revision.prefix(12)),
-            summary: "LightX2V v1.0 eight-evaluation 544p PEFT LoRA for native MiniMax-H3 BF16 FL2VA.",
+            summary: "LightX2V v1.0 eight-evaluation 544p PEFT LoRA for native MiniMax-H3 compact BF16 and Q8 FL2VA.",
             baseModelID: ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue,
+            compatibleBaseModelIDs: [
+                ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue,
+                MiniMaxH3Resources.fl2vaQ8ModelID,
+            ],
             format: MiniMaxH3TurboAdapter.lightX2VFormat,
             license: "Apache-2.0 (adapter); MiniMax-H3 Community License (base model)",
             upstreamRevision: miniMaxH3LightX2VV1Revision,
@@ -203,8 +222,12 @@ public enum ManagedAdapterCatalog {
             id: miniMaxH3LightX2VFourStepV1_768pID,
             title: "MiniMax-H3 Turbo 4-step v1.0 768p (LightX2V)",
             version: String(miniMaxH3LightX2VV1Revision.prefix(12)),
-            summary: "LightX2V v1.0 four-evaluation 1344x768 PEFT LoRA for native MiniMax-H3 BF16 FL2VA.",
+            summary: "LightX2V v1.0 four-evaluation 1344x768 PEFT LoRA for native MiniMax-H3 compact BF16 and Q8 FL2VA.",
             baseModelID: ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue,
+            compatibleBaseModelIDs: [
+                ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue,
+                MiniMaxH3Resources.fl2vaQ8ModelID,
+            ],
             format: MiniMaxH3TurboAdapter.lightX2VFormat,
             license: "Apache-2.0 (adapter); MiniMax-H3 Community License (base model)",
             upstreamRevision: miniMaxH3LightX2VV1Revision,
@@ -292,10 +315,10 @@ public enum ManagedAdapterCatalog {
         fileManager: FileManager = .default
     ) throws -> URL? {
         guard let spec = spec(for: reference) else { return nil }
-        guard spec.baseModelID == baseModelID else {
+        guard spec.supports(baseModelID: baseModelID) else {
             throw ManagedAdapterResolutionError.incompatibleBaseModel(
                 adapterID: spec.id,
-                expected: spec.baseModelID,
+                expected: spec.compatibleBaseModelIDs.sorted().joined(separator: " or "),
                 actual: baseModelID
             )
         }

@@ -166,6 +166,7 @@ final class ManagedModelCatalogTests: XCTestCase {
             "video-ltx25-full-bf16",
             "video-minimax-h3-fl2va-mlx",
             "video-minimax-h3-fl2va-bf16-mlx",
+            "video-minimax-h3-fl2va-8bit-mlx",
             "video-minimax-h3-ref2va-mlx",
         ])
         let visibleAndCompanionSpecs = ManagedModelCatalog.allSpecs
@@ -1278,6 +1279,38 @@ final class ManagedModelCatalogTests: XCTestCase {
             + "@\(MiniMaxH3Resources.ref2vaArtifactRevision)"
         try manifest.write(to: root)
         XCTAssertTrue(spec.isManagedRootComplete(root, fileManager: .default))
+    }
+
+    func testManagedCompactH3RequiresCurrentPinnedArtifactRevision() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let cases: [(ModelResolver.ModelID, String, String)] = [
+            (
+                .miniMaxH3FL2VABF16MLX,
+                MiniMaxH3Resources.compactBF16ArtifactRepository,
+                MiniMaxH3Resources.compactBF16ArtifactRevision
+            ),
+            (
+                .miniMaxH3FL2VAQ8MLX,
+                MiniMaxH3Resources.q8ArtifactRepository,
+                MiniMaxH3Resources.q8ArtifactRevision
+            ),
+        ]
+        for (modelID, repository, revision) in cases {
+            let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: modelID.rawValue))
+            var manifest = MereRunModelManifest.template(
+                for: modelID,
+                createdAt: Date(timeIntervalSince1970: 0)
+            )
+            manifest.upstreamRepoId = "\(repository)@stale-revision"
+            try manifest.write(to: root)
+            XCTAssertFalse(spec.managedSourceMatches(root, fileManager: .default), modelID.rawValue)
+
+            manifest.upstreamRepoId = "\(repository)@\(revision)"
+            try manifest.write(to: root)
+            XCTAssertTrue(spec.managedSourceMatches(root, fileManager: .default), modelID.rawValue)
+        }
     }
 
     func testBonsaiTernaryAcceptsPrismMLPackedLayout() throws {

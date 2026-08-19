@@ -164,6 +164,7 @@ enum StudioModelOptimizationCommand {
         let normalized = modelID.lowercased()
         return normalized == "video-minimax-h3-fl2va-mlx"
             || normalized == "video-minimax-h3-fl2va-bf16-mlx"
+            || normalized == "video-minimax-h3-fl2va-8bit-mlx"
             || normalized == "video-minimax-h3-ref2va-mlx"
     }
 

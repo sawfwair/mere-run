@@ -476,6 +476,7 @@ struct VideoGenerationPreflightAnalyzer {
         let requested = input.model.trimmingCharacters(in: .whitespacesAndNewlines)
         if requested == ModelResolver.ModelID.miniMaxH3FL2VAMLX.rawValue
             || requested == ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue
+            || requested == ModelResolver.ModelID.miniMaxH3FL2VAQ8MLX.rawValue
             || requested == ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue {
             return true
         }
@@ -490,7 +491,8 @@ struct VideoGenerationPreflightAnalyzer {
             return true
         }
         if requested == ModelResolver.ModelID.miniMaxH3FL2VAMLX.rawValue
-            || requested == ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue {
+            || requested == ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue
+            || requested == ModelResolver.ModelID.miniMaxH3FL2VAQ8MLX.rawValue {
             return false
         }
         let candidate = input.modelRoot ?? input.model
@@ -1099,34 +1101,41 @@ struct VideoGenerationPreflightAnalyzer {
             ))
         }
         if input.h3Adapter != nil, usesMiniMaxH3Geometry {
-            let expectedBaseModelID = usesMiniMaxH3Ref2VA
-                ? ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue
-                : ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue
+            let expectedBaseModelID: String
+            if usesMiniMaxH3Ref2VA {
+                expectedBaseModelID = ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue
+            } else if model.requested == ModelResolver.ModelID.miniMaxH3FL2VAQ8MLX.rawValue {
+                expectedBaseModelID = ModelResolver.ModelID.miniMaxH3FL2VAQ8MLX.rawValue
+            } else {
+                expectedBaseModelID = ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue
+            }
             if let reference = input.h3Adapter,
                let spec = ManagedAdapterCatalog.spec(for: reference),
-               spec.baseModelID != expectedBaseModelID {
+               !spec.supports(baseModelID: expectedBaseModelID) {
                 diagnostics.append(PreflightDiagnostic(
                     id: "h3_adapter_base_model_mismatch",
                     severity: .blocker,
                     title: "MiniMax-H3 adapter base model does not match",
-                    message: "Adapter \(spec.id) requires \(spec.baseModelID), not \(expectedBaseModelID)."
+                    message: "Adapter \(spec.id) does not support \(expectedBaseModelID)."
                 ))
             }
             if h3AdapterInferenceRecipe?.task == .fl2va {
-                let usesBF16: Bool
+                let supportsTurbo: Bool
                 if let path = model.path {
-                    usesBF16 = MiniMaxH3Resources(
+                    supportsTurbo = (try? MiniMaxH3Resources(
                         rootURL: URL(fileURLWithPath: path).standardizedFileURL
-                    ).usesShardedBF16Transformer
+                    ).transformerStorage().supportsFL2VATurboAdapters) == true
                 } else {
-                    usesBF16 = model.requested == ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue
+                    supportsTurbo = model.requested
+                        == ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue
+                        || model.requested == MiniMaxH3Resources.fl2vaQ8ModelID
                 }
-                if !usesBF16 {
+                if !supportsTurbo {
                     diagnostics.append(PreflightDiagnostic(
-                        id: "h3_adapter_requires_bf16",
+                        id: "h3_adapter_requires_bf16_or_q8",
                         severity: .blocker,
-                        title: "MiniMax-H3 FL2VA Turbo requires the BF16 base model",
-                        message: "Use --model \(ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue)."
+                        title: "MiniMax-H3 FL2VA Turbo requires compact BF16 or Q8",
+                        message: "Legacy MiniMax-H3 Q4 does not support FL2VA Turbo adapters."
                     ))
                 }
             }
@@ -1613,7 +1622,7 @@ struct VideoGenerationPreflightAnalyzer {
             for (index, summary) in summaries.enumerated() {
                 if let expectedLTXBaseModelID,
                    let spec = ManagedAdapterCatalog.spec(for: summary.requested),
-                   spec.baseModelID != expectedLTXBaseModelID {
+                   !spec.supports(baseModelID: expectedLTXBaseModelID) {
                     diagnostics.append(PreflightDiagnostic(
                         id: "\(kind)_\(index)_base_model_mismatch",
                         severity: .blocker,

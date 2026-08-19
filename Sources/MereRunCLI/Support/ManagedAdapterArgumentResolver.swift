@@ -14,10 +14,10 @@ enum ManagedAdapterArgumentResolver {
             return nil
         }
         if !requireInstalled, let spec = ManagedAdapterCatalog.spec(for: reference) {
-            guard spec.baseModelID == baseModelID else {
+            guard spec.supports(baseModelID: baseModelID) else {
                 throw ManagedAdapterResolutionError.incompatibleBaseModel(
                     adapterID: spec.id,
-                    expected: spec.baseModelID,
+                    expected: spec.compatibleBaseModelIDs.sorted().joined(separator: " or "),
                     actual: baseModelID
                 )
             }

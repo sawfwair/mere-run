@@ -746,6 +746,7 @@ public enum MiniMaxH3GenerationStage: String, Sendable {
     case encodingKeyframes = "encoding-keyframes"
     case encodingReferences = "encoding-references"
     case loadingTransformer = "loading-transformer"
+    case interpolatingAdaLNCache = "interpolating-adaln-cache-not-bit-exact"
     case materializingTransformerBF16 = "materializing-transformer-bf16"
     case denoising
     case decodingVideo = "decoding-video"
@@ -767,9 +768,12 @@ public struct MiniMaxH3GenerationResult: @unchecked Sendable {
 public final class MiniMaxH3Generator: @unchecked Sendable {
     private struct DenoisingRuntimeCacheKey: Hashable {
         let modelRoot: URL
-        let schedulePointCount: Int
+        let modelSourceIdentity: String
+        let videoSigmas: [Float]
+        let audioSigmas: [Float]
         let weightMode: MiniMaxH3TransformerWeightMode
         let adapterURL: URL?
+        let adapterSHA256: String?
         let adapterStrength: Float
     }
 
@@ -849,11 +853,17 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         adapterStrength: Float,
         progressHandler: (@Sendable (MiniMaxH3GenerationProgress) -> Void)?
     ) throws -> (transformer: MiniMaxH3Transformer, adaLNCache: MiniMaxH3AdaLNCache?) {
+        let modelSourceIdentity = try resources.adaLNCacheSourceIdentity()
         let cacheKey = DenoisingRuntimeCacheKey(
             modelRoot: resources.rootURL.resolvingSymlinksInPath(),
-            schedulePointCount: videoSchedule.timesteps.count + 1,
+            modelSourceIdentity: modelSourceIdentity,
+            videoSigmas: videoSchedule.sigmas,
+            audioSigmas: audioSchedule.sigmas,
             weightMode: weightMode,
             adapterURL: adapterURL?.resolvingSymlinksInPath(),
+            adapterSHA256: try adapterURL.map {
+                try ModelArtifactPin.fileSHA256($0.resolvingSymlinksInPath())
+            },
             adapterStrength: adapterStrength
         )
         if retainsRuntime,
@@ -867,19 +877,27 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         let adaLNCache: MiniMaxH3AdaLNCache?
         let cachedAdaLNForLoading: MiniMaxH3AdaLNCache?
         if resources.usesShardedBF16Transformer {
-            // The released BF16 artifact retains the schedule-only projections.
-            // Build their exact table for this run instead of interpolating the
-            // compact package's fixed 31-point cache.
+            // A legacy full BF16 root retains the schedule-only projections.
+            // Build an exact table for the requested run; compact managed roots
+            // select their source-bound production cache pack below.
             adaLNCache = nil
             cachedAdaLNForLoading = nil
         } else {
-            adaLNCache = try Self.loadAdaLNCache(
+            let selection = try Self.loadAdaLNCache(
                 resources: resources,
                 configuration: configuration,
                 videoSchedule: videoSchedule,
                 audioSchedule: audioSchedule
             )
-            cachedAdaLNForLoading = adaLNCache
+            if selection?.exact == false {
+                progressHandler?(.init(
+                    stage: .interpolatingAdaLNCache,
+                    stepIndex: 1,
+                    totalSteps: 1
+                ))
+            }
+            adaLNCache = selection?.cache
+            cachedAdaLNForLoading = selection?.cache
         }
         let transformer = try MiniMaxH3ModelLoader.loadInferenceTransformer(
             resources: resources,
@@ -901,12 +919,12 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                 strength: adapterStrength
             )
         }
-        let resolvedAdaLNCache: MiniMaxH3AdaLNCache?
+        var resolvedAdaLNCache: MiniMaxH3AdaLNCache?
         if resources.usesShardedBF16Transformer {
             resolvedAdaLNCache = transformer.precomputeAdaLN(
                 videoSchedule: videoSchedule,
                 audioSchedule: audioSchedule,
-                sourceIdentity: try resources.adaLNCacheSourceIdentity()
+                sourceIdentity: modelSourceIdentity
             )
             transformer.discardAdaLNWeights()
             Memory.clearCache()
@@ -930,21 +948,25 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
             _ = transformer.materializeResidentBF16()
         }
         if let adapterURL, !resources.usesShardedBF16Transformer {
-            guard adapterInferenceRecipe?.task == .ref2va else {
+            let adapterTask = adapterInferenceRecipe?.task ?? .fl2va
+            if adapterTask == .fl2va,
+               try !resources.transformerStorage().supportsFL2VATurboAdapters {
                 throw MiniMaxH3GeneratorError.invalidOptions(
-                    "MiniMax-H3 FL2VA adapters require the BF16 FL2VA model"
+                    "MiniMax-H3 FL2VA Turbo requires compact BF16 or Q8; legacy Q4 is unsupported"
                 )
             }
-            guard transformer.usesResidentBF16 else {
+            if adapterTask == .ref2va, !transformer.usesResidentBF16 {
                 throw MiniMaxH3GeneratorError.invalidOptions(
                     "MiniMax-H3 Ref2VA Turbo requires resident BF16 weights; use --h3-weight-mode resident-bf16 on a machine with sufficient memory"
                 )
             }
-            try MiniMaxH3TurboAdapter.install(
+            let installation = try MiniMaxH3TurboAdapter.installForInference(
                 url: adapterURL,
                 into: transformer,
-                strength: adapterStrength
+                strength: adapterStrength,
+                adaLNCache: resolvedAdaLNCache
             )
+            resolvedAdaLNCache = installation.adaLNCache
         }
         if retainsRuntime {
             retainedDenoisingRuntime = (cacheKey, transformer, resolvedAdaLNCache)
@@ -1553,15 +1575,14 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         configuration: MiniMaxH3Configuration,
         videoSchedule: MiniMaxH3Schedule,
         audioSchedule: MiniMaxH3Schedule
-    ) throws -> MiniMaxH3AdaLNCache? {
+    ) throws -> MiniMaxH3AdaLNCachePack.Selection? {
         do {
-            return try MiniMaxH3AdaLNCache.load(
-                from: resources.adaLNCacheURL,
+            return try MiniMaxH3AdaLNCachePack.load(
+                from: resources.rootURL,
                 configuration: .init(configuration),
                 videoSchedule: videoSchedule,
                 audioSchedule: audioSchedule,
-                sourceIdentity: resources.adaLNCacheSourceIdentity(),
-                allowScheduleResampling: true
+                sourceIdentity: resources.adaLNCacheSourceIdentity()
             )
         } catch {
             guard try !resources.requiresAdaLNCache() else {
@@ -1785,7 +1806,7 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                 audioSchedule: audioSchedule,
                 adaLNCache: runtime.adaLNCache,
                 accelerationMode: options.accelerationMode,
-                permitsCacheReuse: options.adapterURL == nil,
+                permitsCacheReuse: true,
                 progressHandler: progressHandler
             )
             phaseProfileLogger?(String(
@@ -2026,7 +2047,7 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                 audioSchedule: audioSchedule,
                 adaLNCache: runtime.adaLNCache,
                 accelerationMode: options.accelerationMode,
-                permitsCacheReuse: options.adapterURL == nil,
+                permitsCacheReuse: true,
                 progressHandler: progressHandler
             )
             phaseProfileLogger?(String(

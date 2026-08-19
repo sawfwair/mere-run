@@ -1197,9 +1197,14 @@ struct VideoGenerate: AsyncParsableCommand {
             }
             let h3Resources = MiniMaxH3Resources(rootURL: resolvedRootURL)
             let h3Configuration = try h3Resources.loadConfiguration()
-            let h3AdapterBaseModelID = h3Configuration.task == MiniMaxH3TurboAdapter.Task.ref2va.rawValue
-                ? ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue
-                : ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue
+            let h3AdapterBaseModelID: String
+            if h3Configuration.task == MiniMaxH3TurboAdapter.Task.ref2va.rawValue {
+                h3AdapterBaseModelID = ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue
+            } else if resolvedRequestedModel == ModelResolver.ModelID.miniMaxH3FL2VAQ8MLX.rawValue {
+                h3AdapterBaseModelID = ModelResolver.ModelID.miniMaxH3FL2VAQ8MLX.rawValue
+            } else {
+                h3AdapterBaseModelID = ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue
+            }
             let resolvedH3Adapter = try ManagedAdapterArgumentResolver.resolve(
                 h3Adapter,
                 baseModelID: h3AdapterBaseModelID
@@ -1211,8 +1216,11 @@ struct VideoGenerate: AsyncParsableCommand {
                     "MiniMax-H3 adapter \(h3AdapterRecipe.name) requires \(h3AdapterRecipe.task.rawValue), not \(h3Configuration.task)."
                 )
             }
-            if h3AdapterRecipe?.task == .fl2va, !h3Resources.usesShardedBF16Transformer {
-                throw ValidationError("MiniMax-H3 FL2VA adapters require the BF16 FL2VA model.")
+            if h3AdapterRecipe?.task == .fl2va,
+               try !h3Resources.transformerStorage().supportsFL2VATurboAdapters {
+                throw ValidationError(
+                    "MiniMax-H3 FL2VA adapters require compact BF16 or Q8; legacy Q4 is unsupported."
+                )
             }
             if h3AdapterRecipe?.task == .ref2va, h3WeightMode == .quantized {
                 throw ValidationError(
@@ -2904,6 +2912,7 @@ struct VideoGenerate: AsyncParsableCommand {
         let requested = resolvedRequestedModel.trimmingCharacters(in: .whitespacesAndNewlines)
         if requested == ModelResolver.ModelID.miniMaxH3FL2VAMLX.rawValue
             || requested == ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue
+            || requested == ModelResolver.ModelID.miniMaxH3FL2VAQ8MLX.rawValue
             || requested == ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue {
             return true
         }

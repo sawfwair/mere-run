@@ -22,6 +22,8 @@ Example::
         --cache-dir /workspace/hf-cache \
         --conversion-location "CA-MTL-3, Canada" \
         --transformer-precision bf16 \
+        --metal-cache-pack /workspace/metal-cache-pack \
+        --metal-cache-receipt /workspace/metal-cache-pack/adaln_cache.receipt.json \
         --output /workspace/minimax-h3-sawfwair
 
 The output transformer is mixed precision: the 208 transformer/refiner core
@@ -30,7 +32,10 @@ BF16/F32 precision islands remain dense. The Qwen3-VL conditioner retains
 exactly the 50 language layers H3 reads and uses affine Q8/group-64 for 439
 eligible linears. The AdaLN cache is evaluated from the original BF16/F32
 projections before those 13B inference-redundant parameters are omitted from
-the compact transformer.
+the compact transformer. CUDA release builds must import a source-bound cache
+pack evaluated by ``mere.run model optimize`` on MLX Metal: BF16 GEMM reduction
+order is backend-specific, so a CUDA-evaluated table is not a bit-exact Metal
+artifact.
 """
 
 from __future__ import annotations
@@ -59,9 +64,12 @@ SOURCE_LICENSE_SHA256 = "59b99642b95ea21630e311198ddbfffbfe05aadba0c2f5d884cbdf4
 SOURCE_LICENSE_BYTES = 17_604
 GROUP_SIZE = 64
 TEXT_ENCODER_BITS = 8
-SAMPLE_POINTS = 31
 VIDEO_SHIFT = 12.0
 AUDIO_SHIFT = 3.0
+CACHE_SCHEDULES = (
+    *((point_count, VIDEO_SHIFT, AUDIO_SHIFT) for point_count in (5, 9, 12, 16, 21, 31)),
+    (5, 6.0, AUDIO_SHIFT),
+)
 TRANSFORMER_HEAD_COUNT = 56
 TRANSFORMER_HEAD_DIMENSION = 128
 
@@ -107,6 +115,12 @@ QUANTIZER_SELF_TEST = {
     },
 }
 QKV_REORDER_SELF_TEST_SHA256 = "11a9143204ee0defe33828d431cca9f051c2a221050ae8543b543cda5c7b7786"
+CACHE_PACK_FORMAT = "mere.run.minimax-h3-adaln-cache-pack"
+CACHE_PACK_SCHEMA_VERSION = 1
+CACHE_FORMAT = "mere.run.minimax-h3-adaln-cache"
+CACHE_SCHEMA_VERSION = "2"
+CACHE_RECEIPT_FORMAT = "mere.run.minimax-h3-adaln-cache-pack-receipt"
+CACHE_RECEIPT_SCHEMA_VERSION = 1
 
 
 def utc_now() -> str:
@@ -446,30 +460,221 @@ def load_requested_keys(
 def linear(value: Any, weight: Any, bias: Any) -> Any:
     import mlx.core as mx
 
-    return mx.matmul(value.astype(weight.dtype), weight.T) + bias
+    # Match MLX NN Linear exactly.  Keeping the bias inside addmm matters for
+    # the BF16 rounding of the source-bound AdaLN tables: an unfused matmul
+    # followed by addition can move a modulation by one BF16 ULP, which then
+    # changes the denoising trajectory across multiple steps.
+    return mx.addmm(bias, value.astype(weight.dtype), weight.T)
 
 
-def build_adaln_cache(
+def cache_filename(point_count: int, video_shift: float, audio_shift: float) -> str:
+    if (point_count, video_shift, audio_shift) == (31, VIDEO_SHIFT, AUDIO_SHIFT):
+        return "adaln_cache.safetensors"
+
+    def label(value: float) -> str:
+        return str(int(value)) if value.is_integer() else str(value)
+
+    return f"adaln_cache-p{point_count}-v{label(video_shift)}-a{label(audio_shift)}.safetensors"
+
+
+def safetensors_header(path: Path) -> tuple[dict[str, Any], dict[str, str]]:
+    with path.open("rb") as handle:
+        raw_length = handle.read(8)
+        if len(raw_length) != 8:
+            raise ValueError(f"{path.name} has no safetensors header")
+        header_length = int.from_bytes(raw_length, "little")
+        if not 0 < header_length <= 64 * 1024 * 1024:
+            raise ValueError(f"{path.name} has an invalid safetensors header")
+        raw_header = handle.read(header_length)
+    if len(raw_header) != header_length:
+        raise ValueError(f"{path.name} has a truncated safetensors header")
+    header = json.loads(raw_header)
+    metadata = header.pop("__metadata__", {})
+    if not isinstance(metadata, dict):
+        raise ValueError(f"{path.name} metadata is not an object")
+    spans = sorted(
+        (int(entry["data_offsets"][0]), int(entry["data_offsets"][1]), key)
+        for key, entry in header.items()
+    )
+    cursor = 0
+    for start, end, key in spans:
+        if start != cursor or end < start:
+            raise ValueError(f"{path.name}:{key} has invalid data offsets")
+        cursor = end
+    if 8 + header_length + cursor != path.stat().st_size:
+        raise ValueError(f"{path.name} payload extent differs from its file size")
+    return header, metadata
+
+
+def import_metal_adaln_cache_pack(
+    source: Path,
+    output: Path,
+    source_identity: str,
+) -> dict[str, dict[str, Any]]:
+    source = source.expanduser().resolve()
+    index_path = source / "adaln_cache.index.json"
+    index = json.loads(index_path.read_text(encoding="utf-8"))
+    if index.get("schema_version") != CACHE_PACK_SCHEMA_VERSION:
+        raise ValueError("Imported AdaLN cache pack has the wrong schema version")
+    if index.get("format") != CACHE_PACK_FORMAT:
+        raise ValueError("Imported AdaLN cache pack has the wrong format")
+    if index.get("source_identity") != source_identity:
+        raise ValueError("Imported AdaLN cache pack belongs to another transformer source")
+
+    expected = {
+        (point_count, video_shift, audio_shift): cache_filename(
+            point_count, video_shift, audio_shift
+        )
+        for point_count, video_shift, audio_shift in CACHE_SCHEDULES
+    }
+    observed: set[tuple[int, float, float]] = set()
+    results: dict[str, dict[str, Any]] = {}
+    for entry in index.get("entries", []):
+        schedule_value = entry.get("schedule", {})
+        schedule_key = (
+            int(schedule_value.get("point_count", -1)),
+            float(schedule_value.get("video_flow_shift", -1)),
+            float(schedule_value.get("audio_flow_shift", -1)),
+        )
+        expected_filename = expected.get(schedule_key)
+        filename = entry.get("filename")
+        if expected_filename is None or filename != expected_filename:
+            raise ValueError(f"Unexpected imported AdaLN schedule: {schedule_key}")
+        if schedule_key in observed:
+            raise ValueError(f"Duplicate imported AdaLN schedule: {schedule_key}")
+        observed.add(schedule_key)
+
+        path = source / filename
+        byte_count = path.stat().st_size
+        digest = sha256_file(path)
+        if int(entry.get("byte_count", -1)) != byte_count:
+            raise ValueError(f"Imported AdaLN byte count differs for {filename}")
+        if entry.get("sha256") != digest:
+            raise ValueError(f"Imported AdaLN SHA-256 differs for {filename}")
+        header, metadata = safetensors_header(path)
+        if metadata.get("schema_version") != CACHE_SCHEMA_VERSION:
+            raise ValueError(f"Imported AdaLN schema differs for {filename}")
+        if metadata.get("format") != CACHE_FORMAT:
+            raise ValueError(f"Imported AdaLN format differs for {filename}")
+        if metadata.get("source_identity") != source_identity:
+            raise ValueError(f"Imported AdaLN source differs for {filename}")
+        step_count = schedule_key[0] - 1
+        expected_keys = {
+            "audio_sigmas",
+            "final_modulations",
+            "time_embeddings",
+            "video_sigmas",
+            *(f"blocks.{block}.modulations" for block in range(50)),
+        }
+        if set(header) != expected_keys:
+            raise ValueError(f"Imported AdaLN tensor closure differs for {filename}")
+        if header["time_embeddings"]["shape"] != [step_count, 3, 2_688]:
+            raise ValueError(f"Imported time embedding geometry differs for {filename}")
+        if header["final_modulations"]["shape"] != [step_count, 3, 10_752]:
+            raise ValueError(f"Imported final modulation geometry differs for {filename}")
+        if any(
+            header[f"blocks.{block}.modulations"]["shape"]
+            != [step_count, 9, 32_256]
+            for block in range(50)
+        ):
+            raise ValueError(f"Imported block modulation geometry differs for {filename}")
+        if header["time_embeddings"]["dtype"] != "F32" or any(
+            header[f"blocks.{block}.modulations"]["dtype"] != "BF16"
+            for block in range(50)
+        ):
+            raise ValueError(f"Imported AdaLN dtypes differ for {filename}")
+
+        shutil.copyfile(path, output / filename)
+        results[filename] = {
+            "tensor_count": len(header),
+            "sample_points": schedule_key[0],
+            "steps": step_count,
+            "video_shift": schedule_key[1],
+            "audio_shift": schedule_key[2],
+            "source_identity": source_identity,
+            "evaluation_backend": "mlx-metal",
+        }
+
+    if observed != set(expected):
+        raise ValueError("Imported AdaLN production schedule closure differs")
+    shutil.copyfile(index_path, output / index_path.name)
+    results[index_path.name] = {
+        "entry_count": len(observed),
+        "source_identity": source_identity,
+        "evaluation_backend": "mlx-metal",
+    }
+    return results
+
+
+def load_metal_cache_receipt(
+    path: Path,
+    source_identity: str,
+    cache_pack_index: Path,
+) -> dict[str, Any]:
+    receipt = json.loads(path.expanduser().resolve().read_text(encoding="utf-8"))
+    if receipt.get("schema_version") != CACHE_RECEIPT_SCHEMA_VERSION:
+        raise ValueError("Metal AdaLN receipt has the wrong schema version")
+    if receipt.get("format") != CACHE_RECEIPT_FORMAT:
+        raise ValueError("Metal AdaLN receipt has the wrong format")
+    if receipt.get("source_identity") != source_identity:
+        raise ValueError("Metal AdaLN receipt belongs to another transformer source")
+    if receipt.get("evaluation_backend") != "mlx-metal":
+        raise ValueError("Production AdaLN cache receipt must name MLX Metal")
+    if receipt.get("generator") != "mere.run model optimize":
+        raise ValueError("Production AdaLN cache receipt has an unknown generator")
+    closure_digest = receipt.get("source_tensor_closure_sha256", "")
+    if len(closure_digest) != 64 or any(character not in "0123456789abcdef" for character in closure_digest):
+        raise ValueError("Metal AdaLN receipt lacks an official-source tensor closure")
+    if receipt.get("hardware", {}).get("chip") != "Apple M4 Max":
+        raise ValueError("Metal AdaLN receipt has unexpected evaluation hardware")
+    if receipt.get("cache_pack_index_sha256") != sha256_file(cache_pack_index):
+        raise ValueError("Metal AdaLN receipt does not bind the imported cache-pack index")
+    parity = receipt.get("real_generation_parity", [])
+    if {int(item.get("point_count", -1)) for item in parity} != {9, 21}:
+        raise ValueError("Metal AdaLN receipt lacks 9- and 21-point parity")
+    for item in parity:
+        if item.get("full_mp4_sha256") != item.get("compact_mp4_sha256"):
+            raise ValueError("Metal AdaLN receipt records a non-identical parity output")
+    return receipt
+
+
+def build_adaln_cache_pack(
     output: Path,
     transformer_index: dict[str, Any],
     downloaded: dict[str, Path],
     source_identity: str,
-) -> dict[str, Any]:
+) -> dict[str, dict[str, Any]]:
     import mlx.core as mx
     import mlx.nn as nn
     import numpy as np
 
-    video_sigmas, video_timesteps = schedule(SAMPLE_POINTS, VIDEO_SHIFT)
-    audio_sigmas, audio_timesteps = schedule(SAMPLE_POINTS, AUDIO_SHIFT)
-    if len(video_timesteps) != 30 or len(audio_timesteps) != 30:
-        raise ValueError("Unexpected MiniMax-H3 sampler schedule geometry")
-
     flat_timesteps: list[np.float32] = []
+    schedule_values: list[dict[str, Any]] = []
     condition = np.float32(0.999)
-    for video, audio in zip(video_timesteps, audio_timesteps, strict=True):
-        video32 = np.float32(video)
-        audio32 = np.float32(audio)
-        flat_timesteps.extend((video32, audio32, max(video32, condition)))
+    step_offset = 0
+    for point_count, video_shift, audio_shift in CACHE_SCHEDULES:
+        video_sigmas, video_timesteps = schedule(point_count, video_shift)
+        audio_sigmas, audio_timesteps = schedule(point_count, audio_shift)
+        if len(video_timesteps) != point_count - 1 or len(audio_timesteps) != point_count - 1:
+            raise ValueError("Unexpected MiniMax-H3 sampler schedule geometry")
+        for video, audio in zip(video_timesteps, audio_timesteps, strict=True):
+            video32 = np.float32(video)
+            audio32 = np.float32(audio)
+            flat_timesteps.extend((video32, audio32, max(video32, condition)))
+        schedule_values.append(
+            {
+                "point_count": point_count,
+                "video_shift": video_shift,
+                "audio_shift": audio_shift,
+                "video_sigmas": video_sigmas,
+                "audio_sigmas": audio_sigmas,
+                "step_offset": step_offset,
+                "step_count": point_count - 1,
+            }
+        )
+        step_offset += point_count - 1
+
+    total_steps = step_offset
 
     time_keys = (
         "time_embedder.proj_in.weight",
@@ -496,11 +701,11 @@ def build_adaln_cache(
         )),
         time_weights["time_embedder.proj_out.weight"],
         time_weights["time_embedder.proj_out.bias"],
-    ).reshape(30, 3, 2_688)
+    ).reshape(total_steps, 3, 2_688)
     mx.eval(time_embeddings)
     release_arrays(time_weights)
 
-    activated = nn.silu(time_embeddings.reshape(90, 2_688)).astype(mx.bfloat16)
+    activated = nn.silu(time_embeddings.reshape(total_steps * 3, 2_688)).astype(mx.bfloat16)
     mx.eval(activated)
     block_modulations: list[Any | None] = [None] * 50
     weight_map: dict[str, str] = transformer_index["weight_map"]
@@ -514,7 +719,7 @@ def build_adaln_cache(
         for block in blocks:
             prefix = f"blocks.{block}.adaln_proj.linear"
             projected = linear(activated, raw[f"{prefix}.weight"], raw[f"{prefix}.bias"])
-            modulation = projected.reshape(30, 9, 32_256).astype(mx.bfloat16)
+            modulation = projected.reshape(total_steps, 9, 32_256).astype(mx.bfloat16)
             mx.eval(modulation)
             block_modulations[block] = modulation
             print(f"AdaLN cache block {block + 1}/50", flush=True)
@@ -534,42 +739,86 @@ def build_adaln_cache(
         activated,
         final_weights["final_layer.adaln_proj.linear.weight"],
         final_weights["final_layer.adaln_proj.linear.bias"],
-    ).reshape(30, 3, 10_752).astype(mx.bfloat16)
+    ).reshape(total_steps, 3, 10_752).astype(mx.bfloat16)
     mx.eval(final_modulations)
     release_arrays(final_weights)
 
-    arrays: dict[str, Any] = {
-        "audio_sigmas": mx.array(audio_sigmas, dtype=mx.float32),
-        "final_modulations": final_modulations,
-        "time_embeddings": time_embeddings,
-        "video_sigmas": mx.array(video_sigmas, dtype=mx.float32),
-    }
-    for block, modulation in enumerate(block_modulations):
-        arrays[f"blocks.{block}.modulations"] = modulation
-    atomic_safetensors(
-        output,
-        dict(sorted(arrays.items())),
-        {
-            "schema_version": "2",
-            "format": "mere.run.minimax-h3-adaln-cache",
+    results: dict[str, dict[str, Any]] = {}
+    entries: list[dict[str, Any]] = []
+    for values in schedule_values:
+        start = values["step_offset"]
+        end = start + values["step_count"]
+        filename = cache_filename(
+            values["point_count"], values["video_shift"], values["audio_shift"]
+        )
+        arrays: dict[str, Any] = {
+            "audio_sigmas": mx.array(values["audio_sigmas"], dtype=mx.float32),
+            "final_modulations": final_modulations[start:end],
+            "time_embeddings": time_embeddings[start:end],
+            "video_sigmas": mx.array(values["video_sigmas"], dtype=mx.float32),
+        }
+        for block, modulation in enumerate(block_modulations):
+            arrays[f"blocks.{block}.modulations"] = modulation[start:end]
+        cache_output = output / filename
+        atomic_safetensors(
+            cache_output,
+            dict(sorted(arrays.items())),
+            {
+                "schema_version": "2",
+                "format": "mere.run.minimax-h3-adaln-cache",
+                "source_identity": source_identity,
+                "source_repository": SOURCE_REPOSITORY,
+                "source_revision": SOURCE_REVISION,
+                "source_precision": "released mixed BF16/F32",
+            },
+        )
+        stats = {
+            "tensor_count": len(arrays),
+            "sample_points": values["point_count"],
+            "steps": values["step_count"],
+            "video_shift": values["video_shift"],
+            "audio_shift": values["audio_shift"],
             "source_identity": source_identity,
-            "source_repository": SOURCE_REPOSITORY,
-            "source_revision": SOURCE_REVISION,
-            "source_precision": "released mixed BF16/F32",
+        }
+        results[filename] = stats
+        entries.append(
+            {
+                "schedule": {
+                    "point_count": values["point_count"],
+                    "video_flow_shift": values["video_shift"],
+                    "audio_flow_shift": values["audio_shift"],
+                },
+                "filename": filename,
+                "byte_count": cache_output.stat().st_size,
+                "sha256": sha256_file(cache_output),
+            }
+        )
+        release_arrays(arrays)
+
+    index_output = output / "adaln_cache.index.json"
+    atomic_json(
+        index_output,
+        {
+            "schema_version": 1,
+            "format": "mere.run.minimax-h3-adaln-cache-pack",
+            "source_identity": source_identity,
+            "entries": sorted(
+                entries,
+                key=lambda entry: (
+                    entry["schedule"]["point_count"],
+                    entry["schedule"]["video_flow_shift"],
+                    entry["schedule"]["audio_flow_shift"],
+                ),
+            ),
         },
     )
-    stats = {
-        "tensor_count": len(arrays),
-        "sample_points": SAMPLE_POINTS,
-        "steps": 30,
-        "video_shift": VIDEO_SHIFT,
-        "audio_shift": AUDIO_SHIFT,
+    results[index_output.name] = {
+        "entry_count": len(entries),
         "source_identity": source_identity,
     }
-    release_arrays(arrays)
     del activated, time_embeddings, final_modulations, block_modulations
     mx.clear_cache()
-    return stats
+    return results
 
 
 def is_cache_covered_transformer_key(key: str) -> bool:
@@ -903,8 +1152,8 @@ No third-party converted or quantized weights were used.
   Precision-sensitive BF16/F32 input, timestep, normalization, and output
   tensors remain at their released precision.
 * The original BF16/F32 AdaLN projections and timestep MLP were evaluated over
-  mere.run's released 31-point schedules. Their resulting inference table is
-  stored in `adaln_cache.safetensors`; the 13B cache-covered parameters and the
+  every released production schedule. Their source-bound exact inference tables
+  and hashes are stored in `adaln_cache.index.json`; the 13B cache-covered parameters and the
   recomputed RoPE inverse frequencies are omitted from the compact transformer.
 * The Qwen3-VL conditioner keeps the exact 50 language layers MiniMax H3 reads.
   Its 439 eligible linear weights were quantized directly from official BF16 to
@@ -1028,6 +1277,16 @@ def parse_args() -> argparse.Namespace:
         default="q4",
         help="Storage precision for the 208 transformer core linears.",
     )
+    parser.add_argument(
+        "--metal-cache-pack",
+        type=Path,
+        help="Source-bound AdaLN cache pack evaluated by mere.run on MLX Metal.",
+    )
+    parser.add_argument(
+        "--metal-cache-receipt",
+        type=Path,
+        help="Receipt binding the imported Metal cache pack to real 9/21 parity.",
+    )
     parser.add_argument("--plan", action="store_true")
     parser.add_argument("--self-test-only", action="store_true")
     return parser.parse_args()
@@ -1036,6 +1295,8 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
     components = set(args.components)
+    if (args.metal_cache_pack is None) != (args.metal_cache_receipt is None):
+        raise ValueError("--metal-cache-pack and --metal-cache-receipt must be supplied together")
     if args.self_test_only:
         quantizer_self_test()
         qkv_reorder_self_test()
@@ -1075,8 +1336,14 @@ def main() -> int:
 
     if not mx.cuda.is_available():
         print("warning: MLX CUDA is unavailable; conversion is using the current MLX device", flush=True)
+    elif "transformer" in components and args.metal_cache_pack is None:
+        raise ValueError(
+            "CUDA release builds require --metal-cache-pack and --metal-cache-receipt; "
+            "CUDA AdaLN GEMM is not a bit-exact MLX Metal artifact"
+        )
 
     component_stats: dict[str, dict[str, Any]] = {}
+    cache_pack_receipt: dict[str, Any] | None = None
     transformer_index = None
     source_identity = None
     if "transformer" in components:
@@ -1085,13 +1352,35 @@ def main() -> int:
         source_identity = (
             f"{SOURCE_REPOSITORY}@{SOURCE_REVISION}:FL2VA/transformer:index-sha256:{index_sha}"
         )
-        cache_stats = build_adaln_cache(
-            output / "adaln_cache.safetensors",
-            transformer_index,
-            downloaded,
-            source_identity,
-        )
-        component_stats["adaln_cache.safetensors"] = cache_stats
+        if args.metal_cache_pack is not None:
+            cache_stats = import_metal_adaln_cache_pack(
+                args.metal_cache_pack,
+                output,
+                source_identity,
+            )
+            cache_pack_receipt = load_metal_cache_receipt(
+                args.metal_cache_receipt,
+                source_identity,
+                args.metal_cache_pack.expanduser().resolve() / "adaln_cache.index.json",
+            )
+        else:
+            cache_stats = build_adaln_cache_pack(
+                output,
+                transformer_index,
+                downloaded,
+                source_identity,
+            )
+            cache_pack_receipt = {
+                "schema_version": CACHE_RECEIPT_SCHEMA_VERSION,
+                "format": CACHE_RECEIPT_FORMAT,
+                "source_identity": source_identity,
+                "evaluation_backend": "mlx-metal",
+                "generator": "official-source converter",
+                "cache_pack_index_sha256": sha256_file(
+                    output / "adaln_cache.index.json"
+                ),
+            }
+        component_stats.update(cache_stats)
         transformer_stats = convert_transformer(
             output / "transformer.safetensors",
             transformer_index,
@@ -1121,7 +1410,7 @@ def main() -> int:
     }
     conversion_receipt = {
         "converter": "scripts/model-conversion/convert_minimax_h3_official_mlx.py",
-        "converter_version": 3,
+        "converter_version": 5,
         "converter_sha256": sha256_file(Path(__file__).resolve()),
         "started_at": started_at,
         "completed_at": utc_now(),
@@ -1146,6 +1435,7 @@ def main() -> int:
         "mlx_cuda_available": bool(mx.cuda.is_available()),
         "quantizer_self_test": self_test,
         "qkv_reorder_self_test": qkv_self_test,
+        "adaln_cache_pack": cache_pack_receipt,
         "outputs": outputs,
     }
     atomic_json(output / "transformer.conversion.json", conversion_receipt)

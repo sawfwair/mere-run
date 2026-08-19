@@ -856,7 +856,7 @@ swift run mere.run video generate \
   --image ./performer.png \
   --output ./performance.mp4
 
-# MiniMax-H3 text/first-frame to synchronized 24 fps video + 32 kHz stereo
+# Legacy Q4 MiniMax-H3 compatibility package. Prefer BF16 or 8-bit for quality.
 # Passing --accept-model-license confirms review and acceptance of the listed
 # terms and agreement to comply before the download begins.
 swift run mere.run model pull video-minimax-h3-fl2va-mlx --accept-model-license
@@ -867,15 +867,25 @@ swift run mere.run video generate \
   --num-frames 124 \
   --output ./paper-bird-h3.mp4
 
-# Maximum-fidelity H3: direct pinned 13-shard BF16 MLX transformer
-swift run mere.run model pull video-minimax-h3-fl2va-bf16-mlx --accept-model-license
+# Maximum-fidelity H3: compact BF16 core plus exact production cache pack.
+# --cache-dir keeps the immutable payload on the selected external volume.
+swift run mere.run model pull video-minimax-h3-fl2va-bf16-mlx \
+  --cache-dir /Volumes/SALVATION/MereRun/hub \
+  --accept-model-license
 swift run mere.run video generate \
   "a cinematic rain-soaked bus stop at night" \
   --model video-minimax-h3-fl2va-bf16-mlx \
-  --width 1280 --height 768 --duration 10 --steps 20 \
+  --width 1280 --height 768 --duration 10 --steps 21 \
   --output ./bus-stop-bf16.mp4
 
-# Two checksum-pinned four-evaluation adapters for the BF16 H3 model
+# Smaller high-quality H3 fallback: affine Q8/group-64 core. BF16 and Q8 share
+# byte-identical conditioner, VAE, tokenizer, license, and cache-pack blobs.
+# The verified runtime payload is 58,075,175,639 bytes before shared-blob reuse.
+swift run mere.run model pull video-minimax-h3-fl2va-8bit-mlx \
+  --cache-dir /Volumes/SALVATION/MereRun/hub \
+  --accept-model-license
+
+# Two checksum-pinned four-evaluation adapters for compact BF16 or Q8 H3
 swift run mere.run adapter pull minimax-h3-turbo-4step
 swift run mere.run adapter pull minimax-h3-lightx2v-4step
 swift run mere.run video generate \
@@ -1015,6 +1025,11 @@ model store. It is a mere.run-local cache, not the default
 2. `MERERUN_MODEL_CACHE_HOME/hub` (shared cache root)
 3. `~/Library/Application Support/MereRun/hub` (default)
 4. `~/Library/Caches/MereRun/hub`, then a temp dir as last-resort fallbacks
+
+Pass `model pull --cache-dir PATH` to select the cache for one pull. Disk
+preflight and downloads use that volume, and the installed model root links to
+its content-addressed blobs. Disconnecting an external cache volume makes that
+model unavailable until it is reconnected.
 
 If you already pull from Hugging Face elsewhere and want to share cached weights,
 point `MERERUN_HUB_CACHE` at your existing `huggingface/hub` directory.

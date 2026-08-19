@@ -13,6 +13,35 @@ final class ModelPullCommandParsingTests: XCTestCase {
         XCTAssertTrue(cmd.allowUnsupported)
     }
 
+    func testModelPullParsesExternalCacheAndIncludesItInStructuredPreflight() throws {
+        let temp = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let cache = temp.appending(path: "external-hub", directoryHint: .isDirectory)
+        let modelStore = temp.appending(path: "models", directoryHint: .isDirectory)
+        let command = try ModelPull.parse([
+            "image-zimage-nano",
+            "--cache-dir", cache.path,
+            "--preflight",
+            "--json",
+        ])
+
+        XCTAssertEqual(command.cacheDir, cache.path)
+        let envelope = command.makePreflightEnvelope(
+            modelStoreURL: modelStore,
+            diskAvailableBytes: { _ in 200 * ModelPullDiskPreflight.bytesPerGiB }
+        )
+        XCTAssertEqual(envelope.request.cacheDirectory, cache.path)
+        XCTAssertEqual(envelope.result.hubCache.path, cache.path)
+        XCTAssertTrue(envelope.diagnostics.contains {
+            $0.id == "external_hub_cache_availability"
+                && $0.message.contains("disconnecting")
+        })
+        XCTAssertTrue(envelope.actions.contains {
+            $0.command?.argv.contains("--cache-dir") == true
+                && $0.command?.argv.contains(cache.path) == true
+        })
+    }
+
     func testBuffaloLPullRequiresExplicitLicenseAcceptance() throws {
         let restricted = try XCTUnwrap(
             ManagedModelCatalog.spec(for: FaceAnalysisResources.modelID)

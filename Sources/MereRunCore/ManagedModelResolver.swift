@@ -219,6 +219,7 @@ public enum ManagedModelResolver {
         id: String,
         force: Bool = false,
         usageTermsAcknowledged: Bool = false,
+        hubCacheURL: URL? = nil,
         fileManager: FileManager = .default,
         progress: (@Sendable (InstallProgress) -> Void)? = nil
     ) async throws -> InstallResult {
@@ -244,39 +245,72 @@ public enum ManagedModelResolver {
         let snapshotURL = try await downloadHubSnapshotWithByteProgress(
             config: hubFallback,
             reuseRoots: reuseRoots,
+            hubCacheURL: hubCacheURL,
             progress: progress
         )
         let mountedSnapshots = try await downloadMountedHubSnapshots(
             for: spec,
             modelDir: modelDir,
+            hubCacheURL: hubCacheURL,
             fileManager: fileManager,
             progress: progress
         )
         let storageLock = try ModelStorageFileLock.acquire(
-            hubDirectory: HubSnapshot.resolvedDownloadBase(fileManager: fileManager),
+            hubDirectory: HubSnapshot.resolvedDownloadBase(
+                requested: hubCacheURL,
+                fileManager: fileManager
+            ),
             fileManager: fileManager
         )
         defer { storageLock.unlock() }
         try normalizeManagedLayoutIfNeeded(for: spec, in: snapshotURL, fileManager: fileManager)
-        if fileManager.fileExists(atPath: modelDir.path) {
-            try fileManager.removeItem(at: modelDir)
-        }
-        try fileManager.createDirectory(at: modelDir.deletingLastPathComponent(), withIntermediateDirectories: true)
+        let parentURL = modelDir.deletingLastPathComponent()
+        try fileManager.createDirectory(at: parentURL, withIntermediateDirectories: true)
+        let transactionID = UUID().uuidString
+        let stagingURL = parentURL.appending(
+            path: ".\(spec.id).staging.\(transactionID)",
+            directoryHint: .isDirectory
+        )
+        defer { try? fileManager.removeItem(at: stagingURL) }
         let manifest = try materializeManagedInstallRoot(
             for: spec,
             snapshotURL: snapshotURL,
             mountedSnapshots: mountedSnapshots,
-            modelDir: modelDir,
+            modelDir: stagingURL,
             usageTermsAcknowledged: usageTermsAcknowledged,
             fileManager: fileManager
         )
-        try installManagedAliasesIfNeeded(for: spec, rootURL: modelDir, fileManager: fileManager)
-
-        let normalized = spec.normalizedRootURL(modelDir, fileManager: fileManager)
-        let missing = spec.missingPaths(in: normalized, fileManager: fileManager)
-        guard missing.isEmpty else {
+        let stagedRoot = spec.normalizedRootURL(stagingURL, fileManager: fileManager)
+        let stagedDiagnostics = spec.validationMessages(in: stagedRoot, fileManager: fileManager)
+        guard stagedDiagnostics.isEmpty,
+              spec.isManagedRootComplete(stagedRoot, fileManager: fileManager) else {
+            let details = stagedDiagnostics.isEmpty
+                ? "required files or pinned source identity do not match"
+                : stagedDiagnostics.joined(separator: "; ")
             throw ResolverError.invalidInstalledModel(
-                "Installed model is incomplete: \(missing.map(\.path).joined(separator: ", "))"
+                "Staged model is invalid: \(details)"
+            )
+        }
+        try commitStagedManagedInstall(
+            stagingURL: stagingURL,
+            modelDir: modelDir,
+            fileManager: fileManager
+        ) { installedURL in
+            let normalized = spec.normalizedRootURL(installedURL, fileManager: fileManager)
+            let diagnostics = spec.validationMessages(in: normalized, fileManager: fileManager)
+            guard diagnostics.isEmpty,
+                  spec.isManagedRootComplete(normalized, fileManager: fileManager) else {
+                let details = diagnostics.isEmpty
+                    ? "required files or pinned source identity do not match"
+                    : diagnostics.joined(separator: "; ")
+                throw ResolverError.invalidInstalledModel(
+                    "Installed model is invalid: \(details)"
+                )
+            }
+            try installManagedAliasesIfNeeded(
+                for: spec,
+                rootURL: installedURL,
+                fileManager: fileManager
             )
         }
         return InstallResult(spec: spec, installURL: modelDir, manifest: manifest, wasAlreadyInstalled: false)
@@ -297,6 +331,46 @@ public enum ManagedModelResolver {
         return true
     }
 
+    static func commitStagedManagedInstall(
+        stagingURL: URL,
+        modelDir: URL,
+        fileManager: FileManager = .default,
+        finalValidation: (URL) throws -> Void
+    ) throws {
+        let previousURL = modelDir.deletingLastPathComponent().appending(
+            path: ".\(modelDir.lastPathComponent).previous.\(UUID().uuidString)",
+            directoryHint: .isDirectory
+        )
+        let hadPreviousInstall = fileManager.fileExists(atPath: modelDir.path)
+        defer {
+            try? fileManager.removeItem(at: stagingURL)
+        }
+        if hadPreviousInstall {
+            try fileManager.moveItem(at: modelDir, to: previousURL)
+        }
+        do {
+            try fileManager.moveItem(at: stagingURL, to: modelDir)
+            try finalValidation(modelDir)
+            if hadPreviousInstall {
+                try fileManager.removeItem(at: previousURL)
+            }
+        } catch {
+            if fileManager.fileExists(atPath: modelDir.path) {
+                try? fileManager.removeItem(at: modelDir)
+            }
+            if hadPreviousInstall, fileManager.fileExists(atPath: previousURL.path) {
+                do {
+                    try fileManager.moveItem(at: previousURL, to: modelDir)
+                } catch let rollbackError {
+                    throw ResolverError.invalidInstalledModel(
+                        "Managed install failed and rollback also failed: \(error.localizedDescription); rollback: \(rollbackError.localizedDescription)"
+                    )
+                }
+            }
+            throw error
+        }
+    }
+
     public static func estimatedManagedDownloadBytes(
         spec: ManagedModelSpec,
         at modelDir: URL,
@@ -305,16 +379,17 @@ public enum ManagedModelResolver {
     ) async throws -> Int64? {
         guard let hubFallback = spec.hubFallback else { return nil }
         let primaryReuseRoots = fileManager.fileExists(atPath: modelDir.path) ? [modelDir] : []
-        let primary = try HubSnapshot(
-            options: HubSnapshotOptions(
-                repoId: hubFallback.repoId,
-                revision: hubFallback.revision,
-                patterns: hubFallback.patterns,
-                cacheDirectory: hubCacheURL,
-                reuseRoots: primaryReuseRoots
-            )
+        let primaryOptions = HubSnapshotOptions(
+            repoId: hubFallback.repoId,
+            revision: hubFallback.revision,
+            patterns: hubFallback.patterns,
+            cacheDirectory: hubCacheURL,
+            reuseRoots: primaryReuseRoots
         )
-        var total = try await primary.estimatedDownloadBytes()
+        var total = try await estimatedDownloadBytes(
+            options: primaryOptions,
+            fileManager: fileManager
+        )
 
         for mounted in spec.mountedHubFallbacks {
             let mountedRoot = modelDir.appending(
@@ -324,19 +399,37 @@ public enum ManagedModelResolver {
             let mountedReuseRoots = fileManager.fileExists(atPath: mountedRoot.path)
                 ? [mountedRoot]
                 : []
-            let snapshot = try HubSnapshot(
-                options: HubSnapshotOptions(
-                    repoId: mounted.hubFallback.repoId,
-                    revision: mounted.hubFallback.revision,
-                    patterns: mounted.hubFallback.patterns,
-                    cacheDirectory: hubCacheURL,
-                    reuseRoots: mountedReuseRoots
-                )
+            let options = HubSnapshotOptions(
+                repoId: mounted.hubFallback.repoId,
+                revision: mounted.hubFallback.revision,
+                patterns: mounted.hubFallback.patterns,
+                cacheDirectory: hubCacheURL,
+                reuseRoots: mountedReuseRoots
             )
-            let bytes = try await snapshot.estimatedDownloadBytes()
+            let bytes = try await estimatedDownloadBytes(
+                options: options,
+                fileManager: fileManager
+            )
             total = total > Int64.max - bytes ? Int64.max : total + bytes
         }
         return total
+    }
+
+    private static func estimatedDownloadBytes(
+        options: HubSnapshotOptions,
+        fileManager: FileManager
+    ) async throws -> Int64 {
+        if let cachedSnapshot = try HubSnapshot.cachedMaterializedSnapshotURL(
+            options: options,
+            fileManager: fileManager
+        ), HubSnapshot.containsAllMaterializedPatterns(
+            at: cachedSnapshot,
+            patterns: options.patterns,
+            fileManager: fileManager
+        ) {
+            return 0
+        }
+        return try await HubSnapshot(options: options).estimatedDownloadBytes()
     }
 
     private static func normalizedRequestedID(_ requestedModel: String?) -> String? {
@@ -402,6 +495,7 @@ public enum ManagedModelResolver {
     private static func downloadHubSnapshotWithByteProgress(
         config: HubFallbackConfig,
         reuseRoots: [URL] = [],
+        hubCacheURL: URL? = nil,
         progress: (@Sendable (InstallProgress) -> Void)?
     ) async throws -> URL {
         do {
@@ -410,6 +504,7 @@ public enum ManagedModelResolver {
                     repoId: config.repoId,
                     revision: config.revision,
                     patterns: config.patterns,
+                    cacheDirectory: hubCacheURL,
                     reuseRoots: reuseRoots
                 )
             )
@@ -437,6 +532,7 @@ public enum ManagedModelResolver {
     private static func downloadMountedHubSnapshots(
         for spec: ManagedModelSpec,
         modelDir: URL,
+        hubCacheURL: URL? = nil,
         fileManager: FileManager,
         progress: (@Sendable (InstallProgress) -> Void)?
     ) async throws -> [(MountedHubFallbackConfig, URL)] {
@@ -452,6 +548,7 @@ public enum ManagedModelResolver {
             let snapshotURL = try await downloadHubSnapshotWithByteProgress(
                 config: mounted.hubFallback,
                 reuseRoots: reuseRoots,
+                hubCacheURL: hubCacheURL,
                 progress: progress
             )
             snapshots.append((mounted, snapshotURL))

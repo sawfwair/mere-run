@@ -45,14 +45,15 @@ struct ModelOptimize: ParsableCommand {
             optimization = "ltx25-native-model-pack"
         } else {
             let resources = MiniMaxH3Resources(rootURL: rootURL)
-            artifacts = [try MiniMaxH3ModelOptimizer.optimize(
+            _ = try MiniMaxH3ModelOptimizer.optimize(
                 resources: resources,
                 replacing: force,
                 progressHandler: { completed, total in
                     CLIStderr.write("MiniMax-H3 AdaLN cache: \(completed)/\(total)\n")
                 }
-            )]
-            optimization = "minimax-h3-adaln-cache"
+            )
+            artifacts = MiniMaxH3ModelOptimizer.artifactURLs(resources: resources)
+            optimization = "minimax-h3-adaln-cache-pack-v1"
         }
         let bytes = artifacts.reduce(0) { total, url in
             total + ((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
@@ -93,6 +94,7 @@ struct ModelOptimize: ParsableCommand {
         }
         guard modelID == .miniMaxH3FL2VAMLX
                 || modelID == .miniMaxH3FL2VABF16MLX
+                || modelID == .miniMaxH3FL2VAQ8MLX
                 || modelID == .miniMaxH3Ref2VAMLX
                 || modelID == .ltxVideo25DistilledBF16
                 || modelID == .ltxVideo25FullBF16 else {

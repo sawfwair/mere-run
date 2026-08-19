@@ -238,6 +238,17 @@ public struct MiniMaxH3Resources: Sendable {
         case shardedBF16(indexURL: URL)
     }
 
+    public enum TransformerStorage: String, Codable, Sendable {
+        case shardedBF16 = "sharded-bf16"
+        case compactBF16 = "compact-bf16"
+        case affineQ8 = "affine-q8"
+        case affineQ4 = "affine-q4"
+
+        public var supportsFL2VATurboAdapters: Bool {
+            self != .affineQ4
+        }
+    }
+
     private struct SafetensorsHeader: Decodable {
         let metadata: [String: String]?
 
@@ -248,13 +259,18 @@ public struct MiniMaxH3Resources: Sendable {
 
     public static let fl2vaModelID = "video-minimax-h3-fl2va-mlx"
     public static let fl2vaBF16ModelID = "video-minimax-h3-fl2va-bf16-mlx"
+    public static let fl2vaQ8ModelID = "video-minimax-h3-fl2va-8bit-mlx"
     public static let ref2vaModelID = "video-minimax-h3-ref2va-mlx"
     public static let sourceRepository = "MiniMaxAI/MiniMax-H3"
     public static let sourceRevision = "ec19cc6daf5d8add9417c18e86b6b58cc6c55027"
     public static let artifactRepository = "Sawfwair/MiniMax-H3-FL2VA-MLX-4bit"
     public static let artifactRevision = "e1244ad93d60c737c7e0f065a1c9372f3de7caf8"
-    public static let bf16ArtifactRepository = "pipenetwork/MiniMax-H3-MLX-bf16"
-    public static let bf16ArtifactRevision = "1486555759eed9e3037edf29f9e055a0713bab2f"
+    public static let legacyBF16ArtifactRepository = "pipenetwork/MiniMax-H3-MLX-bf16"
+    public static let legacyBF16ArtifactRevision = "1486555759eed9e3037edf29f9e055a0713bab2f"
+    public static let compactBF16ArtifactRepository = "Sawfwair/MiniMax-H3-FL2VA-MLX-BF16"
+    public static let compactBF16ArtifactRevision = "6f2c1edb4d31d9110d4a51457ba1d6401a05dfd0"
+    public static let q8ArtifactRepository = "Sawfwair/MiniMax-H3-FL2VA-MLX-8bit"
+    public static let q8ArtifactRevision = "57a926c2422e09c8563cd2e0c43b2e94ef791de4"
     public static let ref2vaArtifactRepository = "Sawfwair/MiniMax-H3-Ref2VA-MLX-8bit"
     public static let ref2vaArtifactRevision = "61dc387ef1a7166425cdacd63c2340598dcc364f"
     public static let bf16TransformerDirectory = "transformer-bf16"
@@ -288,6 +304,13 @@ public struct MiniMaxH3Resources: Sendable {
     ]
     public static let compactArtifactFiles = requiredFiles + [
         "adaln_cache.safetensors",
+        "SOURCE_MANIFEST.json",
+        "transformer.conversion.json",
+        "SHA256SUMS",
+    ]
+    public static let cachePackFiles = [MiniMaxH3AdaLNCachePack.filename]
+        + MiniMaxH3AdaLNCachePack.productionSchedules.map(\.filename)
+    public static let compactBF16AndQ8ArtifactFiles = requiredFiles + cachePackFiles + [
         "SOURCE_MANIFEST.json",
         "transformer.conversion.json",
         "SHA256SUMS",
@@ -340,6 +363,9 @@ public struct MiniMaxH3Resources: Sendable {
     public var videoVAEWeightsURL: URL { rootURL.appending(path: "video_vae.safetensors") }
     public var audioVAEWeightsURL: URL { rootURL.appending(path: "audio_vae.safetensors") }
     public var adaLNCacheURL: URL { rootURL.appending(path: MiniMaxH3AdaLNCache.filename) }
+    public var adaLNCachePackIndexURL: URL {
+        rootURL.appending(path: MiniMaxH3AdaLNCachePack.filename)
+    }
     public var conversionReceiptURL: URL { rootURL.appending(path: "transformer.conversion.json") }
 
     public func transformerWeightsLayout(fileManager: FileManager = .default) -> TransformerWeightsLayout? {
@@ -355,6 +381,34 @@ public struct MiniMaxH3Resources: Sendable {
     public var usesShardedBF16Transformer: Bool {
         if case .shardedBF16 = transformerWeightsLayout() { return true }
         return false
+    }
+
+    public func transformerStorage() throws -> TransformerStorage {
+        if usesShardedBF16Transformer { return .shardedBF16 }
+        let metadata = try transformerMetadata()
+        switch metadata["precision"]?.lowercased() {
+        case "bf16":
+            return .compactBF16
+        case "q8", "int8", "8bit":
+            return .affineQ8
+        case "q4", "int4", "4bit":
+            return .affineQ4
+        default:
+            let configuration = try loadConfiguration()
+            switch configuration.quantization?.bits {
+            case nil:
+                return .compactBF16
+            case 8:
+                return .affineQ8
+            case 4:
+                return .affineQ4
+            case .some(let bits):
+                throw MiniMaxH3ResourcesError.invalidConfiguration(
+                    configURL,
+                    "unsupported transformer quantization width: \(bits)"
+                )
+            }
+        }
     }
 
     public var usesShardedBF16Conditioner: Bool {
@@ -456,7 +510,42 @@ public struct MiniMaxH3Resources: Sendable {
                 .map { bf16TextEncoderRootURL.appending(path: $0) }
                 .filter { !fileManager.fileExists(atPath: $0.path) }
         }
+        if fileManager.fileExists(atPath: transformerWeightsURL.path),
+           (try? requiresAdaLNCache()) == true {
+            if fileManager.fileExists(atPath: adaLNCachePackIndexURL.path) {
+                missing += Self.cachePackFiles
+                    .map { rootURL.appending(path: $0) }
+                    .filter { !fileManager.fileExists(atPath: $0.path) }
+            } else if !fileManager.fileExists(atPath: adaLNCacheURL.path) {
+                missing.append(adaLNCacheURL)
+            }
+        }
         return missing
+    }
+
+    func validateCompactCachePack(fileManager: FileManager = .default) -> [String] {
+        let provenanceFiles = [
+            "SOURCE_MANIFEST.json",
+            "transformer.conversion.json",
+            "SHA256SUMS",
+        ]
+        let missingProvenance = provenanceFiles.filter {
+            !fileManager.fileExists(atPath: rootURL.appending(path: $0).path)
+        }
+        if !missingProvenance.isEmpty {
+            return missingProvenance.map { "Missing required MiniMax-H3 provenance file: \($0)" }
+        }
+        do {
+            let sourceIdentity = try adaLNCacheSourceIdentity()
+            try MiniMaxH3AdaLNCachePack.validateClosure(
+                from: rootURL,
+                sourceIdentity: sourceIdentity,
+                fileManager: fileManager
+            )
+            return []
+        } catch {
+            return ["Invalid MiniMax-H3 cache pack: \(error.localizedDescription)"]
+        }
     }
 
     public func loadConfiguration() throws -> MiniMaxH3Configuration {

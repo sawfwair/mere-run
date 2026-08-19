@@ -15,6 +15,11 @@ SOURCE_REPOSITORY = "MiniMaxAI/MiniMax-H3"
 SOURCE_REVISION = "ec19cc6daf5d8add9417c18e86b6b58cc6c55027"
 SOURCE_BYTES = 144_035_116_604
 SOURCE_FILE_COUNT = 48
+ADALN_SOURCE_TENSOR_COUNT = 106
+ADALN_SOURCE_TENSOR_BYTES = 26_142_079_488
+ADALN_SOURCE_TENSOR_CLOSURE_SHA256 = (
+    "e2ccc0cab72b9183a0347e3999f4559cdc315b7b363a5fe9196890dd315f5a40"
+)
 LICENSE_SHA256 = "59b99642b95ea21630e311198ddbfffbfe05aadba0c2f5d884cbdf4efcc90f44"
 LICENSE_BYTES = 17_604
 EXPECTED_QUANTIZER_SELF_TEST = {
@@ -35,13 +40,33 @@ EXPECTED_QKV_REORDER_SELF_TEST = {
     "layout": "global-qkv-slabs",
     "sha256": "11a9143204ee0defe33828d431cca9f051c2a221050ae8543b543cda5c7b7786",
 }
+CACHE_SCHEDULES = (
+    *((point_count, 12.0, 3.0) for point_count in (5, 9, 12, 16, 21, 31)),
+    (5, 6.0, 3.0),
+)
+
+
+def cache_filename(point_count: int, video_shift: float, audio_shift: float) -> str:
+    if (point_count, video_shift, audio_shift) == (31, 12.0, 3.0):
+        return "adaln_cache.safetensors"
+
+    def label(value: float) -> str:
+        return str(int(value)) if value.is_integer() else str(value)
+
+    return f"adaln_cache-p{point_count}-v{label(video_shift)}-a{label(audio_shift)}.safetensors"
+
+
+CACHE_FILES = {
+    cache_filename(point_count, video_shift, audio_shift)
+    for point_count, video_shift, audio_shift in CACHE_SCHEDULES
+}
 RUNTIME_FILES = {
     "LICENSE",
     "MODIFICATIONS.md",
     "NOTICE",
     "SHA256SUMS",
     "SOURCE_MANIFEST.json",
-    "adaln_cache.safetensors",
+    "adaln_cache.index.json",
     "audio_vae.safetensors",
     "config.json",
     "text_encoder.safetensors",
@@ -50,7 +75,7 @@ RUNTIME_FILES = {
     "transformer.conversion.json",
     "transformer.safetensors",
     "video_vae.safetensors",
-}
+} | CACHE_FILES
 
 
 def require(condition: bool, message: str) -> None:
@@ -183,12 +208,65 @@ def verify_vaes_and_cache(root: Path) -> None:
     require(not any(key.endswith(".weight_g") or key.endswith(".weight_v") for key in audio),
             "audio weight normalization was not fully folded")
 
-    cache, cache_metadata = safetensors_header(root / "adaln_cache.safetensors")
-    require(len(cache) == 54, "wrong AdaLN cache tensor count")
-    require(cache_metadata.get("schema_version") == "2", "wrong AdaLN cache schema")
-    require(cache_metadata.get("source_repository") == SOURCE_REPOSITORY, "wrong cache source")
-    require(len([key for key in cache if re.fullmatch(r"blocks\.\d+\.modulations", key)]) == 50,
-            "wrong cached block count")
+    pack = load_json(root / "adaln_cache.index.json")
+    require(pack.get("schema_version") == 1, "wrong AdaLN cache-pack schema")
+    require(pack.get("format") == "mere.run.minimax-h3-adaln-cache-pack",
+            "wrong AdaLN cache-pack format")
+    source_identity = pack.get("source_identity")
+    require(isinstance(source_identity, str) and SOURCE_REVISION in source_identity,
+            "wrong AdaLN cache-pack source identity")
+    entries = pack.get("entries")
+    require(isinstance(entries, list) and len(entries) == len(CACHE_SCHEDULES),
+            "wrong AdaLN cache-pack entry count")
+    expected_schedules = {
+        (point_count, video_shift, audio_shift): cache_filename(
+            point_count, video_shift, audio_shift
+        )
+        for point_count, video_shift, audio_shift in CACHE_SCHEDULES
+    }
+    observed_schedules: dict[tuple[int, float, float], str] = {}
+    for entry in entries:
+        schedule_value = entry.get("schedule", {})
+        geometry = (
+            schedule_value.get("point_count"),
+            schedule_value.get("video_flow_shift"),
+            schedule_value.get("audio_flow_shift"),
+        )
+        filename = entry.get("filename")
+        require(geometry in expected_schedules, f"unexpected AdaLN schedule: {geometry}")
+        require(filename == expected_schedules[geometry], f"wrong filename for {geometry}")
+        require(geometry not in observed_schedules, f"duplicate AdaLN schedule: {geometry}")
+        observed_schedules[geometry] = filename
+        cache_path = root / filename
+        require(entry.get("byte_count") == cache_path.stat().st_size,
+                f"cache-pack byte count differs for {filename}")
+        require(entry.get("sha256") == sha256_file(cache_path),
+                f"cache-pack SHA-256 differs for {filename}")
+
+        cache, cache_metadata = safetensors_header(cache_path)
+        steps = geometry[0] - 1
+        require(len(cache) == 54, f"wrong AdaLN tensor count for {filename}")
+        require(cache_metadata.get("schema_version") == "2",
+                f"wrong AdaLN schema for {filename}")
+        require(cache_metadata.get("format") == "mere.run.minimax-h3-adaln-cache",
+                f"wrong AdaLN format for {filename}")
+        require(cache_metadata.get("source_identity") == source_identity,
+                f"wrong AdaLN source identity for {filename}")
+        require(cache_metadata.get("source_repository") in (None, SOURCE_REPOSITORY),
+                f"wrong AdaLN source for {filename}")
+        require(cache["time_embeddings"]["shape"] == [steps, 3, 2_688],
+                f"wrong time embedding geometry for {filename}")
+        require(cache["final_modulations"]["shape"] == [steps, 3, 10_752],
+                f"wrong final modulation geometry for {filename}")
+        require(cache["video_sigmas"]["shape"] == [geometry[0]],
+                f"wrong video sigma geometry for {filename}")
+        require(cache["audio_sigmas"]["shape"] == [geometry[0]],
+                f"wrong audio sigma geometry for {filename}")
+        block_keys = [key for key in cache if re.fullmatch(r"blocks\.\d+\.modulations", key)]
+        require(len(block_keys) == 50, f"wrong block count for {filename}")
+        require(all(cache[key]["shape"] == [steps, 9, 32_256] for key in block_keys),
+                f"wrong block modulation geometry for {filename}")
+    require(observed_schedules == expected_schedules, "AdaLN production schedule closure differs")
 
 
 def verify_receipts(
@@ -215,6 +293,8 @@ def verify_receipts(
             "wrong conditioner config quantization")
 
     receipt = load_json(root / "transformer.conversion.json")
+    require(receipt.get("converter_version") == 5,
+            "wrong converter version; CUDA builds must import a Metal-exact AdaLN pack")
     source = receipt.get("source", {})
     require(source.get("repository") == SOURCE_REPOSITORY, "wrong receipt source repository")
     require(source.get("revision") == SOURCE_REVISION, "wrong receipt source revision")
@@ -225,6 +305,36 @@ def verify_receipts(
             "quantizer self-test receipt differs")
     require(receipt.get("qkv_reorder_self_test") == EXPECTED_QKV_REORDER_SELF_TEST,
             "QKV reorder self-test receipt differs")
+    cache_receipt = receipt.get("adaln_cache_pack", {})
+    require(cache_receipt.get("schema_version") == 1,
+            "wrong Metal AdaLN receipt schema")
+    require(cache_receipt.get("format") ==
+            "mere.run.minimax-h3-adaln-cache-pack-receipt",
+            "wrong Metal AdaLN receipt format")
+    require(cache_receipt.get("evaluation_backend") == "mlx-metal",
+            "production AdaLN cache was not evaluated on MLX Metal")
+    require(cache_receipt.get("generator") == "mere.run model optimize",
+            "production AdaLN cache did not come from the Mere optimizer")
+    require(cache_receipt.get("source_identity") ==
+            "MiniMaxAI/MiniMax-H3@ec19cc6daf5d8add9417c18e86b6b58cc6c55027:"
+            "FL2VA/transformer:index-sha256:"
+            "fb457a26ffa6294660e249b0ddd03a337f2e5393f770b5c34c8b8f90a29a7efb",
+            "Metal AdaLN receipt has the wrong source identity")
+    require(cache_receipt.get("source_tensor_count") == ADALN_SOURCE_TENSOR_COUNT,
+            "Metal AdaLN receipt has the wrong source tensor count")
+    require(cache_receipt.get("source_tensor_bytes") == ADALN_SOURCE_TENSOR_BYTES,
+            "Metal AdaLN receipt has the wrong source tensor byte count")
+    require(cache_receipt.get("source_tensor_closure_sha256") ==
+            ADALN_SOURCE_TENSOR_CLOSURE_SHA256,
+            "Metal AdaLN receipt has the wrong official-source tensor closure")
+    require(cache_receipt.get("hardware", {}).get("chip") == "Apple M4 Max",
+            "Metal AdaLN receipt has the wrong evaluation hardware")
+    parity = cache_receipt.get("real_generation_parity", [])
+    require({item.get("point_count") for item in parity} == {9, 21},
+            "Metal AdaLN receipt lacks 9- and 21-point parity")
+    require(all(item.get("full_mp4_sha256") == item.get("compact_mp4_sha256")
+                for item in parity),
+            "Metal AdaLN receipt records non-identical output")
     software = receipt.get("software", {})
     require(software.get("mlx") == "0.29.3", "wrong MLX version")
     require(software.get("mlx_cuda") == "0.29.3", "wrong MLX CUDA version")
@@ -233,6 +343,22 @@ def verify_receipts(
         require(output.get("sha256") == hashes[filename], f"receipt hash differs for {filename}")
         require(output.get("byte_count") == (root / filename).stat().st_size,
                 f"receipt byte count differs for {filename}")
+        if filename in CACHE_FILES or filename == "adaln_cache.index.json":
+            require(output.get("evaluation_backend") == "mlx-metal",
+                    f"{filename} is not marked as a Metal-evaluated output")
+    expected_outputs = RUNTIME_FILES - {
+        "LICENSE",
+        "MODIFICATIONS.md",
+        "NOTICE",
+        "SHA256SUMS",
+        "SOURCE_MANIFEST.json",
+        "config.json",
+        "tokenizer.json",
+        "tokenizer_config.json",
+        "transformer.conversion.json",
+    }
+    require(set(receipt.get("outputs", {})) == expected_outputs,
+            "conversion output receipt closure differs")
     transformer = receipt.get("outputs", {}).get("transformer.safetensors", {})
     require(transformer.get("precision") == transformer_precision,
             "wrong transformer receipt precision")
