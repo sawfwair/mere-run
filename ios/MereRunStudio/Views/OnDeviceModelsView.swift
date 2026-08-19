@@ -22,6 +22,7 @@ struct OnDeviceModelsView: View {
 /// The list itself, pushable from Settings or wrapped in a sheet.
 struct OnDeviceModelsList: View {
     @ObservedObject private var local = LocalEngine.shared
+    @AppStorage(LocalEngine.allowsCellularDownloadsKey) private var allowsCellularDownloads = false
     @State private var confirmingModel: LocalEngine.Model?
 
     var body: some View {
@@ -66,6 +67,25 @@ struct OnDeviceModelsList: View {
                     } footer: {
                         Text("Frees partial downloads and payloads no installed model uses.")
                     }
+                }
+
+                if local.isDownloadingModel {
+                    Section {
+                        Label("Safe to leave the app", systemImage: "arrow.down.circle")
+                            .font(.footnote)
+                    } footer: {
+                        Text("iOS continues model transfers in the background and finishes verification when mere.run resumes.")
+                    }
+                }
+
+                Section {
+                    Toggle("Allow cellular downloads", isOn: $allowsCellularDownloads)
+                } header: {
+                    Text("Downloads")
+                } footer: {
+                    Text(allowsCellularDownloads
+                        ? "New model downloads may use cellular, expensive, or constrained networks."
+                        : "New model downloads wait for an unrestricted Wi-Fi connection.")
                 }
 
                 if let message = local.lastError {
@@ -162,7 +182,7 @@ struct OnDeviceModelsList: View {
         .swipeActions(edge: .trailing, allowsFullSwipe: false) {
             if local.state(of: model.id) == .ready {
                 Button(role: .destructive) {
-                    local.delete(model.id)
+                    Task { await local.delete(model.id) }
                 } label: {
                     Label("Remove", systemImage: "trash")
                 }

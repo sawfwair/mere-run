@@ -140,7 +140,9 @@ struct ChatView: View {
             Text("Think it through.")
                 .font(.system(.largeTitle, design: .serif))
                 .foregroundStyle(MereTheme.textPrimary)
-            Text("Your words go to your machines and nowhere else.")
+            Text(ExecutionPrivacyCopy.chat(
+                for: chat.runLocally ? .onDevice : relay.executionPrivacyLane
+            ))
                 .font(.callout)
                 .foregroundStyle(MereTheme.textSecondary)
         }

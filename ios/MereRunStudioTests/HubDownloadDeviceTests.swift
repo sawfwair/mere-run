@@ -49,7 +49,7 @@ final class HubDownloadDeviceTests: XCTestCase {
             let http = try XCTUnwrap(response as? HTTPURLResponse)
             if (200..<300).contains(http.statusCode) {
                 let size = (try? FileManager.default.attributesOfItem(atPath: tempURL.path)[.size] as? Int) ?? 0
-                XCTAssertGreaterThan(size ?? 0, 10, "Downloaded file is empty")
+                XCTAssertGreaterThan(size, 10, "Downloaded file is empty")
                 return
             }
             guard (300..<400).contains(http.statusCode),
@@ -246,11 +246,11 @@ final class HubDownloadDeviceTests: XCTestCase {
         let a = sessionDelegate.state
         let b = taskDelegate.state
         attach([
-            "A(session delegate): file \(sizeA ?? 0) bytes, didWriteData events \(a.events), reported \(a.bytes)",
-            "B(per-task delegate): file \(sizeB ?? 0) bytes, didWriteData events \(b.events), reported \(b.bytes)",
+            "A(session delegate): file \(sizeA) bytes, didWriteData events \(a.events), reported \(a.bytes)",
+            "B(per-task delegate): file \(sizeB) bytes, didWriteData events \(b.events), reported \(b.bytes)",
         ], name: "v7-delegates")
-        XCTAssertGreaterThan(sizeA ?? 0, 1000, "Session-delegate download produced no file")
-        XCTAssertGreaterThan(sizeB ?? 0, 1000, "Per-task-delegate download produced no file")
+        XCTAssertGreaterThan(sizeA, 1000, "Session-delegate download produced no file")
+        XCTAssertGreaterThan(sizeB, 1000, "Per-task-delegate download produced no file")
         XCTAssertGreaterThan(b.events, 0, "Per-task delegate never saw progress")
     }
 }

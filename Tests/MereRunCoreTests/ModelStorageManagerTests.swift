@@ -227,6 +227,27 @@ final class ModelStorageManagerTests: XCTestCase {
         XCTAssertEqual(try noGraceManager.garbageCollectionPlan().reclaimableBytes, 72)
     }
 
+    func testGlobalCollectionReclaimsAbandonedBackgroundTransferStaging() throws {
+        let transfers = hub.appendingPathComponent("background-transfers", isDirectory: true)
+        _ = try writePayload(at: transfers.appendingPathComponent("payload.download"), bytes: 32)
+        _ = try writePayload(at: transfers.appendingPathComponent("payload.download.json"), bytes: 7)
+        let manager = try ModelStorageManager(
+            modelsDirectory: models,
+            hubDirectory: hub,
+            applicationSupportDirectory: applicationSupport,
+            fileManager: fileManager,
+            unreferencedGracePeriod: 0
+        )
+
+        let plan = try manager.garbageCollectionPlan()
+
+        XCTAssertEqual(plan.reclaimableBytes, 39)
+        XCTAssertEqual(plan.incompleteDownloadBytes, 39)
+        XCTAssertEqual(plan.items.map(\.kind), [.incompleteDownload, .incompleteDownload])
+        XCTAssertEqual(try manager.execute(plan).reclaimedBytes, 39)
+        XCTAssertTrue(try manager.garbageCollectionPlan().items.isEmpty)
+    }
+
     func testExecutionRechecksReferencesUnderStorageLock() throws {
         let unit = legacyUnit(repository: "recheck")
         let payload = try writePayload(at: unit.appendingPathComponent("model.bin"), bytes: 88)

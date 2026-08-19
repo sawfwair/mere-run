@@ -222,17 +222,14 @@ struct RunDetailView: View {
         guard let client = relay.client else { return }
         busy = true
         defer { busy = false }
-        let destination = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("runs", isDirectory: true)
-            .appendingPathComponent(jobID, isDirectory: true)
-        // Fetch validates a pre-existing destination as a materialized bundle,
-        // which the phone never has; start each fetch from a clean directory.
-        try? FileManager.default.removeItem(at: destination)
+        let store = RunArtifactStore(
+            runsRoot: FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("runs", isDirectory: true)
+        )
         do {
-            let fetched = try await client.fetch(jobID: jobID, into: destination, allArtifacts: false)
-            fetchedFiles = fetched.artifacts.compactMap { artifact in
-                let url = destination.appendingPathComponent(artifact.path)
-                return FileManager.default.fileExists(atPath: url.path) ? url : nil
+            fetchedFiles = try await store.refresh(jobID: jobID) { staging in
+                let fetched = try await client.fetch(jobID: jobID, into: staging, allArtifacts: false)
+                return fetched.artifacts.map(\.path)
             }
         } catch let error as RelayClientError {
             errorMessage = AppErrorText.presentable(error.message)

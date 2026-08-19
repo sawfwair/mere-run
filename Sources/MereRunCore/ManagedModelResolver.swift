@@ -220,6 +220,8 @@ public enum ManagedModelResolver {
         force: Bool = false,
         usageTermsAcknowledged: Bool = false,
         hubCacheURL: URL? = nil,
+        useBackgroundSession: Bool = false,
+        backgroundNetworkPolicy: HubDownloadNetworkPolicy = .wifiOnly,
         fileManager: FileManager = .default,
         progress: (@Sendable (InstallProgress) -> Void)? = nil
     ) async throws -> InstallResult {
@@ -246,12 +248,16 @@ public enum ManagedModelResolver {
             config: hubFallback,
             reuseRoots: reuseRoots,
             hubCacheURL: hubCacheURL,
+            useBackgroundSession: useBackgroundSession,
+            backgroundNetworkPolicy: backgroundNetworkPolicy,
             progress: progress
         )
         let mountedSnapshots = try await downloadMountedHubSnapshots(
             for: spec,
             modelDir: modelDir,
             hubCacheURL: hubCacheURL,
+            useBackgroundSession: useBackgroundSession,
+            backgroundNetworkPolicy: backgroundNetworkPolicy,
             fileManager: fileManager,
             progress: progress
         )
@@ -496,6 +502,8 @@ public enum ManagedModelResolver {
         config: HubFallbackConfig,
         reuseRoots: [URL] = [],
         hubCacheURL: URL? = nil,
+        useBackgroundSession: Bool = false,
+        backgroundNetworkPolicy: HubDownloadNetworkPolicy = .wifiOnly,
         progress: (@Sendable (InstallProgress) -> Void)?
     ) async throws -> URL {
         do {
@@ -505,6 +513,8 @@ public enum ManagedModelResolver {
                     revision: config.revision,
                     patterns: config.patterns,
                     cacheDirectory: hubCacheURL,
+                    useBackgroundSession: useBackgroundSession,
+                    backgroundNetworkPolicy: backgroundNetworkPolicy,
                     reuseRoots: reuseRoots
                 )
             )
@@ -533,6 +543,8 @@ public enum ManagedModelResolver {
         for spec: ManagedModelSpec,
         modelDir: URL,
         hubCacheURL: URL? = nil,
+        useBackgroundSession: Bool = false,
+        backgroundNetworkPolicy: HubDownloadNetworkPolicy = .wifiOnly,
         fileManager: FileManager,
         progress: (@Sendable (InstallProgress) -> Void)?
     ) async throws -> [(MountedHubFallbackConfig, URL)] {
@@ -549,6 +561,8 @@ public enum ManagedModelResolver {
                 config: mounted.hubFallback,
                 reuseRoots: reuseRoots,
                 hubCacheURL: hubCacheURL,
+                useBackgroundSession: useBackgroundSession,
+                backgroundNetworkPolicy: backgroundNetworkPolicy,
                 progress: progress
             )
             snapshots.append((mounted, snapshotURL))

@@ -373,6 +373,23 @@ public final class ModelStorageManager {
             }
         }
 
+        if cacheUnitPaths == nil {
+            let backgroundTransfers = hubDirectory.appendingPathComponent(
+                "background-transfers",
+                isDirectory: true
+            )
+            for record in fileRecords(at: backgroundTransfers)
+                where !cacheUnitIsWithinGracePeriod(record.url) {
+                items.append(ModelStorageGarbageItem(
+                    kind: .incompleteDownload,
+                    path: record.url.path,
+                    logicalBytes: record.size
+                ))
+                plannedFilePaths.insert(record.url.path)
+                incompleteBytes += record.size
+            }
+        }
+
         let blobRoot = hubDirectory.appendingPathComponent("blobs", isDirectory: true)
         let referencedBlobPaths = Set(
             references

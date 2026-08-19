@@ -3,6 +3,7 @@ import XCTest
 /// Screenshot harness for design iteration: launches the app in UI-preview
 /// mode and captures the on-device model surfaces. Gated on
 /// MERERUN_TEST_UX_SHOTS so ordinary test runs skip it.
+@MainActor
 final class UXShotsUITests: XCTestCase {
     func testCaptureOnDeviceSurfaces() throws {
         guard ProcessInfo.processInfo.environment["MERERUN_TEST_UX_SHOTS"] != nil else {

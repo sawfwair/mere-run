@@ -3,6 +3,7 @@ import XCTest
 /// Diagnostic: drive an on-device model download on real hardware and record
 /// what the UI reports. Runs only when MERERUN_TEST_DOWNLOAD_DIAG is set —
 /// this is an investigation tool, not a CI gate.
+@MainActor
 final class DownloadDiagnosticsUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = true

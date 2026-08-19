@@ -8,8 +8,8 @@ import UIKit
 /// Application Support directory, protected with complete file protection, so
 /// a profile paired on the phone is the same document the CLI would write.
 @MainActor
-final class RelayStore: ObservableObject {
-    enum PairingState: Equatable {
+public final class RelayStore: ObservableObject {
+    public enum PairingState: Equatable {
         case unpaired
         case discovering
         case awaitingApproval(verificationURL: String, userCode: String)
@@ -17,37 +17,44 @@ final class RelayStore: ObservableObject {
         case failed(String)
     }
 
-    @Published private(set) var profile: WorkflowExecutorProfile?
-    @Published private(set) var pairing: PairingState = .unpaired
+    @Published public private(set) var profile: WorkflowExecutorProfile?
+    @Published public private(set) var pairing: PairingState = .unpaired
     @Published private(set) var authStatus: RelayAuthStatusResult?
 
     static let iosClientID = "mererun-ios"
     static let iosRedirectURI = "https://mere.world/oauth/ios-done"
 
     private let supportBase: URL
+    private let credentialStorageFactory: (String) -> any RelayCredentialStorage
     private var profilesURL: URL { supportBase.appendingPathComponent("executors.json") }
 
     /// Keychain is the credential's home on iOS; the legacy protected file
     /// migrates in on first load and is removed.
-    private func keychain(for profileName: String) -> KeychainCredentialStorage {
-        KeychainCredentialStorage(service: "run.mere.studio.relay", account: profileName)
+    private func credentialStorage(for profileName: String) -> any RelayCredentialStorage {
+        credentialStorageFactory(profileName)
     }
 
-    init() {
-        let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
-            .appendingPathComponent("MereRun", isDirectory: true)
+    public init(
+        supportBase requestedSupportBase: URL? = nil,
+        credentialStorageFactory: @escaping (String) -> any RelayCredentialStorage = { profileName in
+            KeychainCredentialStorage(service: "run.mere.studio.relay", account: profileName)
+        }
+    ) {
+        let base = requestedSupportBase
+            ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+                .appendingPathComponent("MereRun", isDirectory: true)
         supportBase = base
+        self.credentialStorageFactory = credentialStorageFactory
         try? FileManager.default.createDirectory(
             at: base,
             withIntermediateDirectories: true,
             attributes: [.protectionKey: FileProtectionType.complete]
         )
-        // iOS moves the data container to a new absolute path on app updates,
-        // so the persisted token-file path is advisory only: recompute it from
-        // the current container (the file itself migrates with the app).
+        // Credentials now live in the Keychain. Recompute the old sandbox path
+        // only to migrate installations that predate Keychain storage.
         if let stored = (try? WorkflowExecutorProfileStore.load(from: profilesURL))?
             .profiles.first(where: { $0.kind == .relay }) {
-            let tokenFile = RelayAuthentication.defaultTokenFile(
+            let legacyTokenFile = RelayAuthentication.defaultTokenFile(
                 profileName: stored.name,
                 applicationSupportBase: base
             )
@@ -60,13 +67,13 @@ final class RelayStore: ObservableObject {
                 identityFile: stored.identityFile,
                 mereRunPath: stored.mereRunPath,
                 url: stored.url,
-                tokenFile: tokenFile.path
+                tokenFile: nil
             )
-            let storage = keychain(for: stored.name)
+            let storage = credentialStorage(for: stored.name)
             if (try? storage.load()) == nil,
-               let legacy = try? FileCredentialStorage(url: tokenFile).load() {
+               let legacy = try? FileCredentialStorage(url: legacyTokenFile).load() {
                 try? storage.save(legacy)
-                try? FileCredentialStorage(url: tokenFile).clear()
+                try? FileCredentialStorage(url: legacyTokenFile).clear()
             }
             pairing = .paired
             refreshAuthStatus()
@@ -80,13 +87,17 @@ final class RelayStore: ObservableObject {
         #endif
     }
 
-    var client: RelayWorkflowExecutor? {
-        profile.map { RelayWorkflowExecutor(profile: $0, credentialStorage: keychain(for: $0.name)) }
+    public var client: RelayWorkflowExecutor? {
+        profile.map { RelayWorkflowExecutor(profile: $0, credentialStorage: credentialStorage(for: $0.name)) }
+    }
+
+    var executionPrivacyLane: ExecutionPrivacyLane {
+        profile?.name == "direct" ? .directMachine : .hostedRelay
     }
 
     func refreshAuthStatus() {
         guard let profile else { return }
-        if let tokenSet = try? keychain(for: profile.name).load() {
+        if let tokenSet = try? credentialStorage(for: profile.name).load() {
             authStatus = RelayAuthStatusResult(
                 executor: "relay:\(profile.name)",
                 credentialKind: "keychain-token-set",
@@ -140,7 +151,7 @@ final class RelayStore: ObservableObject {
                 url: trimmed,
                 tokenFile: nil
             )
-            try keychain(for: profileName).save(tokenSet)
+            try credentialStorage(for: profileName).save(tokenSet)
             try WorkflowExecutorProfileStore.save(
                 WorkflowExecutorProfiles(schemaVersion: 1, profiles: [candidate]),
                 to: profilesURL
@@ -197,7 +208,7 @@ final class RelayStore: ObservableObject {
                 clientID: Self.iosClientID,
                 redirectURI: Self.iosRedirectURI
             )
-            try keychain(for: profileName).save(tokenSet)
+            try credentialStorage(for: profileName).save(tokenSet)
             try WorkflowExecutorProfileStore.save(
                 WorkflowExecutorProfiles(schemaVersion: 1, profiles: [candidate]),
                 to: profilesURL
@@ -217,7 +228,7 @@ final class RelayStore: ObservableObject {
     /// The mere.world account this pairing belongs to, from the token's
     /// email claim. Fleet visibility is scoped by account.
     var accountEmail: String? {
-        guard let name = profile?.name, let tokenSet = try? keychain(for: name).load() else {
+        guard let name = profile?.name, let tokenSet = try? credentialStorage(for: name).load() else {
             return nil
         }
         return tokenSet.accountEmail
@@ -232,10 +243,6 @@ final class RelayStore: ObservableObject {
             pairing = .failed("Relay URL must use HTTPS.")
             return
         }
-        let tokenFile = RelayAuthentication.defaultTokenFile(
-            profileName: profileName,
-            applicationSupportBase: supportBase
-        )
         let candidate = WorkflowExecutorProfile(
             name: profileName,
             kind: .relay,
@@ -245,7 +252,7 @@ final class RelayStore: ObservableObject {
             identityFile: nil,
             mereRunPath: nil,
             url: trimmed,
-            tokenFile: tokenFile.path
+            tokenFile: nil
         )
         pairing = .discovering
         do {
@@ -261,7 +268,7 @@ final class RelayStore: ObservableObject {
                 authorization,
                 configuration: configuration
             )
-            try RelayAuthentication.save(tokenSet, to: tokenFile)
+            try credentialStorage(for: profileName).save(tokenSet)
             try WorkflowExecutorProfileStore.save(
                 WorkflowExecutorProfiles(schemaVersion: 1, profiles: [candidate]),
                 to: profilesURL
@@ -338,9 +345,12 @@ final class RelayStore: ObservableObject {
         return job
     }
 
-    func unpair() {
+    public func unpair() {
+        #if canImport(ActivityKit)
+        RunActivityTracker.cancelAll()
+        #endif
         if let profile {
-            try? keychain(for: profile.name).clear()
+            try? credentialStorage(for: profile.name).clear()
             if let tokenFile = profile.tokenFile {
                 try? FileManager.default.removeItem(atPath: tokenFile)
             }

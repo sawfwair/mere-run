@@ -7,9 +7,15 @@ import MereRunRelayKit
 /// state, updating progress from the worker's event stream. Updates are
 /// app-driven for now; push-updated activities need APNs support in the
 /// relay and are a documented follow-up.
+@MainActor
 enum RunActivityTracker {
+    private static let pollingPolicy = RunPollingPolicy()
+    private static var tasks: [String: Task<Void, Never>] = [:]
+    private static var taskTokens: [String: UUID] = [:]
+
     static func track(job: WorkflowRemoteJob, title: String, client: RelayWorkflowExecutor) {
-        guard ActivityAuthorizationInfo().areActivitiesEnabled else { return }
+        guard ActivityAuthorizationInfo().areActivitiesEnabled,
+              tasks[job.jobID] == nil else { return }
         let attributes = RunActivityAttributes(jobID: job.jobID, title: title)
         let initial = RunActivityAttributes.ContentState(
             stateLabel: job.state.rawValue,
@@ -18,17 +24,53 @@ enum RunActivityTracker {
         )
         let jobID = job.jobID
         let startLabel = job.state.rawValue
-        // The Activity handle is not Sendable; confining its whole lifetime to
-        // one detached task keeps request, update, and end in a single region.
-        Task.detached {
+        let token = UUID()
+        taskTokens[jobID] = token
+        tasks[jobID] = Task { @MainActor in
+            defer { clear(jobID: jobID, token: token) }
             guard let activity = try? Activity.request(
                 attributes: attributes,
                 content: .init(state: initial, staleDate: nil)
             ) else { return }
             var lastLabel = startLabel
-            while true {
-                try? await Task.sleep(for: .seconds(2))
-                guard let current = try? await client.inspect(jobID: jobID) else { continue }
+            var consecutiveFailures = 0
+            while !Task.isCancelled {
+                let current: WorkflowRemoteJob
+                do {
+                    current = try await client.inspect(jobID: jobID)
+                    consecutiveFailures = 0
+                } catch {
+                    consecutiveFailures += 1
+                    if pollingPolicy.shouldStop(afterConsecutiveFailures: consecutiveFailures) {
+                        let paused = RunActivityAttributes.ContentState(
+                            stateLabel: lastLabel,
+                            fraction: nil,
+                            detail: "Updates paused — open mere.run"
+                        )
+                        await activity.end(
+                            .init(state: paused, staleDate: nil),
+                            dismissalPolicy: .default
+                        )
+                        return
+                    }
+                    guard await sleep(
+                        nanoseconds: pollingPolicy.delayNanoseconds(
+                            afterConsecutiveFailures: consecutiveFailures
+                        )
+                    ) else {
+                        let stopped = RunActivityAttributes.ContentState(
+                            stateLabel: lastLabel,
+                            fraction: nil,
+                            detail: "Updates stopped"
+                        )
+                        await activity.end(
+                            .init(state: stopped, staleDate: nil),
+                            dismissalPolicy: .default
+                        )
+                        return
+                    }
+                    continue
+                }
                 var fraction: Double?
                 var detail: String?
                 if let raw = try? await client.events(jobID: jobID) {
@@ -61,8 +103,53 @@ enum RunActivityTracker {
                     return
                 }
                 await activity.update(.init(state: state, staleDate: nil))
+                guard await sleep(nanoseconds: pollingPolicy.regularDelayNanoseconds) else {
+                    let stopped = RunActivityAttributes.ContentState(
+                        stateLabel: lastLabel,
+                        fraction: nil,
+                        detail: "Updates stopped"
+                    )
+                    await activity.end(
+                        .init(state: stopped, staleDate: nil),
+                        dismissalPolicy: .default
+                    )
+                    return
+                }
             }
+            let stopped = RunActivityAttributes.ContentState(
+                stateLabel: lastLabel,
+                fraction: nil,
+                detail: "Updates stopped"
+            )
+            await activity.end(
+                .init(state: stopped, staleDate: nil),
+                dismissalPolicy: .default
+            )
         }
+    }
+
+    static func cancelAll() {
+        let running = Array(tasks.values)
+        tasks.removeAll()
+        taskTokens.removeAll()
+        for task in running {
+            task.cancel()
+        }
+    }
+
+    private static func sleep(nanoseconds: UInt64) async -> Bool {
+        do {
+            try await Task.sleep(nanoseconds: nanoseconds)
+            return !Task.isCancelled
+        } catch {
+            return false
+        }
+    }
+
+    private static func clear(jobID: String, token: UUID) {
+        guard taskTokens[jobID] == token else { return }
+        tasks[jobID] = nil
+        taskTokens[jobID] = nil
     }
 }
 #endif

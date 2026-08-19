@@ -1,7 +1,7 @@
 # XcodeGen manifest for the iOS Studio app.
 # Generate the project on a Mac:  cd ios && xcodegen generate
-# The app links only the portable MereRunRelayKit product from the root
-# package; no inference runtime is built for the phone in this phase.
+# The app links the portable relay client and the on-device runtime from the
+# root package.
 name: MereRunStudio
 options:
   bundleIdPrefix: run.mere
@@ -29,16 +29,6 @@ targets:
         NSLocalNetworkUsageDescription: mere.run connects to your own machines on your network to run the work you submit.
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
-    entitlements:
-      path: MereRunStudio/MereRunStudio.entitlements
-      properties:
-        # ?mode=developer bypasses Apple's AASA CDN on Developer Mode
-        # devices; drop the suffix for release signing.
-        com.apple.developer.associated-domains:
-          - applinks:mere.world?mode=developer
-          - webcredentials:mere.world
-        # Bonsai 27B 1-bit chat needs the expanded per-app memory ceiling.
-        com.apple.developer.kernel.increased-memory-limit: true
     settings:
       base:
         PRODUCT_NAME: mere.run
@@ -60,17 +50,29 @@ targets:
         # Set for device builds: MERERUN_IOS_TEAM=<team id> xcodegen generate
         # Simulator builds need no team.
         DEVELOPMENT_TEAM: ${MERERUN_IOS_TEAM}
+      configs:
+        Debug:
+          CODE_SIGN_ENTITLEMENTS: MereRunStudio/MereRunStudio.Debug.entitlements
+        Release:
+          CODE_SIGN_ENTITLEMENTS: MereRunStudio/MereRunStudio.entitlements
   MereRunStudioTests:
     type: bundle.unit-test
     platform: iOS
     sources:
       - MereRunStudioTests
+      - MereRunStudio/App/PendingModelDownloadStore.swift
+      - MereRunStudio/App/RuntimeResidencyState.swift
+      - MereRunStudio/App/RunPollingPolicy.swift
+      - MereRunStudio/App/RunArtifactStore.swift
+      - MereRunStudio/App/ExecutionPrivacyCopy.swift
     dependencies:
       - target: MereRunStudio
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: run.mere.studio.ios.tests
         SWIFT_VERSION: "6.0"
+        # The app module imports MereRunCore, which uses C++ interoperability.
+        OTHER_SWIFT_FLAGS: -cxx-interoperability-mode=default
         GENERATE_INFOPLIST_FILE: YES
         TEST_HOST: $(BUILT_PRODUCTS_DIR)/mere.run.app/mere.run
         BUNDLE_LOADER: $(TEST_HOST)
@@ -101,6 +103,8 @@ targets:
       path: MereRunWidgets/Info.plist
       properties:
         CFBundleDisplayName: mere.run
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
         NSExtension:
           NSExtensionPointIdentifier: com.apple.widgetkit-extension
     settings:
