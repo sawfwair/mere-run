@@ -14,6 +14,7 @@ import XCTest
 ///
 /// Without those variables the test skips, so plain `xcodebuild test` stays
 /// green on machines with no relay running.
+@MainActor
 final class DirectLaneUITests: XCTestCase {
     override func setUpWithError() throws {
         continueAfterFailure = false

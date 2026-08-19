@@ -211,7 +211,10 @@ if isLinuxPackage {
       path: "vendor/llama.xcframework"
     )
   )
-  mereRunCoreDependencies.append(.target(name: "llama"))
+  // The iOS Studio runtime uses the native MLX chat and image paths. Keeping
+  // llama.cpp macOS-only also avoids embedding unused platform slices in the
+  // phone app.
+  mereRunCoreDependencies.append(.target(name: "llama", condition: .when(platforms: [.macOS])))
 }
 if hasMagentaRT2Binary {
   targets.append(

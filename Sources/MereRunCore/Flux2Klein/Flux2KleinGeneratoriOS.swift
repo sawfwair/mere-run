@@ -22,6 +22,17 @@ public actor Flux2KleinGeneratoriOS: ImageGenerator {
         Memory.cacheLimit = 256 * 1024 * 1024
     }
 
+    /// Releases the small persistent tokenizer/statistics residency and any
+    /// cached GPU allocations retained between phone generations.
+    public func unload() {
+        tokenizer = nil
+        bnRunningMean = nil
+        bnRunningVar = nil
+        loadedModelPath = nil
+        loadedManifest = nil
+        clearGPUMemory()
+    }
+
     /// Clear GPU cached memory
     func clearGPUMemory(synchronize: Bool = true) {
         // Clearing while kernels are in-flight can lead to corrupted outputs (e.g. blurry images).

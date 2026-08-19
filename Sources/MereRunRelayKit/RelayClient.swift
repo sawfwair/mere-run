@@ -17,7 +17,7 @@ public struct RelayWorkflowExecutor: Sendable {
         self.credentialStorage = credentialStorage
     }
 
-    private func resolveCredential(forceRefresh: Bool = false) async throws -> RelayResolvedCredential {
+    package func resolveCredential(forceRefresh: Bool = false) async throws -> RelayResolvedCredential {
         if let credentialStorage {
             return try await RelayAuthentication.resolveCredential(
                 profile: profile,
@@ -239,7 +239,7 @@ public struct RelayWorkflowExecutor: Sendable {
         guard let baseURL = profile.url, let url = URL(string: "\(baseURL)\(path)") else {
             throw RelayClientError("Relay executor profile has an invalid URL.")
         }
-        var credential = try await RelayAuthentication.resolveCredential(profile: profile)
+        var credential = try await resolveCredential()
         var attempt = 0
         while true {
             attempt += 1
@@ -254,7 +254,7 @@ public struct RelayWorkflowExecutor: Sendable {
             }
             if http.statusCode == 401, credential.refreshable, attempt == 1 {
                 try? FileManager.default.removeItem(at: temporary)
-                credential = try await RelayAuthentication.resolveCredential(profile: profile, forceRefresh: true)
+                credential = try await resolveCredential(forceRefresh: true)
                 continue
             }
             guard (200..<300).contains(http.statusCode) else {

@@ -255,7 +255,9 @@ struct CreateView: View {
 
                     runButton
 
-                    Text("Runs on your machines. Prompts, photos, and outputs stay between your devices.")
+                    Text(ExecutionPrivacyCopy.create(
+                        for: runsOnThisPhone ? .onDevice : relay.executionPrivacyLane
+                    ))
                         .font(.footnote)
                         .foregroundStyle(MereTheme.textMuted)
                         .frame(maxWidth: .infinity, alignment: .center)
@@ -430,9 +432,10 @@ struct CreateView: View {
         } else {
             switch selected.assetMedia {
             case .image:
+                let title = selected.assetRequired ? "Choose a photo" : "Add a photo (optional)"
                 PhotosPicker(selection: $photoItem, matching: .images) {
                     AttachLabel(
-                        title: selected.assetRequired ? "Choose a photo" : "Add a photo (optional)",
+                        title: title,
                         symbol: "photo.badge.plus"
                     )
                 }

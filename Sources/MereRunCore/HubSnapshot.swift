@@ -22,6 +22,20 @@ public struct HubSnapshotReceipt: Codable, Equatable, Sendable {
     public let files: [File]
 }
 
+public enum HubDownloadNetworkPolicy: String, Codable, Equatable, Sendable {
+    case wifiOnly
+    case allNetworks
+
+    package func applying(to request: URLRequest) -> URLRequest {
+        var request = request
+        let unrestricted = self == .allNetworks
+        request.allowsCellularAccess = unrestricted
+        request.allowsExpensiveNetworkAccess = unrestricted
+        request.allowsConstrainedNetworkAccess = unrestricted
+        return request
+    }
+}
+
 public struct HubSnapshotOptions: Sendable {
     public var repoId: String
     public var revision: String
@@ -31,6 +45,7 @@ public struct HubSnapshotOptions: Sendable {
     public var accessToken: String?
     public var offline: Bool
     public var useBackgroundSession: Bool
+    public var backgroundNetworkPolicy: HubDownloadNetworkPolicy
     public var reuseRoots: [URL]
 
     public init(
@@ -42,6 +57,7 @@ public struct HubSnapshotOptions: Sendable {
         accessToken: String? = nil,
         offline: Bool = false,
         useBackgroundSession: Bool = false,
+        backgroundNetworkPolicy: HubDownloadNetworkPolicy = .wifiOnly,
         reuseRoots: [URL] = []
     ) {
         self.repoId = repoId
@@ -52,6 +68,7 @@ public struct HubSnapshotOptions: Sendable {
         self.accessToken = accessToken
         self.offline = offline
         self.useBackgroundSession = useBackgroundSession
+        self.backgroundNetworkPolicy = backgroundNetworkPolicy
         self.reuseRoots = reuseRoots
     }
 }
@@ -489,13 +506,33 @@ public actor HubSnapshot {
                     estimatedSpeedBytesPerSecond: speed
                 ))
             }
-            let tempURL = try await download(remote.downloadURL, delegate: delegate, relativePath: entry.path)
+            let tempURL = try await download(
+                remote.downloadURL,
+                delegate: delegate,
+                relativePath: entry.path,
+                resolvedRevision: resolvedRevision,
+                etag: remote.etag
+            )
+            guard expectedBytes <= 0 || Self.fileSize(at: tempURL) == expectedBytes else {
+                try? FileManager.default.removeItem(at: tempURL)
+                #if !canImport(FoundationNetworking)
+                HubBackgroundTransferSession.finishConsuming(tempURL)
+                #endif
+                throw Hub.HubClientError.downloadError(
+                    "Downloaded size mismatch for \(options.repoId)/\(entry.path)"
+                )
+            }
             try FileManager.default.createDirectory(
                 at: destination.deletingLastPathComponent(),
                 withIntermediateDirectories: true
             )
             try? FileManager.default.removeItem(at: destination)
             try materializeDownloadedPayload(tempURL, remote: remote, destination: destination)
+            #if !canImport(FoundationNetworking)
+            if options.useBackgroundSession {
+                HubBackgroundTransferSession.finishConsuming(tempURL)
+            }
+            #endif
             try writeDownloadMetadata(remote, to: metadataDestination)
             completedBytes += max(expectedBytes, Self.fileSize(at: destination))
             receiptFiles.append(
@@ -654,8 +691,39 @@ public actor HubSnapshot {
     private func download(
         _ url: URL,
         delegate: HubSnapshotDownloadDelegate,
-        relativePath: String
+        relativePath: String,
+        resolvedRevision: String,
+        etag: String?
     ) async throws -> URL {
+        #if !canImport(FoundationNetworking)
+        if options.useBackgroundSession {
+            var request = authorizedRequest(url: url)
+            request.httpMethod = "GET"
+            request = options.backgroundNetworkPolicy.applying(to: request)
+            let transferID = Self.backgroundTransferID(
+                repoType: options.repoType.rawValue,
+                repoID: options.repoId,
+                revision: resolvedRevision,
+                relativePath: relativePath,
+                etag: etag
+            )
+            return try await HubBackgroundTransferSession.shared.download(
+                request: request,
+                transferID: transferID,
+                stagingDirectory: downloadBase.appending(
+                    path: "background-transfers",
+                    directoryHint: .isDirectory
+                ),
+                progress: { completed, total in
+                    delegate.recordProgress(
+                        totalBytesWritten: completed,
+                        totalBytesExpectedToWrite: total
+                    )
+                }
+            )
+        }
+        #endif
+
         var currentURL = url
         for _ in 0..<8 {
             var request = authorizedRequest(url: currentURL)
@@ -683,6 +751,20 @@ public actor HubSnapshot {
             currentURL = redirected
         }
         throw Hub.HubClientError.downloadError("Too many redirects while downloading \(options.repoId)/\(relativePath)")
+    }
+
+    package static func backgroundTransferID(
+        repoType: String,
+        repoID: String,
+        revision: String,
+        relativePath: String,
+        etag: String?
+    ) -> String {
+        let identity = [repoType, repoID, revision, relativePath, etag ?? ""]
+            .joined(separator: "\n")
+        return SHA256.hash(data: Data(identity.utf8))
+            .map { String(format: "%02x", $0) }
+            .joined()
     }
 
     private func writeDownloadMetadata(_ remote: HubSnapshotRemoteFile, to metadataURL: URL) throws {
@@ -1396,6 +1478,16 @@ private final class HubSnapshotDownloadDelegate: NSObject, URLSessionTaskDelegat
         _: URLSession,
         downloadTask _: URLSessionDownloadTask,
         didWriteData _: Int64,
+        totalBytesWritten: Int64,
+        totalBytesExpectedToWrite: Int64
+    ) {
+        recordProgress(
+            totalBytesWritten: totalBytesWritten,
+            totalBytesExpectedToWrite: totalBytesExpectedToWrite
+        )
+    }
+
+    func recordProgress(
         totalBytesWritten: Int64,
         totalBytesExpectedToWrite: Int64
     ) {

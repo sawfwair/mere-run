@@ -1,7 +1,29 @@
+import MereRunCore
 import SwiftUI
+import UIKit
+
+final class StudioAppDelegate: NSObject, UIApplicationDelegate {
+    func application(
+        _: UIApplication,
+        handleEventsForBackgroundURLSession identifier: String,
+        completionHandler: @escaping () -> Void
+    ) {
+        guard HubBackgroundTransferSession.handleEvents(
+            for: identifier,
+            completionHandler: completionHandler
+        ) else {
+            completionHandler()
+            return
+        }
+        Task { @MainActor in
+            LocalEngine.shared.resumePendingDownloads()
+        }
+    }
+}
 
 @main
 struct MereRunStudioApp: App {
+    @UIApplicationDelegateAdaptor(StudioAppDelegate.self) private var appDelegate
     @StateObject private var relay = RelayStore()
 
     var body: some Scene {
@@ -15,24 +37,44 @@ struct MereRunStudioApp: App {
 
 struct RootView: View {
     @EnvironmentObject private var relay: RelayStore
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some View {
-        if relay.pairing == .paired {
-            TabView {
-                CreateView()
-                    .tabItem { Label("Create", systemImage: "sparkles") }
-                ChatView(relay: relay)
-                    .tabItem { Label("Chat", systemImage: "bubble.left.and.bubble.right") }
-                RunsView()
-                    .tabItem { Label("Runs", systemImage: "tray.full") }
-                FleetView()
-                    .tabItem { Label("Fleet", systemImage: "server.rack") }
-                SettingsView()
-                    .tabItem { Label("Settings", systemImage: "gearshape") }
+        Group {
+            if relay.pairing == .paired {
+                TabView {
+                    CreateView()
+                        .tabItem { Label("Create", systemImage: "sparkles") }
+                    ChatView(relay: relay)
+                        .tabItem { Label("Chat", systemImage: "bubble.left.and.bubble.right") }
+                    RunsView()
+                        .tabItem { Label("Runs", systemImage: "tray.full") }
+                    FleetView()
+                        .tabItem { Label("Fleet", systemImage: "server.rack") }
+                    SettingsView()
+                        .tabItem { Label("Settings", systemImage: "gearshape") }
+                }
+                .background(MereTheme.background)
+            } else {
+                PairingView()
             }
-            .background(MereTheme.background)
-        } else {
-            PairingView()
+        }
+        .onChange(of: scenePhase) { _, phase in
+            switch phase {
+            case .active:
+                LocalEngine.shared.resumePendingDownloads()
+            case .background:
+                LocalEngine.shared.releaseRuntime()
+            case .inactive:
+                break
+            @unknown default:
+                break
+            }
+        }
+        .onReceive(NotificationCenter.default.publisher(
+            for: UIApplication.didReceiveMemoryWarningNotification
+        )) { _ in
+            LocalEngine.shared.releaseRuntime()
         }
     }
 }
@@ -64,7 +106,7 @@ struct SettingsView: View {
                         relay.unpair()
                     }
                 } footer: {
-                    Text("Work runs on your paired nodes. Prompts and outputs move only between this phone and your relay.")
+                    Text(ExecutionPrivacyCopy.create(for: relay.executionPrivacyLane))
                 }
             }
             .scrollContentBackground(.hidden)

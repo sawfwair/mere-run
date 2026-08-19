@@ -45,6 +45,64 @@ final class HubSnapshotTests: XCTestCase {
         XCTAssertEqual(HubSnapshot.revisionKey("main").count, 64)
     }
 
+    func testBackgroundTransferIdentityIncludesPinnedPayloadIdentity() {
+        let base = HubSnapshot.backgroundTransferID(
+            repoType: "models",
+            repoID: "mere/image",
+            revision: "commit-a",
+            relativePath: "weights/model.safetensors",
+            etag: "etag-a"
+        )
+        let same = HubSnapshot.backgroundTransferID(
+            repoType: "models",
+            repoID: "mere/image",
+            revision: "commit-a",
+            relativePath: "weights/model.safetensors",
+            etag: "etag-a"
+        )
+        let changedRevision = HubSnapshot.backgroundTransferID(
+            repoType: "models",
+            repoID: "mere/image",
+            revision: "commit-b",
+            relativePath: "weights/model.safetensors",
+            etag: "etag-a"
+        )
+
+        XCTAssertEqual(base, same)
+        XCTAssertNotEqual(base, changedRevision)
+        XCTAssertEqual(base.count, 64)
+    }
+
+    #if !canImport(FoundationNetworking)
+    func testBackgroundNetworkPolicyConfiguresEachRequest() throws {
+        let url = try XCTUnwrap(URL(string: "https://example.test/model.safetensors"))
+
+        let wifiOnly = HubDownloadNetworkPolicy.wifiOnly.applying(to: URLRequest(url: url))
+        XCTAssertFalse(wifiOnly.allowsCellularAccess)
+        XCTAssertFalse(wifiOnly.allowsExpensiveNetworkAccess)
+        XCTAssertFalse(wifiOnly.allowsConstrainedNetworkAccess)
+
+        let unrestricted = HubDownloadNetworkPolicy.allNetworks.applying(to: URLRequest(url: url))
+        XCTAssertTrue(unrestricted.allowsCellularAccess)
+        XCTAssertTrue(unrestricted.allowsExpensiveNetworkAccess)
+        XCTAssertTrue(unrestricted.allowsConstrainedNetworkAccess)
+    }
+
+    func testBackgroundTransferTaskDescriptionRoundTripsDurableDestination() throws {
+        let descriptor = HubBackgroundTransferSession.Descriptor(
+            id: "transfer-id",
+            stagingURL: URL(fileURLWithPath: "/tmp/mere run/background/transfer.download")
+        )
+        let encoded = try HubBackgroundTransferSession.taskDescription(for: descriptor)
+
+        XCTAssertEqual(
+            HubBackgroundTransferSession.descriptor(from: encoded),
+            descriptor
+        )
+        XCTAssertNil(HubBackgroundTransferSession.descriptor(from: "not-base64"))
+    }
+    #endif
+
     func testMaterializedPatternClosureSupportsExactAndGlobSelections() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent("mere-run-hub-closure-\(UUID().uuidString)", isDirectory: true)

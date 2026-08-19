@@ -107,6 +107,91 @@ jobs:
             | grep -q 'com.apple.security.device.audio-input'
           codesign --verify --strict --verbose=2 "$bundle"
 
+  ios:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: '26.4'
+      - name: Restore iOS SwiftPM dependencies
+        uses: actions/cache@v4
+        with:
+          path: .build/ios-source-packages
+          key: ios-swiftpm-${{ runner.os }}-${{ runner.arch }}-xcode-26.4-${{ hashFiles('Package.swift', 'Package.resolved') }}
+      - name: Install XcodeGen
+        run: |
+          # Keep this in sync with the native Swift job's runner workaround.
+          brew untap --force aws/tap
+          brew install xcodegen
+      - name: Generate iOS project
+        run: xcodegen generate --spec ios/project.yml --project ios
+      - name: Build iOS app and tests for release
+        run: |
+          xcodebuild build-for-testing \
+            -project ios/MereRunStudio.xcodeproj \
+            -scheme MereRunStudio \
+            -configuration Release \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=latest' \
+            -derivedDataPath .build/ios-derived \
+            -clonedSourcePackagesDirPath .build/ios-source-packages \
+            ONLY_ACTIVE_ARCH=YES \
+            CODE_SIGNING_ALLOWED=NO
+      - name: Run iOS unit tests
+        run: |
+          xcodebuild test-without-building \
+            -project ios/MereRunStudio.xcodeproj \
+            -scheme MereRunStudio \
+            -configuration Release \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=latest' \
+            -derivedDataPath .build/ios-derived \
+            -clonedSourcePackagesDirPath .build/ios-source-packages \
+            -only-testing:MereRunStudioTests \
+            ONLY_ACTIVE_ARCH=YES \
+            CODE_SIGNING_ALLOWED=NO
+      - name: Verify iOS release metadata
+        run: |
+          set -euo pipefail
+
+          app='.build/ios-derived/Build/Products/Release-iphonesimulator/mere.run.app'
+          widget="${app}/PlugIns/MereRunWidgets.appex"
+          test -d "$app"
+          test -d "$widget"
+
+          app_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${app}/Info.plist")"
+          widget_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${widget}/Info.plist")"
+          test "$app_version" = "$widget_version"
+
+          executable="${app}/mere.run"
+          executable_archs="$(lipo -archs "$executable")"
+          test "$executable_archs" = 'arm64'
+          executable_bytes="$(stat -f '%z' "$executable")"
+          maximum_executable_bytes="$((80 * 1024 * 1024))"
+          if (( executable_bytes > maximum_executable_bytes )); then
+            echo "iOS Release executable is ${executable_bytes} bytes; budget is ${maximum_executable_bytes}." >&2
+            echo 'Audit MereRunCore dependencies before raising the budget.' >&2
+            exit 1
+          fi
+          echo "iOS Release executable: ${executable_bytes} bytes (${executable_archs})"
+
+          release_entitlements='ios/MereRunStudio/MereRunStudio.entitlements'
+          debug_entitlements='ios/MereRunStudio/MereRunStudio.Debug.entitlements'
+          grep -q '<string>applinks:mere.world</string>' "$release_entitlements"
+          if grep -q 'mode=developer' "$release_entitlements"; then
+            echo 'Release entitlements must not use associated-domain developer mode.' >&2
+            exit 1
+          fi
+          grep -q '<string>applinks:mere.world?mode=developer</string>' "$debug_entitlements"
+
+          debug_setting="$(xcodebuild -project ios/MereRunStudio.xcodeproj -scheme MereRunStudio -configuration Debug -showBuildSettings | awk -F ' = ' '/CODE_SIGN_ENTITLEMENTS/ { print $2; exit }')"
+          release_setting="$(xcodebuild -project ios/MereRunStudio.xcodeproj -scheme MereRunStudio -configuration Release -showBuildSettings | awk -F ' = ' '/CODE_SIGN_ENTITLEMENTS/ { print $2; exit }')"
+          test "$debug_setting" = 'MereRunStudio/MereRunStudio.Debug.entitlements'
+          test "$release_setting" = 'MereRunStudio/MereRunStudio.entitlements'
+
   # Keep the existing protected-check context while the real bundle build and
   # verification share the warm SwiftPM build directory in the swift job.
   macos-app-bundle:

@@ -1,10 +1,10 @@
 # iOS Studio
 
-The iOS app (`ios/`) is the third thin client in the family that hosted Graph
-Studio established: it signs in to a relay, submits and watches work, and
-fetches verified artifacts, while paired nodes own model execution. This
-document records the architecture decisions and phasing; `ios/README.md`
-covers building.
+The iOS app (`ios/`) combines the portable relay client established by hosted
+Graph Studio with a constrained on-device runtime. It can submit and watch
+fleet work, fetch verified artifacts, connect directly to a machine, or run
+supported image and chat models on a physical iPhone. `ios/README.md` covers
+building.
 
 ## Two lanes
 
@@ -14,21 +14,20 @@ covers building.
    hosted-Studio pattern — never from local discovery, which needs process
    spawning that iOS forbids), and reads the same `graph-event-v1` /
    `graph-run-v1` documents published in `docs/public/schemas/`.
-2. **On-device lane (experimental, landed).** `MereRunCore` builds for
-   iOS; the app's image mode offers "This iPhone" alongside the fleet,
-   installing FLUX.2 Klein nano through the managed store into the app
-   sandbox and generating through the memory-optimized iOS pipeline. First
-   on-device generation still needs real-device validation of the MLX Metal
-   kernel path. Sizing: small models genuinely fit Pro-class devices —
+2. **On-device lane (experimental).** `MereRunCore` builds for iOS; the app's
+   image and chat modes offer "This iPhone" alongside the fleet and install
+   managed models into the app sandbox. These paths require a physical device;
+   a simulator build is portability evidence, not inference proof. Sizing:
+   small models genuinely fit Pro-class devices —
    the Bonsai image binary (4B, 1-bit, ~3.4 GB) runs through the same FLUX.2
    Klein pipeline that already has a memory-constrained iOS generator in
    `MereRunCore` (`Flux2KleinGeneratoriOS`, ~2 GB peak via sequential
    loading), and `text-chat-bonsai-27b-1bit` (~5.1 GB, Apache-2.0,
-   vision-capable) is plausible on 12 GB+ devices with the increased-memory
-   entitlement. This lane requires an iOS build gate for a trimmed
-   `MereRunCore` (ONNX paths are already macOS-conditional; the `IOKit`
-   linker setting needs a platform condition) and a storage/download UX, and
-   is explicitly out of scope for the first shippable phase.
+   vision-capable) targets 12 GB+ devices with the increased-memory
+   entitlement. The current app links the broad `MereRunCore` target; a
+   narrower mobile runtime remains a build-time and binary-size optimization.
+   CI builds only the active simulator architecture so test coverage does not
+   accidentally turn into a universal two-architecture product-size proxy.
 
 ## What exists today
 
@@ -38,14 +37,15 @@ covers building.
   artifact fetch, the workflow wire types, and SSE event-text normalization.
   Foundation + swift-crypto only; builds and tests on Linux; the CLI consumes
   it with unchanged behavior.
-- `ios/` — the SwiftUI scaffold: pairing via device grant, fleet view, run
-  inbox, run detail with polled events/progress, cancel/retry, and artifact
-  fetch with share. Generated with XcodeGen; first Xcode build still pending
-  (authored in a Linux environment).
+- `ios/` — the SwiftUI client: PKCE and device-code relay sign-in, direct
+  machine pairing, fleet and run views, polled events/progress, cancel/retry,
+  verified artifact fetch and sharing, Live Activities, and on-device model
+  management, image generation, and chat. XcodeGen owns the project, and CI
+  regenerates and Release-builds it for the simulator.
 
 ## Phasing
 
-- **Phase A — run inbox and prompt-first submission (current).** Pair,
+- **Phase A — run inbox and prompt-first submission (landed).** Pair,
   watch, fetch, cancel/retry, fleet, and Create: the graph documents, node
   registry, validator, and bundle materializer now live in
   `MereRunRelayKit`, so the phone materializes byte-identical bundles and
@@ -55,7 +55,7 @@ covers building.
   from the worker probe, and pins models from the fleet's installed list.
   Provider-qualified nodes stay excluded on iOS, and modes whose required
   inputs are assets wait for the photo/file picker step.
-- **Phase B — chat.** Route chat to the best available transport: on-device
+- **Phase B — chat (landed).** Route chat to the selected transport: on-device
   small models when present, a machine reached directly when paired (the
   `mere.run relay serve` direct lane — the app's "Connect to a machine"
   pairing serves the full job vocabulary over the LAN or a tailnet with no
@@ -67,8 +67,42 @@ covers building.
   implementation — but `graph-event-v1` is a closed schema, so a
   `node_output_delta` event needs a coordinated contract revision with the
   relay and node repositories' shared fixtures.
-- **Phase C — on-device tiny models.** The Bonsai lane above, gated by
-  device RAM, Wi-Fi-only multi-GB pulls, and a storage manager.
+- **Phase C — on-device models (experimental).** The managed Bonsai/Liquid
+  lane above is gated by device RAM and available storage. Model payloads use
+  one fixed, system-owned background session, so the active file can continue
+  while the app is suspended. The app durably records the requested install,
+  rejoins matching system tasks after relaunch, stages completed payloads out
+  of URLSession's temporary directory, and then resumes the normal pinned
+  snapshot and final validation pipeline. A user-initiated download currently
+  defaults to unmetered, unconstrained Wi-Fi. Users can explicitly allow
+  cellular, expensive, and constrained networks before starting a download;
+  that choice is recorded with the pending install so a relaunch cannot
+  silently change the transfer policy.
+
+## On-device lifecycle
+
+- Chat warmup remains immediate, but resident chat or image state is released
+  after two idle minutes, when the selected chat model or inference lane
+  changes, when the app enters the background, and on an iOS memory warning.
+- A lifecycle release never interrupts active inference. It is deferred until
+  the current image or chat request finishes, and the engine rejects another
+  request while release is in progress.
+- Removing an installed model unloads all runtime state before deleting its
+  install and reclaiming only cache payloads not referenced by another model.
+- iOS may relaunch the app to deliver background-session events. The app
+  reconnects that session through its application delegate and resumes every
+  durable pending install. Explicit user force-quit behavior remains controlled
+  by iOS and is not treated as a supported continuation path.
+- Live Activity polling is single-owner per job. Transient request failures use
+  bounded exponential backoff; persistent failures end the activity instead of
+  leaving an immortal poller behind. Unpairing cancels all outstanding pollers.
+- Refreshing a run's artifacts stages and validates the complete new result
+  beside the existing result, then atomically replaces it. A failed refresh
+  leaves the last verified local copy intact.
+- Privacy copy follows the selected execution lane: on-device work stays on the
+  phone, a direct-machine lane names that machine connection, and hosted relay
+  work describes the authenticated relay/fleet path rather than claiming every
+  remote request is local-only.
 
 ## iOS-specific follow-ups
 
@@ -79,8 +113,25 @@ covers building.
   remains as the browserless fallback).
 - Artifact downloads stream to disk with digest verification (done);
   incremental in-flight hashing remains a refinement.
+- Physical-device interruption coverage still needs a release-signed run that
+  backgrounds the app during a real multi-gigabyte model pull, verifies
+  relaunch reattachment, and observes runtime memory returning after eviction.
+- Debug uses the associated-domain developer alternate mode; Release uses the
+  production AASA CDN. The app and widget versions must remain identical.
 - Live Activities ship with app-driven updates; completion pushes and
   push-updated activities need APNs support in the relay repository.
+
+## Release footprint
+
+A clean arm64 Release-simulator build on 2026-08-19 measured 75.4 MiB
+uncompressed, including a 68.3 MiB main executable and a 4.3 MiB MLX Metal
+library. The unused llama.cpp binary dependency is macOS-only. This is not an
+App Store download-size measurement, but it confirms that the broad
+`MereRunCore` closure is the main compile-time and binary-size cost. CI now
+rejects a non-arm64-only simulator executable and caps that executable at 80
+MiB. Extracting the image/chat/model storage surface into a narrower mobile
+runtime remains a separate architectural optimization; a facade that still
+depends on `MereRunCore` would not reduce the dependency closure.
 
 ## Boundaries
 

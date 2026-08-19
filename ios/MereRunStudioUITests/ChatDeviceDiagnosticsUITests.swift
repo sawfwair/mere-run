@@ -3,6 +3,7 @@ import XCTest
 /// Diagnostic: drive an on-device chat turn on real hardware and record the
 /// streaming pipeline's behavior — telemetry line, partial bubble, reply.
 /// Gated on MERERUN_TEST_CHAT_DIAG.
+@MainActor
 final class ChatDeviceDiagnosticsUITests: XCTestCase {
     func testOnDeviceChatTurn() throws {
         guard ProcessInfo.processInfo.environment["MERERUN_TEST_CHAT_DIAG"] != nil else {

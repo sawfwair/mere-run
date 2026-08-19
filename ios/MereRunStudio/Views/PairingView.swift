@@ -140,7 +140,9 @@ struct PairingView: View {
                 EmptyView()
             }
             Spacer()
-            Text("Stays between your devices.")
+            Text(directConnect
+                ? "Connects directly to your machine over your network or tailnet."
+                : "Hosted relay infrastructure carries prompts, status, and artifacts to your fleet.")
                 .font(.footnote)
                 .foregroundStyle(MereTheme.textMuted)
         }

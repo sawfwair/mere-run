@@ -6,6 +6,37 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### iOS Studio
+
+- fixed verified artifact downloads on Apple platforms to use the iOS
+  Keychain-backed relay credential, including refresh, instead of falling back
+  to CLI token-file and environment authentication.
+- made browserless device-code pairing persist directly to the Keychain, so
+  the newly paired relay is usable immediately instead of only after a restart
+  migrated the credential.
+- split associated-domain entitlements by configuration: Debug keeps Apple's
+  developer-mode origin lookup while Release uses the production AASA CDN.
+  The widget now inherits the containing app's version, and CI regenerates and
+  release-builds the iOS project while checking both contracts.
+- added explicit on-device runtime residency management: chat warmup is evicted
+  after two idle minutes, while model/lane changes, backgrounding, memory
+  warnings, and model removal unload chat and image state without interrupting
+  active inference.
+- made runtime release a deterministic state transition that rejects new work
+  while unloading, and added unit coverage for deferred release, repeated
+  release requests, and inference completion.
+- bounded Live Activity polling to one task per job with exponential failure
+  backoff, terminal failure handling, and cancellation when the relay unpairs.
+- made run-artifact refresh transactional: a complete verified refresh replaces
+  the prior local result atomically, while a failed refresh preserves the last
+  verified copy.
+- made execution privacy text reflect the selected on-device, direct-machine,
+  or hosted-relay lane instead of applying a local-only claim to every route.
+- kept the unused llama.cpp binary dependency macOS-only, added a clean arm64
+  Release-footprint audit, and set an 80 MiB CI ceiling for the main iOS
+  executable, making growth in the broad `MereRunCore` dependency closure
+  visible ahead of a narrower mobile-runtime extraction.
+
 ### Model downloads
 
 - fixed Hub download progress freezing at zero on iOS: the Swift-concurrency
@@ -13,10 +44,19 @@ The format is based on Keep a Changelog.
   there (macOS happens to), so multi-gigabyte pulls looked hung while bytes
   flowed. Downloads now run as classic delegate-driven download tasks, which
   report byte progress on every platform; behavior on macOS and Linux is
-  unchanged. The iOS app additionally keeps the display awake during a pull
-  (a locked screen suspends the app and kills the transfer), surfaces
-  download failures in Chat's on-device row, and shows absolute megabytes
-  instead of a percent that rounds to zero for most of a large pull.
+  unchanged. The iOS app surfaces failures in Chat's on-device row and shows
+  absolute megabytes instead of a percent that rounds to zero for most of a
+  large pull.
+- moved iOS model payloads onto one fixed system background session, with
+  deterministic task identities, durable completed-file staging, relaunch
+  reattachment, app-container-relocatable destinations, cross-host credential
+  stripping, and a persisted pending install queue. Background delivery returns
+  through the application delegate; ordinary model pinning, byte-count checks,
+  receipts, and final validation still gate installation. Abandoned staging is
+  included in model-storage garbage collection after its safety grace period.
+- made unmetered, unconstrained Wi-Fi the default for new iOS model downloads,
+  with an explicit cellular/expensive/constrained-network opt-in persisted per
+  pending install so relaunch reattachment preserves the user's choice.
 
 ### MiniMax-H3 compact BF16 and Q8
 
