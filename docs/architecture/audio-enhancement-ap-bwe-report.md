@@ -1,5 +1,8 @@
 # AP-BWE speech bandwidth-extension implementation report
 
+This report is for contributors who review AP-BWE runtime admission,
+implementation parity, and validation evidence.
+
 ## Decision
 
 AP-BWE's 16 kHz to 48 kHz profile is admitted as a separate native audio
@@ -7,6 +10,9 @@ enhancement runtime. It is intentionally not presented as music mastering or
 general audio super-resolution.
 
 ## Source and license admission
+
+The following table records the admitted source, checkpoint, and transport
+identities:
 
 | Item | Frozen identity | License/admission result |
 | --- | --- | --- |
@@ -22,20 +28,22 @@ count and SHA-256. Runtime readiness fails if any of the four changes.
 
 ## Native graph
 
-The typed graph contains 162 float32 tensors and 29,760,515 scalars. It follows
-the published 16→48 kHz profile:
+The typed graph contains 162 `float32` tensors and 29,760,515 scalars. It
+follows the published 16 kHz to 48 kHz profile:
 
-- mono 16 kHz decoding and deterministic 3x band-limited interpolation;
-- centered 1,024-point STFT with a periodic 320-sample Hann window padded to
-  the FFT size and an 80-sample hop;
-- magnitude and phase input convolutions from 513 bins to 512 channels;
-- eight paired ConvNeXt blocks per stream using depthwise kernel-7 convolution,
-  layer norm, exact GELU, 3x channel expansion, layer scale, and residuals;
-- the upstream sequential magnitude/phase cross-add update;
-- residual log-magnitude prediction, atan2 phase reconstruction, and native
-  ISTFT back to the input duration.
+- Mono 16 kHz decoding and deterministic threefold band-limited interpolation
+- Centered 1,024-point short-time Fourier transform (STFT) with a periodic
+  320-sample Hann window, padding to the fast Fourier transform (FFT) size, and
+  an 80-sample hop
+- Magnitude and phase input convolutions from 513 bins to 512 channels
+- Eight paired ConvNeXt blocks per stream with depthwise kernel-7 convolution,
+  layer normalization, exact GELU, threefold channel expansion, layer scale,
+  and residuals
+- The upstream sequential magnitude and phase cross-add update
+- Residual log-magnitude prediction, `atan2` phase reconstruction, and native
+  inverse STFT cropped to the input duration
 
-PyTorch Conv1d tensors are transposed from `[out, in, kernel]` to MLX's
+PyTorch `Conv1d` tensors are transposed from `[out, in, kernel]` to the MLX
 `[out, kernel, in]` layout. The loader rejects key, shape, dtype, tensor-count,
 scalar-count, byte-count, and whole-file hash drift.
 
@@ -46,8 +54,8 @@ extension and general-audio super-resolution do not get conflated with music
 stem separation. AP-BWE remains independently reviewable from the stacked
 UniverSR runtime.
 
-The installed-model gate produces a real WAV artifact through the public
-command. The manual checkpoint smoke additionally verifies a 48 kHz mono,
-finite, non-silent output and reports energy above the original 8 kHz
+The installed-model gate produces a WAV file through the public command. The
+manual checkpoint smoke also verifies finite, non-silent, 48 kHz mono output
+and reports energy above the original 8 kHz
 narrowband boundary. These checks prove execution and artifact integrity, not
 a perceptual benchmark.

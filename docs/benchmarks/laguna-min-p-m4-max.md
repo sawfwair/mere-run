@@ -1,6 +1,6 @@
-# Laguna S 2.1 Min-P Evaluation
+# Laguna S 2.1 min-p evaluation
 
-This report records the 2026-07-27 Laguna S 2.1 min-p promotion gate on an
+This report records the July 27, 2026, Laguna S 2.1 min-p promotion gate on an
 AC-powered Apple M4 Max with 128 GB unified memory, macOS 26.5.2, the official
 `Laguna-S-2.1-NVFP4-mlx` target, and the official
 `Laguna-S-2.1-DFlash` companion.

@@ -4,7 +4,7 @@
 
 <p align="center">
   <a href="https://mere.run">mere.run</a> ·
-  <a href="https://docs.mere.run/">Docs</a> ·
+  <a href="https://docs.mere.run/">Documentation</a> ·
   <a href="https://mere.run/releases">Downloads</a> ·
   <a href="https://relay.mere.run">Relay + Nodes</a> ·
   <a href="https://plugins.mere.run">Plugins</a> ·
@@ -46,19 +46,19 @@ mere.run image generate \
 
 Use `mere.run guide <command path>` for the packaged offline cookbook behind a
 creative or model-specific command, and `mere.run <group> --help` for the exact
-current flags.
+supported flags.
 
-## What works today
+## Supported capabilities
 
-| Area | Public commands | Current surface |
+| Area | Public commands | Supported behavior |
 | --- | --- | --- |
 | Images and LoRAs | `image generate`, `image train-lora`, `adapter list`, `adapter pull` | Klein, ZImage, HiDream O1, Krea 2, Ideogram 4, and Bonsai; text-to-image, edits, multiple references, structured prompts, local Krea/Klein training, and checksum-pinned public adapters |
-| Text, code, and agents | `text chat`, `text code`, `text embed`, `text anonymize`, `text train-lora`, `agent` | Local chat and tool use, including Qwen3.8 27B BF16/4-bit and Bonsai 27B binary/ternary vision chat; code generation, embeddings, PII redaction, text LoRA training, and guided local-agent setup |
+| Text, code, and agents | `text chat`, `text code`, `text embed`, `text anonymize`, `text train-lora`, `agent` | Local chat and tool use, including Qwen3.8 27B BF16/4-bit and Bonsai 27B binary/ternary vision chat; code generation, embeddings, personally identifiable information (PII) redaction, text LoRA training, and guided local-agent setup |
 | Vision understanding | `vision caption`, `inspect`, `face`, `ground`, `segment`, `track`, `track-live`, `pose`, `flow`, `ocr` | Captioning and VQA, local face detection/identity embeddings, LightOn/GLM/Infinity OCR, Falcon grounding, SAM 3.1 segmentation and tracking, body/hand/face landmarks, and dense optical flow |
 | Depth, geometry, and 3D | `vision depth-video`, `geometry`, `geometry-multiview`, `image-to-3d*`; `image reconstruct-3d*` | Video Depth Anything, MoGe-2, Depth Anything 3, TripoSR, InstantMesh, and TRELLIS.2; depth/confidence EXRs, cameras, point clouds, 3DGS initialization, OBJ, PLY, GLB, and PBR voxel artifacts |
 | Audio enhancement | `audio enhance` | Native AP-BWE speech bandwidth extension and UniverSR general-audio super-resolution to hashed 48 kHz mono WAVs |
 | Video and worlds | `video generate`, `video cosmos3`, `video prepare-masks`, `video animate`, `video session`, `video export-latents`, `world serve` | MiniMax-H3 FL2VA/Ref2VA synchronized video and audio, native LTX 2.5 and LTX 2.3 synchronized audio/video, resident distilled and full-dev LTX workers, Wan 2.2 TI2V, native Cosmos3-Edge generation/reasoning/action dynamics, native SAM 3.1 mask preparation, native SCAIL-2 subject animation/replacement, and warm DreamX or Cosmos3 world sessions |
-| Music and sound | `music analyze`, `generate`, `realtime`, `separate`, `transcribe`; `sfx generate`, `sfx video generate` | Native MiniMax Music 3 full-song generation; ACE-Step generation, analysis, and covers; Magenta RT2 realtime MIDI performance; native RoFormer separation, dereverb, and denoise; MuScriptor full-mix MIDI transcription; Woosh and native MMAudio text/video-conditioned sound |
+| Music and sound | `music analyze`, `generate`, `realtime`, `separate`, `transcribe`; `sfx generate`, `sfx video generate` | Native MiniMax Music 3 full-song generation; ACE-Step generation, analysis, and covers; Magenta RT2 real-time MIDI performance; native RoFormer separation, dereverb, and denoise; MuScriptor full-mix MIDI transcription; Woosh and native MMAudio text/video-conditioned sound |
 | Speech | `speech synthesize`, `speech transcribe`, `speech diarize`, `speech listen`, `speech profile` | Qwen3 TTS, saved voice profiles, Qwen3 live ASR, Parakeet transcription, and native MLX Sortformer speaker diarization |
 | Serving and operations | `api serve`, `open-webui quickstart`, `status`, `run`, `model runtime`, `gate` | OpenAI-compatible chat, embeddings, images, TTS, and STT; resident model pooling, TTL/pinning, memory guards, durable run inspection, and installed-model quality gates |
 | Automation | `--preflight --json`, `--progress-json`, `image run-plan`, `guide` | Typed preflight actions, machine-readable progress, replayable plans, durable run directories, checksums, and offline command cookbooks |
@@ -70,14 +70,14 @@ vary by command, so check `mere.run model capabilities` before a large pull and
 [`docs/model-sources.md`](./docs/model-sources.md) before redistributing model
 artifacts.
 
-## Relay, Nodes, and plugins
+## Relay, nodes, and plugins
 
 The core runtime stays local, but it does not have to stay on one machine.
 
 - [Relay](https://relay.mere.run) pools Macs and Linux hosts approved under the
   same mere.world account. The separate `mere.run node` desktop app advertises
   each machine's models and availability, then accepts work through an outbound
-  connection. Current node downloads cover macOS, Linux x86_64, and Linux arm64.
+  connection. Active Node builds are available for macOS and Linux x86_64.
 - [Official plugins](https://plugins.mere.run) are companion executables for
   VFX, realtime performance, production tracking, private document workflows,
   automation, and user-owned GPU training. They keep plans, manifests,
@@ -94,7 +94,7 @@ Relay/Node code lives in `sawfwair/relay-mere-run`; plugin contracts and source
 live in [`sawfwair/mere-run-plugins`](https://github.com/sawfwair/mere-run-plugins).
 Neither adds a hosted inference backend to this repository.
 
-## What’s included in this repo
+## Included components
 
 - `Sources/MereRunCore`: shared model resolution, manifests, generation primitives, and MLX-backed inference code
 - `Sources/AudioCore`, `Sources/AudioCodecs`, `Sources/AudioSTT`, `Sources/AudioTTS`: audio generation and transcription support
@@ -108,19 +108,30 @@ Neither adds a hosted inference backend to this repository.
 
 ## Platform expectations
 
-- the public CLI and local runtime are developed and validated on Apple Silicon macOS 15 or newer
-- the optional SwiftUI studio, app bundle, installer, and DMG are macOS-only; Linux compatibility work is for the headless `mere.run` CLI
-- `Package.swift` uses Swift tools 6.0 and declares macOS 15 / iOS 18 package platforms
-- `swift build` and `swift test` are the supported first-run validation path for macOS contributors
-- Linux CLI compatibility work expects a Swift 6.x toolchain, `clang`, `cmake`, `ninja`, `pkg-config`, `gfortran`, curl/zlib/OpenBLAS/LAPACK development headers, `ffmpeg`, `ffprobe`, `gzip`, `unzip`, and `zip`
-- media I/O should discover `ffmpeg` and `ffprobe` on `PATH`, with `MERERUN_FFMPEG` and `MERERUN_FFPROBE` reserved for absolute executable overrides
-- hosted Linux CI should stay CPU MLX-oriented and fixture-sized; Linux arm64 release packages must use a real CUDA lane
-- Linux CUDA validation is limited to the exact hosts that have run the CUDA package and smoke path
-- some vendored binaries include additional Apple platform slices for package consumers, while Linux release artifacts stay headless CLI-only
+- The public CLI and local runtime are developed and validated on Apple Silicon
+  with macOS 15 or later.
+- The optional SwiftUI Studio, app bundle, installer, and DMG are available only
+  on macOS. Linux compatibility work applies to the headless `mere.run` CLI.
+- `Package.swift` uses Swift tools 6.0 and declares macOS 15 and iOS 18 package
+  platforms.
+- `swift build` and `swift test` are the supported first-run validation path for
+  macOS contributors.
+- Linux CLI compatibility work requires a Swift 6.x toolchain, `clang`,
+  `cmake`, `ninja`, `pkg-config`, `gfortran`, curl/zlib/OpenBLAS/LAPACK
+  development headers, `ffmpeg`, `ffprobe`, `gzip`, `unzip`, and `zip`.
+- Media I/O discovers `ffmpeg` and `ffprobe` on `PATH`.
+  `MERERUN_FFMPEG` and `MERERUN_FFPROBE` provide absolute executable overrides.
+- Hosted Linux CI remains CPU MLX-oriented and fixture-sized. Active release
+  builds cover macOS and the configured `tensor.local` x86_64 CUDA builder.
+  The arm64 CUDA release lane is paused until a matching host is available.
+- Linux CUDA validation applies only to hosts that have run the CUDA package
+  and smoke path.
+- Some vendored binaries include additional Apple platform slices for package
+  consumers. Linux release artifacts remain headless and CLI-only.
 
-## Install the latest release
+## Install a signed release
 
-The latest signed macOS build is mirrored at:
+The signed macOS build is mirrored at:
 
 ```bash
 curl -L https://mere.run/releases/mere-run.dmg -o mere-run.dmg
@@ -153,11 +164,11 @@ Pass `preview` one percent-encoded absolute artifact path. It supports images,
 audio, video, text, and Quick Look-compatible 3D files:
 
 ```text
-mererun://preview?path=%2FUsers%2Fme%2FDesktop%2Fresult.png
+mererun://preview?path=%2FUsers%2Fdana%2FDesktop%2Fresult.png
 ```
 
 ```bash
-open 'mererun://preview?path=%2FUsers%2Fme%2FDesktop%2Fresult.png'
+open 'mererun://preview?path=%2FUsers%2Fdana%2FDesktop%2Fresult.png'
 ```
 
 The target must already exist and be a readable file. MereRun rejects relative
@@ -165,17 +176,17 @@ paths, directories, missing files, duplicate `path` values, and extra query
 parameters. This route remains an explicit preview-only option; it does not
 import, move, or modify the artifact.
 
-See [macOS Deep Links](./docs/macos-deep-links.md) for both route contracts and
+See [macOS deep links](./docs/macos-deep-links.md) for both route contracts and
 security boundaries. The separate [Raycast integration](./docs/raycast.md) is
 one example client built on the same public handoff.
 
 Linux package builds are headless CLI-only. They install the `mere.run` CLI plus
 colocated runtime assets; they do not include the macOS SwiftUI studio or DMG
-layout. See the dedicated [Linux QuickStart](./docs/linux-quickstart.md) for the
-current validation boundary, CUDA notes, and first commands. On Linux arm64, if a distro Clang shadows Swift's
+layout. See the dedicated [Linux quickstart](./docs/linux-quickstart.md) for the
+validation boundary, CUDA notes, and first commands. On Linux arm64, if a distribution's Clang shadows Swift's
 bundled Clang and cannot compile MLX bf16 headers, the Linux scripts select a
 bf16-capable C++ driver or report the `CXX` override to use. Linux arm64 release
-packages should be built with CUDA enabled on a host with the CUDA Toolkit
+packages must be built with CUDA enabled on a host with the CUDA Toolkit
 headers, CUDA CCCL headers, cuDNN, and NCCL installed. CUDA `.deb` artifacts
 derive their runtime/JIT dependencies from the linked `libcudart` major. CUDA
 12 packages target the 12.8 NVIDIA packages with Lambda Stack alternatives;
@@ -189,8 +200,8 @@ MERERUN_LINUX_ACCEL=cuda MERERUN_SKIP_MLX_CUDA_EXAMPLE=1 \
   scripts/package-linux.sh --version 0.23.0 --artifact-suffix cuda
 ```
 
-Current CUDA validation should be treated as limited to the exact hosts that
-have run the CUDA package/smoke path.
+CUDA validation applies only to hosts that have run the CUDA package and smoke
+path.
 
 ## Build from source
 
@@ -456,7 +467,7 @@ swift run mere.run text chat \
 
 # Redact PII locally
 swift run mere.run text anonymize \
-  "My name is Alice Smith and my email is alice@example.com"
+  "My name is Dana Example and my email is dana@example.com"
 
 # Serve the OpenAI-compatible local API on loopback
 swift run mere.run api serve --engine text-chat-gemma4
@@ -994,10 +1005,11 @@ management, API serving, and arbitrary arguments in Advanced details.
 
 ## Vision notes
 
-- `vision-segment-sam31` is the single managed SAM 3.1 package for segmentation and tracking
-- `mere.run vision segment` supports text prompts plus box and point prompting
-- `mere.run vision track` seeds objects on the init frame, then propagates them through later frames
-- `mere.run vision track-live` currently records a camera clip first, searches a short warm-up window for seed objects, and then runs tracking over that recording
+- `vision-segment-sam31` is the single managed SAM 3.1 package for segmentation and tracking.
+- `mere.run vision segment` supports text prompts and box or point prompting.
+- `mere.run vision track` seeds objects on the initial frame and then propagates them through later frames.
+- `mere.run vision track-live` records a camera clip, searches a short warm-up
+  window for seed objects, and then runs tracking over that recording.
 
 ## Model store
 
@@ -1020,8 +1032,8 @@ Keep one writable store while unifying models already held on other disks:
 # Search a catalog laid out as <root>/<canonical-model-id>/
 mere.run model location add /Volumes/Models
 
-# Or bind an arbitrary folder name to one canonical model id
-mere.run model location bind video-ltx23-full-mlx /Volumes/SALVATION/models/LTX-2.3 \
+# Or bind an arbitrary folder name to one canonical model ID
+mere.run model location bind video-ltx23-full-mlx /Volumes/ExampleModels/LTX-2.3 \
   --accept-model-license
 
 mere.run model location list
@@ -1062,33 +1074,38 @@ mere.run model gc          # read-only plan
 mere.run model gc --force  # recompute under lock, then delete
 ```
 
-`model remove <id>` reclaims backing payloads only when no other current or
+`model remove <id>` reclaims backing payloads only when no other active or
 legacy model link uses them; `--keep-cache` retains those bytes intentionally.
-New pulls are revision-addressed and hard-link matching content blobs, while
+Managed pulls are revision-addressed and hard-link matching content blobs, while
 existing legacy cache directories remain compatible and can be adopted without
 copying payload bytes.
 
 ## Security defaults
 
-The public OSS build keeps local-first behavior by default and requires explicit opt-in for higher-risk modes:
+The public open-source build keeps local-first behavior by default and requires
+explicit opt-in for higher-risk modes:
 
 - `mere.run api serve --preflight --json` reports host/port, auth, model,
   runtime, and redacted follow-up actions before starting a server or loading a
   model
-- `mere.run api serve` can bind to loopback without auth, but non-loopback hosts require `--api-key` or `MERERUN_API_KEY`
+- `mere.run api serve` can bind to loopback without authentication, but
+  non-loopback hosts require `--api-key` or `MERERUN_API_KEY`.
 - the OpenAI-compatible chat and embedding routes require `Content-Type: application/json`, support `--rate-limit-per-minute` for basic abuse control, decode the common OpenAI request shapes, and reject unsupported high-impact fields before generation
 - `/v1/models` adds task, tool-call, reasoning, modality, limit, and
-  compatibility metadata. The bundled Pi provider consumes these fields and
+  compatibility metadata. The bundled Pi provider uses these fields and
   exposes only tool-capable chat models instead of guessing from model names.
   Those fields project from typed managed-model catalog profiles; aliases and
   active runtime limit overrides are layered on when the server responds.
 - API LoRA adapters are operator-controlled with `--lora`; it accepts a
   verified installed adapter catalog id or a local path, while per-request LoRA
-  paths are rejected
-- tool-loop execution in `mere.run text chat` requires interactive approval unless `--auto-approve-tools` is passed for non-shell tools
-- `shell_exec` is disabled unless `--allow-shell-exec` is set, and still requires interactive approval when enabled
-- `write_file` stays inside the sandbox unless `--allow-absolute-tool-paths` is set
-- remote model and LoRA downloads reject plaintext HTTP except for loopback and local-dev cases
+  paths are rejected.
+- Tool-loop execution in `mere.run text chat` requires interactive approval
+  unless `--auto-approve-tools` is passed for non-shell tools.
+- `shell_exec` is disabled unless `--allow-shell-exec` is set and requires
+  interactive approval when enabled.
+- `write_file` stays inside the sandbox unless `--allow-absolute-tool-paths` is set.
+- Remote model and LoRA downloads reject plaintext HTTP except for loopback and
+  local-development cases.
 
 These flags are intentionally explicit because they weaken the default safety posture:
 
@@ -1110,7 +1127,7 @@ MERERUN_RUN_E2E=core ./scripts/check.sh
 MERERUN_RUN_E2E=installed ./scripts/check.sh
 ```
 
-## Docs
+## Documentation
 
 Start with the docs home:
 
@@ -1129,6 +1146,8 @@ Core guides:
   relay, worker protocol, and remote run lifecycle
 - [`docs/repository-tour.md`](./docs/repository-tour.md): top-level layout and module ownership
 - [`docs/development-workflow.md`](./docs/development-workflow.md): how to work in the repo day to day
+- [`docs/documentation-style.md`](./docs/documentation-style.md): voice,
+  headings, accessibility, example data, and review checks
 - [`docs/testing.md`](./docs/testing.md): validation layers, smoke runs, and troubleshooting
 - [`docs/runtime/vision.md`](./docs/runtime/vision.md): native SAM 3.1 segmentation and tracking details
 - [`docs/runtime/sfx.md`](./docs/runtime/sfx.md): native Woosh and MMAudio SFX generation, CLAP scoring, and video-conditioned generation details
@@ -1161,7 +1180,7 @@ mere-run/
   vendor/
 ```
 
-## Acknowledgements
+## Acknowledgments
 
 mere.run exists because the Python MLX community proved that local-first inference on Apple Silicon could feel fast, practical, and joyful. This Swift package is not a replacement for that work; it is a port of those ideas into a public Swift runtime and CLI. The shape of mere.run — what to expose, how to manage models, how to keep inference paths Metal-native — was directly informed by these projects:
 
@@ -1173,4 +1192,8 @@ mere.run exists because the Python MLX community proved that local-first inferen
   how `mere.run image` loads components, schedules denoising, decodes VAE
   output, exposes engines, and validates generated images.
 
-Where these projects ship runtime artifacts that mere.run actually links against, attribution and license terms live in [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md). The credits above are for the architectural debt: the design conversations, reference implementations, and hard-won model bring-up work these repos held in public before mere.run wrote its first line of Swift.
+When these projects ship runtime artifacts that mere.run links against,
+[`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md) records their attribution
+and license terms. The acknowledgments recognize the design discussions,
+reference implementations, and model bring-up work that these repositories
+published before mere.run began its Swift implementation.

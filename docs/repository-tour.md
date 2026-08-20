@@ -1,6 +1,6 @@
-# Repository Tour
+# Repository tour
 
-This page explains the shape of the repo and what each major directory owns.
+This page explains the shape of the repository and what each major directory owns.
 Use it as the bridge between the end-user docs and the source tree.
 
 ## Top-level layout
@@ -57,7 +57,7 @@ The public command-line surface.
 - `Support/`: shared CLI bootstrap, model inventory, output helpers, and local
   API support
 
-If you want to understand the CLI end to end, start here.
+To understand the CLI end to end, start with `Sources/MereRunCLI`.
 
 ### `apps/macos/MereRunStudio`
 
@@ -67,7 +67,7 @@ child process, streams stdout and stderr, saves local library metadata, and keep
 the raw command surface available in Advanced details.
 
 Do not make this target part of Linux compatibility work. Linux contributors
-should validate the CLI and local API surfaces directly.
+must validate the CLI and local API surfaces directly.
 
 ### `apps/ios`
 
@@ -149,15 +149,15 @@ surface or command semantics, this is where you should add or update coverage.
 
 The main repo validation entrypoint. It runs:
 
-- build and unit tests
-- CLI help smoke for the public command tree
-- output-format and hygiene checks
-- optional e2e smoke runs
+- Build and unit tests.
+- CLI help smoke for the public command tree.
+- Output-format and hygiene checks.
+- Optional end-to-end smoke runs.
 
 ### `scripts/e2e_smoke.sh`
 
 Sequential real-world smoke tests for installed models. Use this when you want
-to validate actual runtime paths instead of just build and parse coverage.
+to validate actual runtime paths in addition to build and parse coverage.
 
 ### `scripts/package-linux.sh`
 
@@ -204,14 +204,14 @@ The docs are layered intentionally:
 - runtime-family guides in `docs/runtime/`
 - contributor/source-reading material in `docs/internals/`
 
-Start at [mere.run Documentation](/) to navigate by audience.
+Start at the [mere.run documentation home](/) to navigate by audience.
 
 ## Recommended code reading order
 
-1. Read [Architecture Reading Map](./architecture.md)
-2. Open `Sources/MereRunCLI/MereRunCLI.swift`
-3. Pick one command family in `Sources/MereRunCLI/Commands`
+1. Read the [architecture map](./architecture.md).
+2. Open `Sources/MereRunCLI/MereRunCLI.swift`.
+3. Pick one command family in `Sources/MereRunCLI/Commands`.
 4. Jump to the matching runtime family in `Sources/MereRunCore`,
    `Sources/AudioSTT`, or `Sources/AudioTTS`
-5. Use the runtime family docs to follow the load -> prepare -> generate ->
-   decode -> output path
+5. Use the runtime family documentation to follow the load, prepare, generate,
+   decode, and output path.

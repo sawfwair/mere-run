@@ -1,16 +1,17 @@
-# CLI and Runtime Internals
+# CLI and runtime internals
 
 This page explains how the public `mere.run` command tree maps to the package
 internals.
 
 ## Top-level flow
 
-1. `Sources/MereRunCLI/MereRunCLI.swift` defines the public modality-first tree
-2. each command in `Sources/MereRunCLI/Commands` parses arguments and performs
-   small amounts of orchestration
-3. shared CLI helpers in `Sources/MereRunCLI/Support` bootstrap the model store,
-   expose the managed model registry, and provide output helpers
-4. runtime code in `MereRunCore`, `AudioSTT`, and `AudioTTS` does the actual work
+1. `Sources/MereRunCLI/MereRunCLI.swift` defines the public modality-first tree.
+2. Each command in `Sources/MereRunCLI/Commands` parses arguments and performs
+   small amounts of orchestration.
+3. Shared CLI helpers in `Sources/MereRunCLI/Support` bootstrap the model store,
+   expose the managed model registry, and provide output helpers.
+4. Runtime code in `MereRunCore`, `AudioSTT`, and `AudioTTS` performs the
+   inference work.
 
 The package is intentionally organized so public command concerns do not live in
 the deep model code.
@@ -81,7 +82,7 @@ That pattern is used heavily in:
 - `ACEStepPipeline`
 - `ImageValidateCommand`
 
-## When to start in the CLI vs the runtime
+## Choose the CLI or runtime starting point
 
 ### Start in the CLI when
 
@@ -95,10 +96,10 @@ That pattern is used heavily in:
 - you are debugging loading, decoding, or generation internals
 - you are working inside one modality family already
 
-## Recommended reading sequence for contributors
+## Contributor reading sequence
 
-1. [Repository Tour](../repository-tour.md)
-2. [Architecture Reading Map](../architecture.md)
-3. one command file in `Sources/MereRunCLI/Commands`
-4. the matching runtime family entrypoint
-5. the related tests in `Tests/`
+1. Read the [repository tour](../repository-tour.md).
+2. Read the [architecture map](../architecture.md).
+3. Read one command file in `Sources/MereRunCLI/Commands`.
+4. Read the matching runtime family entry point.
+5. Read the related tests in `Tests/`.

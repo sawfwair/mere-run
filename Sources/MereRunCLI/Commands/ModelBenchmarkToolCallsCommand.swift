@@ -5,7 +5,7 @@ import MereRunCore
 struct ModelBenchmarkToolCalls: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "tool-calls",
-        abstract: "Run a small tool-call selection eval against local chat models."
+        abstract: "Run a small tool-call selection evaluation against local chat models."
     )
 
     @Option(name: [.long], help: "Comma-separated model ids. Defaults to Q36 and Gemma 4 12B 4-bit.")

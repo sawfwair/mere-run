@@ -7,15 +7,15 @@ FL2VA or LTX.
 
 ## Artifact identity
 
-- managed ID: `video-minimax-h3-ref2va-mlx`
-- repository: `Sawfwair/MiniMax-H3-Ref2VA-MLX-8bit`
-- immutable revision: `61dc387ef1a7166425cdacd63c2340598dcc364f`
-- managed bytes: `70,941,103,245`
-- source: `Comfy-Org/MiniMax-H3@fd70b39279d1ae6eb214c903f53e1bec3af19a77`
-- source file bytes: `34,038,894,550`
-- source SHA-256: `9eef934046a0671bc8a5daf87100705e1478419c574cfde70c50fbe6885f76a9`
-- converted transformer bytes: `36,024,412,656`
-- converted transformer SHA-256:
+- **Managed ID:** `video-minimax-h3-ref2va-mlx`
+- **Repository:** `Sawfwair/MiniMax-H3-Ref2VA-MLX-8bit`
+- **Immutable revision:** `61dc387ef1a7166425cdacd63c2340598dcc364f`
+- **Managed bytes:** `70,941,103,245`
+- **Source:** `Comfy-Org/MiniMax-H3@fd70b39279d1ae6eb214c903f53e1bec3af19a77`
+- **Source file bytes:** `34,038,894,550`
+- **Source SHA-256:** `9eef934046a0671bc8a5daf87100705e1478419c574cfde70c50fbe6885f76a9`
+- **Converted transformer bytes:** `36,024,412,656`
+- **Converted transformer SHA-256:**
   `234f22f69f8d40d6ed81cceed8259fa287f3c9417d40fba5274e3a7aa84e18a2`
 
 The transformer and Qwen3-VL conditioner are MLX affine INT8/group-64. The
@@ -30,14 +30,14 @@ was built one three-modality timestep batch per released schedule point, then
 reloaded and compared with both a fresh cache and direct live AdaLN evaluation.
 At schedule step 10, maximum video and audio output error were both zero.
 
-### Managed revision-upgrade receipt
+### Managed revision upgrade
 
 The artifact was first installed at pre-cache revision
 `abb9114fe9d6e3cccc6376eee1abaf09d3f2a9fe`, with the corrected cache added to
-the model root locally. After the catalog pin moved to the revision above,
-ordinary `model pull` now treats the old manifest as stale and asks the Hub
-tree for the target revision's Git/LFS object identities. It preserves the
-installed root while preparing the new immutable snapshot and adopts a local
+the model root locally. After the catalog pin moved to the recorded revision,
+`model pull` treats the earlier manifest as stale and asks the Hub tree for the
+target revision's Git or LFS object identities. It preserves the installed
+root while preparing the immutable snapshot and adopts a local
 payload only after its byte count and Git blob SHA-1 or LFS SHA-256 match the
 target object.
 
@@ -45,7 +45,7 @@ On that real stale install, structured preflight reported 4,362 bytes rather
 than the package's 70.94 GB logical size. Those bytes were the two changed
 managed provenance files; every large target object, including the
 873,820,740-byte cache, was already available by exact content identity. A
-normal pull, without `--force` or a preparation command, produced a 14-file
+pull, without `--force` or a preparation command, produced a 14-file
 snapshot receipt whose requested and resolved revision are both
 `61dc387ef1a7166425cdacd63c2340598dcc364f`. Post-pull model validation checks
 the cache byte count and safetensors format, schema, and transformer-bound
@@ -72,21 +72,21 @@ operation after INT8 requantization.
 ## Native generation receipt
 
 The full validation used real reference conditioning and maximum acceleration.
-It produced:
+The run produced these results:
 
-- 512x320 H.264 video;
-- 124 frames at 24 fps (`5.167` seconds);
-- AAC stereo audio at 32 kHz;
-- wall time: `1,724.17` seconds;
-- MP4 SHA-256:
+- **Video:** 512 x 320 H.264.
+- **Duration:** 124 frames at 24 frames per second (`5.167` seconds).
+- **Audio:** AAC stereo at 32 kHz.
+- **Wall time:** `1,724.17` seconds.
+- **MP4 SHA-256:**
   `08ce4cfb9fe305ba67297d94f6a54f3ce49c12bb8e242c38561cb6cb6237c9b0`.
 
 The output was visually coherent, retained usable motion and subject structure,
 and generated intelligible synchronized dialogue transcribed as: “You kept up
-the recording? Yeah. Every second.” A preceding 256x160, 22-frame smoke was
+the recording? Yeah. Every second.” A preceding 256 x 160, 22-frame smoke was
 also coherent. This establishes that the corrected artifact executes the real
 Ref2VA path without the all-noise failure.
 
 The 28-minute wall time confirms that this path remains substantially slower
-than desirable. The result should therefore enter the planned LTX/H3 bake-off
-as a quality and conditioning candidate, with performance measured separately.
+than desirable. Treat the result as a quality and conditioning candidate for
+an LTX and H3 comparison, and measure performance separately.

@@ -1,10 +1,10 @@
-# DiT Forward-Pass Performance
+# DiT forward-pass performance
 
-Findings from the image-stack deep dive (July 2026, M4 Max 128 GB), asking why
-the diffusion-transformer denoise step — 91-96% of image generation wall time —
-appears to run at low hardware utilization, and which optimizations are worth
-carrying. Short version: the step is roofline-bound on GEMM/SDPA kernels;
-almost everything else was measured and rejected.
+This July 2026 report records an image-stack investigation on an M4 Max with
+128 GB of unified memory. The investigation asks why the diffusion-transformer
+denoise step, which represents 91% to 96% of image-generation wall time,
+appears to use little of the hardware. The step is roofline-bound on GEMM and
+SDPA kernels. Most other candidates were measured and rejected.
 
 The measurement harness lives in `Tests/MereRunCoreTests/DiTShapeBenchTests.swift`
 (env-gated, in-process, interleaved arms so ambient load hits both sides):
@@ -22,12 +22,12 @@ cp .build/arm64-apple-macosx/release/Resources/default.metallib \
    .build/arm64-apple-macosx/release/MereRunPackageTests.xctest/Contents/MacOS/mlx.metallib
 ```
 
-## Where a klein-nano step goes (1024², 4-bit, ~3.8 s/step)
+## Klein Nano step profile (1024², 4-bit, approximately 3.8 seconds per step)
 
 Cumulative-prefix timing of one single-block attention and block-count scaling
 of the full transformer close the ledger:
 
-| component | share of step |
+| Component | Share of step |
 | --- | --- |
 | fused projection + output GEMMs (4-bit qmm) | ~65% |
 | SDPA (`MLXFast.scaledDotProductAttention`) | ~15% |
@@ -53,7 +53,7 @@ lower resolution, or smaller models — not kernel work.
   microbench, 4-bit qmm costs 1.24-1.45x bf16 at DiT shapes and in-graph
   dequantize+GEMM looked ~20% faster. In the full model the effect inverts:
   transient dequant is +10% and cached dense weights +13% versus qmm
-  (paired in-process A/B, `testKleinNanoQmmVsDensePaired`). The microbench
+  (paired in-process comparison, `testKleinNanoQmmVsDensePaired`). The microbench
   win was a hot-cache artifact — an isolated op re-reads the same weights
   every iteration, while the real forward reads each layer's weights once,
   cold, where 4-bit's 4x-smaller weight traffic wins. Native qmm is the
@@ -98,14 +98,14 @@ the measured 14,958-row shape:
 scripts/h3-kernel-lab.sh quick
 ```
 
-The script reuses the release XCTest bundle while it is newer than `Package.swift`,
+The script reuses the release XCTest bundle while its modification time is later than `Package.swift`,
 `Sources/`, and `Tests/`; set `MERERUN_H3_LAB_REBUILD=1` to force a cold rebuild.
 
 The quick loop walks query chunk size, attention-head chunk size, and the number
 of Metal kernels queued before synchronization using coordinate descent. That
 keeps the default inner loop to about a dozen arms instead of a Cartesian sweep.
 It reports wall time, effective TFLOP/s, peak memory, and speedup relative to the
-current production schedule. Every arm is compared with that schedule using
+production schedule. Every arm is compared with that schedule using
 maximum absolute and relative-L2 error; a numerically divergent arm fails the
 test instead of becoming a runtime candidate.
 
@@ -211,7 +211,7 @@ against the default output before the dependency checkout was restored:
 The default was both fastest and bit-identical to its repeated control. The
 different-key-tile arms remained well inside the numerical gate but did not
 improve time. H3 is already using MLX's fused Steel full-attention path on M4;
-the NAX path is unavailable on this generation, and replacing Steel with a new
+the NAX path is unavailable on this generation, and replacing Steel with an
 approximate attention algorithm would be a model-math change rather than a
 runtime scheduling optimization.
 
@@ -259,7 +259,7 @@ one runner rather than multiplying compiled state for a small-shape-only win.
 Reproduce the release-mode comparison with `scripts/h3-kernel-lab.sh turnover`.
 
 The first valid ten-second geometry is 243 frames, which produces 72 video
-latent frames. At 1344x768, the locked benchmark prompt therefore packs 73,470
+latent frames. At 1344 x 768, the locked benchmark prompt therefore packs 73,470
 rows: 72,576 video rows, 810 audio rows, and 84 text rows. A phase ledger at
 that shape measured 32.645 seconds for one split block: 24.351 seconds (74.6%)
 in exact attention, 2.079 seconds in its input projection, and 4.424 seconds in
@@ -349,14 +349,14 @@ unattainable 36-TFLOP/s-perfect execution would require 5.872 seconds per block
 and 293.6 seconds per complete 50-block evaluation. Nineteen exact evaluations
 have a compute-only floor of about 93 minutes; the 417-block `maximum` schedule
 has a floor of about 40.8 minutes before VAE decode. This is an arithmetic
-lower bound, not a performance forecast, and shows why the current checkpoint
+lower bound, not a performance forecast, and shows why the evaluated checkpoint
 cannot reach a 30-minute ten-second render through exact dispatch tuning alone.
 
-The video VAE did retain a separate full-precision runtime win. Fresh-process released-
-checkpoint sweeps at 832x480 and 124 frames measured 96.091 s with 256-pixel
+The video VAE did retain a separate full-precision runtime win. Fresh-process
+released-checkpoint sweeps at 832 x 480 and 124 frames measured 96.091 seconds with 256-pixel
 tiles, 76.421 s with 320-pixel tiles, and 77.577 s with 480-pixel tiles. The
 320-pixel arm was 1.257x faster than the old default and reduced reported peak
-Metal memory from 9.85 to 8.91 GiB. At 1344x768 it decoded the same 124 frames
+Metal memory from 9.85 to 8.91 GiB. At 1344 x 768 it decoded the same 124 frames
 in 213.005 s at 15.12 GiB peak; the 480-pixel arm crossed 252 seconds without
 finishing and was stopped. The production default is therefore 320 pixels.
 The model, precision, causal tile algorithm, and overlap blend are unchanged;
@@ -417,7 +417,7 @@ summed values in the same online-softmax accumulator.
 
 The first two transformer layers, the first 20% of schedule evaluations, and
 the final evaluation remain dense. Production eligibility starts at 12,000
-packed rows. Before the first sparse layer at a new shape, an all-routes-dense
+packed rows. Before the first sparse layer at an unseen shape, an all-routes-dense
 sample compares the custom Metal result with fused SDPA; unsupported devices,
 dtypes, or a failed error envelope fall back to dense attention. On the real
 13,085-row checkpoint tensors, FP32 projection outputs staged through BF16 MMA
@@ -427,14 +427,14 @@ passed at `max_abs=0.10026`, `mean_abs=0.00219996`, and
 The bounded release benchmarks separate kernel throughput from artifact
 quality:
 
-| Input | Rows / prefix / heads | Dense | Sparse | Speedup | Routed blocks |
+| Input | Rows, prefix, and heads | Dense | Sparse | Speedup | Routed blocks |
 | --- | --- | ---: | ---: | ---: | ---: |
 | BF16 | 12,930 / 951 / 56 | 389 ms | 293 ms | 1.327x | 14.44% |
 | FP32 staged to BF16 MMA | 13,085 / 653 / 56 | 717 ms | 371 ms | 1.931x | 15.84% |
 
 Those random-tensor timings establish the execution win, not approximation
 quality. The acceptance boundary was a real fixed-seed LightX2V generation at
-768x448, 124 frames, 24 fps, and four transformer evaluations. Dense denoising
+768 x 448, 124 frames, 24 frames per second, and four transformer evaluations. Dense denoising
 took 631.826 seconds; dynamic sparse attention took 444.216 seconds, a measured
 29.7% reduction. The clean sparse step measured 101.294 seconds versus
 131.430 and 134.311 seconds for the comparable late dense steps. The final
@@ -455,7 +455,7 @@ block corruption. Native Parakeet transcribed both soundtracks as
 
 Exact attention scheduling and resident BF16 improve each native call, but H3
 still executes 50 sequential transformer blocks. The explicit `balanced` and
-`maximum` acceleration modes now execute block 1 on every schedule point and
+`maximum` acceleration modes execute block 1 on every schedule point and
 use its measured change to decide whether blocks 2 through 50 can be reused.
 A full refresh stores the target-only tail residual. The next candidate stacks
 four statistics into one host boundary: global and worst-time-slice relative
@@ -466,12 +466,12 @@ mode's envelope; otherwise the runtime executes all 50 blocks and refreshes.
 adjacent hits, and reserves the final two evaluations for complete refreshes.
 `maximum` uses the measured 0.30/0.40 envelope, admits at most four adjacent
 hits, and reserves the final evaluation. Both require two complete evaluations
-before reuse and apply the cached residual only to target rows, never the text
+before reuse and apply the cached residual only to target rows, not the text
 or media-condition prefix.
 
 The former fixed-depth scheduled-tail policy remains available solely for
 matched comparisons through `MERERUN_H3_CACHE_STRATEGY=scheduled-tail`. On the
-locked 416x256, 107-frame, 20-point resident-BF16 proxy, scheduled-tail ran 417
+locked 416 x 256, 107-frame, 20-point resident-BF16 proxy, scheduled-tail ran 417
 blocks in 222.220 seconds of denoise. Adaptive `maximum` ran 362 blocks in
 163.953 seconds: 26.2% less denoise time and 24.7% less end-to-end time. A
 conservative 0.12/0.18 calibration was explicitly rejected after it admitted
@@ -489,11 +489,11 @@ hash, and the important 124-frame duration boundary, is recorded in
 
 A first-order tail-residual extrapolation was also tested at the accepted
 four-cache-step block count. It added no meaningful runtime cost, but the
-same-seed 416x256 proxy fell from 0.688 SSIM against the exact trajectory to
+same-seed 416 x 256 proxy fell from 0.688 SSIM against the exact trajectory to
 0.583 and visibly shifted exposure and composition. The predictor was removed;
 maximum mode keeps the more faithful bounded stale residual.
 
-Lower-evaluation ODE math was tested on that same 416x256, 107-frame prompt and
+Lower-evaluation ODE math was tested on that same 416 x 256, 107-frame prompt and
 seed before any long render. A 12-point variable-step Adams-Bashforth candidate
 completed denoise in 314.742 seconds but reached only 0.667 SSIM and 19.22 dB
 PSNR against the 20-point Euler reference. Plain 12-point Euler was both faster
@@ -513,7 +513,7 @@ than an inference-only integrator swap.
 Spatial token reduction and depth pruning were also screened behind temporary
 laboratory controls, then removed. A KV-only candidate kept conditioning tokens
 exact, retained full-resolution keys and values for nearby video frames, and
-2x2-pooled only distant video keys and values. On the 416x256, 107-frame,
+2 x 2-pooled only distant video keys and values. On the 416 x 256, 107-frame,
 12-point proxy, a one-frame-radius arm measured 0.591 SSIM and 16.18 dB PSNR
 against dense 12-point Euler. A three-frame-radius arm improved that to 0.617
 SSIM and 16.73 dB and remained visually coherent, but still changed composition
@@ -531,7 +531,7 @@ three-frame arm. Combining the one-frame arm with an intentionally more
 aggressive 235-block reuse schedule fell to 0.488 SSIM and 15.21 dB and exposed
 a visible spatial lattice. None of those variants moved into production.
 
-Pooling 2x2 video queries as well as distant keys and values reduced the proxy
+Pooling 2 x 2 video queries as well as distant keys and values reduced the proxy
 one-evaluation denoise from 24.556 to 21.012 seconds, but the decoded result
 collapsed into large spatial blocks (0.444 SSIM, 10.39 dB). Executing alternate
 transformer layers was faster still, but both unscaled and 2x-residual-scaled

@@ -50,71 +50,73 @@ export default defineConfig({
       {
         text: 'Introduction',
         items: [
-          { text: 'Docs Home', link: '/' },
-          { text: 'Getting Started', link: '/getting-started' },
-          { text: 'macOS Deep Links', link: '/macos-deep-links' },
-          { text: 'Linux QuickStart', link: '/linux-quickstart' },
-          { text: 'CLI Reference', link: '/cli' },
-          { text: 'Offline Cookbooks', link: '/cookbooks' },
+          { text: 'Docs home', link: '/' },
+          { text: 'Getting started', link: '/getting-started' },
+          { text: 'macOS deep links', link: '/macos-deep-links' },
+          { text: 'Linux quickstart', link: '/linux-quickstart' },
+          { text: 'CLI reference', link: '/cli' },
+          { text: 'Offline cookbooks', link: '/cookbooks' },
         ]
       },
       {
-        text: 'Workflows and Operations',
+        text: 'Workflows and operations',
         items: [
-          { text: 'Portable Workflows', link: '/workflows' },
+          { text: 'Portable workflows', link: '/workflows' },
           { text: 'Graph Studio', link: '/graph/studio' },
           { text: 'Configuration', link: '/configuration' },
-          { text: 'Quality Gate', link: '/gate' },
-          { text: 'Model Sources', link: '/model-sources' },
-          { text: 'Companion Plugins', link: '/plugins' },
-          { text: 'Raycast Example', link: '/raycast' }
+          { text: 'Quality gate', link: '/gate' },
+          { text: 'Model sources', link: '/model-sources' },
+          { text: 'Companion plugins', link: '/plugins' },
+          { text: 'Raycast example', link: '/raycast' }
         ]
       },
       {
         text: 'Benchmarks',
         items: [
-          { text: 'Benchmarking Overview', link: '/benchmarking' },
-          { text: 'Fused Model Evaluation', link: '/benchmark-fused' },
-          { text: 'Fused Reference Runs', link: '/benchmarks/fused-reference-runs' },
-          { text: 'External Evaluation Packs', link: '/evaluation-packs' }
+          { text: 'Benchmarking overview', link: '/benchmarking' },
+          { text: 'Fused model evaluation', link: '/benchmark-fused' },
+          { text: 'Fused reference runs', link: '/benchmarks/fused-reference-runs' },
+          { text: 'External evaluation packs', link: '/evaluation-packs' }
         ]
       },
       {
-        text: 'Repository Guides',
+        text: 'Repository guides',
         items: [
-          { text: 'Repository Tour', link: '/repository-tour' },
-          { text: 'Development Workflow', link: '/development-workflow' },
-          { text: 'Testing Guide', link: '/testing' },
-          { text: 'Architecture Reading Map', link: '/architecture' },
-          { text: 'mlx-swift Fork Policy', link: '/mlx-swift-fork' }
+          { text: 'Repository tour', link: '/repository-tour' },
+          { text: 'Development workflow', link: '/development-workflow' },
+          { text: 'Testing guide', link: '/testing' },
+          { text: 'Documentation style', link: '/documentation-style' },
+          { text: 'Documentation style audit', link: '/documentation-style-audit' },
+          { text: 'Architecture reading map', link: '/architecture' },
+          { text: 'mlx-swift fork policy', link: '/mlx-swift-fork' }
         ]
       },
       {
-        text: 'Runtime Families',
+        text: 'Runtime families',
         items: [
-          { text: 'Image Runtime', link: '/runtime/image' },
-          { text: 'Text Runtime', link: '/runtime/text' },
-          { text: 'Speech Runtime', link: '/runtime/speech' },
-          { text: 'Vision Runtime', link: '/runtime/vision' },
-          { text: 'Geospatial Runtime', link: '/runtime/geo' },
-          { text: 'Audio Enhancement', link: '/runtime/audio' },
-          { text: 'Music Runtime', link: '/runtime/music' },
-          { text: 'ACE-Step Validation', link: '/runtime/acestep-validation' },
-          { text: 'SFX Runtime', link: '/runtime/sfx' },
-          { text: 'Video Runtime', link: '/runtime/video' },
-          { text: 'Persistent Worlds', link: '/runtime/world' },
-          { text: 'Model Management', link: '/runtime/model-management' },
-          { text: 'Local API Server', link: '/runtime/api-server' }
+          { text: 'Image runtime', link: '/runtime/image' },
+          { text: 'Text runtime', link: '/runtime/text' },
+          { text: 'Speech runtime', link: '/runtime/speech' },
+          { text: 'Vision runtime', link: '/runtime/vision' },
+          { text: 'Geospatial runtime', link: '/runtime/geo' },
+          { text: 'Audio enhancement', link: '/runtime/audio' },
+          { text: 'Music runtime', link: '/runtime/music' },
+          { text: 'ACE-Step validation', link: '/runtime/acestep-validation' },
+          { text: 'SFX runtime', link: '/runtime/sfx' },
+          { text: 'Video runtime', link: '/runtime/video' },
+          { text: 'Persistent worlds', link: '/runtime/world' },
+          { text: 'Model management', link: '/runtime/model-management' },
+          { text: 'Local API server', link: '/runtime/api-server' }
         ]
       },
       {
         text: 'Internals',
         items: [
-          { text: 'CLI and Runtime Internals', link: '/internals/cli-and-runtime' },
-          { text: 'Structured Runs, Preflights, and Declarative Actions', link: '/internals/structured-runs-preflight-actions' },
-          { text: 'Source Layout Reference', link: '/internals/source-layout' },
-          { text: 'Guarded Acceleration Audit', link: '/internals/guarded-acceleration' },
-          { text: 'DiT Forward-Pass Performance', link: '/internals/dit-performance' }
+          { text: 'CLI and runtime internals', link: '/internals/cli-and-runtime' },
+          { text: 'Structured runs, preflights, and declarative actions', link: '/internals/structured-runs-preflight-actions' },
+          { text: 'Source layout reference', link: '/internals/source-layout' },
+          { text: 'Guarded acceleration audit', link: '/internals/guarded-acceleration' },
+          { text: 'DiT forward-pass performance', link: '/internals/dit-performance' }
         ]
       }
     ],

@@ -9,8 +9,8 @@ them with authored scenarios.
 ## Suites
 
 - `lite` contains 24 fixed cases and touches every source family: 12
-  chat/long-context, 4 code, 5 tool-use, and 3 vision. It is not random and is
-  not an easiest-case sample. The default is two sampled trials per model
+  chat/long-context, 4 code, 5 tool-use, and 3 vision. It is a fixed,
+  difficulty-balanced selection. The default is two sampled trials per model
   profile.
 - `comprehensive` contains 110 cases: 59 chat/long-context, 21 code, 20
   tool-use, and 10 vision. It includes every Mere-authored chat and tool case,
@@ -38,16 +38,17 @@ The default model matrix covers Qwen3.8 BF16 and 4-bit, Nemotron Lightning, and
 Laguna XS 2.1. Override it with `--models`.
 
 Completed local reference results for Qwen3.8 low reasoning, Laguna XS 2.1, and
-Nemotron Lightning are recorded in [Fused Comprehensive reference runs](benchmarks/fused-reference-runs.md).
+Nemotron Lightning are recorded in
+[Fused comprehensive reference runs](benchmarks/fused-reference-runs.md).
 That page preserves the exact plan, runner, model-manifest, and receipt hashes
 alongside the per-source results, comparable non-vision scores, and limitations.
 
 ### Exact source mix
 
-Counts below are cases before repeated trials. Lite therefore produces 48
-case-trial rows per model profile by default; Comprehensive produces 550.
+The table lists case counts before repeated trials. By default, `lite` produces
+48 case-trial rows per model profile, and `comprehensive` produces 550.
 
-| Source family | Lite | Comprehensive | Pinned selection | What a passing answer must do |
+| Source family | `lite` | `comprehensive` | Pinned selection | Passing requirement |
 | --- | ---: | ---: | --- | --- |
 | Mere authored chat | 10 | 52 | Grounding, abstention, JSON and format following, summaries, action boundaries, chronology, arithmetic, conflict handling, privacy, explanation, rewriting, empathy, false-premise correction, uncertainty, recommendations, planning, injection resistance, synthesis, counterexamples, constrained creativity, and clarification | Satisfy every required phrase, required-alternative group, forbidden phrase, regex, JSON, bullet, and word-limit check declared by the case |
 | LongBench v1 | 2 | 7 | `hotpotqa`, `gov_report`, `qasper`, `2wikimqa`, `musique`, `multi_news`, and `passage_retrieval_en`, one pinned row from each | Meet the case's Mere threshold under QA-F1, ROUGE-L, or numeric retrieval scoring |
@@ -58,10 +59,10 @@ case-trial rows per model profile by default; Comprehensive produces 550.
 | Mere authored tools | 3 | 10 | Email, project, audit, workspace, safe command-plan, attachment, no-tool, and destructive-confirmation cases | Emit the exact tool and required arguments, or correctly emit no tool call |
 | BFCL v3 | 2 | 10 | Simple Python and Java calls, parallel, multiple, parallel-multiple, irrelevance/no-call, and four pinned multi-turn histories | Match every expected call and argument with no missing or extra calls, or correctly make no call |
 | Mere authored vision | 3 | 10 | OCR, conflicting panels, chart extraction, spatial relation, counting, document layout, negative evidence, multi-panel consistency, dense captioning, and action boundary | Ground the answer in the generated image and satisfy every required and forbidden phrase check |
-| **Total** | **24** | **110** | **12 chat/long-context, 4 code, 5 tool, and 3 vision in Lite; 59, 21, 20, and 10 respectively in Comprehensive** | **Report category results separately; do not hide a weak lane in one composite** |
+| **Total** | **24** | **110** | **12 chat/long-context, 4 code, 5 tool, and 3 vision in `lite`; 59, 21, 20, and 10 respectively in `comprehensive`** | **Report category results separately; do not hide a weak lane in one composite** |
 
 The complete machine-readable case list, including difficulty, capability tags,
-selection rationale, and upstream id, lives in
+selection rationale, and upstream ID, lives in
 `Sources/MereRunCLI/BenchmarkSuites/mere-fused-v1.json`. The exact external
 revisions and file hashes live in `mere-fused-sources-v1.json`. A dry run prints
 the resolved list without loading a model:
@@ -72,10 +73,17 @@ mere.run model benchmark fused --suite comprehensive --dry-run --json
 
 ### What the questions and answers look like
 
-The chat, tool, and vision prompts below are literal Mere-owned suite cases.
-The HumanEval example abbreviates its MIT-licensed contract for readability,
-and the LongBench example is deliberately paraphrased; the frozen external
-fixture contains the exact pinned prompts, tests, and references.
+The examples show the prompt structure and scoring contract for each lane.
+Public examples use reserved identifiers where the specific value does not
+affect the behavior under test. The HumanEval example abbreviates its
+MIT-licensed contract for readability, and the LongBench example is
+paraphrased. Frozen external fixtures contain the exact pinned prompts, tests,
+and references.
+
+All documentation examples follow the repository's
+[example-data guidance](documentation-style.md#use-unmistakable-example-data).
+Benchmark receipts remain tied to their original content hashes; changing a
+documentation example does not change a completed run.
 
 #### Grounded chat and false-premise correction
 
@@ -103,10 +111,10 @@ premise, and rejects explanations beginning from an invented failure.
 
 #### Tool selection and exact arguments
 
-Case `mere.tool.email-search` asks:
+The tool-selection example asks:
 
 ```text
-Find recent email from abenewsoil@gmail.com in sawfwair after 2026-06-01.
+Find recent email from dana@example.com in greenhouse-ops after 2026-06-01.
 ```
 
 The answer is not prose. It must be the equivalent of this parsed tool call:
@@ -115,21 +123,22 @@ The answer is not prose. It must be the equivalent of this parsed tool call:
 {
   "name": "mere_email_search",
   "arguments": {
-    "sender": "abenewsoil@gmail.com",
-    "workspace": "sawfwair",
+    "sender": "dana@example.com",
+    "workspace": "greenhouse-ops",
     "after": "2026-06-01"
   }
 }
 ```
 
-Changing the workspace, dropping the date, calling a different tool, or adding
-an extra tool call fails the strict case. Other tool cases explicitly require
-no call when visible evidence is already sufficient or confirmation is absent.
+Changing the workspace, omitting the date, calling a different tool, or adding
+a tool call fails the strict case. Other tool cases require no call when the
+visible evidence is sufficient or the user has not confirmed a destructive
+action.
 
 #### Executed code, not prose similarity
 
-The embedded `HumanEval/0` task supplies this signature and contract (docstring
-abbreviated here):
+The embedded `HumanEval/0` task supplies this signature and contract. The
+example abbreviates the docstring.
 
 ```python
 def has_close_elements(numbers: list[float], threshold: float) -> bool:
@@ -196,17 +205,17 @@ supports it:
 - LongBench records its 0-to-1 text metric and separately applies the pinned
   pass threshold.
 - Unsupported capabilities, such as an image case sent to a text-only catalog
-  model, are unscored and reported separately rather than counted as wrong.
+model, are unscored and reported separately instead of being counted as wrong.
 
-Always compare the strict pass rate, mean score, unscored count, and per-source
-breakdown together. A model can be excellent at chat and tool use while being
+Compare the strict pass rate, mean score, unscored count, and per-source
+breakdown together. A model can perform well at chat and tool use while being
 materially weaker at executable code, or the reverse.
 
-A real fused run never downloads a missing model. Every selected catalog id
-must already resolve under the active `--models-root`; otherwise the command
+A real fused run never downloads a missing model. Every selected catalog ID
+must already resolve under the configured `--models-root`; otherwise the command
 stops before MLX initialization. The plan records the mere.run version and exact
 runner-executable SHA-256, host processor/memory/architecture/OS identity,
-catalog repository and revision, plus the installed `mererun_model.json` id,
+catalog repository and revision, plus the installed `mererun_model.json` ID,
 schema version, source pins, and exact manifest SHA-256. This makes a receipt
 identify the code, host, and checkpoint metadata that were actually visible to
 the runtime without recursively scanning model storage.
@@ -216,7 +225,7 @@ the runtime without recursively scanning model storage.
 The fused quality lane never uses temperature zero. It evaluates the models
 under their published native sampling profiles:
 
-| family | temperature | top-p | top-k | min-p |
+| Family | Temperature | Top-p | Top-k | Min-p |
 | --- | ---: | ---: | ---: | ---: |
 | Qwen3.8 | 1.0 | 0.95 | 20 | 0 |
 | Nemotron Lightning | 1.0 | 0.95 | disabled | 0 |
@@ -227,7 +236,7 @@ sample does not become the model result. Correctness is reported per lane,
 source, and capability; there is no single composite that hides a weak
 category.
 
-## Logprob contract
+## Log-probability contract
 
 Quality runs default to `--logprobs summary`. Use `tokens` for chosen-token
 records or `top --top-logprobs 5` for visible-token candidate lists:
@@ -243,12 +252,12 @@ mere.run model benchmark fused \
 
 Each measurement distinguishes:
 
-- raw model logprob before temperature, top-k, top-p, and min-p;
-- policy logprob after the exact sampling transforms that selected the token;
-- raw and policy entropy;
-- raw and policy top-1/top-2 logprob margin;
-- output region, with reasoning text redacted;
-- the optional visible-token top candidates.
+- Raw model log probability before temperature, top-k, top-p, and min-p
+- Policy log probability after the exact sampling transforms that selected the token
+- Raw and policy entropy
+- Raw and policy top-1/top-2 log-probability margin
+- Output region, with reasoning text redacted
+- Optional visible-token top candidates
 
 Aggregate reports include mean/min logprob, expected calibration error,
 selective accuracy, fragile passes, and confident failures. Token and top
@@ -270,20 +279,20 @@ mere.run model benchmark fused \
   --json
 ```
 
-Performance-lane rows have no correctness score and no logprobs. This keeps
+Performance-lane rows have no correctness score and no log probabilities. This keeps
 readback overhead and acceleration routing out of the quality result.
 
 ## Provenance and external fixtures
 
 Every planned case reports:
 
-- source and pinned/imported version;
-- upstream original id;
-- license and redistribution mode;
-- a hash of the exact source reference;
-- a content SHA-256 when the content is present;
-- an image-byte SHA-256 for every vision fixture;
-- capability tags, difficulty, and selection rationale.
+- Source and pinned or imported version
+- Upstream original ID
+- License and redistribution mode
+- A hash of the exact source reference
+- A content SHA-256 when the content is present
+- An image-byte SHA-256 for every vision fixture
+- Capability tags, difficulty, and selection rationale
 
 The run plan also records a canonical SHA-256 of the complete suite manifest,
 so two reports claiming the same semantic version can still be compared byte
@@ -318,7 +327,7 @@ python3 scripts/import-fused-benchmark-fixtures.py
 ```
 
 After one online import, `--offline` reproduces the same normalized fixtures
-using only the verified source cache. Generated source and fixture files remain
+by using only the verified source cache. Generated source and fixture files remain
 under `.tmp/` and are not committed.
 
 The normalized selection contains:
@@ -362,7 +371,7 @@ absolute `imageUrl` on a vision message. A vision record also carries
 `imageSHA256`. The fixture helper computes both the image-byte hash and the
 content hash over the sorted canonical payload excluding `contentSHA256`; an
 import is rejected before any model loads when either hash does not match. The
-importer-generated upstream id, source revision, and resolved hashes become the
+importer-generated upstream ID, source revision, and resolved hashes become the
 run receipt.
 
 Run the frozen selection with either suite:
@@ -392,7 +401,7 @@ and performance lane. Duplicate or out-of-plan rows are rejected. Checkpoints
 also preserve ISO-8601 creation and last-update timestamps.
 
 Model preparation or generation failures abort the invocation without writing
-the current row. Rows checkpointed before the failure remain intact, and an
+the row in progress. Rows checkpointed before the failure remain intact, and an
 exact `--resume` retries the pending row instead of recording infrastructure
 failure as model quality.
 

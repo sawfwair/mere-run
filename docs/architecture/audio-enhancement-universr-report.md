@@ -1,5 +1,8 @@
 # UniverSR general-audio super-resolution implementation report
 
+This report is for contributors who review UniverSR runtime admission,
+implementation parity, and validation evidence.
+
 ## Decision
 
 The official general-audio UniverSR profile is admitted as a separate native
@@ -9,6 +12,8 @@ audio. It is described as audio super-resolution, not a complete mastering
 chain.
 
 ## Source and license admission
+
+The following table records the admitted source and checkpoint identities:
 
 | Item | Frozen identity | License/admission result |
 | --- | --- | --- |
@@ -24,20 +29,22 @@ three artifacts changes.
 
 ## Native graph
 
-The typed graph contains 394 float32 tensors and 57,231,302 scalars. It follows
-the published general-audio profile:
+The typed graph contains 394 `float32` tensors and 57,231,302 scalars. It
+follows the published general-audio profile:
 
-- deterministic integer-ratio, windowed-sinc interpolation to 48 kHz;
-- symmetric-Hann, 1,024-point complex STFT with a 512-sample hop;
-- power-law magnitude compression with alpha 0.2, beta 1, and epsilon 1e-4;
-- conditional ConvNeXt V2 U-Net dimensions `[96, 192, 384, 768]`, depths
-  `[2, 2, 4, 2]`, 384 conditioning channels, and a 256-dimensional time path;
-- rate-conditioned low-frequency observations and reconstruction of the
-  remaining spectrum;
-- deterministic noise seeding and Euler, midpoint, or RK4 ODE integration;
-- inverse compression and native ISTFT cropped back to the source duration.
+- Deterministic integer-ratio, windowed-sinc interpolation to 48 kHz
+- Symmetric-Hann, 1,024-point complex short-time Fourier transform (STFT) with
+  a 512-sample hop
+- Power-law magnitude compression with alpha 0.2, beta 1, and epsilon 1e-4
+- Conditional ConvNeXt V2 U-Net dimensions `[96, 192, 384, 768]`, depths
+  `[2, 2, 4, 2]`, 384 conditioning channels, and a 256-dimensional time path
+- Rate-conditioned low-frequency observations and reconstruction of the
+  remaining spectrum
+- Deterministic noise seeding and Euler, midpoint, or RK4 ordinary differential
+  equation (ODE) integration
+- Inverse compression and native inverse STFT cropped to the source duration
 
-PyTorch Conv2d and ConvTranspose2d tensors are transformed into the MLX kernel
+PyTorch `Conv2d` and `ConvTranspose2d` tensors are transformed into MLX kernel
 layouts only after the restricted state-dict reader verifies archive metadata,
 key set, shape, dtype, tensor count, scalar count, byte count, and whole-file
 hash.
@@ -52,6 +59,6 @@ four steps, guidance scale 1.5, and seed 42, all recorded in the output
 provenance manifest.
 
 The installed-model gate and manual smoke use the public command to produce a
-real WAV. Finite, non-silent output and spectral energy above the declared
+WAV file. Finite, non-silent output and spectral energy above the declared
 input boundary prove the native path executed; they are not a perceptual
 quality benchmark.

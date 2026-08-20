@@ -1,4 +1,4 @@
-# macOS Deep Links
+# macOS deep links
 
 MereRun.app exposes two typed local handoff routes through the `mererun://`
 scheme. A launcher, automation, agent, or another macOS app can preview an
@@ -13,7 +13,7 @@ only and cannot open MereRun Studio.
 Open one existing readable file in MereRun's native Quick Look panel:
 
 ```text
-mererun://preview?path=%2FUsers%2Fme%2FDesktop%2Fresult.png
+mererun://preview?path=%2FUsers%2Fdana%2FDesktop%2Fresult.png
 ```
 
 Build the URL with a URL-components API so the absolute path is percent encoded
@@ -21,7 +21,7 @@ exactly once. From a shell, an already encoded link can be passed to Launch
 Services with `open`:
 
 ```bash
-open 'mererun://preview?path=%2FUsers%2Fme%2FDesktop%2Fresult.png'
+open 'mererun://preview?path=%2FUsers%2Fdana%2FDesktop%2Fresult.png'
 ```
 
 The target may be an image, audio, video, text, or Quick Look-compatible 3D
@@ -35,7 +35,7 @@ move, or modify the artifact.
 JSON receipt:
 
 ```text
-mererun://library/import?receipt=%2FUsers%2Fme%2FLibrary%2FApplication%20Support%2FMyLauncher%2Fimports%2F5cb7dc90-a9d4-4634-a486-0b8140226b42.json
+mererun://library/import?receipt=%2FUsers%2Fdana%2FLibrary%2FApplication%20Support%2FExampleLauncher%2Fimports%2F5cb7dc90-a9d4-4634-a486-0b8140226b42.json
 ```
 
 A version 1 receipt contains the completed local run metadata MereRun needs:
@@ -47,21 +47,21 @@ A version 1 receipt contains the completed local run metadata MereRun needs:
   "source": "raycast",
   "kind": "image",
   "prompt": "a ceramic coffee mug in soft morning light",
-  "artifactPath": "/Users/me/MereRun/Artifacts/mere-image-result.png",
+  "artifactPath": "/Users/dana/MereRun/Artifacts/mere-image-result.png",
   "createdAt": "2026-08-01T22:42:07Z"
 }
 ```
 
-Version 1 currently accepts the `raycast` source and the typed `image`,
+Version 1 accepts the `raycast` source and the typed `image`,
 `video`, `music`, and `speech` kinds. The source vocabulary is intentionally
-strict even though the deep-link transport is not coupled to Raycast. New
-maintained clients should add a source case and contract tests before emitting
-receipts under a new source name.
+strict even though the deep-link transport is not coupled to Raycast. Before a
+maintained client emits receipts under another source name, add a source case
+and contract tests.
 
 MereRun validates the receipt and referenced artifact, deduplicates repeated
 handoffs, records the completed result through its own Library store, activates
 the matching workspace, reveals Library, and selects the imported row. The
-caller must never read or write `library.json` directly.
+caller must not read or write `library.json` directly.
 
 ## Local and security boundaries
 

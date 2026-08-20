@@ -6,19 +6,19 @@ transformer-only extrapolation.
 
 ## Locked workload
 
-- checkpoint: managed `video-minimax-h3-fl2va-bf16-mlx`
-- mode: resident BF16 transformer, historical scheduled-tail `maximum`
-- geometry: 832x480, 124 frames, 24 fps
-- schedule: 20 points / 19 model evaluations
-- seed: `20260804`
-- packed rows: 14,928
-- execution: blockwise compiled
-- policy: six complete 50-block evaluations and thirteen nine-block cached-tail
+- **Checkpoint:** Managed `video-minimax-h3-fl2va-bf16-mlx`.
+- **Mode:** Resident BF16 transformer, historical scheduled-tail `maximum`.
+- **Geometry:** 832 x 480 pixels, 124 frames, 24 frames per second.
+- **Schedule:** 20 points and 19 model evaluations.
+- **Seed:** `20260804`.
+- **Packed rows:** 14,928.
+- **Execution:** Blockwise compiled.
+- **Policy:** Six complete 50-block evaluations and thirteen nine-block cached-tail
   evaluations, with native start, refresh, and endpoint evaluations
 
-This historical artifact is reproducible on the current runtime with
-`MERERUN_H3_CACHE_STRATEGY=scheduled-tail`. Production `maximum` now selects
-the adaptive first-block policy measured below.
+This historical artifact is reproducible on the runtime with
+`MERERUN_H3_CACHE_STRATEGY=scheduled-tail`. Production `maximum` selects
+the adaptive first-block policy in the adaptive cache comparison.
 
 The command is reproducible with the repository benchmark harness:
 
@@ -41,21 +41,22 @@ The six full evaluations averaged 184.268 seconds. The thirteen cached-tail
 evaluations averaged 32.372 seconds with a 32.191-second median. Peak reported
 Metal memory was 43.41 GiB and active memory remained approximately 38.24 GiB.
 
-The output is an H.264/AAC MP4 at 832x480, 24 fps, with synchronized 32 kHz
+The output is an H.264/AAC MP4 at 832 x 480 pixels and 24 frames per second,
+with synchronized 32 kHz
 stereo audio. Its SHA-256 is
 `270544693662769fd8f90971d1ccabce3405fe00ff21885f96b9b0e218cb921f`.
 Visual acceptance confirmed a coherent caped figure and yellow umbrella,
 wet-street reflections, levitating bus, and luminous dragon motion without the
 spatial lattice rejected in earlier aggressive cache experiments.
 
-## Adaptive first-block cache A/B
+## Adaptive first-block cache comparison
 
 A later release-build A/B held checkpoint, prompt, seed, geometry, schedule,
 weight residency, and packed layout fixed while changing only the cache
-decision. This practical proxy used resident BF16 at 416x256, 107 frames,
-20 schedule points / 19 evaluations, and 3,768 packed rows.
+decision. This practical proxy used resident BF16 at 416 x 256 pixels, 107 frames,
+20 schedule points and 19 evaluations, and 3,768 packed rows.
 
-| Policy | Full / cached evaluations | Executed blocks | Denoising | End to end |
+| Policy | Full and cached evaluations | Executed blocks | Denoising | End to end |
 | --- | ---: | ---: | ---: | ---: |
 | Scheduled-tail baseline | 6 / 13 | 417 | 222.220 s | 257.814 s |
 | Adaptive first-block `maximum` | 7 / 12 | 362 | **163.953 s** | **194.174 s** |
@@ -67,7 +68,7 @@ performance warning at its start. A deliberately conservative 0.12/0.18
 calibration was also measured and rejected: it admitted only 7 cache hits,
 executed 607 blocks, and took 328.364 seconds to denoise.
 
-Both accepted MP4s contain H.264 416x256 video at 24 fps and AAC 32 kHz stereo
+Both accepted MP4s contain H.264 416 x 256 video at 24 frames per second and AAC 32 kHz stereo
 audio. Contact-sheet inspection confirmed the same coherent bus-lift-to-dragon
 trajectory without lattice collapse. The baseline SHA-256 is
 `02fb184e6cc8213197e52ecaf4b6b344eb4b292b6233213605bc36d5d50cb66b`; the
@@ -77,17 +78,17 @@ adaptive output SHA-256 is
 ## Resident sliding-window and frame-injection receipts
 
 A real two-window FL2VA generation then exercised the long-form path with the
-same managed BF16 checkpoint. It generated 56 frames at 416x256 using 39-frame
+same managed BF16 checkpoint. It generated 56 frames at 416 x 256 pixels using 39-frame
 windows, an 18-frame video-and-audio overlap, nine schedule points per window,
 and the adaptive `maximum` policy. The second window reused the resident Qwen
 conditioner and transformer: both model-load phases measured 0.000 seconds.
 
-| Window | Full / cached evaluations | Executed blocks | Denoising | Generation |
+| Window | Full and cached evaluations | Executed blocks | Denoising | Generation |
 | --- | ---: | ---: | ---: | ---: |
 | First | 5 / 3 | 253 | 43.268 s | 67.796 s |
 | Continuation | 5 / 3 | 253 | 51.273 s | 63.421 s |
 
-The resulting H.264/AAC MP4 contains exactly 56 frames at 24 fps and 32 kHz
+The resulting H.264/AAC MP4 contains exactly 56 frames at 24 frames per second and 32 kHz
 stereo audio, both 2.333 seconds long. At the window boundary, frame-to-frame
 RGB mean absolute difference was 4.128, below every adjacent comparison in the
 local inspection range (6.418–7.609). Audio sample jumps at the same boundary
@@ -97,7 +98,7 @@ nor an audio-click impulse. The artifact SHA-256 is
 `ac51d8eb9623e9f7ea996204a415370058241f912aadffc058dde3a2525f25de`.
 
 A separate release-mode FL2VA generation injected an exact image at output
-frame 11 of a 22-frame, 416x256 shot. The Qwen multimodal presentation and
+frame 11 of a 22-frame, 416 x 256 shot. The Qwen multimodal presentation and
 video-VAE condition path both consumed the frame; the run completed in 46.944
 seconds with 28.532 seconds of denoising. The valid H.264/AAC output has
 SHA-256
@@ -113,13 +114,13 @@ to the typed continuation-layout coverage here.
 The locked MP4 predates the audio-VAE bias-loading correction documented in
 the kernel lab. Its video remains the accepted visual and timing receipt, but
 its hissy soundtrack is not an audio-quality reference. The corrected decoder
-matches the released FP32 reference at `rel_l2=0.0000194`; a future long render
-must replace the soundtrack acceptance receipt rather than reusing this file.
+matches the released FP32 reference at `rel_l2=0.0000194`; a later long render
+must replace the soundtrack acceptance receipt instead of reusing this file.
 
 ## Duration boundary
 
 MiniMax-H3 frame counts follow `17*n+5`. The locked 124-frame artifact is
-5.167 seconds at 24 fps. It proves the near-30-minute target for this workload;
+5.167 seconds at 24 frames per second. It proves the near-30-minute target for this workload;
 it is not a ten-second runtime claim. The first valid frame count beyond ten
 seconds is 243 frames (10.125 seconds), which requires a separate measured
 receipt.
@@ -130,13 +131,13 @@ The optional `minimax-h3-turbo-4step` adapter was validated separately with a
 real release-mode generation rather than extrapolating its tiny-shape smoke
 test:
 
-- checkpoint: managed `video-minimax-h3-fl2va-bf16-mlx`
-- adapter: checksum-pinned `minimax-h3-turbo-4step`, strength `0.9`
-- geometry: 1280x768, 124 frames, 24 fps
-- schedule: five points / four complete model evaluations
-- seed: `20260804`
-- packed rows: 36,047
-- execution: dense BF16, blockwise compiled, exact `quality` acceleration
+- **Checkpoint:** Managed `video-minimax-h3-fl2va-bf16-mlx`.
+- **Adapter:** Checksum-pinned `minimax-h3-turbo-4step`, strength `0.9`.
+- **Geometry:** 1280 x 768 pixels, 124 frames, 24 frames per second.
+- **Schedule:** Five points and four complete model evaluations.
+- **Seed:** `20260804`.
+- **Packed rows:** 36,047.
+- **Execution:** Dense BF16, blockwise compiled, exact `quality` acceleration.
 
 | Phase | Time |
 | --- | ---: |
@@ -167,14 +168,14 @@ hiss acceptance reference.
 The Apple-GPU dynamic-sparse path was accepted with a real synchronized-video
 generation, not from random-tensor timing alone:
 
-- checkpoint: managed `video-minimax-h3-fl2va-bf16-mlx`
-- adapter: checksum-pinned `minimax-h3-lightx2v-4step`, strength `1.0`
-- geometry: 768x448, 124 frames, 24 fps, 13,085 packed rows
-- schedule: five points / four transformer evaluations
-- seed: `20260808`
-- dense arm: resident BF16, exact `quality`
-- sparse arm: resident BF16, attention-only `maximum`, tau `1.0`, no cache reuse
-- prompt: a continuous rain-soaked railway-platform two-shot with a detective,
+- **Checkpoint:** Managed `video-minimax-h3-fl2va-bf16-mlx`.
+- **Adapter:** Checksum-pinned `minimax-h3-lightx2v-4step`, strength `1.0`.
+- **Geometry:** 768 x 448 pixels, 124 frames, 24 frames per second, and 13,085 packed rows.
+- **Schedule:** Five points and four transformer evaluations.
+- **Seed:** `20260808`.
+- **Dense arm:** Resident BF16, exact `quality`.
+- **Sparse arm:** Resident BF16, attention-only `maximum`, tau `1.0`, and no cache reuse.
+- **Prompt:** A continuous rain-soaked railway-platform two-shot with a detective,
   a paramedic, a recorder handoff, a passing train, and two spoken lines
 
 | Phase | Dense | Dynamic sparse |
@@ -203,8 +204,8 @@ an in-process thermal control for the 20.6% faster sparse step.
 
 Before sparse execution was admitted, the custom all-routes-dense Metal sample
 matched fused SDPA at `max_abs=0.10026`, `mean_abs=0.00219996`, and
-`rel_l2=0.0027471`. Both outputs then passed the artifact boundary: 768x448
-H.264, exactly 124 frames at 24 fps and 5.167 seconds, plus stereo AAC at
+`rel_l2=0.0027471`. Both outputs then passed the artifact boundary: 768 x 448
+H.264, exactly 124 frames at 24 frames per second and 5.167 seconds, plus stereo AAC at
 32 kHz. Eight matched frame samples retained both actor identities, the
 recorder handoff, coherent faces, train movement, and the final composition.
 Native Parakeet transcribed both soundtracks exactly as
@@ -224,11 +225,11 @@ pretending that a two-point sampler is a quality result:
 scripts/h3-end-to-end-benchmark.sh probe-768
 ```
 
-- geometry: 1344x768, 124 frames, 24 fps
-- schedule: two points / one complete 50-block model evaluation
-- packed rows: 37,794
-- execution: dense BF16, blockwise compiled, 768-query single-evaluation attention chunks
-- acceleration: exact `quality` (no tail reuse)
+- **Geometry:** 1344 x 768 pixels, 124 frames, 24 frames per second.
+- **Schedule:** Two points and one complete 50-block model evaluation.
+- **Packed rows:** 37,794.
+- **Execution:** Dense BF16, blockwise compiled, with 768-query single-evaluation attention chunks.
+- **Acceleration:** Exact `quality` with no tail reuse.
 
 | Phase | Baseline | Optimized exact |
 | --- | ---: | ---: |
@@ -240,12 +241,12 @@ scripts/h3-end-to-end-benchmark.sh probe-768
 | End to end | 1,253.425 s | **1,027.310 s (17:07.310)** |
 
 The full model evaluation itself fell from 953.192 to 775.062 seconds, a
-1.230x throughput improvement and 18.7% less wall time. End to end, the boundary
+1.230 times the throughput and 18.7% less wall time. End to end, the boundary
 is 3:46.115 faster (18.0%). Peak reported Metal memory remained 48.77 GiB, so
 this workload is compute-bound rather than blocked by unified-memory capacity.
-The valid H.264/AAC output is 1344x768 at 24 fps with 32 kHz stereo audio and a
+The valid H.264/AAC output is 1344 x 768 at 24 frames per second with 32 kHz stereo audio and a
 5.167-second duration. Its SHA-256 is
-`f74e0d2ab0cf9a58233e954560a9aa6c05a1f905fd78914350a077b70f7e5848`—exactly
+`f74e0d2ab0cf9a58233e954560a9aa6c05a1f905fd78914350a077b70f7e5848`, exactly
 the same as the baseline artifact, proving the optimized execution did not
 change model output.
 
@@ -259,17 +260,17 @@ model/block evaluations rather than another small scheduling adjustment.
 ## VAE tile frontier
 
 A later fresh-process sweep of the released BF16 video decoder changed the
-production spatial tile from 256 to 320 pixels. At 832x480 and 124 frames, the
-matched decode fell from 96.091 to 76.421 seconds (1.257x) while reported peak
+production spatial tile from 256 to 320 pixels. At 832 x 480 pixels and 124 frames, the
+matched decode fell from 96.091 to 76.421 seconds (1.257 times) while reported peak
 Metal memory fell from 9.85 to 8.91 GiB. A 480-pixel arm reached 77.577 seconds
-and lost. At the true 1344x768 shape, the accepted 320-pixel arm completed in
+and lost. At the true 1344 x 768 shape, the accepted 320-pixel arm completed in
 213.005 seconds at a 15.12 GiB reported peak; the 480-pixel arm crossed 252
 seconds without completing and was stopped.
 
 This is a non-quantized runtime change: the released decoder, precision,
 causal tiling, and overlap blend remain intact. The larger tile performs fewer
 overlapping tile evaluations and gives each evaluation more spatial context.
-At true 1344x768 spatial geometry, an order-balanced 22-frame screen confirmed
+At true 1344 x 768 spatial geometry, an order-balanced 22-frame screen confirmed
 that 320 pixels also beats the tempting overlap-count breakpoints: a hot-state
 416-versus-320 pair measured 33.756 versus 32.321 seconds, and 432- and
 496-pixel arms were materially slower. A two-temporal-chunk submission
@@ -286,7 +287,7 @@ which yields 72 video latent frames and 73,470 packed rows for the locked prompt
 The accepted exact attention schedule splits the 56 independent heads into
 eight-head submissions with 640 query rows per kernel. An order-balanced
 full-block gate measured 32.249 seconds for the previous 768-query/56-head
-schedule and 25.173 seconds for the new schedule, a 1.281x speedup with
+schedule and 25.173 seconds for the accepted schedule, a 1.281-times speedup with
 bit-identical BF16 output (`rel_l2=0`). That puts one exact 50-block model
 evaluation near 21 minutes. Scaling the measured 124-frame VAE decode only as
 an arithmetic estimate adds roughly seven minutes, placing the
@@ -309,7 +310,7 @@ checkpoint; the exact head-scheduling win does not remove the remaining
 evaluation-count multiplier.
 
 Inference-only solver screens did not change that conclusion. On the locked
-416x256 proxy, 12-point variable-step Adams-Bashforth was less faithful to the
+416 x 256 proxy, 12-point variable-step Adams-Bashforth was less faithful to the
 20-point Euler artifact than plain 12-point Euler (0.667 versus 0.694 SSIM).
 A two-evaluation Heun solve reached the desired compute class—45.548 seconds of
 proxy denoise—but produced tiled chromatic noise at 0.327 SSIM. Both candidates

@@ -35,6 +35,7 @@ fi
 swiftlint --strict --cache-path .build/swiftlint.cache
 bash ./scripts/agent_readiness_check.sh
 bash ./scripts/check-evaluation-boundary.sh
+bash ./scripts/check-docs-examples.sh
 swiftpm() {
   local subcommand="$1"
   shift

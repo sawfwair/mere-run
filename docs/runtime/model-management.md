@@ -1,9 +1,9 @@
-# Model Management
+# Model management
 
-One writable store, a unified catalog, canonical IDs, and honest accounting. `mere.run` checks whether this
-machine can run a model before it spends your bandwidth on it, reports what a
-model actually costs on disk once shared payloads are counted once, and shows
-exactly what is safe to delete.
+Use model-management commands to work with one writable store, a unified
+catalog, canonical IDs, and physical-storage accounting. Before downloading a
+model, `mere.run` checks whether the machine can run it. Storage reports count
+shared payloads once and identify data that is safe to delete.
 
 ## Commands
 
@@ -53,8 +53,9 @@ catalog normally.
 
 ## Registered catalog locations
 
-The primary store is the only writable location. Existing model collections on
-other disks can participate without copying files or building a symlink facade:
+The primary store is the only writable location. Register existing model
+collections on other disks without copying files or building a symbolic-link
+facade:
 
 ```bash
 # A canonical catalog root: /Volumes/Models/<model-id>/
@@ -74,7 +75,7 @@ Resolution order is deterministic:
 2. explicit bindings, in registration order
 3. registered search roots, in registration order
 
-An unavailable removable disk is skipped, so the next valid location can win.
+If a removable disk is unavailable, resolution tries the next valid location.
 Search-root models must live at `<root>/<canonical-model-id>/` and carry a
 matching `mererun_model.json`. A binding supplies the canonical identity for an
 arbitrarily named folder; mere.run validates it but does not write a manifest or
@@ -91,15 +92,16 @@ remove registrations. Both operations preserve every payload byte.
 
 Open **Models**, switch the scope to **All**, and select any missing model to
 download it directly. Studio streams the underlying `model pull` output, keeps
-cancelled partial downloads resumable, and refreshes the inventory after a
+canceled partial downloads resumable, and refreshes the inventory after a
 successful install. Models with restricted third-party terms show their source
 links and require **Accept & Download** before transfer. Continuing confirms
-that the user reviewed and accepts the listed terms and agrees to comply. The **Files**
-button opens the configured model store in Finder; it does not start a download.
+that you reviewed and accept the listed terms and agree to comply. The
+**Files** button opens the configured model store in Finder; it does not start
+a download.
 
 ## Canonical model IDs
 
-Examples:
+The following list shows representative canonical IDs by modality:
 
 - images: `image-klein-nano`, `image-bonsai-binary`, `image-bonsai-ternary`, `image-zimage-nano`, `image-klein-max`, `image-zimage-max`
 - text and omni chat: `text-chat-gemma4`, `text-chat-laguna-s-2-1`, `text-chat-laguna-xs-2-1`, `text-chat-nemotron-35-lightning`, `omni-chat-nemotron3-nano-30b-a3b-bf16`, `text-chat-q36-nano`, `vision-chat-q38-27b`, `vision-chat-q38-27b-4bit`, `text-chat-bonsai-27b-1bit`, `text-chat-bonsai-27b-2bit`, `text-chat-lfm25-2.6b-4bit`, `text-chat-lfm25-a1b-8bit`, `vision-chat-lfm25-3b-8bit`, `text-agent-deepseek-v4-flash`, `text-agent-qwen35-9b`, `text-agent-ornith-9b`, `text-agent-ornith-35b-mlx`, `text-agent-ornith-35b`, `text-code-north-mini`, `text-code-qwen3`, `text-embed-qwen3-0.6b`
@@ -113,7 +115,7 @@ Examples:
   `video-ltx25-distilled-bf16`, `video-ltx25-full-bf16`,
   `video-wan22-ti2v-5b-mlx`, `video-scail2-14b-mlx`
 
-The public runtime resolves these IDs directly, so docs and examples should use
+The public runtime resolves these IDs directly. Documentation and examples must use
 the canonical names shown by `mere.run model list`.
 
 ## Runtime entrypoints
@@ -148,7 +150,7 @@ keep their backing payloads live.
 
 ### `mere.run model optimize`
 
-For compatible MiniMax-H3 or LTX 2.5 roots, build the model-specific native
+For compatible MiniMax-H3 or LTX 2.5 roots, the command builds the model-specific native
 inference artifact:
 
 ```bash
@@ -182,7 +184,7 @@ the primary readout; the model IDs from `/v1/models` are the fallback.
 
 ### `mere.run model capabilities`
 
-Summarizes the current machine, the managed models it can run, the preferred
+Summarizes this machine, the managed models it can run, the preferred
 setup-agent tier, chat winners by RAM band, and cross-modality starter coverage.
 Pass `--all` to include models that are blocked by platform or memory
 requirements.
@@ -212,14 +214,14 @@ validated before the old root is renamed, and a failed final validation or
 alias installation restores the old root.
 
 Access-gated models and models with material non-commercial, research-only, or
-revenue-limited terms require `--accept-model-license` for new downloads and
+revenue-limited terms require `--accept-model-license` for restricted downloads and
 never auto-download at runtime. A custom license alone does not trigger the
 flag. The CLI and macOS app show the
 applicable model/component terms before acceptance. Passing the flag or choosing
-**Accept & Download** confirms that the user reviewed and accepts those terms
-and agrees to comply. Schema 3 of the installed `mererun_model.json` records the
+**Accept & Download** confirms that you reviewed and accept those terms and
+agree to comply. Schema 3 of the installed `mererun_model.json` records the
 immutable source revisions, term URLs, and acceptance confirmation. mere.run
-does not determine whether a user's intended use is
+does not determine whether your intended use is
 permitted. The complete inventory is in
 [`model-sources.md`](../model-sources.md#restricted-model-downloads).
 
@@ -286,7 +288,7 @@ mere.run text chat \
 
 `adapter pull` downloads the immutable upstream artifact, verifies its exact
 byte count and SHA-256, and prints the installed adapter path on stdout.
-Catalog ids are accepted by `text chat --lora`, `api serve --lora`, and the
+Catalog IDs are accepted by `text chat --lora`, `api serve --lora`, and the
 compatible SCAIL `video animate --distilled-adapter` surface; local paths
 remain supported. The default `video animate --profile fast` selects the SCAIL
 adapter ID and its published four-step schedule automatically.
@@ -352,11 +354,11 @@ separate warning confirmation. Every gate writes a JSON report.
 
 ### `mere.run model runtime`
 
-Reads and updates typed per-model API runtime settings — how a model behaves
-when served by `mere.run api serve`. `get` prints the stored settings for one
-managed model id or configured alias; `set` updates them:
+Reads and updates typed per-model API runtime settings that control how a model
+behaves when served by `mere.run api serve`. `get` prints the stored settings
+for one managed model ID or configured alias; `set` updates them.
 
-The macOS Studio's top-level **Serving & Agents → Model Pool** view uses these
+The macOS Studio's top-level **Serving & Agents > Model Pool** view uses these
 same settings for both text models and managed sidecars. Text rows additionally
 support explicit HTTP load/unload. Sidecars load on first request and expose
 their lifecycle, readiness, queue, replacement, failure, and eviction state;
@@ -400,7 +402,8 @@ not part of the everyday inference workflow. Lanes:
 - `tool-continuations` — evaluates Gemma 4 continuation after completed tool
   calls.
 - `code` — runs a real coding-eval slice against local coding models.
-- `gemma4-kv` — compares Gemma4 default KV cache decode against packed PolarKV.
+- `gemma4-kv` — compares Gemma4 default key-value (KV) cache decode against
+  packed PolarKV.
 - `gemma4-mtp` — compares Gemma4 serial decode against verified MTP speculative
   decode.
 - `q36-mtp` — compares Qwen3.6 serial decode against adaptive and forced MTP
@@ -415,6 +418,6 @@ Each lane accepts `--json` for machine-readable reports; see
 
 ## Related docs
 
-- [Model Sources](../model-sources.md)
+- [Model sources](../model-sources.md)
 - [Configuration](../configuration.md)
-- [Testing Guide](../testing.md)
+- [Testing guide](../testing.md)

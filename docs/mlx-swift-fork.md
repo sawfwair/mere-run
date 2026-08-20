@@ -1,6 +1,6 @@
 # mlx-swift fork policy and compiled-call overhead
 
-mere-run pins the public `sawfwair/mlx-swift` fork at
+`mere.run` pins the public `sawfwair/mlx-swift` fork at
 `7558b9cff75746e3ce25802aecbdc498b240af7f`. It contains upstream
 `mlx-swift` through `97cf19efeaa4e929415e75982e999adb34f62c0d`. The embedded
 `sawfwair/mlx` revision is
@@ -18,7 +18,7 @@ fast dispatch; the fork instead tests matching host/kernel alignment directly.
 Changes stay scoped to their bit width, group size, quantization mode, and
 backend so stock 2-bit and wider models keep their existing paths.
 
-The current pin also lets an MLXFast custom Metal kernel explicitly request
+The pin also lets an MLXFast custom Metal kernel explicitly request
 the core quantized helper headers. The source marker
 `MLX_INCLUDE_FP_QUANTIZED_HEADERS` exposes the NVFP4 helpers, while
 `MLX_INCLUDE_AFFINE_QUANTIZED_HEADERS` exposes the affine helpers. Kernels
@@ -35,8 +35,7 @@ to the generated kernel tree, and `--verify-only` checks the resulting symbols.
 
 ## Refresh procedure
 
-Refresh the dependency chain from the bottom up and publish it in the same
-order:
+Refresh and publish the dependency chain in dependency order:
 
 1. Record immutable upstream cutoffs for both repositories and classify every
    fork-only commit as replay, replace with upstream, or drop with a regression
@@ -48,7 +47,7 @@ order:
    AOT sources, regenerate a second time to prove the tree is idempotent, and
    run the full Xcode test plan so the Metal shader bundle is present.
 4. Publish the reviewed core revision, then pin that immutable revision from
-   mlx-swift and publish the reviewed Swift revision. Never make mere.run depend
+   mlx-swift and publish the reviewed Swift revision. Do not make `mere.run` depend
    on an unpushed or floating dependency ref.
 5. Pin the immutable mlx-swift revision in `Package.swift` and
    `Package.resolved`, rebuild the vendored Metal library, and update its
@@ -66,14 +65,14 @@ order:
 Perform this audit at least once per upstream minor release, and sooner for a
 security fix or a correctness/performance change in a path mere.run owns.
 
-The previously staged compiled-call optimization is now included: MLX v0.32.1
+The previously staged compiled-call optimization is included. MLX v0.32.1
 makes compile caches thread-local and cache erasure thread-safe, and the Swift
 bridge retains the originating cache identities across executors. With that
 core prerequisite in place, independent compiled functions no longer take the
 global Swift evaluation lock. The regression suite covers concurrent first
 traces, shape changes, numerical evaluation, and cross-thread cache erasure.
 
-An eight-worker, 2,000-call-per-worker A/B on the same machine isolates that
+An eight-worker, 2,000-call-per-worker comparison on the same machine isolates that
 lock change on the same v0.32.1 core. Across five alternating trials, median
 compiled graph-build wall time fell from 7.56 us/call to 1.38 us/call (5.5x
 higher concurrent call throughput); median build-plus-evaluation wall time fell
@@ -88,13 +87,13 @@ TransformTests.testConcurrentCompiledCallOverheadMicrobench`.
 call rates this is a cliff, measured on an M4 Max (Gemma4 12B, 96 compiled
 calls/token):
 
-| | per-token wall | per-call cost |
+| Variant | Per-token wall time | Per-call cost |
 |---|---|---|
 | stock 0.31.4 | 70.8 ms (2.6× slower than uncompiled) | ~0.45 ms |
 | lock removed | 28.2 ms (parity) | ~5 µs (= one raw op) |
 
 Every MLXNN compiled activation (`geluApproximate`, swiglu helpers, …) pays
-this cost per call, not just explicit `compile(...)` users. Confirmed present
+this cost per call, including code that does not call `compile(...)` directly. Confirmed present
 through upstream v0.31.6 (the file is unchanged upstream since 2026-05-07).
 
 ## Why the one-line fix was previously held back
@@ -110,7 +109,7 @@ exercises in production:
   cross-function serialization of that path; the per-function `NSLock` does
   not cover two *different* compiled functions racing their first traces.
 - mlx-swift's own comment documents the lock as guarding eval re-entrancy,
-  i.e. the maintainers treat this path as not thread-safe without it.
+  which means the maintainers treat this path as not thread-safe without it.
 - mere-run runs concurrent generator actors (text serving while image/LoRA
   training, multiple model families resident) — exactly the workload that can
   first-trace independent compiled functions on different threads at once.
@@ -122,14 +121,15 @@ For a serving runtime the burden of proof is on the patch, and
 "maintainer-documented not-thread-safe + globals on the unlocked path + our
 architecture exercises it" is past the threshold to hold it back.
 
-## The paired fix this needs (before re-attempting)
+## Required paired fix
 
-1. **Core-side thread safety**: bump/patch the vendored mlx core so compile
+1. **Core-side thread safety:** Update the vendored MLX core so compile
    tracing state is thread-local and the compile cache has its own narrow
    lock, making a cache-hit `mlx_closure_apply` genuinely lock-free-safe and
    first-traces mutually safe.
-2. **Swift-side lock removal** (the existing one-liner), only on top of (1).
-3. **A stress test that can actually fail**: concurrently first-trace many
+2. **Swift-side lock removal:** Apply the existing one-line change only after
+   the core-side change.
+3. **A stress test that can detect the failure:** Concurrently first-trace many
    *independent* compiled functions (and new shapes of shared ones) from
    multiple threads. Repeated calls to a single closure — including the
    existing `MLXCompiledFunctionOverheadTests` micro-bench — cannot catch
@@ -159,5 +159,5 @@ erase bridge and the concurrency regressions.
   release, and generated-kernel source hash compiled into `mere.run`.
   `scripts/check.sh` recomputes the same provenance and release ancestry from
   the clean pinned checkout.
-- Never edit `.build/checkouts/` to change dependency behavior — checkout
-  edits silently vanish on the next `swift package resolve/update`.
+- Do not edit `.build/checkouts/` to change dependency behavior. Checkout
+  edits disappear during the next `swift package resolve` or `swift package update`.

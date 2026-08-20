@@ -1,18 +1,20 @@
-# Testing Guide
+# Testing guide
 
-This repo has three layers of validation:
+This repository has three layers of validation:
 
 1. Swift build and unit tests
 2. CLI help and hygiene checks
-3. end-to-end smoke runs against real installed models
+3. End-to-end smoke runs against real installed models
 
 Use the smallest layer that covers your change, then scale up before opening a
-PR.
+pull request.
 
 Linux CLI compatibility uses a narrower fixture boundary for hosted CI:
 headless CLI behavior and media-tool discovery. There is no CPU-only Linux
 release. Every release-worthy Linux package must exercise its CUDA lane on
-matching real CUDA hardware.
+matching real CUDA hardware. Active release validation covers macOS and the
+configured `tensor.local` x86_64 CUDA builder. The arm64 CUDA lane remains
+paused until a matching host is available.
 
 ## Fast validation
 
@@ -23,9 +25,9 @@ swift test
 
 Use this for:
 
-- pure library changes
-- parser changes that already have test coverage
-- refactors that should not change public behavior
+- Pure library changes
+- Parser changes that already have test coverage
+- Refactors that should not change public behavior
 
 ## Repo-wide validation
 
@@ -37,13 +39,13 @@ This script is the main gate for contributors. It runs:
 
 - `swift build`
 - `swift test`
-- help smoke for the public command tree
-- generated CLI documentation and command-owner synchronization
+- Help smoke for the public command tree
+- Generated CLI documentation and command-owner synchronization
 - `mere.run model list` output sanity checks
 - `mere.run status` output sanity checks
-- docs and source hygiene sweeps
+- Documentation and source hygiene sweeps
 
-Use this for almost every change before you stop.
+Run this gate for most changes before you open a pull request.
 
 ### CLI documentation contract
 
@@ -85,7 +87,7 @@ export MERERUN_FFMPEG=/usr/bin/ffmpeg
 export MERERUN_FFPROBE=/usr/bin/ffprobe
 ```
 
-The pull-request fixture should stay CPU MLX-compatible on hosted x86 runners.
+The pull-request fixture must remain CPU MLX-compatible on hosted x86 runners.
 CUDA machines can run additional package and smoke tests, but CUDA installation,
 driver selection, and GPU availability are not assumptions in the shared hosted
 CI contract. Do not describe a CUDA configuration as tested until that exact
@@ -172,8 +174,12 @@ The model directory must come from a license-acknowledged managed installation
 or an equivalent local checkpoint. A CUDA build without this real-audio GPU and
 speaker-reidentification result is not diarization runtime proof.
 
-For a real GB10/DGX Spark model sweep, use the installed CUDA binary and record
-the quantized-kernel choice alongside artifacts and throughput:
+### Historical GB10 and DGX Spark sweep
+
+The GB10 and DGX Spark command remains as a historical validation recipe. These
+machines are not active release builders. If an arm64 CUDA host becomes
+available again, use the installed CUDA binary and record the quantized-kernel
+choice alongside artifacts and throughput:
 
 ```bash
 scripts/e2e_gb10.sh --bin /usr/bin/mere.run --quant-mode auto --out ./e2e-gb10-auto
@@ -192,9 +198,9 @@ covers pure Swift image, WAV, and FFT behavior in the normal test suite.
 to exercise Linux `ffmpeg`/`ffprobe` image, audio, MP4, mux, and frame
 extraction paths without requiring host media files or model checkpoints.
 
-### Unified AV audio comparison
+### Unified audiovisual audio comparison
 
-When unified AV audio sounds too hot, bandwidth-limited, fluttery, or different
+When unified audiovisual (AV) audio sounds too hot, bandwidth-limited, fluttery, or different
 from the upstream LTX-2 reference, generate the same prompt/seed through both
 paths and compare the finished MP4s:
 
@@ -235,10 +241,10 @@ drop-in native MLX model root.
 
 This runs a smaller, stable subset of real workflows. Use it when you touched:
 
-- model resolution
-- runtime orchestration
-- output writing
-- common CLI paths
+- Model resolution
+- Runtime orchestration
+- Output writing
+- Common CLI paths
 
 ### Installed sweep
 
@@ -250,12 +256,12 @@ This runs the established cross-modality installed-model subset against the
 local model store. It is useful for broad development feedback, but it is not a
 claim that every installed checkpoint ran. Use it when you changed:
 
-- image generation
-- speech generation or transcription
+- Image generation
+- Speech generation or transcription
 - OCR
 - music or video generation
 - SAM segmentation or tracking behavior
-- manifest handling or installed model discovery
+- Manifest handling or installed model discovery
 
 ### Strict pre-release video generation
 
@@ -329,7 +335,8 @@ swift test
 MERERUN_RUN_E2E=core ./scripts/check.sh
 ```
 
-If you touched the SAM runtime, also run at least one real local smoke like:
+If you changed the Segment Anything Model (SAM) runtime, also run at least one
+real local smoke test:
 
 ```bash
 swift run mere.run model pull vision-segment-sam31 --accept-model-license
@@ -388,7 +395,7 @@ need manifest and component details for one model.
 ### `mere.run model pull` fails immediately
 
 That usually means the requested model is local-path-only in the public build or
-the current Mac does not pass the capability check.
+the Mac does not pass the capability check.
 
 Run:
 
@@ -396,7 +403,7 @@ Run:
 swift run mere.run model capabilities --all
 ```
 
-See [Model Sources](./model-sources.md) and [Configuration](./configuration.md).
+See [Model sources](./model-sources.md) and [Configuration](./configuration.md).
 
 ### A smoke test fails only in `--installed`
 

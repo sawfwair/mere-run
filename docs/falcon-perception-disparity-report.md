@@ -1,35 +1,39 @@
-# Falcon Perception Disparity Report
+# Falcon Perception disparity report
 
-Date: 2026-04-12
-Repo: `mere-run`
-Reference: `../mlx-vlm/mlx_vlm/models/falcon_perception`
+**Date:** 2026-04-12
+
+**Repository:** `mere-run`
+**Reference:** `../mlx-vlm/mlx_vlm/models/falcon_perception`
 
 ## Goal
 
-Trace the native Swift Falcon Perception path end to end, compare it to the `mlx-vlm`
-reference implementation, and identify the concrete disparities that explain why:
+This report traces the native Swift Falcon Perception path end to end, compares
+it with the `mlx-vlm` reference implementation, and identifies the disparities
+behind an incorrect grounding result. The recorded run used this command:
 
 ```bash
- mere.run vision ground ./test.jpeg --query "person"
+mere.run vision ground ./test.jpeg --query "person"
 ```
 
-currently returns clearly wrong results:
+The command returned these incorrect results:
 
 - `Detections: 55`
-- repeated centerline boxes with nearly identical `x`, `h`, and only slightly varying `y`
-- output written to:
+- Repeated centerline boxes with nearly identical `x` and `h` values and only
+  slightly different `y` values
+- Output written to:
   - `./test_grounded.jpeg`
   - `./test_grounded.json`
 
 Observed sample from the emitted JSON:
 
-- detection 0: `x=0.50048876`, `y=0.50048876`, `h=0.71263784`, `w=1`
-- detection 1: `x=0.56989247`, `y=0.50048876`, `h=0.71263784`, `w=0.038948007`
-- detections 2..19: mostly the same narrow centerline box repeated with tiny `y` shifts
+- Detection 0: `x=0.50048876`, `y=0.50048876`, `h=0.71263784`, `w=1`
+- Detection 1: `x=0.56989247`, `y=0.50048876`, `h=0.71263784`, `w=0.038948007`
+- Detections 2 through 19: mostly the same narrow centerline box, repeated
+  with small `y` shifts
 
 This is not “over-detecting people.” It is a malformed generation pattern.
 
-## E2E Trace
+## End-to-end trace
 
 ### 1. CLI entry
 
@@ -37,11 +41,11 @@ Swift path:
 
 - `Sources/MereRunCLI/Commands/VisionGroundCommand.swift`
 
-Behavior:
+The command:
 
-- resolves `vision-ground-falcon-perception` by default
-- constructs `FalconPerceptionGrounder`
-- calls `ground(imageURL:queries:...)`
+- Resolves `vision-ground-falcon-perception` by default.
+- Constructs `FalconPerceptionGrounder`.
+- Calls `ground(imageURL:queries:...)`.
 
 Status:
 
@@ -56,7 +60,7 @@ Swift paths:
 - `Sources/MereRunCore/FalconPerception/FalconPerceptionTokenizer.swift`
 - `Sources/MereRunCore/FalconPerception/FalconPerceptionConfig.swift`
 
-Model root used on this machine:
+The recorded run used this model root:
 
 - `<models-root>/vision-ground-falcon-perception`
 - symlink target:
@@ -110,26 +114,26 @@ Swift path:
 
 - `Sources/MereRunCore/FalconPerception/FalconPerceptionProcessor.swift`
 
-Reference behavior:
+The reference implementation:
 
-- resize shortest/longest into `256...1024`
-- smart-resize to patch multiples
-- normalize with mean/std `0.5`
-- prompt:
+- Resizes the shortest and longest dimensions into `256...1024`.
+- Resizes to patch multiples.
+- Normalizes with a mean and standard deviation of `0.5`.
+- Uses this prompt:
   `"<|image|>Segment these expressions in the image:<|start_of_query|>{query}<|REF_SEG|>"`
-- expand `<|image|>` into:
+- Expands `<|image|>` into:
   - `image_cls`
   - `image_reg_1...4`
   - repeated `img_id` patch tokens
   - `img_end_id`
 
-Swift behavior:
+The Swift implementation:
 
-- matches the same resize policy
-- matches the same smart-resize policy
-- matches the same normalization
-- matches the same prompt text
-- matches the same image-token expansion strategy
+- Matches the resize policy.
+- Matches the patch-aligned resize policy.
+- Matches the normalization.
+- Matches the prompt text.
+- Matches the image-token expansion strategy.
 
 Findings:
 
@@ -148,7 +152,7 @@ Swift paths:
 - `Sources/MereRunCore/FalconPerception/FalconPerceptionGrounder.swift`
 - `Sources/MereRunCore/FalconPerception/FalconPerceptionModel.swift`
 
-Reference behavior:
+The reference implementation:
 
 - precomputes:
   - `position_ids`
@@ -163,13 +167,13 @@ Reference behavior:
   - keeps `_full_attn_mask`
 - decode then derives positions from `cache_offset + rope_delta`
 
-Previous Swift behavior:
+Before the recorded fixes, the Swift implementation:
 
 - computed prefill position data
 - passed it during prefill
 - dropped the decode-time rope/position state on subsequent single-token decode
 
-Current Swift behavior:
+After the recorded fixes, the Swift implementation:
 
 - now stores prefill state on the language model
 - now clears only prefill-sized tables after prefill
@@ -235,7 +239,7 @@ Swift path:
 
 - `Sources/MereRunCore/FalconPerception/FalconPerceptionModel.swift`
 
-Reference behavior:
+The reference implementation:
 
 - each attention layer owns:
   - `self.sinks = mx.zeros((self.n_heads,))`
@@ -244,7 +248,7 @@ Reference behavior:
   - `scaled_dot_product_attention(q, k, v, cache=cache, scale=self.scale, mask=mask, sinks=self.sinks)`
 - `mlx-vlm` passes that through to MLX attention with sinks support
 
-Current Swift behavior:
+At the time of this report, the Swift implementation:
 
 - attention layer has:
   - `wqkv`
@@ -261,7 +265,7 @@ Current Swift behavior:
 
 Confirmed disparity:
 
-- The native Swift attention implementation ignores a serialized Falcon tensor family
+- The native Swift attention implementation ignored a serialized Falcon tensor family
   that the reference uses on every layer.
 
 Severity:
@@ -270,7 +274,7 @@ Severity:
 
 Reason:
 
-- This is the strongest remaining e2e mismatch between the reference model and the
+- This was the strongest remaining end-to-end mismatch between the reference model and the
   native port.
 - It affects the core language-model decoding loop, which is exactly where the malformed
   repeated box pattern is appearing.
@@ -285,13 +289,14 @@ Swift path:
 
 - `Sources/MereRunCore/FalconPerception/FalconPerceptionGrounder.swift`
 
-Comparison:
+Both implementations:
 
-- Both implementations:
-  - greedy sample `argmax(logits[:, -1, :])`
-  - interpret coord/size/seg from the hidden state of the previous step
-  - feed the sampled token back through token embedding
-  - inject encoded coord/size features when the sampled token is coord/size
+- Greedily sample `argmax(logits[:, -1, :])`.
+- Interpret coordinate, size, and segmentation values from the hidden state of
+  the previous step.
+- Feed the sampled token back through token embedding.
+- Inject encoded coordinate or size features when the sampled token represents
+  a coordinate or size.
 
 Finding:
 
@@ -309,12 +314,12 @@ Swift paths:
 Status:
 
 - AnyUp and segmentation feature plumbing were ported.
-- They are not the best explanation for the current failure because the malformed pattern
+- They are not the best explanation for the recorded failure because the malformed pattern
   is already visible at the box-generation stage before mask quality matters.
 
-## Fixed Disparities
+## Fixed disparities
 
-These were real bugs found during the trace:
+The trace found these bugs:
 
 1. Flat Hugging Face Falcon config decode
    - Native code originally assumed nested `text_config` / `vision_config`.
@@ -339,7 +344,7 @@ These were investigated but ruled out as the primary remaining cause:
    - Checkpoint header inspection shows those tensors do not exist in the Falcon weights.
    - Not the primary issue.
 
-## Open Disparities
+## Open disparities
 
 ### A. Attention sinks are missing end to end
 
@@ -365,7 +370,7 @@ Priority:
 Evidence:
 
 - reference uses `scaled_dot_product_attention(..., cache=cache, sinks=sinks)`
-- Swift currently implements attention manually
+- Swift implements attention manually
 
 Risk:
 
@@ -382,10 +387,12 @@ Priority:
 
 ### C. Weight-mapping audit should explicitly report skipped tensor families
 
-Current problem:
+Recorded problem:
 
-- `loadWeights` silently skips tensors whose mapped keys do not match a native parameter
-- this made the missing `attention.sinks` family invisible until direct header inspection
+- `loadWeights` silently skips tensors whose mapped keys do not match a native
+  parameter.
+- This behavior hid the missing `attention.sinks` family until direct header
+  inspection.
 
 Expected fix:
 
@@ -399,20 +406,21 @@ Priority:
 
 - P1
 
-## Most Likely Root Cause
+## Most likely root cause
 
 The highest-confidence root cause of the remaining bad grounding behavior is:
 
 1. Falcon attention sinks are serialized in the checkpoint.
 2. The `mlx-vlm` reference uses them in every attention call.
-3. The native Swift attention implementation currently ignores them completely.
+3. At the time of the report, the native Swift attention implementation ignored
+   them completely.
 4. The malformed output pattern is a generation-time failure, not a prompt-time or
    segmentation-time failure.
 
-That makes the missing sink-aware attention path the most important unresolved e2e
+That makes the missing sink-aware attention path the most important unresolved end-to-end
 disparity.
 
-## Recommended Next Patch Order
+## Recommended next patch order
 
 1. Add `attention.sinks` to `FalconPerceptionAttention`.
 2. Map `layers.*.attention.sinks` in checkpoint loading.
@@ -431,7 +439,7 @@ disparity.
    - whether the repeated centerline pattern disappears
 6. Add an audit command or debug mode that prints skipped checkpoint tensor families.
 
-## Appendix: Repro Evidence
+## Appendix: reproduction evidence
 
 Command:
 
@@ -439,7 +447,7 @@ Command:
 mere.run vision ground ./test.jpeg --query "person"
 ```
 
-Current native result:
+Recorded native result:
 
 - `Model: vision-ground-falcon-perception`
 - `Detections: 55`
@@ -452,9 +460,9 @@ Key artifact for inspection:
 
 Symptoms inside JSON:
 
-- repeated boxes centered around `x ~= 0.5005`
-- repeated `h ~= 0.7126`
-- many boxes differ only by small `y` deltas
+- Repeated boxes centered around `x ~= 0.5005`
+- Repeated `h ~= 0.7126`
+- Many boxes that differ only by small `y` deltas
 
 This is consistent with a broken decode/attention path, not with genuine multi-person
 grounding.

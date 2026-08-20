@@ -1,20 +1,19 @@
-# Portable Workflows
+# Portable workflows
 
-Describe a job once as a typed graph, and the same bundle runs on your laptop,
-over SSH to a GPU box, or across a relay fleet — with the same resolved seeds,
-the same fingerprints, and the same execution contract at the other end.
+Describe a job once as a typed graph. The same bundle then runs on your laptop,
+over Secure Shell (SSH) on a graphics processing unit (GPU) host, or across a
+relay fleet with the same resolved seeds, fingerprints, and execution contract.
 
-Workflows are immutable and headless. Nothing about *where* a job runs is baked
-into it: executor profiles, tokens, URLs, and machine paths never enter the
+Workflows are immutable and headless. Execution-location details do not enter
+the bundle: executor profiles, tokens, URLs, and machine paths remain external.
 bundle. Visual editors such as [Graph Studio](./graph/studio.md) author these
 documents, but execution behavior is defined here, not on the canvas.
 
 ## Graph v2 runtime and v1 contract
 
-Two different things carry version numbers here, and mixing them up causes real
-bugs.
+The runtime and serialized workflow contract use separate version numbers.
 
-**Graph v2** is the current runtime generation: immutable job bundles, typed
+**Graph v2** is the runtime generation with immutable job bundles, typed
 provider catalogs, executor preflight, resumable runs, parallel scheduling, and
 one execution contract shared by local, SSH, and Relay.
 
@@ -45,7 +44,7 @@ Independent ready nodes may run concurrently when the graph declares
 all scheduling, event commits, and final outputs retain stable topological order.
 Each node may independently set retry, timeout, and cache policy.
 
-The V1 node catalog contains:
+The version 1 node catalog contains:
 
 - `text.value`, `integer.value`, `number.value`, `boolean.value`, `json.value`
 - `seed.value`, `choice.value`
@@ -158,7 +157,7 @@ Materialization records source graph and input fingerprints, resolves defaults
 and random seeds, fingerprints the portable graph and inputs, and copies
 declared file inputs into a content-addressed store. The optional source
 fingerprints also flow into `run.json`, allowing authoring clients to display
-results only when they match the currently open source documents.
+results only when they match the source documents open in the editor.
 
 ```bash
 mere.run graph materialize workflow.json \
@@ -302,7 +301,8 @@ mere.run graph worker inspect --run-dir PATH --json
 mere.run graph worker cancel --run-dir PATH --json
 ```
 
-`execute --json-stream` emits the run event model as NDJSON on stdout. It
+`execute --json-stream` emits the run event model as newline-delimited JSON
+(NDJSON) on standard output. It
 preserves node progress, preview, artifact, diagnostic, metric, heartbeat, and
 lifecycle events. Diagnostics produced outside the machine protocol stay on
 stderr.
@@ -404,23 +404,23 @@ and reused bytes and parts.
 ## Direct relay (`relay serve`)
 
 `mere.run relay serve` hosts the same client-facing graph-job HTTP surface
-directly on a machine and runs submitted jobs there — no broker, no cloud
-hop. It is the single-machine, self-sovereign lane: reach it over the LAN or
+directly on a machine and runs submitted jobs there without a broker or cloud
+hop. It is the single-machine, self-sovereign lane. Reach it over the local area network (LAN) or
 a tailnet (Tailscale users can front it with `tailscale serve` for HTTPS),
 and prompts, inputs, and outputs never leave your network.
 
 ```bash
 # On the machine that will run the work:
 mere.run relay serve
-# → prints the address and a six-digit pairing code
+# The command prints the address and a six-digit pairing code.
 
 # On any other machine, exchange the code for a bearer token:
-curl -X POST http://lab.local:6373/api/pair \
+curl -X POST http://192.0.2.10:6373/api/pair \
   -H 'Content-Type: application/json' \
-  -d '{"code": "123-456", "device_name": "laptop"}'
+  -d '{"code": "123-456", "device_name": "example-laptop"}'
 
 # Save the token and add a normal relay executor profile:
-mere.run executor add relay lab --url http://lab.local:6373 --token-file ./lab-token
+mere.run executor add relay lab --url http://192.0.2.10:6373 --token-file ./lab-token
 mere.run graph submit workflow.json --executor relay:lab --run-dir ./runs/job
 ```
 
@@ -473,7 +473,7 @@ forms remain available for raw arguments and JSON streaming.
 
 Relay profile setup and device authorization also stay on the public
 `executor add relay`, `executor auth-status`, and `executor login` contracts.
-Studio streams the CLI's approval URL, opens it after the user chooses **Sign
+Studio streams the CLI's approval URL, opens it after you choose **Sign
 In**, and never reads or stores bearer credentials itself.
 
 The ownership boundary is deliberate:
@@ -491,13 +491,13 @@ and does not keep parallel graph, fleet, node, or scheduling schemas.
 
 ## Schemas
 
-- [Workflow Graph V1](/schemas/workflow-graph-v1.schema.json)
-- [Workflow Inputs V1](/schemas/workflow-inputs-v1.schema.json)
-- [Asset Manifest V1](/schemas/asset-manifest-v1.schema.json)
-- [Job Bundle V1](/schemas/job-bundle-v1.schema.json)
-- [Graph Run V1](/schemas/graph-run-v1.schema.json)
-- [Worker Probe V1](/schemas/worker-probe-v1.schema.json)
-- [Plugin Graph Provider V1](/schemas/graph-node-provider.v1.schema.json)
-- [Plugin Graph Invocation V1](/schemas/graph-node-invocation.v1.schema.json)
-- [Plugin Graph Preflight V1](/schemas/graph-node-preflight.v1.schema.json)
-- [Plugin Graph Event V1](/schemas/graph-node-event.v1.schema.json)
+- [Workflow graph V1](/schemas/workflow-graph-v1.schema.json)
+- [Workflow inputs V1](/schemas/workflow-inputs-v1.schema.json)
+- [Asset manifest V1](/schemas/asset-manifest-v1.schema.json)
+- [Job bundle V1](/schemas/job-bundle-v1.schema.json)
+- [Graph run V1](/schemas/graph-run-v1.schema.json)
+- [Worker probe V1](/schemas/worker-probe-v1.schema.json)
+- [Plugin graph provider V1](/schemas/graph-node-provider.v1.schema.json)
+- [Plugin graph invocation V1](/schemas/graph-node-invocation.v1.schema.json)
+- [Plugin graph preflight V1](/schemas/graph-node-preflight.v1.schema.json)
+- [Plugin graph event V1](/schemas/graph-node-event.v1.schema.json)

@@ -1,10 +1,10 @@
-# Persistent World Runtime
+# Persistent world runtime
 
-A generated place you can walk around in. Send a camera move and get back a
-video chunk; send another and it continues from where the last one ended — same
-corridor, same light, same scene. The session is a navigation graph rather than
-a one-way chain, so an exact inverse move replays the edge you arrived on
-instead of inventing a new room on the way back.
+Use the persistent world runtime to navigate a generated place. Send a camera
+move to receive a video chunk. Send another move to continue from the previous
+endpoint with the same corridor, light, and scene. The session uses a
+navigation graph, so an exact inverse move replays the arrival edge instead of
+generating a different room on the return path.
 
 It runs as a long-lived local HTTP server, loopback-first, on either of two
 native Swift/MLX backends:
@@ -13,7 +13,7 @@ native Swift/MLX backends:
 - `cosmos3`: the official Cosmos3-Edge checkpoint with learned action
   conditioning and the `camera_pose` action domain
 
-The macOS Studio app exposes the same resident server in Advanced → Operations
+The macOS Studio app exposes the same resident server in **Advanced > Operations**
 with typed backend, model, state-directory, warmup, host, port, and
 authentication controls. API keys are injected with `MERERUN_API_KEY` so they
 do not appear in the child process argument list.
@@ -83,6 +83,9 @@ use `Authorization: Bearer <token>`.
 
 ## HTTP lifecycle
 
+Use the Hypertext Transfer Protocol (HTTP) endpoints in this section to manage
+the session lifecycle.
+
 The server exposes:
 
 | Method | Path | Purpose |
@@ -133,10 +136,11 @@ curl -X POST http://127.0.0.1:8791/v1/world/session/rollouts \
 As in upstream DreamX, `num_output_frames` is the latent-frame count and must
 be divisible by three. The public pixel-frame count is
 `(num_output_frames - 1) * 4 + 1`: `21` produces `81` frames and `63` produces
-`249`. The current upstream one-minute recipe ends at 252 latent / 1,005 pixel
-frames (62.8 encoded seconds at 16 fps, including the initial frame), and
-resolution may not exceed the official 1280x704 geometry. The defaults are
-1280x704, 21 latent frames, speed 1.5, seed 42, and 16 fps.
+`249`. The upstream DreamX one-minute recipe ends at 252 latent frames and
+1,005 pixel frames (62.8 encoded seconds at 16 frames per second, including the
+initial frame). Resolution must not exceed the official 1280 x 704 geometry.
+The defaults are 1280 x 704, 21 latent frames, speed 1.5, seed 42, and 16 frames
+per second.
 
 A browser or app can seed the first frame without knowing a path on the runtime
 host:
@@ -154,8 +158,8 @@ each following block emits 12 new frames after removing the shared boundary.
 When continuing an already-active causal session, the first streamed chunk also
 contains the prior terminal boundary frame, so clients must trust each chunk's
 reported `pixel_frame_count` instead of assuming nine. A completed job also
-includes a `rollout_receipt` with the final output and terminal-frame media paths. Browser
-clients may fetch and queue those MP4 chunks in order instead of waiting for
+includes a `rollout_receipt` with the final output and terminal-frame media
+paths. Browser clients may fetch and queue those MP4 chunks in order instead of waiting for
 the full rollout. The server supplies CORS headers for local product clients;
 Bearer authentication still applies when configured.
 
@@ -188,7 +192,7 @@ compounding character scale or appearance on repeated loop closure. The first
 origin entry stays pinned while capacity eviction removes the oldest
 non-origin entry.
 
-The default can be reproduced or deliberately swept from the command line:
+Reproduce or deliberately sweep the default from the command line:
 
 ```bash
 mere.run world serve --prepare \
@@ -236,7 +240,7 @@ curl -X POST \
 `GET /v1/world/session/checkpoints` lists live locks, and
 `GET /v1/world/session/checkpoints/:id/media/frame` returns a lock's PNG for a
 browser client. `DELETE /v1/world/session/checkpoints/:id` releases it. Locks
-are exact within the current loaded session and intentionally cleared by
+are exact within the loaded session and intentionally cleared by
 `reset` or `unload`; they are not mislabeled restart-persistent checkpoints.
 Artifact numbering remains collision-free across restores, logical resets, and
 existing files in the state directory, while the next rollout's
@@ -257,9 +261,10 @@ python3 scripts/reference-parity/run_dreamx_world_eval.py \
   --output /tmp/dreamx-world-eval
 ```
 
-The runner saves requests, jobs, receipts, MP4s, terminal PNGs, `ffprobe`
-truth, pose closure, and scene-memory telemetry. Add deterministic PSNR/SSIM
-scores with:
+The runner saves requests, jobs, receipts, MP4 files, terminal PNG files,
+`ffprobe` data, pose closure, and scene-memory telemetry. Add deterministic
+peak signal-to-noise ratio (PSNR) and structural similarity index measure (SSIM)
+scores:
 
 ```bash
 uv run --script scripts/reference-parity/score_dreamx_world_eval.py \
@@ -317,8 +322,9 @@ Camera motion values are `hold`, `forward`, `backward`, `strafeLeft`,
 arrays are XYZ values in meters and degrees.
 
 Omitted sampling fields use backend-specific recipes. DreamX defaults to
-512x320, 17 frames, 40 steps, CFG 5, shift 5, seed 42, and 24 fps. Cosmos3
-uses 320x176, 17 frames, 30 steps, CFG 1, shift 3, seed 0, and 30 fps. Every
+512 x 320, 17 frames, 40 steps, classifier-free guidance (CFG) 5, shift 5, seed
+42, and 24 frames per second. Cosmos3 uses 320 x 176, 17 frames, 30 steps, CFG
+1, shift 3, seed 0, and 30 frames per second. Every
 interactive camera primitive uses NVIDIA's default 16-action cadence and the
 same pinned translation-magnitude envelope. Rotation intent is divided into a
 constant per-frame pose delta. This keeps each generative chunk local enough to
@@ -328,13 +334,13 @@ matching NVIDIA's autoregressive sampling policy. Cosmos3 frame counts must be
 `4n+1`.
 
 The session is a small navigation graph rather than a write-only frame chain.
-An exact inverse control at the same magnitude replays the current path edge in
+An exact inverse control at the same magnitude replays the active path edge in
 reverse, pops it, and restores its source state, model-space action, and
 generation depth. Repeated backtracking can therefore traverse multiple parent
 edges without spending stochastic chunks or compounding avoidable scene drift.
 
 For Cosmos3, the semantic camera request selects a normalized model-space
-trajectory. NVIDIA defines every 9D `camera_pose` row as the relative pose delta
+trajectory. NVIDIA defines every nine-dimensional `camera_pose` row as the relative pose delta
 between consecutive visual states: XYZ translation plus column-based
 rotation-6D. The released 60x9 trajectory is retained byte-for-byte as a parity
 fixture, but it is an arbitrary camera sample rather than a canonical forward

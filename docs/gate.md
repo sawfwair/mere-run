@@ -1,17 +1,17 @@
 # Quality gate
 
-`mere.run gate` is the platform's flight recorder: it runs the real
+Use `mere.run gate` as the platform's flight recorder. It runs the real
 user-facing commands against the installed models at temperature 0, hashes
 their outputs, proves in-run determinism, and compares everything against
-machine-local baselines. It exists because a stale Metal library once shipped
-broken ≥1024-token decode to every clone for two months without anything
-noticing — the gate's text checks deliberately include a long-context lane in
-exactly that regime, and its determinism check would have caught the failure
-on the first nightly run.
+machine-local baselines. The gate exists because a stale Metal library once
+shipped broken decode for 1,024 or more tokens to every clone for two months
+without detection. Its text checks include a long-context lane in that regime,
+and its determinism check would have caught the failure during the first nightly
+run.
 
 ## What it checks
 
-| check | what it runs | hard-fails on |
+| Check | Operation | Failure conditions |
 | --- | --- | --- |
 | `text-*-short` / `text-*-long` | `text chat` at temp 0 (Gemma 4 12B, Ornith 35B, LFM2.5), long lane ≥1200 prompt tokens, each executed twice | run-to-run nondeterminism, empty output, output hash drift vs baseline |
 | `tts-wav` | `speech synthesize` at temp 0 | WAV hash drift, truncated audio |
@@ -23,14 +23,15 @@ on the first nightly run.
 | `video-ltx23-full-av` | 9-frame full two-stage LTX 2.3 render with generated audio | generation failure, MP4 decode failure, missing audio, or silent audio |
 | `video-ltx23-a2vid` | 9-frame full two-stage LTX 2.3 render conditioned on a generated non-silent WAV fixture | generation failure, MP4 decode failure, missing audio, or silent audio |
 
-Performance (wall time, `decode_tps` where the engine reports it) is compared
-against the baseline too: regressions beyond 0.75× tok/s or 1.5× wall are
+The gate also compares performance, including wall time and `decode_tps` when
+the engine reports it. Regressions beyond 0.75 times the tokens per second or
+1.5 times the wall time are
 warnings by default and failures with `--strict-perf` (suitable for a
-dedicated runner; on a shared workstation, background load makes hard perf
-gates noisy).
+dedicated runner). On a shared workstation, background load makes strict
+performance gates noisy.
 
-Checks whose models are not installed are skipped and reported. Every check
-shells out to the same `mere.run` binary that users run — the gate covers the
+If a model is not installed, the gate skips and reports its checks. Every check
+invokes the same `mere.run` binary that users run. The gate covers the
 CLI surface, model resolution, and the runtime together, not a parallel test
 path.
 
@@ -56,7 +57,7 @@ model:
 - every Woosh/MMAudio generator, CLAP, and Synchformer
 - every installed LTX, Wan, Cosmos3, SCAIL-2, and DreamX video/world model
 
-Component-only entries are not waved through as a family. Their report row
+The gate does not accept component-only entries as a family. Their report row
 names the true companion inference that consumes them. For example,
 Synchformer must be loaded by `sfx video generate`; DreamX must complete a
 queued `world serve` transition using its Wan base. If the required companion
@@ -99,10 +100,10 @@ so a release host cannot silently turn a required real-generation check into a
 skip. The three LTX checks cover the standalone draft checkpoint, the full
 generated-audio path, and the compatibility A2Vid model ID separately.
 
-The final packaged candidate must run `--all-installed` from the exact
+For the final packaged candidate, run `--all-installed` from the exact
 extracted CLI. The JSON report has one result per installed model ID. Compare
 `gate --all-installed --list` with `model list` before starting a long run if
-you need a quick inventory audit; the gate performs that mapping itself and
+you need an inventory audit. The gate performs that mapping itself and
 fails closed if it cannot account for an installed entry.
 
 A documented exceptional release quarantine can add
@@ -111,13 +112,13 @@ explicit `skipped` row; it is never counted as a pass. The option is valid only
 with `--all-installed`, and unknown or non-installed IDs fail closed.
 
 Baselines live at `~/Library/Application Support/MereRun/gate/baselines.json`.
-After an intentionally output-changing merge (sampler changes, model updates,
-scheduler changes), refresh them with `--update-baselines` — the failure
-message says so when a hash drifts.
+After a merge intentionally changes output, such as a sampler, model, or
+scheduler change, refresh the baselines with `--update-baselines`. The failure
+message also directs you to refresh them when a hash drifts.
 
-## Running it nightly
+## Run the gate nightly
 
-launchd (per-machine, recommended for workstations):
+For a per-machine workstation schedule, use `launchd`:
 
 ```xml
 <?xml version="1.0" encoding="UTF-8"?>
@@ -139,11 +140,14 @@ launchd (per-machine, recommended for workstations):
 </dict></plist>
 ```
 
-Save as `~/Library/LaunchAgents/run.mere.gate.plist`, then
-`launchctl load ~/Library/LaunchAgents/run.mere.gate.plist`.
+Save the file as `~/Library/LaunchAgents/run.mere.gate.plist`, and then run:
 
-GitHub Actions (requires a self-hosted Apple-silicon runner with models
-installed; the hosted runners have no GPU or model store):
+```bash
+launchctl load ~/Library/LaunchAgents/run.mere.gate.plist
+```
+
+To use GitHub Actions, configure a self-hosted Apple silicon runner with the
+models installed. Hosted runners do not have a GPU or model store.
 
 ```yaml
 name: quality-gate

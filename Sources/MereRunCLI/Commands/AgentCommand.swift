@@ -188,7 +188,7 @@ struct AgentOnboard: AsyncParsableCommand {
     )
     var acceptModelLicense: Bool = false
 
-    @Flag(name: [.long], help: "Install the latest Pi coding-agent release from GitHub.")
+    @Flag(name: [.long], help: "Install the most recent published Pi coding-agent release from GitHub.")
     var installPi: Bool = false
 
     @Flag(name: [.long], help: "Write a Pi extension that registers the local mere.run API provider.")
@@ -374,7 +374,7 @@ struct AgentOnboard: AsyncParsableCommand {
 struct AgentInstallPi: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "install-pi",
-        abstract: "Install the latest Pi coding-agent release for use with mere.run."
+        abstract: "Install the most recent published Pi coding-agent release for use with mere.run."
     )
 
     @Flag(name: [.long], help: "Re-download and replace the current installed Pi release.")
@@ -417,7 +417,7 @@ struct AgentStart: AsyncParsableCommand {
     @Option(name: [.long], help: "Working directory for the Pi process.")
     var workingDirectory: String?
 
-    @Flag(name: [.long], help: "Run Pi in the current terminal instead of opening Terminal.app.")
+    @Flag(name: [.long], help: "Run Pi in the active terminal instead of opening Terminal.app.")
     var inline: Bool = false
 
     @Option(name: [.long], help: "Managed agent model id to serve through Pi.")

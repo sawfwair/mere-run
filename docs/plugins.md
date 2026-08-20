@@ -1,4 +1,4 @@
-# Companion Plugins
+# Companion plugins
 
 Extend `mere.run` without letting anything into its process. Official plugins
 are separate executables shipped outside the Swift package: they can add
@@ -29,7 +29,7 @@ they do not maintain a second plugin registry.
 ## macOS Studio
 
 Open **Plugins** from the Studio sidebar or **View → Plugins**. The first-class
-workspace supports catalog search, installed/verified status, channel
+workspace supports catalog search, installed and verified status, channel
 selection, repository access, copyable install commands, confirmed install or
 update, and the fixed plugin doctor operation. A custom catalog URL or local
 JSON path is available for development.
@@ -48,7 +48,7 @@ mere.run plugin install mere-runpod
 mere.run plugin install mere-runpod --yes
 ```
 
-After installation, mere.run verifies the plugin manifest and entrypoint. A
+After installation, `mere.run` verifies the plugin manifest and entrypoint. A
 plugin that declares a graph provider is registered only after that manifest
 passes validation.
 
@@ -63,7 +63,7 @@ mere.run plugin doctor mere-runpod
 
 The doctor command resolves the catalog entry, verifies that its executable is
 on `PATH`, verifies its manifest, and invokes the plugin's fixed `doctor` verb.
-If the entrypoint cannot start, mere.run diagnoses the installation before
+If the entrypoint cannot start, `mere.run` diagnoses the installation before
 delegating. A stale editable `pipx` install reports its missing source path and
 the exact forced-reinstall command instead of exposing only a Python traceback.
 Plugin stdout and exit status remain owned by a verified executable.
@@ -75,8 +75,8 @@ verbs: catalog, preflight, and execute. The core runtime validates typed
 requests and events; plugin manifests cannot inject arbitrary shell commands
 into workflow bundles.
 
-See [Portable Workflows](./workflows.md#graph-v2-runtime-and-v1-contract) for
-the graph ABI and [CLI Reference](./cli.md) for every plugin option.
+See [Portable workflows](./workflows.md#graph-v2-runtime-and-v1-contract) for
+the graph ABI and [CLI reference](./cli.md) for every plugin option.
 
 ## Source boundary
 

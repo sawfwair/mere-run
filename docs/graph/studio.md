@@ -1,14 +1,14 @@
 # Graph Studio
 
-Build workflows on a canvas instead of by hand in JSON. Mere Graph Studio is
-the visual authoring and operations surface for the current `mere.run` Graph v2
-runtime — either the hosted app at
+Use Mere Graph Studio to build workflows on a canvas instead of writing JSON by
+hand. Graph Studio is the visual authoring and operations surface for the
+`mere.run` Graph v2 runtime. Use either the hosted app at
 [studio.mere.run](https://studio.mere.run/) or the cross-platform Tauri 2
 desktop build for macOS, Windows, and Linux.
 
 Studio is a client, not a second engine. It authors exactly the typed graph,
 inputs, and immutable job bundle that the CLI validates and executes locally,
-over SSH, or through Relay — so anything you draw there runs headless
+over SSH, or through Relay. A workflow that you draw in Studio runs headless
 everywhere else, unchanged.
 
 ## Graph v2 versus `schema_version: 1`
@@ -17,8 +17,8 @@ Two version labels describe different layers:
 
 | Label | Meaning |
 | --- | --- |
-| Graph v2 | The current runtime generation: catalog-driven nodes, immutable bundles, preflight, parallel and resumable execution, providers, Relay placement, and typed artifacts. |
-| `schema_version: 1` | The stable serialized `mere.run/workflow-graph` ABI consumed by every current executor. |
+| Graph v2 | The runtime generation: catalog-driven nodes, immutable bundles, preflight, parallel and resumable execution, providers, Relay placement, and typed artifacts. |
+| `schema_version: 1` | The stable serialized `mere.run/workflow-graph` ABI consumed by every supported executor. |
 
 Do not change a workflow to `schema_version: 2`. Graph v2 intentionally keeps
 the version-1 document contract so the CLI, desktop Studio, hosted Studio,
@@ -37,7 +37,7 @@ The hosted site does not run models. Relay owns admission, scheduling, leases,
 retry state, and artifact delivery; the paired Node owns model execution. A
 stale worker cannot settle a newer attempt.
 
-Hosted execution currently accepts graphs whose inputs are JSON values. Use the
+Hosted execution accepts graphs whose inputs are JSON values. Use the
 desktop app for workflows that bind local files or directories; browser asset
 upload is a separate transport boundary and is not inferred from a machine-local
 path.
@@ -45,13 +45,13 @@ path.
 ### Desktop Studio
 
 The desktop app packages the React/XYFlow editor in a Rust and Tauri 2 shell.
-It is designed for:
+Use the desktop app for these tasks:
 
-- macOS, Windows, and Linux native installation;
-- local file and directory inputs;
-- local, SSH, and Relay execution;
-- offline authoring and local execution;
-- native project and run workspaces.
+- Install a native app on macOS, Windows, or Linux.
+- Bind local file and directory inputs.
+- Run workflows locally, over SSH, or through Relay.
+- Author workflows and run them locally while offline.
+- Manage native project and run workspaces.
 
 Desktop Studio requires a compatible `mere.run` executable for local execution.
 Optional workflow tools add templates, programs, and conservative ComfyUI
@@ -68,7 +68,7 @@ gate; the hosted app remains available without a desktop install.
 
 ## Authentication boundary
 
-Local Studio never requires Mere World sign-in. Launch, authoring, project
+Local Studio does not require Mere World sign-in. Launch, authoring, project
 save and load, catalog discovery, validation, preflight, and local execution
 remain available without an account or network connection when the required
 CLI and model assets are already installed.
@@ -100,9 +100,10 @@ editor sidecar   node positions, groups, notes, selections, view state
 program          optional higher-level map and branch authoring document
 ```
 
-Import and export use a `.meregraph.json` project package to carry those
+Studio import and export use a `.meregraph.json` project package to carry those
 documents together. Execution still materializes the canonical
-`mere.run/job-bundle.v1` files described in [Portable Workflows](../workflows.md).
+`mere.run/job-bundle.v1` files described in
+[Portable workflows](../workflows.md).
 
 ## Run from the CLI
 
@@ -114,7 +115,7 @@ mere.run graph preflight workflow.json --inputs-json inputs.json --executor loca
 mere.run graph run workflow.json --inputs-json inputs.json --run-dir ./runs/studio --json
 ```
 
-For a paired fleet, select the Relay executor in Studio or submit the same
+If you use a paired fleet, select the Relay executor in Studio or submit the same
 materialized bundle with `mere.run graph submit-job`. Run reports, events, and
 artifact hashes use the same contract in either client.
 
@@ -124,7 +125,7 @@ Studio does not keep a private hard-coded execution schema. Desktop Studio
 reads `mere.run graph catalog --json`; hosted Studio reads catalogs reported by
 connected Nodes through Relay. The catalog carries node fields, requirements,
 provider versions, and provider catalog digests, so an unavailable or outdated
-node is rejected during authoring or preflight instead of failing after queueing.
+node is rejected during authoring or preflight instead of failing after it is queued.
 
 The `mere.run` repository keeps its CLI and documentation synchronized through
 `DocumentationContractTests`. Graph Studio, Relay, and Node maintain shared

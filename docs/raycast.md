@@ -1,7 +1,7 @@
-# Raycast Integration
+# Raycast integration
 
 Raycast is one example client of MereRun's public macOS handoff surface. Read
-[macOS Deep Links](./macos-deep-links.md) for the app-owned route contracts and
+[macOS deep links](./macos-deep-links.md) for the app-owned route contracts and
 security boundaries independent of any launcher.
 
 Generate an image, video, music track, or spoken-audio file from Raycast, then
@@ -14,20 +14,19 @@ executable plugin and is not installed through the MereRun plugin catalog.
 
 ## Requirements
 
-- macOS with [Raycast](https://www.raycast.com/) installed;
-- a MereRun.app build containing the `mererun://library/import` route; v0.31.0
-  supports the optional preview-only route but not Library import;
-- the app-bundled `mere.run` helper, or another executable CLI path configured
-  in the extension;
-- a locally installed model for the generation command you want to run.
+- macOS with [Raycast](https://www.raycast.com/) installed.
+- A MereRun.app build containing the `mererun://library/import` route. Version
+  0.31.0 supports the optional preview-only route but not Library import.
+- The app-bundled `mere.run` helper, or another executable CLI path configured
+  in the extension.
+- A locally installed model for the generation command you want to run.
 
 The native import and preview deep links are part of the macOS app. Linux
 packages contain the headless CLI only and cannot open the MereRun Studio.
 
 ## Install the extension
 
-The extension is not in the Raycast Store yet. Load the development extension
-from its public repository:
+Load the development extension from its public repository:
 
 ```bash
 git clone https://github.com/sawfwair/mere-run-raycast.git
@@ -53,9 +52,9 @@ Raycast's **Uninstall Extension** action.
 | **Synthesize Speech** | `mere speech` | `mere.run speech synthesize` | WAV |
 
 Choose a command, enter its prompt in Raycast, and press Return. Raycast shows
-the CLI's latest diagnostic while generation is active. After the command exits
+the CLI's most recent diagnostic while generation is active. After the command exits
 successfully and the output is readable, the extension imports the artifact,
-opens its owning MereRun workspace, reveals Library, and selects the new row.
+opens its owning MereRun workspace, reveals Library, and selects the imported row.
 
 Generated files are durable. By default they are written to
 `~/MereRun/Raycast` with a media-specific name and UTC timestamp, for example:
@@ -69,10 +68,10 @@ mere-speech-2026-08-01T22-46-28-054Z.wav
 
 Open Raycast's extension preferences for **Mere.run** to change either setting:
 
-- **MereRun CLI Path** — optional absolute path to a `mere.run` executable;
-- **Output Directory** — artifact directory, defaulting to
-  `~/MereRun/Raycast`. Tilde paths are supported;
-- **Open Result In** — **MereRun Library** by default, or **Quick Look Only**
+- **MereRun CLI Path:** Optional absolute path to a `mere.run` executable.
+- **Output Directory:** Artifact directory, defaulting to
+  `~/MereRun/Raycast`. Tilde paths are supported.
+- **Open Result In:** **MereRun Library** by default, or **Quick Look Only**
   when the artifact should not be imported.
 
 When no CLI path is configured, the extension selects the first executable in
@@ -98,7 +97,7 @@ version 1 receipt contains only the completed local run metadata MereRun needs:
   "source": "raycast",
   "kind": "image",
   "prompt": "a ceramic coffee mug in soft morning light",
-  "artifactPath": "/Users/me/MereRun/Raycast/mere-image-result.png",
+  "artifactPath": "/Users/dana/MereRun/Raycast/mere-image-result.png",
   "createdAt": "2026-08-01T22:42:07Z"
 }
 ```
@@ -106,7 +105,7 @@ version 1 receipt contains only the completed local run metadata MereRun needs:
 It then asks Launch Services to open one percent-encoded absolute receipt path:
 
 ```text
-mererun://library/import?receipt=%2FUsers%2Fme%2FLibrary%2FApplication%20Support%2Fcom.raycast.macos%2Fextensions%2Fmere-run%2Flibrary-imports%2F5cb7dc90-a9d4-4634-a486-0b8140226b42.json
+mererun://library/import?receipt=%2FUsers%2Fdana%2FLibrary%2FApplication%20Support%2Fcom.raycast.macos%2Fextensions%2Fmere-run%2Flibrary-imports%2F5cb7dc90-a9d4-4634-a486-0b8140226b42.json
 ```
 
 MereRun accepts receipt version 1 and the typed `image`, `video`, `music`, and
@@ -114,7 +113,7 @@ MereRun accepts receipt version 1 and the typed `image`, `video`, `music`, and
 versions, empty prompts, missing or unreadable artifacts, and media that does
 not match the declared kind. Reopening the same receipt or artifact selects the
 existing row instead of duplicating it. MereRun owns `library.json`; the
-launcher never reads or writes that file.
+launcher does not read or write that file.
 
 ## Preview an existing artifact
 
@@ -122,7 +121,7 @@ MereRun.app registers `mererun://preview`. A launcher can pass one
 percent-encoded absolute path:
 
 ```text
-mererun://preview?path=%2FUsers%2Fme%2FDesktop%2Fresult.png
+mererun://preview?path=%2FUsers%2Fdana%2FDesktop%2Fresult.png
 ```
 
 Raycast extensions should let the URL API encode the path:
@@ -201,6 +200,6 @@ npm run check
 ```
 
 MereRun owns the CLI behavior, both typed deep-link routes, Library persistence,
-and the signed macOS release. See [Getting Started](./getting-started.md) for
-installation and [Model Management](./runtime/model-management.md) for managed
+and the signed macOS release. See [Getting started](./getting-started.md) for
+installation and [Model management](./runtime/model-management.md) for managed
 downloads.

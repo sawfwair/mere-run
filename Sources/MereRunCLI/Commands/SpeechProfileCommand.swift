@@ -122,7 +122,7 @@ struct SpeechProfileCreate: AsyncParsableCommand {
 struct SpeechProfileDelete: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "delete",
-        abstract: "Delete a speech profile by id."
+        abstract: "Delete a speech profile by ID."
     )
 
     @Option(name: [.long], help: "Profile UUID.")

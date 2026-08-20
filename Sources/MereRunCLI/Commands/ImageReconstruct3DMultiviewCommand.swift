@@ -11,7 +11,7 @@ struct InstantMeshCameraDocument: Codable, Equatable {
 struct ImageReconstruct3DMultiview: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "reconstruct-3d-multiview",
-        abstract: "Reconstruct a colored mesh from 4 or 6 user-supplied views with native InstantMesh."
+        abstract: "Reconstruct a colored mesh from four or six supplied views with native InstantMesh."
     )
 
     @Option(
@@ -171,7 +171,7 @@ struct ImageReconstruct3DMultiview: AsyncParsableCommand {
 struct VisionImageTo3DMultiview: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "image-to-3d-multiview",
-        abstract: "VFX alias for native 4/6-view InstantMesh reconstruction."
+        abstract: "VFX alias for native four-view or six-view InstantMesh reconstruction."
     )
 
     @Option(name: [.customLong("view")], parsing: .singleValue, help: "Ordered view path; repeat 4 or 6 times.")

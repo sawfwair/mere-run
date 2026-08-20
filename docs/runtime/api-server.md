@@ -1,8 +1,9 @@
-# Local API Server
+# Local API server
 
-The rest of `mere.run`, behind an OpenAI-compatible endpoint on localhost.
-Point an existing client, your editor, or Open WebUI at it and nothing about
-your setup changes except where the weights live — and where your prompts stop.
+Use the local API server to expose supported `mere.run` models through an
+OpenAI-compatible endpoint. Point an existing client, your editor, or Open
+WebUI at the loopback endpoint to keep model weights and prompts on the serving
+machine.
 
 ## Commands
 
@@ -13,26 +14,26 @@ your setup changes except where the weights live — and where your prompts stop
 | `mere.run model runtime set` | Update typed API runtime settings for a managed model. |
 | `mere.run status` | Show local server, loaded model, and installed model status. |
 
-## macOS Serving & Agents Console
+## macOS Serving & Agents console
 
 MereRun Studio exposes this control plane as a top-level **Serving & Agents**
 destination (or `Shift-Command-S`). It is an operational client of the public
 CLI and HTTP contracts, not a second runtime. The console provides:
 
-- API preflight, app-owned start/stop/restart, and reconnection to a server
+- API preflight, app-owned start, stop, restart, and reconnection to a server
   started outside Studio
-- explicit loopback/LAN authentication safety; Studio blocks a non-loopback
+- Explicit loopback and local area network (LAN) authentication safety; Studio blocks a non-loopback
   app-owned launch until an API key is configured
-- the live text and image/speech/transcription/embedding sidecar pools,
+- Live text, image, speech, transcription, and embedding sidecar pools,
   readiness, activity, queues, pinning, TTLs, aliases, model settings, and
   text-model load/unload controls
-- unified-memory guard pressure, process CPU, honest Metal allocation and
+- Unified-memory guard pressure, process CPU, Metal allocation and
   recommended working set, and macOS thermal/power state where available
-- observed request totals, failures, tokens, latency/throughput, prefix reuse,
+- Observed request totals, failures, tokens, latency, throughput, prefix reuse,
   decode batching, and MTP counters
-- typed Pi readiness/install/configure/start flows plus copyable OpenAI SDK,
+- Typed Pi readiness, install, configure, and start flows, plus copyable OpenAI software development kit (SDK),
   curl, BYOA, and Open WebUI connection setup
-- a sanitized lifecycle/activity feed that excludes prompts, messages, media,
+- A sanitized lifecycle and activity feed that excludes prompts, messages, media,
   and generated content
 
 Server launches and agent setup sessions use the normal Studio Library
@@ -55,13 +56,12 @@ lifecycle. API keys still cross the process boundary only through
 
 ## What it is for
 
-Serving beats shelling out to the CLI once you are making more than one request
-— the model stays loaded between them. It suits:
+Use the server for repeated requests so the model stays loaded. It supports:
 
-- editor tooling and local automation
-- RAG and knowledge-base embeddings over private documents
-- image generation, speech, and transcription from an existing OpenAI client
-- trying the runtime out over HTTP before wiring anything permanent
+- Editor tooling and local automation
+- Retrieval-augmented generation (RAG) and knowledge-base embeddings over private documents
+- Image generation, speech, and transcription from an existing OpenAI client
+- Runtime evaluation over HTTP before a permanent integration
 
 It is not a hosted service or a relay layer. The server binds to loopback by
 default. For remote jobs, prefer [portable workflows](../workflows.md); when
@@ -253,10 +253,10 @@ swift run mere.run model runtime set text-chat-gemma4 \
   --min-p 0.05
 ```
 
-Network-exposed example:
+For a network-exposed server, configure an API key and a rate limit:
 
 ```bash
-export MERERUN_API_KEY=change-me
+export MERERUN_API_KEY=example-api-key
 swift run mere.run api serve \
   --engine text-chat-gemma4 \
   --host 0.0.0.0 \
@@ -268,39 +268,39 @@ swift run mere.run api serve \
 
 ## Design notes
 
-- the API server follows the same model-resolution and model-store rules as the
-  rest of the CLI
+- The API server follows the same model-resolution and model-store rules as the
+  rest of the CLI.
 - `ManagedModelCatalog` is the API model authority; the server does not scan
-  arbitrary model folders as request-addressable models
+  arbitrary model folders as request-addressable models.
 - `--engine` and `--model` still define and preload the startup default, while
   each chat request can select another installed API-capable catalog model with
-  the OpenAI `model` field
+  the OpenAI `model` field.
 - `/v1/embeddings` uses the native `text-embed-qwen3-0.6b` sidecar model; it is
-  listed in `/v1/models` when installed even though it is not a chat-serving engine
+  listed in `/v1/models` when installed even though it is not a chat-serving engine.
 - `/v1/images/generations`, `/v1/images/edits`, `/v1/audio/speech`, and
   `/v1/audio/transcriptions` are sidecar routes over existing native CLI
-  runtime paths. Installed embedding, image, TTS, and ASR sidecar catalog ids are listed in
+  runtime paths. Installed embedding, image, TTS, and ASR sidecar catalog IDs are listed in
   `/v1/models` even though they are not chat-serving engines.
-- the server keeps one most-recently-used embedding lane, one image lane shared
+- The server keeps one most-recently-used embedding lane, one image lane shared
   by generation and editing, one TTS lane, and one ASR lane resident. Repeated requests for the
   same model reuse loaded components; mutable generators execute exclusively,
   and a model or ASR-backend switch unloads the previous runtime before loading
   the next one so request-selected local paths cannot grow residency without
   bound.
-- sidecars default to a 300-second idle TTL. Per-lane autonomous timers expire
+- Sidecars default to a 300-second idle time to live (TTL). Per-lane autonomous timers expire
   idle residents without waiting for another request and re-read managed
   `pinned` and `ttlSeconds` settings while idle, so live settings changes take
   effect. Managed embedding, image, TTS, and ASR models accept
   `model runtime set <id> --ttl-seconds <seconds>` and `--pinned`;
   sidecar-specific settings reject text-only sampling, engine, alias, context,
   and KV controls. The special `qwen-image-edit` repository lane is resident but
-  currently uses the default lifecycle policy because it is not configurable
+  uses the default lifecycle policy because it is not configurable
   through `model runtime`.
-- sidecar admission samples the same `--memory-guard` policy before and after an
+- Sidecar admission samples the same `--memory-guard` policy before and after an
   operation. Cold sidecar operations are exclusive across lanes, preventing two
   model loads from racing each other or an already-running warm sidecar. Image
   operations remain exclusive because staged image pipelines can reload
-  components even when their resident generator is warm. Before a new resident loads, the
+  components even when their resident generator is warm. Before another resident loads, the
   catalog estimate (or resolved local directory size) is projected against the
   hard guard with conservative per-family working-set floors; idle unpinned residents are proactively released, and the request
   fails with a memory-pressure error if adequate headroom cannot be recovered.
@@ -309,21 +309,22 @@ swift run mere.run api serve \
   eviction; the idle startup default is eligible for this sidecar admission
   path. If pressure remains, eligible idle sidecars are evicted oldest first.
   Active, queued, or pinned residents are protected throughout.
-- chat, embedding, image, TTS, and ASR inference pass through a fair FIFO request
+- Chat, embedding, image, TTS, and ASR inference pass through a fair first-in,
+  first-out (FIFO) request
   admission actor; the default `--max-active-requests 1` serializes local
   inference across text and media activation peaks and exposes queue depth in
   status. Raising it is an explicit throughput and unified-memory tradeoff;
   queued client cancellations are removed from the FIFO instead of being
   admitted later. Explicit runtime model load/unload maintenance shares the
-  same queue
-- machine admission complements rather than replaces `--max-active-requests`:
+  same queue.
+- Machine admission complements rather than replaces `--max-active-requests`:
   the server's local limit controls request and batching concurrency inside its
-  weighted machine reservation
+  weighted machine reservation.
 - Gemma4, Qwen-family, and LFM2 prefills are chunked with cancellation and
   progress checkpoints before decode; this is cooperative single-request
   prefill, not continuous batching. Qwen3.8 defaults to 1,024-token chunks and
   caps them at 512 when live reclaimable memory falls below 16 GiB or a peer is
-  admitted, so a live decoder is not held behind a pressure-heavy prefill
+  admitted, so a live decoder is not held behind a pressure-heavy prefill.
 - Gemma4 uses in-memory prefix KV reuse by default in `api serve`; set
   `MERERUN_GEMMA4_PREFIX_KV_CACHE=0` for a baseline. `/runtime/status` reports
   cache entries, hits, and reused tokens when the Gemma4 model is loaded; the
@@ -357,7 +358,7 @@ swift run mere.run api serve \
   attention and LFM2 short-convolution layers use typed recurrent state, so
   compatible rows may batch across decode positions. The scheduler services the
   earliest decode position first, batching compatible rows there or advancing a
-  single lower-offset row until it can join one
+  single lower-offset row until it can join one.
 - Gemma4 has an experimental packed PolarKV path behind
   `--kv-quant-scheme polar --kv-bits 2`; use it for memory-pressure and
   long-context synthetic decode testing. It is not the default until checkpoint
@@ -380,36 +381,37 @@ swift run mere.run api serve \
   signal that a resident object exists; additive `ready: false` means text
   preparation is in progress or a sidecar's first operation is loading or
   failed. Older payloads can omit `ready`, and older clients can ignore it. SSD
-  KV persistence remains unavailable until the in-memory counters justify it
-- runtime settings are stored at
-  `<active model store>/.mere-run/runtime-model-settings.json`
-- the runtime pool applies `ttlSeconds` opportunistically when handling pool
+  KV persistence remains unavailable until the in-memory counters justify it.
+- Runtime settings are stored at
+  `<active model store>/.mere-run/runtime-model-settings.json`.
+- The runtime pool applies `ttlSeconds` opportunistically when handling pool
   operations; expired idle models unload automatically unless their settings are
   pinned. Explicit unload remains available for pinned models.
-- memory-pressure LRU uses the API server's `--memory-guard` tier. The guard
+- Memory-pressure least-recently-used (LRU) eviction uses the API server's
+  `--memory-guard` tier. The guard
   derives soft/hard ceilings from Darwin physical footprint (RSS elsewhere),
   host memory
   headroom, and a tier reserve (`safe`, `balanced`, `aggressive`, or
   `custom`). Elevated pressure pauses extra concurrent admissions and evicts the
   least-recently-used idle unpinned model; critical pressure evicts every idle
   unpinned model. Active requests are never evicted.
-- `mere.run status` is the preferred quick check before wiring an editor or
-  agent to a local server
-- it is intentionally local-first
-- it should not reintroduce relay, billing, or hosted-infrastructure concerns
-- non-loopback binds require an API key, and the OpenAI-compatible routes
-  support basic rate limiting
-- chat, embedding, image generation, and TTS requests must use
+- `mere.run status` is the preferred quick check before you connect an editor or
+  agent to a local server.
+- The server is local-first.
+- The server must not introduce relay, billing, or hosted-infrastructure concerns.
+- Non-loopback binds require an API key, and the OpenAI-compatible routes
+  support basic rate limiting.
+- Chat, embedding, image generation, and TTS requests must use
   `Content-Type: application/json`; image editing, STT, and vision
   geometry/3D/depth requests must use `multipart/form-data`; browser-simple
-  form/text posts are rejected before the request body is processed
-- chat requests are validated before generation; `max_tokens`,
+  form and text posts are rejected before the request body is processed.
+- Chat requests are validated before generation; `max_tokens`,
   `max_completion_tokens`, `temperature`, `top_p`, and the supported `min_p`
-  extension must stay within bounded ranges
+  extension must stay within bounded ranges.
 - LoRA adapters are configured at server startup with `--lora`; request bodies
-  cannot select local LoRA paths
-- streaming and JSON error paths are sanitized so the local server does not
-  reflect raw internal runtime details back to clients
+  cannot select local LoRA paths.
+- Streaming and JSON error paths are sanitized so the local server does not
+  reflect raw internal runtime details back to clients.
 
 ## Runtime control endpoints
 
@@ -423,7 +425,7 @@ The control endpoints use the same bearer-token behavior as `/v1/models`,
   aggregate traffic stats measured from completed native chat requests.
   Newer servers also include additive `process` telemetry: PID, start time,
   uptime, sampled process CPU, macOS thermal/low-power state, Metal device,
-  current Metal allocation, recommended maximum working set, and unified-memory
+  live Metal allocation, recommended maximum working set, and unified-memory
   capability. Older clients ignore it and older servers may omit it.
 - `POST /runtime/models/{id}/load`: explicitly load an installed API-capable
   text-pool catalog model.
@@ -484,7 +486,7 @@ chunks as they are produced.
 
 Native Qwen-family, Nemotron Lightning, and Laguna catalog profiles accept
 `logprobs: true` for non-streaming requests, with `top_logprobs` from 0 through
-20. Logprob capture currently requires unconstrained text output rather than
+20. Log-probability capture requires unconstrained text output instead of
 `json_object` or `json_schema`. The response keeps the OpenAI
 `choices[].logprobs.content[]` shape and adds
 explicit `raw_logprob`, `policy_logprob`, entropy, margin, region, summary, and
@@ -583,7 +585,7 @@ Qwen3 embedding model has a fixed vector size and returns float vectors.
 
 `POST /v1/images/generations` accepts:
 
-- `model`: a mere.run image model id, local image model path, or an OpenAI image
+- `model`: a mere.run image model ID, local image model path, or an OpenAI image
   model name such as `dall-e-3` mapped to `image-zimage-nano`
 - `prompt`: required text prompt
 - `size`: `WIDTHxHEIGHT`; defaults to `1024x1024`; each dimension must be a
@@ -599,7 +601,7 @@ Qwen3 embedding model has a fixed vector size and returns float vectors.
 - `image`: required input image file part; Open WebUI-style `image[]` repeated
   parts are accepted for multi-image edit requests
 - `mask`: optional mask file part
-- `model`: a mere.run image model id, local image model path, `qwen-image-edit`,
+- `model`: a mere.run image model ID, local image model path, `qwen-image-edit`,
   or an OpenAI image model name such as `gpt-image-1` mapped to
   `image-zimage-nano`
 - `prompt`: required edit instruction
@@ -611,7 +613,7 @@ Qwen3 embedding model has a fixed vector size and returns float vectors.
 - local extensions: `strength`, `seed`, `negative_prompt`, `steps` (1 through
   100), and `guidance_scale`
 
-Masks are accepted for client compatibility. Current native edit models use
+Masks are accepted for client compatibility. Native edit models use
 whole-image conditioning rather than strict masked inpainting.
 
 `POST /v1/audio/speech` accepts:
@@ -646,10 +648,10 @@ instead of being ignored.
 The five `/v1/vision/*` routes take `multipart/form-data` and return JSON whose
 artifacts are server-local `file://` URLs, retained for one hour. Because those
 URLs only make sense on the serving machine, the routes are loopback-only:
-authenticated remote clients get an error, and their model ids are filtered out
+authenticated remote clients get an error, and their model IDs are filtered out
 of `/v1/models` for non-loopback clients. Inputs must be uploaded file parts;
 client filesystem paths are rejected. Each route accepts only its managed
-default model id (depth video also accepts its metric variant).
+default model ID (depth video also accepts its metric variant).
 
 `POST /v1/vision/geometry` accepts:
 
@@ -746,7 +748,7 @@ scripts/smoke-open-webui.sh live-smoke
 
 `live-smoke` waits for Open WebUI, signs in to the disposable no-auth smoke
 admin user, filters the OpenAI chat connection to the configured text and vision
-chat ids, imports per-model metadata wrappers, sends text and vision chat
+chat IDs, imports per-model metadata wrappers, sends text and vision chat
 through Open WebUI's own proxy, then exercises the direct mere.run API surface
 and the Open WebUI model list. Use `configure`, `proxy-smoke`, `api-smoke`, and
 `ui-smoke` separately when debugging one stage.
@@ -807,7 +809,8 @@ docker run -d \
   ghcr.io/open-webui/open-webui:main
 ```
 
-The environment variables above preconfigure Open WebUI on a fresh data volume.
+The environment variables in the Docker command preconfigure Open WebUI on a
+fresh data volume.
 Run `scripts/smoke-open-webui.sh configure` after the container is healthy to
 set Open WebUI's OpenAI connection `model_ids` filter and import per-model
 capability wrappers. That keeps image, embedding, TTS, and STT sidecars out of
@@ -826,10 +829,10 @@ the same values in the admin UI:
 - STT engine/model: `openai` / `speech-asr-parakeet`
 - Function calling: native mode with `{"function_calling":"native"}`
 
-Docker Compose / DGX Spark path:
+### Docker Compose host path
 
-Keep mere.run on the host and run only Open WebUI in Docker. This is the
-cleaner path for Linux, DGX Spark, or LAN workstations because the mere.run
+Keep mere.run on the host and run only Open WebUI in Docker. Use this path for
+Linux or LAN workstations because the mere.run
 process owns the local model store and runtime/GPU setup while Open WebUI keeps
 its persistent app data in a Docker volume.
 
@@ -850,7 +853,7 @@ MERERUN_API_KEY=change-me
 WEBUI_SECRET_KEY=replace-with-openssl-rand-hex-32
 OPEN_WEBUI_IMAGE=ghcr.io/open-webui/open-webui:main
 OPEN_WEBUI_BIND=0.0.0.0
-OPEN_WEBUI_URL=http://spark.local:3000
+OPEN_WEBUI_URL=http://host.example.com:3000
 MERERUN_OPENWEBUI_API_URL=http://host.docker.internal:8080/v1
 MERERUN_OPENWEBUI_TEXT_MODEL=text-chat-gemma4-12b
 ```
@@ -915,7 +918,7 @@ docker compose up -d
 ```
 
 For Open WebUI on a different machine, set `MERERUN_OPENWEBUI_API_URL` to the
-mere.run host's LAN URL, for example `http://192.168.1.50:8080/v1`. Keep
+mere.run host's LAN URL, for example `http://192.0.2.50:8080/v1`. Keep
 `WEBUI_AUTH=True`, keep a stable `WEBUI_SECRET_KEY`, and pin
 `OPEN_WEBUI_IMAGE` to a tested release tag before treating the instance as
 shared or production-like.
@@ -975,7 +978,8 @@ install. If an existing Open WebUI data directory ignores changed environment
 variables, update the values in the admin UI, set `ENABLE_PERSISTENT_CONFIG=False`
 for smoke, or start with a fresh data directory. Set the
 `vision-chat-gemma4-12b` per-model capability `vision=true` before UI vision
-upload smoke if you use the conservative global model metadata above.
+upload smoke if you use the conservative global model metadata from this
+example.
 
 uv path:
 
@@ -1015,7 +1019,7 @@ AUDIO_STT_OPENAI_API_BASE_URL=http://127.0.0.1:8080/v1 \
 AUDIO_STT_OPENAI_API_KEY="$MERERUN_API_KEY" \
 ENABLE_PERSISTENT_CONFIG=False \
 WEBUI_AUTH=False \
-uvx --python 3.11 open-webui@latest serve --host 127.0.0.1 --port 3000
+uvx --python 3.11 open-webui serve --host 127.0.0.1 --port 3000
 ```
 
 Run the mere.run API on `127.0.0.1:8080` in another terminal. The explicit
@@ -1027,7 +1031,7 @@ The CLI cookbook has the longer copy-paste recipe:
 mere.run guide open-webui
 ```
 
-Fair FIFO request admission is part of the runtime pool now, and Gemma4,
+Fair FIFO request admission is part of the runtime pool, and Gemma4,
 Qwen-family, and LFM2 chat use engine-specific chunked prefill checkpoints.
 Matching text prefixes reuse in-memory KV by default for all three families;
 Qwen-family vision requests remain excluded, and the engine-specific prefix
@@ -1043,7 +1047,8 @@ persistence remains later, measured work; use `cacheStats` plus
 `benchmarkStats` to decide whether that experiment is worth expanding on a real
 machine.
 
-If you are working on this area, read [CLI and Runtime Internals](../internals/cli-and-runtime.md) after the command source.
+If you are working on this area, read
+[CLI and runtime internals](../internals/cli-and-runtime.md) after the command source.
 
 ## Troubleshooting
 

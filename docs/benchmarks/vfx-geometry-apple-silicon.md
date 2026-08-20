@@ -4,6 +4,9 @@ These measurements exercise the native Swift/MLX runtime and the audited
 managed checkpoints. They are implementation evidence, not cross-device
 performance promises.
 
+Use this report to compare the measured native geometry paths and understand
+their validation boundaries.
+
 ## Host
 
 - Apple M4 Max, 16 CPU cores, 128 GB unified memory
@@ -14,14 +17,14 @@ performance promises.
 
 ## MoGe-2 ViT-S Normal
 
-A 128x128 RGB PNG was processed at the production 3,600-token setting through
-the managed `vision-geometry-moge2-small` checkpoint. The row is a fresh CLI
-process and includes strict ONNX digest verification, native MLX loading,
-metric camera recovery, and all artifact exports.
+A 128 x 128 RGB PNG was processed at the production 3,600-token setting through
+the managed `vision-geometry-moge2-small` checkpoint. Each row represents a
+fresh CLI process. The measurements include strict ONNX digest verification,
+native MLX loading, metric camera recovery, and all artifact exports.
 
 | Input | Tokens | Valid points | Model load | Inference | Postprocess | Wall | Max RSS | Peak footprint |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 128x128 | 3,600 | 13,186 | 0.179 s | 0.397 s | 0.016 s | 0.88 s | 748.9 MiB | 8.50 GiB |
+| 128 x 128 | 3,600 | 13,186 | 0.179 s | 0.397 s | 0.016 s | 0.88 s | 748.9 MiB | 8.50 GiB |
 
 The run emitted metric depth and confidence EXRs, normal EXR, preview PNGs,
 validity, camera JSON, and a colored PLY. Its schema-2 manifest binds the exact
@@ -32,8 +35,9 @@ treated as a high-quality production setting, not a small-memory default.
 
 ## Video Depth Anything Small
 
-Synthetic 128x128 H.264 source at 8 fps, decoded and exported at source
-resolution. The managed relative checkpoint was used through
+The test used a synthetic 128 x 128 H.264 source at 8 frames per second. It
+decoded and exported the source at its original resolution. The test used the
+managed relative checkpoint through
 `vision-depth-vda-small`.
 
 | Frames | Network input | Windows | Model load | Inference | Export/review | Wall | Max RSS | Peak footprint |
@@ -56,7 +60,7 @@ depth/preview artifact hashes were byte-identical.
 
 ## Depth Anything 3 Small
 
-Two 128x128 PNG views were processed through the managed
+Two 128 x 128 PNG views were processed through the managed
 `vision-geometry-da3-small` checkpoint. Each CLI invocation was a fresh
 process; later rows benefited from filesystem and Metal cache warming. Peak
 footprint includes the MLX/Metal allocations that are not visible in RSS.
@@ -70,8 +74,8 @@ footprint includes the MLX/Metal allocations that are not visible in RSS.
 The 504 run emitted two depth EXRs, two confidence EXRs, review and processed
 PNGs, predicted camera JSON, a 76,208-point colored binary PLY, a glTF 2.0 GLB
 point cloud, and a Nerfstudio/3DGS initialization handoff. The handoff is
-explicitly camera-plus-colored-points only; it contains no learned Gaussian
-parameters and no triangle mesh. A separate pose-conditioned run preserved the
+explicitly contains only camera data and colored points; it contains no learned
+Gaussian parameters and no triangle mesh. A separate pose-conditioned run preserved the
 supplied cameras, used the checkpoint's camera encoder, and recorded the
 pairwise camera-baseline scale divisor in both structured output and the durable
 scene manifest.
@@ -80,7 +84,7 @@ scene manifest.
 
 The deterministic 512x512 parity image was reconstructed through the managed
 `image-3d-triposr` checkpoint. These rows use the exact pinned upstream CKPT,
-full native MLX scene encoding, learned vertex colors, and the native marching-
+full native MLX scene encoding, learned vertex colors, and the native marching
 tetrahedra exporter. Each invocation was a fresh process.
 
 | Density grid | Vertices | Triangles | Checkpoint verify | Model load | Scene encode | Mesh/color | Export | Wall | Max RSS | Peak footprint |
@@ -91,7 +95,7 @@ tetrahedra exporter. Each invocation was a fresh process.
 The runtime verifies the whole 1.67 GB checkpoint SHA-256 before parsing it.
 Because that exact content digest supersedes ZIP entry CRCs, the pinned loader
 does not rescan every tensor byte in a pure-Swift CRC loop; managed cold model
-load fell from 153.3 seconds to about 1.0–1.3 seconds without weakening the
+load fell from 153.3 seconds to about 1.0 to 1.3 seconds without weakening the
 restricted non-executing state-dict grammar. Arbitrary checkpoint readers keep
 entry CRC verification enabled by default.
 
@@ -102,7 +106,7 @@ checkpoint format/source pins, foreground processing, density controls,
 topology algorithm, mesh summary, and the hash of each mesh plus the shared
 mesh manifest. Extraction cost grows cubically with grid resolution; the CLI's
 default 256 grid is a quality setting, not a claim that the smaller benchmark
-rows match final-production topology density.
+rows match production topology density.
 
 ## InstantMesh Base reconstruction
 
@@ -128,7 +132,7 @@ Two independent grid-24 runs produced identical OBJ, PLY, and GLB hashes:
 `47e94a1f...`, `0239415b...`, and `583e819d...`. The authoritative run
 manifest separately hashes the shared mesh manifest and durably records view
 order/sizes, camera mode, source and converted pins, extraction controls,
-Zero123++/runtime-Python/proprietary-FlexiCubes exclusions, and the native
+Zero123++, runtime Python, and proprietary FlexiCubes exclusions, and the native
 marching-tetrahedra topology caveat. Learned field parity is covered by the
 reference fixture; triangle topology is not claimed to match upstream
 FlexiCubes.

@@ -5,7 +5,7 @@ import MereRunCore
 struct ModelBenchmarkChat: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "chat",
-        abstract: "Run a small grounded-chat eval slice against local assistant models."
+        abstract: "Run a small grounded-chat evaluation slice against local assistant models."
     )
 
     @Option(name: [.long], help: "Comma-separated model ids. Defaults to the local chat comparison lane.")

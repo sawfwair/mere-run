@@ -1,23 +1,24 @@
-# Getting Started
+# Getting started
 
-By the end of this page you will have built the package from source, pulled a
-model, and generated your first image, paragraph, and spoken line — all on your
-own machine, with nothing leaving it.
+By the end of this page, you will have built the package from source, pulled a
+model, and generated your first image, paragraph, and spoken line. All inference
+stays on your machine.
 
 If you only want to use the app, install a signed build from
-[mere.run/releases](https://mere.run/releases) instead and jump straight to
-[Pull a model](#pull-a-model). Everything below is the from-source path.
+[mere.run releases](https://mere.run/releases) and go to
+[Pull a model](#pull-a-model). The remaining sections describe the from-source
+path.
 
 ## What you are building
 
 `mere-run` is one Swift package that produces:
 
-- the public `mere.run` executable — the CLI that does all the actual work
-- `mere.run.app`, an optional macOS studio that drives that same CLI rather
-  than a separate backend
-- reusable inference libraries in `Sources/MereRunCore`, `Sources/AudioCore`,
+- The public `mere.run` executable, which provides the command-line interface
+  (CLI) and performs the work
+- `mere.run.app`, an optional macOS studio that uses the same CLI
+- Reusable inference libraries in `Sources/MereRunCore`, `Sources/AudioCore`,
   `Sources/AudioCodecs`, `Sources/AudioSTT`, and `Sources/AudioTTS`
-- tests and smoke harnesses for both surfaces
+- Tests and smoke harnesses for both interfaces
 
 There is no hosted inference service behind it. Inference stays local; network
 access happens only for explicit operations such as model downloads,
@@ -27,21 +28,23 @@ installation and update checks, or Relay.
 
 For the supported macOS developer path:
 
-- Apple Silicon Mac
-- macOS 15 or newer
-- Xcode command line tools
+- An Apple Silicon Mac
+- macOS 15 or later
+- Xcode command-line tools
 - SwiftLint and ripgrep for `./scripts/check.sh`
   (`brew install swiftlint ripgrep`)
-- enough disk space for model installs in
+- Enough disk space for model installs in
   `~/Library/Application Support/MereRun/models`
 
 For Linux CLI compatibility work:
 
-- Swift 6.x toolchain
-- `clang`, `cmake`, `ninja`, `pkg-config`, `gfortran`, curl/zlib/OpenBLAS/LAPACK development headers
+- A Swift 6.x toolchain
+- `clang`, `cmake`, `ninja`, `pkg-config`, `gfortran`, and the curl, zlib,
+  OpenBLAS, and LAPACK development headers
 - `ffmpeg` and `ffprobe` for media probing and conversion
-- `gzip`, `unzip`, and `zip` for portable LoRA checkpoint archives
-- enough disk space for a headless model store
+- `gzip`, `unzip`, and `zip` for portable low-rank adaptation (LoRA)
+  checkpoint archives
+- Enough disk space for a headless model store
 
 On Ubuntu-style runners, the system package layer is:
 
@@ -69,8 +72,8 @@ app_path="$(./scripts/build_mere_run_app.sh debug)"
 open "$app_path"
 ```
 
-If all five succeed, the package resolves, the CLI builds and parses, and the
-Mac app bundles and opens. That is the whole toolchain proven in one pass.
+If all five commands succeed, the package resolves, the CLI builds and parses,
+and the Mac app bundles and opens.
 
 On Linux compatibility branches, keep the first pass headless and stop at the
 CLI surface:
@@ -83,10 +86,10 @@ The macOS app product is intentionally outside the Linux target.
 
 ## Launch the macOS studio
 
-The studio is a prompt-first face on the same CLI you just built — one canvas,
-one prompt bar, and a local library of everything you have made. The exact
-command behind each generation is always one click away under Advanced. Launch
-it from a checkout with:
+The Studio is a prompt-first interface for the CLI you built. It provides one
+canvas, one prompt bar, and a local library of generated artifacts. Open
+**Advanced** to see the exact command behind a generation. Launch the Studio
+from a checkout:
 
 ```bash
 app_path="$(./scripts/build_mere_run_app.sh debug)"
@@ -96,7 +99,7 @@ open "$app_path"
 For contributor smoke tests, `swift run mere.run.app` still builds the executable
 product, but the bundle script is the recommended local launch path for normal
 macOS window behavior. The app auto-detects a bundled CLI first, then nearby
-SwiftPM build products, common install locations, and finally the current
+Swift Package Manager build products, common install locations, and then the active
 package checkout. It does not silently install the terminal command on launch;
 open Settings and choose `Install CLI` or `Install Skill` when you want the
 bundled command or `use-mere-run` Codex skill copied into user-visible
@@ -116,26 +119,27 @@ final manual DMG install before future updates can arrive in-app.
 
 Linux package artifacts are headless CLI-only. They install the `mere.run` CLI
 plus colocated runtime assets; they do not include `mere.run.app`, SwiftUI
-studio flows, or the macOS DMG layout. For a Linux-only setup path, first
-commands, package checks, and CUDA validation limits, see
-[Linux QuickStart](./linux-quickstart.md).
+studio flows, or the macOS DMG layout. For Linux setup commands, package
+checks, and Compute Unified Device Architecture (CUDA) validation limits, see
+the [Linux quickstart](./linux-quickstart.md).
 
 ```bash
 scripts/package-linux.sh --version 0.23.0
 ls dist/linux/
 ```
 
-CUDA packages must be built and smoke-tested on matching CUDA hardware before
-being treated as supported. Linux arm64 packages are CUDA-only and should be
-built on a real arm64 CUDA host with `MERERUN_LINUX_ACCEL=cuda`; CPU arm64
-packages are local smoke artifacts, not useful release targets.
+Build and smoke-test CUDA packages on matching CUDA hardware before treating
+them as supported. Active release builds cover macOS and the configured
+`tensor.local` x86_64 CUDA builder. The arm64 CUDA release lane is paused while
+no matching build host is available. CPU arm64 packages are local smoke
+artifacts, not release targets.
 
 ## Understand the command tree
 
 Commands are organized by what you want to make — `image`, `text`, `speech`,
 `vision`, `music`, `sfx`, `video`, `world` — with separate families for running
 graphs, managing models, and serving. This table is generated from the CLI
-itself, so it always matches the binary you just built:
+itself, so it matches the binary you built:
 
 <!-- BEGIN GENERATED: CLI TOP LEVEL -->
 | Command | Purpose |
@@ -169,7 +173,7 @@ itself, so it always matches the binary you just built:
 | [`mere.run agent`](/getting-started) | Install and start the optional guided local setup agent. |
 <!-- END GENERATED: CLI TOP LEVEL -->
 
-For the full reference, see [CLI Reference](./cli.md).
+For all commands and options, see the [CLI reference](./cli.md).
 
 ## Choose a model store location
 
@@ -193,15 +197,14 @@ swift run mere.run --models-root /path/to/models model list
 
 ## Check local status
 
-Use `status` whenever you want a quick snapshot of this machine's mere.run
-state:
+Use `status` for a quick snapshot of this machine's mere.run state:
 
 ```bash
 swift run mere.run status
 ```
 
 It reports whether the local API server is reachable, which model the server
-currently exposes through `/v1/models`, the active model store, and the managed
+exposes through `/v1/models`, the active model store, and the managed
 models installed there. Use JSON output when scripting:
 
 ```bash
@@ -236,12 +239,13 @@ For guided onboarding, run:
 swift run mere.run setup
 ```
 
-The setup command offers a local Mere agent powered by Pi, a bring-your-own-agent
-handoff prompt for Claude/Codex, or manual commands. Use
+The setup command offers a local Mere agent powered by Pi, a
+bring-your-own-agent handoff prompt for Claude or Codex, or manual commands. Use
 `--mode agent --agent-model small` to select the tool-capable native Ornith 9B
-setup agent explicitly. On 96 GB+ Apple Silicon Macs, the hardware-tier and premier agent
-path selects DeepSeek V4 Flash as the preferred setup agent. On Linux, install
-or provide Pi separately with `--pi-path` or PATH before using `--start`.
+setup agent explicitly. On Apple Silicon Macs with at least 96 GB of unified
+memory, the hardware-tier and premier-agent path selects DeepSeek V4 Flash as
+the preferred setup agent. On Linux, install Pi or provide it with `--pi-path`
+or `PATH` before you use `--start`.
 
 ### Agent commands
 
@@ -250,7 +254,7 @@ the default subcommand:
 
 - `mere.run agent onboard` — summarize this machine's model capabilities and
   prepare the optional Pi agent
-- `mere.run agent install-pi` — install the latest Pi coding-agent release
+- `mere.run agent install-pi` — install the most recent published Pi coding-agent release
 - `mere.run agent start` — start Pi against a local mere.run setup-agent API
   server
 
@@ -268,8 +272,8 @@ Face and auto-installs Pi; pass `--no-bootstrap` to refuse both. Other
 
 ## Make something
 
-Each of these writes a real file to disk, and none of them depend on the
-others. Start wherever you are curious.
+Each command writes a file to disk and runs independently. Start with any
+modality.
 
 ### Image generation
 
@@ -353,8 +357,8 @@ MERERUN_RUN_E2E=installed ./scripts/check.sh
 
 ## What to read next
 
-- [CLI Reference](./cli.md) if you want command details
+- [CLI reference](./cli.md) if you want command details
 - [Configuration](./configuration.md) if you need to tune paths or runtime
   behavior
-- [Repository Tour](./repository-tour.md) if you want to work on the code
-- [Testing Guide](./testing.md) if you plan to contribute
+- [Repository tour](./repository-tour.md) if you want to work on the code
+- [Testing guide](./testing.md) if you plan to contribute

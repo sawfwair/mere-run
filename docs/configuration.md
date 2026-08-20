@@ -1,22 +1,23 @@
 # Configuration
 
-There are two ways to change how `mere.run` behaves: settings that persist
-across shells, and environment variables you set for a single run. This page
-covers both, and marks which ones hold secrets.
+Configure `mere.run` with persisted settings or environment variables. Persisted
+settings apply across shells, and environment variables apply to an individual
+run. This page also identifies settings that contain secrets.
 
 ## Persisted settings: `mere.run config`
 
-`mere.run config` persists settings that should survive across shells without
-environment variables, in `~/Library/Application Support/MereRun/config.json`
-(written with `0600` permissions because it carries secrets). Subcommands:
-`set`, `get`, `unset`, `list`, and `path` (prints the config file path).
+`mere.run config` writes persisted settings to
+`~/Library/Application Support/MereRun/config.json`. Because the file can
+contain secrets, `mere.run` writes it with `0600` permissions. Use the `set`,
+`get`, `unset`, `list`, and `path` subcommands. The `path` subcommand prints the
+configuration file path.
 
-Keys:
+The following keys are available:
 
-- `hf-token` — Hugging Face access token, used to pull gated models
-  (e.g. `image-klein-9b`). Treated as a secret: `get` and `list` print it
-  masked; pass `--reveal` to `get` to print it in full.
-- `hf-endpoint` — alternate Hugging Face endpoint for managed downloads.
+- `hf-token`: Hugging Face access token used to pull gated models, such as
+  `image-klein-9b`. The `get` and `list` commands mask this secret. To print the
+  full token, pass `--reveal` to `get`.
+- `hf-endpoint`: Alternative Hugging Face endpoint for managed downloads.
 
 ```bash
 swift run mere.run config set hf-token hf_xxxxxxxx
@@ -24,7 +25,8 @@ swift run mere.run config get hf-token --reveal
 swift run mere.run config list
 ```
 
-For scripts and GUI launchers, keep the token out of process arguments:
+To keep the token out of process arguments in scripts and GUI launchers, use an
+environment variable:
 
 ```bash
 export MERERUN_CONFIG_VALUE=hf_xxxxxxxx
@@ -34,16 +36,16 @@ unset MERERUN_CONFIG_VALUE
 
 The macOS Studio Settings screen uses this environment-backed path.
 
-Environment variables take precedence over the config file: the HF token
-resolves from `HF_TOKEN` (then `HUGGING_FACE_HUB_TOKEN`) before falling back to
-the stored `hf-token`, and the endpoint resolves from `HF_ENDPOINT` before the
-stored `hf-endpoint`, defaulting to `https://huggingface.co`.
+Environment variables take precedence over the configuration file. The Hugging
+Face token resolves from `HF_TOKEN`, then `HUGGING_FACE_HUB_TOKEN`, and then the
+stored `hf-token`. The endpoint resolves from `HF_ENDPOINT`, then the stored
+`hf-endpoint`, and finally defaults to `https://huggingface.co`.
 
 ## Model store
 
 ### `MERERUN_MODELS_DIR`
 
-Overrides the model links and model-local-files store. Large managed Hub
+Overrides the model links and model-local file store. Large managed Hub
 payloads normally live under `MERERUN_HUB_CACHE`, so moving only this directory
 does not move most downloaded bytes.
 
@@ -63,7 +65,7 @@ Default:
 ### `MERERUN_HUB_CACHE`
 
 Overrides the physical payload store used by managed model pulls. This is the
-location to move when large downloaded weights need to live on another disk.
+location to move if large downloaded weights must reside on another disk.
 
 ```bash
 export MERERUN_HUB_CACHE=/Volumes/Models/huggingface
@@ -81,7 +83,7 @@ Checksum-pinned public adapter releases install under:
 ~/Library/Application Support/MereRun/adapters
 ```
 
-`mere.run adapter pull` uses public HTTPS release URLs and never requires or
+`mere.run adapter pull` uses public HTTPS release URLs and does not require or
 accepts R2 credentials. Catalog ids resolve from this verified local store when
 passed to `text chat --lora` or `api serve --lora`.
 
@@ -89,13 +91,14 @@ passed to `text chat --lora` or `api serve --lora`.
 
 ### `MERERUN_VIDEO_LTX_MODEL_ROOT`
 
-Sets the default root used by `mere.run video generate` and `mere.run video export-latents` when `--model-root` is omitted.
+Sets the default root used by `mere.run video generate` and
+`mere.run video export-latents` when you omit `--model-root`.
 
 ### `MERERUN_MUSIC_ACESTEP_ROOT`
 
 Sets the default checkpoint root used by `mere.run music generate` and
-`mere.run music analyze` when the command is not resolving from the shared model
-store.
+`mere.run music analyze` when the command does not resolve a model from the
+shared model store.
 
 ## API server security
 
@@ -105,14 +108,15 @@ Provides the bearer token accepted by `mere.run api serve` for `/v1/models`,
 `/v1/chat/completions`, `/v1/embeddings`, `/v1/images/generations`,
 `/v1/images/edits`, `/v1/audio/speech`, and `/v1/audio/transcriptions`.
 
-This is optional for loopback-only usage and required for non-loopback binds.
+This key is optional for loopback-only use and required for non-loopback binds.
 `mere.run status` also reads it when probing `/v1/models`.
 
 ## Runtime experiments
 
 ### `MERERUN_GEMMA4_PREFIX_KV_CACHE`
 
-Gemma4 in-memory prefix KV reuse is enabled by default in `mere.run api serve`.
+Gemma4 in-memory prefix key-value (KV) reuse is enabled by default in
+`mere.run api serve`.
 Set this to `0`, `false`, `no`, or `off` to disable it for a baseline run. The
 runtime stores bounded, forked Gemma4 prompt-prefix cache state for matching
 token prefixes and reports entries, hits, and reused tokens through
@@ -125,28 +129,33 @@ Continuous batching and SSD KV cache are not enabled by this flag.
 
 ### `MERERUN_LFM2_PREFIX_KV_CACHE`
 
-In-memory prompt-prefix reuse for the LFM2 chat runtime, enabled by default
-in `mere.run api serve` (set `0`, `false`, or `off` to disable; one-shot CLI
-invocations keep it off since a prefix cache cannot outlive the process),
-mirroring the Qwen-family implementation. Forked layer caches (attention KV
-and short-conv states both support forking) retain exact prompts plus the
+In-memory prompt-prefix reuse for the LFM2 chat runtime is enabled by default
+in `mere.run api serve`. Set `0`, `false`, or `off` to disable it. One-shot CLI
+invocations keep it off because a prefix cache cannot outlive the process. The
+implementation mirrors the Qwen-family implementation. Forked layer caches
+(attention KV and short-convolution states both support forking) retain exact prompts plus the
 stable conversation prefix before the final message. The longest matching
 token prefix seeds later requests, so a repeated or extended prompt re-prefills
 only its tail. Intermediate prefill chunks are not cloned. The cache is bounded
 to 4 entries with the shared retention planner, which keeps semantic
 conversation checkpoints ahead of exact-prompt entries when pruning.
 
-### Continuous batching (`MERERUN_GEMMA4_CONTINUOUS_BATCHING`, `MERERUN_LAGUNA_CONTINUOUS_BATCHING`, `MERERUN_Q35_CONTINUOUS_BATCHING`, `MERERUN_LFM2_CONTINUOUS_BATCHING`)
+### Continuous batching
+
+Use `MERERUN_GEMMA4_CONTINUOUS_BATCHING`,
+`MERERUN_LAGUNA_CONTINUOUS_BATCHING`, `MERERUN_Q35_CONTINUOUS_BATCHING`, or
+`MERERUN_LFM2_CONTINUOUS_BATCHING` to override continuous batching for an
+individual engine.
 
 Decode batching for concurrent requests engages automatically when
-`mere.run api serve` runs with `--max-active-requests` above 1 — the
-concurrency flag is the single switch. The per-engine environment variables
+`mere.run api serve` runs with `--max-active-requests` above 1. The concurrency
+flag is the primary switch. The per-engine environment variables
 remain as explicit overrides in both directions (`1` forces batching on even
 at concurrency 1, `0` forces the serial path). `/runtime/status` reports
 engagement under `decodeBatching` (`batchedDecodeSteps`, `maxBatchSize`);
 per-model stats include `recentDecodeTokensPerSecond`, a rolling last-10
-window that surfaces mid-flight throughput regressions lifetime averages
-hide.
+window that surfaces mid-flight throughput regressions that lifetime averages
+can hide.
 
 Laguna follows the same switch through
 `MERERUN_LAGUNA_CONTINUOUS_BATCHING`. The target supports ragged decode rows;
@@ -163,7 +172,7 @@ token-budget-complete rows. `0` keeps the serial pipelined decoder.
 
 ### Machine-wide inference admission
 
-Every allocation-heavy direct `mere.run` command joins a crash-safe weighted
+Every allocation-heavy direct `mere.run` command joins a crash-safe, weighted
 FIFO shared by Studio, terminals, launchers, scripts, and agents. API-server
 processes hold a reservation while preserving their own model-pool and request
 concurrency. Lightweight inspection and management commands such as `status`,
@@ -178,11 +187,11 @@ larger, and an explicit local model file of that size, is also promoted to the
 exclusive class. FIFO ordering prevents a stream of small jobs from starving
 an earlier large job.
 
-Before registration and admission, the coordinator checks reclaimable memory
-and preserves free disk for swap and temporary files. The disk floor is one
+Before it registers and admits a command, the coordinator checks reclaimable
+memory and preserves free disk for swap and temporary files. The disk floor is one
 eighth of physical memory, clamped from 8 to 32 GiB. A command below that floor
-fails before loading a model. Cancelled waiters remove their tickets; dead
-processes are pruned automatically. `mere.run status` shows active and queued
+fails before loading a model. Cancelled waiters remove their tickets, and the
+coordinator automatically prunes dead processes. `mere.run status` shows active and queued
 entries, and the typed ledger lives under
 `~/Library/Application Support/MereRun/admission/` without prompts or content.
 
@@ -235,7 +244,7 @@ to `2048`.
 ### `MERERUN_GEMMA4_MTP_BLOCK_SIZE`
 
 Override the Gemma 4 12B assistant draft block size. Defaults to the assistant
-config value, currently `4`, and is clamped to the native runtime's supported
+configuration value, which is `4`, and is clamped to the native runtime's supported
 range.
 
 ### `MERERUN_GEMMA4_MTP_SAMPLED`
@@ -244,7 +253,7 @@ Opt-in (`1`, `true`, or `on`) Gemma 4 12B MTP for sampled (temperature > 0)
 requests. The verify loop samples the target model at every drafted position
 and emits either the matching draft token or the target's own sample, so
 sampled outputs remain true target-model samples; drafts run greedily to
-maximize the match rate. Off by default: with the current assistant the
+maximize the match rate. This mode is disabled by default because the selected assistant's
 acceptance economics measured below the pipelined sampled decode path at long
 context.
 
@@ -257,12 +266,12 @@ fallback) of the generated context recurs earlier in the context, the
 pipelined decode loop runs a burst: the continuation of that earlier
 occurrence is drafted and verified in one batched forward, exactly like an
 MTP draft, so outputs are token-identical to plain greedy decode. A
-no-match token costs one host-side scan and no GPU work — decode speed on
-non-repetitive text is unchanged — while echo-heavy generation (quoted
+no-match token costs one host-side scan and no GPU work. Decode speed on
+non-repetitive text is unchanged, while echo-heavy generation, such as quoted
 documents, retrieval answers, code edits, tool loops) measured 1.9× on an
 echo workload. Three consecutive zero-accept rounds stop further lookups
 for the request. MTP takes precedence when its assistant is active;
-JSON-constrained requests never use lookup.
+JSON-constrained requests do not use lookup.
 
 ### `MERERUN_GEMMA4_PROMPT_LOOKUP_BLOCK`
 
@@ -284,7 +293,7 @@ each attention call issues one fused matmul instead of three. Quantized
 packing is per-output-row, so results are bit-identical to the separate
 projections (greedy outputs verified byte-equal). Enabled by default; set to
 `0`, `false`, or `off` to fall back. On the 35B MoE this measured +1% decode
-throughput for roughly 130 MB of additional resident weight copies —
+throughput for roughly 130 MB of additional resident weight copies. In this case,
 attention is a small slice of a MoE's per-token weights, unlike the dense
 Gemma case where the same fusion bought +17%.
 
@@ -292,7 +301,7 @@ Gemma case where the same fusion bought +17%.
 
 Prefill chunk length for Qwen-family models, accepted range 64–8192, default
 1024. Qwen3.8 uses live host-memory headroom rather than total physical RAM: it
-caps the current chunk at 512 below 16 GiB of reclaimable headroom. The same cap
+caps the active chunk at 512 below 16 GiB of reclaimable headroom. The same cap
 applies when another request is admitted so a decoder is not stalled behind a
 wide prefill. An explicit value remains an upper bound and is still reduced
 under memory pressure or contention. On the Ornith 35B MoE (M4 Max), a
@@ -305,7 +314,7 @@ against progress-report granularity and per-chunk activation memory.
 Qwen-family continuous-batching decode samples every active request's row on
 GPU (the same sampler the serial pipelined path uses, including the on-GPU
 repetition window) and reads the whole batch back in a single sync per step.
-The legacy path sampled per row on the host — one blocking GPU→CPU readback
+The legacy path sampled per row on the host, with one blocking GPU-to-CPU readback
 per request per token, scaling linearly with serve concurrency. Enabled by
 default; set to `0`, `false`, or `off` to restore per-row host sampling.
 
@@ -329,7 +338,7 @@ Off by default: throughput is neutral on an idle GPU and the kernels' float32
 single-rounding numerics reduce Gemma MTP speculative acceptance at long
 context. They cut per-token kernel dispatches roughly in half, which helps
 when the GPU is shared with other heavy work (for example concurrent
-training) — enable explicitly for that scenario.
+training). Enable the kernels explicitly for that scenario.
 
 ### `MERERUN_GEMMA4_COMPILED_SEGMENTS`
 
@@ -347,8 +356,8 @@ tunable: overlapping `mrt2_engine_generate_frame` with the asynchronous
 encode segfaults, verified live against the engine by the gated
 `MagentaRT2PromptSwapTests`. Stall-free swaps require the engine's threaded
 `mrt2_runner_*` API with its buffered audio ring. Note the engine's Metal
-libraries inside `vendor/magentart.xcframework` are Git LFS objects — a
-checkout without hydrated LFS fails at model load with a metallib error; run
+libraries inside `vendor/magentart.xcframework` are Git LFS objects. A
+checkout without hydrated LFS fails at model load with a metallib error. Run
 `git lfs install --local && git lfs pull` and rebuild.
 
 ### `MERERUN_SAMPLER_TOP_P_PREFILTER`
@@ -362,7 +371,7 @@ practical temperatures.
 
 ### `MERERUN_LORA_TRAIN_GRAD_CHECKPOINT`
 
-Gradient checkpointing for image-LoRA training — Krea 2 and FLUX.2 Klein.
+Gradient checkpointing applies to image LoRA training for Krea 2 and FLUX.2 Klein.
 Transformer blocks recompute their activations during backward instead of
 retaining every intermediate. Unset, the default is resolution-aware: it
 engages when the peak training resolution (after `--max-resolution` capping)
@@ -381,14 +390,14 @@ prints its decision at startup (`grad_checkpoint=` on stderr).
 
 MLX buffer-cache cap during image-LoRA training, in gigabytes (default `16`;
 `0` leaves the cache unlimited). The cache grows to the transient high-water
-mark and never shrinks, so without a cap the process footprint stays pinned at
+mark and does not shrink, so without a cap the process footprint stays pinned at
 the worst spike of the run. Applies to both image-LoRA trainers.
 
 ### `MERERUN_LORA_TRAIN_SYNC_EVAL`
 
 Set to `1` to evaluate each image-LoRA training step synchronously. The
 default overlapped evaluation lets the next step's graph (and its full
-activation set) go live while the current step executes, which can nearly
+activation set) go live while the active step executes, which can nearly
 double the peak memory footprint at training-sized activations. Synchronous
 mode caps in-flight activations at one step's worth at the cost of graph-build
 overlap, which is negligible next to a training step.
@@ -398,7 +407,7 @@ overlap, which is negligible next to a training step.
 Adapter checkpoint cadence, in optimizer steps, for image-LoRA training
 (default `100`; `0` disables). A `<name>.partial.safetensors` file is written
 next to the output and removed once the final save succeeds, so a run killed
-mid-training — for example by memory pressure — no longer loses everything.
+mid-training, for example by memory pressure, retains its partial work.
 The trainer also logs `step_s` and `footprint_gb` diagnostics at the metrics
 cadence.
 
@@ -408,7 +417,7 @@ Native text LoRA training (`text train-lora`) projects only loss-masked
 target positions through the 262k-vocabulary lm_head and computes cross
 entropy as logSumExp-minus-gather, instead of materializing full-sequence
 logits plus a second full-vocabulary log-probability tensor. Gradients are
-identical to the full path — prompt and padding rows never contribute loss —
+identical to the full path. Prompt and padding rows do not contribute loss, so
 so this is on by default; set `0`, `false`, or `off` to restore the legacy
 full-logits loss. The trainer prints its decision at startup
 (`gathered_loss=` on stderr).
@@ -432,8 +441,8 @@ is written every 100 steps and removed after the final save.
 
 Parakeet transducer decoding (TDT and RNN-T) evaluates the joint network for
 this many contiguous encoder frames per batched call (default `16`). The
-decoder state only changes when a token is emitted, so blank frames — the
-majority — scan host-side from a single readback instead of one (RNN-T) or
+decoder state changes only when a token is emitted, so the host scans blank
+frames from a single readback instead of one RNN-T or
 two (TDT) scalar readbacks per frame. Greedy semantics are identical to the
 per-frame loop. Set `1` to restore the legacy per-frame readback cadence.
 
@@ -441,7 +450,7 @@ per-frame loop. Set `1` to restore the legacy per-frame readback cadence.
 
 Qwen3 ASR token decoding samples on GPU and pipelines the loop at depth 1:
 the sampled token feeds the next forward as a GPU array and the previous
-step's token is read back while the current step executes (the legacy loop
+step's token is read back while the active step executes (the legacy loop
 synchronized twice per token). Enabled by default; set `0`, `false`, or
 `off` to restore the legacy loop.
 
@@ -453,7 +462,7 @@ each back with `.item()`, roughly nine GPU→CPU round trips per emitted
 frame), the ~1k-entry suppress list becomes a mask built once per generation
 instead of a per-token upload, top-k uses argPartition instead of a
 full-vocabulary sort, and the previous step's token is read back while the
-current step executes. EOS therefore costs one speculative frame of discarded
+active step executes. EOS therefore costs one speculative frame of discarded
 GPU work. Enabled by default; set `0`, `false`, or `off` to restore the
 legacy synchronous loop.
 
@@ -479,7 +488,7 @@ contended request uses ordinary continuous batching; a late peer does not
 migrate an MTP request that is already running.
 
 The `Q35` name is an internal compatibility prefix for the Qwen-family runtime;
-the public managed model ids retain their Qwen release names.
+the public managed model IDs retain their Qwen release names.
 
 ### `MERERUN_Q35_MTP_MIN_PROMPT_TOKENS`
 
@@ -579,7 +588,7 @@ When unset, `mere.run api serve` enables Gemma4 same-offset decode batching when
 with equal KV offsets into typed batched KV caches, splits the cache rows back
 after each step, and reports same-position batched decode steps, queued rows,
 and max observed batch size through `/runtime/status`. Gemma4 variable-position
-decode batching is not enabled because its current attention path applies RoPE
+decode batching is not enabled because its attention path applies RoPE
 with scalar cache offsets.
 
 ### `MERERUN_Q35_CONTINUOUS_BATCHING`

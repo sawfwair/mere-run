@@ -1,4 +1,4 @@
-# Guarded Acceleration Audit
+# Guarded acceleration audit
 
 This audit separates acceleration paths that preserve model semantics from
 paths that change numerical precision, require checkpoint metadata, or only
@@ -26,7 +26,7 @@ dispatches.
 
 The decode path is enabled by default only when running on an Apple GPU with
 BF16/FP16 activations, input width divisible by 512, output width divisible by
-8, matching gate/up shapes, and the exact quantization contract above. The
+8, matching gate/up shapes, and the specified quantization contract. The
 prefill path is narrower: macOS 26, M4 Max `applegpu_g16s` or M5 Max
 `applegpu_g17s`, BF16, group-16 NVFP4, aligned projection dimensions, and at
 least 64 sequence tokens. A failed guard returns to the portable path. The
@@ -52,7 +52,7 @@ The shared-mask graph and eight-layer evaluation ladder are architecture-
 independent defaults. The exact residual/RMSNorm and QK-norm/RoPE fusions are
 M5 Max defaults and remain explicit opt-ins on M4 Max. Final-position slicing
 before the output norm and language-model head avoids projecting prompt rows
-that generation never consumes.
+that generation does not consume.
 
 The M5 Max default also prepares a decode-only group-32 affine INT8 Q/K/V side
 layout for the first 28 Laguna XS layers. It leaves checkpoint parameters,
@@ -98,7 +98,7 @@ bandwidth are at their physical limit.
 
 The ranked Laguna XS work contains both reusable execution ideas and kernels
 whose correctness depends on that checkpoint's exact shapes. Promotion across
-the catalog follows the matrix below; sharing an operator name is not enough.
+the catalog follows the portability matrix; sharing an operator name is not enough.
 
 This work originated in the public [MLX Fast Laguna XS 2.1
 challenge](https://mlx.fast/). Submission
@@ -106,21 +106,21 @@ challenge](https://mlx.fast/). Submission
 was promoted on July 30, 2026 with score `1.8435177465`, decode
 `7.089954 ms/token`, and prefill `0.240295 ms/token`, taking first place at
 the time of promotion under the official paired M5 Max validation. The
-production port retains only mechanisms compatible with mere.run's broader
+production port retains only mechanisms compatible with `mere.run`'s broader
 sampling, serving, capture, and concurrency contracts.
 
 | Ranked mechanism | Production status | Portability boundary |
 | --- | --- | --- |
 | Last-position terminal prefill | Shipped for guarded Laguna XS M5 execution | The graph idea can apply to decoder-only models whose caller consumes only the final logit row. Each engine must separately preserve every K/V row, cache offset, batch behavior, multimodal inputs, speculative/DFlash captures, and requested hidden states. |
-| Exact `[Q; gate]` and `[K; V]` projection banks | Shipped for the terminal Laguna XS BF16 layer | Combining independent output rows is generally valid for bias-free projections, but the current side banks require Laguna's 2,048-wide input, per-head gate, 128 head dimension, eight K/V heads, and 48/64 query-head layouts. Other engines need their own retained-memory and kernel-selection measurements. |
-| Retained affine INT8 Q/K/V side layout | Shipped for the officially validated first 28 XS decode layers on M5 Max | This changes projection precision and retains about 598.5 MiB. It is not an automatic catalog-wide optimization. Every new checkpoint, layer mask, and hardware generation needs token/behavior gates, quality evidence, bounded-memory proof, and paired timing. |
+| Exact `[Q; gate]` and `[K; V]` projection banks | Shipped for the terminal Laguna XS BF16 layer | Combining independent output rows is generally valid for bias-free projections, but the existing side banks require Laguna's 2,048-wide input, per-head gate, 128 head dimension, eight K/V heads, and 48/64 query-head layouts. Other engines need their own retained-memory and kernel-selection measurements. |
+| Retained affine INT8 Q/K/V side layout | Shipped for the officially validated first 28 XS decode layers on M5 Max | This changes projection precision and retains about 598.5 MiB. It is not an automatic catalog-wide optimization. Each additional checkpoint, layer mask, and hardware generation needs token and behavior gates, quality evidence, bounded-memory proof, and paired timing. |
 | Fused routed/shared down projection and residual | Shipped only behind exact XS shape, dtype, quantization, scaling, and M5-default guards | The implementation assumes hidden width 2,048, expert intermediate width 512, top-8 routing, group-16 NVFP4, 256 experts, fixed 2.5 scaling, and the existing BF16 reduction order. Other MoE models need model-specific kernels rather than relaxed guards. |
 | Fused NVFP4 gate/up plus SwiGLU | Shipped for guarded Laguna layouts; LFM2 has a separate affine-8 implementation | The reusable idea is avoiding repeated routed activations. Quantization codes, scales, group size, tile geometry, activation dtype, and output alignment remain engine-specific. |
 | Sorted expert routing, fast inverse scatter, and expert-aligned prefill tiles | Shipped for Laguna with portable fallbacks | The ordering/locality idea is reusable across MoE runtimes. It must be benchmarked per route count and expert geometry; short verification and concurrent decode can lose more to sorting than they gain from locality. |
 | Shared masks, bounded asynchronous evaluation, residual/RMSNorm, and QK-norm/RoPE fusion | Shipped within Laguna under independent controls | These are the broadest graph-level candidates. A cross-engine port still must preserve mask semantics, RoPE offsets, materialization/cast boundaries, capture behavior, and the engine's own scheduling break-even point. |
-| Retained base-weight layouts with runtime adapters | Laguna invalidates native affine QKV and terminal projection banks when a text LoRA loads | This lifecycle rule applies across model families: any cached, fused, packed, or requantized weight representation must be rebuilt from the wrapped module or discarded when an adapter replaces its source projection. Gemma's fused projection cache already keys reuse to source-module identity; new retained layouts need an equivalent contract before adapter support ships. |
+| Retained base-weight layouts with runtime adapters | Laguna invalidates native affine QKV and terminal projection banks when a text LoRA loads | This lifecycle rule applies across model families: any cached, fused, packed, or requantized weight representation must be rebuilt from the wrapped module or discarded when an adapter replaces its source projection. Gemma's fused projection cache already keys reuse to source-module identity; additional retained layouts need an equivalent contract before adapter support ships. |
 | Challenge expert-gather threadgroup expansion | Not transplanted literally | Production Laguna already assigns actual sorted expert tiles independently. The ranked change lived in the challenge's pinned MLX/vendor path; this repository does not modify vendored runtime code merely to copy its launch constant. |
-| Certified/approximate lm-head pruning and packing | Deliberately excluded | The challenge only had to preserve the greedy winner. mere.run exposes temperature, top-k, min-p, structured output, and DFlash paths that consume the logit distribution. Approximating non-winning logits would change public sampling semantics. |
+| Certified/approximate lm-head pruning and packing | Deliberately excluded | The challenge only had to preserve the greedy winner. `mere.run` exposes temperature, top-k, min-p, structured output, and DFlash paths that consume the logit distribution. Approximating non-winning logits would change public sampling semantics. |
 
 An additional rollout is allowed only after the same revision, prompt corpus,
 seed, and token budget pass the portable fallback and candidate paths with:
@@ -146,7 +146,7 @@ before the host confirms the preceding token. The final token-budget boundary
 samples without scheduling an unused forward. This keeps immediate EOS and
 short budgets bounded without draining the GPU queue between ordinary tokens.
 
-A matched release-mode gate on 2026-07-11 used the managed
+A matched release-mode gate on July 11, 2026, used the managed
 `LiquidAI/LFM2.5-8B-A1B-MLX-8bit@984aa3f` checkpoint, a fixed prompt, greedy
 sampling, and 96 output tokens on an M4 Max with 128 GB unified memory. The
 three-run median was 63.25 decode tokens/s versus 62.47 for the pre-change
@@ -209,12 +209,12 @@ after latent attention, retaining only the shared latent and decoupled RoPE key.
 
 For representative dimensions (32 heads, rank 512, 128 no-PE dimensions, 64
 RoPE dimensions, and 128 value dimensions), resident elements per token per
-layer fall from 10,240 to 1,088, a 9.4x structural reduction. Weight absorption
+layer fall from 10,240 to 1,088, a 9.4-times structural reduction. Weight absorption
 reassociates floating-point operations and keeps dequantized projection weights
 resident, so the default remains off pending a real-checkpoint quality corpus.
 
 ```bash
-# Force for an A/B run.
+# Force a comparison run.
 MERERUN_PSI_COMPRESSED_MLA=1 swift run mere.run text chat \
   --model text-chat-psi-agent --temperature 0 --prompt "..."
 
@@ -226,7 +226,7 @@ MERERUN_PSI_COMPRESSED_MLA_MIN_PROMPT_TOKENS=2048 \
 
 ### Psi sparse-MoE dispatch
 
-The Psi expert loader now starts with packed placeholder tensors instead of
+The Psi expert loader starts with packed placeholder tensors instead of
 constructing enormous dense random expert tensors that are immediately
 replaced by quantized checkpoint arrays. Long routed batches sort expert rows
 before gather matmul. `MERERUN_PSI_FUSED_MOE=1` additionally stacks gate/up
@@ -240,7 +240,7 @@ end-to-end gain.
 The relevant Qwen3.8 runtime techniques were reviewed against the native Swift
 implementation:
 
-| Technique | mere.run disposition |
+| Technique | `mere.run` disposition |
 | --- | --- |
 | Structural streamed XML tool parsing | Adopted with bounded reparsing and adversarial literal-tag tests. |
 | Native Qwen3.8 reasoning effort | Adopted as `low`, `medium`, and `xhigh`, with explicit Pi aliases. |
@@ -250,7 +250,7 @@ implementation:
 | Conv3d vision weight conversion | Already present for both MLX and PyTorch layouts. |
 | Embedded and mounted MTP weights | Already present for official `mtp.*` shards and the managed `mtp/model.safetensors` component. |
 | One-block scaled dot-product attention | Already present through one `MLXFast.scaledDotProductAttention` call per full-attention layer. |
-| Private ANE/GPU hybrid prefill | Research only. It depends on a private fixed-shape ANE runtime and a separate native extension, so production mere.run does not depend on or advertise it. |
+| Private ANE/GPU hybrid prefill | Research only. It depends on a private fixed-shape ANE runtime and a separate native extension, so production `mere.run` does not depend on or advertise it. |
 
 The ANE path may be reconsidered only with a public supported runtime contract,
 fixed-shape parity, failure fallback, and matched end-to-end measurements. Its
@@ -290,13 +290,13 @@ before any automatic wide-chunk promotion.
 
 ## Not honestly promotable
 
-| Candidate | Current blocker |
+| Candidate | Blocker |
 | --- | --- |
 | Activation quantization | MLX exposes quantized weight matmul, not a native activation-quantized attention/MoE contract. Quantize-then-dequantize would add kernels and quality loss without reducing the following operation. |
 | MTP on every text model | Speculation requires a compatible draft head/model and verifier integration. Model metadata such as a next-token-layer count is not sufficient; unrecognized draft weights are not silently loaded. |
 | Distilled steps on base diffusion checkpoints | Step distillation is checkpoint training, not a scheduler shortcut. Applying four-step schedules to base weights is a quality regression. |
 | Compressed MLA outside Psi | Qwen and Gemma use GQA/hybrid attention rather than an MLA latent. The DeepSeek V4 Flash managed lane is an external native binary, so its internal cache cannot be changed in this Swift runtime. |
-| Automatic Psi MLA/fused-MoE | Structural and algebraic tests pass, but no public Psi checkpoint is managed for repeatable output-quality and throughput A/B. Both controls remain explicit. |
+| Automatic Psi MLA/fused-MoE | Structural and algebraic tests pass, but no public Psi checkpoint is managed for repeatable output-quality and throughput comparisons. Both controls remain explicit. |
 
 ## Promotion gate
 
@@ -312,7 +312,7 @@ swift test --filter 'AffineQuantizedKVCacheTests|GLM47AccelerationTests'
 ```
 
 When the managed LFM2 checkpoint is installed, run the gated real-checkpoint
-greedy parity A/B on a GPU device:
+greedy parity comparison on a GPU device:
 
 ```bash
 MERERUN_TEST_GUARDED_ACCELERATION_CHECKPOINTS=1 \

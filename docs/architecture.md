@@ -1,14 +1,15 @@
-# Architecture Reading Map
+# Architecture reading map
 
-This repo is easiest to understand by starting at the CLI surface and then
-following one runtime family at a time. The goal of this map is not to explain
-every model detail, but to give contributors a reliable reading order.
+Start at the CLI surface, and then follow one runtime family at a time. This map
+gives contributors a reliable reading order without explaining every model
+detail.
 
-For the broader documentation set, start at [mere.run Documentation](/).
+For the broader documentation set, start at the
+[mere.run documentation home](/).
 
 ## Start here
 
-- CLI entrypoint: `Sources/MereRunCLI/MereRunCLI.swift`
+- CLI entry point: `Sources/MereRunCLI/MereRunCLI.swift`
 - Shared CLI helpers: `Sources/MereRunCLI/Support`
 - Model paths and manifests:
   - `Sources/MereRunCore/MereRunModelPaths.swift`
@@ -16,14 +17,14 @@ For the broader documentation set, start at [mere.run Documentation](/).
   - `Sources/MereRunCore/ModelResolver.swift`
 
 If you want to understand what a command does end to end, start at the command
-file, then jump to the family entrypoint listed below.
+file, and then use the table to open the family entry point.
 
 ## Image families
 
 Klein image generation:
 
 - CLI: `Sources/MereRunCLI/Commands/ImageGenerateCommand.swift`
-- Runtime entrypoint: `Sources/MereRunCore/Flux2Klein/Flux2KleinGenerator.swift`
+- Runtime entry point: `Sources/MereRunCore/Flux2Klein/Flux2KleinGenerator.swift`
 - Read next:
   - `Sources/MereRunCore/Flux2Klein/Flux2KleinGenerator+ModelLoading.swift`
   - `Sources/MereRunCore/Flux2Klein/Flux2KleinGenerator+Generation.swift`
@@ -31,7 +32,7 @@ Klein image generation:
 
 ZImage generation:
 
-- Runtime entrypoint: `Sources/MereRunCore/ZImageTurbo/ZImageTurboGenerator.swift`
+- Runtime entry point: `Sources/MereRunCore/ZImageTurbo/ZImageTurboGenerator.swift`
 - Read next:
   - `Sources/MereRunCore/ZImageTurbo/ZImageTurboGenerator+ModelLoading.swift`
   - `Sources/MereRunCore/ZImageTurbo/ZImageTurboGenerator+Inference.swift`
@@ -39,14 +40,14 @@ ZImage generation:
 
 Qwen image editing:
 
-- Runtime entrypoint: `Sources/MereRunCore/QwenImageEdit/QwenImageEditGenerator.swift`
+- Runtime entry point: `Sources/MereRunCore/QwenImageEdit/QwenImageEditGenerator.swift`
 - Read next:
   - `Sources/MereRunCore/QwenImageEdit/QwenImageEditGenerator+ModelLoading.swift`
   - `Sources/MereRunCore/QwenImageEdit/QwenImageEditGenerator+Encoding.swift`
 
 Krea 2 generation and LoRA training:
 
-- Runtime entrypoint: `Sources/MereRunCore/Krea2/Krea2Generator.swift`
+- Runtime entry point: `Sources/MereRunCore/Krea2/Krea2Generator.swift`
 - Read next:
   - `Sources/MereRunCore/Krea2/Krea2RawResources.swift`
   - `Sources/MereRunCore/Krea2/Krea2Resources.swift`
@@ -59,7 +60,7 @@ Krea 2 generation and LoRA training:
 
 Shared text encoder stack used by image models:
 
-- Public entrypoint:
+- Public entry point:
   `Sources/MereRunCore/ZImageTurbo/Model/TextEncoder/TextEncoder.swift`
 - Architecture internals:
   - `Sources/MereRunCore/ZImageTurbo/Model/TextEncoder/TextEncoder+RoPE.swift`
@@ -70,7 +71,7 @@ Shared text encoder stack used by image models:
 Speech synthesis command path:
 
 - CLI: `Sources/MereRunCLI/Commands/SpeechSynthesizeCommand.swift`
-- Runtime entrypoint: `Sources/AudioTTS/Qwen3TTS/Qwen3TTSGenerator.swift`
+- Runtime entry point: `Sources/AudioTTS/Qwen3TTS/Qwen3TTSGenerator.swift`
 - Read next:
   - `Sources/AudioTTS/Qwen3TTS/Qwen3TTSGenerator+Loading.swift`
   - `Sources/AudioTTS/Qwen3TTS/Qwen3TTSGenerator+Generation.swift`
@@ -103,7 +104,7 @@ Speaker diarization:
 OCR:
 
 - CLI: `Sources/MereRunCLI/Commands/VisionOCRCommand.swift`
-- Runtime entrypoint: `Sources/MereRunCore/LightOnOCR/LightOnOCRGenerator.swift`
+- Runtime entry point: `Sources/MereRunCore/LightOnOCR/LightOnOCRGenerator.swift`
 - Read next:
   - `Sources/MereRunCore/LightOnOCR/LightOnOCRGenerator+Loading.swift`
   - `Sources/MereRunCore/LightOnOCR/LightOnOCRGenerator+Inference.swift`
@@ -156,7 +157,7 @@ Native object reconstruction:
 Music generation:
 
 - CLI: `Sources/MereRunCLI/Commands/MusicGenerateCommand.swift`
-- Runtime entrypoint: `Sources/MereRunCore/ACEStep/ACEStepPipeline.swift`
+- Runtime entry point: `Sources/MereRunCore/ACEStep/ACEStepPipeline.swift`
 - Read next:
   - `Sources/MereRunCore/ACEStep/ACEStepPipeline+Prompting.swift`
   - `Sources/MereRunCore/ACEStep/ACEStepPipeline+Generation.swift`
@@ -164,7 +165,7 @@ Music generation:
 Music source separation:
 
 - CLI: `Sources/MereRunCLI/Commands/MusicSeparateCommand.swift`
-- Runtime entrypoint: `Sources/MereRunCore/RoFormer/RoFormerSeparator.swift`
+- Runtime entry point: `Sources/MereRunCore/RoFormer/RoFormerSeparator.swift`
 - Read next:
   - `Sources/MereRunCore/RoFormer/RoFormerResources.swift`
   - `Sources/MereRunCore/RoFormer/BSRoFormer.swift`
@@ -173,8 +174,8 @@ Music source separation:
 Audio bandwidth extension and super-resolution:
 
 - CLI: `Sources/MereRunCLI/Commands/AudioEnhanceCommand.swift`
-- Runtime entrypoint: `Sources/MereRunCore/APBWE/APBWEEnhancer.swift`
-- General-audio entrypoint: `Sources/MereRunCore/UniverSR/UniverSREnhancer.swift`
+- Runtime entry point: `Sources/MereRunCore/APBWE/APBWEEnhancer.swift`
+- General-audio entry point: `Sources/MereRunCore/UniverSR/UniverSREnhancer.swift`
 - Read next:
   - `Sources/MereRunCore/APBWE/APBWEResources.swift`
   - `Sources/MereRunCore/APBWE/APBWEModel.swift`
@@ -216,7 +217,7 @@ Cosmos3-Edge omnimodal generation and world simulation:
   `Sources/MereRunCLI/Commands/VideoCosmos3Command.swift`
 - Persistent world server:
   `Sources/MereRunCLI/Commands/WorldCommand.swift`
-- Runtime entrypoints:
+- Runtime entry points:
   - `Sources/MereRunCore/Cosmos3/Cosmos3EdgeGenerator.swift`
   - `Sources/MereRunCore/Cosmos3/Cosmos3Reasoner.swift`
   - `Sources/MereRunCore/Cosmos3/Cosmos3WorldSession.swift`
@@ -239,12 +240,12 @@ The advanced image validator is intentionally separate from generation:
   - `Sources/MereRunCLI/Commands/ImageValidateCommand+EncoderTransformer.swift`
   - `Sources/MereRunCLI/Commands/ImageValidateCommand+Pipeline.swift`
 
-## Suggested reading order for new contributors
+## Contributor reading order
 
 1. Start with `Sources/MereRunCLI/MereRunCLI.swift`.
 2. Pick one modality and read the matching command file.
-3. Jump to that modality’s runtime entrypoint.
+3. Jump to that modality's runtime entry point.
 4. Follow companion files in order: loading or preparation, then generation,
    then output.
-5. Only then drop into the larger model-definition files if you need
-   implementation detail.
+5. If you need implementation detail, continue to the larger model-definition
+   files.

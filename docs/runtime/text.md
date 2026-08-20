@@ -1,10 +1,10 @@
-# Text Runtime
+# Text runtime
 
-Local chat that can actually do things: stream tokens, run a sandboxed tool
-loop, take an image alongside the prompt, hold a grammar-checked JSON object to
-the last brace, and fine-tune on your own conversations. Alongside it sits a
-separate GGUF path for code, an embedding model for local search, and a PII
-redactor that never sends the text it is redacting anywhere.
+Use the text runtime to stream chat tokens, run a sandboxed tool loop, include
+an image with a prompt, produce a grammar-checked JSON object, and fine-tune on
+your own conversations. Separate paths provide GGUF code generation, embeddings
+for local search, and local personally identifiable information (PII)
+redaction.
 
 ## Commands
 
@@ -21,12 +21,12 @@ redactor that never sends the text it is redacting anywhere.
 The macOS app compiles against the same `MereRunContract` emitted by
 `mere.run catalog --json`. Chat's Options panel exposes text versus constrained
 `json_object` output, model-default/show/disable reasoning, context and sampling
-controls, KV quantization, a catalog adapter id or local LoRA file, tool
+controls, key-value (KV) quantization, a catalog adapter ID or local LoRA file, tool
 permissions, preflight, and installed-model enforcement. **Utilities** turns
 Embeddings into a vector explorer with dimensions, norms, previews, and cosine
 similarity, and turns Anonymize into original/protected text review with labeled
 PII spans. **Training** opens a text-dataset preview, preflight, live metrics,
-artifact, history, and comparison workspace for native LoRA. Advanced retains
+artifacts, history, and comparison workspace for native LoRA. Advanced retains
 guided raw forms; every generated flag is checked against public ArgumentParser
 help in the repository gate.
 
@@ -146,23 +146,22 @@ proposal, verification, recovery, and adaptive-fallback counts. Set
 `MERERUN_NEMOTRON35_DSPARK=0` to compare serial target decode, or tune the
 break-even gate with `MERERUN_NEMOTRON35_DSPARK_MIN_ACCEPTANCE`. The model is
 never selected or downloaded implicitly; 32 GB is the catalog floor and 64 GB
-is recommended for comfortable runtime headroom.
+provides additional runtime headroom.
 
-Use these chat winners by RAM band instead of treating every supported model as
-equally recommended:
+Use these recommended chat models by unified-memory band:
 
-| Unified memory | Winner | Notes |
+| Unified memory | Recommended model | Notes |
 | --- | --- | --- |
-| 16-23 GB | `text-chat-gemma4-12b-4bit` | Best compact first chat pick; `text-chat-gemma4-nano` is the safer smallest fallback. |
+| 16-23 GB | `text-chat-gemma4-12b-4bit` | Compact default; `text-chat-gemma4-nano` has the smallest memory requirement. |
 | 24-63 GB | `text-chat-gemma4-12b-4bit` | Default grounded local-assistant tier; `text-chat-gemma4-turbo` is the larger Gemma alternate. |
-| 64-95 GB | `text-chat-gemma4-12b-4bit` | Keep the proven Gemma assistant lane; spend headroom on context, concurrency, or larger Gemma alternates. |
-| 96+ GB | `text-agent-deepseek-v4-flash` | Premier agent/API chat tier; keep Gemma 12B 4-bit for normal interactive local chat. |
+| 64-95 GB | `text-chat-gemma4-12b-4bit` | Retain the measured Gemma assistant lane; use additional memory for context, concurrency, or larger Gemma alternatives. |
+| 96+ GB | `text-agent-deepseek-v4-flash` | Agent and API chat tier; retain Gemma 12B 4-bit for interactive local chat. |
 
 The DeepSeek V4 Flash tier uses the official 80.76 GiB pure-Q2 0731 imatrix
 GGUF. Its persistent DS4 server defaults to a 32K operational context, a
-1,024-token prefill chunk, and an 8 GiB disk-KV budget. A 128 GB Mac is the
-comfortable target; close other memory-heavy workloads before using it on a
-96 GB machine.
+1,024-token prefill chunk, and an 8 GiB disk-KV budget. A 128 GB Mac provides
+additional headroom. Close other memory-heavy workloads before using the model
+on a 96 GB machine.
 
 `text-chat-lfm25-2.6b-4bit` installs the pinned 4-bit partition of
 `LiquidAI/LFM2.5-2.6B-MLX`; `text-chat-lfm25-a1b-8bit` installs
@@ -286,7 +285,7 @@ Qwen3.8 image sizing floor. Its native reasoning-effort values are `low`,
 native values without inventing unsupported template labels. Tool calls use a
 streaming structural Qwen XML parser, including when parameter strings contain
 tag-like text. The checkpoint also contains video understanding weights, but
-the current native command accepts text and local images only. Its embedded
+the native command accepts text and local images only. Its embedded
 dense MTP head can be loaded from the official shards with
 `MERERUN_Q35_MTP_SPECULATION=1`. This materially accelerates greedy decode, but
 is experimental: BF16 multi-token verification can choose a different greedy
@@ -296,7 +295,7 @@ uses speculation only while uncontended; peers use the continuous-batching lane.
 
 Qwen3.8 prefill defaults to 1,024-token chunks. Live reclaimable host-memory
 headroom below 16 GiB, or an admitted peer, caps a chunk at 512 tokens. This
-uses current pressure rather than total physical RAM because the dense BF16
+uses live pressure instead of total physical memory because the dense BF16
 checkpoint and concurrent workloads can consume most unified memory before
 prefill begins. `MERERUN_Q35_PREFILL_CHUNK_TOKENS` remains an explicit upper
 bound and is still pressure-capped.
@@ -410,7 +409,7 @@ always requires interactive approval even when that flag is set.
 ```bash
 swift run mere.run text chat \
   --model text-chat-gemma4-12b-4bit \
-  --prompt "Create hello.py that prints the current time, then run it." \
+  --prompt "Create hello.py that prints the system time, then run it." \
   --tools write_file,shell_exec \
   --tool-loop \
   --allow-shell-exec \
@@ -468,7 +467,7 @@ swift run mere.run text embed \
 
 ```bash
 swift run mere.run text anonymize \
-  "My name is Alice Smith and my email is alice@example.com"
+  "My name is Dana Example and my email is dana@example.com"
 ```
 
 ### Native text LoRA training
@@ -499,8 +498,8 @@ surface, and writes a `.safetensors` adapter plus a family-specific manifest. Ad
 training; text runs write `run.json`, `*.events.jsonl`, `*.loss.csv`, and
 `*.loss.html` beside the adapter so loss and training events can be inspected
 while the optimizer runs. Keep local text fine-tuning in `mere.run` so the same
-model ids, manifests, runtime constraints, and eval artifacts remain under the
-MereRun command plane.
+model IDs, manifests, runtime constraints, and evaluation artifacts remain
+under the MereRun command surface.
 
 When `--eval` is supplied for a real training run, mere.run tokenizes that
 held-out SFT JSONL with the same model chat template and reports assistant-token
@@ -601,7 +600,7 @@ training graph uses a differentiable MLX mask path and treats discrete expert
 selection indices as non-differentiable while retaining gradients through the
 selected router scores and quantized expert computation.
 
-Loss improvement is diagnostic, not a behavioral acceptance gate. The repo
+Loss improvement is diagnostic, not a behavioral acceptance gate. The repository
 includes a deterministic codebook task with 32 train examples and four unseen
 paraphrases. The following proven recipe covers 12 complete shuffled epochs
 using balanced batch-4 updates, then requires the adapter to answer all
@@ -700,8 +699,9 @@ mixed-precision MLX artifact.
 
 If you want to understand the text stack:
 
-1. start at the matching CLI command
-2. follow model resolution through `MereRunModelManifest` and `ModelResolver`
-3. jump to the family-specific runtime in `MereRunCore`
+1. Start at the matching CLI command.
+2. Follow model resolution through `MereRunModelManifest` and `ModelResolver`.
+3. Continue to the family-specific runtime in `MereRunCore`.
 
-For repo orientation, pair this page with [CLI and Runtime Internals](../internals/cli-and-runtime.md).
+For repository orientation, pair this page with
+[CLI and runtime internals](../internals/cli-and-runtime.md).
