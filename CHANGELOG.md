@@ -14,6 +14,22 @@ The format is based on Keep a Changelog.
   signing, notarization, archive export, and upload automation remains in the
   private release-tools repository.
 
+### Ornith 1.5
+
+- upgraded `text-agent-ornith-35b-mlx` from a local-only Ornith 1.0 Q4
+  conversion target to Ornith's pinned public 1.5 35B-A3B BF16 MLX snapshot.
+  Explicit `model pull` now installs the official 64.6 GiB checkpoint, while
+  runtime auto-download remains disabled for this large model.
+- updated the managed manifest, 262K context metadata, and machine guidance
+  for the BF16 payload: 96 GB unified memory is the minimum and 128 GB is
+  recommended.
+- documented the MIT license declared by the authoritative
+  `ornith-ai/Ornith-1.5-35B-A3B` base checkpoint for the official MLX
+  conversion.
+- restored MLX's core `dot.metal` kernels to the vendored AOT library and made
+  metallib verification reject missing FP32, FP16, or BF16 dot-product symbols.
+  This fixes the BF16 checkpoint's first-load Metal failure.
+
 ### External evaluation packs
 
 - added the public `MereRunEvaluation` contract and `eval pack validate`,

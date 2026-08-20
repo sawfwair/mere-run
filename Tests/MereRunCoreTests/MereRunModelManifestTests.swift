@@ -403,12 +403,10 @@ final class MereRunModelManifestTests: MereRunCoreTestCase {
         XCTAssertEqual(manifest.id, Q35Resources.ornith35BMLXModelId)
         XCTAssertEqual(manifest.engine, .qwen35HybridMoE)
         XCTAssertEqual(manifest.family, .code)
-        XCTAssertEqual(manifest.tier, .small)
+        XCTAssertEqual(manifest.tier, .large)
         XCTAssertEqual(manifest.variant, .standard)
-        XCTAssertEqual(manifest.precision, .int4)
-        XCTAssertEqual(manifest.quantization?.bits, 4)
-        XCTAssertEqual(manifest.quantization?.groupSize, 64)
-        XCTAssertEqual(manifest.quantization?.scheme, "mlx-affine-moe")
+        XCTAssertEqual(manifest.precision, .bf16)
+        XCTAssertNil(manifest.quantization)
         XCTAssertEqual(Set(manifest.supports ?? []), Set([.chat, .codeGeneration]))
         XCTAssertEqual(
             manifest.upstreamRepoId,

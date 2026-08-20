@@ -474,10 +474,10 @@ public enum ManagedModelCapabilityCatalog {
             ),
             descriptor(
                 Q35Resources.ornith35BMLXModelId,
-                "Ornith 1.0 35B MLX Q4",
-                "Runs a converted Ornith 1.0 35B Q4 MLX MoE through the native Qwen-family runtime.",
-                minimum: 24,
-                recommended: 32
+                "Ornith 1.5 35B-A3B MLX",
+                "Runs Ornith's official 35B-A3B BF16 MLX coding agent through the native Qwen-family runtime.",
+                minimum: 96,
+                recommended: 128
             ),
             descriptor(
                 LFM2Resources.defaultModelId,

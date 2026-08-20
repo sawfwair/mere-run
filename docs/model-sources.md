@@ -290,10 +290,16 @@ revision. Ornith is a DeepReinforce agentic coding model with Qwen3.5 text
 architecture metadata; mere.run treats this MLX OptiQ quant as a native
 Qwen-family runtime target for `chat`, `api serve`, and setup-agent experiments.
 
-`text-agent-ornith-35b-mlx` is reserved for a locally converted Q4 MLX snapshot
-of `deepreinforce-ai/Ornith-1.0-35B` at the pinned catalog revision. It runs
-through the native Qwen-family runtime, but has no Hugging Face pull source yet;
-install a converted directory under the local model store before using it.
+`text-agent-ornith-35b-mlx` installs Ornith's official
+`ornith-ai/Ornith-1.5-35B-A3B-MLX` BF16 snapshot at the pinned catalog revision.
+The 35B-parameter MoE activates about 3B parameters per token, advertises a
+262,144-token context, and runs through the native Qwen-family runtime. Because
+the payload is about 64.6 GiB, runtime auto-download remains disabled: install
+it explicitly with `model pull` on a 96 GB or larger Apple Silicon Mac (128 GB
+recommended). The authoritative
+[`ornith-ai/Ornith-1.5-35B-A3B`](https://huggingface.co/ornith-ai/Ornith-1.5-35B-A3B)
+base checkpoint declares the model under the MIT license in its model-card
+metadata; the MLX conversion repository does not duplicate the license file.
 
 `text-agent-ornith-35b` installs DeepReinforce's public
 `deepreinforce-ai/Ornith-1.0-35B-GGUF` Q4_K_M file at the pinned catalog

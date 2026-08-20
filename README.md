@@ -308,8 +308,8 @@ swift run mere.run model pull vision-chat-muse-glimmer-30b --accept-model-licens
 swift run mere.run model pull text-chat-bonsai-27b-1bit
 swift run mere.run model pull text-chat-bonsai-27b-2bit
 swift run mere.run model pull text-code-north-mini
+swift run mere.run model pull text-agent-ornith-35b-mlx
 swift run mere.run model pull text-agent-ornith-35b
-# text-agent-ornith-35b-mlx is local-only until a converted MLX snapshot is published
 
 # Run Prism ML's binary model for lower residency/faster decode, or substitute
 # text-chat-bonsai-27b-2bit for the larger ternary checkpoint.

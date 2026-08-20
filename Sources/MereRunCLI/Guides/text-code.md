@@ -17,13 +17,14 @@ For larger Ornith coding-agent evals, `text-agent-ornith-35b` installs
 DeepReinforce's Q4_K_M GGUF quant and runs through the same native `text-code`
 path with a 32K runtime context.
 Use `text-agent-ornith-35b-mlx` through `text chat`, `api serve`, or
-`model benchmark code` when testing a locally converted native MLX Q4 snapshot.
+`model benchmark code` when testing Ornith's official 1.5 35B-A3B BF16 MLX snapshot.
 
 ## Install And Check
 
 ```bash
 mere.run model pull text-code-qwen3
 mere.run model pull text-code-north-mini
+mere.run model pull text-agent-ornith-35b-mlx
 mere.run model pull text-agent-ornith-35b
 mere.run text code --help
 ```

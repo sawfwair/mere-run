@@ -287,9 +287,11 @@ The `text-code` API lane rejects tool calls, so these models are not Pi setup
 agents.
 `text-agent-ornith-9b` can be pulled, inspected, and run through the native
 Qwen-family MLX/OptiQ runtime for coding-agent comparisons.
-`text-agent-ornith-35b-mlx` is a local-only converted MLX Q4 Ornith target; it
-can be inspected and served once its converted directory exists in the model
-store, but `model pull` is disabled until a converted public snapshot exists.
+`text-agent-ornith-35b-mlx` pulls Ornith's official 1.5 35B-A3B BF16 MLX
+snapshot for the native Qwen-family runtime. The 64.6 GiB install requires an
+explicit `model pull`; ordinary runtime resolution will not start this large
+download automatically. Use at least 96 GB unified memory; 128 GB is
+recommended.
 `text-agent-ornith-35b` is the larger GGUF Ornith eval target and runs through
 the native `text-code`/llama.cpp path.
 

@@ -399,7 +399,7 @@ members of this lane for the current machine:
   default only on 64 GB and larger machines.
 
 For larger explicit Ornith runs, pass `--models text-agent-ornith-35b-mlx` for
-the local native MLX Q4 conversion or `--models text-agent-ornith-35b` for the
+the official 1.5 35B-A3B BF16 MLX snapshot or `--models text-agent-ornith-35b` for the
 GGUF target. They are not part of the default comparison because they are larger
 installs/loads.
 

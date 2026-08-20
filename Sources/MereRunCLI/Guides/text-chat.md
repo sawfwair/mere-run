@@ -18,7 +18,7 @@ thinking and the published 0.7/0.95/20 sampling, and advertise a 262,144-token
 context. Choose 1-bit for lower residency and faster decode, or 2-bit when the
 ternary checkpoint's additional weight capacity is worth the memory cost.
 `text-agent-ornith-9b` is the managed Ornith 1.0 9B OptiQ MLX coding-agent experiment; it uses the native Qwen-family runtime rather than the GGUF `text code` command.
-`text-agent-ornith-35b-mlx` is the local converted Ornith 1.0 35B Q4 MLX coding-agent target; it also uses the native Qwen-family runtime.
+`text-agent-ornith-35b-mlx` is Ornith's official 1.5 35B-A3B BF16 MLX coding-agent target; it also uses the native Qwen-family runtime and requires an explicit managed pull.
 `text-chat-lfm25-2.6b-4bit` is the managed LiquidAI LFM2.5 2.6B dense MLX 4-bit snapshot and runs through the native Swift LFM2 runtime.
 `text-chat-lfm25-a1b-8bit` is the managed LiquidAI LFM2.5 8B-A1B MLX 8-bit snapshot and runs through the native Swift LFM2 runtime.
 `vision-chat-lfm25-3b-8bit` adds LiquidAI's SigLIP2 vision tower and multimodal projector to the dense LFM2.5 2.6B language backbone. Use `--image` with a local path or base64 data URL.
