@@ -87,9 +87,10 @@ public enum NemotronOmniExpertPack {
               capacityURL.path != "/" {
             capacityURL.deleteLastPathComponent()
         }
-        let capacity = try capacityURL.resourceValues(
-            forKeys: [.volumeAvailableCapacityForImportantUsageKey]
-        ).volumeAvailableCapacityForImportantUsage ?? 0
+        let capacity = try availableCapacity(
+            at: capacityURL,
+            fileManager: fileManager
+        )
         let reserve: Int64 = 8 * 1_073_741_824
         let required = NemotronOmniResources.packedExpertWeightBytes + reserve
         guard capacity <= 0 || capacity >= required else {
@@ -272,6 +273,14 @@ public enum NemotronOmniExpertPack {
             throw NemotronOmniExpertPackError.invalidOutput(outputURL)
         }
         return outputURL
+    }
+
+    static func availableCapacity(
+        at url: URL,
+        fileManager: FileManager = .default
+    ) throws -> Int64 {
+        let attributes = try fileManager.attributesOfFileSystem(forPath: url.path)
+        return (attributes[.systemFreeSize] as? NSNumber)?.int64Value ?? 0
     }
 
     private static func safetensorsDType(_ dtype: DType) throws -> String {

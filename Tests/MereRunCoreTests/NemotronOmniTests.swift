@@ -4,6 +4,14 @@ import XCTest
 @testable import MereRunCore
 
 final class NemotronOmniTests: MereRunCoreTestCase {
+    func testExpertPackCapacityProbeUsesPortableFileSystemAttributes() throws {
+        let capacity = try NemotronOmniExpertPack.availableCapacity(
+            at: FileManager.default.temporaryDirectory
+        )
+
+        XCTAssertGreaterThan(capacity, 0)
+    }
+
     func testPinnedOmniConfigDecodesAllThreeMediaTowers() throws {
         let config = try JSONDecoder().decode(
             NemotronOmniConfig.self,
