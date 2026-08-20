@@ -27,6 +27,16 @@ native non-greedy model profiles and repeated trials. `--performance-lane
 native` adds separately labeled timing rows with logprob capture off; those
 rows never contribute correctness scores.
 
+The exact Comprehensive mix is 52 Mere-authored chat cases, seven LongBench
+cases, three HumanEval cases, six HumanEval+ cases, six MBPP+ cases, six
+LiveCodeBench cases, ten Mere-authored tool cases, ten BFCL cases, and ten
+generated Mere vision cases. Lite selects 10, 2, 1, 1, 1, 1, 3, 2, and 3 from
+those families respectively. Run `--dry-run --json` to inspect every resolved
+case id, capability tag, difficulty, and selection rationale. The Mere fused
+model evaluation documentation also shows literal Mere-owned question/answer
+and tool-call examples, plus representative code, long-context, and vision
+cases.
+
 The upstream HumanEval+, MBPP+, LiveCodeBench, BFCL, and LongBench datasets are
 not vendored. Generate the pinned 35-case normalized selection from the
 hash-verified source lock, stamp it, and verify it before model loading:
