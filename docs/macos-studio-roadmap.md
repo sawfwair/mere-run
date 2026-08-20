@@ -1,6 +1,6 @@
 # MereRun macOS Studio — Review & Roadmap to v1.0
 
-_Verified multi-agent review of `Sources/MereRunApp` (~6,500 LOC) against the CLI source of truth (`Sources/MereRunCLI`) and the bundling pipeline. Findings below were adversarially re-checked against source; refuted/adjusted claims were dropped or down-graded._
+_Verified multi-agent review of `apps/macos/MereRunStudio` (~6,500 LOC) against the CLI source of truth (`Sources/MereRunCLI`) and the bundling pipeline. Findings below were adversarially re-checked against source; refuted/adjusted claims were dropped or down-graded._
 
 > **Implementation update (2026-07-27):** This document preserves the original
 > pre-parity audit and sequencing rationale. The capability gaps described below
@@ -11,7 +11,7 @@ _Verified multi-agent review of `Sources/MereRunApp` (~6,500 LOC) against the CL
 > Qwen3.6/Laguna benchmark, Open WebUI, and API workflows; Graph Studio and Node remain explicit
 > external boundaries. Structured receipts, file pickers, validation, retry and
 > resume controls are implemented. See
-> [`Sources/MereRunApp/README.md`](../Sources/MereRunApp/README.md) for the
+> [`apps/macos/README.md`](../apps/macos/README.md) for the
 > current surface. On 2026-07-27, the release pipeline produced a Developer
 > ID-signed and Apple-notarized app and DMG, both passed Gatekeeper and stapler
 > validation, and the installed app completed a real image-generation workflow

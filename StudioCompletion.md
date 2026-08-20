@@ -1,7 +1,7 @@
 # MereRun macOS Studio — Completion Plan (v1.0)
 
 This document enumerates **all remaining work** to take the MereRun macOS Studio
-(`Sources/MereRunApp`) from its current state to a shippable, signed/notarized **v1.0**,
+(`apps/macos/MereRunStudio`) from its current state to a shippable, signed/notarized **v1.0**,
 sequenced across a **26-week** delivery calendar.
 
 It is the execution companion to [`docs/macos-studio-roadmap.md`](./docs/macos-studio-roadmap.md)

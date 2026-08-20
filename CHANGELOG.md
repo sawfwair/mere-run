@@ -6,6 +6,14 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Apple app layout
+
+- grouped the open-source macOS and iOS clients under `apps/`, with their
+  platform sources, tests, assets, XcodeGen manifest, contributor documentation,
+  package paths, build scripts, and CI references moving together. Maintainer-only
+  signing, notarization, archive export, and upload automation remains in the
+  private release-tools repository.
+
 ### External evaluation packs
 
 - added the public `MereRunEvaluation` contract and `eval pack validate`,

@@ -6,7 +6,7 @@ mere.run is a Swift package, CLI, and optional macOS GUI for local-first inferen
 
 1. `Package.swift` for target and dependency flow
 2. `Sources/MereRunCLI/MereRunCLI.swift` for the public command tree
-3. `Sources/MereRunApp` for the optional SwiftUI wrapper
+3. `apps/macos/MereRunStudio` for the optional SwiftUI wrapper
 4. `docs/repository-tour.md` for top-level ownership
 5. `docs/architecture.md` for runtime reading order
 6. the module README inside the subsystem you are editing
@@ -14,10 +14,10 @@ mere.run is a Swift package, CLI, and optional macOS GUI for local-first inferen
 ## Key Modules
 
 - `Sources/MereRunCLI/Commands/`: one file per public command family or large subcommand cluster
-- `Sources/MereRunApp/`: macOS GUI forms, command templates, and CLI process launching
+- `apps/macos/`: macOS Studio sources, tests, assets, command templates, and CLI process launching
 - `Sources/MereRunEvaluation/`: runtime-neutral external evaluation-pack schema, validation, and content hashing
 - `Sources/MereRunRelayKit/`: portable relay client, executor profiles/auth, and workflow wire types shared by the CLI and app shells
-- `ios/`: the iOS Studio app, a relay client over `MereRunRelayKit` (see `docs/ios-studio.md`)
+- `apps/ios/`: the iOS Studio app, a relay client over `MereRunRelayKit` (see `docs/ios-studio.md`)
 - `Sources/MereRunCore/`: model paths, manifests, source config, shared runtime helpers, and modality runtime implementations
 - `Sources/MereRunCore/LTX/`: native video generation and MP4 output
 - `Sources/MereRunCore/Cosmos3/`: native Cosmos3-Edge omnimodal generation,

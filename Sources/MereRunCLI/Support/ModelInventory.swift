@@ -68,6 +68,7 @@ enum ModelInventory {
                 spec: spec,
                 resolver: resolver,
                 measureSize: mode == .measured,
+                usesDefaultLocations: locations == nil,
                 fileManager: fileManager
             )
         }
@@ -175,6 +176,7 @@ enum ModelInventory {
         spec: ManagedModelSpec?,
         resolver: ModelResolver,
         measureSize: Bool,
+        usesDefaultLocations: Bool,
         fileManager: FileManager
     ) -> ModelInventoryRow {
         let status: String
@@ -226,7 +228,7 @@ enum ModelInventory {
                       spec: spec,
                       at: flatDir,
                       fileManager: fileManager
-                  ) || spec.managedRuntimeURL(fileManager: fileManager) != nil {
+                  ) || (usesDefaultLocations && spec.managedRuntimeURL(fileManager: fileManager) != nil) {
             status = "installed"
             measuredRoot = flatDir
         } else if flatInstalled {

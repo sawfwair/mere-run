@@ -1,4 +1,4 @@
-# MereRunApp
+# mere.run Studio for macOS
 
 Optional SwiftUI studio wrapper around the public `mere.run` CLI.
 
@@ -154,11 +154,12 @@ The inverse coverage test also requires every command in the shared contract to
 have an App-owned template or utility surface, so a newly cataloged CLI command
 cannot silently ship without a macOS path.
 
-`scripts/package-macos.sh` signs, notarizes, staples, and Gatekeeper-validates
-the app before placing that already-stapled app into the signed and notarized
-DMG. `LinuxNativeBridgeTests.testMacOSPackageEmbedsTheStapledAppBeforeCreatingTheDMG`
-guards that ordering. Release proof must validate the mounted/installed app and
-its embedded CLI, not only the outer DMG.
+The public `scripts/build_mere_run_app.sh` path produces a contributor/CI app
+bundle and verifies its nested-code layout. Maintainer-only Developer ID
+signing, notarization, stapling, DMG assembly, Sparkle feed generation, and
+upload live in the separate private release-tools repository. Release proof
+must validate the mounted/installed app and its embedded CLI, not only the
+outer DMG.
 
 The packaged app embeds Sparkle and exposes **Check for Updates…** in the app
 menu. Release builds use the stable HTTPS appcast, automatic daily discovery,

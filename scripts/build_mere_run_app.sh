@@ -25,7 +25,7 @@ app_build="${MERERUN_APP_BUILD:-$default_build}"
 sparkle_feed_url="${MERERUN_SPARKLE_FEED_URL:-https://mere.run/releases/appcast.xml}"
 sparkle_public_ed_key="6sFs+7UqYcE7rThPAovzMDsZtKyf/h4/d8rUmPSH2rw="
 
-app_icon="${repo_root}/assets/MereRunApp/AppIcon.icns"
+app_icon="${repo_root}/apps/macos/Assets/MereRunApp/AppIcon.icns"
 release_entitlements="${repo_root}/scripts/MereRun.entitlements"
 debug_entitlements="${repo_root}/scripts/MereRunDebug.entitlements"
 # Developer ID Application identity; defaults to ad-hoc ("-") for local/dev builds.

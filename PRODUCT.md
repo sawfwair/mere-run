@@ -20,7 +20,7 @@ drag-and-drop, VoiceOver, Dynamic Type).
 
 ## Product Purpose
 
-mere.run Studio (`Sources/MereRunApp`) is the macOS front end for the open-source
+mere.run Studio (`apps/macos/MereRunStudio`) is the macOS front end for the open-source
 mere.run local-inference CLI. Tagline: **"Create anything. Locally."** It exists so that
 local-first inference feels as effortless as a hosted tool: pick a mode, type a prompt,
 get a previewable result — while the public CLI does the real work and stays the source

@@ -1,5 +1,5 @@
 # XcodeGen manifest for the iOS Studio app.
-# Generate the project on a Mac:  cd ios && xcodegen generate
+# Generate the project on a Mac:  cd apps/ios && xcodegen generate
 # The app links the portable relay client and the on-device runtime from the
 # root package.
 name: MereRunStudio
@@ -10,7 +10,7 @@ options:
   xcodeVersion: "16.0"
 packages:
   MereRun:
-    path: ..
+    path: ../..
 targets:
   MereRunStudio:
     type: application
