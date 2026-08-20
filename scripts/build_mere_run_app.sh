@@ -121,8 +121,13 @@ if [[ ! -x "$cli_executable" ]]; then
   exit 66
 fi
 
-verify_private_build_path_absent "$executable"
-verify_private_build_path_absent "$cli_executable"
+# Debug executables intentionally retain third-party Swift source paths in DWARF and
+# assertion metadata. Only release executables are shipped, so enforce the private-path
+# boundary on the optimized payloads without rejecting CI's ad-hoc debug bundle.
+if [[ "$configuration" == "release" ]]; then
+  verify_private_build_path_absent "$executable"
+  verify_private_build_path_absent "$cli_executable"
+fi
 
 bundle="${build_dir}/MereRun.app"
 contents="${bundle}/Contents"

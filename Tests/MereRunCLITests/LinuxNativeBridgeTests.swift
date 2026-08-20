@@ -214,6 +214,7 @@ final class LinuxNativeBridgeTests: XCTestCase {
         XCTAssertTrue(script.contains(#"${swift_scratch_path}=/src/mere-run/.build"#))
         XCTAssertTrue(script.contains("verify_private_build_path_absent"))
         XCTAssertTrue(script.contains("Private source path leaked"))
+        XCTAssertTrue(script.contains(#"if [[ "$configuration" == "release" ]]; then"#))
         XCTAssertTrue(script.contains("--preserve-metadata=entitlements"))
         XCTAssertTrue(script.contains("XPCServices/Installer.xpc"))
         XCTAssertTrue(script.contains("XPCServices/Downloader.xpc"))
