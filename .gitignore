@@ -10,8 +10,8 @@ docs/.vitepress/cache/
 docs/.vitepress/dist/
 .gitnexus
 
-# XcodeGen output (regenerate with `cd ios && xcodegen generate`)
-ios/MereRunStudio.xcodeproj/
+# XcodeGen output (regenerate with `cd apps/ios && xcodegen generate`)
+apps/ios/MereRunStudio.xcodeproj/
 
 # Build artifacts
 dist/

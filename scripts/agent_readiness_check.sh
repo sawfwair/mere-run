@@ -37,13 +37,15 @@ if [[ -f CODEBASE.md ]]; then
 fi
 
 required_module_readmes=(
+  apps/README.md
+  apps/ios/README.md
   Sources/AudioCore/README.md
   Sources/AudioCodecs/README.md
   Sources/AudioSTT/Parakeet/README.md
   Sources/AudioSTT/Qwen3ASR/Model/README.md
   Sources/AudioSTT/Qwen3ASR/README.md
   Sources/AudioTTS/Qwen3TTS/README.md
-  Sources/MereRunApp/README.md
+  apps/macos/README.md
   Sources/MereRunCLI/Commands/README.md
   Sources/MereRunCLI/Support/README.md
   Sources/MereRunCore/ACEStep/Model/README.md
@@ -97,11 +99,11 @@ dynamic_boundary_files=(
   "Sources/AudioSTT/Qwen3ASR/Qwen3ASRTokenizer.swift"
   # Studio artifact explorers deliberately accept polymorphic manifests/results from saved
   # runs. Voice Studio is included because AVAudioRecorder's settings API requires [String: Any].
-  "Sources/MereRunApp/Studio3DCreationView.swift"
-  "Sources/MereRunApp/StudioMusicToolsView.swift"
-  "Sources/MereRunApp/StudioTrainingView.swift"
-  "Sources/MereRunApp/StudioUtilityLabView.swift"
-  "Sources/MereRunApp/StudioVoiceView.swift"
+  "apps/macos/MereRunStudio/Studio3DCreationView.swift"
+  "apps/macos/MereRunStudio/StudioMusicToolsView.swift"
+  "apps/macos/MereRunStudio/StudioTrainingView.swift"
+  "apps/macos/MereRunStudio/StudioUtilityLabView.swift"
+  "apps/macos/MereRunStudio/StudioVoiceView.swift"
   "Sources/MereRunCLI/Support/ResumeLoRABootstrap.swift"
   "Sources/MereRunCore/Asset3D/MeshGLBWriter.swift"
   "Sources/MereRunCore/FalconPerception/FalconPerceptionTokenizer.swift"
@@ -138,10 +140,15 @@ is_dynamic_boundary_file() {
 }
 
 dynamic_pattern='JSONSerialization\.jsonObject|JSONSerialization\.data\(withJSONObject|\[String\s*:\s*Any\]|\[\[String\s*:\s*Any\]\]|\[Any\]|Any\?'
+dynamic_boundary_roots=(
+  Sources
+  apps/ios
+  apps/macos/MereRunStudio
+)
 dynamic_matches=()
 while IFS= read -r match; do
   dynamic_matches+=("$match")
-done < <(rg -l "$dynamic_pattern" Sources | sort || true)
+done < <(rg -l "$dynamic_pattern" "${dynamic_boundary_roots[@]}" | sort || true)
 for match in "${dynamic_matches[@]}"; do
   if ! is_dynamic_boundary_file "$match"; then
     record_failure "raw dynamic JSON appeared outside the typed-boundary inventory: $match"

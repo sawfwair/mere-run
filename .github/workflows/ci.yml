@@ -129,11 +129,11 @@ jobs:
           brew untap --force aws/tap
           brew install xcodegen
       - name: Generate iOS project
-        run: xcodegen generate --spec ios/project.yml --project ios
+        run: xcodegen generate --spec apps/ios/project.yml --project apps/ios
       - name: Build iOS app and tests for release
         run: |
           xcodebuild build-for-testing \
-            -project ios/MereRunStudio.xcodeproj \
+            -project apps/ios/MereRunStudio.xcodeproj \
             -scheme MereRunStudio \
             -configuration Release \
             -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=latest' \
@@ -144,7 +144,7 @@ jobs:
       - name: Run iOS unit tests
         run: |
           xcodebuild test-without-building \
-            -project ios/MereRunStudio.xcodeproj \
+            -project apps/ios/MereRunStudio.xcodeproj \
             -scheme MereRunStudio \
             -configuration Release \
             -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=latest' \
@@ -164,7 +164,10 @@ jobs:
 
           app_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${app}/Info.plist")"
           widget_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "${widget}/Info.plist")"
+          app_build="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "${app}/Info.plist")"
+          widget_build="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "${widget}/Info.plist")"
           test "$app_version" = "$widget_version"
+          test "$app_build" = "$widget_build"
 
           executable="${app}/mere.run"
           executable_archs="$(lipo -archs "$executable")"
@@ -178,8 +181,8 @@ jobs:
           fi
           echo "iOS Release executable: ${executable_bytes} bytes (${executable_archs})"
 
-          release_entitlements='ios/MereRunStudio/MereRunStudio.entitlements'
-          debug_entitlements='ios/MereRunStudio/MereRunStudio.Debug.entitlements'
+          release_entitlements='apps/ios/MereRunStudio/MereRunStudio.entitlements'
+          debug_entitlements='apps/ios/MereRunStudio/MereRunStudio.Debug.entitlements'
           grep -q '<string>applinks:mere.world</string>' "$release_entitlements"
           if grep -q 'mode=developer' "$release_entitlements"; then
             echo 'Release entitlements must not use associated-domain developer mode.' >&2
@@ -187,8 +190,8 @@ jobs:
           fi
           grep -q '<string>applinks:mere.world?mode=developer</string>' "$debug_entitlements"
 
-          debug_setting="$(xcodebuild -project ios/MereRunStudio.xcodeproj -scheme MereRunStudio -configuration Debug -showBuildSettings | awk -F ' = ' '/CODE_SIGN_ENTITLEMENTS/ { print $2; exit }')"
-          release_setting="$(xcodebuild -project ios/MereRunStudio.xcodeproj -scheme MereRunStudio -configuration Release -showBuildSettings | awk -F ' = ' '/CODE_SIGN_ENTITLEMENTS/ { print $2; exit }')"
+          debug_setting="$(xcodebuild -project apps/ios/MereRunStudio.xcodeproj -scheme MereRunStudio -configuration Debug -showBuildSettings | awk -F ' = ' '/CODE_SIGN_ENTITLEMENTS/ { print $2; exit }')"
+          release_setting="$(xcodebuild -project apps/ios/MereRunStudio.xcodeproj -scheme MereRunStudio -configuration Release -showBuildSettings | awk -F ' = ' '/CODE_SIGN_ENTITLEMENTS/ { print $2; exit }')"
           test "$debug_setting" = 'MereRunStudio/MereRunStudio.Debug.entitlements'
           test "$release_setting" = 'MereRunStudio/MereRunStudio.entitlements'
 

@@ -4,7 +4,7 @@ The iOS client for mere.run. It can sign in to a hosted relay or pair directly
 with a machine, submit and watch work, fetch digest-verified artifacts, and
 inspect fleet nodes. Supported image and chat models can also execute entirely
 on a physical iPhone. The architecture and current boundaries live in
-[`docs/ios-studio.md`](../docs/ios-studio.md).
+[`docs/ios-studio.md`](../../docs/ios-studio.md).
 
 ## Status
 
@@ -21,7 +21,7 @@ Requires Xcode 16+ on macOS and [XcodeGen](https://github.com/yonaskolb/XcodeGen
 
 ```bash
 brew install xcodegen
-cd ios
+cd apps/ios
 xcodegen generate                              # simulator builds
 MERERUN_IOS_TEAM=<team id> xcodegen generate   # device builds (automatic signing)
 open MereRunStudio.xcodeproj
@@ -68,6 +68,15 @@ requested unload begins, and new inference is rejected during the release
 transition. Live Activities use one bounded poller per run with exponential
 backoff and stop after persistent transport failures. Artifact refreshes are
 staged and validated before replacing an earlier verified local copy.
+
+## Distribution boundary
+
+This public directory owns the buildable app and widget sources, XcodeGen
+manifest, tests, declared entitlements, versions, and simulator CI. Apple team
+selection, provisioning updates, signed device archives, export options,
+TestFlight/App Store Connect upload, and release receipts belong to the separate
+private maintainer release-tools repository. Credentials and provisioning
+profiles must never be added here.
 
 ## Release footprint
 

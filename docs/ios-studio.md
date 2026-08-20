@@ -1,9 +1,9 @@
 # iOS Studio
 
-The iOS app (`ios/`) combines the portable relay client established by hosted
+The iOS app (`apps/ios/`) combines the portable relay client established by hosted
 Graph Studio with a constrained on-device runtime. It can submit and watch
 fleet work, fetch verified artifacts, connect directly to a machine, or run
-supported image and chat models on a physical iPhone. `ios/README.md` covers
+supported image and chat models on a physical iPhone. `apps/ios/README.md` covers
 building.
 
 ## Two lanes
@@ -37,7 +37,7 @@ building.
   artifact fetch, the workflow wire types, and SSE event-text normalization.
   Foundation + swift-crypto only; builds and tests on Linux; the CLI consumes
   it with unchanged behavior.
-- `ios/` — the SwiftUI client: PKCE and device-code relay sign-in, direct
+- `apps/ios/` — the SwiftUI client: PKCE and device-code relay sign-in, direct
   machine pairing, fleet and run views, polled events/progress, cancel/retry,
   verified artifact fetch and sharing, Live Activities, and on-device model
   management, image generation, and chat. XcodeGen owns the project, and CI

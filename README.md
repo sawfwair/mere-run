@@ -99,7 +99,8 @@ Neither adds a hosted inference backend to this repository.
 - `Sources/MereRunCore`: shared model resolution, manifests, generation primitives, and MLX-backed inference code
 - `Sources/AudioCore`, `Sources/AudioCodecs`, `Sources/AudioSTT`, `Sources/AudioTTS`: audio generation and transcription support
 - `Sources/MereRunCLI`: the target that builds the public `mere.run` executable
-- `Sources/MereRunApp`: a SwiftUI `mere.run.app` target with a user-facing studio and advanced CLI details
+- `apps/macos/`: the SwiftUI `mere.run.app` target, tests, and assets for the user-facing macOS Studio
+- `apps/ios/`: the XcodeGen-managed iOS Studio app, widget, tests, and source-level signing metadata
 - `Tests`: SwiftPM test coverage for the core and CLI surfaces
 - `vendor/llama.xcframework`: vendored `llama.cpp` runtime used by `mere.run text code` and `mere.run api serve`
 - `vendor/mlx-swift_Cmlx.bundle`: vendored Metal shader resources needed by MLX-backed runtime paths

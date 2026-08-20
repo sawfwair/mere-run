@@ -10,6 +10,9 @@ mere-run/
   Package.swift
   Sources/
   Tests/
+  apps/
+    macos/
+    ios/
   docs/
   scripts/
   vendor/
@@ -40,6 +43,10 @@ them on the Linux host class they target.
 
 ## Source tree
 
+The [`apps/`](../apps/README.md) directory owns the two user-facing Apple
+clients. Shared runtime and relay behavior remains in SwiftPM library targets
+under `Sources/` so neither app becomes a second backend.
+
 ### `Sources/MereRunCLI`
 
 The public command-line surface.
@@ -51,7 +58,7 @@ The public command-line surface.
 
 If you want to understand the CLI end to end, start here.
 
-### `Sources/MereRunApp`
+### `apps/macos/MereRunStudio`
 
 The optional macOS studio. It does not own runtime behavior; it turns
 user-facing studio requests into `mere.run` arguments, launches the CLI as a
@@ -60,6 +67,14 @@ the raw command surface available in Advanced details.
 
 Do not make this target part of Linux compatibility work. Linux contributors
 should validate the CLI and local API surfaces directly.
+
+### `apps/ios`
+
+The XcodeGen-managed iOS Studio app, widget, unit/UI tests, entitlements, and
+simulator release gate. It consumes the portable relay client and selected
+on-device runtime paths from the root package. Maintainer-only provisioning,
+archive export, and App Store Connect upload automation live outside this
+public repository.
 
 ### `Sources/MereRunCore`
 

@@ -530,10 +530,7 @@ if !isLinuxPackage {
         "MereRunContract",
         .product(name: "Sparkle", package: "Sparkle")
       ],
-      path: "Sources/MereRunApp",
-      exclude: [
-        "README.md"
-      ],
+      path: "apps/macos/MereRunStudio",
       linkerSettings: [
         .unsafeFlags([
           "-Xlinker", "-rpath",
@@ -546,7 +543,7 @@ if !isLinuxPackage {
     .testTarget(
       name: "MereRunAppTests",
       dependencies: ["MereRunApp", "MereRunContract"],
-      path: "Tests/MereRunAppTests"
+      path: "apps/macos/MereRunStudioTests"
     )
   )
 }
