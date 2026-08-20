@@ -34,7 +34,7 @@ enum MLXBundleSupport {
       upstreamTag: "v0.32.1",
       upstreamRevision: "3a6219917e4535575ce5bce2fc2ba27a483a709b",
       swiftRevision: "7558b9cff75746e3ce25802aecbdc498b240af7f",
-      kernelSourcesSHA256: "acfb87b05e097f03cecffcd084b988d99fb0321ea923cd561a482d114d75a895"
+      kernelSourcesSHA256: "36412403ff4f0117579f0bc4471a17083411422bfc446f9f11420614ddbeb9ee"
     )
 
     /// Relationship between a bundle's metallib version stamp

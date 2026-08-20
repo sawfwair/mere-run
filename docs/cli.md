@@ -947,11 +947,12 @@ swift run mere.run model pull text-agent-ornith-35b
 swift run mere.run text code --model text-agent-ornith-35b --prompt "Sketch a small Swift Result helper."
 ```
 
-`text-agent-ornith-35b-mlx` is the native Swift/MLX lane for a locally converted
-Ornith 1.0 35B Q4 directory. It is intentionally local-only until a converted
-MLX snapshot is published:
+`text-agent-ornith-35b-mlx` is the native Swift/MLX lane for Ornith's official
+1.5 35B-A3B BF16 snapshot. Pull the 64.6 GiB model explicitly; runtime
+auto-download is disabled for this large checkpoint:
 
 ```bash
+swift run mere.run model pull text-agent-ornith-35b-mlx
 swift run mere.run text chat --model text-agent-ornith-35b-mlx --prompt "Sketch a small Swift Result helper."
 ```
 
@@ -2889,8 +2890,9 @@ so it is not exposed to Pi.
 Ornith (`text-agent-ornith-9b`) is available as an experimental native
 MLX/OptiQ coding-agent model. It uses the Qwen-family runtime, so serve it with
 `api serve --engine text-chat-q36 --model text-agent-ornith-9b`.
-The local converted Ornith 35B MLX target (`text-agent-ornith-35b-mlx`) uses
-the same native Qwen-family serving engine when installed.
+The official Ornith 1.5 35B-A3B BF16 MLX target
+(`text-agent-ornith-35b-mlx`) uses the same native Qwen-family serving engine
+after an explicit managed pull.
 The larger Ornith 35B GGUF target (`text-agent-ornith-35b`) is also available
 for explicit evals and runs through:
 

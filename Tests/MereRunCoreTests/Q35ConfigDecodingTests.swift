@@ -1146,6 +1146,63 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         XCTAssertEqual(config.textConfig.numExperts, 256)
     }
 
+    func testOrnith15PublishedBF16ConfigurationDecodes() throws {
+        var configObject = makeBaseConfig()
+        configObject["model_type"] = "qwen3_5_moe"
+        configObject["architectures"] = ["Qwen3_5MoeForConditionalGeneration"]
+        configObject["eos_token_id"] = [248_046, 248_044]
+        configObject.removeValue(forKey: "vision_config")
+        configObject.removeValue(forKey: "quantization")
+
+        var textConfig = configObject["text_config"] as? [String: Any] ?? [:]
+        textConfig["model_type"] = "qwen3_5_moe_text"
+        textConfig["hidden_size"] = 2_048
+        textConfig["num_hidden_layers"] = 40
+        textConfig.removeValue(forKey: "intermediate_size")
+        textConfig["shared_expert_intermediate_size"] = 512
+        textConfig["moe_intermediate_size"] = 512
+        textConfig["num_attention_heads"] = 16
+        textConfig["num_key_value_heads"] = 2
+        textConfig["head_dim"] = 256
+        textConfig["num_experts"] = 256
+        textConfig["num_experts_per_tok"] = 8
+        textConfig["layer_types"] = (0..<40).map {
+            ($0 + 1).isMultiple(of: 4) ? "full_attention" : "linear_attention"
+        }
+        textConfig.removeValue(forKey: "mlp_only_layers")
+        textConfig["linear_num_value_heads"] = 32
+        textConfig["linear_num_key_heads"] = 16
+        textConfig["linear_key_head_dim"] = 128
+        textConfig["linear_value_head_dim"] = 128
+        textConfig["linear_conv_kernel_dim"] = 4
+        textConfig["max_position_embeddings"] = 262_144
+        textConfig["vocab_size"] = 248_320
+        textConfig["eos_token_id"] = 248_044
+        textConfig["rope_parameters"] = [
+            "mrope_interleaved": true,
+            "mrope_section": [11, 11, 10],
+            "partial_rotary_factor": 0.25,
+            "rope_theta": 10_000_000.0,
+            "type": "default",
+        ]
+        configObject["text_config"] = textConfig
+
+        let config = try decodeConfig(configObject)
+
+        XCTAssertEqual(config.modelType, "qwen3_5_moe")
+        XCTAssertNil(config.quantization)
+        XCTAssertNil(config.visionConfig)
+        XCTAssertEqual(config.eosTokenIds, [248_046, 248_044])
+        XCTAssertEqual(config.textConfig.hiddenSize, 2_048)
+        XCTAssertEqual(config.textConfig.numHiddenLayers, 40)
+        XCTAssertEqual(config.textConfig.moeIntermediateSize, 512)
+        XCTAssertEqual(config.textConfig.sharedExpertIntermediateSize, 512)
+        XCTAssertEqual(config.textConfig.numExperts, 256)
+        XCTAssertEqual(config.textConfig.numExpertsPerTok, 8)
+        XCTAssertTrue(config.textConfig.normTopKProb)
+        XCTAssertEqual(config.textConfig.maxPositionEmbeddings, Q35Resources.ornith35BMLXContextLength)
+    }
+
     func testQ38PublishedDenseVisionConfigurationDecodes() throws {
         var configObject = makeBaseConfig()
         configObject["model_type"] = "qwen3_5"

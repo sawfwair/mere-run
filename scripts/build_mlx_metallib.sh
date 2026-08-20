@@ -2,7 +2,8 @@
 set -euo pipefail
 
 # Build mlx-swift's AOT Metal kernel library (default.metallib) from the
-# CURRENT dependency checkout and stamp it with the versions it was built from.
+# CURRENT generated kernel tree plus required MLX core AOT sources, and stamp
+# it with the versions it was built from.
 #
 # Why this exists: plain `swift build` never compiles the .metal sources —
 # there is no metallib rule in the SwiftPM manifest — yet the MLX runtime
@@ -38,11 +39,27 @@ repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 checkout="${MERERUN_MLX_SWIFT_CHECKOUT:-$repo_root/.build/checkouts/mlx-swift}"
 gen_dir="$checkout/Source/Cmlx/mlx-generated/metal"
 core_checkout="$checkout/Source/Cmlx/mlx"
+core_kernel_dir="$core_checkout/mlx/backend/metal/kernels"
 version_header="$checkout/Source/Cmlx/mlx/mlx/version.h"
 resolved="$repo_root/Package.resolved"
 stamp_name="default.metallib.version"
 upstream_tag="v0.32.1"
 upstream_revision="3a6219917e4535575ce5bce2fc2ba27a483a709b"
+core_aot_source_paths=(
+  "mlx/backend/metal/kernels/dot.metal"
+  "mlx/backend/metal/kernels/dot.h"
+  "mlx/backend/metal/kernels/utils.h"
+  "mlx/backend/metal/kernels/bf16.h"
+  "mlx/backend/metal/kernels/bf16_math.h"
+  "mlx/backend/metal/kernels/complex.h"
+  "mlx/backend/metal/kernels/defines.h"
+  "mlx/backend/metal/kernels/logging.h"
+)
+required_aot_kernel_symbols=(
+  "dot_product_float32_it32_tg512_sg16"
+  "dot_product_float16_it32_tg512_sg16"
+  "dot_product_bfloat16_it32_tg512_sg16"
+)
 
 usage() {
   sed -n '3,36p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
@@ -148,18 +165,29 @@ fi
 # `shasum` listing from blob contents preserves existing stamp compatibility.
 # The clean-worktree check above ensures this cannot hide local source edits.
 sources_hash="$(
-  git -C "$checkout" ls-tree -r --full-tree HEAD -- Source/Cmlx/mlx-generated/metal \
-    | awk '$4 ~ /\.(metal|h)$/ { print $3, $4 }' \
+  {
+    git -C "$checkout" ls-tree -r --full-tree HEAD -- Source/Cmlx/mlx-generated/metal \
+      | awk '$4 ~ /\.(metal|h)$/ { print $3, $4 }' \
+      | while read -r object_id object_path; do
+          relative_path="${object_path#Source/Cmlx/mlx-generated/metal/}"
+          object_hash="$(
+            git -C "$checkout" cat-file blob "$object_id" \
+              | shasum -a 256 \
+              | cut -d' ' -f1
+          )"
+          printf '%s  ./generated/%s\n' "$object_hash" "$relative_path"
+        done
+    for object_path in "${core_aot_source_paths[@]}"; do
+      object_id="$(git -C "$core_checkout" rev-parse "HEAD:$object_path")"
+      object_hash="$(
+        git -C "$core_checkout" cat-file blob "$object_id" \
+          | shasum -a 256 \
+          | cut -d' ' -f1
+      )"
+      printf '%s  ./core/%s\n' "$object_hash" "$object_path"
+    done
+  } \
     | LC_ALL=C sort -k2 \
-    | while read -r object_id object_path; do
-        relative_path="${object_path#Source/Cmlx/mlx-generated/metal/}"
-        object_hash="$(
-          git -C "$checkout" cat-file blob "$object_id" \
-            | shasum -a 256 \
-            | cut -d' ' -f1
-        )"
-        printf '%s  ./%s\n' "$object_hash" "$relative_path"
-      done \
     | shasum -a 256 \
     | cut -d' ' -f1
 )"
@@ -210,6 +238,19 @@ if [[ "$mode" == "verify" ]]; then
   [[ "$stamped_upstream_revision" == "$upstream_revision" ]] || { echo "STALE: upstream revision $stamped_upstream_revision != required $upstream_revision" >&2; status=1; }
   [[ "$stamped_rev" == "$swift_pin_revision" ]] || { echo "STALE: mlx-swift revision $stamped_rev != pinned $swift_pin_revision" >&2; status=1; }
   [[ "$stamped_hash" == "$sources_hash" ]] || { echo "STALE: kernel source hash mismatch" >&2; status=1; }
+  metallib="$(dirname "$sidecar")/default.metallib"
+  if [[ ! -f "$metallib" ]]; then
+    echo "STALE: no default.metallib next to $sidecar" >&2
+    status=1
+  else
+    for symbol in "${required_aot_kernel_symbols[@]}"; do
+      if ! xcrun metal-nm "$metallib" \
+        | awk -v required="$symbol" '$2 == "T" && $3 == required { found = 1 } END { exit(found ? 0 : 1) }'; then
+        echo "STALE: metallib is missing required kernel $symbol" >&2
+        status=1
+      fi
+    done
+  fi
   if [[ $status -eq 0 ]]; then
     echo "OK: $sidecar matches mlx-swift $swift_pin_version (mlx core $core_version)"
   fi
@@ -221,7 +262,7 @@ fi
 workdir="$(mktemp -d -t mlx-metallib)"
 trap 'rm -rf "$workdir"' EXIT
 
-metal_sources=("$gen_dir"/*.metal)
+metal_sources=("$gen_dir"/*.metal "$core_kernel_dir/dot.metal")
 if [[ ${#metal_sources[@]} -eq 0 ]]; then
   echo "error: no .metal sources in $gen_dir" >&2
   exit 1
@@ -232,9 +273,13 @@ echo "[metallib] compiling ${#metal_sources[@]} kernels from mlx-swift $swift_pi
 # require IEEE semantics (mlx's own CMake passes the same flag).
 for src in "${metal_sources[@]}"; do
   base="$(basename "$src" .metal)"
+  include_dir="$gen_dir"
+  if [[ "$src" == "$core_kernel_dir/"* ]]; then
+    include_dir="$core_checkout"
+  fi
   xcrun -sdk macosx metal \
     -x metal -Wall -Wextra -fno-fast-math -Wno-c++17-extensions -Wno-c++20-extensions \
-    -c "$src" -I "$gen_dir" -o "$workdir/$base.air" \
+    -c "$src" -I "$include_dir" -o "$workdir/$base.air" \
     2> "$workdir/$base.err" &
 done
 wait

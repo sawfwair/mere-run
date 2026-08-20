@@ -27,6 +27,12 @@ attention and gather-tile optimizations now live in MLX core source, so
 regenerating mlx-swift's AOT sources reproduces them instead of depending on
 generated-file-only commits.
 
+The vendored metallib also compiles MLX core's `dot.metal` directly. MLX 0.32.1
+does not copy that always-required source into `mlx-generated/metal`, while the
+host runtime still dispatches its FP32, FP16, and BF16 symbols. The provenance
+digest therefore covers the core source and its transitive headers in addition
+to the generated kernel tree, and `--verify-only` checks the resulting symbols.
+
 ## Refresh procedure
 
 Refresh the dependency chain from the bottom up and publish it in the same

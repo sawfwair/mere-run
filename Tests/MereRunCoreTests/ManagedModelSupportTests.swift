@@ -429,10 +429,10 @@ final class ManagedModelSupportTests: XCTestCase {
         XCTAssertEqual(recommendation.servingEngine, .textCode)
     }
 
-    func testOrnith35BMLXIsSupportedOnThirtyTwoGBAndStartableThroughQ35() throws {
+    func testOrnith35BMLXIsSupportedOnOneHundredTwentyEightGBAndStartableThroughQ35() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Q35Resources.ornith35BMLXModelId))
         let machine = MereRunMachineProfile(
-            physicalMemoryBytes: 32 * 1_073_741_824,
+            physicalMemoryBytes: 128 * 1_073_741_824,
             processorName: "M4 Max",
             isAppleSiliconMac: true
         )
@@ -447,6 +447,22 @@ final class ManagedModelSupportTests: XCTestCase {
         XCTAssertTrue(report.isSupported)
         XCTAssertTrue(recommendation.isStartableByMereRun)
         XCTAssertEqual(recommendation.servingEngine, .textChatQ35)
+        XCTAssertEqual(recommendation.minimumUnifiedMemoryGB, 96)
+        XCTAssertEqual(recommendation.recommendedUnifiedMemoryGB, 128)
+    }
+
+    func testOrnith35BMLXRejectsSixtyFourGBMachine() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Q35Resources.ornith35BMLXModelId))
+        let machine = MereRunMachineProfile(
+            physicalMemoryBytes: 64 * 1_073_741_824,
+            processorName: "M4 Max",
+            isAppleSiliconMac: true
+        )
+
+        let report = ManagedModelCapabilityCatalog.support(for: spec, on: machine)
+
+        XCTAssertFalse(report.isSupported)
+        XCTAssertTrue(report.reasons.contains { $0.contains("96 GB") })
     }
 
     func testUnsupportedRuntimeIsRejected() throws {

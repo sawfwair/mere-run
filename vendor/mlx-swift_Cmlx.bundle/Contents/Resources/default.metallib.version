@@ -4,6 +4,6 @@ mlx-upstream-tag: v0.32.1
 mlx-upstream-revision: 3a6219917e4535575ce5bce2fc2ba27a483a709b
 mlx-swift-version: unknown
 mlx-swift-revision: 7558b9cff75746e3ce25802aecbdc498b240af7f
-kernel-sources-sha256: acfb87b05e097f03cecffcd084b988d99fb0321ea923cd561a482d114d75a895
-built-at: 2026-08-18T12:13:53Z
+kernel-sources-sha256: 36412403ff4f0117579f0bc4471a17083411422bfc446f9f11420614ddbeb9ee
+built-at: 2026-08-20T00:31:31Z
 metal-compiler: Apple metal version 32023.883 (metalfe-32023.883)

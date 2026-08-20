@@ -757,8 +757,8 @@ limitations under the License.
 - embedded MLX revision: `11da2b33a51772c023e2f7d7bc4ba9b3ff7e03ef`
 - incorporated upstream MLX v0.32.1 revision:
   `3a6219917e4535575ce5bce2fc2ba27a483a709b`
-- generated-kernel source SHA-256:
-  `acfb87b05e097f03cecffcd084b988d99fb0321ea923cd561a482d114d75a895`
+- generated-kernel and required core AOT source SHA-256:
+  `36412403ff4f0117579f0bc4471a17083411422bfc446f9f11420614ddbeb9ee`
 - license: MIT
 
 ```

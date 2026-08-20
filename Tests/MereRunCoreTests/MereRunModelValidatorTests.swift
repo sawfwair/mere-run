@@ -592,7 +592,8 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         XCTAssertTrue(report.isValid)
         XCTAssertTrue(report.errors.isEmpty)
         XCTAssertEqual(report.manifest?.family, .code)
-        XCTAssertEqual(report.manifest?.tier, .small)
+        XCTAssertEqual(report.manifest?.tier, .large)
+        XCTAssertEqual(report.manifest?.precision, .bf16)
         XCTAssertFalse(report.warnings.contains { $0.contains("family=code expects") })
     }
 

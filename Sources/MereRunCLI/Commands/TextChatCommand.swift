@@ -30,7 +30,7 @@ struct TextChat: AsyncParsableCommand {
           - text-chat-bonsai-27b-2bit (Ternary Bonsai 27B packed 2-bit Qwen3.6 vision/reasoning model)
           - text-chat-q36-nano-gguf (Qwen3.6-35B-A3B GGUF, default on Linux CUDA)
           - text-agent-ornith-9b (Ornith 1.0 9B OptiQ, experimental coding-agent target)
-          - text-agent-ornith-35b-mlx (Ornith 1.0 35B MLX Q4, local converted coding-agent target)
+          - text-agent-ornith-35b-mlx (Ornith 1.5 35B-A3B BF16 MLX coding-agent target)
           - text-chat-gemma4-12b (Gemma 4 12B dense native Swift runtime)
           - text-chat-gemma4-12b-4bit (Gemma 4 12B MLX 4-bit native Swift runtime)
           - text-chat-gemma4-turbo (Gemma 4 26B-A4B NVFP4 native Swift runtime)

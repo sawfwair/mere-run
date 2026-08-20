@@ -526,8 +526,8 @@ Engine compatibility:
 - `text-agent-ornith-9b`: uses the same Qwen-family serving engine for the
   Ornith 1.0 9B OptiQ coding-agent experiment; start it with
   `api serve --engine text-chat-q36 --model text-agent-ornith-9b`.
-- `text-agent-ornith-35b-mlx`: uses the Qwen-family serving engine for a local
-  converted Ornith 1.0 35B Q4 MLX snapshot; start it with
+- `text-agent-ornith-35b-mlx`: uses the Qwen-family serving engine for Ornith's
+  official 1.5 35B-A3B BF16 MLX snapshot; install it explicitly, then start it with
   `api serve --engine text-chat-q36 --model text-agent-ornith-35b-mlx`.
 - Both Ornith lanes serve with thinking-enabled generation by default (the
   models degenerate without it); the reasoning arrives in the response's

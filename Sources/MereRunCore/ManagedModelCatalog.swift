@@ -1787,6 +1787,7 @@ public enum ManagedModelCatalog {
             id: Q35Resources.ornith35BMLXModelId,
             category: .textCode,
             installShape: .directoryRoot,
+            hubFallback: Q35Resources.profile(for: Q35Resources.ornith35BMLXModelId)?.hubFallbackConfig,
             upstreamRepoId: Q35Resources.ornith35BMLXUpstreamRepoId,
             upstreamRevision: Q35Resources.ornith35BMLXUpstreamRevision,
             validationKind: .q35,
@@ -1794,7 +1795,7 @@ public enum ManagedModelCatalog {
             estimatedDownloadBytes: Q35Resources.ornith35BMLXEstimatedDownloadBytes,
             defaultCLICommands: ["chat", "api serve", "agent start", "model benchmark code"],
             apiProfile: .q36(
-                contextWindow: Q35Resources.defaultContextLength,
+                contextWindow: Q35Resources.ornith35BMLXContextLength,
                 fixedReasoning: true
             )
         ),

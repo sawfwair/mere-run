@@ -118,9 +118,10 @@ public struct Q35Resources: Sendable, Hashable {
     public static let ornith9BUpstreamRepoId = "sahilchachra/ornith-1.0-9b-optiq-5bpw-mlx"
     public static let ornith9BUpstreamRevision = "4f9f4fc2c10ec17cbeb9dae086a7f1272c904e86"
     public static let ornith9BEstimatedDownloadBytes: Int64 = 7 * 1_073_741_824
-    public static let ornith35BMLXUpstreamRepoId = "deepreinforce-ai/Ornith-1.0-35B"
-    public static let ornith35BMLXUpstreamRevision = "5df2ed3f675c7beaa490328cc70bb573b65fb660"
-    public static let ornith35BMLXEstimatedDownloadBytes: Int64 = 18 * 1_073_741_824
+    public static let ornith35BMLXUpstreamRepoId = "ornith-ai/Ornith-1.5-35B-A3B-MLX"
+    public static let ornith35BMLXUpstreamRevision = "bcfbfccfe413e46bc7cc04188622accccd8d3c00"
+    public static let ornith35BMLXEstimatedDownloadBytes: Int64 = 69_343_588_037
+    public static let ornith35BMLXContextLength = 262_144
     public static let infinityParser2ProUpstreamRepoId = "infly/Infinity-Parser2-Pro"
     public static let infinityParser2ProUpstreamRevision = "1d070df7db5acca0ffa75596229070a047704f89"
     public static let infinityParser2ProInt8UpstreamRepoId = "Sawfwair/Infinity-Parser2-Pro-Int8"
@@ -173,7 +174,8 @@ public struct Q35Resources: Sendable, Hashable {
         ornith35BMLXModelId: Profile(
             modelId: ornith35BMLXModelId,
             upstreamRepoId: ornith35BMLXUpstreamRepoId,
-            upstreamRevision: ornith35BMLXUpstreamRevision
+            upstreamRevision: ornith35BMLXUpstreamRevision,
+            snapshotPatterns: snapshotPatterns + ["generation_config.json"]
         ),
         infinityParser2ProModelId: Profile(
             modelId: infinityParser2ProModelId,
@@ -206,6 +208,8 @@ public struct Q35Resources: Sendable, Hashable {
             bonsai27B1BitContextLength
         case bonsai27B2BitModelId:
             bonsai27B2BitContextLength
+        case ornith35BMLXModelId:
+            ornith35BMLXContextLength
         default:
             defaultContextLength
         }
