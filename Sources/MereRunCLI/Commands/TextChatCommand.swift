@@ -297,33 +297,74 @@ struct TextChat: AsyncParsableCommand {
             throw ValidationError("--context-size must be greater than zero.")
         }
         let requiresJSON = responseFormat == .jsonObject
+        let resolvedTemperature: Double
+        if let temperature {
+            resolvedTemperature = temperature
+        } else if isLFM2Vision {
+            resolvedTemperature = 0.2
+        } else if isNemotronOmni {
+            resolvedTemperature = NemotronOmniResources.thinkingTemperature
+        } else if isNemotronH {
+            resolvedTemperature = NemotronHResources.recommendedTemperature
+        } else if isMuseGlimmer {
+            resolvedTemperature = MuseGlimmerResources.recommendedTemperature
+        } else if isLaguna {
+            resolvedTemperature = LagunaResources.recommendedTemperature
+        } else {
+            resolvedTemperature = recommendedSampling?.temperature ?? 0.7
+        }
+
+        let resolvedTopP: Double
+        if let topP {
+            resolvedTopP = topP
+        } else if isNemotronOmni {
+            resolvedTopP = NemotronOmniResources.thinkingTopP
+        } else if isNemotronH {
+            resolvedTopP = NemotronHResources.recommendedTopP
+        } else if isMuseGlimmer {
+            resolvedTopP = MuseGlimmerResources.recommendedTopP
+        } else if isLaguna {
+            resolvedTopP = LagunaResources.recommendedTopP
+        } else {
+            resolvedTopP = recommendedSampling?.topP ?? 0.9
+        }
+
+        let resolvedTopK: Int?
+        if let topK {
+            resolvedTopK = topK
+        } else if isLFM2Vision {
+            resolvedTopK = 50
+        } else if isMuseGlimmer {
+            resolvedTopK = MuseGlimmerResources.recommendedTopK
+        } else if isLaguna {
+            resolvedTopK = LagunaResources.recommendedTopK
+        } else {
+            resolvedTopK = recommendedSampling?.topK
+        }
+
+        let resolvedMinP = minP ?? (isLaguna ? LagunaResources.recommendedMinP : 0)
+        let resolvedShowThinking: Bool
+        if requiresJSON {
+            resolvedShowThinking = false
+        } else if let thinking {
+            resolvedShowThinking = thinking
+        } else if isNemotronOmni {
+            resolvedShowThinking = true
+        } else if isMuseGlimmer {
+            resolvedShowThinking = false
+        } else {
+            resolvedShowThinking = Q35Resources.thinkingDefault(forModelId: model)
+        }
+
         let request = ChatRequest(
             messages: messages,
             maxTokens: maxTokens,
-            temperature: temperature
-                ?? (isLFM2Vision ? 0.2 : nil)
-                ?? (isNemotronOmni ? NemotronOmniResources.thinkingTemperature : nil)
-                ?? (isNemotronH ? NemotronHResources.recommendedTemperature : nil)
-                ?? (isMuseGlimmer ? MuseGlimmerResources.recommendedTemperature : nil)
-                ?? (isLaguna ? LagunaResources.recommendedTemperature : recommendedSampling?.temperature)
-                ?? 0.7,
-            topP: topP
-                ?? (isNemotronOmni ? NemotronOmniResources.thinkingTopP : nil)
-                ?? (isNemotronH ? NemotronHResources.recommendedTopP : nil)
-                ?? (isMuseGlimmer ? MuseGlimmerResources.recommendedTopP : nil)
-                ?? (isLaguna ? LagunaResources.recommendedTopP : recommendedSampling?.topP)
-                ?? 0.9,
-            topK: topK
-                ?? (isLFM2Vision ? 50 : nil)
-                ?? (isMuseGlimmer ? MuseGlimmerResources.recommendedTopK : nil)
-                ?? (isLaguna ? LagunaResources.recommendedTopK : recommendedSampling?.topK),
-            minP: minP ?? (isLaguna ? LagunaResources.recommendedMinP : 0),
+            temperature: resolvedTemperature,
+            topP: resolvedTopP,
+            topK: resolvedTopK,
+            minP: resolvedMinP,
             reasoningEffort: reasoningEffort,
-            showThinking: requiresJSON
-                ? false
-                : (thinking ?? (isNemotronOmni
-                    ? true
-                    : (isMuseGlimmer ? false : Q35Resources.thinkingDefault(forModelId: model)))),
+            showThinking: resolvedShowThinking,
             lora: lora,
             requiresJSON: requiresJSON,
             tools: toolDefs,
@@ -473,8 +514,12 @@ struct TextChat: AsyncParsableCommand {
 
                 // Show the model's response (may contain text before/after tool calls)
                 let textBeforeTools = result.response
-                    .replacingOccurrences(of: "<\\|tool_call>.*?<tool_call\\|>", with: "", options: .regularExpression)
-                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .replacingOccurrences(
+                        of: "<\\|tool_call>.*?<tool_call\\|>",
+                        with: "",
+                        options: String.CompareOptions.regularExpression
+                    )
+                    .trimmingCharacters(in: CharacterSet.whitespacesAndNewlines)
                 if !textBeforeTools.isEmpty {
                     CLIStderr.write(cleanResponse(textBeforeTools, showThinking: request.showThinking) + "\n")
                 }
