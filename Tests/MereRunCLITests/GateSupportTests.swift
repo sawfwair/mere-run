@@ -173,6 +173,17 @@ final class GateSupportTests: XCTestCase {
         XCTAssertTrue(checks.allSatisfy { !$0.comparesBaseline })
     }
 
+    func testSpeechSuiteCoversBothFileAndLiveParakeetTranscription() {
+        let checks = GateChecks.all.filter { $0.suite == "speech" }
+
+        XCTAssertTrue(checks.contains { $0.id == "stt-roundtrip" })
+        XCTAssertTrue(checks.contains { $0.id == "stt-live-stream" })
+        XCTAssertEqual(
+            checks.first { $0.id == "stt-live-stream" }?.requiredModels,
+            ["speech-tts-qwen3-nano", "speech-asr-parakeet"]
+        )
+    }
+
     func testCompatibleFallbackCountsAsInstalledForRequiredReleaseCheck() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)

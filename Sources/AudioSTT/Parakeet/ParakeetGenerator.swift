@@ -89,7 +89,12 @@ public actor ParakeetGenerator: ASRGenerator {
         language: String? = nil,
         progressHandler: (@Sendable (ASRProgress) -> Void)? = nil
     ) async throws -> ASRResult {
-        try Stream.withNewDefaultStream {
+        try await Stream.withNewDefaultStream(isolation: self) {
+            // Keep this closure genuinely asynchronous under -O. MLX's async overload
+            // installs task-local CPU and GPU streams that survive executor hops; without
+            // a suspension the optimizer can collapse the body onto the caller thread and
+            // `.gpu` operations fall back to MLX's missing thread-local default stream.
+            await Task.yield()
             guard let model, let audioPreprocessor, let modelConfig else {
                 throw ParakeetError.modelNotLoaded
             }
@@ -224,6 +229,21 @@ public actor ParakeetGenerator: ASRGenerator {
         from rootURL: URL,
         progressHandler: (@Sendable (ASRProgress) -> Void)?
     ) async throws {
+        try await Stream.withNewDefaultStream(isolation: self) {
+            try loadModelOnTaskSafeStream(
+                from: rootURL,
+                progressHandler: progressHandler
+            )
+        }
+    }
+
+    /// Model construction and weight evaluation create lazy MLX arrays that retain their
+    /// originating stream. The live session decodes on a later cooperative-executor thread,
+    /// so preparation must use MLX's cross-thread streams too—not only the decode call.
+    private func loadModelOnTaskSafeStream(
+        from rootURL: URL,
+        progressHandler: (@Sendable (ASRProgress) -> Void)?
+    ) throws {
         let resources = ParakeetResources(rootURL: rootURL)
         let missing = resources.validate()
         guard missing.isEmpty else {

@@ -199,6 +199,44 @@ enum GateChecks {
                         : String(format: "STT roundtrip lost the sentence (%.0f%% word overlap): %@", overlap * 100, transcript.prefix(120) as CVarArg)
                 )
             },
+            GateCheck(
+                id: "stt-live-stream", suite: "speech",
+                requiredModels: ["speech-tts-qwen3-nano", "speech-asr-parakeet"]
+            ) { runner in
+                let wav = runner.workDirectory.appendingPathComponent("gate-tts.wav")
+                if !FileManager.default.fileExists(atPath: wav.path) {
+                    _ = try await runner.exec(
+                        ["speech", "synthesize", sentence, "-o", wav.path, "--temperature", "0", "-q"],
+                        timeout: 600
+                    )
+                }
+                let run = try await runner.exec(
+                    [
+                        "speech", "transcribe", wav.path,
+                        "--stream",
+                        "--backend", "parakeet",
+                        "--model", "speech-asr-parakeet",
+                        "--no-timestamps",
+                        "--quiet",
+                    ],
+                    timeout: 600
+                )
+                let transcript = GateRunner.normalizeWords(run.stdout)
+                let overlap = GateRunner.wordOverlap(source: sentence, candidate: run.stdout)
+                return GateObservation(
+                    hash: GateRunner.sha256(Data(transcript.utf8)),
+                    secondRunHash: nil,
+                    wallSeconds: run.wallSeconds,
+                    decodeTps: nil,
+                    semanticFailure: overlap >= 0.85
+                        ? nil
+                        : String(
+                            format: "Live STT lost the sentence (%.0f%% word overlap): %@",
+                            overlap * 100,
+                            transcript.prefix(120) as CVarArg
+                        )
+                )
+            },
         ]
     }
 

@@ -4,7 +4,7 @@ import XCTest
 @testable import AudioSTT
 
 final class ParakeetGeneratorStreamTests: MereRunCoreTestCase {
-    func testPreparedDecodeInstallsMLXStreamAfterGeneratorActorHop() async throws {
+    func testPreparedDecodeInstallsCPUAndGPUStreamsAfterGeneratorActorHop() async throws {
         let config = makeConfig()
         let generator = ParakeetGenerator(
             preparedModel: StreamCheckingParakeetModel(config: config),
@@ -85,7 +85,7 @@ private final class StreamCheckingParakeetModel: ParakeetDecodingModel {
     }
 
     func decode(_ mel: MLXArray) -> [ParakeetAlignedResult] {
-        let output = MLX.mean(mel) * 2
+        let output = MLX.multiply(MLX.mean(mel), 2, stream: .gpu)
         MLX.eval(output)
         _ = output.item(Float.self)
         return [ParakeetAlignedResult(text: "stream safe", sentences: [])]
