@@ -43,9 +43,10 @@ them on the Linux host class they target.
 
 ## Source tree
 
-The [`apps/`](../apps/README.md) directory owns the two user-facing Apple
-clients. Shared runtime and relay behavior remains in SwiftPM library targets
-under `Sources/` so neither app becomes a second backend.
+The [`apps/` directory](https://github.com/sawfwair/mere-run/tree/main/apps)
+owns the two user-facing Apple clients. Shared runtime and relay behavior
+remains in SwiftPM library targets under `Sources/` so neither app becomes a
+second backend.
 
 ### `Sources/MereRunCLI`
 
