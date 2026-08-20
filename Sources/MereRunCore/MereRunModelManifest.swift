@@ -181,6 +181,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case int2
         case int8
         case int4
+        case int6
         case unknown
     }
 
@@ -1267,6 +1268,33 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                     + "@\(Q35Resources.ornith9BUpstreamRevision)",
                 createdAt: createdAt
             )
+        case .ornith35BMLX4Bit:
+            return ornith35BMLXManifest(
+                modelID: modelID,
+                precision: .int4,
+                bits: 4,
+                upstreamRepoId: Q35Resources.ornith35BMLX4BitUpstreamRepoId,
+                upstreamRevision: Q35Resources.ornith35BMLX4BitUpstreamRevision,
+                createdAt: createdAt
+            )
+        case .ornith35BMLX6Bit:
+            return ornith35BMLXManifest(
+                modelID: modelID,
+                precision: .int6,
+                bits: 6,
+                upstreamRepoId: Q35Resources.ornith35BMLX6BitUpstreamRepoId,
+                upstreamRevision: Q35Resources.ornith35BMLX6BitUpstreamRevision,
+                createdAt: createdAt
+            )
+        case .ornith35BMLX8Bit:
+            return ornith35BMLXManifest(
+                modelID: modelID,
+                precision: .int8,
+                bits: 8,
+                upstreamRepoId: Q35Resources.ornith35BMLX8BitUpstreamRepoId,
+                upstreamRevision: Q35Resources.ornith35BMLX8BitUpstreamRevision,
+                createdAt: createdAt
+            )
         case .ornith35BMLX:
             return MereRunModelManifest(
                 id: modelID.rawValue,
@@ -1281,6 +1309,21 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 components: q35TextComponents,
                 upstreamRepoId: "\(Q35Resources.ornith35BMLXUpstreamRepoId)"
                     + "@\(Q35Resources.ornith35BMLXUpstreamRevision)",
+                createdAt: createdAt
+            )
+        case .ornith35BMTP:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .qwen35HybridMoE,
+                family: .code,
+                tier: .small,
+                variant: .standard,
+                precision: .bf16,
+                defaults: nil,
+                supports: [],
+                components: nil,
+                upstreamRepoId: "\(Q35Resources.ornith35BMTPUpstreamRepoId)"
+                    + "@\(Q35Resources.ornith35BMTPUpstreamRevision)",
                 createdAt: createdAt
             )
         case .ornith35B:
@@ -2322,5 +2365,35 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 createdAt: createdAt
             )
         }
+    }
+
+    private static func ornith35BMLXManifest(
+        modelID: ModelResolver.ModelID,
+        precision: Precision,
+        bits: Int,
+        upstreamRepoId: String,
+        upstreamRevision: String,
+        createdAt: Date
+    ) -> MereRunModelManifest {
+        MereRunModelManifest(
+            id: modelID.rawValue,
+            engine: .qwen35HybridMoE,
+            family: .code,
+            tier: .large,
+            variant: .standard,
+            precision: precision,
+            quantization: Quantization(bits: bits, groupSize: 64, scheme: "mlx-affine"),
+            defaults: nil,
+            supports: [.chat, .codeGeneration],
+            components: Components(
+                tokenizer: .local(path: "."),
+                textEncoder: .local(path: "."),
+                transformer: nil,
+                vae: nil,
+                scheduler: nil
+            ),
+            upstreamRepoId: "\(upstreamRepoId)@\(upstreamRevision)",
+            createdAt: createdAt
+        )
     }
 }

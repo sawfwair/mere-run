@@ -6,7 +6,7 @@ Run a local chat-style text model for answers, drafting, analysis, or lightweigh
 
 ## Required Models
 
-Supported native managed ids include `text-chat-gemma4`, `text-chat-gemma4-12b`, `text-chat-gemma4-12b-4bit`, `text-chat-gemma4-turbo`, `text-chat-gemma4-nano`, `text-chat-gemma4-max`, `text-chat-laguna-s-2-1`, `text-chat-laguna-xs-2-1`, `text-chat-q36-nano`, `text-chat-bonsai-27b-1bit`, `text-chat-bonsai-27b-2bit`, `text-agent-ornith-9b`, `text-agent-ornith-35b-mlx`, `text-chat-lfm25-2.6b-4bit`, `text-chat-lfm25-a1b-8bit`, `vision-chat-lfm25-3b-8bit`, and `text-chat-psi-agent`.
+Supported native managed ids include `text-chat-gemma4`, `text-chat-gemma4-12b`, `text-chat-gemma4-12b-4bit`, `text-chat-gemma4-turbo`, `text-chat-gemma4-nano`, `text-chat-gemma4-max`, `text-chat-laguna-s-2-1`, `text-chat-laguna-xs-2-1`, `text-chat-q36-nano`, `text-chat-bonsai-27b-1bit`, `text-chat-bonsai-27b-2bit`, `text-agent-ornith-9b`, `text-agent-ornith-35b-mlx-4bit`, `text-agent-ornith-35b-mlx-6bit`, `text-agent-ornith-35b-mlx-8bit`, `text-agent-ornith-35b-mlx`, `text-chat-lfm25-2.6b-4bit`, `text-chat-lfm25-a1b-8bit`, `vision-chat-lfm25-3b-8bit`, and `text-chat-psi-agent`.
 `text-chat-gemma4-12b` is the managed dense Google Gemma 4 12B-it checkpoint, routed through the native Swift Gemma 4 runtime for text chat.
 Pulling `text-chat-gemma4-12b` or `vision-chat-gemma4-12b` also installs the managed `text-chat-gemma4-12b-mtp` assistant; greedy serial Gemma 12B decode uses it for verified decode-tail MTP when the prompt is above the configured threshold.
 `text-chat-gemma4-turbo` is the managed MLX NVFP4 Gemma 4 26B-A4B-it MoE tier for 32 GB Apple Silicon Macs.
@@ -18,7 +18,11 @@ thinking and the published 0.7/0.95/20 sampling, and advertise a 262,144-token
 context. Choose 1-bit for lower residency and faster decode, or 2-bit when the
 ternary checkpoint's additional weight capacity is worth the memory cost.
 `text-agent-ornith-9b` is the managed Ornith 1.0 9B OptiQ MLX coding-agent experiment; it uses the native Qwen-family runtime rather than the GGUF `text code` command.
-`text-agent-ornith-35b-mlx` is Ornith's official 1.5 35B-A3B BF16 MLX coding-agent target; it also uses the native Qwen-family runtime and requires an explicit managed pull.
+Ornith 1.5 35B-A3B has official Q4/Q6/Q8 ids ending in `-mlx-4bit`,
+`-mlx-6bit`, and `-mlx-8bit`; `text-agent-ornith-35b-mlx` remains the BF16 id.
+All use the native Qwen-family runtime, require an explicit managed pull, and
+share the pinned base-checkpoint MTP companion installed by that pull. Managed
+Ornith 1.5 enables verified MTP drafting from short prompts.
 `text-chat-lfm25-2.6b-4bit` is the managed LiquidAI LFM2.5 2.6B dense MLX 4-bit snapshot and runs through the native Swift LFM2 runtime.
 `text-chat-lfm25-a1b-8bit` is the managed LiquidAI LFM2.5 8B-A1B MLX 8-bit snapshot and runs through the native Swift LFM2 runtime.
 `vision-chat-lfm25-3b-8bit` adds LiquidAI's SigLIP2 vision tower and multimodal projector to the dense LFM2.5 2.6B language backbone. Use `--image` with a local path or base64 data URL.

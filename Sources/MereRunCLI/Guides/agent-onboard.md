@@ -36,8 +36,9 @@ mere.run agent onboard --help
 - Run plain `agent onboard` first; it is informational.
 - Use `--install-pi` before `agent start` if Pi is not already installed.
 - Use `--configure-pi --model <id>` when Pi should call a local mere.run API provider.
-- For Ornith 35B MLX, install `text-agent-ornith-35b-mlx`, start `api serve --engine text-chat-q36 --model text-agent-ornith-35b-mlx`,
-  then use `--configure-pi --model text-agent-ornith-35b-mlx --host <host> --port <port>`.
+- For Ornith 35B MLX, choose the RAM-appropriate Q4/Q6/Q8/BF16 id from
+  `model capabilities`, use it for both `api serve --engine text-chat-q36`
+  and `--configure-pi --model`, and keep the model id identical end to end.
 - For Ornith, pull `text-agent-ornith-9b`, start `api serve --engine text-chat-q36 --model text-agent-ornith-9b`,
   then use `--configure-pi --model text-agent-ornith-9b --host <host> --port <port>`.
 

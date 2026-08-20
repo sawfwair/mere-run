@@ -105,6 +105,7 @@ public enum QuantizedModelManifestWriter {
             case 1: return .int1
             case 2: return .int2
             case 4: return .int4
+            case 6: return .int6
             case 8: return .int8
             default: return .unknown
             }

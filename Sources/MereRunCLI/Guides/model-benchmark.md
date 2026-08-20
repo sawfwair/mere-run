@@ -228,11 +228,12 @@ benchmark, not a model-quality eval.
 
 `model benchmark q36-mtp` runs requested-token comparisons for Qwen-family
 models with MTP draft heads (`text-chat-q36-nano` by default; `--model` also
-accepts `text-agent-ornith-9b` and `text-agent-ornith-35b-mlx` when an
-`mtp.safetensors` sidecar is present in the model root):
+accepts `text-agent-ornith-9b` and the official Ornith 1.5 Q4/Q6/Q8/BF16 ids).
+Managed Ornith 1.5 pulls install one shared, pinned MTP companion:
 
 - `baseline`: MTP disabled with `MERERUN_Q35_MTP_SPECULATION=0`.
-- `adaptive`: production policy with the default long-context threshold.
+- `adaptive`: production policy (short-prompt MTP for Ornith 1.5; the measured
+  long-context threshold for Qwen3.6).
 - `forced`: MTP enabled with `MERERUN_Q35_MTP_SPECULATION=1` and a configurable
   forced threshold, defaulting to `1` token.
 

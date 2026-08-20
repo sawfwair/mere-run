@@ -34,10 +34,12 @@ final class Q35MTPExperts: Module {
     @ModuleInfo(key: "down_proj") var downProj: MLXArray
 
     private let intermediateSize: Int
+    let expertCount: Int
 
     init(config: Q35Config) {
         let text = config.textConfig
         self.intermediateSize = text.moeIntermediateSize
+        self.expertCount = text.numExperts
         self._gateUpProj.wrappedValue = MLXArray.zeros(
             [text.numExperts, text.moeIntermediateSize * 2, text.hiddenSize],
             dtype: .bfloat16

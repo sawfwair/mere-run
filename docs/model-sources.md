@@ -85,6 +85,9 @@ an effective overlay; they are not a second capability catalog.
 | `text-chat` | `text-chat-bonsai-27b-1bit` |
 | `text-chat` | `text-chat-bonsai-27b-2bit` |
 | `text-code` | `text-agent-ornith-9b` |
+| `text-code` | `text-agent-ornith-35b-mlx-4bit` |
+| `text-code` | `text-agent-ornith-35b-mlx-6bit` |
+| `text-code` | `text-agent-ornith-35b-mlx-8bit` |
 | `text-code` | `text-agent-ornith-35b-mlx` |
 | `text-code` | `text-agent-qwen35-9b` |
 | `text-code` | `text-code-north-mini` |
@@ -290,13 +293,16 @@ revision. Ornith is a DeepReinforce agentic coding model with Qwen3.5 text
 architecture metadata; mere.run treats this MLX OptiQ quant as a native
 Qwen-family runtime target for `chat`, `api serve`, and setup-agent experiments.
 
-`text-agent-ornith-35b-mlx` installs Ornith's official
-`ornith-ai/Ornith-1.5-35B-A3B-MLX` BF16 snapshot at the pinned catalog revision.
-The 35B-parameter MoE activates about 3B parameters per token, advertises a
-262,144-token context, and runs through the native Qwen-family runtime. Because
-the payload is about 64.6 GiB, runtime auto-download remains disabled: install
-it explicitly with `model pull` on a 96 GB or larger Apple Silicon Mac (128 GB
-recommended). The authoritative
+The Ornith 1.5 native family pins the official
+`ornith-ai/Ornith-1.5-35B-A3B-MLX-4bit`, `-6bit`, `-8bit`, and BF16
+`ornith-ai/Ornith-1.5-35B-A3B-MLX` repositories as
+`text-agent-ornith-35b-mlx-4bit`, `-6bit`, `-8bit`, and
+`text-agent-ornith-35b-mlx`. The 35B-parameter MoE activates about 3B
+parameters per token, advertises a 262,144-token context, and runs through the
+native Qwen-family runtime. Runtime auto-download remains disabled. Every pull
+also installs the final safetensors shard and index containing `mtp.*` from the
+pinned authoritative base checkpoint as the shared
+`text-agent-ornith-35b-mtp` companion. The authoritative
 [`ornith-ai/Ornith-1.5-35B-A3B`](https://huggingface.co/ornith-ai/Ornith-1.5-35B-A3B)
 base checkpoint declares the model under the MIT license in its model-card
 metadata; the MLX conversion repository does not duplicate the license file.

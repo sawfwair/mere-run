@@ -30,6 +30,7 @@ public enum ModelWeightsLoader {
             let precisionImpliesQuant = manifest.precision == .int1
                 || manifest.precision == .int2
                 || manifest.precision == .int4
+                || manifest.precision == .int6
                 || manifest.precision == .int8
             let hasQuant = manifest.quantization != nil
             guard precisionImpliesQuant || hasQuant else {

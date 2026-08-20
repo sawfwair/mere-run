@@ -34,7 +34,7 @@ struct ModelBenchmarkQ36MTP: AsyncParsableCommand {
         abstract: "Compare Qwen3.6 serial decode against adaptive and forced MTP speculative decode."
     )
 
-    @Option(name: [.long], help: "Qwen3.6 model id.")
+    @Option(name: [.long], help: "Qwen-family model id.")
     var model: String = Q35Resources.q36NanoModelId
 
     @Option(name: [.customShort("m"), .long], help: "Override model root directory.")
@@ -86,6 +86,9 @@ struct ModelBenchmarkQ36MTP: AsyncParsableCommand {
         let supportedModels = [
             Q35Resources.q36NanoModelId,
             Q35Resources.ornith9BModelId,
+            Q35Resources.ornith35BMLX4BitModelId,
+            Q35Resources.ornith35BMLX6BitModelId,
+            Q35Resources.ornith35BMLX8BitModelId,
             Q35Resources.ornith35BMLXModelId,
         ]
         guard supportedModels.contains(model) else {

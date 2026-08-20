@@ -30,6 +30,7 @@ struct ModelCapabilities: ParsableCommand {
             return all || report.isSupported
         }
         let chatBands = ManagedModelCapabilityCatalog.recommendedChatBandReports(on: machine)
+        let ornithProfiles = ManagedModelCapabilityCatalog.recommendedOrnith35BMLXProfiles(on: machine)
         let recommendedReports = ManagedModelCapabilityCatalog.recommendedSetupReports(on: machine)
         let unavailableRecommended = reports.filter {
             $0.isSupported
@@ -45,6 +46,7 @@ struct ModelCapabilities: ParsableCommand {
                     .first { $0.contains(unifiedMemoryGB: machine.unifiedMemoryGB) }
                     .map { .init($0, machine: machine) },
                 recommendedCodeModel: recommendedCodeReport.map(ModelCapabilitiesModel.init),
+                ornith35BMLXProfiles: ornithProfiles.map(ModelCapabilitiesOrnithProfile.init),
                 setupAgent: MereRunAgentModelCatalog
                     .recommendation(for: .tier, on: machine)
                     .map(ModelCapabilitiesSetupAgent.init),
@@ -79,6 +81,14 @@ struct ModelCapabilities: ParsableCommand {
             print("\nRecommended code model")
             print("  \(CLICommandDisplay.modelPullCommand(for: recommendedCodeReport.spec.id))")
             print("  \(recommendedCodeReport.descriptor.title): \(recommendedCodeReport.descriptor.summary)")
+        }
+
+        if !ornithProfiles.isEmpty {
+            print("\nOrnith 35B MLX profiles for this machine")
+            for recommendation in ornithProfiles {
+                print("  \(recommendation.profile.rawValue): \(recommendation.modelID)")
+                print("    \(recommendation.summary)")
+            }
         }
 
         if let agent = MereRunAgentModelCatalog.recommendation(for: .tier, on: machine) {
@@ -138,10 +148,23 @@ struct ModelCapabilitiesOutput: Codable, Equatable {
     let chatBands: [ModelCapabilitiesChatBand]
     let recommendedChatModel: ModelCapabilitiesChatBand?
     let recommendedCodeModel: ModelCapabilitiesModel?
+    let ornith35BMLXProfiles: [ModelCapabilitiesOrnithProfile]
     let setupAgent: ModelCapabilitiesSetupAgent?
     let recommendedSetupModels: [ModelCapabilitiesModel]
     let unavailableRecommendedModelIDs: [String]
     let models: [ModelCapabilitiesModel]
+}
+
+struct ModelCapabilitiesOrnithProfile: Codable, Equatable {
+    let profile: String
+    let modelID: String
+    let summary: String
+
+    init(_ recommendation: ManagedOrnith35BMLXProfileRecommendation) {
+        profile = recommendation.profile.rawValue
+        modelID = recommendation.modelID
+        summary = recommendation.summary
+    }
 }
 
 struct ModelCapabilitiesMachine: Codable, Equatable {

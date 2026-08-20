@@ -143,6 +143,7 @@ public enum MereRunModelValidator {
             vaeDir = nil
             tokenizerDir = nil
         } else if spec?.validationKind == .gemma4MTPAssistant
+            || spec?.validationKind == .q35MTPAssistant
             || spec?.validationKind == .lagunaDFlash
             || spec?.validationKind == .museGlimmerAssistant {
             errors.append(contentsOf: spec?.validationMessages(in: rootURL, fileManager: fileManager) ?? [])
@@ -495,7 +496,7 @@ public enum MereRunModelValidator {
 
         if let precision = manifest.precision {
             switch precision {
-            case .int1, .int2, .int4, .int8:
+            case .int1, .int2, .int4, .int6, .int8:
                 guard let q = manifest.quantization else {
                     if manifestRequiresInlineQuantization(manifest) {
                         errors.append("Quantized precision (\(precision.rawValue)) requires quantization metadata.")
@@ -555,6 +556,7 @@ public enum MereRunModelValidator {
         }()
         let skipsComponentValidation = {
             if ManagedModelCatalog.spec(for: manifest.id)?.validationKind == .gemma4MTPAssistant
+                || ManagedModelCatalog.spec(for: manifest.id)?.validationKind == .q35MTPAssistant
                 || ManagedModelCatalog.spec(for: manifest.id)?.validationKind == .lagunaDFlash
                 || ManagedModelCatalog.spec(for: manifest.id)?.validationKind == .museGlimmerAssistant {
                 return true
