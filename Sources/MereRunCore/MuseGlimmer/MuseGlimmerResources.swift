@@ -16,6 +16,17 @@ public struct MuseGlimmerResources: Sendable, Hashable {
     public static let assistantUpstreamRepoId = "meta-models/Muse-Glimmer-30B-assistant"
     public static let assistantUpstreamRevision = "2c86316d689027b91123638739743fef1d425233"
     public static let assistantEstimatedDownloadBytes: Int64 = 5_111_976_608
+    public static let dflash2ModelId = "vision-chat-muse-glimmer-30b-dflash2"
+    public static let dflash2UpstreamRepoId = "z-lab/Muse-Glimmer-30B-DFlash2"
+    public static let dflash2UpstreamRevision = "b54ffdd11fa9cfe2af370012e5763d492c904128"
+    public static let dflash2EstimatedDownloadBytes: Int64 = 5_544_615_313
+    public static let dflash2SnapshotPatterns = [
+        "README.md",
+        "config.json",
+        "model.safetensors",
+        "model.safetensors.index.json",
+        "*.safetensors",
+    ]
     public static let assistantSnapshotPatterns = [
         "LICENSE",
         "README.md",

@@ -374,15 +374,16 @@ the token
 embedding and complete vision tower in BF16; pass `--quantization-scope compact`
 to quantize all 721 eligible matrices for an explicit lower-memory experiment.
 The runtime discovers quantized modules from their `.scales` arrays, so both
-layouts use the same inference implementation. The same pull installs the 5.11
-GB official DFlash assistant
-from `meta-models/Muse-Glimmer-30B-assistant` at revision
-`2c86316d689027b91123638739743fef1d425233`; the native verifier accelerates
-eligible decode without changing target-model output. Pulls require explicit
-review and acceptance of the bundled `LICENSE` and `USAGE_POLICY.md`; upstream
-says the model is not intended for download or use by people under 18. Python
-conversion scripts are offline artifact tooling only and are not part of
-inference.
+layouts use the same inference implementation. The same pull installs z-lab's
+5.54 GB DFlash2 assistant as the hidden managed model
+`vision-chat-muse-glimmer-30b-dflash2`, pinned to
+`z-lab/Muse-Glimmer-30B-DFlash2@b54ffdd11fa9cfe2af370012e5763d492c904128`.
+The earlier 5.11 GB assistant from `meta-models/Muse-Glimmer-30B-assistant` at
+revision `2c86316d689027b91123638739743fef1d425233` remains a compatible fallback
+for existing installations. Pulls require explicit review and acceptance of
+the target's bundled `LICENSE` and `USAGE_POLICY.md`; upstream says the model is
+not intended for download or use by people under 18. Python conversion scripts
+are offline artifact tooling only and are not part of inference.
 
 `text-chat-nemotron-35-lightning` pins Sawfwair's native MLX conversion at
 revision `6699e5fd3f0c5b392bb3f8bac2443276bb41958a`, produced from NVIDIA's

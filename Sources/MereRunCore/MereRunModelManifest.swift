@@ -1031,6 +1031,21 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 upstreamRepoId: "\(MuseGlimmerResources.artifactRepoId)@\(MuseGlimmerResources.artifactRevision)",
                 createdAt: createdAt
             )
+        case .museGlimmer30BDFlash2:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .museGlimmer,
+                family: .muse,
+                tier: .small,
+                variant: .standard,
+                precision: .bf16,
+                defaults: nil,
+                supports: [],
+                components: nil,
+                upstreamRepoId:
+                    "\(MuseGlimmerResources.dflash2UpstreamRepoId)@\(MuseGlimmerResources.dflash2UpstreamRevision)",
+                createdAt: createdAt
+            )
         case .nemotron35Lightning:
             return MereRunModelManifest(
                 id: modelID.rawValue,

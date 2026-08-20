@@ -228,6 +228,60 @@ final class ModelPullCommandParsingTests: XCTestCase {
         XCTAssertEqual(decoded.result.models.first?.conversionRequired, false)
     }
 
+    func testInstalledMuseTargetStillPreflightsMissingAssistantCompanion() throws {
+        let temp = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: temp) }
+        let modelStore = temp.appendingPathComponent("models", isDirectory: true)
+        let hubCache = temp.appendingPathComponent("hub", isDirectory: true)
+        let targetRoot = modelStore.appendingPathComponent(
+            MuseGlimmerResources.modelId,
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(at: targetRoot, withIntermediateDirectories: true)
+        for filename in [
+            "config.json",
+            "generation_config.json",
+            "processor_config.json",
+            "tokenizer.json",
+            "tokenizer_config.json",
+            "model.safetensors",
+        ] {
+            try Data("{}".utf8).write(to: targetRoot.appendingPathComponent(filename))
+        }
+        try MereRunModelManifest(
+            id: MuseGlimmerResources.modelId,
+            usageTermsAcknowledged: true
+        ).write(to: targetRoot)
+
+        let companionBytes: Int64 = 1_234
+        let envelope = try ModelPull.parse([
+            MuseGlimmerResources.modelId,
+            "--allow-unsupported",
+            "--accept-model-license",
+            "--preflight",
+            "--json",
+        ]).makePreflightEnvelope(
+            hubCacheURL: hubCache,
+            modelStoreURL: modelStore,
+            estimatedDownloadBytesOverrides: [
+                MuseGlimmerResources.dflash2ModelId: companionBytes,
+            ],
+            diskAvailableBytes: { _ in 100 * ModelPullDiskPreflight.bytesPerGiB }
+        )
+
+        XCTAssertNotEqual(envelope.status, .blocked)
+        XCTAssertEqual(envelope.result.models.count, 2)
+        XCTAssertEqual(envelope.result.selectedModelCount, 2)
+        XCTAssertEqual(envelope.result.willDownloadCount, 1)
+        XCTAssertEqual(envelope.result.estimatedDownloadBytes, companionBytes)
+        XCTAssertEqual(envelope.result.models[0].id, MuseGlimmerResources.modelId)
+        XCTAssertTrue(envelope.result.models[0].installed)
+        XCTAssertFalse(envelope.result.models[0].willDownload)
+        XCTAssertEqual(envelope.result.models[1].id, MuseGlimmerResources.dflash2ModelId)
+        XCTAssertFalse(envelope.result.models[1].installed)
+        XCTAssertTrue(envelope.result.models[1].willDownload)
+    }
+
     func testModelPullPreflightUsesExplicitConversionRequiredStatus() {
         XCTAssertEqual(
             ModelPullPreflightAnalyzer.modelStatus(

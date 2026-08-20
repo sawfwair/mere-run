@@ -114,6 +114,11 @@ private struct MuseGlimmerPreparedGreedyRound {
     let candidate: MuseGlimmerForwardOutput
 }
 
+private struct MuseGlimmerProposalDistribution {
+    let probabilities: MLXArray
+    let candidateTokenIds: MLXArray?
+}
+
 enum MuseGlimmerDFlashDecoder {
     static func decode(
         initialLogits: MLXArray,
@@ -186,7 +191,7 @@ enum MuseGlimmerDFlashDecoder {
             if assistantActive,
                draftCount > 0,
                generationConfig.temperature == 0,
-               generationConfig.repetitionPenalty == nil,
+               generationConfig.repetitionPenalty.map({ $0 == 1 }) ?? true,
                generationConfig.bannedTokens.isEmpty {
                 prepared = prepareGreedyRound(
                     logits: logits,
@@ -224,7 +229,7 @@ enum MuseGlimmerDFlashDecoder {
             }
 
             let proposals: [Int]
-            var proposalProbabilities: [MLXArray] = []
+            var proposalDistributions: [MuseGlimmerProposalDistribution] = []
             let candidateTargetCache: [Gemma4AttentionCache]
             let candidate: MuseGlimmerForwardOutput
             if let prepared {
@@ -233,29 +238,68 @@ enum MuseGlimmerDFlashDecoder {
                 candidate = prepared.candidate
             } else {
                 let candidateAssistantCache = assistantCache.map { $0.fork() }
-                let draftLogits = assistant.draftLogits(
-                    anchorTokens: MLXArray([Int32(anchor)]).reshaped(1, 1),
+                let anchorTokens = MLXArray([Int32(anchor)]).reshaped(1, 1)
+                let draft = assistant.draft(
+                    anchorTokens: anchorTokens,
                     speculativeTokenCount: draftCount,
                     cache: candidateAssistantCache,
                     target: target
                 )
-                MLX.eval(draftLogits)
-                var sampled: [Int] = []
-                var proposalHistory = repetitionHistory
-                sampled.reserveCapacity(draftCount)
-                proposalProbabilities.reserveCapacity(draftCount)
-                for index in 0..<draftCount {
-                    let probabilities = samplingProbabilities(
-                        logits: draftLogits[0, index, 0...],
-                        config: generationConfig,
-                        previousTokens: proposalHistory
+                let selectorDraft: MuseGlimmerAssistantDraftOutput
+                if let banMask = tokenBanMask(
+                    vocabularySize: draft.logits.dim(-1),
+                    dtype: draft.logits.dtype,
+                    tokens: generationConfig.bannedTokens
+                ) {
+                    selectorDraft = MuseGlimmerAssistantDraftOutput(
+                        hidden: draft.hidden,
+                        logits: draft.logits + banMask
                     )
-                    let token = sampleToken(probabilities: probabilities)
-                    sampled.append(token)
-                    proposalProbabilities.append(probabilities)
-                    proposalHistory.append(token)
+                } else {
+                    selectorDraft = draft
                 }
-                proposals = sampled
+                if let selection = assistant.selectDFlash2Candidates(
+                    draft: selectorDraft,
+                    anchorTokens: anchorTokens,
+                    temperature: generationConfig.temperature
+                ) {
+                    if let probabilities = selection.candidateProbabilities {
+                        MLX.eval(selection.tokens, selection.candidateTokenIds, probabilities)
+                    } else {
+                        MLX.eval(selection.tokens, selection.candidateTokenIds)
+                    }
+                    proposals = selection.tokens.asArray(Int32.self).map(Int.init)
+                    if let probabilities = selection.candidateProbabilities {
+                        proposalDistributions.reserveCapacity(draftCount)
+                        for index in 0..<draftCount {
+                            proposalDistributions.append(MuseGlimmerProposalDistribution(
+                                probabilities: probabilities[0, index, 0...],
+                                candidateTokenIds: selection.candidateTokenIds[0, index, 0...]
+                            ))
+                        }
+                    }
+                } else {
+                    MLX.eval(draft.logits)
+                    var sampled: [Int] = []
+                    var proposalHistory = repetitionHistory
+                    sampled.reserveCapacity(draftCount)
+                    proposalDistributions.reserveCapacity(draftCount)
+                    for index in 0..<draftCount {
+                        let probabilities = samplingProbabilities(
+                            logits: draft.logits[0, index, 0...],
+                            config: generationConfig,
+                            previousTokens: proposalHistory
+                        )
+                        let token = sampleToken(probabilities: probabilities)
+                        sampled.append(token)
+                        proposalDistributions.append(MuseGlimmerProposalDistribution(
+                            probabilities: probabilities,
+                            candidateTokenIds: nil
+                        ))
+                        proposalHistory.append(token)
+                    }
+                    proposals = sampled
+                }
                 candidateTargetCache = targetCache.map { $0.fork() }
                 candidate = target.forward(
                     MLXArray(([anchor] + proposals).map(Int32.init))
@@ -294,20 +338,37 @@ enum MuseGlimmerDFlashDecoder {
                         config: generationConfig,
                         previousTokens: verificationHistory
                     )
-                    let draftProbabilities = proposalProbabilities[index]
-                    let draftProbability = max(
-                        draftProbabilities[proposal].item(Float.self),
-                        Float.leastNonzeroMagnitude
-                    )
+                    let draftDistribution = proposalDistributions[index]
+                    let draftProbability: Float
+                    if let candidateTokenIds = draftDistribution.candidateTokenIds {
+                        draftProbability = max(
+                            (draftDistribution.probabilities
+                                * (candidateTokenIds .== Int32(proposal))).sum().item(Float.self),
+                            Float.leastNonzeroMagnitude
+                        )
+                    } else {
+                        draftProbability = max(
+                            draftDistribution.probabilities[proposal].item(Float.self),
+                            Float.leastNonzeroMagnitude
+                        )
+                    }
                     let acceptanceProbability = min(
                         1,
                         targetProbabilities[proposal].item(Float.self) / draftProbability
                     )
                     guard Float.random(in: 0..<1) <= acceptanceProbability else {
-                        replacement = sampleToken(probabilities: rejectionDistribution(
-                            target: targetProbabilities,
-                            draft: draftProbabilities
-                        ))
+                        if let candidateTokenIds = draftDistribution.candidateTokenIds {
+                            replacement = sampleToken(probabilities: sparseRejectionDistribution(
+                                target: targetProbabilities,
+                                candidateTokenIds: candidateTokenIds,
+                                draft: draftDistribution.probabilities
+                            ))
+                        } else {
+                            replacement = sampleToken(probabilities: rejectionDistribution(
+                                target: targetProbabilities,
+                                draft: draftDistribution.probabilities
+                            ))
+                        }
                         break
                     }
                 }
@@ -393,13 +454,17 @@ enum MuseGlimmerDFlashDecoder {
         let anchor = MLX.argMax(logits[0, -1, 0...], axis: -1)
             .asType(.int32)
             .reshaped(1, 1)
-        let draftLogits = assistant.draftLogits(
+        let draft = assistant.draft(
             anchorTokens: anchor,
             speculativeTokenCount: draftCount,
             cache: assistantCache.map { $0.fork() },
             target: target
         )
-        let proposalTokens = MLX.argMax(draftLogits, axis: -1).asType(.int32)
+        let proposalTokens = assistant.selectDFlash2Candidates(
+            draft: draft,
+            anchorTokens: anchor,
+            temperature: 0
+        )?.tokens ?? MLX.argMax(draft.logits, axis: -1).asType(.int32)
         let candidateTargetCache = targetCache.map { $0.fork() }
         let candidate = target.forward(
             concatenated([anchor, proposalTokens], axis: 1),
@@ -458,5 +523,22 @@ enum MuseGlimmerDFlashDecoder {
         let residual = MLX.maximum(target - draft, MLXArray(0))
         let mass = residual.sum().item(Float.self)
         return mass > 1e-6 ? residual / residual.sum() : target
+    }
+
+    static func sparseRejectionDistribution(
+        target: MLXArray,
+        candidateTokenIds: MLXArray,
+        draft: MLXArray
+    ) -> MLXArray {
+        let candidateTarget = takeAlong(target, candidateTokenIds, axis: -1)
+        let residual = putAlong(
+            target,
+            candidateTokenIds,
+            values: candidateTarget - draft,
+            axis: -1
+        )
+        let clipped = MLX.maximum(residual, MLXArray(0))
+        let mass = clipped.sum().item(Float.self)
+        return mass > 1e-6 ? clipped / clipped.sum() : target
     }
 }

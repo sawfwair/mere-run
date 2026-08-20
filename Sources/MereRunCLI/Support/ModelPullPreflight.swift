@@ -209,7 +209,10 @@ struct ModelPullPreflightAnalyzer {
 
     private func selectedSpecs(diagnostics: inout [PreflightDiagnostic]) -> [ManagedModelSpec] {
         if input.all {
-            return ManagedModelCatalog.allSpecs
+            return specsIncludingCompanions(
+                ManagedModelCatalog.allSpecs,
+                diagnostics: &diagnostics
+            )
         }
 
         guard let target = input.target?.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -236,7 +239,36 @@ struct ModelPullPreflightAnalyzer {
             )
             return []
         }
-        return [spec]
+        return specsIncludingCompanions([spec], diagnostics: &diagnostics)
+    }
+
+    private func specsIncludingCompanions(
+        _ roots: [ManagedModelSpec],
+        diagnostics: inout [PreflightDiagnostic]
+    ) -> [ManagedModelSpec] {
+        var specs: [ManagedModelSpec] = []
+        var seen: Set<String> = []
+        var pending = roots
+        while !pending.isEmpty {
+            let spec = pending.removeFirst()
+            guard seen.insert(spec.id).inserted else { continue }
+            specs.append(spec)
+            for companionID in spec.companionModelIDs {
+                guard let companion = ManagedModelCatalog.spec(for: companionID) else {
+                    diagnostics.append(
+                        PreflightDiagnostic(
+                            id: "companion_model_unknown",
+                            severity: .blocker,
+                            title: "Companion model unavailable",
+                            message: "Unknown companion model id for \(spec.id): \(companionID)."
+                        )
+                    )
+                    continue
+                }
+                pending.append(companion)
+            }
+        }
+        return specs
     }
 
     private func resolvedHubCache(diagnostics: inout [PreflightDiagnostic]) -> URL {
@@ -282,7 +314,7 @@ struct ModelPullPreflightAnalyzer {
             ?? runtimeURL(for: spec, installPath: installPath, installed: installedInPrimary)
         let runtimeReady = runtimeURL != nil
         let conversionRequired = spec.requiresManagedConversion && installedInPrimary && !runtimeReady
-        let selected = input.all || spec.id == input.target
+        let selected = true
         let blockedBySupport = !input.allowUnsupported && !support.isSupported
         let blockedBySource = !hasSource
         let requiresUsageTermsAcknowledgement = spec.usageRestriction != nil && (input.force || !installed)

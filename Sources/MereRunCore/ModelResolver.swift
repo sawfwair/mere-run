@@ -40,6 +40,7 @@ public struct ModelResolver {
         case lagunaS21DFlash = "text-chat-laguna-s-2-1-dflash"
         case inklingSmall = "text-chat-inkling-small"
         case museGlimmer30B = "vision-chat-muse-glimmer-30b"
+        case museGlimmer30BDFlash2 = "vision-chat-muse-glimmer-30b-dflash2"
         case nemotron35Lightning = "text-chat-nemotron-35-lightning"
         case nemotron35LightningDSpark = "text-chat-nemotron-35-lightning-dspark"
         case ltxGemma3TwelveB4Bit = "text-encoder-ltx-gemma3-12b-4bit"

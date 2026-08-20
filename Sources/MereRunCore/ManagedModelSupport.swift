@@ -374,6 +374,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 128
             ),
             descriptor(
+                LagunaResources.dflashModelID,
+                "Laguna S 2.1 DFlash assistant",
+                "Installs the companion drafter used for verified Laguna S 2.1 speculative decoding.",
+                minimum: 96,
+                recommended: 128
+            ),
+            descriptor(
                 LagunaResources.xsModelID,
                 "Laguna XS 2.1 agentic chat",
                 "Runs Poolside's released 33B-A3B Laguna XS 2.1 through its NVFP4 MLX serialization and the native Swift runtime.",
@@ -390,7 +397,21 @@ public enum ManagedModelCapabilityCatalog {
             descriptor(
                 MuseGlimmerResources.modelId,
                 "Muse Glimmer 30B vision agent",
-                "Runs Sawfwair's pinned selective MLX Q4 conversion of Meta Muse Glimmer with its managed DFlash speculative companion through the native Swift/MLX stack.",
+                "Runs Sawfwair's pinned selective MLX Q4 conversion of Meta Muse Glimmer with its managed DFlash2 speculative companion through the native Swift/MLX stack.",
+                minimum: 32,
+                recommended: 64
+            ),
+            descriptor(
+                MuseGlimmerResources.dflash2ModelId,
+                "Muse Glimmer 30B DFlash2 assistant",
+                "Installs z-lab's grouped-convolution DFlash2 drafter for Muse Glimmer speculative decoding.",
+                minimum: 32,
+                recommended: 64
+            ),
+            descriptor(
+                MuseGlimmerResources.assistantModelId,
+                "Muse Glimmer 30B DFlash assistant",
+                "Preserves the original Muse Glimmer DFlash drafter for compatible existing installations.",
                 minimum: 32,
                 recommended: 64
             ),
@@ -398,6 +419,13 @@ public enum ManagedModelCapabilityCatalog {
                 NemotronHResources.modelID,
                 "Nemotron 3.5 Lightning 30B-A3B",
                 "Runs NVIDIA's hybrid Nemotron-H NVFP4 checkpoint with its verified DSpark speculative companion through native Swift/MLX.",
+                minimum: 32,
+                recommended: 64
+            ),
+            descriptor(
+                NemotronHResources.dsparkModelID,
+                "Nemotron 3.5 DSpark assistant",
+                "Installs the companion drafter used for verified Nemotron 3.5 speculative decoding.",
                 minimum: 32,
                 recommended: 64
             ),
@@ -966,6 +994,13 @@ public enum ManagedModelCapabilityCatalog {
                 ModelResolver.ModelID.ltxVideo25FullBF16.rawValue,
                 "LTX 2.5 Full BF16",
                 "Installs the full LTX 2.5 dev, distilled, LoRA, VAE, upscaler, and duration components for every native pipeline.",
+                minimum: 96,
+                recommended: 128
+            ),
+            descriptor(
+                ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue,
+                "LTX Gemma 3 12B text encoder",
+                "Installs the shared 4-bit Gemma text encoder used by managed LTX video models.",
                 minimum: 96,
                 recommended: 128
             ),

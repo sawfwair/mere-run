@@ -188,16 +188,16 @@ entries, and the typed ledger lives under
 
 ### `MERERUN_MUSE_GLIMMER_DFLASH`
 
-Muse Glimmer DFlash is enabled by default when the official managed assistant
-companion is installed. Set this to `0`, `false`, `no`, or `off` to force
+Muse Glimmer DFlash is enabled by default when a managed assistant companion is
+installed. The runtime prefers DFlash2, then falls back to an existing original
+DFlash or local Q4 companion. Set this to `0`, `false`, `no`, or `off` to force
 target-only decode. The runtime uses the assistant after both text and image
-prefill, verifies every proposal with the target, and preserves the target's
-greedy or sampled output distribution.
+prefill and verifies every proposal with the target.
 
 ### `MERERUN_MUSE_GLIMMER_DFLASH_TOKENS`
 
-Overrides proposals per DFlash round. The checkpoint supports up to `15`, but
-the measured affine-Q4 MLX target defaults to `3`; values are clamped to the
+Overrides proposals per DFlash round. Both Muse assistants support up to `15`;
+the measured affine-Q4 MLX default is `3`, and values are clamped to the active
 assistant's supported range.
 
 ### `MERERUN_MUSE_GLIMMER_DFLASH_MIN_OUTPUT`
@@ -214,8 +214,9 @@ fallback for the rest of the request.
 ### `MERERUN_MUSE_GLIMMER_DFLASH_PATH`
 
 Selects an explicit local Muse Glimmer assistant directory. When unset, the
-runtime prefers the managed official BF16 assistant, then the optional local
-`vision-chat-muse-glimmer-30b-assistant-q4` conversion.
+runtime prefers managed DFlash2, then an existing managed original DFlash
+install, then the optional local `vision-chat-muse-glimmer-30b-assistant-q4`
+conversion.
 
 ### `MERERUN_GEMMA4_MTP`
 

@@ -323,15 +323,17 @@ swift run mere.run text chat \
   --prompt "Plan a recovery-safe repository migration."
 
 # Muse Glimmer is a pinned native Swift/MLX multimodal agent model. The pull
-# installs Sawfwair's 21.38 GB selective MLX Q4 target and Meta's 5.11 GB
-# official DFlash companion;
-# review their shared usage policy first.
+# installs Sawfwair's 21.38 GB selective MLX Q4 target and z-lab's 5.54 GB
+# DFlash2 companion; review the target's bundled usage policy first.
 swift run mere.run text chat \
   --model vision-chat-muse-glimmer-30b \
   --image ./screenshot.png \
   --reasoning-effort 0.8 \
   --stats \
   --prompt "Inspect this interface and propose the safest next action."
+
+# The managed DFlash2 companion can also be refreshed independently.
+swift run mere.run model pull vision-chat-muse-glimmer-30b-dflash2
 
 # Nemotron 3.5 Lightning is a pinned native Swift/MLX hybrid Mamba/MoE target.
 # The managed pull also installs its converted DSpark speculative companion.

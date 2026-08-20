@@ -145,7 +145,6 @@ final class ManagedModelCatalogTests: XCTestCase {
             "vision-embed-olmoearth-v12-small",
             "vision-embed-olmoearth-v12-base",
             MuseGlimmerResources.modelId,
-            MuseGlimmerResources.assistantModelId,
             "image-3d-trellis2-4b",
             MiniMaxMusic3Resources.modelID,
             "music-muscriptor-small",
@@ -707,9 +706,12 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertTrue(LagunaResources.snapshotPatterns.contains("LICENSE*"))
     }
 
-    func testMuseGlimmerUsesPinnedSawfwairQ4TargetAndOfficialDFlashCompanion() throws {
+    func testMuseGlimmerUsesPinnedQ4TargetAndDFlash2Companion() throws {
         let target = try XCTUnwrap(ManagedModelCatalog.spec(for: MuseGlimmerResources.modelId))
         let companion = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: MuseGlimmerResources.dflash2ModelId)
+        )
+        let legacy = try XCTUnwrap(
             ManagedModelCatalog.spec(for: MuseGlimmerResources.assistantModelId)
         )
 
@@ -726,33 +728,32 @@ final class ManagedModelCatalogTests: XCTestCase {
             target.usageRestriction?.terms.first?.sourceRevision,
             MuseGlimmerResources.upstreamRevision
         )
-        XCTAssertEqual(target.companionModelIDs, [MuseGlimmerResources.assistantModelId])
+        XCTAssertEqual(target.companionModelIDs, [MuseGlimmerResources.dflash2ModelId])
         XCTAssertEqual(target.validationKind, .museGlimmer)
         XCTAssertFalse(target.runtimeAutoDownloadAllowed)
 
         XCTAssertFalse(ManagedModelCatalog.allSpecs.contains { $0.id == companion.id })
         XCTAssertEqual(
             companion.hubFallback?.repoId,
-            MuseGlimmerResources.assistantUpstreamRepoId
+            MuseGlimmerResources.dflash2UpstreamRepoId
         )
         XCTAssertEqual(
             companion.hubFallback?.revision,
-            MuseGlimmerResources.assistantUpstreamRevision
+            MuseGlimmerResources.dflash2UpstreamRevision
         )
         XCTAssertEqual(
             companion.hubFallback?.patterns,
-            MuseGlimmerResources.assistantSnapshotPatterns
+            MuseGlimmerResources.dflash2SnapshotPatterns
         )
         XCTAssertEqual(companion.validationKind, .museGlimmerAssistant)
         XCTAssertEqual(
             companion.estimatedDownloadBytes,
-            MuseGlimmerResources.assistantEstimatedDownloadBytes
+            MuseGlimmerResources.dflash2EstimatedDownloadBytes
         )
-        XCTAssertEqual(
-            companion.usageRestriction?.terms.first?.sourceRepoId,
-            MuseGlimmerResources.assistantUpstreamRepoId
-        )
+        XCTAssertNil(companion.usageRestriction)
         XCTAssertFalse(companion.runtimeAutoDownloadAllowed)
+        XCTAssertFalse(ManagedModelCatalog.allSpecs.contains { $0.id == legacy.id })
+        XCTAssertEqual(legacy.upstreamRepoId, MuseGlimmerResources.assistantUpstreamRepoId)
     }
 
     func testQ36NanoUsesOptiQHubSource() throws {

@@ -96,18 +96,23 @@ non-repetitive text, and worth ~2× when generation echoes the prompt
 [Configuration](../configuration.md#mererun_gemma4_prompt_lookup)).
 
 `vision-chat-muse-glimmer-30b` installs Sawfwair's pinned 21.38 GB selective MLX
-Q4 target plus Meta's official 2.56B-parameter DFlash assistant. The target's
-receipt pins every source and output hash and retains Meta's bundled terms.
-Native DFlash captures the five
-released target hidden-state taps during text or image prefill, drafts masked
-blocks with the assistant, and verifies them against the target without
-changing the target's output distribution. It engages for output budgets of at
-least 32 tokens, defaults to 3 proposals per round on MLX, and returns to
-target-only decode after two rounds below 40% acceptance. Add `--stats` to see
-the proposal width, acceptance, verification forwards, and fallback state.
+Q4 target plus z-lab's DFlash2 assistant. The target's receipt pins every
+source and output hash and retains Meta's bundled terms. Native DFlash captures
+the five released target hidden-state taps during text or image prefill, drafts
+masked blocks, and verifies them against the target. It engages for output
+budgets of at least 32 tokens, defaults to 3 proposals per round on MLX, and
+returns to target-only decode after two rounds below 40% acceptance. Add
+`--stats` to see the proposal width, acceptance, verification forwards, and
+fallback state.
 Loading performs one target and DFlash warmup before the first user-visible
 decode, so lazy MLX graph compilation is reported in `loadSeconds` and a
 persistent CLI/API model session pays that cost once.
+
+DFlash2 adds two-phase grouped dynamic causal convolution and predecessor-aware
+sparse candidate selection. It is installed and preferred automatically; an
+existing original DFlash or local Q4 assistant remains a fallback. A real
+64-token selective-Q4 probe produced the same bytes as the original DFlash path
+while improving acceptance from 63.1% to 67.7% on that prompt.
 
 ```bash
 swift run mere.run model pull vision-chat-muse-glimmer-30b --accept-model-license
