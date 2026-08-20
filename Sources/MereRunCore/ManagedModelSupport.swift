@@ -430,6 +430,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 64
             ),
             descriptor(
+                NemotronOmniResources.modelID,
+                "Nemotron 3 Nano Omni 30B-A3B BF16",
+                "Runs NVIDIA's pinned BF16 text, image, video, and audio understanding checkpoint through native Swift/MLX media towers and Nemotron-H language runtime.",
+                minimum: 112,
+                recommended: 128
+            ),
+            descriptor(
                 Q35Resources.q36NanoModelId,
                 "Qwen3.6 A3B chat nano",
                 "Runs the Qwen3.6 35B-A3B OptiQ 4-bit MLX/MTP snapshot through the native Qwen-family runtime.",

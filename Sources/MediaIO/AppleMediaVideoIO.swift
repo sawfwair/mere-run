@@ -310,6 +310,83 @@ enum AppleMediaVideoIO {
         return VideoFrameSequence(frameURLs: frameURLs, fps: fps, frameWidth: frameWidth, frameHeight: frameHeight)
     }
 
+    static func sampleFrames(
+        from videoURL: URL,
+        into outputDirectoryURL: URL,
+        framesPerSecond: Double,
+        maximumFrames: Int
+    ) throws -> VideoFrameSequence {
+        let asset = AVURLAsset(url: videoURL)
+        guard let track = asset.tracks(withMediaType: .video).first else {
+            throw MediaIOError.videoOperationFailed("Video track missing in asset: \(videoURL.path)")
+        }
+        let sourceRate = try MediaVideoFrameRateResolver.resolve(
+            Double(track.nominalFrameRate),
+            fallbackFPS: 30
+        )
+        let duration = CMTimeGetSeconds(asset.duration)
+        guard duration.isFinite, duration > 0 else {
+            throw MediaIOError.videoOperationFailed("Video duration is not finite or positive.")
+        }
+        let estimatedSourceCount = max(1, Int((duration * sourceRate.framesPerSecond).rounded()))
+        let requestedCount = max(1, min(maximumFrames, Int(duration * framesPerSecond)))
+        let indices = evenlySpacedIndices(
+            sourceCount: estimatedSourceCount,
+            requestedCount: requestedCount
+        )
+        let generator = AVAssetImageGenerator(asset: asset)
+        generator.appliesPreferredTrackTransform = true
+        try FileManager.default.createDirectory(
+            at: outputDirectoryURL,
+            withIntermediateDirectories: true
+        )
+        var frameURLs: [URL] = []
+        var width = 0
+        var height = 0
+        for (outputIndex, sourceIndex) in indices.enumerated() {
+            let time = CMTime(
+                value: CMTimeValue(sourceIndex) * sourceRate.frameDurationValue,
+                timescale: sourceRate.timeScale
+            )
+            let image = try generator.copyCGImage(at: time, actualTime: nil)
+            width = image.width
+            height = image.height
+            let url = outputDirectoryURL
+                .appendingPathComponent(String(format: "frame_%05d", outputIndex))
+                .appendingPathExtension("png")
+            try writeImage(image, to: url)
+            frameURLs.append(url)
+        }
+        return VideoFrameSequence(
+            frameURLs: frameURLs,
+            fps: sourceRate.framesPerSecond,
+            frameWidth: width,
+            frameHeight: height,
+            sourceFrameIndices: indices
+        )
+    }
+
+    private static func evenlySpacedIndices(
+        sourceCount: Int,
+        requestedCount: Int
+    ) -> [Int] {
+        if requestedCount >= sourceCount {
+            return Array(0..<sourceCount)
+        }
+        if requestedCount == 1 {
+            return [0]
+        }
+        let scale = Double(sourceCount - 1) / Double(requestedCount - 1)
+        var result: [Int] = []
+        for index in 0..<requestedCount {
+            let candidate = Int((Double(index) * scale).rounded())
+            if result.last != candidate {
+                result.append(candidate)
+            }
+        }
+        return result
+    }
+
     static func writeVideo(frameURLs: [URL], fps: Double, to outputURL: URL) throws {
         let frameRate = try MediaVideoFrameRateResolver.resolve(fps, fallbackFPS: 1)
         guard let firstURL = frameURLs.first,

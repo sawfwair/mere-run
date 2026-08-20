@@ -406,6 +406,8 @@ public struct OpenAIChatMessage: Codable, Sendable {
     public var tool_call_id: String?
     public var tool_calls: [OpenAIChatToolCall]?
     public var imageURLs: [String]
+    public var audioURLs: [String]
+    public var videoURLs: [String]
 
     public init(
         role: String,
@@ -414,7 +416,9 @@ public struct OpenAIChatMessage: Codable, Sendable {
         name: String? = nil,
         tool_call_id: String? = nil,
         tool_calls: [OpenAIChatToolCall]? = nil,
-        imageURLs: [String] = []
+        imageURLs: [String] = [],
+        audioURLs: [String] = [],
+        videoURLs: [String] = []
     ) {
         self.role = role
         self.content = content
@@ -423,6 +427,8 @@ public struct OpenAIChatMessage: Codable, Sendable {
         self.tool_call_id = tool_call_id
         self.tool_calls = tool_calls
         self.imageURLs = imageURLs
+        self.audioURLs = audioURLs
+        self.videoURLs = videoURLs
     }
 
     private enum CodingKeys: String, CodingKey {
@@ -440,6 +446,8 @@ public struct OpenAIChatMessage: Codable, Sendable {
         let decoded = try container.decodeFlexibleContentIfPresent(forKey: .content)
         content = decoded.text
         imageURLs = decoded.imageURLs
+        audioURLs = decoded.audioURLs
+        videoURLs = decoded.videoURLs
         reasoning_content = try container.decodeIfPresent(String.self, forKey: .reasoning_content)
         name = try container.decodeIfPresent(String.self, forKey: .name)
         tool_call_id = try container.decodeIfPresent(String.self, forKey: .tool_call_id)
@@ -449,7 +457,24 @@ public struct OpenAIChatMessage: Codable, Sendable {
     public func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(role, forKey: .role)
-        try container.encode(content, forKey: .content)
+        if imageURLs.isEmpty, audioURLs.isEmpty, videoURLs.isEmpty {
+            try container.encode(content, forKey: .content)
+        } else {
+            var parts: [OpenAIChatContentPart] = []
+            if !content.isEmpty {
+                parts.append(OpenAIChatContentPart(type: "text", text: content))
+            }
+            parts += imageURLs.map {
+                OpenAIChatContentPart(type: "image_url", image_url: OpenAIImageURL(url: $0))
+            }
+            parts += audioURLs.map {
+                OpenAIChatContentPart(type: "audio_url", audio_url: OpenAIImageURL(url: $0))
+            }
+            parts += videoURLs.map {
+                OpenAIChatContentPart(type: "video_url", video_url: OpenAIImageURL(url: $0))
+            }
+            try container.encode(parts, forKey: .content)
+        }
         try container.encodeIfPresent(reasoning_content, forKey: .reasoning_content)
         try container.encodeIfPresent(name, forKey: .name)
         try container.encodeIfPresent(tool_call_id, forKey: .tool_call_id)
@@ -599,6 +624,8 @@ public struct OpenAIStreamOptions: Codable, Hashable, Sendable {
 private struct OpenAIChatContent: Sendable {
     var text: String
     var imageURLs: [String]
+    var audioURLs: [String]
+    var videoURLs: [String]
 }
 
 public struct OpenAIImageURL: Codable, Hashable, Sendable {
@@ -633,29 +660,43 @@ public struct OpenAIChatContentPart: Codable, Hashable, Sendable {
     public var text: String?
     public var image_url: OpenAIImageURL?
     public var input_image: OpenAIImageURL?
+    public var audio_url: OpenAIImageURL?
+    public var video_url: OpenAIImageURL?
 
-    public init(type: String? = nil, text: String? = nil, image_url: OpenAIImageURL? = nil, input_image: OpenAIImageURL? = nil) {
+    public init(
+        type: String? = nil,
+        text: String? = nil,
+        image_url: OpenAIImageURL? = nil,
+        input_image: OpenAIImageURL? = nil,
+        audio_url: OpenAIImageURL? = nil,
+        video_url: OpenAIImageURL? = nil
+    ) {
         self.type = type
         self.text = text
         self.image_url = image_url
         self.input_image = input_image
+        self.audio_url = audio_url
+        self.video_url = video_url
     }
 
     var extractedImageURL: String? {
         image_url?.url ?? input_image?.url
     }
+
+    var extractedAudioURL: String? { audio_url?.url }
+    var extractedVideoURL: String? { video_url?.url }
 }
 
 private extension KeyedDecodingContainer {
     func decodeFlexibleContentIfPresent(forKey key: Key) throws -> OpenAIChatContent {
         guard contains(key) else {
-            return OpenAIChatContent(text: "", imageURLs: [])
+            return OpenAIChatContent(text: "", imageURLs: [], audioURLs: [], videoURLs: [])
         }
         if try decodeNil(forKey: key) {
-            return OpenAIChatContent(text: "", imageURLs: [])
+            return OpenAIChatContent(text: "", imageURLs: [], audioURLs: [], videoURLs: [])
         }
         if let content = try? decode(String.self, forKey: key) {
-            return OpenAIChatContent(text: content, imageURLs: [])
+            return OpenAIChatContent(text: content, imageURLs: [], audioURLs: [], videoURLs: [])
         }
         if let parts = try? decode([OpenAIChatContentPart].self, forKey: key) {
             let text = parts
@@ -663,13 +704,20 @@ private extension KeyedDecodingContainer {
                 .compactMap(\.text)
                 .joined(separator: "\n")
             let imageURLs = parts.compactMap(\.extractedImageURL)
-            return OpenAIChatContent(text: text, imageURLs: imageURLs)
+            let audioURLs = parts.compactMap(\.extractedAudioURL)
+            let videoURLs = parts.compactMap(\.extractedVideoURL)
+            return OpenAIChatContent(
+                text: text,
+                imageURLs: imageURLs,
+                audioURLs: audioURLs,
+                videoURLs: videoURLs
+            )
         }
         throw DecodingError.typeMismatch(
             String.self,
             DecodingError.Context(
                 codingPath: codingPath + [key],
-                debugDescription: "Expected chat message content to be a string, null, or text content parts."
+                debugDescription: "Expected chat message content to be a string, null, or supported text/media content parts."
             )
         )
     }

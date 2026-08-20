@@ -166,6 +166,8 @@ public struct ChatMessage: Sendable, Hashable, Codable {
     public var role: Role
     public var content: String
     public var imageUrl: String?
+    public var audioUrl: String?
+    public var videoUrl: String?
     public var reasoningContent: String?
     public var name: String?
     public var toolCallID: String?
@@ -175,6 +177,8 @@ public struct ChatMessage: Sendable, Hashable, Codable {
         role: Role,
         content: String,
         imageUrl: String? = nil,
+        audioUrl: String? = nil,
+        videoUrl: String? = nil,
         reasoningContent: String? = nil,
         name: String? = nil,
         toolCallID: String? = nil,
@@ -183,6 +187,8 @@ public struct ChatMessage: Sendable, Hashable, Codable {
         self.role = role
         self.content = content
         self.imageUrl = imageUrl
+        self.audioUrl = audioUrl
+        self.videoUrl = videoUrl
         self.reasoningContent = reasoningContent
         self.name = name
         self.toolCallID = toolCallID

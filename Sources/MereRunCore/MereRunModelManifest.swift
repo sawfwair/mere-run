@@ -112,6 +112,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case museGlimmer = "muse-glimmer"
         /// NVIDIA Nemotron-H hybrid Mamba/MoE family via native Swift/MLX.
         case nemotronH = "nemotron-h"
+        /// NVIDIA Nemotron 3 Nano Omni multimodal understanding family.
+        case nemotronOmni = "nemotron-omni"
     }
 
     public enum Family: String, Codable, CaseIterable, Hashable, Sendable {
@@ -196,6 +198,9 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case speakerDiarization = "speaker_diarization"
         case visionChat = "vision_chat"
         case visionOCR = "vision_ocr"
+        case audioUnderstanding = "audio_understanding"
+        case videoUnderstanding = "video_understanding"
+        case documentUnderstanding = "document_understanding"
         case musicGeneration = "music_generation"
         case musicTranscription = "music_transcription"
         case musicSeparation = "music_separation"
@@ -1084,6 +1089,29 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 components: nil,
                 upstreamRepoId:
                     "\(NemotronHResources.dsparkUpstreamRepoID)@\(NemotronHResources.dsparkUpstreamRevision)",
+                createdAt: createdAt
+            )
+        case .nemotron3NanoOmni30BA3BBF16:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .nemotronOmni,
+                family: .nemotron,
+                tier: .latest,
+                variant: .standard,
+                precision: .bf16,
+                defaults: nil,
+                supports: [
+                    .chat,
+                    .codeGeneration,
+                    .visionChat,
+                    .visionOCR,
+                    .audioUnderstanding,
+                    .videoUnderstanding,
+                    .documentUnderstanding,
+                ],
+                components: genericTextComponents,
+                upstreamRepoId:
+                    "\(NemotronOmniResources.upstreamRepoID)@\(NemotronOmniResources.upstreamRevision)",
                 createdAt: createdAt
             )
         case .q36Nano:

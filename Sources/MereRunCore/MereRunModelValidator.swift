@@ -180,6 +180,7 @@ public enum MereRunModelValidator {
             || spec?.validationKind == .terramindFire
             || spec?.validationKind == .tessera
             || spec?.validationKind == .olmoEarth
+            || spec?.validationKind == .nemotronOmni
             || spec?.validationKind == .inkling {
             errors.append(contentsOf: spec?.validationMessages(in: rootURL, fileManager: fileManager) ?? [])
             transformerDir = nil

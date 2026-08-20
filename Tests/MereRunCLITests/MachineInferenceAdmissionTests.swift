@@ -366,6 +366,13 @@ final class MachineInferenceAdmissionTests: XCTestCase {
         )
         XCTAssertEqual(
             CLIInferenceAdmissionClassifier.apiServerRequest(
+                engine: .textChatNemotronOmni,
+                modelID: "omni-chat-nemotron3-nano-30b-a3b-bf16"
+            ),
+            MachineInferenceRequest(label: "api serve text-chat-nemotron-omni", resourceClass: .large)
+        )
+        XCTAssertEqual(
+            CLIInferenceAdmissionClassifier.apiServerRequest(
                 engine: .textChatLaguna,
                 modelID: "text-chat-laguna-s-2-1"
             ),

@@ -148,10 +148,10 @@ struct APIServe: AsyncParsableCommand {
     @Option(name: [.long], help: "Host to bind to.")
     var host: String = "127.0.0.1"
 
-    @Option(name: [.customShort("m"), .long, .customLong("model-path")], help: "Model path. For --engine text-code, pass a GGUF file. For --engine text-chat-klein, pass a Klein-root text chat model. For --engine text-chat-gemma4, pass a Gemma 4 model root or repo ID. For --engine text-chat-laguna, pass text-chat-laguna-s-2-1, text-chat-laguna-xs-2-1, or an installed Laguna MLX root. For --engine text-chat-q36, pass a Qwen3.6 text chat model root. For --engine text-chat-lfm2, pass an LFM2 MLX model root or repo ID. For --engine text-chat-deepseek-v4-flash, pass a DS4 GGUF file or managed model root. For --engine text-chat-muse-glimmer, pass vision-chat-muse-glimmer-30b or an installed Muse Glimmer MLX root.")
+    @Option(name: [.customShort("m"), .long, .customLong("model-path")], help: "Model path. For --engine text-code, pass a GGUF file. For --engine text-chat-klein, pass a Klein-root text chat model. For --engine text-chat-gemma4, pass a Gemma 4 model root or repo ID. For --engine text-chat-laguna, pass text-chat-laguna-s-2-1, text-chat-laguna-xs-2-1, or an installed Laguna MLX root. For --engine text-chat-q36, pass a Qwen3.6 text chat model root. For --engine text-chat-lfm2, pass an LFM2 MLX model root or repo ID. For --engine text-chat-deepseek-v4-flash, pass a DS4 GGUF file or managed model root. For --engine text-chat-muse-glimmer, pass vision-chat-muse-glimmer-30b or an installed Muse Glimmer MLX root. For --engine text-chat-nemotron-omni, pass omni-chat-nemotron3-nano-30b-a3b-bf16 or its installed wrapper root.")
     var model: String?
 
-    @Option(name: [.long], help: "Serving engine: text-chat-q36 (default; serves text-chat-q36-nano), text-code, text-chat-klein, text-chat-gemma4, text-chat-laguna, text-chat-lfm2, text-chat-deepseek-v4-flash, or text-chat-muse-glimmer.")
+    @Option(name: [.long], help: "Serving engine: text-chat-q36 (default; serves text-chat-q36-nano), text-code, text-chat-klein, text-chat-gemma4, text-chat-laguna, text-chat-lfm2, text-chat-deepseek-v4-flash, text-chat-muse-glimmer, text-chat-nemotron-h, or text-chat-nemotron-omni.")
     var engine: APIEngine = .textChatQ36
 
     @Option(name: [.long], help: "Default cataloged adapter id or local LoRA path for all requests.")
@@ -270,6 +270,8 @@ struct APIServe: AsyncParsableCommand {
             return MuseGlimmerResources.modelId
         case .textChatNemotronH:
             return NemotronHResources.modelID
+        case .textChatNemotronOmni:
+            return NemotronOmniResources.modelID
         }
     }
 
@@ -362,6 +364,23 @@ struct APIServe: AsyncParsableCommand {
                 return explicit
             }
             return ManagedModelResolver.resolveInstalledModel(id: NemotronHResources.modelID)?.path
+        case .textChatNemotronOmni:
+            if let explicit = model {
+                if explicit == NemotronOmniResources.modelID {
+                    guard let installed = ManagedModelResolver.resolveInstalledModel(
+                        id: NemotronOmniResources.modelID
+                    ) else {
+                        throw ValidationError(
+                            "Model '\(NemotronOmniResources.modelID)' is not installed. Run "
+                                + "'mere.run model pull \(NemotronOmniResources.modelID) "
+                                + "--accept-model-license' first."
+                        )
+                    }
+                    return installed.path
+                }
+                return explicit
+            }
+            return ManagedModelResolver.resolveInstalledModel(id: NemotronOmniResources.modelID)?.path
         }
     }
 
@@ -501,6 +520,7 @@ enum APIEngine: String, ExpressibleByArgument {
     case textChatDeepseekV4Flash = "text-chat-deepseek-v4-flash"
     case textChatMuseGlimmer = "text-chat-muse-glimmer"
     case textChatNemotronH = "text-chat-nemotron-h"
+    case textChatNemotronOmni = "text-chat-nemotron-omni"
 
     var runtimeServingEngine: RuntimeServingEngine {
         switch self {
@@ -524,6 +544,8 @@ enum APIEngine: String, ExpressibleByArgument {
             return .textChatMuseGlimmer
         case .textChatNemotronH:
             return .textChatNemotronH
+        case .textChatNemotronOmni:
+            return .textChatNemotronOmni
         }
     }
 
@@ -542,6 +564,8 @@ struct APIEngineCapabilities: Equatable, Sendable {
     var supportsMaxCompletionTokens: Bool = true
     var supportsUsageInStreaming: Bool = true
     var supportsVisionContentParts: Bool = false
+    var supportsAudioContentParts: Bool = false
+    var supportsVideoContentParts: Bool = false
     var supportsStrictMode: Bool = false
     var supportsStopSequences: Bool = false
     var supportsSeed: Bool = false
@@ -560,6 +584,8 @@ struct APIEngineCapabilities: Equatable, Sendable {
             supportsMaxCompletionTokens: profile.compatibility.maxTokensField == .maxCompletionTokens,
             supportsUsageInStreaming: profile.compatibility.supportsUsageInStreaming,
             supportsVisionContentParts: profile.inputModalities.contains(.image),
+            supportsAudioContentParts: profile.inputModalities.contains(.audio),
+            supportsVideoContentParts: profile.inputModalities.contains(.video),
             supportsStrictMode: profile.compatibility.supportsStrictMode,
             supportsStopSequences: profile.supportsStopSequences,
             supportsSeed: profile.supportsSeed,
@@ -2623,12 +2649,16 @@ enum APIServerContract {
         }
 
         let imageURL = try firstImageURL(from: msg, capabilities: capabilities)
+        let audioURL = try firstAudioURL(from: msg, capabilities: capabilities)
+        let videoURL = try firstVideoURL(from: msg, capabilities: capabilities)
         let content = renderMessageContent(msg)
         let toolCalls = try chatMessageToolCalls(from: msg)
         return ChatMessage(
             role: role,
             content: content,
             imageUrl: imageURL,
+            audioUrl: audioURL,
+            videoUrl: videoURL,
             reasoningContent: msg.reasoning_content,
             name: msg.name,
             toolCallID: msg.tool_call_id,
@@ -2690,6 +2720,46 @@ enum APIServerContract {
             )
         }
         return msg.imageURLs.first
+    }
+
+    private static func firstAudioURL(
+        from msg: OpenAIChatMessage,
+        capabilities: APIEngineCapabilities
+    ) throws -> String? {
+        guard !msg.audioURLs.isEmpty else { return nil }
+        guard capabilities.supportsAudioContentParts else {
+            throw APIRequestValidationError.invalidField(
+                "messages.content",
+                "audio content parts are not supported by this engine"
+            )
+        }
+        guard msg.audioURLs.count == 1 else {
+            throw APIRequestValidationError.invalidField(
+                "messages.content",
+                "only one audio content part per message is currently supported"
+            )
+        }
+        return msg.audioURLs.first
+    }
+
+    private static func firstVideoURL(
+        from msg: OpenAIChatMessage,
+        capabilities: APIEngineCapabilities
+    ) throws -> String? {
+        guard !msg.videoURLs.isEmpty else { return nil }
+        guard capabilities.supportsVideoContentParts else {
+            throw APIRequestValidationError.invalidField(
+                "messages.content",
+                "video content parts are not supported by this engine"
+            )
+        }
+        guard msg.videoURLs.count == 1 else {
+            throw APIRequestValidationError.invalidField(
+                "messages.content",
+                "only one video content part per message is currently supported"
+            )
+        }
+        return msg.videoURLs.first
     }
 
     private static func renderMessageContent(_ msg: OpenAIChatMessage) -> String {

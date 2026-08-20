@@ -244,6 +244,39 @@ public enum MediaVideoIO {
         #endif
     }
 
+    /// Samples frames across the full source timeline. This is intentionally
+    /// distinct from `extractFrames(endFrame:)`, which decodes a contiguous
+    /// prefix and is unsuitable for long-form understanding models.
+    public static func sampleFrames(
+        from videoURL: URL,
+        into outputDirectoryURL: URL,
+        framesPerSecond: Double,
+        maximumFrames: Int
+    ) throws -> VideoFrameSequence {
+        guard framesPerSecond.isFinite,
+              framesPerSecond > 0,
+              maximumFrames > 0 else {
+            throw MediaIOError.videoOperationFailed(
+                "Video sampling requires a positive finite rate and frame limit."
+            )
+        }
+        #if canImport(AVFoundation) && canImport(CoreGraphics)
+        return try AppleMediaVideoIO.sampleFrames(
+            from: videoURL,
+            into: outputDirectoryURL,
+            framesPerSecond: framesPerSecond,
+            maximumFrames: maximumFrames
+        )
+        #else
+        return try FFmpegMediaIO.sampleFrames(
+            from: videoURL,
+            into: outputDirectoryURL,
+            framesPerSecond: framesPerSecond,
+            maximumFrames: maximumFrames
+        )
+        #endif
+    }
+
     public static func writeVideo(frameURLs: [URL], fps: Double, to outputURL: URL) throws {
         #if canImport(AVFoundation) && canImport(CoreGraphics)
         try AppleMediaVideoIO.writeVideo(frameURLs: frameURLs, fps: fps, to: outputURL)

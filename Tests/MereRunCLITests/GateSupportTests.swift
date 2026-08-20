@@ -105,6 +105,23 @@ final class GateSupportTests: XCTestCase {
         )
     }
 
+    func testNemotronOmniGateRunsDirectNativeInference() throws {
+        let spec = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: NemotronOmniResources.modelID)
+        )
+        let plan = try XCTUnwrap(InstalledModelSmokePlans.plan(
+            for: spec,
+            installedIDs: [spec.id]
+        ))
+
+        XCTAssertEqual(plan.check.suite, ManagedModelCategory.omniChat.rawValue)
+        XCTAssertEqual(plan.check.requiredModels, [spec.id])
+        XCTAssertEqual(
+            plan.check.successDetail,
+            "direct true inference: text chat through native Omni runtime"
+        )
+    }
+
     func testNewGeoFamiliesHaveDirectNativeInferenceSmokePlans() throws {
         let expectations: [(String, String)] = [
             ("vision-fire-terramind-base", "geo fire normalized tensor smoke"),

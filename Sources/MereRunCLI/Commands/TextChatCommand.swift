@@ -40,6 +40,7 @@ struct TextChat: AsyncParsableCommand {
           - text-chat-laguna-s-2-1 (Poolside Laguna S 2.1 118B-A8B NVFP4 with DFlash)
           - text-chat-laguna-xs-2-1 (Poolside Laguna XS 2.1 33B-A3B NVFP4)
           - text-chat-nemotron-35-lightning (NVIDIA Nemotron 3.5 Lightning 30B-A3B NVFP4 with DSpark)
+          - omni-chat-nemotron3-nano-30b-a3b-bf16 (NVIDIA Nemotron 3 Nano Omni BF16)
           - text-chat-inkling-small (Inkling-Small 276B-A12B mixed MLX: routed-expert q2, non-routed BF16)
           - text-chat-lfm25-2.6b-4bit (LiquidAI LFM2.5 2.6B dense MLX 4-bit native Swift runtime)
           - text-chat-lfm25-a1b-8bit (LiquidAI LFM2.5 8B-A1B MLX 8-bit native Swift runtime)
@@ -58,6 +59,12 @@ struct TextChat: AsyncParsableCommand {
 
     @Option(name: [.long], help: "Optional image path for vision-capable chat models such as Bonsai 27B or vision-chat-gemma4-12b.")
     var image: String?
+
+    @Option(name: [.long], help: "Optional local audio path for audio-capable Omni chat models.")
+    var audio: String?
+
+    @Option(name: [.long], help: "Optional local video path for video-capable Omni chat models.")
+    var video: String?
 
     @Option(name: [.customShort("s"), .customLong("system")], help: "System prompt.")
     var systemPrompt: String?
@@ -152,7 +159,7 @@ struct TextChat: AsyncParsableCommand {
             + firstTokenSeconds
     }
 
-    @Option(name: [.long], help: "Canonical model id. Default: text-chat-gemma4-12b-4bit (Apple Silicon) / text-chat-q36-nano-gguf (Linux CUDA). Others include vision-chat-muse-glimmer-30b, text-chat-nemotron-35-lightning, text-chat-laguna-s-2-1, text-chat-inkling-small, text-chat-bonsai-27b-1bit, text-chat-q36-nano, text-agent-ornith-9b, text-chat-gemma4[-12b|-12b-4bit|-turbo|-max|-nano], and text-chat-lfm25-a1b-8bit.")
+    @Option(name: [.long], help: "Canonical model id. Default: text-chat-gemma4-12b-4bit (Apple Silicon) / text-chat-q36-nano-gguf (Linux CUDA). Others include omni-chat-nemotron3-nano-30b-a3b-bf16, vision-chat-muse-glimmer-30b, text-chat-nemotron-35-lightning, text-chat-laguna-s-2-1, text-chat-inkling-small, text-chat-bonsai-27b-1bit, text-chat-q36-nano, text-agent-ornith-9b, text-chat-gemma4[-12b|-12b-4bit|-turbo|-max|-nano], and text-chat-lfm25-a1b-8bit.")
     var model: String = TextChat.defaultChatModelId
 
     @Option(
@@ -245,12 +252,20 @@ struct TextChat: AsyncParsableCommand {
         } else {
             imageReference = nil
         }
+        let audioReference = try Self.resolveLocalMediaReference(audio, label: "Audio")
+        let videoReference = try Self.resolveLocalMediaReference(video, label: "Video")
 
         var messages: [ChatMessage] = []
         if let systemPrompt, !systemPrompt.isEmpty {
             messages.append(ChatMessage(role: .system, content: systemPrompt))
         }
-        messages.append(ChatMessage(role: .user, content: prompt, imageUrl: imageReference))
+        messages.append(ChatMessage(
+            role: .user,
+            content: prompt,
+            imageUrl: imageReference,
+            audioUrl: audioReference,
+            videoUrl: videoReference
+        ))
 
         let toolDefs: [ToolDefinition]? = try tools.flatMap { raw in
             let names = raw.split(separator: ",").map { String($0).trimmingCharacters(in: .whitespaces) }
@@ -275,6 +290,7 @@ struct TextChat: AsyncParsableCommand {
         let isLaguna = LagunaResources.handles(modelSpec: normalizedModelId)
         let isMuseGlimmer = MuseGlimmerResources.handles(modelSpec: normalizedModelId)
         let isNemotronH = NemotronHResources.handles(modelSpec: normalizedModelId)
+        let isNemotronOmni = NemotronOmniResources.handles(modelSpec: normalizedModelId)
         let isLFM2Vision = normalizedModelId == LFM2Resources.visionModelId
         let q35KVCacheMode = try resolveQ35KVCacheMode(for: normalizedModelId)
         if let contextSize, contextSize <= 0 {
@@ -286,11 +302,13 @@ struct TextChat: AsyncParsableCommand {
             maxTokens: maxTokens,
             temperature: temperature
                 ?? (isLFM2Vision ? 0.2 : nil)
+                ?? (isNemotronOmni ? NemotronOmniResources.thinkingTemperature : nil)
                 ?? (isNemotronH ? NemotronHResources.recommendedTemperature : nil)
                 ?? (isMuseGlimmer ? MuseGlimmerResources.recommendedTemperature : nil)
                 ?? (isLaguna ? LagunaResources.recommendedTemperature : recommendedSampling?.temperature)
                 ?? 0.7,
             topP: topP
+                ?? (isNemotronOmni ? NemotronOmniResources.thinkingTopP : nil)
                 ?? (isNemotronH ? NemotronHResources.recommendedTopP : nil)
                 ?? (isMuseGlimmer ? MuseGlimmerResources.recommendedTopP : nil)
                 ?? (isLaguna ? LagunaResources.recommendedTopP : recommendedSampling?.topP)
@@ -303,7 +321,9 @@ struct TextChat: AsyncParsableCommand {
             reasoningEffort: reasoningEffort,
             showThinking: requiresJSON
                 ? false
-                : (thinking ?? (isMuseGlimmer ? false : Q35Resources.thinkingDefault(forModelId: model))),
+                : (thinking ?? (isNemotronOmni
+                    ? true
+                    : (isMuseGlimmer ? false : Q35Resources.thinkingDefault(forModelId: model)))),
             lora: lora,
             requiresJSON: requiresJSON,
             tools: toolDefs,
@@ -333,6 +353,7 @@ struct TextChat: AsyncParsableCommand {
             )
             : nil
         let nemotronGenerator = isNemotronH ? NemotronHGenerator() : nil
+        let nemotronOmniGenerator = isNemotronOmni ? NemotronOmniGenerator() : nil
 
         let chatOnce: (ChatRequest) async throws -> ChatResponse = { req in
             if normalizedModelId == Psi3ChatResources.defaultModelId {
@@ -385,6 +406,15 @@ struct TextChat: AsyncParsableCommand {
                 )
                 lastMuseDFlashStats = await generator.dflashStats()
                 return response
+            } else if NemotronOmniResources.handles(modelSpec: normalizedModelId) {
+                guard let generator = nemotronOmniGenerator else {
+                    throw NemotronOmniError.generationFailed("generator is unavailable")
+                }
+                return try await generator.chat(
+                    req,
+                    modelPath: runtimeModelRoot,
+                    progressHandler: progressHandler
+                )
             } else if NemotronHResources.handles(modelSpec: normalizedModelId) {
                 guard let generator = nemotronGenerator else {
                     throw NemotronHError.generationFailed("generator is unavailable")
@@ -554,6 +584,25 @@ struct TextChat: AsyncParsableCommand {
         return ManagedModelResolver.resolveInstalledModel(id: modelID)?.path
     }
 
+    private static func resolveLocalMediaReference(
+        _ rawValue: String?,
+        label: String
+    ) throws -> String? {
+        guard let rawValue else { return nil }
+        let trimmed = rawValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        let url: URL
+        if let parsed = URL(string: trimmed), parsed.scheme?.lowercased() == "file" {
+            url = parsed
+        } else {
+            url = URL(fileURLWithPath: trimmed).standardizedFileURL
+        }
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            throw ValidationError("\(label) file not found: \(url.path)")
+        }
+        return url.path
+    }
+
     private func emitPreflight(modelID: String, installedModelPath: String?) throws {
         var diagnostics: [PreflightDiagnostic] = []
         if modelID.isEmpty || ManagedModelCatalog.spec(for: modelID) == nil {
@@ -581,6 +630,20 @@ struct TextChat: AsyncParsableCommand {
                     severity: .blocker,
                     title: "Chat image is missing",
                     message: "Image file not found: \(imageURL.path)"
+                ))
+            }
+        }
+        for (label, value) in [("Audio", audio), ("Video", video)] {
+            guard let value, !value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                continue
+            }
+            let url = URL(fileURLWithPath: value).standardizedFileURL
+            if !FileManager.default.fileExists(atPath: url.path) {
+                diagnostics.append(.init(
+                    id: "text_chat_\(label.lowercased())_missing",
+                    severity: .blocker,
+                    title: "Chat \(label.lowercased()) is missing",
+                    message: "\(label) file not found: \(url.path)"
                 ))
             }
         }
@@ -690,9 +753,10 @@ struct TextChat: AsyncParsableCommand {
             || LFM2Resources.handles(modelSpec: modelID)
             || InklingResources.handles(modelSpec: modelID)
             || MuseGlimmerResources.handles(modelSpec: modelID)
-            || NemotronHResources.handles(modelSpec: modelID) {
+            || NemotronHResources.handles(modelSpec: modelID)
+            || NemotronOmniResources.handles(modelSpec: modelID) {
             throw ValidationError(
-                "--response-format json_object is supported by native Gemma4 and Qwen-family MLX chat models; Muse Glimmer and Nemotron-H support structured tool schemas but not constrained JSON decoding."
+                "--response-format json_object is supported by native Gemma4 and Qwen-family MLX chat models; Muse Glimmer and Nemotron runtimes support structured tool schemas but not constrained JSON decoding."
             )
         }
         if LagunaResources.handles(modelSpec: modelID) {

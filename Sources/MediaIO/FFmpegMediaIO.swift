@@ -694,6 +694,58 @@ enum FFmpegMediaIO {
         )
     }
 
+    static func sampleFrames(
+        from videoURL: URL,
+        into directoryURL: URL,
+        framesPerSecond: Double,
+        maximumFrames: Int
+    ) throws -> VideoFrameSequence {
+        let sourceFPS = try videoFPS(videoURL)
+        let duration = try videoDurationSeconds(videoURL)
+        let sourceCount = max(1, Int((duration * sourceFPS).rounded()))
+        let requestedCount = max(1, min(maximumFrames, Int(duration * framesPerSecond)))
+        let indices: [Int]
+        if requestedCount >= sourceCount {
+            indices = Array(0..<sourceCount)
+        } else if requestedCount == 1 {
+            indices = [0]
+        } else {
+            let scale = Double(sourceCount - 1) / Double(requestedCount - 1)
+            indices = (0..<requestedCount).reduce(into: []) { result, index in
+                let candidate = Int((Double(index) * scale).rounded())
+                if result.last != candidate {
+                    result.append(candidate)
+                }
+            }
+        }
+        try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
+        let pattern = directoryURL.appendingPathComponent("frame_%05d.png")
+        let expression = indices.map { "eq(n\\,\($0))" }.joined(separator: "+")
+        _ = try FFmpegProcess.run(
+            tool: MediaTool.ffmpegPath,
+            arguments: [
+                "-v", "error", "-y", "-i", videoURL.path,
+                "-map", "0:v:0", "-vf", "select=\(expression)",
+                "-fps_mode", "vfr", "-frames:v", "\(indices.count)", pattern.path,
+            ]
+        )
+        let frameURLs = (try FileManager.default.contentsOfDirectory(
+            at: directoryURL,
+            includingPropertiesForKeys: nil
+        )).filter { $0.pathExtension.lowercased() == "png" }.sorted { $0.path < $1.path }
+        guard let first = frameURLs.first else {
+            throw MediaIOError.videoOperationFailed("No frames sampled from \(videoURL.path).")
+        }
+        let size = try imageSize(of: first)
+        return VideoFrameSequence(
+            frameURLs: frameURLs,
+            fps: sourceFPS,
+            frameWidth: size.width,
+            frameHeight: size.height,
+            sourceFrameIndices: indices
+        )
+    }
+
     static func frameAdmissionPlan(
         fromFFmpegShowInfo output: String,
         maximumFrameCount: Int

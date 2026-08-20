@@ -84,12 +84,20 @@ public struct VideoFrameSequence: Sendable, Hashable {
     public let fps: Double
     public let frameWidth: Int
     public let frameHeight: Int
+    public let sourceFrameIndices: [Int]?
 
-    public init(frameURLs: [URL], fps: Double, frameWidth: Int, frameHeight: Int) {
+    public init(
+        frameURLs: [URL],
+        fps: Double,
+        frameWidth: Int,
+        frameHeight: Int,
+        sourceFrameIndices: [Int]? = nil
+    ) {
         self.frameURLs = frameURLs
         self.fps = max(1, fps)
         self.frameWidth = max(0, frameWidth)
         self.frameHeight = max(0, frameHeight)
+        self.sourceFrameIndices = sourceFrameIndices
     }
 }
 

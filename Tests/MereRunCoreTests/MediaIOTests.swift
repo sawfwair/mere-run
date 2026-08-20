@@ -532,6 +532,37 @@ final class MediaIOTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: framesURL.path))
     }
 
+    func testVideoSamplingCoversTimelineWithinFrameLimit() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mediaio-video-sampling-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let videoURL = root.appendingPathComponent("input.mp4")
+        let framesURL = root.appendingPathComponent("sampled", isDirectory: true)
+        try MediaVideoIO.writeMP4(
+            rgb24: [UInt8](repeating: 127, count: 32 * 32 * 3 * 16),
+            width: 32,
+            height: 32,
+            frameCount: 16,
+            fps: 4,
+            to: videoURL
+        )
+
+        let sampled = try MediaVideoIO.sampleFrames(
+            from: videoURL,
+            into: framesURL,
+            framesPerSecond: 1,
+            maximumFrames: 3
+        )
+
+        XCTAssertEqual(sampled.frameURLs.count, 3)
+        XCTAssertEqual(sampled.sourceFrameIndices, [0, 8, 15])
+        XCTAssertEqual(sampled.frameWidth, 32)
+        XCTAssertEqual(sampled.frameHeight, 32)
+        XCTAssertTrue(sampled.frameURLs.allSatisfy { FileManager.default.fileExists(atPath: $0.path) })
+    }
+
     func testFFmpegExtractionRunsFrameAdmissionBeforeCreatingOutputDirectory() throws {
         guard isExecutableAvailable(MediaTool.ffmpegPath),
               isExecutableAvailable(MediaTool.ffprobePath) else {
