@@ -37,6 +37,171 @@ mere.run model benchmark fused --suite comprehensive --dry-run --json
 The default model matrix covers Qwen3.8 BF16 and 4-bit, Nemotron Lightning, and
 Laguna XS 2.1. Override it with `--models`.
 
+Completed local reference results for Qwen3.8 low reasoning, Laguna XS 2.1, and
+Nemotron Lightning are recorded in [Fused Comprehensive reference runs](benchmarks/fused-reference-runs.md).
+That page preserves the exact plan, runner, model-manifest, and receipt hashes
+alongside the per-source results, comparable non-vision scores, and limitations.
+
+### Exact source mix
+
+Counts below are cases before repeated trials. Lite therefore produces 48
+case-trial rows per model profile by default; Comprehensive produces 550.
+
+| Source family | Lite | Comprehensive | Pinned selection | What a passing answer must do |
+| --- | ---: | ---: | --- | --- |
+| Mere authored chat | 10 | 52 | Grounding, abstention, JSON and format following, summaries, action boundaries, chronology, arithmetic, conflict handling, privacy, explanation, rewriting, empathy, false-premise correction, uncertainty, recommendations, planning, injection resistance, synthesis, counterexamples, constrained creativity, and clarification | Satisfy every required phrase, required-alternative group, forbidden phrase, regex, JSON, bullet, and word-limit check declared by the case |
+| LongBench v1 | 2 | 7 | `hotpotqa`, `gov_report`, `qasper`, `2wikimqa`, `musique`, `multi_news`, and `passage_retrieval_en`, one pinned row from each | Meet the case's Mere threshold under QA-F1, ROUGE-L, or numeric retrieval scoring |
+| OpenAI HumanEval | 1 | 3 | `HumanEval/0`, `/3`, and `/8` | Return Python that defines the requested entry point and passes every embedded test |
+| EvalPlus HumanEval+ | 1 | 6 | `HumanEval/0`, `/3`, `/8`, `/32`, `/53`, and `/81` from HumanEval+ v0.1.10 | Pass the selected task's base and Plus tests in the local Python sandbox |
+| EvalPlus MBPP+ | 1 | 6 | `Mbpp/2`, `/3`, `/4`, `/6`, `/7`, and `/56` from MBPP+ v0.2.0 | Pass the selected task's base and Plus tests in the local Python sandbox |
+| LiveCodeBench | 1 | 6 | Release-v5 questions `1873_A`, `1883_B`, `1899_B`, `2727`, `2728`, and `2757`: three Codeforces-style stdin programs and three LeetCode-style functions across easy, medium, and hard strata | Pass every pinned public and private test for that row |
+| Mere authored tools | 3 | 10 | Email, project, audit, workspace, safe command-plan, attachment, no-tool, and destructive-confirmation cases | Emit the exact tool and required arguments, or correctly emit no tool call |
+| BFCL v3 | 2 | 10 | Simple Python and Java calls, parallel, multiple, parallel-multiple, irrelevance/no-call, and four pinned multi-turn histories | Match every expected call and argument with no missing or extra calls, or correctly make no call |
+| Mere authored vision | 3 | 10 | OCR, conflicting panels, chart extraction, spatial relation, counting, document layout, negative evidence, multi-panel consistency, dense captioning, and action boundary | Ground the answer in the generated image and satisfy every required and forbidden phrase check |
+| **Total** | **24** | **110** | **12 chat/long-context, 4 code, 5 tool, and 3 vision in Lite; 59, 21, 20, and 10 respectively in Comprehensive** | **Report category results separately; do not hide a weak lane in one composite** |
+
+The complete machine-readable case list, including difficulty, capability tags,
+selection rationale, and upstream id, lives in
+`Sources/MereRunCLI/BenchmarkSuites/mere-fused-v1.json`. The exact external
+revisions and file hashes live in `mere-fused-sources-v1.json`. A dry run prints
+the resolved list without loading a model:
+
+```bash
+mere.run model benchmark fused --suite comprehensive --dry-run --json
+```
+
+### What the questions and answers look like
+
+The chat, tool, and vision prompts below are literal Mere-owned suite cases.
+The HumanEval example abbreviates its MIT-licensed contract for readability,
+and the LongBench example is deliberately paraphrased; the frozen external
+fixture contains the exact pinned prompts, tests, and references.
+
+#### Grounded chat and false-premise correction
+
+Case `mere.chat.false-premise` gives the model structured evidence and then
+asks a question whose premise conflicts with it:
+
+```text
+Evidence:
+deployment_id="dep_812"
+status="succeeded"
+completed_at="2026-08-17T14:22:00Z"
+warnings=0
+
+Question: Why did deployment dep_812 fail?
+```
+
+One passing answer is:
+
+```text
+It did not fail; deployment dep_812 succeeded at 2026-08-17T14:22:00Z.
+```
+
+The scorer requires the actual status and timestamp plus a correction of the
+premise, and rejects explanations beginning from an invented failure.
+
+#### Tool selection and exact arguments
+
+Case `mere.tool.email-search` asks:
+
+```text
+Find recent email from abenewsoil@gmail.com in sawfwair after 2026-06-01.
+```
+
+The answer is not prose. It must be the equivalent of this parsed tool call:
+
+```json
+{
+  "name": "mere_email_search",
+  "arguments": {
+    "sender": "abenewsoil@gmail.com",
+    "workspace": "sawfwair",
+    "after": "2026-06-01"
+  }
+}
+```
+
+Changing the workspace, dropping the date, calling a different tool, or adding
+an extra tool call fails the strict case. Other tool cases explicitly require
+no call when visible evidence is already sufficient or confirmation is absent.
+
+#### Executed code, not prose similarity
+
+The embedded `HumanEval/0` task supplies this signature and contract (docstring
+abbreviated here):
+
+```python
+def has_close_elements(numbers: list[float], threshold: float) -> bool:
+    """Return whether any two numbers are closer than threshold."""
+```
+
+One valid answer shape is:
+
+```python
+def has_close_elements(numbers, threshold):
+    return any(
+        abs(numbers[i] - numbers[j]) < threshold
+        for i in range(len(numbers))
+        for j in range(i + 1, len(numbers))
+    )
+```
+
+The benchmark extracts the code, combines it with the pinned tests, and runs it
+inside the selected local sandbox. HumanEval+ and MBPP+ use the same functional
+contract with stronger Plus tests. LiveCodeBench additionally checks complete
+stdin programs and function-style submissions against pinned public and
+private cases. A plausible explanation receives zero if the code does not run
+and pass.
+
+#### Long-context retrieval and synthesis
+
+A LongBench row can present many documents followed by a question such as
+“which of these two events happened first?” The answer may be only the entity
+name. Other rows ask for a government-report or multi-news summary, research
+paper QA, multi-hop QA, or a numbered passage retrieval result. These are not
+scored with phrase presence: the suite uses normalized QA-F1, ROUGE-L, or
+numeric retrieval against the pinned references and applies the threshold
+declared by that case.
+
+#### Vision grounding and action boundaries
+
+Case `mere.vision.action-boundary` renders an image whose status reads `DRAFT`
+and whose available button reads `PUBLISH`, then asks:
+
+```text
+Has this item already been published? Answer from the visible status, not the button label.
+```
+
+One passing answer is:
+
+```text
+No. Its visible status is DRAFT.
+```
+
+Claiming that the item was published because a Publish button is visible fails.
+The other generated images make similarly inspectable OCR, chart, counting,
+spatial, conflict, document-layout, negative-evidence, and captioning checks.
+
+### How strict pass and score differ
+
+Each row records both `passed` and `score`. Strict pass means the entire case
+contract passed. The score preserves useful partial signal where the adapter
+supports it:
+
+- Mere chat and tool cases report the fraction of deterministic checks passed;
+  strict pass still requires all checks.
+- HumanEval, EvalPlus, LiveCodeBench, and external BFCL rows are binary: the
+  whole executable or tool-call contract passes or it does not.
+- LongBench records its 0-to-1 text metric and separately applies the pinned
+  pass threshold.
+- Unsupported capabilities, such as an image case sent to a text-only catalog
+  model, are unscored and reported separately rather than counted as wrong.
+
+Always compare the strict pass rate, mean score, unscored count, and per-source
+breakdown together. A model can be excellent at chat and tool use while being
+materially weaker at executable code, or the reverse.
+
 A real fused run never downloads a missing model. Every selected catalog id
 must already resolve under the active `--models-root`; otherwise the command
 stops before MLX initialization. The plan records the mere.run version and exact

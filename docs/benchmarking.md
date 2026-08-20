@@ -27,6 +27,11 @@ For the model-comparison contract, provenance format, external fixture import,
 and raw-versus-policy logprob semantics, see
 [Mere fused model evaluation](benchmark-fused.md).
 
+For the completed August 2026 Qwen3.8 low-reasoning, Laguna XS 2.1, and
+Nemotron Lightning receipts, including comparable non-vision results,
+per-source scores, and exact hashes, see
+[Fused Comprehensive reference runs](benchmarks/fused-reference-runs.md).
+
 For repository-owned cases, prompts, scorers, and qualification gates that must
 remain outside this public repository, use the open
 [external evaluation-pack interface](evaluation-packs.md).
@@ -72,9 +77,11 @@ covering:
 - conflicting evidence
 - avoiding fabricated links, secrets, and command output
 
-The default sampling is deterministic: `--temperature 0 --top-p 1`. Scoring uses
-deterministic checks such as required phrases, forbidden phrases, regexes, JSON
-keys, and bullet counts.
+This standalone regression lane defaults to deterministic sampling:
+`--temperature 0 --top-p 1`. That default does **not** apply to the fused model
+quality suite, which always uses each model family's pinned non-greedy native
+profile and repeated trials. Scoring here uses deterministic checks such as
+required phrases, forbidden phrases, regexes, JSON keys, and bullet counts.
 
 For stochastic evaluation, the chat, tool-call, and code lanes expose
 `--top-k` and `--min-p` in addition to temperature and top-p. A positive min-p
