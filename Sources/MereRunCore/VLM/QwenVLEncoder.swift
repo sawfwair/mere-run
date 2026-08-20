@@ -255,6 +255,27 @@ public final class QwenVLEncoder: Module {
         )
     }
 
+    /// Encodes a complete multimodal presentation and returns the final,
+    /// normalized language-model hidden state. Retrieval models pool the last
+    /// valid token from this sequence instead of applying the language-model
+    /// head used by caption generation.
+    public func forwardMultimodalHiddenState(
+        inputIds: MLXArray,
+        attentionMask: MLXArray,
+        images: [ConditioningImage]
+    ) throws -> MLXArray {
+        let finalLayer = textEncoder.configuration.numHiddenLayers - 1
+        guard let hiddenState = try forwardMultimodalActivationHiddenState(
+            inputIds: inputIds,
+            attentionMask: attentionMask,
+            images: images,
+            activationLayer: finalLayer
+        ) else {
+            preconditionFailure("Qwen3-VL text encoder has no final transformer layer")
+        }
+        return textEncoder.encoder.norm(hiddenState)
+    }
+
     private static func multimodalPositionIDs(
         sequenceLength: Int,
         images: [ConditioningImage],

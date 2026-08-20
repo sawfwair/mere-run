@@ -50,7 +50,8 @@ Public tree:
     - `mere.run speech profile list` — List saved speech voice profiles.
     - `mere.run speech profile create` — Create a speech profile from reference audio.
     - `mere.run speech profile delete` — Delete a speech profile by ID.
-- [`mere.run vision`](/runtime/vision) — Caption, inspect, face-analyze, segment, track, pose, depth, geometry, optical flow, and OCR visual media.
+- [`mere.run vision`](/runtime/vision) — Embed, caption, inspect, face-analyze, segment, track, pose, depth, geometry, optical flow, and OCR visual media.
+  - `mere.run vision embed` — Generate shared text/image embeddings with native Qwen3-VL.
   - `mere.run vision caption` — Generate training-friendly captions for images.
   - `mere.run vision inspect` — Describe or answer questions about an image using Qwen3-VL.
   - `mere.run vision face` — Detect faces, create identity embeddings, and compare faces locally.
@@ -243,6 +244,7 @@ are:
 - Text chat: `text-chat-gemma4`, `text-chat-mebot`, `text-chat-psi-agent`, `text-chat-q36-nano`, `vision-chat-q38-27b`, `vision-chat-q38-27b-4bit`, `text-chat-lfm25-2.6b-4bit`, `text-chat-lfm25-a1b-8bit`, `vision-chat-lfm25-3b-8bit`
 - Text code / agents: `text-agent-qwen35-9b`, `text-agent-ornith-9b`, `text-agent-ornith-35b-mlx-4bit`, `text-agent-ornith-35b-mlx-6bit`, `text-agent-ornith-35b-mlx-8bit`, `text-agent-ornith-35b-mlx`, `text-agent-ornith-35b`, `text-code-north-mini`, `text-code-qwen3`
 - Text embed: `text-embed-qwen3-0.6b`
+- Multimodal embed: `vision-embed-qwen3-vl-2b`
 - Text anonymize: `text-anonymize-privacy-filter`
 - Speech TTS: `speech-tts-qwen3-nano`, `speech-tts-qwen3-customvoice`
 - Speech ASR: `speech-asr-qwen3`, `speech-asr-parakeet`

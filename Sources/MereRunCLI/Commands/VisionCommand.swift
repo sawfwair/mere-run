@@ -3,8 +3,9 @@ import ArgumentParser
 struct Vision: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "vision",
-        abstract: "Caption, inspect, face-analyze, segment, track, pose, depth, geometry, optical flow, and OCR visual media.",
+        abstract: "Embed, caption, inspect, face-analyze, segment, track, pose, depth, geometry, optical flow, and OCR visual media.",
         subcommands: [
+            VisionEmbed.self,
             VisionCaption.self,
             VisionInspect.self,
             VisionFace.self,

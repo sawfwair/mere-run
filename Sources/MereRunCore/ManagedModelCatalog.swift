@@ -516,6 +516,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case parakeet
     case sortformer
     case qwen3Embedding
+    case qwen3VLEmbedding
     case privacyFilter
     case codegenGGUF
     case deepseekV4FlashIMatrixGGUF
@@ -2209,6 +2210,17 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["text embed"]
         ),
         ManagedModelSpec(
+            id: Qwen3VLEmbeddingCatalog.modelID,
+            category: .visionEmbed,
+            installShape: .directoryRoot,
+            hubFallback: Qwen3VLEmbeddingCatalog.hubFallbackConfig,
+            upstreamRepoId: Qwen3VLEmbeddingCatalog.defaultRepoID,
+            upstreamRevision: Qwen3VLEmbeddingCatalog.defaultRevision,
+            validationKind: .qwen3VLEmbedding,
+            estimatedDownloadBytes: 4_266_564_017,
+            defaultCLICommands: ["vision embed"]
+        ),
+        ManagedModelSpec(
             id: OpenAIPrivacyFilterCatalog.modelId,
             category: .textAnonymize,
             installShape: .directoryRoot,
@@ -3814,6 +3826,8 @@ public extension ManagedModelSpec {
             return Self.missingSortformerPaths(in: rootURL, fileManager: fileManager)
         case .qwen3Embedding:
             return Qwen3EmbeddingResources(rootURL: rootURL).validate(fileManager: fileManager)
+        case .qwen3VLEmbedding:
+            return Qwen3VLEmbeddingResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .privacyFilter:
             return OpenAIPrivacyFilterResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .codegenGGUF:

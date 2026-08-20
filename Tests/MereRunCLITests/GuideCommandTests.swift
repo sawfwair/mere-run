@@ -77,6 +77,23 @@ final class GuideCommandTests: XCTestCase {
         XCTAssertTrue(rendered.contains("does not fabricate confidence maps"))
     }
 
+    func testVisionEmbedGuideDocumentsSimilarityBoundary() throws {
+        let entry = try GuideCommand.resolveEntry(
+            commandPath: ["vision", "embed"],
+            model: Qwen3VLEmbeddingCatalog.modelID
+        )
+        let rendered = try GuideCommand.render(
+            entry: entry,
+            model: Qwen3VLEmbeddingCatalog.modelID,
+            json: false
+        )
+
+        XCTAssertEqual(entry.topic, "vision-embed")
+        XCTAssertTrue(rendered.contains("L2-normalized embeddings"))
+        XCTAssertTrue(rendered.contains("not identity proof"))
+        XCTAssertTrue(rendered.contains("a white SUV"))
+    }
+
     func testGeometryGuidesResolvePinnedNativeModels() throws {
         let still = try GuideCommand.resolveEntry(
             commandPath: ["vision", "geometry"],

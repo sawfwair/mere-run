@@ -104,6 +104,7 @@ an effective overlay; they are not a second capability catalog.
 | `speech-diarization` | `speech-diarization-sortformer` |
 | `text-code` | `text-code-qwen3` |
 | `text-embed` | `text-embed-qwen3-0.6b` |
+| `vision-embed` | `vision-embed-qwen3-vl-2b` |
 | `text-anonymize` | `text-anonymize-privacy-filter` |
 | `vision-ocr` | `vision-ocr-infinity-pro` |
 | `vision-ocr` | `vision-ocr-infinity-pro-int8` |

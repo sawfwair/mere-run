@@ -168,6 +168,7 @@ public enum MereRunCapabilityCatalog {
             imageReconstruct3D,
             imageReconstruct3DTrellis2,
             imageReconstruct3DMultiview,
+            visionEmbed,
             visionInspect,
             visionCaption,
             visionOCR,
@@ -676,6 +677,27 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--top-p", label: "Top-p", kind: .number)
         ],
         output: .init(kind: .text)
+    )
+
+    public static let visionEmbed = MereRunCommandCapability(
+        id: "vision.embed",
+        command: ["vision", "embed"],
+        title: "Multimodal embeddings",
+        summary: "Generate shared text and image embeddings with native Qwen3-VL.",
+        options: [
+            .init(flag: "--text", label: "Text inputs", kind: .string, repeatable: true),
+            .init(flag: "--image", label: "Image inputs", kind: .file, repeatable: true),
+            .init(flag: "--input-json", label: "JSON batch", kind: .file),
+            .init(flag: "--instruction", label: "Retrieval instruction", kind: .string),
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--dimensions", label: "Dimensions", kind: .integer),
+            .init(flag: "--max-tokens", label: "Max tokens", kind: .integer),
+            .init(flag: "--min-pixels", label: "Minimum pixels", kind: .integer),
+            .init(flag: "--max-pixels", label: "Maximum pixels", kind: .integer),
+            .init(flag: "--output", label: "Output", kind: .file),
+            .init(flag: "--pretty", label: "Pretty JSON", kind: .boolean)
+        ],
+        output: .init(kind: .file, fileExtension: "json")
     )
 
     public static let visionCaption = MereRunCommandCapability(

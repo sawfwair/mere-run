@@ -19,6 +19,7 @@ import Testing
         "image.reconstruct-3d": ImageReconstruct3D.helpMessage(),
         "image.reconstruct-3d-trellis2": ImageReconstruct3DTrellis2.helpMessage(),
         "image.reconstruct-3d-multiview": ImageReconstruct3DMultiview.helpMessage(),
+        "vision.embed": VisionEmbed.helpMessage(),
         "vision.inspect": VisionInspect.helpMessage(),
         "vision.caption": VisionCaption.helpMessage(),
         "vision.ocr": VisionOCR.helpMessage(),

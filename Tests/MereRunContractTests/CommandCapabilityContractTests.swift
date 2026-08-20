@@ -20,6 +20,7 @@ import Testing
         "image.reconstruct-3d",
         "image.reconstruct-3d-trellis2",
         "image.reconstruct-3d-multiview",
+        "vision.embed",
         "vision.inspect",
         "vision.caption",
         "vision.ocr",
@@ -107,7 +108,7 @@ import Testing
         "config.get",
         "config.unset"
     ])
-    #expect(document.commands.count == 100)
+    #expect(document.commands.count == 101)
 
     let data = try JSONEncoder().encode(document)
     let decoded = try JSONDecoder().decode(MereRunCapabilityDocument.self, from: data)
