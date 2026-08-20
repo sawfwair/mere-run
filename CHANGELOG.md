@@ -6,6 +6,15 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.42.0 - 2026-08-20
+
+This release expands mere.run's native model lineup with official Ornith 1.5,
+Muse Glimmer DFlash2 acceleration, and multimodal Nemotron 3 Nano Omni. It also
+adds portable external evaluation packs, publishes fused benchmark references,
+hardens iOS Studio downloads and runtime residency, ships compact MiniMax-H3
+BF16 and Q8 packages, and brings the Apple app sources under one `apps/`
+layout.
+
 ### Apple app layout
 
 - grouped the open-source macOS and iOS clients under `apps/`, with their
@@ -58,6 +67,14 @@ The format is based on Keep a Changelog.
   authorization, execute without a shell in a reduced environment, and are
   bounded by timeout and output validation.
 
+### Fused benchmark references
+
+- published completed Comprehensive reference results for Qwen3.8 low
+  reasoning, Laguna XS 2.1, and Nemotron Lightning. The frozen receipts retain
+  exact runner, model, plan, and content hashes; the documentation distinguishes
+  strict passes from partial scores and does not present the local results as
+  upstream leaderboard claims.
+
 ### Muse Glimmer DFlash2
 
 - added native Swift/MLX support for Inco's Muse Glimmer DFlash2 companion:
@@ -82,6 +99,12 @@ The format is based on Keep a Changelog.
   and video understanding, Parakeet audio understanding, local video sampling,
   media-aware OpenAI chat completions, source-bound expert caching, installed
   inference smoke coverage, and first-class catalog/runtime-pool support.
+
+### Speech
+
+- established a fresh task-local MLX default stream at the prepared Parakeet
+  decode boundary and routed file and in-memory transcription through the same
+  guarded path, fixing detached-task and generator-actor decode failures.
 
 ### iOS Studio
 
@@ -153,6 +176,28 @@ The format is based on Keep a Changelog.
   transactional managed replacement with rollback after final validation or
   alias-install failures. External cache use is explicit in preflight and
   reports that disconnecting the volume makes the model unavailable.
+
+### Included pull requests
+
+- exact release range: [#327](https://github.com/sawfwair/mere-run/pull/327),
+  [#328](https://github.com/sawfwair/mere-run/pull/328),
+  [#329](https://github.com/sawfwair/mere-run/pull/329),
+  [#330](https://github.com/sawfwair/mere-run/pull/330),
+  [#331](https://github.com/sawfwair/mere-run/pull/331),
+  [#332](https://github.com/sawfwair/mere-run/pull/332),
+  [#333](https://github.com/sawfwair/mere-run/pull/333),
+  [#334](https://github.com/sawfwair/mere-run/pull/334),
+  [#335](https://github.com/sawfwair/mere-run/pull/335),
+  [#337](https://github.com/sawfwair/mere-run/pull/337),
+  [#338](https://github.com/sawfwair/mere-run/pull/338),
+  [#339](https://github.com/sawfwair/mere-run/pull/339),
+  [#340](https://github.com/sawfwair/mere-run/pull/340),
+  [#341](https://github.com/sawfwair/mere-run/pull/341),
+  [#344](https://github.com/sawfwair/mere-run/pull/344),
+  [#345](https://github.com/sawfwair/mere-run/pull/345),
+  [#346](https://github.com/sawfwair/mere-run/pull/346),
+  [#347](https://github.com/sawfwair/mere-run/pull/347), and
+  [#348](https://github.com/sawfwair/mere-run/pull/348).
 
 ## 0.41.0 - 2026-08-18
 
