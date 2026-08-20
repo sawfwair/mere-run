@@ -767,17 +767,43 @@ extension GateRunner {
         )
         let transcript = run.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
         let overlap = Self.wordOverlap(source: sentence, candidate: transcript)
+        var combinedTranscript = transcript
+        var liveSemanticFailure: String?
+        var wallSeconds = run.wallSeconds
+        if backend == "parakeet" {
+            let liveRun = try await exec(
+                [
+                    "speech", "transcribe", input.path,
+                    "--stream",
+                    "--backend", backend,
+                    "--model", model,
+                    "--no-timestamps",
+                    "--quiet",
+                ],
+                timeout: 1_800
+            )
+            let liveTranscript = liveRun.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+            let liveOverlap = Self.wordOverlap(source: sentence, candidate: liveTranscript)
+            combinedTranscript += "\n" + liveTranscript
+            wallSeconds += liveRun.wallSeconds
+            if liveOverlap < 0.5 {
+                liveSemanticFailure = String(
+                    format: "Live ASR transcript lost the spoken fixture (%.0f%% word overlap)",
+                    liveOverlap * 100
+                )
+            }
+        }
         return GateObservation(
-            hash: Self.sha256(Data(transcript.utf8)),
+            hash: Self.sha256(Data(combinedTranscript.utf8)),
             secondRunHash: nil,
-            wallSeconds: run.wallSeconds,
+            wallSeconds: wallSeconds,
             decodeTps: nil,
-            semanticFailure: overlap >= 0.5
-                ? nil
-                : String(
+            semanticFailure: overlap < 0.5
+                ? String(
                     format: "ASR transcript lost the spoken fixture (%.0f%% word overlap)",
                     overlap * 100
                 )
+                : liveSemanticFailure
         )
     }
 

@@ -39,6 +39,35 @@ fi
 swift_app_args=(build --product mere.run.app)
 swift_cli_args=(build --product mere.run)
 swift_bin_path_args=(build --show-bin-path)
+swift_scratch_path="${MERERUN_SWIFT_SCRATCH_PATH:-}"
+if [[ -n "$swift_scratch_path" ]]; then
+  if [[ "$swift_scratch_path" != /* ]]; then
+    echo "MERERUN_SWIFT_SCRATCH_PATH must be an absolute path: ${swift_scratch_path}" >&2
+    exit 64
+  fi
+  swift_app_args+=(--scratch-path "$swift_scratch_path")
+  swift_cli_args+=(--scratch-path "$swift_scratch_path")
+  swift_bin_path_args+=(--scratch-path "$swift_scratch_path")
+fi
+
+private_build_roots=("$repo_root")
+source_path_maps=("${repo_root}=/src/mere-run")
+if [[ -n "$swift_scratch_path" && "$swift_scratch_path" != "${repo_root}/.build" ]]; then
+  private_build_roots+=("$swift_scratch_path")
+  source_path_maps+=("${swift_scratch_path}=/src/mere-run/.build")
+fi
+swift_path_map_args=()
+for source_path_map in "${source_path_maps[@]}"; do
+  swift_path_map_args+=(
+    -Xcc "-ffile-prefix-map=${source_path_map}"
+    -Xcxx "-ffile-prefix-map=${source_path_map}"
+    -Xswiftc -file-prefix-map
+    -Xswiftc "$source_path_map"
+  )
+done
+swift_app_args+=("${swift_path_map_args[@]}")
+swift_cli_args+=("${swift_path_map_args[@]}")
+swift_bin_path_args+=("${swift_path_map_args[@]}")
 if [[ "${MERERUN_SWIFT_DISABLE_INDEX_STORE:-0}" == "1" ]]; then
   swift_app_args+=(--disable-index-store)
   swift_cli_args+=(--disable-index-store)
@@ -63,6 +92,25 @@ build_dir="$(swift "${swift_bin_path_args[@]}")"
 executable="${build_dir}/mere.run.app"
 cli_executable="${build_dir}/mere.run"
 
+verify_private_build_path_absent() {
+  local candidate="$1"
+  local private_root
+  local embedded_path
+  for private_root in "${private_build_roots[@]}"; do
+    while IFS= read -r embedded_path; do
+      # SwiftPM intentionally embeds sibling resource-bundle fallbacks in Bundle.module.
+      # Installed bundles resolve their main-bundle copy first; these are not source paths
+      # and cannot appear in MLX/C++ diagnostics. Everything else remains release-blocking.
+      if [[ "$embedded_path" == "${build_dir}/"*.bundle ]]; then
+        continue
+      fi
+      echo "Private source path leaked into release executable: ${candidate}" >&2
+      echo "Leaked path: ${embedded_path}" >&2
+      exit 66
+    done < <(strings -a "$candidate" | grep -F "${private_root}/" || true)
+  done
+}
+
 if [[ ! -x "$executable" ]]; then
   echo "Built executable not found: ${executable}" >&2
   exit 66
@@ -71,6 +119,14 @@ fi
 if [[ ! -x "$cli_executable" ]]; then
   echo "Built CLI not found: ${cli_executable}" >&2
   exit 66
+fi
+
+# Debug executables intentionally retain third-party Swift source paths in DWARF and
+# assertion metadata. Only release executables are shipped, so enforce the private-path
+# boundary on the optimized payloads without rejecting CI's ad-hoc debug bundle.
+if [[ "$configuration" == "release" ]]; then
+  verify_private_build_path_absent "$executable"
+  verify_private_build_path_absent "$cli_executable"
 fi
 
 bundle="${build_dir}/MereRun.app"
