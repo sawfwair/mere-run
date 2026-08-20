@@ -1,4 +1,4 @@
-# Development Workflow
+# Development workflow
 
 This page describes the expected local workflow for editing `mere-run`.
 
@@ -31,14 +31,14 @@ export MERERUN_FFMPEG=/opt/ffmpeg/bin/ffmpeg
 export MERERUN_FFPROBE=/opt/ffmpeg/bin/ffprobe
 ```
 
-## The normal loop
+## Standard development loop
 
 For most changes:
 
-1. make the code or docs change
-2. run the smallest relevant local check
-3. run `./scripts/check.sh`
-4. run the installed smoke sweep if you touched real runtime behavior
+1. Make the code or documentation change.
+2. Run the smallest relevant local check.
+3. Run `./scripts/check.sh`.
+4. If you changed real runtime behavior, run the installed smoke sweep.
 
 That keeps the package healthy without forcing a full manual validation cycle
 for every tiny edit.
@@ -51,7 +51,7 @@ for every tiny edit.
 ./scripts/check.sh
 ```
 
-This catches docs hygiene regressions and verifies the CLI help surface still
+This catches documentation hygiene regressions and verifies the CLI help surface still
 matches the public tree.
 
 If the change adds, removes, renames, or redescribes a CLI command, first run:
@@ -158,7 +158,8 @@ That writes artifacts such as
 `mere-run-<version>-linux-x86_64-cuda.tar.gz` and
 `mere-run-cuda_<version>_amd64.deb`. Real CUDA runtime smoke belongs on an
 actual GPU host. CUDA package builders need CMake 3.25 or newer for the
-upstream `mlx-swift` CUDA bridge. On Ubuntu 22.04/Jammy images, install a current CMake with
+upstream `mlx-swift` CUDA bridge. On Ubuntu 22.04/Jammy images, install CMake
+3.25 or later with
 `python3 -m pip install --upgrade "cmake>=3.25,<4"` before starting the CUDA
 package build.
 
@@ -174,17 +175,22 @@ An explicit `MERERUN_PACKAGE_LINUX_DEPS` value bypasses the automatic CUDA
 major gate and is written verbatim, making dependency compatibility the
 packager's responsibility.
 
+Active release builds cover macOS and the configured `tensor.local` x86_64 CUDA
+builder. The arm64 CUDA release lane is paused while no matching build host is
+available. Do not publish an arm64 CUDA artifact until it has been rebuilt and
+smoke-tested on matching hardware.
+
 ## Model-store expectations
 
 The public runtime is hard-cut to the canonical OSS model IDs. That means:
 
-- runtime code should use canonical public IDs only
-- examples should use canonical public IDs only
-- model-store and server troubleshooting should point readers at
+- Runtime code must use canonical public IDs only.
+- Examples must use canonical public IDs only.
+- Model-store and server troubleshooting must point readers at
   `mere.run status`, `mere.run model list`, `mere.run model info`, and
-  `mere.run model repair-manifests`
+  `mere.run model repair-manifests`.
 
-When testing locally, inspect your current state with:
+When testing locally, inspect the machine state with:
 
 ```bash
 swift run mere.run status
@@ -196,51 +202,54 @@ swift run mere.run model info image-klein-max
 
 ### If you touch the public command tree
 
-- keep the modality-first structure intact
-- preserve stdout and stderr discipline
-- update `docs/cli.md` if the user-facing behavior changes
-- update quickstarts, cookbooks, and runtime docs when the command becomes part
-  of setup or troubleshooting
-- add or update `Tests/MereRunCLITests`
+- Keep the modality-first structure intact.
+- Preserve stdout and stderr discipline.
+- Update `docs/cli.md` if the user-facing behavior changes.
+- Update quickstarts, cookbooks, and runtime documentation when the command
+  becomes part of setup or troubleshooting.
+- Add or update `Tests/MereRunCLITests`.
 
 ### If you touch runtime code
 
-- keep debug output behind the internal debug helper
-- avoid introducing new implicit hosted defaults
-- keep model resolution explicit and canonical
-- add or update the most local tests you can
-- for Linux media I/O, test executable discovery through `MERERUN_FFMPEG`,
-  `MERERUN_FFPROBE`, and `PATH` without requiring real model checkpoints
+- Keep debug output behind the internal debug helper.
+- Do not introduce implicit hosted defaults.
+- Keep model resolution explicit and canonical.
+- Add or update the closest relevant tests.
+- For Linux media I/O, test executable discovery through `MERERUN_FFMPEG`,
+  `MERERUN_FFPROBE`, and `PATH` without requiring real model checkpoints.
 
 ### If you touch docs
 
-- teach the current public OSS surface
-- prefer links between docs pages over repeating large blocks of reference text
+- Follow the [documentation style guide](documentation-style.md).
+- Describe the public OSS behavior that the repository implements.
+- Link to the canonical page instead of repeating large reference sections.
+- Use reserved domains and fictional identifiers in examples.
+- Run `bash ./scripts/check-docs-examples.sh` and `pnpm docs:build`.
 
 ## Contribution boundaries
 
-This repo is intentionally scoped to the package and CLI. Changes should not
+This repository is intentionally scoped to the package and CLI. Changes must not
 reintroduce:
 
-- hosted-service assumptions
-- billing or entitlement logic
-- app-store-only release behavior
-- relay/web/app-specific product layers
+- Hosted-service assumptions.
+- Billing or entitlement logic.
+- App-store-only release behavior.
+- Relay, web, or app-specific product layers.
 
 See the root `CONTRIBUTING.md` file for the short policy version.
 
-## A good contributor checklist
+## Contributor checklist
 
-Before opening a PR:
+Before you open a pull request:
 
-- `swift build` passes
-- `swift test` passes
-- `./scripts/check.sh` passes
-- `pnpm docs:build` passes if you changed docs
+- `swift build` passes.
+- `swift test` passes.
+- `./scripts/check.sh` passes.
+- `pnpm docs:build` passes if you changed documentation.
 - `gitleaks detect --source . --config .gitleaks.toml --redact --no-banner`
-  passes before a public release
-- the docs reflect any user-facing change
-- the public command and model vocabulary remain canonical
+  passes before a public release.
+- The documentation reflects any user-facing change.
+- The public command and model vocabulary remain canonical.
 
 If you changed runtime behavior against real models, also include the result of:
 

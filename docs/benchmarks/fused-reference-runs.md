@@ -1,10 +1,10 @@
-# Fused Comprehensive reference runs
+# Fused comprehensive reference runs
 
-These are completed local reference receipts captured on August 18–20, 2026.
-They are **not** upstream leaderboard scores. They measure the pinned Mere
-Comprehensive subset, scorers, sampling profiles, and runtime identified below.
-Future runner, fixture, sandbox, model, or profile changes require a new dated
-receipt; they do not silently replace these results.
+These completed local reference receipts were captured from August 18 through
+August 20, 2026. They are **not** upstream leaderboard scores. They measure the
+pinned Mere `comprehensive` subset, scorers, sampling profiles, and runtime
+listed on this page. Runner, fixture, sandbox, model, or profile changes require
+a new dated receipt; they do not replace these results.
 
 ## Completed profile scope
 
@@ -75,58 +75,59 @@ about the complete upstream benchmark collections.
 
 ### Qwen3.8 27B low-reasoning receipt
 
-- Model id: `vision-chat-q38-27b`
-- Artifact: `Qwen/Qwen3.8-27B`
-- Artifact revision: `1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0`
-- Runtime-manifest SHA-256:
+- **Model ID:** `vision-chat-q38-27b`.
+- **Artifact:** `Qwen/Qwen3.8-27B`.
+- **Artifact revision:** `1d4bf0f2ff6012fd82039f2fa52739d0dd7c60c0`.
+- **Runtime-manifest SHA-256:**
   `c5813b1044dff6f7aec2464c31d829f96aba19671839b70d83d617a6a1c42ec0`
-- Profile: `qwen3.8-native-low`; reasoning effort 0.2, thinking enabled,
+- **Profile:** `qwen3.8-native-low`; reasoning effort 0.2, thinking enabled,
   temperature 1.0, top-p 0.95, top-k 20, min-p 0
-- Checkpoint window: `2026-08-20T01:15:56Z` to `2026-08-20T09:21:19Z`
-- Completion scope: low 550/550; medium 0/550; xhigh 0/550
-- Plan SHA-256:
+- **Checkpoint window:** `2026-08-20T01:15:56Z` to `2026-08-20T09:21:19Z`.
+- **Completion scope:** Low 550/550; medium 0/550; xhigh 0/550.
+- **Plan SHA-256:**
   `64a9b0fa53478c177947101cb385ef73ac6025827fbb8be2d9031a719c13d5b2`
-- Frozen receipt filename: `qwen38-low-comprehensive-b944c0e7.json`
-- Receipt SHA-256:
+- **Frozen receipt filename:** `qwen38-low-comprehensive-b944c0e7.json`.
+- **Receipt SHA-256:**
   `c6b70396f183ec7183563d0b2789a32893841285e843cafb8d3ff796e18698f4`
 
 ### Laguna XS 2.1 receipt
 
-- Model id: `text-chat-laguna-xs-2-1`
-- Artifact: `poolside/Laguna-XS-2.1-NVFP4-mlx`
-- Artifact revision: `841778bda563a36104dd521e37d99218e46f4f25`
-- Runtime-manifest SHA-256:
+- **Model ID:** `text-chat-laguna-xs-2-1`.
+- **Artifact:** `poolside/Laguna-XS-2.1-NVFP4-mlx`.
+- **Artifact revision:** `841778bda563a36104dd521e37d99218e46f4f25`.
+- **Runtime-manifest SHA-256:**
   `213b9c6ee642824a2294715aa37c84ee5772e45ca2d671f3cc2aafa2e5c368f7`
-- Profile: temperature 1.0, top-p 1.0, top-k 20, min-p 0.02
-- Checkpoint window: `2026-08-19T12:47:30Z` to `2026-08-19T14:47:50Z`
-- Plan SHA-256:
+- **Profile:** Temperature 1.0, top-p 1.0, top-k 20, min-p 0.02.
+- **Checkpoint window:** `2026-08-19T12:47:30Z` to `2026-08-19T14:47:50Z`.
+- **Plan SHA-256:**
   `ba0c0785c17f857a58428c024eae9448130b749e39c4e525eb60910c16720af1`
-- Receipt filename: `laguna-xs-2-1-comprehensive-b944c0e7.json`
-- Receipt SHA-256:
+- **Receipt filename:** `laguna-xs-2-1-comprehensive-b944c0e7.json`.
+- **Receipt SHA-256:**
   `6b8ddccd034cd00515becbb6f7eb31d12a2f8aae2ccb93d00cc7212237dd522d`
 
 ### Nemotron Lightning receipt
 
-- Model id: `text-chat-nemotron-35-lightning`
-- Managed artifact:
+- **Model ID:** `text-chat-nemotron-35-lightning`.
+- **Managed artifact:**
   `Sawfwair/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4-MLX`
-- Managed artifact revision:
+- **Managed artifact revision:**
   `6699e5fd3f0c5b392bb3f8bac2443276bb41958a`
-- Pinned base-model revision:
+- **Pinned base-model revision:**
   `nvidia/NVIDIA-Nemotron-3.5-Lightning-30B-A3B-NVFP4@e0b753dc24903ad4d62f5696077da22020eca89a`
-- Runtime-manifest SHA-256:
+- **Runtime-manifest SHA-256:**
   `369da6748557f0a3a05256cbeea933e789b7a9b15c5e08403a24946ec6b453e7`
-- Profile: temperature 1.0, top-p 0.95, top-k disabled, min-p 0
-- Checkpoint window: `2026-08-18T18:20:13Z` to `2026-08-19T12:24:41Z`
-- Plan SHA-256:
+- **Profile:** Temperature 1.0, top-p 0.95, top-k disabled, min-p 0.
+- **Checkpoint window:** `2026-08-18T18:20:13Z` to `2026-08-19T12:24:41Z`.
+- **Plan SHA-256:**
   `bd04d29ac3a67b23d9c23ffc9477b7284274adf22de14af65cd7ac14de5aa8a7`
-- Receipt filename: `nemotron-lightning-comprehensive-b944c0e7.json`
-- Receipt SHA-256:
+- **Receipt filename:** `nemotron-lightning-comprehensive-b944c0e7.json`.
+- **Receipt SHA-256:**
   `b1631e7504c74fcf41a34b44c1969dc2d6984b75e43a3bdac29fe9894b3ecd68`
 
 ## Interpretation limits
 
-- These results apply to the exact Mere subset and hashes above, not the full
+- These results apply to the exact Mere subset and hashes in the shared run
+  contract, not the full
   HumanEval+, MBPP+, LiveCodeBench, BFCL, or LongBench leaderboards.
 - Qwen3.8 medium and xhigh were intentionally deferred. The Qwen checkpoint is
   complete for low reasoning and partial for its three-profile plan.

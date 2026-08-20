@@ -1,4 +1,4 @@
-# Model Sources
+# Model sources
 
 Weights reach `mere.run` in three local-first ways:
 
@@ -31,7 +31,7 @@ metadata into the external directory. Externally registered files remain
 read-only and are outside `model remove`, `model gc`, manifest repair, and
 storage-reclamation ownership.
 
-## Canonical Managed Model IDs
+## Canonical managed model IDs
 
 This is the authoritative public catalog list. It is kept in sync with
 `ManagedModelCatalog.allSpecs`, and the test suite fails if the table drifts
@@ -171,13 +171,12 @@ an effective overlay; they are not a second capability catalog.
 ### Restricted model downloads
 
 mere.run is free and open source, but model and component licenses remain the
-terms of their respective owners. mere.run does not bundle these weights,
-decide whether a user's intended use qualifies, or police use after install.
-For every new download that is access-gated or carries a material use limit—
-such as non-commercial, research-only, or revenue-limited terms—the user must
-review the listed terms and pass `--accept-model-license`. Passing the flag and
-continuing with the download confirms that the user accepts those terms and
-agrees to comply with them:
+terms of their respective owners. mere.run does not bundle these weights or
+decide whether your intended use qualifies. Before downloading an access-gated
+model or one with a material use limit, such as non-commercial, research-only,
+or revenue-limited terms, review the listed terms and pass
+`--accept-model-license`. Passing the flag and continuing with the download
+confirms that you accept those terms and agree to comply with them:
 
 ```bash
 mere.run model pull vision-face-buffalo-l --accept-model-license
@@ -261,8 +260,8 @@ treated as a new restriction on the converted weights.
 `fafaab5faa1617a0ca52d38dd3dc4bd636800d3d`; the weights are installed
 separately and are not vendored in this repository.
 
-Most catalog IDs have managed Hugging Face sources and can be installed with
-`mere.run model pull`. A small number of legacy/local catalog IDs remain so
+Install most catalog IDs from managed Hugging Face sources with `mere.run model
+pull`. A small number of legacy and local catalog IDs remain so
 existing installs and explicit local paths keep working:
 
 - `image-klein-shared`
@@ -306,7 +305,7 @@ metadata; the MLX conversion repository does not duplicate the license file.
 `deepreinforce-ai/Ornith-1.0-35B-GGUF` Q4_K_M file at the pinned catalog
 revision. It runs through the native Swift/llama.cpp `text code` path for
 larger Ornith coding-agent comparisons and uses a 32K runtime context by
-default to keep local evals predictable.
+default to keep local evaluations predictable.
 
 `text-agent-deepseek-v4-flash` is the preferred managed setup-agent tier on
 96 GB+ Apple Silicon Macs, with 128 GB recommended. It pulls the official
@@ -633,14 +632,14 @@ Managed or local roots are expected to contain:
 
 The managed manifest records SDNQ asymmetric uint4 weights and the separate
 positive and unconditional transformer branches used by Ideogram 4 guidance.
-The current native support can pull, inspect, validate, decode SDNQ uint4
+The native runtime can pull, inspect, validate, and decode SDNQ uint4
 linear, embedding, and Conv2d weights, build Qwen3-VL concatenated text
 features, pack Ideogram 4 text/image samples, run positive/unconditional CFG
 denoising, and decode PNG output through the Flux2-style VAE. Text-to-image
 `image generate` is wired; image-to-image, reference inputs, and LoRA are still
 unsupported for this family.
 
-## Hugging Face Cache
+## Hugging Face cache
 
 Hub snapshots use the shared cache location managed by the runtime. Override it
 when you want large models on an external disk:
@@ -654,11 +653,11 @@ Model pulls are resumable at the file level through the Hugging Face snapshot
 cache. The CLI writes a managed-model symlink from the mere.run model store to
 the prepared snapshot when needed.
 
-## Hardware Support Checks
+## Hardware support checks
 
 Managed pulls are gated by the local capability catalog before any download. The
 check uses supported local runtimes plus memory thresholds for each model
-family, then blocks models that are unlikely to run reliably on the current machine.
+family, then blocks models that are unlikely to run reliably on this machine.
 
 Inspect the local recommendation first:
 
@@ -670,7 +669,7 @@ swift run mere.run model capabilities --all
 If you are intentionally testing an unsupported setup, pass
 `--allow-unsupported` to `mere.run model pull`.
 
-## Model Store Behavior
+## Model store behavior
 
 The CLI resolves models in this order:
 
@@ -691,13 +690,13 @@ MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull text-chat-lfm25
 MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull text-chat-lfm25-2.6b-4bit --accept-model-license
 MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull vision-chat-lfm25-3b-8bit --accept-model-license
 
-# Inspect what is currently installed
+# Inspect installed models
 swift run mere.run status
 swift run mere.run model list
 swift run mere.run model info image-klein-max
 ```
 
-## Music, SFX, And Video Layouts
+## Music, SFX, and video layouts
 
 Some retained surfaces have more structure than a flat model root.
 
@@ -1004,8 +1003,8 @@ This deprecated compatibility ID preserves existing A2Vid installs and scripts:
 
 Its legacy narrow manifest may omit the vocoder, so it can run final-quality
 video-only and source-audio A2Vid but not generated-audio output. Requests for
-either the legacy ID or the new full ID resolve to an already-installed
-compatible root when possible. New pulls should use `video-ltx23-full-mlx`.
+either the legacy ID or the replacement full ID resolve to an already-installed
+compatible root when possible. Use `video-ltx23-full-mlx` for pulls.
 
 ### `video-ltx25-distilled-bf16`
 
@@ -1073,7 +1072,7 @@ configuration, source manifest, conversion receipt, hashes, `LICENSE`,
 QKV matrices are deinterleaved from MiniMax's released per-head row order into
 the global Q/K/V slabs consumed by the native runtime. Runtime auto-download is
 disabled. This compatibility ID remains installable, but Q4 did not meet the
-current visual-quality bar and is no longer recommended.
+release visual-quality bar and is no longer recommended.
 
 The maximum-fidelity `video-minimax-h3-fl2va-bf16-mlx` ID now resolves to the
 single-root `Sawfwair/MiniMax-H3-FL2VA-MLX-BF16` compact artifact pinned at
@@ -1098,7 +1097,7 @@ reduction order is not bit-identical to Apple Silicon.
 affine INT8/group-64; the conditioner, VAEs, tokenizer, cache tables, and
 official-source provenance remain the same as compact BF16. Its independently
 verified runtime payload is exactly 58,075,175,639 bytes. Q8 is a disk and
-memory option rather than a speed claim. Both new packages are explicit-pull
+memory option instead of a speed claim. Both compact packages are explicit-pull
 only and runtime auto-download remains disabled.
 
 The explicit-pull Ref2VA root is the flat
@@ -1217,7 +1216,7 @@ generation. One session retains the models, prompt cache, and terminal-frame
 latent across transitions; callers receive MP4/PNG state artifacts and opaque
 state IDs rather than mutable MLX tensors. Camera controls are represented as
 XYZ translation and rotation so a DreamX-derived causal camera conditioner can
-replace the current text-plus-first-frame mode without changing the session
+replace the text-plus-first-frame mode without changing the session
 schema.
 
 ### `video-scail2-14b-mlx`
@@ -1294,12 +1293,12 @@ The native DreamX-World autoregressive checkpoint root is:
 ```
 
 The public CLI does not convert this local-only checkpoint. Supply a previously
-converted `GD-ML/DreamX-World-5B` root at the managed path above or pass its
+converted `GD-ML/DreamX-World-5B` root at the documented managed path or pass its
 directory to `mere.run world serve --model`. The runtime pairs it with
 `video-wan22-ti2v-5b-mlx` for tokenizer, text encoder, and VAE resources. The
 checkpoint provides learned camera conditioning, block-causal attention,
 persistent attention caches, and autoregressive forcing for long-lived local
 world sessions. It is never downloaded or converted automatically at runtime.
 
-See [Persistent World Runtime](./runtime/world.md) for the server and request
+See [Persistent world runtime](./runtime/world.md) for the server and request
 lifecycle.

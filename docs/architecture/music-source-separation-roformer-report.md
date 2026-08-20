@@ -1,6 +1,6 @@
 # RoFormer music source-separation implementation report
 
-Research snapshot: 2026-08-01.
+Research snapshot: August 1, 2026.
 
 This report evaluates ViperX's BS-RoFormer checkpoint and the source-separation
 tools catalogued in the community-maintained
@@ -9,7 +9,7 @@ The guide is a useful routing index, but model quality claims in it are not a
 runtime or licensing authority. This report therefore checks implementation,
 artifact, and license facts against the relevant upstream projects.
 
-The exploration has now produced a native runtime, managed model contract, and
+The exploration produced a native runtime, managed model contract, and
 public `music separate` command in this worktree. This report preserves the
 upstream/tool audit and records which admission and implementation claims are
 proven separately from the remaining parity and quality work.
@@ -17,7 +17,7 @@ proven separately from the remaining parity and quality work.
 ## Decision
 
 A native Swift/MLX BS-RoFormer lane is feasible and fits the existing
-`mere.run` architecture. The first parity target should be the widely mirrored
+`mere.run` architecture. Use the widely mirrored
 ViperX `model_bs_roformer_ep_317_sdr_12.9755.ckpt` vocals checkpoint, usually
 called ViperX 1297. It is a stable, well-understood two-stem target, not a claim
 that it is the best separator for every recording.
@@ -25,7 +25,7 @@ that it is the best separator for every recording.
 Use [`pymss`](https://github.com/pymss-project/pymss) and
 [`pymss-core`](https://github.com/pymss-project/pymss-core) as frozen reference
 implementations and fixture generators. Do not make either a product runtime
-dependency: the product path should load safetensors and execute the graph in
+dependency. The product path must load safetensors and execute the graph in
 the existing Swift package with MLX. This keeps inference local, avoids a
 Python/Torch sidecar, and lets the CLI preserve its machine-readable-output
 contract.
@@ -34,7 +34,7 @@ Checkpoint admission is closed for this exact mirror. The AEmotion Studio
 repository includes an MIT `LICENSE` covering the mirrored model release, its
 model card declares `license: mit` and states that the upstream model releases
 use the same license, and the mirror attributes the original ViperX checkpoint
-through the upstream training repository. mere.run pins the mirror revision,
+through the upstream training repository. `mere.run` pins the mirror revision,
 license, model card, source YAML, and weights as one accepted artifact set; it
 does not generalize that finding to differently hosted RoFormer checkpoints.
 
@@ -79,13 +79,13 @@ and the ViperX config/checkpoint table in
 [`ZFTurbo/Music-Source-Separation-Training@e247dfe`](https://github.com/ZFTTurbo/Music-Source-Separation-Training/blob/e247dfe4abc1f17c69dff719207fe045dc04413a/docs/pretrained_models.md).
 Both codebases are MIT-licensed. The separately hosted AEmotion model release
 also carries its own explicit MIT license and is admitted only at the pinned
-revision above.
+recorded revision.
 
 ## Tool landscape
 
 | Tool or service | What it contributes | Fit for `mere.run` |
 | --- | --- | --- |
-| [`pymss@7ff129f`](https://github.com/pymss-project/pymss/tree/7ff129f784bd070b60543d1715edf59284f15ebd) | Current CLI/API, Apple-Silicon MLX backend, chunking, workflows, and waveform/FFT ensembles | Primary parity oracle and UX reference; not a runtime dependency |
+| [`pymss@7ff129f`](https://github.com/pymss-project/pymss/tree/7ff129f784bd070b60543d1715edf59284f15ebd) | CLI/API at the recorded revision, Apple-Silicon MLX backend, chunking, workflows, and waveform/FFT ensembles | Primary parity oracle and UX reference; not a runtime dependency |
 | [`pymss-core@9eadda9`](https://github.com/pymss-project/pymss-core/tree/9eadda9ee4bc7ad476e37e26dd769963669831c7) | Low-level BS/Mel-RoFormer graphs, MLX STFT/ISTFT, config and checkpoint helpers | Closest implementation reference for the native port |
 | [`Music-Source-Separation-Training@e247dfe`](https://github.com/ZFTurbo/Music-Source-Separation-Training/tree/e247dfe4abc1f17c69dff719207fe045dc04413a) | Training/evaluation framework and a broad pretrained-model index | Fixture provenance, configs, and later training experiments |
 | [`python-audio-separator@4fe3540`](https://github.com/nomadkaraoke/python-audio-separator/tree/4fe3540c249ff130bd5395c0e9377b3d16970c1a) | Mature model registry, large-file chunking, CLI, and reusable API | Behavior and packaging reference; Python/ONNX/Torch runtime is out of product scope |
@@ -95,20 +95,20 @@ revision above.
 | `pymss-studio`, `pymss-ara`, and `MSST-WebUI` | Desktop, plugin, and workflow ideas | AGPL-3.0 boundary: study behavior, do not copy or embed code in this public distribution |
 | MVSep and other hosted separators | Rapid comparisons across many community checkpoints | Evaluation aid only; hosted processing conflicts with the local-first runtime path |
 
-The guide also tracks newer community checkpoint families such as PolarFormer,
+The guide also tracks other community checkpoint families such as PolarFormer,
 HyperACE, Becruily Deux, Leap, SCNet, MDX23, DrumSep, karaoke/backing-vocal,
-dereverb, denoise, and crowd-removal models. They should be treated as a
+dereverb, denoise, and crowd-removal models. Treat them as a
 candidate backlog. Their names, quality rankings, and availability are not
 sufficient artifact contracts.
 
 ViperX 1296/1297 also appear in modern workflows as phase-correction donors.
 That makes 1297 useful beyond the initial two-stem baseline, but phase
-correction and ensembles should come only after one native model matches a
+correction and ensembles must come only after one native model matches a
 frozen reference end to end.
 
 ## Native integration shape
 
-The repo already provides most of the infrastructure the port needs:
+The repository provides most of the infrastructure the port needs:
 
 - `MediaAudioIO.decode` and `writeFloatWAV` cover platform audio decode and
   floating-point WAV output. Separation must decode directly without the
@@ -175,7 +175,7 @@ the original decoded mixture is important for residual closure.
 ### Stage 1: frozen parity oracle
 
 - Pin a disposable Python environment to the audited `pymss` and `pymss-core`
-  revisions; it never ships with the product.
+  revisions. It does not ship with the product.
 - Generate fixtures from synthetic impulses, tones, stereo phase cases, and a
   redistributable short music mixture.
 - Record input/output hashes, exact package versions, config, model digest,
@@ -241,7 +241,7 @@ The native spike is complete only when all of the following are proven:
   thermal context are recorded. An interrupted or thermally contaminated run
   is not performance evidence.
 
-## Current validation boundary
+## Validation boundary
 
 The worktree now proves typed configuration decoding, the exact 699-tensor and
 159,758,796-scalar native parameter inventory, all checkpoint keys and shapes,
@@ -259,7 +259,8 @@ not a thermal-controlled performance benchmark or a music-quality result.
 
 The remaining validation boundary is frozen-reference parity and quality:
 intermediate tensor comparison, a redistributable music fixture, multiple
-chunk boundaries, and the broader impulse/noise/phase corpus described above.
+chunk boundaries, and the broader impulse, noise, and phase corpus in the
+acceptance gates.
 
 The four-stem follow-on also passed a real managed-model smoke. The downloaded
 526,964,800-byte safetensors artifact independently matched SHA-256

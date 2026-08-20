@@ -1,8 +1,8 @@
-# ACE-Step Validation
+# ACE-Step validation
 
-This is the evidence contract for the native Swift/MLX ACE-Step 1.5 runtime.
-It separates source parity, local tests, installed-checkpoint execution,
-performance, and listening review.
+Use this evidence contract to qualify the native Swift/MLX ACE-Step 1.5
+runtime. The contract separates source parity, local tests,
+installed-checkpoint execution, performance, and listening review.
 
 ## Immutable sources
 
@@ -35,21 +35,21 @@ components.
 
 The deterministic test surface covers:
 
-- Turbo and continuous timestep schedules, Euler/Heun updates, CFG, APG, ADG,
-  guidance windows, and stabilization;
-- typed task/checkpoint capability routing and exact Base-only restrictions;
+- Turbo and continuous timestep schedules, Euler and Heun updates, CFG, APG,
+  ADG, guidance windows, and stabilization.
+- Typed task and checkpoint capability routing and exact Base-only restrictions.
 - source conditioning, repaint masks/injection/splice, retake endpoints and
-  spherical interpolation, and flow-edit integration windows;
+  spherical interpolation, and flow-edit integration windows.
 - prompt/condition encoder, audio-tokenizer, DCW, first-velocity, final-latent,
-  and VAE parity dump paths;
+  and VAE parity dump paths.
 - Python-contract metadata precedence: explicit duration and language survive
   conflicting planner proposals, 1.7B is discovered before 4B, and separately
-  managed planners resolve without checkpoint-store symlinks;
+  managed planners resolve without checkpoint-store symlinks.
 - upstream two-phase LM prompting: metadata uses CFG `1.0`; code generation
   continues from the planned CoT, guides conditional/unconditional logits at
-  `2.0`, and keeps the sampled token streams synchronized;
+  `2.0`, and keeps the sampled token streams synchronized.
 - stable seed fanout, candidate metrics/ranking, batch/session serialization,
-  API decoding/security, WAV headers, LRC, recipes, and DAW bundle topology;
+  API decoding and security, WAV headers, LRC, recipes, and DAW bundle topology.
 - PEFT LoRA and LyCORIS LoKr key mapping, numerical contributions, alpha/scale,
   decomposed Kronecker factors, and adapter stacking.
 
@@ -75,7 +75,8 @@ environment variables and skip truthfully when an asset is absent.
 
 ## Installed-model evidence
 
-All files below were generated locally at 48 kHz stereo. Hashes make the
+All files in the installed-model evidence table were generated locally at
+48 kHz stereo. Hashes make the
 specific validation artifacts identifiable without committing model output.
 
 | Path exercised | Configuration | Result |
@@ -88,7 +89,7 @@ specific validation artifacts identifiable without committing model output.
 | XL-Turbo + 4B recipe v2 | one-second LM-planned vocal, one step | `68b170220cf5849635f3f97f2b75d87d7a80045f2401edf9a707d677db2f2122` |
 | XL-Turbo + 4B upstream LM replay | 85-second trailer prompt, seed 4747, 16-step Heun | `65eaaac55db062189ab2d923ad5dcda0ecaa7287dcee00a7c2003af3b999ffad` |
 | Resident API WAV | warm one-second XL-Turbo request, one step | `9c6f3ef3752f15636aa2f4eb7b74b3dcee556e78a62158e4bc4ac344f6eaee32` |
-| Float32 artifact/DAW workflow | recipe, LRC, candidates, bundle | `d44d8386c6b479e209d169c74ff2aa69bd2b13dd980f83a708b9f381c985e629` |
+| Float32 artifact and DAW workflow | recipe, LRC, candidates, bundle | `d44d8386c6b479e209d169c74ff2aa69bd2b13dd980f83a708b9f381c985e629` |
 | LoRA train/save | one real backward and AdamW step, 256 layers | `b7c9c40c3b74aca7fb8f12fb4999c0be1175db82bf9e1504bb9c19794a29c8dd` |
 | LoRA reload/generate | trained artifact applied to 256 layers | `1ba7876df682c626b1f08da80a739ed0685becdf0182e492bb1c533d07d41449` |
 | LoKr train/save | one real backward and AdamW step, 256 layers | `5175420753533a736b43afa608dfc957e48c8d216ac0ec0d6ac824030e1c739e` |
@@ -176,7 +177,7 @@ For a repeatable timing capture:
 ./scripts/acestep-performance-proof.sh
 ```
 
-The installed one-second/one-step XL-Turbo proof completed in 3.14 seconds,
+The installed one-second, one-step XL-Turbo proof completed in 3.14 seconds,
 including process startup and checkpoint load, with 21.35 GB maximum RSS,
 25.35 GB peak footprint, and zero swap. It produced PCM24 stereo at 48 kHz with
 SHA-256

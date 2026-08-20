@@ -1,8 +1,15 @@
-# mere.run Codebase Map
+# mere.run codebase map
 
-mere.run is a Swift package, CLI, and optional macOS GUI for local-first inference on Apple Silicon. The repo exposes the public `mere.run` executable plus a thin `mere.run.app` SwiftUI wrapper that runs that CLI. Runtime code lives in `MereRunCore`, shared audio primitives live in `AudioCore` and `AudioCodecs`, speech runtimes live in `AudioSTT` and `AudioTTS`, `MereRunCLI` owns the modality-first command surface, and `MereRunApp` owns the GUI shell.
+`mere.run` is a Swift package, command-line interface (CLI), and optional macOS
+graphical user interface (GUI) for local-first inference on Apple Silicon. Use
+this map to find the module that owns your change. The repository exposes the
+public `mere.run` executable and a thin `mere.run.app` SwiftUI wrapper that runs
+the CLI. `MereRunCore` owns runtime code. `AudioCore` and `AudioCodecs` own
+shared audio primitives. `AudioSTT` and `AudioTTS` own speech runtimes.
+`MereRunCLI` owns the modality-first command surface, and `MereRunApp` owns the
+GUI shell.
 
-## Read This First
+## Read this first
 
 1. `Package.swift` for target and dependency flow
 2. `Sources/MereRunCLI/MereRunCLI.swift` for the public command tree
@@ -11,7 +18,7 @@ mere.run is a Swift package, CLI, and optional macOS GUI for local-first inferen
 5. `docs/architecture.md` for runtime reading order
 6. the module README inside the subsystem you are editing
 
-## Key Modules
+## Key modules
 
 - `Sources/MereRunCLI/Commands/`: one file per public command family or large subcommand cluster
 - `apps/macos/`: macOS Studio sources, tests, assets, command templates, and CLI process launching
@@ -38,17 +45,25 @@ mere.run is a Swift package, CLI, and optional macOS GUI for local-first inferen
 - Runtime smoke: `MERERUN_RUN_E2E=core ./scripts/check.sh`
 - Installed-model smoke: `MERERUN_RUN_E2E=installed ./scripts/check.sh`
 
-## Do Not Touch Blindly
+## Review before editing
 
-- `vendor/`: vendored runtime artifacts
-- giant model-definition files in `Sources/MereRunCore/` without first reading the local module README
-- canonical model IDs, migration vocabulary, or hosted-default hygiene checks without updating docs and tests together
+- Do not modify `vendor/` without reviewing the vendored runtime requirements.
+- Before editing a large model-definition file in `Sources/MereRunCore/`, read
+  the local module README.
+- When you change canonical model IDs, migration vocabulary, or hosted-default
+  hygiene checks, update the documentation and tests together.
 
-## Editing Rules
+## Editing rules
 
-- Prefer typed decoding at config/tokenizer boundaries over `[String: Any]`
-- Keep stdout machine-readable and stderr diagnostic in CLI commands
-- Add or update the closest test file for command parsing, model resolution, or compatibility behavior
-- After changing the command tree or command abstracts, run `./scripts/update-docs-command-reference.sh`; the docs contract owns every top-level command and fails `swift test` on drift
-- Add a module README before a source directory grows past 500 direct Swift lines
-- If a change requires real checkpoint assets or GPU-only validation, stop after the local gate and report the remaining validation gap explicitly
+- Prefer typed decoding at configuration and tokenizer boundaries over
+  `[String: Any]`.
+- Keep stdout machine-readable and stderr diagnostic in CLI commands.
+- Add or update the closest test file for command parsing, model resolution, or
+  compatibility behavior.
+- After changing the command tree or command abstracts, run
+  `./scripts/update-docs-command-reference.sh`. The documentation contract owns
+  every top-level command and fails `swift test` on drift.
+- Add a module README before a source directory grows past 500 direct Swift
+  lines.
+- If a change requires real checkpoint assets or GPU-only validation, stop
+  after the local gate and report the remaining validation gap explicitly.

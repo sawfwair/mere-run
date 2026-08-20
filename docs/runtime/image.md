@@ -1,10 +1,10 @@
-# Image Runtime
+# Image runtime
 
-Generate an image from a prompt — then keep going. Train a LoRA on your own
-pictures without renting a GPU, replay any generation from a saved plan, or
-lift a single photo into a textured 3D mesh. Eight model families are
-supported, from compact ZImage checkpoints up to FLUX.2 Klein, HiDream O1,
-Krea 2, and Ideogram 4.
+Use the image runtime to generate an image from a prompt, train a low-rank
+adaptation (LoRA) on your own pictures, replay a generation from a saved plan,
+or convert one photo into a textured three-dimensional (3D) mesh. The runtime
+supports eight model families, from compact ZImage checkpoints through FLUX.2
+Klein, HiDream O1, Krea 2, and Ideogram 4.
 
 ## Commands
 
@@ -18,7 +18,7 @@ Krea 2, and Ideogram 4.
 | `mere.run image validate` | Run advanced deterministic validation for local image model families. |
 | `mere.run image reconstruct-3d` | Reconstruct a colored object mesh from one image with native TripoSR. |
 | `mere.run image reconstruct-3d-trellis2` | Reconstruct a 512-resolution PBR O-Voxel mesh with native MLX TRELLIS.2. |
-| `mere.run image reconstruct-3d-multiview` | Reconstruct a colored mesh from 4 or 6 user-supplied views with native InstantMesh. |
+| `mere.run image reconstruct-3d-multiview` | Reconstruct a colored mesh from four or six supplied views with native InstantMesh. |
 
 ## macOS Studio
 
@@ -41,15 +41,15 @@ preflight, launch/resume, live loss charts, samples, checkpoints, history, and
 run comparison. **Utilities** opens deterministic validation, dataset discovery
 candidate cards, and saved-plan preflight/materialization with durable paths.
 
-Advanced → Image also exposes the entire public family as guided forms:
+**Advanced > Image** also exposes the public command family as guided forms:
 
-- generation/editing with repeatable references, structured prompts, and LoRAs;
+- Generation and editing with repeatable references, structured prompts, and LoRAs
 - Krea 2 and FLUX.2 Klein LoRA training, recipes, memory controls, checkpoints,
   preview samples, schedules, benchmarks, and the live dashboard;
-- dataset discovery, saved workflow preflight/materialization/execution, and
-  durable-run visualization;
-- deterministic image-stack validation; and
-- TripoSR, TRELLIS.2, and four/six-view InstantMesh reconstruction.
+- Dataset discovery, saved-workflow preflight, materialization, execution, and
+  durable-run visualization
+- Deterministic image-stack validation
+- TripoSR, TRELLIS.2, and four-view or six-view InstantMesh reconstruction
 
 The app launches the public CLI for all work. `mere.run catalog --json` and the
 shared contract tests keep every form flag aligned with ArgumentParser help.
@@ -128,7 +128,7 @@ printed.
 ### Klein generation and LoRA training
 
 Klein models run through the native Swift FLUX.2 Klein runtime. Base Klein
-models can also train LoRA adapters with `image train-lora`. For serious Klein
+models can also train LoRA adapters with `image train-lora`. For production Klein
 LoRA training, use the undistilled BF16 `image-klein-base-9b` model id or a
 local equivalent model root, then use the saved adapter with Klein
 `image generate --lora`. The loader accepts mflux-format Klein transformer
@@ -154,12 +154,12 @@ Core `train-lora` hyperparameters and their defaults:
 
 `--recipe` presets set curated values for steps, learning rate, rank, and
 alpha; an explicit flag always wins over the recipe. `swift run mere.run image
-train-lora --help` and the [CLI Reference](../cli.md) list the full flag
+train-lora --help` and the [CLI reference](../cli.md) list the full flag
 surface.
 
 Klein resume restores the selected adapter checkpoint before the next optimizer
-step. Krea 2 rejects `--resume-from` explicitly rather than silently starting a
-new run. Training Studio discovers checkpoint artifacts beside a prior output
+step. Krea 2 rejects `--resume-from` explicitly instead of silently starting
+another run. Training Studio discovers checkpoint artifacts beside a prior output
 and sends the same public flag.
 
 ```bash
@@ -182,7 +182,7 @@ swift run mere.run image generate \
 For reference-guided Klein LoRA inference, run the adapter on the distilled
 Klein model and pass the source composition with `--ref-image`. A practical
 starting point for style transfer is `--strength 0.55`, `--lora-scale 1.5`,
-1024x768, 16 steps, and a locked seed once the composition is close. Put the
+1024 x 768, 16 steps, and a locked seed after the composition is close. Put the
 trigger token first, then describe the subject/action relationship, visible
 anatomy, and style:
 
@@ -201,8 +201,8 @@ swift run mere.run image generate \
 ```
 
 For cleaner public-facing exports, keep the seed and prompt fixed, render at a
-larger matching aspect ratio such as 1280x960 with 24 steps, then downsample to
-1024x768 with a high-quality image resizer.
+larger matching aspect ratio such as 1280 x 960 with 24 steps, and then
+downsample to 1024 x 768 with a high-quality image resizer.
 
 If you are starting from a project data root instead of a specific dataset
 folder, discover image-caption leaves first:
@@ -370,12 +370,13 @@ weight 1.0. The native Krea target set matches the published adapter surface:
 264 Linear modules on the full model, including image input, text
 projection/fusion, time embedding/projection, transformer attention/feed-forward
 gates, and final output projection.
-Use `--recipe krea-fast-style` for a quick local Krea proof pass: Raw base, 100
+Use `--recipe krea-fast-style` for a local Krea smoke test: Raw base, 100
 steps, LR `0.0005`, 10-step warmup/cosine decay, 768 square, rank `32`, alpha
 `32`, and the full native Krea target surface. Treat this as a smoke recipe and
 inspect images before trusting it as a final style adapter. Use
-`--recipe krea-cinematic-style` for the safer movie-style lane: 200 steps, LR
-`0.0001`, 20-step warmup/cosine decay, 768x416, rank `32`, alpha `32`, and
+`--recipe krea-cinematic-style` for the lower-learning-rate movie-style lane:
+200 steps, learning rate (LR) `0.0001`, 20-step warmup and cosine decay,
+768 x 416, rank `32`, alpha `32`, and
 compiled-step disablement. Override `--width`/`--height` when your source set is
 not widescreen.
 
@@ -403,17 +404,18 @@ the user already requested a larger value. Use `--structured-prompt-output` to
 save the generated JSON for review or later refinement.
 
 The supported packer emits one uniform segment, so Ideogram skips the redundant
-block mask exactly and by default. At a representative 1024x1024 shape with
+block mask exactly and by default. At a representative 1024 x 1024 shape with
 4096 image tokens, 64 text tokens, and 18 heads, this avoids a 16.50 MiB
 one-byte mask plus a 1.160 GiB float32 masked-score graph intermediate per
 layer. Those are avoided transient allocation and memory-traffic estimates, not
 a guaranteed RSS reduction; layer buffers are reused, so the per-layer number
 must not be multiplied by the model's 34 layers to predict peak memory.
 
-Custom QKV-normalization, AdaLN, and residual Metal kernels remain opt-in with
+Custom query-key-value (QKV) normalization, adaptive layer normalization
+(AdaLN), and residual Metal kernels remain opt-in with
 `MERERUN_IDEOGRAM4_FUSED_KERNELS=1`. Although their isolated microbenchmarks
-were faster, a fixed 256x256, one-step installed-checkpoint release A/B measured
-the warm portable graph at 2.532s and the custom path at 4.169s, 1.65x slower,
+were faster, a fixed 256 x 256, one-step installed-checkpoint release A/B measured
+the warm portable graph at 2.532 seconds and the custom path at 4.169 seconds, 1.65x slower,
 with the same roughly 2.94 GiB warm incremental MLX peak. The two paths were
 internally deterministic and visually close but not bit-exact, so the portable
 graph remains the production default. The exact uniform-mask removal is
@@ -425,13 +427,13 @@ Three subcommands turn object images into colored meshes, each backed by a
 native runtime:
 
 - `image reconstruct-3d`: single-image reconstruction with native TripoSR
-  (managed id `image-3d-triposr`). This is the canonical image-family spelling
+  (managed ID `image-3d-triposr`). This is the canonical image-family spelling
   of `vision image-to-3d`; both run the same implementation.
 - `image reconstruct-3d-trellis2`: single-image 512-resolution PBR O-Voxel
-  reconstruction with native MLX TRELLIS.2 (managed id `image-3d-trellis2-4b`).
-- `image reconstruct-3d-multiview`: reconstruction from user-supplied views
-  with native InstantMesh (managed id `image-3d-instantmesh-base`). Repeat
-  `--view` exactly 4 or 6 times; no views are generated for you.
+  reconstruction with native MLX TRELLIS.2 (managed ID `image-3d-trellis2-4b`).
+- `image reconstruct-3d-multiview`: reconstruction from views you supply with
+  native InstantMesh (managed ID `image-3d-instantmesh-base`). Repeat `--view`
+  exactly four or six times; the command does not generate views.
 
 ```bash
 swift run mere.run image reconstruct-3d ./object.png --output ./object-3d
@@ -451,7 +453,8 @@ without loading weights, and `--json` for structured stdout. TripoSR and
 InstantMesh take a `--resolution` extraction-grid override (2 through 512 and
 2 through 256 respectively) plus `--no-vertex-colors` for geometry-only
 export; multiview optionally takes a `--cameras` JSON file with one 16-value
-C2W/intrinsics camera per view. The [Vision Runtime](./vision.md) page covers
+C2W transformation and intrinsics camera per view. The
+[Vision runtime](./vision.md) page covers
 the equivalent `vision image-to-3d*` commands and TRELLIS.2 output artifacts.
 
 ### Deterministic validation
@@ -522,7 +525,7 @@ generation; smaller shapes stay on the byte-identical dense path. In a warm
 - `Sources/MereRunCore/QwenImageEdit/QwenImageEditGenerator+Encoding.swift`
 
 Qwen Image Edit, Z-Image, FLUX.2 Klein, and HiDream O1 automatically combine
-unconditional and conditional CFG into one transformer batch on Apple silicon
+unconditional and conditional CFG into one transformer batch on Apple Silicon
 Macs with at least 24 GiB of physical memory and sufficient estimated MLX
 allocation headroom for the requested resolution. The estimate subtracts MLX
 active and cache allocations from physical memory; it is not host-wide
@@ -543,14 +546,15 @@ increase peak memory or exhaust unified memory at large resolutions.
 
 ## How image generation flows
 
-At a high level:
+Image generation follows these steps:
 
-1. the CLI parses prompt, model choice, size, steps, optional image input, and optional reference images
-2. model resolution maps a canonical model ID or explicit path to a local root
-3. the runtime loads the matching components for the chosen family
-4. prompt encoding and optional conditioning data are prepared
-5. the denoise loop or family-specific generation path runs
-6. latents are decoded and written as an image artifact
+1. The CLI parses the prompt, model choice, size, steps, optional image input,
+   and optional reference images.
+2. Model resolution maps a canonical model ID or explicit path to a local root.
+3. The runtime loads the matching components for the chosen family.
+4. The runtime prepares prompt encoding and optional conditioning data.
+5. The denoise loop or family-specific generation path runs.
+6. The runtime decodes the latents and writes an image artifact.
 
 The image families do not share identical implementation internals, but they are
 presented through the same public `mere.run image generate` command.
@@ -570,6 +574,6 @@ family still behaves consistently.
 
 ## Related docs
 
-- [CLI Reference](../cli.md)
-- [Model Management](./model-management.md)
-- [Architecture Reading Map](../architecture.md)
+- [CLI reference](../cli.md)
+- [Model management](./model-management.md)
+- [Architecture reading map](../architecture.md)

@@ -1,9 +1,9 @@
-# Vision Runtime
+# Vision runtime
 
-The widest surface in `mere.run`. Ask a question about a photo, cut out any
-object you can name, follow it through a video, read a document, recover metric
-depth and camera intrinsics from a single frame, or reconstruct a PBR mesh —
-nineteen commands, every one of them running on your own machine.
+Use the vision runtime to ask a question about a photo, isolate a named object,
+follow it through a video, read a document, recover metric depth and camera
+intrinsics from one frame, or reconstruct a physically based rendering (PBR)
+mesh. The runtime provides 19 commands that run on your machine.
 
 ## Commands
 
@@ -48,10 +48,10 @@ nineteen commands, every one of them running on your own machine.
 
 The macOS Studio app exposes the same surface through its shared capability
 contract. Read Image remains the fast caption/inspection entry point. Its
-**Vision Lab** button (also present in Find, Segment, and Track) opens a
-first-class workspace for live camera tracking; Buffalo-L detection, embedding,
-comparison, and batch analysis; native pose and optical flow; video depth; and
-single/multi-view geometry. The Lab draws native face/pose overlays and
+**Vision Lab** button, also present in Find, Segment, and Track, opens a
+workspace for live camera tracking, Buffalo-L detection, embedding, comparison,
+batch analysis, native pose and optical flow, video depth, and single-view or
+multi-view geometry. The Lab draws native face and pose overlays and
 direction-colored flow vectors, plays annotated/depth video, embeds orbitable
 point clouds, reports request-scoped progress, and preserves structured and
 visual sidecars in Library.
@@ -60,7 +60,7 @@ Advanced retains typed forms for every command and raw-argument escape hatches.
 Image-to-3D commands live in the Image workspace so the app has one canonical
 reconstruction flow.
 
-## Model family
+## Model families
 
 - `vision-ocr-lighton`
 - `vision-ground-falcon-perception`
@@ -96,19 +96,23 @@ representative prototype selection, and identity-outlier review. Neither model
 claims emotion, demographic attributes, liveness, deepfake detection, or
 general image understanding.
 
-## Current SAM 3.1 scope
+## SAM 3.1 scope
 
-- `vision segment` supports text prompts plus geometry prompting with boxes and points
-- `vision track` supports text, box, and point prompts on the init frame, then propagates tracked objects through later frames
-- `vision track-live` records a camera clip, searches a short warm-up window for seed objects, and then runs the same native tracking path over the saved recording
-- the managed model package `vision-segment-sam31` is the single SAM 3.1 package for segmentation and tracking
+- `vision segment` supports text prompts and geometry prompts with boxes and points.
+- `vision track` supports text, box, and point prompts on the initial frame. It
+  then propagates tracked objects through later frames.
+- `vision track-live` records a camera clip, searches a short warm-up window
+  for seed objects, and then runs the same native tracking path over the saved
+  recording.
+- The managed `vision-segment-sam31` package supports segmentation and tracking.
 
-## Current implementation notes
+## Implementation notes
 
-- still-image text prompting uses the native detector path
-- still-image box and point prompting use the native interactive SAM prompt path
-- offline video tracking currently uses native prompt propagation built on top of the image segmenter rather than a full SAM memory-bank tracker
-- live capture is text-prompt seeded only in the current CLI surface
+- Still-image text prompting uses the native detector path.
+- Still-image box and point prompting use the native interactive SAM prompt path.
+- Offline video tracking uses native prompt propagation built on the image
+  segmenter instead of a full SAM memory-bank tracker.
+- Live capture supports text-prompt seeding in the CLI.
 
 ## Fused attention policy
 
@@ -119,9 +123,9 @@ compatibility fallback or a controlled A/B.
 
 The installed-model gate on 2026-07-11 used release binaries on an M4 Max with
 128 GB unified memory. A SAM 3.1 text-prompt segmentation run was about 3%
-faster (1.36s to 1.32s) and reduced peak footprint by 13.2%; all 11 exported
+faster (1.36 seconds to 1.32 seconds) and reduced peak footprint by 13.2%; all 11 exported
 masks were bit-exact, with only negligible score/box deltas. A warm LightOn OCR
-run improved from 2.87s to 1.97s (1.46x throughput) and reduced peak footprint
+run improved from 2.87 seconds to 1.97 seconds (1.46x throughput) and reduced peak footprint
 by 55%, with byte-identical text. Process RSS was effectively flat in both
 comparisons, so these measurements are not presented as general RSS savings or
 as guarantees for other models, prompts, or shapes.
@@ -437,7 +441,8 @@ swift run mere.run vision ocr ./page.png --backend lighton
 swift run mere.run vision ocr ./page.png --backend infinity --infinity-task doc2md
 ```
 
-For an external Infinity-Parser2 parity eval against an already-running vLLM server:
+For an external Infinity-Parser2 parity evaluation against an already-running
+vLLM server, run:
 
 ```bash
 swift run mere.run vision ocr ./page.png \
@@ -514,11 +519,11 @@ swift run mere.run vision ocr ./page.png \
 
 ## How the OCR path works
 
-1. the CLI resolves the OCR model
-2. the OCR runtime loads the required components
-3. the input image is normalized into the expected tensor form
-4. OCR inference runs
-5. text is emitted without internal bring-up logs on stdout
+1. The CLI resolves the OCR model.
+2. The OCR runtime loads the required components.
+3. The runtime normalizes the input image into the expected tensor form.
+4. OCR inference runs.
+5. The command emits text on standard output without internal bring-up logs.
 
 LightOnOCR uses the dedicated LightOn runtime and remains the default `vision ocr`
 backend. Native Infinity-Parser2 uses the Q35 text runtime plus the Qwen-family
@@ -533,25 +538,35 @@ target an upstream Transformers, vLLM engine, or vLLM server run.
 
 ## How segmentation and tracking work
 
-1. the CLI resolves `vision-segment-sam31` from the model store or uses the local root passed with `--model`
-2. the native SAM 3.1 runtime validates the root, loads tokenizer/config/weights, and preprocesses the input image or video frames
-3. still-image text prompts run the detector once, then text + DETR + mask decode per prompt
-4. geometry prompts use the interactive SAM path, and video tracking reuses those prompts frame to frame after the seed frame
-5. native postprocessing applies thresholding, mask resize, score ordering, NMS, and optional mask export
-6. the runtime writes annotated media plus structured JSON metadata
+1. The CLI resolves `vision-segment-sam31` from the model store or uses the
+   local root passed with `--model`.
+2. The native SAM 3.1 runtime validates the root, loads the tokenizer,
+   configuration, and weights, and preprocesses the input image or video frames.
+3. Still-image text prompts run the detector once and then run text, Detection
+   Transformer (DETR), and mask decoding for each prompt.
+4. Geometry prompts use the interactive SAM path. Video tracking reuses those
+   prompts frame to frame after the seed frame.
+5. Native postprocessing applies thresholding, mask resizing, score ordering,
+   non-maximum suppression (NMS), and optional mask export.
+6. The runtime writes annotated media and structured JSON metadata.
 
 ## How grounding works
 
-1. the CLI resolves `vision-ground-falcon-perception` from the model store or uses the local root passed with `--model`
-2. the native Falcon runtime validates the root, loads config/tokenizer/weights, and preprocesses the image plus text query
-3. the model autoregressively emits grounded detections, including coordinate and size tokens, and decodes optional segmentation masks
-4. native postprocessing derives normalized centers, sizes, bounding boxes, and optional exported mask artifacts
-5. the runtime writes an annotated image plus structured JSON metadata designed for downstream agent use
+1. The CLI resolves `vision-ground-falcon-perception` from the model store or
+   uses the local root passed with `--model`.
+2. The native Falcon runtime validates the root, loads the configuration,
+   tokenizer, and weights, and preprocesses the image and text query.
+3. The model autoregressively emits grounded detections, including coordinate
+   and size tokens, and decodes optional segmentation masks.
+4. Native postprocessing derives normalized centers, sizes, bounding boxes,
+   and optional exported mask artifacts.
+5. The runtime writes an annotated image and structured JSON metadata for
+   downstream agents.
 
 ## How caption and inspect differ
 
-- `caption` is a direct descriptive task
-- `inspect` is a question-driven vision-language path
+- `caption` is a direct descriptive task.
+- `inspect` is a question-driven vision-language path.
 
 They share some of the same underlying vision support code, but they are
-presented as separate public tasks because the user intent differs.
+presented as separate public tasks because your intent differs.

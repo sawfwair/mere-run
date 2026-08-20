@@ -1,17 +1,16 @@
 # Benchmarking
 
-Small, local, repeatable lanes that answer one question: on *this* machine, is
-this model better than the alternative? Use them to compare installed models,
-verify a runtime change, and catch a regression before you claim support for
-something.
+Use these local, repeatable lanes to answer one question: on *this* machine, is
+this model better than the alternative? They compare installed models, verify
+runtime changes, and catch regressions before you claim support.
 
 They are not public leaderboards and do not try to be. For command syntax, see
-the generated [CLI Reference](./cli.md); this page is the decision guide for
+the generated [CLI reference](./cli.md). This page is the decision guide for
 picking a lane and reading what it tells you.
 
-## Benchmark Map
+## Benchmark map
 
-| Goal | Command | What It Measures |
+| Goal | Command | What it measures |
 | --- | --- | --- |
 | Grounded assistant behavior | `model benchmark chat` | Answers over provided evidence, abstention, formats, concise summaries, and local-action boundaries |
 | Tool selection | `model benchmark tool-calls` | Parsed tool names and arguments for synthetic Mere-style tools |
@@ -30,13 +29,13 @@ and raw-versus-policy logprob semantics, see
 For the completed August 2026 Qwen3.8 low-reasoning, Laguna XS 2.1, and
 Nemotron Lightning receipts, including comparable non-vision results,
 per-source scores, and exact hashes, see
-[Fused Comprehensive reference runs](benchmarks/fused-reference-runs.md).
+[Fused comprehensive reference runs](benchmarks/fused-reference-runs.md).
 
 For repository-owned cases, prompts, scorers, and qualification gates that must
 remain outside this public repository, use the open
 [external evaluation-pack interface](evaluation-packs.md).
 
-## Recommended Workflow
+## Recommended workflow
 
 1. Pull the exact models you want to compare.
 2. Dry-run the benchmark plan before loading models.
@@ -44,7 +43,7 @@ remain outside this public repository, use the open
 4. For quality, use the suite's pinned non-greedy native profile and repeated
    trials. Reserve deterministic settings for isolated runtime microbenchmarks.
 5. Save JSON output for comparisons and keep the raw command with the result.
-6. Treat capped generations, missing models, and skipped cases as separate from correctness.
+6. Report capped generations, missing models, and skipped cases separately from correctness.
 
 Example:
 
@@ -59,7 +58,7 @@ swift run mere.run model benchmark chat \
 The benchmark commands do not auto-pull models during scoring. Missing models are
 reported as skipped so the comparison remains explicit.
 
-## Quality Evals
+## Quality evaluations
 
 ### Chat
 
@@ -98,7 +97,7 @@ swift run mere.run model benchmark chat \
   --log-responses
 ```
 
-### Tool Calls
+### Tool calls
 
 `model benchmark tool-calls` is separate from the chat benchmark on purpose. It
 passes synthetic `ToolDefinition` schemas to the model and scores the parsed
@@ -118,7 +117,7 @@ swift run mere.run model benchmark tool-calls \
 ### Code
 
 `model benchmark code` runs a real functional-code eval slice. The default suite
-is `humaneval-slice`, currently three public HumanEval tasks:
+is `humaneval-slice`, which contains three public HumanEval tasks:
 
 - `HumanEval/0`
 - `HumanEval/3`
@@ -135,7 +134,7 @@ swift run mere.run model benchmark code \
 ```
 
 Without `--models`, the code benchmark uses the supported members of the default
-comparison lane for the current machine. On 32 GB Macs that means
+comparison lane for this machine. On 32 GB Macs that means
 `text-agent-ornith-9b` and `text-code-north-mini`; `text-code-qwen3` joins the
 default comparison on 64 GB and larger machines.
 
@@ -162,7 +161,7 @@ captured `<think>...</think>` content is reported as reasoning metadata. A secon
 generated reasoning block is reported as `reasoning_reopened=true`; treat that as
 a loop or phase-restart warning, not an automatic correctness failure.
 
-### Laguna S 2.1 Evaluation
+### Laguna S 2.1 evaluation
 
 Laguna S 2.1 is available as the opt-in managed model
 `text-chat-laguna-s-2-1`. Pull it once with
@@ -252,7 +251,7 @@ gate/up projection and SwiGLU behind
 `MERERUN_LAGUNA_FUSED_SORTED_NVFP4_MOE`. The matching expert-aligned down
 projection is controlled independently by
 `MERERUN_LAGUNA_FUSED_SORTED_NVFP4_DOWN`; weighting and reduction retain the
-native operation order. Set either flag to `0` for a portable-path A/B or
+native operation order. Set either flag to `0` for a portable-path comparison or
 rollback. `MERERUN_LAGUNA_FAST_SORTED_INVERSE=0` independently restores the
 reference second route sort. The guarded kernels recognize both M4 Max
 `applegpu_g16s` and M5 Max `applegpu_g17s` on macOS 26.
@@ -263,7 +262,7 @@ sliding masks default on and can be disabled with
 ladder can be changed or disabled with `MERERUN_LAGUNA_PREFILL_ASYNC_LADDER`.
 Exact fused residual/RMSNorm and QK-norm/RoPE kernels default on only for M5
 Max; use `MERERUN_LAGUNA_PREFILL_FUSED_RESIDUAL_RMSNORM` and
-`MERERUN_LAGUNA_PREFILL_QK_NORM_ROPE` for explicit A/Bs on either architecture.
+`MERERUN_LAGUNA_PREFILL_QK_NORM_ROPE` for explicit comparisons on either architecture.
 
 These flags are an evaluation boundary, not a pull or serving contract. Do not
 infer catalog support from a successful local checkpoint run.
@@ -293,9 +292,9 @@ swift run mere.run model benchmark vlm \
   --dry-run
 ```
 
-## Runtime Benchmarks
+## Runtime benchmarks
 
-### Gemma 4 Tool Continuation
+### Gemma 4 tool continuation
 
 `model benchmark tool-continuations` runs two deterministic real-checkpoint
 Gemma 4 histories: a typed tool call containing boolean, nested, and null JSON
@@ -310,7 +309,7 @@ mere.run model benchmark tool-continuations --log-responses
 Use `--model-root` to validate a locally converted Gemma 4 directory without
 installing or replacing the managed model.
 
-### API Workload
+### API workload
 
 `model benchmark api-workload` measures the real local API serving path. Run it
 against an already-started `mere.run api serve` process when you need request
@@ -332,7 +331,7 @@ swift run mere.run model benchmark api-workload \
 For cache or batching work, compare runs against `/runtime/status` before and
 after the benchmark instead of inferring behavior from prose.
 
-### KV Cache And Speculative Decode
+### KV cache and speculative decode
 
 The microbenchmark commands are for runtime implementation work:
 
@@ -351,12 +350,12 @@ so their source-level structural/numerical checks are separate:
 swift test --filter 'AffineQuantizedKVCacheTests|GLM47AccelerationTests'
 ```
 
-Before promoting either path, run release-mode real-checkpoint A/B with a fixed
+Before promoting either path, run a release-mode real-checkpoint comparison with a fixed
 greedy prompt corpus and report output parity, resident memory, TTFT, prefill
 tokens/s, and decode tokens/s. See the
 [guarded acceleration audit](./internals/guarded-acceleration.md).
 
-## Interpreting Results
+## Interpret results
 
 Use these conventions when reporting benchmark outcomes:
 
@@ -371,10 +370,10 @@ Use these conventions when reporting benchmark outcomes:
 - For large models, prefer one model per command invocation when memory pressure
   could affect fairness.
 
-## Related References
+## Related references
 
-- [CLI Reference](./cli.md)
-- [Testing Guide](./testing.md)
+- [CLI reference](./cli.md)
+- [Testing guide](./testing.md)
 - [Configuration](./configuration.md)
-- [Text Runtime](./runtime/text.md)
-- [Local API Server](./runtime/api-server.md)
+- [Text runtime](./runtime/text.md)
+- [Local API server](./runtime/api-server.md)

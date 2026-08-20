@@ -1,8 +1,8 @@
 # Cookbooks
 
 Every command carries its own manual. `mere.run guide` is a cookbook reader
-built into the binary, and it works with the network off — on a plane, in a
-locked-down lab, or on a machine that has never had an API key. It prints
+built into the binary, and it works with the network off, such as on a plane or
+in a locked-down lab. It prints
 Markdown by default, emits JSON for agents and tools, and renders the topic
 list as a Markdown table with `--markdown`.
 
@@ -19,11 +19,11 @@ mere.run guide open-webui
 mere.run guide video generate --json
 ```
 
-Each guide is written to be used, not skimmed: what the command does, which
-model to install, which flags actually change the output, prompting patterns,
+Each guide explains what the command does, which model to install, which flags
+change the output, prompting patterns,
 worked examples, iteration tips, troubleshooting, and links into the source.
 
-## Available Topics
+## Available topics
 
 Creative and runtime workflows:
 
@@ -80,7 +80,7 @@ Operational workflows:
 - `agent install-pi`
 - `agent start`
 
-## Model-Focused Guides
+## Model-focused guides
 
 Some topics support model focus. The CLI validates that the requested model is
 covered by the guide before printing:
@@ -95,9 +95,9 @@ mere.run guide music transcribe --model music-muscriptor-medium
 ```
 
 If the model does not belong to the topic, the command prints a validation error
-with the supported model ids.
+with the supported model IDs.
 
-## Agent Usage
+## Agent usage
 
 Agents should keep their own prompt context small:
 
@@ -107,5 +107,5 @@ Agents should keep their own prompt context small:
 3. Use `--json` when the agent needs a structured payload with topic metadata
    and Markdown content.
 
-The guide command is the canonical source for per-command usage advice; skills
+The guide command is the canonical source for per-command usage advice. Skills
 should route to it instead of duplicating cookbook content.

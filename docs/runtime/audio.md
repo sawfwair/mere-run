@@ -1,4 +1,4 @@
-# Audio Enhancement Runtime
+# Audio enhancement runtime
 
 Extend narrowband speech or bandwidth-limited general audio to a 48 kHz
 artifact with native Swift/MLX ports of AP-BWE and UniverSR. Both runtimes are
@@ -11,7 +11,7 @@ machine-readable results on stdout.
 | --- | --- |
 | `mere.run audio enhance` | Reconstruct a 48 kHz mono float WAV with AP-BWE speech bandwidth extension or UniverSR general-audio super-resolution. |
 
-## Model
+## Models
 
 - `audio-enhance-ap-bwe-16kto48k`
 - `audio-enhance-universr-audio`
@@ -19,8 +19,8 @@ machine-readable results on stdout.
 The source implementation is pinned to
 [`yxlu-0102/AP-BWE@751710f`](https://github.com/yxlu-0102/AP-BWE/tree/751710f22404c27e5bcc983248f8b856a04b8422).
 The official repository states that both code and pretrained weights are MIT.
-The public Hugging Face transport snapshot is pinned independently; mere.run
-accepts its 16→48 kHz archive only because it is byte-identical to the official
+The public Hugging Face transport snapshot is pinned independently. `mere.run`
+accepts its 16 to 48 kHz archive only because it is byte-identical to the official
 Google Drive checkpoint.
 
 UniverSR's native graph is pinned to
@@ -51,15 +51,17 @@ swift run mere.run audio enhance ./limited-48k.wav \
 
 Input is decoded to 16 kHz mono, then upsampled threefold with a deterministic
 windowed-sinc/Lanczos filter before the neural reconstruction stage. The pinned
-profile uses a 1,024-point STFT, 320-sample periodic Hann window, 80-sample hop,
+profile uses a 1,024-point short-time Fourier transform (STFT), 320-sample
+periodic Hann window, 80-sample hop,
 512 channels, and eight paired magnitude/phase ConvNeXt blocks. Chunked overlap
 uses two-second 48 kHz windows by default.
 
 UniverSR accepts effective input rates of 8, 12, 16, or 24 kHz. It applies a
 1,024-point complex STFT, conditions a 394-tensor ConvNeXt V2 U-Net on the
 observed low-frequency region, and reconstructs the remaining spectrum with
-flow matching. The published defaults are midpoint integration, four ODE
-steps, classifier-free guidance 1.5, and seed 42. Native-rate files supply the
+flow matching. The published defaults are midpoint integration, four ordinary
+differential equation (ODE) steps, classifier-free guidance 1.5, and seed 42.
+Native-rate files supply the
 effective rate automatically; a bandwidth-limited 48 kHz container requires
 `--input-rate`.
 
@@ -75,7 +77,7 @@ rather than a complete mastering chain. A decoded, finite, non-silent output
 proves the native route executed; it does not by itself establish perceptual
 improvement for a particular recording.
 
-See the [implementation report](../architecture/audio-enhancement-ap-bwe-report.md)
-for AP-BWE admission evidence and the
-[UniverSR report](../architecture/audio-enhancement-universr-report.md) for its
+See the [AP-BWE implementation report](../architecture/audio-enhancement-ap-bwe-report.md)
+for admission evidence and the
+[UniverSR implementation report](../architecture/audio-enhancement-universr-report.md) for its
 separate graph, artifact, and license evidence.

@@ -1,7 +1,7 @@
 # MiniMax-H3 h3.c transfer program
 
 This document defines the evidence contract for transferring useful h3.c
-techniques into mere.run. It is not a performance receipt. Production behavior
+techniques into `mere.run`. It is not a performance receipt. Production behavior
 does not change until a candidate passes its tensor, checkpoint, quality,
 memory, and fallback gates.
 
@@ -16,10 +16,10 @@ shapes. MLX's public quantized-matmul primitive does not accept an output
 stride or custom epilogue, so eliminating the remaining projection
 materializations competitively requires an MLX/MLXFast primitive with a tiled
 quantized core and H3-specific epilogue, or an M5 TensorOps implementation. It
-is not achievable by further tuning the current standalone scalar kernels.
+is not achievable by further tuning the standalone scalar kernels.
 
 Resident BF16 has a separate M3/M4 opportunity. The refreshed MLX source has
-a Metal 4 NAX GEMM implementation, but its runtime capability gate currently
+a Metal 4 NAX GEMM implementation, but its runtime capability gate
 requires Apple GPU generation 18 or newer, so it does not dispatch on the local
 generation-16 M4 Max. The H3 lab now includes an independently gated MPP BF16
 projection candidate, adapted from WeeTodd's measured MiniMax-H3 tiles. Both
@@ -78,7 +78,8 @@ scripts/h3c-oracle.sh run --help
 No h3.c source code, binary, or library is vendored, linked, or shipped by
 mere.run. The optional runner fetches an ignored checkout under
 `.build/h3c-oracle` by default and refuses revision drift by checking out the
-immutable commit above on every build. It does not download checkpoint weights.
+immutable h3.c commit listed in this section on every build. It does not download
+checkpoint weights.
 h3.c expects the original upstream `FL2VA/` and `Ref2VA/` directory trees;
 mere.run consumes its own flat managed MLX artifacts, so output comparisons
 must record which weight representation each arm used.
@@ -103,15 +104,15 @@ MERERUN_H3_BF16_OVERLAY_ROOT=/absolute/path/to/overlay \
 
 Each kernel candidate must first reproduce an explicit decomposed oracle. If a
 candidate deliberately changes arithmetic, such as dynamic INT8 activation
-quantization, it also needs a same-seed checkpoint quality A/B and may not be
+quantization, it also needs a same-seed checkpoint quality comparison and may not be
 described as trajectory-exact.
 
 | ID | Candidate | First proving shape | Required fallback |
 | --- | --- | --- | --- |
 | K1 | Attention residual gate + following MLP AdaLN, then optional activation quantization | BF16 `[1, rows, 5376]` | Existing decomposed MLX graph |
-| K2 | QKV projection directly to `[1, 56, rows, 128]`, with fused Q/K RMSNorm and RoPE | H3 QKV `5376 -> 21504` | Current linear, split, transpose, norm, and RoPE path |
-| K3 | Head-major SDPA output directly into the INT8 output projection | H3 attention output `7168 -> 5376` | Current transpose, reshape, and linear path |
-| K4 | FC1, SwiGLU, and FC2 with H3-specialized `5376 -> 28672 -> 14336 -> 5376` dimensions | Complete production MLP | Current MLX compiled MLP |
+| K2 | QKV projection directly to `[1, 56, rows, 128]`, with fused Q/K RMSNorm and RoPE | H3 QKV `5376 -> 21504` | Existing linear, split, transpose, norm, and RoPE path |
+| K3 | Head-major SDPA output directly into the INT8 output projection | H3 attention output `7168 -> 5376` | Existing transpose, reshape, and linear path |
+| K4 | FC1, SwiGLU, and FC2 with H3-specialized `5376 -> 28672 -> 14336 -> 5376` dimensions | Complete production MLP | Existing MLX compiled MLP |
 | K5 | Activation lifetime aliases for QKV, attention, and MLP arenas | Complete block | Independent MLX arrays |
 
 K1 has BF16 and mixed BF16/Float32 custom-Metal canaries in
@@ -125,7 +126,8 @@ through h3.c-compatible per-row symmetric activation quantization:
 row. A standalone quantizer provides the two-kernel oracle and release timing
 arm. Both paths are byte-exact at the INT8 boundary in the deterministic GPU
 canary. The floating K1 path participates in the opt-in installed-checkpoint
-dispatch below. The activation-INT8 continuation remains lab-only.
+dispatch described in the installed-checkpoint section. The activation-INT8
+continuation remains lab-only.
 
 The managed H3 artifacts use affine Q8/group-64 *weights*. Stock MLX
 `QuantizedLinear` still accepts floating activations and does not expose a
@@ -157,7 +159,7 @@ scripts/h3-kernel-suite.sh --output .build/h3-kernel-suite/ref2va --resume
 
 The default queue covers K1 floating and activation-INT8 boundaries, K2a/K2b,
 K3, K4, K5, and the installed Ref2VA full-forward gate. Each attempt gets its
-own stdout, stderr, and start-gate receipt, so resuming never overwrites failed
+own stdout, stderr, and start-gate receipt, so resuming does not overwrite failed
 evidence. A clean-host rejection stops the suite immediately with exit 75;
 other failures are recorded while remaining modes continue. Successful modes
 leave commit-bound pass markers, so `--resume` skips only proven passes. The
@@ -168,8 +170,8 @@ after its recorded PID no longer exists.
 
 K2 through K4 need two implementations where hardware requires it:
 
-- a portable MLX/Metal fallback for current M-series Macs;
-- an M5-gated Metal 4/TensorOps implementation, never selected by device-name
+- A portable MLX and Metal fallback for supported M-series Macs.
+- An M5-gated Metal 4 or TensorOps implementation that is not selected by device-name
   assumptions alone if capability probing is available.
 
 K2 is split into two proof stages so layout correctness is not confounded with
@@ -186,7 +188,7 @@ projection arithmetic:
   raw head-major Q/K remain explicit until the normalization kernel finishes;
   the path is projection-direct but not allocation-free.
 
-The K2a deterministic GPU canary compares all three outputs with the current
+The K2a deterministic GPU canary compares all three outputs with the existing
 decomposed graph; V is byte-exact and Q/K remain inside the declared BF16
 tolerance. Its isolated release arm is:
 
@@ -210,7 +212,7 @@ contiguous `[1, 56, rows, 128]` BF16 or Float32 output directly and applies the 
 checkpoint's existing affine Q8/group-64 output weight (`uint32` packed codes,
 BF16 scale and bias per 64 input columns). The kernel writes
 `[1, rows, 5376]`, eliminating the head-major transpose/reshape materialization.
-This is weight INT8 with floating activations, matching the current artifact;
+This is weight INT8 with floating activations, matching the managed artifact;
 it is not h3.c's separate symmetric activation-INT8 arithmetic. The deterministic GPU
 canary compares it with MLX `quantizedMM` using the same packed arrays. Its
 isolated release arm is:
@@ -257,12 +259,12 @@ quantized projections instead of selecting the slower custom affine-Q8 GEMMs.
 The mode remains explicit, requires `--h3-acceleration quality`, and falls back
 per call when the exact H3 shape or dtype contract is unavailable. Sequences at
 or below 12,000 rows retain whole-step compilation. Larger sequences use eager
-layer evaluation because the clean Ref2VA A/B below measured a larger gain and
+layer evaluation because the clean Ref2VA comparison measured a larger gain and
 lower peak footprint than embedding these custom boundaries in independently
 compiled blocks.
 
 `MERERUN_H3_EXACT_KERNELS=affine-q8` enables the exact kernel candidates inside
-the real transformer loop for controlled checkpoint A/Bs. Admission is typed
+the real transformer loop for controlled checkpoint comparisons. Admission is typed
 and fail-closed: the request must use `--h3-acceleration quality`, every main
 transformer block must retain its unadapted affine Q8/group-64 QKV, output, FC1,
 and FC2 linears, and resident-BF16 materialization must be off. The mode forces
@@ -318,7 +320,7 @@ MERERUN_H3_BAKEOFF_ARMS=quality,exact-affine-q8 \
 
 This is an experimental evidence surface, not a production default. The
 50-block real-weight arithmetic pass and fixed-seed generated-media review are
-complete. The generated results below justify the shape-aware execution policy,
+complete. The generated-media results justify the shape-aware execution policy,
 but not ordinary dispatch: FL2VA has no measured speed win and Ref2VA has only
 one fixed prompt/reference fixture so far.
 
@@ -348,7 +350,7 @@ advanced to generated-media evaluation from this run.
 
 ### Clean generated-media result
 
-The fixed railway-platform fixture used a 512x256 canvas, 124 frames at 24 fps,
+The fixed railway-platform fixture used a 512 x 256 canvas, 124 frames at 24 frames per second,
 seed `20260810`, one pinned 110,364-byte image with SHA-256
 `34ea0fee383e3b5d353f6a9556af12b5e7d3a7846c6899e768791b5354818ebd`,
 and, for Ref2VA, one pinned 663,630-byte audio reference with SHA-256
@@ -358,7 +360,7 @@ FL2VA used the same image as its first-frame condition and the installed
 clean worktree, no matched build/ML process, and no thermal or performance
 warning; all arms also ended at zero swap.
 
-| Model / boundary execution | Commit | Baseline | Boundary | Wall delta | Peak-footprint delta | Decision |
+| Model and boundary execution | Commit | Baseline | Boundary | Wall delta | Peak-footprint delta | Decision |
 | --- | --- | ---: | ---: | ---: | ---: | --- |
 | Ref2VA / eager | `e93bf2ab` | 1,920.079 s | 1,860.912 s | -59.167 s (-3.08%) | -1.344 GiB | Retain above 12,000 rows |
 | FL2VA / eager | `e93bf2ab` | 174.096 s | 194.674 s | +20.578 s (+11.82%) | effectively unchanged | Reject as a universal policy |
@@ -373,11 +375,11 @@ the blockwise-compiled Ref2VA arm reduced steady MLX cache from 16.11 to 12.61
 GiB but did not reduce the 88.59 GiB MLX peak and increased process peak
 footprint, so the small wall-time delta is not a promotion candidate.
 
-All four selected outputs passed the structural gate: H.264 video at 512x256,
-124 frames, 24 fps, 5.167 seconds, plus stereo AAC at 32 kHz. Matched-seed
+All four selected outputs passed the structural gate: H.264 video at 512 x 256,
+124 frames, 24 frames per second, 5.167 seconds, plus stereo AAC at 32 kHz. Matched-seed
 quality for the selected shape-aware paths was:
 
-| Model / candidate | Video SSIM | PSNR | VMAF | Audio correlation | Audio relative L2 |
+| Model and candidate | Video SSIM | PSNR | VMAF | Audio correlation | Audio relative L2 |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Ref2VA / eager boundary | 0.989612 | 45.954653 dB | 91.309876 | 0.999354733 | 0.0359229473 |
 | FL2VA / compiled boundary | 0.988137 | 46.453891 dB | 91.366412 | 0.998332539 | 0.0577492307 |
@@ -398,20 +400,20 @@ quality envelopes have been measured.
 | --- | --- | --- |
 | A1 | Same-aspect reduced internal render canvas followed by high-quality upscale | Native output, 75%, and 62.5% internal dimensions |
 | A2 | AdaLN-gate-ranked layer thinning with protected first/final blocks | 50, 45, and 40 active blocks |
-| A3 | Whole-velocity or transformer-core reuse | Current adaptive tail reuse, interval-2 velocity reuse, and interval-4 core reuse |
+| A3 | Whole-velocity or transformer-core reuse | Adaptive tail reuse, interval-2 velocity reuse, and interval-4 core reuse |
 | A4 | Target-video token pairing with full-resolution bypass and delta restoration | Blocks 4-40 early, then 4-30, versus full tokens |
 
-The current adaptive block-tail cache is not equivalent to h3.c whole-velocity
+The adaptive block-tail cache is not equivalent to h3.c whole-velocity
 or core reuse. It remains a separate bake-off arm rather than being silently
 relabelled.
 
 A3 now has its first explicit runtime arm: `--h3-acceleration
 velocity-reuse-2`. It runs the first and final denoise evaluations in full,
 linearly extrapolates both complete video and audio velocity outputs from the
-two latest full evaluations on intervening odd steps, and keeps the quality
+two most recent full evaluations on intervening odd steps, and keeps the quality
 schedule point count. Selecting it disables the adaptive tail and dynamic-sparse
 policies so its quality and timing deltas remain attributable. It is
-experimental and non-default. Fixed FL2VA and three-seed Ref2VA A/Bs found a
+experimental and non-default. Fixed FL2VA and three-seed Ref2VA comparisons found a
 repeatable speed benefit but failed the visual-trajectory promotion gate.
 
 A2 has two equally isolated arms: `--h3-acceleration layers-45` and
@@ -419,7 +421,7 @@ A2 has two equally isolated arms: `--h3-acceleration layers-45` and
 mean absolute attention and MLP AdaLN gate values over every cached schedule
 point and modality, with blocks 0, 1, and 49 always protected. The lowest
 remaining scores are skipped while original block indices and weights remain
-unchanged. The current prototype reduces executed transformer work but retains
+unchanged. The prototype reduces executed transformer work but retains
 all loaded weights; it must not claim h3.c's additional residency reduction
 until loading itself prunes the inactive blocks.
 
@@ -471,7 +473,7 @@ schedule and disables the other approximation policies.
 
 Run the fixed-seed algorithm matrix with one installed FL2VA or Ref2VA model.
 The harness refuses another active ML workload, builds release once, emits one
-preflight JSON and stderr log per arm, and records wall time plus output SHA256:
+preflight JSON and stderr log per arm, and records wall time plus output SHA-256:
 
 ```bash
 scripts/h3-algorithm-bakeoff.sh \
@@ -512,12 +514,12 @@ MERERUN_H3_BAKEOFF_REFERENCE_MANIFEST=./references.expected.tsv \
   --reference audio:./voice.wav
 ```
 
-The default 512x512 matrix includes native resolution, 384x384 (75%), 320x320
+The default 512 x 512 matrix includes native resolution, 384 x 384 (75%), 320 x 320
 (62.5%), 45 and 40 layers, interval-2 velocity reuse, and token reduction.
 Override geometry, seed, frame count, executable, or the comma-separated arm
 list with the `MERERUN_H3_BAKEOFF_*` variables documented by the script's
 defaults. A render arm is marked skipped when an exact same-aspect scale cannot
-remain on the 32px grid; the harness never rounds it into a different aspect.
+remain on the 32-pixel grid; the harness does not round it into a different aspect.
 
 The runner fails closed when a matching ML process, `mere.run` process, Swift
 compiler, or Xcode build is active. It also rejects a host starting above
@@ -528,12 +530,13 @@ the results; it is not a way to describe swap-heavy timing as clean.
 The process and swap gates are checked again immediately before every arm and
 the arm's starting swap is written directly to `receipts.tsv`. A long matrix
 therefore cannot silently cross the evidence policy after its initial gate; a
-new competing process is captured as sanitized PID/executable/cwd evidence. To
+additional competing process is captured as sanitized process ID, executable,
+and working-directory evidence. To
 score a narrow follow-up without regenerating a byte-identical expensive
 baseline, omit the `quality` arm and set `MERERUN_H3_BAKEOFF_BASELINE` to the
 existing MP4. The runner rejects a missing baseline, records its resolved path,
 byte count, and SHA-256, and does not allow an external baseline together with
-a new `quality` arm.
+another `quality` arm.
 
 `receipts.tsv` measures generation only; preflight is completed before its
 clock starts. Every passing arm records wall time, `/usr/bin/time` maximum RSS
@@ -550,7 +553,7 @@ rejected process and swap evidence even when no arm runs. Per-arm before/after
 snapshots capture thermal, swap, and VM state around the timed region.
 
 After generation, `scripts/h3-bakeoff-score.py` verifies that every MP4 matches
-the requested width, height, frame count, 24 fps video, 32 kHz stereo audio,
+the requested width, height, frame count, 24-frames-per-second video, 32 kHz stereo audio,
 and duration. It compares each arm with the same-seed dense-quality output and
 writes a matched eight-frame baseline/candidate contact sheet, one JSON report,
 and a `quality.tsv` summary containing video SSIM, PSNR, VMAF, decoded-audio
@@ -580,7 +583,7 @@ scripts/h3-bakeoff-score.py \
 ### Fixed-seed algorithm result
 
 The post-reboot algorithm screen used the same pinned railway fixture as the
-exact-kernel bake-off: 512x256, 124 frames at 24 fps, seed `20260810`, image
+exact-kernel bake-off: 512 x 256, 124 frames at 24 frames per second, seed `20260810`, image
 SHA-256 `34ea0fee383e3b5d353f6a9556af12b5e7d3a7846c6899e768791b5354818ebd`,
 and, for Ref2VA, audio SHA-256
 `444afb780a0b1a8fe5b1bb90ac744669ef9086c721439c4a0d569389c2e1df80`.
@@ -590,7 +593,7 @@ from commit `ee64b21c`.
 
 This first screen predates the h3.c-aligned reference-serving contract. Its
 Ref2VA latency and 88.59 GiB peak describe the former 2,048-pixel-short-edge
-reference preprocessing path, not the current dense runtime.
+reference preprocessing path, not the dense runtime.
 
 The full FL2VA matrix began with zero swap. Every arm through A3 also began at
 zero swap; A3 caused macOS to retain 200.62 MiB, so A4 began below, but not at,
@@ -599,8 +602,8 @@ the 1024 MiB ceiling. No arm recorded a thermal or performance warning.
 | FL2VA arm | Wall time | Delta vs quality | Video SSIM | VMAF | Audio correlation | Decision |
 | --- | ---: | ---: | ---: | ---: | ---: | --- |
 | quality / 50 blocks | 211.995 s | baseline | 1.000000 | 99.543328 | 1.000000 | dense reference |
-| A1 / 75% internal canvas | 129.447 s | -38.94% | 0.808859 | 2.761354 | 0.398702743 | reject current scale |
-| A1 / 62.5% internal canvas | 96.570 s | -54.45% | 0.797838 | 1.490763 | 0.408785695 | reject current scale |
+| A1 / 75% internal canvas | 129.447 s | -38.94% | 0.808859 | 2.761354 | 0.398702743 | reject tested scale |
+| A1 / 62.5% internal canvas | 96.570 s | -54.45% | 0.797838 | 1.490763 | 0.408785695 | reject tested scale |
 | A2 / 45 active blocks | 211.230 s | -0.36% | 0.820338 | 3.437342 | 0.095347761 | no useful speed win |
 | A2 / 40 active blocks | 181.841 s | -14.22% | 0.792344 | 2.987691 | 0.082693270 | reject quality |
 | A3 / interval-2 velocity reuse | 177.169 s | -16.43% | 0.870424 | 18.213738 | 0.376719974 | reject complete reuse |
@@ -619,9 +622,9 @@ scored against the clean dense baseline MP4 whose SHA-256 is
 `e2a2af06e1c3b3ac4f8cfc25f46de0d8edcab2a729e40afc003a2eac572aeb9f`.
 That artifact was generated twice byte-identically in zero-swap sessions at
 1,920.079 and 1,911.015 seconds; their 1,915.547-second mean is used only as the
-timing reference below. The selected follow-up began with 200.62 MiB of swap,
+timing reference for this comparison. The selected follow-up began with 200.62 MiB of swap,
 dropped to 192.62 MiB, and recorded no thermal or performance warning, so these
-are screening timings rather than new zero-swap baselines.
+are screening timings rather than additional zero-swap baselines.
 
 | Ref2VA arm | Wall time | Delta vs baseline mean | Process-peak delta | Video SSIM | VMAF | Audio correlation | Decision |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | --- |
@@ -642,7 +645,7 @@ perceptual quality, this fixture does not establish that A3 is visually worse.
 A1 kept the subjects, dialogue waveform, and moving-train concept, but changed
 train trajectory/color and softened faces. Neither mode advances to ordinary
 dispatch from this single fixture. This result selected A3 for the multi-seed
-follow-up below; it did not itself authorize promotion.
+multi-seed follow-up; it did not itself authorize promotion.
 
 ### Post-alignment Ref2VA multi-seed result
 
@@ -652,7 +655,8 @@ aligned with the pinned h3.c serving contract. It used commit `2fe645f7`,
 release executable SHA-256
 `34854543dfacf58383e1feebaaeeced65aed3b532676e1e768979235420f9125`,
 the same prompt and pinned image/audio references, and explicitly disabled the
-exact-kernel mode. Every output passed the 512x256, 124-frame, 24 fps, stereo
+exact-kernel mode. Every output passed the 512 x 256, 124-frame,
+24-frames-per-second, stereo
 32 kHz structural gate.
 
 These runs began with 12,694.5 to 12,710.5 MiB of swap after earlier model
@@ -678,7 +682,7 @@ run and kept audio correlation above 0.998. It nevertheless changed train
 appearance, lighting, or trajectory in all three contact sheets; seed
 `20260811` also developed a conspicuous magenta train-light artifact late in
 the clip. The result rejects velocity reuse as an ordinary default. It stays
-available only as a named experimental policy for future research.
+available only as a named experimental policy for later research.
 
 ### Zero-swap finalist retake
 
@@ -689,10 +693,10 @@ started with zero swap, a clean worktree, no matching build or ML process, and
 no thermal or performance warning. Ref2VA also ended at zero swap; the larger
 LightX2V arm ended with 15.94 MiB.
 
-| Finalist | Geometry / evaluations | Wall time | Denoising | Non-denoise remainder | MLX peak | Process peak footprint | Output SHA-256 |
+| Finalist | Geometry and evaluations | Wall time | Denoising | Non-denoise remainder | MLX peak | Process peak footprint | Output SHA-256 |
 | --- | --- | ---: | ---: | ---: | ---: | ---: | --- |
-| Dense Ref2VA | 512x256 / 8 | 578.450 s | 528.492 s | 49.958 s | 41.14 GiB | 47,255,358,296 bytes | `7b716380a857c3203e8434db11493fbf8e9b2b26166da41bf5f84e18f95c0866` |
-| LightX2V v1.0 8-step | 960x544 / 8 | 2,457.841 s | 2,277.428 s | 180.413 s | 61.90 GiB | 68,143,584,184 bytes | `cebc0d88c80145057cd7e6daeaf45568a59122ac72173d91c94c048681995822` |
+| Dense Ref2VA | 512 x 256, 8 | 578.450 s | 528.492 s | 49.958 s | 41.14 GiB | 47,255,358,296 bytes | `7b716380a857c3203e8434db11493fbf8e9b2b26166da41bf5f84e18f95c0866` |
+| LightX2V v1.0 8-step | 960 x 544, 8 | 2,457.841 s | 2,277.428 s | 180.413 s | 61.90 GiB | 68,143,584,184 bytes | `cebc0d88c80145057cd7e6daeaf45568a59122ac72173d91c94c048681995822` |
 
 The Ref2VA output is byte-identical to seed `20260810` from the post-alignment
 multi-seed screen. Compared with the old clean 1,920.079-second,
@@ -703,7 +707,7 @@ they are retained for cross-seed behavior, not averaged into this cold-host
 timing.
 
 The selected LightX2V finalist uses the released v1.0 8-step recipe at its
-960x544 training geometry: shifts 12/3, LoRA alpha 8, eight evaluations, and
+960 x 544 training geometry: shifts 12 and 3, LoRA alpha 8, eight evaluations, and
 19,317 packed rows. Its output is byte-identical to the earlier screening
 artifact, including 124 H.264 frames and stereo 32 kHz AAC with mean/max levels
 of -23.2/-5.6 dB. The cold-host wall was 3.59% slower and denoising 4.54% slower
@@ -721,7 +725,7 @@ useful attribution evidence but remain labeled as screening timings. The
 harness now enables both phase and step profiling for every subsequent arm.
 
 The portable direction is therefore narrower, not more aggressive: retain the
-exact reference-serving alignment, evaluate a 448x224 (87.5%) internal canvas,
+exact reference-serving alignment, evaluate a 448 x 224 (87.5%) internal canvas,
 at most one reused middle evaluation, less aggressive token pairing/block
 spans, and true load-time pruning for A2 before another promotion attempt.
 Exact `boundary-layout` remains the only h3.c kernel lane with a supported

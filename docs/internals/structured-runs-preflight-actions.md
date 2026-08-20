@@ -1,13 +1,15 @@
-# Structured Runs, Preflights, and Declarative Actions
+# Structured runs, preflights, and declarative actions
 
-This document defines the headless-first run contract for
-`mere.run`: structured `--json` output, cheap `--preflight` checks, and
-declarative next actions that can later power optional local UIs without making
-the UI the source of behavior.
+This document defines the headless-first run contract for `mere.run`:
+structured `--json` output, low-cost `--preflight` checks, and declarative next
+actions that can power optional local user interfaces (UIs) without making a
+UI the source of behavior.
 
-The immediate goal is not to build another standing app surface. The goal is to
-make every substantial command able to describe what it will do, what it did,
-what artifacts it produced, and what the caller can safely do next.
+The contract lets each substantial command describe what it will do, what it
+did, which artifacts it produced, and what the caller can safely do next.
+
+The implementation-phase sections are retained as a design record. The public
+contract and acceptance criteria remain normative.
 
 ## Product thesis
 
@@ -71,8 +73,8 @@ Every feature must work from the CLI and be useful to:
 
 ### stdout is contract, stderr is diagnostics
 
-This repo already treats stdout as machine-readable output and stderr as
-diagnostic progress. The new JSON surfaces must preserve that contract.
+This repository treats standard output as machine-readable output and standard
+error as diagnostic progress. JSON surfaces must preserve that contract.
 
 When `--json` is set:
 
@@ -84,8 +86,8 @@ When `--json` is set:
 
 ### Typed contracts
 
-All output contracts should be typed Swift structs with `Codable` conformance.
-Avoid ad hoc dictionaries. This keeps tests, docs, and future UI clients aligned
+Use typed Swift structures with `Codable` conformance for all output contracts.
+Avoid ad hoc dictionaries. This keeps tests, documentation, and UI clients aligned
 with compiler-checked fields.
 
 ### Stable but evolvable schemas
@@ -130,7 +132,7 @@ and API keys must be masked.
 
 Add or normalize `--json` across commands that produce structured state.
 
-For commands that currently print a single path or human text, `--json` should
+For commands that print a single path or human text, `--json` should
 emit an envelope and keep the existing default output unchanged.
 
 Example:
@@ -268,7 +270,7 @@ mere.run run cancel relay://fleet/<job-id> --json
 mere.run run retry relay://fleet/<job-id> --json
 ```
 
-The public schemas live under `/schemas/`. See [Portable Workflows](../workflows.md)
+The public schemas live under `/schemas/`. See [Portable workflows](../workflows.md)
 for the complete graph, bundle, executor, worker, and run-directory contract.
 
 ## JSON envelope
@@ -439,9 +441,9 @@ logs/
 
 Required files:
 
-- `run.json`: latest run envelope and request summary.
+- `run.json`: most recent run envelope and request summary.
 - `events.jsonl`: append-only event stream.
-- `actions.json`: next actions valid for the current run state.
+- `actions.json`: next actions valid for the active run state.
 - `plan.json`: normalized executable request, when the run came from a saved
   plan.
 
@@ -477,17 +479,17 @@ mere.run image train-lora \
   --json
 ```
 
-Should:
+The command must:
 
-1. resolve CLI options and named recipes
-2. inspect dataset files and captions
-3. validate output path and parent directory
-4. resolve model id or model path without pulling large missing models
-5. estimate training image buckets
-6. estimate memory and disk footprint when possible
-7. report known incompatibilities
-8. emit diagnostics and actions
-9. exit before loading the full training runtime
+1. Resolve CLI options and named recipes.
+2. Inspect dataset files and captions.
+3. Validate the output path and parent directory.
+4. Resolve the model ID or model path without pulling large missing models.
+5. Estimate training image buckets.
+6. Estimate memory and disk footprint when possible.
+7. Report known incompatibilities.
+8. Emit diagnostics and actions.
+9. Exit before loading the full training runtime.
 
 ### Preflight checks
 
@@ -630,9 +632,9 @@ Resource estimates:
 Deliverables:
 
 - this planning document
-- inventory of current commands with existing `--json` support
+- Inventory of commands with existing `--json` support
 - inventory of commands where preflight is valuable
-- list of current output conventions that must not break
+- List of existing output conventions that must not break
 
 Likely files:
 
@@ -645,7 +647,7 @@ Likely files:
 Acceptance:
 
 - no behavior changes
-- document reviewed against current command tree
+- Document reviewed against the command tree
 
 ### Phase 1: shared typed contracts
 
@@ -734,7 +736,7 @@ Behavior matrix:
 
 | Flags | Behavior |
 | --- | --- |
-| none | current behavior |
+| none | Existing behavior |
 | `--json` | final success emits structured run result, if feasible in this phase |
 | `--preflight` | human-readable preflight summary |
 | `--preflight --json` | structured preflight report |
@@ -799,7 +801,7 @@ Docs should show:
 
 Acceptance:
 
-- docs examples use repo-relative paths
+- Documentation examples use repository-relative paths
 - no workstation-specific paths
 - no stale model IDs
 
@@ -908,7 +910,7 @@ The result should include:
 - suggested upload/submission actions
 - local run metadata for later readback import
 
-Relay integration can then live in the relay repo:
+Relay integration can then live in the relay repository:
 
 - client API accepts graph job payloads
 - scheduler matches graph requirements to online node capabilities
@@ -944,7 +946,7 @@ warning-level `legacy_manifest` summary instead of treating the directory as an
 opaque blocker. Unknown or corrupt manifests still block inspection.
 
 Run-directory inspection also emits a compact `metrics` summary derived from
-loss CSVs and discovered artifacts, so clients can show latest loss, step range,
+loss CSVs and discovered artifacts, so clients can show the most recent loss, step range,
 sample count, checkpoint count, and adapter count without parsing artifact
 files themselves.
 
@@ -960,7 +962,7 @@ Viewer rule:
 - viewer buttons render declarative actions
 - viewer does not invent hidden command behavior
 
-There is no generic run-view command. The current viewer entrypoint is
+There is no generic run-view command. The supported viewer entrypoint is
 `mere.run image visualize-run` for compatible local image-training runs. Other
 clients should build views from `mere.run run inspect --json` and the same
 reports, events, metrics, artifacts, and declarative actions that the CLI
@@ -1014,17 +1016,17 @@ Rules:
 
 ## Compatibility
 
-The implementation should be additive.
+The implementation must be additive.
 
 Must preserve:
 
-- current default stdout behavior
-- current `--quiet` behavior unless explicitly documented
-- current `--visualize` behavior
+- Existing default stdout behavior
+- Existing `--quiet` behavior unless explicitly documented
+- Existing `--visualize` behavior
 - existing LoRA run directories
-- existing docs examples until the new feature lands
+- Existing documentation examples until the feature lands
 
-The first PR should not require users to change existing commands.
+The first pull request must not require users to change existing commands.
 
 ## Open decisions
 
@@ -1041,7 +1043,7 @@ The first PR should not require users to change existing commands.
 5. Should the run directory contract live in `MereRunCLI` or `MereRunCore`?
    Recommended: start in `MereRunCLI/Support`; move shared artifact/event types
    lower only if runtimes need to write them directly.
-6. Should graph jobs enter relay as a new first-class work kind or as a
+6. Should graph jobs enter relay as a separate first-class work kind or as a
    tool-style request carrying a `mere.run/workflow-graph` payload? Recommended:
    first-class long-term, tool-style only as a compatibility bridge.
 7. Should `mere.run` submit directly to relay? Recommended: no for the public
@@ -1053,15 +1055,15 @@ The first PR should not require users to change existing commands.
    plugin nodes only when their manifests declare typed inputs, outputs, and
    artifact behavior.
 
-## PR sequencing
+## Pull request sequencing
 
-### PR 1: contract and LoRA preflight JSON
+### Pull request 1: contract and LoRA preflight JSON
 
 Scope:
 
 - shared typed envelope, diagnostics, actions
 - `image train-lora --preflight --json`
-- tests and docs for the new preflight path
+- Tests and documentation for the preflight path
 
 Avoid:
 
@@ -1069,15 +1071,15 @@ Avoid:
 - viewer changes
 - cross-command adoption
 
-### PR 2: LoRA run actions and normalized files
+### Pull request 2: LoRA run actions and normalized files
 
 Scope:
 
 - write `run.json` and `actions.json` for LoRA training
 - keep existing viewer working
-- add compatibility tests for old and new run dirs
+- Add compatibility tests for both run-directory formats
 
-### PR 3: model and image generation preflights
+### Pull request 3: model and image generation preflights
 
 Scope:
 
@@ -1095,7 +1097,7 @@ Scope:
 - redacted start-server, status, model-store, and pull actions
 - shared model availability diagnostics
 
-### PR 4: long-running media commands
+### Pull request 4: long-running media commands
 
 Scope:
 
@@ -1110,7 +1112,7 @@ Scope:
 - `start-sfx-video-generation`, `pull-model`, `pull-synchformer`, input reveal, and output actions
 - benchmark commands where useful
 
-### PR 5: run inspection
+### Pull request 5: run inspection
 
 Scope:
 
@@ -1118,7 +1120,7 @@ Scope:
 - generic `run inspect --json` readback for run directories, report files, and
   plan files
 
-### PR 6: workflow graph contract
+### Pull request 6: workflow graph contract
 
 Scope:
 
@@ -1135,7 +1137,7 @@ Avoid:
 - visual graph editor
 - private relay assumptions
 
-### PR 7: local graph run and relay job export
+### Pull request 7: local graph run and relay job export
 
 Scope:
 
@@ -1143,14 +1145,14 @@ Scope:
 - graph parent run directory with child node reports
 - `graph export-job --target relay`
 - asset manifest and capability requirement payload
-- docs describing how an external relay should consume the payload
+- Documentation that describes how an external relay consumes the payload
 
 Avoid:
 
-- embedding relay auth or hosted scheduling in this repo
+- Embedding relay authentication or hosted scheduling in this repository
 - requiring a GPU node for local tests
 
-### PR 8: optional viewer refresh
+### Pull request 8: optional viewer refresh
 
 Scope:
 
@@ -1179,7 +1181,7 @@ The first milestone is complete when:
 This turns `mere.run` into a better headless runtime without expanding the
 standing UI surface.
 
-The runtime becomes easier to drive from scripts, Codex, remote workers, and
-small local dashboards. Bad runs fail earlier. Good runs explain themselves.
+Scripts, Codex, remote workers, and small local dashboards can drive the runtime
+through one contract. Invalid runs fail earlier. Valid runs explain themselves.
 Optional UIs can appear later as faithful renderers of structured truth instead
 of becoming a second workflow engine.

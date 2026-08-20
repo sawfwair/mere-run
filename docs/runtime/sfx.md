@@ -1,8 +1,8 @@
-# SFX Runtime
+# SFX runtime
 
-Foley from a sentence — or from a silent video. Describe the sound you want and
-get a WAV back, or hand the runtime a clip and let it watch the footage and
-place the hits in sync with what is on screen.
+Generate Foley from a sentence or silent video. Describe the sound you want to
+create, or provide a clip so the runtime can align the generated sound with the
+on-screen action.
 
 ## Commands
 
@@ -15,7 +15,7 @@ place the hits in sync with what is on screen.
 | `mere.run sfx ae encode` | Encode audio into normalized Woosh-AE latents. |
 | `mere.run sfx ae decode` | Decode normalized Woosh-AE latents into audio. |
 
-## Model family
+## Model families
 
 - `sfx-woosh-dflow`
 - `sfx-woosh-flow`
@@ -31,12 +31,12 @@ The Sound FX workspace opens **SFX Lab**, a dedicated surface for all six
 command families. It provides text generation and video-synchronized Foley,
 renoise and negative-conditioning controls, text-conditioning export, Woosh-AE
 encode/decode, and CLAP prompt/audio scoring. Generated audio and source video
-are reviewable in place; encoded NPY results show their dtype, shape, NumPy
+are reviewable in place. Encoded NPY results show their data type, shape, NumPy
 version, layout, and size. Progress and every output remain durable in Library.
 
 ## Writing prompts
 
-Woosh is trained on caption datasets — AudioCaps, WavCaps and Freesound — where
+Woosh is trained on the AudioCaps, WavCaps, and Freesound caption datasets, where
 every label is a natural-language clause describing an event, and Sony's own
 examples follow that form ("A crowd applauds", "An engine humming and brakes
 squealing"). Keyword lists usually work too, but caption phrasing is more
@@ -53,10 +53,11 @@ Measured on `sfx-woosh-dflow`, seed 7, peak amplitude of the generated WAV:
 | `ceramic mug shattering on a tile floor` | 0.082 — very quiet |
 | `A ceramic mug shatters on a tile floor` | 0.893 |
 
-The collapse is not about the subject: `piano` and `lid closing` each generate
-fine on their own, and `piano lid closing, loud` recovers. Nor is it sampling —
-seed, `--cfg` and `--steps` change nothing, and the `dflow` and `flow`
-checkpoints fail identically on the same prompts.
+The subject does not cause the collapse. `piano` and `lid closing` each generate
+audible output independently, and `piano lid closing, loud` recovers. Sampling
+also does not cause the collapse. The seed, `--cfg`, and `--steps` do not change
+the result, and the `dflow` and `flow` checkpoints fail identically on the same
+prompts.
 
 When a generation comes out inaudible, `sfx generate` warns with the measured
 peak. Rephrase as a caption before reaching for other parameters:
@@ -166,7 +167,7 @@ both DFN5B CLIP frames and Synchformer features. A Synchformer-only `.npy`
 input cannot supply the CLIP stream. The model produces 44.1 kHz audio and
 defaults to 8 seconds, 25 Euler flow steps, and CFG 4.5.
 
-## Runtime entrypoints
+## Runtime entry points
 
 ### CLI
 
@@ -195,19 +196,20 @@ defaults to 8 seconds, 25 Euler flow steps, and CFG 4.5.
 
 ## Reading order
 
-1. `WooshResources.swift` for model IDs, validation, and checkpoint layout
-2. `WooshGenerator.swift` for prompt/video conditioning, Flow/DFlow/VFlow/DVFlow sampling, and WAV-ready samples
-3. `WooshRobertaTextEncoder.swift` for TextConditionerA / RoBERTa conditioning
-4. `WooshDiT.swift` for the native Flow and FlowMap DiTs
-5. `WooshVideoDiT.swift` for VFlow/DVFlow video-feature-conditioned DiTs
+1. `WooshResources.swift` for model IDs, validation, and checkpoint layout.
+2. `WooshGenerator.swift` for prompt and video conditioning,
+   Flow/DFlow/VFlow/DVFlow sampling, and WAV-ready samples.
+3. `WooshRobertaTextEncoder.swift` for TextConditionerA and RoBERTa conditioning.
+4. `WooshDiT.swift` for the native Flow and FlowMap DiTs.
+5. `WooshVideoDiT.swift` for VFlow and DVFlow video-feature-conditioned DiTs.
 6. `WooshSynchformer.swift` for raw-video frame preprocessing and
    Synchformer `synch_out` extraction
-7. `WooshCLAP.swift` for Woosh-CLAP text/audio scoring
-8. `WooshVocosDecoder.swift` for Woosh-AE encode/decode
+7. `WooshCLAP.swift` for Woosh-CLAP text and audio scoring.
+8. `WooshVocosDecoder.swift` for Woosh-AE encoding and decoding.
 
 ## Contributor notes
 
-- Woosh is a sound-effect and Foley model, not a song model; keep it under
+- Woosh is a sound-effect and Foley model, not a song model. Keep it under
   `sfx`, not `music`.
 - The managed install uses the Hugging Face mirror
   `AEmotionStudio/woosh-models`, which mirrors Sony Research Woosh v1.0.0.
@@ -216,7 +218,7 @@ defaults to 8 seconds, 25 Euler flow steps, and CFG 4.5.
   and needs more steps for quality.
 - TextConditionerA/TextConditionerV are exported Woosh-CLAP text-conditioning
   components. `sfx condition text` exposes the text-token conditioning tensors,
-  and `sfx clap score` runs the native RoBERTa + PaSST retrieval path.
+  and `sfx clap score` runs the native RoBERTa and PaSST retrieval path.
 - `sfx video generate` runs native VFlow/DVFlow from a raw video file. It can
   also take precomputed Synchformer `synch_out` tensors as `.npy` with shape
   `[frames, 768]` or `[1, frames, 768]`.

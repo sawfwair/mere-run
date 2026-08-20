@@ -1,13 +1,13 @@
 # OSS depth and 3D models for native VFX workflows
 
-Research snapshot: 2026-07-13.
+Research snapshot: July 13, 2026.
 
 This report records five permissively licensed model lanes plus the separately
 license-gated DINOv3 dependency used by TRELLIS.2, all selected for native
 Swift/MLX execution in `mere.run`. It separates what each neural model actually
 predicts from downstream files that `mere.run` derives, and it makes the
 InstantMesh and DINOv3 licensing boundaries explicit. Exact TRELLIS.2 artifact
-identities live in `Trellis2Resources`; the other geometry identities live in
+identities live in `Trellis2Resources`. The other geometry identities live in
 `GeometryModelPins`.
 
 ## Recommendation at a glance
@@ -34,79 +34,79 @@ runtime admission controls, not approximate download sizes.
 
 ### MoGe-2 ViT-S Normal
 
-- Managed ID: `vision-geometry-moge2-small`
-- Pinned model: [`Ruicheng/moge-2-vits-normal-onnx@e50ffda`](https://huggingface.co/Ruicheng/moge-2-vits-normal-onnx/tree/e50ffda41565591092adea54c6ac83d6212e1e23)
-- Pinned source: [`microsoft/MoGe@0744441`](https://github.com/microsoft/MoGe/tree/07444410f1e33f402353b99d6ccd26bd31e469e8)
-- `model.onnx`: 140,852,051 bytes
-- SHA-256: `24eacb5dc7a2c54c7bc98f7de085ffbed79ad006ea5b664c2c2cdc02ff3a52f0`
-- License boundary: MIT for MoGe; the bundled DINOv2 portion is Apache-2.0.
+- **Managed ID:** `vision-geometry-moge2-small`.
+- **Pinned model:** [`Ruicheng/moge-2-vits-normal-onnx@e50ffda`](https://huggingface.co/Ruicheng/moge-2-vits-normal-onnx/tree/e50ffda41565591092adea54c6ac83d6212e1e23).
+- **Pinned source:** [`microsoft/MoGe@0744441`](https://github.com/microsoft/MoGe/tree/07444410f1e33f402353b99d6ccd26bd31e469e8).
+- **`model.onnx`:** 140,852,051 bytes.
+- **SHA-256:** `24eacb5dc7a2c54c7bc98f7de085ffbed79ad006ea5b664c2c2cdc02ff3a52f0`.
+- **License boundary:** MIT for MoGe; the bundled DINOv2 portion is Apache-2.0.
   The conversion repository has no Hugging Face license tag, so distribution
   must retain the notices from the [upstream MoGe project](https://github.com/microsoft/MoGe/blob/07444410f1e33f402353b99d6ccd26bd31e469e8/LICENSE)
   and DINOv2 rather than relying on model-card metadata alone.
 
 ### Video Depth Anything Small
 
-- Managed ID: `vision-depth-vda-small`
-- Pinned model: [`depth-anything/Video-Depth-Anything-Small@2568753`](https://huggingface.co/depth-anything/Video-Depth-Anything-Small/tree/256875362cff76724b920335dfb4b29dd611f66e)
-- Pinned source: [`DepthAnything/Video-Depth-Anything@4f5ae23`](https://github.com/DepthAnything/Video-Depth-Anything/tree/4f5ae23172ba60fd7bc11ef671cca678842c7072)
-- `video_depth_anything_vits.pth`: 116,440,756 bytes
-- SHA-256: `13379300b739e659f076a59d52e9801bd8d38c541a7e71f73bbca4dcfb013609`
-- License: Apache-2.0.
+- **Managed ID:** `vision-depth-vda-small`.
+- **Pinned model:** [`depth-anything/Video-Depth-Anything-Small@2568753`](https://huggingface.co/depth-anything/Video-Depth-Anything-Small/tree/256875362cff76724b920335dfb4b29dd611f66e).
+- **Pinned source:** [`DepthAnything/Video-Depth-Anything@4f5ae23`](https://github.com/DepthAnything/Video-Depth-Anything/tree/4f5ae23172ba60fd7bc11ef671cca678842c7072).
+- **`video_depth_anything_vits.pth`:** 116,440,756 bytes.
+- **SHA-256:** `13379300b739e659f076a59d52e9801bd8d38c541a7e71f73bbca4dcfb013609`.
+- **License:** Apache-2.0.
 
 Metric variant:
 
-- Managed ID: `vision-depth-vda-small-metric`
-- Pinned model: [`depth-anything/Metric-Video-Depth-Anything-Small@273d090`](https://huggingface.co/depth-anything/Metric-Video-Depth-Anything-Small/tree/273d090f2ce17df50c2872d82c8322c45da5b4dd)
-- `metric_video_depth_anything_vits.pth`: 116,444,063 bytes
-- SHA-256: `3c28432b4e1f0d7bb31cad5151b6313b49457db5aa58d82e85bfb0f8b1311b33`
-- License: Apache-2.0.
+- **Managed ID:** `vision-depth-vda-small-metric`.
+- **Pinned model:** [`depth-anything/Metric-Video-Depth-Anything-Small@273d090`](https://huggingface.co/depth-anything/Metric-Video-Depth-Anything-Small/tree/273d090f2ce17df50c2872d82c8322c45da5b4dd).
+- **`metric_video_depth_anything_vits.pth`:** 116,444,063 bytes.
+- **SHA-256:** `3c28432b4e1f0d7bb31cad5151b6313b49457db5aa58d82e85bfb0f8b1311b33`.
+- **License:** Apache-2.0.
 
 ### Depth Anything 3 Small
 
-- Managed ID: `vision-geometry-da3-small`
-- Pinned model: [`depth-anything/DA3-SMALL@e08cab6`](https://huggingface.co/depth-anything/DA3-SMALL/tree/e08cab65ca0ec38e7826075418411ab90cab4da3)
-- Pinned source: [`ByteDance-Seed/Depth-Anything-3@4173623`](https://github.com/ByteDance-Seed/Depth-Anything-3/tree/41736238f5bced4debf3f2a12375d2466874866d)
-- `config.json`: 1,202 bytes; SHA-256
+- **Managed ID:** `vision-geometry-da3-small`.
+- **Pinned model:** [`depth-anything/DA3-SMALL@e08cab6`](https://huggingface.co/depth-anything/DA3-SMALL/tree/e08cab65ca0ec38e7826075418411ab90cab4da3).
+- **Pinned source:** [`ByteDance-Seed/Depth-Anything-3@4173623`](https://github.com/ByteDance-Seed/Depth-Anything-3/tree/41736238f5bced4debf3f2a12375d2466874866d).
+- **`config.json`:** 1,202 bytes; SHA-256
   `a486e29e82b7ab4a7d4cefc1ea4526cfe2ae438a572c8ca98917cfbcde7447d2`
-- `model.safetensors`: 137,248,940 bytes; SHA-256
+- **`model.safetensors`:** 137,248,940 bytes; SHA-256
   `364492e38a3a06d221ac75da7f6621ada3f2361cd24fde11ba79091e9f40efcf`
-- License: Apache-2.0.
+- **License:** Apache-2.0.
 
 ### TripoSR
 
-- Managed ID: `image-3d-triposr`
-- Pinned model: [`stabilityai/TripoSR@5b52193`](https://huggingface.co/stabilityai/TripoSR/tree/5b521936b01fbe1890f6f9baed0254ab6351c04a)
-- Pinned source: [`VAST-AI-Research/TripoSR@107cefd`](https://github.com/VAST-AI-Research/TripoSR/tree/107cefdc244c39106fa830359024f6a2f1c78871)
-- `config.yaml`: 987 bytes; SHA-256
+- **Managed ID:** `image-3d-triposr`.
+- **Pinned model:** [`stabilityai/TripoSR@5b52193`](https://huggingface.co/stabilityai/TripoSR/tree/5b521936b01fbe1890f6f9baed0254ab6351c04a).
+- **Pinned source:** [`VAST-AI-Research/TripoSR@107cefd`](https://github.com/VAST-AI-Research/TripoSR/tree/107cefdc244c39106fa830359024f6a2f1c78871).
+- **`config.yaml`:** 987 bytes; SHA-256
   `74ca708ce086bf68e97709ea6b3d91f14717921c04691e84043f0eb8fcc68e62`
-- `model.ckpt`: 1,677,246,742 bytes; SHA-256
+- **`model.ckpt`:** 1,677,246,742 bytes; SHA-256
   `429e2c6b22a0923967459de24d67f05962b235f79cde6b032aa7ed2ffcd970ee`
-- License: MIT for code and pretrained model, as stated by both the
+- **License:** MIT for code and pretrained model, as stated by both the
   [model card](https://huggingface.co/stabilityai/TripoSR) and
   [source repository](https://github.com/VAST-AI-Research/TripoSR/tree/107cefdc244c39106fa830359024f6a2f1c78871#license).
 
 ### InstantMesh Base, reconstruction only
 
-- Managed ID: `image-3d-instantmesh-base`
-- Pinned model: [`TencentARC/InstantMesh@b785b4e`](https://huggingface.co/TencentARC/InstantMesh/tree/b785b4ecfb6636ef34a08c748f96f6a5686244d0)
-- Pinned source: [`TencentARC/InstantMesh@08822c5`](https://github.com/TencentARC/InstantMesh/tree/08822c52fdc399b93ea00e4fa9e596344ed52ccc)
-- `instant_mesh_base.ckpt`: 1,253,574,354 bytes
-- SHA-256: `22701cd25201d624ebb1568b93cf91b43a2c32006835c08fe73e1f3c9f6c44b5`
-- License boundary: Apache-2.0 reconstruction checkpoint only. The runtime
+- **Managed ID:** `image-3d-instantmesh-base`.
+- **Pinned model:** [`TencentARC/InstantMesh@b785b4e`](https://huggingface.co/TencentARC/InstantMesh/tree/b785b4ecfb6636ef34a08c748f96f6a5686244d0).
+- **Pinned source:** [`TencentARC/InstantMesh@08822c5`](https://github.com/TencentARC/InstantMesh/tree/08822c52fdc399b93ea00e4fa9e596344ed52ccc).
+- **`instant_mesh_base.ckpt`:** 1,253,574,354 bytes.
+- **SHA-256:** `22701cd25201d624ebb1568b93cf91b43a2c32006835c08fe73e1f3c9f6c44b5`.
+- **License boundary:** Apache-2.0 reconstruction checkpoint only. The runtime
   excludes view synthesis and NVIDIA's proprietary FlexiCubes implementation.
 
 ### TRELLIS.2-4B 512
 
-- Managed ID: `image-3d-trellis2-4b`
-- Pinned model: [`microsoft/TRELLIS.2-4B@af44b45`](https://huggingface.co/microsoft/TRELLIS.2-4B/tree/af44b45f2e35a493886929c6d786e563ec68364d)
-- Pinned source: [`microsoft/TRELLIS.2`](https://github.com/microsoft/TRELLIS.2)
-- Pinned sparse-structure dependency:
+- **Managed ID:** `image-3d-trellis2-4b`.
+- **Pinned model:** [`microsoft/TRELLIS.2-4B@af44b45`](https://huggingface.co/microsoft/TRELLIS.2-4B/tree/af44b45f2e35a493886929c6d786e563ec68364d).
+- **Pinned source:** [`microsoft/TRELLIS.2`](https://github.com/microsoft/TRELLIS.2).
+- **Pinned sparse-structure dependency:**
   [`microsoft/TRELLIS-image-large@25e0d31`](https://huggingface.co/microsoft/TRELLIS-image-large/tree/25e0d31ffbebe4b5a97464dd851910efc3002d96)
-- Pinned conditioner:
+- **Pinned conditioner:**
   [`facebook/dinov3-vitl16-pretrain-lvd1689m@ea8dc28`](https://huggingface.co/facebook/dinov3-vitl16-pretrain-lvd1689m/tree/ea8dc2863c51be0a264bab82070e3e8836b02d51)
-- Seven pinned safetensors total 11,010,775,158 bytes; each byte count and
+- **Artifact size:** Seven pinned safetensors total 11,010,775,158 bytes; each byte count and
   SHA-256 is enforced by `Trellis2Resources`.
-- License boundary: TRELLIS.2 code and weights are MIT. DINOv3 has separate
+- **License boundary:** TRELLIS.2 code and weights are MIT. DINOv3 has separate
   terms and a gated model repository; users must accept those terms and
   authenticate before installation.
 
@@ -118,11 +118,11 @@ Metric variant:
 | VDA-S relative/metric | PyTorch state dict | Exact pinned PTH is parsed by a restricted non-executing tensor reader; exact converted packages are also accepted | Deterministic conversion proven byte-identical twice per variant, with frozen environment, 351-tensor inventory, and mandatory license |
 | DA3-S | Safetensors | Exact pinned safetensors and config are checksum-verified and loaded directly | No conversion required |
 | TripoSR | Lightning/PyTorch CKPT | Exact CKPT is accepted by the restricted state-dict grammar; verified converted safetensors is also accepted | Deterministic conversion proven byte-identical twice |
-| InstantMesh Base | Lightning CKPT | Runtime accepts only the verified reconstruction-only safetensors package | Deterministic conversion proven byte-identical twice; view-generation tensors are never accepted |
+| InstantMesh Base | Lightning CKPT | Runtime accepts only the verified reconstruction-only safetensors package | Deterministic conversion proven byte-identical twice; view-generation tensors are not accepted |
 | TRELLIS.2-4B 512 | Safetensors | Official BF16/FP16 files are checksum-verified and loaded directly into native dense/sparse MLX graphs | No conversion required |
 
 Every inference path is native Swift/MLX. Python appears only in audited
-release conversion and upstream-reference fixture generation, never as a
+release conversion and upstream-reference fixture generation, not as a
 runtime sidecar.
 
 ## Model profiles
@@ -149,7 +149,7 @@ not a multi-view camera solver and does not create a watertight object mesh.
 
 Apple Silicon fit is strong: the small backbone is the lightest still-geometry
 choice here, token count is capped and controllable, and inference is entirely
-MLX. The published 128x128, 3,600-token native row completed in 0.88 seconds,
+MLX. The published 128 x 128, 3,600-token native row completed in 0.88 seconds,
 with 748.9 MiB max RSS and an 8.50 GiB MLX/Metal peak footprint.
 
 ### 2. Video Depth Anything Small and Metric Small
@@ -200,7 +200,7 @@ triangles. The 3DGS handoff contains cameras and colored points, not learned
 Gaussian parameters. Those distinctions should remain visible in every plugin
 contract and UI.
 
-DA3 is the right primitive for multi-view camera bootstrap, plate alignment,
+Use DA3 for multi-view camera bootstrap, plate alignment,
 point-based set reconstruction, scene-scale occlusion proxies, and seeding a
 separate Nerfstudio or 3DGS optimization. It is not the right primitive for
 metric measurements or a finished mesh.
@@ -237,7 +237,7 @@ The upstream project combines a sparse-view reconstruction network with a
 single-image-to-multiview diffusion stage. Only the reconstruction network is
 in scope. `mere.run` accepts exactly four or six ordered, user-supplied views,
 with either the official camera rig or explicit 16-value camera conditioning.
-It never downloads or runs the view generator.
+It does not download or run the view generator.
 
 The pinned reconstruction checkpoint contains 455 tensors and 313,352,516
 scalars. Its native graph uses a camera-conditioned ViT-B/16 encoder, 3,072
@@ -261,9 +261,9 @@ set-dressing proxies, and occlusion/collision assets. It is deliberately not a
 single-image plugin: callers must supply views they are licensed to use.
 
 The graph uses view batching plus attention, feed-forward, field-query, and
-isosurface chunking for Apple Silicon. The benchmark ledger now includes native
+isosurface chunking for Apple Silicon. The benchmark ledger includes native
 six-view grid-16 and grid-24 runs through the verified converted package; the
-measured figures are summarized below.
+measured figures appear in the Apple Silicon evidence section.
 
 ### 6. TRELLIS.2-4B 512
 
@@ -278,7 +278,7 @@ Official BF16 and FP16 safetensors load directly into MLX. Stages are loaded
 and released independently rather than retaining the roughly 11 GB checkpoint
 set at once. The result includes normalized colored OBJ, PLY, and GLB meshes.
 A deterministic `.pbrvox` sidecar preserves base color RGB, metallic,
-roughness, and alpha for every decoded sparse voxel; the current canonical GLB
+roughness, and alpha for every decoded sparse voxel; the canonical GLB
 writer does not claim a synthesized texture-atlas representation.
 
 The native public surface deliberately starts with 512. It does not claim the
@@ -316,7 +316,7 @@ by an upstream project safe to ship. The engineering boundary is:
   notice, and input-asset rights remain distribution obligations. This is an
   engineering policy, not a substitute for product-specific legal review.
 
-## What "parity" means
+## Parity definition
 
 Exact neural parity means the native MLX graph is compared with the pinned
 upstream implementation at model-internal boundaries using the same weights
@@ -338,7 +338,7 @@ The parity surfaces are:
 InstantMesh SDF parity is measured before extraction. If an extraction grid's
 interior is entirely one-signed, the run then applies the pinned upstream
 center/boundary sign repair, records that intervention, and meshes the repaired
-field. It never presents a repaired sample as a raw neural-parity value.
+field. It does not present a repaired sample as a raw neural-parity value.
 
 Neural-field parity does **not** imply triangle-topology parity:
 
@@ -350,7 +350,8 @@ Neural-field parity does **not** imply triangle-topology parity:
   the parity-tested SDF/deformation/color field. It intentionally reports
   `topologyMatchesUpstreamFlexiCubes=false`.
 
-Plugins should compare semantic assets, bounds, field samples, and durable
+When comparing results, plugins should compare semantic assets, bounds, field
+samples, and durable
 hashes produced by the same native settings. They must not promise identical
 upstream triangle IDs or topology.
 
@@ -358,7 +359,7 @@ upstream triangle IDs or topology.
 
 The full methodology and tables live in
 [VFX geometry Apple Silicon benchmarks](../benchmarks/vfx-geometry-apple-silicon.md).
-The current measurements are from a debug build on an M4 Max with 128 GB unified
+The measurements are from a debug build on an M4 Max with 128 GB unified
 memory and macOS 26.4:
 
 - MoGe-2 ViT-S Normal: one 128 x 128 image at 3,600 tokens completed in
@@ -395,7 +396,7 @@ Keep model truth explicit in plugin outputs:
 - Label VDA relative depth as affine-relative and VDA metric depth as meters.
   Do not add confidence or camera fields to either model.
 - Label DA3 output as relative, its GLB as a point cloud, and its 3DGS handoff
-  as initialization only. Never imply learned Gaussians or a triangle mesh.
+  as initialization only. Do not imply learned Gaussians or a triangle mesh.
 - Label TripoSR and InstantMesh meshes as normalized object space unless a
   separate scale/alignment operation establishes world units.
 - Label TRELLIS.2 meshes as normalized object space and keep the `.pbrvox`

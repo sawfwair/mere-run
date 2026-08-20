@@ -1,17 +1,17 @@
-# Linux QuickStart
+# Linux quickstart
 
-Installing or building the headless `mere.run` CLI on Linux.
+Use this guide to install or build the headless `mere.run` CLI on Linux.
 
 Be clear about what you are getting. The Linux path is real but deliberately
 narrow: CLI only, Ubuntu-style hosts, and CUDA on x86_64 or arm64. There is no
 CPU-only Linux release and no studio app here; macOS remains the primary
-development and runtime-validation environment for this repo.
+development and runtime-validation environment for this repository.
 
 Nothing is treated as supported until it has been built and smoke-tested on the
-host class it targets — CUDA artifacts on real CUDA hardware, never a
-cross-build taken on faith.
+host class it targets. Validate CUDA artifacts on real CUDA hardware; do not
+treat a cross-build as runtime proof.
 
-## Current validation boundary
+## Validation boundary
 
 - Linux package artifacts are headless CLI-only.
 - Package validation must cover the portable tarball, Debian package, runtime
@@ -19,11 +19,11 @@ cross-build taken on faith.
 - CUDA package validation must include a real CUDA GPU host.
 - Linux packages do not include `MereRun.app`, the SwiftUI studio, the macOS
   installer UI, or the DMG layout.
-- Published Linux package builds must use `MERERUN_LINUX_ACCEL=cuda` on both
-  x86_64 and arm64. CPU builds are test fixtures, not release artifacts.
-- NVIDIA GB10/DGX Spark is a valid arm64 CUDA target when the package is built
-  and smoke-tested on matching hardware.
-- Current CUDA validation should be treated as limited to the exact hosts that
+- Published Linux package builds must use `MERERUN_LINUX_ACCEL=cuda`. CPU
+  builds are test fixtures, not release artifacts.
+- Active release builds use the configured `tensor.local` x86_64 CUDA builder.
+  The arm64 CUDA lane is paused while no matching build host is available.
+- CUDA validation applies only to hosts that
   have run the CUDA package and smoke path.
 
 ## Install with apt
@@ -90,8 +90,8 @@ mere.run --version
 mere.run status
 ```
 
-The CUDA tarball is the right build pack for companion remote-runner plugins.
-It is not a source/bootstrap archive and should not compile on paid GPU time.
+Use the CUDA tarball as the build pack for companion remote-runner plugins.
+It is not a source or bootstrap archive and must not compile on paid GPU time.
 No CPU-only tarball is published.
 
 ## First commands
@@ -108,7 +108,7 @@ mere.run status
 ```
 
 Use `mere.run model capabilities` before pulling large checkpoints. It gives a
-machine-local view of the recommended public model IDs for the current host.
+machine-local view of the recommended public model IDs for the host.
 
 ## Media commands
 
@@ -141,7 +141,7 @@ ls dist/linux/
 On rented GPU builders, keep paid compile time down by setting
 `MERERUN_NATIVE_BUILD_JOBS` to the worker's real vCPU count and
 `MERERUN_CUDA_ARCHITECTURES` to the target build policy. For example, an RTX
-A4000 builder that should also ship forward-compatible H100 PTX can use:
+A4000 builder that must also ship forward-compatible H100 PTX can use:
 
 ```bash
 MERERUN_LINUX_ACCEL=cuda \
@@ -161,7 +161,7 @@ publish or recommend CPU-only arm64 packages as release artifacts.
 Build arm64 packages on a native arm64 Linux host with an NVIDIA GPU, driver,
 CUDA Toolkit, `nvcc`, CUDA CCCL headers, cuDNN, NCCL, Swift,
 OpenBLAS/LAPACK headers, and `ffmpeg` available. On NVIDIA's Ubuntu 24.04 SBSA
-repo this includes `cuda-cccl-13-0`, `libcudnn9-dev-cuda-13`, and
+repository this includes `cuda-cccl-13-0`, `libcudnn9-dev-cuda-13`, and
 `libnccl-dev`:
 
 ```bash
@@ -199,21 +199,23 @@ Linux Swift toolchain, then builds the CMake CUDA bridge from that exact
 `mlx-swift` checkout. This keeps the bridge aligned when an older Swift
 toolchain selects a compatibility revision different from a Mac checkout.
 `MLX_SWIFT_CUDA_COMMIT` is available only as a deliberate maintainer diagnostic
-override; normal source builds should use the SwiftPM-selected revision.
+override. Standard source builds must use the SwiftPM-selected revision.
 
 Do not describe a CUDA configuration as supported unless it has been run on that
 matching host.
 
-### Spark CUDA smoke status
+### Historical Spark CUDA smoke receipt
 
-The arm64 CUDA smoke path has been validated on NVIDIA GB10/DGX Spark after
+The arm64 CUDA smoke path was validated on NVIDIA GB10/DGX Spark after
 installing the package and pulling public managed models. MLX-backed image,
 speech, vision, music, SFX, video, embedding, anonymization, and dense Gemma
-chat paths are expected to run there with the packaged CUDA setup. The packaged
+chat paths ran with the packaged CUDA setup. This receipt does not make Spark
+an active release builder. The arm64 lane remains paused until a compatible
+host is available for a fresh build and smoke test. The packaged
 Linux CUDA build also carries the matching `llama-cli`; `mere.run text code`
 uses that subprocess on Linux so GGUF coding models do not share a process with
-MLX CUDA. If a future CUDA run fails inside an upstream MLX or llama.cpp kernel,
-keep that failure in the release notes or PR description until the exact package
+MLX CUDA. If a later CUDA run fails inside an upstream MLX or llama.cpp kernel,
+keep that failure in the release notes or pull request description until the exact package
 has been rebuilt and rerun on matching hardware.
 
 Quantized MLX paths default to `MERERUN_MLX_CUDA_NATIVE_QUANT=auto`: each
@@ -233,7 +235,7 @@ sudo apt-get install -y cmake ninja-build pkg-config gfortran libcurl4-openssl-d
 
 CUDA package builds also require CMake 3.25 or newer because the CUDA bridge
 build follows upstream `mlx-swift`. On Ubuntu 22.04/Jammy images, install a
-newer CMake before running the CUDA package path:
+CMake 3.25 or later before running the CUDA package path:
 
 ```bash
 sudo apt-get install -y python3-pip

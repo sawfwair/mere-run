@@ -1,10 +1,10 @@
-# Music Runtime
+# Music runtime
 
-Write a track from a text prompt, cover an existing song in a different genre,
-play a model live from a MIDI controller, split a mix into vocal and
-instrumental WAVs, or turn it back into instrument-separated MIDI with tempo,
-meter, and key already filled in.
-Generation, analysis, adapter training, resident serving, realtime steering,
+Use the music runtime to write a track from a text prompt, cover a song in a
+different genre, play a model from a Musical Instrument Digital Interface
+(MIDI) controller, split a mix into vocal and instrumental WAV files, or
+convert it into instrument-separated MIDI with tempo, meter, and key metadata.
+Generation, analysis, adapter training, resident serving, real-time steering,
 source separation, and transcription are native Swift and MLX paths. MiniMax
 Music 3 uses its staged language-model, RVQ, flow-transformer, and stereo
 vocoder stack locally; Magenta RT2 takes CC knobs while it is still generating.
@@ -17,17 +17,17 @@ vocoder stack locally; Magenta RT2 takes CC knobs while it is still generating.
 | `mere.run music analyze` | Analyze source audio with ACE-Step audio understanding. |
 | `mere.run music serve` | Keep an ACE-Step pipeline resident behind the native music API. |
 | `mere.run music train-adapter` | Train a reloadable ACE-Step LoRA or LoKr adapter. |
-| `mere.run music realtime` | Run Magenta RealTime 2 music generation, steerable from stdin or CoreMIDI. |
+| `mere.run music realtime` | Run Magenta RealTime 2 music generation with stdin or CoreMIDI steering. |
 | `mere.run music separate` | Separate stems or restore audio with native BS/MelBand RoFormer models. |
 | `mere.run music transcribe` | Transcribe a full music mix into instrument-separated MIDI with MuScriptor. |
 
 The macOS Studio app exposes its music workflows through first-class
 workspaces backed by `MereRunContract`. Its primary Music composer covers the
-normal production loop—create or edit, source/reference audio, quality and LM
+production loop: create or edit, source or reference audio, quality and language-model (LM)
 planning, ranked candidates, adapter stacks, stems, LRC, recipes, and DAW
 export. **Music Tools** provides structured audio analysis, MuScriptor controls
 and an embedded MIDI piano roll, plus resident-server start/stop and health.
-**Realtime** owns Magenta playback and MIDI steering. **Training Studio** owns
+**Real-time** owns Magenta playback and MIDI steering. **Training Studio** owns
 LoRA/LoKr dataset inspection, launch, metrics, and run comparison. Advanced
 remains available for raw command-level control. App-to-CLI tests reject any
 emitted flag absent from `mere.run catalog --json`.
@@ -55,7 +55,7 @@ emitted flag absent from `mere.run catalog --json`.
 ## Guides
 
 Music guidance follows the command/cookbook shape used by the rest of
-`mere.run`: choose the command first, then focus the guide with a model id.
+`mere.run`: choose the command first, and then focus the guide with a model ID.
 
 ```bash
 mere.run guide music generate --model music-acestep
@@ -225,7 +225,7 @@ exact 684-tensor, 228,203,172-scalar geometry but retain different weight and
 source-config hashes. The dereverb inference config publishes overlap `2`; the
 denoise config publishes overlap `4`.
 
-The accepted AEmotion Studio snapshot is explicitly MIT-licensed and pinned at
+The accepted AEmotion Studio snapshot uses the MIT License and is pinned at
 revision `d323194290f8488ea51814143806609bfbd7a1e5`. mere.run verifies the exact
 model, upstream YAML, model-card README, and license hashes before loading.
 Inference preserves each profile's published chunk geometry, centered
@@ -244,7 +244,7 @@ values, confidence scores, and beat positions as JSON, or
 `--no-musical-context` for the legacy fixed-120-BPM writer.
 
 MuScriptor treats `--chunk-batch-size` (default `4`) as an upper bound, not a
-forced allocation. On Apple Silicon, the runtime subtracts current MLX active
+forced allocation. On Apple Silicon, the runtime subtracts active MLX
 and cache allocations plus a reserve of the greater of 4 GiB or one-eighth of
 physical memory. It estimates each requested chunk at
 `numLayers * dim * 65,536 * max(1, beamSize)` bytes for bfloat16 and float16;
@@ -272,7 +272,7 @@ peak footprint, while the four-chunk group was both slower and substantially
 larger. Lower-headroom systems fall back to one chunk, which measured about
 4.8x faster than baseline at about 2.5x its peak footprint.
 
-Greedy and sampling pipeline selected tokens into the next model step. Beam
+Greedy and sampling pipelines feed selected tokens into the next model step. Beam
 search packs live beams across the effective chunk group into as few bounded
 forwards per step as the lane budget allows, keeps an independently forked
 typed cache lane for every beam, and removes ended beams from later forwards.
@@ -386,8 +386,9 @@ For faithful covers, keep `--audio-cover-strength 1.0` and leave
 `--cover-noise-strength 0.0` while exploring, and use `--reference-audio` for an
 optional target-style/timbre example.
 
-For demo-style steering, pass `--interactive`. The command reads stdin while it
-runs, paces generation to realtime, and applies changes between native frames:
+For interactive steering, pass `--interactive`. The command reads standard
+input while it runs, paces generation in real time, and applies changes between
+native frames:
 
 ```bash
 swift run mere.run music realtime \
@@ -429,7 +430,7 @@ swift run mere.run music realtime \
 
 `--midi-cc` mappings use `cc=target:min:max`. Supported targets are `temp`,
 `topk`, `mc`, `notes`, `drums`, `drumless`, `unmask`, `seed`, and `onset`.
-`--midi-log-events` writes parsed note and CC events to stderr during realtime
+`--midi-log-events` writes parsed note and CC events to stderr during real-time
 runs, while `--midi-log-raw` writes raw packet bytes. Prompt changes still use
 stdin and may briefly stall while the prompt encoder runs; MIDI is intended for
 notes and continuous controls.
@@ -463,7 +464,7 @@ notes and continuous controls.
 
 ## Reading order
 
-The ACEStep runtime now follows a clean phase split:
+The ACEStep runtime uses three phases:
 
 1. `ACEStepPipeline.swift` for the public pipeline and orchestration
 2. `ACEStepPipeline+Prompting.swift` for prompt preparation and conditioning
@@ -473,22 +474,22 @@ See [ACE-Step validation](./acestep-validation.md) for immutable checkpoint
 pins, parity coverage, installed-model evidence, listening review fixtures,
 and measured performance.
 
-That makes it much easier to follow than a single pipeline monolith.
+This structure separates orchestration, prompt preparation, and generation.
 
 Magenta RT2 is a native Apple Silicon macOS runtime. The managed model layout
 contains exported `.mlxfn` models, matching state files, and shared MusicCoCa and
 SpectroStream resources; raw upstream checkpoint files are not enough for
 `mere.run`.
 
-`--style-conditioning streaming` matches upstream's realtime C++ path by using
+`--style-conditioning streaming` matches upstream's real-time C++ path by using
 the coarsest MusicCoCa style tokens. `--style-conditioning full` uses all style
 tokens, matching upstream's high-level Python `.mlxfn` generator more closely.
 
 ## Contributor notes
 
-- this is a native Swift/MLX path, not a Python bridge
-- Magenta RT2 uses a pinned C ABI bridge built by
+- This is a native Swift/MLX path, not a Python bridge.
+- Magenta RT2 uses a pinned C application binary interface (ABI) bridge built by
   `scripts/rebuild_magentart_xcframework.sh`; Linux builds keep compiling with
-  an unsupported-runtime error for Magenta
-- model resolution and storage still follow the same canonical public rules as
-  the rest of the repo
+  an unsupported-runtime error for Magenta.
+- Model resolution and storage follow the same canonical public rules as the
+  rest of the repository.

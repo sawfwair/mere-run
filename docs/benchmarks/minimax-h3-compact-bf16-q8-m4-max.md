@@ -2,22 +2,23 @@
 
 This receipt records the official-source compact-artifact rollout and real
 native Swift/MLX inference on an Apple M4 Max with 128 GB unified memory. The
-test media uses 416x256, 22 frames at 24 fps, stereo AAC at 32 kHz, and matched
+test media uses 416 x 256 pixels, 22 frames at 24 frames per second, stereo AAC
+at 32 kHz, and matched
 prompts/seeds so several lanes could be reviewed without projecting a large
 production render.
 
 ## Artifact identity
 
-- official source: `MiniMaxAI/MiniMax-H3@ec19cc6daf5d8add9417c18e86b6b58cc6c55027`
-- official source bytes: `144,035,116,604` across 48 files
-- cache-producing source tensors: 106 tensors / `26,142,079,488` bytes
-- cache source closure SHA-256:
+- **Official source:** `MiniMaxAI/MiniMax-H3@ec19cc6daf5d8add9417c18e86b6b58cc6c55027`
+- **Official source bytes:** `144,035,116,604` across 48 files.
+- **Cache-producing source tensors:** 106 tensors and `26,142,079,488` bytes.
+- **Cache source closure SHA-256:**
   `e2ccc0cab72b9183a0347e3999f4559cdc315b7b363a5fe9196890dd315f5a40`
-- compact BF16: `Sawfwair/MiniMax-H3-FL2VA-MLX-BF16@6f2c1edb4d31d9110d4a51457ba1d6401a05dfd0`
-- BF16 managed bytes: `76,861,026,073`
-- affine Q8/group-64: `Sawfwair/MiniMax-H3-FL2VA-MLX-8bit@57a926c2422e09c8563cd2e0c43b2e94ef791de4`
-- Q8 managed bytes: `58,075,175,639`
-- rollback source: `Sawfwair/MiniMax-H3-FL2VA-MLX-BF16@c768b13a964f646a8000e641608189289e4514af`
+- **Compact BF16:** `Sawfwair/MiniMax-H3-FL2VA-MLX-BF16@6f2c1edb4d31d9110d4a51457ba1d6401a05dfd0`.
+- **BF16 managed bytes:** `76,861,026,073`.
+- **Affine Q8/group-64:** `Sawfwair/MiniMax-H3-FL2VA-MLX-8bit@57a926c2422e09c8563cd2e0c43b2e94ef791de4`.
+- **Q8 managed bytes:** `58,075,175,639`.
+- **Rollback source:** `Sawfwair/MiniMax-H3-FL2VA-MLX-BF16@c768b13a964f646a8000e641608189289e4514af`.
 
 Both denoising cores were reproduced from the pinned official checkpoint on an
 ephemeral RTX A6000 host in Sweden with MLX/MLX CUDA 0.29.3. The BF16 core is
@@ -45,7 +46,7 @@ contains the Metal receipt and exact 9-/21-point media parity.
 The old full BF16 root and compact BF16 candidate used the same release binary,
 prompt, seed, geometry, schedule, resident-BF16 policy, and compiled execution.
 
-| Workload | Full and compact MP4 SHA-256 | Video / audio result |
+| Workload | Full and compact MP4 SHA-256 | Video and audio result |
 | --- | --- | --- |
 | Base, 9 points | `29c76863cae58644d3747e7fd362d46877fdc7c31c5dc60d8be98d4651843f21` | SSIM 1.0, PSNR infinite, audio correlation 1.0, audio relative L2 0 |
 | Base, 21 points | `5449b7e66b803f71d4e78d558f1710b6558b684ff722f0155992df6d94f05ad1` | SSIM 1.0, PSNR infinite, audio correlation 1.0, audio relative L2 0 |
@@ -63,14 +64,14 @@ staging roots. Its base, Larry, and LightX2V MP4 SHA-256 values were
 `748a77ce065d8efeb85a186f0fd226e824f277af8c301e8b527119fbfe147b3b`,
 `1dbfb7e01cad686dc798578a510d0e9e014920277adbbf9ad85846fa078634a2`,
 and `ad45678a374de7c27e71833be503cbdadf28413d7f1672bc2f550ddedbc781a7`.
-All three outputs contained 416x256 H.264 video and stereo 32 kHz AAC audio,
+All three outputs contained 416 x 256 H.264 video and stereo 32 kHz AAC audio,
 and all three processes reported zero swaps.
 
-## Q8 quality against BF16 and rejected Q4
+## Q8 quality compared with BF16 and rejected Q4
 
 Three matched prompt/seed lanes covered character identity/dialogue, rally-car
 camera motion, and lighthouse fine texture/weather. Contact-sheet review found
-no Q8 collapse, lattice, identity loss, broken motion, or new audio failure.
+no Q8 collapse, lattice, identity loss, broken motion, or additional audio failure.
 Q4 changed the character into a helmeted figure and materially changed motion,
 background, and lighthouse structure. This was an operator review rather than
 an independent blinded panel, so the latter remains a release-note limitation.
@@ -110,8 +111,8 @@ motion without lattice or collapse.
 The most comparable 9-point BF16 runs measured 38.698 seconds for the full
 root and 38.542 seconds for compact BF16 denoising, a 0.4% improvement. Larry
 measured 28.943 versus 19.521 seconds, and LightX2V measured 18.929 versus
-18.070 seconds. Those adapter pairs confirm there is no observed 3% runtime-
-LoRA steady-state penalty; they are not generalized speed claims.
+18.070 seconds. Those adapter pairs show no observed 3% runtime LoRA
+steady-state penalty. They are not generalized speed claims.
 
 The external ExFAT candidate made cold preparation and end-to-end numbers
 storage-bound: compact BF16 preparation took about 97 seconds from the external
@@ -149,12 +150,12 @@ afterward it was `83,435,384` KiB, a measured increase of `64,725,612` KiB
 (`66,279,026,688` bytes). The reclaimed amount is lower than the old root's
 allocated size because APFS had clone-shared blocks with other local payloads.
 SALVATION changed by only 128 KiB during the pull because every payload blob was
-already present. The old internal directory and all staging/previous siblings
-are gone; the BF16 and Q8 managed roots now occupy 4 KiB each and resolve all 21
+already present. The earlier internal directory and all staging and previous
+siblings are gone. The BF16 and Q8 managed roots occupy 4 KiB each and resolve all 21
 payload files through absolute links to SALVATION. Shared conditioner, VAE,
 tokenizer, license, and cache-table links resolve to identical content-addressed
 blob paths for both models.
-`model pull --cache-dir /Volumes/SALVATION/MereRun/hub` prepared each new
+`model pull --cache-dir /Volumes/SALVATION/MereRun/hub` prepared each
 revision completely, validated a sibling staged root, atomically exchanged the
 managed install, revalidated aliases/source identity, and only then removed the
 previous root. The internal managed roots resolve through absolute symlinks to
@@ -163,7 +164,7 @@ unavailable.
 
 ## Commands and remaining boundaries
 
-Representative commands:
+The following commands reproduce the preparation and validation steps:
 
 ```bash
 mere.run model optimize /tmp/h3-adaln-rebuild --json

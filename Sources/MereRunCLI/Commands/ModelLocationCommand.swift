@@ -129,7 +129,7 @@ struct ModelLocationRemove: ParsableCommand {
 struct ModelLocationBind: ParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "bind",
-        abstract: "Bind a canonical model id to an arbitrary read-only directory."
+        abstract: "Bind a canonical model ID to an arbitrary read-only directory."
     )
 
     @Argument(help: "Canonical model id.")

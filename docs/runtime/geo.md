@@ -1,4 +1,4 @@
-# Geospatial Runtime
+# Geospatial runtime
 
 `mere.run geo` is a local-first inference boundary for Earth-observation and
 humanitarian workflows. Any
@@ -6,7 +6,7 @@ workflow can prepare the documented tensors, run the native model locally, and
 carry the resulting candidates or embeddings into its own evidence process.
 
 Acquisition, cloud masking, reprojection, tiling, georeferencing, source
-citations, and analyst review remain workflow responsibilities. mere.run owns
+citations, and analyst review remain workflow responsibilities. `mere.run` owns
 immutable model provenance, native Swift/MLX execution, hardware-aware model
 selection, and machine-readable outputs.
 
@@ -21,7 +21,7 @@ selection, and machine-readable outputs.
 
 When `--model` is omitted, the runtime chooses the strongest tier recommended
 for the machine. If that tier is not installed, it selects the strongest
-installed tier below it. It never silently downloads model weights. An
+installed tier below it. It does not silently download model weights. An
 explicit model ID or converted model path always overrides automatic choice.
 
 ### TerraMind Fire
@@ -72,7 +72,7 @@ statistics. The runtime selects the correct contract from the immutable model
 variant.
 
 The Teacher evaluates 2.064B parameters per pixel. It is valuable for focused
-research and distillation but is not the sensible bulk-embedding default. The
+research and distillation but is not the recommended bulk-embedding default. The
 Large student is the automatic ceiling below 32 GB unified memory.
 
 ### OlmoEarth v1.2
@@ -103,12 +103,12 @@ OlmoEarth's artifact license permits broad environmental and humanitarian
 work, but prohibits military and defense applications, intelligence gathering,
 human surveillance and policing, and listed extractive activities. Managed
 pulls require `--accept-model-license`; the flag records review and acceptance
-of upstream terms, not a mere.run judgment that a proposed use qualifies.
+of upstream terms, not a `mere.run` judgment that a proposed use qualifies.
 
 ## Immutable conversion
 
 Managed pulls download the pinned upstream checkpoint and source metadata.
-The Python checkpoint is never interpreted by the Swift runtime. Convert it
+The Swift runtime does not interpret the Python checkpoint. Convert it
 once into the checksum-pinned float32 safetensors package:
 
 ```bash
@@ -139,25 +139,25 @@ For numerical verification against the official implementations, use
 `scripts/validate-olmoearth-v12-reference.py`. The repository's installed-model
 gate constructs real input tensors and exercises the public `geo` commands.
 
-## Why THOR is not a fourth runtime yet
+## Why THOR is deferred
 
 [THOR](https://github.com/FM4CS/THOR) was evaluated at source commit
 `7ded3cea673ac21fe2bcadf9f3d9d4506eb6ab5f`. Its flexible 10-1,000 m
 Sentinel-1/2/3 backbone is promising, especially for coarse Sentinel-3 climate
-and ocean observations. The current release is an embedding backbone rather
+and ocean observations. The evaluated release is an embedding backbone rather
 than a humanitarian decision head, however, and its S1/S2 role overlaps the
 validated TESSERA and OlmoEarth routes.
 
 THOR is therefore deferred until a workflow needs its genuinely distinct
 Sentinel-3/native-resolution contract and can supply a usefulness gate for
 that output. Adding another generic encoder without that consumer would expand
-download, preprocessing, ALiBi, and validation surface without improving a
-current result.
+download, preprocessing, ALiBi, and validation surface without improving an
+implemented result.
 
 ## Responsibility boundary
 
 Flood and fire logits are candidates, not authoritative findings. Embeddings
-are features, not conclusions. Humanitarian promotion should retain source
+are features, not conclusions. For humanitarian promotion, retain source
 imagery and acquisition time, preprocessing provenance, model ID and immutable
 revision, output artifact hashes, corroborating evidence, and accountable
 human review.

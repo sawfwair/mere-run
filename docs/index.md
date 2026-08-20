@@ -46,7 +46,8 @@ mere.run video generate "a drone flight over snowy peaks" --output flight.mp4
 mere.run vision image-to-3d-trellis2 ./mug.png --output ./mug-3d
 ```
 
-Same binary. Same grammar. No inference API key in any of them.
+Every command uses the same binary and grammar. None requires an inference API
+key.
 
 Start with `mere.run model capabilities` — it reads your hardware and tells you
 which models this machine can actually run before you spend a gigabyte finding
@@ -54,7 +55,7 @@ out.
 
 ## The full command surface
 
-All of it ships in that one executable. The table below is generated from the
+All of it ships in that one executable. This table is generated from the
 CLI itself, so it cannot drift from what your copy really does — and every row
 links to the page that owns that command.
 
@@ -96,44 +97,46 @@ links to the page that owns that command.
 
 Install, pull a first model, and make something in the next ten minutes.
 
-- [Getting Started](/getting-started)
-- [macOS Deep Links](/macos-deep-links) — preview or import local artifacts from launchers, automations, agents, and apps
-- [Linux QuickStart](/linux-quickstart)
-- [CLI Reference](/cli)
-- [Offline Cookbooks](/cookbooks) — `mere.run guide` works without a network
+- [Getting started](/getting-started)
+- [macOS deep links](/macos-deep-links) — preview or import local artifacts from launchers, automations, agents, and apps
+- [Linux quickstart](/linux-quickstart)
+- [CLI reference](/cli)
+- [Offline cookbooks](/cookbooks) — `mere.run guide` works without a network
 - [Configuration](/configuration)
-- [Model Sources](/model-sources)
+- [Model sources](/model-sources)
 
 ### Make things
 
 Each family is its own page: what it generates, which model to pull, and the
 flags that actually change the output.
 
-- [Image](/runtime/image) — text-to-image, edits, and local LoRA training
+- [Image generation](/runtime/image) — text-to-image, edits, and local LoRA training
 - [Text](/runtime/text) — chat, code, embeddings, tool use, PII redaction
 - [Speech](/runtime/speech) — synthesis, voice cloning, live transcription
 - [Vision and 3D](/runtime/vision) — caption, segment, track, depth, mesh, OCR
 - [Music](/runtime/music) — generation, covers, realtime MIDI, transcription
-- [Sound Effects](/runtime/sfx) — Foley from text or from a silent video
+- [Sound effects](/runtime/sfx) — Foley from text or from a silent video
 - [Video](/runtime/video) — clips with synchronized audio, subject animation
-- [Persistent Worlds](/runtime/world) — a scene that remembers where you walked
+- [Persistent worlds](/runtime/world) — a scene that remembers where you walked
 
 ### Put it to work
 
 Serve it, schedule it, measure it, and keep it honest.
 
-- [Portable Workflows, Executors, and Run Artifacts](/workflows)
-- [Model and Adapter Management](/runtime/model-management)
-- [Raycast Example Integration](/raycast) — one launcher client for the macOS deep-link routes
-- [Local API Server and Open WebUI](/runtime/api-server)
-- [Official Companion Plugins](/plugins)
-- [Quality Gate](/gate) — the check that catches a bad build before you do
+- [Portable workflows, executors, and run artifacts](/workflows)
+- [Model and adapter management](/runtime/model-management)
+- [Raycast example integration](/raycast) — one launcher client for the macOS deep-link routes
+- [Local API server and Open WebUI](/runtime/api-server)
+- [Official companion plugins](/plugins)
+- [Quality gate](/gate) — the check that catches a bad build before you do
 - [Benchmarking](/benchmarking)
 
 ### Work on the code
 
-- [Repository Tour](/repository-tour)
-- [Development Workflow](/development-workflow)
-- [Testing Guide](/testing)
-- [Architecture Reading Map](/architecture)
-- [CLI and Runtime Internals](/internals/cli-and-runtime)
+- [Repository tour](/repository-tour)
+- [Development workflow](/development-workflow)
+- [Testing guide](/testing)
+- [Documentation style](/documentation-style)
+- [Documentation style audit](/documentation-style-audit)
+- [Architecture reading map](/architecture)
+- [CLI and runtime internals](/internals/cli-and-runtime)

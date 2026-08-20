@@ -1,10 +1,10 @@
-# Video Runtime
+# Video runtime
 
-Generate a clip from a prompt. With a unified A/V checkpoint, the model writes
-the soundtrack in the same pass rather than layering it on afterwards. Anchor
-the clip to a start frame, steer it toward an end frame, or condition the motion
-on a song you already have. Recast a performer in an existing shot. Keep the
-checkpoint resident and render take after take without paying for the reload.
+Use the video runtime to generate a clip from a prompt. With a unified
+audiovisual (AV) checkpoint, the model writes the soundtrack in the same pass.
+Anchor the clip to a start frame, steer it toward an end frame, condition its
+motion on a song, or recast a performer in an existing shot. Keep the checkpoint
+resident to render multiple takes without reloading it.
 
 ## Commands
 
@@ -41,7 +41,7 @@ dimensions, profile, adapter, seed, segmentation/overlap, tail, audio, output,
 and preflight controls map directly to the public CLI contract. Every mask and
 animation run remains live and restartable in Library.
 
-Advanced Video remains the typed home for Cosmos3 generation/action modes, raw
+**Advanced Video** provides typed controls for Cosmos3 generation and action modes, raw
 mask-plan execution, LTX latent export, and resident LTX sessions. Raw arguments
 are an escape hatch, not the capability contract.
 
@@ -49,9 +49,10 @@ are an escape hatch, not the capability contract.
 
 - `video-minimax-h3-fl2va-mlx`: legacy compatibility MiniMax-H3 FL2VA package
   with a direct-from-official Q4 transformer core, Q8 conditioner, and bundled
-  source-bound AdaLN cache. It generates 24 fps RGB and synchronized 32 kHz
-  stereo audio from text, a first frame, or directed first/last frames. Frame
-  counts follow `17*n+5`; width and height are multiples of 32. It remains
+  source-bound AdaLN cache. It generates RGB video at 24 frames per second and
+  synchronized 32 kHz stereo audio from text, a first frame, or directed
+  first and last frames. Frame
+  counts follow `17*n+5`; width and height are multiples of 32. The package remains
   installable but is no longer the recommended quality path.
 - `video-minimax-h3-fl2va-bf16-mlx`: maximum-fidelity compact FL2VA package.
   Its official-source BF16 denoising core omits the schedule-only AdaLN,
@@ -214,9 +215,9 @@ and boundary audio latents. Only new frames and samples are appended, so the
 final MP4 has the exact aligned global duration. Conditioner, transformer,
 AdaLN table, reference encodings, and both VAEs remain resident across windows.
 
-The compact BF16, Q8, legacy Q4, and Ref2VA managed packages already include
+The compact BF16, Q8, legacy Q4, and Ref2VA managed packages include
 source-bound inference-only AdaLN caches; no post-pull optimization is
-required. New BF16 and Q8 packages select exact tables for 5, 9, 12, 16, 21,
+required. Compact BF16 and Q8 packages select exact tables for 5, 9, 12, 16, 21,
 or 31 points at shifts 12/3 and the LightX2V 768p 5-point schedule at shifts
 6/3. A custom schedule interpolates from the densest table and emits a visible
 non-bit-exact diagnostic. Generation skips the 13B-parameter
@@ -252,7 +253,7 @@ and seed; use `quality` when exact-seed fidelity matters.
 `--h3-acceleration velocity-reuse-2` is an isolated experimental bake-off arm.
 It keeps the quality schedule, protects the first and final full evaluations,
 and linearly extrapolates the complete synchronized video/audio velocity from
-the two latest full evaluations on intervening odd steps. Video and audio use
+the two most recent full evaluations on intervening odd steps. Video and audio use
 their independent shifted schedules, and the extrapolation ratio is clamped to
 `[-2, 2]`. It disables the other approximation policies so its timing and
 quality deltas can be attributed directly; it is not an automatic or default
@@ -268,7 +269,7 @@ seeded streams and native latent layouts.
 
 The isolated `layers-45` and `layers-40` arms rank mean absolute attention and
 MLP gates from the exact AdaLN table, protect blocks 0, 1, and 49, and skip the
-lowest remaining blocks. They reduce executed block work but currently keep all
+lowest remaining blocks. They reduce executed block work but keep all
 weights loaded, so no residency reduction is claimed.
 
 `--h3-acceleration token-reduction` preserves the complete packed prefix and
@@ -283,10 +284,10 @@ isolated from the other approximation policies and is not a default.
 `--h3-render-width` and `--h3-render-height` select an explicit internal target
 canvas for FL2VA or Ref2VA. Set both; they must be same-aspect 32px multiples no
 larger than the requested output. DiT and VAE decode operate on that smaller
-grid, then the decoded RGB frames are returned to `--width` and `--height` with
+grid. The decoded RGB frames are then returned to `--width` and `--height` with
 the pinned h3.c high-quality vImage scaling contract. A 512x512 output can use
-384x384 for the 75% arm or 320x320 for the 62.5% arm. Reduced rendering is
-currently rejected with sliding windows because continuation conditioning has
+384 x 384 for the 75% arm or 320 x 320 for the 62.5% arm. Reduced rendering is
+rejected with sliding windows because continuation conditioning has
 not yet been resampled and qualified.
 
 ### Cosmos3 generation, actions, and reasoning
@@ -350,7 +351,7 @@ SHA-256 manifest. Set the plan's `mode` to `replacement` to aspect-fit every
 reference into the target canvas and matte all non-subject pixels to black;
 `animation` preserves the fitted reference scene. The plan
 supports one to six stable subjects, text/box/point selectors, and dense painted
-PNG corrections. White is background; legal subject colours are blue, red,
+PNG corrections. White is background; legal subject colors are blue, red,
 green, magenta, cyan, and yellow.
 
 The native transformer preserves upstream global self-attention while splitting
@@ -420,7 +421,7 @@ target to match exactly, applies the compatible 487 LoRA pairs and parameter
 differences, and explicitly leaves only that incompatible input-projection
 weight untouched. It does not use a general skip-mismatch mode.
 
-Decoded mask pixels are snapped to the nearest legal colour inside a strict
+Decoded mask pixels are snapped to the nearest legal color inside a strict
 tolerance, and ambiguous or out-of-tolerance pixels are rejected. The default
 long-video contract uses 81-frame segments with five decoded frames of clean
 overlap. Compatibility defaults remain `--tail-policy drop` and
@@ -441,7 +442,7 @@ and reference/mask ordering is preserved.
 The default `--quality draft` lane is the speed path. It generates video-only
 MP4s by default and is the right first pass for prompt, camera, subject, and
 composition checks.
-For the current split-layout LTX 2.3 model, it retains the joint AV denoising
+For the split-layout LTX 2.3 model, it retains the joint AV denoising
 tokens that influence video through audio-to-video cross attention, but skips
 loading and decoding the audio VAE/vocoder and writes no audio stream.
 
@@ -492,7 +493,7 @@ change comes from selecting the draft checkpoint.
 
 ### Synchronized AV final render
 
-For LTX 2.3 audio/video, pull the managed model id and let it install its Gemma
+For LTX 2.3 audio and video, pull the managed model ID and let it install its Gemma
 3 companion:
 
 ```bash
@@ -506,9 +507,9 @@ swift run mere.run video generate \
   --output ./ltx23.mp4
 ```
 
-Use `--duration` rather than hand-pairing `--num-frames` and `--fps` for
-representative unified AV tests. LTX 2.3 expects 24 fps timing; for example,
-15 seconds resolves to 361 frames at 24 fps because LTX frame counts must
+Use `--duration` instead of pairing `--num-frames` and `--fps` manually for
+representative unified AV tests. LTX 2.3 expects 24 frames per second; for
+example, 15 seconds resolves to 361 frames at 24 frames per second because LTX frame counts must
 satisfy `8n+1`.
 
 `--quality final --output-mode audio-video` runs the official two-stage quality
@@ -633,19 +634,20 @@ zero-memory. MP4 formats and backend selection are unchanged.
 - `Sources/MereRunCore/SCAIL2/SCAIL2Generator.swift`
 - `Sources/MereRunCore/SCAIL2/SCAIL2Transformer.swift`
 
-## Source Reading Notes
+## Source reading notes
 
 The LTX runtime has more low-level model, media, and checkpoint-layout code
-than most other runtime families in this repo. Start from the public generation
+than most other runtime families in this repository. Start from the public generation
 flow before reading the lower-level model definitions.
 
-The best reading order is:
+Use this reading order:
 
-1. public generation types and `LTXDistilledLatentGenerator`
-2. request normalization and generation flow
-3. denoise and latent-conditioning helpers
-4. decoding and media assembly code
-5. lower-level model definitions
+1. Public generation types and `LTXDistilledLatentGenerator`
+2. Request normalization and generation flow
+3. Denoise and latent-conditioning helpers
+4. Decoding and media assembly code
+5. Lower-level model definitions
 
-If you are new to the repo, use [Architecture Reading Map](../architecture.md)
+If you are new to the repository, use the
+[Architecture reading map](../architecture.md)
 before diving directly into the LTX implementation.

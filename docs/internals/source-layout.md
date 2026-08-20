@@ -1,6 +1,7 @@
-# Source Layout Reference
+# Source layout reference
 
-This page is a concise reference for where each major subsystem lives.
+Use this reference to find the public target, test suite, or operational file
+that owns your change.
 
 ## Public package targets
 
@@ -25,9 +26,9 @@ Main areas:
 - `VLM/`: vision-language model support
 - `ZImageI2L/`, `ZImageTurbo/`: image-family support
 
-Linux CLI compatibility should enter through reusable core surfaces here, not
-through app bundle code. Media-tool discovery belongs behind typed APIs and
-should honor `MERERUN_FFMPEG`, `MERERUN_FFPROBE`, and then `PATH`.
+Implement Linux CLI compatibility through reusable core surfaces, not app
+bundle code. Keep media-tool discovery behind typed APIs, and resolve
+`MERERUN_FFMPEG`, then `MERERUN_FFPROBE`, and then `PATH`.
 
 ### `AudioCore`
 
@@ -62,11 +63,11 @@ The public executable target.
 - `Commands/`
 - `Support/`
 
-This is the product Linux compatibility work should exercise.
+Exercise product Linux compatibility through this target.
 
 ### `MereRunApp`
 
-The optional SwiftUI studio target. It stays macOS-only and should not become a
+The optional SwiftUI Studio target. It stays macOS-only and must not become a
 Linux compatibility dependency.
 
 ## Tests
@@ -93,6 +94,6 @@ Use this for:
 - `scripts/check.sh`: main validation gate
 - `scripts/e2e_smoke.sh`: installed-model smoke runner
 - `vendor/llama.xcframework`: vendored native dependency for code and API paths
-- `vendor/mlx-swift_Cmlx.bundle`: macOS MLX shader resources; hosted Linux CI
-  should use CPU MLX-sized fixtures, while Linux arm64 package validation needs
+- `vendor/mlx-swift_Cmlx.bundle`: macOS MLX shader resources. Hosted Linux CI
+  uses CPU MLX-sized fixtures, while Linux arm64 package validation requires
   the CUDA path on real arm64 CUDA hardware

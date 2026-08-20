@@ -1,16 +1,17 @@
-# mere.run CLI
+# mere.run CLI reference
 
 The complete command tree, generated from the binary itself. Commands are
 organized by what you want to make — `image`, `text`, `speech`, `vision`,
 `music`, `sfx`, `video`, `world` — with separate families for portable graphs,
 executors, run artifacts, models, adapters, serving, and status.
 
-Every path on this page is real: a test in the repo fails if the docs and the
-CLI ever disagree. For per-command advice — prompting patterns, which flags
-matter, troubleshooting — read the offline [cookbooks](/cookbooks) with
+The repository tests this command tree against the CLI and fails if they
+disagree. For per-command advice, including prompting patterns, important
+flags, and troubleshooting, read the offline [cookbooks](/cookbooks) with
 `mere.run guide <command path>`.
 
-New here? Start at [mere.run Documentation](/).
+If this is your first time using mere.run, start with the
+[mere.run documentation](/).
 
 ## Overview
 
@@ -29,7 +30,7 @@ Public tree:
   - `mere.run image generate` — Generate images with local image models.
   - `mere.run image reconstruct-3d` — Reconstruct a colored object mesh from one image with native TripoSR.
   - `mere.run image reconstruct-3d-trellis2` — Reconstruct a 512-resolution PBR O-Voxel mesh with native MLX TRELLIS.2.
-  - `mere.run image reconstruct-3d-multiview` — Reconstruct a colored mesh from 4 or 6 user-supplied views with native InstantMesh.
+  - `mere.run image reconstruct-3d-multiview` — Reconstruct a colored mesh from four or six supplied views with native InstantMesh.
   - `mere.run image run-plan` — Run a saved image workflow plan.
   - `mere.run image train-lora` — Train a local image LoRA adapter.
   - `mere.run image visualize-run` — Open a local LoRA training run viewer.
@@ -48,7 +49,7 @@ Public tree:
   - `mere.run speech profile` — Manage saved voice clone profiles.
     - `mere.run speech profile list` — List saved speech voice profiles.
     - `mere.run speech profile create` — Create a speech profile from reference audio.
-    - `mere.run speech profile delete` — Delete a speech profile by id.
+    - `mere.run speech profile delete` — Delete a speech profile by ID.
 - [`mere.run vision`](/runtime/vision) — Caption, inspect, face-analyze, segment, track, pose, depth, geometry, optical flow, and OCR visual media.
   - `mere.run vision caption` — Generate training-friendly captions for images.
   - `mere.run vision inspect` — Describe or answer questions about an image using Qwen3-VL.
@@ -69,11 +70,11 @@ Public tree:
   - `mere.run vision geometry-multiview` — Solve native DA3-Small multi-view relative geometry, confidence, and cameras.
   - `mere.run vision image-to-3d` — Reconstruct a colored object mesh from one image with native TripoSR.
   - `mere.run vision image-to-3d-trellis2` — Reconstruct a 512-resolution PBR O-Voxel mesh with native MLX TRELLIS.2.
-  - `mere.run vision image-to-3d-multiview` — VFX alias for native 4/6-view InstantMesh reconstruction.
+  - `mere.run vision image-to-3d-multiview` — VFX alias for native four-view or six-view InstantMesh reconstruction.
   - `mere.run vision ocr` — Extract text from images using LightOnOCR, GLM-OCR, or Infinity-Parser2.
 - [`mere.run geo`](/runtime/geo) — Run native geospatial inference models on local Earth-observation data.
-  - `mere.run geo flood` — Run native TerraMind Flood tile inference with MLX on Apple silicon.
-  - `mere.run geo fire` — Run native TerraMind Fire tile inference with MLX on Apple silicon.
+  - `mere.run geo flood` — Run native TerraMind Flood tile inference with MLX on Apple Silicon.
+  - `mere.run geo fire` — Run native TerraMind Fire tile inference with MLX on Apple Silicon.
   - `mere.run geo tessera` — Encode local Sentinel-1/2 time series with a native TESSERA v2 student.
   - `mere.run geo olmoearth` — Encode multisensor Earth observations with native OlmoEarth v1.2.
 - [`mere.run audio`](/runtime/audio) — Enhance general audio locally.
@@ -160,7 +161,7 @@ Public tree:
     - `mere.run model location list` — List the writable store, search roots, and explicit bindings.
     - `mere.run model location add` — Register a read-only root containing directories named for canonical model IDs.
     - `mere.run model location remove` — Unregister a search root without deleting its files.
-    - `mere.run model location bind` — Bind a canonical model id to an arbitrary read-only directory.
+    - `mere.run model location bind` — Bind a canonical model ID to an arbitrary read-only directory.
     - `mere.run model location unbind` — Remove explicit bindings without deleting model files.
   - `mere.run model pull` — Download a managed model into the local model store.
   - `mere.run model remove` — Remove a model from the local model store.
@@ -173,12 +174,12 @@ Public tree:
     - `mere.run model runtime set` — Update typed API runtime settings for a managed model.
   - `mere.run model optimize` — Build inference-only caches for a supported installed model.
   - `mere.run model benchmark` — Run focused local model benchmarks.
-    - `mere.run model benchmark chat` — Run a small grounded-chat eval slice against local assistant models.
+    - `mere.run model benchmark chat` — Run a small grounded-chat evaluation slice against local assistant models.
     - `mere.run model benchmark fused` — Run the versioned Mere Lite or Mere Comprehensive fused quality suite.
     - `mere.run model benchmark fused-fixture` — Stamp or verify normalized fused-benchmark JSONL fixture hashes.
-    - `mere.run model benchmark tool-calls` — Run a small tool-call selection eval against local chat models.
+    - `mere.run model benchmark tool-calls` — Run a small tool-call selection evaluation against local chat models.
     - `mere.run model benchmark tool-continuations` — Evaluate Gemma 4 continuation after completed tool calls.
-    - `mere.run model benchmark code` — Run a real coding-eval slice against local coding models.
+    - `mere.run model benchmark code` — Run a real coding-evaluation slice against local coding models.
     - `mere.run model benchmark gemma4-kv` — Compare Gemma4 default KV cache decode against packed PolarKV.
     - `mere.run model benchmark gemma4-mtp` — Compare Gemma4 serial decode against verified MTP speculative decode.
     - `mere.run model benchmark q36-mtp` — Compare Qwen3.6 serial decode against adaptive and forced MTP speculative decode.
@@ -210,7 +211,7 @@ Public tree:
 - [`mere.run agent`](/getting-started) — Install and start the optional guided local setup agent.
   - `mere.run agent onboard` — Summarize this machine's model capabilities and prepare the optional Pi agent.
   - `mere.run agent status` — Inspect local agent, Pi, provider, and model readiness.
-  - `mere.run agent install-pi` — Install the latest Pi coding-agent release for use with mere.run.
+  - `mere.run agent install-pi` — Install the most recent published Pi coding-agent release for use with mere.run.
   - `mere.run agent start` — Start Pi against a local mere.run setup-agent API server.
 <!-- END GENERATED: CLI TREE -->
 
@@ -384,7 +385,7 @@ mere.run run inspect ./runs/local --json
 ```
 
 The same immutable job bundle can run through configured SSH or relay
-executors. See [Portable Workflows](./workflows.md).
+executors. See [Portable workflows](./workflows.md).
 
 ### Start a persistent world session
 
@@ -395,7 +396,7 @@ mere.run world serve \
   --prepare
 ```
 
-See [Persistent World Runtime](./runtime/world.md) for the HTTP lifecycle,
+See [Persistent world runtime](./runtime/world.md) for the HTTP lifecycle,
 camera controls, state artifacts, and authentication boundary.
 
 ### Serve a local API
@@ -418,12 +419,15 @@ swift run mere.run plugin install mere-runpod --yes
 swift run mere.run plugin doctor mere-runpod
 ```
 
-See [Companion Plugins](./plugins.md) for installation verification and the
+See [Companion plugins](./plugins.md) for installation verification and the
 typed graph-provider boundary.
 
 ## Command reference
 
-Model installation in the OSS repo is explicit. `mere.run model pull` uses cataloged Hugging Face snapshots only; local-path-only models must be supplied with command-specific `--model` or `--model-root` options. See [`configuration.md`](./configuration.md) and [`model-sources.md`](./model-sources.md).
+Model installation in the open-source repository is explicit. `mere.run model
+pull` uses only cataloged Hugging Face snapshots. Supply local-path-only models
+with the command-specific `--model` or `--model-root` options. See
+[Configuration](./configuration.md) and [Model sources](./model-sources.md).
 
 Public LoRA releases use the separate checksum-pinned adapter catalog:
 
@@ -433,7 +437,7 @@ mere.run adapter pull mere-platform-assistant
 mere.run text chat \
   --model text-chat-gemma4-12b-4bit \
   --lora mere-platform-assistant \
-  --prompt "Summarize the current Mere workspace."
+  --prompt "Summarize the active project workspace."
 ```
 
 ### `mere.run plugin`
@@ -763,8 +767,8 @@ diagnostic count, and action count. For plan files, it reports the plan kind,
 command, creation timestamp, and captured working directory. Legacy/plugin run
 manifests are kept warning-level and expose `legacy_manifest` details such as
 provider, GPU, dataset path/count, recipe id, command, and run status. Run
-directories also include a compact `metrics` object with loss CSV summary,
-latest loss, step range, sample image count, checkpoint count, and adapter
+directories also include a compact `metrics` object with a loss CSV summary,
+most recent loss, step range, sample image count, checkpoint count, and adapter
 count.
 
 ### `mere.run image visualize-run`
@@ -978,7 +982,7 @@ Key options:
 Detect and redact PII with the native OpenAI Privacy Filter model.
 
 ```bash
-swift run mere.run text anonymize "My name is Alice Smith and my email is alice@example.com"
+swift run mere.run text anonymize "My name is Dana Example and my email is dana@example.com"
 swift run mere.run text anonymize --json --pretty "Phone: 555-1234"
 cat notes.txt | swift run mere.run text anonymize --output redacted.txt
 ```
@@ -1244,9 +1248,9 @@ Key options:
 
 Notes:
 
-- `track-live` currently records a camera clip first, then runs tracking over the recorded media
+- `track-live` records a camera clip first, then runs tracking over the recorded media
 - live tracking searches a short warm-up window after the init frame so startup exposure or motion blur does not silently produce an unsegmented output
-- live mode accepts text prompts only in the current implementation
+- live mode accepts only text prompts
 - `--output` is required; `--json-output` is optional
 
 ### `mere.run vision face`
@@ -1499,7 +1503,7 @@ Key options:
 - `--beam-size`
 - `--chunk-batch-size`: upper bound on independent five-second chunks decoded
   together for greedy, sampling, or beam mode (default `4`). The runtime may
-  reduce it for current unified-memory headroom and model/beam saturation;
+  reduce it for available unified-memory headroom and model/beam saturation;
   `1` always selects the single-chunk path.
 - `--dtype`: `bfloat16`, `float16`, or `float32`
 - `--context-output`: optional JSON path for detected tempo, meter, key,
@@ -1892,7 +1896,7 @@ a retimed clip. LTX 2.3 unified AV is trained around 24 fps; using 8 fps can
 make generated motion look slow while audio remains normal. Use `--duration`
 for clip length so the CLI can choose the nearest legal `8n+1` frame count.
 Use the default `--quality draft` lane for fast iterations. Use `--quality
-final` for the current high-quality two-stage checkpoint. Output is a separate
+final` for the LTX 2.3 high-quality two-stage checkpoint. Output is a separate
 choice: both qualities default to video-only, and `--output-mode audio-video`
 adds synchronized generated audio. Suppressing audio on the same checkpoint is
 an output contract, not the source of the draft lane's speed advantage.
@@ -1954,7 +1958,7 @@ fidelity matters.
 `velocity-reuse-2` is a separate experimental h3.c transfer arm. It retains the
 quality schedule, runs the first and final denoise evaluations in full, and
 linearly extrapolates complete video and audio velocity outputs from the two
-latest full evaluations on intervening odd steps. The two modalities use their
+most recent full evaluations on intervening odd steps. The two modalities use their
 independent shifted schedules. It does not compose with dynamic-sparse
 attention or either block-cache policy. Use it only for controlled same-seed
 FL2VA and Ref2VA comparisons until the quality envelope is published.
@@ -1967,7 +1971,7 @@ the released independent seeded streams.
 
 `layers-45` and `layers-40` are separate gate-ranked thinning arms. They rank
 the cached schedule's mean absolute attention/MLP AdaLN gates, always protect
-blocks 0, 1, and 49, and skip the lowest remaining scores. They currently save
+blocks 0, 1, and 49, and skip the lowest remaining scores. They save
 block execution only: mere.run still retains every loaded transformer weight,
 so these modes do not yet claim h3.c's weight-residency reduction.
 
@@ -2311,7 +2315,7 @@ unavailable until it is reconnected.
 Use `--allow-unsupported` only when you intentionally accept the runtime risk.
 
 Models that are access-gated or carry material non-commercial, research-only,
-or revenue-limited terms require `--accept-model-license` before a new
+or revenue-limited terms require `--accept-model-license` before a
 download. A custom license alone does not trigger the flag.
 The preflight reports the exact component terms and blocks without
 acceptance; `--all` skips restricted entries unless the flag is present.
@@ -2351,7 +2355,7 @@ expanded to resident BF16. All bases remain subject to MiniMax-H3 Community
 License acceptance.
 
 For a cross-command decision guide, see [Benchmarking](./benchmarking.md). The
-sections below are the command reference for each benchmark lane.
+following subsections provide the command reference for each benchmark lane.
 
 ### `mere.run model benchmark gemma4-kv`
 
@@ -2653,7 +2657,7 @@ Start an OpenAI-compatible local API server.
 swift run mere.run api serve [options]
 ```
 
-Current endpoint surface:
+Supported endpoint surface:
 
 - `GET /health`
 - `GET /v1/models`
@@ -2817,7 +2821,7 @@ OpenAI image/audio compatibility:
 - `POST /v1/images/edits` accepts multipart `image` uploads, Open WebUI-style
   `image[]` repeated uploads, an optional `mask`, and an edit `prompt`; it uses
   the same image runtime with input-image conditioning and the same size
-  limits. Masks are accepted for client compatibility; current native edit
+  limits. Masks are accepted for client compatibility; native edit
   models use whole-image conditioning.
 - `POST /v1/audio/speech` serves `speech-tts-qwen3-nano` and returns WAV by
   default, with `mp3`, `opus`, `aac`, and `flac` available when `ffmpeg` is
@@ -2878,13 +2882,13 @@ swift run mere.run setup --mode manual
 Agent model choices:
 
 - `small`: `text-agent-ornith-9b`, a tool-capable native OptiQ setup agent for 16 GB machines
-- `tier`: the best supported tool-capable local tier for this machine, currently Ornith 9B, Gemma 4, Qwen3.6 nano on Linux, or DeepSeek V4 Flash on 96 GB+ machines
+- `tier`: the best supported tool-capable local tier for this machine: Ornith 9B, Gemma 4, Qwen3.6 nano on Linux, or DeepSeek V4 Flash on 96 GB+ machines
 - `premier`: `text-agent-deepseek-v4-flash`, the preferred managed 96 GB+ setup-agent tier served by the bundled DS4 engine
 
 North Mini Code (`text-code-north-mini`) is available as a managed native GGUF
 coding model. It is pullable through `model pull`, can be served with
 `api serve --engine text-code --model text-code-north-mini`, and can be used
-for direct code sessions and evals. The `text-code` API lane rejects tool calls,
+for direct code sessions and evaluations. The `text-code` API lane rejects tool calls,
 so it is not exposed to Pi.
 
 Ornith (`text-agent-ornith-9b`) is available as an experimental native
@@ -2894,7 +2898,7 @@ The official Ornith 1.5 35B-A3B BF16 MLX target
 (`text-agent-ornith-35b-mlx`) uses the same native Qwen-family serving engine
 after an explicit managed pull.
 The larger Ornith 35B GGUF target (`text-agent-ornith-35b`) is also available
-for explicit evals and runs through:
+for explicit evaluations and runs through:
 
 ```bash
 swift run mere.run api serve --engine text-chat-q36 --model text-agent-ornith-35b-mlx
@@ -2904,12 +2908,12 @@ swift run mere.run api serve --engine text-code --model text-agent-ornith-35b
 BYOA prints a ready-to-paste Claude/Codex prompt. Manual mode prints the
 commands for capabilities, model pulls, serving, and optional Pi installation.
 Pi auto-install uses the published macOS release assets; on Linux, put a `pi`
-binary on `PATH` or pass `--pi-path` and the agent runs in the current terminal.
+binary on `PATH` or pass `--pi-path` and the agent runs in the active terminal.
 
 ### `mere.run agent onboard`
 
 Lower-level agent plumbing used by `mere.run setup`. Print a guided setup
-summary for the current machine. Optional flags can pull the
+summary for this machine. Optional flags can pull the
 recommended supported model package, install Pi, and write a Pi provider
 extension that points at `mere.run api serve`.
 
@@ -2923,7 +2927,7 @@ swift run mere.run agent onboard --configure-pi --model text-agent-ornith-9b --p
 
 ### `mere.run agent status`
 
-Inspect the current machine, Pi install, generated provider extension, selected
+Inspect this machine, the Pi installation, the generated provider extension, the selected
 provider endpoint/model, recommended setup tier, and every startable agent
 model without mutating the setup.
 
@@ -2939,7 +2943,7 @@ extension that the CLI will actually use.
 
 ### `mere.run agent install-pi`
 
-Install the latest `earendil-works/pi` release asset for the current macOS
+Install the most recent published `earendil-works/pi` release asset for this macOS
 architecture into the mere.run application-support directory.
 
 ```bash
@@ -2953,7 +2957,7 @@ launch Pi against the native `mere-run` provider. Qwen-family models use a
 native chat engine and DeepSeek V4 Flash uses the DS4-backed
 `--engine text-chat-deepseek-v4-flash`. If `--model` is omitted, `agent start`
 uses the best installed startable setup agent first, then a valid persisted Pi
-provider model, then the current machine's startable hardware tier. On 96 GB+
+provider model, then this machine's startable hardware tier. On 96 GB+
 Apple Silicon Macs, DeepSeek V4 Flash is the preferred setup-agent tier; smaller
 Qwen models are alternatives, not upgrades. Qwen3.8 advertises its native
 `low`, `medium`, and `xhigh` reasoning levels to Pi; Pi's `minimal`, `high`, and
@@ -2967,7 +2971,7 @@ swift run mere.run agent start --model text-agent-deepseek-v4-flash
 
 ## Validation and smoke runs
 
-Standard repo validation:
+Standard repository validation:
 
 ```bash
 ./scripts/check.sh

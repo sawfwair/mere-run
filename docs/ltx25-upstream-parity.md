@@ -1,20 +1,21 @@
 # LTX 2.5 upstream parity
 
-mere.run implements the official LTX 2.5 inference family directly in Swift
+`mere.run` implements the official LTX 2.5 inference family directly in Swift
 and MLX. It does not launch Python, PyTorch, a sidecar, or an upstream script.
 
 The compatibility target is immutable:
 
-- code: `Lightricks/LTX-2` release `v1.2.0`, commit
+- **Code:** `Lightricks/LTX-2` release `v1.2.0`, commit
   `d151147788a9284cca791edc6ce898007e727fe6`
-- weights: `Lightricks/LTX-2`, revision
+- **Weights:** `Lightricks/LTX-2`, revision
   `dd53cc2cd45bbeaa3563dfb575cba3f49cf44761`
-- DFR detailer: `Lightricks/LTX-2.5-22b-IC-LoRA-Pixel-Spatial-Upscaler`,
+- **DFR detailer:** `Lightricks/LTX-2.5-22b-IC-LoRA-Pixel-Spatial-Upscaler`,
   revision `74c4e68ee7dd99f3997d5a1bb1a3784941822222`
 
 When `--width` and `--height` are omitted, recipe-native geometry is preserved:
-1536x1024 for standard two-stage, keyframe interpolation, and DFR; 1920x1088
-for HQ; and 768x512 for dev one-stage. Explicit dimensions always win.
+1536 x 1024 for standard two-stage, keyframe interpolation, and DFR;
+1920 x 1088 for HQ; and 768 x 512 for dev one-stage. Explicit dimensions take
+precedence.
 
 ## Install
 
@@ -40,7 +41,7 @@ does not prove that every checkpoint file is installed.
 
 ## Pipeline matrix
 
-| Official pipeline | Native mere.run surface | Coverage |
+| Official pipeline | Native `mere.run` surface | Coverage |
 | --- | --- | --- |
 | Distilled two-stage | `video generate --model video-ltx25-distilled-bf16` | Ancestral distilled schedule, x2 latent upsampling, generated AV or video-only |
 | Dev plus distilled-LoRA two-stage | `video generate --model video-ltx25-full-bf16` | Guided dev stage, runtime LoRA fusion, distilled refinement |
@@ -56,7 +57,7 @@ does not prove that every checkpoint file is installed.
 | Dub-It | `video dub-it` | Reference video identity plus clean negative-time reference audio, original fractional FPS |
 | Text-to-audio | `audio generate` | Audio-only denoising and decode with CFG/STG, LoRA, custom sigma, and DurationHead controls |
 
-The upstream repository has twelve entry-point files but thirteen rows here
+The upstream repository has twelve entry-point files but thirteen table rows
 because generated keyframes are an independently testable checkpoint feature
 shared by multiple official pipelines.
 
@@ -64,17 +65,18 @@ shared by multiple official pipelines.
 
 The native surface includes the model-affecting upstream controls:
 
-- arbitrary finite LoRA strengths, including zero and negative weights;
-- explicit descending sigma schedules, Euler ancestral sampling, HQ Res2s,
-  Bong math controls, and independent random streams;
-- video/audio CFG, STG, rescale, modality guidance, block selection, and skip
-  intervals;
-- native Gemma 4 prompt enhancement and precomputed text contexts;
+- Arbitrary finite LoRA strengths, including zero and negative weights.
+- Explicit descending sigma schedules, Euler ancestral sampling, HQ Res2s,
+  Bong math controls, and independent random streams.
+- Video and audio CFG, STG, rescale, modality guidance, block selection, and skip
+  intervals.
+- Native Gemma 4 prompt enhancement and precomputed text contexts.
 - DurationHead prediction. Omitting `--num-frames` on supported LTX 2.5
-  generation uses the official 1–20 second range; an explicit frame count wins;
-- fractional frame rates. The same value drives temporal RoPE, audio length,
-  retake masks, and the encoded MP4 clock;
-- convolutional or diffusion video VAE decode, explicit spatial tiling, HDR
+  generation uses the official 1–20 second range; an explicit frame count takes
+  precedence.
+- Fractional frame rates. The same value drives temporal RoPE, audio length,
+  retake masks, and the encoded MP4 clock.
+- Convolutional or diffusion video VAE decode, explicit spatial tiling, HDR
   transfer, half-float EXR output, and BT.2020/HLG Main10 masters.
 
 `--image` and `--end-image` remain convenient first/last-frame aliases. Use
@@ -127,7 +129,7 @@ and computed versus reused transformer stacks.
 
 The residual-reuse policy follows the
 [TeaCache paper](https://arxiv.org/abs/2411.19108) and
-[official implementation](https://github.com/ali-vilab/TeaCache), with new
+[official implementation](https://github.com/ali-vilab/TeaCache), with calibrated
 coefficients measured against the pinned LTX 2.5 checkpoint and this native
 transformer rather than copied from an older LTX release.
 
@@ -147,14 +149,14 @@ model capabilities, and therefore have no one-for-one Apple-Silicon switch:
 | multi-GPU runners | Apple Silicon uses one unified-memory device |
 
 The upstream HDR command also accepts a directory for batch convenience.
-mere.run exposes the full single-item model workflow through CLI, Studio, and
+`mere.run` exposes the full single-item model workflow through CLI, Studio, and
 the local API; shell or graph workflows provide batching without a second
 inference implementation.
 
-## API and Studio
+## API and Studio integration
 
 `POST /v1/videos/generations` accepts the same flags through its `options`
-object, so new model controls do not require a parallel Python schema. The
+object, so additional model controls do not require a parallel Python schema. The
 macOS Studio exposes primary LTX 2.5 controls directly and retains an extra
 arguments field for the complete CLI surface. Capabilities advertise native
 LTX 2.5, source/reference media, audio-video output, HDR, Retake, Dub-It, and

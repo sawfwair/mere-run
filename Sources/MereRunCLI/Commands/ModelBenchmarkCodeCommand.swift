@@ -5,7 +5,7 @@ import MereRunCore
 struct ModelBenchmarkCode: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "code",
-        abstract: "Run a real coding-eval slice against local coding models."
+        abstract: "Run a real coding-evaluation slice against local coding models."
     )
 
     @Option(name: [.long], help: "Comma-separated model ids. Defaults to the installed coding comparison lane.")

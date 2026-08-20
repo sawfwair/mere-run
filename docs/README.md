@@ -1,13 +1,13 @@
-# mere.run Documentation
+# mere.run documentation
 
-This documentation set is organized like a practical manual for the public
-`mere.run` package, CLI, and optional macOS studio. The goal is to make it easy to learn the tool,
-understand the repository, and navigate the runtime code without guessing where
-things live.
+Use this documentation to learn the public `mere.run` package, CLI, and optional
+macOS Studio. The pages are organized by task, runtime family, and contributor
+workflow so you can find the relevant command or source module directly.
 
 ## Run the docs site locally
 
-The repo ships with a VitePress site for these docs:
+The repository includes a VitePress site for these docs. Install the site
+dependencies, and then start the local development server:
 
 ```bash
 brew install node pnpm
@@ -24,7 +24,7 @@ Build the static site with:
 pnpm docs:build
 ```
 
-The repo also includes a dedicated GitHub Pages workflow at
+The repository also includes a GitHub Pages workflow at
 `.github/workflows/docs.yml`. On pull requests it builds the site as a docs-only
 CI job, and on `main` it deploys the VitePress output to Pages at
 `https://docs.mere.run/`.
@@ -33,116 +33,121 @@ CI job, and on `main` it deploys the VitePress output to Pages at
 
 If you are new to the repo, read these in order:
 
-1. [Getting Started](./getting-started.md)
-2. [macOS Deep Links](./macos-deep-links.md), if a local tool should preview or import artifacts in MereRun
-3. [Linux QuickStart](./linux-quickstart.md), if you are installing the headless CLI on Linux
-4. [CLI Reference](./cli.md)
-5. [Portable Workflows](./workflows.md), if you are automating local or remote jobs
+1. [Getting started](./getting-started.md)
+2. [macOS deep links](./macos-deep-links.md), if a local tool should preview or import artifacts in MereRun
+3. [Linux quickstart](./linux-quickstart.md), if you are installing the headless CLI on Linux
+4. [CLI reference](./cli.md)
+5. [Portable workflows](./workflows.md), if you are automating local or remote jobs
 6. [Graph Studio](./graph/studio.md), if you want to author Graph v2 workflows visually
 7. [Benchmarking](./benchmarking.md)
 8. [External evaluation packs](./evaluation-packs.md)
 9. [Cookbooks](./cookbooks.md)
 10. [Configuration](./configuration.md)
-11. [Model Sources](./model-sources.md)
-12. [Companion Plugins](./plugins.md)
-13. [Repository Tour](./repository-tour.md)
+11. [Model sources](./model-sources.md)
+12. [Companion plugins](./plugins.md)
+13. [Repository tour](./repository-tour.md)
 
 ## Choose your path
 
 ### I want to use `mere.run`
 
-- [Getting Started](./getting-started.md)
-- [macOS Deep Links](./macos-deep-links.md)
-- [Linux QuickStart](./linux-quickstart.md)
-- [CLI Reference](./cli.md)
+- [Getting started](./getting-started.md)
+- [macOS deep links](./macos-deep-links.md)
+- [Linux quickstart](./linux-quickstart.md)
+- [CLI reference](./cli.md)
 - [Benchmarking](./benchmarking.md)
 - [External evaluation packs](./evaluation-packs.md)
 - [Cookbooks](./cookbooks.md)
-- [Portable Workflows](./workflows.md)
+- [Portable workflows](./workflows.md)
 - [Graph Studio](./graph/studio.md)
 - [Configuration](./configuration.md)
-- [Model Sources](./model-sources.md)
-- [Companion Plugins](./plugins.md)
+- [Model sources](./model-sources.md)
+- [Companion plugins](./plugins.md)
 
 ### I want to contribute code
 
-- [Repository Tour](./repository-tour.md)
-- [Development Workflow](./development-workflow.md)
-- [Testing Guide](./testing.md)
-- [Architecture Reading Map](./architecture.md)
-- [CLI and Runtime Internals](./internals/cli-and-runtime.md)
+- [Repository tour](./repository-tour.md)
+- [Development workflow](./development-workflow.md)
+- [Testing guide](./testing.md)
+- [Documentation style](./documentation-style.md)
+- [Architecture reading map](./architecture.md)
+- [CLI and runtime internals](./internals/cli-and-runtime.md)
 
 ### I want to understand the runtime families
 
-- [Image Runtime](./runtime/image.md)
-- [Text Runtime](./runtime/text.md)
-- [Speech Runtime](./runtime/speech.md)
-- [Vision Runtime](./runtime/vision.md)
-- [Music Runtime](./runtime/music.md)
-- [SFX Runtime](./runtime/sfx.md)
-- [Video Runtime](./runtime/video.md)
-- [Persistent World Runtime](./runtime/world.md)
-- [Model Management](./runtime/model-management.md)
-- [Local API Server](./runtime/api-server.md)
+- [Image runtime](./runtime/image.md)
+- [Text runtime](./runtime/text.md)
+- [Speech runtime](./runtime/speech.md)
+- [Vision runtime](./runtime/vision.md)
+- [Music runtime](./runtime/music.md)
+- [SFX runtime](./runtime/sfx.md)
+- [Video runtime](./runtime/video.md)
+- [Persistent world runtime](./runtime/world.md)
+- [Model management](./runtime/model-management.md)
+- [Local API server](./runtime/api-server.md)
 
 ## Documentation map
 
 ### Fundamentals
 
-- [Getting Started](./getting-started.md): clone, build, first commands, first
+- [Getting started](./getting-started.md): clone, build, first commands, first
   status checks, Linux release artifacts, model pulls, and local setup
-- [macOS Deep Links](./macos-deep-links.md): preview or import completed local
+- [macOS deep links](./macos-deep-links.md): preview or import completed local
   artifacts from launchers, automations, agents, and other macOS apps
-- [Raycast Example Integration](./raycast.md): one launcher client built on the
+- [Raycast example integration](./raycast.md): one launcher client built on the
   public macOS deep-link surface
-- [Linux QuickStart](./linux-quickstart.md): Linux package install, first
+- [Linux quickstart](./linux-quickstart.md): Linux package install, first
   commands, release asset verification, and CUDA validation boundaries
 - [Cookbooks](./cookbooks.md): `mere.run guide` command topics for practical
   prompting, parameters, examples, and troubleshooting
 - [Configuration](./configuration.md): supported environment variables and
   debug toggles
-- [Model Sources](./model-sources.md): canonical model IDs, Hugging Face sources,
+- [Model sources](./model-sources.md): canonical model IDs, Hugging Face sources,
   and local model-store behavior
-- [LTX 2.5 Upstream Parity](./ltx25-upstream-parity.md): pinned upstream
+- [LTX 2.5 upstream parity](./ltx25-upstream-parity.md): pinned upstream
   pipeline matrix, native controls, and hardware-specific boundaries
 - [Benchmarking](./benchmarking.md): local quality evals, generated-code
   execution, VLM datasets, API workload, and runtime microbenchmarks
 - [External evaluation packs](./evaluation-packs.md): content-addressed private
   packs, adapter comparisons, calibration, gates, and promotion receipts
-- [Portable Workflows](./workflows.md): typed graphs, immutable job bundles,
+- [Portable workflows](./workflows.md): typed graphs, immutable job bundles,
   local execution, SSH and relay executors, run artifacts, and remote lifecycle
 - [Graph Studio](./graph/studio.md): visual Graph v2 authoring in the browser or
   a cross-platform Tauri desktop app, using the same version-1 workflow contract
-- [Companion Plugins](./plugins.md): public catalog discovery, safe installation,
+- [Companion plugins](./plugins.md): public catalog discovery, safe installation,
   doctor checks, and the typed graph-provider boundary
 
 ### Repository guides
 
-- [Repository Tour](./repository-tour.md): top-level layout, SwiftPM targets,
+- [Repository tour](./repository-tour.md): top-level layout, SwiftPM targets,
   and where each subsystem lives
-- [Development Workflow](./development-workflow.md): day-to-day edit, build,
+- [Development workflow](./development-workflow.md): day-to-day edit, build,
   test, Linux packaging, and smoke-test loop
-- [Testing Guide](./testing.md): what each validation command does and when to
+- [Testing guide](./testing.md): what each validation command does and when to
   run it
-- [Architecture Reading Map](./architecture.md): code-reader-oriented entry
+- [Documentation style](./documentation-style.md): voice, headings,
+  accessibility, example data, command examples, and review checks
+- [Documentation style audit](./documentation-style-audit.md): line-by-line,
+  targeted, and pending review status for every public Markdown file
+- [Architecture reading map](./architecture.md): code-reader-oriented entry
   points for each runtime family
 
 ### Runtime family guides
 
-- [Image Runtime](./runtime/image.md)
-- [Text Runtime](./runtime/text.md)
-- [Speech Runtime](./runtime/speech.md)
-- [Vision Runtime](./runtime/vision.md)
-- [Music Runtime](./runtime/music.md)
-- [SFX Runtime](./runtime/sfx.md)
-- [Video Runtime](./runtime/video.md)
-- [Persistent World Runtime](./runtime/world.md)
-- [Model Management](./runtime/model-management.md)
-- [Local API Server](./runtime/api-server.md)
+- [Image runtime](./runtime/image.md)
+- [Text runtime](./runtime/text.md)
+- [Speech runtime](./runtime/speech.md)
+- [Vision runtime](./runtime/vision.md)
+- [Music runtime](./runtime/music.md)
+- [SFX runtime](./runtime/sfx.md)
+- [Video runtime](./runtime/video.md)
+- [Persistent world runtime](./runtime/world.md)
+- [Model management](./runtime/model-management.md)
+- [Local API server](./runtime/api-server.md)
 
 ## Keep command docs synchronized
 
-The generated command inventories on the docs home, Getting Started, and CLI
+The generated command inventories on the docs home, Getting started, and CLI
 reference come directly from `MereRunCLI.configuration`. Every top-level command
 also has an explicit owner in `.vitepress/command-pages.tsv`.
 
@@ -162,19 +167,19 @@ After adding, renaming, removing, or redescribing a command, run:
 
 ### Internal implementation guides
 
-- [CLI and Runtime Internals](./internals/cli-and-runtime.md)
-- [Source Layout Reference](./internals/source-layout.md)
+- [CLI and runtime internals](./internals/cli-and-runtime.md)
+- [Source layout reference](./internals/source-layout.md)
 
 ## What this docs set is for
 
 These docs are intentionally split by audience:
 
-- end users should be able to install models and run commands without reading
+- End users can install models and run commands without reading
   source code
-- contributors should be able to understand the package layout and validation
+- Contributors can understand the package layout and validation
   flow before editing runtime code
-- code readers should be able to follow a command into the correct subsystem in
-  a few clicks
+- Code readers can follow a command into the correct subsystem without
+  searching unrelated modules
 
-If you only read one page before opening the code, read
-[Repository Tour](./repository-tour.md).
+Before you open the code, start with the
+[repository tour](./repository-tour.md).

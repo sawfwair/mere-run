@@ -6,7 +6,7 @@ import MereRunCore
 struct GeoFlood: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "flood",
-        abstract: "Run native TerraMind Flood tile inference with MLX on Apple silicon."
+        abstract: "Run native TerraMind Flood tile inference with MLX on Apple Silicon."
     )
 
     @Argument(help: "Safetensors input containing normalized S2L2A, S1RTC, and DEM tile batches.")

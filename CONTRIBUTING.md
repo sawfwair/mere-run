@@ -8,6 +8,24 @@
 - If you touch vendored artifacts or third-party package pins, update [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md).
 - Do not add hosted-service, billing, or app-store-only surfaces back into this repo.
 
+## Writing documentation
+
+Follow the [documentation style guide](./docs/documentation-style.md) for public
+pages, command descriptions, and examples. In particular:
+
+- write directly to the reader in active voice and present tense
+- use sentence case for titles and headings
+- use descriptive link text and accessible document structure
+- use reserved domains and fictional identifiers in examples
+- identify dated evidence and historical benchmark receipts precisely
+
+Run the focused documentation checks before you open a pull request:
+
+```bash
+bash ./scripts/check-docs-examples.sh
+pnpm docs:build
+```
+
 ## Opening issues
 
 - Use GitHub issues for bugs, docs gaps, and feature requests.

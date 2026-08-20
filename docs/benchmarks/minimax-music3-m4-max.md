@@ -1,7 +1,7 @@
 # MiniMax Music 3 on M4 Max
 
 This receipt records installed-checkpoint MiniMax Music 3 performance work on a
-16-core CPU / 40-core GPU M4 Max MacBook Pro with 128 GB unified memory. Tests
+16-core CPU and 40-core GPU M4 Max MacBook Pro with 128 GB unified memory. Tests
 used the immutable managed `MiniMaxAI/MiniMax-Music3` snapshot, staged loading,
 44.1 kHz stereo PCM24 export, seed 37, guidance 1.7, and 30 flow steps unless a
 row says otherwise.
@@ -10,10 +10,10 @@ row says otherwise.
 
 | Runtime | Wall time | Max resident | Relative speed |
 | --- | ---: | ---: | ---: |
-| mere.run 0.37.0 reference | 143.29 s | 18.67 GB | 1.00x |
-| optimized BF16 | 105.46 s | 7.14 GB | 1.36x |
-| Q8 autoregressive turbo | 52.66 s | 4.36 GB | 2.72x |
-| Q4 autoregressive turbo | 51.40 s | 3.19 GB | 2.79x |
+| `mere.run` 0.37.0 reference | 143.29 s | 18.67 GB | 1.00 times |
+| Optimized BF16 | 105.46 s | 7.14 GB | 1.36 times |
+| Q8 autoregressive turbo | 52.66 s | 4.36 GB | 2.72 times |
+| Q4 autoregressive turbo | 51.40 s | 3.19 GB | 2.79 times |
 
 Q8 is the recommended turbo tier. Its first-step installed-checkpoint semantic
 logits measured cosine similarity 0.99985 and retained 98 of the BF16 top 100
@@ -29,7 +29,8 @@ released graph for parity investigations.
 
 ## MLX 0.32.1 follow-on
 
-The next pass rebased onto mere.run PR #297 after it landed. The tested chain
+The follow-on pass rebased onto `mere.run` pull request #297 after it landed.
+The tested chain
 pins `mlx-swift` at `3e6df6d8163a8f212061d15739eeeec12d5b89e3`, its embedded
 MLX at `b57bd7640f3f7c743b76a58478faaf1e8ee084f2`, and MLX core 0.32.1.
 
@@ -41,7 +42,7 @@ used the same prompt, checkpoint, seed, 30-step schedule, and one flow chunk:
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Refreshed dependency baseline | 30.90 s | 13.16 s | 16.88 s | 16.31 s | baseline |
 | Static KV cache | 22.21 s | 7.25 s | 14.61 s | 14.29 s | 28.1% less total |
-| Static KV + fused flow inputs | 19.24 s | 6.70 s | 12.21 s | 11.81 s | 37.7% less total |
+| Static KV and fused flow inputs | 19.24 s | 6.70 s | 12.21 s | 11.81 s | 37.7% less total |
 
 The baseline and static-cache WAVs were byte-identical. Combining the flow
 preprocess, residual, and input projections changes floating-point association;
@@ -54,9 +55,9 @@ override. A clean 100-frame series from the final graph measured:
 
 | Tier | Flow steps | Profiled total | Autoregressive | Flow | Wall time | Total speedup |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| `quality` | 30 | 20.03 s | 6.79 s | 12.89 s | 22.92 s | 1.00x |
-| `fast` | 20 | 15.04 s | 5.52 s | 9.19 s | 15.13 s | 1.33x |
-| `draft` | 16 | 13.41 s | 5.61 s | 7.47 s | 13.51 s | 1.49x |
+| `quality` | 30 | 20.03 s | 6.79 s | 12.89 s | 22.92 s | 1.00 times |
+| `fast` | 20 | 15.04 s | 5.52 s | 9.19 s | 15.13 s | 1.33 times |
+| `draft` | 16 | 13.41 s | 5.61 s | 7.47 s | 13.51 s | 1.49 times |
 
 Profiler JSON is opt-in with `--profile-output`. It synchronizes stage
 boundaries so its internal totals are useful for hotspot attribution, while
@@ -84,7 +85,7 @@ isolated tensor fixtures.
   series regressed from a 1.851 s eager median to a 2.157 s compiled median,
   16.5% slower. The fixed-capacity cache remains eager.
 - A production-shape ConvRot W8A8 Metal oracle retained 0.999929 cosine and
-  0.01192 relative RMSE, but took 57.64 ms versus 3.47 ms for BF16 GEMM, 16.6x
+  0.01192 relative RMSE, but took 57.64 ms versus 3.47 ms for BF16 GEMM, 16.6 times
   slower on this M4 Max. The research test remains env-gated; the runtime does
   not ship a slower W8A8 path.
 - A real, derived Q8 checkpoint repack occupied 9.01 GB and produced a
@@ -95,11 +96,11 @@ isolated tensor fixtures.
 
 ## ComfyUI comparison
 
-The current ComfyUI implementation validates several architectural choices:
+The evaluated ComfyUI implementation validates several architectural choices:
 its autoregressive model uses a fixed KV cache, prunes the semantic projection
 to 16,385 reachable rows, and has optional prefetch/graph support for the
 residual-depth blocks. Its flow transformer still constructs the aligned input
-inside each forward; mere.run now precomputes the invariant condition side and
+inside each forward; `mere.run` precomputes the invariant condition side and
 fuses the latent-side projections. See ComfyUI's pinned
 [autoregressive implementation](https://github.com/Comfy-Org/ComfyUI/blob/7fe8a6138504f90ff7be82f3babf416da32876b1/comfy/ldm/minimax_music/ar.py)
 and [flow transformer](https://github.com/Comfy-Org/ComfyUI/blob/7fe8a6138504f90ff7be82f3babf416da32876b1/comfy/ldm/minimax_music/dit.py).
@@ -110,7 +111,7 @@ quantization, not evidence that activation-quantized W8A8 is faster on M4-class
 Apple GPUs. See the pinned
 [workflow template](https://github.com/Comfy-Org/workflow_templates/blob/d9e66019b85da231b7c936ad9cb7ff08cec16557/templates/audio_minimax_music_3.json).
 
-A frequently cited public timing log is also easy to misread: it generates
+A frequently cited public timing log is often misread: it generates
 1,501 frames, approximately 60 seconds of audio, in about 170 seconds before
 decode on a 24 GB AMD/HIP GPU. It is not a three-minute output and it is not an
 MPS result. See the
@@ -120,17 +121,17 @@ MPS result. See the
 
 The model emits semantic frames at 25 Hz, but the vocoder emits whole
 512-sample hops. At 44.1 kHz, 250 semantic frames decode to 440,832 samples, or
-9.99619 seconds. A requested 10-second minimum now selects 251 frames and
+9.99619 seconds. A requested 10-second minimum selects 251 frames and
 decodes to 10.04263 seconds. This is why second-based floors must not use only
 `duration * 25` truncation.
 
 Long-form Q8 floor runs from the same release binary confirm both the corrected
 duration contract and approximately linear scaling:
 
-| Requested minimum | Frames / flow chunks | Wall time | Max resident | Peak footprint | Decoded duration |
+| Requested minimum | Frames and flow chunks | Wall time | Max resident | Peak footprint | Decoded duration |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| 60 s | 1,501 / 15 | 457.54 s | 4.30 GB | 19.19 GB | 60.10485 s |
-| 180 s | 4,501 / 45 | 1,413.81 s | 4.50 GB | 41.64 GB | 180.26812 s |
+| 60 s | 1,501 and 15 | 457.54 s | 4.30 GB | 19.19 GB | 60.10485 s |
+| 180 s | 4,501 and 45 | 1,413.81 s | 4.50 GB | 41.64 GB | 180.26812 s |
 
 The 180-second receipt used native 44.1 kHz stereo PCM24 export. Its audio
 SHA-256 was
