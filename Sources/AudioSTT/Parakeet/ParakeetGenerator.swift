@@ -24,6 +24,18 @@ public actor ParakeetGenerator: ASRGenerator {
         self.modelId = modelId
     }
 
+    init(
+        preparedModel: any ParakeetDecodingModel,
+        audioPreprocessor: ParakeetAudioPreprocessor,
+        modelConfig: ParakeetModelConfig
+    ) {
+        self.modelId = ParakeetResources.defaultModelId
+        self.model = preparedModel
+        self.audioPreprocessor = audioPreprocessor
+        self.modelConfig = modelConfig
+        self.loadedModelPath = "<prepared>"
+    }
+
     public func transcribe(
         _ request: ASRRequest,
         progressHandler: (@Sendable (ASRProgress) -> Void)? = nil
@@ -45,7 +57,7 @@ public actor ParakeetGenerator: ASRGenerator {
 
         progressHandler?(ASRProgress(stage: .loadingAudio, message: "Loading audio..."))
         let audio = try AudioReader.readAudio(from: request.audioURL)
-        return try transcribePrepared(
+        return try await transcribePrepared(
             samples: audio,
             language: request.language,
             progressHandler: progressHandler
@@ -65,16 +77,9 @@ public actor ParakeetGenerator: ASRGenerator {
             try await loadModel(from: root, progressHandler: progressHandler)
         }
 
-        guard let model, let audioPreprocessor, let modelConfig else {
-            throw ParakeetError.modelNotLoaded
-        }
-
-        return decode(
+        return try await transcribePrepared(
             samples: samples,
             language: language,
-            model: model,
-            audioPreprocessor: audioPreprocessor,
-            modelConfig: modelConfig,
             progressHandler: progressHandler
         )
     }
@@ -83,19 +88,21 @@ public actor ParakeetGenerator: ASRGenerator {
         samples: [Float],
         language: String? = nil,
         progressHandler: (@Sendable (ASRProgress) -> Void)? = nil
-    ) throws -> ASRResult {
-        guard let model, let audioPreprocessor, let modelConfig else {
-            throw ParakeetError.modelNotLoaded
-        }
+    ) async throws -> ASRResult {
+        try Stream.withNewDefaultStream {
+            guard let model, let audioPreprocessor, let modelConfig else {
+                throw ParakeetError.modelNotLoaded
+            }
 
-        return decode(
-            samples: samples,
-            language: language,
-            model: model,
-            audioPreprocessor: audioPreprocessor,
-            modelConfig: modelConfig,
-            progressHandler: progressHandler
-        )
+            return decode(
+                samples: samples,
+                language: language,
+                model: model,
+                audioPreprocessor: audioPreprocessor,
+                modelConfig: modelConfig,
+                progressHandler: progressHandler
+            )
+        }
     }
 
     private func decode(
