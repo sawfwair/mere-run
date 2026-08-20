@@ -195,6 +195,11 @@ enum InstalledModelSmokePlans {
                 try await runner.installedTextCheck(model: spec.id)
             }
 
+        case .nemotronOmni:
+            return direct(spec, route: "text chat through native Omni runtime") { runner in
+                try await runner.installedTextCheck(model: spec.id)
+            }
+
         case .deepseekV4FlashIMatrixGGUF:
             return direct(spec, route: "model benchmark chat via bundled DS4 runtime") { runner in
                 try await runner.installedDeepseekCheck(model: spec.id)
@@ -561,9 +566,35 @@ enum InstalledModelSmokePlans {
             try await run(runner, primary)
         })
     }
+
+    private static func structural(
+        _ spec: ManagedModelSpec,
+        route: String,
+        run: @escaping @Sendable (GateRunner) async throws -> GateObservation
+    ) -> InstalledModelSmokePlan {
+        InstalledModelSmokePlan(check: GateCheck(
+            id: "installed-\(spec.id)",
+            suite: spec.category.rawValue,
+            requiredModels: [spec.id],
+            comparesBaseline: false,
+            successDetail: "structural validation only; native inference is not implemented: \(route)",
+            run: run
+        ))
+    }
 }
 
 extension GateRunner {
+    func installedModelValidationCheck(model: String) async throws -> GateObservation {
+        let run = try await exec(
+            ["model", "info", model],
+            timeout: 1_800
+        )
+        guard run.stdout.contains("isValid: true") else {
+            throw GateError.invalidArtifact("Managed model validation did not report isValid: true")
+        }
+        return stdoutObservation(run, label: "model validation")
+    }
+
     func installedTextCheck(model: String) async throws -> GateObservation {
         let run = try await exec(
             [

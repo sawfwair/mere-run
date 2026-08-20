@@ -370,6 +370,7 @@ targets.append(contentsOf: [
       "MuScriptor/README.md",
       "MuseGlimmer/README.md",
       "NemotronH/README.md",
+      "NemotronOmni/README.md",
       "LFM2/README.md",
       "LightOnOCR/README.md",
       "LTX/README.md",

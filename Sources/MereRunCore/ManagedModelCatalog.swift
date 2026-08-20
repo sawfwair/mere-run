@@ -11,6 +11,7 @@ public enum ManagedModelCategory: String, CaseIterable, Hashable, Sendable {
     case speechDiarization = "speech-diarization"
     case visionOCR = "vision-ocr"
     case visionChat = "vision-chat"
+    case omniChat = "omni-chat"
     case visionSegment = "vision-segment"
     case visionGround = "vision-ground"
     case visionFlood = "vision-flood"
@@ -341,6 +342,22 @@ public extension ManagedModelAPIProfile {
         )
     }
 
+    static func nemotronOmni(
+        contextWindow: Int = NemotronOmniResources.maximumContextLength
+    ) -> ManagedModelAPIProfile {
+        chat(
+            servingEngine: .textChatNemotronOmni,
+            inputModalities: [.text, .image, .audio, .video],
+            contextWindow: contextWindow,
+            maximumOutputTokens: NemotronOmniResources.maximumOutputTokens,
+            thinkingLevels: [.off, .high],
+            thinkingLevelMap: [.high: .high],
+            toolCall: true,
+            supportsStopSequences: true,
+            supportsProviderThinkingControls: true
+        )
+    }
+
     static func runtimeFallback(for engine: RuntimeServingEngine) -> ManagedModelAPIProfile {
         switch engine {
         case .textCode:
@@ -361,6 +378,8 @@ public extension ManagedModelAPIProfile {
             return .museGlimmer()
         case .textChatNemotronH:
             return .nemotronH()
+        case .textChatNemotronOmni:
+            return .nemotronOmni()
         }
     }
 
@@ -490,6 +509,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case museGlimmerAssistant
     case nemotronH
     case nemotronHDSpark
+    case nemotronOmni
     case qwen3TTS
     case qwen3ASR
     case parakeet
@@ -1667,6 +1687,36 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["text chat", "api serve", "model benchmark chat"],
             companionModelIDs: [NemotronHResources.dsparkModelID],
             apiProfile: .nemotronH()
+        ),
+        ManagedModelSpec(
+            id: NemotronOmniResources.modelID,
+            category: .omniChat,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: NemotronOmniResources.upstreamRepoID,
+                revision: NemotronOmniResources.upstreamRevision,
+                patterns: NemotronOmniResources.snapshotPatterns
+            ),
+            upstreamRepoId: NemotronOmniResources.upstreamRepoID,
+            upstreamRevision: NemotronOmniResources.upstreamRevision,
+            usageRestriction: ManagedModelUsageRestriction(
+                summary: "Use is governed by the NVIDIA Open Model Agreement; review and acknowledge the governing terms before download.",
+                terms: [
+                    ManagedModelUsageTerm(
+                        component: "Nemotron 3 Nano Omni 30B-A3B Reasoning BF16",
+                        license: "NVIDIA Open Model Agreement",
+                        summary: "Review the NVIDIA Open Model Agreement before installing or deploying.",
+                        sourceRepoId: NemotronOmniResources.upstreamRepoID,
+                        sourceRevision: NemotronOmniResources.upstreamRevision,
+                        licenseURL: "https://www.nvidia.com/en-us/agreements/enterprise-software/nvidia-open-model-agreement/"
+                    ),
+                ]
+            ),
+            validationKind: .nemotronOmni,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: NemotronOmniResources.estimatedDownloadBytes,
+            defaultCLICommands: ["text chat", "api serve", "model benchmark chat"],
+            apiProfile: .nemotronOmni()
         ),
         ManagedModelSpec(
             id: Q35Resources.q36NanoModelId,
@@ -3652,6 +3702,11 @@ public extension ManagedModelSpec {
                 rootURL: rootURL,
                 fileManager: fileManager
             )
+        case .nemotronOmni:
+            return NemotronOmniResources.missingTargetFiles(
+                rootURL: rootURL,
+                fileManager: fileManager
+            )
         case .sam31:
             return SAM31Resources(modelRootURL: rootURL).missingRequiredPaths(fileManager: fileManager)
         case .falconPerception:
@@ -3767,6 +3822,11 @@ public extension ManagedModelSpec {
 
     func validationMessages(in rootURL: URL, fileManager: FileManager = .default) -> [String] {
         switch validationKind {
+        case .nemotronOmni:
+            return NemotronOmniResources.validationMessages(
+                rootURL: normalizedRootURL(rootURL, fileManager: fileManager),
+                fileManager: fileManager
+            )
         case .moge2, .videoDepthAnything, .depthAnything3, .tripoSR:
             guard let pin = GeometryModelPins.pin(for: id) else {
                 return ["Missing exact artifact pin for managed model \(id)."]

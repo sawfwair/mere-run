@@ -12,6 +12,13 @@ public struct NemotronHQuantizationConfig: Decodable, Sendable, Hashable {
         case mode
         case globalScale = "global_scale"
     }
+
+    init(bits: Int, groupSize: Int, mode: String, globalScale: Bool) {
+        self.bits = bits
+        self.groupSize = groupSize
+        self.mode = mode
+        self.globalScale = globalScale
+    }
 }
 
 public struct NemotronHConfig: Decodable, Sendable, Hashable {
@@ -133,6 +140,66 @@ public struct NemotronHConfig: Decodable, Sendable, Hashable {
                 debugDescription: "Unsupported Nemotron-H checkpoint contract."
             )
         }
+    }
+
+    init(
+        modelType: String,
+        vocabSize: Int,
+        hiddenSize: Int,
+        numHiddenLayers: Int,
+        layersBlockType: [String],
+        numAttentionHeads: Int,
+        numKeyValueHeads: Int,
+        headDim: Int,
+        maxPositionEmbeddings: Int,
+        normEps: Float,
+        mambaHeadDim: Int,
+        mambaNumHeads: Int,
+        ssmStateSize: Int,
+        nGroups: Int,
+        convKernel: Int,
+        timeStepMin: Float,
+        timeStepMax: Float,
+        nRoutedExperts: Int,
+        nSharedExperts: Int,
+        numExpertsPerToken: Int,
+        moeIntermediateSize: Int,
+        sharedExpertIntermediateSize: Int,
+        routedScalingFactor: Float,
+        normTopKProbability: Bool,
+        nGroup: Int,
+        topKGroup: Int,
+        eosTokenIDs: [Int],
+        quantization: NemotronHQuantizationConfig
+    ) {
+        self.modelType = modelType
+        self.vocabSize = vocabSize
+        self.hiddenSize = hiddenSize
+        self.numHiddenLayers = numHiddenLayers
+        self.layersBlockType = layersBlockType
+        self.numAttentionHeads = numAttentionHeads
+        self.numKeyValueHeads = numKeyValueHeads
+        self.headDim = headDim
+        self.maxPositionEmbeddings = maxPositionEmbeddings
+        self.normEps = normEps
+        self.mambaHeadDim = mambaHeadDim
+        self.mambaNumHeads = mambaNumHeads
+        self.ssmStateSize = ssmStateSize
+        self.nGroups = nGroups
+        self.convKernel = convKernel
+        self.timeStepMin = timeStepMin
+        self.timeStepMax = timeStepMax
+        self.nRoutedExperts = nRoutedExperts
+        self.nSharedExperts = nSharedExperts
+        self.numExpertsPerToken = numExpertsPerToken
+        self.moeIntermediateSize = moeIntermediateSize
+        self.sharedExpertIntermediateSize = sharedExpertIntermediateSize
+        self.routedScalingFactor = routedScalingFactor
+        self.normTopKProbability = normTopKProbability
+        self.nGroup = nGroup
+        self.topKGroup = topKGroup
+        self.eosTokenIDs = eosTokenIDs
+        self.quantization = quantization
     }
 }
 

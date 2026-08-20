@@ -78,6 +78,7 @@ an effective overlay; they are not a second capability catalog.
 | `text-chat` | `text-chat-inkling-small` |
 | `vision-chat` | `vision-chat-muse-glimmer-30b` |
 | `text-chat` | `text-chat-nemotron-35-lightning` |
+| `omni-chat` | `omni-chat-nemotron3-nano-30b-a3b-bf16` |
 | `text-chat` | `text-chat-q36-nano` |
 | `vision-chat` | `vision-chat-q38-27b` |
 | `vision-chat` | `vision-chat-q38-27b-4bit` |
@@ -405,6 +406,37 @@ conversion of NVIDIA's 967M-parameter DSpark companion at artifact revision
 OpenMDW-1.1 license and upstream model cards, never download implicitly, and do
 not require an additional mere.run acceptance gate solely because the public
 repositories use a custom license identifier.
+
+`omni-chat-nemotron3-nano-30b-a3b-bf16` stages NVIDIA's official
+`Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16` snapshot at immutable revision
+`24e67ea000b7c2837fc8f9488aa2008524fac8ba`. The 66.06 GB checkpoint accepts
+text, images, audio, and video and produces reasoning text. Its document
+examples render PDF pages to images before prompting; PDF is not a separate raw
+input modality. The catalog pins all 17 BF16 weight shards, typed
+Nemotron-H/C-RADIO v4-H/Parakeet configuration contracts, tokenizer and media
+processor metadata, NVIDIA Open Model Agreement terms, 131,072-token composed
+context, and 20,480-token maximum output.
+
+The native Swift/MLX runtime implements the C-RADIO vision tower, Parakeet
+audio tower, BF16 Nemotron-H language backbone, multimodal prefill, local video
+sampling, and media-aware OpenAI chat completions. It is supported on Apple
+Silicon machines with at least 112 GB unified memory and recommended at 128 GB.
+The model remains an explicit pull because its NVIDIA terms must be accepted:
+
+```bash
+mere.run model pull omni-chat-nemotron3-nano-30b-a3b-bf16 \
+  --accept-model-license
+mere.run text chat \
+  --model omni-chat-nemotron3-nano-30b-a3b-bf16 \
+  --video clip.mp4 \
+  --prompt "Summarize the clip."
+```
+
+The runtime consumes the 17 upstream BF16 shards in place and creates a
+source-bound stacked expert cache. A lightweight managed-model wrapper may
+point at an immutable snapshot on external storage, avoiding a second copy of
+the checkpoint while keeping it visible to `model list`, `text chat`, and
+`api serve`.
 
 `text-chat-gemma4-12b` and `vision-chat-gemma4-12b` share Google's dense Gemma
 4 12B-it checkpoint; the text id uses the native chat path, while the vision id

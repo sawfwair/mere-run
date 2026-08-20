@@ -311,6 +311,23 @@ swift run mere.run model pull text-code-north-mini
 swift run mere.run model pull text-agent-ornith-35b-mlx
 swift run mere.run model pull text-agent-ornith-35b
 
+# Nemotron 3 Nano Omni is an explicit 66.06 GB BF16 pull for 112+ GB machines.
+# It runs text, image, audio, and video understanding through native Swift/MLX.
+swift run mere.run model pull omni-chat-nemotron3-nano-30b-a3b-bf16 \
+  --accept-model-license
+swift run mere.run text chat \
+  --model omni-chat-nemotron3-nano-30b-a3b-bf16 \
+  --image photo.png \
+  --prompt "Describe the image."
+swift run mere.run text chat \
+  --model omni-chat-nemotron3-nano-30b-a3b-bf16 \
+  --audio speech.wav \
+  --prompt "Transcribe the spoken audio."
+swift run mere.run text chat \
+  --model omni-chat-nemotron3-nano-30b-a3b-bf16 \
+  --video clip.mp4 \
+  --prompt "Summarize the video."
+
 # Run Prism ML's binary model for lower residency/faster decode, or substitute
 # text-chat-bonsai-27b-2bit for the larger ternary checkpoint.
 swift run mere.run text chat \

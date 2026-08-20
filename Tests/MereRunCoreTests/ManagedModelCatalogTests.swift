@@ -145,6 +145,7 @@ final class ManagedModelCatalogTests: XCTestCase {
             "vision-embed-olmoearth-v12-small",
             "vision-embed-olmoearth-v12-base",
             MuseGlimmerResources.modelId,
+            NemotronOmniResources.modelID,
             "image-3d-trellis2-4b",
             MiniMaxMusic3Resources.modelID,
             "music-muscriptor-small",

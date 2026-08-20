@@ -1688,6 +1688,11 @@ actor RuntimeModelPool {
                 NemotronHGenerator(),
                 modelPath: resolved.installPath
             )
+        case .textChatNemotronOmni:
+            return .textChatNemotronOmni(
+                NemotronOmniGenerator(),
+                modelPath: resolved.installPath
+            )
         }
     }
 
@@ -1914,6 +1919,8 @@ actor RuntimeModelPool {
             return ManagedModelCategory.textChat.rawValue
         case .textChatMuseGlimmer:
             return ManagedModelCategory.visionChat.rawValue
+        case .textChatNemotronOmni:
+            return ManagedModelCategory.omniChat.rawValue
         }
     }
 
@@ -2234,6 +2241,7 @@ enum RuntimeLoadedModel: Sendable {
     case textChatDeepseekV4Flash(DeepseekV4FlashGenerator, modelPath: String?)
     case textChatMuseGlimmer(MuseGlimmerGenerator, modelPath: String?)
     case textChatNemotronH(NemotronHGenerator, modelPath: String?)
+    case textChatNemotronOmni(NemotronOmniGenerator, modelPath: String?)
 
     func prepare(progressHandler: (@Sendable (ChatProgress) -> Void)?) async throws {
         switch self {
@@ -2265,6 +2273,8 @@ enum RuntimeLoadedModel: Sendable {
             try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
         case .textChatNemotronH(let generator, let modelPath):
             try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
+        case .textChatNemotronOmni(let generator, let modelPath):
+            try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
         }
     }
 
@@ -2288,6 +2298,8 @@ enum RuntimeLoadedModel: Sendable {
             await generator.unload()
         case .textChatNemotronH(let generator, _):
             await generator.unload()
+        case .textChatNemotronOmni(let generator, _):
+            await generator.unload()
         }
     }
 
@@ -2300,7 +2312,7 @@ enum RuntimeLoadedModel: Sendable {
         case .textChatLFM2(let generator, _):
             return await generator.prefixKVCacheStats()
         case .textCode, .textChatKlein, .textChatLaguna, .textChatDeepseekV4Flash,
-             .textChatMuseGlimmer, .textChatNemotronH:
+             .textChatMuseGlimmer, .textChatNemotronH, .textChatNemotronOmni:
             return nil
         }
     }
@@ -2316,7 +2328,7 @@ enum RuntimeLoadedModel: Sendable {
         case .textChatLFM2(let generator, _):
             return await generator.continuousBatchingStats()
         case .textCode, .textChatKlein, .textChatDeepseekV4Flash, .textChatMuseGlimmer,
-             .textChatNemotronH:
+             .textChatNemotronH, .textChatNemotronOmni:
             return nil
         }
     }
@@ -2326,7 +2338,8 @@ enum RuntimeLoadedModel: Sendable {
         case .textChatGemma4(let generator, _):
             return await generator.mtpStats()
         case .textCode, .textChatKlein, .textChatLaguna, .textChatQ35, .textChatLFM2,
-             .textChatDeepseekV4Flash, .textChatMuseGlimmer, .textChatNemotronH:
+             .textChatDeepseekV4Flash, .textChatMuseGlimmer, .textChatNemotronH,
+             .textChatNemotronOmni:
             return nil
         }
     }
@@ -2371,6 +2384,8 @@ enum RuntimeLoadedModel: Sendable {
             return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
         case .textChatNemotronH(let generator, let modelPath):
             return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
+        case .textChatNemotronOmni(let generator, let modelPath):
+            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
         }
     }
 
@@ -2384,7 +2399,8 @@ enum RuntimeLoadedModel: Sendable {
                 progressHandler: progressHandler
             )
         case .textCode, .textChatKlein, .textChatGemma4, .textChatLaguna, .textChatQ35,
-             .textChatLFM2, .textChatMuseGlimmer, .textChatNemotronH:
+             .textChatLFM2, .textChatMuseGlimmer, .textChatNemotronH,
+             .textChatNemotronOmni:
             throw RuntimeModelPoolError.rawProxyUnavailable("")
         }
     }

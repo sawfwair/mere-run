@@ -86,7 +86,7 @@ public enum QuantizedModelManifestWriter {
             case .deepseekV4Flash: return .deepseek
             case .inkling: return .inkling
             case .museGlimmer: return .muse
-            case .nemotronH: return .nemotron
+            case .nemotronH, .nemotronOmni: return .nemotron
             }
         }()
 
@@ -129,6 +129,16 @@ public enum QuantizedModelManifestWriter {
                     return [.chat, .codeGeneration, .visionChat]
                 case .nemotronH:
                     return [.chat, .codeGeneration]
+                case .nemotronOmni:
+                    return [
+                        .chat,
+                        .codeGeneration,
+                        .visionChat,
+                        .visionOCR,
+                        .audioUnderstanding,
+                        .videoUnderstanding,
+                        .documentUnderstanding,
+                    ]
                 case .lfm2:
                     return [.chat]
                 case .laguna:
@@ -255,7 +265,7 @@ public enum QuantizedModelManifestWriter {
                 manifest.defaults = MereRunModelManifest.Defaults(steps: 20, cfg: 7.0)
             case .gemma4:
                 break
-            case .museGlimmer, .nemotronH:
+            case .museGlimmer, .nemotronH, .nemotronOmni:
                 break
             case .lfm2:
                 break

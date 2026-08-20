@@ -121,6 +121,22 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertFalse(cmd.engine.openAICompatibility.supportsStructuredOutputs)
     }
 
+    func testAPIServeParsesNemotronOmniNativeEngine() throws {
+        let cmd = try APIServe.parse([
+            "--engine", "text-chat-nemotron-omni",
+            "--model", NemotronOmniResources.modelID,
+        ])
+
+        XCTAssertEqual(cmd.engine, .textChatNemotronOmni)
+        XCTAssertEqual(cmd.model, NemotronOmniResources.modelID)
+        XCTAssertEqual(cmd.defaultRuntimeModelID(modelPath: nil), NemotronOmniResources.modelID)
+        XCTAssertTrue(cmd.engine.openAICompatibility.supportsTools)
+        XCTAssertTrue(cmd.engine.openAICompatibility.supportsVisionContentParts)
+        XCTAssertTrue(cmd.engine.openAICompatibility.supportsAudioContentParts)
+        XCTAssertTrue(cmd.engine.openAICompatibility.supportsVideoContentParts)
+        XCTAssertFalse(cmd.engine.openAICompatibility.supportsStructuredOutputs)
+    }
+
     func testAPIServeParsesPreflightJSONFlags() throws {
         let cmd = try APIServe.parse([
             "--preflight",
@@ -2393,6 +2409,62 @@ final class APIServeCommandTests: XCTestCase {
         )
         XCTAssertEqual(chatRequest.messages[0].content, "describe")
         XCTAssertEqual(chatRequest.messages[0].imageUrl, "file:///tmp/image.png")
+    }
+
+    func testOmniProfileMapsImageAudioAndVideoContentParts() throws {
+        let data = """
+        {
+          "model": "omni-chat-nemotron3-nano-30b-a3b-bf16",
+          "messages": [
+            {
+              "role": "user",
+              "content": [
+                { "type": "text", "text": "summarize" },
+                { "type": "image_url", "image_url": { "url": "file:///tmp/page.png" } },
+                { "type": "audio_url", "audio_url": { "url": "file:///tmp/audio.wav" } },
+                { "type": "video_url", "video_url": { "url": "file:///tmp/video.mp4" } }
+              ]
+            }
+          ]
+        }
+        """.data(using: .utf8)!
+        let request = try JSONDecoder().decode(OpenAIChatRequest.self, from: data)
+        let capabilities = APIEngineCapabilities.catalog(.nemotronOmni())
+
+        XCTAssertTrue(capabilities.supportsVisionContentParts)
+        XCTAssertTrue(capabilities.supportsAudioContentParts)
+        XCTAssertTrue(capabilities.supportsVideoContentParts)
+        let chatRequest = try APIServerContract.chatRequest(
+            from: request,
+            fallbackLoraPath: nil,
+            contextSize: 131_072,
+            capabilities: capabilities,
+            servedModelID: NemotronOmniResources.modelID
+        )
+        XCTAssertEqual(chatRequest.messages[0].imageUrl, "file:///tmp/page.png")
+        XCTAssertEqual(chatRequest.messages[0].audioUrl, "file:///tmp/audio.wav")
+        XCTAssertEqual(chatRequest.messages[0].videoUrl, "file:///tmp/video.mp4")
+    }
+
+    func testTextProfileRejectsAudioAndVideoContentParts() throws {
+        for part in [
+            "{ \"type\": \"audio_url\", \"audio_url\": { \"url\": \"file:///tmp/audio.wav\" } }",
+            "{ \"type\": \"video_url\", \"video_url\": { \"url\": \"file:///tmp/video.mp4\" } }",
+        ] {
+            let data = """
+            {
+              "model": "mererun-test-model",
+              "messages": [{"role":"user","content":[\(part)]}]
+            }
+            """.data(using: .utf8)!
+            let request = try JSONDecoder().decode(OpenAIChatRequest.self, from: data)
+            XCTAssertThrowsError(try APIServerContract.chatRequest(
+                from: request,
+                fallbackLoraPath: nil,
+                contextSize: 4_096,
+                capabilities: .localText
+            ))
+        }
     }
 
     func testChatRequestMapsSupportedOpenAITools() throws {

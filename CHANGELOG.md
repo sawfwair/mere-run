@@ -63,6 +63,14 @@ The format is based on Keep a Changelog.
   rounding at an observed near-tie, so the implementation does not claim
   bit-exact equivalence to one-token execution.
 
+### Nemotron Omni
+
+- added a native Swift/MLX execution engine for NVIDIA Nemotron 3 Nano Omni
+  30B-A3B Reasoning BF16: BF16 Nemotron-H text generation, C-RADIO v4-H image
+  and video understanding, Parakeet audio understanding, local video sampling,
+  media-aware OpenAI chat completions, source-bound expert caching, installed
+  inference smoke coverage, and first-class catalog/runtime-pool support.
+
 ### iOS Studio
 
 - fixed verified artifact downloads on Apple platforms to use the iOS

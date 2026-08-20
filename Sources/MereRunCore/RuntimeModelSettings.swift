@@ -11,6 +11,7 @@ public enum RuntimeServingEngine: String, Codable, CaseIterable, Hashable, Senda
     case textChatDeepseekV4Flash = "text-chat-deepseek-v4-flash"
     case textChatMuseGlimmer = "text-chat-muse-glimmer"
     case textChatNemotronH = "text-chat-nemotron-h"
+    case textChatNemotronOmni = "text-chat-nemotron-omni"
 
     public var canonical: RuntimeServingEngine {
         switch self {
