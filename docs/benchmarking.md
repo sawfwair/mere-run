@@ -27,9 +27,10 @@ For the model-comparison contract, provenance format, external fixture import,
 and raw-versus-policy logprob semantics, see
 [Mere fused model evaluation](benchmark-fused.md).
 
-For the completed August 2026 Laguna XS 2.1 and Nemotron Lightning receipts,
-including per-source scores and exact hashes, see
-[Fused Comprehensive reference runs](benchmarks/fused-reference-runs-2026-08-19.md).
+For the completed August 2026 Qwen3.8 low-reasoning, Laguna XS 2.1, and
+Nemotron Lightning receipts, including comparable non-vision results,
+per-source scores, and exact hashes, see
+[Fused Comprehensive reference runs](benchmarks/fused-reference-runs.md).
 
 For repository-owned cases, prompts, scorers, and qualification gates that must
 remain outside this public repository, use the open

@@ -75,7 +75,7 @@ export default defineConfig({
         items: [
           { text: 'Benchmarking Overview', link: '/benchmarking' },
           { text: 'Fused Model Evaluation', link: '/benchmark-fused' },
-          { text: 'Fused Reference Runs', link: '/benchmarks/fused-reference-runs-2026-08-19' },
+          { text: 'Fused Reference Runs', link: '/benchmarks/fused-reference-runs' },
           { text: 'External Evaluation Packs', link: '/evaluation-packs' }
         ]
       },

@@ -37,10 +37,10 @@ mere.run model benchmark fused --suite comprehensive --dry-run --json
 The default model matrix covers Qwen3.8 BF16 and 4-bit, Nemotron Lightning, and
 Laguna XS 2.1. Override it with `--models`.
 
-Completed local reference results for Laguna XS 2.1 and Nemotron Lightning are
-recorded in the dated [Fused Comprehensive reference runs](benchmarks/fused-reference-runs-2026-08-19.md)
-page. That page preserves the exact plan, runner, model-manifest, and receipt
-hashes alongside the per-source results and limitations.
+Completed local reference results for Qwen3.8 low reasoning, Laguna XS 2.1, and
+Nemotron Lightning are recorded in [Fused Comprehensive reference runs](benchmarks/fused-reference-runs.md).
+That page preserves the exact plan, runner, model-manifest, and receipt hashes
+alongside the per-source results, comparable non-vision scores, and limitations.
 
 ### Exact source mix
 
