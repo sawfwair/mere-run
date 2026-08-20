@@ -16,8 +16,8 @@ private func q35Swiglu(_ gate: MLXArray, _ up: MLXArray) -> MLXArray {
 enum Q35FusedSwitchGLUPolicy {
     /// Kill switch: MERERUN_Q35_FUSED_SWITCH_GLU=0 disables the stacked
     /// gate+up expert matmul. The fusion halves the gather-matmul launches per
-    /// MoE block at the cost of a second resident copy of the gate/up expert
-    /// weights.
+    /// MoE block. The loader materializes this stack one layer at a time and
+    /// releases the two source arrays before preparing the next layer.
     static let enabled: Bool = {
         let raw = ProcessInfo.processInfo.environment["MERERUN_Q35_FUSED_SWITCH_GLU"]?
             .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
@@ -183,11 +183,12 @@ final class Q35SwitchGLU: Module {
         let scales: MLXArray?
         let biases: MLXArray?
         let intermediate: Int
-        let sourceIDs: [ObjectIdentifier]
+        let sourceIDs: [ObjectIdentifier]?
     }
 
     private var fusedGateUp: FusedGateUp?
     private var fusedGateUpAttempted = false
+    private var fusedGateUpSourcesReleased = false
 
     init(config: Q35Config) {
         let text = config.textConfig
@@ -275,6 +276,10 @@ final class Q35SwitchGLU: Module {
     private func resolvedFusedGateUp() -> FusedGateUp? {
         guard Q35FusedSwitchGLUPolicy.enabled else { return nil }
 
+        if fusedGateUpSourcesReleased {
+            return fusedGateUp
+        }
+
         let gateScales = gateProj.scales
         let upScales = upProj.scales
         var sourceIDs = [ObjectIdentifier(gateProj.weight), ObjectIdentifier(upProj.weight)]
@@ -297,7 +302,54 @@ final class Q35SwitchGLU: Module {
         return fusedGateUp
     }
 
-    private func buildFusedGateUp(sourceIDs: [ObjectIdentifier]) -> FusedGateUp? {
+    @discardableResult
+    func prepareFusedGateUpAndReleaseSources() -> Bool {
+        guard Q35FusedSwitchGLUPolicy.enabled else { return false }
+        if fusedGateUpSourcesReleased {
+            return fusedGateUp != nil
+        }
+
+        guard let built = buildFusedGateUp(sourceIDs: nil) else {
+            fusedGateUpAttempted = true
+            return false
+        }
+
+        fusedGateUp = built
+        fusedGateUpAttempted = true
+        Stream.gpu.synchronize()
+        let releasedGate = Q35SwitchLinear(
+            weight: MLXArray.zeros([0], dtype: gateProj.weight.dtype),
+            scales: nil,
+            biases: nil,
+            bias: nil,
+            groupSize: gateProj.groupSize,
+            bits: gateProj.bits
+        )
+        let releasedUp = Q35SwitchLinear(
+            weight: MLXArray.zeros([0], dtype: upProj.weight.dtype),
+            scales: nil,
+            biases: nil,
+            bias: nil,
+            groupSize: upProj.groupSize,
+            bits: upProj.bits
+        )
+        update(modules: ModuleChildren.unflattened([
+            ("gate_proj", releasedGate),
+            ("up_proj", releasedUp),
+        ]))
+        fusedGateUpSourcesReleased = true
+        return true
+    }
+
+    var hasPreparedFusedGateUp: Bool {
+        fusedGateUp != nil && fusedGateUpSourcesReleased
+    }
+
+    var sourceGateUpElementCount: Int {
+        gateProj.weight.shape.reduce(1, *) + upProj.weight.shape.reduce(1, *)
+    }
+
+    private func buildFusedGateUp(sourceIDs: [ObjectIdentifier]?) -> FusedGateUp? {
         guard gateProj.bias == nil, upProj.bias == nil else { return nil }
         guard gateProj.weight.ndim == 3,
               gateProj.weight.shape == upProj.weight.shape,
@@ -460,6 +512,11 @@ final class Q35FeedForward: Module {
         }
 
         super.init()
+    }
+
+    @discardableResult
+    func prepareFusedSwitchGLU() -> Bool {
+        switchMLP?.prepareFusedGateUpAndReleaseSources() ?? false
     }
 
     func callAsFunction(_ x: MLXArray) -> MLXArray {

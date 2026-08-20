@@ -16,6 +16,18 @@ The format is based on Keep a Changelog.
 
 ### Ornith 1.5
 
+- added pinned official 4-bit, 6-bit, and 8-bit MLX targets alongside the
+  existing BF16 target. `model capabilities` now reports explicit
+  speed/balanced/quality choices for the machine's unified-memory tier.
+- made every Ornith 1.5 MLX pull install one shared, pinned MTP head from the
+  authoritative base checkpoint. The native runtime discovers that companion
+  for verified speculative decoding instead of duplicating it per quant. Q4
+  validation measured 52.5-63.2% draft acceptance and up to 41.95 decode tok/s,
+  a 37% paired uplift, so Ornith enables verified MTP from short prompts while
+  Qwen3.6 retains its separate long-context threshold.
+- bounded fused routed-expert preparation to one decoder layer at a time and
+  release the unfused gate/up arrays after each evaluated stack, preserving the
+  fused fast path without a model-wide second resident copy.
 - upgraded `text-agent-ornith-35b-mlx` from a local-only Ornith 1.0 Q4
   conversion target to Ornith's pinned public 1.5 35B-A3B BF16 MLX snapshot.
   Explicit `model pull` now installs the official 64.6 GiB checkpoint, while

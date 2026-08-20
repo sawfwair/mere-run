@@ -218,6 +218,21 @@ enum InstalledModelSmokePlans {
                 try await runner.installedTextCheck(model: primary)
             }
 
+        case .q35MTPAssistant:
+            return companion(
+                spec,
+                installedIDs: installedIDs,
+                candidates: [
+                    Q35Resources.ornith35BMLX4BitModelId,
+                    Q35Resources.ornith35BMLX6BitModelId,
+                    Q35Resources.ornith35BMLX8BitModelId,
+                    Q35Resources.ornith35BMLXModelId,
+                ],
+                route: "consumed by Ornith 1.5 Qwen-family text chat"
+            ) { runner, primary in
+                try await runner.installedTextCheck(model: primary)
+            }
+
         case .lagunaDFlash:
             return companion(
                 spec,

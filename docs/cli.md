@@ -241,7 +241,7 @@ are:
   `image-krea2-turbo`,
   `image-ideogram4-sdnq-uint4`
 - Text chat: `text-chat-gemma4`, `text-chat-mebot`, `text-chat-psi-agent`, `text-chat-q36-nano`, `vision-chat-q38-27b`, `vision-chat-q38-27b-4bit`, `text-chat-lfm25-2.6b-4bit`, `text-chat-lfm25-a1b-8bit`, `vision-chat-lfm25-3b-8bit`
-- Text code / agents: `text-agent-qwen35-9b`, `text-agent-ornith-9b`, `text-agent-ornith-35b-mlx`, `text-agent-ornith-35b`, `text-code-north-mini`, `text-code-qwen3`
+- Text code / agents: `text-agent-qwen35-9b`, `text-agent-ornith-9b`, `text-agent-ornith-35b-mlx-4bit`, `text-agent-ornith-35b-mlx-6bit`, `text-agent-ornith-35b-mlx-8bit`, `text-agent-ornith-35b-mlx`, `text-agent-ornith-35b`, `text-code-north-mini`, `text-code-qwen3`
 - Text embed: `text-embed-qwen3-0.6b`
 - Text anonymize: `text-anonymize-privacy-filter`
 - Speech TTS: `speech-tts-qwen3-nano`, `speech-tts-qwen3-customvoice`
@@ -951,13 +951,14 @@ swift run mere.run model pull text-agent-ornith-35b
 swift run mere.run text code --model text-agent-ornith-35b --prompt "Sketch a small Swift Result helper."
 ```
 
-`text-agent-ornith-35b-mlx` is the native Swift/MLX lane for Ornith's official
-1.5 35B-A3B BF16 snapshot. Pull the 64.6 GiB model explicitly; runtime
-auto-download is disabled for this large checkpoint:
+Ornith 1.5's native Swift/MLX lane has official Q4/Q6/Q8 ids plus the BF16
+compatibility id `text-agent-ornith-35b-mlx`. Use `model capabilities` to pick
+the speed, balanced, or quality tier for this machine. Pull it explicitly;
+runtime auto-download is disabled for these large checkpoints:
 
 ```bash
-swift run mere.run model pull text-agent-ornith-35b-mlx
-swift run mere.run text chat --model text-agent-ornith-35b-mlx --prompt "Sketch a small Swift Result helper."
+swift run mere.run model pull text-agent-ornith-35b-mlx-4bit
+swift run mere.run text chat --model text-agent-ornith-35b-mlx-4bit --prompt "Sketch a small Swift Result helper."
 ```
 
 ### `mere.run text embed`
@@ -2433,10 +2434,12 @@ and context limits.
 
 Run a requested-token real-checkpoint Qwen-family MTP comparison. The command
 supports `text-chat-q36-nano` (default), `text-agent-ornith-9b`, and
-`text-agent-ornith-35b-mlx`, and runs the selected model with three policies:
+the official Ornith 1.5 Q4/Q6/Q8/BF16 ids, and runs the selected model with
+three policies:
 
 - `baseline`: MTP disabled with `MERERUN_Q35_MTP_SPECULATION=0`.
-- `adaptive`: production long-context policy.
+- `adaptive`: production policy (short-prompt MTP for Ornith 1.5; the measured
+  long-context threshold for Qwen3.6).
 - `forced`: MTP enabled with `MERERUN_Q35_MTP_SPECULATION=1` and a configurable
   forced threshold.
 
@@ -2894,14 +2897,14 @@ so it is not exposed to Pi.
 Ornith (`text-agent-ornith-9b`) is available as an experimental native
 MLX/OptiQ coding-agent model. It uses the Qwen-family runtime, so serve it with
 `api serve --engine text-chat-q36 --model text-agent-ornith-9b`.
-The official Ornith 1.5 35B-A3B BF16 MLX target
-(`text-agent-ornith-35b-mlx`) uses the same native Qwen-family serving engine
-after an explicit managed pull.
+The official Ornith 1.5 35B-A3B Q4/Q6/Q8/BF16 MLX family uses the same native
+Qwen-family serving engine after an explicit managed pull. Use
+`model capabilities` to select its RAM-appropriate id.
 The larger Ornith 35B GGUF target (`text-agent-ornith-35b`) is also available
 for explicit evaluations and runs through:
 
 ```bash
-swift run mere.run api serve --engine text-chat-q36 --model text-agent-ornith-35b-mlx
+swift run mere.run api serve --engine text-chat-q36 --model text-agent-ornith-35b-mlx-4bit
 swift run mere.run api serve --engine text-code --model text-agent-ornith-35b
 ```
 

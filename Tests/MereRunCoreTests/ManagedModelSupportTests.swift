@@ -374,7 +374,7 @@ final class ManagedModelSupportTests: XCTestCase {
         XCTAssertTrue(recommendation.isSupported)
     }
 
-    func testSupportedCodeBenchmarkModelsExcludeQwen3BelowSixtyFourGB() {
+    func testSupportedCodeBenchmarkModelsUseOrnithQ4BelowSixtyFourGB() {
         let machine = MereRunMachineProfile(
             physicalMemoryBytes: 32 * 1_073_741_824,
             processorName: "M4",
@@ -385,6 +385,7 @@ final class ManagedModelSupportTests: XCTestCase {
 
         XCTAssertEqual(modelIDs, [
             Q35Resources.ornith9BModelId,
+            Q35Resources.ornith35BMLX4BitModelId,
             NorthMiniCodeResources.modelId,
         ])
     }
@@ -463,6 +464,39 @@ final class ManagedModelSupportTests: XCTestCase {
 
         XCTAssertFalse(report.isSupported)
         XCTAssertTrue(report.reasons.contains { $0.contains("96 GB") })
+    }
+
+    func testOrnith35BMLXProfilesScaleQualityAndPreserveSpeedOnOneHundredTwentyEightGB() {
+        let machine = MereRunMachineProfile(
+            physicalMemoryBytes: 128 * 1_073_741_824,
+            processorName: "M4 Max",
+            isAppleSiliconMac: true
+        )
+
+        let profiles = ManagedModelCapabilityCatalog.recommendedOrnith35BMLXProfiles(on: machine)
+
+        XCTAssertEqual(profiles.map(\.profile), [.speed, .balanced, .quality])
+        XCTAssertEqual(profiles.map(\.modelID), [
+            Q35Resources.ornith35BMLX4BitModelId,
+            Q35Resources.ornith35BMLX6BitModelId,
+            Q35Resources.ornith35BMLXModelId,
+        ])
+    }
+
+    func testOrnith35BMLXProfilesUseHighestSafeQuantOnSixtyFourGB() {
+        let machine = MereRunMachineProfile(
+            physicalMemoryBytes: 64 * 1_073_741_824,
+            processorName: "M4 Max",
+            isAppleSiliconMac: true
+        )
+
+        let profiles = ManagedModelCapabilityCatalog.recommendedOrnith35BMLXProfiles(on: machine)
+
+        XCTAssertEqual(profiles.map(\.modelID), [
+            Q35Resources.ornith35BMLX4BitModelId,
+            Q35Resources.ornith35BMLX6BitModelId,
+            Q35Resources.ornith35BMLX8BitModelId,
+        ])
     }
 
     func testUnsupportedRuntimeIsRejected() throws {

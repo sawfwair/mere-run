@@ -391,6 +391,9 @@ final class ModelPullCommandParsingTests: XCTestCase {
             recommendedCodeModel: ManagedModelCapabilityCatalog
                 .recommendedCodeModelReport(on: machine)
                 .map(ModelCapabilitiesModel.init),
+            ornith35BMLXProfiles: ManagedModelCapabilityCatalog
+                .recommendedOrnith35BMLXProfiles(on: machine)
+                .map(ModelCapabilitiesOrnithProfile.init),
             setupAgent: MereRunAgentModelCatalog
                 .recommendation(for: .tier, on: machine)
                 .map(ModelCapabilitiesSetupAgent.init),
@@ -412,6 +415,7 @@ final class ModelPullCommandParsingTests: XCTestCase {
         ])
         XCTAssertTrue(decoded.recommendedChatModel?.currentMachine == true)
         XCTAssertEqual(decoded.recommendedCodeModel?.id, "text-code-north-mini")
+        XCTAssertEqual(decoded.ornith35BMLXProfiles.first?.modelID, Q35Resources.ornith35BMLX4BitModelId)
         XCTAssertEqual(decoded.setupAgent?.id, "text-chat-gemma4-12b-4bit")
     }
 

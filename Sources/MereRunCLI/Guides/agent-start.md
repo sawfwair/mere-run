@@ -36,8 +36,8 @@ mere.run status
 - Run `model capabilities --recommended` or `agent onboard` first and use the recommended setup-agent id.
 - Pull the selected model before `agent start`.
 - Use `--skip-server` only when you already started a compatible local API server.
-- Use `agent start --model text-agent-ornith-35b-mlx` to compare the official
-  Ornith 1.5 35B-A3B BF16 MLX target through the native Qwen-family runtime.
+- Use `agent start --model text-agent-ornith-35b-mlx-4bit` for the official
+  Ornith 1.5 speed tier; Q6, Q8, and BF16 ids use the same native runtime.
 - Use `text code` or `api serve --engine text-code` for GGUF coding models;
   that API lane intentionally rejects Pi tool calls.
 - On Linux, provide an existing Pi binary with `--pi-path` or PATH before starting.

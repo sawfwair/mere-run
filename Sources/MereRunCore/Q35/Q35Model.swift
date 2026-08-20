@@ -314,6 +314,23 @@ public final class Q35Model: Module, @unchecked Sendable {
         model.embeddings(for: inputIds)
     }
 
+    /// Bound fused expert preparation to one decoder layer's gate/up pair at a
+    /// time. Each completed stack owns its evaluated storage before the source
+    /// arrays are released and the MLX cache is cleared for the next layer.
+    @discardableResult
+    func prepareFusedSwitchGLU() -> Int {
+        guard Q35FusedSwitchGLUPolicy.enabled, config.textConfig.usesMoE else {
+            return 0
+        }
+        var preparedLayers = 0
+        for layer in model.layers where layer.mlp.prepareFusedSwitchGLU() {
+            preparedLayers += 1
+            Stream.gpu.synchronize()
+            Memory.clearCache()
+        }
+        return preparedLayers
+    }
+
     func logits(from hidden: MLXArray) -> MLXArray {
         lmHead?(hidden) ?? model.embedTokens.asLinear(hidden)
     }

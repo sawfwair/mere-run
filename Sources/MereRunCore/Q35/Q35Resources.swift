@@ -34,7 +34,12 @@ public struct Q35Resources: Sendable, Hashable {
     public static let bonsai27B1BitModelId = "text-chat-bonsai-27b-1bit"
     public static let bonsai27B2BitModelId = "text-chat-bonsai-27b-2bit"
     public static let ornith9BModelId = "text-agent-ornith-9b"
+    public static let ornith35BMLX4BitModelId = "text-agent-ornith-35b-mlx-4bit"
+    public static let ornith35BMLX6BitModelId = "text-agent-ornith-35b-mlx-6bit"
+    public static let ornith35BMLX8BitModelId = "text-agent-ornith-35b-mlx-8bit"
+    /// Compatibility id for the official unquantized BF16 MLX snapshot.
     public static let ornith35BMLXModelId = "text-agent-ornith-35b-mlx"
+    public static let ornith35BMTPModelId = "text-agent-ornith-35b-mtp"
     public static let infinityParser2ProModelId = "vision-ocr-infinity-pro"
     public static let infinityParser2ProInt8ModelId = "vision-ocr-infinity-pro-int8"
     public static let defaultModelId = q36NanoModelId
@@ -47,7 +52,7 @@ public struct Q35Resources: Sendable, Hashable {
         isQ38ModelId(modelId)
             || isBonsai27BModelId(modelId)
             || modelId == ornith9BModelId
-            || modelId == ornith35BMLXModelId
+            || isOrnith35BMLXModelId(modelId)
     }
 
     public static func isBonsai27BModelId(_ modelId: String) -> Bool {
@@ -83,7 +88,11 @@ public struct Q35Resources: Sendable, Hashable {
             return RecommendedSampling(temperature: 1.0, topP: 0.95, topK: 20)
         case bonsai27B1BitModelId, bonsai27B2BitModelId:
             return RecommendedSampling(temperature: 0.7, topP: 0.95, topK: 20)
-        case ornith9BModelId, ornith35BMLXModelId:
+        case ornith9BModelId,
+             ornith35BMLX4BitModelId,
+             ornith35BMLX6BitModelId,
+             ornith35BMLX8BitModelId,
+             ornith35BMLXModelId:
             return RecommendedSampling(temperature: 1.0, topP: 0.95, topK: 20)
         default:
             return nil
@@ -121,6 +130,24 @@ public struct Q35Resources: Sendable, Hashable {
     public static let ornith35BMLXUpstreamRepoId = "ornith-ai/Ornith-1.5-35B-A3B-MLX"
     public static let ornith35BMLXUpstreamRevision = "bcfbfccfe413e46bc7cc04188622accccd8d3c00"
     public static let ornith35BMLXEstimatedDownloadBytes: Int64 = 69_343_588_037
+    public static let ornith35BMLX4BitUpstreamRepoId = "ornith-ai/Ornith-1.5-35B-A3B-MLX-4bit"
+    public static let ornith35BMLX4BitUpstreamRevision = "19504d912fa8fc7622bf6b1de3db5d5d890b1f02"
+    public static let ornith35BMLX4BitEstimatedDownloadBytes: Int64 = 19_530_936_278
+    public static let ornith35BMLX6BitUpstreamRepoId = "ornith-ai/Ornith-1.5-35B-A3B-MLX-6bit"
+    public static let ornith35BMLX6BitUpstreamRevision = "585b7867b0517980293ece857b26d64e84491352"
+    public static let ornith35BMLX6BitEstimatedDownloadBytes: Int64 = 28_190_535_198
+    public static let ornith35BMLX8BitUpstreamRepoId = "ornith-ai/Ornith-1.5-35B-A3B-MLX-8bit"
+    public static let ornith35BMLX8BitUpstreamRevision = "02440c39bdf7365c494a7f55f2a8b104ba87562f"
+    public static let ornith35BMLX8BitEstimatedDownloadBytes: Int64 = 36_850_134_639
+    public static let ornith35BMTPUpstreamRepoId = "ornith-ai/Ornith-1.5-35B-A3B"
+    public static let ornith35BMTPUpstreamRevision = "e4dfb35a93d4b6822a811a7676f3488514abe7e2"
+    public static let ornith35BMTPShardFilename = "model-00016-of-00016.safetensors"
+    public static let ornith35BMTPSnapshotPatterns = [
+        "README.md",
+        "model.safetensors.index.json",
+        ornith35BMTPShardFilename,
+    ]
+    public static let ornith35BMTPEstimatedDownloadBytes: Int64 = 4_379_189_705
     public static let ornith35BMLXContextLength = 262_144
     public static let infinityParser2ProUpstreamRepoId = "infly/Infinity-Parser2-Pro"
     public static let infinityParser2ProUpstreamRevision = "1d070df7db5acca0ffa75596229070a047704f89"
@@ -175,7 +202,25 @@ public struct Q35Resources: Sendable, Hashable {
             modelId: ornith35BMLXModelId,
             upstreamRepoId: ornith35BMLXUpstreamRepoId,
             upstreamRevision: ornith35BMLXUpstreamRevision,
-            snapshotPatterns: snapshotPatterns + ["generation_config.json"]
+            snapshotPatterns: snapshotPatterns + ["generation_config.json", "README.md"]
+        ),
+        ornith35BMLX4BitModelId: Profile(
+            modelId: ornith35BMLX4BitModelId,
+            upstreamRepoId: ornith35BMLX4BitUpstreamRepoId,
+            upstreamRevision: ornith35BMLX4BitUpstreamRevision,
+            snapshotPatterns: snapshotPatterns + ["generation_config.json", "README.md"]
+        ),
+        ornith35BMLX6BitModelId: Profile(
+            modelId: ornith35BMLX6BitModelId,
+            upstreamRepoId: ornith35BMLX6BitUpstreamRepoId,
+            upstreamRevision: ornith35BMLX6BitUpstreamRevision,
+            snapshotPatterns: snapshotPatterns + ["generation_config.json", "README.md"]
+        ),
+        ornith35BMLX8BitModelId: Profile(
+            modelId: ornith35BMLX8BitModelId,
+            upstreamRepoId: ornith35BMLX8BitUpstreamRepoId,
+            upstreamRevision: ornith35BMLX8BitUpstreamRevision,
+            snapshotPatterns: snapshotPatterns + ["generation_config.json", "README.md"]
         ),
         infinityParser2ProModelId: Profile(
             modelId: infinityParser2ProModelId,
@@ -208,7 +253,10 @@ public struct Q35Resources: Sendable, Hashable {
             bonsai27B1BitContextLength
         case bonsai27B2BitModelId:
             bonsai27B2BitContextLength
-        case ornith35BMLXModelId:
+        case ornith35BMLX4BitModelId,
+             ornith35BMLX6BitModelId,
+             ornith35BMLX8BitModelId,
+             ornith35BMLXModelId:
             ornith35BMLXContextLength
         default:
             defaultContextLength
@@ -224,6 +272,13 @@ public struct Q35Resources: Sendable, Hashable {
 
     public static func isQ38ModelId(_ modelId: String) -> Bool {
         modelId == q38TwentySevenBModelId || modelId == q38TwentySevenB4BitModelId
+    }
+
+    public static func isOrnith35BMLXModelId(_ modelId: String) -> Bool {
+        modelId == ornith35BMLX4BitModelId
+            || modelId == ornith35BMLX6BitModelId
+            || modelId == ornith35BMLX8BitModelId
+            || modelId == ornith35BMLXModelId
     }
 
     public static let snapshotPatterns = [
@@ -286,6 +341,13 @@ public struct Q35Resources: Sendable, Hashable {
         return Self.q38MTPComponentSnapshotPatterns
             .map { componentRoot.appendingPathComponent($0, isDirectory: false) }
             .filter { !fileManager.fileExists(atPath: $0.path) }
+    }
+
+    public func validateOrnith35BMTPCompanion(fileManager: FileManager = .default) -> [URL] {
+        [
+            modelIndexURL,
+            rootURL.appendingPathComponent(Self.ornith35BMTPShardFilename, isDirectory: false),
+        ].filter { !fileManager.fileExists(atPath: $0.path) }
     }
 
     public static func normalizedRootURL(_ rootURL: URL, fileManager: FileManager = .default) -> URL {

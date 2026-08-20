@@ -51,6 +51,9 @@ help in the repository gate.
 - `text-chat-lfm25-a1b-8bit` (managed LiquidAI LFM2.5 8B-A1B MLX 8-bit snapshot)
 - `vision-chat-lfm25-3b-8bit` (managed LiquidAI LFM2.5-VL 3B MLX 8-bit vision-language snapshot)
 - `text-agent-ornith-9b` (experimental native MLX/OptiQ coding-agent snapshot)
+- `text-agent-ornith-35b-mlx-4bit` (Ornith 1.5 speed tier)
+- `text-agent-ornith-35b-mlx-6bit` (Ornith 1.5 balanced tier)
+- `text-agent-ornith-35b-mlx-8bit` (Ornith 1.5 quantized quality tier)
 - `text-agent-ornith-35b-mlx` (Ornith 1.5 35B-A3B BF16 MLX coding-agent snapshot)
 - `text-agent-deepseek-v4-flash` (API/agent serving)
 - `text-chat-mebot` (API serving; not a `text chat` dispatch lane)
@@ -355,10 +358,15 @@ through the native Qwen-family runtime. Use `text chat --model text-agent-ornith
 or `api serve --engine text-chat-q36 --model text-agent-ornith-9b` for coding-agent
 smoke tests.
 
-`text-agent-ornith-35b-mlx` is the same native Qwen-family runtime lane for
-Ornith's official 1.5 35B-A3B BF16 MLX snapshot. Install the 64.6 GiB payload
-explicitly with `model pull`; runtime-triggered auto-download stays disabled.
-The lane requires at least 96 GB unified memory and recommends 128 GB.
+Ornith 1.5 35B-A3B uses the same native Qwen-family lane across the official
+`text-agent-ornith-35b-mlx-4bit`, `-6bit`, `-8bit`, and BF16
+`text-agent-ornith-35b-mlx` targets. Runtime-triggered auto-download stays
+disabled. `model capabilities` selects explicit speed/balanced/quality ids
+from unified memory: Q4 starts at 32 GB, Q6 at 48 GB, Q8 at 64 GB, and BF16 at
+96 GB. Pulling any tier also installs one shared MTP head from the pinned
+authoritative base checkpoint; target verification remains authoritative for
+every emitted speculative token. Ornith enables that verified MTP path from
+short prompts; Qwen3.6 retains its separate 6,144-token adaptive threshold.
 
 Both Ornith lanes are R1-style reasoning tunes and generate with thinking
 enabled by default in `text chat` and `api serve` — without it the models

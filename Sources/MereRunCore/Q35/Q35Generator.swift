@@ -1,6 +1,7 @@
 import Foundation
 import MediaIO
 import MLX
+import MLXNN
 #if canImport(Darwin)
 import Darwin
 #endif
@@ -452,6 +453,13 @@ public actor Q35Generator: ChatGenerator {
             groupSize: groupSize,
             bits: bits
         )
+        if Q35FusedSwitchGLUPolicy.enabled, config.textConfig.usesMoE {
+            progressHandler?(ChatProgress(
+                stage: .loadingModel,
+                message: "Preparing Qwen-family fused MoE weights"
+            ))
+            _ = q35Model.prepareFusedSwitchGLU()
+        }
 
         let tower = config.visionConfig == nil ? nil : Q35VisionTower(config: config)
         // Load the MTP draft head whenever it ships with the model and isn't
@@ -467,7 +475,14 @@ public actor Q35Generator: ChatGenerator {
         let shouldLoadMTP = !mtpExplicitlyDisabled
             && (config.textConfig.usesMoE || mtpExplicitlyEnabled)
         let loadedMTP: Q35MTPModel?
-        if shouldLoadMTP, let mtpResources = Self.mtpResources(primary: resources) {
+        let ornithMTPCompanionRoot = Q35Resources.isOrnith35BMLXModelId(modelId)
+            ? ManagedModelResolver.resolveInstalledModel(id: Q35Resources.ornith35BMTPModelId)
+            : nil
+        if shouldLoadMTP,
+           let mtpResources = Self.mtpResources(
+               primary: resources,
+               companionRootURL: ornithMTPCompanionRoot
+           ) {
             progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Qwen-family MTP weights"))
             let mtp = Q35MTPModel(config: config)
             try loadMTPWeights(
@@ -769,7 +784,8 @@ public actor Q35Generator: ChatGenerator {
     ///
     /// Select the model-specific MTP break-even point. Qwen3.6 hybrid MoE uses
     /// the measured long-context threshold (~20-token context -31%, ~4K -22%,
-    /// ~12K +1.5-2.5x on M4 Max). Dense Qwen3.8 uses a zero threshold only
+    /// ~12K +1.5-2.5x on M4 Max). Ornith 1.5 uses its validated MTP companion
+    /// from short prompts. Dense Qwen3.8 uses a zero threshold only
     /// after explicit opt-in because its BF16 multi-token verification is not
     /// serial-greedy identical. MERERUN_Q35_MTP_SPECULATION can enable/disable
     /// the path and MERERUN_Q35_MTP_MIN_PROMPT_TOKENS overrides either default.
@@ -818,6 +834,13 @@ public actor Q35Generator: ChatGenerator {
         return promptTokenCount >= threshold
     }
 
+    static func defaultMTPMinimumPromptTokens(modelId: String, usesMoE: Bool) -> Int {
+        if Q35Resources.isOrnith35BMLXModelId(modelId) {
+            return 0
+        }
+        return usesMoE ? 6144 : 0
+    }
+
     static func mtpBlockSize(environment env: [String: String] = ProcessInfo.processInfo.environment) -> Int {
         guard let raw = env["MERERUN_Q35_MTP_BLOCK_SIZE"],
               let value = Int(raw), value >= 2 else {
@@ -853,7 +876,10 @@ public actor Q35Generator: ChatGenerator {
             && !jsonConstrained && !stopAtCompletedToolCall && Self.shouldSpeculate(
             promptTokenCount: promptTokens.count,
             maxContextTokens: maxContextTokens,
-            defaultMinimumPromptTokens: model.config.textConfig.usesMoE ? 6144 : 0,
+            defaultMinimumPromptTokens: Self.defaultMTPMinimumPromptTokens(
+                modelId: modelId,
+                usesMoE: model.config.textConfig.usesMoE
+            ),
             enabledByDefault: model.config.textConfig.usesMoE
         ) && mropeRopeDelta == nil ? mtpModel : nil
         let decodePath = Self.decodePath(
@@ -2140,7 +2166,10 @@ public actor Q35Generator: ChatGenerator {
         return index.weightMap.keys.contains { $0.hasPrefix("mtp.") }
     }
 
-    static func mtpResources(primary resources: Q35Resources) -> Q35Resources? {
+    static func mtpResources(
+        primary resources: Q35Resources,
+        companionRootURL: URL? = nil
+    ) -> Q35Resources? {
         if hasMTPWeights(resources: resources) {
             return resources
         }
@@ -2150,7 +2179,16 @@ public actor Q35Generator: ChatGenerator {
                 isDirectory: true
             )
         )
-        return hasMTPWeights(resources: mounted) ? mounted : nil
+        if hasMTPWeights(resources: mounted) {
+            return mounted
+        }
+        if let companionRootURL {
+            let companion = Q35Resources(rootURL: companionRootURL)
+            if hasMTPWeights(resources: companion) {
+                return companion
+            }
+        }
+        return nil
     }
 
     private static func standaloneMTPWeightsURL(resources: Q35Resources) -> URL? {
@@ -2205,17 +2243,23 @@ public actor Q35Generator: ChatGenerator {
         let data = try Data(contentsOf: resources.modelIndexURL)
         let index = try JSONDecoder().decode(HFSafetensorsIndex.self, from: data)
         let shardFilenames = Self.embeddedMTPShardFilenames(weightMap: index.weightMap)
+        let checkpointUsesZeroCenteredNorms = try Self.checkpointUsesZeroCenteredRMSNorm(
+            from: resources
+        )
         for filename in shardFilenames {
-            try HFSafetensorsWeightsLoader.applyWeights(
+            let arrays = try SafetensorsStreamingLoader.loadArrays(
                 url: resources.rootURL.appendingPathComponent(filename),
-                to: mtp,
-                dtype: .bfloat16,
-                verify: .none,
-                mapper: { key, value in
-                    guard let mapped = Self.mapMTPWeightKey(key) else { return [] }
-                    return Self.mapMTPWeight(mapped, value)
-                }
+                where: { Self.mapMTPWeightKey($0) != nil },
+                dtype: .bfloat16
             )
+            let updates = try Self.mappedMTPUpdates(
+                arrays: arrays,
+                expertCount: mtp.layers.first?.mlp.experts?.expertCount ?? 0,
+                checkpointUsesZeroCenteredNorms: checkpointUsesZeroCenteredNorms
+            )
+            try mtp.update(parameters: ModuleParameters.unflattened(updates), verify: .none)
+            MLX.eval(updates.map(\.1))
+            Memory.clearCache()
         }
     }
 
@@ -2256,6 +2300,64 @@ public actor Q35Generator: ChatGenerator {
             return [(key, value - MLXArray(1.0).asType(value.dtype))]
         }
         return [(key, value)]
+    }
+
+    static func mappedMTPUpdates(
+        arrays: [String: MLXArray],
+        expertCount: Int,
+        checkpointUsesZeroCenteredNorms: Bool = false
+    ) throws -> [(String, MLXArray)] {
+        var updates: [(String, MLXArray)] = []
+        updates.reserveCapacity(arrays.count)
+        let individualExpertMarker = ".mlp.experts."
+
+        for (key, value) in arrays {
+            guard let mapped = mapMTPWeightKey(key) else { continue }
+            if expertCount > 0,
+               mapped.contains(individualExpertMarker),
+               mapped.contains(".weight") {
+                continue
+            }
+            if isMTPRMSNormWeight(mapped) {
+                updates.append((
+                    mapped,
+                    normalizedRMSNormWeight(
+                        value,
+                        checkpointUsesZeroCenteredNorms: checkpointUsesZeroCenteredNorms
+                    )
+                ))
+            } else {
+                updates.append(contentsOf: mapMTPWeight(mapped, value))
+            }
+        }
+
+        guard expertCount > 0 else { return updates }
+        let prefix = "mtp.layers.0.mlp.experts"
+        func required(_ expert: Int, _ projection: String) throws -> MLXArray {
+            let key = "\(prefix).\(expert).\(projection).weight"
+            guard let value = arrays[key] else {
+                throw Q35Error.missingFiles([key])
+            }
+            return value
+        }
+
+        var gateUpExperts: [MLXArray] = []
+        var downExperts: [MLXArray] = []
+        gateUpExperts.reserveCapacity(expertCount)
+        downExperts.reserveCapacity(expertCount)
+        for expert in 0..<expertCount {
+            let gate = try required(expert, "gate_proj")
+            let up = try required(expert, "up_proj")
+            gateUpExperts.append(MLX.concatenated([gate, up], axis: 0))
+            downExperts.append(try required(expert, "down_proj"))
+        }
+
+        let gateUp = MLX.stacked(gateUpExperts, axis: 0)
+        let down = MLX.stacked(downExperts, axis: 0)
+        MLX.eval(gateUp, down)
+        updates.append(("layers.0.mlp.experts.gate_up_proj", gateUp))
+        updates.append(("layers.0.mlp.experts.down_proj", down))
+        return updates
     }
 
     private static func mapTextWeightKey(_ key: String) -> String? {

@@ -493,9 +493,10 @@ the public managed model IDs retain their Qwen release names.
 ### `MERERUN_Q35_MTP_MIN_PROMPT_TOKENS`
 
 Minimum effective prompt length before Qwen-family MTP is considered. Hybrid
-MoE models default to `6144`; an explicitly enabled dense embedded head defaults
-to `0`. The effective request context must also be at least the selected
-threshold.
+Qwen3.6 MoE models default to `6144`; managed Ornith 1.5 targets default to `0`
+after their shared MTP companion showed a verified short-prompt decode win. An
+explicitly enabled dense embedded head also defaults to `0`. The effective
+request context must be at least the selected threshold.
 
 ### `MERERUN_Q35_MTP_BLOCK_SIZE`
 

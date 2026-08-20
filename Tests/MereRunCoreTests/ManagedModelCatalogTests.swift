@@ -928,6 +928,75 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.estimatedDownloadBytes, Q35Resources.ornith35BMLXEstimatedDownloadBytes)
         XCTAssertEqual(spec.defaultRuntimeServingEngine, .textChatQ36)
         XCTAssertEqual(spec.apiProfile?.contextWindow, Q35Resources.ornith35BMLXContextLength)
+        XCTAssertEqual(spec.companionModelIDs, [Q35Resources.ornith35BMTPModelId])
+    }
+
+    func testOrnith35BMLXQuantizedVariantsUsePinnedOfficialSourcesAndMTPCompanion() throws {
+        let expected: [(String, String, String, Int64)] = [
+            (
+                Q35Resources.ornith35BMLX4BitModelId,
+                Q35Resources.ornith35BMLX4BitUpstreamRepoId,
+                Q35Resources.ornith35BMLX4BitUpstreamRevision,
+                Q35Resources.ornith35BMLX4BitEstimatedDownloadBytes
+            ),
+            (
+                Q35Resources.ornith35BMLX6BitModelId,
+                Q35Resources.ornith35BMLX6BitUpstreamRepoId,
+                Q35Resources.ornith35BMLX6BitUpstreamRevision,
+                Q35Resources.ornith35BMLX6BitEstimatedDownloadBytes
+            ),
+            (
+                Q35Resources.ornith35BMLX8BitModelId,
+                Q35Resources.ornith35BMLX8BitUpstreamRepoId,
+                Q35Resources.ornith35BMLX8BitUpstreamRevision,
+                Q35Resources.ornith35BMLX8BitEstimatedDownloadBytes
+            ),
+        ]
+
+        for (modelID, repoID, revision, downloadBytes) in expected {
+            let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: modelID))
+            XCTAssertEqual(spec.hubFallback?.repoId, repoID)
+            XCTAssertEqual(spec.hubFallback?.revision, revision)
+            XCTAssertEqual(spec.upstreamRepoId, repoID)
+            XCTAssertEqual(spec.upstreamRevision, revision)
+            XCTAssertEqual(spec.validationKind, .q35)
+            XCTAssertEqual(spec.estimatedDownloadBytes, downloadBytes)
+            XCTAssertEqual(spec.companionModelIDs, [Q35Resources.ornith35BMTPModelId])
+        }
+
+        let companion = try XCTUnwrap(ManagedModelCatalog.spec(for: Q35Resources.ornith35BMTPModelId))
+        XCTAssertEqual(companion.validationKind, .q35MTPAssistant)
+        XCTAssertEqual(companion.hubFallback?.repoId, Q35Resources.ornith35BMTPUpstreamRepoId)
+        XCTAssertEqual(companion.hubFallback?.revision, Q35Resources.ornith35BMTPUpstreamRevision)
+        XCTAssertEqual(companion.hubFallback?.patterns, Q35Resources.ornith35BMTPSnapshotPatterns)
+    }
+
+    func testOrnith35BMTPCompanionResolvesFromManagedModelStore() throws {
+        let modelsRoot = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "ornith-mtp-store-\(UUID().uuidString)",
+            isDirectory: true
+        )
+        defer {
+            MereRunModelPaths.setProcessModelsDirOverride(nil)
+            try? FileManager.default.removeItem(at: modelsRoot)
+        }
+        MereRunModelPaths.setProcessModelsDirOverride(modelsRoot)
+        let companionRoot = modelsRoot.appendingPathComponent(
+            Q35Resources.ornith35BMTPModelId,
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(at: companionRoot, withIntermediateDirectories: true)
+        try Data("{}".utf8).write(
+            to: companionRoot.appendingPathComponent("model.safetensors.index.json")
+        )
+        try Data([0]).write(
+            to: companionRoot.appendingPathComponent(Q35Resources.ornith35BMTPShardFilename)
+        )
+        try MereRunModelManifest.template(for: .ornith35BMTP).write(to: companionRoot)
+
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Q35Resources.ornith35BMTPModelId))
+        XCTAssertEqual(spec.missingPaths(in: companionRoot), [])
+        XCTAssertEqual(spec.managedRuntimeURL()?.standardizedFileURL, companionRoot.standardizedFileURL)
     }
 
     func testInfinityParser2ProRequiresExplicitPull() throws {

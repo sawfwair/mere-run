@@ -503,6 +503,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case laguna
     case lagunaDFlash
     case q35
+    case q35MTPAssistant
     case lfm2
     case inkling
     case museGlimmer
@@ -1834,6 +1835,57 @@ public enum ManagedModelCatalog {
             )
         ),
         ManagedModelSpec(
+            id: Q35Resources.ornith35BMLX4BitModelId,
+            category: .textCode,
+            installShape: .directoryRoot,
+            hubFallback: Q35Resources.profile(for: Q35Resources.ornith35BMLX4BitModelId)?.hubFallbackConfig,
+            upstreamRepoId: Q35Resources.ornith35BMLX4BitUpstreamRepoId,
+            upstreamRevision: Q35Resources.ornith35BMLX4BitUpstreamRevision,
+            validationKind: .q35,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: Q35Resources.ornith35BMLX4BitEstimatedDownloadBytes,
+            defaultCLICommands: ["chat", "api serve", "agent start", "model benchmark code"],
+            companionModelIDs: [Q35Resources.ornith35BMTPModelId],
+            apiProfile: .q36(
+                contextWindow: Q35Resources.ornith35BMLXContextLength,
+                fixedReasoning: true
+            )
+        ),
+        ManagedModelSpec(
+            id: Q35Resources.ornith35BMLX6BitModelId,
+            category: .textCode,
+            installShape: .directoryRoot,
+            hubFallback: Q35Resources.profile(for: Q35Resources.ornith35BMLX6BitModelId)?.hubFallbackConfig,
+            upstreamRepoId: Q35Resources.ornith35BMLX6BitUpstreamRepoId,
+            upstreamRevision: Q35Resources.ornith35BMLX6BitUpstreamRevision,
+            validationKind: .q35,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: Q35Resources.ornith35BMLX6BitEstimatedDownloadBytes,
+            defaultCLICommands: ["chat", "api serve", "agent start", "model benchmark code"],
+            companionModelIDs: [Q35Resources.ornith35BMTPModelId],
+            apiProfile: .q36(
+                contextWindow: Q35Resources.ornith35BMLXContextLength,
+                fixedReasoning: true
+            )
+        ),
+        ManagedModelSpec(
+            id: Q35Resources.ornith35BMLX8BitModelId,
+            category: .textCode,
+            installShape: .directoryRoot,
+            hubFallback: Q35Resources.profile(for: Q35Resources.ornith35BMLX8BitModelId)?.hubFallbackConfig,
+            upstreamRepoId: Q35Resources.ornith35BMLX8BitUpstreamRepoId,
+            upstreamRevision: Q35Resources.ornith35BMLX8BitUpstreamRevision,
+            validationKind: .q35,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: Q35Resources.ornith35BMLX8BitEstimatedDownloadBytes,
+            defaultCLICommands: ["chat", "api serve", "agent start", "model benchmark code"],
+            companionModelIDs: [Q35Resources.ornith35BMTPModelId],
+            apiProfile: .q36(
+                contextWindow: Q35Resources.ornith35BMLXContextLength,
+                fixedReasoning: true
+            )
+        ),
+        ManagedModelSpec(
             id: Q35Resources.ornith35BMLXModelId,
             category: .textCode,
             installShape: .directoryRoot,
@@ -1844,6 +1896,7 @@ public enum ManagedModelCatalog {
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: Q35Resources.ornith35BMLXEstimatedDownloadBytes,
             defaultCLICommands: ["chat", "api serve", "agent start", "model benchmark code"],
+            companionModelIDs: [Q35Resources.ornith35BMTPModelId],
             apiProfile: .q36(
                 contextWindow: Q35Resources.ornith35BMLXContextLength,
                 fixedReasoning: true
@@ -3411,6 +3464,21 @@ private extension ManagedModelCatalog {
     static var companionSpecs: [ManagedModelSpec] {
         [
             ManagedModelSpec(
+                id: Q35Resources.ornith35BMTPModelId,
+                category: .textCode,
+                installShape: .directoryRoot,
+                hubFallback: HubFallbackConfig(
+                    repoId: Q35Resources.ornith35BMTPUpstreamRepoId,
+                    revision: Q35Resources.ornith35BMTPUpstreamRevision,
+                    patterns: Q35Resources.ornith35BMTPSnapshotPatterns
+                ),
+                upstreamRepoId: Q35Resources.ornith35BMTPUpstreamRepoId,
+                upstreamRevision: Q35Resources.ornith35BMTPUpstreamRevision,
+                validationKind: .q35MTPAssistant,
+                runtimeAutoDownloadAllowed: false,
+                estimatedDownloadBytes: Q35Resources.ornith35BMTPEstimatedDownloadBytes
+            ),
+            ManagedModelSpec(
                 id: Gemma4MTPResources.modelId,
                 category: .textChat,
                 installShape: .directoryRoot,
@@ -3678,6 +3746,10 @@ public extension ManagedModelSpec {
                 missing.append(contentsOf: resources.validateQ38MTPComponent(fileManager: fileManager))
             }
             return missing
+        case .q35MTPAssistant:
+            return Q35Resources(rootURL: rootURL).validateOrnith35BMTPCompanion(
+                fileManager: fileManager
+            )
         case .lfm2:
             return LFM2Resources(rootURL: rootURL).validate(
                 fileManager: fileManager,

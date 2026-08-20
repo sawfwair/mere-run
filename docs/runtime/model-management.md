@@ -104,7 +104,7 @@ a download.
 The following list shows representative canonical IDs by modality:
 
 - images: `image-klein-nano`, `image-bonsai-binary`, `image-bonsai-ternary`, `image-zimage-nano`, `image-klein-max`, `image-zimage-max`
-- text and omni chat: `text-chat-gemma4`, `text-chat-laguna-s-2-1`, `text-chat-laguna-xs-2-1`, `text-chat-nemotron-35-lightning`, `omni-chat-nemotron3-nano-30b-a3b-bf16`, `text-chat-q36-nano`, `vision-chat-q38-27b`, `vision-chat-q38-27b-4bit`, `text-chat-bonsai-27b-1bit`, `text-chat-bonsai-27b-2bit`, `text-chat-lfm25-2.6b-4bit`, `text-chat-lfm25-a1b-8bit`, `vision-chat-lfm25-3b-8bit`, `text-agent-deepseek-v4-flash`, `text-agent-qwen35-9b`, `text-agent-ornith-9b`, `text-agent-ornith-35b-mlx`, `text-agent-ornith-35b`, `text-code-north-mini`, `text-code-qwen3`, `text-embed-qwen3-0.6b`
+- text and omni chat: `text-chat-gemma4`, `text-chat-laguna-s-2-1`, `text-chat-laguna-xs-2-1`, `text-chat-nemotron-35-lightning`, `omni-chat-nemotron3-nano-30b-a3b-bf16`, `text-chat-q36-nano`, `vision-chat-q38-27b`, `vision-chat-q38-27b-4bit`, `text-chat-bonsai-27b-1bit`, `text-chat-bonsai-27b-2bit`, `text-chat-lfm25-2.6b-4bit`, `text-chat-lfm25-a1b-8bit`, `vision-chat-lfm25-3b-8bit`, `text-agent-deepseek-v4-flash`, `text-agent-qwen35-9b`, `text-agent-ornith-9b`, `text-agent-ornith-35b-mlx-4bit`, `text-agent-ornith-35b-mlx-6bit`, `text-agent-ornith-35b-mlx-8bit`, `text-agent-ornith-35b-mlx`, `text-agent-ornith-35b`, `text-code-north-mini`, `text-code-qwen3`, `text-embed-qwen3-0.6b`
 - speech: `speech-tts-qwen3-nano`, `speech-asr-parakeet`
 - vision: `vision-ocr-lighton`
 - music: `music-acestep`, `music-acestep-xl-turbo`, `music-acestep-xl-turbo-lm4b`, `music-acestep-xl-sft`, `music-acestep-xl-base`, `music-acestep-lm-1.7b`, `music-acestep-lm-4b`, `music-magenta-rt2-small`, `music-magenta-rt2-base`
@@ -309,11 +309,14 @@ The `text-code` API lane rejects tool calls, so these models are not Pi setup
 agents.
 `text-agent-ornith-9b` can be pulled, inspected, and run through the native
 Qwen-family MLX/OptiQ runtime for coding-agent comparisons.
-`text-agent-ornith-35b-mlx` pulls Ornith's official 1.5 35B-A3B BF16 MLX
-snapshot for the native Qwen-family runtime. The 64.6 GiB install requires an
-explicit `model pull`; ordinary runtime resolution will not start this large
-download automatically. Use at least 96 GB unified memory; 128 GB is
-recommended.
+Ornith 1.5 35B-A3B has four official native MLX targets:
+`text-agent-ornith-35b-mlx-4bit`, `text-agent-ornith-35b-mlx-6bit`,
+`text-agent-ornith-35b-mlx-8bit`, and the unquantized BF16 compatibility id
+`text-agent-ornith-35b-mlx`. All require an explicit `model pull`; each pull
+also installs one shared, pinned BF16 MTP head from the authoritative base
+checkpoint. Use `model capabilities` for the current machine's explicit
+speed/balanced/quality choices. The conservative tiers are Q4 at 32 GB, Q6 at
+48 GB, Q8 at 64 GB, and BF16 at 96 GB; 128 GB is recommended for BF16.
 `text-agent-ornith-35b` is the larger GGUF Ornith eval target and runs through
 the native `text-code`/llama.cpp path.
 

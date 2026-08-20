@@ -176,6 +176,28 @@ public struct ManagedChatModelBandRecommendation: Hashable, Sendable {
     }
 }
 
+public enum Ornith35BMLXPerformanceProfile: String, CaseIterable, Hashable, Sendable {
+    case speed
+    case balanced
+    case quality
+}
+
+public struct ManagedOrnith35BMLXProfileRecommendation: Hashable, Sendable {
+    public let profile: Ornith35BMLXPerformanceProfile
+    public let modelID: String
+    public let summary: String
+
+    public init(
+        profile: Ornith35BMLXPerformanceProfile,
+        modelID: String,
+        summary: String
+    ) {
+        self.profile = profile
+        self.modelID = modelID
+        self.summary = summary
+    }
+}
+
 public enum ManagedModelCapabilityCatalog {
     private static let descriptorsByID: [String: ManagedModelCapabilityDescriptor] = {
         let descriptors = [
@@ -480,11 +502,39 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 24
             ),
             descriptor(
+                Q35Resources.ornith35BMLX4BitModelId,
+                "Ornith 1.5 35B-A3B MLX 4-bit",
+                "Fastest official Ornith 35B MLX tier with the shared BF16 MTP companion for verified speculative decode.",
+                minimum: 32,
+                recommended: 48
+            ),
+            descriptor(
+                Q35Resources.ornith35BMLX6BitModelId,
+                "Ornith 1.5 35B-A3B MLX 6-bit",
+                "Balanced official Ornith 35B MLX tier with the shared BF16 MTP companion for verified speculative decode.",
+                minimum: 48,
+                recommended: 64
+            ),
+            descriptor(
+                Q35Resources.ornith35BMLX8BitModelId,
+                "Ornith 1.5 35B-A3B MLX 8-bit",
+                "Highest-precision official quantized Ornith 35B MLX tier with the shared BF16 MTP companion.",
+                minimum: 64,
+                recommended: 96
+            ),
+            descriptor(
                 Q35Resources.ornith35BMLXModelId,
-                "Ornith 1.5 35B-A3B MLX",
-                "Runs Ornith's official 35B-A3B BF16 MLX coding agent through the native Qwen-family runtime.",
+                "Ornith 1.5 35B-A3B MLX BF16",
+                "Runs Ornith's official unquantized BF16 coding agent with the shared BF16 MTP companion.",
                 minimum: 96,
                 recommended: 128
+            ),
+            descriptor(
+                Q35Resources.ornith35BMTPModelId,
+                "Ornith 1.5 35B-A3B MTP assistant",
+                "Installs the shared BF16 next-token prediction layer used for verified Ornith speculative decode.",
+                minimum: 32,
+                recommended: 48
             ),
             descriptor(
                 LFM2Resources.defaultModelId,
@@ -1222,11 +1272,63 @@ public enum ManagedModelCapabilityCatalog {
         }.first
     }
 
+    /// Select explicit, reproducible Ornith MLX ids for the current RAM tier.
+    /// The speed and balanced lanes stay quantized even on large Macs; quality
+    /// is the only profile that advances to BF16 when sufficient headroom is
+    /// available. The shared BF16 MTP companion is included by `model pull`.
+    public static func recommendedOrnith35BMLXProfiles(
+        on machine: MereRunMachineProfile = .current
+    ) -> [ManagedOrnith35BMLXProfileRecommendation] {
+        guard machine.isAppleSiliconMac, machine.unifiedMemoryGB >= 32 else {
+            return []
+        }
+
+        let balancedModelID = machine.unifiedMemoryGB >= 48
+            ? Q35Resources.ornith35BMLX6BitModelId
+            : Q35Resources.ornith35BMLX4BitModelId
+        let qualityModelID: String
+        if machine.unifiedMemoryGB >= 96 {
+            qualityModelID = Q35Resources.ornith35BMLXModelId
+        } else if machine.unifiedMemoryGB >= 64 {
+            qualityModelID = Q35Resources.ornith35BMLX8BitModelId
+        } else if machine.unifiedMemoryGB >= 48 {
+            qualityModelID = Q35Resources.ornith35BMLX6BitModelId
+        } else {
+            qualityModelID = Q35Resources.ornith35BMLX4BitModelId
+        }
+
+        return [
+            ManagedOrnith35BMLXProfileRecommendation(
+                profile: .speed,
+                modelID: Q35Resources.ornith35BMLX4BitModelId,
+                summary: "Highest decode speed and smallest residency; use for interactive agent loops."
+            ),
+            ManagedOrnith35BMLXProfileRecommendation(
+                profile: .balanced,
+                modelID: balancedModelID,
+                summary: machine.unifiedMemoryGB >= 48
+                    ? "Q6 is the default speed/quality compromise with useful context headroom."
+                    : "Q4 is the only 35B MLX tier with conservative headroom in this RAM band."
+            ),
+            ManagedOrnith35BMLXProfileRecommendation(
+                profile: .quality,
+                modelID: qualityModelID,
+                summary: qualityModelID == Q35Resources.ornith35BMLXModelId
+                    ? "BF16 preserves the official unquantized target when this machine has enough headroom."
+                    : "Uses the highest-precision quantized tier with conservative headroom on this machine."
+            ),
+        ]
+    }
+
     public static func supportedCodeBenchmarkModelIDs(
         on machine: MereRunMachineProfile = .current
     ) -> [String] {
         [
             Q35Resources.ornith9BModelId,
+            Q35Resources.ornith35BMLX4BitModelId,
+            Q35Resources.ornith35BMLX6BitModelId,
+            Q35Resources.ornith35BMLX8BitModelId,
+            Q35Resources.ornith35BMLXModelId,
             NorthMiniCodeResources.modelId,
             CodeGenResources.defaultModelId,
         ].filter { modelID in

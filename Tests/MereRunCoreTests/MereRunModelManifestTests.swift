@@ -414,6 +414,57 @@ final class MereRunModelManifestTests: MereRunCoreTestCase {
         )
     }
 
+    func testOrnith35BMLXQuantizedTemplatesPinOfficialConversions() throws {
+        let createdAt = Date(timeIntervalSince1970: 0)
+        let cases: [(
+            ModelResolver.ModelID,
+            String,
+            MereRunModelManifest.Precision,
+            Int,
+            String,
+            String
+        )] = [
+            (
+                .ornith35BMLX4Bit,
+                Q35Resources.ornith35BMLX4BitModelId,
+                .int4,
+                4,
+                Q35Resources.ornith35BMLX4BitUpstreamRepoId,
+                Q35Resources.ornith35BMLX4BitUpstreamRevision
+            ),
+            (
+                .ornith35BMLX6Bit,
+                Q35Resources.ornith35BMLX6BitModelId,
+                .int6,
+                6,
+                Q35Resources.ornith35BMLX6BitUpstreamRepoId,
+                Q35Resources.ornith35BMLX6BitUpstreamRevision
+            ),
+            (
+                .ornith35BMLX8Bit,
+                Q35Resources.ornith35BMLX8BitModelId,
+                .int8,
+                8,
+                Q35Resources.ornith35BMLX8BitUpstreamRepoId,
+                Q35Resources.ornith35BMLX8BitUpstreamRevision
+            ),
+        ]
+
+        for (modelID, id, precision, bits, repoID, revision) in cases {
+            let manifest = MereRunModelManifest.template(for: modelID, createdAt: createdAt)
+            XCTAssertEqual(manifest.id, id)
+            XCTAssertEqual(manifest.engine, .qwen35HybridMoE)
+            XCTAssertEqual(manifest.family, .code)
+            XCTAssertEqual(manifest.tier, .large)
+            XCTAssertEqual(manifest.precision, precision)
+            XCTAssertEqual(manifest.quantization?.bits, bits)
+            XCTAssertEqual(manifest.quantization?.groupSize, 64)
+            XCTAssertEqual(manifest.quantization?.scheme, "mlx-affine")
+            XCTAssertEqual(Set(manifest.supports ?? []), Set([.chat, .codeGeneration]))
+            XCTAssertEqual(manifest.upstreamRepoId, "\(repoID)@\(revision)")
+        }
+    }
+
     func testOrnith35BTemplateHasExpectedMetadata() throws {
         let manifest = MereRunModelManifest.template(for: .ornith35B, createdAt: Date(timeIntervalSince1970: 0))
 

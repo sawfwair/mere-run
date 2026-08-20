@@ -746,6 +746,60 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         XCTAssertEqual(resources.rootURL.standardizedFileURL, mtpRoot.standardizedFileURL)
     }
 
+    func testOrnithManagedMTPCompanionIsDiscovered() throws {
+        let primaryRoot = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "ornith-primary-\(UUID().uuidString)",
+            isDirectory: true
+        )
+        let companionRoot = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "ornith-mtp-\(UUID().uuidString)",
+            isDirectory: true
+        )
+        defer {
+            try? FileManager.default.removeItem(at: primaryRoot)
+            try? FileManager.default.removeItem(at: companionRoot)
+        }
+        try FileManager.default.createDirectory(at: primaryRoot, withIntermediateDirectories: true)
+        try FileManager.default.createDirectory(at: companionRoot, withIntermediateDirectories: true)
+        let index = [
+            "weight_map": [
+                "mtp.norm.weight": Q35Resources.ornith35BMTPShardFilename,
+            ],
+        ]
+        let indexData = try JSONSerialization.data(withJSONObject: index, options: [.sortedKeys])
+        try indexData.write(to: companionRoot.appendingPathComponent("model.safetensors.index.json"))
+        try Data().write(
+            to: companionRoot.appendingPathComponent(Q35Resources.ornith35BMTPShardFilename)
+        )
+
+        let resources = try XCTUnwrap(Q35Generator.mtpResources(
+            primary: Q35Resources(rootURL: primaryRoot),
+            companionRootURL: companionRoot
+        ))
+
+        XCTAssertEqual(resources.rootURL.standardizedFileURL, companionRoot.standardizedFileURL)
+    }
+
+    func testQ35PreparedFusedSwitchGLUReleasesSourceWeightsAndPreservesOutput() throws {
+        MLXRandom.seed(43)
+        let config = try decodeConfig(makeTinyRuntimeConfig(layerTypes: ["full_attention"]))
+        let switchMLP = Q35SwitchGLU(config: config)
+        let input = MLXRandom.uniform(-0.2..<0.2, [1, 1, config.textConfig.hiddenSize])
+        let indices = MLXArray([Int32(0)]).reshaped(1, 1, 1)
+        let before = switchMLP.unsorted(input, indices: indices)
+        MLX.eval(before)
+
+        XCTAssertGreaterThan(switchMLP.sourceGateUpElementCount, 0)
+        XCTAssertTrue(switchMLP.prepareFusedGateUpAndReleaseSources())
+        XCTAssertTrue(switchMLP.hasPreparedFusedGateUp)
+        XCTAssertEqual(switchMLP.sourceGateUpElementCount, 0)
+
+        let after = switchMLP.unsorted(input, indices: indices)
+        MLX.eval(after)
+        let maximumError = MLX.max(MLX.abs(before - after)).item(Float.self)
+        XCTAssertEqual(maximumError, 0, accuracy: 0.0001)
+    }
+
     func testQ35StandaloneMTPWeightMappingAcceptsBareHeadKeys() {
         XCTAssertEqual(
             Q35Generator.mapMTPWeightKey("layers.0.self_attn.q_proj.weight", standalone: true),
@@ -768,6 +822,41 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         XCTAssertTrue(Q35Generator.isMTPRMSNormWeight("layers.0.self_attn.q_norm.weight"))
         XCTAssertTrue(Q35Generator.isMTPRMSNormWeight("layers.0.self_attn.k_norm.weight"))
         XCTAssertFalse(Q35Generator.isMTPRMSNormWeight("layers.0.self_attn.q_proj.weight"))
+    }
+
+    func testQ35OrnithMTPIndividualExpertsPackIntoDraftLayout() throws {
+        var arrays: [String: MLXArray] = [
+            "mtp.norm.weight": MLXArray.ones([4]),
+        ]
+        for expert in 0..<2 {
+            arrays["mtp.layers.0.mlp.experts.\(expert).gate_proj.weight"] =
+                MLXArray.ones([2, 4]) * Float(expert + 1)
+            arrays["mtp.layers.0.mlp.experts.\(expert).up_proj.weight"] =
+                MLXArray.ones([2, 4]) * Float(expert + 3)
+            arrays["mtp.layers.0.mlp.experts.\(expert).down_proj.weight"] =
+                MLXArray.ones([4, 2]) * Float(expert + 5)
+        }
+
+        let updates = try Q35Generator.mappedMTPUpdates(
+            arrays: arrays,
+            expertCount: 2,
+            checkpointUsesZeroCenteredNorms: true
+        )
+        let convertedUpdates = try Q35Generator.mappedMTPUpdates(arrays: arrays, expertCount: 2)
+        let mapped = Dictionary(uniqueKeysWithValues: updates)
+        let converted = Dictionary(uniqueKeysWithValues: convertedUpdates)
+        let gateUp = try XCTUnwrap(mapped["layers.0.mlp.experts.gate_up_proj"])
+        let down = try XCTUnwrap(mapped["layers.0.mlp.experts.down_proj"])
+        let norm = try XCTUnwrap(mapped["norm.weight"])
+        let convertedNorm = try XCTUnwrap(converted["norm.weight"])
+        MLX.eval(gateUp, down, norm, convertedNorm)
+
+        XCTAssertEqual(gateUp.shape, [2, 4, 4])
+        XCTAssertEqual(down.shape, [2, 4, 2])
+        XCTAssertEqual(norm[0].item(Float.self), 1, accuracy: 0.0001)
+        XCTAssertEqual(MLX.max(MLX.abs(convertedNorm)).item(Float.self), 0, accuracy: 0.0001)
+        XCTAssertEqual(gateUp[0, 0, 0].item(Float.self), 1, accuracy: 0.0001)
+        XCTAssertEqual(gateUp[0, 2, 0].item(Float.self), 3, accuracy: 0.0001)
     }
 
     func testQ35MTPDraftBlockReturnsRequestedGreedyTokens() throws {
@@ -939,6 +1028,32 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
                 defaultMinimumPromptTokens: 0,
                 enabledByDefault: false,
                 environment: ["MERERUN_Q35_MTP_SPECULATION": "1"]
+            )
+        )
+    }
+
+    func testOrnithMTPDefaultsToShortPromptSpeculationWithoutChangingQwen36Threshold() {
+        XCTAssertEqual(
+            Q35Generator.defaultMTPMinimumPromptTokens(
+                modelId: Q35Resources.ornith35BMLX4BitModelId,
+                usesMoE: true
+            ),
+            0
+        )
+        XCTAssertEqual(
+            Q35Generator.defaultMTPMinimumPromptTokens(
+                modelId: Q35Resources.q36NanoModelId,
+                usesMoE: true
+            ),
+            6144
+        )
+        XCTAssertTrue(
+            Q35Generator.shouldSpeculate(
+                promptTokenCount: 32,
+                maxContextTokens: 262_144,
+                defaultMinimumPromptTokens: 0,
+                enabledByDefault: true,
+                environment: [:]
             )
         )
     }

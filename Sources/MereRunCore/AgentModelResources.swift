@@ -192,6 +192,9 @@ public enum MereRunAgentModelCatalog {
             northMiniCode(),
             ornith9B(),
             ornith35B(),
+            ornith35BMLX4Bit(),
+            ornith35BMLX6Bit(),
+            ornith35BMLX8Bit(),
             ornith35BMLX(),
             q36Nano(),
             q38TwentySevenB4Bit(),
@@ -306,6 +309,50 @@ public enum MereRunAgentModelCatalog {
             recommendedUnifiedMemoryGB: 128,
             servingEngine: .textChatQ35,
             managedModelID: Q35Resources.ornith35BMLXModelId
+        )
+    }
+
+    private static func ornith35BMLX4Bit() -> MereRunAgentModelRecommendation {
+        ornith35BMLXQuantized(
+            id: Q35Resources.ornith35BMLX4BitModelId,
+            label: "4-bit",
+            minimum: 32,
+            recommended: 48
+        )
+    }
+
+    private static func ornith35BMLX6Bit() -> MereRunAgentModelRecommendation {
+        ornith35BMLXQuantized(
+            id: Q35Resources.ornith35BMLX6BitModelId,
+            label: "6-bit",
+            minimum: 48,
+            recommended: 64
+        )
+    }
+
+    private static func ornith35BMLX8Bit() -> MereRunAgentModelRecommendation {
+        ornith35BMLXQuantized(
+            id: Q35Resources.ornith35BMLX8BitModelId,
+            label: "8-bit",
+            minimum: 64,
+            recommended: 96
+        )
+    }
+
+    private static func ornith35BMLXQuantized(
+        id: String,
+        label: String,
+        minimum: Int,
+        recommended: Int
+    ) -> MereRunAgentModelRecommendation {
+        MereRunAgentModelRecommendation(
+            id: id,
+            displayName: "Ornith 1.5 35B-A3B MLX \(label)",
+            summary: "Official quantized Ornith 35B-A3B MoE with verified MTP drafting through native Swift/MLX.",
+            minimumUnifiedMemoryGB: minimum,
+            recommendedUnifiedMemoryGB: recommended,
+            servingEngine: .textChatQ35,
+            managedModelID: id
         )
     }
 

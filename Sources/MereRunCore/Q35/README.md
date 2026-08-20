@@ -23,7 +23,17 @@ managed 4-bit lane pairs the MLX Fast reference target with a matching
 4-bit/group-64 proposal head. `MERERUN_Q35_MTP_SPECULATION=1` enables greedy
 speculation from short prompts. It stays opt-in because multi-token target
 verification can choose a different greedy path from serial target decode.
-Hybrid MoE Qwen models keep the existing adaptive long-context threshold.
+Qwen3.6 hybrid MoE keeps the existing adaptive long-context threshold.
+
+Ornith 1.5's official MLX quants omit the MTP tensors advertised by their
+configuration. Managed Q4/Q6/Q8/BF16 pulls therefore install one shared,
+revision-pinned final shard from the authoritative Ornith base checkpoint; the
+runtime reads only its `mtp.*` tensors. Routed-expert gate/up fusion is prepared
+one decoder layer at a time after target weights load. Each evaluated fused
+stack replaces its two source arrays before the MLX cache is cleared, bounding
+transient preparation memory instead of retaining a model-wide duplicate.
+Verified Q4 measurements showed a short-prompt decode win, so managed Ornith
+1.5 targets enable MTP from token zero while preserving target verification.
 
 Greedy Qwen3.8 MTP uses a proposal-only compact vocabulary projection containing
 the first 98,304 tokenizer rows and the official control-token rows. A fused

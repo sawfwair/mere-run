@@ -226,10 +226,14 @@ final class ModelBenchmarkCommandTests: XCTestCase {
 
         XCTAssertEqual(ModelBenchmarkCode.defaultModelIDs(on: thirtyTwoGB), [
             Q35Resources.ornith9BModelId,
+            Q35Resources.ornith35BMLX4BitModelId,
             NorthMiniCodeResources.modelId,
         ])
         XCTAssertEqual(ModelBenchmarkCode.defaultModelIDs(on: sixtyFourGB), [
             Q35Resources.ornith9BModelId,
+            Q35Resources.ornith35BMLX4BitModelId,
+            Q35Resources.ornith35BMLX6BitModelId,
+            Q35Resources.ornith35BMLX8BitModelId,
             NorthMiniCodeResources.modelId,
             CodeGenResources.defaultModelId,
         ])
@@ -524,6 +528,17 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         XCTAssertEqual(cmd.mtpBlockSize, 6)
         XCTAssertEqual(cmd.forcedMTPMinPromptTokens, 2)
         XCTAssertTrue(cmd.json)
+    }
+
+    func testQ36MTPBenchmarkAcceptsOfficialOrnithQuantizedTargets() throws {
+        for modelId in [
+            Q35Resources.ornith35BMLX4BitModelId,
+            Q35Resources.ornith35BMLX6BitModelId,
+            Q35Resources.ornith35BMLX8BitModelId,
+        ] {
+            let cmd = try ModelBenchmarkQ36MTP.parse(["--model", modelId])
+            XCTAssertNoThrow(try cmd.validate())
+        }
     }
 
     func testGemma4MTPBenchmarkParsesDefaults() throws {
