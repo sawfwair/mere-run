@@ -6,6 +6,12 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.43.0 - 2026-08-20
+
+This release adds native multimodal embeddings for shared text, image, and
+mixed-media retrieval with Qwen3-VL. It also hardens optimized Parakeet live
+streaming and removes private build roots from packaged diagnostics.
+
 ### Multimodal embeddings
 
 - added `vision embed`, a generic native Swift/MLX Qwen3-VL embedding command
@@ -14,6 +20,19 @@ The format is based on Keep a Changelog.
   normalized vectors with stable caller IDs, supports Matryoshka dimension
   truncation, and keeps indexing, match thresholds, reranking, and tracking in
   the consuming application.
+
+### Parakeet live streaming
+
+- constructed and evaluated Parakeet models inside task-safe MLX stream scopes,
+  and kept prepared live decoding on explicit CPU and GPU streams across
+  executor hops. Release and installed-model gates now exercise real Parakeet
+  streaming, while packaged diagnostics remap private build roots and packaging
+  rejects unexpected path leakage.
+
+### Included pull requests
+
+- exact release range: [#351](https://github.com/sawfwair/mere-run/pull/351)
+  and [#353](https://github.com/sawfwair/mere-run/pull/353).
 
 ## 0.42.0 - 2026-08-20
 
