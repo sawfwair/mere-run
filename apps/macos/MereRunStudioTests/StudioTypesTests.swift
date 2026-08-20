@@ -708,6 +708,10 @@ final class StudioTypesTests: XCTestCase {
     func testVisionAndVFXArgumentsAreDeclaredBySharedCapabilityContract() throws {
         let fixtures: [(CommandTemplateID, String, (inout CommandDraft) -> Void)] = [
             (.visionInspect, "vision.inspect", { $0.inputPath = "/tmp/a.png" }),
+            (.visionEmbed, "vision.embed", {
+                $0.inputPath = "/tmp/a.png"
+                $0.prompt = "a maroon pickup truck"
+            }),
             (.visionCaption, "vision.caption", {
                 $0.inputPath = "/tmp/a.png"
                 $0.visionAdditionalInputs = "/tmp/b.png"

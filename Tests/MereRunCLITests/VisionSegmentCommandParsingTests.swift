@@ -411,7 +411,7 @@ final class VisionSegmentCommandParsingTests: XCTestCase {
     func testVisionSubcommandsIncludeSegment() {
         let visionNames = Set(Vision.configuration.subcommands.map { $0.configuration.commandName })
         XCTAssertEqual(visionNames, Set([
-            "caption", "inspect", "segment", "face", "ground", "track", "track-live", "pose", "flow", "ocr",
+            "caption", "inspect", "embed", "segment", "face", "ground", "track", "track-live", "pose", "flow", "ocr",
             "depth-video", "geometry", "geometry-multiview", "image-to-3d", "image-to-3d-multiview",
             "image-to-3d-trellis2", "serve",
         ]))

@@ -56,6 +56,7 @@ enum CommandTemplateID: String, CaseIterable, Codable {
     case speechProfileCreate
     case speechProfileDelete
     case visionInspect
+    case visionEmbed
     case visionCaption
     case visionOCR
     case visionGround
@@ -158,6 +159,7 @@ enum CommandTemplateID: String, CaseIterable, Codable {
         case .speechProfileCreate: return "speech.profile.create"
         case .speechProfileDelete: return "speech.profile.delete"
         case .visionInspect: return "vision.inspect"
+        case .visionEmbed: return "vision.embed"
         case .visionCaption: return "vision.caption"
         case .visionOCR: return "vision.ocr"
         case .visionGround: return "vision.ground"
@@ -933,6 +935,8 @@ struct CommandTemplate: Identifiable, Equatable {
             draft.seed = "42"
         case .musicSeparate:
             draft.audioDType = "float16"
+        case .visionEmbed:
+            draft.maxTokens = 8_192
         case .visionCaption, .visionOCR:
             draft.maxTokens = id == .visionCaption ? 96 : 4096
             draft.temperature = id == .visionCaption ? 0.2 : 0.2
@@ -1110,6 +1114,7 @@ struct CommandTemplate: Identifiable, Equatable {
         if promptLabel != nil
             && id != .custom
             && id != .musicRealtime
+            && id != .visionEmbed
             && id != .visionSegment
             && id != .visionTrack
             && draft.prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -1121,6 +1126,7 @@ struct CommandTemplate: Identifiable, Equatable {
             .imageTrainLoRA,
             .videoGenerate,
             .musicTranscribe,
+            .visionEmbed,
             .visionFaceBatch
         ]
         if inputKind != .none
@@ -1130,6 +1136,10 @@ struct CommandTemplate: Identifiable, Equatable {
         }
 
         switch id {
+        case .visionEmbed:
+            if draft.prompt.isBlank && draft.inputPath.isBlank {
+                return "Text or image input is required."
+            }
         case .visionSegment, .visionTrack:
             if draft.prompt.isBlank && draft.visionBoxPrompts.isBlank
                 && draft.visionPointPrompts.isBlank {
@@ -1919,6 +1929,15 @@ struct CommandTemplate: Identifiable, Equatable {
             args = ["vision", "inspect", draft.inputPath, "--prompt", draft.prompt]
             if !draft.model.isBlank { args += ["--model", draft.model] }
             args += ["--max-tokens", String(draft.maxTokens), "--temperature", format(draft.temperature), "--top-p", format(draft.topP)]
+
+        case .visionEmbed:
+            args = ["vision", "embed"]
+            if !draft.prompt.isBlank { args += ["--text", draft.prompt] }
+            if !draft.inputPath.isBlank { args += ["--image", draft.inputPath] }
+            if !draft.secondaryText.isBlank { args += ["--instruction", draft.secondaryText] }
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            args += ["--max-tokens", String(draft.maxTokens)]
+            if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
 
         case .visionCaption:
             args = ["vision", "caption"]
@@ -3170,6 +3189,7 @@ extension CommandTemplate {
         case .visionTrack, .visionTrackLive:
             return .track
         case .visionInspect,
+             .visionEmbed,
              .visionCaption,
              .visionOCR,
              .visionFaceDetect,
@@ -3534,6 +3554,19 @@ enum CommandCatalog {
             promptLabel: "Question",
             inputKind: .image,
             defaultPrompt: "Describe this image."
+        ),
+        CommandTemplate(
+            id: .visionEmbed,
+            category: .vision,
+            title: "Embed text + image",
+            subtitle: "Create shared retrieval vectors",
+            systemImage: "point.3.connected.trianglepath.dotted",
+            promptLabel: "Text (optional)",
+            secondaryLabel: "Retrieval instruction",
+            inputKind: .image,
+            outputKind: .file("json"),
+            defaultSecondaryText: "Represent the item for retrieval.",
+            defaultModel: "vision-embed-qwen3-vl-2b"
         ),
         CommandTemplate(
             id: .visionCaption,

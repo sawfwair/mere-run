@@ -654,6 +654,13 @@ public enum ManagedModelCapabilityCatalog {
                 setup: true
             ),
             descriptor(
+                Qwen3VLEmbeddingCatalog.modelID,
+                "Multimodal embeddings",
+                "Creates shared Qwen3-VL text and image vectors for local retrieval and ranking.",
+                minimum: 16,
+                recommended: 24
+            ),
+            descriptor(
                 OpenAIPrivacyFilterCatalog.modelId,
                 "Text anonymization",
                 "Detects and replaces private text spans before prompts or logs leave a local workflow.",

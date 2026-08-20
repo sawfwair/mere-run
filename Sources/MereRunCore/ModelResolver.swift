@@ -88,6 +88,7 @@ public struct ModelResolver {
         case visionEmbedOlmoEarthV12Tiny = "vision-embed-olmoearth-v12-tiny"
         case visionEmbedOlmoEarthV12Small = "vision-embed-olmoearth-v12-small"
         case visionEmbedOlmoEarthV12Base = "vision-embed-olmoearth-v12-base"
+        case visionEmbedQwen3VL2B = "vision-embed-qwen3-vl-2b"
         case visionFaceBuffaloL = "vision-face-buffalo-l"
         case visionGeometryMoGe2Small = "vision-geometry-moge2-small"
         case visionDepthVDASmall = "vision-depth-vda-small"

@@ -1,5 +1,6 @@
 import ArgumentParser
 import Foundation
+import MereRunCore
 
 struct GuideCommand: ParsableCommand {
     static let configuration = CommandConfiguration(
@@ -296,6 +297,13 @@ enum GuideRegistry {
             commandPaths: [["vision", "caption"]],
             models: [],
             resourceName: "vision-caption.md"
+        ),
+        GuideTopic(
+            topic: "vision-embed",
+            title: "Vision Embed",
+            commandPaths: [["vision", "embed"]],
+            models: [Qwen3VLEmbeddingCatalog.modelID],
+            resourceName: "vision-embed.md"
         ),
         GuideTopic(
             topic: "vision-inspect",

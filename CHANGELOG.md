@@ -6,6 +6,15 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Multimodal embeddings
+
+- added `vision embed`, a generic native Swift/MLX Qwen3-VL embedding command
+  for text, images, and mixed JSON records. The managed
+  `vision-embed-qwen3-vl-2b` model pins the official BF16 checkpoint, emits
+  normalized vectors with stable caller IDs, supports Matryoshka dimension
+  truncation, and keeps indexing, match thresholds, reranking, and tracking in
+  the consuming application.
+
 ## 0.42.0 - 2026-08-20
 
 This release expands mere.run's native model lineup with official Ornith 1.5,

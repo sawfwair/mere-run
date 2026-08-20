@@ -378,6 +378,7 @@ targets.append(contentsOf: [
       "MagentaRT2/README.md",
       "MLX/README.md",
       "MMAudio/README.md",
+      "MultimodalEmbeddings/README.md",
       "MiniMaxH3/README.md",
       "MiniMaxMusic3/README.md",
       "PrivacyFilter/README.md",

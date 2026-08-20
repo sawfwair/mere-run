@@ -291,6 +291,11 @@ enum InstalledModelSmokePlans {
                 try await runner.installedEmbeddingCheck(model: spec.id)
             }
 
+        case .qwen3VLEmbedding:
+            return direct(spec, route: "vision embed with text and image inputs") { runner in
+                try await runner.installedMultimodalEmbeddingCheck(model: spec.id)
+            }
+
         case .privacyFilter:
             return direct(spec, route: "text anonymize") { runner in
                 try await runner.installedPrivacyCheck(model: spec.id)
@@ -831,6 +836,30 @@ extension GateRunner {
                 "--output", output.path,
             ],
             timeout: 900
+        )
+        let data = try Data(contentsOf: output)
+        return GateObservation(
+            hash: try Self.embeddingVectorHash(data),
+            secondRunHash: nil,
+            wallSeconds: run.wallSeconds,
+            decodeTps: nil,
+            semanticFailure: nil
+        )
+    }
+
+    func installedMultimodalEmbeddingCheck(model: String) async throws -> GateObservation {
+        let image = try fixtureImage(name: "installed-embedding-scene.png")
+        let output = artifactURL(model, extension: "json")
+        let run = try await exec(
+            [
+                "vision", "embed",
+                "--text", "a red square with a peach circle",
+                "--image", image.path,
+                "--model", model,
+                "--dimensions", "256",
+                "--output", output.path,
+            ],
+            timeout: 1_800
         )
         let data = try Data(contentsOf: output)
         return GateObservation(

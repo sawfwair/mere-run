@@ -54,7 +54,7 @@ supported flags.
 | --- | --- | --- |
 | Images and LoRAs | `image generate`, `image train-lora`, `adapter list`, `adapter pull` | Klein, ZImage, HiDream O1, Krea 2, Ideogram 4, and Bonsai; text-to-image, edits, multiple references, structured prompts, local Krea/Klein training, and checksum-pinned public adapters |
 | Text, code, and agents | `text chat`, `text code`, `text embed`, `text anonymize`, `text train-lora`, `agent` | Local chat and tool use, including Qwen3.8 27B BF16/4-bit and Bonsai 27B binary/ternary vision chat; code generation, embeddings, personally identifiable information (PII) redaction, text LoRA training, and guided local-agent setup |
-| Vision understanding | `vision caption`, `inspect`, `face`, `ground`, `segment`, `track`, `track-live`, `pose`, `flow`, `ocr` | Captioning and VQA, local face detection/identity embeddings, LightOn/GLM/Infinity OCR, Falcon grounding, SAM 3.1 segmentation and tracking, body/hand/face landmarks, and dense optical flow |
+| Vision understanding | `vision embed`, `caption`, `inspect`, `face`, `ground`, `segment`, `track`, `track-live`, `pose`, `flow`, `ocr` | Shared text/image embeddings, captioning and VQA, local face detection/identity embeddings, LightOn/GLM/Infinity OCR, Falcon grounding, SAM 3.1 segmentation and tracking, body/hand/face landmarks, and dense optical flow |
 | Depth, geometry, and 3D | `vision depth-video`, `geometry`, `geometry-multiview`, `image-to-3d*`; `image reconstruct-3d*` | Video Depth Anything, MoGe-2, Depth Anything 3, TripoSR, InstantMesh, and TRELLIS.2; depth/confidence EXRs, cameras, point clouds, 3DGS initialization, OBJ, PLY, GLB, and PBR voxel artifacts |
 | Audio enhancement | `audio enhance` | Native AP-BWE speech bandwidth extension and UniverSR general-audio super-resolution to hashed 48 kHz mono WAVs |
 | Video and worlds | `video generate`, `video cosmos3`, `video prepare-masks`, `video animate`, `video session`, `video export-latents`, `world serve` | MiniMax-H3 FL2VA/Ref2VA synchronized video and audio, native LTX 2.5 and LTX 2.3 synchronized audio/video, resident distilled and full-dev LTX workers, Wan 2.2 TI2V, native Cosmos3-Edge generation/reasoning/action dynamics, native SAM 3.1 mask preparation, native SCAIL-2 subject animation/replacement, and warm DreamX or Cosmos3 world sessions |
@@ -484,6 +484,13 @@ swift run mere.run status
 curl http://127.0.0.1:8080/v1/embeddings \
   -H "Content-Type: application/json" \
   --data '{"model":"text-embed-qwen3-0.6b","input":"mere.run native embeddings"}'
+
+# Shared text/image embeddings for local retrieval and candidate ranking
+swift run mere.run vision embed \
+  --image ./vehicle.jpg \
+  --text "a white SUV" \
+  --instruction "Retrieve visually similar vehicles" \
+  --pretty
 
 # Native image generation and audio through the same /v1 API
 curl http://127.0.0.1:8080/v1/images/generations \

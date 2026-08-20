@@ -193,6 +193,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case chat = "chat"
         case codeGeneration = "code_generation"
         case textEmbedding = "text_embedding"
+        case multimodalEmbedding = "multimodal_embedding"
         case textAnonymization = "text_anonymization"
         case speechSynthesis = "speech_synthesis"
         case speechRecognition = "speech_recognition"
@@ -1882,6 +1883,20 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.textEmbedding],
                 components: genericTextComponents,
                 upstreamRepoId: Qwen3EmbeddingCatalog.defaultRepoId,
+                createdAt: createdAt
+            )
+        case .visionEmbedQwen3VL2B:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .qwen3Embedding,
+                family: .embed,
+                tier: .small,
+                variant: .standard,
+                precision: .bf16,
+                defaults: nil,
+                supports: [.textEmbedding, .multimodalEmbedding],
+                components: genericTextComponents,
+                upstreamRepoId: Qwen3VLEmbeddingCatalog.defaultRepoID,
                 createdAt: createdAt
             )
         case .privacyFilter:
