@@ -238,7 +238,7 @@ are:
 
 - Images: `image-klein-nano`, `image-klein-base`, `image-klein-base-9b`, `image-klein-max`,
   `image-bonsai-binary`, `image-bonsai-ternary`, `image-zimage-nano`, `image-zimage-base`, `image-zimage-max`,
-  `image-hidream-o1`, `image-hidream-o1-dev`, `image-krea2-raw`,
+  `image-hidream-o1`, `image-hidream-o1-dev`, `image-sensenova-u1-5-8b-mot`, `image-krea2-raw`,
   `image-krea2-turbo`,
   `image-ideogram4-sdnq-uint4`
 - Text chat: `text-chat-gemma4`, `text-chat-mebot`, `text-chat-psi-agent`, `text-chat-q36-nano`, `vision-chat-q38-27b`, `vision-chat-q38-27b-4bit`, `text-chat-lfm25-2.6b-4bit`, `text-chat-lfm25-a1b-8bit`, `vision-chat-lfm25-3b-8bit`
@@ -478,9 +478,8 @@ Key options:
 - `--width`, `--height`
 - `--steps`: override the model-specific step default
 - `--cfg`: override the model-specific CFG default
-- `--input`: image-to-image source. For FLUX.2 Klein, this is treated as a
-  single reference image.
-- `--ref-image`: repeatable FLUX.2 Klein or HiDream O1 reference image
+- `--input`: image-to-image source. SenseNova U1.5 uses it as an editing reference.
+- `--ref-image`: repeatable Klein, HiDream O1, or SenseNova U1.5 reference image
 - `--keep-original-aspect`: preserve one HiDream reference image's aspect ratio
 - `--strength`: image-to-image/reference change strength
 - `--structured-prompt`, `--json-prompt`: expand the prompt into a structured JSON caption with a local text chat model before image generation
@@ -526,6 +525,12 @@ swift run mere.run image generate \
   --prompt "put this subject in a studio portrait" \
   --ref-image ./subject.png \
   --output ./portrait.png
+swift run mere.run image generate \
+  --model image-sensenova-u1-5-8b-mot \
+  --prompt "replace the background with a snowy mountain pass" \
+  --input ./subject.png \
+  --width 2048 --height 2048 \
+  --output ./sensenova-edit.png
 swift run mere.run image generate \
   --model image-klein-base \
   --prompt "a trading card character with the same sticker layout" \

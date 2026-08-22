@@ -86,6 +86,7 @@ Key subdirectories:
 - `Flux2Klein/`: Klein image-family runtime
 - `ZImageTurbo/`: ZImage image-family runtime
 - `HiDreamO1/`: HiDream O1 image-family runtime
+- `SenseNovaU15/`: native SenseNova U1.5 raw-pixel generation and editing runtime
 - `Krea2/`: Krea 2 image-family runtime and Raw LoRA training
 - `QwenImageEdit/`: image editing flow
 - `Gemma4/`, `Q35/`, `LFM2/`, `Psi/`, `MeBot/`: text/chat model families

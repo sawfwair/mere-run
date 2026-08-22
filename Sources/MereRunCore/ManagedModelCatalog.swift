@@ -495,6 +495,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case bonsaiImage
     case zimageTurbo
     case hidreamO1
+    case senseNovaU15
     case krea2
     case ideogram4SDNQ
     case gemma4
@@ -1404,6 +1405,35 @@ public enum ManagedModelCatalog {
             validationKind: .hidreamO1,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 35_231_213_079,
+            defaultCLICommands: ["image generate"]
+        ),
+        ManagedModelSpec(
+            id: SenseNovaU15Resources.modelID,
+            category: .image,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: SenseNovaU15Resources.repository,
+                revision: SenseNovaU15Resources.revision,
+                patterns: [
+                    "LICENSE",
+                    "README.md",
+                    "README_CN.md",
+                    "added_tokens.json",
+                    "config.json",
+                    "merges.txt",
+                    "model.safetensors.index.json",
+                    "model-*.safetensors",
+                    "special_tokens_map.json",
+                    "tokenizer.json",
+                    "tokenizer_config.json",
+                    "vocab.json",
+                ]
+            ),
+            upstreamRepoId: SenseNovaU15Resources.repository,
+            upstreamRevision: SenseNovaU15Resources.revision,
+            validationKind: .senseNovaU15,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 50_227_451_138,
             defaultCLICommands: ["image generate"]
         ),
         ManagedModelSpec(
@@ -3906,6 +3936,8 @@ public extension ManagedModelSpec {
             return ZImageTurboResources(rootURL: rootURL).validate(fileManager: fileManager)
         case .hidreamO1:
             return HiDreamO1Resources(rootURL: rootURL).validate(fileManager: fileManager)
+        case .senseNovaU15:
+            return SenseNovaU15Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .krea2:
             return Krea2Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .ideogram4SDNQ:

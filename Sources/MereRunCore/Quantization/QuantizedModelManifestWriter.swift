@@ -56,6 +56,7 @@ public enum QuantizedModelManifestWriter {
             case .flux2Klein: return .klein
             case .zimageTurbo: return .zimage
             case .hidreamO1: return .hidream
+            case .senseNovaU15: return .senseNova
             case .krea2: return .krea
             case .ideogram4: return .ideogram
             case .gemma4: return .gemma
@@ -120,6 +121,8 @@ public enum QuantizedModelManifestWriter {
                     return [.txt2img, .img2img, .loraInference]
                 case .hidreamO1:
                     return [.txt2img, .referenceEdit, .subjectPersonalization]
+                case .senseNovaU15:
+                    return [.txt2img, .img2img, .referenceEdit, .subjectPersonalization]
                 case .krea2:
                     return [.txt2img]
                 case .ideogram4:
@@ -256,6 +259,8 @@ public enum QuantizedModelManifestWriter {
                 manifest.defaults = MereRunModelManifest.Defaults(steps: 4, cfg: 1.0)
             case .hidreamO1:
                 manifest.defaults = MereRunModelManifest.Defaults(steps: 28, cfg: 0.0)
+            case .senseNovaU15:
+                manifest.defaults = MereRunModelManifest.Defaults(steps: 50, cfg: 4.0, sigmaShift: 3.0)
             case .krea2:
                 manifest.defaults = MereRunModelManifest.Defaults(
                     steps: 8,

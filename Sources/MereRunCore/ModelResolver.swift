@@ -22,6 +22,7 @@ public struct ModelResolver {
         case zetaBase = "image-zimage-base"
         case hidreamO1 = "image-hidream-o1"
         case hidreamO1Dev = "image-hidream-o1-dev"
+        case senseNovaU15 = "image-sensenova-u1-5-8b-mot"
         case krea2Raw = "image-krea2-raw"
         case krea2Turbo = "image-krea2-turbo"
         case ideogram4SDNQUInt4 = "image-ideogram4-sdnq-uint4"

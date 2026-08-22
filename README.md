@@ -52,7 +52,7 @@ supported flags.
 
 | Area | Public commands | Supported behavior |
 | --- | --- | --- |
-| Images and LoRAs | `image generate`, `image train-lora`, `adapter list`, `adapter pull` | Klein, ZImage, HiDream O1, Krea 2, Ideogram 4, and Bonsai; text-to-image, edits, multiple references, structured prompts, local Krea/Klein training, and checksum-pinned public adapters |
+| Images and LoRAs | `image generate`, `image train-lora`, `adapter list`, `adapter pull` | Klein, ZImage, HiDream O1, SenseNova U1.5, Krea 2, Ideogram 4, and Bonsai; text-to-image, edits, multiple references, structured prompts, local Krea/Klein training, and checksum-pinned public adapters |
 | Text, code, and agents | `text chat`, `text code`, `text embed`, `text anonymize`, `text train-lora`, `agent` | Local chat and tool use, including Qwen3.8 27B BF16/4-bit and Bonsai 27B binary/ternary vision chat; code generation, embeddings, personally identifiable information (PII) redaction, text LoRA training, and guided local-agent setup |
 | Vision understanding | `vision embed`, `caption`, `inspect`, `face`, `ground`, `segment`, `track`, `track-live`, `pose`, `flow`, `ocr` | Shared text/image embeddings, captioning and VQA, local face detection/identity embeddings, LightOn/GLM/Infinity OCR, Falcon grounding, SAM 3.1 segmentation and tracking, body/hand/face landmarks, and dense optical flow |
 | Depth, geometry, and 3D | `vision depth-video`, `geometry`, `geometry-multiview`, `image-to-3d*`; `image reconstruct-3d*` | Video Depth Anything, MoGe-2, Depth Anything 3, TripoSR, InstantMesh, and TRELLIS.2; depth/confidence EXRs, cameras, point clouds, 3DGS initialization, OBJ, PLY, GLB, and PBR voxel artifacts |
@@ -407,6 +407,15 @@ swift run mere.run image generate \
   --prompt "a clean studio product photo of the subject" \
   --ref-image ./subject.png \
   --output ./subject-studio.png
+
+# SenseNova U1.5 runs its official raw-pixel model natively for generation and editing.
+swift run mere.run model pull image-sensenova-u1-5-8b-mot
+swift run mere.run image generate \
+  --model image-sensenova-u1-5-8b-mot \
+  --prompt "Turn this reference into a cinematic rainy-night scene" \
+  --input ./reference.png \
+  --width 2048 --height 2048 \
+  --output ./sensenova-edit.png
 
 # Krea 2 Turbo runs natively for 8-step text-to-image generation.
 swift run mere.run image generate \

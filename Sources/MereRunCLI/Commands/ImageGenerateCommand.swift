@@ -51,7 +51,7 @@ struct ImageGenerate: AsyncParsableCommand {
 
     @Option(
         name: [.customShort("i"), .long],
-        help: "Input image path for image-to-image. For FLUX.2 Klein, this is treated as a single reference image."
+        help: "Input image path for image-to-image. SenseNova U1.5 uses it as an editing reference."
     )
     var input: String?
 
@@ -72,7 +72,7 @@ struct ImageGenerate: AsyncParsableCommand {
 
     @Option(
         name: [.customLong("ref-image")],
-        help: "Reference image path for FLUX.2 Klein or HiDream O1 editing/personalization. Repeat for multiple references."
+        help: "Reference image path for Klein, HiDream O1, or SenseNova U1.5 editing. Repeat for multiple references."
     )
     var referenceImages: [String] = []
 
@@ -267,11 +267,13 @@ struct ImageGenerate: AsyncParsableCommand {
             strength: strength
         )
         let effectiveSteps = steps
-            ?? ((manifest.family == .hidream || manifest.family == .krea || manifest.family == .ideogram)
+            ?? ((manifest.family == .hidream || manifest.family == .senseNova
+                    || manifest.family == .krea || manifest.family == .ideogram)
                 ? (manifest.defaults?.steps ?? 4)
                 : 4)
         let effectiveCFG = cfgScale
-            ?? ((manifest.family == .hidream || manifest.family == .krea || manifest.family == .ideogram)
+            ?? ((manifest.family == .hidream || manifest.family == .senseNova
+                    || manifest.family == .krea || manifest.family == .ideogram)
                 ? (manifest.defaults?.cfg ?? 1.0)
                 : 1.0)
         let effectiveSigmaShift = sigmaShift.map { Float($0) }
@@ -377,6 +379,10 @@ struct ImageGenerate: AsyncParsableCommand {
                 result = try await generator.generate(request, progressHandler: progressHandler)
             case .hidream:
                 let generator = HiDreamO1Generator()
+                defer { generator.unload() }
+                result = try await generator.generate(request, progressHandler: progressHandler)
+            case .senseNova:
+                let generator = SenseNovaU15Generator()
                 defer { generator.unload() }
                 result = try await generator.generate(request, progressHandler: progressHandler)
             case .krea:

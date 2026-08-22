@@ -5029,11 +5029,13 @@ actor CodeGenServer {
         }
         let resolved = try resolveImageModel(plan.modelID)
         let effectiveSteps = plan.steps
-            ?? ((resolved.manifest.family == .hidream || resolved.manifest.family == .krea || resolved.manifest.family == .ideogram)
+            ?? ((resolved.manifest.family == .hidream || resolved.manifest.family == .senseNova
+                    || resolved.manifest.family == .krea || resolved.manifest.family == .ideogram)
                 ? (resolved.manifest.defaults?.steps ?? 4)
                 : 4)
         let effectiveCFG = plan.guidanceScale
-            ?? ((resolved.manifest.family == .hidream || resolved.manifest.family == .krea || resolved.manifest.family == .ideogram)
+            ?? ((resolved.manifest.family == .hidream || resolved.manifest.family == .senseNova
+                    || resolved.manifest.family == .krea || resolved.manifest.family == .ideogram)
                 ? (resolved.manifest.defaults?.cfg ?? 1.0)
                 : 1.0)
         let outputURL = try temporaryOutputURL(directoryName: "mere-run-api-images", extension: "png")
@@ -5076,6 +5078,13 @@ actor CodeGenServer {
         case .hidream:
             _ = try await sidecarPool.generateImage(
                 kind: .hiDreamO1,
+                modelID: resolved.modelID,
+                modelPath: resolved.rootURL.path,
+                request: request
+            )
+        case .senseNova:
+            _ = try await sidecarPool.generateImage(
+                kind: .senseNovaU15,
                 modelID: resolved.modelID,
                 modelPath: resolved.rootURL.path,
                 request: request

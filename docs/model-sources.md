@@ -61,6 +61,7 @@ an effective overlay; they are not a second capability catalog.
 | `image` | `image-zimage-base` |
 | `image` | `image-hidream-o1` |
 | `image` | `image-hidream-o1-dev` |
+| `image` | `image-sensenova-u1-5-8b-mot` |
 | `image` | `image-krea2-raw` |
 | `image` | `image-krea2-turbo` |
 | `image` | `image-ideogram4-sdnq-uint4` |
@@ -205,6 +206,7 @@ validates all configured models before downloading any; both accept the same
 | --- | --- |
 | `image-klein-9b`, `image-klein-base-9b` | FLUX Non-Commercial License v2.1; non-commercial, non-production use |
 | `image-krea2-raw`, `image-krea2-turbo` | Krea 2 Community License; commercial use is limited to entities below USD 1M trailing annual revenue, plus use/distribution conditions |
+| `image-sensenova-u1-5-8b-mot` | Apache License 2.0 |
 | `image-ideogram4-sdnq-uint4` | Ideogram Non-Commercial Model Agreement |
 | LFM2.5 text and vision targets plus their DSpark companions | LFM Open License v1.0; commercial use by entities at or above USD 10M annual revenue is excluded |
 | `vision-chat-muse-glimmer-30b` | Apache-2.0 plus Meta's bundled usage policy; upstream says the model is not intended for download or use by people under 18 |
@@ -620,6 +622,20 @@ Runtime defaults come from the managed manifest:
 Both checkpoints are large BF16 unified-transformer roots, about 33 GiB on disk
 each before filesystem compression effects. Expect high unified-memory pressure
 and prefer one-step smokes before full-quality 28/50 step runs.
+
+`image-sensenova-u1-5-8b-mot` maps to the official
+`sensenova/SenseNova-U1.5-8B-MoT` checkpoint at the exact revision recorded in
+the managed catalog. The corresponding reference implementation is published
+at `OpenSenseNova/SenseNova-U1`. The root contains the typed configuration,
+Qwen tokenizer assets, a safetensors index, and 13 shards.
+
+SenseNova uses one unified checkpoint rather than separate text-encoder and VAE
+directories. The native runtime mirrors the checkpoint's understanding and
+generation experts, caches the prompt/reference prefix, embeds RGB patches,
+applies the published shifted Euler flow schedule, and decodes predicted RGB
+pixels with the checkpoint's convolutional pixel head. Text-to-image and
+multi-reference instruction editing share this Swift/MLX path. The managed
+defaults are 50 steps, CFG 4.0, and timestep shift 3.0.
 
 `image-krea2-raw` and `image-krea2-turbo` map to Krea's public Krea 2
 checkpoints:

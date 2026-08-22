@@ -131,6 +131,7 @@ public enum MereRunModelValidator {
         let modelResolver = ModelResolver(fileManager: fileManager)
         let componentRefs = manifest?.components
         let usesUnifiedImageTransformer = manifest?.engine == .hidreamO1
+            || manifest?.engine == .senseNovaU15
         let transformerDir: URL?
         let textEncoderDir: URL?
         let vaeDir: URL?
@@ -441,6 +442,8 @@ public enum MereRunModelValidator {
                 warnings.append("Manifest engine mismatch: family=zimage expects zimage-turbo.")
             case .hidream where engine != .hidreamO1:
                 warnings.append("Manifest engine mismatch: family=hidream expects hidream-o1.")
+            case .senseNova where engine != .senseNovaU15:
+                warnings.append("Manifest engine mismatch: family=sensenova expects sensenova-u1.5.")
             case .krea where engine != .krea2:
                 warnings.append("Manifest engine mismatch: family=krea expects krea-2.")
             case .ideogram where engine != .ideogram4:
@@ -546,6 +549,7 @@ public enum MereRunModelValidator {
             return supports.contains(.txt2img) || supports.contains(.img2img) || supports.contains(.referenceEdit)
         }()
         let usesUnifiedImageTransformer = manifest.engine == .hidreamO1
+            || manifest.engine == .senseNovaU15
         let supportsVisionModel = {
             let supports = Set(manifest.supports ?? [])
             return supports.contains(.visionGrounding)
@@ -617,6 +621,7 @@ public enum MereRunModelValidator {
         if modelId.hasPrefix("image-klein-") { return .klein }
         if modelId.hasPrefix("image-zimage-") { return .zimage }
         if modelId.hasPrefix("image-hidream-") { return .hidream }
+        if modelId.hasPrefix("image-sensenova-") { return .senseNova }
         if modelId.hasPrefix("image-krea2-") { return .krea }
         if modelId.hasPrefix("image-ideogram4-") { return .ideogram }
         if modelId.hasPrefix("text-chat-laguna-") { return .laguna }
