@@ -37,6 +37,36 @@ final class SenseNovaU15Tests: MereRunCoreTestCase {
         XCTAssertEqual(restored.asArray(Float.self), source.asArray(Float.self))
     }
 
+    func testCachedVisionRoPEMatchesLegacyFormulaExactly() {
+        let input = MLXArray(Array(0..<48).map { Float($0) / 13 }, [6, 8])
+            .asType(.bfloat16)
+        let cached = SenseNovaU15VisionEmbeddings.makeRoPETables(
+            height: 2,
+            width: 3,
+            hiddenSize: 8,
+            base: 10_000,
+            dtype: input.dtype
+        )
+        MLX.eval(cached.arrays)
+
+        let reused = SenseNovaU15VisionEmbeddings.applyVisionRoPE(input, tables: cached)
+        let legacy = legacyVisionRoPE(input, height: 2, width: 3, base: 10_000)
+        MLX.eval(reused, legacy)
+
+        XCTAssertEqual(reused.asArray(Float.self), legacy.asArray(Float.self))
+    }
+
+    func testCachedNoiseEmbeddingMatchesFreshRepeatedInputExactly() {
+        let embedder = SenseNovaU15TimestepEmbedder(hiddenSize: 8)
+        let values = MLXArray([Float](repeating: 0.375, count: 4))
+        let cached = embedder(values)
+        MLX.eval(cached)
+        let fresh = embedder(values)
+        MLX.eval(fresh)
+
+        XCTAssertEqual(cached.asArray(Float.self), fresh.asArray(Float.self))
+    }
+
     func testManagedModelIsPinnedAndUsesUnifiedManifest() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: SenseNovaU15Resources.modelID))
         XCTAssertEqual(spec.hubFallback?.repoId, SenseNovaU15Resources.repository)
@@ -86,5 +116,38 @@ final class SenseNovaU15Tests: MereRunCoreTestCase {
         XCTAssertEqual(tokenizer.imageContextTokenID, 151_669)
         XCTAssertEqual(tokenizer.imageStartTokenID, 151_670)
         XCTAssertEqual(tokenizer.imageEndTokenID, 151_671)
+    }
+
+    private func legacyVisionRoPE(
+        _ input: MLXArray,
+        height: Int,
+        width: Int,
+        base: Float
+    ) -> MLXArray {
+        let half = input.dim(-1) / 2
+        let xPositions = (0..<height).flatMap { _ in (0..<width).map(Float.init) }
+        let yPositions = (0..<height).flatMap { row in [Float](repeating: Float(row), count: width) }
+        return MLX.concatenated([
+            legacyInterleavedRoPE(input[0..., 0..<half], positions: xPositions, base: base),
+            legacyInterleavedRoPE(input[0..., half...], positions: yPositions, base: base),
+        ], axis: -1)
+    }
+
+    private func legacyInterleavedRoPE(
+        _ input: MLXArray,
+        positions: [Float],
+        base: Float
+    ) -> MLXArray {
+        let dimension = input.dim(-1)
+        let indices = MLXArray(stride(from: Float(0), to: Float(dimension), by: 2))
+        let inverseFrequencies = 1 / MLX.pow(MLXArray(base), indices / Float(dimension))
+        let frequencies = MLXArray(positions)[0..., .newAxis] * inverseFrequencies[.newAxis, 0...]
+        let cosine = MLX.cos(frequencies).asType(input.dtype)
+        let sine = MLX.sin(frequencies).asType(input.dtype)
+        let even = input[0..., .stride(by: 2)]
+        let odd = input[0..., .stride(from: 1, by: 2)]
+        let rotatedEven = even * cosine - odd * sine
+        let rotatedOdd = even * sine + odd * cosine
+        return MLX.stacked([rotatedEven, rotatedOdd], axis: -1).reshaped(input.shape)
     }
 }

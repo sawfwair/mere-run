@@ -184,7 +184,17 @@ public final class SenseNovaU15Generator: ImageGenerator {
                 prefixTime: ($0.prompt.timeIndexes.max() ?? -1) + 1
             )
         }
-
+        let noiseEmbedding: MLXArray?
+        if config.addNoiseScaleEmbedding {
+            let normalizedNoiseScale = noiseScale / config.noiseScaleMaxValue
+            let noiseScaleValues = MLXArray(
+                [Float](repeating: normalizedNoiseScale, count: imageTokenCount)
+            )
+            noiseEmbedding = model.flowModules.noiseScaleEmbedder(noiseScaleValues)
+        } else {
+            noiseEmbedding = nil
+        }
+        MLX.eval([noiseEmbedding].compactMap { $0 })
         for step in 0..<steps {
             progressHandler?(GenerationProgress(stage: .denoising, stepIndex: step, totalSteps: steps))
             let timestep = timesteps[step]
@@ -196,12 +206,7 @@ public final class SenseNovaU15Generator: ImageGenerator {
             )
             let timestepValues = MLXArray([Float](repeating: timestep, count: imageTokenCount))
             var timeEmbeddings = model.flowModules.timestepEmbedder(timestepValues)
-            if config.addNoiseScaleEmbedding {
-                let scaleValues = MLXArray(
-                    [Float](repeating: noiseScale / config.noiseScaleMaxValue, count: imageTokenCount)
-                )
-                timeEmbeddings = timeEmbeddings + model.flowModules.noiseScaleEmbedder(scaleValues)
-            }
+            if let noiseEmbedding { timeEmbeddings = timeEmbeddings + noiseEmbedding }
             let imageEmbeddings = model.flowModules.generationVisionModel.embeddings(pixels)
                 + timeEmbeddings.reshaped(1, imageTokenCount, -1)
             let conditionalVelocity = velocity(
