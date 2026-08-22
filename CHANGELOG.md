@@ -6,6 +6,14 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Audio
+
+- fixed MiniMax Music 3 optimized, Q8, and Q4 lyric drift by preserving the
+  released full-vocabulary categorical layout behind the compact semantic head
+  and keeping the eight-token residual-depth decode on its seeded-parity path.
+  Installed 250-frame vocal renders now transcribe the requested opening lyric
+  across all three compact modes.
+
 ### Image
 
 - added the official BF16 SenseNova U1.5 8B-MoT checkpoint as a pinned managed

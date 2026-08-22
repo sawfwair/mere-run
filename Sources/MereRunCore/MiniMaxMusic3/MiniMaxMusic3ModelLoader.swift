@@ -106,7 +106,6 @@ public enum MiniMaxMusic3ModelLoader {
         if performanceMode.usesOptimizedGraph {
             languageModel.prepareCompactSemanticHead()
             languageModel.prepareFusedProjections()
-            depthDecoder.prepareFusedProjections()
         }
         if let bits = performanceMode.quantizationBits {
             quantizeAutoregressive(

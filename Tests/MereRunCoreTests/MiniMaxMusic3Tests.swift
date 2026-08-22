@@ -1,4 +1,5 @@
 import MLX
+import MLXRandom
 import XCTest
 @testable import MereRunCore
 
@@ -84,6 +85,63 @@ final class MiniMaxMusic3Tests: MereRunCoreTestCase {
         XCTAssertGreaterThanOrEqual(q8Overlap, 80)
         XCTAssertGreaterThan(q4Cosine, 0.80)
         XCTAssertGreaterThanOrEqual(q4Overlap, 50)
+    }
+
+    func testInstalledCompactSemanticHeadPreservesSeededFirstToken() throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard environment["MERERUN_MINIMAX_MUSIC3_E2E"] == "1",
+              let root = environment["MERERUN_MINIMAX_MUSIC3_MODEL_ROOT"]
+        else {
+            throw XCTSkip("set the MiniMax Music 3 model root and E2E flag for compact-head parity")
+        }
+        let resources = MiniMaxMusic3Resources(rootURL: URL(fileURLWithPath: root))
+        let models = try MiniMaxMusic3ModelLoader.loadAutoregressive(
+            from: resources,
+            performanceMode: .reference
+        )
+        let prompt = MiniMaxMusic3Prompt.assemble(
+            caption: "Warm acoustic pop, intimate vocal, fingerpicked guitar, soft piano.",
+            lyrics: "[verse]\nMorning light across the room\nA quiet road will lead me home"
+        )
+        let conditional = models.tokenizer.encode(prompt, addSpecialTokens: false)
+        var unconditional = conditional
+        for index in 1..<(unconditional.count - 2) {
+            unconditional[index] = MiniMaxMusic3Prompt.audioCFGTokenID
+        }
+        let ids = MLXArray((conditional + unconditional).map(Int32.init))
+            .reshaped(2, conditional.count)
+        let hidden = models.languageModel.hidden(
+            embeddings: models.languageModel.embed(tokenIDs: ids),
+            cache: models.languageModel.makeCache(),
+            lastPositionOnly: true
+        ).squeezed(axis: 1)
+        let fullLogits = models.languageModel.logits(hidden)
+        MLX.eval(fullLogits)
+        models.languageModel.prepareCompactSemanticHead()
+        let compactLogits = models.languageModel.logits(hidden)
+        MLX.eval(compactLogits)
+
+        for seed in UInt64(0)..<16 {
+            let fullSample = MiniMaxMusic3Pipeline.sampleSemanticReference(
+                logits: fullLogits,
+                allowEnd: true,
+                generator: MLXRandom.RandomState(seed: seed)
+            )
+            let compactSample = MiniMaxMusic3Pipeline.sampleSemantic(
+                logits: compactLogits,
+                compactHead: true,
+                fullVocabularySize: models.languageModel.configuration.vocabSize,
+                allowEnd: true,
+                generator: MLXRandom.RandomState(seed: seed)
+            )
+            MLX.eval(fullSample, compactSample)
+
+            XCTAssertEqual(
+                compactSample.item(Int.self),
+                fullSample.item(Int.self),
+                "compact projection changed the installed checkpoint's first token for seed \(seed)"
+            )
+        }
     }
 
     func testInstalledStagedAndResidentGenerationAreSeedEquivalent() throws {
@@ -785,6 +843,56 @@ final class MiniMaxMusic3Tests: MereRunCoreTestCase {
         XCTAssertTrue(model.usesCompactSemanticHead)
         XCTAssertEqual(compact.shape, [2, MiniMaxMusic3Prompt.semanticVocabularySize + 1])
         XCTAssertTrue(MLX.allClose(expected, compact, rtol: 1e-5, atol: 1e-5).item(Bool.self))
+    }
+
+    func testCompactSemanticSamplingPreservesFullVocabularySeedTrajectory() {
+        let vocabulary = 200_000
+        let compactVocabulary = MiniMaxMusic3Prompt.semanticVocabularySize + 1
+        var fullValues = [Float](repeating: -100, count: 2 * vocabulary)
+        var compactValues = [Float](repeating: -100, count: 2 * compactVocabulary)
+
+        for batch in 0..<2 {
+            let fullBase = batch * vocabulary
+            let compactBase = batch * compactVocabulary
+            let endValue = Float(5.25 - Float(batch) * 0.2)
+            fullValues[fullBase + MiniMaxMusic3Prompt.audioEndTokenID] = endValue
+            compactValues[compactBase] = endValue
+            for semanticToken in 0..<80 {
+                let value = Float(6 - Float(semanticToken) * 0.03 - Float(batch) * 0.01)
+                fullValues[
+                    fullBase + MiniMaxMusic3Prompt.audioCodeOffset + semanticToken
+                ] = value
+                compactValues[compactBase + semanticToken + 1] = value
+            }
+        }
+
+        let fullLogits = MLXArray(fullValues).reshaped(2, vocabulary)
+        let compactLogits = MLXArray(compactValues).reshaped(2, compactVocabulary)
+        for allowEnd in [false, true] {
+            for seed in UInt64(0)..<16 {
+                let fullSample = MiniMaxMusic3Pipeline.sampleSemantic(
+                    logits: fullLogits,
+                    compactHead: false,
+                    fullVocabularySize: vocabulary,
+                    allowEnd: allowEnd,
+                    generator: MLXRandom.RandomState(seed: seed)
+                )
+                let compactSample = MiniMaxMusic3Pipeline.sampleSemantic(
+                    logits: compactLogits,
+                    compactHead: true,
+                    fullVocabularySize: vocabulary,
+                    allowEnd: allowEnd,
+                    generator: MLXRandom.RandomState(seed: seed)
+                )
+                MLX.eval(fullSample, compactSample)
+
+                XCTAssertEqual(
+                    compactSample.item(Int.self),
+                    fullSample.item(Int.self),
+                    "compact sampling changed the seed trajectory for seed \(seed)"
+                )
+            }
+        }
     }
 
     func testSemanticTopKIgnoresTextVocabularyLogits() {

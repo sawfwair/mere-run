@@ -394,10 +394,11 @@ public final class MiniMaxMusic3Pipeline {
             let logits = languageModel.logits(lastHidden)
             let allowEnd = frameHiddens.count >= minimumFrames
             let sampled = performanceMode == .reference
-                ? sampleSemanticReference(logits: logits, allowEnd: allowEnd, generator: generator)
-                : sampleSemantic(
+                ? Self.sampleSemanticReference(logits: logits, allowEnd: allowEnd, generator: generator)
+                : Self.sampleSemantic(
                     logits: logits,
                     compactHead: languageModel.usesCompactSemanticHead,
+                    fullVocabularySize: languageModel.configuration.vocabSize,
                     allowEnd: allowEnd,
                     generator: generator
                 )
@@ -479,7 +480,7 @@ public final class MiniMaxMusic3Pipeline {
             && generatedFrameCount.isMultiple(of: autoregressiveCacheClearInterval)
     }
 
-    private func sampleSemanticReference(
+    static func sampleSemanticReference(
         logits: MLXArray,
         allowEnd: Bool,
         generator: MLXRandom.RandomState
@@ -487,7 +488,7 @@ public final class MiniMaxMusic3Pipeline {
         let guided = allowEnd
             ? Self.guidedSemanticLogitsReference(logits)
             : Self.guidedSemanticLogits(logits, allowEnd: false)
-        return sampleTopK(guided[0], generator: generator)
+        return Self.sampleTopK(guided[0], generator: generator)
     }
 
     /// Keep the released full-vocabulary graph byte-for-byte available for
@@ -518,20 +519,57 @@ public final class MiniMaxMusic3Pipeline {
         return MLX.where(allowed, guided, MLXArray(-Float.infinity))
     }
 
-    private func sampleSemantic(
+    static func sampleSemantic(
         logits: MLXArray,
         compactHead: Bool,
+        fullVocabularySize: Int,
         allowEnd: Bool,
         generator: MLXRandom.RandomState
     ) -> MLXArray {
         let guided = Self.guidedSemanticLogits(logits, allowEnd: allowEnd)
-        let sampled = sampleTopK(guided[0], generator: generator)
-        guard compactHead else { return sampled }
-        return MLX.where(
-            sampled .== MLXArray(Int32(0)),
-            MLXArray(Int32(MiniMaxMusic3Prompt.audioEndTokenID)),
-            sampled + MLXArray(Int32(MiniMaxMusic3Prompt.audioCodeOffset - 1))
-        ).asType(.int32)
+        let samplingLogits = compactHead
+            ? restoreFullSemanticVocabulary(guided[0], vocabularySize: fullVocabularySize)
+            : guided[0]
+        return sampleTopK(samplingLogits, generator: generator)
+    }
+
+    /// The published sampler draws from the full language-model vocabulary
+    /// after masking unreachable tokens. Keep that coordinate layout for seeded
+    /// parity even when the optimized projection retains only reachable rows.
+    static func restoreFullSemanticVocabulary(
+        _ compactLogits: MLXArray,
+        vocabularySize: Int
+    ) -> MLXArray {
+        let semanticEnd = MiniMaxMusic3Prompt.audioCodeOffset
+            + MiniMaxMusic3Prompt.semanticVocabularySize
+        precondition(
+            compactLogits.dim(-1) == MiniMaxMusic3Prompt.semanticVocabularySize + 1,
+            "compact MiniMax Music 3 logits must contain EOS and every semantic token"
+        )
+        precondition(
+            vocabularySize >= semanticEnd,
+            "MiniMax Music 3 vocabulary does not contain every semantic token"
+        )
+        let masked = MLXArray(-Float.infinity)
+        return MLX.concatenated(
+            [
+                MLXArray.full(
+                    [MiniMaxMusic3Prompt.audioEndTokenID],
+                    values: masked
+                ),
+                compactLogits[0..<1],
+                MLXArray.full(
+                    [MiniMaxMusic3Prompt.audioCodeOffset - MiniMaxMusic3Prompt.audioEndTokenID - 1],
+                    values: masked
+                ),
+                compactLogits[1...],
+                MLXArray.full(
+                    [vocabularySize - semanticEnd],
+                    values: masked
+                ),
+            ],
+            axis: -1
+        )
     }
 
     static func guidedSemanticLogits(
@@ -606,9 +644,11 @@ public final class MiniMaxMusic3Pipeline {
         sequence.append(depthDecoder.projection(semanticEmbedding).expandedDimensions(axis: 1))
         var codes = [semanticCode]
         var hiddenParts: [MLXArray] = []
-        let caches = performanceMode.usesOptimizedGraph
-            ? depthDecoder.makeCache(capacity: depthDecoder.configuration.numCodebooks)
-            : nil
+        // The depth sequence is only eight tokens long. Recomputing its prefix
+        // preserves the released seeded trajectory; cached/fused BF16 depth
+        // projections can move a late codebook across a categorical boundary,
+        // which then changes every following semantic frame.
+        let caches: [KVCache]? = nil
         for codebook in 1..<depthDecoder.configuration.numCodebooks {
             let input = if caches == nil || codebook == 1 {
                 MLX.concatenated(sequence, axis: 1)
@@ -621,7 +661,7 @@ public final class MiniMaxMusic3Pipeline {
             let conditional = logits[0..<1].asType(.float32)
             let unconditional = logits[1..<2].asType(.float32)
             let guided = unconditional + (conditional - unconditional) * MLXArray(Float(1.5))
-            let sampled = sampleTopK(guided[0], generator: generator)
+            let sampled = Self.sampleTopK(guided[0], generator: generator)
             let duplicated = MLX.repeated(sampled.reshaped(1), count: 2, axis: 0)
             codes.append(duplicated)
             if codebook < depthDecoder.configuration.numCodebooks - 1 {
@@ -638,7 +678,7 @@ public final class MiniMaxMusic3Pipeline {
         )
     }
 
-    private func sampleTopK(
+    private static func sampleTopK(
         _ logits: MLXArray,
         generator: MLXRandom.RandomState
     ) -> MLXArray {

@@ -21,6 +21,15 @@ model math and generation schedule. Optimized autoregressive generation also
 returns completed variable-length attention buffers to MLX every 64 frames;
 live model weights, KV state, and generated conditioning remain resident.
 
+The optimized language-model head retains only EOS plus the 16,384 reachable
+semantic rows, but sampling restores those logits to their original positions
+in a masked full-vocabulary view before the categorical draw. The residual
+depth decoder intentionally recomputes its eight-token prefix with separate
+projections. Cached or fused depth evaluation is numerically close, but a late
+codebook can cross a categorical boundary and change every later semantic
+frame. Seeded code trajectories and lyric transcription, not logit cosine
+alone, are the admission checks for changing either path.
+
 The released flow and seed recipes remain `sequential` and `legacy`.
 `overlap-average` is an opt-in whole-song flow experiment that averages
 overlapping window velocities at each Euler step, then uses bounded DAV decode
