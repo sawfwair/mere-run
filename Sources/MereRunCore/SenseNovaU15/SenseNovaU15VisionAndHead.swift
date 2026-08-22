@@ -2,6 +2,21 @@ import Foundation
 import MLX
 import MLXNN
 
+struct SenseNovaU15VisionRoPEKey: Hashable {
+    let height: Int
+    let width: Int
+    let dtype: DType
+}
+
+struct SenseNovaU15VisionRoPETables {
+    let xCosine: MLXArray
+    let xSine: MLXArray
+    let yCosine: MLXArray
+    let ySine: MLXArray
+
+    var arrays: [MLXArray] { [xCosine, xSine, yCosine, ySine] }
+}
+
 final class SenseNovaU15VisionEmbeddings: Module {
     @ModuleInfo(key: "patch_embedding") var patchEmbedding: Conv2d
     @ModuleInfo(key: "dense_embedding") var denseEmbedding: Conv2d
@@ -10,6 +25,7 @@ final class SenseNovaU15VisionEmbeddings: Module {
     private let patchSize: Int
     private let downsampleFactor: Int
     private let ropeBase: Float
+    private var cachedRoPE: (key: SenseNovaU15VisionRoPEKey, tables: SenseNovaU15VisionRoPETables)?
 
     init(config: SenseNovaU15Config) {
         self._patchEmbedding.wrappedValue = Conv2d(
@@ -41,29 +57,80 @@ final class SenseNovaU15VisionEmbeddings: Module {
         let gridWidth = pixels.dim(2) / patchSize
         var patches = MLXNN.gelu(patchEmbedding(pixels))
             .reshaped(gridHeight * gridWidth, hiddenSize)
-        patches = applyVisionRoPE(patches, height: gridHeight, width: gridWidth)
+        let tables = cachedRoPETables(height: gridHeight, width: gridWidth, dtype: patches.dtype)
+        patches = Self.applyVisionRoPE(patches, tables: tables)
         patches = patches.reshaped(1, gridHeight, gridWidth, hiddenSize)
         let merged = denseEmbedding(patches)
         return merged.reshaped(1, gridHeight / downsampleFactor * gridWidth / downsampleFactor, -1)
     }
 
-    private func applyVisionRoPE(_ input: MLXArray, height: Int, width: Int) -> MLXArray {
+    private func cachedRoPETables(height: Int, width: Int, dtype: DType) -> SenseNovaU15VisionRoPETables {
+        let key = SenseNovaU15VisionRoPEKey(height: height, width: width, dtype: dtype)
+        if cachedRoPE?.key == key, let tables = cachedRoPE?.tables { return tables }
+        let tables = Self.makeRoPETables(
+            height: height,
+            width: width,
+            hiddenSize: hiddenSize,
+            base: ropeBase,
+            dtype: dtype
+        )
+        cachedRoPE = (key, tables)
+        return tables
+    }
+
+    static func makeRoPETables(
+        height: Int,
+        width: Int,
+        hiddenSize: Int,
+        base: Float,
+        dtype: DType
+    ) -> SenseNovaU15VisionRoPETables {
         let half = hiddenSize / 2
         let xPositions = (0..<height).flatMap { _ in (0..<width).map(Float.init) }
         let yPositions = (0..<height).flatMap { row in [Float](repeating: Float(row), count: width) }
+        let x = makeInterleavedRoPETable(positions: xPositions, dimension: half, base: base, dtype: dtype)
+        let y = makeInterleavedRoPETable(positions: yPositions, dimension: half, base: base, dtype: dtype)
+        return SenseNovaU15VisionRoPETables(
+            xCosine: x.cosine,
+            xSine: x.sine,
+            yCosine: y.cosine,
+            ySine: y.sine
+        )
+    }
+
+    static func applyVisionRoPE(_ input: MLXArray, tables: SenseNovaU15VisionRoPETables) -> MLXArray {
+        let half = input.dim(-1) / 2
         return MLX.concatenated([
-            applyInterleavedRoPE(input[0..., 0..<half], positions: xPositions),
-            applyInterleavedRoPE(input[0..., half...], positions: yPositions)
+            applyInterleavedRoPE(
+                input[0..., 0..<half],
+                cosine: tables.xCosine,
+                sine: tables.xSine
+            ),
+            applyInterleavedRoPE(
+                input[0..., half...],
+                cosine: tables.yCosine,
+                sine: tables.ySine
+            ),
         ], axis: -1)
     }
 
-    private func applyInterleavedRoPE(_ input: MLXArray, positions: [Float]) -> MLXArray {
-        let dimension = input.dim(-1)
+    private static func makeInterleavedRoPETable(
+        positions: [Float],
+        dimension: Int,
+        base: Float,
+        dtype: DType
+    ) -> (cosine: MLXArray, sine: MLXArray) {
         let indices = MLXArray(stride(from: Float(0), to: Float(dimension), by: 2))
-        let inverseFrequencies = 1 / MLX.pow(MLXArray(ropeBase), indices / Float(dimension))
+        let inverseFrequencies = 1 / MLX.pow(MLXArray(base), indices / Float(dimension))
         let frequencies = MLXArray(positions)[0..., .newAxis] * inverseFrequencies[.newAxis, 0...]
-        let cosine = MLX.cos(frequencies).asType(input.dtype)
-        let sine = MLX.sin(frequencies).asType(input.dtype)
+        return (MLX.cos(frequencies).asType(dtype), MLX.sin(frequencies).asType(dtype))
+    }
+
+    private static func applyInterleavedRoPE(
+        _ input: MLXArray,
+        cosine: MLXArray,
+        sine: MLXArray
+    ) -> MLXArray {
         let even = input[0..., .stride(by: 2)]
         let odd = input[0..., .stride(from: 1, by: 2)]
         let rotatedEven = even * cosine - odd * sine
