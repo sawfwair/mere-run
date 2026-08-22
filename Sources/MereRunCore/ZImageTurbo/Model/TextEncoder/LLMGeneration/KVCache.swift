@@ -115,6 +115,13 @@ public class KVCacheSimple: KVCache {
         offset = 0
     }
 
+    /// Moves the logical write head back without reallocating storage.
+    /// The next update overwrites the discarded suffix.
+    public func rollback(toOffset newOffset: Int) {
+        precondition(newOffset >= 0 && newOffset <= offset)
+        offset = newOffset
+    }
+
     public func fork() -> KVCache {
         let copy = KVCacheSimple(step: step)
         // `update` writes new tokens with subscript assignment, which rebinds

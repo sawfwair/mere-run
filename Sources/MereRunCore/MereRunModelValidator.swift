@@ -145,7 +145,9 @@ public enum MereRunModelValidator {
         } else if spec?.validationKind == .gemma4MTPAssistant
             || spec?.validationKind == .q35MTPAssistant
             || spec?.validationKind == .lagunaDFlash
-            || spec?.validationKind == .museGlimmerAssistant {
+            || spec?.validationKind == .museGlimmerAssistant
+            || spec?.validationKind == .nemotronHDSpark
+            || spec?.validationKind == .lfm2DSpark {
             errors.append(contentsOf: spec?.validationMessages(in: rootURL, fileManager: fileManager) ?? [])
             transformerDir = nil
             textEncoderDir = nil
@@ -558,7 +560,9 @@ public enum MereRunModelValidator {
             if ManagedModelCatalog.spec(for: manifest.id)?.validationKind == .gemma4MTPAssistant
                 || ManagedModelCatalog.spec(for: manifest.id)?.validationKind == .q35MTPAssistant
                 || ManagedModelCatalog.spec(for: manifest.id)?.validationKind == .lagunaDFlash
-                || ManagedModelCatalog.spec(for: manifest.id)?.validationKind == .museGlimmerAssistant {
+                || ManagedModelCatalog.spec(for: manifest.id)?.validationKind == .museGlimmerAssistant
+                || ManagedModelCatalog.spec(for: manifest.id)?.validationKind == .nemotronHDSpark
+                || ManagedModelCatalog.spec(for: manifest.id)?.validationKind == .lfm2DSpark {
                 return true
             }
             switch manifest.engine {
@@ -648,8 +652,12 @@ public enum MereRunModelValidator {
             return .gemma
         }
         if modelId == ModelResolver.ModelID.lfm25A1B8Bit.rawValue
+            || modelId == ModelResolver.ModelID.lfm25Small1_2BBF16.rawValue
             || modelId == ModelResolver.ModelID.lfm25Dense2_6B4Bit.rawValue
-            || modelId == ModelResolver.ModelID.lfm25VL3B8Bit.rawValue {
+            || modelId == ModelResolver.ModelID.lfm25VL3B8Bit.rawValue
+            || modelId == ModelResolver.ModelID.lfm25A1BDSpark.rawValue
+            || modelId == ModelResolver.ModelID.lfm25Small1_2BDSpark.rawValue
+            || modelId == ModelResolver.ModelID.lfm25Dense2_6BDSpark.rawValue {
             return .liquid
         }
         if modelId == ModelResolver.ModelID.q36Nano.rawValue

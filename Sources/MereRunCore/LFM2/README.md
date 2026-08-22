@@ -5,8 +5,11 @@ Native Swift MLX runtime for LiquidAI LFM2 text and vision-language checkpoints.
 ## Managed models
 
 - `text-chat-lfm25-a1b-8bit` — `LiquidAI/LFM2.5-8B-A1B-MLX-8bit`
+- `text-chat-lfm25-a1b-bf16` — `LiquidAI/LFM2.5-8B-A1B` with DSpark
+- `text-chat-lfm25-1.2b-bf16` — `LiquidAI/LFM2.5-1.2B-Instruct`
 - `text-chat-lfm25-2.6b-4bit` — the `4bit/` partition of
   `LiquidAI/LFM2.5-2.6B-MLX`
+- `text-chat-lfm25-2.6b-bf16` — `LiquidAI/LFM2.5-2.6B` with DSpark
 - `vision-chat-lfm25-3b-8bit` — `LiquidAI/LFM2.5-VL-3B-MLX-8bit`
 - Serving engine: `text-chat-lfm2`
 
@@ -45,6 +48,18 @@ applies sharded safetensor weights with `HFSafetensorsWeightsLoader`, pre-fills
 in cancellable chunks, then uses either the pipelined serial loop or the
 row-compacting continuous decode scheduler selected by the serving runtime.
 
+For text targets, the managed catalog also installs the matching pinned
+`*-dspark` companion. `LFM2DSpark.swift` projects hidden states captured at
+the inputs to the checkpoint's five configured target layers into a five-layer,
+non-causal diffusion-attention drafter. It proposes up to nine tokens per round;
+`LFM2DSparkDecoder.swift`
+verifies the block with the target model, commits full acceptances, and replays
+only the bounded committed prefix after a rejection because LFM2 short-conv
+state cannot be sliced. Greedy generation preserves the target's exact token
+sequence; sampled generation uses rejection sampling. Set
+`MERERUN_LFM25_DSPARK=0` to disable the route or
+`MERERUN_LFM25_DSPARK_PATH=/path/to/sidecar` to test an explicit checkpoint.
+
 Small-route decode fuses the affine-8 gate and up gather-GEMVs with SwiGLU,
 then keeps the native down projection. The fused path is enabled by default
 and can be disabled with `MERERUN_LFM2_FUSED_AFFINE8_MOE=0` for a controlled
@@ -56,13 +71,15 @@ fall back to MLX's portable gather path.
 ## Notes
 
 - This runtime is Swift-native and does not bridge to Python.
-- The two `text-chat-*` checkpoints reject image content parts. The
+- The three `text-chat-*` checkpoints reject image content parts. The
   `vision-chat-lfm25-3b-8bit` catalog entry enables them through the same
   serving engine.
 - API serving enables exact token-prefix KV reuse by default and enables
   continuous decode batching when `--max-active-requests` is greater than one.
   Ragged rows carry independent attention offsets and typed short-convolution
   state so compatible requests may share one model forward across positions.
+  Requests using DSpark currently bypass prefix-cache reuse and continuous
+  batching so the drafter and target caches remain synchronized.
 - Cold model preparation is deduplicated by the serving pool. Residency epochs
   invalidate stale decode loops and explicit unloads without canceling another
   request that is waiting on the same shared preparation task.

@@ -48,7 +48,10 @@ help in the repository gate.
 - `text-chat-bonsai-27b-1bit` (managed packed 1-bit dense Qwen3.6 27B vision/reasoning snapshot)
 - `text-chat-bonsai-27b-2bit` (managed packed 2-bit ternary dense Qwen3.6 27B vision/reasoning snapshot)
 - `text-chat-lfm25-2.6b-4bit` (managed LiquidAI LFM2.5 2.6B dense MLX 4-bit snapshot)
+- `text-chat-lfm25-2.6b-bf16` (managed LiquidAI LFM2.5 2.6B BF16 target plus DSpark)
+- `text-chat-lfm25-1.2b-bf16` (managed LiquidAI LFM2.5 1.2B Instruct BF16 target plus DSpark)
 - `text-chat-lfm25-a1b-8bit` (managed LiquidAI LFM2.5 8B-A1B MLX 8-bit snapshot)
+- `text-chat-lfm25-a1b-bf16` (managed LiquidAI LFM2.5 8B-A1B BF16 target plus DSpark)
 - `vision-chat-lfm25-3b-8bit` (managed LiquidAI LFM2.5-VL 3B MLX 8-bit vision-language snapshot)
 - `text-agent-ornith-9b` (experimental native MLX/OptiQ coding-agent snapshot)
 - `text-agent-ornith-35b-mlx-4bit` (Ornith 1.5 speed tier)
@@ -166,15 +169,36 @@ GGUF. Its persistent DS4 server defaults to a 32K operational context, a
 additional headroom. Close other memory-heavy workloads before using the model
 on a 96 GB machine.
 
-`text-chat-lfm25-2.6b-4bit` installs the pinned 4-bit partition of
-`LiquidAI/LFM2.5-2.6B-MLX`; `text-chat-lfm25-a1b-8bit` installs
-`LiquidAI/LFM2.5-8B-A1B-MLX-8bit`. Both run through the native Swift LFM2
-runtime and are text-only. Select either with `--model`; `api serve --engine
+`text-chat-lfm25-1.2b-bf16`, `text-chat-lfm25-2.6b-bf16`, and
+`text-chat-lfm25-a1b-bf16` install exact pinned LiquidAI LFM2.5 checkpoints and
+their matching DSpark assistants. All three run through the native Swift LFM2
+runtime and are text-only. Select one with `--model`; `api serve --engine
 text-chat-lfm2` defaults to the A1B model unless `--model` is provided.
-Concurrent serve workloads use ragged, cache-safe decode batching when
+DSpark uses five non-causal diffusion-attention layers to draft nine-token
+blocks from five configured target-layer outputs and verifies them with the target before
+committing output. Greedy tokens remain target-authoritative: accepted draft
+prefixes are committed, while a mismatch partially rolls target attention and
+short-convolution state back to the accepted prefix without replaying the
+rejected block. Sampled generation uses rejection sampling, and the runtime
+adaptively falls back if draft acceptance stays below 20% for three rounds.
+`text chat --stats` prints `lfm25_dspark` state and acceptance counters.
+
+Set `MERERUN_LFM25_DSPARK=0` for a target-only A/B or
+`MERERUN_LFM25_DSPARK_PATH` to load an explicit compatible sidecar. Very short
+outputs, vision prefill, logprob capture, continuous batching, and target
+prefix-cache reuse currently take the target-only path. Without DSpark,
+concurrent serve workloads use ragged, cache-safe decode batching when
 `--max-active-requests` is above `1` (`MERERUN_LFM2_CONTINUOUS_BATCHING`
 overrides); rows at different prompt lengths share a forward only when every
 attention and short-conv cache proves compatibility.
+
+```bash
+swift run mere.run model pull text-chat-lfm25-2.6b-bf16 --accept-model-license
+swift run mere.run text chat \
+  --model text-chat-lfm25-2.6b-bf16 \
+  --stats \
+  --prompt "Explain speculative decoding in one paragraph."
+```
 
 `vision-chat-lfm25-3b-8bit` adds the checkpoint's SigLIP2 vision tower and
 multimodal projector to that native LFM2 engine. Pass a local image path or

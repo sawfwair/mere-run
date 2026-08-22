@@ -505,6 +505,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case q35
     case q35MTPAssistant
     case lfm2
+    case lfm2DSpark
     case inkling
     case museGlimmer
     case museGlimmerAssistant
@@ -2003,6 +2004,56 @@ public enum ManagedModelCatalog {
             apiProfile: .lfm2()
         ),
         ManagedModelSpec(
+            id: LFM2Resources.a1bBF16ModelId,
+            category: .textChat,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: LFM2Resources.a1bBF16UpstreamRepoId,
+                revision: LFM2Resources.a1bBF16UpstreamRevision,
+                patterns: LFM2Resources.snapshotPatterns
+            ),
+            upstreamRepoId: LFM2Resources.a1bBF16UpstreamRepoId,
+            upstreamRevision: LFM2Resources.a1bBF16UpstreamRevision,
+            usageRestriction: usageRestriction(
+                summary: "LFM uses a custom open license; commercial use by entities with at least USD 10M annual revenue is not licensed under its community terms.",
+                license: "LFM Open License v1.0",
+                sourceRepoId: LFM2Resources.a1bBF16UpstreamRepoId,
+                sourceRevision: LFM2Resources.a1bBF16UpstreamRevision,
+                licenseURL: "https://huggingface.co/LiquidAI/LFM2.5-8B-A1B/blob/\(LFM2Resources.a1bBF16UpstreamRevision)/LICENSE"
+            ),
+            validationKind: .lfm2,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: LFM2Resources.a1bBF16EstimatedDownloadBytes,
+            defaultCLICommands: ["text chat", "api serve"],
+            companionModelIDs: [LFM2Resources.defaultDSparkModelId],
+            apiProfile: .lfm2()
+        ),
+        ManagedModelSpec(
+            id: LFM2Resources.smallModelId,
+            category: .textChat,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: LFM2Resources.smallUpstreamRepoId,
+                revision: LFM2Resources.smallUpstreamRevision,
+                patterns: LFM2Resources.snapshotPatterns
+            ),
+            upstreamRepoId: LFM2Resources.smallUpstreamRepoId,
+            upstreamRevision: LFM2Resources.smallUpstreamRevision,
+            usageRestriction: usageRestriction(
+                summary: "LFM uses a custom open license; commercial use by entities with at least USD 10M annual revenue is not licensed under its community terms.",
+                license: "LFM Open License v1.0",
+                sourceRepoId: LFM2Resources.smallUpstreamRepoId,
+                sourceRevision: LFM2Resources.smallUpstreamRevision,
+                licenseURL: "https://huggingface.co/LiquidAI/LFM2.5-1.2B-Instruct/blob/\(LFM2Resources.smallUpstreamRevision)/LICENSE"
+            ),
+            validationKind: .lfm2,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: LFM2Resources.smallEstimatedDownloadBytes,
+            defaultCLICommands: ["text chat", "api serve"],
+            companionModelIDs: [LFM2Resources.smallDSparkModelId],
+            apiProfile: .lfm2()
+        ),
+        ManagedModelSpec(
             id: LFM2Resources.denseModelId,
             category: .textChat,
             installShape: .directoryRoot,
@@ -2024,6 +2075,31 @@ public enum ManagedModelCatalog {
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 1_601_108_788,
             defaultCLICommands: ["text chat", "api serve"],
+            apiProfile: .lfm2()
+        ),
+        ManagedModelSpec(
+            id: LFM2Resources.denseBF16ModelId,
+            category: .textChat,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: LFM2Resources.denseBF16UpstreamRepoId,
+                revision: LFM2Resources.denseBF16UpstreamRevision,
+                patterns: LFM2Resources.snapshotPatterns
+            ),
+            upstreamRepoId: LFM2Resources.denseBF16UpstreamRepoId,
+            upstreamRevision: LFM2Resources.denseBF16UpstreamRevision,
+            usageRestriction: usageRestriction(
+                summary: "LFM uses a custom open license; commercial use by entities with at least USD 10M annual revenue is not licensed under its community terms.",
+                license: "LFM Open License v1.0",
+                sourceRepoId: LFM2Resources.denseBF16UpstreamRepoId,
+                sourceRevision: LFM2Resources.denseBF16UpstreamRevision,
+                licenseURL: "https://huggingface.co/LiquidAI/LFM2.5-2.6B/blob/\(LFM2Resources.denseBF16UpstreamRevision)/LICENSE"
+            ),
+            validationKind: .lfm2,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: LFM2Resources.denseBF16EstimatedDownloadBytes,
+            defaultCLICommands: ["text chat", "api serve"],
+            companionModelIDs: [LFM2Resources.denseDSparkModelId],
             apiProfile: .lfm2()
         ),
         ManagedModelSpec(
@@ -3469,6 +3545,36 @@ public enum ManagedModelCatalog {
 }
 
 private extension ManagedModelCatalog {
+    static func lfm2DSparkSpec(
+        id: String,
+        repoId: String,
+        revision: String,
+        estimatedDownloadBytes: Int64
+    ) -> ManagedModelSpec {
+        ManagedModelSpec(
+            id: id,
+            category: .textChat,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: repoId,
+                revision: revision,
+                patterns: LFM2Resources.dsparkSnapshotPatterns
+            ),
+            upstreamRepoId: repoId,
+            upstreamRevision: revision,
+            usageRestriction: usageRestriction(
+                summary: "LFM uses a custom open license; commercial use by entities with at least USD 10M annual revenue is not licensed under its community terms.",
+                license: "LFM Open License v1.0",
+                sourceRepoId: repoId,
+                sourceRevision: revision,
+                licenseURL: "https://huggingface.co/\(repoId)/blob/\(revision)/LICENSE"
+            ),
+            validationKind: .lfm2DSpark,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: estimatedDownloadBytes
+        )
+    }
+
     static var allKnownSpecs: [ManagedModelSpec] {
         allSpecs + companionSpecs
     }
@@ -3575,6 +3681,24 @@ private extension ManagedModelCatalog {
                 validationKind: .nemotronHDSpark,
                 runtimeAutoDownloadAllowed: false,
                 estimatedDownloadBytes: NemotronHResources.dsparkEstimatedDownloadBytes
+            ),
+            lfm2DSparkSpec(
+                id: LFM2Resources.defaultDSparkModelId,
+                repoId: LFM2Resources.defaultDSparkRepoId,
+                revision: LFM2Resources.defaultDSparkRevision,
+                estimatedDownloadBytes: LFM2Resources.defaultDSparkEstimatedDownloadBytes
+            ),
+            lfm2DSparkSpec(
+                id: LFM2Resources.smallDSparkModelId,
+                repoId: LFM2Resources.smallDSparkRepoId,
+                revision: LFM2Resources.smallDSparkRevision,
+                estimatedDownloadBytes: LFM2Resources.smallDSparkEstimatedDownloadBytes
+            ),
+            lfm2DSparkSpec(
+                id: LFM2Resources.denseDSparkModelId,
+                repoId: LFM2Resources.denseDSparkRepoId,
+                revision: LFM2Resources.denseDSparkRevision,
+                estimatedDownloadBytes: LFM2Resources.denseDSparkEstimatedDownloadBytes
             ),
             ManagedModelSpec(
                 id: ModelResolver.ModelID.ltxGemma3TwelveB4Bit.rawValue,
@@ -3766,6 +3890,11 @@ public extension ManagedModelSpec {
             return LFM2Resources(rootURL: rootURL).validate(
                 fileManager: fileManager,
                 requireVisionProcessor: id == LFM2Resources.visionModelId
+            )
+        case .lfm2DSpark:
+            return LFM2Resources.missingDSparkFiles(
+                rootURL: rootURL,
+                fileManager: fileManager
             )
         case .inkling:
             return InklingResources.validate(rootURL: rootURL, fileManager: fileManager)

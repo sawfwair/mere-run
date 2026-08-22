@@ -545,12 +545,57 @@ public enum ManagedModelCapabilityCatalog {
                 setup: true
             ),
             descriptor(
+                LFM2Resources.a1bBF16ModelId,
+                "LFM2.5 A1B BF16 + DSpark",
+                "Runs the exact LiquidAI LFM2.5 8B-A1B BF16 target with its native DSpark accelerator.",
+                minimum: 32,
+                recommended: 48,
+                setup: true
+            ),
+            descriptor(
+                LFM2Resources.smallModelId,
+                "LFM2.5 1.2B BF16",
+                "Runs the compact LiquidAI LFM2.5 1.2B Instruct checkpoint with its optional native DSpark accelerator.",
+                minimum: 8,
+                recommended: 12,
+                setup: true
+            ),
+            descriptor(
                 LFM2Resources.denseModelId,
                 "LFM2.5 2.6B 4-bit",
                 "Runs the LiquidAI LFM2.5 2.6B dense MLX 4-bit snapshot through the native Swift LFM2 runtime.",
                 minimum: 8,
                 recommended: 12,
                 setup: true
+            ),
+            descriptor(
+                LFM2Resources.denseBF16ModelId,
+                "LFM2.5 2.6B BF16 + DSpark",
+                "Runs the exact LiquidAI LFM2.5 2.6B BF16 target with its native DSpark accelerator.",
+                minimum: 16,
+                recommended: 24,
+                setup: true
+            ),
+            descriptor(
+                LFM2Resources.smallDSparkModelId,
+                "LFM2.5 1.2B DSpark assistant",
+                "Installs the verified speculative-decoding assistant for LFM2.5 1.2B Instruct.",
+                minimum: 8,
+                recommended: 12
+            ),
+            descriptor(
+                LFM2Resources.denseDSparkModelId,
+                "LFM2.5 2.6B DSpark assistant",
+                "Installs the verified speculative-decoding assistant for LFM2.5 2.6B.",
+                minimum: 8,
+                recommended: 12
+            ),
+            descriptor(
+                LFM2Resources.defaultDSparkModelId,
+                "LFM2.5 8B-A1B DSpark assistant",
+                "Installs the verified speculative-decoding assistant for LFM2.5 8B-A1B.",
+                minimum: 16,
+                recommended: 24
             ),
             descriptor(
                 LFM2Resources.visionModelId,

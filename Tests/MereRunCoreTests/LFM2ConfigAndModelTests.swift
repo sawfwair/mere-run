@@ -17,6 +17,43 @@ final class LFM2ConfigAndModelTests: MereRunCoreTestCase {
         return try JSONDecoder().decode(LFM2VLConfig.self, from: data)
     }
 
+    private func decodeDSparkConfig(_ object: [String: Any]) throws -> LFM2DSparkConfig {
+        let data = try JSONSerialization.data(withJSONObject: object, options: [])
+        return try JSONDecoder().decode(LFM2DSparkConfig.self, from: data)
+    }
+
+    private func makeDSparkConfig(
+        vocabularySize: Int = 128_000,
+        targetLayerCount: Int = 30,
+        targetLayerIDs: [Int] = [2, 9, 17, 21, 27]
+    ) -> [String: Any] {
+        [
+            "architectures": ["Lfm2DSparkDraftModel"],
+            "model_type": "qwen3",
+            "hidden_size": 2_048,
+            "num_hidden_layers": 5,
+            "num_attention_heads": 32,
+            "num_key_value_heads": 8,
+            "head_dim": 64,
+            "intermediate_size": 6_144,
+            "rms_norm_eps": 0.00001,
+            "vocab_size": vocabularySize,
+            "rope_theta": 10_000_000,
+            "max_position_embeddings": 32_768,
+            "layer_types": Array(repeating: "full_attention", count: 5),
+            "block_size": 9,
+            "dflash_config": [
+                "mask_token_id": 125_017,
+                "target_layer_ids": targetLayerIDs,
+                "num_target_layers": targetLayerCount,
+            ],
+            "markov_rank": 256,
+            "rope_is_neox_style": false,
+            "enable_confidence_head": true,
+            "markov_head_type": "vanilla",
+        ]
+    }
+
     private func makeTinyVisionConfig() -> [String: Any] {
         [
             "architectures": ["Lfm2VlForConditionalGeneration"],
@@ -228,6 +265,53 @@ final class LFM2ConfigAndModelTests: MereRunCoreTestCase {
         XCTAssertEqual(config.fullAttentionLayerIndexes, Set([1, 3]))
     }
 
+    func testDecodesLFM25AutoAdjustedSwiGLUWidth() throws {
+        var config = try XCTUnwrap(
+            try JSONSerialization.jsonObject(with: Data("""
+            {
+              "architectures": ["Lfm2ForCausalLM"],
+              "model_type": "lfm2",
+              "vocab_size": 65536,
+              "hidden_size": 2048,
+              "intermediate_size": 12288,
+              "block_auto_adjust_ff_dim": true,
+              "block_ffn_dim_multiplier": 1.0,
+              "block_multiple_of": 256,
+              "num_hidden_layers": 16,
+              "num_attention_heads": 32,
+              "num_key_value_heads": 8,
+              "max_position_embeddings": 128000,
+              "norm_eps": 0.00001,
+              "conv_L_cache": 3,
+              "layer_types": ["conv", "conv", "full_attention", "conv", "conv", "full_attention", "conv", "conv", "full_attention", "conv", "full_attention", "conv", "full_attention", "conv", "full_attention", "conv"]
+            }
+            """.utf8)) as? [String: Any]
+        )
+        config["eos_token_id"] = 7
+
+        XCTAssertEqual(try decodeConfig(config).intermediateSize, 8_192)
+    }
+
+    func testDecodesOfficialLiquidAILFM25DSparkContract() throws {
+        let config = try decodeDSparkConfig(makeDSparkConfig())
+
+        XCTAssertEqual(config.architectures, ["Lfm2DSparkDraftModel"])
+        XCTAssertEqual(config.hiddenLayerCount, 5)
+        XCTAssertEqual(config.blockSize, 9)
+        XCTAssertEqual(config.markovRank, 256)
+        XCTAssertEqual(config.features.targetLayerIDs, [2, 9, 17, 21, 27])
+        XCTAssertEqual(config.features.targetLayerCount, 30)
+        XCTAssertFalse(config.ropeUsesNeoXLayout)
+        XCTAssertTrue(config.confidenceHeadEnabled)
+    }
+
+    func testRejectsAlteredLFM25DSparkArchitectureContract() throws {
+        var object = makeDSparkConfig()
+        object["block_size"] = 8
+
+        XCTAssertThrowsError(try decodeDSparkConfig(object))
+    }
+
     func testDecodesLFM25VisionConfigAndFallsBackToImageTokenID() throws {
         let config = try decodeVisionConfig(makeTinyVisionConfig())
 
@@ -366,6 +450,126 @@ final class LFM2ConfigAndModelTests: MereRunCoreTestCase {
 
         XCTAssertEqual(logits.shape, [1, 3, config.vocabSize])
         XCTAssertTrue(MLX.max(MLX.abs(logits.asType(.float32))).item(Float.self).isFinite)
+    }
+
+    func testLFM2ForwardCapturesConfiguredTargetLayerOutputs() throws {
+        MLXRandom.seed(44)
+        let config = try makeTinyDenseConfig()
+        let model = LFM2Model(config: config)
+        let input = MLXArray([Int32(1), 2, 3]).reshaped(1, 3)
+        let output = model.forward(
+            input,
+            cache: makeLayerCaches(config: config),
+            captureLayerIndices: [0, 2]
+        )
+        let embeddings = model.embeddings(for: input)
+        let expectedLayerZeroOutput = model.model.layers[0](
+            embeddings,
+            attentionMask: createAttentionMask(h: embeddings, cache: nil),
+            cache: nil
+        )
+
+        MLX.eval(
+            output.logits,
+            output.capturedHiddenStates[0]!,
+            output.capturedHiddenStates[2]!,
+            expectedLayerZeroOutput
+        )
+        XCTAssertEqual(Set(output.capturedHiddenStates.keys), Set([0, 2]))
+        XCTAssertEqual(output.capturedHiddenStates[0]?.shape, [1, 3, config.hiddenSize])
+        XCTAssertEqual(output.capturedHiddenStates[2]?.shape, [1, 3, config.hiddenSize])
+        XCTAssertLessThan(
+            MLX.max(
+                MLX.abs(output.capturedHiddenStates[0]! - expectedLayerZeroOutput)
+            ).item(Float.self),
+            1e-4
+        )
+    }
+
+    func testLFM2BlockVerificationMatchesSerialDecodeAfterCachedPrefix() throws {
+        MLXRandom.seed(45)
+        let config = try makeTinyDenseConfig()
+        let model = LFM2Model(config: config)
+        let blockCache = makeLayerCaches(config: config)
+        let serialCache = makeLayerCaches(config: config)
+        let prefix = MLXArray([Int32(1), 2, 3]).reshaped(1, 3)
+        MLX.eval(model(prefix, cache: blockCache), model(prefix, cache: serialCache))
+
+        let block = model.forward(
+            MLXArray([Int32(4), 5, 6]).reshaped(1, 3),
+            cache: blockCache
+        ).logits
+        let serialRows = [4, 5, 6].map { token in
+            model.forward(
+                MLXArray([Int32(token)]).reshaped(1, 1),
+                cache: serialCache
+            ).logits
+        }
+        let serial = MLX.concatenated(serialRows, axis: 1)
+        MLX.eval(block, serial)
+
+        XCTAssertLessThan(
+            MLX.max(MLX.abs(block - serial)).item(Float.self),
+            1e-4
+        )
+    }
+
+    func testLFM2SpeculativeRollbackMatchesCommittedPrefixDecode() throws {
+        MLXRandom.seed(46)
+        let config = try makeTinyDenseConfig()
+        let model = LFM2Model(config: config)
+        let speculativeCache = makeLayerCaches(config: config)
+        let referenceCache = makeLayerCaches(config: config)
+        let prefix = MLXArray([Int32(1), 2, 3]).reshaped(1, 3)
+        MLX.eval(model(prefix, cache: speculativeCache), model(prefix, cache: referenceCache))
+
+        let candidate = MLXArray([Int32(4), 5, 6, 7]).reshaped(1, 4)
+        let speculative = model.forward(
+            candidate,
+            cache: speculativeCache,
+            captureSpeculativeState: true
+        ).logits
+        MLX.eval(speculative, model.speculativeCacheStorageArrays(speculativeCache))
+
+        model.rollbackSpeculativeCache(
+            speculativeCache,
+            candidateTokenCount: 4,
+            committedTokenCount: 2
+        )
+        let committed = model.forward(
+            MLXArray([Int32(4), 5]).reshaped(1, 2),
+            cache: referenceCache
+        ).logits
+        MLX.eval(committed)
+
+        let replacement = MLXArray([Int32(8)]).reshaped(1, 1)
+        let rolledBack = model(replacement, cache: speculativeCache)
+        let reference = model(replacement, cache: referenceCache)
+        MLX.eval(rolledBack, reference)
+
+        XCTAssertLessThan(
+            MLX.max(MLX.abs(rolledBack - reference)).item(Float.self),
+            1e-4
+        )
+    }
+
+    func testLFM25DSparkResourceMappingAndPolicy() throws {
+        XCTAssertEqual(
+            LFM2Resources.dsparkModelID(for: LFM2Resources.a1bBF16ModelId),
+            LFM2Resources.defaultDSparkModelId
+        )
+        XCTAssertEqual(
+            LFM2Resources.dsparkModelID(for: LFM2Resources.smallModelId),
+            LFM2Resources.smallDSparkModelId
+        )
+        XCTAssertEqual(
+            LFM2Resources.dsparkModelID(for: LFM2Resources.denseBF16ModelId),
+            LFM2Resources.denseDSparkModelId
+        )
+        XCTAssertNil(LFM2Resources.dsparkModelID(for: LFM2Resources.defaultModelId))
+        XCTAssertNil(LFM2Resources.dsparkModelID(for: LFM2Resources.denseModelId))
+        XCTAssertFalse(LFM2DSparkPolicy.enabled(environment: ["MERERUN_LFM25_DSPARK": "off"]))
+        XCTAssertTrue(LFM2DSparkPolicy.enabled(environment: [:]))
     }
 
     func testFusedGatherAffine8SwiGLUMatchesNativeGathers() throws {

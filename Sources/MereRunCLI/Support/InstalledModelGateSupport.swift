@@ -263,6 +263,25 @@ enum InstalledModelSmokePlans {
                 try await runner.installedTextCheck(model: primary)
             }
 
+        case .lfm2DSpark:
+            let targetID: String
+            switch spec.id {
+            case LFM2Resources.smallDSparkModelId:
+                targetID = LFM2Resources.smallModelId
+            case LFM2Resources.denseDSparkModelId:
+                targetID = LFM2Resources.denseBF16ModelId
+            default:
+                targetID = LFM2Resources.a1bBF16ModelId
+            }
+            return companion(
+                spec,
+                installedIDs: installedIDs,
+                candidates: [targetID],
+                route: "consumed by LFM2.5 text chat"
+            ) { runner, primary in
+                try await runner.installedTextCheck(model: primary)
+            }
+
         case .qwen3TTS:
             return direct(spec, route: "speech synthesize") { runner in
                 try await runner.installedTTSCheck(model: spec.id)

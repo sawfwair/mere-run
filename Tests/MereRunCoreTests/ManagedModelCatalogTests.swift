@@ -136,7 +136,13 @@ final class ManagedModelCatalogTests: XCTestCase {
             "image-krea2-turbo",
             "image-ideogram4-sdnq-uint4",
             "text-chat-lfm25-a1b-8bit",
+            "text-chat-lfm25-a1b-bf16",
+            "text-chat-lfm25-1.2b-bf16",
             "text-chat-lfm25-2.6b-4bit",
+            "text-chat-lfm25-2.6b-bf16",
+            "text-chat-lfm25-a1b-dspark",
+            "text-chat-lfm25-1.2b-dspark",
+            "text-chat-lfm25-2.6b-dspark",
             "vision-chat-lfm25-3b-8bit",
             "vision-segment-sam31",
             "vision-face-buffalo-l",
@@ -1194,6 +1200,70 @@ final class ManagedModelCatalogTests: XCTestCase {
 
         XCTAssertEqual(spec.normalizedRootURL(root), variant.standardizedFileURL)
         XCTAssertTrue(spec.missingPaths(in: root).isEmpty)
+    }
+
+    func testLFM25TargetsUseTheirPinnedDSparkCompanions() throws {
+        let pairs = [
+            (
+                LFM2Resources.smallModelId,
+                LFM2Resources.smallDSparkModelId,
+                LFM2Resources.smallDSparkRepoId,
+                LFM2Resources.smallDSparkRevision
+            ),
+            (
+                LFM2Resources.denseBF16ModelId,
+                LFM2Resources.denseDSparkModelId,
+                LFM2Resources.denseDSparkRepoId,
+                LFM2Resources.denseDSparkRevision
+            ),
+            (
+                LFM2Resources.a1bBF16ModelId,
+                LFM2Resources.defaultDSparkModelId,
+                LFM2Resources.defaultDSparkRepoId,
+                LFM2Resources.defaultDSparkRevision
+            ),
+        ]
+
+        for (targetID, dsparkID, repoID, revision) in pairs {
+            let target = try XCTUnwrap(ManagedModelCatalog.spec(for: targetID))
+            let dspark = try XCTUnwrap(ManagedModelCatalog.spec(for: dsparkID))
+            XCTAssertEqual(target.companionModelIDs, [dsparkID])
+            XCTAssertEqual(dspark.hubFallback?.repoId, repoID)
+            XCTAssertEqual(dspark.hubFallback?.revision, revision)
+            XCTAssertEqual(dspark.validationKind, .lfm2DSpark)
+            XCTAssertFalse(dspark.runtimeAutoDownloadAllowed)
+            XCTAssertNotNil(dspark.usageRestriction)
+        }
+
+        XCTAssertTrue(
+            try XCTUnwrap(ManagedModelCatalog.spec(for: LFM2Resources.denseModelId))
+                .companionModelIDs.isEmpty
+        )
+        XCTAssertTrue(
+            try XCTUnwrap(ManagedModelCatalog.spec(for: LFM2Resources.defaultModelId))
+                .companionModelIDs.isEmpty
+        )
+    }
+
+    func testLFM25DSparkCompanionValidatesWithoutStandaloneChatComponents() throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        for filename in ["config.json", "model.safetensors"] {
+            XCTAssertTrue(FileManager.default.createFile(
+                atPath: root.appendingPathComponent(filename).path,
+                contents: Data()
+            ))
+        }
+        try MereRunModelManifest.template(
+            for: .lfm25Dense2_6BDSpark,
+            createdAt: Date(timeIntervalSince1970: 0)
+        ).write(to: root)
+
+        let report = MereRunModelValidator.validate(
+            modelRoot: root,
+            expectedModelID: LFM2Resources.denseDSparkModelId
+        )
+        XCTAssertTrue(report.isValid, report.errors.joined(separator: "\n"))
     }
 
     func testLFM25VisionUsesPinnedLiquidAIMLXCheckpoint() throws {

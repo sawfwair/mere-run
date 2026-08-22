@@ -69,6 +69,9 @@ public struct LFM2Config: Decodable, Sendable, Hashable {
         case vocabSize = "vocab_size"
         case hiddenSize = "hidden_size"
         case intermediateSize = "intermediate_size"
+        case blockAutoAdjustFFDimension = "block_auto_adjust_ff_dim"
+        case blockFFDimensionMultiplier = "block_ffn_dim_multiplier"
+        case blockMultipleOf = "block_multiple_of"
         case moeIntermediateSize = "moe_intermediate_size"
         case numHiddenLayers = "num_hidden_layers"
         case numExperts = "num_experts"
@@ -98,7 +101,21 @@ public struct LFM2Config: Decodable, Sendable, Hashable {
         self.modelType = try container.decode(String.self, forKey: .modelType)
         self.vocabSize = try container.decode(Int.self, forKey: .vocabSize)
         self.hiddenSize = try container.decode(Int.self, forKey: .hiddenSize)
-        self.intermediateSize = try container.decode(Int.self, forKey: .intermediateSize)
+        let configuredIntermediateSize = try container.decode(Int.self, forKey: .intermediateSize)
+        if try container.decodeIfPresent(Bool.self, forKey: .blockAutoAdjustFFDimension) == true {
+            var adjusted = 2 * configuredIntermediateSize / 3
+            if let multiplier = try container.decodeIfPresent(
+                Double.self,
+                forKey: .blockFFDimensionMultiplier
+            ) {
+                adjusted = Int(multiplier * Double(adjusted))
+                let multiple = try container.decodeIfPresent(Int.self, forKey: .blockMultipleOf) ?? 1
+                adjusted = multiple * ((adjusted + multiple - 1) / multiple)
+            }
+            self.intermediateSize = adjusted
+        } else {
+            self.intermediateSize = configuredIntermediateSize
+        }
         self.moeIntermediateSize = try container.decodeIfPresent(Int.self, forKey: .moeIntermediateSize)
             ?? intermediateSize
         self.numHiddenLayers = try container.decode(Int.self, forKey: .numHiddenLayers)

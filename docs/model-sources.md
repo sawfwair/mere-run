@@ -95,7 +95,10 @@ an effective overlay; they are not a second capability catalog.
 | `text-chat` | `text-chat-q36-nano-gguf` |
 | `text-chat` | `text-agent-deepseek-v4-flash` |
 | `text-chat` | `text-chat-lfm25-a1b-8bit` |
+| `text-chat` | `text-chat-lfm25-a1b-bf16` |
+| `text-chat` | `text-chat-lfm25-1.2b-bf16` |
 | `text-chat` | `text-chat-lfm25-2.6b-4bit` |
+| `text-chat` | `text-chat-lfm25-2.6b-bf16` |
 | `vision-chat` | `vision-chat-lfm25-3b-8bit` |
 | `speech-tts` | `speech-tts-qwen3-nano` |
 | `speech-tts` | `speech-tts-qwen3-customvoice` |
@@ -201,7 +204,7 @@ validates all configured models before downloading any; both accept the same
 | `image-klein-9b`, `image-klein-base-9b` | FLUX Non-Commercial License v2.1; non-commercial, non-production use |
 | `image-krea2-raw`, `image-krea2-turbo` | Krea 2 Community License; commercial use is limited to entities below USD 1M trailing annual revenue, plus use/distribution conditions |
 | `image-ideogram4-sdnq-uint4` | Ideogram Non-Commercial Model Agreement |
-| `text-chat-lfm25-a1b-8bit`, `text-chat-lfm25-2.6b-4bit`, `vision-chat-lfm25-3b-8bit` | LFM Open License v1.0; commercial use by entities at or above USD 10M annual revenue is excluded |
+| LFM2.5 text and vision targets plus their DSpark companions | LFM Open License v1.0; commercial use by entities at or above USD 10M annual revenue is excluded |
 | `vision-chat-muse-glimmer-30b` | Apache-2.0 plus Meta's bundled usage policy; upstream says the model is not intended for download or use by people under 18 |
 | `vision-segment-sam31` | Meta SAM License custom use, trade-control, attribution, and redistribution conditions |
 | `vision-face-buffalo-l` | InsightFace pretrained weights; non-commercial research use |
@@ -467,12 +470,42 @@ with source and emitted artifact hashes, and is published as the user-facing
 a text-only MLX 8-bit directory-root model with `config.json`,
 `tokenizer.json`, `tokenizer_config.json`, and sharded `*.safetensors` weights.
 mere.run runs it through the native Swift LFM2 runtime; no Python bridge is used.
+This quantized target does not attach the BF16-trained DSpark assistant.
+
+`text-chat-lfm25-a1b-bf16` uses `LiquidAI/LFM2.5-8B-A1B` at revision
+`b9aebfcbe28b6cb374042f495d733037550ab146`, the exact target for the managed
+8B-A1B DSpark companion.
+
+`text-chat-lfm25-1.2b-bf16` uses
+`LiquidAI/LFM2.5-1.2B-Instruct` at revision
+`df58c174f05ff733f83f8cae10ea9298224c8006`. Its matching
+`text-chat-lfm25-1.2b-dspark` companion uses
+`LiquidAI/LFM2.5-1.2B-Instruct-DSpark` at revision
+`4876d04848e15a6fd48d7c1481110e7cf5d62621`.
 
 `text-chat-lfm25-2.6b-4bit` uses the pinned `4bit/` partition of
 `LiquidAI/LFM2.5-2.6B-MLX`. The managed pull selects only that partition plus
 the repository license and model card, then normalizes the nested directory
 for the native dense `Lfm2ForCausalLM` runtime. The checkpoint uses affine
 4-bit linear weights with a 6-bit tied embedding and is approximately 1.60 GB.
+It remains target-only because the managed DSpark assistant was trained for the
+unquantized target.
+
+`text-chat-lfm25-2.6b-bf16` uses `LiquidAI/LFM2.5-2.6B` at revision
+`a334ee78cd38458bb71eda24109ac42dcec1309d`, the exact target for the managed
+2.6B DSpark companion.
+
+The three exact BF16 LFM2.5 text targets install matching DSpark sidecars from LiquidAI:
+`LFM2.5-8B-A1B-DSpark` at revision
+`5b285c827912834665b1915f171897e49ff0f388`,
+`LFM2.5-2.6B-DSpark` at revision
+`458cedab07d0f7b2b05700c77e1aa463d43d6f04`, and the 1.2B revision above.
+Each sidecar is roughly 0.59-0.66 GB and is loaded only beside its compatible
+target. LiquidAI reports mean M4 Max speedups of 2.54x for 1.2B, 2.27x for
+2.6B, and 1.18x for 8B-A1B; these are upstream measurements, not mere.run
+benchmark results.
+See LiquidAI's [LFM2.5-DSpark release and methodology](https://www.liquid.ai/blog/lfm2.5-dspark)
+for the upstream benchmark protocol and framework integrations.
 
 `vision-chat-lfm25-3b-8bit` uses the public
 `LiquidAI/LFM2.5-VL-3B-MLX-8bit` checkpoint at revision
@@ -694,7 +727,10 @@ swift run mere.run model pull image-zimage-nano
 # Pull into a custom SSD-backed store
 MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull text-chat-q36-nano
 MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull text-chat-lfm25-a1b-8bit --accept-model-license
+MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull text-chat-lfm25-a1b-bf16 --accept-model-license
+MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull text-chat-lfm25-1.2b-bf16 --accept-model-license
 MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull text-chat-lfm25-2.6b-4bit --accept-model-license
+MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull text-chat-lfm25-2.6b-bf16 --accept-model-license
 MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull vision-chat-lfm25-3b-8bit --accept-model-license
 
 # Inspect installed models

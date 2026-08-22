@@ -6,6 +6,22 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Text
+
+- added pinned LiquidAI DSpark companions for LFM2.5 1.2B Instruct, 2.6B,
+  and 8B-A1B. The native Swift/MLX runtime captures five configured target-layer
+  outputs, runs the non-causal diffusion draft block, drafts
+  nine tokens, verifies them against one target forward,
+  and uses target-authoritative verification with partial attention and
+  recurrent-state rollback instead of replaying rejected blocks. Managed pulls install the
+  matching licensed sidecar, while
+  `text chat --stats` reports acceptance, verification, recovery, and adaptive
+  fallback counters.
+- added the exact BF16 `LiquidAI/LFM2.5-1.2B-Instruct`, `LFM2.5-2.6B`, and
+  `LFM2.5-8B-A1B` targets required by their trained DSpark assistants. Existing
+  4-bit and 8-bit LFM2.5 variants remain target-only so quantized hidden-state
+  drift cannot silently reduce acceptance or change the intended pairing.
+
 ## 0.43.0 - 2026-08-20
 
 This release adds native multimodal embeddings for shared text, image, and

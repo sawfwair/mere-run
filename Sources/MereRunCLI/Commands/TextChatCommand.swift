@@ -45,6 +45,9 @@ struct TextChat: AsyncParsableCommand {
           - text-chat-nemotron-35-lightning (NVIDIA Nemotron 3.5 Lightning 30B-A3B NVFP4 with DSpark)
           - omni-chat-nemotron3-nano-30b-a3b-bf16 (NVIDIA Nemotron 3 Nano Omni BF16)
           - text-chat-inkling-small (Inkling-Small 276B-A12B mixed MLX: routed-expert q2, non-routed BF16)
+          - text-chat-lfm25-1.2b-bf16 (LiquidAI LFM2.5 1.2B Instruct BF16 with DSpark)
+          - text-chat-lfm25-2.6b-bf16 (LiquidAI LFM2.5 2.6B BF16 with DSpark)
+          - text-chat-lfm25-a1b-bf16 (LiquidAI LFM2.5 8B-A1B BF16 with DSpark)
           - text-chat-lfm25-2.6b-4bit (LiquidAI LFM2.5 2.6B dense MLX 4-bit native Swift runtime)
           - text-chat-lfm25-a1b-8bit (LiquidAI LFM2.5 8B-A1B MLX 8-bit native Swift runtime)
           - vision-chat-lfm25-3b-8bit (LiquidAI LFM2.5-VL 3B MLX 8-bit native vision-language runtime)
@@ -162,7 +165,7 @@ struct TextChat: AsyncParsableCommand {
             + firstTokenSeconds
     }
 
-    @Option(name: [.long], help: "Canonical model id. Default: text-chat-gemma4-12b-4bit (Apple Silicon) / text-chat-q36-nano-gguf (Linux CUDA). Others include omni-chat-nemotron3-nano-30b-a3b-bf16, vision-chat-muse-glimmer-30b, text-chat-nemotron-35-lightning, text-chat-laguna-s-2-1, text-chat-inkling-small, text-chat-bonsai-27b-1bit, text-chat-q36-nano, text-agent-ornith-9b, text-chat-gemma4[-12b|-12b-4bit|-turbo|-max|-nano], and text-chat-lfm25-a1b-8bit.")
+    @Option(name: [.long], help: "Canonical model id. Default: text-chat-gemma4-12b-4bit (Apple Silicon) / text-chat-q36-nano-gguf (Linux CUDA). Others include omni-chat-nemotron3-nano-30b-a3b-bf16, vision-chat-muse-glimmer-30b, text-chat-nemotron-35-lightning, text-chat-laguna-s-2-1, text-chat-inkling-small, text-chat-bonsai-27b-1bit, text-chat-q36-nano, text-agent-ornith-9b, text-chat-gemma4[-12b|-12b-4bit|-turbo|-max|-nano], text-chat-lfm25-{1.2b,2.6b,a1b}-bf16, and text-chat-lfm25-a1b-8bit.")
     var model: String = TextChat.defaultChatModelId
 
     @Option(
@@ -389,6 +392,7 @@ struct TextChat: AsyncParsableCommand {
         var lastLagunaDFlashStats: LagunaDFlashStats?
         var lastMuseDFlashStats: MuseGlimmerDFlashStats?
         var lastNemotronDSparkStats: NemotronHDSparkStats?
+        var lastLFM2DSparkStats: LFM2DSparkStats?
         let lagunaGenerator = isLaguna
             ? LagunaGenerator(
                 dflashModelPath: LagunaResources.installedDFlashPath(
@@ -398,6 +402,13 @@ struct TextChat: AsyncParsableCommand {
             : nil
         let nemotronGenerator = isNemotronH ? NemotronHGenerator() : nil
         let nemotronOmniGenerator = isNemotronOmni ? NemotronOmniGenerator() : nil
+        let lfm2Generator = LFM2Resources.handles(modelSpec: normalizedModelId)
+            ? LFM2Generator(
+                modelId: normalizedModelId.isEmpty
+                    ? LFM2Resources.defaultModelId
+                    : normalizedModelId
+            )
+            : nil
 
         let chatOnce: (ChatRequest) async throws -> ChatResponse = { req in
             if normalizedModelId == Psi3ChatResources.defaultModelId {
@@ -471,9 +482,16 @@ struct TextChat: AsyncParsableCommand {
                 lastNemotronDSparkStats = await generator.dsparkStats()
                 return response
             } else if LFM2Resources.handles(modelSpec: normalizedModelId) {
-                let effectiveModelId = normalizedModelId.isEmpty ? LFM2Resources.defaultModelId : normalizedModelId
-                let generator = LFM2Generator(modelId: effectiveModelId)
-                return try await generator.chat(req, modelPath: runtimeModelRoot, progressHandler: progressHandler)
+                guard let generator = lfm2Generator else {
+                    throw LFM2Error.generationFailed("generator is unavailable")
+                }
+                let response = try await generator.chat(
+                    req,
+                    modelPath: runtimeModelRoot,
+                    progressHandler: progressHandler
+                )
+                lastLFM2DSparkStats = await generator.dsparkStats()
+                return response
             } else {
                 let effectiveModelId = normalizedModelId.isEmpty ? Q35Resources.defaultModelId : normalizedModelId
                 let generator = Q35Generator(modelId: effectiveModelId)
@@ -598,6 +616,9 @@ struct TextChat: AsyncParsableCommand {
                     if let dspark = lastNemotronDSparkStats {
                         CLIStderr.write(Self.formatNemotronDSparkStats(dspark) + "\n")
                     }
+                    if let dspark = lastLFM2DSparkStats {
+                        CLIStderr.write(Self.formatLFM2DSparkStats(dspark) + "\n")
+                    }
                 } else {
                     let line = String(format: "time=%.2fs tokens=%d tps=%.2f", elapsed, result.tokensGenerated, e2eTps)
                     CLIStderr.write("\(line)\n")
@@ -612,6 +633,9 @@ struct TextChat: AsyncParsableCommand {
                     }
                     if let dspark = lastNemotronDSparkStats {
                         CLIStderr.write(Self.formatNemotronDSparkStats(dspark) + "\n")
+                    }
+                    if let dspark = lastLFM2DSparkStats {
+                        CLIStderr.write(Self.formatLFM2DSparkStats(dspark) + "\n")
                     }
                 }
             }
@@ -775,6 +799,33 @@ struct TextChat: AsyncParsableCommand {
         let reason = stats.reason.map { " reason=\($0)" } ?? ""
         return String(
             format: "dspark=%@ block=%d rounds=%d drafted=%d accepted=%d acceptance=%.1f%% rejected=%d verification=%d recoveries=%d fallback_forwards=%d adaptive_fallbacks=%d%@",
+            state,
+            stats.speculativeTokens,
+            stats.rounds,
+            stats.draftedTokens,
+            stats.acceptedDraftTokens,
+            stats.acceptanceRate * 100,
+            stats.rejectedDraftTokens,
+            stats.targetVerificationForwards,
+            stats.targetRecoveryForwards,
+            stats.targetFallbackForwards,
+            stats.adaptiveFallbacks,
+            reason
+        )
+    }
+
+    static func formatLFM2DSparkStats(_ stats: LFM2DSparkStats) -> String {
+        let state: String
+        if stats.active {
+            state = "active"
+        } else if stats.enabled {
+            state = stats.adaptiveFallbacks > 0 ? "fallback" : "available"
+        } else {
+            state = "unavailable"
+        }
+        let reason = stats.reason.map { " reason=\($0)" } ?? ""
+        return String(
+            format: "lfm25_dspark=%@ block=%d rounds=%d drafted=%d accepted=%d acceptance=%.1f%% rejected=%d verification=%d recoveries=%d fallback_forwards=%d adaptive_fallbacks=%d%@",
             state,
             stats.speculativeTokens,
             stats.rounds,
