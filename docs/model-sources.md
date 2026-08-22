@@ -868,11 +868,14 @@ minutes; 9,000 frames is the six-minute runtime hard limit.
 
 `--minimum-duration` and `--min-frames` add an EOS floor; duration floors round
 up across the vocoder's whole 512-sample hops so the decoded WAV does not
-undershoot. `--performance-mode optimized` is the BF16 default and uses compact
-semantic logits, fused projections, incremental depth caches, and batched flow
-guidance. The opt-in `q8` and `q4` modes apply group-64 affine quantization to
-the autoregressive transformers; `q8` is the recommended turbo tier. Flow stays
-BF16 because installed-checkpoint timing showed its quantized kernels regress.
+undershoot. `--performance-mode optimized` is the BF16 default and uses a
+compact semantic projection, a full-vocabulary sampling view, fused global
+language-model projections, and batched flow guidance. The eight-token residual
+depth prefix is recomputed without projection fusion because its cached/fused
+BF16 path changed seeded codebook choices and caused lyric drift. The opt-in
+`q8` and `q4` modes apply group-64 affine quantization to the autoregressive
+transformers; `q8` is the recommended turbo tier. Flow stays BF16 because
+installed-checkpoint timing showed its quantized kernels regress.
 
 Generation defaults to `--memory-mode staged`, which releases the language,
 flow, and vocoder weights between stages. `--memory-mode resident` keeps the

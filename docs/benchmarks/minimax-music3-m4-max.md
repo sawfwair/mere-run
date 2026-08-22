@@ -6,7 +6,14 @@ used the immutable managed `MiniMaxAI/MiniMax-Music3` snapshot, staged loading,
 44.1 kHz stereo PCM24 export, seed 37, guidance 1.7, and 30 flow steps unless a
 row says otherwise.
 
-## Matched 250-frame result
+## Historical matched 250-frame result
+
+The timings below describe the original acceleration graph. A later
+seeded-lyric parity correction retained the compact semantic head, global
+language-model fusion, and fixed-capacity global KV cache, but restored the
+masked 200,000-token sampling layout and removed incremental/fused execution
+from the eight-token residual-depth decoder. Treat these numbers as the
+pre-correction performance baseline, not current release timing.
 
 | Runtime | Wall time | Max resident | Relative speed |
 | --- | ---: | ---: | ---: |
@@ -20,12 +27,13 @@ logits measured cosine similarity 0.99985 and retained 98 of the BF16 top 100
 candidates. Q4 measured 0.99166 and retained 80 of 100; its small additional
 speedup comes with a larger sampling-distribution change.
 
-The BF16 optimized graph uses a 16,385-row reachable semantic head instead of
-projecting the full 200,000-token vocabulary at every 25 Hz frame, fused QKV
-and gate/up projections, incremental residual-depth KV caches, cached rotary
-and zero conditioning, batched conditional/unconditional flow evaluation, and
-fewer forced graph evaluations. `--performance-mode reference` preserves the
-released graph for parity investigations.
+The corrected BF16 optimized graph still projects only the 16,385 reachable
+semantic rows instead of the full 200,000-token vocabulary at every 25 Hz
+frame. It restores those values to their original vocabulary coordinates only
+for the lightweight categorical draw. Global QKV and gate/up projections,
+cached rotary/zero conditioning, batched conditional/unconditional flow
+evaluation, and fewer forced graph evaluations remain. Residual-depth prefix
+recomputation preserves the released seeded trajectory.
 
 ## MLX 0.32.1 follow-on
 
@@ -81,9 +89,11 @@ isolated tensor fixtures.
   BF16.
 - Serial flow CFG took 18.43 s versus 17.38 s for batched CFG on a matched
   100-frame, one-chunk, 30-step Q8 run. Batched CFG stays as the default.
-- Compiling only the residual-depth graph was waveform-identical, but an ABBA
-  series regressed from a 1.851 s eager median to a 2.157 s compiled median,
-  16.5% slower. The fixed-capacity cache remains eager.
+- Compiling only the residual-depth graph was waveform-identical in the
+  original benchmark, but an ABBA series regressed from a 1.851 s eager median
+  to a 2.157 s compiled median, 16.5% slower. Later lyric-level validation also
+  showed that cached/fused depth evaluation could change a late categorical
+  codebook choice, so the release path now recomputes the short depth prefix.
 - A production-shape ConvRot W8A8 Metal oracle retained 0.999929 cosine and
   0.01192 relative RMSE, but took 57.64 ms versus 3.47 ms for BF16 GEMM, 16.6 times
   slower on this M4 Max. The research test remains env-gated; the runtime does
