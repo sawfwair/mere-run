@@ -6,6 +6,14 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Image
+
+- added the official BF16 SenseNova U1.5 8B-MoT checkpoint as a pinned managed
+  model. Its native Swift/MLX runtime implements the dual-expert Qwen3 stack,
+  raw-pixel flow matching, resolution-scaled noise, shifted Euler sampling,
+  text CFG, and multi-image instruction editing without Python or an external
+  VAE.
+
 ### Text
 
 - added pinned LiquidAI DSpark companions for LFM2.5 1.2B Instruct, 2.6B,

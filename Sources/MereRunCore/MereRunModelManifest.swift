@@ -20,6 +20,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case zimageTurbo = "zimage-turbo"
         /// HiDream O1 unified pixel transformer family.
         case hidreamO1 = "hidream-o1"
+        /// SenseNova U1.5 unified understanding and raw-pixel generation transformer.
+        case senseNovaU15 = "sensenova-u1.5"
         /// Krea 2 text-to-image family.
         case krea2 = "krea-2"
         /// Ideogram 4 text-to-image family.
@@ -120,6 +122,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case klein
         case zimage
         case hidream
+        case senseNova = "sensenova"
         case krea
         case ideogram
         case gemma
@@ -1636,6 +1639,26 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                     scheduler: nil
                 ),
                 upstreamRepoId: "HiDream-ai/HiDream-O1-Image-Dev",
+                createdAt: createdAt
+            )
+        case .senseNovaU15:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .senseNovaU15,
+                family: .senseNova,
+                tier: .latest,
+                variant: .standard,
+                precision: .bf16,
+                defaults: Defaults(steps: 50, cfg: 4.0, sigmaShift: 3.0),
+                supports: [.txt2img, .img2img, .referenceEdit, .subjectPersonalization],
+                components: Components(
+                    tokenizer: .local(path: "."),
+                    textEncoder: .local(path: "."),
+                    transformer: .local(path: "."),
+                    vae: nil,
+                    scheduler: nil
+                ),
+                upstreamRepoId: "OpenSenseNova/SenseNova-U1",
                 createdAt: createdAt
             )
         case .krea2Raw:

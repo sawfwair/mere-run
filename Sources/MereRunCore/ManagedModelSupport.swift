@@ -295,6 +295,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 128
             ),
             descriptor(
+                SenseNovaU15Resources.modelID,
+                "Image, SenseNova U1.5",
+                "Runs the native raw-pixel SenseNova U1.5 model for text-to-image and multi-image editing.",
+                minimum: 64,
+                recommended: 96
+            ),
+            descriptor(
                 Krea2RawResources.modelId,
                 "Image training, Krea 2 Raw",
                 "Installs the Krea 2 Raw base checkpoint for LoRA training and post-training workflows.",

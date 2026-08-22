@@ -941,7 +941,7 @@ struct ImageGenerationPreflightAnalyzer {
         let hasInput = input.input != nil
         let hasReferences = !input.referenceImages.isEmpty
         guard hasInput || hasReferences else { return "text_to_image" }
-        if family == .klein {
+        if family == .klein || family == .senseNova {
             return "reference_image"
         }
         if hasInput && hasReferences {
@@ -954,7 +954,7 @@ struct ImageGenerationPreflightAnalyzer {
     }
 
     private static func familyUsesManifestDefaults(_ family: MereRunModelManifest.Family) -> Bool {
-        family == .hidream || family == .krea || family == .ideogram
+        family == .hidream || family == .krea || family == .ideogram || family == .senseNova
     }
 
     private static let supportedImageFamilies: Set<MereRunModelManifest.Family?> = [
@@ -963,5 +963,6 @@ struct ImageGenerationPreflightAnalyzer {
         .hidream,
         .krea,
         .ideogram,
+        .senseNova,
     ]
 }

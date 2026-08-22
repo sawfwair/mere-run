@@ -534,6 +534,7 @@ enum APISidecarImageKind: String, Hashable, Sendable {
     case flux2Klein
     case zImageTurbo
     case hiDreamO1
+    case senseNovaU15
     case krea2
     case ideogram4
     case qwenImageEdit
@@ -668,6 +669,7 @@ private enum APISidecarImageGenerator: @unchecked Sendable {
     case flux2Klein(Flux2KleinGenerator)
     case zImageTurbo(ZImageTurboGenerator)
     case hiDreamO1(HiDreamO1Generator)
+    case senseNovaU15(SenseNovaU15Generator)
     case krea2(Krea2Generator)
     case ideogram4(Ideogram4Generator)
     case qwenImageEdit(QwenImageEditGenerator)
@@ -797,6 +799,8 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                         return .zImageTurbo(ZImageTurboGenerator())
                     case .hiDreamO1:
                         return .hiDreamO1(HiDreamO1Generator())
+                    case .senseNovaU15:
+                        return .senseNovaU15(SenseNovaU15Generator())
                     case .krea2:
                         return .krea2(Krea2Generator())
                     case .ideogram4:
@@ -813,6 +817,8 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                         await generator.unload()
                     case .hiDreamO1(let generator):
                         generator.unload()
+                    case .senseNovaU15(let generator):
+                        generator.unload()
                     case .krea2(let generator):
                         generator.unload()
                     case .ideogram4(let generator):
@@ -828,6 +834,8 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                     case .zImageTurbo(let generator):
                         return try await generator.generate(request, progressHandler: nil)
                     case .hiDreamO1(let generator):
+                        return try await generator.generate(request, progressHandler: nil)
+                    case .senseNovaU15(let generator):
                         return try await generator.generate(request, progressHandler: nil)
                     case .krea2(let generator):
                         return try await generator.generate(request, progressHandler: nil)
@@ -1447,6 +1455,8 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
             await generator.unload()
         case .hiDreamO1(let generator):
             generator.unload()
+        case .senseNovaU15(let generator):
+            generator.unload()
         case .krea2(let generator):
             generator.unload()
         case .ideogram4(let generator):
@@ -1540,6 +1550,8 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
             return 12 * gibibyte
         case .hiDreamO1, .krea2, .ideogram4, .qwenImageEdit:
             return 16 * gibibyte
+        case .senseNovaU15:
+            return 48 * gibibyte
         }
     }
 
@@ -1555,7 +1567,7 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                 height: height
             )
             return (resolution.width, resolution.height)
-        case .flux2Klein, .zImageTurbo, .krea2, .ideogram4, .qwenImageEdit:
+        case .flux2Klein, .zImageTurbo, .senseNovaU15, .krea2, .ideogram4, .qwenImageEdit:
             return (width, height)
         }
     }

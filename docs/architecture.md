@@ -45,6 +45,17 @@ Qwen image editing:
   - `Sources/MereRunCore/QwenImageEdit/QwenImageEditGenerator+ModelLoading.swift`
   - `Sources/MereRunCore/QwenImageEdit/QwenImageEditGenerator+Encoding.swift`
 
+SenseNova U1.5 generation and editing:
+
+- Runtime entry point: `Sources/MereRunCore/SenseNovaU15/SenseNovaU15Generator.swift`
+- Read next:
+  - `Sources/MereRunCore/SenseNovaU15/SenseNovaU15Model.swift`
+  - `Sources/MereRunCore/SenseNovaU15/SenseNovaU15VisionAndHead.swift`
+  - `Sources/MereRunCore/SenseNovaU15/SenseNovaU15Tokenizer.swift`
+  - `Sources/MereRunCore/SenseNovaU15/SenseNovaU15Scheduler.swift`
+  - `Sources/MereRunCore/SenseNovaU15/SenseNovaU15ImageIO.swift`
+  - `Sources/MereRunCore/SenseNovaU15/SenseNovaU15Resources.swift`
+
 Krea 2 generation and LoRA training:
 
 - Runtime entry point: `Sources/MereRunCore/Krea2/Krea2Generator.swift`

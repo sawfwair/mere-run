@@ -4,7 +4,7 @@ Use the image runtime to generate an image from a prompt, train a low-rank
 adaptation (LoRA) on your own pictures, replay a generation from a saved plan,
 or convert one photo into a textured three-dimensional (3D) mesh. The runtime
 supports eight model families, from compact ZImage checkpoints through FLUX.2
-Klein, HiDream O1, Krea 2, and Ideogram 4.
+Klein, HiDream O1, SenseNova U1.5, Krea 2, and Ideogram 4.
 
 ## Commands
 
@@ -63,6 +63,7 @@ The public image families are:
 - `image-bonsai-ternary`: PrismML Bonsai ternary FLUX.2 Klein deployment
 - `image-zimage-*`: ZImage image family
 - `image-hidream-o1*`: HiDream O1 unified pixel-transformer family
+- `image-sensenova-u1-5-8b-mot`: SenseNova U1.5 raw-pixel generation and editing family
 - `image-krea2-raw`: Krea 2 Raw base checkpoint for LoRA training
 - `image-krea2-turbo`: Krea 2 Turbo text-to-image and LoRA inference family
 - `image-ideogram4-sdnq-uint4`: Ideogram 4 SDNQ uint4 text-to-image family
@@ -80,6 +81,7 @@ Common managed IDs:
 - `image-zimage-max`
 - `image-hidream-o1-dev`
 - `image-hidream-o1`
+- `image-sensenova-u1-5-8b-mot`
 - `image-krea2-raw`
 - `image-krea2-turbo`
 - `image-ideogram4-sdnq-uint4`
@@ -336,6 +338,37 @@ MERERUN_RUN_E2E=installed MERERUN_E2E_HIDREAM=1 ./scripts/check.sh
 MERERUN_RUN_E2E=installed MERERUN_E2E_HIDREAM_FULL=1 ./scripts/check.sh
 ```
 
+### SenseNova U1.5 generation and editing
+
+`image-sensenova-u1-5-8b-mot` pins the official SenseNova U1.5 MoT checkpoint.
+The native Swift/MLX runtime loads its dual understanding/generation experts,
+builds reusable prefix KV caches, and denoises RGB pixels directly; it does not
+launch Python and does not require a separate text encoder or VAE. The managed
+manifest defaults match the published examples: 50 steps, CFG 4, and timestep
+shift 3. Output dimensions must be multiples of 32.
+
+```bash
+swift run mere.run model pull image-sensenova-u1-5-8b-mot
+
+# Text to image
+swift run mere.run image generate \
+  --model image-sensenova-u1-5-8b-mot \
+  --prompt "A lunar greenhouse at blue hour, cinematic photography" \
+  --width 2048 --height 2048 \
+  --output ./lunar-greenhouse.png
+
+# Instruction editing; repeat --ref-image for additional references.
+swift run mere.run image generate \
+  --model image-sensenova-u1-5-8b-mot \
+  --prompt "Keep the subject, replace the background with a snowy mountain pass" \
+  --input ./subject.png \
+  --width 2048 --height 2048 \
+  --output ./mountain-edit.png
+```
+
+The BF16 checkpoint is about 50 GB on disk. The capability gate requires at
+least 64 GB unified memory and recommends 96 GB for generation headroom.
+
 ### Krea 2 Raw and Turbo
 
 `image-krea2-raw` maps to `krea/Krea-2-Raw` and installs Krea's base
@@ -505,6 +538,16 @@ generation; smaller shapes stay on the byte-identical dense path. In a warm
 - `Sources/MereRunCore/HiDreamO1/HiDreamO1ImagePreprocessor.swift`
 - `Sources/MereRunCore/HiDreamO1/HiDreamO1TokenizerAndTemplate.swift`
 - `Sources/MereRunCore/HiDreamO1/HiDreamO1Scheduler.swift`
+
+### SenseNova U1.5 family
+
+- `Sources/MereRunCore/SenseNovaU15/SenseNovaU15Generator.swift`
+- `Sources/MereRunCore/SenseNovaU15/SenseNovaU15Model.swift`
+- `Sources/MereRunCore/SenseNovaU15/SenseNovaU15VisionAndHead.swift`
+- `Sources/MereRunCore/SenseNovaU15/SenseNovaU15Tokenizer.swift`
+- `Sources/MereRunCore/SenseNovaU15/SenseNovaU15Scheduler.swift`
+- `Sources/MereRunCore/SenseNovaU15/SenseNovaU15ImageIO.swift`
+- `Sources/MereRunCore/SenseNovaU15/SenseNovaU15Resources.swift`
 
 ### Krea 2 family
 
