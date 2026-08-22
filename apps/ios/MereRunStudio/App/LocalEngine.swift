@@ -81,10 +81,27 @@ final class LocalEngine: ObservableObject {
 
     static let chatModels: [Model] = [
         Model(
+            id: "text-chat-lfm25-1.2b-qad-4bit",
+            kind: .chat,
+            title: "Liquid QAD Mini",
+            detail: "The memory-first Liquid assistant for iPhones with 4 GB or more.",
+            minimumMemoryGB: 4,
+            licenseNote: "LFM Open License: free for personal use and for companies under USD 10M revenue."
+        ),
+        Model(
             id: "text-chat-lfm25-2.6b-4bit",
             kind: .chat,
             title: "Liquid Chat",
             detail: "A quick assistant sized for a phone. Your words never leave it.",
+            minimumMemoryGB: 6,
+            licenseNote: "LFM Open License: free for personal use and for companies under USD 10M revenue."
+        ),
+        Model(
+            id: "text-chat-lfm25-2.6b-qad-4bit",
+            kind: .chat,
+            title: "Liquid QAD 2.6B",
+            detail: "QAD-trained 4-bit quality recovery for iPhones with 8 GB or more.",
+            minimumMemoryGB: 8,
             licenseNote: "LFM Open License: free for personal use and for companies under USD 10M revenue."
         ),
         Model(
@@ -97,6 +114,19 @@ final class LocalEngine: ObservableObject {
     ]
 
     static var allModels: [Model] { imageModels + chatModels }
+
+    static var preferredChatModelID: String {
+        let preferredIDs = [
+            "text-chat-lfm25-2.6b-4bit",
+            "text-chat-lfm25-1.2b-qad-4bit",
+        ]
+        for id in preferredIDs {
+            if let model = chatModels.first(where: { $0.id == id }), model.isCompatible {
+                return id
+            }
+        }
+        return chatModels[0].id
+    }
 
     static func model(withID id: String) -> Model? {
         allModels.first { $0.id == id }
@@ -334,7 +364,8 @@ final class LocalEngine: ObservableObject {
 
     init() {
         let saved = UserDefaults.standard.string(forKey: "local.selectedChatModelID")
-        selectedChatModelID = Self.chatModels.first { $0.id == saved }?.id ?? Self.chatModels[0].id
+        selectedChatModelID = Self.chatModels.first { $0.id == saved && $0.isCompatible }?.id
+            ?? Self.preferredChatModelID
         refresh()
         guard Self.isSupported else { return }
         HubBackgroundTransferSession.shared.reconnect()

@@ -2054,6 +2054,30 @@ public enum ManagedModelCatalog {
             apiProfile: .lfm2()
         ),
         ManagedModelSpec(
+            id: LFM2Resources.smallQADModelId,
+            category: .textChat,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: LFM2Resources.smallQADRepoId,
+                revision: LFM2Resources.smallQADRevision,
+                patterns: LFM2Resources.qadSnapshotPatterns
+            ),
+            upstreamRepoId: LFM2Resources.smallQADRepoId,
+            upstreamRevision: LFM2Resources.smallQADRevision,
+            usageRestriction: usageRestriction(
+                summary: "LFM uses a custom open license; commercial use by entities with at least USD 10M annual revenue is not licensed under its community terms.",
+                license: "LFM Open License v1.0",
+                sourceRepoId: LFM2Resources.smallQADRepoId,
+                sourceRevision: LFM2Resources.smallQADRevision,
+                licenseURL: "https://huggingface.co/\(LFM2Resources.smallQADRepoId)/blob/\(LFM2Resources.smallQADRevision)/LICENSE"
+            ),
+            validationKind: .lfm2,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: LFM2Resources.smallQADEstimatedDownloadBytes,
+            defaultCLICommands: ["text chat", "api serve"],
+            apiProfile: .lfm2()
+        ),
+        ManagedModelSpec(
             id: LFM2Resources.denseModelId,
             category: .textChat,
             installShape: .directoryRoot,
@@ -2074,6 +2098,30 @@ public enum ManagedModelCatalog {
             validationKind: .lfm2,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 1_601_108_788,
+            defaultCLICommands: ["text chat", "api serve"],
+            apiProfile: .lfm2()
+        ),
+        ManagedModelSpec(
+            id: LFM2Resources.denseQADModelId,
+            category: .textChat,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: LFM2Resources.denseQADRepoId,
+                revision: LFM2Resources.denseQADRevision,
+                patterns: LFM2Resources.qadSnapshotPatterns
+            ),
+            upstreamRepoId: LFM2Resources.denseQADRepoId,
+            upstreamRevision: LFM2Resources.denseQADRevision,
+            usageRestriction: usageRestriction(
+                summary: "LFM uses a custom open license; commercial use by entities with at least USD 10M annual revenue is not licensed under its community terms.",
+                license: "LFM Open License v1.0",
+                sourceRepoId: LFM2Resources.denseQADRepoId,
+                sourceRevision: LFM2Resources.denseQADRevision,
+                licenseURL: "https://huggingface.co/\(LFM2Resources.denseQADRepoId)/blob/\(LFM2Resources.denseQADRevision)/LICENSE"
+            ),
+            validationKind: .lfm2,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: LFM2Resources.denseQADEstimatedDownloadBytes,
             defaultCLICommands: ["text chat", "api serve"],
             apiProfile: .lfm2()
         ),

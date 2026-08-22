@@ -1239,6 +1239,26 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                     "\(LFM2Resources.smallUpstreamRepoId)@\(LFM2Resources.smallUpstreamRevision)",
                 createdAt: createdAt
             )
+        case .lfm25Small1_2BQAD4Bit:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .lfm2,
+                family: .liquid,
+                tier: .nano,
+                variant: .standard,
+                precision: .int4,
+                quantization: Quantization(
+                    bits: 4,
+                    groupSize: 32,
+                    scheme: "liquid-qad-q4_0-mlx-affine-g32"
+                ),
+                defaults: nil,
+                supports: [.chat],
+                components: q35TextComponents,
+                upstreamRepoId:
+                    "\(LFM2Resources.smallQADRepoId)@\(LFM2Resources.smallQADRevision)",
+                createdAt: createdAt
+            )
         case .lfm25Dense2_6B4Bit:
             return MereRunModelManifest(
                 id: modelID.rawValue,
@@ -1252,6 +1272,26 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.chat],
                 components: denseLFM2TextComponents,
                 upstreamRepoId: "\(LFM2Resources.denseUpstreamRepoId)@\(LFM2Resources.denseUpstreamRevision)",
+                createdAt: createdAt
+            )
+        case .lfm25Dense2_6BQAD4Bit:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .lfm2,
+                family: .liquid,
+                tier: .nano,
+                variant: .standard,
+                precision: .int4,
+                quantization: Quantization(
+                    bits: 4,
+                    groupSize: 32,
+                    scheme: "liquid-qad-q4_0-mlx-affine-g32"
+                ),
+                defaults: nil,
+                supports: [.chat],
+                components: q35TextComponents,
+                upstreamRepoId:
+                    "\(LFM2Resources.denseQADRepoId)@\(LFM2Resources.denseQADRevision)",
                 createdAt: createdAt
             )
         case .lfm25Dense2_6BBF16:

@@ -97,7 +97,9 @@ an effective overlay; they are not a second capability catalog.
 | `text-chat` | `text-chat-lfm25-a1b-8bit` |
 | `text-chat` | `text-chat-lfm25-a1b-bf16` |
 | `text-chat` | `text-chat-lfm25-1.2b-bf16` |
+| `text-chat` | `text-chat-lfm25-1.2b-qad-4bit` |
 | `text-chat` | `text-chat-lfm25-2.6b-4bit` |
+| `text-chat` | `text-chat-lfm25-2.6b-qad-4bit` |
 | `text-chat` | `text-chat-lfm25-2.6b-bf16` |
 | `vision-chat` | `vision-chat-lfm25-3b-8bit` |
 | `speech-tts` | `speech-tts-qwen3-nano` |
@@ -483,6 +485,13 @@ This quantized target does not attach the BF16-trained DSpark assistant.
 `LiquidAI/LFM2.5-1.2B-Instruct-DSpark` at revision
 `4876d04848e15a6fd48d7c1481110e7cf5d62621`.
 
+`text-chat-lfm25-1.2b-qad-4bit` uses
+`Sawfwair/LFM2.5-1.2B-Instruct-QAD-MLX-4bit` at revision
+`b1caaa502c5bfd975f5219162eaa90b1e7cc7839`. The conversion pins LiquidAI's
+QAD Q4_0 GGUF at revision `afbd8eaeab5dd94ba0b079ebfb02517d19641e38`,
+keeps every projection nibble and scale exact in MLX group-32 affine tensors,
+and records all source and output hashes in `MERERUN_CONVERSION.json`.
+
 `text-chat-lfm25-2.6b-4bit` uses the pinned `4bit/` partition of
 `LiquidAI/LFM2.5-2.6B-MLX`. The managed pull selects only that partition plus
 the repository license and model card, then normalizes the nested directory
@@ -494,6 +503,16 @@ unquantized target.
 `text-chat-lfm25-2.6b-bf16` uses `LiquidAI/LFM2.5-2.6B` at revision
 `a334ee78cd38458bb71eda24109ac42dcec1309d`, the exact target for the managed
 2.6B DSpark companion.
+
+`text-chat-lfm25-2.6b-qad-4bit` uses
+`Sawfwair/LFM2.5-2.6B-QAD-MLX-4bit` at revision
+`e829e540629759fdb886cb529e4d03640a11ffa7`. Its conversion pins LiquidAI's
+QAD Q4_0 GGUF at revision `f4a289c8a200a5ca71005ba7abc2dad33058a450`
+and follows the same exact projection conversion contract. The standard 2.6B
+MLX 4-bit checkpoint remains the faster native MLX lane; the QAD variant exists
+for the quantized-accuracy tradeoff. Liquid's published QAD throughput values
+reuse native llama.cpp Q4_0 throughput because QAD and PTQ share that format,
+not because QAD itself adds a runtime speedup.
 
 The three exact BF16 LFM2.5 text targets install matching DSpark sidecars from LiquidAI:
 `LFM2.5-8B-A1B-DSpark` at revision
@@ -729,8 +748,10 @@ MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull text-chat-q36-n
 MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull text-chat-lfm25-a1b-8bit --accept-model-license
 MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull text-chat-lfm25-a1b-bf16 --accept-model-license
 MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull text-chat-lfm25-1.2b-bf16 --accept-model-license
+MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull text-chat-lfm25-1.2b-qad-4bit --accept-model-license
 MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull text-chat-lfm25-2.6b-4bit --accept-model-license
 MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull text-chat-lfm25-2.6b-bf16 --accept-model-license
+MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull text-chat-lfm25-2.6b-qad-4bit --accept-model-license
 MERERUN_MODELS_DIR=/Volumes/Models swift run mere.run model pull vision-chat-lfm25-3b-8bit --accept-model-license
 
 # Inspect installed models

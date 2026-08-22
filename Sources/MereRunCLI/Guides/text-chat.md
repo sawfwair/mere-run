@@ -6,7 +6,7 @@ Run a local chat-style text model for answers, drafting, analysis, or lightweigh
 
 ## Required Models
 
-Supported native managed ids include `text-chat-gemma4`, `text-chat-gemma4-12b`, `text-chat-gemma4-12b-4bit`, `text-chat-gemma4-turbo`, `text-chat-gemma4-nano`, `text-chat-gemma4-max`, `text-chat-laguna-s-2-1`, `text-chat-laguna-xs-2-1`, `text-chat-q36-nano`, `text-chat-bonsai-27b-1bit`, `text-chat-bonsai-27b-2bit`, `text-agent-ornith-9b`, `text-agent-ornith-35b-mlx-4bit`, `text-agent-ornith-35b-mlx-6bit`, `text-agent-ornith-35b-mlx-8bit`, `text-agent-ornith-35b-mlx`, `text-chat-lfm25-2.6b-4bit`, `text-chat-lfm25-a1b-8bit`, `vision-chat-lfm25-3b-8bit`, and `text-chat-psi-agent`.
+Supported native managed ids include `text-chat-gemma4`, `text-chat-gemma4-12b`, `text-chat-gemma4-12b-4bit`, `text-chat-gemma4-turbo`, `text-chat-gemma4-nano`, `text-chat-gemma4-max`, `text-chat-laguna-s-2-1`, `text-chat-laguna-xs-2-1`, `text-chat-q36-nano`, `text-chat-bonsai-27b-1bit`, `text-chat-bonsai-27b-2bit`, `text-agent-ornith-9b`, `text-agent-ornith-35b-mlx-4bit`, `text-agent-ornith-35b-mlx-6bit`, `text-agent-ornith-35b-mlx-8bit`, `text-agent-ornith-35b-mlx`, `text-chat-lfm25-1.2b-qad-4bit`, `text-chat-lfm25-2.6b-4bit`, `text-chat-lfm25-2.6b-qad-4bit`, `text-chat-lfm25-a1b-8bit`, `vision-chat-lfm25-3b-8bit`, and `text-chat-psi-agent`.
 `text-chat-gemma4-12b` is the managed dense Google Gemma 4 12B-it checkpoint, routed through the native Swift Gemma 4 runtime for text chat.
 Pulling `text-chat-gemma4-12b` or `vision-chat-gemma4-12b` also installs the managed `text-chat-gemma4-12b-mtp` assistant; greedy serial Gemma 12B decode uses it for verified decode-tail MTP when the prompt is above the configured threshold.
 `text-chat-gemma4-turbo` is the managed MLX NVFP4 Gemma 4 26B-A4B-it MoE tier for 32 GB Apple Silicon Macs.
@@ -24,6 +24,12 @@ All use the native Qwen-family runtime, require an explicit managed pull, and
 share the pinned base-checkpoint MTP companion installed by that pull. Managed
 Ornith 1.5 enables verified MTP drafting from short prompts.
 `text-chat-lfm25-2.6b-4bit` is the managed LiquidAI LFM2.5 2.6B dense MLX 4-bit snapshot and runs through the native Swift LFM2 runtime.
+The `text-chat-lfm25-1.2b-qad-4bit` and `text-chat-lfm25-2.6b-qad-4bit`
+models are deterministic native-MLX conversions of LiquidAI's QAD-trained
+Q4_0 checkpoints. QAD retains the compact Q4_0 representation while recovering
+accuracy lost by post-training quantization; it does not add a separate speedup
+over a comparable Q4_0 runtime. The 1.2B model is the memory-first tier. The
+standard 2.6B MLX model remains the faster compact 2.6B lane.
 `text-chat-lfm25-a1b-8bit` is the managed LiquidAI LFM2.5 8B-A1B MLX 8-bit snapshot and runs through the native Swift LFM2 runtime.
 `vision-chat-lfm25-3b-8bit` adds LiquidAI's SigLIP2 vision tower and multimodal projector to the dense LFM2.5 2.6B language backbone. Use `--image` with a local path or base64 data URL.
 `text-chat-laguna-s-2-1` is the opt-in managed Poolside 118B-A8B NVFP4 target
@@ -38,6 +44,7 @@ serialization. It is opt-in and does not use the Laguna S DFlash companion.
 
 | Unified memory | Winner | Why |
 | --- | --- | --- |
+| 8-15 GB | `text-chat-lfm25-1.2b-qad-4bit` | Memory-first native chat; use the optimized 2.6B MLX model when its larger resident footprint fits. |
 | 16-23 GB | `text-chat-gemma4-12b-4bit` | Best compact first chat pick; `text-chat-gemma4-nano` is the safer smallest fallback. |
 | 24-63 GB | `text-chat-gemma4-12b-4bit` | Default grounded local-assistant tier; `text-chat-gemma4-turbo` is the larger Gemma alternate. |
 | 64-95 GB | `text-chat-gemma4-12b-4bit` | Keep the proven Gemma assistant lane; spend headroom on context, concurrency, or larger Gemma alternates. |
@@ -48,6 +55,7 @@ serialization. It is opt-in and does not use the Laguna S DFlash companion.
 ```bash
 mere.run model capabilities
 mere.run model pull text-chat-gemma4-12b-4bit
+mere.run model pull text-chat-lfm25-1.2b-qad-4bit --accept-model-license
 mere.run model pull text-chat-lfm25-2.6b-4bit --accept-model-license
 mere.run model pull vision-chat-lfm25-3b-8bit --accept-model-license
 mere.run model pull text-chat-laguna-s-2-1

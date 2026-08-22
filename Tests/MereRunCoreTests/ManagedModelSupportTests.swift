@@ -311,6 +311,38 @@ final class ManagedModelSupportTests: XCTestCase {
         XCTAssertEqual(report.descriptor.recommendedUnifiedMemoryGB, 12)
     }
 
+    func testSmallQADLFM25RunsInFourGBMemoryTier() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: LFM2Resources.smallQADModelId))
+        let machine = MereRunMachineProfile(
+            physicalMemoryBytes: 4 * 1_073_741_824,
+            processorName: "A17 Pro",
+            isAppleSiliconMac: true
+        )
+
+        let report = ManagedModelCapabilityCatalog.support(for: spec, on: machine)
+
+        XCTAssertTrue(report.isSupported)
+        XCTAssertFalse(report.meetsRecommendedMemory)
+        XCTAssertEqual(report.descriptor.minimumUnifiedMemoryGB, 4)
+        XCTAssertEqual(report.descriptor.recommendedUnifiedMemoryGB, 8)
+    }
+
+    func testDenseQADLFM25RunsInEightGBMemoryTier() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: LFM2Resources.denseQADModelId))
+        let machine = MereRunMachineProfile(
+            physicalMemoryBytes: 8 * 1_073_741_824,
+            processorName: "M1",
+            isAppleSiliconMac: true
+        )
+
+        let report = ManagedModelCapabilityCatalog.support(for: spec, on: machine)
+
+        XCTAssertTrue(report.isSupported)
+        XCTAssertFalse(report.meetsRecommendedMemory)
+        XCTAssertEqual(report.descriptor.minimumUnifiedMemoryGB, 8)
+        XCTAssertEqual(report.descriptor.recommendedUnifiedMemoryGB, 12)
+    }
+
     func testLFM25VisionRunsInCompactMemoryTier() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: LFM2Resources.visionModelId))
         let machine = MereRunMachineProfile(
@@ -551,8 +583,9 @@ final class ManagedModelSupportTests: XCTestCase {
 
         let bands = ManagedModelCapabilityCatalog.recommendedChatBandReports(on: machine)
 
-        XCTAssertEqual(bands.map(\.bandLabel), ["16-23 GB", "24-63 GB", "64-95 GB", "96+ GB"])
+        XCTAssertEqual(bands.map(\.bandLabel), ["8-15 GB", "16-23 GB", "24-63 GB", "64-95 GB", "96+ GB"])
         XCTAssertEqual(bands.map(\.modelID), [
+            LFM2Resources.smallQADModelId,
             Gemma4Resources.twelveB4BitModelId,
             Gemma4Resources.twelveB4BitModelId,
             Gemma4Resources.twelveB4BitModelId,

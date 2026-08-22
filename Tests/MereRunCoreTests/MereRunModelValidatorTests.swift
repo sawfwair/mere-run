@@ -48,7 +48,7 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
 
         let modelType: String
         switch id {
-        case .lfm25Dense2_6B4Bit:
+        case .lfm25Small1_2BQAD4Bit, .lfm25Dense2_6B4Bit, .lfm25Dense2_6BQAD4Bit:
             modelType = "lfm2"
         case .lfm25VL3B8Bit:
             modelType = "lfm2_vl"

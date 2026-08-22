@@ -1,5 +1,45 @@
 # Native model conversion
 
+## LiquidAI LFM2.5 QAD Q4_0 to MLX
+
+`convert_lfm25_qad_mlx.py` converts LiquidAI's immutable QAD Q4_0 GGUF
+checkpoints into native MLX safetensors for the existing Swift LFM2 runtime.
+It repacks every Q4_0 nibble and FP16 block scale exactly into MLX affine
+4-bit/group-32 tensors (`bias = -8 * scale`) without applying a second
+quantizer. The GGUF's single Q6_K tied token embedding is decoded and
+requantized to MLX affine 6-bit/group-64 so tied output projection remains on a
+quantized kernel. The resulting maximum and mean elementwise errors are recorded
+in `MERERUN_CONVERSION.json`.
+
+Pass `--q4-layout affine64` to build the performance candidate that decodes the
+QAD values once and requantizes them to MLX affine 4-bit/group-64. This is not a
+bit-exact repack: its measured maximum and weighted-mean error are written to
+the receipt, and it must pass output-quality and real-runtime speed gates before
+publication. The default remains the exact group-32 representation.
+
+The source directory must contain the pinned QAD GGUF plus the original model's
+`LICENSE`, `README.md`, config, tokenizer, generation config, and chat template.
+Every input is size- and SHA-256-verified before conversion. Outputs are written
+transactionally and include a managed-model manifest, model card, and complete
+artifact receipt.
+
+```bash
+uv run --script scripts/model-conversion/convert_lfm25_qad_mlx.py \
+  --profile 1.2b \
+  --source /path/to/lfm25-qad-1.2b \
+  --output /path/to/LFM2.5-1.2B-Instruct-QAD-MLX-4bit
+
+uv run --script scripts/model-conversion/convert_lfm25_qad_mlx.py \
+  --profile 2.6b \
+  --source /path/to/lfm25-qad-2.6b \
+  --output /path/to/LFM2.5-2.6B-QAD-MLX-4bit
+```
+
+The publishable artifacts belong at
+`Sawfwair/LFM2.5-1.2B-Instruct-QAD-MLX-4bit` and
+`Sawfwair/LFM2.5-2.6B-QAD-MLX-4bit`. Pin the resulting immutable Hub commits in
+the managed catalog only after native runtime and output-quality validation.
+
 ## NVIDIA Nemotron 3.5 Lightning and DSpark MLX
 
 The Nemotron converters accept only NVIDIA's exact ModelOpt releases at the

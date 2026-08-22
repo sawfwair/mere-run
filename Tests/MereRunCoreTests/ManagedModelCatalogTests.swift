@@ -138,8 +138,10 @@ final class ManagedModelCatalogTests: XCTestCase {
             "text-chat-lfm25-a1b-8bit",
             "text-chat-lfm25-a1b-bf16",
             "text-chat-lfm25-1.2b-bf16",
+            "text-chat-lfm25-1.2b-qad-4bit",
             "text-chat-lfm25-2.6b-4bit",
             "text-chat-lfm25-2.6b-bf16",
+            "text-chat-lfm25-2.6b-qad-4bit",
             "text-chat-lfm25-a1b-dspark",
             "text-chat-lfm25-1.2b-dspark",
             "text-chat-lfm25-2.6b-dspark",
@@ -1200,6 +1202,37 @@ final class ManagedModelCatalogTests: XCTestCase {
 
         XCTAssertEqual(spec.normalizedRootURL(root), variant.standardizedFileURL)
         XCTAssertTrue(spec.missingPaths(in: root).isEmpty)
+    }
+
+    func testLFM25QADModelsUsePinnedSawfwairMLXSnapshots() throws {
+        let expected = [
+            (
+                LFM2Resources.smallQADModelId,
+                LFM2Resources.smallQADRepoId,
+                LFM2Resources.smallQADRevision,
+                LFM2Resources.smallQADEstimatedDownloadBytes
+            ),
+            (
+                LFM2Resources.denseQADModelId,
+                LFM2Resources.denseQADRepoId,
+                LFM2Resources.denseQADRevision,
+                LFM2Resources.denseQADEstimatedDownloadBytes
+            ),
+        ]
+
+        for (modelID, repoID, revision, downloadBytes) in expected {
+            let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: modelID))
+            XCTAssertEqual(spec.category, .textChat)
+            XCTAssertEqual(spec.installShape, .directoryRoot)
+            XCTAssertEqual(spec.hubFallback?.repoId, repoID)
+            XCTAssertEqual(spec.hubFallback?.revision, revision)
+            XCTAssertEqual(spec.hubFallback?.patterns, LFM2Resources.qadSnapshotPatterns)
+            XCTAssertEqual(spec.validationKind, .lfm2)
+            XCTAssertEqual(spec.defaultRuntimeServingEngine, .textChatLFM2)
+            XCTAssertEqual(spec.estimatedDownloadBytes, downloadBytes)
+            XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
+            XCTAssertNotNil(spec.usageRestriction)
+        }
     }
 
     func testLFM25TargetsUseTheirPinnedDSparkCompanions() throws {

@@ -13,6 +13,10 @@ public struct LFM2Resources: Sendable, Hashable {
     public static let smallUpstreamRepoId = "LiquidAI/LFM2.5-1.2B-Instruct"
     public static let smallUpstreamRevision = "df58c174f05ff733f83f8cae10ea9298224c8006"
     public static let smallEstimatedDownloadBytes: Int64 = 2_345_555_000
+    public static let smallQADModelId = "text-chat-lfm25-1.2b-qad-4bit"
+    public static let smallQADRepoId = "Sawfwair/LFM2.5-1.2B-Instruct-QAD-MLX-4bit"
+    public static let smallQADRevision = "b1caaa502c5bfd975f5219162eaa90b1e7cc7839"
+    public static let smallQADEstimatedDownloadBytes: Int64 = 761_967_712
     public static let denseModelId = "text-chat-lfm25-2.6b-4bit"
     public static let denseUpstreamRepoId = "LiquidAI/LFM2.5-2.6B-MLX"
     public static let denseUpstreamRevision = "58e239c769c4eb2b766fee80f0b7228bff837baf"
@@ -21,6 +25,10 @@ public struct LFM2Resources: Sendable, Hashable {
     public static let denseBF16UpstreamRepoId = "LiquidAI/LFM2.5-2.6B"
     public static let denseBF16UpstreamRevision = "a334ee78cd38458bb71eda24109ac42dcec1309d"
     public static let denseBF16EstimatedDownloadBytes: Int64 = 5_394_427_456
+    public static let denseQADModelId = "text-chat-lfm25-2.6b-qad-4bit"
+    public static let denseQADRepoId = "Sawfwair/LFM2.5-2.6B-QAD-MLX-4bit"
+    public static let denseQADRevision = "e829e540629759fdb886cb529e4d03640a11ffa7"
+    public static let denseQADEstimatedDownloadBytes: Int64 = 1_753_796_391
     public static let visionModelId = "vision-chat-lfm25-3b-8bit"
     public static let visionUpstreamRepoId = "LiquidAI/LFM2.5-VL-3B-MLX-8bit"
     public static let visionUpstreamRevision = "4065d2c056a9c54d44fec67cf651812b55c6673f"
@@ -68,6 +76,8 @@ public struct LFM2Resources: Sendable, Hashable {
         "LICENSE", "README.md", "config.json", "model.safetensors",
     ]
 
+    public static let qadSnapshotPatterns = snapshotPatterns + ["MERERUN_CONVERSION.json"]
+
     public static let visionSnapshotPatterns = [
         "LICENSE*",
         "README.md",
@@ -86,16 +96,20 @@ public struct LFM2Resources: Sendable, Hashable {
         defaultModelId,
         a1bBF16ModelId,
         smallModelId,
+        smallQADModelId,
         denseModelId,
         denseBF16ModelId,
+        denseQADModelId,
         visionModelId,
     ]
     public static let upstreamRepoIds = [
         upstreamRepoId,
         a1bBF16UpstreamRepoId,
         smallUpstreamRepoId,
+        smallQADRepoId,
         denseUpstreamRepoId,
         denseBF16UpstreamRepoId,
+        denseQADRepoId,
         visionUpstreamRepoId,
     ]
 

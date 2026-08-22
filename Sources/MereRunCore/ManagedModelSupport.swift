@@ -561,12 +561,27 @@ public enum ManagedModelCapabilityCatalog {
                 setup: true
             ),
             descriptor(
+                LFM2Resources.smallQADModelId,
+                "LFM2.5 1.2B QAD 4-bit",
+                "Runs the compact QAD-trained LFM2.5 1.2B checkpoint in native MLX; choose it when memory matters more than BF16 or DSpark throughput.",
+                minimum: 4,
+                recommended: 8,
+                setup: true
+            ),
+            descriptor(
                 LFM2Resources.denseModelId,
                 "LFM2.5 2.6B 4-bit",
                 "Runs the LiquidAI LFM2.5 2.6B dense MLX 4-bit snapshot through the native Swift LFM2 runtime.",
                 minimum: 8,
                 recommended: 12,
                 setup: true
+            ),
+            descriptor(
+                LFM2Resources.denseQADModelId,
+                "LFM2.5 2.6B QAD 4-bit",
+                "Runs the QAD-trained LFM2.5 2.6B checkpoint in native MLX for quantized quality recovery; the standard MLX 4-bit model remains the faster compact lane.",
+                minimum: 8,
+                recommended: 12
             ),
             descriptor(
                 LFM2Resources.denseBF16ModelId,
@@ -1257,6 +1272,18 @@ public enum ManagedModelCapabilityCatalog {
             headroomAssistantSummary = "Keep the proven Gemma local-assistant lane as default; use the headroom for context, concurrency, or larger Gemma alternates."
         }
         return [
+            ManagedChatModelBandRecommendation(
+                minimumUnifiedMemoryGB: 8,
+                maximumUnifiedMemoryGB: 15,
+                modelID: LFM2Resources.smallQADModelId,
+                title: "Memory-first native chat",
+                summary: "QAD-trained 1.2B 4-bit is the compact chat pick; step up to the optimized 2.6B MLX lane when its larger resident footprint fits.",
+                alternateModelIDs: [
+                    LFM2Resources.denseModelId,
+                    LFM2Resources.denseQADModelId,
+                    LFM2Resources.smallModelId,
+                ]
+            ),
             ManagedChatModelBandRecommendation(
                 minimumUnifiedMemoryGB: 16,
                 maximumUnifiedMemoryGB: 23,
