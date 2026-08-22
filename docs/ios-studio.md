@@ -18,7 +18,9 @@ the build process.
    image and chat modes offer "This iPhone" alongside the fleet and install
    managed models into the app sandbox. These paths require a physical device;
    a simulator build is portability evidence, not inference proof. Sizing:
-   small models fit Pro-class devices. For example,
+   chat selection is RAM-aware: 4-5 GB devices prefer the 1.2B QAD MLX model,
+   while 6 GB-and-up devices retain the faster standard 2.6B MLX default. The
+   2.6B QAD model appears as an 8 GB-and-up quality-recovery option. For example,
    the Bonsai image binary (4B, 1-bit, ~3.4 GB) runs through the same FLUX.2
    Klein pipeline that already has a memory-constrained iOS generator in
    `MereRunCore` (`Flux2KleinGeneratoriOS`, ~2 GB peak via sequential

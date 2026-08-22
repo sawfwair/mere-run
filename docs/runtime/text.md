@@ -48,8 +48,10 @@ help in the repository gate.
 - `text-chat-bonsai-27b-1bit` (managed packed 1-bit dense Qwen3.6 27B vision/reasoning snapshot)
 - `text-chat-bonsai-27b-2bit` (managed packed 2-bit ternary dense Qwen3.6 27B vision/reasoning snapshot)
 - `text-chat-lfm25-2.6b-4bit` (managed LiquidAI LFM2.5 2.6B dense MLX 4-bit snapshot)
+- `text-chat-lfm25-2.6b-qad-4bit` (managed QAD-trained LFM2.5 2.6B native MLX 4-bit conversion)
 - `text-chat-lfm25-2.6b-bf16` (managed LiquidAI LFM2.5 2.6B BF16 target plus DSpark)
 - `text-chat-lfm25-1.2b-bf16` (managed LiquidAI LFM2.5 1.2B Instruct BF16 target plus DSpark)
+- `text-chat-lfm25-1.2b-qad-4bit` (managed QAD-trained LFM2.5 1.2B native MLX 4-bit conversion)
 - `text-chat-lfm25-a1b-8bit` (managed LiquidAI LFM2.5 8B-A1B MLX 8-bit snapshot)
 - `text-chat-lfm25-a1b-bf16` (managed LiquidAI LFM2.5 8B-A1B BF16 target plus DSpark)
 - `vision-chat-lfm25-3b-8bit` (managed LiquidAI LFM2.5-VL 3B MLX 8-bit vision-language snapshot)
@@ -182,6 +184,15 @@ short-convolution state back to the accepted prefix without replaying the
 rejected block. Sampled generation uses rejection sampling, and the runtime
 adaptively falls back if draft acceptance stays below 20% for three rounds.
 `text chat --stats` prints `lfm25_dspark` state and acceptance counters.
+
+The QAD ids use deterministic Sawfwair-hosted native-MLX conversions of
+LiquidAI's QAD Q4_0 GGUFs. Projection nibbles and scales are preserved exactly
+in affine group-32 tensors; the tied Q6_K embedding is requantized to MLX
+6-bit/group-64 with error recorded in `MERERUN_CONVERSION.json`. QAD's benefit
+is accuracy recovery at a compact Q4_0 footprint. It is not a second speedup
+over Q4_0; MLX throughput depends on the native group-32 kernel. Use 1.2B QAD
+as the memory-first tier, the standard 2.6B MLX checkpoint as the faster compact
+2.6B tier, and 2.6B QAD when quantized quality recovery is the priority.
 
 Set `MERERUN_LFM25_DSPARK=0` for a target-only A/B or
 `MERERUN_LFM25_DSPARK_PATH` to load an explicit compatible sidecar. Very short

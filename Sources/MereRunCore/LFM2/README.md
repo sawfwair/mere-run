@@ -7,8 +7,12 @@ Native Swift MLX runtime for LiquidAI LFM2 text and vision-language checkpoints.
 - `text-chat-lfm25-a1b-8bit` — `LiquidAI/LFM2.5-8B-A1B-MLX-8bit`
 - `text-chat-lfm25-a1b-bf16` — `LiquidAI/LFM2.5-8B-A1B` with DSpark
 - `text-chat-lfm25-1.2b-bf16` — `LiquidAI/LFM2.5-1.2B-Instruct`
+- `text-chat-lfm25-1.2b-qad-4bit` — deterministic native-MLX conversion of
+  LiquidAI's QAD-trained Q4_0 checkpoint, hosted by `Sawfwair`
 - `text-chat-lfm25-2.6b-4bit` — the `4bit/` partition of
   `LiquidAI/LFM2.5-2.6B-MLX`
+- `text-chat-lfm25-2.6b-qad-4bit` — deterministic native-MLX conversion of
+  LiquidAI's QAD-trained Q4_0 checkpoint, hosted by `Sawfwair`
 - `text-chat-lfm25-2.6b-bf16` — `LiquidAI/LFM2.5-2.6B` with DSpark
 - `vision-chat-lfm25-3b-8bit` — `LiquidAI/LFM2.5-VL-3B-MLX-8bit`
 - Serving engine: `text-chat-lfm2`
@@ -71,6 +75,11 @@ fall back to MLX's portable gather path.
 ## Notes
 
 - This runtime is Swift-native and does not bridge to Python.
+- The QAD checkpoints keep Q4_0 projection nibbles and scales exactly in MLX
+  affine group-32 tensors. Their Q6_K tied embeddings are decoded and
+  requantized to MLX affine 6-bit/group-64; the published conversion receipts
+  record the measured error and hashes. QAD targets quantized accuracy recovery,
+  not a separate speedup over the same Q4_0 runtime path.
 - The three `text-chat-*` checkpoints reject image content parts. The
   `vision-chat-lfm25-3b-8bit` catalog entry enables them through the same
   serving engine.

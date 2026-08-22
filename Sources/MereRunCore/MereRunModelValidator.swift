@@ -653,7 +653,9 @@ public enum MereRunModelValidator {
         }
         if modelId == ModelResolver.ModelID.lfm25A1B8Bit.rawValue
             || modelId == ModelResolver.ModelID.lfm25Small1_2BBF16.rawValue
+            || modelId == ModelResolver.ModelID.lfm25Small1_2BQAD4Bit.rawValue
             || modelId == ModelResolver.ModelID.lfm25Dense2_6B4Bit.rawValue
+            || modelId == ModelResolver.ModelID.lfm25Dense2_6BQAD4Bit.rawValue
             || modelId == ModelResolver.ModelID.lfm25VL3B8Bit.rawValue
             || modelId == ModelResolver.ModelID.lfm25A1BDSpark.rawValue
             || modelId == ModelResolver.ModelID.lfm25Small1_2BDSpark.rawValue

@@ -69,6 +69,11 @@ transition. Live Activities use one bounded poller per run with exponential
 backoff and stop after persistent transport failures. Artifact refreshes are
 staged and validated before replacing an earlier verified local copy.
 
+Local chat choices are attributed by physical-memory band. The 1.2B QAD MLX
+model is available from 4 GB and is the default below 6 GB; the standard 2.6B
+MLX model remains the faster default from 6 GB; the 2.6B QAD quality-recovery
+variant appears from 8 GB. Bonsai Chat remains a 12 GB-and-up option.
+
 ## Distribution boundary
 
 This public directory owns the buildable app and widget sources, XcodeGen
