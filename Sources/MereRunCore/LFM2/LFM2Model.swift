@@ -11,6 +11,7 @@ private func lfm2Swiglu(_ gate: MLXArray, _ up: MLXArray) -> MLXArray {
 
 public final class LFM2ConvCache: @unchecked Sendable {
     var state: MLXArray?
+    private var speculativeStates: [MLXArray] = []
 
     public init() {}
 
@@ -18,6 +19,24 @@ public final class LFM2ConvCache: @unchecked Sendable {
         let copy = LFM2ConvCache()
         copy.state = state
         return copy
+    }
+
+    func captureSpeculativeStates(from input: MLXArray, tokenCount: Int, stateLength: Int) {
+        precondition(input.dim(1) == tokenCount + stateLength)
+        speculativeStates = (0...tokenCount).map { processed in
+            input[0..., processed..<(processed + stateLength), 0...]
+        }
+    }
+
+    func rollbackSpeculativeState(processedTokens: Int) -> Bool {
+        guard speculativeStates.indices.contains(processedTokens) else { return false }
+        state = speculativeStates[processedTokens]
+        speculativeStates.removeAll(keepingCapacity: false)
+        return true
+    }
+
+    func speculativeStorageArrays() -> [MLXArray] {
+        speculativeStates
     }
 
     func batched(with caches: [LFM2ConvCache]) -> LFM2ConvCache? {
@@ -248,7 +267,11 @@ final class LFM2ShortConv: Module {
         super.init()
     }
 
-    func callAsFunction(_ x: MLXArray, cache: LFM2ConvCache?) -> MLXArray {
+    func callAsFunction(
+        _ x: MLXArray,
+        cache: LFM2ConvCache?,
+        captureSpeculativeState: Bool = false
+    ) -> MLXArray {
         let projected = inProj(x)
         let bGate = projected[.ellipsis, 0..<hiddenSize]
         let cGate = projected[.ellipsis, hiddenSize..<(2 * hiddenSize)]
@@ -262,6 +285,13 @@ final class LFM2ShortConv: Module {
                 dtype: x.dtype
             )
             convInput = concatenated([state, convInput], axis: 1)
+            if captureSpeculativeState {
+                cache.captureSpeculativeStates(
+                    from: convInput,
+                    tokenCount: x.dim(1),
+                    stateLength: keep
+                )
+            }
             if keep > 0 {
                 cache.state = convInput[0..., (convInput.dim(1) - keep)..., 0...]
             } else {
@@ -562,7 +592,8 @@ final class LFM2DecoderLayer: Module {
     func callAsFunction(
         _ x: MLXArray,
         attentionMask: MLXFast.ScaledDotProductAttentionMaskMode,
-        cache: LFM2LayerCache?
+        cache: LFM2LayerCache?,
+        captureSpeculativeState: Bool = false
     ) -> MLXArray {
         let normed = operatorNorm(x)
         let operatorOut: MLXArray
@@ -587,7 +618,11 @@ final class LFM2DecoderLayer: Module {
             guard let conv else {
                 preconditionFailure("LFM2 convolution module was not initialized")
             }
-            operatorOut = conv(normed, cache: convCache)
+            operatorOut = conv(
+                normed,
+                cache: convCache,
+                captureSpeculativeState: captureSpeculativeState
+            )
         }
 
         let hidden = x + operatorOut
@@ -630,28 +665,48 @@ final class LFM2Transformer: Module {
         return nil
     }
 
-    func callAsFunction(
+    func forward(
         _ inputIds: MLXArray,
         cache: [LFM2LayerCache?]?,
-        inputEmbeddings: MLXArray? = nil
-    ) -> MLXArray {
+        inputEmbeddings: MLXArray? = nil,
+        captureLayerIndices: Set<Int> = [],
+        captureSpeculativeState: Bool = false
+    ) -> (hidden: MLXArray, captures: [Int: MLXArray]) {
         var hidden = inputEmbeddings ?? embeddings(for: inputIds)
         let attentionMask = createAttentionMask(h: hidden, cache: firstAttentionCache(from: cache))
+        var captures: [Int: MLXArray] = [:]
 
         for (index, layer) in layers.enumerated() {
             hidden = layer(
                 hidden,
                 attentionMask: attentionMask,
-                cache: cache?[index] ?? nil
+                cache: cache?[index] ?? nil,
+                captureSpeculativeState: captureSpeculativeState
             )
+            if captureLayerIndices.contains(index) {
+                captures[index] = hidden
+            }
         }
-        return embeddingNorm(hidden)
+        return (embeddingNorm(hidden), captures)
+    }
+
+    func callAsFunction(
+        _ inputIds: MLXArray,
+        cache: [LFM2LayerCache?]?,
+        inputEmbeddings: MLXArray? = nil
+    ) -> MLXArray {
+        forward(
+            inputIds,
+            cache: cache,
+            inputEmbeddings: inputEmbeddings
+        ).hidden
     }
 }
 
 struct LFM2ForwardOutput {
     let hidden: MLXArray
     let logits: MLXArray
+    let capturedHiddenStates: [Int: MLXArray]
 }
 
 public final class LFM2Model: Module, @unchecked Sendable {
@@ -669,13 +724,29 @@ public final class LFM2Model: Module, @unchecked Sendable {
         model.embeddings(for: inputIds)
     }
 
+    func logits(from hidden: MLXArray) -> MLXArray {
+        model.embedTokens.asLinear(hidden)
+    }
+
     func forward(
         _ inputIds: MLXArray,
         cache: [LFM2LayerCache?]?,
-        inputEmbeddings: MLXArray? = nil
+        inputEmbeddings: MLXArray? = nil,
+        captureLayerIndices: Set<Int> = [],
+        captureSpeculativeState: Bool = false
     ) -> LFM2ForwardOutput {
-        let hidden = model(inputIds, cache: cache, inputEmbeddings: inputEmbeddings)
-        return LFM2ForwardOutput(hidden: hidden, logits: model.embedTokens.asLinear(hidden))
+        let output = model.forward(
+            inputIds,
+            cache: cache,
+            inputEmbeddings: inputEmbeddings,
+            captureLayerIndices: captureLayerIndices,
+            captureSpeculativeState: captureSpeculativeState
+        )
+        return LFM2ForwardOutput(
+            hidden: output.hidden,
+            logits: logits(from: output.hidden),
+            capturedHiddenStates: output.captures
+        )
     }
 
     /// Forward for prefill chunks: hidden states flow through every position
@@ -686,14 +757,61 @@ public final class LFM2Model: Module, @unchecked Sendable {
     func forwardPrefill(
         _ inputIds: MLXArray,
         cache: [LFM2LayerCache?]?,
-        inputEmbeddings: MLXArray? = nil
+        inputEmbeddings: MLXArray? = nil,
+        captureLayerIndices: Set<Int> = []
     ) -> LFM2ForwardOutput {
-        var hidden = model(inputIds, cache: cache, inputEmbeddings: inputEmbeddings)
+        let output = model.forward(
+            inputIds,
+            cache: cache,
+            inputEmbeddings: inputEmbeddings,
+            captureLayerIndices: captureLayerIndices
+        )
+        var hidden = output.hidden
         let sequenceLength = hidden.dim(1)
         if sequenceLength > 1 {
             hidden = hidden[0..., (sequenceLength - 1)..., 0...]
         }
-        return LFM2ForwardOutput(hidden: hidden, logits: model.embedTokens.asLinear(hidden))
+        return LFM2ForwardOutput(
+            hidden: hidden,
+            logits: logits(from: hidden),
+            capturedHiddenStates: output.captures
+        )
+    }
+
+    func forkCache(_ cache: [LFM2LayerCache?]) -> [LFM2LayerCache?] {
+        cache.map { $0?.fork() }
+    }
+
+    func speculativeCacheStorageArrays(_ cache: [LFM2LayerCache?]) -> [MLXArray] {
+        cache.compactMap { entry -> LFM2ConvCache? in
+            guard case .conv(let conv)? = entry else { return nil }
+            return conv
+        }.flatMap { $0.speculativeStorageArrays() }
+    }
+
+    func rollbackSpeculativeCache(
+        _ cache: [LFM2LayerCache?],
+        candidateTokenCount: Int,
+        committedTokenCount: Int
+    ) {
+        precondition(committedTokenCount > 0 && committedTokenCount <= candidateTokenCount)
+        let discardedCount = candidateTokenCount - committedTokenCount
+        for entry in cache {
+            switch entry {
+            case .attention(let attention)?:
+                guard let simple = attention as? KVCacheSimple else {
+                    preconditionFailure("LFM2 DSpark rollback requires the default KV cache.")
+                }
+                simple.rollback(toOffset: simple.offset - discardedCount)
+            case .conv(let conv)?:
+                precondition(
+                    conv.rollbackSpeculativeState(processedTokens: committedTokenCount),
+                    "LFM2 DSpark convolution rollback snapshot is missing."
+                )
+            case nil:
+                break
+            }
+        }
     }
 
     public func callAsFunction(

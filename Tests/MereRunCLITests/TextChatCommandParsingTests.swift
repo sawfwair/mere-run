@@ -263,6 +263,22 @@ final class TextChatCommandParsingTests: XCTestCase {
         XCTAssertTrue(formatted.contains("acceptance=33.3%"))
         XCTAssertTrue(formatted.contains("fallback_forwards=57"))
         XCTAssertTrue(formatted.contains("adaptive_fallbacks=1"))
+
+        let lfm2Formatted = TextChat.formatLFM2DSparkStats(LFM2DSparkStats(
+            enabled: true,
+            active: true,
+            speculativeTokens: 9,
+            rounds: 2,
+            draftedTokens: 18,
+            acceptedDraftTokens: 15,
+            rejectedDraftTokens: 1,
+            targetVerificationForwards: 2,
+            targetRecoveryForwards: 1
+        ))
+        XCTAssertTrue(lfm2Formatted.contains("lfm25_dspark=active"))
+        XCTAssertTrue(lfm2Formatted.contains("block=9"))
+        XCTAssertTrue(lfm2Formatted.contains("acceptance=83.3%"))
+        XCTAssertTrue(lfm2Formatted.contains("verification=2"))
     }
 
     func testTextChatBackendDescriptionIdentifiesGGUFModels() {

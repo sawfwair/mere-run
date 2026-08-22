@@ -21,6 +21,7 @@ private struct LFM2DecodeResult {
     let generatedTokens: [Int]
     let decodeSeconds: Double
     var firstTokenSeconds: Double? = nil
+    var acceleration: ChatAccelerationDiagnostics? = nil
 }
 
 struct LFM2DecodeLoopEpochState: Equatable, Sendable {
@@ -161,6 +162,7 @@ public actor LFM2Generator: ChatGenerator {
 
     private var model: LFM2Model?
     private var visionModel: LFM2VLModel?
+    private var dspark: LFM2DSparkModel?
     private var tokenizerAndTemplate: LFM2TokenizerAndTemplate?
     private var loadedModelPath: String?
     private var loadedConfig: LFM2Config?
@@ -178,6 +180,7 @@ public actor LFM2Generator: ChatGenerator {
     private var singleDecodeSteps = 0
     private var totalBatchedRows = 0
     private var maxObservedBatchSize = 0
+    private var latestDSparkStats = LFM2DSparkStats()
 
     public init(
         modelId: String = LFM2Resources.defaultModelId,
@@ -254,6 +257,10 @@ public actor LFM2Generator: ChatGenerator {
         )
     }
 
+    public func dsparkStats() -> LFM2DSparkStats {
+        latestDSparkStats
+    }
+
     #if DEBUG
     func decodeLoopEpochStateForTesting() -> LFM2DecodeLoopEpochState {
         decodeLoopEpochState
@@ -296,6 +303,7 @@ public actor LFM2Generator: ChatGenerator {
         let resources = LFM2Resources(rootURL: normalizedRoot)
         let groupSize = visionConfig?.quantization?.groupSize ?? config.quantization?.groupSize ?? 64
         let bits = visionConfig?.quantization?.bits ?? config.quantization?.bits ?? 8
+        let quantized = (visionConfig?.quantization ?? config.quantization) != nil
         let lfm2Model: LFM2Model
         let lfm2VisionModel: LFM2VLModel?
         if let visionConfig {
@@ -305,6 +313,7 @@ public actor LFM2Generator: ChatGenerator {
                 resources: resources,
                 groupSize: groupSize,
                 bits: bits,
+                quantized: quantized,
                 progressHandler: progressHandler
             )
             lfm2Model = composite.languageModel
@@ -316,16 +325,47 @@ public actor LFM2Generator: ChatGenerator {
                 resources: resources,
                 groupSize: groupSize,
                 bits: bits,
+                quantized: quantized,
                 progressHandler: progressHandler
             )
             lfm2Model = language
             lfm2VisionModel = nil
         }
 
+        let lfm2DSparkModel: LFM2DSparkModel?
+        if visionConfig == nil,
+           let dsparkPath = LFM2Resources.installedDSparkPath(
+               for: modelId,
+               config: config
+           ) {
+            let dsparkRoot = URL(fileURLWithPath: dsparkPath).standardizedFileURL
+            let missing = LFM2Resources.missingDSparkFiles(rootURL: dsparkRoot)
+            guard missing.isEmpty else {
+                throw LFM2Error.missingFiles(missing.map { "DSpark/\($0.lastPathComponent)" })
+            }
+            progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading LFM2.5 DSpark"))
+            let dsparkConfig = try JSONDecoder().decode(
+                LFM2DSparkConfig.self,
+                from: Data(contentsOf: dsparkRoot.appendingPathComponent("config.json"))
+            )
+            try Self.validateDSparkCompatibility(target: config, dspark: dsparkConfig)
+            let loaded = LFM2DSparkModel(config: dsparkConfig)
+            try HFSafetensorsWeightsLoader.applyWeights(
+                url: dsparkRoot.appendingPathComponent("model.safetensors"),
+                to: loaded,
+                dtype: nil,
+                verify: .shapeMismatch
+            )
+            lfm2DSparkModel = loaded
+        } else {
+            lfm2DSparkModel = nil
+        }
+
         try Task.checkCancellation()
         try requireCurrentResidency(loadEpoch)
         self.model = lfm2Model
         self.visionModel = lfm2VisionModel
+        self.dspark = lfm2DSparkModel
         self.tokenizerAndTemplate = tokenizer
         self.loadedConfig = config
         self.loadedVisionConfig = visionConfig
@@ -339,13 +379,58 @@ public actor LFM2Generator: ChatGenerator {
         self.loadedModelPath = normalizedRoot.path
     }
 
+    static func validateDSparkCompatibility(
+        target: LFM2Config,
+        dspark: LFM2DSparkConfig
+    ) throws {
+        guard target.vocabSize == dspark.vocabularySize else {
+            throw LFM2Error.generationFailed("LFM2.5 DSpark vocabulary does not match its target.")
+        }
+        guard target.hiddenSize == dspark.hiddenSize else {
+            throw LFM2Error.generationFailed("LFM2.5 DSpark hidden size does not match its target.")
+        }
+        guard target.numHiddenLayers == dspark.features.targetLayerCount,
+              dspark.features.targetLayerIDs.allSatisfy({
+                  $0 >= 0 && $0 < target.numHiddenLayers
+              }) else {
+            throw LFM2Error.generationFailed("LFM2.5 DSpark target-layer contract is incompatible.")
+        }
+    }
+
     private func loadWeights(
         into model: Module,
         resources: LFM2Resources,
         groupSize: Int,
         bits: Int,
+        quantized: Bool,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) throws {
+        if !quantized {
+            if FileManager.default.fileExists(atPath: resources.modelIndexURL.path) {
+                try HFSafetensorsWeightsLoader.applyShardedWeights(
+                    indexURL: resources.modelIndexURL,
+                    to: model,
+                    dtype: nil,
+                    verify: .shapeMismatch,
+                    mapper: LFM2Resources.mapWeight(key:value:),
+                    progressHandler: { progress in
+                        progressHandler?(ChatProgress(
+                            stage: .loadingModel,
+                            message: "Loading LFM2 shard \(progress.shardIndex + 1)/\(progress.shardCount)"
+                        ))
+                    }
+                )
+            } else {
+                try HFSafetensorsWeightsLoader.applyWeights(
+                    url: resources.modelWeightsURL,
+                    to: model,
+                    dtype: nil,
+                    verify: .shapeMismatch,
+                    mapper: LFM2Resources.mapWeight(key:value:)
+                )
+            }
+            return
+        }
         if FileManager.default.fileExists(atPath: resources.modelIndexURL.path) {
             try HFSafetensorsWeightsLoader.applyQuantizedWeights(
                 indexURL: resources.modelIndexURL,
@@ -471,6 +556,7 @@ public actor LFM2Generator: ChatGenerator {
             effectiveKVCacheMode = .default
         }
         var layerCaches = makeLayerCaches(config: loadedConfig, kvCacheMode: effectiveKVCacheMode)
+        let draftCache = imageReferences.isEmpty ? dspark?.makeCache() : nil
         let prefixCheckpoints = imageReferences.isEmpty
             ? semanticPrefixCheckpoints(
                 tokenizerAndTemplate: tokenizerAndTemplate,
@@ -483,7 +569,7 @@ public actor LFM2Generator: ChatGenerator {
             : []
         var prefillStartIndex = 0
         var prefillExistingLogits: MLXArray?
-        if imageReferences.isEmpty, let seed = prefixKVCacheSeed(
+        if imageReferences.isEmpty, dspark == nil, let seed = prefixKVCacheSeed(
             modelPath: loadedModelPath,
             promptTokens: promptTokens,
             cacheMode: effectiveKVCacheMode
@@ -502,6 +588,8 @@ public actor LFM2Generator: ChatGenerator {
             startIndex: prefillStartIndex,
             existingLogits: prefillExistingLogits,
             checkpointTokenCounts: prefixCheckpoints,
+            dspark: dspark,
+            draftCache: draftCache,
             residencyEpoch: residencyEpoch,
             progressHandler: progressHandler
         )
@@ -510,19 +598,83 @@ public actor LFM2Generator: ChatGenerator {
         let tokenBudget = max(0, min(request.maxTokens, effectiveContext - promptTokens.count))
 
         progressHandler?(ChatProgress(stage: .generating, message: ""))
-        let decodeResult = try await decodeTokens(
-            model: model,
-            tokenizerAndTemplate: tokenizerAndTemplate,
-            initialLogits: prefillOutput.logits,
-            layerCaches: layerCaches,
-            eosSet: eosSet,
-            generationConfig: generationConfig,
-            tokenBudget: tokenBudget,
-            prefillTokenCount: promptTokens.count,
-            promptTokens: promptTokens,
-            residencyEpoch: residencyEpoch,
-            progressHandler: progressHandler
-        )
+        let decodeResult: LFM2DecodeResult
+        if let dspark,
+           let draftCache,
+           effectiveKVCacheMode == .default,
+           !continuousBatchingEnabled,
+           !request.logprobCapture.isEnabled,
+           LFM2DSparkPolicy.enabled(),
+           tokenBudget >= LFM2DSparkPolicy.minimumOutputTokens() {
+            let result = try LFM2DSparkDecoder.decode(
+                initialLogits: prefillOutput.logits,
+                target: model,
+                targetCache: layerCaches,
+                dspark: dspark,
+                draftCache: draftCache,
+                generationConfig: generationConfig,
+                eosTokens: eosSet,
+                tokenBudget: tokenBudget,
+                historySeedTokens: promptTokens,
+                decodeToken: { tokenizerAndTemplate.decode(token: $0) },
+                emitPiece: { _, piece in
+                    progressHandler?(ChatProgress(stage: .generating, message: piece))
+                },
+                checkCancellation: { try Task.checkCancellation() }
+            )
+            latestDSparkStats = result.stats
+            decodeResult = LFM2DecodeResult(
+                generatedTokens: result.generatedTokens,
+                decodeSeconds: result.decodeSeconds,
+                firstTokenSeconds: result.firstTokenSeconds,
+                acceleration: ChatAccelerationDiagnostics(
+                    route: "dspark-speculative",
+                    draftModel: LFM2Resources.dsparkModelID(
+                        for: modelId,
+                        config: loadedConfig
+                    ),
+                    rounds: result.stats.rounds,
+                    draftedTokens: result.stats.draftedTokens,
+                    acceptedDraftTokens: result.stats.acceptedDraftTokens
+                )
+            )
+        } else {
+            let reason: String?
+            if dspark == nil {
+                reason = "companion model is not installed"
+            } else if effectiveKVCacheMode != .default {
+                reason = "DSpark requires the default KV cache"
+            } else if continuousBatchingEnabled {
+                reason = "continuous batching uses final-target decode"
+            } else if request.logprobCapture.isEnabled {
+                reason = "logprob capture requires final-target decode"
+            } else if !LFM2DSparkPolicy.enabled() {
+                reason = "disabled by MERERUN_LFM25_DSPARK"
+            } else if tokenBudget < LFM2DSparkPolicy.minimumOutputTokens() {
+                reason = "output budget is below the DSpark break-even gate"
+            } else {
+                reason = nil
+            }
+            latestDSparkStats = LFM2DSparkStats(
+                enabled: dspark != nil,
+                active: false,
+                speculativeTokens: dspark?.config.blockSize ?? 0,
+                reason: reason
+            )
+            decodeResult = try await decodeTokens(
+                model: model,
+                tokenizerAndTemplate: tokenizerAndTemplate,
+                initialLogits: prefillOutput.logits,
+                layerCaches: layerCaches,
+                eosSet: eosSet,
+                generationConfig: generationConfig,
+                tokenBudget: tokenBudget,
+                prefillTokenCount: promptTokens.count,
+                promptTokens: promptTokens,
+                residencyEpoch: residencyEpoch,
+                progressHandler: progressHandler
+            )
+        }
 
         let decoded = tokenizerAndTemplate.decode(tokens: decodeResult.generatedTokens)
             .trimmingCharacters(in: .whitespacesAndNewlines)
@@ -549,7 +701,8 @@ public actor LFM2Generator: ChatGenerator {
                 )
             ),
             toolCalls: toolCalls,
-            promptTokens: promptTokens.count
+            promptTokens: promptTokens.count,
+            acceleration: decodeResult.acceleration
         )
     }
 
@@ -933,6 +1086,8 @@ public actor LFM2Generator: ChatGenerator {
         startIndex: Int = 0,
         existingLogits: MLXArray? = nil,
         checkpointTokenCounts: Set<Int> = [],
+        dspark: LFM2DSparkModel? = nil,
+        draftCache: [Gemma4AttentionCache]? = nil,
         residencyEpoch: UInt64,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> LFM2PrefillOutput {
@@ -958,10 +1113,20 @@ public actor LFM2Generator: ChatGenerator {
             let output = model.forwardPrefill(
                 input,
                 cache: cache,
-                inputEmbeddings: chunkEmbeddings
+                inputEmbeddings: chunkEmbeddings,
+                captureLayerIndices: dspark.map { Set($0.config.features.targetLayerIDs) } ?? []
             )
-            MLX.eval(output.logits)
-            MLX.eval(output.hidden)
+            if let dspark, let draftCache {
+                dspark.appendTargetContext(
+                    dspark.combineTargetHiddenStates(output.capturedHiddenStates),
+                    cache: draftCache
+                )
+            }
+            MLX.eval(
+                [output.logits, output.hidden]
+                    + Array(output.capturedHiddenStates.values)
+                    + (draftCache?.flatMap { $0.storageArraysForEvaluation() } ?? [])
+            )
             logits = output.logits
             hidden = output.hidden
             offset = end
@@ -1177,6 +1342,8 @@ public actor LFM2Generator: ChatGenerator {
         failQueuedDecodeRows(CancellationError())
         model = nil
         visionModel = nil
+        dspark = nil
+        latestDSparkStats = LFM2DSparkStats()
         tokenizerAndTemplate = nil
         loadedModelPath = nil
         loadedConfig = nil

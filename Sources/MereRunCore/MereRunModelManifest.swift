@@ -1209,6 +1209,36 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 upstreamRepoId: "\(LFM2Resources.upstreamRepoId)@\(LFM2Resources.upstreamRevision)",
                 createdAt: createdAt
             )
+        case .lfm25A1BBF16:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .lfm2,
+                family: .liquid,
+                tier: .nano,
+                variant: .standard,
+                precision: .bf16,
+                defaults: nil,
+                supports: [.chat],
+                components: q35TextComponents,
+                upstreamRepoId:
+                    "\(LFM2Resources.a1bBF16UpstreamRepoId)@\(LFM2Resources.a1bBF16UpstreamRevision)",
+                createdAt: createdAt
+            )
+        case .lfm25Small1_2BBF16:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .lfm2,
+                family: .liquid,
+                tier: .nano,
+                variant: .standard,
+                precision: .bf16,
+                defaults: nil,
+                supports: [.chat],
+                components: q35TextComponents,
+                upstreamRepoId:
+                    "\(LFM2Resources.smallUpstreamRepoId)@\(LFM2Resources.smallUpstreamRevision)",
+                createdAt: createdAt
+            )
         case .lfm25Dense2_6B4Bit:
             return MereRunModelManifest(
                 id: modelID.rawValue,
@@ -1222,6 +1252,46 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.chat],
                 components: denseLFM2TextComponents,
                 upstreamRepoId: "\(LFM2Resources.denseUpstreamRepoId)@\(LFM2Resources.denseUpstreamRevision)",
+                createdAt: createdAt
+            )
+        case .lfm25Dense2_6BBF16:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .lfm2,
+                family: .liquid,
+                tier: .nano,
+                variant: .standard,
+                precision: .bf16,
+                defaults: nil,
+                supports: [.chat],
+                components: q35TextComponents,
+                upstreamRepoId:
+                    "\(LFM2Resources.denseBF16UpstreamRepoId)@\(LFM2Resources.denseBF16UpstreamRevision)",
+                createdAt: createdAt
+            )
+        case .lfm25A1BDSpark, .lfm25Small1_2BDSpark, .lfm25Dense2_6BDSpark:
+            let source: (repoId: String, revision: String)
+            switch modelID {
+            case .lfm25A1BDSpark:
+                source = (LFM2Resources.defaultDSparkRepoId, LFM2Resources.defaultDSparkRevision)
+            case .lfm25Small1_2BDSpark:
+                source = (LFM2Resources.smallDSparkRepoId, LFM2Resources.smallDSparkRevision)
+            case .lfm25Dense2_6BDSpark:
+                source = (LFM2Resources.denseDSparkRepoId, LFM2Resources.denseDSparkRevision)
+            default:
+                preconditionFailure("unreachable LFM2.5 DSpark manifest case")
+            }
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .lfm2,
+                family: .liquid,
+                tier: .nano,
+                variant: .standard,
+                precision: .bf16,
+                defaults: nil,
+                supports: [],
+                components: nil,
+                upstreamRepoId: "\(source.repoId)@\(source.revision)",
                 createdAt: createdAt
             )
         case .lfm25VL3B8Bit:
