@@ -13,6 +13,9 @@ public struct MiniMaxMusic3GenerationOptions: Sendable {
     public var guidanceScale: Float
     public var profilingEnabled: Bool
     public var flowStrategy: MiniMaxMusic3FlowStrategy
+    public var flowSolver: MiniMaxMusic3FlowSolver
+    public var autoregressiveGuidanceFrames: Int?
+    public var flowGuidanceEnd: Float
     public var seedStrategy: MiniMaxMusic3SeedStrategy
 
     public init(
@@ -26,6 +29,9 @@ public struct MiniMaxMusic3GenerationOptions: Sendable {
         guidanceScale: Float = 1.7,
         profilingEnabled: Bool = false,
         flowStrategy: MiniMaxMusic3FlowStrategy = .sequential,
+        flowSolver: MiniMaxMusic3FlowSolver = .euler,
+        autoregressiveGuidanceFrames: Int? = nil,
+        flowGuidanceEnd: Float = 1,
         seedStrategy: MiniMaxMusic3SeedStrategy = .legacy
     ) {
         self.caption = caption
@@ -38,6 +44,9 @@ public struct MiniMaxMusic3GenerationOptions: Sendable {
         self.guidanceScale = guidanceScale
         self.profilingEnabled = profilingEnabled
         self.flowStrategy = flowStrategy
+        self.flowSolver = flowSolver
+        self.autoregressiveGuidanceFrames = autoregressiveGuidanceFrames
+        self.flowGuidanceEnd = flowGuidanceEnd
         self.seedStrategy = seedStrategy
     }
 }
@@ -112,6 +121,16 @@ public final class MiniMaxMusic3Pipeline {
         guard options.inferenceSteps > 0 else {
             throw MiniMaxMusic3Error.invalidPrompt("inference steps must be positive")
         }
+        if let guidanceFrames = options.autoregressiveGuidanceFrames,
+           guidanceFrames < 0 || guidanceFrames > MiniMaxMusic3Prompt.maxAudioFrames
+        {
+            throw MiniMaxMusic3Error.invalidPrompt(
+                "autoregressive guidance frames must be between 0 and \(MiniMaxMusic3Prompt.maxAudioFrames)"
+            )
+        }
+        guard (0...1).contains(options.flowGuidanceEnd) else {
+            throw MiniMaxMusic3Error.invalidPrompt("flow guidance end must be between 0 and 1")
+        }
         if let maximumFrames = options.maximumFrames,
            !(1...MiniMaxMusic3Prompt.maxAudioFrames).contains(maximumFrames)
         {
@@ -166,6 +185,8 @@ public final class MiniMaxMusic3Pipeline {
             steps: options.inferenceSteps,
             guidanceScale: options.guidanceScale,
             strategy: options.flowStrategy,
+            solver: options.flowSolver,
+            guidanceEnd: options.flowGuidanceEnd,
             generator: flowGenerator,
             recorder: recorder,
             progress: progress
@@ -196,6 +217,10 @@ public final class MiniMaxMusic3Pipeline {
                 frameCount: frameHiddens.dim(1),
                 chunkCount: flow.windowCount,
                 inferenceSteps: options.inferenceSteps,
+                performanceMode: performanceMode,
+                flowSolver: options.flowSolver,
+                autoregressiveGuidanceFrames: options.autoregressiveGuidanceFrames,
+                flowGuidanceEnd: options.flowGuidanceEnd,
                 totalSeconds: MiniMaxMusic3ProfileRecorder.seconds(since: totalStart),
                 recorder: $0
             )
@@ -239,6 +264,7 @@ public final class MiniMaxMusic3Pipeline {
             maximumFrames: options.maximumFrames,
             languageModel: models.languageModel,
             depthDecoder: models.depthDecoder,
+            autoregressiveGuidanceFrames: options.autoregressiveGuidanceFrames,
             generator: generator,
             recorder: recorder,
             progress: progress
@@ -252,6 +278,8 @@ public final class MiniMaxMusic3Pipeline {
         steps: Int,
         guidanceScale: Float,
         strategy: MiniMaxMusic3FlowStrategy,
+        solver: MiniMaxMusic3FlowSolver,
+        guidanceEnd: Float,
         generator: MLXRandom.RandomState,
         recorder: MiniMaxMusic3ProfileRecorder?,
         progress: (@Sendable (MiniMaxMusic3Progress) -> Void)?
@@ -272,6 +300,8 @@ public final class MiniMaxMusic3Pipeline {
             steps: steps,
             guidanceScale: guidanceScale,
             strategy: strategy,
+            solver: solver,
+            guidanceEnd: guidanceEnd,
             conditionEncoder: models.conditionEncoder,
             transformer: models.transformer,
             generator: generator,
@@ -353,6 +383,7 @@ public final class MiniMaxMusic3Pipeline {
         maximumFrames explicitMaximumFrames: Int?,
         languageModel: MiniMaxMusic3LanguageModel,
         depthDecoder: MiniMaxMusic3DepthDecoder,
+        autoregressiveGuidanceFrames: Int?,
         generator: MLXRandom.RandomState,
         recorder: MiniMaxMusic3ProfileRecorder?,
         progress: (@Sendable (MiniMaxMusic3Progress) -> Void)?
@@ -372,7 +403,7 @@ public final class MiniMaxMusic3Pipeline {
         }
 
         let cacheCapacity = textIDs.dim(1) + maximumFrames + 1
-        let caches = languageModel.makeCache(
+        var caches = languageModel.makeCache(
             capacity: performanceMode.usesOptimizedGraph ? cacheCapacity : nil
         )
         let prefillStart = ContinuousClock.now
@@ -390,18 +421,44 @@ public final class MiniMaxMusic3Pipeline {
         var frameHiddens: [MLXArray] = []
         frameHiddens.reserveCapacity(maximumFrames)
         for frameIndex in 0...maximumFrames {
+            let guidanceEnabled = Self.autoregressiveGuidanceEnabled(
+                generatedFrameCount: frameHiddens.count,
+                guidanceFrames: autoregressiveGuidanceFrames
+            )
+            if !guidanceEnabled, lastHidden.dim(0) == 2 {
+                let rows = caches.compactMap { $0.unbatchedRows(count: 2)?.first }
+                guard rows.count == caches.count else {
+                    throw MiniMaxMusic3Error.invalidPrompt(
+                        "the autoregressive cache cannot transition to conditional-only decoding"
+                    )
+                }
+                caches = rows
+                lastHidden = lastHidden[0..<1]
+                MLX.eval(lastHidden)
+            }
             let samplingStart = ContinuousClock.now
             let logits = languageModel.logits(lastHidden)
             let allowEnd = frameHiddens.count >= minimumFrames
-            let sampled = performanceMode == .reference
-                ? Self.sampleSemanticReference(logits: logits, allowEnd: allowEnd, generator: generator)
-                : Self.sampleSemantic(
+            let sampled: MLXArray
+            if guidanceEnabled {
+                sampled = performanceMode == .reference
+                    ? Self.sampleSemanticReference(logits: logits, allowEnd: allowEnd, generator: generator)
+                    : Self.sampleSemantic(
+                        logits: logits,
+                        compactHead: languageModel.usesCompactSemanticHead,
+                        fullVocabularySize: languageModel.configuration.vocabSize,
+                        allowEnd: allowEnd,
+                        generator: generator
+                    )
+            } else {
+                sampled = Self.sampleSemanticConditional(
                     logits: logits,
                     compactHead: languageModel.usesCompactSemanticHead,
                     fullVocabularySize: languageModel.configuration.vocabSize,
                     allowEnd: allowEnd,
                     generator: generator
                 )
+            }
             let sampledID = sampled.item(Int.self)
             recorder?.record(.semanticSampling, since: samplingStart)
             if sampledID == MiniMaxMusic3Prompt.audioEndTokenID {
@@ -409,11 +466,13 @@ public final class MiniMaxMusic3Pipeline {
             }
 
             let semantic = sampled.asType(.int32) - MLXArray(Int32(MiniMaxMusic3Prompt.audioCodeOffset))
-            let duplicatedSemantic = MLX.repeated(semantic.reshaped(1), count: 2, axis: 0)
+            let semanticBatch = guidanceEnabled
+                ? MLX.repeated(semantic.reshaped(1), count: 2, axis: 0)
+                : semantic.reshaped(1)
             let depthStart = ContinuousClock.now
             let depth = generateDepthCodes(
                 lastHidden: lastHidden,
-                semanticCode: duplicatedSemantic,
+                semanticCode: semanticBatch,
                 languageModel: languageModel,
                 depthDecoder: depthDecoder,
                 generator: generator
@@ -480,6 +539,13 @@ public final class MiniMaxMusic3Pipeline {
             && generatedFrameCount.isMultiple(of: autoregressiveCacheClearInterval)
     }
 
+    static func autoregressiveGuidanceEnabled(
+        generatedFrameCount: Int,
+        guidanceFrames: Int?
+    ) -> Bool {
+        guidanceFrames.map { generatedFrameCount < $0 } ?? true
+    }
+
     static func sampleSemanticReference(
         logits: MLXArray,
         allowEnd: Bool,
@@ -531,6 +597,52 @@ public final class MiniMaxMusic3Pipeline {
             ? restoreFullSemanticVocabulary(guided[0], vocabularySize: fullVocabularySize)
             : guided[0]
         return sampleTopK(samplingLogits, generator: generator)
+    }
+
+    static func sampleSemanticConditional(
+        logits: MLXArray,
+        compactHead: Bool,
+        fullVocabularySize: Int,
+        allowEnd: Bool,
+        generator: MLXRandom.RandomState
+    ) -> MLXArray {
+        let conditional = conditionalSemanticLogits(logits, allowEnd: allowEnd)
+        let samplingLogits = compactHead
+            ? restoreFullSemanticVocabulary(conditional[0], vocabularySize: fullVocabularySize)
+            : conditional[0]
+        return sampleTopK(samplingLogits, generator: generator)
+    }
+
+    static func conditionalSemanticLogits(
+        _ logits: MLXArray,
+        allowEnd: Bool
+    ) -> MLXArray {
+        let vocabulary = logits.dim(-1)
+        if vocabulary == MiniMaxMusic3Prompt.semanticVocabularySize + 1 {
+            guard !allowEnd else { return logits[0..<1].asType(.float32) }
+            return MLX.concatenated(
+                [
+                    MLXArray.full([1, 1], values: MLXArray(-Float.infinity)),
+                    logits[0..<1, 1...].asType(.float32),
+                ],
+                axis: -1
+            )
+        }
+
+        let tokenIndices = MLX.arange(vocabulary, dtype: .int32).reshaped(1, vocabulary)
+        let semanticStart = MLXArray(Int32(MiniMaxMusic3Prompt.audioCodeOffset))
+        let semanticEnd = MLXArray(Int32(
+            MiniMaxMusic3Prompt.audioCodeOffset + MiniMaxMusic3Prompt.semanticVocabularySize
+        ))
+        let allowedSemantic = (tokenIndices .>= semanticStart) .&& (tokenIndices .< semanticEnd)
+        let allowedEnd = allowEnd
+            ? tokenIndices .== MLXArray(Int32(MiniMaxMusic3Prompt.audioEndTokenID))
+            : MLXArray.zeros(tokenIndices.shape, dtype: .bool)
+        return MLX.where(
+            allowedSemantic .|| allowedEnd,
+            logits[0..<1].asType(.float32),
+            MLXArray(-Float.infinity)
+        )
     }
 
     /// The published sampler draws from the full language-model vocabulary
@@ -659,14 +771,23 @@ public final class MiniMaxMusic3Pipeline {
             hiddenParts.append(hidden[0..<1])
             let logits = depthDecoder.logits(hidden, codebookIndex: codebook - 1)
             let conditional = logits[0..<1].asType(.float32)
-            let unconditional = logits[1..<2].asType(.float32)
-            let guided = unconditional + (conditional - unconditional) * MLXArray(Float(1.5))
+            let guided: MLXArray
+            if logits.dim(0) == 2 {
+                let unconditional = logits[1..<2].asType(.float32)
+                guided = unconditional + (conditional - unconditional) * MLXArray(Float(1.5))
+            } else {
+                guided = conditional
+            }
             let sampled = Self.sampleTopK(guided[0], generator: generator)
-            let duplicated = MLX.repeated(sampled.reshaped(1), count: 2, axis: 0)
-            codes.append(duplicated)
+            let sampledBatch = MLX.repeated(
+                sampled.reshaped(1),
+                count: semanticCode.dim(0),
+                axis: 0
+            )
+            codes.append(sampledBatch)
             if codebook < depthDecoder.configuration.numCodebooks - 1 {
                 let embedding = depthDecoder.embedResidualCodes(
-                    duplicated,
+                    sampledBatch,
                     codebookIndex: codebook - 1
                 )
                 sequence.append(depthDecoder.projection(embedding).expandedDimensions(axis: 1))
@@ -717,6 +838,8 @@ public final class MiniMaxMusic3Pipeline {
         steps: Int,
         guidanceScale: Float,
         strategy: MiniMaxMusic3FlowStrategy,
+        solver: MiniMaxMusic3FlowSolver,
+        guidanceEnd: Float,
         conditionEncoder: MiniMaxMusic3ConditionEncoder,
         transformer: MiniMaxMusic3Transformer,
         generator: MLXRandom.RandomState,
@@ -728,6 +851,8 @@ public final class MiniMaxMusic3Pipeline {
                 frameHiddens: frameHiddens,
                 steps: steps,
                 guidanceScale: guidanceScale,
+                solver: solver,
+                guidanceEnd: guidanceEnd,
                 conditionEncoder: conditionEncoder,
                 transformer: transformer,
                 generator: generator,
@@ -740,6 +865,8 @@ public final class MiniMaxMusic3Pipeline {
                 frameHiddens: frameHiddens,
                 steps: steps,
                 guidanceScale: guidanceScale,
+                solver: solver,
+                guidanceEnd: guidanceEnd,
                 conditionEncoder: conditionEncoder,
                 transformer: transformer,
                 generator: generator,
@@ -782,6 +909,7 @@ public final class MiniMaxMusic3Pipeline {
                 dtype: condition.dtype
             )
             let stepSize = MLXArray(1 / Float(steps)).asType(condition.dtype)
+            var previousVelocity: MLXArray?
 
             for step in 0..<steps {
                 let transformerStart = ContinuousClock.now
@@ -795,27 +923,50 @@ public final class MiniMaxMusic3Pipeline {
                     )
                 }
                 let timestep = MLXArray([time]).asType(latents.dtype)
-                let batchedLatents = MLX.concatenated([latents, latents], axis: 0)
-                let batchedTimestep = MLX.repeated(timestep, count: 2, axis: 0)
+                let guidanceEnabled = Self.flowGuidanceEnabled(
+                    step: step,
+                    stepCount: steps,
+                    guidanceEnd: guidanceEnd
+                )
+                let transformerLatents = guidanceEnabled
+                    ? MLX.concatenated([latents, latents], axis: 0)
+                    : latents
+                let transformerTimestep = guidanceEnabled
+                    ? MLX.repeated(timestep, count: 2, axis: 0)
+                    : timestep
                 let velocities = if let preparedCondition {
                     transformer(
-                        latents: batchedLatents,
-                        timestep: batchedTimestep,
-                        preparedCondition: preparedCondition,
+                        latents: transformerLatents,
+                        timestep: transformerTimestep,
+                        preparedCondition: guidanceEnabled
+                            ? preparedCondition
+                            : preparedCondition[0..<1],
                         rotary: rotary
                     )
                 } else {
                     transformer(
-                        latents: batchedLatents,
-                        timestep: batchedTimestep,
-                        condition: batchedCondition,
+                        latents: transformerLatents,
+                        timestep: transformerTimestep,
+                        condition: guidanceEnabled ? batchedCondition : condition,
                         rotary: rotary
                     )
                 }
                 let conditional = velocities[0..<1]
-                let unconditional = velocities[1..<2]
-                let velocity = unconditional + (conditional - unconditional) * MLXArray(guidanceScale)
-                latents = latents + velocity * stepSize
+                let velocity: MLXArray
+                if guidanceEnabled {
+                    let unconditional = velocities[1..<2]
+                    velocity = unconditional
+                        + (conditional - unconditional) * MLXArray(guidanceScale)
+                } else {
+                    velocity = conditional
+                }
+                let integrationVelocity = Self.flowIntegrationVelocity(
+                    velocity,
+                    previous: previousVelocity,
+                    solver: solver
+                )
+                latents = latents + integrationVelocity * stepSize
+                previousVelocity = velocity
                 MLX.eval(latents)
                 recorder?.record(.flowTransformer, since: transformerStart)
                 progress?(.denoise(
@@ -846,6 +997,8 @@ public final class MiniMaxMusic3Pipeline {
         frameHiddens: MLXArray,
         steps: Int,
         guidanceScale: Float,
+        solver: MiniMaxMusic3FlowSolver,
+        guidanceEnd: Float,
         conditionEncoder: MiniMaxMusic3ConditionEncoder,
         transformer: MiniMaxMusic3Transformer,
         generator: MLXRandom.RandomState,
@@ -885,14 +1038,25 @@ public final class MiniMaxMusic3Pipeline {
         ], key: generator).asType(condition.dtype)
         let stepSize = MLXArray(1 / Float(steps)).asType(condition.dtype)
         var rotaryCaches: [Int: (MLXArray, MLXArray)] = [:]
+        var previousVelocity: MLXArray?
 
         for step in 0..<steps {
             let transformerStart = ContinuousClock.now
             let timestep = MLXArray([Float(step) / Float(steps)]).asType(latents.dtype)
-            let batchedLatents = MLX.concatenated([latents, latents], axis: 0)
-            let batchedTimestep = MLX.repeated(timestep, count: 2, axis: 0)
+            let guidanceEnabled = Self.flowGuidanceEnabled(
+                step: step,
+                stepCount: steps,
+                guidanceEnd: guidanceEnd
+            )
+            let transformerLatents = guidanceEnabled
+                ? MLX.concatenated([latents, latents], axis: 0)
+                : latents
+            let transformerTimestep = guidanceEnabled
+                ? MLX.repeated(timestep, count: 2, axis: 0)
+                : timestep
+            let batchCount = guidanceEnabled ? 2 : 1
             let accumulated = MLXArray.zeros(
-                [2, transformer.configuration.inChannels, latentLength],
+                [batchCount, transformer.configuration.inChannels, latentLength],
                 dtype: latents.dtype
             )
             var firstPendingProgressIndex = 0
@@ -906,16 +1070,16 @@ public final class MiniMaxMusic3Pipeline {
                 rotaryCaches[length] = rotary
                 let velocities = if let preparedCondition {
                     transformer(
-                        latents: batchedLatents[0..., 0..., start..<end],
-                        timestep: batchedTimestep,
-                        preparedCondition: preparedCondition[0..., start..<end, 0...],
+                        latents: transformerLatents[0..., 0..., start..<end],
+                        timestep: transformerTimestep,
+                        preparedCondition: preparedCondition[0..<batchCount, start..<end, 0...],
                         rotary: rotary
                     )
                 } else {
                     transformer(
-                        latents: batchedLatents[0..., 0..., start..<end],
-                        timestep: batchedTimestep,
-                        condition: batchedCondition[0..., start..<end, 0...],
+                        latents: transformerLatents[0..., 0..., start..<end],
+                        timestep: transformerTimestep,
+                        condition: batchedCondition[0..<batchCount, start..<end, 0...],
                         rotary: rotary
                     )
                 }
@@ -941,13 +1105,48 @@ public final class MiniMaxMusic3Pipeline {
             }
             let averaged = accumulated / counts
             let conditional = averaged[0..<1]
-            let unconditional = averaged[1..<2]
-            let velocity = unconditional + (conditional - unconditional) * MLXArray(guidanceScale)
-            latents = latents + velocity * stepSize
+            let velocity: MLXArray
+            if guidanceEnabled {
+                let unconditional = averaged[1..<2]
+                velocity = unconditional
+                    + (conditional - unconditional) * MLXArray(guidanceScale)
+            } else {
+                velocity = conditional
+            }
+            let integrationVelocity = Self.flowIntegrationVelocity(
+                velocity,
+                previous: previousVelocity,
+                solver: solver
+            )
+            latents = latents + integrationVelocity * stepSize
+            previousVelocity = velocity
             MLX.eval(latents)
             recorder?.record(.flowTransformer, since: transformerStart)
         }
         return latents
+    }
+
+    static func flowGuidanceEnabled(
+        step: Int,
+        stepCount: Int,
+        guidanceEnd: Float
+    ) -> Bool {
+        precondition(step >= 0 && step < stepCount)
+        let progress = stepCount == 1
+            ? 0
+            : Float(step) / Float(stepCount - 1)
+        return progress <= guidanceEnd
+    }
+
+    static func flowIntegrationVelocity(
+        _ velocity: MLXArray,
+        previous: MLXArray?,
+        solver: MiniMaxMusic3FlowSolver
+    ) -> MLXArray {
+        guard solver == .adamsBashforth2, let previous else {
+            return velocity
+        }
+        return velocity * MLXArray(Float(1.5)) - previous * MLXArray(Float(0.5))
     }
 
     static func overlapAverageStarts(latentLength: Int) -> [Int] {
@@ -970,6 +1169,8 @@ public final class MiniMaxMusic3Pipeline {
         frameHiddens: MLXArray,
         steps: Int,
         guidanceScale: Float,
+        solver: MiniMaxMusic3FlowSolver,
+        guidanceEnd: Float,
         conditionEncoder: MiniMaxMusic3ConditionEncoder,
         transformer: MiniMaxMusic3Transformer,
         generator: MLXRandom.RandomState,
@@ -998,6 +1199,7 @@ public final class MiniMaxMusic3Pipeline {
                 condition.dim(1),
             ], key: generator).asType(condition.dtype)
             let noisePrompt = overlap > 0 ? latents[0..., 0..., 0..<overlap] : nil
+            var previousVelocity: MLXArray?
 
             for step in 0..<steps {
                 let time = Float(step) / Float(steps)
@@ -1015,13 +1217,30 @@ public final class MiniMaxMusic3Pipeline {
                     timestep: timestep,
                     condition: condition
                 )
-                let unconditional = transformer(
-                    latents: latents,
-                    timestep: timestep,
-                    condition: MLXArray.zeros(condition.shape, dtype: condition.dtype)
+                let guidanceEnabled = Self.flowGuidanceEnabled(
+                    step: step,
+                    stepCount: steps,
+                    guidanceEnd: guidanceEnd
                 )
-                let velocity = unconditional + (conditional - unconditional) * MLXArray(guidanceScale)
-                latents = latents + velocity * MLXArray(1 / Float(steps))
+                let velocity: MLXArray
+                if guidanceEnabled {
+                    let unconditional = transformer(
+                        latents: latents,
+                        timestep: timestep,
+                        condition: MLXArray.zeros(condition.shape, dtype: condition.dtype)
+                    )
+                    velocity = unconditional
+                        + (conditional - unconditional) * MLXArray(guidanceScale)
+                } else {
+                    velocity = conditional
+                }
+                let integrationVelocity = Self.flowIntegrationVelocity(
+                    velocity,
+                    previous: previousVelocity,
+                    solver: solver
+                )
+                latents = latents + integrationVelocity * MLXArray(1 / Float(steps))
+                previousVelocity = velocity
                 MLX.eval(latents)
                 progress?(.denoise(
                     chunk: chunkIndex + 1,

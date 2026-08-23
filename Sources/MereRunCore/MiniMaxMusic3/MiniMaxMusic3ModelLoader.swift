@@ -36,20 +36,52 @@ public enum MiniMaxMusic3PerformanceMode: String, CaseIterable, Codable, Sendabl
     case q8
     /// Optimized graph with affine 4-bit autoregressive weights.
     case q4
+    /// Optimized graph with an affine 8-bit global language model and BF16 depth decoder.
+    case q8LM = "q8-lm"
+    /// Optimized graph with an affine 4-bit global language model and BF16 depth decoder.
+    case q4LM = "q4-lm"
 
-    var quantizationBits: Int? {
+    public var languageModelPrecision: MiniMaxMusic3WeightPrecision {
         switch self {
         case .reference, .optimized:
-            nil
+            .bfloat16
+        case .q8, .q8LM:
+            .affineQ8
+        case .q4, .q4LM:
+            .affineQ4
+        }
+    }
+
+    public var depthDecoderPrecision: MiniMaxMusic3WeightPrecision {
+        switch self {
+        case .reference, .optimized, .q8LM, .q4LM:
+            .bfloat16
         case .q8:
-            8
+            .affineQ8
         case .q4:
-            4
+            .affineQ4
         }
     }
 
     var usesOptimizedGraph: Bool {
         self != .reference
+    }
+}
+
+public enum MiniMaxMusic3WeightPrecision: String, Codable, Sendable, Equatable {
+    case bfloat16 = "bf16"
+    case affineQ8 = "affine-q8"
+    case affineQ4 = "affine-q4"
+
+    var quantizationBits: Int? {
+        switch self {
+        case .bfloat16:
+            nil
+        case .affineQ8:
+            8
+        case .affineQ4:
+            4
+        }
     }
 }
 
@@ -107,13 +139,11 @@ public enum MiniMaxMusic3ModelLoader {
             languageModel.prepareCompactSemanticHead()
             languageModel.prepareFusedProjections()
         }
-        if let bits = performanceMode.quantizationBits {
-            quantizeAutoregressive(
-                languageModel: languageModel,
-                depthDecoder: depthDecoder,
-                bits: bits
-            )
-        }
+        applyAutoregressiveQuantization(
+            languageModel: languageModel,
+            depthDecoder: depthDecoder,
+            performanceMode: performanceMode
+        )
         let tokenizer = try ACEStep5HzLMTokenizer.load(
             from: resources.tokenizerURL,
             requireAudioCodeTokens: false
@@ -157,14 +187,21 @@ public enum MiniMaxMusic3ModelLoader {
         )
     }
 
-    private static func quantizeAutoregressive(
+    static func applyAutoregressiveQuantization(
         languageModel: MiniMaxMusic3LanguageModel,
         depthDecoder: MiniMaxMusic3DepthDecoder,
-        bits: Int
+        performanceMode: MiniMaxMusic3PerformanceMode
     ) {
-        for model in [languageModel as Module, depthDecoder as Module] {
-            quantize(model: model, bits: bits)
+        var didQuantize = false
+        if let bits = performanceMode.languageModelPrecision.quantizationBits {
+            quantize(model: languageModel, bits: bits)
+            didQuantize = true
         }
+        if let bits = performanceMode.depthDecoderPrecision.quantizationBits {
+            quantize(model: depthDecoder, bits: bits)
+            didQuantize = true
+        }
+        guard didQuantize else { return }
         MLX.eval(languageModel.parameters(), depthDecoder.parameters())
         MLX.Memory.clearCache()
     }

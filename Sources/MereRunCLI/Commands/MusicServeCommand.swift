@@ -201,7 +201,9 @@ struct MusicServe: AsyncParsableCommand {
         let performanceMode = miniMaxPerformanceMode ?? .optimized
         CLIStderr.write(
             "Loading MiniMax Music 3 server in \(loadingStrategy.rawValue) memory mode "
-                + "with \(performanceMode.rawValue) execution\n"
+                + "with \(performanceMode.rawValue) execution "
+                + "(LM \(performanceMode.languageModelPrecision.rawValue), "
+                + "depth \(performanceMode.depthDecoderPrecision.rawValue))\n"
         )
         let server = try MiniMaxMusic3APIServer(
             resources: resources,

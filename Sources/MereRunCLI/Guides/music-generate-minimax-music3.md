@@ -25,41 +25,57 @@ MiniMax Music 3 consumes only these model inputs:
 
 - positional caption: genre, emotional arc, vocals, instrumentation,
   arrangement, and production profile
-- `--lyrics`, `--lyrics-file`, `--lrc-file`, or `--instrumental`
+- `--compose`, `--lyrics`, `--lyrics-file`, `--lrc-file`, or `--instrumental`
+- `--lyrics-preflight off|warn|strict`: duration and section checks; defaults
+  to `warn`
 - `--duration`: upper-bound seconds; defaults to 60
 - `--minimum-duration`: decoded-audio duration floor. The runtime rounds up to
   the first 25 Hz frame whose whole 512-sample vocoder hops meet the request.
 - `--min-frames`: exact acoustic-frame floor; 1 through 9000
 - `--max-frames`: exact 25 Hz acoustic-frame upper bound; 1 through 9000
-- `--sampling-tier quality|fast|draft`: named flow-Euler schedules with 30,
+- `--sampling-tier quality|fast|draft`: named flow schedules with 30,
   20, or 16 steps; defaults to `quality`
-- `--steps`: exact flow-Euler steps per chunk; overrides `--sampling-tier`
+- `--steps`: exact flow steps per chunk; overrides `--sampling-tier`
 - `--profile-output`: write synchronized stage timings as JSON; intended for
   benchmarking because the extra evaluations can affect wall time
 - `--seed`: deterministic MLX seed; defaults to 0
 - `--guidance-scale`: flow classifier-free guidance; defaults to 1.7
 - `--memory-mode staged|resident`: staged loads and releases the autoregressive,
   flow, and vocoder stages separately; resident keeps every component loaded
-- `--performance-mode reference|optimized|q8|q4`: exact upstream graph,
-  parity-safe BF16 acceleration (default), recommended affine Q8 turbo, or
-  maximum-compression affine Q4 turbo
+- `--performance-mode reference|optimized|q8-lm|q4-lm|q8|q4`: exact upstream
+  graph, parity-safe BF16 acceleration (default), split LM-only affine
+  quantization with BF16 depth, or legacy whole-autoregressive quantization
 - `--sample-rate 44100|32000`: native Diffusers output or SGLang-compatible WAV
+- `--flow-solver euler|ab2`: parity-default Euler or opt-in second-order AB2
+- `--ar-cfg-frames`: opt-in count of autoregressive frames that retain CFG
+- `--flow-cfg-end`: opt-in normalized cutoff after which flow runs only the
+  conditional row
 
 When both `--duration` and `--max-frames` are provided, they must describe the
 same limit. The checkpoint hard cap is 9000 frames (360 seconds), while the
 official supported-quality claim is songs up to five minutes.
 
 `optimized` keeps BF16 weights while reducing launch and memory traffic with a
-compact reachable-token head, fused projections, incremental depth KV caches,
-and batched flow guidance. `q8` additionally quantizes the autoregressive
-language and depth transformers with group-64 affine weights; `q4` applies the
-same path at four bits. Quantization changes the sampled composition, so use `reference` or
-`optimized` for upstream-parity investigations and `q8` for the normal turbo
-tradeoff.
+compact reachable-token head, fused global-language-model projections, a
+fixed-capacity global KV cache, and batched flow guidance. The short residual
+depth prefix is deliberately recomputed to preserve seeded lyric trajectories.
+`q8-lm` additionally quantizes the global language model with group-64 affine
+weights while retaining the residual-depth decoder in BF16; `q4-lm` applies
+the same split at four bits. These are the preferred quantized experiments
+because depth codebooks directly shape vocal detail. Legacy `q8` and `q4`
+continue to quantize both autoregressive components for compatible maximum
+compression. Quantization changes the sampled composition, so use `reference`
+or `optimized` for upstream-parity investigations.
 
 The `quality`, `fast`, and `draft` sampling tiers use the same model and fixed
 Euler schedule with 30, 20, and 16 evaluations respectively. Use `--steps`
 when you need an exact custom count; it takes precedence over the named tier.
+Euler and full classifier-free guidance remain the default parity path.
+`--flow-solver ab2` uses Euler for the first update and second-order
+Adams-Bashforth for later updates. `--ar-cfg-frames 50` and
+`--flow-cfg-end 0.4` switch their later work to conditional-only execution.
+Treat these as reproducible full-song A/B controls, not speed or quality
+presets.
 
 Incompatible ACE-Step cover, editing, LM-planner, adapter, VAE,
 candidate-ranking, stem, and DAW settings fail explicitly for this model.
@@ -70,7 +86,7 @@ Magenta RT2 settings also fail instead of being silently ignored.
 | Upstream Diffusers input | mere.run surface |
 | --- | --- |
 | `prompt` | positional caption |
-| `lyrics` | `--lyrics`, `--lyrics-file`, `--lrc-file`, or `--instrumental` |
+| `lyrics` | `--compose`, `--lyrics`, `--lyrics-file`, `--lrc-file`, or `--instrumental` |
 | `audio_duration` | `--duration` |
 | `minimum_audio_duration` | `--minimum-duration` |
 | `min_new_tokens` | `--min-frames` |
@@ -79,9 +95,10 @@ Magenta RT2 settings also fail instead of being silently ignored.
 | `num_inference_steps` | `--steps` |
 | `output_type=np|pt` | `--export-format float32` with mastering disabled as shown below |
 
-The released autoregressive CFG (`1.5`) and top-k (`50`) remain fixed because
-they are checkpoint behavior, not pipeline inputs. Flow guidance defaults to
-the released `1.7` and is available as `--guidance-scale`. The speech route
+The released autoregressive CFG (`1.5`) and top-k (`50`) remain fixed while CFG
+is active. Flow guidance defaults to the released `1.7` and is available as
+`--guidance-scale`. Guidance cutoffs are explicit experimental execution
+controls and never change those scales. The speech route
 maps upstream `max_new_tokens` to the same frame limit exposed by
 `--max-frames`; native `minimum_audio_duration` and `min_new_tokens` map to the
 same duration floor exposed by `--minimum-duration` and `--min-frames`. It
@@ -102,7 +119,7 @@ mere.run music generate \
   --lyrics-file ./lyrics.txt \
   --duration 60 \
   --minimum-duration 60 \
-  --performance-mode q8 \
+  --performance-mode q8-lm \
   --steps 30 \
   --seed 7 \
   --output ./song.wav
@@ -111,7 +128,47 @@ mere.run music generate \
 Use `--instrumental` to pass the upstream `[Instrumental]` marker without a
 lyrics file.
 
-## Structured caption companion
+`--duration` is an upper bound, so sparse lyrics can let the autoregressive
+model emit EOS well before it. The default lyric preflight prints warnings for
+underfilled long-form lyrics, missing structure, and unsupported or inline
+tags. `--lyrics-preflight strict` fails before checkpoint loading when any
+issue remains. It does not add `--minimum-duration` or otherwise force EOS
+masking on the user's behalf.
+
+## Local composer
+
+`--compose` turns the positional caption into a natural-language song brief.
+A local native Gemma4 or Qwen-family chat model runs two constrained-JSON
+passes: a BPM/meter/section blueprint whose bars fill the requested timeline,
+then the final title, tags, lyrics, and `Global Metadata`, `Vocal Details`, and
+`Arrangement` fields. The typed contract normalizes the bar budget, requires a
+supported ordered section sequence ending in an outro, checks
+per-section lyric budgets, and keeps production directions out of lyric lines.
+Each phase gets at most one validation-guided repair attempt while the writer
+model remains loaded.
+
+```bash
+mere.run music generate \
+  "slow-burn dream pop about leaving a familiar city and finding home" \
+  --model music-minimax-music3 \
+  --compose \
+  --duration 180 \
+  --lyrics-preflight strict \
+  --performance-mode q8-lm \
+  --sampling-tier fast \
+  --output ./composed-song.wav
+```
+
+If tagged `--lyrics` or `--lyrics-file` is also present, that text is authoritative:
+the composer plans its existing section order and returns it unchanged while
+writing the caption. `--instrumental` creates a section-only timeline. Use
+`--composer-model`, `--composer-model-root`, and
+`--require-composer-installed` to control the writer model. The writer unloads
+before MiniMax loads. `<output>.composition.json` records the request,
+blueprint, finished inputs, writer model, and preflight; schema 7 recipe JSON
+embeds the same provenance.
+
+## Upstream structured-caption companion
 
 MiniMax publishes a separate `music-caption-rewriter` agent skill containing
 its structured-caption workflow and static template library. It is not
@@ -122,8 +179,10 @@ Install it directly from the official source when you want it:
 npx skills add MiniMax-AI/MiniMax-Music3 --skill music-caption-rewriter
 ```
 
-Pass the resulting `Global Metadata`, `Vocal Details`, and `Arrangement` text
-as the positional caption, while keeping the original lyrics separate.
+The integrated `--compose` workflow is a typed local mere.run implementation;
+it does not vendor that upstream skill. If you use the upstream companion
+instead, pass its `Global Metadata`, `Vocal Details`, and `Arrangement` text as
+the positional caption while keeping the original lyrics separate.
 
 ## Native and reference-server output
 
@@ -146,7 +205,7 @@ Start the SGLang-compatible speech route with all weights warm:
 mere.run music serve \
   --model music-minimax-music3 \
   --memory-mode resident \
-  --performance-mode q8 \
+  --performance-mode q8-lm \
   --port 8081
 ```
 
@@ -164,6 +223,10 @@ curl http://127.0.0.1:8081/v1/audio/speech \
     "max_new_tokens": 750,
     "min_new_tokens": 750,
     "sampling_tier": "fast",
+    "flow_solver": "ab2",
+    "autoregressive_guidance_frames": 50,
+    "flow_guidance_end": 0.4,
+    "lyric_preflight": "strict",
     "stream": false
   }' \
   --output song.wav

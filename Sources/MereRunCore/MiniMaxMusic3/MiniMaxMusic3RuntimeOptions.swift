@@ -9,6 +9,13 @@ public enum MiniMaxMusic3FlowStrategy: String, CaseIterable, Codable, Sendable {
     case overlapAverage = "overlap-average"
 }
 
+public enum MiniMaxMusic3FlowSolver: String, CaseIterable, Codable, Sendable {
+    /// Preserve the released first-order flow integration path.
+    case euler
+    /// Use Euler for the first step, then second-order Adams-Bashforth updates.
+    case adamsBashforth2 = "ab2"
+}
+
 public enum MiniMaxMusic3SeedStrategy: String, CaseIterable, Codable, Sendable {
     /// Preserve the released recipe: autoregressive sampling and flow noise share one stream.
     case legacy

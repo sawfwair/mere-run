@@ -10,9 +10,10 @@ This directory contains the native Swift/MLX inference path for MiniMax Music
 3. a 1D flow-matching transformer denoises overlapping 200-frame windows;
 4. the DAC-style vocoder decodes and stitches stereo waveform chunks.
 
-Keep the prompt tokens, code offsets, chunk overlap, Euler schedule, and
-weight-name mapping in parity with the pinned upstream revision declared by
-`MiniMaxMusic3Resources`.
+Keep the default prompt tokens, code offsets, chunk overlap, Euler schedule,
+full-CFG path, and weight-name mapping in parity with the pinned upstream
+revision declared by `MiniMaxMusic3Resources`. Solver and guidance-taper
+experiments must remain explicit options with parity defaults unchanged.
 
 The default `staged` loading strategy releases each stage before loading the
 next one and clears the MLX cache between stages. `resident` loads the complete
@@ -30,12 +31,23 @@ codebook can cross a categorical boundary and change every later semantic
 frame. Seeded code trajectories and lyric transcription, not logit cosine
 alone, are the admission checks for changing either path.
 
-The released flow and seed recipes remain `sequential` and `legacy`.
+Quantization is component-aware. `q8-lm` and `q4-lm` quantize only the global
+language model and keep the residual-depth decoder in BF16; these are the
+preferred quantized experiments for preserving vocal detail. Legacy `q8` and
+`q4` retain whole-autoregressive quantization for compatible maximum
+compression. Profiles and generation recipes record both resolved component
+precisions rather than relying on the mode name alone.
+
+The released flow, solver, CFG, and seed recipes remain `sequential`, `euler`,
+full guidance, and `legacy`.
 `overlap-average` is an opt-in whole-song flow experiment that averages
 overlapping window velocities at each Euler step, then uses bounded DAV decode
 with retained-center stitching. `stage-separated-v1` independently derives the
-autoregressive and flow random streams. The pipeline validates finite output,
-signal level, peak, and stereo integrity before returning audio.
+autoregressive and flow random streams. `ab2` uses Euler for its first update
+and second-order Adams-Bashforth thereafter. Autoregressive and flow CFG
+cutoffs unbatch the conditional row after their explicit boundary. The pipeline
+validates finite output, signal level, peak, and stereo integrity before
+returning audio.
 
 On an M4 Max with 128 GB unified memory and MLX 0.32.1, the PocketAiHub-style
 direct INT8 ConvRot projection was slower than the converted BF16 dense path at

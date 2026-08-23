@@ -83,6 +83,16 @@ swift run mere.run music generate \
 
 swift run mere.run model pull music-minimax-music3 --accept-model-license
 swift run mere.run music generate \
+  "slow-burn dream pop about leaving a familiar city and finding home" \
+  --model music-minimax-music3 \
+  --compose \
+  --duration 180 \
+  --lyrics-preflight strict \
+  --performance-mode q8-lm \
+  --sampling-tier fast \
+  --output ./minimax-composed-song.wav
+
+swift run mere.run music generate \
   "cinematic synth-pop, female lead, 118 bpm, wide guitars" \
   --model music-minimax-music3 \
   --lyrics-file ./lyrics.txt \
@@ -91,7 +101,7 @@ swift run mere.run music generate \
   --sampling-tier fast \
   --seed 7 \
   --memory-mode staged \
-  --performance-mode q8 \
+  --performance-mode q8-lm \
   --output ./minimax-song.wav
 
 swift run mere.run music generate \
@@ -106,7 +116,7 @@ swift run mere.run music generate \
 swift run mere.run music serve \
   --model music-minimax-music3 \
   --memory-mode resident \
-  --performance-mode q8 \
+  --performance-mode q8-lm \
   --port 8080
 
 curl http://127.0.0.1:8080/v1/audio/speech \
@@ -179,14 +189,46 @@ swift run mere.run music separate ./noisy.wav \
 ```
 
 MiniMax Music 3 keeps `--flow-strategy sequential` and
-`--seed-strategy legacy` as its released defaults. The experimental
+`--seed-strategy legacy` as its released defaults. `--compose` adds a local,
+two-pass constrained-JSON writer before music inference: the first pass plans a
+bar-aware timeline, and the second writes the structured three-part caption and
+lyrics against that timeline. Existing `--lyrics` or `--lyrics-file` content is
+authoritative and is preserved exactly; `--instrumental` produces section-only
+lyrics. Each phase has one bounded validation-guided repair attempt. The writer
+is unloaded before MiniMax weights load. Its typed blueprint,
+finished inputs, model ID, and lyric preflight are saved to
+`<output>.composition.json` and embedded in the generation recipe. Use
+`--require-composer-installed` to prevent implicit composer-model download.
+
+`--duration` remains an output upper bound: MiniMax may emit EOS earlier. The
+default `--lyrics-preflight warn` reports sparse lyrics, missing long-form
+structure, unsupported tags, and composed section-budget mismatches before the
+checkpoint loads. `strict` rejects every issue, while `off` bypasses the check.
+Supplying a duration floor still masks EOS; preflight does not silently force
+one for sparse lyrics.
+
+The default `--performance-mode optimized` keeps the global language model and
+residual-depth decoder in BF16. `q8-lm` and `q4-lm` quantize only the global
+language model while preserving BF16 depth codebooks and are the preferred
+quantized experiments. Legacy `q8` and `q4` continue to quantize both
+autoregressive components for compatible maximum compression. Recipes and
+profiles record the resolved precision of each component.
+
+The experimental
 `overlap-average` strategy denoises one song-length latent and averages the
 velocities from overlapping flow windows at every Euler step; it then decodes
 the long latent in bounded DAV chunks. `stage-separated-v1` derives stable,
 independent autoregressive and flow random streams so changes in one stage do
-not perturb the other. Both choices are recorded in schema 5 recipe JSON.
-The speech-compatible HTTP route accepts the same choices as
-`flow_strategy` and `seed_strategy`.
+not perturb the other. The default solver remains Euler with CFG active across
+every autoregressive frame and flow step. `--flow-solver ab2` uses Euler for its
+first update and second-order Adams-Bashforth thereafter;
+`--ar-cfg-frames 50` switches later autoregressive decoding to the conditional
+row; `--flow-cfg-end 0.4` does the same after 40% of flow steps. These are
+opt-in A/B controls, not quality or speed presets. Schema 7 recipe JSON and
+schema 3 profiles record solver, guidance, performance mode, and resolved LM
+and depth precision. The speech-compatible HTTP route accepts
+the corresponding `flow_solver`, `autoregressive_guidance_frames`,
+`flow_guidance_end`, and `lyric_preflight` fields.
 
 Optimized MiniMax modes periodically return completed autoregressive attention
 buffers to MLX while preserving live KV state. This bounds unified-memory use

@@ -17,7 +17,11 @@ struct MiniMaxMusic3SpeechRequest: Codable, Sendable {
     var minNewTokens: Int?
     var samplingTier: MiniMaxMusic3SamplingTier?
     var flowStrategy: MiniMaxMusic3FlowStrategy?
+    var flowSolver: MiniMaxMusic3FlowSolver?
+    var autoregressiveGuidanceFrames: Int?
+    var flowGuidanceEnd: Float?
     var seedStrategy: MiniMaxMusic3SeedStrategy?
+    var lyricPreflight: MiniMaxMusic3LyricPreflightPolicy?
     var numInferenceSteps: Int?
     var guidanceScale: Float?
     var sampleRate: Int?
@@ -35,7 +39,11 @@ struct MiniMaxMusic3SpeechRequest: Codable, Sendable {
         case minNewTokens = "min_new_tokens"
         case samplingTier = "sampling_tier"
         case flowStrategy = "flow_strategy"
+        case flowSolver = "flow_solver"
+        case autoregressiveGuidanceFrames = "autoregressive_guidance_frames"
+        case flowGuidanceEnd = "flow_guidance_end"
         case seedStrategy = "seed_strategy"
+        case lyricPreflight = "lyric_preflight"
         case numInferenceSteps = "num_inference_steps"
         case guidanceScale = "guidance_scale"
         case sampleRate = "sample_rate"
@@ -48,6 +56,8 @@ private struct MiniMaxMusic3HealthResponse: Codable {
     var resident: Bool
     var memoryMode: MiniMaxMusic3LoadingStrategy
     var performanceMode: MiniMaxMusic3PerformanceMode
+    var languageModelPrecision: MiniMaxMusic3WeightPrecision
+    var depthDecoderPrecision: MiniMaxMusic3WeightPrecision
     var nativeSampleRate: Int
     var speechSampleRate: Int
 
@@ -57,6 +67,8 @@ private struct MiniMaxMusic3HealthResponse: Codable {
         case resident
         case memoryMode = "memory_mode"
         case performanceMode = "performance_mode"
+        case languageModelPrecision = "language_model_precision"
+        case depthDecoderPrecision = "depth_decoder_precision"
         case nativeSampleRate = "native_sample_rate"
         case speechSampleRate = "speech_sample_rate"
     }
@@ -196,6 +208,26 @@ private actor MiniMaxMusic3ServerSession {
         guard sampleRate == 32_000 || sampleRate == 44_100 else {
             throw ValidationError("sample_rate must be 32000 or 44100.")
         }
+        if let guidanceFrames = request.autoregressiveGuidanceFrames,
+           !(0...MiniMaxMusic3Prompt.maxAudioFrames).contains(guidanceFrames)
+        {
+            throw ValidationError("autoregressive_guidance_frames must be between 0 and 9000.")
+        }
+        let flowGuidanceEnd = request.flowGuidanceEnd ?? 1
+        guard (0...1).contains(flowGuidanceEnd) else {
+            throw ValidationError("flow_guidance_end must be between 0 and 1.")
+        }
+        let instrumental = lyrics.lowercased() == "[instrumental]"
+        if request.lyricPreflight == .strict {
+            let report = MiniMaxMusic3LyricPreflight.inspect(
+                lyrics: lyrics,
+                durationSeconds: duration,
+                instrumental: instrumental
+            )
+            if let issue = report.issues.first {
+                throw ValidationError("lyric preflight failed: \(issue.message)")
+            }
+        }
         return (
             MiniMaxMusic3GenerationOptions(
                 caption: caption,
@@ -207,6 +239,9 @@ private actor MiniMaxMusic3ServerSession {
                 seed: request.seed ?? 0,
                 guidanceScale: guidanceScale,
                 flowStrategy: request.flowStrategy ?? .sequential,
+                flowSolver: request.flowSolver ?? .euler,
+                autoregressiveGuidanceFrames: request.autoregressiveGuidanceFrames,
+                flowGuidanceEnd: flowGuidanceEnd,
                 seedStrategy: request.seedStrategy ?? .legacy
             ),
             sampleRate
@@ -264,6 +299,8 @@ final class MiniMaxMusic3APIServer: @unchecked Sendable {
                     resident: loadingStrategy == .resident,
                     memoryMode: loadingStrategy,
                     performanceMode: performanceMode,
+                    languageModelPrecision: performanceMode.languageModelPrecision,
+                    depthDecoderPrecision: performanceMode.depthDecoderPrecision,
                     nativeSampleRate: 44_100,
                     speechSampleRate: 32_000
                 )

@@ -2,15 +2,19 @@ import Foundation
 import MereRunCore
 
 struct MiniMaxMusic3GenerationRecipe: Codable {
-    static let currentSchemaVersion = 5
+    static let currentSchemaVersion = 7
 
     var schemaVersion: Int
     var createdAt: Date
     var modelID: String
     var sourceRepository: String
     var sourceRevision: String
+    var inputBrief: String
     var caption: String
     var lyrics: String
+    var composition: MiniMaxMusic3CompositionReceipt?
+    var lyricPreflightPolicy: MiniMaxMusic3LyricPreflightPolicy
+    var lyricPreflight: MiniMaxMusic3LyricPreflightReport?
     var durationSeconds: Float
     var requestedMinimumFrames: Int?
     var requestedMaximumFrames: Int?
@@ -23,7 +27,12 @@ struct MiniMaxMusic3GenerationRecipe: Codable {
     var outputSampleRate: Int
     var loadingStrategy: MiniMaxMusic3LoadingStrategy
     var performanceMode: MiniMaxMusic3PerformanceMode
+    var languageModelPrecision: MiniMaxMusic3WeightPrecision
+    var depthDecoderPrecision: MiniMaxMusic3WeightPrecision
     var flowStrategy: MiniMaxMusic3FlowStrategy
+    var flowSolver: MiniMaxMusic3FlowSolver
+    var autoregressiveGuidanceFrames: Int?
+    var flowGuidanceEnd: Float
     var seedStrategy: MiniMaxMusic3SeedStrategy
     var audioHealth: MiniMaxMusic3AudioHealthReport
     var export: ACEStepAudioExportOptions
@@ -36,8 +45,12 @@ struct MiniMaxMusic3GenerationRecipe: Codable {
         case modelID = "model_id"
         case sourceRepository = "source_repository"
         case sourceRevision = "source_revision"
+        case inputBrief = "input_brief"
         case caption
         case lyrics
+        case composition
+        case lyricPreflightPolicy = "lyric_preflight_policy"
+        case lyricPreflight = "lyric_preflight"
         case durationSeconds = "duration_seconds"
         case requestedMinimumFrames = "requested_minimum_frames"
         case requestedMaximumFrames = "requested_maximum_frames"
@@ -50,7 +63,12 @@ struct MiniMaxMusic3GenerationRecipe: Codable {
         case outputSampleRate = "output_sample_rate"
         case loadingStrategy = "loading_strategy"
         case performanceMode = "performance_mode"
+        case languageModelPrecision = "language_model_precision"
+        case depthDecoderPrecision = "depth_decoder_precision"
         case flowStrategy = "flow_strategy"
+        case flowSolver = "flow_solver"
+        case autoregressiveGuidanceFrames = "autoregressive_guidance_frames"
+        case flowGuidanceEnd = "flow_guidance_end"
         case seedStrategy = "seed_strategy"
         case audioHealth = "audio_health"
         case export

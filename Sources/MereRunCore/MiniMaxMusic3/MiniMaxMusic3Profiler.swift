@@ -1,12 +1,18 @@
 import Foundation
 
 public struct MiniMaxMusic3GenerationProfile: Codable, Sendable, Equatable {
-    public static let currentSchemaVersion = 1
+    public static let currentSchemaVersion = 3
 
     public let schemaVersion: Int
     public let frameCount: Int
     public let chunkCount: Int
     public let inferenceSteps: Int
+    public let performanceMode: MiniMaxMusic3PerformanceMode
+    public let languageModelPrecision: MiniMaxMusic3WeightPrecision
+    public let depthDecoderPrecision: MiniMaxMusic3WeightPrecision
+    public let flowSolver: MiniMaxMusic3FlowSolver
+    public let autoregressiveGuidanceFrames: Int?
+    public let flowGuidanceEnd: Float
     public let totalSeconds: Double
     public let autoregressiveStageSeconds: Double
     public let autoregressiveLoadSeconds: Double
@@ -26,6 +32,10 @@ public struct MiniMaxMusic3GenerationProfile: Codable, Sendable, Equatable {
         frameCount: Int,
         chunkCount: Int,
         inferenceSteps: Int,
+        performanceMode: MiniMaxMusic3PerformanceMode,
+        flowSolver: MiniMaxMusic3FlowSolver,
+        autoregressiveGuidanceFrames: Int?,
+        flowGuidanceEnd: Float,
         totalSeconds: Double,
         recorder: MiniMaxMusic3ProfileRecorder
     ) {
@@ -33,6 +43,12 @@ public struct MiniMaxMusic3GenerationProfile: Codable, Sendable, Equatable {
         self.frameCount = frameCount
         self.chunkCount = chunkCount
         self.inferenceSteps = inferenceSteps
+        self.performanceMode = performanceMode
+        self.languageModelPrecision = performanceMode.languageModelPrecision
+        self.depthDecoderPrecision = performanceMode.depthDecoderPrecision
+        self.flowSolver = flowSolver
+        self.autoregressiveGuidanceFrames = autoregressiveGuidanceFrames
+        self.flowGuidanceEnd = flowGuidanceEnd
         self.totalSeconds = totalSeconds
         self.autoregressiveStageSeconds = recorder.autoregressiveStageSeconds
         self.autoregressiveLoadSeconds = recorder.autoregressiveLoadSeconds
