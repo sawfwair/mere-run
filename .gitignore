@@ -13,6 +13,9 @@ docs/.vitepress/dist/
 # XcodeGen output (regenerate with `cd apps/ios && xcodegen generate`)
 apps/ios/MereRunStudio.xcodeproj/
 
+# Legacy root-level iOS project output
+/ios/
+
 # Build artifacts
 dist/
 logs/
