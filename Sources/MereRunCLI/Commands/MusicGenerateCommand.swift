@@ -55,6 +55,42 @@ struct MusicGenerate: AsyncParsableCommand {
     @Flag(name: [.customLong("instrumental")], help: "Use upstream's [Instrumental] lyric marker; cannot be combined with lyrics.")
     var instrumental: Bool = false
 
+    @Flag(
+        name: [.customLong("compose")],
+        help: "Use a local chat model to plan a bar-aware MiniMax Music 3 timeline, lyrics, and structured caption."
+    )
+    var miniMaxCompose: Bool = false
+
+    @Option(
+        name: [.customLong("composer-model")],
+        help: "Native Gemma4 or Qwen-family chat model used by --compose."
+    )
+    var miniMaxComposerModel: String = TextChat.defaultChatModelId
+
+    @Option(
+        name: [.customLong("composer-model-root")],
+        help: "Local composer model root; skips composer auto-download."
+    )
+    var miniMaxComposerModelRoot: String?
+
+    @Flag(
+        name: [.customLong("require-composer-installed")],
+        help: "Require --composer-model to be installed and never download it implicitly."
+    )
+    var miniMaxRequireComposerInstalled: Bool = false
+
+    @Option(
+        name: [.customLong("composition-output")],
+        help: "Composer JSON receipt path (default: <output>.composition.json)."
+    )
+    var miniMaxCompositionOutput: String?
+
+    @Option(
+        name: [.customLong("lyrics-preflight")],
+        help: "MiniMax lyric-duration checks: off, warn (default), or strict."
+    )
+    var miniMaxLyricPreflightPolicy: MiniMaxMusic3LyricPreflightPolicy = .warn
+
     @Option(name: [.customLong("lrc-file")], help: "Synchronized LRC lyrics input. Cannot be combined with plain lyrics options.")
     var lrcFile: String?
 
@@ -188,7 +224,7 @@ struct MusicGenerate: AsyncParsableCommand {
 
     @Option(
         name: [.customLong("performance-mode")],
-        help: "MiniMax Music 3 execution: reference, optimized (default), q8, or q4."
+        help: "MiniMax Music 3 execution: reference, optimized (default), q8-lm/q4-lm with BF16 depth, or legacy whole-AR q8/q4."
     )
     var miniMaxPerformanceMode: MiniMaxMusic3PerformanceMode?
 
@@ -203,6 +239,24 @@ struct MusicGenerate: AsyncParsableCommand {
         help: "MiniMax Music 3 long-form flow: sequential (default) or experimental overlap-average."
     )
     var miniMaxFlowStrategy: MiniMaxMusic3FlowStrategy?
+
+    @Option(
+        name: [.customLong("flow-solver")],
+        help: "MiniMax Music 3 integration: euler (default) or experimental ab2."
+    )
+    var miniMaxFlowSolver: MiniMaxMusic3FlowSolver?
+
+    @Option(
+        name: [.customLong("ar-cfg-frames")],
+        help: "Experimental MiniMax CFG frame count; later autoregressive frames use conditional-only decoding."
+    )
+    var miniMaxAutoregressiveGuidanceFrames: Int?
+
+    @Option(
+        name: [.customLong("flow-cfg-end")],
+        help: "Experimental MiniMax flow CFG cutoff in [0, 1]; later steps use conditional-only decoding."
+    )
+    var miniMaxFlowGuidanceEnd: Float?
 
     @Option(
         name: [.customLong("seed-strategy")],
@@ -546,7 +600,7 @@ struct MusicGenerate: AsyncParsableCommand {
         }
 
         if isMiniMaxMusic3Request {
-            try runMiniMaxMusic3(explicitDurationSeconds: explicitDurationSeconds)
+            try await runMiniMaxMusic3(explicitDurationSeconds: explicitDurationSeconds)
             return
         }
 
@@ -558,11 +612,19 @@ struct MusicGenerate: AsyncParsableCommand {
             || miniMaxPerformanceMode != nil
             || miniMaxSamplingTier != nil
             || miniMaxFlowStrategy != nil
+            || miniMaxFlowSolver != nil
+            || miniMaxAutoregressiveGuidanceFrames != nil
+            || miniMaxFlowGuidanceEnd != nil
             || miniMaxSeedStrategy != nil
             || miniMaxProfileOutput != nil
+            || miniMaxCompose
+            || miniMaxComposerModelRoot != nil
+            || miniMaxRequireComposerInstalled
+            || miniMaxCompositionOutput != nil
+            || miniMaxLyricPreflightPolicy != .warn
         {
             throw ValidationError(
-                "MiniMax duration-frame, sample-rate, memory-mode, performance-mode, flow, seed, sampling-tier, and profiling options require MiniMax Music 3."
+                "MiniMax composer, lyric-preflight, duration-frame, sample-rate, memory-mode, performance-mode, flow, seed, sampling-tier, and profiling options require MiniMax Music 3."
             )
         }
 
@@ -1158,17 +1220,32 @@ struct MusicGenerate: AsyncParsableCommand {
         return MiniMaxMusic3Resources.looksLikeRoot(resolveUserPath(model))
     }
 
-    private func runMiniMaxMusic3(explicitDurationSeconds: Float?) throws {
+    private func runMiniMaxMusic3(explicitDurationSeconds: Float?) async throws {
         try validateMiniMaxMusic3Options(explicitDurationSeconds: explicitDurationSeconds)
         let inputLRC = try loadLRC()
-        let resolvedLyrics = instrumental
+        let inputLyrics = instrumental
             ? "[Instrumental]"
             : try inputLRC?.lyrics ?? loadLyrics()
-        guard !resolvedLyrics.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+        guard miniMaxCompose
+                || !inputLyrics.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             throw ValidationError(
-                "MiniMax Music 3 requires --lyrics, --lyrics-file, --lrc-file, or --instrumental."
+                "MiniMax Music 3 requires --compose, --lyrics, --lyrics-file, --lrc-file, or --instrumental."
             )
         }
+        let requestedDuration = explicitDurationSeconds
+            ?? miniMaxMaximumFrames.map {
+                Float($0) / Float(MiniMaxMusic3Prompt.frameRate)
+            }
+            ?? 60
+        let requestedMinimumFrames = miniMaxMinimumFrames
+            ?? miniMaxMinimumDurationSeconds.map {
+                MiniMaxMusic3Prompt.minimumFrameCount(forDurationSeconds: $0)
+            }
+        let outputURL = CLIOutput.resolveOutputURL(
+            output,
+            defaultPrefix: "mererun-minimax-music3",
+            defaultExtension: "wav"
+        )
 
         let rootURL: URL
         if model == ModelResolver.ModelID.miniMaxMusic3.rawValue {
@@ -1192,15 +1269,65 @@ struct MusicGenerate: AsyncParsableCommand {
             )
         }
 
-        let outputURL = CLIOutput.resolveOutputURL(
-            output,
-            defaultPrefix: "mererun-minimax-music3",
-            defaultExtension: "wav"
-        )
         try FileManager.default.createDirectory(
             at: outputURL.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
+
+        let composition: MiniMaxMusic3CompositionReceipt?
+        if miniMaxCompose {
+            let authoritativeLyrics = inputLyrics
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .isEmpty || instrumental
+                ? nil
+                : inputLyrics
+            composition = try await MiniMaxMusic3LocalComposer.compose(
+                request: MiniMaxMusic3CompositionRequest(
+                    brief: caption,
+                    durationSeconds: requestedDuration,
+                    instrumental: instrumental,
+                    authoritativeLyrics: authoritativeLyrics
+                ),
+                modelID: miniMaxComposerModel,
+                modelRoot: miniMaxComposerModelRoot,
+                requireInstalled: miniMaxRequireComposerInstalled,
+                quiet: quiet
+            )
+            let compositionURL = miniMaxCompositionOutput.map(resolveUserPath)
+                ?? outputURL.deletingPathExtension().appendingPathExtension("composition.json")
+            try FileManager.default.createDirectory(
+                at: compositionURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try composition?.write(to: compositionURL)
+            if !quiet {
+                CLIStderr.write("Saved composition: \(compositionURL.path)\n")
+            }
+        } else {
+            composition = nil
+        }
+        let effectiveCaption = composition?.song.caption ?? caption
+        let resolvedLyrics = composition?.song.lyrics ?? inputLyrics
+        let lyricPreflight = miniMaxLyricPreflightPolicy == .off
+            ? nil
+            : MiniMaxMusic3LyricPreflight.inspect(
+                lyrics: resolvedLyrics,
+                durationSeconds: requestedDuration,
+                instrumental: instrumental,
+                blueprint: composition?.blueprint
+            )
+        if let lyricPreflight {
+            for issue in lyricPreflight.issues where !quiet {
+                CLIStderr.write(
+                    "MiniMax lyric preflight [\(issue.severity.rawValue)]: \(issue.message)\n"
+                )
+            }
+            if miniMaxLyricPreflightPolicy == .strict,
+               let issue = lyricPreflight.issues.first
+            {
+                throw ValidationError("MiniMax lyric preflight failed: \(issue.message)")
+            }
+        }
         if !quiet {
             CLIStderr.write("Loading MiniMax Music 3 from \(rootURL.path)\n")
         }
@@ -1210,13 +1337,28 @@ struct MusicGenerate: AsyncParsableCommand {
         }
         let performanceMode = miniMaxPerformanceMode ?? .optimized
         if !quiet {
-            CLIStderr.write("MiniMax performance mode: \(performanceMode.rawValue)\n")
+            CLIStderr.write(
+                "MiniMax performance mode: \(performanceMode.rawValue) "
+                    + "(LM \(performanceMode.languageModelPrecision.rawValue), "
+                    + "depth \(performanceMode.depthDecoderPrecision.rawValue))\n"
+            )
         }
         let inferenceSteps = resolvedMiniMaxInferenceSteps
         let flowStrategy = miniMaxFlowStrategy ?? .sequential
+        let flowSolver = miniMaxFlowSolver ?? .euler
+        let flowGuidanceEnd = miniMaxFlowGuidanceEnd ?? 1
         let seedStrategy = miniMaxSeedStrategy ?? .legacy
         if !quiet {
             CLIStderr.write("MiniMax flow strategy: \(flowStrategy.rawValue)\n")
+            CLIStderr.write("MiniMax flow solver: \(flowSolver.rawValue)\n")
+            if let miniMaxAutoregressiveGuidanceFrames {
+                CLIStderr.write(
+                    "MiniMax autoregressive CFG frames: \(miniMaxAutoregressiveGuidanceFrames)\n"
+                )
+            }
+            if flowGuidanceEnd < 1 {
+                CLIStderr.write("MiniMax flow CFG end: \(flowGuidanceEnd)\n")
+            }
             CLIStderr.write("MiniMax seed strategy: \(seedStrategy.rawValue)\n")
         }
         if !quiet {
@@ -1230,18 +1372,9 @@ struct MusicGenerate: AsyncParsableCommand {
             loadingStrategy: loadingStrategy,
             performanceMode: performanceMode
         )
-        let requestedDuration = explicitDurationSeconds
-            ?? miniMaxMaximumFrames.map {
-                Float($0) / Float(MiniMaxMusic3Prompt.frameRate)
-            }
-            ?? 60
-        let requestedMinimumFrames = miniMaxMinimumFrames
-            ?? miniMaxMinimumDurationSeconds.map {
-                MiniMaxMusic3Prompt.minimumFrameCount(forDurationSeconds: $0)
-            }
         let result = try pipeline.generate(
             options: MiniMaxMusic3GenerationOptions(
-                caption: caption,
+                caption: effectiveCaption,
                 lyrics: resolvedLyrics,
                 durationSeconds: requestedDuration,
                 minimumFrames: requestedMinimumFrames,
@@ -1251,6 +1384,9 @@ struct MusicGenerate: AsyncParsableCommand {
                 guidanceScale: guidanceScale ?? 1.7,
                 profilingEnabled: miniMaxProfileOutput != nil,
                 flowStrategy: flowStrategy,
+                flowSolver: flowSolver,
+                autoregressiveGuidanceFrames: miniMaxAutoregressiveGuidanceFrames,
+                flowGuidanceEnd: flowGuidanceEnd,
                 seedStrategy: seedStrategy
             ),
             progress: { event in
@@ -1316,8 +1452,12 @@ struct MusicGenerate: AsyncParsableCommand {
                 modelID: model,
                 sourceRepository: MiniMaxMusic3Resources.repository,
                 sourceRevision: MiniMaxMusic3Resources.revision,
-                caption: caption,
+                inputBrief: caption,
+                caption: effectiveCaption,
                 lyrics: resolvedLyrics,
+                composition: composition,
+                lyricPreflightPolicy: miniMaxLyricPreflightPolicy,
+                lyricPreflight: lyricPreflight,
                 durationSeconds: requestedDuration,
                 requestedMinimumFrames: requestedMinimumFrames,
                 requestedMaximumFrames: miniMaxMaximumFrames,
@@ -1330,7 +1470,12 @@ struct MusicGenerate: AsyncParsableCommand {
                 outputSampleRate: outputSampleRate,
                 loadingStrategy: loadingStrategy,
                 performanceMode: performanceMode,
+                languageModelPrecision: performanceMode.languageModelPrecision,
+                depthDecoderPrecision: performanceMode.depthDecoderPrecision,
                 flowStrategy: flowStrategy,
+                flowSolver: flowSolver,
+                autoregressiveGuidanceFrames: miniMaxAutoregressiveGuidanceFrames,
+                flowGuidanceEnd: flowGuidanceEnd,
                 seedStrategy: seedStrategy,
                 audioHealth: result.audioHealth,
                 export: exportOptions,
@@ -1356,6 +1501,27 @@ struct MusicGenerate: AsyncParsableCommand {
     }
 
     func validateMiniMaxMusic3Options(explicitDurationSeconds: Float?) throws {
+        if let miniMaxAutoregressiveGuidanceFrames,
+           !(0...MiniMaxMusic3Prompt.maxAudioFrames).contains(
+            miniMaxAutoregressiveGuidanceFrames
+           )
+        {
+            throw ValidationError("--ar-cfg-frames must be between 0 and 9000.")
+        }
+        if let miniMaxFlowGuidanceEnd,
+           !(0...1).contains(miniMaxFlowGuidanceEnd)
+        {
+            throw ValidationError("--flow-cfg-end must be between 0 and 1.")
+        }
+        if !miniMaxCompose,
+           miniMaxComposerModelRoot != nil
+            || miniMaxRequireComposerInstalled
+            || miniMaxCompositionOutput != nil
+        {
+            throw ValidationError(
+                "--composer-model-root, --require-composer-installed, and --composition-output require --compose."
+            )
+        }
         if let miniMaxMinimumDurationSeconds,
            miniMaxMinimumDurationSeconds <= 0 || miniMaxMinimumDurationSeconds > 360
         {
@@ -1396,6 +1562,12 @@ struct MusicGenerate: AsyncParsableCommand {
         }
         if let explicitDurationSeconds, explicitDurationSeconds > 360 {
             throw ValidationError("MiniMax Music 3 supports at most 360 seconds (9,000 frames at 25 Hz).")
+        }
+        if miniMaxCompose,
+           let explicitDurationSeconds,
+           explicitDurationSeconds < 10
+        {
+            throw ValidationError("--compose requires a duration of at least 10 seconds.")
         }
         if let explicitDurationSeconds, let miniMaxMinimumDurationSeconds,
            miniMaxMinimumDurationSeconds > explicitDurationSeconds
@@ -1448,7 +1620,9 @@ struct MusicGenerate: AsyncParsableCommand {
             || velocityNormThreshold != nil
             || velocityEMAFactor != nil
         {
-            throw ValidationError("MiniMax Music 3 uses its fixed flow-matching Euler schedule.")
+            throw ValidationError(
+                "ACE-Step scheduler controls do not apply to MiniMax Music 3; use --flow-solver and --flow-cfg-end for MiniMax experiments."
+            )
         }
         if let candidateCount, candidateCount != 1 {
             throw ValidationError("MiniMax Music 3 currently supports one candidate per invocation.")

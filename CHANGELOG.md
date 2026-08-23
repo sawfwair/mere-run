@@ -8,6 +8,20 @@ The format is based on Keep a Changelog.
 
 ### Audio
 
+- added split MiniMax Music 3 quantization tiers: `q8-lm` and `q4-lm`
+  quantize only the 8B global language model while retaining the residual-depth
+  decoder in BF16. Legacy whole-autoregressive `q8` and `q4` remain available;
+  profile schema 3 and recipe schema 7 record the resolved precision of both
+  components.
+- added an opt-in MiniMax Music 3 local composer that plans a bar-aware song
+  timeline, writes lyrics and the structured three-part caption with native
+  constrained-JSON chat models, preserves supplied lyrics, and saves typed
+  composition and lyric-preflight provenance. Duration-aware lyric checks warn
+  by default and can be made strict without silently forcing an EOS floor.
+- added reproducible MiniMax Music 3 experiments for AB2 flow integration,
+  autoregressive CFG cutoff, and flow CFG cutoff across the CLI and speech API.
+  Euler and full CFG remain unchanged defaults, and recipes plus profiles record
+  every experimental setting.
 - fixed MiniMax Music 3 optimized, Q8, and Q4 lyric drift by preserving the
   released full-vocabulary categorical layout behind the compact semantic head
   and keeping the eight-token residual-depth decode on its seeded-parity path.

@@ -241,6 +241,23 @@ public final class KVCacheStatic: KVCache {
         copy.offset = offset
         return copy
     }
+
+    public func unbatchedRows(count: Int) -> [KVCache]? {
+        guard count > 0,
+              let keys,
+              let values,
+              keys.dim(0) == count,
+              values.dim(0) == count else {
+            return nil
+        }
+        return (0..<count).map { index in
+            let copy = KVCacheStatic(capacity: capacity)
+            copy.keys = keys[index..<(index + 1), 0..., 0..., 0...]
+            copy.values = values[index..<(index + 1), 0..., 0..., 0...]
+            copy.offset = offset
+            return copy
+        }
+    }
 }
 
 public final class KVRaggedBatchCache: KVCache {

@@ -670,6 +670,16 @@ swift run mere.run music generate \
 # Generate a lyric-driven stereo song with native MiniMax Music 3
 swift run mere.run model pull music-minimax-music3 --accept-model-license
 swift run mere.run music generate \
+  "slow-burn dream pop about leaving a familiar city and finding home" \
+  --model music-minimax-music3 \
+  --compose \
+  --duration 180 \
+  --lyrics-preflight strict \
+  --performance-mode q8-lm \
+  --sampling-tier fast \
+  --output ./minimax-composed-song.wav
+
+swift run mere.run music generate \
   "cinematic synth-pop, female lead, 118 bpm, wide guitars" \
   --model music-minimax-music3 \
   --lyrics-file ./lyrics.txt \
@@ -678,7 +688,7 @@ swift run mere.run music generate \
   --sampling-tier fast \
   --seed 7 \
   --memory-mode staged \
-  --performance-mode q8 \
+  --performance-mode q8-lm \
   --output ./minimax-song.wav
 
 # Compare the experimental whole-song flow windowing recipe without changing defaults
@@ -691,11 +701,22 @@ swift run mere.run music generate \
   --seed-strategy stage-separated-v1 \
   --output ./minimax-overlap-average.wav
 
+# A/B opt-in solver and guidance-taper experiments; Euler and full CFG remain defaults
+swift run mere.run music generate \
+  "cinematic synth-pop, female lead, 118 bpm, wide guitars" \
+  --model music-minimax-music3 \
+  --lyrics-file ./lyrics.txt \
+  --duration 30 \
+  --flow-solver ab2 \
+  --ar-cfg-frames 50 \
+  --flow-cfg-end 0.4 \
+  --output ./minimax-ab2-taper.wav
+
 # Keep MiniMax Music 3 warm behind its speech-compatible HTTP route
 swift run mere.run music serve \
   --model music-minimax-music3 \
   --memory-mode resident \
-  --performance-mode q8 \
+  --performance-mode q8-lm \
   --port 8080
 
 # Generate with ACE-Step XL Turbo on larger Macs

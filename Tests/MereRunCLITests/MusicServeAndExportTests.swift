@@ -43,6 +43,18 @@ final class MusicServeAndExportTests: XCTestCase {
         XCTAssertEqual(command.port, 8_091)
     }
 
+    func testMusicServeParsesMiniMaxSplitQuantization() throws {
+        let command = try MusicServe.parse([
+            "--model", MiniMaxMusic3Resources.modelID,
+            "--performance-mode", "q4-lm",
+        ])
+
+        XCTAssertEqual(command.miniMaxPerformanceMode, .q4LM)
+        XCTAssertEqual(command.miniMaxPerformanceMode?.languageModelPrecision, .affineQ4)
+        XCTAssertEqual(command.miniMaxPerformanceMode?.depthDecoderPrecision, .bfloat16)
+        XCTAssertEqual(MiniMaxMusic3GenerationRecipe.currentSchemaVersion, 7)
+    }
+
     func testMiniMaxSpeechRequestDecodesReferenceAndNativeControls() throws {
         let request = try JSONDecoder().decode(
             MiniMaxMusic3SpeechRequest.self,
@@ -61,7 +73,11 @@ final class MusicServeAndExportTests: XCTestCase {
                   "minimum_audio_duration": 20,
                   "sampling_tier": "draft",
                   "flow_strategy": "overlap-average",
+                  "flow_solver": "ab2",
+                  "autoregressive_guidance_frames": 50,
+                  "flow_guidance_end": 0.4,
                   "seed_strategy": "stage-separated-v1",
+                  "lyric_preflight": "strict",
                   "num_inference_steps": 24,
                   "guidance_scale": 1.7,
                   "sample_rate": 44100
@@ -76,7 +92,11 @@ final class MusicServeAndExportTests: XCTestCase {
         XCTAssertEqual(request.minimumAudioDuration, 20)
         XCTAssertEqual(request.samplingTier, .draft)
         XCTAssertEqual(request.flowStrategy, .overlapAverage)
+        XCTAssertEqual(request.flowSolver, .adamsBashforth2)
+        XCTAssertEqual(request.autoregressiveGuidanceFrames, 50)
+        XCTAssertEqual(request.flowGuidanceEnd, 0.4)
         XCTAssertEqual(request.seedStrategy, .stageSeparatedV1)
+        XCTAssertEqual(request.lyricPreflight, .strict)
         XCTAssertEqual(request.numInferenceSteps, 24)
         XCTAssertEqual(request.guidanceScale, 1.7)
         XCTAssertEqual(request.sampleRate, 44_100)

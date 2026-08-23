@@ -1,14 +1,229 @@
 import MLX
+import MLXNN
 import MLXRandom
 import XCTest
 @testable import MereRunCore
 
 final class MiniMaxMusic3Tests: MereRunCoreTestCase {
+    func testComposerNormalizesBlueprintToRequestedBarBudget() throws {
+        let request = MiniMaxMusic3CompositionRequest(
+            brief: "A patient synth-pop song that blooms into a wide final chorus",
+            durationSeconds: 120,
+            instrumental: false
+        )
+        let proposedBlueprint = MiniMaxMusic3SongBlueprint(
+            bpm: 120,
+            meter: .fourFour,
+            durationUse: "build across the full song",
+            sections: [
+                .init(tag: .intro, approximateBars: 4, targetLyricLines: 0, vocalPlan: "wordless", productionEvents: "pads enter"),
+                .init(tag: .verse, approximateBars: 12, targetLyricLines: 8, vocalPlan: "close lead", productionEvents: "bass enters"),
+                .init(tag: .chorus, approximateBars: 12, targetLyricLines: 8, vocalPlan: "stacked lead", productionEvents: "drums widen"),
+                .init(tag: .verse, approximateBars: 12, targetLyricLines: 8, vocalPlan: "close lead", productionEvents: "guitar enters"),
+                .init(tag: .bridge, approximateBars: 8, targetLyricLines: 4, vocalPlan: "restrained", productionEvents: "drums exit"),
+                .init(tag: .chorus, approximateBars: 12, targetLyricLines: 8, vocalPlan: "stacked lead", productionEvents: "full return"),
+                .init(tag: .outro, approximateBars: 4, targetLyricLines: 2, vocalPlan: "single refrain", productionEvents: "layers exit"),
+            ]
+        )
+
+        let normalized = try MiniMaxMusic3ComposerContract.normalize(
+            blueprint: proposedBlueprint,
+            request: request
+        )
+
+        XCTAssertEqual(normalized.sections.reduce(0) { $0 + $1.approximateBars }, 60)
+        XCTAssertEqual(normalized.sections.last?.tag, .outro)
+        XCTAssertTrue(normalized.sections.allSatisfy { (1...64).contains($0.approximateBars) })
+    }
+
+    func testComposerPreservesAuthoritativeLyricsExactly() throws {
+        let lyrics = "[verse]\nKeep these words exactly\n[chorus]\nHold this line\n[outro]\nStay"
+        let request = MiniMaxMusic3CompositionRequest(
+            brief: "intimate acoustic pop",
+            durationSeconds: 60,
+            instrumental: false,
+            authoritativeLyrics: lyrics
+        )
+        let proposedBlueprint = MiniMaxMusic3SongBlueprint(
+            bpm: 120,
+            meter: .fourFour,
+            durationUse: "complete arc",
+            sections: [
+                .init(tag: .verse, approximateBars: 10, targetLyricLines: 1, vocalPlan: "lead", productionEvents: "guitar"),
+                .init(tag: .chorus, approximateBars: 10, targetLyricLines: 1, vocalPlan: "double", productionEvents: "bass"),
+                .init(tag: .outro, approximateBars: 10, targetLyricLines: 1, vocalPlan: "lead", productionEvents: "fade"),
+            ]
+        )
+        let blueprint = try MiniMaxMusic3ComposerContract.normalize(
+            blueprint: proposedBlueprint,
+            request: request
+        )
+        XCTAssertEqual(blueprint.sections.map(\.targetLyricLines), [1, 1, 1])
+
+        let song = MiniMaxMusic3ComposedSong(
+            title: "Stay",
+            tags: ["acoustic", "intimate", "warm"],
+            bpm: 120,
+            language: "en",
+            lyrics: "the model tried to replace this",
+            globalMetadata: "Basic Attributes: acoustic pop. Global Emotional Progression: calm to open. Application Scenarios & Imagery: morning room. Sonics & Production Profile: natural and close.",
+            vocalDetails: "Vocal Gender & Timbre: neutral warm lead. Vocal Style: conversational. Harmony/Backing Vocals: light doubles. Vocal FX: short room.",
+            arrangement: "Instrument Lifecycle Description (Primary/Secondary Layering): guitar throughout, bass enters. Groove & Foundation Progression: restrained pulse. Embellishments, Textures & Spatial FX: soft piano and room tail."
+        )
+
+        let normalized = try MiniMaxMusic3ComposerContract.normalize(
+            song: song,
+            request: request,
+            blueprint: blueprint
+        )
+
+        XCTAssertEqual(normalized.lyrics, lyrics)
+    }
+
+    func testLyricPreflightFlagsSparseLongSongAndUnsupportedTags() {
+        let report = MiniMaxMusic3LyricPreflight.inspect(
+            lyrics: "[lyrics]\njust one line",
+            durationSeconds: 180,
+            instrumental: false
+        )
+
+        XCTAssertTrue(report.issues.contains { $0.id == "lyrics_underfilled_lines" })
+        XCTAssertTrue(report.issues.contains { $0.id == "lyrics_placeholder_tag" && $0.severity == .blocker })
+    }
+
+    func testExperimentalGuidanceCutoffsAndAB2Update() {
+        XCTAssertTrue(MiniMaxMusic3Pipeline.autoregressiveGuidanceEnabled(
+            generatedFrameCount: 49,
+            guidanceFrames: 50
+        ))
+        XCTAssertFalse(MiniMaxMusic3Pipeline.autoregressiveGuidanceEnabled(
+            generatedFrameCount: 50,
+            guidanceFrames: 50
+        ))
+        XCTAssertTrue(MiniMaxMusic3Pipeline.flowGuidanceEnabled(
+            step: 1,
+            stepCount: 5,
+            guidanceEnd: 0.4
+        ))
+        XCTAssertFalse(MiniMaxMusic3Pipeline.flowGuidanceEnabled(
+            step: 2,
+            stepCount: 5,
+            guidanceEnd: 0.4
+        ))
+
+        let current = MLXArray([Float(4), 8])
+        let previous = MLXArray([Float(2), 6])
+        let ab2 = MiniMaxMusic3Pipeline.flowIntegrationVelocity(
+            current,
+            previous: previous,
+            solver: .adamsBashforth2
+        )
+        MLX.eval(ab2)
+        XCTAssertEqual(ab2.asArray(Float.self), [5, 9])
+    }
+
+    func testStaticKVCacheCanDropTheUnconditionalRow() throws {
+        let cache = KVCacheStatic(capacity: 4)
+        _ = cache.update(
+            keys: MLXArray.zeros([2, 1, 1, 2]),
+            values: MLXArray.zeros([2, 1, 1, 2])
+        )
+
+        let rows = try XCTUnwrap(cache.unbatchedRows(count: 2))
+        XCTAssertEqual(rows.count, 2)
+        XCTAssertEqual(rows[0].offset, 1)
+        let updated = rows[0].update(
+            keys: MLXArray.ones([1, 1, 1, 2]),
+            values: MLXArray.ones([1, 1, 1, 2])
+        )
+        XCTAssertEqual(updated.0.shape, [1, 1, 2, 2])
+        XCTAssertEqual(rows[0].offset, 2)
+    }
+
     func testAutoregressiveCacheClearingUsesBoundedIntervals() {
         XCTAssertFalse(MiniMaxMusic3Pipeline.shouldClearAutoregressiveCache(generatedFrameCount: 0))
         XCTAssertFalse(MiniMaxMusic3Pipeline.shouldClearAutoregressiveCache(generatedFrameCount: 63))
         XCTAssertTrue(MiniMaxMusic3Pipeline.shouldClearAutoregressiveCache(generatedFrameCount: 64))
         XCTAssertTrue(MiniMaxMusic3Pipeline.shouldClearAutoregressiveCache(generatedFrameCount: 128))
+    }
+
+    func testPerformanceModesResolveLanguageAndDepthPrecisionIndependently() {
+        XCTAssertEqual(MiniMaxMusic3PerformanceMode.optimized.languageModelPrecision, .bfloat16)
+        XCTAssertEqual(MiniMaxMusic3PerformanceMode.optimized.depthDecoderPrecision, .bfloat16)
+        XCTAssertEqual(MiniMaxMusic3PerformanceMode.q8LM.languageModelPrecision, .affineQ8)
+        XCTAssertEqual(MiniMaxMusic3PerformanceMode.q8LM.depthDecoderPrecision, .bfloat16)
+        XCTAssertEqual(MiniMaxMusic3PerformanceMode.q4LM.languageModelPrecision, .affineQ4)
+        XCTAssertEqual(MiniMaxMusic3PerformanceMode.q4LM.depthDecoderPrecision, .bfloat16)
+        XCTAssertEqual(MiniMaxMusic3PerformanceMode.q8.depthDecoderPrecision, .affineQ8)
+        XCTAssertEqual(MiniMaxMusic3PerformanceMode.q4.depthDecoderPrecision, .affineQ4)
+    }
+
+    func testLanguageModelOnlyQuantizationLeavesDepthDecoderDense() {
+        func models() -> (MiniMaxMusic3LanguageModel, MiniMaxMusic3DepthDecoder) {
+            let languageModel = MiniMaxMusic3LanguageModel(
+                configuration: .init(
+                    vocabSize: 128,
+                    hiddenSize: 64,
+                    intermediateSize: 128,
+                    numHiddenLayers: 1,
+                    numAttentionHeads: 4,
+                    numKeyValueHeads: 2,
+                    headDim: 16,
+                    maxPositionEmbeddings: 16,
+                    rmsNormEps: 1e-6,
+                    ropeParameters: .init(ropeTheta: 10_000)
+                )
+            )
+            let depthDecoder = MiniMaxMusic3DepthDecoder(
+                configuration: .init(
+                    hiddenSize: 64,
+                    numLayers: 1,
+                    numAttentionHeads: 4,
+                    intermediateSize: 128,
+                    audioVocabSize: 128,
+                    numCodebooks: 4,
+                    maxPositionEmbeddings: 8
+                )
+            )
+            return (languageModel, depthDecoder)
+        }
+
+        let split = models()
+        MiniMaxMusic3ModelLoader.applyAutoregressiveQuantization(
+            languageModel: split.0,
+            depthDecoder: split.1,
+            performanceMode: .q4LM
+        )
+        XCTAssertTrue(split.0.leafModules().flattened().contains { $0.1 is QuantizedLinear })
+        XCTAssertFalse(split.1.leafModules().flattened().contains { $0.1 is QuantizedLinear })
+
+        let legacy = models()
+        MiniMaxMusic3ModelLoader.applyAutoregressiveQuantization(
+            languageModel: legacy.0,
+            depthDecoder: legacy.1,
+            performanceMode: .q4
+        )
+        XCTAssertTrue(legacy.0.leafModules().flattened().contains { $0.1 is QuantizedLinear })
+        XCTAssertTrue(legacy.1.leafModules().flattened().contains { $0.1 is QuantizedLinear })
+    }
+
+    func testGenerationProfileRecordsResolvedSplitPrecision() {
+        let profile = MiniMaxMusic3GenerationProfile(
+            frameCount: 250,
+            chunkCount: 2,
+            inferenceSteps: 15,
+            performanceMode: .q8LM,
+            flowSolver: .adamsBashforth2,
+            autoregressiveGuidanceFrames: 50,
+            flowGuidanceEnd: 0.4,
+            totalSeconds: 1,
+            recorder: MiniMaxMusic3ProfileRecorder()
+        )
+
+        XCTAssertEqual(profile.schemaVersion, 3)
+        XCTAssertEqual(profile.performanceMode, .q8LM)
+        XCTAssertEqual(profile.languageModelPrecision, .affineQ8)
+        XCTAssertEqual(profile.depthDecoderPrecision, .bfloat16)
     }
 
     func testInstalledQuantizedSemanticLogitQuality() throws {

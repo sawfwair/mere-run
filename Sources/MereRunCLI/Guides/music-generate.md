@@ -79,8 +79,10 @@ mere.run guide music generate --model music-magenta-rt2-small
 - `--duration`: output seconds.
 - `--minimum-duration`: MiniMax Music 3 decoded-audio duration floor.
 - `--min-frames`, `--max-frames`: MiniMax Music 3 exact 25 Hz floor and limit.
-- `--performance-mode reference|optimized|q8|q4`: MiniMax Music 3 execution tier;
-  `optimized` is the BF16 default and `q8` is the recommended turbo tier.
+- `--performance-mode reference|optimized|q8-lm|q4-lm|q8|q4`: MiniMax Music 3
+  execution tier; `optimized` is the BF16 default, `q8-lm` is the recommended
+  quantized tier with a BF16 depth decoder, and `q8`/`q4` retain legacy
+  whole-autoregressive quantization.
 - `--sampling-tier quality|fast|draft`: MiniMax Music 3 flow schedule with 30,
   20, or 16 steps.
 - `--steps`, `-s`: exact denoise steps; overrides a MiniMax sampling tier.
@@ -159,9 +161,11 @@ audio without a Python process. `--duration` accepts up to 360 seconds;
 `--minimum-duration` prevents semantic EOS and rounds for the vocoder hop so
 the decoded WAV meets the requested floor. `--guidance-scale` defaults to `1.7`.
 The default `--performance-mode optimized` keeps BF16 quality while using
-compact/fused projections, cached depth decode, and batched flow guidance;
-`q8` is the recommended quantized turbo tier, with `q4` available for maximum
-memory reduction. ACE-Step source audio, adapters, ranked
+compact/fused projections, a fixed-capacity language-model cache, and batched
+flow guidance. `q8-lm` quantizes the global language model while retaining the
+vocal-critical residual-depth decoder in BF16; `q4-lm` is its lower-memory
+counterpart. Legacy `q8` and `q4` still quantize both autoregressive components.
+ACE-Step source audio, adapters, ranked
 candidates, stems, DAW bundles, and LRC export do not apply to this model. A
 reproducibility recipe is written beside the WAV unless `--no-recipe` is used.
 The selective managed download is approximately 26.6 GiB and requires

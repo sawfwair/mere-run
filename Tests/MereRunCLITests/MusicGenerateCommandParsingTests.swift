@@ -86,9 +86,12 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
             "--guidance-scale", "1.7",
             "--sample-rate", "32000",
             "--memory-mode", "staged",
-            "--performance-mode", "q8",
+            "--performance-mode", "q8-lm",
             "--sampling-tier", "fast",
             "--flow-strategy", "overlap-average",
+            "--flow-solver", "ab2",
+            "--ar-cfg-frames", "50",
+            "--flow-cfg-end", "0.4",
             "--seed-strategy", "stage-separated-v1",
             "--profile-output", "/tmp/minimax-profile.json",
         ])
@@ -104,12 +107,53 @@ final class MusicGenerateCommandParsingTests: XCTestCase {
         XCTAssertEqual(command.guidanceScale, 1.7)
         XCTAssertEqual(command.miniMaxOutputSampleRate, 32_000)
         XCTAssertEqual(command.miniMaxLoadingStrategy, .staged)
-        XCTAssertEqual(command.miniMaxPerformanceMode, .q8)
+        XCTAssertEqual(command.miniMaxPerformanceMode, .q8LM)
+        XCTAssertEqual(command.miniMaxPerformanceMode?.languageModelPrecision, .affineQ8)
+        XCTAssertEqual(command.miniMaxPerformanceMode?.depthDecoderPrecision, .bfloat16)
         XCTAssertEqual(command.miniMaxSamplingTier, .fast)
         XCTAssertEqual(command.miniMaxFlowStrategy, .overlapAverage)
+        XCTAssertEqual(command.miniMaxFlowSolver, .adamsBashforth2)
+        XCTAssertEqual(command.miniMaxAutoregressiveGuidanceFrames, 50)
+        XCTAssertEqual(command.miniMaxFlowGuidanceEnd, 0.4)
         XCTAssertEqual(command.miniMaxSeedStrategy, .stageSeparatedV1)
         XCTAssertEqual(command.resolvedMiniMaxInferenceSteps, 24)
         XCTAssertEqual(command.miniMaxProfileOutput, "/tmp/minimax-profile.json")
+    }
+
+    func testMusicGenerateParsesMiniMaxLocalComposer() throws {
+        let command = try MusicGenerate.parse([
+            "slow-burn dream pop about finding home",
+            "--model", MiniMaxMusic3Resources.modelID,
+            "--compose",
+            "--composer-model", Gemma4Resources.nanoModelId,
+            "--require-composer-installed",
+            "--composition-output", "/tmp/composition.json",
+            "--lyrics-preflight", "strict",
+            "--duration", "180",
+        ])
+
+        XCTAssertTrue(command.miniMaxCompose)
+        XCTAssertEqual(command.miniMaxComposerModel, Gemma4Resources.nanoModelId)
+        XCTAssertTrue(command.miniMaxRequireComposerInstalled)
+        XCTAssertEqual(command.miniMaxCompositionOutput, "/tmp/composition.json")
+        XCTAssertEqual(command.miniMaxLyricPreflightPolicy, .strict)
+        XCTAssertNoThrow(
+            try command.validateMiniMaxMusic3Options(explicitDurationSeconds: 180)
+        )
+    }
+
+    func testMiniMaxRejectsInvalidExperimentalCutoffs() throws {
+        let command = try MusicGenerate.parse([
+            "deep house",
+            "--model", MiniMaxMusic3Resources.modelID,
+            "--instrumental",
+            "--ar-cfg-frames", "9001",
+            "--flow-cfg-end", "1.1",
+        ])
+
+        XCTAssertThrowsError(
+            try command.validateMiniMaxMusic3Options(explicitDurationSeconds: nil)
+        )
     }
 
     func testMiniMaxSamplingTiersResolveDocumentedStepCounts() throws {

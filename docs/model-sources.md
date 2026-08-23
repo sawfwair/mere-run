@@ -873,9 +873,29 @@ compact semantic projection, a full-vocabulary sampling view, fused global
 language-model projections, and batched flow guidance. The eight-token residual
 depth prefix is recomputed without projection fusion because its cached/fused
 BF16 path changed seeded codebook choices and caused lyric drift. The opt-in
-`q8` and `q4` modes apply group-64 affine quantization to the autoregressive
-transformers; `q8` is the recommended turbo tier. Flow stays BF16 because
+`q8-lm` and `q4-lm` apply group-64 affine quantization only to the global
+language model while retaining the residual-depth decoder in BF16. They are
+the preferred quantized experiments because depth codebooks directly affect
+vocal detail. Legacy `q8` and `q4` still quantize both autoregressive
+components for compatible maximum compression. Flow stays BF16 because
 installed-checkpoint timing showed its quantized kernels regress.
+
+`--compose` runs a local native Gemma4 or Qwen-family chat model in two
+constrained-JSON passes before loading MiniMax: a bar-aware song blueprint,
+then lyrics and the checkpoint's three-part structured caption. Supplied lyrics
+remain authoritative. The typed composition receipt and lyric-duration
+preflight are stored separately and in schema 7 generation provenance. The
+recipe and schema 3 profile record resolved language-model and depth-decoder
+precision independently.
+Composer weights are unloaded before music inference. The default lyric
+preflight warns because `--duration` is an upper bound rather than a promise;
+`strict` rejects sparse or structurally invalid inputs without silently adding
+an EOS floor.
+
+Euler, full autoregressive CFG, and full flow CFG remain the parity defaults.
+The opt-in `--flow-solver ab2`, `--ar-cfg-frames`, and `--flow-cfg-end`
+controls support reproducible full-song A/B experiments and are recorded in
+recipes and profiles. They are experimental controls, not admission claims.
 
 Generation defaults to `--memory-mode staged`, which releases the language,
 flow, and vocoder weights between stages. `--memory-mode resident` keeps the
@@ -885,7 +905,8 @@ entire stack loaded for repeated work. Staged mode moves the catalog floor to
 SGLang speech route; 44,100 Hz remains the native CLI default. `music serve
 --model music-minimax-music3` exposes the non-streaming `/v1/audio/speech`
 request shape with `input`, `instructions`, `seed`, and `max_new_tokens`, plus
-explicit native duration, step, guidance, and sample-rate controls.
+explicit native duration, step, guidance, solver, CFG-cutoff, lyric-preflight,
+and sample-rate controls.
 
 MiniMax publishes its optional `music-caption-rewriter` agent skill separately
 in the official
