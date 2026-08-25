@@ -361,6 +361,17 @@ struct APIServe: AsyncParsableCommand {
             return ManagedModelResolver.resolveInstalledModel(id: MuseGlimmerResources.modelId)?.path
         case .textChatNemotronH:
             if let explicit = model {
+                if NemotronHResources.handles(modelSpec: explicit) {
+                    guard let installed = ManagedModelResolver.resolveInstalledModel(
+                        id: NemotronHResources.modelID
+                    ) else {
+                        throw ValidationError(
+                            "Model '\(NemotronHResources.modelID)' is not installed. Run "
+                                + "'mere.run model pull \(NemotronHResources.modelID)' first."
+                        )
+                    }
+                    return installed.path
+                }
                 return explicit
             }
             return ManagedModelResolver.resolveInstalledModel(id: NemotronHResources.modelID)?.path
@@ -2528,13 +2539,28 @@ enum APIServerContract {
         let topP = try validateTopP(openaiRequest.top_p)
         let minP = try validateMinP(openaiRequest.min_p)
         let tools = try toolDefinitions(from: openaiRequest, capabilities: capabilities)
+        let toolChoice = try chatToolChoice(from: openaiRequest, capabilities: capabilities)
+        let parallelToolCalls = openaiRequest.parallel_tool_calls ?? true
         let requiresJSON = try requiresJSONResponseFormat(
             openaiRequest.response_format,
             capabilities: capabilities
         )
 
-        let messages = try openaiRequest.messages.map { msg in
+        var messages = try openaiRequest.messages.map { msg in
             try chatMessage(from: msg, capabilities: capabilities)
+        }
+        if let instruction = toolChoiceInstruction(
+            choice: toolChoice,
+            parallelToolCalls: parallelToolCalls,
+            tools: tools
+        ) {
+            if let systemIndex = messages.firstIndex(where: { $0.role == .system }) {
+                messages[systemIndex].content = [messages[systemIndex].content, instruction]
+                    .filter { !$0.isEmpty }
+                    .joined(separator: "\n\n")
+            } else {
+                messages.insert(ChatMessage(role: .system, content: instruction), at: 0)
+            }
         }
 
         let lora: LoRA?
@@ -2596,6 +2622,8 @@ enum APIServerContract {
             lora: lora,
             requiresJSON: requiresJSON,
             tools: tools,
+            toolChoice: toolChoice,
+            parallelToolCalls: parallelToolCalls,
             stopSequences: openaiRequest.stop?.values ?? [],
             maxContextTokens: contextSize,
             logprobCapture: logprobCapture
@@ -2864,7 +2892,15 @@ enum APIServerContract {
         capabilities: APIEngineCapabilities
     ) throws -> [ToolDefinition]? {
         guard let tools = request.tools, !tools.isEmpty else {
-            return nil
+            switch request.tool_choice {
+            case .mode("required")?, .function(_)?:
+                throw APIRequestValidationError.invalidField(
+                    "tool_choice",
+                    "requires at least one function in tools"
+                )
+            default:
+                return nil
+            }
         }
         guard capabilities.supportsTools else {
             throw APIRequestValidationError.invalidField("tools", "tools are not supported by this engine")
@@ -2888,6 +2924,53 @@ enum APIServerContract {
             throw APIRequestValidationError.invalidField("tool_choice", "unsupported object shape")
         case .mode(let value)?:
             throw APIRequestValidationError.invalidField("tool_choice", "unsupported mode '\(value)'")
+        }
+    }
+
+    private static func chatToolChoice(
+        from request: OpenAIChatRequest,
+        capabilities: APIEngineCapabilities
+    ) throws -> ChatToolChoice {
+        guard request.tool_choice != nil else { return .auto }
+        guard capabilities.supportsToolChoice else {
+            throw APIRequestValidationError.invalidField(
+                "tool_choice",
+                "tool choice is not supported by this engine"
+            )
+        }
+        switch request.tool_choice {
+        case nil, .mode("auto")?, .mode("none")?:
+            return .auto
+        case .mode("required")?:
+            return .required
+        case .function(let name)?:
+            return .function(name)
+        case .custom?:
+            throw APIRequestValidationError.invalidField("tool_choice", "unsupported object shape")
+        case .mode(let value)?:
+            throw APIRequestValidationError.invalidField("tool_choice", "unsupported mode '\(value)'")
+        }
+    }
+
+    private static func toolChoiceInstruction(
+        choice: ChatToolChoice,
+        parallelToolCalls: Bool,
+        tools: [ToolDefinition]?
+    ) -> String? {
+        guard tools?.isEmpty == false else { return nil }
+        switch choice {
+        case .auto where !parallelToolCalls:
+            return "If you call a function, call at most one provided function."
+        case .required where parallelToolCalls:
+            return "You must call one or more provided functions. Do not answer without a function call."
+        case .required:
+            return "You must call exactly one provided function. Do not answer without a function call."
+        case .function(let name) where parallelToolCalls:
+            return "You must call the provided function '\(name)' at least once. Do not call any other function."
+        case .function(let name):
+            return "You must call the provided function '\(name)' exactly once. Do not call any other function."
+        case .auto:
+            return nil
         }
     }
 
@@ -4972,6 +5055,11 @@ actor CodeGenServer {
             }
         }
         let result = try await lease.chat(request, progressHandler: nil)
+        let responseToolCalls = openAIToolCalls(
+            from: result.toolCalls,
+            tools: request.tools,
+            parallelToolCalls: request.parallelToolCalls
+        )
 
         let response = OpenAIChatResponse(
             id: "chatcmpl-\(UUID().uuidString.prefix(8))",
@@ -4985,9 +5073,12 @@ actor CodeGenServer {
                         role: "assistant",
                         content: result.response,
                         reasoning_content: result.reasoningContent,
-                        tool_calls: openAIToolCalls(from: result.toolCalls, tools: request.tools)
+                        tool_calls: responseToolCalls
                     ),
-                    finish_reason: Self.openAIFinishReason(for: result),
+                    finish_reason: Self.openAIFinishReason(
+                        for: result,
+                        hasToolCalls: responseToolCalls?.isEmpty == false
+                    ),
                     logprobs: OpenAIChatLogprobs(result.logprobs)
                 )
             ],
@@ -5576,8 +5667,12 @@ actor CodeGenServer {
                         }
                     }
                 }
-                if let toolCalls = openAIToolCalls(from: result.toolCalls, tools: request.tools),
-                   !toolCalls.isEmpty {
+                let responseToolCalls = openAIToolCalls(
+                    from: result.toolCalls,
+                    tools: request.tools,
+                    parallelToolCalls: request.parallelToolCalls
+                )
+                if let toolCalls = responseToolCalls, !toolCalls.isEmpty {
                     let chunk = OpenAIChatResponse(
                         id: id,
                         object: "chat.completion.chunk",
@@ -5631,7 +5726,10 @@ actor CodeGenServer {
                         OpenAIChatChoice(
                             index: 0,
                             delta: OpenAIChatDelta(),
-                            finish_reason: Self.openAIFinishReason(for: result)
+                            finish_reason: Self.openAIFinishReason(
+                                for: result,
+                                hasToolCalls: responseToolCalls?.isEmpty == false
+                            )
                         )
                     ]
                 )
@@ -5687,11 +5785,18 @@ actor CodeGenServer {
 
     private nonisolated func openAIToolCalls(
         from toolCalls: [ToolCall]?,
-        tools: [ToolDefinition]?
+        tools: [ToolDefinition]?,
+        parallelToolCalls: Bool = true
     ) -> [OpenAIChatToolCall]? {
-        guard let toolCalls, !toolCalls.isEmpty else { return nil }
-        return toolCalls.enumerated().map { index, call in
-            let parameterTypes = tools?
+        guard let toolCalls, !toolCalls.isEmpty, let tools, !tools.isEmpty else { return nil }
+        let validated = ToolCallPolicy.validatedCalls(
+            toolCalls,
+            tools: tools,
+            parallelToolCalls: parallelToolCalls
+        )
+        guard !validated.isEmpty else { return nil }
+        return validated.enumerated().map { index, call in
+            let parameterTypes = tools
                 .first(where: { $0.name == call.name })?
                 .parameters
                 .mapValues(\.type) ?? [:]
@@ -5708,8 +5813,11 @@ actor CodeGenServer {
         }
     }
 
-    nonisolated static func openAIFinishReason(for result: ChatResponse) -> String {
-        if result.toolCalls?.isEmpty == false {
+    nonisolated static func openAIFinishReason(
+        for result: ChatResponse,
+        hasToolCalls: Bool? = nil
+    ) -> String {
+        if hasToolCalls ?? (result.toolCalls?.isEmpty == false) {
             return "tool_calls"
         }
         return result.finishReason == .length ? "length" : "stop"

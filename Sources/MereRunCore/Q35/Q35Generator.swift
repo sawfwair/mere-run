@@ -715,7 +715,7 @@ public actor Q35Generator: ChatGenerator {
             promptTokens: promptTokens,
             maxContextTokens: effectiveContext,
             jsonConstrained: jsonConstrained,
-            stopAtCompletedToolCall: request.tools?.isEmpty == false,
+            stopAtCompletedToolCall: request.tools?.isEmpty == false && !request.parallelToolCalls,
             logprobCapture: request.logprobCapture,
             logprobRegion: request.logprobRegionHint ?? .visible,
             progressHandler: progressHandler
@@ -730,13 +730,23 @@ public actor Q35Generator: ChatGenerator {
             tokenBudget: tokenBudget,
             matchedStopSequence: trimmed.matchedSequence != nil
         )
-        let toolCalls: [ToolCall]? = request.tools?.isEmpty == false ? {
-            let parsed = Q35ToolParser.parseToolCalls(decoded)
-            return parsed.isEmpty ? nil : parsed
-        }() : nil
+        let parsedToolCalls = request.tools?.isEmpty == false
+            ? Q35ToolParser.parseToolCalls(decoded)
+            : []
+        let toolCalls: [ToolCall]? = request.tools.flatMap { tools -> [ToolCall]? in
+            let validated = ToolCallPolicy.validatedCalls(
+                parsedToolCalls,
+                tools: tools,
+                parallelToolCalls: request.parallelToolCalls
+            )
+            return validated.isEmpty ? nil : validated
+        }
+        let visibleText = parsedToolCalls.isEmpty
+            ? decoded
+            : Q35ToolParser.visibleText(decoded)
 
         return ChatResponse(
-            generatedText: decoded,
+            generatedText: visibleText,
             tokensGenerated: decodeResult.generatedTokens.count,
             showThinking: includeThinking,
             timing: ChatTiming(

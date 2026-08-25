@@ -289,6 +289,29 @@ public struct ToolCall: Sendable, Hashable {
     }
 }
 
+public enum ChatToolChoice: Sendable, Hashable {
+    case auto
+    case required
+    case function(String)
+}
+
+public enum ToolCallPolicy {
+    public static func validatedCalls(
+        _ calls: [ToolCall],
+        tools: [ToolDefinition],
+        parallelToolCalls: Bool
+    ) -> [ToolCall] {
+        let definitions = tools.reduce(into: [String: ToolDefinition]()) { result, tool in
+            result[tool.name] = tool
+        }
+        let validated = calls.filter { call in
+            guard let definition = definitions[call.name] else { return false }
+            return definition.required.allSatisfy { call.arguments[$0] != nil }
+        }
+        return parallelToolCalls ? validated : Array(validated.prefix(1))
+    }
+}
+
 public struct ChatLogprobCapture: Codable, Sendable, Hashable {
     public enum Mode: String, Codable, Sendable, Hashable {
         case none
@@ -452,6 +475,8 @@ public struct ChatRequest: Sendable, Hashable {
     public var lora: LoRA?
     public var requiresJSON: Bool
     public var tools: [ToolDefinition]?
+    public var toolChoice: ChatToolChoice
+    public var parallelToolCalls: Bool
     public var stopOnEOS: Bool
     public var stopSequences: [String]
     /// Prevent generation of an n-gram already present in the full prompt and decode history.
@@ -477,6 +502,8 @@ public struct ChatRequest: Sendable, Hashable {
         lora: LoRA? = nil,
         requiresJSON: Bool = false,
         tools: [ToolDefinition]? = nil,
+        toolChoice: ChatToolChoice = .auto,
+        parallelToolCalls: Bool = false,
         stopOnEOS: Bool = true,
         stopSequences: [String] = [],
         noRepeatNgramSize: Int? = nil,
@@ -496,6 +523,8 @@ public struct ChatRequest: Sendable, Hashable {
         self.lora = lora
         self.requiresJSON = requiresJSON
         self.tools = tools
+        self.toolChoice = toolChoice
+        self.parallelToolCalls = parallelToolCalls
         self.stopOnEOS = stopOnEOS
         self.stopSequences = stopSequences
         self.noRepeatNgramSize = noRepeatNgramSize

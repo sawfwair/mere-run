@@ -58,8 +58,58 @@ public enum Q35ToolParser {
         }
     }
 
+    /// Streams only user-visible prose while a tool-capable decode is active.
+    ///
+    /// The checkpoint contract permits prose before a tool call but forbids a
+    /// suffix after the opening envelope. Keep a short marker-sized tail so an
+    /// opening tag split across tokenizer pieces is never exposed, then suppress
+    /// the protocol envelope once it begins.
+    public struct StreamingVisibleTextFilter: Sendable {
+        private var pendingText = ""
+        private var isSuppressingToolCall = false
+
+        public init() {}
+
+        public mutating func feed(_ piece: String) -> String {
+            guard !piece.isEmpty, !isSuppressingToolCall else { return "" }
+            pendingText += piece
+
+            if let openingRange = pendingText.range(of: Q35ToolParser.openingTag) {
+                let visible = String(pendingText[..<openingRange.lowerBound])
+                pendingText = ""
+                isSuppressingToolCall = true
+                return visible
+            }
+
+            let retainedCount = max(0, Q35ToolParser.openingTag.count - 1)
+            let emittedCount = max(0, pendingText.count - retainedCount)
+            guard emittedCount > 0 else { return "" }
+            let emittedEnd = pendingText.index(pendingText.startIndex, offsetBy: emittedCount)
+            let visible = String(pendingText[..<emittedEnd])
+            pendingText.removeSubrange(..<emittedEnd)
+            return visible
+        }
+
+        public mutating func finish() -> String {
+            guard !isSuppressingToolCall else { return "" }
+            defer { pendingText = "" }
+            return pendingText
+        }
+    }
+
     public static func parseToolCalls(_ text: String) -> [ToolCall] {
         parsedEnvelopes(in: text).compactMap(\.toolCall)
+    }
+
+    /// Removes structurally valid tool-call envelopes while preserving any
+    /// allowed prose that precedes them. Malformed marker-shaped text remains
+    /// visible and is never promoted into a typed call.
+    public static func visibleText(_ text: String) -> String {
+        var visible = text
+        for envelope in parsedEnvelopes(in: text).reversed() {
+            visible.removeSubrange(envelope.startIndex..<envelope.endIndex)
+        }
+        return visible.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     public static func containsCompletedToolCall(_ text: String) -> Bool {
@@ -67,6 +117,7 @@ public enum Q35ToolParser {
     }
 
     private struct ParsedEnvelope {
+        let startIndex: String.Index
         let endIndex: String.Index
         let toolCall: ToolCall?
     }
@@ -138,7 +189,11 @@ public enum Q35ToolParser {
                 guard text[callClose...].hasPrefix(closingTag) else { return nil }
                 let envelopeEnd = text.index(callClose, offsetBy: closingTag.count)
                 let toolCall = name.isEmpty ? nil : ToolCall(name: name, arguments: arguments)
-                return ParsedEnvelope(endIndex: envelopeEnd, toolCall: toolCall)
+                return ParsedEnvelope(
+                    startIndex: openingRange.lowerBound,
+                    endIndex: envelopeEnd,
+                    toolCall: toolCall
+                )
             }
 
             guard text[cursor...].hasPrefix(parameterOpeningTag) else { return nil }

@@ -102,6 +102,7 @@ enum NemotronHDSparkDecoder {
         speculativeTokens: Int,
         decodeToken: ((Int) -> String)?,
         emitPiece: ((Int, String) -> Void)?,
+        shouldContinue: ((Int, String) -> Bool)? = nil,
         checkCancellation: (() throws -> Void)?
     ) throws -> NemotronHDSparkDecodeResult {
         let startedAt = Date()
@@ -123,20 +124,22 @@ enum NemotronHDSparkDecoder {
         var fallbackReason: String?
         let captures = Set(dspark.config.speculation.targetLayerIDs)
 
-        func emit(_ token: Int) {
+        func emit(_ token: Int) -> Bool {
             generated.append(token)
             history.append(token)
             if firstTokenSeconds == nil {
                 firstTokenSeconds = Date().timeIntervalSince(startedAt)
             }
-            guard let decodeToken, let emitPiece else { return }
-            let piece = decodeToken(token)
-            if piece.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                pendingWhitespace += piece
-            } else if !piece.isEmpty {
-                emitPiece(token, pendingWhitespace + piece)
-                pendingWhitespace = ""
+            let piece = decodeToken?(token) ?? ""
+            if let emitPiece {
+                if piece.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                    pendingWhitespace += piece
+                } else if !piece.isEmpty {
+                    emitPiece(token, pendingWhitespace + piece)
+                    pendingWhitespace = ""
+                }
             }
+            return shouldContinue?(token, piece) ?? true
         }
 
         func result() -> NemotronHDSparkDecodeResult {
@@ -184,7 +187,7 @@ enum NemotronHDSparkDecoder {
                 previousTokens: history
             )
             guard !eosTokens.contains(anchor) else { break }
-            emit(anchor)
+            guard emit(anchor) else { return result() }
             guard generated.count < tokenBudget else { break }
 
             if !dsparkActive {
@@ -296,7 +299,7 @@ enum NemotronHDSparkDecoder {
             if accepted == proposals.count {
                 for proposal in proposals {
                     guard !eosTokens.contains(proposal) else { return result() }
-                    emit(proposal)
+                    guard emit(proposal) else { return result() }
                     guard generated.count < tokenBudget else { return result() }
                 }
                 targetCache = candidateCache
@@ -314,7 +317,7 @@ enum NemotronHDSparkDecoder {
             rejected += 1
             for proposal in proposals.prefix(accepted) {
                 guard !eosTokens.contains(proposal) else { return result() }
-                emit(proposal)
+                guard emit(proposal) else { return result() }
                 guard generated.count < tokenBudget else { return result() }
             }
             guard let replacement, !eosTokens.contains(replacement) else { break }
@@ -331,7 +334,7 @@ enum NemotronHDSparkDecoder {
             )
             MLX.eval([recovery.logits] + Array(recovery.capturedHiddenStates.values))
             recoveryForwards += 1
-            emit(replacement)
+            guard emit(replacement) else { return result() }
             targetCache = recoveryCache
             let finalPosition = recovery.logits.dim(1) - 1
             logits = recovery.logits[0..., finalPosition..., 0...]
