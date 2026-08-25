@@ -1125,10 +1125,11 @@ actor RuntimeModelPool {
     }
 
     func modelsResponse(
+        installedModelIDs: Set<String>,
         serverContextSize: Int = 32_768,
         createdAt: Date = Date()
     ) throws -> OpenAIModelsResponse {
-        let models = try listedOpenAIModelIDs().map { listedID in
+        let models = try listedOpenAIModelIDs(installedModelIDs: installedModelIDs).map { listedID in
             let resolved = try resolveModel(listedID, requireInstalled: false)
             let profile = resolved.apiProfile
             let configuredContextWindow = resolved.settings.maxContextTokens ?? serverContextSize
@@ -1902,6 +1903,9 @@ actor RuntimeModelPool {
         if spec.id == defaultModelID, let startupModelPath {
             return startupModelPath
         }
+        guard requireInstalled else {
+            return nil
+        }
         if let runtimeURL = spec.managedRuntimeURL() {
             return runtimeURL.path
         }
@@ -1914,9 +1918,9 @@ actor RuntimeModelPool {
         return nil
     }
 
-    private func listedOpenAIModelIDs() throws -> [String] {
+    private func listedOpenAIModelIDs(installedModelIDs: Set<String>) throws -> [String] {
         let settings = try settingsStore.load().models
-        var ids = Set(installedServableCatalogIDs())
+        var ids = Set(installedServableCatalogIDs(in: installedModelIDs))
         ids.insert(defaultModelID)
         for (modelID, modelSettings) in settings {
             guard modelSettings.alias != nil,
@@ -1928,6 +1932,16 @@ actor RuntimeModelPool {
             }
         }
         return ids.sorted()
+    }
+
+    private func installedServableCatalogIDs(in installedModelIDs: Set<String>) -> [String] {
+        ManagedModelCatalog.allSpecs.compactMap { spec in
+            guard spec.isAPIServableRuntimeModel,
+                  installedModelIDs.contains(spec.id) else {
+                return nil
+            }
+            return spec.id
+        }
     }
 
     private func installedServableCatalogIDs() -> [String] {

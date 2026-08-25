@@ -17,6 +17,10 @@ struct ModelInventorySnapshot: Equatable {
     let mode: ModelInventoryMode
     let complete: Bool
     let durationMs: Int
+
+    var installedModelIDs: Set<String> {
+        Set(rows.lazy.filter(\.isInstalled).map(\.id))
+    }
 }
 
 struct ModelInventoryRow: Equatable {

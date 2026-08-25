@@ -209,6 +209,7 @@ final class RuntimeModelPoolTests: XCTestCase {
         )
 
         let response = try await pool.modelsResponse(
+            installedModelIDs: [],
             serverContextSize: 8_192,
             createdAt: Date(timeIntervalSince1970: 10)
         )
@@ -238,7 +239,10 @@ final class RuntimeModelPoolTests: XCTestCase {
             settingsStore: settingsStore
         )
 
-        let response = try await pool.modelsResponse(serverContextSize: 32_768)
+        let response = try await pool.modelsResponse(
+            installedModelIDs: [],
+            serverContextSize: 32_768
+        )
         let model = try XCTUnwrap(
             response.data.first { $0.id == Q35Resources.ornith9BModelId }
         )
@@ -250,6 +254,31 @@ final class RuntimeModelPoolTests: XCTestCase {
         XCTAssertEqual(
             model.modalities,
             OpenAIModelModalities(input: ["text", "image"], output: ["text"])
+        )
+    }
+
+    func testModelsResponseUsesSuppliedFastInventoryForInstalledModelsAndAliases() async throws {
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        let settingsStore = RuntimeModelSettingsStore(modelsDir: root)
+        try settingsStore.writeSettings(
+            RuntimeModelSettings(alias: "coding-agent"),
+            for: Q35Resources.ornith9BModelId
+        )
+        let pool = RuntimeModelPool(
+            defaultModelID: "custom.gguf",
+            defaultEngine: .textCode,
+            startupModelPath: root.appendingPathComponent("custom.gguf").path,
+            settingsStore: settingsStore
+        )
+
+        let response = try await pool.modelsResponse(
+            installedModelIDs: [Q35Resources.ornith9BModelId]
+        )
+
+        XCTAssertEqual(
+            Set(response.data.map(\.id)),
+            ["coding-agent", "custom.gguf", Q35Resources.ornith9BModelId]
         )
     }
 

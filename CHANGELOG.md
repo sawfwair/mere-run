@@ -6,6 +6,12 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### API
+
+- fixed `GET /v1/models` latency on large or externally linked model stores by
+  sharing one shallow fast inventory across chat and companion discovery instead
+  of repeatedly validating every installed runtime.
+
 ## 0.44.0 - 2026-08-25
 
 This release expands native text, image, and music inference with LFM2.5
