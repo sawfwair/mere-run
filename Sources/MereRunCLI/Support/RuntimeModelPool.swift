@@ -2115,6 +2115,7 @@ actor RuntimeRequestAdmission {
         var phaseDetail: String?
         var firstTokenAt: Date?
         var generatedTokenUpdates = 0
+        var lastEventSequence: UInt64 = 0
 
         var snapshot: RuntimeActiveRequestSnapshot {
             RuntimeActiveRequestSnapshot(
@@ -2206,8 +2207,26 @@ actor RuntimeRequestAdmission {
         activeRequestStates[id] = state
     }
 
-    fileprivate func recordProgress(id: UUID, progress: ChatProgress) {
+    func recordProgress(
+        id: UUID,
+        sequence: UInt64,
+        progress: ChatProgress,
+        observedAt: Date = Date()
+    ) {
         guard var state = activeRequestStates[id] else { return }
+        if progress.stage == .generating, progress.message?.isEmpty == false {
+            if let firstTokenAt = state.firstTokenAt {
+                state.firstTokenAt = min(firstTokenAt, observedAt)
+            } else {
+                state.firstTokenAt = observedAt
+            }
+            state.generatedTokenUpdates += 1
+        }
+        guard state.phase != "cancelling", sequence > state.lastEventSequence else {
+            activeRequestStates[id] = state
+            return
+        }
+        state.lastEventSequence = sequence
         switch progress.stage {
         case .loadingModel:
             state.phase = "loading_model"
@@ -2218,20 +2237,17 @@ actor RuntimeRequestAdmission {
         case .generating:
             state.phase = "decode"
             state.phaseDetail = nil
-            if progress.message?.isEmpty == false {
-                state.firstTokenAt = state.firstTokenAt ?? Date()
-                state.generatedTokenUpdates += 1
-            }
         }
         activeRequestStates[id] = state
     }
 
-    fileprivate func recordClientDisconnect(id: UUID) {
+    func recordClientDisconnect(id: UUID, sequence: UInt64, observedAt: Date = Date()) {
         guard var state = activeRequestStates[id] else { return }
         state.phase = "cancelling"
         state.phaseDetail = "Client disconnected"
+        state.lastEventSequence = max(state.lastEventSequence, sequence)
         activeRequestStates[id] = state
-        lastClientDisconnectAt = Date()
+        lastClientDisconnectAt = observedAt
     }
 
     fileprivate func releaseLease(id: UUID, cancelled: Bool) async {
@@ -2363,6 +2379,8 @@ final class RuntimeRequestAdmissionLease: @unchecked Sendable {
     private let admission: RuntimeRequestAdmission
     private let lock = NSLock()
     private var released = false
+    private var clientDisconnected = false
+    private var nextEventSequence: UInt64 = 0
 
     init(id: UUID, admission: RuntimeRequestAdmission) {
         self.id = id
@@ -2396,18 +2414,31 @@ final class RuntimeRequestAdmissionLease: @unchecked Sendable {
     }
 
     func observe(_ progress: ChatProgress) {
+        guard let sequence = reserveEventSequence() else { return }
         let admission = admission
         let id = id
+        let observedAt = Date()
         Task {
-            await admission.recordProgress(id: id, progress: progress)
+            await admission.recordProgress(
+                id: id,
+                sequence: sequence,
+                progress: progress,
+                observedAt: observedAt
+            )
         }
     }
 
     func observeClientDisconnect() {
+        guard let sequence = reserveDisconnectSequence() else { return }
         let admission = admission
         let id = id
+        let observedAt = Date()
         Task {
-            await admission.recordClientDisconnect(id: id)
+            await admission.recordClientDisconnect(
+                id: id,
+                sequence: sequence,
+                observedAt: observedAt
+            )
         }
     }
 
@@ -2422,6 +2453,23 @@ final class RuntimeRequestAdmissionLease: @unchecked Sendable {
         guard !released else { return false }
         released = true
         return true
+    }
+
+    private func reserveEventSequence() -> UInt64? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !released, !clientDisconnected else { return nil }
+        nextEventSequence += 1
+        return nextEventSequence
+    }
+
+    private func reserveDisconnectSequence() -> UInt64? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !released, !clientDisconnected else { return nil }
+        clientDisconnected = true
+        nextEventSequence += 1
+        return nextEventSequence
     }
 }
 

@@ -1337,6 +1337,45 @@ final class RuntimeModelPoolTests: XCTestCase {
         XCTAssertNotNil(snapshot.lastSlotReleaseAt)
     }
 
+    func testRequestAdmissionKeepsNewestPhaseWhenProgressArrivesOutOfOrder() async throws {
+        let admission = RuntimeRequestAdmission(maxActiveRequests: 1)
+        let lease = try await admission.acquire()
+        await lease.configure(
+            modelID: Gemma4Resources.turboModelId,
+            streaming: false,
+            requestedMaxTokens: 64,
+            toolCount: 3
+        )
+
+        await admission.recordProgress(
+            id: lease.requestID,
+            sequence: 2,
+            progress: ChatProgress(stage: .generating, message: "{")
+        )
+        await admission.recordProgress(
+            id: lease.requestID,
+            sequence: 1,
+            progress: ChatProgress(stage: .encoding, message: "Encoding prompt")
+        )
+
+        var snapshot = await admission.snapshot()
+        XCTAssertEqual(snapshot.activeRequestDetails?.first?.phase, "decode")
+        XCTAssertEqual(snapshot.activeRequestDetails?.first?.generatedTokenUpdates, 1)
+
+        await admission.recordClientDisconnect(id: lease.requestID, sequence: 4)
+        await admission.recordProgress(
+            id: lease.requestID,
+            sequence: 3,
+            progress: ChatProgress(stage: .encoding, message: "Late prefill update")
+        )
+
+        snapshot = await admission.snapshot()
+        XCTAssertEqual(snapshot.activeRequestDetails?.first?.phase, "cancelling")
+        XCTAssertEqual(snapshot.activeRequestDetails?.first?.phaseDetail, "Client disconnected")
+
+        await lease.release(cancelled: true)
+    }
+
     func testRequestAdmissionCancelsQueuedWaiterWithoutLaterAdmission() async throws {
         let admission = RuntimeRequestAdmission(maxActiveRequests: 1)
         let first = try await admission.acquire()
