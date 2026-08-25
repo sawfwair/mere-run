@@ -1289,6 +1289,54 @@ final class RuntimeModelPoolTests: XCTestCase {
         await third.release()
     }
 
+    func testRequestAdmissionReportsActivePhaseAndCancellationRelease() async throws {
+        let admission = RuntimeRequestAdmission(maxActiveRequests: 1)
+        let lease = try await admission.acquire()
+        await lease.configure(
+            modelID: Gemma4Resources.turboModelId,
+            streaming: false,
+            requestedMaxTokens: 64,
+            toolCount: 3
+        )
+        lease.observe(ChatProgress(stage: .encoding, message: "Encoding prompt"))
+        lease.observe(ChatProgress(stage: .generating, message: "{"))
+
+        var snapshot = await admission.snapshot()
+        for _ in 0..<50 {
+            if snapshot.activeRequestDetails?.first?.phase == "decode" { break }
+            try await Task.sleep(nanoseconds: 10_000_000)
+            snapshot = await admission.snapshot()
+        }
+
+        let active = try XCTUnwrap(snapshot.activeRequestDetails?.first)
+        XCTAssertEqual(active.modelID, Gemma4Resources.turboModelId)
+        XCTAssertEqual(active.streaming, false)
+        XCTAssertEqual(active.requestedMaxTokens, 64)
+        XCTAssertEqual(active.toolCount, 3)
+        XCTAssertEqual(active.phase, "decode")
+        XCTAssertNotNil(active.firstTokenAt)
+        XCTAssertEqual(active.generatedTokenUpdates, 1)
+
+        lease.observeClientDisconnect()
+        for _ in 0..<50 {
+            snapshot = await admission.snapshot()
+            if snapshot.lastClientDisconnectAt != nil { break }
+            try await Task.sleep(nanoseconds: 10_000_000)
+        }
+        XCTAssertEqual(snapshot.activeRequestDetails?.first?.phase, "cancelling")
+        XCTAssertNotNil(snapshot.lastClientDisconnectAt)
+
+        await lease.release(cancelled: true)
+        snapshot = await admission.snapshot()
+
+        XCTAssertEqual(snapshot.activeRequests, 0)
+        XCTAssertEqual(snapshot.totalCompletedRequests, 0)
+        XCTAssertEqual(snapshot.totalCancelledRequests, 1)
+        XCTAssertEqual(snapshot.activeRequestDetails, [])
+        XCTAssertNotNil(snapshot.lastCancellationAt)
+        XCTAssertNotNil(snapshot.lastSlotReleaseAt)
+    }
+
     func testRequestAdmissionCancelsQueuedWaiterWithoutLaterAdmission() async throws {
         let admission = RuntimeRequestAdmission(maxActiveRequests: 1)
         let first = try await admission.acquire()

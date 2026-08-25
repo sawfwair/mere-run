@@ -4,6 +4,7 @@ import Foundation
 import FoundationNetworking
 #endif
 import Hummingbird
+import HTTPTypes
 import NIOCore
 import AudioCore
 import AudioSTT
@@ -181,6 +182,13 @@ struct APIServe: AsyncParsableCommand {
     @Option(name: [.long], help: "Context size (default: 32768).")
     var contextSize: Int = 32768
 
+    @Flag(
+        name: [.customLong("warmup")],
+        inversion: .prefixedNo,
+        help: "Warm the default Gemma 4 Turbo graph before the server becomes healthy."
+    )
+    var warmup: Bool = true
+
     @Option(name: [.long], help: "Quantize the Gemma4 KV cache to this many bits. Supports integer widths for uniform/polar and integer/.5 widths for turboquant.")
     var kvBits: Double?
 
@@ -237,7 +245,8 @@ struct APIServe: AsyncParsableCommand {
             engine: engine,
             contextSize: contextSize,
             gemma4KVCacheQuantization: gemma4KVCacheQuantization,
-            memoryPressurePolicy: memoryPressurePolicy
+            memoryPressurePolicy: memoryPressurePolicy,
+            warmupDefaultModel: warmup
         )
         try await server.run(host: host, port: port)
     }
@@ -405,24 +414,13 @@ struct APIServe: AsyncParsableCommand {
         )
     }
 
-    private var requestedGemma4ModelSpec: String {
-        model?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() ?? Gemma4Resources.defaultModelId
-    }
-
-    private var usesGemma4TurboKVDefaults: Bool {
-        Gemma4Resources.usesTurboDefaults(modelSpec: requestedGemma4ModelSpec)
-            && Gemma4Resources.supportsDefaultTurboKVQuantization
-    }
-
     private var resolvedGemma4KVBits: Double? {
-        kvBits ?? (usesGemma4TurboKVDefaults ? Gemma4Resources.defaultTurboKVBits : nil)
+        kvBits
     }
 
     private func resolveGemma4KVQuantizationScheme() throws -> Gemma4KVQuantizationScheme {
         let raw = kvQuantScheme
-            ?? (usesGemma4TurboKVDefaults
-                ? Gemma4Resources.defaultTurboKVQuantizationScheme.rawValue
-                : Gemma4Resources.defaultKVQuantizationScheme.rawValue)
+            ?? Gemma4Resources.defaultKVQuantizationScheme.rawValue
         guard let scheme = Gemma4KVQuantizationScheme(
             rawValue: raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         ) else {
@@ -432,9 +430,7 @@ struct APIServe: AsyncParsableCommand {
     }
 
     private var resolvedGemma4QuantizedKVStart: Int {
-        quantizedKVStart ?? (usesGemma4TurboKVDefaults
-            ? Gemma4Resources.defaultTurboQuantizedKVStart
-            : Gemma4Resources.defaultQuantizedKVStart)
+        quantizedKVStart ?? Gemma4Resources.defaultQuantizedKVStart
     }
 
     func resolveAPIKey() -> String? {
@@ -3872,7 +3868,8 @@ actor CodeGenServer {
         contextSize: Int = 32768,
         gemma4KVCacheQuantization: Gemma4KVCacheQuantization = Gemma4KVCacheQuantization(),
         memoryPressurePolicy: RuntimeMemoryPressurePolicy = .default,
-        artifactCleanupScheduler: APIArtifactDirectoryCleanupScheduler = APIArtifactDirectoryCleanupScheduler()
+        artifactCleanupScheduler: APIArtifactDirectoryCleanupScheduler = APIArtifactDirectoryCleanupScheduler(),
+        warmupDefaultModel: Bool = true
     ) async throws {
         self.apiKey = apiKey
         self.contextSize = contextSize
@@ -3919,7 +3916,7 @@ actor CodeGenServer {
                 await runtimePool.currentMemoryPressure()
             }
         )
-        try await pool.preloadDefault()
+        try await pool.preloadDefault(warmup: warmupDefaultModel)
     }
 
     func run(host: String, port: Int) async throws {
@@ -4127,7 +4124,8 @@ actor CodeGenServer {
         )
     }
 
-    private func handleChatCompletions(_ request: Request) async throws -> Response {
+    private func handleChatCompletions(_ incomingRequest: Request) async throws -> Response {
+        var request = incomingRequest
         if let unauthorized = unauthorizedResponseIfNeeded(for: request) {
             return unauthorized
         }
@@ -4149,7 +4147,7 @@ actor CodeGenServer {
         // Decode request body
         let body: ByteBuffer
         do {
-            body = try await request.body.collect(upTo: 10 * 1024 * 1024) // 10MB limit
+            body = try await request.collectBody(upTo: 10 * 1024 * 1024) // 10MB limit
         } catch {
             return makeErrorResponse(status: .badRequest, message: "Invalid request body.", type: "invalid_request_error")
         }
@@ -4173,6 +4171,12 @@ actor CodeGenServer {
             await admissionLease.release()
             return runtimeErrorResponse(error)
         }
+        await admissionLease.configure(
+            modelID: plan.modelID,
+            streaming: openaiRequest.stream == true,
+            requestedMaxTokens: plan.request.maxTokens,
+            toolCount: plan.request.tools?.count ?? 0
+        )
 
         if plan.engine == .textChatDeepseekV4Flash {
             do {
@@ -4199,7 +4203,7 @@ actor CodeGenServer {
                     admissionLease: admissionLease
                 )
             } else {
-                return try await handleNonStreamingChat(
+                return handleNonStreamingChat(
                     plan.request,
                     modelID: plan.modelID,
                     lease: plan.lease,
@@ -5047,51 +5051,156 @@ actor CodeGenServer {
         modelID: String,
         lease: RuntimeModelLease,
         admissionLease: RuntimeRequestAdmissionLease
-    ) async throws -> Response {
-        defer {
-            Task {
-                await lease.release()
-                await admissionLease.release()
+    ) -> Response {
+        let (stream, continuation) = AsyncStream<NonStreamingChatEvent>.makeStream()
+        let heartbeatTask = Task<Void, Never> {
+            do {
+                while !Task.isCancelled {
+                    try await Task.sleep(for: .milliseconds(250))
+                    guard !Task.isCancelled else { break }
+                    continuation.yield(.heartbeat)
+                }
+            } catch {
+                // Cancellation ends the heartbeat loop.
             }
         }
-        let result = try await lease.chat(request, progressHandler: nil)
-        let responseToolCalls = openAIToolCalls(
-            from: result.toolCalls,
-            tools: request.tools,
-            parallelToolCalls: request.parallelToolCalls
-        )
-
-        let response = OpenAIChatResponse(
-            id: "chatcmpl-\(UUID().uuidString.prefix(8))",
-            object: "chat.completion",
-            created: Int(Date().timeIntervalSince1970),
-            model: modelID,
-            choices: [
-                OpenAIChatChoice(
-                    index: 0,
-                    message: OpenAIChatMessage(
-                        role: "assistant",
-                        content: result.response,
-                        reasoning_content: result.reasoningContent,
-                        tool_calls: responseToolCalls
-                    ),
-                    finish_reason: Self.openAIFinishReason(
-                        for: result,
-                        hasToolCalls: responseToolCalls?.isEmpty == false
-                    ),
-                    logprobs: OpenAIChatLogprobs(result.logprobs)
+        let generationTask = Task {
+            do {
+                let result = try await lease.chat(request) { progress in
+                    admissionLease.observe(progress)
+                }
+                let responseToolCalls = openAIToolCalls(
+                    from: result.toolCalls,
+                    tools: request.tools,
+                    parallelToolCalls: request.parallelToolCalls
                 )
-            ],
-            usage: Self.openAIUsage(for: result)
-        )
+                let response = OpenAIChatResponse(
+                    id: "chatcmpl-\(UUID().uuidString.prefix(8))",
+                    object: "chat.completion",
+                    created: Int(Date().timeIntervalSince1970),
+                    model: modelID,
+                    choices: [
+                        OpenAIChatChoice(
+                            index: 0,
+                            message: OpenAIChatMessage(
+                                role: "assistant",
+                                content: result.response,
+                                reasoning_content: result.reasoningContent,
+                                tool_calls: responseToolCalls
+                            ),
+                            finish_reason: Self.openAIFinishReason(
+                                for: result,
+                                hasToolCalls: responseToolCalls?.isEmpty == false
+                            ),
+                            logprobs: OpenAIChatLogprobs(result.logprobs)
+                        )
+                    ],
+                    usage: Self.openAIUsage(for: result)
+                )
+                let data = try JSONEncoder().encode(response)
+                var trailers = Self.openAITimingHeaders(for: result)
+                trailers["x-mere-runtime-status"] = "200"
+                await lease.release()
+                await admissionLease.release()
+                heartbeatTask.cancel()
+                continuation.yield(.completion(NonStreamingChatPayload(
+                    data: data,
+                    trailers: trailers
+                )))
+                continuation.finish()
+            } catch {
+                await lease.release()
+                await admissionLease.release(
+                    cancelled: Task.isCancelled || error is CancellationError
+                )
+                heartbeatTask.cancel()
+                if !Task.isCancelled,
+                   let data = try? JSONEncoder().encode(OpenAIErrorResponse(
+                       error: OpenAIError(message: "Request failed.", type: "server_error")
+                   )) {
+                    continuation.yield(.completion(NonStreamingChatPayload(
+                        data: data,
+                        trailers: ["x-mere-runtime-status": "500"]
+                    )))
+                }
+                continuation.finish()
+            }
+        }
+        continuation.onTermination = { termination in
+            if case .cancelled = termination {
+                admissionLease.observeClientDisconnect()
+                heartbeatTask.cancel()
+                generationTask.cancel()
+            }
+        }
 
-        let data = try JSONEncoder().encode(response)
+        var headers: HTTPFields = [
+            .contentType: "application/json",
+            .trailer: Self.openAITimingTrailerNames.joined(separator: ", "),
+        ]
+        if let requestIDName = HTTPField.Name("x-mere-request-id") {
+            headers[requestIDName] = admissionLease.requestID.uuidString
+        }
+
         return Response(
             status: .ok,
-            headers: [.contentType: "application/json"],
-            body: .init(byteBuffer: ByteBuffer(bytes: data))
+            headers: headers,
+            body: .init { writer in
+                do {
+                    // Leading JSON whitespace doubles as a bounded outbound
+                    // disconnect probe without exposing partial model output.
+                    try await writer.write(ByteBuffer(string: "\n"))
+                    var iterator = stream.makeAsyncIterator()
+                    while let event = await iterator.next() {
+                        switch event {
+                        case .heartbeat:
+                            try await writer.write(ByteBuffer(string: " "))
+                        case .completion(let payload):
+                            try await writer.write(ByteBuffer(bytes: payload.data))
+                            try await writer.finish(Self.httpFields(payload.trailers))
+                            return
+                        }
+                    }
+                    try await writer.finish(nil)
+                } catch {
+                    admissionLease.observeClientDisconnect()
+                    heartbeatTask.cancel()
+                    generationTask.cancel()
+                    throw error
+                }
+            }
         )
     }
+
+    private nonisolated static func httpFields(_ values: [String: String]) -> HTTPFields {
+        var fields: HTTPFields = [:]
+        for (name, value) in values {
+            if let fieldName = HTTPField.Name(name) {
+                fields[fieldName] = value
+            }
+        }
+        return fields
+    }
+
+    private struct NonStreamingChatPayload: Sendable {
+        let data: Data
+        let trailers: [String: String]
+    }
+
+    private enum NonStreamingChatEvent: Sendable {
+        case heartbeat
+        case completion(NonStreamingChatPayload)
+    }
+
+    private nonisolated static let openAITimingTrailerNames = [
+        "Server-Timing",
+        "x-mere-prompt-tokens",
+        "x-mere-generated-tokens",
+        "x-mere-prefill-tokens-per-second",
+        "x-mere-decode-tokens-per-second",
+        "x-mere-kv-cache",
+        "x-mere-runtime-status",
+    ]
 
     private func embeddingModel(for requestedModel: String) async throws -> (modelID: String, modelPath: String) {
         let normalized = requestedModel.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -5635,12 +5744,12 @@ actor CodeGenServer {
         // Create async stream for SSE
         let (stream, continuation) = AsyncStream<ByteBuffer>.makeStream()
 
-        // Start generation in a detached task
-        Task {
+        let generationTask = Task {
             do {
                 let streamedContent = StreamingContentTracker()
                 let shouldBufferForToolCalls = request.tools?.isEmpty == false
                 let result = try await lease.chat(request) { progress in
+                    admissionLease.observe(progress)
                     guard !shouldBufferForToolCalls else { return }
                     if progress.stage == .generating,
                        let token = progress.message,
@@ -5758,17 +5867,26 @@ actor CodeGenServer {
                 await admissionLease.release()
                 continuation.finish()
             } catch {
-                // Send error in SSE format
-                let errorResponse = OpenAIErrorResponse(
-                    error: OpenAIError(message: "Request failed.", type: "server_error")
-                )
-                if let data = try? encoder.encode(errorResponse),
-                   let json = String(data: data, encoding: .utf8) {
-                    continuation.yield(ByteBuffer(string: "data: \(json)\n\n"))
+                if !Task.isCancelled {
+                    let errorResponse = OpenAIErrorResponse(
+                        error: OpenAIError(message: "Request failed.", type: "server_error")
+                    )
+                    if let data = try? encoder.encode(errorResponse),
+                       let json = String(data: data, encoding: .utf8) {
+                        continuation.yield(ByteBuffer(string: "data: \(json)\n\n"))
+                    }
                 }
                 await lease.release()
-                await admissionLease.release()
+                await admissionLease.release(
+                    cancelled: Task.isCancelled || error is CancellationError
+                )
                 continuation.finish()
+            }
+        }
+        continuation.onTermination = { termination in
+            if case .cancelled = termination {
+                admissionLease.observeClientDisconnect()
+                generationTask.cancel()
             }
         }
 
@@ -5832,6 +5950,50 @@ actor CodeGenServer {
             completion_tokens: result.tokensGenerated,
             total_tokens: promptTokens + result.tokensGenerated
         )
+    }
+
+    nonisolated static func openAITimingHeaders(for result: ChatResponse) -> [String: String] {
+        var headers = [
+            "x-mere-prompt-tokens": String(result.promptTokens ?? 0),
+            "x-mere-generated-tokens": String(result.tokensGenerated),
+        ]
+        guard let timing = result.timing else { return headers }
+
+        let timeToFirstToken = timing.loadSeconds
+            + timing.prefillSeconds
+            + (timing.cacheConversionSeconds ?? 0)
+            + (timing.firstTokenSeconds ?? 0)
+        var serverTiming = [
+            "model_load;dur=\(milliseconds(timing.loadSeconds))",
+            "prefill;dur=\(milliseconds(timing.prefillSeconds))",
+            "decode;dur=\(milliseconds(timing.decodeSeconds))",
+            "ttft;dur=\(milliseconds(timeToFirstToken))",
+        ]
+        if let cacheConversionSeconds = timing.cacheConversionSeconds {
+            serverTiming.insert(
+                "kv_pack;dur=\(milliseconds(cacheConversionSeconds))",
+                at: 2
+            )
+        }
+        headers["server-timing"] = serverTiming.joined(separator: ", ")
+        if let throughput = timing.prefillTokensPerSecond {
+            headers["x-mere-prefill-tokens-per-second"] = fixedPrecision(throughput)
+        }
+        if let throughput = timing.decodeTokensPerSecond {
+            headers["x-mere-decode-tokens-per-second"] = fixedPrecision(throughput)
+        }
+        if let kvCache = timing.decodeKVCache {
+            headers["x-mere-kv-cache"] = kvCache
+        }
+        return headers
+    }
+
+    private nonisolated static func milliseconds(_ seconds: Double) -> String {
+        fixedPrecision(seconds * 1_000)
+    }
+
+    private nonisolated static func fixedPrecision(_ value: Double) -> String {
+        String(format: "%.3f", value)
     }
 
     private func unauthorizedResponseIfNeeded(for request: Request) -> Response? {

@@ -191,6 +191,10 @@ struct RuntimeRequestAdmissionSnapshot: Codable, Equatable, Sendable {
     let totalCancelledRequests: Int
     let admissionPaused: Bool?
     let pressure: String?
+    var activeRequestDetails: [RuntimeActiveRequestSnapshot]? = nil
+    var lastClientDisconnectAt: Date? = nil
+    var lastCancellationAt: Date? = nil
+    var lastSlotReleaseAt: Date? = nil
 
     init(
         maxActiveRequests: Int,
@@ -200,7 +204,11 @@ struct RuntimeRequestAdmissionSnapshot: Codable, Equatable, Sendable {
         totalCompletedRequests: Int,
         totalCancelledRequests: Int,
         admissionPaused: Bool? = nil,
-        pressure: String? = nil
+        pressure: String? = nil,
+        activeRequestDetails: [RuntimeActiveRequestSnapshot]? = nil,
+        lastClientDisconnectAt: Date? = nil,
+        lastCancellationAt: Date? = nil,
+        lastSlotReleaseAt: Date? = nil
     ) {
         self.maxActiveRequests = maxActiveRequests
         self.activeRequests = activeRequests
@@ -210,7 +218,24 @@ struct RuntimeRequestAdmissionSnapshot: Codable, Equatable, Sendable {
         self.totalCancelledRequests = totalCancelledRequests
         self.admissionPaused = admissionPaused
         self.pressure = pressure
+        self.activeRequestDetails = activeRequestDetails
+        self.lastClientDisconnectAt = lastClientDisconnectAt
+        self.lastCancellationAt = lastCancellationAt
+        self.lastSlotReleaseAt = lastSlotReleaseAt
     }
+}
+
+struct RuntimeActiveRequestSnapshot: Codable, Equatable, Sendable {
+    let id: UUID
+    let admittedAt: Date
+    let modelID: String?
+    let streaming: Bool?
+    let requestedMaxTokens: Int?
+    let toolCount: Int?
+    let phase: String
+    let phaseDetail: String?
+    let firstTokenAt: Date?
+    let generatedTokenUpdates: Int
 }
 
 struct RuntimeFutureStats: Codable, Equatable, Sendable {
@@ -237,6 +262,7 @@ struct RuntimeModelBenchmarkStats: Codable, Equatable, Sendable {
     /// servers.
     let recentDecodeTokensPerSecond: Double?
     let lastCompletedAt: Date?
+    var lastRequest: RuntimeRequestTimingSnapshot? = nil
 
     init(
         completedRequests: Int,
@@ -247,7 +273,8 @@ struct RuntimeModelBenchmarkStats: Codable, Equatable, Sendable {
         totalDecodeSeconds: Double,
         recentDecodeTokens: Int = 0,
         recentDecodeSeconds: Double = 0,
-        lastCompletedAt: Date?
+        lastCompletedAt: Date?,
+        lastRequest: RuntimeRequestTimingSnapshot? = nil
     ) {
         self.completedRequests = completedRequests
         self.failedRequests = failedRequests
@@ -266,11 +293,48 @@ struct RuntimeModelBenchmarkStats: Codable, Equatable, Sendable {
             ? Double(recentDecodeTokens) / recentDecodeSeconds
             : nil
         self.lastCompletedAt = lastCompletedAt
+        self.lastRequest = lastRequest
     }
 
     private static func average(_ value: Double, count: Int) -> Double? {
         guard count > 0 else { return nil }
         return value / Double(count)
+    }
+}
+
+struct RuntimeRequestTimingSnapshot: Codable, Equatable, Sendable {
+    let promptTokens: Int
+    let generatedTokens: Int
+    let loadSeconds: Double
+    let prefillSeconds: Double
+    let cacheConversionSeconds: Double?
+    let decodeSeconds: Double
+    let timeToFirstTokenSeconds: Double?
+    let prefillTokensPerSecond: Double?
+    let decodeTokensPerSecond: Double?
+    let prefillKVCache: String?
+    let decodeKVCache: String?
+
+    init(response: ChatResponse) {
+        let timing = response.timing
+        promptTokens = response.promptTokens ?? 0
+        generatedTokens = response.tokensGenerated
+        loadSeconds = timing?.loadSeconds ?? 0
+        prefillSeconds = timing?.prefillSeconds ?? 0
+        cacheConversionSeconds = timing?.cacheConversionSeconds
+        decodeSeconds = timing?.decodeSeconds ?? 0
+        if let timing, let firstTokenSeconds = timing.firstTokenSeconds {
+            timeToFirstTokenSeconds = timing.loadSeconds
+                + timing.prefillSeconds
+                + (timing.cacheConversionSeconds ?? 0)
+                + firstTokenSeconds
+        } else {
+            timeToFirstTokenSeconds = nil
+        }
+        prefillTokensPerSecond = timing?.prefillTokensPerSecond
+        decodeTokensPerSecond = timing?.decodeTokensPerSecond
+        prefillKVCache = timing?.prefillKVCache
+        decodeKVCache = timing?.decodeKVCache
     }
 }
 
@@ -817,6 +881,18 @@ struct RuntimeModelPoolEntrySnapshot: Codable, Equatable, Sendable {
     let continuousBatching: RuntimeDecodeBatchingStats?
     let mtp: Gemma4MTPStats?
     let benchmarkStats: RuntimeModelBenchmarkStats?
+    /// Startup load and optional graph-warmup timing. Older servers omit it.
+    var startupTiming: RuntimeModelStartupTiming? = nil
+}
+
+struct RuntimeModelStartupTiming: Codable, Equatable, Sendable {
+    let loadSeconds: Double
+    let warmupSeconds: Double?
+    let warmupPrefillSeconds: Double?
+    let warmupDecodeSeconds: Double?
+    let warmupTimeToFirstTokenSeconds: Double?
+    let graphCompilationAccounting: String?
+    let completedAt: Date
 }
 
 struct RuntimeChatPlan: Sendable {
@@ -875,6 +951,8 @@ actor RuntimeModelPool {
         var totalDecodeSeconds: Double = 0
         var recentDecodeSamples: [(tokens: Int, seconds: Double)] = []
         var lastCompletedAt: Date?
+        var startupTiming: RuntimeModelStartupTiming?
+        var lastRequestTiming: RuntimeRequestTimingSnapshot?
 
         var benchmarkStats: RuntimeModelBenchmarkStats {
             RuntimeModelBenchmarkStats(
@@ -886,7 +964,8 @@ actor RuntimeModelPool {
                 totalDecodeSeconds: totalDecodeSeconds,
                 recentDecodeTokens: recentDecodeSamples.reduce(0) { $0 + $1.tokens },
                 recentDecodeSeconds: recentDecodeSamples.reduce(0) { $0 + $1.seconds },
-                lastCompletedAt: lastCompletedAt
+                lastCompletedAt: lastCompletedAt,
+                lastRequest: lastRequestTiming
             )
         }
     }
@@ -994,8 +1073,55 @@ actor RuntimeModelPool {
         self.clearMLXCache = clearMLXCache
     }
 
-    func preloadDefault() async throws {
-        _ = try await loadModel(idOrAlias: defaultModelID)
+    func preloadDefault(warmup: Bool = false) async throws {
+        let resolved = try resolveModel(defaultModelID)
+        let loadStart = currentDate()
+        let loaded = try await ensureLoaded(resolved)
+        let loadSeconds = currentDate().timeIntervalSince(loadStart)
+        var startupTiming = RuntimeModelStartupTiming(
+            loadSeconds: loadSeconds,
+            warmupSeconds: nil,
+            warmupPrefillSeconds: nil,
+            warmupDecodeSeconds: nil,
+            warmupTimeToFirstTokenSeconds: nil,
+            graphCompilationAccounting: nil,
+            completedAt: currentDate()
+        )
+        if warmup,
+           resolved.engine == .textChatGemma4,
+           Gemma4Resources.usesTurboDefaults(modelSpec: resolved.id) {
+            let warmupStart = currentDate()
+            let response = try await loaded.chat(
+                ChatRequest(
+                    messages: [ChatMessage(role: .user, content: "Reply with ready.")],
+                    maxTokens: 1,
+                    temperature: 0,
+                    topP: 1,
+                    showThinking: false
+                ),
+                progressHandler: nil
+            )
+            let timing = response.timing
+            startupTiming = RuntimeModelStartupTiming(
+                loadSeconds: loadSeconds,
+                warmupSeconds: currentDate().timeIntervalSince(warmupStart),
+                warmupPrefillSeconds: timing?.prefillSeconds,
+                warmupDecodeSeconds: timing?.decodeSeconds,
+                warmupTimeToFirstTokenSeconds: timing.map(Self.timeToFirstToken),
+                graphCompilationAccounting: "included_in_warmup_prefill",
+                completedAt: currentDate()
+            )
+        }
+        var state = state(for: resolved.id)
+        state.startupTiming = startupTiming
+        states[resolved.id] = state
+    }
+
+    private static func timeToFirstToken(_ timing: ChatTiming) -> Double {
+        timing.loadSeconds
+            + timing.prefillSeconds
+            + (timing.cacheConversionSeconds ?? 0)
+            + (timing.firstTokenSeconds ?? 0)
     }
 
     func modelsResponse(
@@ -1052,6 +1178,10 @@ actor RuntimeModelPool {
         var mtpStats: [String: Gemma4MTPStats] = [:]
         let currentLoadedModels = loadedModels
         for (id, loaded) in currentLoadedModels {
+            // Generator actors can spend tens of seconds inside one evaluated
+            // prefill chunk. Keep the control plane responsive while a model
+            // is active; its cached counters return on the next idle status poll.
+            guard state(for: id).activeRequests == 0 else { continue }
             if let stats = await loaded.prefixKVCacheStats() {
                 prefixStats[id] = stats
             }
@@ -1278,6 +1408,7 @@ actor RuntimeModelPool {
             }
         }
         state.lastCompletedAt = currentDate()
+        state.lastRequestTiming = RuntimeRequestTimingSnapshot(response: response)
         state.lastError = nil
         states[modelID] = state
     }
@@ -1865,6 +1996,7 @@ actor RuntimeModelPool {
             benchmarkStats: state.benchmarkStats
         )
         snapshot.ready = loadedModels[id] != nil && !preparingModelIDs.contains(id)
+        snapshot.startupTiming = state.startupTiming
         return snapshot
     }
 
@@ -1972,6 +2104,34 @@ actor RuntimeRequestAdmission {
         case cancelled
     }
 
+    private struct ActiveRequestState {
+        let id: UUID
+        let admittedAt: Date
+        var modelID: String?
+        var streaming: Bool?
+        var requestedMaxTokens: Int?
+        var toolCount: Int?
+        var phase = "admitted"
+        var phaseDetail: String?
+        var firstTokenAt: Date?
+        var generatedTokenUpdates = 0
+
+        var snapshot: RuntimeActiveRequestSnapshot {
+            RuntimeActiveRequestSnapshot(
+                id: id,
+                admittedAt: admittedAt,
+                modelID: modelID,
+                streaming: streaming,
+                requestedMaxTokens: requestedMaxTokens,
+                toolCount: toolCount,
+                phase: phase,
+                phaseDetail: phaseDetail,
+                firstTokenAt: firstTokenAt,
+                generatedTokenUpdates: generatedTokenUpdates
+            )
+        }
+    }
+
     private let maxActiveRequests: Int
     private let pressureProvider: @Sendable () async -> RuntimeMemoryPressureLevel
     private var activeRequests = 0
@@ -1980,6 +2140,10 @@ actor RuntimeRequestAdmission {
     private var totalAdmittedRequests = 0
     private var totalCompletedRequests = 0
     private var totalCancelledRequests = 0
+    private var activeRequestStates: [UUID: ActiveRequestState] = [:]
+    private var lastClientDisconnectAt: Date?
+    private var lastCancellationAt: Date?
+    private var lastSlotReleaseAt: Date?
 
     init(
         maxActiveRequests: Int,
@@ -2027,9 +2191,59 @@ actor RuntimeRequestAdmission {
         return admit()
     }
 
-    fileprivate func releaseLease() async {
+    fileprivate func configureLease(
+        id: UUID,
+        modelID: String,
+        streaming: Bool,
+        requestedMaxTokens: Int,
+        toolCount: Int
+    ) {
+        guard var state = activeRequestStates[id] else { return }
+        state.modelID = modelID
+        state.streaming = streaming
+        state.requestedMaxTokens = requestedMaxTokens
+        state.toolCount = toolCount
+        activeRequestStates[id] = state
+    }
+
+    fileprivate func recordProgress(id: UUID, progress: ChatProgress) {
+        guard var state = activeRequestStates[id] else { return }
+        switch progress.stage {
+        case .loadingModel:
+            state.phase = "loading_model"
+            state.phaseDetail = progress.message
+        case .encoding:
+            state.phase = "prefill"
+            state.phaseDetail = progress.message
+        case .generating:
+            state.phase = "decode"
+            state.phaseDetail = nil
+            if progress.message?.isEmpty == false {
+                state.firstTokenAt = state.firstTokenAt ?? Date()
+                state.generatedTokenUpdates += 1
+            }
+        }
+        activeRequestStates[id] = state
+    }
+
+    fileprivate func recordClientDisconnect(id: UUID) {
+        guard var state = activeRequestStates[id] else { return }
+        state.phase = "cancelling"
+        state.phaseDetail = "Client disconnected"
+        activeRequestStates[id] = state
+        lastClientDisconnectAt = Date()
+    }
+
+    fileprivate func releaseLease(id: UUID, cancelled: Bool) async {
         activeRequests = max(0, activeRequests - 1)
-        totalCompletedRequests += 1
+        activeRequestStates.removeValue(forKey: id)
+        lastSlotReleaseAt = Date()
+        if cancelled {
+            totalCancelledRequests += 1
+            lastCancellationAt = Date()
+        } else {
+            totalCompletedRequests += 1
+        }
         await drain()
     }
 
@@ -2043,7 +2257,13 @@ actor RuntimeRequestAdmission {
             totalCompletedRequests: totalCompletedRequests,
             totalCancelledRequests: totalCancelledRequests,
             admissionPaused: admissionPaused(for: pressure),
-            pressure: pressure.rawValue
+            pressure: pressure.rawValue,
+            activeRequestDetails: activeRequestStates.values
+                .map(\.snapshot)
+                .sorted { $0.admittedAt < $1.admittedAt },
+            lastClientDisconnectAt: lastClientDisconnectAt,
+            lastCancellationAt: lastCancellationAt,
+            lastSlotReleaseAt: lastSlotReleaseAt
         )
     }
 
@@ -2103,9 +2323,11 @@ actor RuntimeRequestAdmission {
     }
 
     private func admit() -> RuntimeRequestAdmissionLease {
+        let id = UUID()
         activeRequests += 1
         totalAdmittedRequests += 1
-        return RuntimeRequestAdmissionLease(admission: self)
+        activeRequestStates[id] = ActiveRequestState(id: id, admittedAt: Date())
+        return RuntimeRequestAdmissionLease(id: id, admission: self)
     }
 
     private func canAdmitNow(requireEmptyQueue: Bool = false) async -> Bool {
@@ -2137,25 +2359,61 @@ actor RuntimeRequestAdmission {
 }
 
 final class RuntimeRequestAdmissionLease: @unchecked Sendable {
+    private let id: UUID
     private let admission: RuntimeRequestAdmission
     private let lock = NSLock()
     private var released = false
 
-    init(admission: RuntimeRequestAdmission) {
+    init(id: UUID, admission: RuntimeRequestAdmission) {
+        self.id = id
         self.admission = admission
     }
+
+    var requestID: UUID { id }
 
     deinit {
         guard markReleased() else { return }
         let admission = admission
+        let id = id
         Task {
-            await admission.releaseLease()
+            await admission.releaseLease(id: id, cancelled: false)
         }
     }
 
-    func release() async {
+    func configure(
+        modelID: String,
+        streaming: Bool,
+        requestedMaxTokens: Int,
+        toolCount: Int
+    ) async {
+        await admission.configureLease(
+            id: id,
+            modelID: modelID,
+            streaming: streaming,
+            requestedMaxTokens: requestedMaxTokens,
+            toolCount: toolCount
+        )
+    }
+
+    func observe(_ progress: ChatProgress) {
+        let admission = admission
+        let id = id
+        Task {
+            await admission.recordProgress(id: id, progress: progress)
+        }
+    }
+
+    func observeClientDisconnect() {
+        let admission = admission
+        let id = id
+        Task {
+            await admission.recordClientDisconnect(id: id)
+        }
+    }
+
+    func release(cancelled: Bool = false) async {
         guard markReleased() else { return }
-        await admission.releaseLease()
+        await admission.releaseLease(id: id, cancelled: cancelled)
     }
 
     private func markReleased() -> Bool {
@@ -2206,7 +2464,9 @@ final class RuntimeModelLease: @unchecked Sendable {
             await pool.recordChatCompletion(modelID: modelID, response: response)
             return response
         } catch {
-            await pool.recordChatFailure(modelID: modelID, error: error)
+            if !(error is CancellationError) {
+                await pool.recordChatFailure(modelID: modelID, error: error)
+            }
             throw error
         }
     }

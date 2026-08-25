@@ -329,6 +329,36 @@ final class Gemma4ModelTests: MereRunCoreTestCase {
         XCTAssertNotNil(layer.experts)
     }
 
+    func testSortedExpertPrefillMatchesSerialUnsortedRouting() throws {
+        MLXRandom.seed(71)
+        var configObject = makeBaseConfig()
+        configObject["enable_moe_block"] = true
+        configObject["num_experts"] = 4
+        configObject["top_k_experts"] = 2
+        configObject["moe_intermediate_size"] = 4
+        let config = try decodeTextConfig(configObject)
+        let experts = Gemma4SwitchGLU(config: config, quantized: false)
+        let input = MLXRandom.normal([1, 32, config.hiddenSize])
+        let routeValues = (0..<32).flatMap { index in
+            [Int32((index + 2) % 4), Int32(index % 4)]
+        }
+        let routes = MLXArray(routeValues).reshaped(1, 32, 2)
+
+        let batched = experts(input, indices: routes)
+        let serial = MLX.concatenated((0..<32).map { index in
+            experts(
+                input[0..., index..<(index + 1), 0...],
+                indices: routes[0..., index..<(index + 1), 0...]
+            )
+        }, axis: 1)
+        MLX.eval(batched, serial)
+
+        XCTAssertLessThan(
+            MLX.max(MLX.abs(batched - serial)).item(Float.self),
+            1e-5
+        )
+    }
+
     func testPrefixCacheForkMatchesFullForwardForSuffixLogits() throws {
         MLXRandom.seed(19)
         let config = try decodeTextConfig(makeBaseConfig())

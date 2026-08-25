@@ -300,10 +300,12 @@ flag on `text chat` or `api serve`. For Gemma4, Qwen-family, and LFM2 models
 you can select explicit `affine4` or `affine8` as long-context memory
 controls relative to full-precision K/V. Qwen-family and LFM2 dequantize the
 generic cache for attention, so these modes are not assumed faster. Gemma uses
-its model-specific quantized KV path; `text-chat-gemma4-turbo` already defaults
-to a smaller 4-bit TurboQuant cache, so forcing affine 8-bit can increase that
-model's KV residency. `default` restores the engine/model/server default rather
-than promising full precision.
+its model-specific quantized KV path. Interactive `text chat` retains the
+memory-oriented Gemma Turbo recipe, while `api serve` defaults Turbo to
+full-precision KV after long-schema serving showed that token-zero TurboQuant
+could dominate decode latency. API operators can request that memory tradeoff
+explicitly with `--kv-bits 4 --kv-quant-scheme turboquant
+--quantized-kv-start 0`. `default` restores the engine/model/server default.
 
 `vision-chat-q38-27b` is the official dense Qwen3.8 27B BF16 checkpoint. Pull
 it explicitly before use because the pinned snapshot is 55.59 GB:

@@ -48,6 +48,7 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(cmd.memoryGuard, .balanced)
         XCTAssertNil(cmd.memoryGuardCustomCeilingGB)
         XCTAssertEqual(cmd.contextSize, 32_768)
+        XCTAssertTrue(cmd.warmup)
         XCTAssertNil(cmd.kvBits)
         XCTAssertNil(cmd.kvQuantScheme)
         XCTAssertNil(cmd.kvGroupSize)
@@ -69,6 +70,7 @@ final class APIServeCommandTests: XCTestCase {
             "--memory-guard", "custom",
             "--memory-guard-custom-ceiling-gb", "42.5",
             "--context-size", "8192",
+            "--no-warmup",
             "--kv-bits", "3.5",
             "--kv-quant-scheme", "turboquant",
             "--kv-group-size", "32",
@@ -86,6 +88,7 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(cmd.memoryGuard, .custom)
         XCTAssertEqual(cmd.memoryGuardCustomCeilingGB, 42.5)
         XCTAssertEqual(cmd.contextSize, 8192)
+        XCTAssertFalse(cmd.warmup)
         XCTAssertEqual(cmd.kvBits, 3.5)
         XCTAssertEqual(cmd.kvQuantScheme, "turboquant")
         XCTAssertEqual(cmd.kvGroupSize, 32)
@@ -444,7 +447,7 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertFalse(startServer.command?.argv.contains("--api-key") == true)
     }
 
-    func testAPIServeGemma4TurboModelDefaultsToTurboQuantKVCache() throws {
+    func testAPIServeGemma4TurboModelDefaultsToUnquantizedKVCache() throws {
         let cmd = try APIServe.parse([
             "--engine", "text-chat-gemma4",
             "--model-path", Gemma4Resources.turboModelId,
@@ -452,10 +455,10 @@ final class APIServeCommandTests: XCTestCase {
 
         let quantization = try cmd.resolveGemma4KVCacheQuantization()
 
-        XCTAssertEqual(quantization.bits, Gemma4Resources.defaultTurboKVBits)
-        XCTAssertEqual(quantization.scheme, .turboquant)
+        XCTAssertNil(quantization.bits)
+        XCTAssertEqual(quantization.scheme, .uniform)
         XCTAssertEqual(quantization.groupSize, Gemma4Resources.defaultKVGroupSize)
-        XCTAssertEqual(quantization.quantizedStart, Gemma4Resources.defaultTurboQuantizedKVStart)
+        XCTAssertEqual(quantization.quantizedStart, Gemma4Resources.defaultQuantizedKVStart)
     }
 
     func testAPIServeParsesLFM2Engine() throws {
@@ -522,7 +525,7 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(cmd.engine.runtimeServingEngine, .textChatQ36)
     }
 
-    func testAPIServeGemma4TurboKVFlagsOverrideIndependently() throws {
+    func testAPIServeGemma4TurboKVOptionsWithoutBitsRemainDisabled() throws {
         let cmd = try APIServe.parse([
             "--engine", "text-chat-gemma4",
             "--model-path", Gemma4Resources.turboModelId,
@@ -533,7 +536,7 @@ final class APIServeCommandTests: XCTestCase {
 
         let quantization = try cmd.resolveGemma4KVCacheQuantization()
 
-        XCTAssertEqual(quantization.bits, Gemma4Resources.defaultTurboKVBits)
+        XCTAssertNil(quantization.bits)
         XCTAssertEqual(quantization.scheme, .uniform)
         XCTAssertEqual(quantization.groupSize, 32)
         XCTAssertEqual(quantization.quantizedStart, 128)
@@ -3103,6 +3106,38 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(usage.prompt_tokens, 0)
         XCTAssertEqual(usage.completion_tokens, 7)
         XCTAssertEqual(usage.total_tokens, 7)
+    }
+
+    func testOpenAITimingHeadersExposeRequestPhasesAndThroughput() {
+        let result = ChatResponse(
+            response: "ready",
+            tokensGenerated: 3,
+            timing: ChatTiming(
+                loadSeconds: 0.25,
+                prefillSeconds: 2,
+                cacheConversionSeconds: 0.125,
+                decodeSeconds: 1.5,
+                firstTokenSeconds: 0.5,
+                prefillKVCache: "full-precision",
+                decodeKVCache: "full-precision",
+                prefillTokensPerSecond: 100,
+                decodeTokensPerSecond: 2
+            ),
+            promptTokens: 200
+        )
+
+        let headers = CodeGenServer.openAITimingHeaders(for: result)
+
+        XCTAssertEqual(headers["x-mere-prompt-tokens"], "200")
+        XCTAssertEqual(headers["x-mere-generated-tokens"], "3")
+        XCTAssertEqual(headers["x-mere-prefill-tokens-per-second"], "100.000")
+        XCTAssertEqual(headers["x-mere-decode-tokens-per-second"], "2.000")
+        XCTAssertEqual(headers["x-mere-kv-cache"], "full-precision")
+        XCTAssertEqual(
+            headers["server-timing"],
+            "model_load;dur=250.000, prefill;dur=2000.000, kv_pack;dur=125.000, "
+                + "decode;dur=1500.000, ttft;dur=2875.000"
+        )
     }
 
     func testChatRequestDefaultsToThinkingForOrnithLanes() throws {

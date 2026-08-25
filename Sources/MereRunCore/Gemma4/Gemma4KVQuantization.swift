@@ -32,7 +32,7 @@ public struct Gemma4KVCacheQuantization: Sendable, Hashable {
 
     var statusDescription: String {
         guard let bits else {
-            return "default"
+            return "full-precision"
         }
         return "\(scheme.rawValue):\(bits)-bit:start-\(quantizedStart)"
     }

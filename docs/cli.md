@@ -2724,6 +2724,13 @@ Security defaults:
   Values above `1` automatically engage supported Gemma4, Qwen-family,
   and LFM2 decode batching unless an engine-specific environment variable forces
   the serial path
+- `--warmup` is enabled by default for Gemma 4 Turbo. The server evaluates a
+  one-token warmup before it starts listening, so model loading and the first
+  lazy graph/materialization prefill are paid before `/health` reports ready.
+  Use `--no-warmup` only when startup latency matters more than the first
+  request. MLX does not expose compiler time separately, so startup telemetry
+  reports `warmupPrefillSeconds` and marks graph compilation as included in that
+  measurement instead of presenting an invented compile-only duration.
 - `--memory-guard` controls runtime memory pressure behavior. Accepted values
   are `off`, `safe`, `balanced`, `aggressive`, and `custom`; `custom` also
   requires `--memory-guard-custom-ceiling-gb`.
@@ -2779,19 +2786,34 @@ Security defaults:
   `--kv-quant-scheme polar --kv-bits 2`; use it for memory-pressure and
   long-context synthetic decode testing. It is not the default until checkpoint
   benchmarks prove the end-to-end model path.
-- Per-model runtime settings can set `kvCacheMode` to `affine8` for Gemma4,
+- API serving keeps Gemma 4 Turbo KV full precision by default because the
+  previous token-zero TurboQuant default caused severe long-prompt decode
+  latency. Operators can still opt into the memory tradeoff explicitly with
+  `--kv-bits 4 --kv-quant-scheme turboquant --quantized-kv-start 0`.
+  Per-model runtime settings can set `kvCacheMode` to `affine8` for Gemma4,
   Qwen-family, and LFM2 as a memory control relative to full-precision KV.
   Qwen-family and LFM2 dequantize the generic cache for attention, so this is an
-  explicit tradeoff. Gemma Turbo already defaults to a smaller 4-bit TurboQuant
-  cache, so forcing affine 8-bit can increase its KV residency. `default`
-  restores the selected engine/model/server default, not necessarily full
-  precision. Gemma4 also accepts `polar2` or `auto`; `auto` keeps the default KV
+  explicit tradeoff. `default` restores the selected engine/model/server
+  default. Gemma4 also accepts `polar2` or `auto`; `auto` keeps the default KV
   path below 1024 prompt tokens and switches to decode-deferred packed PolarKV
   at or above that threshold.
 - `/runtime/status` and `mere.run status` aggregate prefix hits, reused tokens,
   batched decode steps, completed chat requests, generated tokens, and average
   load/prefill/decode timings across loaded models under `cacheStats` and
-  `benchmarkStats`
+  `benchmarkStats`. Model entries include startup load/warmup timing and the
+  last completed request's TTFT and throughput. Admission status includes the
+  phase and generated-token updates for active requests plus cancellation and
+  slot-release timestamps. Busy model counters are deferred so the status
+  route remains responsive during long prefill/decode work.
+- non-streaming chat responses expose `x-mere-request-id` immediately, send
+  JSON-safe whitespace heartbeats while the final object remains buffered, and
+  finish with declared HTTP trailers. Those trailers include standard
+  `Server-Timing` entries for load, prefill, KV packing, decode, and TTFT plus
+  `x-mere-*` token, throughput, KV-mode, and final runtime-status fields. This
+  lets an outbound disconnect cancel native generation without leaking partial
+  text or malformed tool calls. Closing either a streaming or non-streaming
+  client releases its active-request slot; `/runtime/status` records the
+  disconnect receipt, cancellation completion, and slot release separately.
 - generation parameters are bounded before execution; for example, `max_tokens` must fit the configured context size, and native chat engines receive that same context cap for prompt truncation
 - LoRA adapters for the API server are selected by the operator with `--lora`; request bodies cannot provide local LoRA paths
 
