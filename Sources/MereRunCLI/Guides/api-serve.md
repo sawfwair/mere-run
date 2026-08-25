@@ -208,8 +208,13 @@ download route.
 - DS4 raw-proxies the complete OpenAI chat request to `ds4-server`.
 - Native engines reject unsupported OpenAI fields explicitly instead of silently dropping them.
 - `text-code` maps OpenAI `stop` sequences into native generation stops.
-- Function `tool_choice` values are accepted for native tool-capable engines;
-  specific function choices narrow the advertised tools to the named function.
+- Native tool-capable engines map `required` and specific-function
+  `tool_choice` values into generation policy; specific choices narrow the
+  advertised tools to the named function, while `parallel_tool_calls: false`
+  limits the response to one validated call. Nemotron H parses its native
+  Qwen-style XML envelope, stops both final-target and DSpark decode after the
+  first complete single-call envelope, and never returns the envelope as
+  assistant content.
 - Native Gemma and Qwen-family chat engines accept
   `response_format: {"type":"json_object"}`. JSON-object generation uses a
   token-level prefix grammar, forces thinking off, and permits EOS only after

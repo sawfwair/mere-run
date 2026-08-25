@@ -121,6 +121,52 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertFalse(cmd.engine.openAICompatibility.supportsStructuredOutputs)
     }
 
+    func testAPIServeResolvesInstalledNemotronCanonicalIDForPreflightAndRuntime() throws {
+        let modelsRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent("mere-run-nemotron-api-\(UUID().uuidString)", isDirectory: true)
+        let modelRoot = modelsRoot
+            .appendingPathComponent(NemotronHResources.modelID, isDirectory: true)
+        defer {
+            MereRunModelPaths.setProcessModelsDirOverride(nil)
+            try? FileManager.default.removeItem(at: modelsRoot)
+        }
+        MereRunModelPaths.setProcessModelsDirOverride(modelsRoot)
+        try FileManager.default.createDirectory(at: modelRoot, withIntermediateDirectories: true)
+        for filename in [
+            "config.json", "tokenizer.json", "tokenizer_config.json", "chat_template.jinja",
+        ] {
+            try Data("{}".utf8).write(to: modelRoot.appendingPathComponent(filename))
+        }
+        try Data("{\"weight_map\":{}}".utf8).write(
+            to: modelRoot.appendingPathComponent("model.safetensors.index.json")
+        )
+        try MereRunModelManifest.template(
+            for: .nemotron35Lightning,
+            createdAt: Date(timeIntervalSince1970: 0)
+        ).write(to: modelRoot)
+
+        let command = try APIServe.parse([
+            "--engine", "text-chat-nemotron-h",
+            "--model", NemotronHResources.modelID,
+            "--preflight",
+            "--json",
+        ])
+
+        XCTAssertEqual(try command.resolveModelPath(), modelRoot.path)
+        let envelope = command.makePreflightEnvelope(
+            environment: [:],
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+        XCTAssertEqual(envelope.status, .ok)
+        XCTAssertTrue(envelope.result.model.installed)
+        XCTAssertEqual(envelope.result.model.path, modelRoot.path)
+        let start = try XCTUnwrap(envelope.actions.first { $0.id == "start-api-server" })
+        let argv = try XCTUnwrap(start.command?.argv)
+        XCTAssertTrue(argv.indices.dropLast().contains { index in
+            argv[index] == "--model" && argv[index + 1] == NemotronHResources.modelID
+        })
+    }
+
     func testAPIServeParsesNemotronOmniNativeEngine() throws {
         let cmd = try APIServe.parse([
             "--engine", "text-chat-nemotron-omni",
@@ -2511,6 +2557,64 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(chatRequest.tools?.first?.name, "lookup")
         XCTAssertEqual(chatRequest.tools?.first?.parameters["query"]?.description, "Search query")
         XCTAssertEqual(chatRequest.tools?.first?.required, ["query"])
+        XCTAssertEqual(chatRequest.toolChoice, .auto)
+        XCTAssertTrue(chatRequest.parallelToolCalls)
+    }
+
+    func testChatRequestMapsRequiredSingleToolPolicy() throws {
+        let tool = OpenAIChatTool(
+            function: OpenAIChatToolFunction(
+                name: "create_status_summary",
+                description: "Create a concise status summary.",
+                parameters: .object([
+                    "type": .string("object"),
+                    "properties": .object([
+                        "reason": .object(["type": .string("string")]),
+                    ]),
+                    "required": .array([.string("reason")]),
+                ])
+            )
+        )
+        let request = OpenAIChatRequest(
+            model: NemotronHResources.modelID,
+            messages: [OpenAIChatMessage(role: "user", content: "Summarize the project update.")],
+            tools: [tool],
+            tool_choice: .mode("required"),
+            parallel_tool_calls: false
+        )
+
+        let chatRequest = try APIServerContract.chatRequest(
+            from: request,
+            fallbackLoraPath: nil,
+            contextSize: 32_768,
+            capabilities: .localTextWithTools,
+            servedModelID: NemotronHResources.modelID
+        )
+
+        XCTAssertEqual(chatRequest.toolChoice, .required)
+        XCTAssertFalse(chatRequest.parallelToolCalls)
+        XCTAssertEqual(chatRequest.tools?.map(\.name), ["create_status_summary"])
+        let system = try XCTUnwrap(chatRequest.messages.first { $0.role == .system })
+        XCTAssertTrue(system.content.contains("exactly one provided function"))
+    }
+
+    func testRequiredToolChoiceWithoutToolsIsRejected() {
+        let request = OpenAIChatRequest(
+            model: NemotronHResources.modelID,
+            messages: [OpenAIChatMessage(role: "user", content: "Summarize the project update.")],
+            tool_choice: .mode("required")
+        )
+
+        XCTAssertThrowsError(
+            try APIServerContract.chatRequest(
+                from: request,
+                fallbackLoraPath: nil,
+                contextSize: 32_768,
+                capabilities: .localTextWithTools
+            )
+        ) { error in
+            XCTAssertTrue(error.localizedDescription.contains("requires at least one function"))
+        }
     }
 
     func testOpenAIToolArgumentsPreserveJSONTypesFromModelPayloads() throws {
@@ -2586,6 +2690,9 @@ final class APIServeCommandTests: XCTestCase {
         )
 
         XCTAssertEqual(chatRequest.tools?.map(\.name), ["summarize"])
+        XCTAssertEqual(chatRequest.toolChoice, .function("summarize"))
+        let system = try XCTUnwrap(chatRequest.messages.first { $0.role == .system })
+        XCTAssertTrue(system.content.contains("'summarize' at least once"))
 
         let missing = OpenAIChatRequest(
             model: "mererun-test-model",
@@ -2714,6 +2821,20 @@ final class APIServeCommandTests: XCTestCase {
         )
 
         XCTAssertEqual(CodeGenServer.openAIFinishReason(for: result), "length")
+    }
+
+    func testOpenAIFinishReasonReportsToolCalls() {
+        let result = ChatResponse(
+            response: "",
+            tokensGenerated: 12,
+            toolCalls: [ToolCall(name: "create_status_summary", arguments: ["reason": "test"])]
+        )
+
+        XCTAssertEqual(CodeGenServer.openAIFinishReason(for: result), "tool_calls")
+        XCTAssertEqual(
+            CodeGenServer.openAIFinishReason(for: result, hasToolCalls: false),
+            "stop"
+        )
     }
 
     func testChatRequestRejectsUnsupportedHighImpactFields() {

@@ -465,8 +465,10 @@ profile for its selected serving engine.
   content parts when the selected engine supports vision
 - assistant `tool_calls` and tool response messages
 - `tools`, `tool_choice`, `parallel_tool_calls`; `tool_choice` accepts `none`,
-  `auto`, `required`, and specific function choices by narrowing the advertised
-  tool list to the named function
+  `auto`, `required`, and specific function choices. Required and specific
+  choices become explicit native generation instructions, specific choices
+  narrow the advertised list to the named function, and
+  `parallel_tool_calls: false` limits the response to one validated call
 - `response_format`
 - `stream_options.include_usage`
 - `stop`, `seed`, penalties, logprobs, reasoning controls, and
@@ -481,8 +483,10 @@ not change local generation.
 
 For non-streaming chat responses, native runtimes split `<think>...</think>`
 blocks out of `message.content` and expose them as OpenAI-compatible
-`message.reasoning_content` when present. Streaming responses still emit token
-chunks as they are produced.
+`message.reasoning_content` when present. Tool-capable streaming requests buffer
+generated chunks until the runtime can emit either typed `tool_calls` or
+protocol-free text, so native XML control markup is never exposed as assistant
+content.
 
 Native Qwen-family, Nemotron Lightning, and Laguna catalog profiles accept
 `logprobs: true` for non-streaming requests, with `top_logprobs` from 0 through
@@ -502,6 +506,11 @@ Engine compatibility:
   `ds4-server`, preserving DS4's OpenAI-compatible behavior.
 - `text-chat-gemma4`: accepts function tools and emits OpenAI tool-call
   responses when the model generates a tool call.
+- `text-chat-nemotron-h`: accepts function tools using the checkpoint's native
+  Qwen-style XML envelope. Both final-target and DSpark decode stop at the first
+  structurally complete envelope when parallel calls are disabled; malformed
+  envelopes and calls that do not match an advertised function or its required
+  arguments are not promoted to OpenAI `tool_calls`.
 - `vision-chat-gemma4-12b`: uses the Gemma4 serving engine and accepts one
   OpenAI image content part per message. The native runtime accepts local file
   paths, `file://` URLs, or base64 data URLs; it does not fetch remote images.

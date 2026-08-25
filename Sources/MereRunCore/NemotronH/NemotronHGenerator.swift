@@ -202,6 +202,22 @@ public actor NemotronHGenerator: ChatGenerator {
         )
         let eosTokens = Set(config.eosTokenIDs + [2, 11] + [tokenizer.eosTokenId].compactMap { $0 })
         progressHandler?(ChatProgress(stage: .generating, message: ""))
+        let filtersToolProtocol = request.tools?.isEmpty == false
+        let stopAtCompletedToolCall = filtersToolProtocol && !request.parallelToolCalls
+        var toolCallCompletionDetector = Q35ToolParser.StreamingCompletionDetector()
+        var visibleTextFilter = Q35ToolParser.StreamingVisibleTextFilter()
+
+        func emitGeneratedPiece(_: Int, _ piece: String) {
+            let visiblePiece = filtersToolProtocol ? visibleTextFilter.feed(piece) : piece
+            if !visiblePiece.isEmpty {
+                progressHandler?(ChatProgress(stage: .generating, message: visiblePiece))
+            }
+        }
+
+        func shouldContinueAfterPiece(_: Int, _ piece: String) -> Bool {
+            guard stopAtCompletedToolCall else { return true }
+            return !toolCallCompletionDetector.feed(piece)
+        }
 
         let decode: NemotronHDecodeResult
         if let dspark,
@@ -221,9 +237,8 @@ public actor NemotronHGenerator: ChatGenerator {
                 historySeedTokens: promptTokens,
                 speculativeTokens: NemotronHResources.defaultSpeculativeTokens,
                 decodeToken: { tokenizer.decode(token: $0) },
-                emitPiece: { _, piece in
-                    progressHandler?(ChatProgress(stage: .generating, message: piece))
-                },
+                emitPiece: emitGeneratedPiece,
+                shouldContinue: shouldContinueAfterPiece,
                 checkCancellation: { try Task.checkCancellation() }
             )
             latestDSparkStats = result.stats
@@ -261,9 +276,8 @@ public actor NemotronHGenerator: ChatGenerator {
                 ),
                 stepForward: { token in model.lastPositionLogits(token, cache: targetCache) },
                 decodeToken: { tokenizer.decode(token: $0) },
-                emitPiece: { _, piece in
-                    progressHandler?(ChatProgress(stage: .generating, message: piece))
-                },
+                emitPiece: emitGeneratedPiece,
+                shouldContinue: shouldContinueAfterPiece,
                 checkCancellation: { try Task.checkCancellation() }
             )
             decode = NemotronHDecodeResult(
@@ -274,17 +288,33 @@ public actor NemotronHGenerator: ChatGenerator {
                 acceleration: ChatAccelerationDiagnostics(route: "final-target-pipelined")
             )
         }
+        if filtersToolProtocol {
+            let remainingVisibleText = visibleTextFilter.finish()
+            if !remainingVisibleText.isEmpty {
+                progressHandler?(ChatProgress(stage: .generating, message: remainingVisibleText))
+            }
+        }
         let raw = tokenizer.decode(tokens: decode.tokens)
         let trimmed = TextGenerationStopSequences.trimming(
             raw,
             sequences: TextGenerationStopSequences.merged(request.stopSequences)
         )
-        let toolCalls: [ToolCall]? = request.tools?.isEmpty == false ? {
-            let parsed = Gemma4ToolParser.parseToolCalls(trimmed.text)
-            return parsed.isEmpty ? nil : parsed
-        }() : nil
+        let parsedToolCalls = request.tools?.isEmpty == false
+            ? Q35ToolParser.parseToolCalls(trimmed.text)
+            : []
+        let toolCalls: [ToolCall]? = request.tools.flatMap { tools -> [ToolCall]? in
+            let validated = ToolCallPolicy.validatedCalls(
+                parsedToolCalls,
+                tools: tools,
+                parallelToolCalls: request.parallelToolCalls
+            )
+            return validated.isEmpty ? nil : validated
+        }
+        let visibleText = parsedToolCalls.isEmpty
+            ? trimmed.text
+            : Q35ToolParser.visibleText(trimmed.text)
         return ChatResponse(
-            generatedText: trimmed.text,
+            generatedText: visibleText,
             tokensGenerated: decode.tokens.count,
             showThinking: request.showThinking,
             timing: ChatTiming(

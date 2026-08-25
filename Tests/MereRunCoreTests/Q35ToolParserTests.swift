@@ -2,6 +2,46 @@ import XCTest
 @testable import MereRunCore
 
 final class Q35ToolParserTests: XCTestCase {
+    func testParsesNemotronLightningToolCallWithTypedPayloads() {
+        let text = """
+        <tool_call>
+        <function=create_status_summary>
+        <parameter=arguments>
+        {"project":"Example App","audience":"reviewers"}
+        </parameter>
+        <parameter=references>
+        ["change-log","test-report"]
+        </parameter>
+        <parameter=include_details>
+        true
+        </parameter>
+        <parameter=maximum_items>
+        3
+        </parameter>
+        <parameter=reason>
+        Summarize the latest project updates for reviewers.
+        </parameter>
+        </function>
+        </tool_call>
+        """
+
+        XCTAssertEqual(
+            Q35ToolParser.parseToolCalls(text),
+            [
+                ToolCall(
+                    name: "create_status_summary",
+                    arguments: [
+                        "arguments": "{\"project\":\"Example App\",\"audience\":\"reviewers\"}",
+                        "references": "[\"change-log\",\"test-report\"]",
+                        "include_details": "true",
+                        "maximum_items": "3",
+                        "reason": "Summarize the latest project updates for reviewers.",
+                    ]
+                ),
+            ]
+        )
+    }
+
     func testParsesCheckpointToolCallProtocolWithoutArguments() {
         let text = """
         <tool_call>
@@ -130,6 +170,87 @@ final class Q35ToolParserTests: XCTestCase {
 
         XCTAssertFalse(detector.feed("The marker </tool_"))
         XCTAssertFalse(detector.feed("call> is documentation."))
+    }
+
+    func testStreamingVisibleTextNeverExposesSplitToolEnvelope() {
+        let text = """
+        I will summarize that now.
+        <tool_call>
+        <function=create_status_summary>
+        <parameter=reason>
+        Summarize the requested updates.
+        </parameter>
+        </function>
+        </tool_call>
+        """
+
+        for chunkSize in [1, 2, 3, 7, 16, 64] {
+            var filter = Q35ToolParser.StreamingVisibleTextFilter()
+            var visible = ""
+            var offset = 0
+            while offset < text.count {
+                let end = min(text.count, offset + chunkSize)
+                let startIndex = text.index(text.startIndex, offsetBy: offset)
+                let endIndex = text.index(text.startIndex, offsetBy: end)
+                visible += filter.feed(String(text[startIndex..<endIndex]))
+                offset = end
+            }
+            visible += filter.finish()
+
+            XCTAssertEqual(visible, "I will summarize that now.\n", "chunk size \(chunkSize)")
+            XCTAssertFalse(visible.contains("<tool_call>"), "chunk size \(chunkSize)")
+        }
+    }
+
+    func testStreamingVisibleTextPreservesNormalProseExactly() {
+        let text = " Normal prose with <tool_ documentation and a trailing newline.\n"
+        var filter = Q35ToolParser.StreamingVisibleTextFilter()
+        var visible = ""
+
+        for character in text {
+            visible += filter.feed(String(character))
+        }
+        visible += filter.finish()
+
+        XCTAssertEqual(visible, text)
+    }
+
+    func testVisibleTextRemovesOnlyStructurallyValidToolCalls() {
+        let valid = "before <tool_call><function=lookup></function></tool_call> after"
+        let malformed = "before <tool_call><function=lookup></tool_call> after"
+
+        XCTAssertEqual(Q35ToolParser.visibleText(valid), "before  after")
+        XCTAssertEqual(Q35ToolParser.visibleText(malformed), malformed)
+        XCTAssertTrue(Q35ToolParser.parseToolCalls(malformed).isEmpty)
+    }
+
+    func testToolCallPolicyRejectsUnknownAndMissingRequiredCalls() {
+        let tool = ToolDefinition(
+            name: "create_status_summary",
+            description: "Create a concise status summary.",
+            parameters: [
+                "reason": ToolParameterProperty(type: "string", description: "Purpose"),
+            ],
+            required: ["reason"]
+        )
+        let calls = [
+            ToolCall(name: "unadvertised", arguments: ["reason": "wrong function"]),
+            ToolCall(name: tool.name, arguments: [:]),
+            ToolCall(name: tool.name, arguments: ["reason": "first"]),
+            ToolCall(name: tool.name, arguments: ["reason": "second"]),
+        ]
+
+        XCTAssertEqual(
+            ToolCallPolicy.validatedCalls(calls, tools: [tool], parallelToolCalls: false),
+            [ToolCall(name: tool.name, arguments: ["reason": "first"])]
+        )
+        XCTAssertEqual(
+            ToolCallPolicy.validatedCalls(calls, tools: [tool], parallelToolCalls: true),
+            [
+                ToolCall(name: tool.name, arguments: ["reason": "first"]),
+                ToolCall(name: tool.name, arguments: ["reason": "second"]),
+            ]
+        )
     }
 
     func testStreamingCompletionBoundFallsBackToFinalStructuralParse() {

@@ -42,6 +42,14 @@ The format is based on Keep a Changelog.
   tool schemas into native training templates, training on typed assistant
   tool-call targets, fingerprinting complete messages and schemas, and
   deduplicating complete controller states instead of first-user text.
+- fixed Nemotron 3.5 Lightning function calling across native chat and
+  `api serve`: the runtime now parses the checkpoint's Qwen-style XML protocol,
+  stops final-target and DSpark decoding after the first complete call when
+  parallel calls are disabled, removes protocol markup from visible content,
+  validates emitted calls against the advertised schema, and reports OpenAI
+  `finish_reason: "tool_calls"`. Canonical managed-model IDs now resolve to the
+  same installed path during real server startup that preflight reports, and
+  native requests preserve `tool_choice` and `parallel_tool_calls` policy.
 - added pinned LiquidAI DSpark companions for LFM2.5 1.2B Instruct, 2.6B,
   and 8B-A1B. The native Swift/MLX runtime captures five configured target-layer
   outputs, runs the non-causal diffusion draft block, drafts
