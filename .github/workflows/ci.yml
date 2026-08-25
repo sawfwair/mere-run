@@ -66,7 +66,7 @@ jobs:
         with:
           xcode-version: '26.4'
       - name: Restore SwiftPM dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/Library/Caches/org.swift.swiftpm
@@ -119,7 +119,7 @@ jobs:
         with:
           xcode-version: '26.4'
       - name: Restore iOS SwiftPM dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .build/ios-source-packages
           key: ios-swiftpm-${{ runner.os }}-${{ runner.arch }}-xcode-26.4-${{ hashFiles('Package.swift', 'Package.resolved') }}
@@ -285,7 +285,7 @@ jobs:
             zlib1g-dev \
             zstd
       - name: Restore SwiftPM and Linux native dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             .build/artifacts
