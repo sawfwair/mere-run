@@ -6,6 +6,13 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.44.0 - 2026-08-25
+
+This release expands native text, image, and music inference with LFM2.5
+DSpark acceleration and QAD models, SenseNova U1.5 generation, and a local
+MiniMax Music 3 composer with mixed quantization. It also hardens tool calling,
+text SFT schema parity, and long-running API inference.
+
 ### Audio
 
 - added split MiniMax Music 3 quantization tiers: `q8-lm` and `q4-lm`
@@ -35,6 +42,8 @@ The format is based on Keep a Changelog.
   raw-pixel flow matching, resolution-scaled noise, shifted Euler sampling,
   text CFG, and multi-image instruction editing without Python or an external
   VAE.
+- reduced SenseNova U1.5 denoising overhead by reusing invariant timestep and
+  guidance tensors across the sampling loop without changing generated output.
 
 ### Text
 
@@ -69,6 +78,30 @@ The format is based on Keep a Changelog.
   `LFM2.5-8B-A1B` targets required by their trained DSpark assistants. Existing
   4-bit and 8-bit LFM2.5 variants remain target-only so quantized hidden-state
   drift cannot silently reduce acceptance or change the intended pairing.
+- added pinned QAD Q4_0 MLX models for LFM2.5 1.2B Instruct and 2.6B, including
+  deterministic conversion tooling, managed pulls, validation, memory guidance,
+  CLI documentation, and iOS Studio selection. QAD is presented as quantized
+  accuracy recovery at a 4-bit footprint rather than a runtime speed claim.
+
+### Maintenance
+
+- removed stale implementation-roadmap documents after their shipped behavior
+  moved into the codebase and maintained documentation.
+- updated the GitHub Actions cache dependency from v4 to v6.
+
+### Included pull requests
+
+- exact release range: [#354](https://github.com/sawfwair/mere-run/pull/354),
+  [#355](https://github.com/sawfwair/mere-run/pull/355),
+  [#356](https://github.com/sawfwair/mere-run/pull/356),
+  [#357](https://github.com/sawfwair/mere-run/pull/357),
+  [#358](https://github.com/sawfwair/mere-run/pull/358),
+  [#359](https://github.com/sawfwair/mere-run/pull/359),
+  [#360](https://github.com/sawfwair/mere-run/pull/360),
+  [#362](https://github.com/sawfwair/mere-run/pull/362),
+  [#336](https://github.com/sawfwair/mere-run/pull/336),
+  [#361](https://github.com/sawfwair/mere-run/pull/361), and
+  [#363](https://github.com/sawfwair/mere-run/pull/363).
 
 ## 0.43.0 - 2026-08-20
 
