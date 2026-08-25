@@ -13,18 +13,35 @@ public enum LagunaTextSFTTokenizer {
             }
             let prefixTokens = try tokenizerAndTemplate.encodeForGeneration(
                 messages: Array(example.messages.dropLast()),
+                tools: example.tools,
                 addGenerationPrompt: true,
                 includeThinking: false,
                 maxLength: tokenizerAndTemplate.maxLength
             )
-            var targetTokens = tokenizerAndTemplate.encodeRaw(
-                assistantTargetText(assistant.content),
-                addSpecialTokens: false
-            )
-            if let assistantEndTokenID = tokenizerAndTemplate.assistantEndTokenID {
-                targetTokens.append(assistantEndTokenID)
-            } else if let eosTokenID = tokenizerAndTemplate.eosTokenID {
-                targetTokens.append(eosTokenID)
+            let targetTokens: [Int]
+            if assistant.toolCalls?.isEmpty == false {
+                let fullTokens = try tokenizerAndTemplate.encodeForGeneration(
+                    messages: example.messages,
+                    tools: example.tools,
+                    addGenerationPrompt: false,
+                    includeThinking: false,
+                    maxLength: tokenizerAndTemplate.maxLength
+                )
+                targetTokens = try TextSFTTrainingBatchBuilder.nativeAssistantTarget(
+                    prefixTokenIds: prefixTokens,
+                    fullConversationTokenIds: fullTokens
+                )
+            } else {
+                var contentTokens = tokenizerAndTemplate.encodeRaw(
+                    assistantTargetText(assistant.content),
+                    addSpecialTokens: false
+                )
+                if let assistantEndTokenID = tokenizerAndTemplate.assistantEndTokenID {
+                    contentTokens.append(assistantEndTokenID)
+                } else if let eosTokenID = tokenizerAndTemplate.eosTokenID {
+                    contentTokens.append(eosTokenID)
+                }
+                targetTokens = contentTokens
             }
             return try TextSFTTrainingBatchBuilder.shiftedTargetExample(
                 prefixTokenIds: prefixTokens,

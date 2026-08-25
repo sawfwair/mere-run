@@ -2,6 +2,41 @@ import XCTest
 @testable import MereRunCore
 
 final class InklingTextSFTTokenizerTests: XCTestCase {
+    func testNativePromptContainsSchemaAndTypedToolTarget() throws {
+        let tool = ToolDefinition(
+            name: "create_status_summary",
+            description: "Create a concise status summary.",
+            parameters: [
+                "project": ToolParameterProperty(
+                    type: "string",
+                    description: "Project identifier"
+                ),
+            ],
+            required: ["project"]
+        )
+        let prompt = try InklingTokenizerAndTemplate.renderPrompt(
+            messages: [
+                ChatMessage(role: .user, content: "Summarize the project status."),
+                ChatMessage(
+                    role: .assistant,
+                    content: "",
+                    toolCalls: [ChatMessageToolCall(
+                        id: "call-1",
+                        name: tool.name,
+                        arguments: ["project": .string("Example App")]
+                    )]
+                ),
+            ],
+            tools: [tool],
+            addGenerationPrompt: false
+        )
+
+        XCTAssertTrue(prompt.contains("tool_declare"), prompt)
+        XCTAssertTrue(prompt.contains("Project identifier"), prompt)
+        XCTAssertTrue(prompt.contains("create_status_summary"), prompt)
+        XCTAssertTrue(prompt.contains("Example App"), prompt)
+    }
+
     func testAssistantTargetUsesInklingVisibleTextAndSamplingBoundary() {
         XCTAssertEqual(
             InklingTextSFTTokenizer.assistantTargetText("  A concise answer.\n"),

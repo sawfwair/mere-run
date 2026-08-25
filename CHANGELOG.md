@@ -38,6 +38,10 @@ The format is based on Keep a Changelog.
 
 ### Text
 
+- fixed tool-use SFT parity for Gemma 4, Laguna, and Inkling by carrying typed
+  tool schemas into native training templates, training on typed assistant
+  tool-call targets, fingerprinting complete messages and schemas, and
+  deduplicating complete controller states instead of first-user text.
 - added pinned LiquidAI DSpark companions for LFM2.5 1.2B Instruct, 2.6B,
   and 8B-A1B. The native Swift/MLX runtime captures five configured target-layer
   outputs, runs the non-causal diffusion draft block, drafts

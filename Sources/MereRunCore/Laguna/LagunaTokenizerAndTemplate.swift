@@ -43,7 +43,7 @@ public final class LagunaTokenizerAndTemplate: @unchecked Sendable {
     ) throws -> [Int] {
         let toolSpecs = tools?.isEmpty == false ? tools!.map { $0.toToolSpec() } : nil
         var encoded = try tokenizer.applyChatTemplate(
-            messages: messages.map(Self.renderMessage),
+            messages: Self.renderMessages(messages),
             chatTemplate: nil,
             addGenerationPrompt: addGenerationPrompt,
             truncation: false,
@@ -77,10 +77,49 @@ public final class LagunaTokenizerAndTemplate: @unchecked Sendable {
         Array(Set([eosTokenID, assistantEndTokenID].compactMap { $0 }))
     }
 
+    static func renderMessages(_ messages: [ChatMessage]) -> [Message] {
+        messages.map(renderMessage)
+    }
+
     private static func renderMessage(_ message: ChatMessage) -> Message {
-        [
+        var rendered: Message = [
             "role": message.role.rawValue,
             "content": message.content,
         ]
+        if let reasoning = message.reasoningContent, !reasoning.isEmpty {
+            rendered["reasoning_content"] = reasoning
+        }
+        if let name = message.name, !name.isEmpty {
+            rendered["name"] = name
+        }
+        if let toolCallID = message.toolCallID, !toolCallID.isEmpty {
+            rendered["tool_call_id"] = toolCallID
+        }
+        if let calls = message.toolCalls, !calls.isEmpty {
+            rendered["tool_calls"] = calls.map { call -> [String: any Sendable] in
+                var result: [String: any Sendable] = [
+                    "function": [
+                        "name": call.name,
+                        "arguments": call.arguments.mapValues(renderJSONValue),
+                    ] as [String: any Sendable],
+                ]
+                if let id = call.id, !id.isEmpty {
+                    result["id"] = id
+                }
+                return result
+            }
+        }
+        return rendered
+    }
+
+    private static func renderJSONValue(_ value: OpenAIJSONValue) -> any Sendable {
+        switch value {
+        case .string(let value): value
+        case .number(let value): value
+        case .bool(let value): value
+        case .object(let value): value.mapValues(renderJSONValue)
+        case .array(let value): value.map(renderJSONValue)
+        case .null: Optional<String>.none
+        }
     }
 }

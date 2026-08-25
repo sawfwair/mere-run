@@ -13,17 +13,34 @@ public enum Gemma4TextSFTTokenizer {
             let prefixMessages = Array(example.messages.dropLast())
             let prefixTokens = try tokenizerAndTemplate.encodeForGeneration(
                 messages: prefixMessages,
+                tools: example.tools,
                 addGenerationPrompt: true,
                 includeThinking: false,
                 maxLength: tokenizerAndTemplate.maxLength
             )
 
-            var targetTokens = tokenizerAndTemplate.encodeRaw(
-                assistantTargetText(assistant.content),
-                addSpecialTokens: false
-            )
-            if let turnTokenId = tokenizerAndTemplate.turnTokenId {
-                targetTokens.append(turnTokenId)
+            let targetTokens: [Int]
+            if assistant.toolCalls?.isEmpty == false {
+                let fullTokens = try tokenizerAndTemplate.encodeForGeneration(
+                    messages: example.messages,
+                    tools: example.tools,
+                    addGenerationPrompt: false,
+                    includeThinking: false,
+                    maxLength: tokenizerAndTemplate.maxLength
+                )
+                targetTokens = try TextSFTTrainingBatchBuilder.nativeAssistantTarget(
+                    prefixTokenIds: prefixTokens,
+                    fullConversationTokenIds: fullTokens
+                )
+            } else {
+                var contentTokens = tokenizerAndTemplate.encodeRaw(
+                    assistantTargetText(assistant.content),
+                    addSpecialTokens: false
+                )
+                if let turnTokenId = tokenizerAndTemplate.turnTokenId {
+                    contentTokens.append(turnTokenId)
+                }
+                targetTokens = contentTokens
             }
 
             return try TextSFTTrainingBatchBuilder.shiftedTargetExample(
