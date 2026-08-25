@@ -637,7 +637,13 @@ public actor Gemma4Generator: ChatGenerator {
                 firstTokenSeconds: decodeResult.firstTokenSeconds,
                 kvCacheMode: effectiveKVCacheMode,
                 prefillKVCache: prefillKVCacheQuantization.statusDescription,
-                decodeKVCache: kvCacheQuantization.statusDescription
+                decodeKVCache: kvCacheQuantization.statusDescription,
+                prefillTokensPerSecond: prefillSeconds > 0
+                    ? Double(max(0, promptTokens.count - (prefixSeed?.tokenCount ?? 0))) / prefillSeconds
+                    : nil,
+                decodeTokensPerSecond: decodeResult.decodeSeconds > 0
+                    ? Double(generated.count) / decodeResult.decodeSeconds
+                    : nil
             ),
             toolCalls: toolCalls,
             promptTokens: promptTokens.count,

@@ -652,7 +652,8 @@ final class Gemma4SwitchLinear: Module {
         groupSize: Int = 16,
         bits: Int = 4,
         mode: QuantizationMode = .nvfp4,
-        bias: Bool = false
+        bias: Bool = false,
+        quantized: Bool = true
     ) {
         self.groupSize = groupSize
         self.bits = bits
@@ -664,7 +665,9 @@ final class Gemma4SwitchLinear: Module {
             [numExperts, outputDims, inputDims]
         )
         let groups = max(1, (inputDims + groupSize - 1) / groupSize)
-        self._scales.wrappedValue = MLXArray.zeros([numExperts, outputDims, groups])
+        self._scales.wrappedValue = quantized
+            ? MLXArray.zeros([numExperts, outputDims, groups])
+            : nil
         self._biases.wrappedValue = nil
         if bias {
             self._bias.wrappedValue = MLXArray.zeros([numExperts, outputDims])
@@ -673,56 +676,54 @@ final class Gemma4SwitchLinear: Module {
     }
 
     func callAsFunction(_ x: MLXArray, indices: MLXArray) -> MLXArray {
-        let batch = x.dim(0)
-        let sequenceLength = x.dim(1)
+        let batchTokens = x.dim(0) * x.dim(1)
         let topK = indices.dim(2)
         let inputDim = x.dim(x.ndim - 1)
-        let batchTokens = batch * sequenceLength
 
-        let flatX: MLXArray
         if x.ndim == 4 && x.dim(2) == topK {
-            flatX = x.reshaped([batchTokens * topK, 1, inputDim])
-        } else {
-            var expanded = x.reshaped([batchTokens, 1, inputDim])
-            expanded = MLX.expandedDimensions(expanded, axis: 1)
-            expanded = MLX.repeated(expanded, count: topK, axis: 1)
-            flatX = expanded.reshaped([batchTokens * topK, 1, inputDim])
+            let flatX = x.reshaped([batchTokens * topK, 1, inputDim])
+            let flatIndices = indices.reshaped([batchTokens * topK])
+            let output = applyFlat(flatX, indices: flatIndices, sortedIndices: false)
+            return output.reshaped([x.dim(0), x.dim(1), topK, output.dim(2)])
         }
 
-        let flatIndices = indices.reshaped([batchTokens * topK])
+        let expanded = MLX.expandedDimensions(x, axes: [-2, -3])
+        return applyGather(expanded, indices: indices, sortedIndices: false)
+            .squeezed(axis: -2)
+    }
+
+    func applyFlat(_ x: MLXArray, indices: MLXArray, sortedIndices: Bool) -> MLXArray {
+        applyGather(x, indices: indices, sortedIndices: sortedIndices)
+    }
+
+    private func applyGather(_ x: MLXArray, indices: MLXArray, sortedIndices: Bool) -> MLXArray {
         let output: MLXArray
         if let scales {
             output = portableGatherQuantizedMM(
-                flatX,
+                x,
                 weight,
                 scales: scales,
                 biases: biases,
-                rhsIndices: flatIndices,
+                rhsIndices: indices,
                 transpose: true,
                 groupSize: groupSize,
                 bits: bits,
                 mode: mode,
-                sortedIndices: false
+                sortedIndices: sortedIndices
             )
         } else {
             output = gatherMM(
-                flatX,
+                x,
                 weight.swappedAxes(-1, -2),
-                rhsIndices: flatIndices,
-                sortedIndices: false
+                rhsIndices: indices,
+                sortedIndices: sortedIndices
             )
         }
 
-        let outputDim = output.dim(2)
-        var reshaped = output.reshaped([batchTokens, topK, outputDim])
-        reshaped = reshaped.reshaped([batch, sequenceLength, topK, outputDim])
-
         if let bias {
-            let selectedBias = take(bias, flatIndices, axis: 0)
-                .reshaped([batch, sequenceLength, topK, outputDim])
-            return reshaped + selectedBias
+            return output + take(bias, indices, axis: 0).expandedDimensions(axis: -2)
         }
-        return reshaped
+        return output
     }
 }
 
@@ -731,29 +732,56 @@ final class Gemma4SwitchGLU: Module {
     @ModuleInfo(key: "up_proj") var upProj: Gemma4SwitchLinear
     @ModuleInfo(key: "down_proj") var downProj: Gemma4SwitchLinear
 
-    init(config: Gemma4TextConfig) {
+    init(config: Gemma4TextConfig, quantized: Bool = true) {
         self._gateProj.wrappedValue = Gemma4SwitchLinear(
             inputDims: config.hiddenSize,
             outputDims: max(1, config.moeIntermediateSize),
-            numExperts: max(1, config.numExperts)
+            numExperts: max(1, config.numExperts),
+            quantized: quantized
         )
         self._upProj.wrappedValue = Gemma4SwitchLinear(
             inputDims: config.hiddenSize,
             outputDims: max(1, config.moeIntermediateSize),
-            numExperts: max(1, config.numExperts)
+            numExperts: max(1, config.numExperts),
+            quantized: quantized
         )
         self._downProj.wrappedValue = Gemma4SwitchLinear(
             inputDims: max(1, config.moeIntermediateSize),
             outputDims: config.hiddenSize,
-            numExperts: max(1, config.numExperts)
+            numExperts: max(1, config.numExperts),
+            quantized: quantized
         )
         super.init()
     }
 
     func callAsFunction(_ x: MLXArray, indices: MLXArray) -> MLXArray {
-        let up = upProj(x, indices: indices)
-        let gate = gateProj(x, indices: indices)
-        return downProj(geluApproximate(gate) * up, indices: indices)
+        let batchTokens = x.dim(0) * x.dim(1)
+        let topK = indices.dim(2)
+        let routeCount = batchTokens * topK
+        guard routeCount >= 64 else {
+            let up = upProj(x, indices: indices)
+            let gate = gateProj(x, indices: indices)
+            return downProj(geluApproximate(gate) * up, indices: indices)
+        }
+
+        let inputDim = x.dim(x.ndim - 1)
+        let flatIndices = indices.reshaped([routeCount])
+        let order = argSort(flatIndices, axis: 0)
+        let inverseOrder = argSort(order, axis: 0)
+        let sortedIndices = take(flatIndices, order, axis: 0)
+        let tokenOrder = order.floorDivide(topK)
+        let flatInput = x.reshaped([batchTokens, inputDim])
+            .take(tokenOrder, axis: 0)
+            .reshaped([routeCount, 1, inputDim])
+
+        let up = upProj.applyFlat(flatInput, indices: sortedIndices, sortedIndices: true)
+        let gate = gateProj.applyFlat(flatInput, indices: sortedIndices, sortedIndices: true)
+        let output = downProj.applyFlat(
+            geluApproximate(gate) * up,
+            indices: sortedIndices,
+            sortedIndices: true
+        ).take(inverseOrder, axis: 0)
+        return output.reshaped([x.dim(0), x.dim(1), topK, output.dim(2)])
     }
 }
 

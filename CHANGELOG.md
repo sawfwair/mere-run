@@ -50,6 +50,12 @@ The format is based on Keep a Changelog.
   `finish_reason: "tool_calls"`. Canonical managed-model IDs now resolve to the
   same installed path during real server startup that preflight reports, and
   native requests preserve `tool_choice` and `parallel_tool_calls` policy.
+- fixed Gemma 4 Turbo API timeout behavior by warming its first graph before
+  readiness, keeping serving KV full precision unless explicitly quantized,
+  sorting large NVFP4 expert batches like the upstream sparse path, propagating
+  client disconnect cancellation, keeping runtime status responsive during
+  inference, and reporting startup, TTFT, prefill, decode, throughput, token,
+  cancellation, and slot-release telemetry.
 - added pinned LiquidAI DSpark companions for LFM2.5 1.2B Instruct, 2.6B,
   and 8B-A1B. The native Swift/MLX runtime captures five configured target-layer
   outputs, runs the non-causal diffusion draft block, drafts
