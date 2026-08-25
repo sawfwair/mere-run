@@ -5074,6 +5074,7 @@ actor CodeGenServer {
                     tools: request.tools,
                     parallelToolCalls: request.parallelToolCalls
                 )
+                let hasToolCalls = responseToolCalls?.isEmpty == false
                 let response = OpenAIChatResponse(
                     id: "chatcmpl-\(UUID().uuidString.prefix(8))",
                     object: "chat.completion",
@@ -5084,13 +5085,16 @@ actor CodeGenServer {
                             index: 0,
                             message: OpenAIChatMessage(
                                 role: "assistant",
-                                content: result.response,
+                                content: Self.openAIMessageContent(
+                                    for: result,
+                                    hasToolCalls: hasToolCalls
+                                ),
                                 reasoning_content: result.reasoningContent,
                                 tool_calls: responseToolCalls
                             ),
                             finish_reason: Self.openAIFinishReason(
                                 for: result,
-                                hasToolCalls: responseToolCalls?.isEmpty == false
+                                hasToolCalls: hasToolCalls
                             ),
                             logprobs: OpenAIChatLogprobs(result.logprobs)
                         )
@@ -5939,6 +5943,13 @@ actor CodeGenServer {
             return "tool_calls"
         }
         return result.finishReason == .length ? "length" : "stop"
+    }
+
+    nonisolated static func openAIMessageContent(
+        for result: ChatResponse,
+        hasToolCalls: Bool
+    ) -> String {
+        hasToolCalls ? "" : result.response
     }
 
     /// Generators that don't report a prompt token count fall back to zero

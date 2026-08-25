@@ -2828,12 +2828,17 @@ final class APIServeCommandTests: XCTestCase {
 
     func testOpenAIFinishReasonReportsToolCalls() {
         let result = ChatResponse(
-            response: "",
+            response: #"<|tool_call>call:create_status_summary{reason:<|\"|>test<|\"|>}"#,
             tokensGenerated: 12,
             toolCalls: [ToolCall(name: "create_status_summary", arguments: ["reason": "test"])]
         )
 
         XCTAssertEqual(CodeGenServer.openAIFinishReason(for: result), "tool_calls")
+        XCTAssertEqual(CodeGenServer.openAIMessageContent(for: result, hasToolCalls: true), "")
+        XCTAssertEqual(
+            CodeGenServer.openAIMessageContent(for: result, hasToolCalls: false),
+            result.response
+        )
         XCTAssertEqual(
             CodeGenServer.openAIFinishReason(for: result, hasToolCalls: false),
             "stop"
