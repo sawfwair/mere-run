@@ -4096,11 +4096,20 @@ actor CodeGenServer {
         let includeLoopbackArtifactModels = APIVFXArtifactRoutePolicy.allows(
             remoteAddress: remoteAddress
         )
-        var models = try await pool.modelsResponse(serverContextSize: contextSize)
+        let inventory = ModelInventory.snapshot(mode: .fast)
+        var installedModelIDs = inventory.installedModelIDs
+        if QwenImageEditRepository.resolveInstalledModelRoot() != nil {
+            installedModelIDs.insert(QwenImageEditRepository.modelId)
+        }
+        var models = try await pool.modelsResponse(
+            installedModelIDs: installedModelIDs,
+            serverContextSize: contextSize
+        )
         if !includeLoopbackArtifactModels {
             models.data.removeAll { APIVFXArtifactRoutePolicy.modelIDs.contains($0.id) }
         }
         for modelID in APIServerContract.companionModelIDs(
+            installedModelIDs: installedModelIDs,
             includeLoopbackArtifactModels: includeLoopbackArtifactModels
         )
             where !models.data.contains(where: { $0.id == modelID }) {

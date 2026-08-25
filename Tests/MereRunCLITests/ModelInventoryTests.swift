@@ -30,6 +30,7 @@ final class ModelInventoryTests: XCTestCase {
         XCTAssertTrue(row.manifestPresent)
         XCTAssertEqual(row.runtimeAvailable, true)
         XCTAssertEqual(row.verification, .notChecked)
+        XCTAssertEqual(snapshot.installedModelIDs, [modelID.rawValue])
     }
 
     func testVerifiedInventoryChecksRuntimeWithoutMeasuringSize() throws {
@@ -75,5 +76,6 @@ final class ModelInventoryTests: XCTestCase {
 
         XCTAssertEqual(row.status, "offline")
         XCTAssertEqual(row.verification, .notChecked)
+        XCTAssertTrue(snapshot.installedModelIDs.isEmpty)
     }
 }
