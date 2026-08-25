@@ -9,11 +9,18 @@ public struct TextSFTExample: Sendable, Hashable, Codable {
     public let id: String?
     public let sources: [String]
     public let messages: [ChatMessage]
+    public let tools: [ToolDefinition]?
 
-    public init(id: String?, sources: [String], messages: [ChatMessage]) {
+    public init(
+        id: String?,
+        sources: [String],
+        messages: [ChatMessage],
+        tools: [ToolDefinition]? = nil
+    ) {
         self.id = id
         self.sources = sources
         self.messages = messages
+        self.tools = tools
     }
 }
 public struct TextSFTDatasetSummary: Sendable, Hashable, Codable {
@@ -66,7 +73,7 @@ public enum TextSFTDataset {
         }
 
         var ids = Set<String>()
-        var prompts = Set<String>()
+        var controllerStates = Set<String>()
         for (index, example) in examples.enumerated() {
             let line = index + 1
             if let id = example.id, !id.isEmpty {
@@ -93,16 +100,16 @@ public enum TextSFTDataset {
 
             for message in example.messages {
                 let trimmed = message.content.trimmingCharacters(in: .whitespacesAndNewlines)
-                guard trimmed.count >= 4 else {
+                let hasToolCalls = message.role == .assistant && message.toolCalls?.isEmpty == false
+                let hasToolResult = message.role == .tool && !trimmed.isEmpty
+                guard trimmed.count >= 4 || hasToolCalls || hasToolResult else {
                     throw TextSFTDatasetError.emptyMessage(line)
                 }
             }
 
-            if let prompt = example.messages.first(where: { $0.role == .user })?.content {
-                let normalized = prompt.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-                guard prompts.insert(normalized).inserted else {
-                    throw TextSFTDatasetError.duplicatePrompt(line)
-                }
+            let state = controllerStateFingerprint(example)
+            guard controllerStates.insert(state).inserted else {
+                throw TextSFTDatasetError.duplicatePrompt(line)
             }
         }
     }
@@ -126,23 +133,69 @@ public enum TextSFTDataset {
     }
 
     public static func fingerprint(_ examples: [TextSFTExample]) -> String {
-        var hasher = SHA256()
-        for example in examples {
-            if let id = example.id {
-                hasher.update(data: Data(id.utf8))
-            }
-            for source in example.sources.sorted() {
-                hasher.update(data: Data(source.utf8))
-            }
-            for message in example.messages {
-                hasher.update(data: Data(message.role.rawValue.utf8))
-                hasher.update(data: Data(message.content.utf8))
-                if let imageUrl = message.imageUrl {
-                    hasher.update(data: Data(imageUrl.utf8))
-                }
-            }
+        digest(canonicalData(examples.map(CanonicalExample.init)))
+    }
+
+    private static func controllerStateFingerprint(_ example: TextSFTExample) -> String {
+        digest(canonicalData(CanonicalControllerState(
+            messages: example.messages.dropLast().map { message in
+                var normalized = message
+                normalized.content = message.content
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                    .lowercased()
+                return normalized
+            },
+            tools: canonicalTools(example.tools)
+        )))
+    }
+
+    private static func canonicalData<Value: Encodable>(_ value: Value) -> Data {
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.sortedKeys, .withoutEscapingSlashes]
+        do {
+            return try encoder.encode(value)
+        } catch {
+            preconditionFailure("Canonical Text SFT state encoding failed: \(error)")
         }
-        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+    }
+
+    private static func digest(_ data: Data) -> String {
+        SHA256.hash(data: data).map { String(format: "%02x", $0) }.joined()
+    }
+
+    fileprivate static func canonicalTools(_ tools: [ToolDefinition]?) -> [ToolDefinition]? {
+        tools?.map { tool in
+            ToolDefinition(
+                name: tool.name,
+                description: tool.description,
+                parameters: tool.parameters,
+                required: tool.required.sorted()
+            )
+        }.sorted { lhs, rhs in
+            if lhs.name == rhs.name {
+                return lhs.description < rhs.description
+            }
+            return lhs.name < rhs.name
+        }
+    }
+}
+
+private struct CanonicalControllerState: Encodable {
+    let messages: [ChatMessage]
+    let tools: [ToolDefinition]?
+}
+
+private struct CanonicalExample: Encodable {
+    let id: String?
+    let sources: [String]
+    let messages: [ChatMessage]
+    let tools: [ToolDefinition]?
+
+    init(_ example: TextSFTExample) {
+        id = example.id
+        sources = example.sources.sorted()
+        messages = example.messages
+        tools = example.tools
     }
 }
 

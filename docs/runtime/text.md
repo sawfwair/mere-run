@@ -526,11 +526,21 @@ swift run mere.run text train-lora \
 ```
 
 `text train-lora` is the native MereRun entrypoint for chat-style SFT JSONL.
-The data format is one JSON object per line with `sources` and `messages`;
-messages use the same `system`, `user`, and `assistant` roles as the local chat
-runtime. `--dry-run` validates the dataset, fingerprints it, validates and
-counts an optional held-out SFT dataset, and writes a `.manifest.json` next to
-the requested adapter path.
+The data format is one JSON object per line with `sources`, `messages`, and an
+optional typed `tools` array. Messages use the same `system`, `user`,
+`assistant`, and `tool` roles as the local chat runtime. Assistant messages can
+carry typed `toolCalls`; tool results use `name` and `toolCallID`. The selected
+model's native template receives the same complete tool schemas during
+training that it receives during inference, and native tool-call markup is
+included in the assistant loss target. `--dry-run` validates the dataset,
+fingerprints messages and complete tool schemas, validates and counts an
+optional held-out SFT dataset, and writes a `.manifest.json` next to the
+requested adapter path.
+
+Duplicate detection compares the complete controller prefix and its tool
+schemas, rather than only the first user question. A curriculum may therefore
+repeat a question after an assistant tool call and tool result, while an exact
+duplicate controller state remains invalid.
 
 Without `--dry-run`, the command resolves a supported Gemma 4 text model,
 `text-chat-laguna-xs-2-1`, or `text-chat-inkling-small` through the same managed

@@ -3,6 +3,33 @@ import XCTest
 @testable import MereRunCore
 
 final class TextSFTTrainingBatchTests: MereRunCoreTestCase {
+    func testNativeAssistantTargetUsesExactTemplateSuffix() throws {
+        XCTAssertEqual(
+            try TextSFTTrainingBatchBuilder.nativeAssistantTarget(
+                prefixTokenIds: [1, 2, 3],
+                fullConversationTokenIds: [1, 2, 3, 8, 9]
+            ),
+            [8, 9]
+        )
+    }
+
+    func testNativeAssistantTargetRejectsDivergentTemplatePrefix() {
+        XCTAssertThrowsError(try TextSFTTrainingBatchBuilder.nativeAssistantTarget(
+            prefixTokenIds: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11],
+            fullConversationTokenIds: [1, 2, 40, 80, 90]
+        ))
+    }
+
+    func testNativeAssistantTargetAllowsGenerationPromptBoundaryControls() throws {
+        XCTAssertEqual(
+            try TextSFTTrainingBatchBuilder.nativeAssistantTarget(
+                prefixTokenIds: [1, 2, 3, 4, 5, 6],
+                fullConversationTokenIds: [1, 2, 8, 9]
+            ),
+            [8, 9]
+        )
+    }
+
     func testShiftedTargetExampleMasksOnlyTargetTokens() throws {
         let example = try TextSFTTrainingBatchBuilder.shiftedTargetExample(
             prefixTokenIds: [10, 11, 12, 13],

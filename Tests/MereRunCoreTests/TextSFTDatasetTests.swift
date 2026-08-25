@@ -49,4 +49,188 @@ final class TextSFTDatasetTests: XCTestCase {
             XCTAssertTrue(String(describing: error).contains("duplicatePrompt"))
         }
     }
+
+    func testAllowsSameQuestionAtDifferentToolLoopStates() throws {
+        let tool = Self.summaryTool()
+        let initial = TextSFTExample(
+            id: "initial",
+            sources: ["test"],
+            messages: [
+                ChatMessage(role: .system, content: "Use available tools."),
+                ChatMessage(role: .user, content: "Summarize the project status."),
+                ChatMessage(
+                    role: .assistant,
+                    content: "",
+                    toolCalls: [Self.summaryCall(id: "call-1")]
+                ),
+            ],
+            tools: [tool]
+        )
+        let continued = TextSFTExample(
+            id: "continued",
+            sources: ["test"],
+            messages: [
+                ChatMessage(role: .system, content: "Use available tools."),
+                ChatMessage(role: .user, content: "Summarize the project status."),
+                ChatMessage(
+                    role: .assistant,
+                    content: "",
+                    toolCalls: [Self.summaryCall(id: "call-1")]
+                ),
+                ChatMessage(
+                    role: .tool,
+                    content: #"{"state":"ready"}"#,
+                    name: "create_status_summary",
+                    toolCallID: "call-1"
+                ),
+                ChatMessage(role: .assistant, content: "The project is ready."),
+            ],
+            tools: [tool]
+        )
+
+        XCTAssertNoThrow(try TextSFTDataset.validate([initial, continued]))
+    }
+
+    func testRejectsDuplicateCompleteControllerState() throws {
+        let tool = Self.summaryTool()
+        let messages = [
+            ChatMessage(role: .system, content: "Use available tools."),
+            ChatMessage(role: .user, content: "Summarize the project status."),
+            ChatMessage(
+                role: .assistant,
+                content: "",
+                toolCalls: [Self.summaryCall(id: "call-1")]
+            ),
+        ]
+        let examples = [
+            TextSFTExample(id: "one", sources: ["test"], messages: messages, tools: [tool]),
+            TextSFTExample(id: "two", sources: ["test"], messages: messages, tools: [tool]),
+        ]
+
+        XCTAssertThrowsError(try TextSFTDataset.validate(examples)) { error in
+            XCTAssertTrue(String(describing: error).contains("duplicatePrompt"))
+        }
+    }
+
+    func testFingerprintIncludesTypedCallsAndCompleteToolSchema() {
+        let base = TextSFTExample(
+            id: "one",
+            sources: ["test"],
+            messages: [
+                ChatMessage(role: .system, content: "Use available tools."),
+                ChatMessage(role: .user, content: "Summarize the project status."),
+                ChatMessage(
+                    role: .assistant,
+                    content: "",
+                    toolCalls: [Self.summaryCall(id: "call-1")]
+                ),
+            ],
+            tools: [Self.summaryTool()]
+        )
+        let changedCall = TextSFTExample(
+            id: base.id,
+            sources: base.sources,
+            messages: [
+                ChatMessage(role: .system, content: "Use available tools."),
+                ChatMessage(role: .user, content: "Summarize the project status."),
+                ChatMessage(
+                    role: .assistant,
+                    content: "",
+                    toolCalls: [ChatMessageToolCall(
+                        id: "call-1",
+                        name: "create_status_summary",
+                        arguments: ["project": .string("Example API")]
+                    )]
+                ),
+            ],
+            tools: base.tools
+        )
+        let changedSchema = TextSFTExample(
+            id: base.id,
+            sources: base.sources,
+            messages: base.messages,
+            tools: [ToolDefinition(
+                name: "create_status_summary",
+                description: "Create a concise status report.",
+                parameters: [
+                    "project": ToolParameterProperty(
+                        type: "string",
+                        description: "Project identifier"
+                    ),
+                    "includeRisks": ToolParameterProperty(
+                        type: "boolean",
+                        description: "Include known risks"
+                    ),
+                ],
+                required: ["project", "includeRisks"]
+            )]
+        )
+
+        let fingerprint = TextSFTDataset.fingerprint([base])
+        XCTAssertNotEqual(fingerprint, TextSFTDataset.fingerprint([changedCall]))
+        XCTAssertNotEqual(fingerprint, TextSFTDataset.fingerprint([changedSchema]))
+    }
+
+    func testFingerprintPreservesRenderedToolOrderWhileDuplicatesCanonicalizeIt() throws {
+        let firstTool = Self.summaryTool()
+        let secondTool = ToolDefinition(
+            name: "record_status_note",
+            description: "Record a status note.",
+            parameters: [
+                "note": ToolParameterProperty(type: "string", description: "Status note"),
+            ],
+            required: ["note"]
+        )
+        let messages = [
+            ChatMessage(role: .user, content: "Summarize the project status."),
+            ChatMessage(role: .assistant, content: "The project is ready."),
+        ]
+        let forward = TextSFTExample(
+            id: "forward",
+            sources: ["test"],
+            messages: messages,
+            tools: [firstTool, secondTool]
+        )
+        let reversed = TextSFTExample(
+            id: "reversed",
+            sources: ["test"],
+            messages: messages,
+            tools: [secondTool, firstTool]
+        )
+
+        XCTAssertNotEqual(
+            TextSFTDataset.fingerprint([forward]),
+            TextSFTDataset.fingerprint([reversed])
+        )
+        XCTAssertThrowsError(try TextSFTDataset.validate([forward, reversed]))
+    }
+
+    func testDecodesLegacyRowsWithoutTools() throws {
+        let row = #"{"id":"legacy","sources":["test"],"messages":[{"role":"system","content":"Be concise."},{"role":"user","content":"Say ready now."},{"role":"assistant","content":"Ready now."}]}"#
+        let example = try JSONDecoder().decode(TextSFTExample.self, from: Data(row.utf8))
+
+        XCTAssertNil(example.tools)
+    }
+
+    private static func summaryTool() -> ToolDefinition {
+        ToolDefinition(
+            name: "create_status_summary",
+            description: "Create a status summary.",
+            parameters: [
+                "project": ToolParameterProperty(
+                    type: "string",
+                    description: "Project identifier"
+                ),
+            ],
+            required: ["project"]
+        )
+    }
+
+    private static func summaryCall(id: String) -> ChatMessageToolCall {
+        ChatMessageToolCall(
+            id: id,
+            name: "create_status_summary",
+            arguments: ["project": .string("Example App")]
+        )
+    }
 }

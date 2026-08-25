@@ -14,14 +14,30 @@ public enum InklingTextSFTTokenizer {
             }
             let prefixTokens = try tokenizerAndTemplate.encodeForGeneration(
                 messages: Array(example.messages.dropLast()),
+                tools: example.tools,
                 addGenerationPrompt: true,
                 reasoningEffort: reasoningEffort,
                 maxLength: tokenizerAndTemplate.maxLength
             )
-            let targetTokens = tokenizerAndTemplate.encodeRaw(
-                assistantTargetText(assistant.content),
-                addSpecialTokens: false
-            )
+            let targetTokens: [Int]
+            if assistant.toolCalls?.isEmpty == false {
+                let fullTokens = try tokenizerAndTemplate.encodeForGeneration(
+                    messages: example.messages,
+                    tools: example.tools,
+                    addGenerationPrompt: false,
+                    reasoningEffort: reasoningEffort,
+                    maxLength: tokenizerAndTemplate.maxLength
+                )
+                targetTokens = try TextSFTTrainingBatchBuilder.nativeAssistantTarget(
+                    prefixTokenIds: prefixTokens,
+                    fullConversationTokenIds: fullTokens
+                )
+            } else {
+                targetTokens = tokenizerAndTemplate.encodeRaw(
+                    assistantTargetText(assistant.content),
+                    addSpecialTokens: false
+                )
+            }
             return try TextSFTTrainingBatchBuilder.shiftedTargetExample(
                 prefixTokenIds: prefixTokens,
                 targetTokenIds: targetTokens,

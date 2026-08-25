@@ -903,8 +903,13 @@ swift run mere.run text train-lora \
   --training-steps 600
 ```
 
-Each non-empty line contains `sources` and at least system, user, and assistant
-messages; the assistant message must be last. `--dry-run --json` validates and
+Each non-empty line contains `sources`, at least system, user, and assistant
+messages, and may include typed `tools`; the assistant message must be last.
+Assistant `toolCalls` and matching `tool` results use the same typed fields as
+inference. Native training templates receive the full schemas, including
+parameters and required fields. Dataset identity and duplicate-controller
+checks include the complete conversation state and schemas, so successive
+tool-loop states may repeat a user question. `--dry-run --json` validates and
 fingerprints the dataset and writes the family-specific manifest without
 loading the model. Gemma 4 and Laguna default to
 `q_proj,k_proj,v_proj,o_proj`. Inkling defaults to those attention projections

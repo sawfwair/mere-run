@@ -15,6 +15,29 @@ public struct TextSFTTokenizedExample: Sendable, Hashable {
 }
 
 public enum TextSFTTrainingBatchBuilder {
+    public static func nativeAssistantTarget(
+        prefixTokenIds: [Int],
+        fullConversationTokenIds: [Int],
+        maxGenerationPromptBoundaryTokens: Int = 8
+    ) throws -> [Int] {
+        let commonCount = zip(prefixTokenIds, fullConversationTokenIds)
+            .prefix { pair in pair.0 == pair.1 }
+            .count
+        guard commonCount > 0,
+              prefixTokenIds.count - commonCount <= maxGenerationPromptBoundaryTokens else {
+            throw TextSFTTrainingBatchError.nativeTemplatePrefixMismatch
+        }
+        // Some native templates end a generation prompt with empty channel
+        // controls that are absent when the completed assistant tool call is
+        // rendered. Keep the inference prefix intact, then train the complete
+        // assistant serialization from the small template boundary onward.
+        let target = Array(fullConversationTokenIds.dropFirst(commonCount))
+        guard !target.isEmpty else {
+            throw TextSFTTrainingBatchError.noAssistantTargets
+        }
+        return target
+    }
+
     public static func shiftedTargetExample(
         prefixTokenIds: [Int],
         targetTokenIds: [Int],
@@ -217,6 +240,7 @@ public enum TextSFTTrainingBatchError: Error, LocalizedError, Sendable {
     case messageTokenRoleMismatch
     case notEnoughTokens
     case noAssistantTargets
+    case nativeTemplatePrefixMismatch
     case shiftedLengthMismatch
 
     public var errorDescription: String? {
@@ -231,6 +255,8 @@ public enum TextSFTTrainingBatchError: Error, LocalizedError, Sendable {
             return "Text SFT example must contain at least two tokens after truncation."
         case .noAssistantTargets:
             return "Text SFT example contains no assistant target tokens."
+        case .nativeTemplatePrefixMismatch:
+            return "Text SFT native assistant rendering diverges before the generation-prompt boundary."
         case .shiftedLengthMismatch:
             return "Text SFT shifted input, label, and mask lengths must match."
         }
