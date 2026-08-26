@@ -61,6 +61,14 @@ final class ModelLocationRegistryTests: XCTestCase {
             try TestFileSystem.createDirectory(url.deletingLastPathComponent())
             try TestFileSystem.writeFile(url, contents: Data())
         }
+        try TestFileSystem.createDirectory(
+            external.appendingPathComponent(LTX25Resources.textEncoderRelativePath)
+                .deletingLastPathComponent()
+        )
+        try TestFileSystem.writeFile(
+            external.appendingPathComponent(LTX25Resources.textEncoderRelativePath),
+            contents: Data()
+        )
 
         let unacceptedLocations = ModelLocationSnapshot(
             primaryRoot: primary,

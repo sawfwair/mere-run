@@ -2065,6 +2065,7 @@ final class VideoCommandTests: XCTestCase {
         for relativePath in LTX25Resources.requiredRelativePaths {
             try createFile(rootURL.appendingPathComponent(relativePath))
         }
+        try createFile(rootURL.appendingPathComponent(LTX25Resources.textEncoderRelativePath))
         return rootURL
     }
 

@@ -4354,25 +4354,29 @@ public actor LTXUnifiedAVGenerator {
         guard loadedForLTX25, let loadedRoot else {
             throw LTXUnifiedAVGeneratorError.durationPredictionRequiresLTX25(self.loadedRoot)
         }
-        guard let textEncoder else {
-            throw LTXUnifiedAVGeneratorError.generatorNotLoaded
-        }
         let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedPrompt.isEmpty else {
             throw LTXUnifiedAVGeneratorError.emptyPrompt
         }
-        let encoding = try await textEncoder.encode(
+        let cacheKey = LTXPromptEmbeddingCacheKey(
             prompt: trimmedPrompt,
             maxLength: maxTextLength
         )
+        if !promptEmbeddingCache.contains(cacheKey), textEncoder == nil {
+            try await loadTextEncoderIfNeeded()
+        }
+        let encoding = try await cachedPromptEmbeddings(
+            prompt: trimmedPrompt,
+            maxLength: maxTextLength
+        ).embeddings
         let head = try LTX25DurationHead.load(
             weightsURL: LTX25Resources(rootURL: loadedRoot).durationHeadURL,
             dtype: loadedDType
         )
         let videoTokens: MLXArray? = conditioning == .audioVideo
-            ? encoding.videoEmbeddings
+            ? encoding.video
             : nil
-        let audioTokens = encoding.audioEmbeddings
+        let audioTokens = encoding.audio
         if conditioning == .audioOnly, audioTokens == nil {
             throw LTXUnifiedAVGeneratorError.audioEmbeddingsMissing
         }
@@ -4382,7 +4386,12 @@ public actor LTXUnifiedAVGenerator {
             frameRate: frameRate,
             range: range
         )
+        if let textEncoder {
+            await textEncoder.unload()
+            self.textEncoder = nil
+        }
         Memory.clearCache()
+        ltxTraceMemory("duration-context-ready")
         return frameCount
     }
 
@@ -5073,7 +5082,7 @@ public actor LTXUnifiedAVGenerator {
         }
     }
 
-    private func loadFullTextEncoderIfNeeded() async throws {
+    private func loadTextEncoderIfNeeded() async throws {
         guard textEncoder == nil else { return }
         guard let loadedRoot else {
             throw LTXUnifiedAVGeneratorError.generatorNotLoaded
@@ -5285,7 +5294,7 @@ public actor LTXUnifiedAVGenerator {
         let usesReusableFullTwoStage = loadedForReusableFullTwoStage
         if usesReusableFullTwoStage {
             let reloadStart = ltxMonotonicSeconds()
-            try await loadFullTextEncoderIfNeeded()
+            try await loadTextEncoderIfNeeded()
             textEncoderReloadSeconds = ltxMonotonicSeconds() - reloadStart
         }
         guard loadedForAudioToVideo,
@@ -6283,9 +6292,9 @@ public actor LTXUnifiedAVGenerator {
         let needsNegativeTextEncoder = usesGuidedFullTwoStage
             && !promptEmbeddingCache.contains(negativePromptCacheKey)
         let needsTextEncoder = needsPositiveTextEncoder || needsNegativeTextEncoder
-        if usesReusableFullTwoStage, needsTextEncoder {
+        if needsTextEncoder, textEncoder == nil {
             let reloadStart = ltxMonotonicSeconds()
-            try await loadFullTextEncoderIfNeeded()
+            try await loadTextEncoderIfNeeded()
             textEncoderReloadSeconds = ltxMonotonicSeconds() - reloadStart
         }
         guard let transformer else {
@@ -6360,12 +6369,6 @@ public actor LTXUnifiedAVGenerator {
             }
             videoContext = loadedVideoContext.asType(loadedDType)
             audioContext = loadedAudioContext.asType(loadedDType)
-            MLX.eval(videoContext, audioContext)
-            if let textEncoder {
-                await textEncoder.unload()
-                self.textEncoder = nil
-                Memory.clearCache()
-            }
         } else {
             let result = try await cachedPromptEmbeddings(
                 prompt: prompt,
@@ -6393,20 +6396,18 @@ public actor LTXUnifiedAVGenerator {
                 throw LTXUnifiedAVGeneratorError.audioEmbeddingsMissing
             }
             negativeAudioContext = audioEmbeddings
-            MLX.eval(videoContext, audioContext, result.embeddings.video, audioEmbeddings)
-            if let textEncoder {
-                await textEncoder.unload()
-                self.textEncoder = nil
-                Memory.clearCache()
-            }
-        } else if usesDFR {
-            MLX.eval(videoContext, audioContext)
-            if let textEncoder {
-                await textEncoder.unload()
-                self.textEncoder = nil
-                Memory.clearCache()
-            }
         }
+        if let negativeVideoContext, let negativeAudioContext {
+            MLX.eval(videoContext, audioContext, negativeVideoContext, negativeAudioContext)
+        } else {
+            MLX.eval(videoContext, audioContext)
+        }
+        if let textEncoder {
+            await textEncoder.unload()
+            self.textEncoder = nil
+        }
+        Memory.clearCache()
+        ltxTraceMemory("text-context-ready")
         textEncodingSeconds = textEncoderReloadSeconds + ltxMonotonicSeconds() - textEncodingStart
         let preparationStart = ltxMonotonicSeconds()
 
@@ -6666,10 +6667,9 @@ public actor LTXUnifiedAVGenerator {
                 }
             }
         }
-        if usesFullTwoStage {
-            encoder = nil
-            Memory.clearCache()
-        }
+        encoder = nil
+        Memory.clearCache()
+        ltxTraceMemory("image-conditioning-ready")
 
         if usesGuidedFullTwoStage {
             MLXRandom.seed(UInt64(bitPattern: Int64(options.seed &+ 1)))
@@ -6902,6 +6902,7 @@ public actor LTXUnifiedAVGenerator {
             MLX.eval(dfrDetailingReferenceLatent)
         }
         stage1DenoiseSeconds = ltxMonotonicSeconds() - stage1DenoiseStart
+        ltxTraceMemory("stage1-denoise-ready")
 
         if !usesDevOneStage, !usesRetakeOneStage, !options.skipStage2 {
             let loraFusionStart = ltxMonotonicSeconds()
@@ -7193,6 +7194,7 @@ public actor LTXUnifiedAVGenerator {
         }
         MLX.eval(videoLatents, audioLatents)
         stage2DenoiseSeconds = ltxMonotonicSeconds() - stage2DenoiseStart
+        ltxTraceMemory("stage2-denoise-ready")
         runtimeDetailingLoRAAdapters.forEach { $0.setActive(false) }
         }
 

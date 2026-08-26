@@ -469,6 +469,9 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
             try TestFileSystem.createDirectory(url.deletingLastPathComponent())
             try TestFileSystem.writeFile(url, contents: Data())
         }
+        let textEncoderURL = root.appendingPathComponent(LTX25Resources.textEncoderRelativePath)
+        try TestFileSystem.createDirectory(textEncoderURL.deletingLastPathComponent())
+        try TestFileSystem.writeFile(textEncoderURL, contents: Data())
 
         let report = MereRunModelValidator.validate(
             modelRoot: root,

@@ -1117,7 +1117,7 @@ public enum ManagedModelCapabilityCatalog {
             descriptor(
                 ModelResolver.ModelID.ltxVideo25DistilledBF16.rawValue,
                 "LTX 2.5 Distilled BF16",
-                "Generates final-quality video with synchronized stereo audio using the official packed LTX 2.5 release.",
+                "Generates synchronized video and audio with the BF16 LTX pipeline and a bundled MLX Q4 Gemma 4 text tower.",
                 minimum: 96,
                 recommended: 128
             ),

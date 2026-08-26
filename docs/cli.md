@@ -2185,6 +2185,7 @@ Build reusable inference-only artifacts for MiniMax-H3 MLX or LTX 2.5:
 ```bash
 mere.run model optimize ./MiniMax-H3-FL2VA-full-MLX
 mere.run model optimize video-ltx25-full-bf16
+mere.run model optimize /path/to/LTX-2.5 --text-encoder-only
 mere.run model optimize ./MiniMax-H3-FL2VA-full-MLX --json
 ```
 
@@ -2201,8 +2202,11 @@ For LTX 2.5, the command streams the distilled transformer and, for a full
 root, the dev transformer into source-bound BF16 native packs. It also writes a
 compact connector pack so text setup does not open the 42 GB official
 transformer. Transformer packs use mere.run's module-key namespace and every
-artifact preserves its tensor payload bytes. Compatible loads prefer validated
-packs automatically and otherwise fall back to the official checkpoint.
+artifact preserves its tensor payload bytes. The self-contained managed
+distilled model already bundles the Q4 text pack and needs no optimization.
+`--text-encoder-only` reproduces that pack from an official BF16 root for
+offline and development use; it retains the BF16 projection and tokenizer
+assets while quantizing eligible Gemma language weights.
 
 ### `mere.run model remove`
 

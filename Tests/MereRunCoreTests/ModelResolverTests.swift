@@ -205,6 +205,9 @@ final class ModelResolverTests: MereRunCoreTestCase {
             try TestFileSystem.createDirectory(url.deletingLastPathComponent())
             try TestFileSystem.writeFile(url, contents: Data())
         }
+        let textEncoderURL = root.appendingPathComponent(LTX25Resources.textEncoderRelativePath)
+        try TestFileSystem.createDirectory(textEncoderURL.deletingLastPathComponent())
+        try TestFileSystem.writeFile(textEncoderURL, contents: Data())
 
         let resolved = try ModelResolver().resolve(.ltxVideo25DistilledBF16)
         XCTAssertEqual(resolved.rootURL.standardizedFileURL, root.standardizedFileURL)

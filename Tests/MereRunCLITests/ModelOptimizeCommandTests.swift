@@ -11,10 +11,12 @@ final class ModelOptimizeCommandTests: XCTestCase {
         let command = try ModelOptimize.parse([
             "video-minimax-h3-fl2va-mlx",
             "--force",
+            "--text-encoder-only",
             "--json",
         ])
         XCTAssertEqual(command.target, "video-minimax-h3-fl2va-mlx")
         XCTAssertTrue(command.force)
+        XCTAssertTrue(command.textEncoderOnly)
         XCTAssertTrue(command.json)
     }
 }

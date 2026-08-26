@@ -170,12 +170,19 @@ legacy roots can synthesize the pack; pruned roots can validate an existing
 complete pack but cannot recreate a missing exact table. Managed compact BF16,
 Q8, legacy Q4, and Ref2VA packages already bundle source-bound caches.
 
-LTX 2.5 optimization streams the official BF16 transformer payloads into the
-exact native module namespace without materializing the 22B checkpoint or
-changing precision. A full root produces distilled and dev packs under
-`.mere-run/ltx25-native-v1`, plus a compact connector pack so text setup avoids
-opening the official transformer. Compatible loads validate the source revision
-and prefer those packs automatically. Use `--force` for an explicit atomic
+The managed LTX 2.5 distilled pull is a public, self-contained Sawfwair
+distribution accepted with `--accept-model-license`. It bundles an MLX affine
+Q4/group-64 Gemma language tower plus the BF16 LTX projection and tokenizer;
+users do not download the original BF16 text tower or quantize anything. The
+video transformer and every non-text model component remain BF16.
+
+For official or offline roots, LTX 2.5 optimization can stream BF16 transformer
+payloads into the exact native module namespace without changing precision. A
+full root produces distilled and dev packs under `.mere-run/ltx25-native-v1`
+plus a compact connector pack. `--text-encoder-only` builds the self-contained
+text pack under `.mere-run/ltx25-text-q4-v1`. Compatible loads validate the
+pinned source receipt and prefer a valid bundled/local Q4 pack, falling back to
+the official BF16 text tower when it is absent. Use `--force` for an explicit
 rebuild.
 
 ### `mere.run status`

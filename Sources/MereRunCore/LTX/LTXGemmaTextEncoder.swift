@@ -280,7 +280,12 @@ public actor LTXGemmaTextEncoder {
         loadConnectorWeights: Bool
     ) async throws {
         let resources = LTX25Resources(rootURL: root)
-        let textEncoderURL = resources.textEncoderURL
+        let quantizedIndexURL = LTX25TextEncoderQuantizedPack.optimizedIndexURLIfValid(
+            resources: resources
+        )
+        let textEncoderURL = quantizedIndexURL.map {
+            LTX25TextEncoderQuantizedPack.runtimeAssetsURL(indexURL: $0)
+        } ?? resources.textEncoderURL
         let connectorURL = LTX25NativeModelPack.optimizedURLIfValid(
             resources: resources,
             kind: .connector
@@ -302,24 +307,36 @@ public actor LTXGemmaTextEncoder {
         }
 
         let languageModel = Gemma4LanguageModel(config: config.textConfig)
-        try SafetensorsStreamingLoader.applyWeightsLazyMaterialized(
-            url: textEncoderURL,
-            to: languageModel,
-            verify: .none,
-            include: { key in
-                key == "model.embed_tokens.weight"
-                    || key == "model.norm.weight"
-                    || key.hasPrefix("model.layers.")
-            },
-            mapper: { key, value in
-                guard key.hasPrefix("model.") else { return [] }
-                return [(
-                    String(key.dropFirst("model.".count)),
-                    HFSafetensorsWeightsLoader.castIfNeeded(value, dtype: dtype)
-                )]
-            },
-            batchSize: 24
-        )
+        if let quantizedIndexURL {
+            try HFSafetensorsWeightsLoader.applyQuantizedWeights(
+                indexURL: quantizedIndexURL,
+                to: languageModel,
+                groupSize: LTX25TextEncoderQuantizedPack.groupSize,
+                bits: LTX25TextEncoderQuantizedPack.bits,
+                mapper: { key, value in
+                    [(key, HFSafetensorsWeightsLoader.castIfNeeded(value, dtype: dtype))]
+                }
+            )
+        } else {
+            try SafetensorsStreamingLoader.applyWeightsLazyMaterialized(
+                url: textEncoderURL,
+                to: languageModel,
+                verify: .none,
+                include: { key in
+                    key == "model.embed_tokens.weight"
+                        || key == "model.norm.weight"
+                        || key.hasPrefix("model.layers.")
+                },
+                mapper: { key, value in
+                    guard key.hasPrefix("model.") else { return [] }
+                    return [(
+                        String(key.dropFirst("model.".count)),
+                        HFSafetensorsWeightsLoader.castIfNeeded(value, dtype: dtype)
+                    )]
+                },
+                batchSize: 24
+            )
+        }
 
         let textFeatures = LTXGemmaFeaturesExtractorV2(
             captionChannels: config.textConfig.hiddenSize,

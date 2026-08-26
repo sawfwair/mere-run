@@ -77,9 +77,13 @@ are an escape hatch, not the capability contract.
   `--quality final`, generated synchronized audio, and source-audio A2Vid.
 - `video-ltx23-a2vid-mlx`: compatibility ID for existing A2Vid installs. New
   installs should use `video-ltx23-full-mlx`.
-- `video-ltx25-distilled-bf16`: official packed LTX 2.5 BF16 checkpoint for
-  native final-quality synchronized video and stereo audio. Pull it with
-  `--accept-model-license`; gated Hugging Face access is also required.
+- `video-ltx25-distilled-bf16`: public, self-contained LTX 2.5 distribution for
+  native synchronized video and stereo audio. The transformer, VAEs, upsampler,
+  and duration head remain BF16; the bundled Gemma 4 language tower is MLX Q4.
+  Pull it once with `--accept-model-license`; no Hugging Face gate, companion
+  download, or local conversion is required. Gemma and the image VAE encoder
+  are released after their conditioning tensors are evaluated, before
+  denoising begins.
 - `video-ltx25-full-bf16`: complete official LTX 2.5 BF16 root with dev and
   distilled transformers, distilled LoRA, convolutional and diffusion VAEs,
   spatial/temporal upsamplers, and DurationHead. It powers the native full,

@@ -218,7 +218,7 @@ validates all configured models before downloading any; both accept the same
 | `music-muscriptor-{small,medium,large}` | CC BY-NC 4.0 model weights |
 | `sfx-woosh-*` | CC BY-NC 4.0 Woosh or MMAudio Synchformer weights |
 | `sfx-mmaudio-large-44k-v2` | CC BY-NC 4.0 MMAudio checkpoints plus Apple's research-only DFN5B encoder terms |
-| `video-ltx-av`, `video-ltx23-av-mlx`, `video-ltx23-full-mlx`, `video-ltx23-a2vid-mlx`, `video-ltx25-distilled-bf16`, `video-ltx25-full-bf16` | LTX-2 Community License; entities at or above USD 10M annual revenue need a paid commercial license, plus acceptable-use conditions. The 2.3 MLX paths also install a hidden Gemma 3 text encoder; the packed 2.5 checkpoints include Gemma 4 weights. Both are additionally governed by Google's Gemma Terms and Prohibited Use Policy. |
+| `video-ltx-av`, `video-ltx23-av-mlx`, `video-ltx23-full-mlx`, `video-ltx23-a2vid-mlx`, `video-ltx25-distilled-bf16`, `video-ltx25-full-bf16` | LTX-2 Community License; entities at or above USD 10M annual revenue need a paid commercial license, plus acceptable-use conditions. The 2.3 MLX paths also install a hidden Gemma 3 text encoder under Google's Gemma Terms and Prohibited Use Policy. The 2.5 checkpoints include Gemma 4 weights under Apache License 2.0. |
 
 The catalog pins every restricted download source to an immutable commit. New
 managed installs write those repository revisions, every applicable
@@ -1119,12 +1119,16 @@ The official packed LTX 2.5 BF16 root is:
 ```
 
 `mere.run model pull video-ltx25-distilled-bf16 --accept-model-license` pulls
-only the native runtime subset from `Lightricks/LTX-2.5` at immutable revision
-`dd53cc2cd45bbeaa3563dfb575cba3f49cf44761`: the distilled transformer, packed
-Gemma 4 text encoder, video VAE, audio VAE/BWE vocoder, x2 spatial upscaler,
-and optional duration head. The required checkpoint payload is about 71.1 GB.
-The Hugging Face repository is gated, so the account behind `HF_TOKEN` must
-already have access in addition to the explicit local license acknowledgement.
+the complete public runtime from
+`Sawfwair/LTX-2.5-Distilled-BF16-MLX-Q4-Text` at immutable revision
+`9f316bfb18448bf67f716006fd78a37829223b74`. It preserves the upstream BF16
+distilled transformer, video VAE, audio VAE/BWE vocoder, spatial upsampler, and
+duration head from `Lightricks/LTX-2.5@dd53cc2...`. The custom Gemma 4 language
+tower is MLX affine Q4/group-64; its LTX projection and tokenizer support remain
+BF16/raw. The complete selected payload is exactly 53,878,648,085 bytes. The
+repository is ungated, includes the full LTX license/AUP, Apache 2.0 text, and
+modification notice, and requires no separate component pull or local
+quantization.
 
 This model runs natively through Swift and MLX; no Python process or sidecar is
 dispatched. Use `--quality final --output-mode audio-video` for synchronized
@@ -1141,9 +1145,12 @@ The complete official LTX 2.5 root is:
 `mere.run model pull video-ltx25-full-bf16 --accept-model-license` uses the
 same immutable weight revision and adds the dev transformer, official
 distilled LoRA, diffusion video VAE, temporal x2 latent upsampler, and duration
-head. The complete pinned payload is exactly 123,751,083,670 bytes. This root
-supports full/dev and HQ pipelines, source-audio A2Vid, DFR, Retake, HDR/EXR,
-IC-LoRA reference video, Dub-It, and native text-to-audio.
+head. The complete official BF16 payload is exactly 123,751,083,670 bytes. This
+full/dev tier still comes from the official upstream repository and requires
+its Hugging Face gate; unlike the distilled managed tier, it retains the
+original BF16 text encoder unless locally optimized. This root supports
+full/dev and HQ pipelines, source-audio A2Vid, DFR, Retake, HDR/EXR, IC-LoRA
+reference video, Dub-It, and native text-to-audio.
 
 The official DFR pixel-space spatial upscaler is a separately gated managed
 adapter: `ltx25-pixel-spatial-upscaler-x2`. Its repository gate and

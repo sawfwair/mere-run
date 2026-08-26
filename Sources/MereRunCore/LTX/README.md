@@ -7,7 +7,7 @@ This directory owns native video generation for mere.run.
 - `LTXGemmaTextEncoder.swift`: text encoder support for LTX models
 - `LTXPromptEmbeddingCache.swift`: bounded resident-session prompt embedding cache
 - `LTXGuidanceProjectionCache.swift`: low-memory-safe full-guidance prompt projection reuse policy
-- `LTX25Resources.swift`: immutable official LTX 2.5 source pins and packed-component layout validation
+- `LTX25Resources.swift`: immutable upstream and managed LTX 2.5 pins plus packed-component layout validation
 - `LTXVideoMP4Writer.swift`: final MP4 assembly
 
 Edit here when you are changing native LTX loading, denoising, decode, or export behavior. Do not mix unrelated CLI concerns into this directory; keep command parsing in `Sources/MereRunCLI/Commands/VideoCommand.swift`.
@@ -16,16 +16,22 @@ Before stopping, run `swift test`, `./scripts/check.sh`, and a smoke path if you
 
 ## LTX 2.5
 
-The official LTX 2.5 distilled release runs through the native `LTXUnifiedAVGenerator` with no Python sidecar. `LTX25Resources` validates the packed Hugging Face layout; `LTXGemmaTextEncoder` reads the embedded tokenizer and Gemma 4 weights directly; and the unified generator loads the packed transformer, video VAE, audio VAE/BWE vocoder, and spatial upsampler. Stage one uses the release's ancestral Euler update and stage two uses its deterministic refinement schedule.
+The LTX 2.5 distilled release runs through the native `LTXUnifiedAVGenerator`
+with no Python sidecar. The managed Sawfwair distribution keeps the video
+transformer, VAEs, upsampler, and duration head in BF16 while bundling a
+self-contained MLX Q4 Gemma 4 language tower with its BF16 projection and
+tokenizer assets. Stage one uses the release's ancestral Euler update and stage
+two uses its deterministic refinement schedule.
 
-Pull the gated checkpoint into the managed model store:
+Pull the public model into the managed model store after reviewing its terms:
 
 ```bash
 mere.run model pull video-ltx25-distilled-bf16 --accept-model-license
 ```
 
-The Hugging Face account behind `HF_TOKEN` must already have access. Then use
-the managed ID (or pass an official checkout with `--model-root`):
+This is one repository and one download; no Hugging Face gate, separate Gemma
+download, or local quantization step is required. Then use the managed ID (or
+pass a compatible official checkout with `--model-root`):
 
 ```bash
 mere.run video generate "a small robot walks across a wooden table" \

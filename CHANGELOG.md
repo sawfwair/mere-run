@@ -12,6 +12,17 @@ The format is based on Keep a Changelog.
   sharing one shallow fast inventory across chat and companion discovery instead
   of repeatedly validating every installed runtime.
 
+### Video
+
+- reduced LTX-2.5 image-to-video memory pressure with a public, pinned,
+  self-contained distilled distribution: the video pipeline remains BF16 while
+  the bundled Gemma 4 language tower uses MLX affine Q4. One accepted model
+  pull now installs every runtime component without downloading the original
+  BF16 text tower or asking users to quantize locally. Runtime releases the text
+  encoder and image VAE as soon as their conditioning tensors are materialized.
+  Set `MERERUN_LTX_MEMORY_TRACE=1` to report MLX allocator use at the major
+  generation phases.
+
 ## 0.44.0 - 2026-08-25
 
 This release expands native text, image, and music inference with LFM2.5
