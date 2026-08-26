@@ -71,20 +71,40 @@ final class Q35DecoderLayer: Module {
     @ModuleInfo(key: "mlp") var mlp: Q35FeedForward
     @ModuleInfo(key: "input_layernorm") var inputLayerNorm: Q35RMSNorm
     @ModuleInfo(key: "post_attention_layernorm") var postAttentionLayerNorm: Q35RMSNorm
+    @ModuleInfo(key: "attn_hyper_connection") var attentionHyperConnection: Q38GatedResidual?
+    @ModuleInfo(key: "mlp_hyper_connection") var mlpHyperConnection: Q38GatedResidual?
+    @ModuleInfo(key: "ple") var ple: Q38PLELayer?
 
     let layerType: Q35AttentionLayerType
     let isMLPOnly: Bool
 
-    init(config: Q35Config, layerIndex: Int) {
+    init(
+        config: Q35Config,
+        layerIndex: Int,
+        layerTypeOverride: Q35AttentionLayerType? = nil,
+        includesPLE: Bool = true
+    ) {
         let text = config.textConfig
-        self.layerType = Q35AttentionLayerType(text.layerTypes[layerIndex])
-        self.isMLPOnly = text.mlpOnlyLayers.contains(layerIndex)
+        self.layerType = layerTypeOverride ?? Q35AttentionLayerType(text.layerTypes[layerIndex])
+        self.isMLPOnly = layerTypeOverride == nil && text.mlpOnlyLayers.contains(layerIndex)
 
         self._linearAttention.wrappedValue = Q35LinearAttention(config: config)
         self._selfAttention.wrappedValue = Q35FullAttention(config: config)
         self._mlp.wrappedValue = Q35FeedForward(config: config)
         self._inputLayerNorm.wrappedValue = Q35RMSNorm(dimensions: text.hiddenSize, eps: text.rmsNormEps)
         self._postAttentionLayerNorm.wrappedValue = Q35RMSNorm(dimensions: text.hiddenSize, eps: text.rmsNormEps)
+        self._attentionHyperConnection.wrappedValue = text.isQwen4Exp
+            ? Q38GatedResidual(config: config)
+            : nil
+        self._mlpHyperConnection.wrappedValue = text.isQwen4Exp
+            ? Q38GatedResidual(config: config)
+            : nil
+        let pleLayerIndex = includesPLE
+            ? text.pleLayerIds.firstIndex(of: layerIndex + 1)
+            : nil
+        self._ple.wrappedValue = pleLayerIndex.map {
+            Q38PLELayer(config: config, pleLayerIndex: $0)
+        }
 
         super.init()
     }
@@ -93,9 +113,66 @@ final class Q35DecoderLayer: Module {
         _ x: MLXArray,
         fullMask: MLXFast.ScaledDotProductAttentionMaskMode,
         cache: Q35LayerCache?,
+        inputIds: MLXArray? = nil,
         positionIds: MLXArray? = nil,
         targetVerify: Bool = false
     ) -> MLXArray {
+        if let attentionHyperConnection, let mlpHyperConnection {
+            var hyper = x
+            if let ple, let inputIds {
+                let linearCache: Q35LinearCache?
+                if case .linear(let cache)? = cache {
+                    linearCache = cache
+                } else {
+                    linearCache = nil
+                }
+                hyper = hyper + ple(hyper, inputIds: inputIds, cache: linearCache)
+            }
+
+            let attentionMix = attentionHyperConnection.mix(hyper)
+            let attentionOut: MLXArray
+            switch layerType {
+            case .linear:
+                let linearCache: Q35LinearCache?
+                if case .linear(let cache)? = cache {
+                    linearCache = cache
+                } else {
+                    linearCache = nil
+                }
+                attentionOut = linearAttention(
+                    attentionMix.mixed,
+                    cache: linearCache,
+                    targetVerify: targetVerify
+                )
+            case .full:
+                let fullCache: KVCache?
+                if case .full(let cache)? = cache {
+                    fullCache = cache
+                } else {
+                    fullCache = nil
+                }
+                attentionOut = selfAttention(
+                    attentionMix.mixed,
+                    mask: fullMask,
+                    cache: fullCache,
+                    positionIds: positionIds
+                )
+            }
+            hyper = attentionHyperConnection.inject(
+                blockOutput: attentionOut,
+                residual: attentionMix.residual,
+                injectionWeights: attentionMix.injectionWeights
+            )
+
+            let mlpMix = mlpHyperConnection.mix(hyper)
+            let mlpOut = mlp(mlpMix.mixed)
+            return mlpHyperConnection.inject(
+                blockOutput: mlpOut,
+                residual: mlpMix.residual,
+                injectionWeights: mlpMix.injectionWeights
+            )
+        }
+
         var h = x
         if !isMLPOnly {
             let normed = inputLayerNorm(x)
@@ -130,13 +207,24 @@ final class Q35DecoderLayer: Module {
     }
 }
 
+struct Q35TransformerOutput {
+    let hidden: MLXArray
+    let mtpHidden: MLXArray?
+}
+
 final class Q35Transformer: Module {
     @ModuleInfo(key: "embed_tokens") var embedTokens: Embedding
     @ModuleInfo(key: "layers") var layers: [Q35DecoderLayer]
     @ModuleInfo(key: "norm") var norm: Q35RMSNorm
+    @ModuleInfo(key: "hyper_connection_mixer") var hyperConnectionMixer: Q38GatedResidual?
+
+    private let isQwen4Exp: Bool
+    private let hyperConnectionCount: Int
 
     init(config: Q35Config) {
         let text = config.textConfig
+        self.isQwen4Exp = text.isQwen4Exp
+        self.hyperConnectionCount = text.hyperConnectionCount
         self._embedTokens.wrappedValue = Embedding(
             embeddingCount: text.vocabSize,
             dimensions: text.hiddenSize
@@ -145,6 +233,9 @@ final class Q35Transformer: Module {
             Q35DecoderLayer(config: config, layerIndex: index)
         }
         self._norm.wrappedValue = Q35RMSNorm(dimensions: text.hiddenSize, eps: text.rmsNormEps)
+        self._hyperConnectionMixer.wrappedValue = text.isQwen4Exp
+            ? Q38GatedResidual(config: config, combinesBlockOutput: false)
+            : nil
         super.init()
     }
 
@@ -166,14 +257,17 @@ final class Q35Transformer: Module {
         return nil
     }
 
-    func callAsFunction(
+    func forward(
         _ inputIds: MLXArray,
         cache: [Q35LayerCache?]?,
         inputEmbeddings: MLXArray? = nil,
         positionIds: MLXArray? = nil,
         targetVerify: Bool = false
-    ) -> MLXArray {
+    ) -> Q35TransformerOutput {
         var hidden = inputEmbeddings ?? embeddings(for: inputIds)
+        if isQwen4Exp {
+            hidden = MLX.tiled(hidden, repetitions: [1, 1, hyperConnectionCount])
+        }
 
         let fullMask = createAttentionMask(h: hidden, cache: firstFullCache(from: cache))
         Q35DebugLayerDump.record(stage: "embeddings", hidden)
@@ -184,22 +278,50 @@ final class Q35Transformer: Module {
                 hidden,
                 fullMask: fullMask,
                 cache: layerCache,
+                inputIds: isQwen4Exp ? inputIds : nil,
                 positionIds: positionIds,
                 targetVerify: targetVerify
             )
+            if isQwen4Exp,
+               (index + 1).isMultiple(of: 4) || index + 1 == layers.count {
+                // Qwen4Exp adds two hyper-connection projections per block.
+                // Materialize each four-layer hybrid block so a 48-layer
+                // prefill is not submitted as one watchdog-sized lazy graph.
+                MLX.eval(hidden)
+            }
             Q35DebugLayerDump.record(stage: "layer\(index)", hidden)
         }
 
-        let normed = norm(hidden)
+        let normed = hyperConnectionMixer?.combine(hidden) ?? norm(hidden)
         Q35DebugLayerDump.record(stage: "final_norm", normed)
         Q35DebugLayerDump.flush()
-        return normed
+        return Q35TransformerOutput(
+            hidden: normed,
+            mtpHidden: isQwen4Exp ? hidden : nil
+        )
+    }
+
+    func callAsFunction(
+        _ inputIds: MLXArray,
+        cache: [Q35LayerCache?]?,
+        inputEmbeddings: MLXArray? = nil,
+        positionIds: MLXArray? = nil,
+        targetVerify: Bool = false
+    ) -> MLXArray {
+        forward(
+            inputIds,
+            cache: cache,
+            inputEmbeddings: inputEmbeddings,
+            positionIds: positionIds,
+            targetVerify: targetVerify
+        ).hidden
     }
 }
 
 struct Q35ForwardOutput {
     let hidden: MLXArray
     let logits: MLXArray
+    let mtpHidden: MLXArray?
 }
 
 #if os(macOS) || os(iOS)
@@ -335,6 +457,10 @@ public final class Q35Model: Module, @unchecked Sendable {
         lmHead?(hidden) ?? model.embedTokens.asLinear(hidden)
     }
 
+    var q38NGramEmbeddings: [Q38NGramEmbedding] {
+        model.layers.compactMap { $0.ple?.pleEmbedding }
+    }
+
     /// Prepare the proposal-only compact projection after the exact target
     /// weights have loaded. This is called only when an MTP head is admitted.
     func prepareGreedyMTPDrafting() {
@@ -445,14 +571,18 @@ public final class Q35Model: Module, @unchecked Sendable {
         positionIds: MLXArray? = nil,
         targetVerify: Bool = false
     ) -> Q35ForwardOutput {
-        let hidden = model(
+        let output = model.forward(
             inputIds,
             cache: cache,
             inputEmbeddings: inputEmbeddings,
             positionIds: positionIds,
             targetVerify: targetVerify
         )
-        return Q35ForwardOutput(hidden: hidden, logits: logits(from: hidden))
+        return Q35ForwardOutput(
+            hidden: output.hidden,
+            logits: logits(from: output.hidden),
+            mtpHidden: output.mtpHidden
+        )
     }
 
     /// Forward for prefill chunks: hidden states flow through every position
@@ -469,12 +599,13 @@ public final class Q35Model: Module, @unchecked Sendable {
         positionIds: MLXArray? = nil,
         retainAllHidden: Bool = false
     ) -> Q35ForwardOutput {
-        let hidden = model(
+        let output = model.forward(
             inputIds,
             cache: cache,
             inputEmbeddings: inputEmbeddings,
             positionIds: positionIds
         )
+        let hidden = output.hidden
         let sequenceLength = hidden.dim(1)
         let lastHidden: MLXArray
         if sequenceLength > 1 {
@@ -482,9 +613,20 @@ public final class Q35Model: Module, @unchecked Sendable {
         } else {
             lastHidden = hidden
         }
+        let mtpHidden: MLXArray?
+        if let fullMTPHidden = output.mtpHidden {
+            if retainAllHidden || sequenceLength == 1 {
+                mtpHidden = fullMTPHidden
+            } else {
+                mtpHidden = fullMTPHidden[0..., (sequenceLength - 1)..., 0...]
+            }
+        } else {
+            mtpHidden = nil
+        }
         return Q35ForwardOutput(
             hidden: retainAllHidden ? hidden : lastHidden,
-            logits: logits(from: lastHidden)
+            logits: logits(from: lastHidden),
+            mtpHidden: mtpHidden
         )
     }
 

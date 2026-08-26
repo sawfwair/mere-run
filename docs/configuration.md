@@ -475,15 +475,18 @@ Useful for locating whether decode is CPU-, schedule-, or GPU-bound.
 ### `MERERUN_Q35_MTP_SPECULATION`
 
 Controls the Qwen-family MTP path used by `text-chat-q36-nano` and
-the `vision-chat-q38-27b` BF16 and 4-bit lanes. Set this to
+the `vision-chat-q38-27b` BF16 and 4-bit lanes, plus both managed
+Qwen3.8-Flash-Next profiles. Set this to
 `1`, `true`, `yes`, or `on` to force consideration when the effective context
 window is large enough; set it to `0`, `false`, or `no` to disable MTP. Any other
 value, including unset, uses the model-specific policy. Qwen3.8's dense head is
 embedded in the BF16 checkpoint; `vision-chat-q38-27b-4bit` mounts the matching
-4-bit/group-64 MLX Fast proposal head. Both are opt-in because multi-token
-verification can diverge from serial greedy decode; Qwen3.6 hybrid MoE retains
-its adaptive default. When continuous batching is enabled, an eligible MTP
-request takes the speculative lane only if no peer is already admitted. A
+4-bit/group-64 MLX Fast proposal head. Both remain opt-in because multi-token
+verification can diverge from serial greedy decode. Flash-Next uses its bundled
+one-layer head by default for greedy short-prompt decode after exact target
+verification and real-checkpoint speed qualification; Qwen3.6 hybrid MoE
+retains its adaptive default. When continuous batching is enabled, an eligible
+MTP request takes the speculative lane only if no peer is already admitted. A
 contended request uses ordinary continuous batching; a late peer does not
 migrate an MTP request that is already running.
 

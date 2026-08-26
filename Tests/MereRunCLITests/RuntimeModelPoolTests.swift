@@ -6,6 +6,29 @@ import XCTest
 final class RuntimeModelPoolTests: XCTestCase {
     private let gib = UInt64(1024 * 1024 * 1024)
 
+    func testDefaultWarmupCoversGemmaTurboAndQwen4ExpOnly() {
+        XCTAssertTrue(RuntimeModelPool.shouldWarmDefaultModel(
+            modelID: Gemma4Resources.turboModelId,
+            engine: .textChatGemma4
+        ))
+        XCTAssertTrue(RuntimeModelPool.shouldWarmDefaultModel(
+            modelID: Q35Resources.q38FlashNextMixedModelId,
+            engine: .textChatQ35
+        ))
+        XCTAssertTrue(RuntimeModelPool.shouldWarmDefaultModel(
+            modelID: Q35Resources.q38FlashNext4BitModelId,
+            engine: .textChatQ36
+        ))
+        XCTAssertFalse(RuntimeModelPool.shouldWarmDefaultModel(
+            modelID: Q35Resources.q38TwentySevenB4BitModelId,
+            engine: .textChatQ35
+        ))
+        XCTAssertFalse(RuntimeModelPool.shouldWarmDefaultModel(
+            modelID: Q35Resources.q38FlashNextMixedModelId,
+            engine: .textChatGemma4
+        ))
+    }
+
     func testStatusIncludesLegacyStartupDefaultWithoutCatalogScan() async throws {
         let root = try makeTemporaryDirectory()
         defer { try? FileManager.default.removeItem(at: root) }

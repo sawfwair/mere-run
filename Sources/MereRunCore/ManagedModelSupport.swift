@@ -488,6 +488,20 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 48
             ),
             descriptor(
+                Q35Resources.q38FlashNextMixedModelId,
+                "Qwen3.8 Flash Next mixed Q2/Q4 vision chat",
+                "Runs Sawfwair's pinned 128 GB Mac profile with routed experts at Q2, core matrices at Q4, and sensitive paths in BF16.",
+                minimum: 112,
+                recommended: 128
+            ),
+            descriptor(
+                Q35Resources.q38FlashNext4BitModelId,
+                "Qwen3.8 Flash Next Q4 vision chat",
+                "Runs Sawfwair's pinned all-Q4-compatible profile for higher quality on Macs with more than 128 GB unified memory.",
+                minimum: 160,
+                recommended: 192
+            ),
+            descriptor(
                 Q35Resources.bonsai27B1BitModelId,
                 "Bonsai 27B 1-bit vision chat",
                 "Runs Prism ML's dense Qwen3.6 27B reasoning and vision model from packed 1-bit MLX weights.",

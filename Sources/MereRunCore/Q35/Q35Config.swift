@@ -70,6 +70,20 @@ public struct Q35RopeParameters: Codable, Sendable, Hashable {
     }
 }
 
+public struct Q35MTPConfig: Codable, Sendable, Hashable {
+    public let hybrid: Bool
+    public let layerTypes: [String]
+    public let numHiddenLayers: Int
+    public let ropeTheta: Float?
+
+    private enum CodingKeys: String, CodingKey {
+        case hybrid
+        case layerTypes = "layer_types"
+        case numHiddenLayers = "num_hidden_layers"
+        case ropeTheta = "rope_theta"
+    }
+}
+
 public struct Q35TextConfig: Codable, Sendable, Hashable {
     public let modelType: String
     public let hiddenSize: Int
@@ -96,6 +110,24 @@ public struct Q35TextConfig: Codable, Sendable, Hashable {
     public let attentionBias: Bool
     public let attentionDropout: Float
     public let fullAttentionInterval: Int?
+    public let outputGateType: String
+    public let hyperConnectionCount: Int
+    public let hyperConnectionLowRank: Int
+    public let pleLayerIds: [Int]
+    public let pleEmbeddingDimensions: Int
+    public let pleConvKernelSize: Int
+    public let ngramSize: Int
+    public let headsPerNgram: Int
+    public let ngramVocabSizeBase: Int
+    public let ngramVocabDivisor: Int
+    public let ngramSeed: Int
+    public let splitNgramParts: Int
+    public let indexerHeadCount: Int
+    public let indexerKVHeadCount: Int
+    public let indexerHeadDimension: Int
+    public let indexerBudget: Int
+    public let indexerCompressionRatio: Int
+    public let mtp: Q35MTPConfig?
     public let vocabSize: Int
     public let eosTokenId: Int?
     public let ropeParameters: Q35RopeParameters
@@ -126,6 +158,24 @@ public struct Q35TextConfig: Codable, Sendable, Hashable {
         case attentionBias = "attention_bias"
         case attentionDropout = "attention_dropout"
         case fullAttentionInterval = "full_attention_interval"
+        case outputGateType = "output_gate_type"
+        case hyperConnectionCount = "hc_count"
+        case hyperConnectionLowRank = "hc_lowrank"
+        case pleLayerIds = "ple_layer_ids"
+        case pleEmbeddingDimensions = "ple_embed_dim"
+        case pleConvKernelSize = "ple_conv_kernel_size"
+        case ngramSize = "ngram_size"
+        case headsPerNgram = "heads_per_ngram"
+        case ngramVocabSizeBase = "ngram_vocab_size_base"
+        case ngramVocabDivisor = "make_ngram_vocab_size_divisible_by"
+        case ngramSeed = "seed"
+        case splitNgramParts = "split_ngram_parts"
+        case indexerHeadCount = "indexer_n_heads"
+        case indexerKVHeadCount = "indexer_kv_heads"
+        case indexerHeadDimension = "indexer_head_dim"
+        case indexerBudget = "indexer_budget"
+        case indexerCompressionRatio = "indexer_compress_ratio"
+        case mtp
         case vocabSize = "vocab_size"
         case eosTokenId = "eos_token_id"
         case ropeParameters = "rope_parameters"
@@ -175,10 +225,30 @@ public struct Q35TextConfig: Codable, Sendable, Hashable {
         self.linearConvKernelDim = try container.decode(Int.self, forKey: .linearConvKernelDim)
         self.maxPositionEmbeddings = try container.decode(Int.self, forKey: .maxPositionEmbeddings)
         self.rmsNormEps = try container.decode(Float.self, forKey: .rmsNormEps)
-        self.attnOutputGate = try container.decode(Bool.self, forKey: .attnOutputGate)
+        self.attnOutputGate = try container.decodeIfPresent(Bool.self, forKey: .attnOutputGate)
+            ?? self.modelType.hasPrefix("qwen4_exp")
         self.attentionBias = try container.decode(Bool.self, forKey: .attentionBias)
         self.attentionDropout = try container.decode(Float.self, forKey: .attentionDropout)
         self.fullAttentionInterval = try container.decodeIfPresent(Int.self, forKey: .fullAttentionInterval)
+        self.outputGateType = try container.decodeIfPresent(String.self, forKey: .outputGateType) ?? "silu"
+        self.hyperConnectionCount = try container.decodeIfPresent(Int.self, forKey: .hyperConnectionCount) ?? 1
+        self.hyperConnectionLowRank = try container.decodeIfPresent(Int.self, forKey: .hyperConnectionLowRank) ?? 0
+        self.pleLayerIds = try container.decodeIfPresent([Int].self, forKey: .pleLayerIds) ?? []
+        self.pleEmbeddingDimensions = try container.decodeIfPresent(Int.self, forKey: .pleEmbeddingDimensions)
+            ?? self.hiddenSize
+        self.pleConvKernelSize = try container.decodeIfPresent(Int.self, forKey: .pleConvKernelSize) ?? 4
+        self.ngramSize = try container.decodeIfPresent(Int.self, forKey: .ngramSize) ?? 3
+        self.headsPerNgram = try container.decodeIfPresent(Int.self, forKey: .headsPerNgram) ?? 8
+        self.ngramVocabSizeBase = try container.decodeIfPresent(Int.self, forKey: .ngramVocabSizeBase) ?? 20_000_000
+        self.ngramVocabDivisor = try container.decodeIfPresent(Int.self, forKey: .ngramVocabDivisor) ?? 128
+        self.ngramSeed = try container.decodeIfPresent(Int.self, forKey: .ngramSeed) ?? 1_234
+        self.splitNgramParts = try container.decodeIfPresent(Int.self, forKey: .splitNgramParts) ?? 128
+        self.indexerHeadCount = try container.decodeIfPresent(Int.self, forKey: .indexerHeadCount) ?? 0
+        self.indexerKVHeadCount = try container.decodeIfPresent(Int.self, forKey: .indexerKVHeadCount) ?? 0
+        self.indexerHeadDimension = try container.decodeIfPresent(Int.self, forKey: .indexerHeadDimension) ?? 0
+        self.indexerBudget = try container.decodeIfPresent(Int.self, forKey: .indexerBudget) ?? 0
+        self.indexerCompressionRatio = try container.decodeIfPresent(Int.self, forKey: .indexerCompressionRatio) ?? 1
+        self.mtp = try container.decodeIfPresent(Q35MTPConfig.self, forKey: .mtp)
         self.vocabSize = try container.decode(Int.self, forKey: .vocabSize)
         self.eosTokenId = try container.decodeIfPresent(Int.self, forKey: .eosTokenId)
         self.ropeParameters = try container.decode(Q35RopeParameters.self, forKey: .ropeParameters)
@@ -211,6 +281,24 @@ public struct Q35TextConfig: Codable, Sendable, Hashable {
         try container.encode(attentionBias, forKey: .attentionBias)
         try container.encode(attentionDropout, forKey: .attentionDropout)
         try container.encodeIfPresent(fullAttentionInterval, forKey: .fullAttentionInterval)
+        try container.encode(outputGateType, forKey: .outputGateType)
+        try container.encode(hyperConnectionCount, forKey: .hyperConnectionCount)
+        try container.encode(hyperConnectionLowRank, forKey: .hyperConnectionLowRank)
+        try container.encode(pleLayerIds, forKey: .pleLayerIds)
+        try container.encode(pleEmbeddingDimensions, forKey: .pleEmbeddingDimensions)
+        try container.encode(pleConvKernelSize, forKey: .pleConvKernelSize)
+        try container.encode(ngramSize, forKey: .ngramSize)
+        try container.encode(headsPerNgram, forKey: .headsPerNgram)
+        try container.encode(ngramVocabSizeBase, forKey: .ngramVocabSizeBase)
+        try container.encode(ngramVocabDivisor, forKey: .ngramVocabDivisor)
+        try container.encode(ngramSeed, forKey: .ngramSeed)
+        try container.encode(splitNgramParts, forKey: .splitNgramParts)
+        try container.encode(indexerHeadCount, forKey: .indexerHeadCount)
+        try container.encode(indexerKVHeadCount, forKey: .indexerKVHeadCount)
+        try container.encode(indexerHeadDimension, forKey: .indexerHeadDimension)
+        try container.encode(indexerBudget, forKey: .indexerBudget)
+        try container.encode(indexerCompressionRatio, forKey: .indexerCompressionRatio)
+        try container.encodeIfPresent(mtp, forKey: .mtp)
         try container.encode(vocabSize, forKey: .vocabSize)
         try container.encodeIfPresent(eosTokenId, forKey: .eosTokenId)
         try container.encode(ropeParameters, forKey: .ropeParameters)
@@ -218,6 +306,10 @@ public struct Q35TextConfig: Codable, Sendable, Hashable {
 
     public var usesMoE: Bool {
         numExperts > 0 && numExpertsPerTok > 0
+    }
+
+    public var isQwen4Exp: Bool {
+        modelType.hasPrefix("qwen4_exp")
     }
 }
 
