@@ -319,6 +319,7 @@ swift run mere.run model pull text-chat-laguna-xs-2-1
 swift run mere.run model pull text-chat-nemotron-35-lightning
 swift run mere.run model pull text-chat-inkling-small
 swift run mere.run model pull vision-chat-muse-glimmer-30b --accept-model-license
+swift run mere.run model pull vision-chat-q38-flash-next-mixed --accept-license-terms
 swift run mere.run model pull text-chat-bonsai-27b-1bit
 swift run mere.run model pull text-chat-bonsai-27b-2bit
 swift run mere.run model pull text-code-north-mini
@@ -353,6 +354,15 @@ swift run mere.run text chat \
   --model text-chat-inkling-small \
   --context-size 32768 \
   --prompt "Plan a recovery-safe repository migration."
+
+# Qwen3.8-Flash-Next mixed Q2/Q4 is the 128 GB Mac profile. Its verified MTP
+# path is enabled by default for greedy decode. Prompt plus generation is
+# limited to 2,048 tokens while the long-context QSA selector is integrated.
+swift run mere.run text chat \
+  --model vision-chat-q38-flash-next-mixed \
+  --context-size 2048 \
+  --max-tokens 256 \
+  --prompt "Explain sparse attention in one paragraph."
 
 # Muse Glimmer is a pinned native Swift/MLX multimodal agent model. The pull
 # installs Sawfwair's 21.38 GB selective MLX Q4 target and z-lab's 5.54 GB

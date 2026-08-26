@@ -5,6 +5,114 @@ import MLXRandom
 @testable import MereRunCore
 
 final class Q35ConfigDecodingTests: MereRunCoreTestCase {
+    func testQwen4ExpFlashNextConfigDecodesPublishedArchitecture() throws {
+        var object = makeBaseConfig()
+        object["model_type"] = "qwen4_exp"
+        object["architectures"] = ["Qwen4ExpForConditionalGeneration"]
+        object["quantization"] = [
+            "bits": 4,
+            "group_size": 64,
+            "language_model.model.layers.0.mlp.switch_mlp.gate_proj": [
+                "bits": 2,
+                "group_size": 128,
+                "mode": "affine",
+            ],
+        ]
+        var text = object["text_config"] as? [String: Any] ?? [:]
+        text["model_type"] = "qwen4_exp_text"
+        text.removeValue(forKey: "attn_output_gate")
+        text["output_gate_type"] = "sigmoid"
+        text["hc_count"] = 4
+        text["hc_lowrank"] = 320
+        text["ple_layer_ids"] = [2]
+        text["ple_embed_dim"] = 2_560
+        text["ple_conv_kernel_size"] = 4
+        text["ngram_size"] = 3
+        text["heads_per_ngram"] = 8
+        text["ngram_vocab_size_base"] = 20_000_000
+        text["make_ngram_vocab_size_divisible_by"] = 128
+        text["split_ngram_parts"] = 128
+        text["indexer_n_heads"] = 4
+        text["indexer_kv_heads"] = 1
+        text["indexer_head_dim"] = 128
+        text["indexer_budget"] = 2_048
+        text["indexer_compress_ratio"] = 4
+        text["mtp"] = [
+            "hybrid": true,
+            "layer_types": ["full_attention"],
+            "num_hidden_layers": 1,
+            "rope_theta": 10_000_000,
+        ]
+        object["text_config"] = text
+
+        let config = try decodeConfig(object)
+
+        XCTAssertTrue(config.textConfig.isQwen4Exp)
+        XCTAssertTrue(config.textConfig.attnOutputGate)
+        XCTAssertEqual(config.textConfig.outputGateType, "sigmoid")
+        XCTAssertEqual(config.textConfig.hyperConnectionCount, 4)
+        XCTAssertEqual(config.textConfig.hyperConnectionLowRank, 320)
+        XCTAssertEqual(config.textConfig.pleLayerIds, [2])
+        XCTAssertEqual(config.textConfig.pleEmbeddingDimensions, 2_560)
+        XCTAssertEqual(config.textConfig.ngramSeed, 1_234)
+        XCTAssertEqual(config.textConfig.splitNgramParts, 128)
+        XCTAssertEqual(config.textConfig.indexerBudget, 2_048)
+        XCTAssertEqual(config.textConfig.mtp?.hybrid, true)
+        XCTAssertEqual(config.textConfig.mtp?.layerTypes, ["full_attention"])
+        XCTAssertEqual(config.textConfig.mtp?.numHiddenLayers, 1)
+        XCTAssertEqual(config.textConfig.mtp?.ropeTheta, 10_000_000)
+        XCTAssertEqual(config.quantization?.bits, 4)
+        XCTAssertEqual(config.quantization?.groupSize, 64)
+    }
+
+    func testQwen4ExpNGramHashesMatchPublishedReferenceAndIncrementalCache() throws {
+        var object = makeBaseConfig()
+        object["model_type"] = "qwen4_exp"
+        object["eos_token_id"] = 248_044
+        var text = object["text_config"] as? [String: Any] ?? [:]
+        text["model_type"] = "qwen4_exp_text"
+        text["vocab_size"] = 248_320
+        text["eos_token_id"] = 248_044
+        text["ple_embed_dim"] = 2_560
+        text["ngram_size"] = 3
+        text["heads_per_ngram"] = 8
+        text["ngram_vocab_size_base"] = 20_000_000
+        text["seed"] = 1_234
+        object["text_config"] = text
+        let config = try decodeConfig(object)
+        let embedding = Q38NGramEmbedding(config: config, pleLayerIndex: 0)
+        let tokens: [Int32] = [248_044, 100, 200, 248_044, 300]
+
+        let oneShot = embedding.hashedTokenIDs(
+            MLXArray(tokens).reshaped(1, tokens.count),
+            cache: nil
+        )
+
+        XCTAssertEqual(Array(oneShot.prefix(16)), [
+            9_663_979, 26_558_231, 56_120_240, 74_755_659,
+            80_459_717, 109_265_651, 132_697_467, 151_022_725,
+            170_054_832, 192_967_038, 200_687_722, 225_763_581,
+            259_275_737, 272_983_544, 297_596_484, 300_986_548,
+        ])
+        XCTAssertEqual(Array(oneShot.suffix(16)), [
+            4_401_500, 35_569_074, 54_889_021, 74_121_415,
+            88_777_613, 107_793_429, 137_064_387, 157_487_094,
+            164_417_016, 186_620_958, 218_728_649, 227_273_627,
+            251_258_918, 276_471_191, 285_147_944, 310_576_508,
+        ])
+
+        let cache = Q35LinearCache()
+        let prefix = embedding.hashedTokenIDs(
+            MLXArray(Array(tokens.prefix(4))).reshaped(1, 4),
+            cache: cache
+        )
+        let suffix = embedding.hashedTokenIDs(
+            MLXArray([tokens[4]]).reshaped(1, 1),
+            cache: cache
+        )
+        XCTAssertEqual(prefix + suffix, oneShot)
+    }
+
     func testBonsaiMLXVisionPatchKernelKeepsPublishedLayout() throws {
         let weight = MLXArray.zeros([1_152, 2, 16, 16, 3])
 
@@ -408,6 +516,25 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         XCTAssertFalse(Q35Generator.isOffsetRMSNormWeight("model.layers.0.linear_attn.norm.weight"))
     }
 
+    func testQwen4ExpGroupedRMSNormNormalizesEachHyperStream() {
+        let norm = Q35RMSNorm(
+            dimensions: 8,
+            eps: 1e-6,
+            groupSize: 4,
+            zeroCenteredWeight: false
+        )
+        let input = MLXArray([Float(1), 2, 3, 4, 2, 2, 2, 2]).reshaped(1, 1, 8)
+
+        let output = norm(input)
+        MLX.eval(output)
+        let values = output.asArray(Float.self)
+
+        XCTAssertEqual(values[0], 1 / sqrt(7.5), accuracy: 1e-5)
+        XCTAssertEqual(values[3], 4 / sqrt(7.5), accuracy: 1e-5)
+        XCTAssertEqual(values[4], 1, accuracy: 1e-5)
+        XCTAssertEqual(values[7], 1, accuracy: 1e-5)
+    }
+
     func testQ35OfficialCheckpointKeepsZeroCenteredRMSNormWeights() {
         let published = MLXArray([Float(-0.125), 0.25])
         let normalized = Q35Generator.normalizedRMSNormWeight(
@@ -718,6 +845,68 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         XCTAssertTrue(MLX.max(MLX.abs(draftLogits.asType(.float32))).item(Float.self).isFinite)
     }
 
+    func testQwen4ExpForwardRetainsMultiStreamHiddenForMTP() throws {
+        MLXRandom.seed(42)
+        var configObject = makeTinyRuntimeConfig(layerTypes: ["full_attention"])
+        configObject["model_type"] = "qwen4_exp"
+        configObject["architectures"] = ["Qwen4ExpForConditionalGeneration"]
+        var text = configObject["text_config"] as? [String: Any] ?? [:]
+        text["model_type"] = "qwen4_exp_text"
+        text["attn_output_gate"] = true
+        text["output_gate_type"] = "sigmoid"
+        text["hc_count"] = 4
+        text["hc_lowrank"] = 4
+        text["ple_layer_ids"] = []
+        text["indexer_n_heads"] = 2
+        text["indexer_kv_heads"] = 1
+        text["indexer_head_dim"] = 4
+        text["indexer_budget"] = 128
+        text["indexer_compress_ratio"] = 4
+        text["mtp"] = [
+            "hybrid": true,
+            "layer_types": ["full_attention"],
+            "num_hidden_layers": 1,
+            "rope_theta": 10_000_000,
+        ]
+        configObject["text_config"] = text
+        let config = try decodeConfig(configObject)
+        let model = Q35Model(config: config)
+        let mtp = Q38MTPModel(config: config)
+        let tokens = [1, 2, 3]
+        let input = MLXArray(tokens.map(Int32.init)).reshaped(1, tokens.count)
+        let output = model.forward(input, cache: makeLayerCaches(config: config))
+        let mtpHidden = try XCTUnwrap(output.mtpHidden)
+        MLX.eval(output.hidden, mtpHidden)
+
+        XCTAssertEqual(output.hidden.shape, [1, tokens.count, config.textConfig.hiddenSize])
+        XCTAssertEqual(
+            mtpHidden.shape,
+            [1, tokens.count, config.textConfig.hiddenSize * config.textConfig.hyperConnectionCount]
+        )
+
+        let previousHidden = mtpHidden[0..., (tokens.count - 1)..., 0...]
+        let logits = mtp.draftLogits(
+            token: 4,
+            previousHidden: previousHidden,
+            positionOffset: tokens.count,
+            baseModel: model
+        )
+        MLX.eval(logits)
+
+        XCTAssertEqual(logits.shape, [1, 1, config.textConfig.vocabSize])
+        XCTAssertTrue(MLX.max(MLX.abs(logits.asType(.float32))).item(Float.self).isFinite)
+
+        let drafts = mtp.draftBlock(
+            lastToken: 4,
+            hidden: previousHidden,
+            blockSize: 4,
+            session: Q35MTPDraftSession(promptTokens: tokens, promptHidden: mtpHidden),
+            baseModel: model
+        )
+        XCTAssertEqual(drafts.count, 3)
+        XCTAssertTrue(drafts.allSatisfy { $0 >= 0 && $0 < config.textConfig.vocabSize })
+    }
+
     func testQ35EmbeddedMTPWeightsSelectOnlyContainingShards() {
         let shards = Q35Generator.embeddedMTPShardFilenames(weightMap: [
             "model.language_model.layers.0.mlp.down_proj.weight": "model-00001.safetensors",
@@ -811,6 +1000,14 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         )
         XCTAssertNil(Q35Generator.mapMTPWeightKey("lm_head.weight", standalone: true))
         XCTAssertNil(Q35Generator.mapMTPWeightKey("layers.0.self_attn.q_proj.weight"))
+    }
+
+    func testQwen4ExpMTPWeightMappingStripsOnlyMTPPrefix() {
+        XCTAssertEqual(
+            Q35Generator.mapQ38MTPWeightKey("mtp.layers.0.self_attn.q_proj.weight"),
+            "layers.0.self_attn.q_proj.weight"
+        )
+        XCTAssertNil(Q35Generator.mapQ38MTPWeightKey("model.layers.0.self_attn.q_proj.weight"))
     }
 
     func testQ35MTPRMSNormWeightInventoryMatchesHeadArchitecture() {
@@ -1051,6 +1248,32 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
             Q35Generator.shouldSpeculate(
                 promptTokenCount: 32,
                 maxContextTokens: 262_144,
+                defaultMinimumPromptTokens: 0,
+                enabledByDefault: true,
+                environment: [:]
+            )
+        )
+    }
+
+    func testQwen4ExpMTPDefaultsToShortPromptSpeculation() {
+        XCTAssertEqual(
+            Q35Generator.defaultMTPMinimumPromptTokens(
+                modelId: Q35Resources.q38FlashNextMixedModelId,
+                usesMoE: true
+            ),
+            0
+        )
+        XCTAssertEqual(
+            Q35Generator.defaultMTPMinimumPromptTokens(
+                modelId: Q35Resources.q38FlashNext4BitModelId,
+                usesMoE: true
+            ),
+            0
+        )
+        XCTAssertTrue(
+            Q35Generator.shouldSpeculate(
+                promptTokenCount: 32,
+                maxContextTokens: 2_048,
                 defaultMinimumPromptTokens: 0,
                 enabledByDefault: true,
                 environment: [:]

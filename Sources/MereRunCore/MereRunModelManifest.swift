@@ -1165,6 +1165,38 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                     + "@\(Q35Resources.q38TwentySevenB4BitUpstreamRevision)",
                 createdAt: createdAt
             )
+        case .q38FlashNextMixed:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .qwen35HybridMoE,
+                family: .qwen,
+                tier: .latest,
+                variant: .standard,
+                precision: .int2,
+                quantization: Quantization(bits: 2, groupSize: 128, scheme: "mlx-mixed-q2-q4-bf16-affine"),
+                defaults: nil,
+                supports: [.chat, .codeGeneration, .visionChat],
+                components: q35TextComponents,
+                upstreamRepoId: "\(Q35Resources.q38FlashNextMixedUpstreamRepoId)"
+                    + "@\(Q35Resources.q38FlashNextMixedUpstreamRevision)",
+                createdAt: createdAt
+            )
+        case .q38FlashNext4Bit:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .qwen35HybridMoE,
+                family: .qwen,
+                tier: .latest,
+                variant: .standard,
+                precision: .int4,
+                quantization: Quantization(bits: 4, groupSize: 64, scheme: "mlx-affine"),
+                defaults: nil,
+                supports: [.chat, .codeGeneration, .visionChat],
+                components: q35TextComponents,
+                upstreamRepoId: "\(Q35Resources.q38FlashNext4BitUpstreamRepoId)"
+                    + "@\(Q35Resources.q38FlashNext4BitUpstreamRevision)",
+                createdAt: createdAt
+            )
         case .bonsai27B1Bit:
             return MereRunModelManifest(
                 id: modelID.rawValue,

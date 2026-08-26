@@ -58,3 +58,24 @@ The streaming tool-call parser walks the Qwen XML structure rather than using
 delimiter search. A closing tag is accepted only at its structural position,
 so strings containing tag-like text remain parameter data. Streaming reparses
 are bounded; EOS still receives a final structural parse.
+
+Qwen3.8-Flash-Next uses the `qwen4_exp` text architecture. Its native path
+implements four-stream gated residual hyper-connections, PLE n-gram hashing and
+embedding lookup, grouped RMS normalization, sigmoid gated-delta output, and
+the published hybrid full/linear-attention schedule. PLE lookup keeps only the
+two preceding token IDs in each incremental cache; its 128 logical embedding
+parts are installed from the physical safetensors shards without duplicating
+the table. Four-layer evaluation boundaries keep the 48-layer lazy graph below
+the macOS Metal watchdog while preserving each hybrid block.
+
+QSA indexer weights load with every full-attention layer, but selection is not
+executed yet. Generation therefore fails closed when prompt plus requested
+output exceeds the model's 2,048-token indexer budget. At or below that budget,
+QSA selects every visible causal block and the regular causal attention result
+is exact. Qwen4Exp's bundled one-layer MTP head consumes the target's four-stream
+hidden state, drafts through its trained hyper-connection/full-attention/MoE
+block, and leaves every emitted token under exact target verification. Managed
+Flash-Next models enable this path from short prompts; API startup warmup runs a
+representative eight-token decode so its lazy target and draft graphs are paid
+before the server reports healthy. `MERERUN_Q35_MTP_SPECULATION=0` keeps the
+target-only path available for comparison or memory pressure.

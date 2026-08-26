@@ -146,6 +146,8 @@ final class ManagedModelCatalogTests: XCTestCase {
             "text-chat-lfm25-1.2b-dspark",
             "text-chat-lfm25-2.6b-dspark",
             "vision-chat-lfm25-3b-8bit",
+            Q35Resources.q38FlashNextMixedModelId,
+            Q35Resources.q38FlashNext4BitModelId,
             "vision-segment-sam31",
             "vision-face-buffalo-l",
             "vision-embed-olmoearth-v12-nano",
@@ -842,6 +844,25 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.apiProfile?.thinkingLevels, [.low, .medium, .xhigh])
         XCTAssertEqual(spec.apiProfile?.thinkingLevelMap[.minimal], .low)
         XCTAssertEqual(spec.apiProfile?.thinkingLevelMap[.max], .xhigh)
+    }
+
+    func testQ38FlashNextProfilesUsePinnedSawfwairArtifactsAndLicenseAcceptance() throws {
+        let mixed = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: Q35Resources.q38FlashNextMixedModelId)
+        )
+        let q4 = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: Q35Resources.q38FlashNext4BitModelId)
+        )
+
+        XCTAssertEqual(mixed.hubFallback?.repoId, Q35Resources.q38FlashNextMixedUpstreamRepoId)
+        XCTAssertEqual(mixed.hubFallback?.revision, Q35Resources.q38FlashNextMixedUpstreamRevision)
+        XCTAssertEqual(mixed.estimatedDownloadBytes, 73_095_335_934)
+        XCTAssertEqual(mixed.usageRestriction?.terms.first?.license, "Qwen Community License 1.0")
+        XCTAssertFalse(mixed.runtimeAutoDownloadAllowed)
+        XCTAssertEqual(q4.hubFallback?.repoId, Q35Resources.q38FlashNext4BitUpstreamRepoId)
+        XCTAssertEqual(q4.hubFallback?.revision, Q35Resources.q38FlashNext4BitUpstreamRevision)
+        XCTAssertEqual(q4.estimatedDownloadBytes, 104_742_357_706)
+        XCTAssertNotNil(q4.usageRestriction)
     }
 
     func testQ38TwentySevenB4BitValidationRequiresMountedMTPFiles() throws {
