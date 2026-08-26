@@ -79,7 +79,11 @@ are an escape hatch, not the capability contract.
   installs should use `video-ltx23-full-mlx`.
 - `video-ltx25-distilled-bf16`: official packed LTX 2.5 BF16 checkpoint for
   native final-quality synchronized video and stereo audio. Pull it with
-  `--accept-model-license`; gated Hugging Face access is also required.
+  `--accept-model-license`; gated Hugging Face access is also required. Run
+  `mere.run model optimize video-ltx25-distilled-bf16` to derive the local
+  source-bound Q4 text tower and native transformer/connector caches. Gemma and
+  the image VAE encoder are released after their conditioning tensors are
+  evaluated, before denoising begins.
 - `video-ltx25-full-bf16`: complete official LTX 2.5 BF16 root with dev and
   distilled transformers, distilled LoRA, convolutional and diffusion VAEs,
   spatial/temporal upsamplers, and DurationHead. It powers the native full,

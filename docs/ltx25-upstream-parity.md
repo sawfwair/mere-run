@@ -115,12 +115,20 @@ The acceleration surface remains native Swift, MLX, and Metal:
   path remains the automatic compatibility fallback.
 - `mere.run model optimize video-ltx25-full-bf16` creates source-bound native
   transformer and compact text-connector packs under
-  `.mere-run/ltx25-native-v1`. It streams tensor bytes in physical file order,
-  rewrites transformer keys to the native module namespace, and does not
-  quantize or rewrite payload bytes. Loading applies the same requested BF16
-  normalization as the official path, including the checkpoint's FP32 tensors.
+  `.mere-run/ltx25-native-v1`. It also derives an MLX affine Q4/group-64 pack
+  for the checkpoint's custom Gemma 4 language tower under
+  `.mere-run/ltx25-text-q4-v1`; the LTX projection and embedded tokenizer stay
+  bound to the official BF16 checkpoint. Runtime loading validates the pinned
+  source revision and prefers this local Q4 tower, with the official BF16 tower
+  as the fallback. Transformer payloads are not quantized or rewritten.
   Connector loading no longer has to touch the 42 GB official transformer
   checkpoint.
+- Prompt tensors are evaluated and cached before the Gemma tower is unloaded.
+  Image/reference latents are likewise evaluated before the video VAE encoder
+  is released. Neither encoder remains resident during denoising; a later
+  session request reloads it only when its prompt or conditioning is not cached.
+  Set `MERERUN_LTX_MEMORY_TRACE=1` to print MLX active, cache, and peak memory at
+  the duration, text, image-conditioning, and denoising phase boundaries.
 
 TeaCache and guidance-projection caching are not stacked: enabling TeaCache
 uses the exact projection path against which its drift calibration was
@@ -141,7 +149,7 @@ model capabilities, and therefore have no one-for-one Apple-Silicon switch:
 | Upstream option | Native disposition |
 | --- | --- |
 | CPU/disk offload | Swift loaders stream large safetensors and release phases under unified-memory admission |
-| FP8 and NVFP4 policies | The pinned native catalog uses the BF16 checkpoints; no silent precision substitution |
+| FP8 and NVFP4 policies | Transformer inference stays on the pinned BF16 checkpoint; the optional source-bound text-tower cache is explicit MLX Q4 |
 | `torch.compile` | `--ltx-transformer-execution compiled` provides shared compiled MLX block execution; eager remains the exact-default path |
 | DiffVAE CUDA optimization presets | Apple GPUs use the native fused 3D Metal neighborhood-attention kernel with an MLX fallback; CUTLASS/CuTe remain CUDA-only |
 | `max_batch_size` | `--ltx-guidance-projection-cache` removes repeated positive-context projections without CUDA transfer batching and preserves a unified-memory reserve |

@@ -27,7 +27,7 @@ struct ModelOptimize: ParsableCommand {
             if isLTX25FullModelRoot(rootURL) {
                 kinds.append(.dev)
             }
-            artifacts = try kinds.map { kind in
+            var ltxArtifacts = try kinds.map { kind in
                 let result = try LTX25NativeModelPack.optimize(
                     resources: resources,
                     kind: kind,
@@ -42,7 +42,20 @@ struct ModelOptimize: ParsableCommand {
                 )
                 return result.outputURL
             }
-            optimization = "ltx25-native-model-pack"
+            _ = try LTX25TextEncoderQuantizedPack.optimize(
+                resources: resources,
+                replacing: force,
+                progressHandler: { completed, total in
+                    CLIStderr.write(
+                        "LTX 2.5 Q4 text pack: \(completed)/\(total) shards\n"
+                    )
+                }
+            )
+            ltxArtifacts.append(
+                contentsOf: LTX25TextEncoderQuantizedPack.artifactURLs(resources: resources)
+            )
+            artifacts = ltxArtifacts
+            optimization = "ltx25-native-model-pack+text-q4-v1"
         } else {
             let resources = MiniMaxH3Resources(rootURL: rootURL)
             _ = try MiniMaxH3ModelOptimizer.optimize(

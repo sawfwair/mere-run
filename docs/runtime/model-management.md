@@ -172,11 +172,14 @@ Q8, legacy Q4, and Ref2VA packages already bundle source-bound caches.
 
 LTX 2.5 optimization streams the official BF16 transformer payloads into the
 exact native module namespace without materializing the 22B checkpoint or
-changing precision. A full root produces distilled and dev packs under
-`.mere-run/ltx25-native-v1`, plus a compact connector pack so text setup avoids
-opening the official transformer. Compatible loads validate the source revision
-and prefer those packs automatically. Use `--force` for an explicit atomic
-rebuild.
+changing transformer precision. A full root produces distilled and dev packs
+under `.mere-run/ltx25-native-v1`, plus a compact connector pack so text setup
+avoids opening the official transformer. It also derives a sharded MLX affine
+Q4/group-64 cache of the checkpoint's custom Gemma 4 language tower under
+`.mere-run/ltx25-text-q4-v1`. The LTX projection and tokenizer remain in the
+official checkpoint. Compatible loads validate the pinned source revision and
+prefer these packs automatically, falling back to the official BF16 text tower
+when the Q4 cache is absent or invalid. Use `--force` for an explicit rebuild.
 
 ### `mere.run status`
 
