@@ -169,6 +169,22 @@ public final class PortableQuantizedLinear: QuantizedLinear {
     public var useUncachedDenseFallback = false
 
     public override func callAsFunction(_ x: MLXArray) -> MLXArray {
+        #if os(macOS)
+        if bias == nil,
+           let biases,
+           let output = SmallBatchAffineQMV.matmul(
+               x,
+               weight: weight,
+               scales: scales,
+               biases: biases,
+               groupSize: groupSize,
+               bits: bits,
+               mode: mode
+           ) {
+            return output
+        }
+        #endif
+
         #if os(Linux)
         if Device.defaultDevice().deviceType == .gpu, mode == .affine {
             if useUncachedDenseFallback {

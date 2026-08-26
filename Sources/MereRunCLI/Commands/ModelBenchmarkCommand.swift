@@ -31,7 +31,7 @@ struct ModelBenchmark: ParsableCommand {
 struct ModelBenchmarkQ36MTP: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "q36-mtp",
-        abstract: "Compare Qwen3.6 serial decode against adaptive and forced MTP speculative decode."
+        abstract: "Compare Qwen-family serial decode against adaptive and forced MTP speculative decode."
     )
 
     @Option(name: [.long], help: "Qwen-family model id.")
@@ -85,6 +85,8 @@ struct ModelBenchmarkQ36MTP: AsyncParsableCommand {
         }
         let supportedModels = [
             Q35Resources.q36NanoModelId,
+            Q35Resources.q38TwentySevenBModelId,
+            Q35Resources.q38TwentySevenB4BitModelId,
             Q35Resources.ornith9BModelId,
             Q35Resources.ornith35BMLX4BitModelId,
             Q35Resources.ornith35BMLX6BitModelId,
@@ -276,6 +278,7 @@ struct ModelBenchmarkQ36MTP: AsyncParsableCommand {
             name: variant.name,
             policy: variant.policy,
             expectedMTPActive: variant.expectedMTPActive(
+                modelID: model,
                 promptTokens: promptTokens,
                 contextSize: contextSize,
                 forcedThreshold: forcedMTPMinPromptTokens
@@ -295,7 +298,11 @@ struct ModelBenchmarkQ36MTP: AsyncParsableCommand {
                 : nil,
             endToEndTokensPerSecond: elapsed > 0 ? Double(response.tokensGenerated) / elapsed : nil,
             residentMemoryBeforeBytes: memoryBefore,
-            residentMemoryAfterBytes: memoryAfter
+            residentMemoryAfterBytes: memoryAfter,
+            acceleration: response.acceleration,
+            outputSHA256: FusedBenchmarkHash.sha256(
+                (response.reasoningContent ?? "") + "\u{0}" + response.response
+            )
         )
     }
 }
@@ -332,6 +339,7 @@ private struct Q36MTPBenchmarkVariant {
     }
 
     func expectedMTPActive(
+        modelID: String,
         promptTokens: Int,
         contextSize: Int,
         forcedThreshold: Int
@@ -342,6 +350,9 @@ private struct Q36MTPBenchmarkVariant {
         case Self.forced.name:
             return contextSize >= forcedThreshold
         default:
+            if modelID == Q35Resources.q38TwentySevenB4BitModelId {
+                return true
+            }
             return promptTokens >= Self.adaptiveThreshold && contextSize >= Self.adaptiveThreshold
         }
     }
@@ -387,6 +398,11 @@ private struct Q36MTPBenchmarkScenarioResult: Encodable {
         speedups(for: \.endToEndTokensPerSecond)
     }
 
+    var greedyOutputParity: Bool? {
+        guard temperature == 0 else { return nil }
+        return Set(variants.map(\.outputSHA256)).count == 1
+    }
+
     enum CodingKeys: String, CodingKey {
         case promptRepeat
         case promptCharacters
@@ -395,6 +411,7 @@ private struct Q36MTPBenchmarkScenarioResult: Encodable {
         case contextSize
         case decodeSpeedups
         case endToEndSpeedups
+        case greedyOutputParity
         case variants
     }
 
@@ -407,6 +424,7 @@ private struct Q36MTPBenchmarkScenarioResult: Encodable {
         try container.encode(contextSize, forKey: .contextSize)
         try container.encode(decodeSpeedups, forKey: .decodeSpeedups)
         try container.encode(endToEndSpeedups, forKey: .endToEndSpeedups)
+        try container.encodeIfPresent(greedyOutputParity, forKey: .greedyOutputParity)
         try container.encode(variants, forKey: .variants)
     }
 
@@ -415,6 +433,7 @@ private struct Q36MTPBenchmarkScenarioResult: Encodable {
             "scenario: prompt_repeat=\(promptRepeat.map(String.init) ?? "custom") prompt_characters=\(promptCharacters) decode_tokens=\(requestedDecodeTokens) temperature=\(format(temperature)) context_size=\(contextSize)",
             "speedup decode: \(formatSpeedups(decodeSpeedups))",
             "speedup e2e: \(formatSpeedups(endToEndSpeedups))",
+            "greedy output parity: \(greedyOutputParity.map(String.init) ?? "n/a")",
         ]
         for result in variants {
             lines.append(result.renderText())
@@ -466,6 +485,8 @@ private struct Q36MTPBenchmarkVariantResult: Encodable {
     let endToEndTokensPerSecond: Double?
     let residentMemoryBeforeBytes: UInt64?
     let residentMemoryAfterBytes: UInt64?
+    let acceleration: ChatAccelerationDiagnostics?
+    let outputSHA256: String
 
     var ttftSeconds: Double? {
         guard let firstTokenSeconds else { return nil }
@@ -489,6 +510,8 @@ private struct Q36MTPBenchmarkVariantResult: Encodable {
         case endToEndTokensPerSecond
         case residentMemoryBeforeBytes
         case residentMemoryAfterBytes
+        case acceleration
+        case outputSHA256
     }
 
     func encode(to encoder: Encoder) throws {
@@ -509,6 +532,8 @@ private struct Q36MTPBenchmarkVariantResult: Encodable {
         try container.encodeIfPresent(endToEndTokensPerSecond, forKey: .endToEndTokensPerSecond)
         try container.encodeIfPresent(residentMemoryBeforeBytes, forKey: .residentMemoryBeforeBytes)
         try container.encodeIfPresent(residentMemoryAfterBytes, forKey: .residentMemoryAfterBytes)
+        try container.encodeIfPresent(acceleration, forKey: .acceleration)
+        try container.encode(outputSHA256, forKey: .outputSHA256)
     }
 
     func renderText() -> String {
@@ -518,6 +543,8 @@ private struct Q36MTPBenchmarkVariantResult: Encodable {
             "  time total=\(format(elapsedSeconds))s load=\(format(loadSeconds))s prefill=\(format(prefillSeconds))s decode=\(format(decodeSeconds))s ttft=\(formatOptional(ttftSeconds))s",
             "  throughput prefill=\(formatOptional(prefillTokensPerSecond)) tok/s decode=\(formatOptional(decodeTokensPerSecond)) tok/s e2e=\(formatOptional(endToEndTokensPerSecond)) tok/s",
             "  resident_memory before=\(formatBytes(residentMemoryBeforeBytes)) after=\(formatBytes(residentMemoryAfterBytes))",
+            "  acceleration route=\(acceleration?.route ?? "n/a") drafted=\(formatOptional(acceleration?.draftedTokens)) accepted=\(formatOptional(acceleration?.acceptedDraftTokens)) rate=\(formatOptional(acceleration?.acceptanceRate))",
+            "  output_sha256=\(outputSHA256)",
             "",
         ].joined(separator: "\n")
     }
@@ -529,6 +556,10 @@ private struct Q36MTPBenchmarkVariantResult: Encodable {
     private func formatOptional(_ value: Double?) -> String {
         guard let value else { return "n/a" }
         return format(value)
+    }
+
+    private func formatOptional(_ value: Int?) -> String {
+        value.map(String.init) ?? "n/a"
     }
 
     private func formatBytes(_ value: UInt64?) -> String {

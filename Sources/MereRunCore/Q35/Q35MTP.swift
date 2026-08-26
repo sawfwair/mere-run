@@ -234,7 +234,7 @@ final class Q35MTPModel: Module {
         blockSize: Int,
         session: Q35MTPDraftSession,
         baseModel: Q35Model
-    ) -> [Int] {
+    ) -> Q35MTPDraftBlock {
         session.draftBlock(
             lastToken: lastToken,
             hidden: hidden,
@@ -242,6 +242,23 @@ final class Q35MTPModel: Module {
             mtpModel: self,
             baseModel: baseModel
         )
+    }
+}
+
+/// Device-resident greedy proposals for one target verification round.
+///
+/// Keeping the ids as an MLX array lets the target graph consume them before
+/// the single verification synchronization also makes them available to the
+/// CPU acceptance loop.
+struct Q35MTPDraftBlock {
+    let tokenIDs: MLXArray
+
+    var count: Int {
+        tokenIDs.dim(1)
+    }
+
+    var tokens: [Int] {
+        tokenIDs.asArray(Int32.self).map(Int.init)
     }
 }
 
@@ -284,9 +301,11 @@ final class Q35MTPDraftSession {
         blockSize: Int,
         mtpModel: Q35MTPModel,
         baseModel: Q35Model
-    ) -> [Int] {
+    ) -> Q35MTPDraftBlock {
         let total = max(1, blockSize) - 1
-        guard total > 0 else { return [] }
+        guard total > 0 else {
+            return Q35MTPDraftBlock(tokenIDs: MLXArray.zeros([1, 0], dtype: .int32))
+        }
 
         backlogHidden.append(hidden)
         backlogTokens.append(lastToken)
@@ -324,7 +343,7 @@ final class Q35MTPDraftSession {
         }
 
         let draftTokens = MLX.concatenated(tokenArrays, axis: 1)
-        MLX.eval(draftTokens)
-        return draftTokens.asArray(Int32.self).map(Int.init)
+        MLX.asyncEval(draftTokens)
+        return Q35MTPDraftBlock(tokenIDs: draftTokens)
     }
 }

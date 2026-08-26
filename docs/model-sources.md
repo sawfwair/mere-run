@@ -355,12 +355,13 @@ metadata as well as the license.
 reconverted 4-bit/group-64 MLX affine target pinned by the Qwen MLX Fast track.
 It retains the same Qwen3.8 text, code, image, context, and sampling contracts.
 The managed pull mounts the track's matching proposal-only 4-bit/group-64 head,
-`lowskillcoding/qwen38-mtp-head-4bit-g64` at revision
-`0966ddaff972fd3ca2be08f3640603b47e9ce70a`, under `mtp/`. Qwen's official
-Apache-2.0 license is retained separately from the official pinned revision.
-The sources total about 15.39 GB. The MTP component is loaded only when
-`MERERUN_Q35_MTP_SPECULATION=1`; default decode remains target-only because
-greedy speculative verification is not bit-exact with serial decode.
+`morgan/qwen38-27b-mtp-r20k-lr3-q4-g64-q2-rerank` at revision
+`fd4a99c590dd6e468c0e2a28168c235e32151a4b`, under `mtp/`. The companion uses
+a proposal-only 2-bit compact readout with exact 4-bit shortlist reranking.
+Qwen's official Apache-2.0 license is retained separately from the official
+pinned revision. The sources total about 15.52 GB. Greedy MTP decode is enabled
+by default for this quantized target because its small-batch Q4 verification is
+serial-exact; set `MERERUN_Q35_MTP_SPECULATION=0` to use target-only decode.
 
 `text-chat-bonsai-27b-1bit` and `text-chat-bonsai-27b-2bit` install Prism ML's
 public `prism-ml/Bonsai-27B-mlx-1bit` and

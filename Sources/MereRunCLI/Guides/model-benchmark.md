@@ -103,10 +103,11 @@ mere.run model benchmark gemma4-mtp \
   --json
 ```
 
-Compare Qwen3.6 baseline decode against adaptive and forced MTP policies:
+Compare Qwen-family baseline decode against adaptive and forced MTP policies:
 
 ```bash
 mere.run model benchmark q36-mtp \
+  --model vision-chat-q38-27b-4bit \
   --prompt-repeat-values 8,80,150 \
   --temperature-values 0,0.7 \
   --decode-tokens 32 \
@@ -237,9 +238,11 @@ Managed Ornith 1.5 pulls install one shared, pinned MTP companion:
 - `forced`: MTP enabled with `MERERUN_Q35_MTP_SPECULATION=1` and a configurable
   forced threshold, defaulting to `1` token.
 
-The runtime may still stop on EOS before `--decode-tokens`. The command reports prompt tokens, generated tokens, timing, throughput, process
-resident memory, and decode/end-to-end speedups for adaptive and forced MTP
-against baseline. Use `--temperature-values 0,0.7` to compare deterministic
+The command forces exactly `--decode-tokens` per variant and reports prompt
+tokens, timing, throughput, process resident memory, acceleration counters, and
+decode/end-to-end speedups for adaptive and forced MTP against baseline. Greedy
+scenarios also report output SHA-256 values and a cross-variant parity verdict.
+Use `--temperature-values 0,0.7` to compare deterministic
 greedy decode against the default chat sampling temperature. Greedy forced MTP
 uses the native block verifier; non-greedy forced MTP stays on the exact
 probabilistic speculative path.

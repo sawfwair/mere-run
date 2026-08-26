@@ -480,9 +480,10 @@ the `vision-chat-q38-27b` BF16 and 4-bit lanes. Set this to
 window is large enough; set it to `0`, `false`, or `no` to disable MTP. Any other
 value, including unset, uses the model-specific policy. Qwen3.8's dense head is
 embedded in the BF16 checkpoint; `vision-chat-q38-27b-4bit` mounts the matching
-4-bit/group-64 MLX Fast proposal head. Both are opt-in because multi-token
-verification can diverge from serial greedy decode; Qwen3.6 hybrid MoE retains
-its adaptive default. When continuous batching is enabled, an eligible MTP
+4-bit/group-64 MLX Fast proposal head with a 2-bit shortlist readout. The Q4
+target enables serial-exact MTP by default; BF16 remains opt-in. Qwen3.6 hybrid
+MoE retains its adaptive default.
+When continuous batching is enabled, an eligible MTP
 request takes the speculative lane only if no peer is already admitted. A
 contended request uses ordinary continuous batching; a late peer does not
 migrate an MTP request that is already running.
@@ -500,8 +501,10 @@ request context must be at least the selected threshold.
 
 ### `MERERUN_Q35_MTP_BLOCK_SIZE`
 
-Override the Qwen-family greedy MTP draft block size. Defaults to `4` and is
-clamped to the native runtime's supported range.
+Override the Qwen-family greedy MTP verification block size. Qwen3.8 defaults
+to `8` (one committed token plus up to seven proposals); other Qwen-family
+targets retain `4`. Qwen3.8 Q4 is capped at its serial-exact width of `9`;
+other targets retain the native maximum of `16`.
 
 ### `MERERUN_Q35_PREFIX_KV_CACHE`
 

@@ -25,6 +25,40 @@ public enum Q35LayerCache: @unchecked Sendable {
         }
     }
 
+    func restoreVerificationPrefix(totalTokens: Int, tokenCount: Int) -> Bool {
+        guard canRestoreVerificationPrefix(
+            totalTokens: totalTokens,
+            tokenCount: tokenCount
+        ) else {
+            return false
+        }
+        switch self {
+        case .linear(let cache):
+            return cache.restoreVerificationPrefix(tokenCount: tokenCount)
+        case .full(let genericCache):
+            guard let cache = genericCache as? KVCacheSimple else { return false }
+            cache.rollback(toOffset: cache.offset - totalTokens + tokenCount)
+            return true
+        }
+    }
+
+    func canRestoreVerificationPrefix(totalTokens: Int, tokenCount: Int) -> Bool {
+        guard tokenCount > 0, tokenCount <= totalTokens else { return false }
+        switch self {
+        case .linear(let cache):
+            return cache.canRestoreVerificationPrefix(tokenCount: tokenCount)
+        case .full(let cache):
+            guard let cache = cache as? KVCacheSimple else { return false }
+            return cache.offset >= totalTokens
+        }
+    }
+
+    func commitVerification() {
+        if case .linear(let cache) = self {
+            cache.commitVerification()
+        }
+    }
+
     func batched(with caches: [Q35LayerCache]) -> Q35LayerCache? {
         guard !caches.isEmpty else { return nil }
         switch self {
@@ -120,7 +154,13 @@ final class Q35DecoderLayer: Module {
                 } else {
                     fullCache = nil
                 }
-                attentionOut = selfAttention(normed, mask: fullMask, cache: fullCache, positionIds: positionIds)
+                attentionOut = selfAttention(
+                    normed,
+                    mask: fullMask,
+                    cache: fullCache,
+                    positionIds: positionIds,
+                    targetVerify: targetVerify
+                )
             }
             h = x + attentionOut
         }
@@ -289,6 +329,7 @@ public final class Q35Model: Module, @unchecked Sendable {
 
     private var compactDraftHead: Linear?
     private var compactDraftHeadSource: ObjectIdentifier?
+    private var coarseDraftHead: PortableQuantizedLinear?
 
     static let compactDraftPrefixCount = 98_304
     static let compactDraftControlStart = 248_044
@@ -344,6 +385,10 @@ public final class Q35Model: Module, @unchecked Sendable {
             MLX.eval(quantized.scales)
             if let biases = quantized.biases { MLX.eval(biases) }
         }
+        if let coarseDraftHead {
+            MLX.eval(coarseDraftHead.weight, coarseDraftHead.scales)
+            if let biases = coarseDraftHead.biases { MLX.eval(biases) }
+        }
 
         let hidden = MLXArray.zeros(
             [1, 1, config.textConfig.hiddenSize],
@@ -358,7 +403,93 @@ public final class Q35Model: Module, @unchecked Sendable {
         guard let head = resolvedCompactDraftHead() else {
             return argMax(logits(from: hidden), axis: -1).asType(.int32).reshaped(1, 1)
         }
+        if let coarseDraftHead,
+           let coarseBiases = coarseDraftHead.biases,
+           let exactHead = head as? PortableQuantizedLinear,
+           let exactBiases = exactHead.biases {
+            #if os(macOS) || os(iOS)
+            let coarseOutput = Device.defaultDevice().deviceType == .gpu
+                ? Q35DraftRerank.coarseLogits(
+                    hidden: hidden,
+                    weight: coarseDraftHead.weight,
+                    scales: coarseDraftHead.scales,
+                    biases: coarseBiases
+                )
+                : nil
+            #else
+            let coarseOutput: MLXArray? = nil
+            #endif
+            let coarseLogits = (coarseOutput ?? coarseDraftHead(hidden))[
+                0..., 0..., 0..<Self.compactDraftRealCount
+            ]
+            #if os(macOS) || os(iOS)
+            if Device.defaultDevice().deviceType == .gpu,
+               hidden.shape == [1, 1, 5_120],
+               exactHead.groupSize == 64,
+               exactHead.bits == 4,
+               exactHead.weight.shape == [Self.compactDraftPaddedCount, 640],
+               exactHead.scales.shape == [Self.compactDraftPaddedCount, 80],
+               exactBiases.shape == exactHead.scales.shape {
+                return Q35DraftRerank.token(
+                    hidden: hidden,
+                    coarseLogits: coarseLogits,
+                    exactWeight: exactHead.weight,
+                    exactScales: exactHead.scales,
+                    exactBiases: exactBiases,
+                    prefixCount: Self.compactDraftPrefixCount,
+                    controlOffset: Self.compactDraftControlStart
+                        - Self.compactDraftPrefixCount
+                )
+            }
+            #endif
+            let shortlist = MLX.sorted(
+                argPartition(-coarseLogits, kth: 31, axis: -1)[.ellipsis, 0..<32],
+                axis: -1
+            )
+            let flatShortlist = shortlist.reshaped([32])
+            let selectedWeight = MLX.take(exactHead.weight, flatShortlist, axis: 0)
+            let selectedScales = MLX.take(exactHead.scales, flatShortlist, axis: 0)
+            let selectedBiases = MLX.take(exactBiases, flatShortlist, axis: 0)
+            let exactLogits = MLX.quantizedMM(
+                hidden,
+                selectedWeight,
+                scales: selectedScales,
+                biases: selectedBiases,
+                transpose: true,
+                groupSize: exactHead.groupSize,
+                bits: exactHead.bits,
+                mode: exactHead.mode
+            )
+            let best = argMax(exactLogits, axis: -1).asType(.int32)
+            let compactID = takeAlong(
+                shortlist,
+                best.expandedDimensions(axis: -1),
+                axis: -1
+            ).reshaped(1, 1)
+            return Self.compactTokenIDToVocabulary(compactID)
+        }
         return Self.compactDraftTokenID(from: head(hidden))
+    }
+
+    func installCoarseDraftHead(
+        weight: MLXArray,
+        scales: MLXArray,
+        biases: MLXArray
+    ) {
+        guard weight.shape == [Self.compactDraftPaddedCount, config.textConfig.hiddenSize / 16],
+              scales.shape == [Self.compactDraftPaddedCount, config.textConfig.hiddenSize / 64],
+              biases.shape == scales.shape else {
+            return
+        }
+        coarseDraftHead = PortableQuantizedLinear(
+            weight: weight,
+            bias: nil,
+            scales: scales,
+            biases: biases,
+            groupSize: 64,
+            bits: 2,
+            mode: .affine
+        )
     }
 
     static func compactDraftRows(_ array: MLXArray) -> MLXArray {
@@ -393,7 +524,11 @@ public final class Q35Model: Module, @unchecked Sendable {
             paddedLogits[0..., 0..., 0..<compactDraftRealCount],
             axis: -1
         ).asType(.int32)
-        return MLX.which(
+        return compactTokenIDToVocabulary(compactID)
+    }
+
+    static func compactTokenIDToVocabulary(_ compactID: MLXArray) -> MLXArray {
+        MLX.which(
             compactID .< compactDraftPrefixCount,
             compactID,
             compactID + (compactDraftControlStart - compactDraftPrefixCount)

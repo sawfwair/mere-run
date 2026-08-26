@@ -3,16 +3,15 @@ import Foundation
 /// Chooses a greedy MTP draft depth from the acceptance observed in this request.
 ///
 /// The MTP head only proposes. A deeper round is useful while the probability of
-/// reaching its next draft outweighs the marginal head work and the repair work
-/// paid after a rejection. The target still verifies every proposed token.
+/// reaching its next draft outweighs the marginal head work. The target still
+/// verifies every proposed token, while rejected suffixes rewind in-place.
 struct Q35MTPAdaptivePolicy {
     private static let acceptanceAlpha = 0.15
     private static let inferredAcceptanceCeiling = 0.95
 
-    /// Unlike the MLX Fast crown's checkpointed rollback path, mere.run repairs
-    /// a rejected prefix with a target forward. Use the MTPLX-style cost ratio
-    /// that prices that repair instead of the crown's lower rollback-only fit.
-    private static let headStepCostRatio = 0.43
+    /// Fit for the rollback-only path: a rejected suffix replays linear state
+    /// from verification intermediates instead of paying another target pass.
+    private static let headStepCostRatio = 0.18
 
     private var positionAcceptance: [Double]
 

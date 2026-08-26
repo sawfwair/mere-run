@@ -4,6 +4,92 @@ import XCTest
 @testable import MereRunCore
 
 final class PortableQuantizedMatmulTests: MereRunCoreTestCase {
+    #if os(macOS)
+    func testQ38DraftTop32MatchesStableMLXSelection() throws {
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip(
+                "Qwen3.8 draft top-32 parity requires MERERUN_TEST_MLX_DEVICE=gpu."
+            )
+        }
+        MLXRandom.seed(38)
+        let logits = (MLXRandom.uniform(
+            -32..<32,
+            [Q35DraftRerank.realCount]
+        ) * 4).round().asType(.bfloat16)
+        let expected = argPartition(
+            logits,
+            kth: Q35DraftRerank.realCount - Q35DraftRerank.candidateCount
+        )[(Q35DraftRerank.realCount - Q35DraftRerank.candidateCount)...]
+            .asType(.uint32)
+        let actual = Q35DraftRerank.topCandidates(logits)
+        MLX.eval(expected, actual)
+
+        XCTAssertEqual(expected.asArray(Int.self), actual.asArray(Int.self))
+    }
+
+    func testSmallBatchAffineQMVMatchesSerialRowsBitExactly() throws {
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip(
+                "Small-batch affine QMV parity requires MERERUN_TEST_MLX_DEVICE=gpu."
+            )
+        }
+        MLXRandom.seed(71)
+        let inputSize = 512
+        for outputSize in [96, 4_096] {
+            let denseWeight = MLXRandom.uniform(
+                -0.2..<0.2,
+                [outputSize, inputSize]
+            ).asType(.bfloat16)
+            let (weight, scales, optionalBiases) = MLX.quantized(
+                denseWeight,
+                groupSize: 64,
+                bits: 4,
+                mode: .affine
+            )
+            let biases = try XCTUnwrap(optionalBiases)
+
+            for width in [2, 4, 7, 9] {
+                let input = MLXRandom.uniform(
+                    -0.5..<0.5,
+                    [1, width, inputSize]
+                ).asType(.bfloat16)
+                let expectedRows = (0..<width).map { row in
+                    MLX.quantizedMM(
+                        input[0..., row..<(row + 1), 0...],
+                        weight,
+                        scales: scales,
+                        biases: biases,
+                        transpose: true,
+                        groupSize: 64,
+                        bits: 4,
+                        mode: .affine
+                    )
+                }
+                let expected = MLX.concatenated(expectedRows, axis: 1)
+                let actual = try XCTUnwrap(SmallBatchAffineQMV.matmul(
+                    input,
+                    weight: weight,
+                    scales: scales,
+                    biases: biases,
+                    groupSize: 64,
+                    bits: 4,
+                    mode: .affine
+                ))
+                MLX.eval(expected, actual)
+
+                let maximumError = MLX.max(MLX.abs(
+                    expected.asType(.float32) - actual.asType(.float32)
+                )).item(Float.self)
+                XCTAssertEqual(
+                    maximumError,
+                    0,
+                    "width \(width), output size \(outputSize) changed serial QMV output"
+                )
+            }
+        }
+    }
+    #endif
+
     func testCUDAQuantModeParsingDefaultsToAutomatic() {
         XCTAssertEqual(MLXCUDAQuant.parseMode(nil), .automatic)
         XCTAssertEqual(MLXCUDAQuant.parseMode(""), .automatic)

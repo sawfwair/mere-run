@@ -92,7 +92,8 @@ final class Q35FullAttention: Module {
         _ x: MLXArray,
         mask: MLXFast.ScaledDotProductAttentionMaskMode,
         cache: KVCache?,
-        positionIds: MLXArray? = nil
+        positionIds: MLXArray? = nil,
+        targetVerify: Bool = false
     ) -> MLXArray {
         let b = x.dim(0)
         let s = x.dim(1)
@@ -147,13 +148,43 @@ final class Q35FullAttention: Module {
             v = cached.1
         }
 
-        let attn = MLXFast.scaledDotProductAttention(
-            queries: q,
-            keys: k,
-            values: v,
-            scale: scale,
-            mask: mask
-        )
+        let queryCount = q.dim(2)
+        let keyCount = k.dim(2)
+        let attn: MLXArray
+        if targetVerify,
+           b == 1,
+           (6...9).contains(queryCount),
+           keyCount >= queryCount,
+           case .causal = mask {
+            // The fused SDPA vector path changes arithmetic above five query
+            // rows. Preserve the serial greedy trajectory by presenting the
+            // same bottom-right-aligned causal windows as two <=5-row calls.
+            let split = 5
+            let keySplit = keyCount - (queryCount - split)
+            let first = MLXFast.scaledDotProductAttention(
+                queries: q[0..., 0..., 0..<split, 0...],
+                keys: k[0..., 0..., 0..<keySplit, 0...],
+                values: v[0..., 0..., 0..<keySplit, 0...],
+                scale: scale,
+                mask: .causal
+            )
+            let second = MLXFast.scaledDotProductAttention(
+                queries: q[0..., 0..., split..., 0...],
+                keys: k,
+                values: v,
+                scale: scale,
+                mask: .causal
+            )
+            attn = MLX.concatenated([first, second], axis: 2)
+        } else {
+            attn = MLXFast.scaledDotProductAttention(
+                queries: q,
+                keys: k,
+                values: v,
+                scale: scale,
+                mask: mask
+            )
+        }
 
         var out = attn.transposed(0, 2, 1, 3).reshaped(b, s, numHeads * headDim)
         if let gate {
