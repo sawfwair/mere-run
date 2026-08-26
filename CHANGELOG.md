@@ -6,6 +6,13 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.45.0 - 2026-08-26
+
+This release adds native Qwen3.8 Flash Next inference with qualified mixed-Q2/Q4
+and Q4 MLX distributions and verified MTP acceleration. It also makes LTX 2.5
+generation substantially more memory-bounded and keeps model inventory fast on
+large or externally linked stores.
+
 ### Text
 
 - added pinned mixed Q2/Q4 and Q4 MLX distributions of
@@ -44,6 +51,13 @@ The format is based on Keep a Changelog.
   generation now automatically decodes long or high-resolution clips in
   overlapped temporal tiles instead of attempting a full-frame decode that can
   exhaust unified memory.
+
+### Included pull requests
+
+- exact release range: [#365](https://github.com/sawfwair/mere-run/pull/365),
+  [#366](https://github.com/sawfwair/mere-run/pull/366),
+  [#367](https://github.com/sawfwair/mere-run/pull/367), and
+  [#369](https://github.com/sawfwair/mere-run/pull/369).
 
 ## 0.44.0 - 2026-08-25
 
