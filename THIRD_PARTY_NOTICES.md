@@ -301,6 +301,18 @@ SOFTWARE.
 
 ## Source-derived runtime implementations
 
+### MLX Fast Qwen3.8 decode-kernel provenance
+
+- purpose: the macOS Metal path for serial-exact affine 4-bit, group-size-64
+  matrix-vector multiplication at speculative verification widths 2 through 9,
+  plus the proposal-only affine-Q2 readout, top-32 selector, and exact
+  affine-Q4 reranker
+- upstream project:
+  [`Layr-Labs/qwen-3.8-mtp-challenge`](https://github.com/Layr-Labs/qwen-3.8-mtp-challenge),
+  revision `0863b06ac16e26e48fc06e97444095b00feb66d4`
+- upstream file: `Vendor/mlx-swift-lm/Libraries/MLXLLM/Models/Qwen35.swift`
+- license: MIT, Copyright (c) 2026 Layr Labs, Inc.
+
 ### Qwen3.5/3.6 GDN verification prework provenance
 
 - purpose: the macOS Metal kernel that fuses Qwen-family gated-delta

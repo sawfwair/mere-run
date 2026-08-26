@@ -904,7 +904,7 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
             baseModel: model
         )
         XCTAssertEqual(drafts.count, 3)
-        XCTAssertTrue(drafts.allSatisfy { $0 >= 0 && $0 < config.textConfig.vocabSize })
+        XCTAssertTrue(drafts.tokens.allSatisfy { $0 >= 0 && $0 < config.textConfig.vocabSize })
     }
 
     func testQ35EmbeddedMTPWeightsSelectOnlyContainingShards() {
@@ -1070,13 +1070,15 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         let lastIndex = output.hidden.dim(1) - 1
         let previousHidden = output.hidden[0..., lastIndex..<(lastIndex + 1), 0...]
         let session = Q35MTPDraftSession()
-        let draftTokens = mtp.draftBlock(
+        let draftBlock = mtp.draftBlock(
             lastToken: 4,
             hidden: previousHidden,
             blockSize: 4,
             session: session,
             baseModel: model
         )
+        MLX.eval(draftBlock.tokenIDs)
+        let draftTokens = draftBlock.tokens
 
         XCTAssertEqual(draftTokens.count, 3)
         XCTAssertTrue(draftTokens.allSatisfy { $0 >= 0 && $0 < config.textConfig.vocabSize })
@@ -1114,18 +1116,68 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         XCTAssertEqual(session.committedHistoryCount, 3)
     }
 
-    func testQ35MTPAdaptivePolicyRampsAfterFullAcceptance() {
+    func testQ35VerificationCachesRestoreAcceptedPrefixWithoutTargetReplay() throws {
+        MLXRandom.seed(42)
+        let config = try decodeConfig(makeTinyRuntimeConfig(
+            layerTypes: ["linear_attention", "full_attention"]
+        ))
+        let model = Q35Model(config: config)
+        let baseCaches = makeLayerCaches(config: config)
+        let baseTokens = [1, 2, 3]
+        let baseInput = MLXArray(baseTokens.map(Int32.init)).reshaped(1, baseTokens.count)
+        let baseOutput = model.forward(baseInput, cache: baseCaches)
+        MLX.eval(baseOutput.logits, baseOutput.hidden)
+
+        let verificationTokens = [4, 5, 6, 7, 8, 9, 10, 11]
+        for committedCount in 1..<verificationTokens.count {
+            let candidateCaches = baseCaches.map { $0?.fork() }
+            let verificationInput = MLXArray(verificationTokens.map(Int32.init))
+                .reshaped(1, verificationTokens.count)
+            let verification = model.forward(
+                verificationInput,
+                cache: candidateCaches,
+                targetVerify: true
+            )
+            MLX.eval(verification.logits, verification.hidden)
+
+            for cache in candidateCaches.compactMap({ $0 }) {
+                XCTAssertTrue(cache.restoreVerificationPrefix(
+                    totalTokens: verificationTokens.count,
+                    tokenCount: committedCount
+                ))
+            }
+
+            let continuation = MLXArray([Int32(12)]).reshaped(1, 1)
+            let restoredOutput = model.forward(continuation, cache: candidateCaches)
+
+            let referenceCaches = baseCaches.map { $0?.fork() }
+            let committedInput = MLXArray(
+                verificationTokens.prefix(committedCount).map(Int32.init)
+            ).reshaped(1, committedCount)
+            let committedOutput = model.forward(committedInput, cache: referenceCaches)
+            MLX.eval(committedOutput.logits, committedOutput.hidden)
+            let referenceOutput = model.forward(continuation, cache: referenceCaches)
+            MLX.eval(restoredOutput.logits, referenceOutput.logits)
+
+            let maximumError = MLX.max(MLX.abs(
+                restoredOutput.logits.asType(.float32) - referenceOutput.logits.asType(.float32)
+            )).item(Float.self)
+            XCTAssertLessThan(maximumError, 0.0001)
+        }
+    }
+
+    func testQ35MTPAdaptivePolicyStartsAtRollbackDepthAndStaysThereAfterFullAcceptance() {
         var policy = Q35MTPAdaptivePolicy(maxDraftDepth: 3)
 
-        XCTAssertEqual(policy.draftDepth(offeredDepth: 3), 2)
-        policy.record(acceptedDrafts: 2, drafted: 2)
+        XCTAssertEqual(policy.draftDepth(offeredDepth: 3), 3)
+        policy.record(acceptedDrafts: 3, drafted: 3)
         XCTAssertEqual(policy.draftDepth(offeredDepth: 3), 3)
     }
 
     func testQ35MTPAdaptivePolicyFallsBackAfterRepeatedRejection() {
         var policy = Q35MTPAdaptivePolicy(maxDraftDepth: 3)
 
-        for _ in 0..<8 {
+        for _ in 0..<16 {
             let depth = policy.draftDepth(offeredDepth: 3)
             guard depth > 0 else { break }
             policy.record(acceptedDrafts: 0, drafted: depth)
@@ -1286,6 +1338,20 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         XCTAssertEqual(Q35Generator.mtpBlockSize(environment: ["MERERUN_Q35_MTP_BLOCK_SIZE": "1"]), 4)
         XCTAssertEqual(Q35Generator.mtpBlockSize(environment: ["MERERUN_Q35_MTP_BLOCK_SIZE": "6"]), 6)
         XCTAssertEqual(Q35Generator.mtpBlockSize(environment: ["MERERUN_Q35_MTP_BLOCK_SIZE": "32"]), 16)
+        XCTAssertEqual(
+            Q35Generator.mtpBlockSize(
+                modelId: Q35Resources.q38TwentySevenB4BitModelId,
+                environment: [:]
+            ),
+            8
+        )
+        XCTAssertEqual(
+            Q35Generator.mtpBlockSize(
+                modelId: Q35Resources.q38TwentySevenB4BitModelId,
+                environment: ["MERERUN_Q35_MTP_BLOCK_SIZE": "16"]
+            ),
+            9
+        )
     }
 
     func testQ35JSONModeAlwaysSelectsConstrainedSerialDecode() {

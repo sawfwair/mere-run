@@ -111,7 +111,7 @@ public struct Q35Resources: Sendable, Hashable {
     public static let q38TwentySevenBEstimatedDownloadBytes: Int64 = 55_586_114_863
     public static let q38TwentySevenB4BitUpstreamRepoId = "EigenLabs/Qwen3.8-27B-4bit"
     public static let q38TwentySevenB4BitUpstreamRevision = "eda45ab47f465d08d6558f0353a2346e2eb9d5b3"
-    public static let q38TwentySevenB4BitEstimatedDownloadBytes: Int64 = 15_392_000_000
+    public static let q38TwentySevenB4BitEstimatedDownloadBytes: Int64 = 15_520_000_000
     public static let q38FlashNextMixedUpstreamRepoId = "Sawfwair/Qwen3.8-Flash-Next-MLX-Mixed-2bit"
     public static let q38FlashNextMixedUpstreamRevision = "0bdf3edf02df271e9898f17a7882e5e6a8feb58a"
     public static let q38FlashNextMixedEstimatedDownloadBytes: Int64 = 73_095_335_934
@@ -119,8 +119,8 @@ public struct Q35Resources: Sendable, Hashable {
     public static let q38FlashNext4BitUpstreamRevision = "6cc9bbc0fae9ce26b7670b3ed1e26d557c154506"
     public static let q38FlashNext4BitEstimatedDownloadBytes: Int64 = 104_742_357_706
     public static let q38MTPComponentPath = "mtp"
-    public static let q38MTP4BitUpstreamRepoId = "lowskillcoding/qwen38-mtp-head-4bit-g64"
-    public static let q38MTP4BitUpstreamRevision = "0966ddaff972fd3ca2be08f3640603b47e9ce70a"
+    public static let q38MTP4BitUpstreamRepoId = "morgan/qwen38-27b-mtp-r20k-lr3-q4-g64-q2-rerank"
+    public static let q38MTP4BitUpstreamRevision = "fd4a99c590dd6e468c0e2a28168c235e32151a4b"
     public static let q38MTPComponentSnapshotPatterns = ["model.safetensors"]
     public static let q38LicenseComponentPath = "licenses/qwen3.8"
     public static let q38LicenseComponentSnapshotPatterns = ["LICENSE"]

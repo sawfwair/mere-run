@@ -817,8 +817,16 @@ final class ManagedModelCatalogTests: XCTestCase {
             Q35Resources.q38MTP4BitUpstreamRepoId
         )
         XCTAssertEqual(
+            Q35Resources.q38MTP4BitUpstreamRepoId,
+            "morgan/qwen38-27b-mtp-r20k-lr3-q4-g64-q2-rerank"
+        )
+        XCTAssertEqual(
             spec.mountedHubFallbacks.first?.hubFallback.revision,
             Q35Resources.q38MTP4BitUpstreamRevision
+        )
+        XCTAssertEqual(
+            Q35Resources.q38MTP4BitUpstreamRevision,
+            "fd4a99c590dd6e468c0e2a28168c235e32151a4b"
         )
         XCTAssertEqual(
             spec.mountedHubFallbacks.first?.hubFallback.patterns,
@@ -838,7 +846,7 @@ final class ManagedModelCatalogTests: XCTestCase {
         )
         XCTAssertEqual(spec.validationKind, .q35)
         XCTAssertEqual(spec.defaultRuntimeServingEngine, .textChatQ36)
-        XCTAssertEqual(spec.estimatedDownloadBytes, 15_392_000_000)
+        XCTAssertEqual(spec.estimatedDownloadBytes, 15_520_000_000)
         XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
         XCTAssertTrue(spec.defaultCLICommands.contains("model benchmark code"))
         XCTAssertEqual(spec.apiProfile?.thinkingLevels, [.low, .medium, .xhigh])

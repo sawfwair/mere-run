@@ -130,6 +130,9 @@ public actor Q35Generator: ChatGenerator {
     private static let minimumReclaimableCacheBytes = 256 * 1_024 * 1_024
     private static let prefixKVCacheMaxEntries = 4
     private static let defaultMTPBlockSize = 4
+    /// One committed token plus up to seven Qwen3.8 proposal tokens. Wider
+    /// target verification is split only at SDPA, preserving one weight pass.
+    private static let q38MTPBlockSize = 8
     private static let mtpPromptHistoryLimit = 4_096
 
     /// Continuous-batching decode samples every row on GPU (the same sampler
@@ -479,8 +482,9 @@ public actor Q35Generator: ChatGenerator {
         let mtpExplicitlyDisabled = mtpPolicy == "0" || mtpPolicy == "false" || mtpPolicy == "no"
         let mtpExplicitlyEnabled = mtpPolicy == "1" || mtpPolicy == "true"
             || mtpPolicy == "yes" || mtpPolicy == "on"
+        let q38Q4 = modelId == Q35Resources.q38TwentySevenB4BitModelId
         let shouldLoadMTP = !mtpExplicitlyDisabled
-            && (config.textConfig.usesMoE || mtpExplicitlyEnabled)
+            && (config.textConfig.usesMoE || q38Q4 || mtpExplicitlyEnabled)
         let loadedMTP: (any Q35MTPDraftModel)?
         let ornithMTPCompanionRoot = Q35Resources.isOrnith35BMLXModelId(modelId)
             ? ManagedModelResolver.resolveInstalledModel(id: Q35Resources.ornith35BMTPModelId)
@@ -517,6 +521,7 @@ public actor Q35Generator: ChatGenerator {
                 let mtp = Q35MTPModel(config: config)
                 try loadMTPWeights(
                     into: mtp,
+                    baseModel: q35Model,
                     from: mtpResources,
                     groupSize: groupSize,
                     bits: bits
@@ -607,11 +612,13 @@ public actor Q35Generator: ChatGenerator {
                 .write(toFile: dumpPath, atomically: true, encoding: .utf8)
         }
 
-        let eosSet = Set(
-            loadedConfig.eosTokenIds
-                + loadedGenerationEOSTokenIds
-                + [tokenizerAndTemplate.eosTokenId].compactMap { $0 }
-        )
+        let eosSet = request.stopOnEOS
+            ? Set(
+                loadedConfig.eosTokenIds
+                    + loadedGenerationEOSTokenIds
+                    + [tokenizerAndTemplate.eosTokenId].compactMap { $0 }
+            )
+            : Set<Int>()
         let generationConfig = GenerationConfig(
             maxTokens: request.maxTokens,
             temperature: Float(request.temperature),
@@ -842,10 +849,10 @@ public actor Q35Generator: ChatGenerator {
     /// Select the model-specific MTP break-even point. Qwen3.6 hybrid MoE uses
     /// the measured long-context threshold (~20-token context -31%, ~4K -22%,
     /// ~12K +1.5-2.5x on M4 Max). Ornith 1.5 uses its validated MTP companion
-    /// from short prompts. Dense Qwen3.8 uses a zero threshold only
-    /// after explicit opt-in because its BF16 multi-token verification is not
-    /// serial-greedy identical. Qwen4Exp uses its exact verified inline head from
-    /// short prompts. MERERUN_Q35_MTP_SPECULATION can enable/disable the path and
+    /// from short prompts. Quantized Qwen3.8 uses serial-exact small-batch Q4
+    /// verification from short prompts; its BF16 sibling remains opt-in.
+    /// Qwen4Exp uses its exact verified inline head from short prompts.
+    /// MERERUN_Q35_MTP_SPECULATION can enable/disable the path and
     /// MERERUN_Q35_MTP_MIN_PROMPT_TOKENS overrides either default.
     static func shouldSpeculate(
         promptTokenCount: Int,
@@ -903,12 +910,19 @@ public actor Q35Generator: ChatGenerator {
         return usesMoE ? 6144 : 0
     }
 
-    static func mtpBlockSize(environment env: [String: String] = ProcessInfo.processInfo.environment) -> Int {
+    static func mtpBlockSize(
+        modelId: String = Q35Resources.q36NanoModelId,
+        environment env: [String: String] = ProcessInfo.processInfo.environment
+    ) -> Int {
+        let modelDefault = Q35Resources.isQ38ModelId(modelId)
+            ? q38MTPBlockSize
+            : defaultMTPBlockSize
         guard let raw = env["MERERUN_Q35_MTP_BLOCK_SIZE"],
               let value = Int(raw), value >= 2 else {
-            return defaultMTPBlockSize
+            return modelDefault
         }
-        return min(16, value)
+        let maximum = modelId == Q35Resources.q38TwentySevenB4BitModelId ? 9 : 16
+        return min(maximum, value)
     }
 
     private func decodeTokens(
@@ -943,6 +957,7 @@ public actor Q35Generator: ChatGenerator {
                 usesMoE: model.config.textConfig.usesMoE
             ),
             enabledByDefault: model.config.textConfig.usesMoE
+                || modelId == Q35Resources.q38TwentySevenB4BitModelId
         ) && mropeRopeDelta == nil ? mtpModel : nil
         let decodePath = Self.decodePath(
             jsonConstrained: jsonConstrained,
@@ -1061,7 +1076,7 @@ public actor Q35Generator: ChatGenerator {
         var mtpVerificationPasses = 0
         var mtpReplacementPasses = 0
         var mtpNonDraftingRounds = 0
-        let mtpBlockSize = Self.mtpBlockSize()
+        let mtpBlockSize = Self.mtpBlockSize(modelId: modelId)
         var mtpAdaptivePolicy = Q35MTPAdaptivePolicy(maxDraftDepth: mtpBlockSize - 1)
         let mtpDraftSession = Q35MTPDraftSession(
             promptTokens: promptTokens,
@@ -1159,27 +1174,30 @@ public actor Q35Generator: ChatGenerator {
                     )
                     let draftDepth = mtpAdaptivePolicy.draftDepth(offeredDepth: offeredDepth)
                     if draftDepth > 0 {
-                        let draftTokens = mtpModel.draftBlock(
+                        let draftBlock = mtpModel.draftBlock(
                             lastToken: next,
                             hidden: hidden,
                             blockSize: draftDepth + 1,
                             session: mtpDraftSession,
                             baseModel: model
                         )
-                        mtpDraftedTokens += draftTokens.count
+                        mtpDraftedTokens += draftBlock.count
 
                         let candidateCaches = forkLayerCaches(layerCaches)
-                        let candidateInput = MLXArray(([next] + draftTokens).map(Int32.init))
-                            .reshaped(1, draftTokens.count + 1)
+                        let nextToken = MLXArray([Int32(next)]).reshaped(1, 1)
+                        let candidateInput = MLX.concatenated(
+                            [nextToken, draftBlock.tokenIDs],
+                            axis: 1
+                        )
                         let candidate = model.forward(
                             candidateInput,
                             cache: candidateCaches,
                             targetVerify: true
                         )
                         let candidateMTPHidden = candidate.mtpHidden ?? candidate.hidden
-                        MLX.eval(candidate.logits)
-                        MLX.eval(candidateMTPHidden)
+                        MLX.eval(candidate.logits, candidateMTPHidden, draftBlock.tokenIDs)
                         mtpVerificationPasses += 1
+                        let draftTokens = draftBlock.tokens
 
                         var accepted = 0
                         var verificationHistory = repetitionHistory
@@ -1216,6 +1234,7 @@ public actor Q35Generator: ChatGenerator {
                                 }
                                 emit(token)
                             }
+                            commitVerificationCaches(candidateCaches)
                             layerCaches = candidateCaches
                             logits = lastTokenLogits(candidate.logits)
                             previousHidden = lastTokenHidden(candidateMTPHidden)
@@ -1244,6 +1263,30 @@ public actor Q35Generator: ChatGenerator {
                         }
                         if eosSet.contains(replacement) {
                             break
+                        }
+
+                        let committedTokenCount = accepted + 1
+                        if restoreVerificationCaches(
+                            candidateCaches,
+                            totalTokens: draftTokens.count + 1,
+                            tokenCount: committedTokenCount
+                        ) {
+                            mtpDraftSession.recordCommittedTransitions(
+                                hiddenStates: candidate.hidden,
+                                nextTokens: acceptedPrefix
+                            )
+                            layerCaches = candidateCaches
+                            logits = candidate.logits[
+                                0...,
+                                accepted..<(accepted + 1),
+                                0...
+                            ]
+                            previousHidden = candidate.hidden[
+                                0...,
+                                accepted..<(accepted + 1),
+                                0...
+                            ]
+                            continue
                         }
 
                         let replacementCaches = forkLayerCaches(layerCaches)
@@ -1316,6 +1359,7 @@ public actor Q35Generator: ChatGenerator {
                             break
                         }
                         emit(draft)
+                        commitVerificationCaches(candidateCaches)
                         layerCaches = candidateCaches
                         logits = lastTokenLogits(candidate.logits)
                         previousHidden = lastTokenHidden(candidateMTPHidden)
@@ -2124,6 +2168,37 @@ public actor Q35Generator: ChatGenerator {
         caches.map { $0?.fork() }
     }
 
+    private func restoreVerificationCaches(
+        _ caches: [Q35LayerCache?],
+        totalTokens: Int,
+        tokenCount: Int
+    ) -> Bool {
+        let presentCaches = caches.compactMap { $0 }
+        guard presentCaches.allSatisfy({ cache in
+            cache.canRestoreVerificationPrefix(
+                totalTokens: totalTokens,
+                tokenCount: tokenCount
+            )
+        }) else {
+            return false
+        }
+        for cache in presentCaches {
+            guard cache.restoreVerificationPrefix(
+                totalTokens: totalTokens,
+                tokenCount: tokenCount
+            ) else {
+                return false
+            }
+        }
+        return true
+    }
+
+    private func commitVerificationCaches(_ caches: [Q35LayerCache?]) {
+        for cache in caches.compactMap({ $0 }) {
+            cache.commitVerification()
+        }
+    }
+
     private func loadTextWeights(
         into q35Model: Q35Model,
         from resources: Q35Resources,
@@ -2389,6 +2464,7 @@ public actor Q35Generator: ChatGenerator {
 
     private func loadMTPWeights(
         into mtp: Q35MTPModel,
+        baseModel: Q35Model,
         from resources: Q35Resources,
         groupSize: Int,
         bits: Int
@@ -2397,6 +2473,15 @@ public actor Q35Generator: ChatGenerator {
             let metadata = try SafetensorsStreamingLoader.metadata(url: standalone)
             if metadata.keys.contains(where: { $0.hasSuffix(".scales") }) {
                 let arrays = try MLX.loadArrays(url: standalone)
+                if let weight = arrays["draft_lm_head.weight"],
+                   let scales = arrays["draft_lm_head.scales"],
+                   let biases = arrays["draft_lm_head.biases"] {
+                    baseModel.installCoarseDraftHead(
+                        weight: weight,
+                        scales: scales,
+                        biases: biases
+                    )
+                }
                 try HFSafetensorsWeightsLoader.applyQuantizedWeightsFromArrays(
                     arrays,
                     to: mtp,

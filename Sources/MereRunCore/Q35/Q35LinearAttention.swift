@@ -152,12 +152,16 @@ private enum Q35GDNPreworkMetalKernel {
                     v_out[out_base + i] = activated[i];
                 }
             }
-            if (row + uint(NKEEP) >= uint(S)) {
-                uint state_row = row + uint(NKEEP) - uint(S);
-                uint raw_base = row * uint(C) + channel_base + lane * 4;
-                uint state_base = state_row * uint(C) + channel_base + lane * 4;
-                for (uint i = 0; i < 4; ++i) {
-                    conv_out[state_base + i] = qkv[raw_base + i];
+            if (row == 0) {
+                for (uint state_row = 0; state_row < uint(NKEEP); ++state_row) {
+                    uint input_row = uint(S) + state_row;
+                    uint state_base = state_row * uint(C) + channel_base + lane * 4;
+                    for (uint i = 0; i < 4; ++i) {
+                        uint channel = channel_base + lane * 4 + i;
+                        conv_out[state_base + i] = input_row < uint(NKEEP)
+                            ? conv_state[input_row * uint(C) + channel]
+                            : qkv[(input_row - uint(NKEEP)) * uint(C) + channel];
+                    }
                 }
             }
             """
@@ -176,7 +180,7 @@ func q35GDNPreworkMetal(
     guard Device.defaultDevice().deviceType == .gpu,
           qkv.ndim == 3,
           qkv.dim(0) == 1,
-          (3...9).contains(qkv.dim(1)),
+          (1...9).contains(qkv.dim(1)),
           qkv.dtype == .bfloat16,
           convState.shape == [1, 3, qkv.dim(2)],
           convState.dtype == .bfloat16,
@@ -516,9 +520,27 @@ func q35GatedDeltaUpdateMetal(
 }
 #endif
 
+fileprivate struct Q35LinearVerificationReplay {
+    let baseConvState: MLXArray
+    let baseRecurrentState: MLXArray?
+    let qkv: MLXArray
+    let q: MLXArray
+    let k: MLXArray
+    let v: MLXArray
+    let a: MLXArray
+    let b: MLXArray
+    let aLog: MLXArray
+    let dtBias: MLXArray
+    let numKeyHeads: Int
+    let numValueHeads: Int
+    let valueHeadDim: Int
+    let convKeep: Int
+}
+
 public final class Q35LinearCache: @unchecked Sendable {
     var convState: MLXArray?
     var recurrentState: MLXArray?
+    fileprivate var verificationReplay: Q35LinearVerificationReplay?
     var pleConvState: MLXArray?
     var pleTokenContext: MLXArray?
 
@@ -527,6 +549,7 @@ public final class Q35LinearCache: @unchecked Sendable {
     public func reset() {
         convState = nil
         recurrentState = nil
+        verificationReplay = nil
         pleConvState = nil
         pleTokenContext = nil
     }
@@ -538,6 +561,61 @@ public final class Q35LinearCache: @unchecked Sendable {
         copy.pleConvState = pleConvState
         copy.pleTokenContext = pleTokenContext
         return copy
+    }
+
+    func canRestoreVerificationPrefix(tokenCount: Int) -> Bool {
+        guard let verificationReplay else { return false }
+        return tokenCount > 0 && tokenCount <= verificationReplay.q.dim(1)
+    }
+
+    /// Commits a prefix of a speculative verification without reading target
+    /// weights again. Convolution state is sliced from the saved projection;
+    /// recurrent state replays only the already-computed GDN inputs.
+    func restoreVerificationPrefix(tokenCount: Int) -> Bool {
+        guard canRestoreVerificationPrefix(tokenCount: tokenCount),
+              let replay = verificationReplay else {
+            return false
+        }
+        defer { verificationReplay = nil }
+
+        if tokenCount == replay.q.dim(1) {
+            return true
+        }
+
+        let qkvPrefix = replay.qkv[0..., 0..<tokenCount, 0...]
+        let convInput = MLX.concatenated([replay.baseConvState, qkvPrefix], axis: 1)
+        let nextConvState: MLXArray
+        if replay.convKeep == 0 {
+            nextConvState = MLXArray.zeros(
+                [qkvPrefix.dim(0), 0, qkvPrefix.dim(2)],
+                dtype: qkvPrefix.dtype
+            )
+        } else {
+            let start = convInput.dim(1) - replay.convKeep
+            nextConvState = convInput[0..., start..., 0...]
+        }
+
+        let (_, nextRecurrentState) = q35GatedDeltaUpdate(
+            q: replay.q[0..., 0..<tokenCount, 0..., 0...],
+            k: replay.k[0..., 0..<tokenCount, 0..., 0...],
+            v: replay.v[0..., 0..<tokenCount, 0..., 0...],
+            a: replay.a[0..., 0..<tokenCount, 0...],
+            b: replay.b[0..., 0..<tokenCount, 0...],
+            aLog: replay.aLog,
+            dtBias: replay.dtBias,
+            state: replay.baseRecurrentState,
+            numKeyHeads: replay.numKeyHeads,
+            numValueHeads: replay.numValueHeads,
+            valueHeadDim: replay.valueHeadDim
+        )
+        convState = nextConvState
+        recurrentState = nextRecurrentState
+        MLX.asyncEval(nextConvState, nextRecurrentState)
+        return true
+    }
+
+    func commitVerification() {
+        verificationReplay = nil
     }
 
     public func batched(with caches: [Q35LinearCache]) -> Q35LinearCache? {
@@ -727,11 +805,11 @@ final class Q35LinearAttention: Module {
 
         let convState = cache?.convState
             ?? MLXArray.zeros([batch, keep, convDim], dtype: x.dtype)
+        let recurrentState = cache?.recurrentState
         let rmsNormWeight = qkv.dtype == .bfloat16 ? qkNormWeightBF16 : nil
         let prework: Q35GDNPreworkOutput
         #if os(macOS)
-        if targetVerify,
-           cache != nil,
+        if cache != nil,
            let fused = q35GDNPreworkMetal(
                qkv: qkv,
                convState: convState,
@@ -776,12 +854,32 @@ final class Q35LinearAttention: Module {
             b: b,
             aLog: aLog,
             dtBias: dtBias,
-            state: cache?.recurrentState,
+            state: recurrentState,
             numKeyHeads: numKeyHeads,
             numValueHeads: numValueHeads,
             valueHeadDim: valueHeadDim
         )
         cache?.recurrentState = state
+        if targetVerify, let cache {
+            cache.verificationReplay = Q35LinearVerificationReplay(
+                baseConvState: convState,
+                baseRecurrentState: recurrentState,
+                qkv: qkv,
+                q: prework.q,
+                k: prework.k,
+                v: prework.v,
+                a: a,
+                b: b,
+                aLog: aLog,
+                dtBias: dtBias,
+                numKeyHeads: numKeyHeads,
+                numValueHeads: numValueHeads,
+                valueHeadDim: valueHeadDim,
+                convKeep: keep
+            )
+        } else {
+            cache?.commitVerification()
+        }
 
         let normalized = norm(updated, gate: z)
         return outProj(normalized.reshaped(batch, sequence, valueDim))

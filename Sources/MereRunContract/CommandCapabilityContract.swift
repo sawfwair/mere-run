@@ -2167,8 +2167,8 @@ public enum MereRunCapabilityCatalog {
     public static let modelBenchmarkQ36MTP = MereRunCommandCapability(
         id: "model.benchmark.q36-mtp",
         command: ["model", "benchmark", "q36-mtp"],
-        title: "Qwen3.6 MTP benchmark",
-        summary: "Run prompt, decode-length, and temperature matrices for Qwen3.6 MTP.",
+        title: "Qwen-family MTP benchmark",
+        summary: "Run prompt, decode-length, and temperature matrices for Qwen-family MTP.",
         options: [
             .init(flag: "--model", label: "Model", kind: .string),
             .init(flag: "--model-root", label: "Model root", kind: .directory),
