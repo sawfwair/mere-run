@@ -60,6 +60,17 @@ final class ModelPullCommandParsingTests: XCTestCase {
         XCTAssertNil(accepted.licenseAcceptanceMessage(for: restricted))
     }
 
+    func testFlashNextPullAcceptsLicenseTermsAlias() throws {
+        let spec = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: Q35Resources.q38FlashNextMixedModelId)
+        )
+        let blocked = try ModelPull.parse([spec.id])
+        let accepted = try ModelPull.parse([spec.id, "--accept-license-terms"])
+
+        XCTAssertNotNil(blocked.licenseAcceptanceMessage(for: spec))
+        XCTAssertNil(accepted.licenseAcceptanceMessage(for: spec))
+    }
+
     func testLTX25PullRequiresExplicitLicenseAcceptance() throws {
         for id in [
             ModelResolver.ModelID.ltxVideo25DistilledBF16.rawValue,

@@ -1087,14 +1087,18 @@ actor RuntimeModelPool {
             graphCompilationAccounting: nil,
             completedAt: currentDate()
         )
-        if warmup,
-           resolved.engine == .textChatGemma4,
-           Gemma4Resources.usesTurboDefaults(modelSpec: resolved.id) {
+        if warmup, Self.shouldWarmDefaultModel(modelID: resolved.id, engine: resolved.engine) {
+            let isQwen4Exp = Self.isQwen4ExpWarmupModel(resolved.id)
             let warmupStart = currentDate()
             let response = try await loaded.chat(
                 ChatRequest(
-                    messages: [ChatMessage(role: .user, content: "Reply with ready.")],
-                    maxTokens: 1,
+                    messages: [ChatMessage(
+                        role: .user,
+                        content: isQwen4Exp
+                            ? "Reply with the numbers 1 through 8 separated by spaces and nothing else."
+                            : "Reply with ready."
+                    )],
+                    maxTokens: isQwen4Exp ? 8 : 1,
                     temperature: 0,
                     topP: 1,
                     showThinking: false
@@ -1108,13 +1112,32 @@ actor RuntimeModelPool {
                 warmupPrefillSeconds: timing?.prefillSeconds,
                 warmupDecodeSeconds: timing?.decodeSeconds,
                 warmupTimeToFirstTokenSeconds: timing.map(Self.timeToFirstToken),
-                graphCompilationAccounting: "included_in_warmup_prefill",
+                graphCompilationAccounting: isQwen4Exp
+                    ? "included_in_warmup_prefill_and_decode"
+                    : "included_in_warmup_prefill",
                 completedAt: currentDate()
             )
         }
         var state = state(for: resolved.id)
         state.startupTiming = startupTiming
         states[resolved.id] = state
+    }
+
+    static func shouldWarmDefaultModel(
+        modelID: String,
+        engine: RuntimeServingEngine
+    ) -> Bool {
+        if engine == .textChatGemma4,
+           Gemma4Resources.usesTurboDefaults(modelSpec: modelID) {
+            return true
+        }
+        return engine.isCompatible(with: .textChatQ35)
+            && isQwen4ExpWarmupModel(modelID)
+    }
+
+    private static func isQwen4ExpWarmupModel(_ modelID: String) -> Bool {
+        modelID == Q35Resources.q38FlashNextMixedModelId
+            || modelID == Q35Resources.q38FlashNext4BitModelId
     }
 
     private static func timeToFirstToken(_ timing: ChatTiming) -> Double {

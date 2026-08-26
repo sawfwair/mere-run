@@ -185,7 +185,7 @@ struct APIServe: AsyncParsableCommand {
     @Flag(
         name: [.customLong("warmup")],
         inversion: .prefixedNo,
-        help: "Warm the default Gemma 4 Turbo graph before the server becomes healthy."
+        help: "Warm supported default-model inference graphs before the server becomes healthy."
     )
     var warmup: Bool = true
 

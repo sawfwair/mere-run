@@ -11,10 +11,12 @@ private let q35PreciseSwigluCompiled = compile(shapeless: true) { hiddenStates, 
 final class Q35RMSNormGated: Module {
     @ModuleInfo(key: "weight") var weight: MLXArray
     private let eps: Float
+    private let activation: String
 
-    init(hiddenSize: Int, eps: Float) {
+    init(hiddenSize: Int, eps: Float, activation: String = "silu") {
         self._weight.wrappedValue = MLXArray.ones([hiddenSize])
         self.eps = eps
+        self.activation = activation
         super.init()
     }
 
@@ -22,6 +24,10 @@ final class Q35RMSNormGated: Module {
         let normalized = MLXFast.rmsNorm(hiddenStates, weight: weight, eps: eps)
         guard let gate else {
             return normalized.asType(hiddenStates.dtype)
+        }
+        if activation == "sigmoid" {
+            return (normalized.asType(.float32) * MLX.sigmoid(gate.asType(.float32)))
+                .asType(hiddenStates.dtype)
         }
         return q35PreciseSwigluCompiled(hiddenStates, gate, normalized)
     }
@@ -535,6 +541,8 @@ public final class Q35LinearCache: @unchecked Sendable {
     var convState: MLXArray?
     var recurrentState: MLXArray?
     fileprivate var verificationReplay: Q35LinearVerificationReplay?
+    var pleConvState: MLXArray?
+    var pleTokenContext: MLXArray?
 
     public init() {}
 
@@ -542,12 +550,16 @@ public final class Q35LinearCache: @unchecked Sendable {
         convState = nil
         recurrentState = nil
         verificationReplay = nil
+        pleConvState = nil
+        pleTokenContext = nil
     }
 
     public func fork() -> Q35LinearCache {
         let copy = Q35LinearCache()
         copy.convState = convState
         copy.recurrentState = recurrentState
+        copy.pleConvState = pleConvState
+        copy.pleTokenContext = pleTokenContext
         return copy
     }
 
@@ -611,13 +623,20 @@ public final class Q35LinearCache: @unchecked Sendable {
 
         let batchedConvState = Self.batchedState(caches.map(\.convState))
         let batchedRecurrentState = Self.batchedState(caches.map(\.recurrentState))
-        guard batchedConvState.isValid, batchedRecurrentState.isValid else {
+        let batchedPLEConvState = Self.batchedState(caches.map(\.pleConvState))
+        let batchedPLETokenContext = Self.batchedState(caches.map(\.pleTokenContext))
+        guard batchedConvState.isValid,
+              batchedRecurrentState.isValid,
+              batchedPLEConvState.isValid,
+              batchedPLETokenContext.isValid else {
             return nil
         }
 
         let copy = Q35LinearCache()
         copy.convState = batchedConvState.value
         copy.recurrentState = batchedRecurrentState.value
+        copy.pleConvState = batchedPLEConvState.value
+        copy.pleTokenContext = batchedPLETokenContext.value
         return copy
     }
 
@@ -625,13 +644,20 @@ public final class Q35LinearCache: @unchecked Sendable {
         guard count > 0 else { return nil }
         let convRows = Self.unbatchedRows(convState, count: count)
         let recurrentRows = Self.unbatchedRows(recurrentState, count: count)
-        guard convRows.isValid, recurrentRows.isValid else {
+        let pleConvRows = Self.unbatchedRows(pleConvState, count: count)
+        let pleTokenRows = Self.unbatchedRows(pleTokenContext, count: count)
+        guard convRows.isValid,
+              recurrentRows.isValid,
+              pleConvRows.isValid,
+              pleTokenRows.isValid else {
             return nil
         }
         return (0..<count).map { index in
             let copy = Q35LinearCache()
             copy.convState = convRows.values?[index]
             copy.recurrentState = recurrentRows.values?[index]
+            copy.pleConvState = pleConvRows.values?[index]
+            copy.pleTokenContext = pleTokenRows.values?[index]
             return copy
         }
     }
@@ -730,7 +756,11 @@ final class Q35LinearAttention: Module {
         )
         self._dtBias.wrappedValue = MLXArray.ones([self.numValueHeads])
         self._aLog.wrappedValue = MLXArray.zeros([self.numValueHeads])
-        self._norm.wrappedValue = Q35RMSNormGated(hiddenSize: self.valueHeadDim, eps: text.rmsNormEps)
+        self._norm.wrappedValue = Q35RMSNormGated(
+            hiddenSize: self.valueHeadDim,
+            eps: text.rmsNormEps,
+            activation: text.outputGateType
+        )
         self._outProj.wrappedValue = Linear(self.valueDim, text.hiddenSize, bias: false)
 
         super.init()

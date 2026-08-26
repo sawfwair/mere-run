@@ -827,7 +827,8 @@ Key options:
 - `--context-size`: maximum prompt plus generation context. Qwen3.8 and Bonsai
   27B use their published 262,144-token limit by default. Inkling-Small advertises
   1,048,576 tokens but uses a 32,768-token operational default because KV
-  residency grows with context.
+  residency grows with context. Qwen3.8-Flash-Next currently requires prompt
+  plus requested generation to fit its 2,048-token QSA indexer budget.
 - `--temperature`: defaults to 0.7, or the model's published value where one
   exists (Bonsai: 0.7; Qwen3.8 and Ornith lanes: 1.0)
 - `--top-p`: defaults to 0.9, or the model's published value (Qwen3.8/Bonsai/Ornith: 0.95)
@@ -866,6 +867,7 @@ Examples:
 ```bash
 swift run mere.run text chat --prompt "What is classifier-free guidance?"
 swift run mere.run text chat --model vision-chat-q38-27b --image ./diagram.png --prompt "Explain this diagram."
+swift run mere.run text chat --model vision-chat-q38-flash-next-mixed --context-size 2048 --max-tokens 256 --prompt "Explain sparse attention."
 swift run mere.run text chat --model text-chat-bonsai-27b-1bit --context-size 262144 --kv-bits 4 --prompt "Plan a long-context repository review."
 swift run mere.run text chat --model text-chat-bonsai-27b-2bit --context-size 262144 --kv-bits 4 --prompt "Compare two repository migration plans."
 swift run mere.run text chat --model text-chat-inkling-small --context-size 32768 --prompt "Plan a recovery-safe repository migration."
@@ -2336,7 +2338,8 @@ or revenue-limited terms require `--accept-model-license` before a
 download. A custom license alone does not trigger the flag.
 The preflight reports the exact component terms and blocks without
 acceptance; `--all` skips restricted entries unless the flag is present.
-Passing `--accept-model-license` and continuing with the download confirms that
+`--accept-license-terms` is an equivalent, clearer alias for
+`--accept-model-license`. Passing either spelling and continuing with the download confirms that
 the user reviewed and accepts the listed terms and agrees to comply. mere.run
 records the immutable source revisions and accepted term URLs in the installed
 `mererun_model.json`, but the user remains responsible for
@@ -2729,13 +2732,15 @@ Security defaults:
   Values above `1` automatically engage supported Gemma4, Qwen-family,
   and LFM2 decode batching unless an engine-specific environment variable forces
   the serial path
-- `--warmup` is enabled by default for Gemma 4 Turbo. The server evaluates a
-  one-token warmup before it starts listening, so model loading and the first
-  lazy graph/materialization prefill are paid before `/health` reports ready.
+- `--warmup` is enabled by default for Gemma 4 Turbo and Qwen3.8-Flash-Next.
+  The server evaluates a small representative request before it starts
+  listening, so model loading and the first lazy target/draft graph
+  materializations are paid before `/health` reports ready.
   Use `--no-warmup` only when startup latency matters more than the first
   request. MLX does not expose compiler time separately, so startup telemetry
-  reports `warmupPrefillSeconds` and marks graph compilation as included in that
-  measurement instead of presenting an invented compile-only duration.
+  reports `warmupPrefillSeconds` and `warmupDecodeSeconds`, and marks graph
+  compilation as included in those warmup measurements instead of presenting
+  an invented compile-only duration.
 - `--memory-guard` controls runtime memory pressure behavior. Accepted values
   are `off`, `safe`, `balanced`, `aggressive`, and `custom`; `custom` also
   requires `--memory-guard-custom-ceiling-gb`.

@@ -1,5 +1,35 @@
 # Native model conversion
 
+## Qwen3.8-Flash-Next MLX Q4 and mixed Q2/Q4
+
+`convert_qwen38_flash_next_mlx.py` downloads Qwen's exact immutable BF16
+revision once and streams its 131 safetensors shards into two independent,
+resumable MLX artifacts. It never instantiates the 180B-parameter model.
+
+- `Qwen3.8-Flash-Next-MLX-4bit` applies affine Q4/group-64 to eligible
+  language, MTP, and vision matrices. The 160-wide n-gram table necessarily
+  uses Q4/group-32. Routers, norms, biases, convolutions, and incompatible
+  shapes remain dense.
+- `Qwen3.8-Flash-Next-MLX-Mixed-2bit` applies Q2/group-128 only to the 48 base
+  routed-expert banks, keeps the n-gram table and eligible core/MTP matrices at
+  Q4, and retains token/output embeddings, QSA indexers, routers, vision, and
+  MTP fusion heads in BF16. This is the 128 GB Mac profile.
+
+Both outputs retain the Qwen Community License 1.0 and include a complete
+source/output hash receipt. Publication is intentionally separate from
+conversion. The native `qwen4_exp` runtime has passed real short-context text
+generation with the mixed artifact on a 128 GB Mac. Long-context QSA selection,
+image input, the bundled MTP path, and a real Q4 generation run remain separate
+qualification gates.
+
+```bash
+uv run --script scripts/model-conversion/convert_qwen38_flash_next_mlx.py \
+  --workspace /workspace/qwen38-flash-next
+```
+
+Interrupted runs resume at the source-shard boundary. Do not publish an output
+while its `.incomplete` marker exists.
+
 ## LiquidAI LFM2.5 QAD Q4_0 to MLX
 
 `convert_lfm25_qad_mlx.py` converts LiquidAI's immutable QAD Q4_0 GGUF

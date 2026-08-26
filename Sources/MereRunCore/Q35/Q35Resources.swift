@@ -31,6 +31,8 @@ public struct Q35Resources: Sendable, Hashable {
     public static let q36NanoModelId = "text-chat-q36-nano"
     public static let q38TwentySevenBModelId = "vision-chat-q38-27b"
     public static let q38TwentySevenB4BitModelId = "vision-chat-q38-27b-4bit"
+    public static let q38FlashNextMixedModelId = "vision-chat-q38-flash-next-mixed"
+    public static let q38FlashNext4BitModelId = "vision-chat-q38-flash-next-4bit"
     public static let bonsai27B1BitModelId = "text-chat-bonsai-27b-1bit"
     public static let bonsai27B2BitModelId = "text-chat-bonsai-27b-2bit"
     public static let ornith9BModelId = "text-agent-ornith-9b"
@@ -84,7 +86,10 @@ public struct Q35Resources: Sendable, Hashable {
     /// one; callers use it when the user did not set explicit sampling.
     public static func recommendedSampling(forModelId modelId: String) -> RecommendedSampling? {
         switch modelId {
-        case q38TwentySevenBModelId, q38TwentySevenB4BitModelId:
+        case q38TwentySevenBModelId,
+             q38TwentySevenB4BitModelId,
+             q38FlashNextMixedModelId,
+             q38FlashNext4BitModelId:
             return RecommendedSampling(temperature: 1.0, topP: 0.95, topK: 20)
         case bonsai27B1BitModelId, bonsai27B2BitModelId:
             return RecommendedSampling(temperature: 0.7, topP: 0.95, topK: 20)
@@ -107,6 +112,12 @@ public struct Q35Resources: Sendable, Hashable {
     public static let q38TwentySevenB4BitUpstreamRepoId = "EigenLabs/Qwen3.8-27B-4bit"
     public static let q38TwentySevenB4BitUpstreamRevision = "eda45ab47f465d08d6558f0353a2346e2eb9d5b3"
     public static let q38TwentySevenB4BitEstimatedDownloadBytes: Int64 = 15_520_000_000
+    public static let q38FlashNextMixedUpstreamRepoId = "Sawfwair/Qwen3.8-Flash-Next-MLX-Mixed-2bit"
+    public static let q38FlashNextMixedUpstreamRevision = "0bdf3edf02df271e9898f17a7882e5e6a8feb58a"
+    public static let q38FlashNextMixedEstimatedDownloadBytes: Int64 = 73_095_335_934
+    public static let q38FlashNext4BitUpstreamRepoId = "Sawfwair/Qwen3.8-Flash-Next-MLX-4bit"
+    public static let q38FlashNext4BitUpstreamRevision = "6cc9bbc0fae9ce26b7670b3ed1e26d557c154506"
+    public static let q38FlashNext4BitEstimatedDownloadBytes: Int64 = 104_742_357_706
     public static let q38MTPComponentPath = "mtp"
     public static let q38MTP4BitUpstreamRepoId = "morgan/qwen38-27b-mtp-r20k-lr3-q4-g64-q2-rerank"
     public static let q38MTP4BitUpstreamRevision = "fd4a99c590dd6e468c0e2a28168c235e32151a4b"
@@ -183,6 +194,30 @@ public struct Q35Resources: Sendable, Hashable {
                 "vocab.json",
             ]
         ),
+        q38FlashNextMixedModelId: Profile(
+            modelId: q38FlashNextMixedModelId,
+            upstreamRepoId: q38FlashNextMixedUpstreamRepoId,
+            upstreamRevision: q38FlashNextMixedUpstreamRevision,
+            snapshotPatterns: snapshotPatterns + [
+                "generation_config.json",
+                "preprocessor_config.json",
+                "video_preprocessor_config.json",
+                "README.md",
+                "MERERUN_CONVERSION.json",
+            ]
+        ),
+        q38FlashNext4BitModelId: Profile(
+            modelId: q38FlashNext4BitModelId,
+            upstreamRepoId: q38FlashNext4BitUpstreamRepoId,
+            upstreamRevision: q38FlashNext4BitUpstreamRevision,
+            snapshotPatterns: snapshotPatterns + [
+                "generation_config.json",
+                "preprocessor_config.json",
+                "video_preprocessor_config.json",
+                "README.md",
+                "MERERUN_CONVERSION.json",
+            ]
+        ),
         bonsai27B1BitModelId: Profile(
             modelId: bonsai27B1BitModelId,
             upstreamRepoId: bonsai27B1BitUpstreamRepoId,
@@ -247,7 +282,10 @@ public struct Q35Resources: Sendable, Hashable {
 
     public static func defaultContextLength(forModelId modelId: String) -> Int {
         switch modelId {
-        case q38TwentySevenBModelId, q38TwentySevenB4BitModelId:
+        case q38TwentySevenBModelId,
+             q38TwentySevenB4BitModelId,
+             q38FlashNextMixedModelId,
+             q38FlashNext4BitModelId:
             q38TwentySevenBContextLength
         case bonsai27B1BitModelId:
             bonsai27B1BitContextLength
@@ -271,7 +309,10 @@ public struct Q35Resources: Sendable, Hashable {
     }
 
     public static func isQ38ModelId(_ modelId: String) -> Bool {
-        modelId == q38TwentySevenBModelId || modelId == q38TwentySevenB4BitModelId
+        modelId == q38TwentySevenBModelId
+            || modelId == q38TwentySevenB4BitModelId
+            || modelId == q38FlashNextMixedModelId
+            || modelId == q38FlashNext4BitModelId
     }
 
     public static func isOrnith35BMLXModelId(_ modelId: String) -> Bool {

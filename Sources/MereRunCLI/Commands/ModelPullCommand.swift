@@ -30,7 +30,10 @@ struct ModelPull: AsyncParsableCommand {
     var allowUnsupported: Bool = false
 
     @Flag(
-        name: [.customLong("accept-model-license")],
+        name: [
+            .customLong("accept-model-license"),
+            .customLong("accept-license-terms"),
+        ],
         help: "Confirm that you reviewed and accept all listed third-party model/component terms before downloading a restricted model."
     )
     var acceptModelLicense: Bool = false

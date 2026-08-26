@@ -177,12 +177,44 @@ final class Q35MTPDecoderLayer: Module {
     }
 }
 
-final class Q35MTPModel: Module {
+struct Q35MTPDraftOutput {
+    let logitsHidden: MLXArray
+    let recurrentHidden: MLXArray
+}
+
+protocol Q35MTPDraftModel: AnyObject {
+    var diagnosticsID: String { get }
+
+    func forwardDraft(
+        inputEmbeddings: MLXArray,
+        hiddenStates: MLXArray,
+        cache: KVCache
+    ) -> Q35MTPDraftOutput
+
+    func draftLogits(
+        token: Int,
+        previousHidden: MLXArray,
+        positionOffset: Int,
+        baseModel: Q35Model
+    ) -> MLXArray
+
+    func draftBlock(
+        lastToken: Int,
+        hidden: MLXArray,
+        blockSize: Int,
+        session: Q35MTPDraftSession,
+        baseModel: Q35Model
+    ) -> Q35MTPDraftBlock
+}
+
+final class Q35MTPModel: Module, Q35MTPDraftModel {
     @ModuleInfo(key: "pre_fc_norm_embedding") var preFCNormEmbedding: Q35RMSNorm
     @ModuleInfo(key: "pre_fc_norm_hidden") var preFCNormHidden: Q35RMSNorm
     @ModuleInfo(key: "fc") var fc: Linear
     @ModuleInfo(key: "layers") var layers: [Q35MTPDecoderLayer]
     @ModuleInfo(key: "norm") var norm: Q35RMSNorm
+
+    let diagnosticsID = "qwen-mtp"
 
     init(config: Q35Config) {
         let text = config.textConfig
@@ -199,6 +231,18 @@ final class Q35MTPModel: Module {
         hiddenStates: MLXArray,
         cache: KVCache
     ) -> MLXArray {
+        forwardDraft(
+            inputEmbeddings: inputEmbeddings,
+            hiddenStates: hiddenStates,
+            cache: cache
+        ).logitsHidden
+    }
+
+    func forwardDraft(
+        inputEmbeddings: MLXArray,
+        hiddenStates: MLXArray,
+        cache: KVCache
+    ) -> Q35MTPDraftOutput {
         let normalizedEmbeddings = preFCNormEmbedding(inputEmbeddings)
         let normalizedHidden = preFCNormHidden(hiddenStates)
         var hidden = MLX.concatenated([normalizedEmbeddings, normalizedHidden], axis: -1)
@@ -208,7 +252,8 @@ final class Q35MTPModel: Module {
         for layer in layers {
             hidden = layer(hidden, mask: mask, cache: cache)
         }
-        return norm(hidden)
+        let output = norm(hidden)
+        return Q35MTPDraftOutput(logitsHidden: output, recurrentHidden: output)
     }
 
     func draftLogits(
@@ -220,12 +265,12 @@ final class Q35MTPModel: Module {
         let inputIds = MLXArray([Int32(token)]).reshaped(1, 1)
         let embeddings = baseModel.embeddings(for: inputIds)
         let cache = Q35MTPPositionCache(offset: positionOffset)
-        let hidden = self(
+        let output = forwardDraft(
             inputEmbeddings: embeddings,
             hiddenStates: previousHidden,
             cache: cache
         )
-        return baseModel.logits(from: hidden)
+        return baseModel.logits(from: output.logitsHidden)
     }
 
     func draftBlock(
@@ -259,6 +304,144 @@ struct Q35MTPDraftBlock {
 
     var tokens: [Int] {
         tokenIDs.asArray(Int32.self).map(Int.init)
+    }
+}
+
+/// Qwen4Exp's inline one-layer MTP head.
+///
+/// Unlike the earlier Qwen predictor, this head consumes the target model's
+/// four-stream residual state. The token embedding and each residual stream
+/// are projected independently, added in stream space, passed through one
+/// full GR/QSA/MoE decoder layer, and reduced by the trained final mixer.
+final class Q38MTPModel: Module, Q35MTPDraftModel {
+    @ModuleInfo(key: "pre_fc_norm_embedding") var preFCNormEmbedding: Q35RMSNorm
+    @ModuleInfo(key: "pre_fc_norm_hidden") var preFCNormHidden: Q35RMSNorm
+    @ModuleInfo(key: "fc_embedding") var fcEmbedding: Linear
+    @ModuleInfo(key: "fc_hidden") var fcHidden: Linear
+    @ModuleInfo(key: "layers") var layers: [Q35DecoderLayer]
+    @ModuleInfo(key: "hyper_connection_mixer") var hyperConnectionMixer: Q38GatedResidual
+
+    let diagnosticsID = "qwen4-exp-mtp"
+
+    private let hiddenSize: Int
+    private let streamCount: Int
+
+    init(config: Q35Config) {
+        let text = config.textConfig
+        let hyperDimensions = text.hiddenSize * text.hyperConnectionCount
+        self.hiddenSize = text.hiddenSize
+        self.streamCount = text.hyperConnectionCount
+        self._preFCNormEmbedding.wrappedValue = Q35RMSNorm(
+            dimensions: text.hiddenSize,
+            eps: text.rmsNormEps
+        )
+        self._preFCNormHidden.wrappedValue = Q35RMSNorm(
+            dimensions: hyperDimensions,
+            eps: text.rmsNormEps
+        )
+        self._fcEmbedding.wrappedValue = Linear(text.hiddenSize, text.hiddenSize, bias: false)
+        self._fcHidden.wrappedValue = Linear(text.hiddenSize, text.hiddenSize, bias: false)
+        let rawLayerType = text.mtp?.layerTypes.first ?? Q35AttentionLayerType.full.rawValue
+        self._layers.wrappedValue = [
+            Q35DecoderLayer(
+                config: config,
+                layerIndex: 0,
+                layerTypeOverride: Q35AttentionLayerType(rawLayerType),
+                includesPLE: false
+            ),
+        ]
+        self._hyperConnectionMixer.wrappedValue = Q38GatedResidual(
+            config: config,
+            combinesBlockOutput: false
+        )
+        super.init()
+    }
+
+    func callAsFunction(
+        inputEmbeddings: MLXArray,
+        hiddenStates: MLXArray,
+        cache: KVCache
+    ) -> MLXArray {
+        forwardDraft(
+            inputEmbeddings: inputEmbeddings,
+            hiddenStates: hiddenStates,
+            cache: cache
+        ).logitsHidden
+    }
+
+    func forwardDraft(
+        inputEmbeddings: MLXArray,
+        hiddenStates: MLXArray,
+        cache: KVCache
+    ) -> Q35MTPDraftOutput {
+        precondition(
+            hiddenStates.dim(-1) == hiddenSize * streamCount,
+            "Qwen4Exp MTP requires the target model's multi-stream hidden state"
+        )
+        let shapePrefix = Array(hiddenStates.shape.dropLast())
+        let embedding = fcEmbedding(preFCNormEmbedding(inputEmbeddings))
+        var hidden = preFCNormHidden(hiddenStates)
+            .reshaped(shapePrefix + [streamCount, hiddenSize])
+        hidden = fcHidden(hidden) + MLX.expandedDimensions(embedding, axis: -2)
+        hidden = hidden.reshaped(shapePrefix + [streamCount * hiddenSize])
+
+        let mask = cache.makeMask(n: hidden.dim(1))
+        for layer in layers {
+            hidden = layer(
+                hidden,
+                fullMask: mask,
+                cache: .full(cache),
+                targetVerify: false
+            )
+        }
+        return Q35MTPDraftOutput(
+            logitsHidden: hyperConnectionMixer.combine(hidden),
+            recurrentHidden: hidden
+        )
+    }
+
+    func draftLogits(
+        token: Int,
+        previousHidden: MLXArray,
+        positionOffset: Int,
+        baseModel: Q35Model
+    ) -> MLXArray {
+        let inputIds = MLXArray([Int32(token)]).reshaped(1, 1)
+        let embeddings = baseModel.embeddings(for: inputIds)
+        let cache = Q35MTPPositionCache(offset: positionOffset)
+        let output = forwardDraft(
+            inputEmbeddings: embeddings,
+            hiddenStates: previousHidden,
+            cache: cache
+        )
+        return baseModel.logits(from: output.logitsHidden)
+    }
+
+    func draftBlock(
+        lastToken: Int,
+        hidden: MLXArray,
+        blockSize: Int,
+        session: Q35MTPDraftSession,
+        baseModel: Q35Model
+    ) -> Q35MTPDraftBlock {
+        session.draftBlock(
+            lastToken: lastToken,
+            hidden: hidden,
+            blockSize: blockSize,
+            mtpModel: self,
+            baseModel: baseModel
+        )
+    }
+
+    @discardableResult
+    func prepareFusedSwitchGLU() -> Bool {
+        guard let layer = layers.first else { return false }
+        let prepared = layer.mlp.prepareFusedSwitchGLU()
+        if prepared {
+            Stream.gpu.synchronize()
+            Memory.clearCache()
+        }
+        return prepared
     }
 }
 
@@ -299,7 +482,7 @@ final class Q35MTPDraftSession {
         lastToken: Int,
         hidden: MLXArray,
         blockSize: Int,
-        mtpModel: Q35MTPModel,
+        mtpModel: any Q35MTPDraftModel,
         baseModel: Q35Model
     ) -> Q35MTPDraftBlock {
         let total = max(1, blockSize) - 1
@@ -318,13 +501,22 @@ final class Q35MTPDraftSession {
         backlogTokens.removeAll(keepingCapacity: true)
 
         let flushEmbeddings = baseModel.embeddings(for: flushTokens)
-        let flushed = mtpModel(
+        let flushed = mtpModel.forwardDraft(
             inputEmbeddings: flushEmbeddings,
             hiddenStates: flushHidden,
             cache: historyCache
         )
-        var previousHidden = flushed[0..., (flushed.dim(1) - 1)..., 0...]
-        var tokenArray = baseModel.greedyDraftToken(from: previousHidden)
+        var previousHidden = flushed.recurrentHidden[
+            0...,
+            (flushed.recurrentHidden.dim(1) - 1)...,
+            0...
+        ]
+        let lastLogitsHidden = flushed.logitsHidden[
+            0...,
+            (flushed.logitsHidden.dim(1) - 1)...,
+            0...
+        ]
+        var tokenArray = baseModel.greedyDraftToken(from: lastLogitsHidden)
         var tokenArrays = [tokenArray]
         tokenArrays.reserveCapacity(total)
 
@@ -332,12 +524,13 @@ final class Q35MTPDraftSession {
             let speculativeCache = historyCache.fork()
             for _ in 1..<total {
                 let embeddings = baseModel.embeddings(for: tokenArray)
-                previousHidden = mtpModel(
+                let output = mtpModel.forwardDraft(
                     inputEmbeddings: embeddings,
                     hiddenStates: previousHidden,
                     cache: speculativeCache
                 )
-                tokenArray = baseModel.greedyDraftToken(from: previousHidden)
+                previousHidden = output.recurrentHidden
+                tokenArray = baseModel.greedyDraftToken(from: output.logitsHidden)
                 tokenArrays.append(tokenArray)
             }
         }

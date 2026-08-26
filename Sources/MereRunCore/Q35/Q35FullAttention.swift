@@ -10,6 +10,7 @@ final class Q35FullAttention: Module {
     @ModuleInfo(key: "o_proj") var oProj: Linear
     @ModuleInfo(key: "q_norm") var qNorm: Q35RMSNorm
     @ModuleInfo(key: "k_norm") var kNorm: Q35RMSNorm
+    @ModuleInfo(key: "indexer") var indexer: Q38QSAIndexer?
 
     /// Row-concatenated q/k/v quantized weights so each attention call issues
     /// one quantized matmul instead of three (bit-identical: quantized
@@ -63,8 +64,17 @@ final class Q35FullAttention: Module {
         self._kProj.wrappedValue = Linear(text.hiddenSize, kvOutput, bias: text.attentionBias)
         self._vProj.wrappedValue = Linear(text.hiddenSize, kvOutput, bias: text.attentionBias)
         self._oProj.wrappedValue = Linear(text.numAttentionHeads * text.headDim, text.hiddenSize, bias: text.attentionBias)
-        self._qNorm.wrappedValue = Q35RMSNorm(dimensions: text.headDim, eps: text.rmsNormEps)
-        self._kNorm.wrappedValue = Q35RMSNorm(dimensions: text.headDim, eps: text.rmsNormEps)
+        self._qNorm.wrappedValue = Q35RMSNorm(
+            dimensions: text.headDim,
+            eps: text.rmsNormEps,
+            zeroCenteredWeight: !text.isQwen4Exp
+        )
+        self._kNorm.wrappedValue = Q35RMSNorm(
+            dimensions: text.headDim,
+            eps: text.rmsNormEps,
+            zeroCenteredWeight: !text.isQwen4Exp
+        )
+        self._indexer.wrappedValue = text.isQwen4Exp ? Q38QSAIndexer(config: config) : nil
 
         let ropeDims = max(1, Int(Float(text.headDim) * text.ropeParameters.partialRotaryFactor))
         self.rotaryDimensions = min(text.headDim, ropeDims)

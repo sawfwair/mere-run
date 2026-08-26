@@ -6,6 +6,30 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.45.0 - 2026-08-26
+
+This release adds native Qwen3.8 Flash Next inference with qualified mixed-Q2/Q4
+and Q4 MLX distributions and verified MTP acceleration. It also makes LTX 2.5
+generation substantially more memory-bounded and keeps model inventory fast on
+large or externally linked stores.
+
+### Text
+
+- added pinned mixed Q2/Q4 and Q4 MLX distributions of
+  Qwen3.8-Flash-Next. The native Qwen4Exp text path implements four-stream
+  hyper-connections, PLE n-gram embeddings, grouped normalization, sigmoid
+  gated-delta output, and exact short-context attention. The mixed artifact is
+  the qualified 128 GB Mac profile; the larger Q4 artifact is cataloged for
+  machines with more memory. Both pulls require explicit acknowledgement of
+  the Qwen Community License 1.0, and `model pull` now accepts the clearer
+  `--accept-license-terms` spelling as an alias for
+  `--accept-model-license`. Until QSA selection is integrated, Qwen4Exp fails
+  closed when prompt plus requested generation exceeds its 2,048-token indexer
+  budget and image input remains unqualified. The bundled one-layer MTP path is
+  enabled by default for greedy decode, preserves exact target verification,
+  and measured 1.43–1.78x faster decode on the mixed checkpoint; set
+  `MERERUN_Q35_MTP_SPECULATION=0` for a target-only comparison.
+
 ### API
 
 - fixed `GET /v1/models` latency on large or externally linked model stores by
@@ -27,6 +51,13 @@ The format is based on Keep a Changelog.
   generation now automatically decodes long or high-resolution clips in
   overlapped temporal tiles instead of attempting a full-frame decode that can
   exhaust unified memory.
+
+### Included pull requests
+
+- exact release range: [#365](https://github.com/sawfwair/mere-run/pull/365),
+  [#366](https://github.com/sawfwair/mere-run/pull/366),
+  [#367](https://github.com/sawfwair/mere-run/pull/367), and
+  [#369](https://github.com/sawfwair/mere-run/pull/369).
 
 ## 0.44.0 - 2026-08-25
 

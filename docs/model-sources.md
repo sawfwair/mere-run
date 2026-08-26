@@ -83,6 +83,8 @@ an effective overlay; they are not a second capability catalog.
 | `text-chat` | `text-chat-q36-nano` |
 | `vision-chat` | `vision-chat-q38-27b` |
 | `vision-chat` | `vision-chat-q38-27b-4bit` |
+| `vision-chat` | `vision-chat-q38-flash-next-mixed` |
+| `vision-chat` | `vision-chat-q38-flash-next-4bit` |
 | `text-chat` | `text-chat-bonsai-27b-1bit` |
 | `text-chat` | `text-chat-bonsai-27b-2bit` |
 | `text-code` | `text-agent-ornith-9b` |
@@ -210,6 +212,7 @@ validates all configured models before downloading any; both accept the same
 | `image-ideogram4-sdnq-uint4` | Ideogram Non-Commercial Model Agreement |
 | LFM2.5 text and vision targets plus their DSpark companions | LFM Open License v1.0; commercial use by entities at or above USD 10M annual revenue is excluded |
 | `vision-chat-muse-glimmer-30b` | Apache-2.0 plus Meta's bundled usage policy; upstream says the model is not intended for download or use by people under 18 |
+| `vision-chat-q38-flash-next-mixed`, `vision-chat-q38-flash-next-4bit` | Qwen Community License 1.0; redistribution, attribution, and restricted-use terms |
 | `vision-segment-sam31` | Meta SAM License custom use, trade-control, attribution, and redistribution conditions |
 | `vision-face-buffalo-l` | InsightFace pretrained weights; non-commercial research use |
 | `vision-embed-olmoearth-v12-{nano,tiny,small,base}` | OlmoEarth Artifact License; prohibited military, defense, intelligence, human-surveillance, policing, and listed extractive uses |
@@ -362,6 +365,35 @@ Qwen's official Apache-2.0 license is retained separately from the official
 pinned revision. The sources total about 15.52 GB. Greedy MTP decode is enabled
 by default for this quantized target because its small-batch Q4 verification is
 serial-exact; set `MERERUN_Q35_MTP_SPECULATION=0` to use target-only decode.
+
+`vision-chat-q38-flash-next-mixed` installs Sawfwair's immutable
+`Qwen3.8-Flash-Next-MLX-Mixed-2bit` revision
+`0bdf3edf02df271e9898f17a7882e5e6a8feb58a`. It applies affine Q2/group-128
+to the 48 routed-expert banks, Q4 to eligible core matrices and the n-gram
+table, and retains embeddings, QSA indexers, routers, vision, and selected MTP
+paths in BF16. Its 73.10 GB of weights are the managed 128 GB Mac profile,
+with 112 GB minimum and 128 GB recommended.
+
+`vision-chat-q38-flash-next-4bit` installs the companion immutable
+`Sawfwair/Qwen3.8-Flash-Next-MLX-4bit` revision
+`6cc9bbc0fae9ce26b7670b3ed1e26d557c154506`. Its 104.74 GB of weights use
+affine Q4/group-64 for eligible matrices, with Q4/group-32 for the 160-wide
+n-gram table. It is cataloged for 160 GB minimum and 192 GB recommended rather
+than as a 128 GB alternative.
+
+Both artifacts include the Qwen Community License 1.0 and a complete
+source/output hash receipt. Pulls are explicit and require either
+`--accept-model-license` or its equivalent `--accept-license-terms` alias. The
+native Qwen4Exp runtime currently qualifies text generation only and rejects
+requests whose prompt plus requested generation exceeds the published
+2,048-token QSA indexer budget. At or below that boundary every visible block
+is selected, so standard causal attention is exact. Long-context QSA
+selection and image input remain unqualified. The bundled one-layer MTP path is
+qualified for greedy text generation and enabled by default from short prompts.
+Every proposed token remains under exact target verification; the mixed
+checkpoint measured 1.43–1.78x faster decode in real-checkpoint comparisons.
+Set `MERERUN_Q35_MTP_SPECULATION=0` to retain target-only decode for comparison
+or memory pressure.
 
 `text-chat-bonsai-27b-1bit` and `text-chat-bonsai-27b-2bit` install Prism ML's
 public `prism-ml/Bonsai-27B-mlx-1bit` and

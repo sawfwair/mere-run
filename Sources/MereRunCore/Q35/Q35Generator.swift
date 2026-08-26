@@ -151,7 +151,7 @@ public actor Q35Generator: ChatGenerator {
     private var model: Q35Model?
     private var tokenizerAndTemplate: Q35TokenizerAndTemplate?
     private var visionTower: Q35VisionTower?
-    private var mtpModel: Q35MTPModel?
+    private var mtpModel: (any Q35MTPDraftModel)?
     private var loadedModelPath: String?
     private var loadedConfig: Q35Config?
     private var loadedGenerationEOSTokenIds: [Int] = []
@@ -456,6 +456,13 @@ public actor Q35Generator: ChatGenerator {
             groupSize: groupSize,
             bits: bits
         )
+        if config.textConfig.isQwen4Exp {
+            progressHandler?(ChatProgress(
+                stage: .loadingModel,
+                message: "Loading Qwen4Exp n-gram embedding shards"
+            ))
+            try loadQ38NGramEmbeddings(into: q35Model, from: resources)
+        }
         if Q35FusedSwitchGLUPolicy.enabled, config.textConfig.usesMoE {
             progressHandler?(ChatProgress(
                 stage: .loadingModel,
@@ -468,8 +475,8 @@ public actor Q35Generator: ChatGenerator {
         // Load the MTP draft head whenever it ships with the model and isn't
         // explicitly disabled. Whether speculation is actually USED is decided
         // by the model-specific policy in Self.shouldSpeculate. Dense Qwen3.8
-        // benefits at short context; hybrid MoE Qwen retains the measured
-        // long-context threshold.
+        // remains opt-in, Qwen4Exp and Ornith use their validated short-context
+        // paths, and Qwen3.6 hybrid MoE retains the measured long-context threshold.
         let mtpPolicy = ProcessInfo.processInfo.environment["MERERUN_Q35_MTP_SPECULATION"]?
             .trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let mtpExplicitlyDisabled = mtpPolicy == "0" || mtpPolicy == "false" || mtpPolicy == "no"
@@ -478,7 +485,7 @@ public actor Q35Generator: ChatGenerator {
         let q38Q4 = modelId == Q35Resources.q38TwentySevenB4BitModelId
         let shouldLoadMTP = !mtpExplicitlyDisabled
             && (config.textConfig.usesMoE || q38Q4 || mtpExplicitlyEnabled)
-        let loadedMTP: Q35MTPModel?
+        let loadedMTP: (any Q35MTPDraftModel)?
         let ornithMTPCompanionRoot = Q35Resources.isOrnith35BMLXModelId(modelId)
             ? ManagedModelResolver.resolveInstalledModel(id: Q35Resources.ornith35BMTPModelId)
             : nil
@@ -487,16 +494,40 @@ public actor Q35Generator: ChatGenerator {
                primary: resources,
                companionRootURL: ornithMTPCompanionRoot
            ) {
-            progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Qwen-family MTP weights"))
-            let mtp = Q35MTPModel(config: config)
-            try loadMTPWeights(
-                into: mtp,
-                baseModel: q35Model,
-                from: mtpResources,
-                groupSize: groupSize,
-                bits: bits
-            )
-            loadedMTP = mtp
+            if config.textConfig.isQwen4Exp {
+                guard config.textConfig.mtp?.numHiddenLayers == 1 else {
+                    throw Q35Error.generationFailed(
+                        "Qwen4Exp MTP requires the published one-layer draft configuration."
+                    )
+                }
+                progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Qwen4Exp MTP weights"))
+                let mtp = Q38MTPModel(config: config)
+                try loadQ38MTPWeights(
+                    into: mtp,
+                    from: mtpResources,
+                    groupSize: groupSize,
+                    bits: bits
+                )
+                if Q35FusedSwitchGLUPolicy.enabled {
+                    progressHandler?(ChatProgress(
+                        stage: .loadingModel,
+                        message: "Preparing Qwen4Exp MTP fused MoE weights"
+                    ))
+                    _ = mtp.prepareFusedSwitchGLU()
+                }
+                loadedMTP = mtp
+            } else {
+                progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Qwen-family MTP weights"))
+                let mtp = Q35MTPModel(config: config)
+                try loadMTPWeights(
+                    into: mtp,
+                    baseModel: q35Model,
+                    from: mtpResources,
+                    groupSize: groupSize,
+                    bits: bits
+                )
+                loadedMTP = mtp
+            }
             progressHandler?(ChatProgress(stage: .loadingModel, message: "Preparing Qwen-family MTP drafting"))
             q35Model.prepareGreedyMTPDrafting()
         } else {
@@ -569,6 +600,13 @@ public actor Q35Generator: ChatGenerator {
         if promptTokens.count > effectiveContext {
             promptTokens = Array(promptTokens.suffix(effectiveContext))
         }
+        if loadedConfig.textConfig.isQwen4Exp,
+           promptTokens.count + request.maxTokens > loadedConfig.textConfig.indexerBudget {
+            throw Q35Error.generationFailed(
+                "Qwen4Exp exact inference is currently limited to \(loadedConfig.textConfig.indexerBudget) "
+                    + "prompt-plus-generation tokens while the long-context QSA indexer is being integrated."
+            )
+        }
         if let dumpPath = ProcessInfo.processInfo.environment["MERERUN_Q35_DEBUG_PROMPT_TOKENS"] {
             try? promptTokens.map(String.init).joined(separator: ",")
                 .write(toFile: dumpPath, atomically: true, encoding: .utf8)
@@ -594,11 +632,20 @@ public actor Q35Generator: ChatGenerator {
             && !jsonConstrained
             && request.tools?.isEmpty != false
             && imageURLs.isEmpty
-            && Self.shouldSpeculate(promptTokenCount: promptTokens.count, maxContextTokens: effectiveContext)
+            && Self.shouldSpeculate(
+                promptTokenCount: promptTokens.count,
+                maxContextTokens: effectiveContext,
+                defaultMinimumPromptTokens: Self.defaultMTPMinimumPromptTokens(
+                    modelId: modelId,
+                    usesMoE: loadedConfig.textConfig.usesMoE
+                ),
+                enabledByDefault: loadedConfig.textConfig.usesMoE
+            )
             && mtpModel != nil
         let retainMTPPromptHistory = mtpSpeculationEligible
-            && !loadedConfig.textConfig.usesMoE
-            && promptTokens.count <= Self.mtpPromptHistoryLimit
+            && (loadedConfig.textConfig.isQwen4Exp
+                || (!loadedConfig.textConfig.usesMoE
+                    && promptTokens.count <= Self.mtpPromptHistoryLimit))
         let retainPrefillHidden = prefixKVCacheEnabled || mtpSpeculationEligible
         let effectiveKVCacheMode: RuntimeKVCacheMode
         switch request.kvCacheMode {
@@ -804,6 +851,7 @@ public actor Q35Generator: ChatGenerator {
     /// ~12K +1.5-2.5x on M4 Max). Ornith 1.5 uses its validated MTP companion
     /// from short prompts. Quantized Qwen3.8 uses serial-exact small-batch Q4
     /// verification from short prompts; its BF16 sibling remains opt-in.
+    /// Qwen4Exp uses its exact verified inline head from short prompts.
     /// MERERUN_Q35_MTP_SPECULATION can enable/disable the path and
     /// MERERUN_Q35_MTP_MIN_PROMPT_TOKENS overrides either default.
     static func shouldSpeculate(
@@ -853,6 +901,10 @@ public actor Q35Generator: ChatGenerator {
 
     static func defaultMTPMinimumPromptTokens(modelId: String, usesMoE: Bool) -> Int {
         if Q35Resources.isOrnith35BMLXModelId(modelId) {
+            return 0
+        }
+        if modelId == Q35Resources.q38FlashNextMixedModelId
+            || modelId == Q35Resources.q38FlashNext4BitModelId {
             return 0
         }
         return usesMoE ? 6144 : 0
@@ -976,7 +1028,7 @@ public actor Q35Generator: ChatGenerator {
         initialLogits: MLXArray,
         initialHidden: MLXArray?,
         prefillMTPHidden: MLXArray?,
-        mtpModel: Q35MTPModel?,
+        mtpModel: (any Q35MTPDraftModel)?,
         layerCaches: [Q35LayerCache?],
         eosSet: Set<Int>,
         generationConfig: GenerationConfig,
@@ -1142,7 +1194,8 @@ public actor Q35Generator: ChatGenerator {
                             cache: candidateCaches,
                             targetVerify: true
                         )
-                        MLX.eval(candidate.logits, candidate.hidden, draftBlock.tokenIDs)
+                        let candidateMTPHidden = candidate.mtpHidden ?? candidate.hidden
+                        MLX.eval(candidate.logits, candidateMTPHidden, draftBlock.tokenIDs)
                         mtpVerificationPasses += 1
                         let draftTokens = draftBlock.tokens
 
@@ -1170,7 +1223,7 @@ public actor Q35Generator: ChatGenerator {
                         if accepted == draftTokens.count {
                             mtpAcceptedTokens += accepted
                             mtpDraftSession.recordCommittedTransitions(
-                                hiddenStates: candidate.hidden,
+                                hiddenStates: candidateMTPHidden,
                                 nextTokens: draftTokens
                             )
                             var hitEOS = false
@@ -1184,7 +1237,7 @@ public actor Q35Generator: ChatGenerator {
                             commitVerificationCaches(candidateCaches)
                             layerCaches = candidateCaches
                             logits = lastTokenLogits(candidate.logits)
-                            previousHidden = lastTokenHidden(candidate.hidden)
+                            previousHidden = lastTokenHidden(candidateMTPHidden)
                             if hitEOS || generated.count >= tokenBudget {
                                 break
                             }
@@ -1242,17 +1295,18 @@ public actor Q35Generator: ChatGenerator {
                         let replacementInput = MLXArray(replacementInputValues)
                             .reshaped(1, acceptedPrefix.count + 2)
                         let replacementForward = model.forward(replacementInput, cache: replacementCaches)
+                        let replacementMTPHidden = replacementForward.mtpHidden ?? replacementForward.hidden
                         MLX.eval(replacementForward.logits)
-                        MLX.eval(replacementForward.hidden)
+                        MLX.eval(replacementMTPHidden)
                         mtpReplacementPasses += 1
                         mtpDraftSession.recordCommittedTransitions(
-                            hiddenStates: replacementForward.hidden,
+                            hiddenStates: replacementMTPHidden,
                             nextTokens: acceptedPrefix + [replacement]
                         )
                         emit(replacement)
                         layerCaches = replacementCaches
                         logits = lastTokenLogits(replacementForward.logits)
-                        previousHidden = lastTokenHidden(replacementForward.hidden)
+                        previousHidden = lastTokenHidden(replacementMTPHidden)
                         continue
                     }
 
@@ -1285,8 +1339,9 @@ public actor Q35Generator: ChatGenerator {
                         cache: candidateCaches,
                         targetVerify: true
                     )
+                    let candidateMTPHidden = candidate.mtpHidden ?? candidate.hidden
                     MLX.eval(candidate.logits)
-                    MLX.eval(candidate.hidden)
+                    MLX.eval(candidateMTPHidden)
                     mtpVerificationPasses += 1
 
                     let targetProbs = samplingProbabilities(
@@ -1307,7 +1362,7 @@ public actor Q35Generator: ChatGenerator {
                         commitVerificationCaches(candidateCaches)
                         layerCaches = candidateCaches
                         logits = lastTokenLogits(candidate.logits)
-                        previousHidden = lastTokenHidden(candidate.hidden)
+                        previousHidden = lastTokenHidden(candidateMTPHidden)
                         continue
                     }
 
@@ -1323,13 +1378,14 @@ public actor Q35Generator: ChatGenerator {
                     let replacementCaches = forkLayerCaches(layerCaches)
                     let replacementInput = MLXArray([Int32(next), Int32(replacement)]).reshaped(1, 2)
                     let replacementForward = model.forward(replacementInput, cache: replacementCaches)
+                    let replacementMTPHidden = replacementForward.mtpHidden ?? replacementForward.hidden
                     MLX.eval(replacementForward.logits)
-                    MLX.eval(replacementForward.hidden)
+                    MLX.eval(replacementMTPHidden)
                     mtpReplacementPasses += 1
                     emit(replacement)
                     layerCaches = replacementCaches
                     logits = lastTokenLogits(replacementForward.logits)
-                    previousHidden = lastTokenHidden(replacementForward.hidden)
+                    previousHidden = lastTokenHidden(replacementMTPHidden)
                     continue
                 }
             }
@@ -1342,8 +1398,9 @@ public actor Q35Generator: ChatGenerator {
                     cache: layerCaches,
                     positionIds: positionIds
                 )
+                let outputMTPHidden = output.mtpHidden ?? output.hidden
                 logits = output.logits
-                previousHidden = lastTokenHidden(output.hidden)
+                previousHidden = lastTokenHidden(outputMTPHidden)
                 MLX.eval(logits)
                 MLX.eval(previousHidden!)
             } else {
@@ -1380,7 +1437,7 @@ public actor Q35Generator: ChatGenerator {
             acceleration: mtpModel.map { _ in
                 ChatAccelerationDiagnostics(
                     route: "mtp-speculative",
-                    draftModel: "qwen-mtp",
+                    draftModel: mtpModel?.diagnosticsID ?? "qwen-mtp",
                     rounds: mtpVerificationPasses,
                     draftedTokens: mtpDraftedTokens,
                     acceptedDraftTokens: mtpAcceptedTokens
@@ -1881,12 +1938,13 @@ public actor Q35Generator: ChatGenerator {
                     cache: cache,
                     retainAllHidden: retainMTPHistory
                 )
+                let outputMTPHidden = output.mtpHidden ?? output.hidden
                 MLX.eval(output.logits)
-                MLX.eval(output.hidden)
+                MLX.eval(outputMTPHidden)
                 logits = output.logits
-                hidden = lastTokenHidden(output.hidden)
+                hidden = lastTokenHidden(outputMTPHidden)
                 if retainMTPHistory {
-                    mtpHistoryChunks.append(output.hidden)
+                    mtpHistoryChunks.append(outputMTPHidden)
                 }
                 if let modelPath {
                     storePrefixKVCache(
@@ -1895,7 +1953,7 @@ public actor Q35Generator: ChatGenerator {
                         tokenCount: end,
                         cache: cache,
                         logits: output.logits,
-                        hidden: lastTokenHidden(output.hidden),
+                        hidden: lastTokenHidden(outputMTPHidden),
                         priority: checkpointTokenCounts.contains(end) ? .semantic : .chunk
                     )
                 }
@@ -1962,10 +2020,11 @@ public actor Q35Generator: ChatGenerator {
                     inputEmbeddings: chunkEmbeddings,
                     positionIds: chunkPositionIds
                 )
+                let outputMTPHidden = output.mtpHidden ?? output.hidden
                 MLX.eval(output.logits)
-                MLX.eval(output.hidden)
+                MLX.eval(outputMTPHidden)
                 logits = output.logits
-                hidden = output.hidden
+                hidden = outputMTPHidden
             } else {
                 let output = model.forwardPrefill(
                     chunkInput,
@@ -2156,7 +2215,7 @@ public actor Q35Generator: ChatGenerator {
                 return splitExperts
             }
             let normalizedMapped = Self.normalizeMappedExpertWeightKey(mapped)
-            if normalizedMapped.hasSuffix(".linear_attn.conv1d.weight"), value.ndim == 3 {
+            if normalizedMapped.hasSuffix(".conv1d.weight"), value.ndim == 3 {
                 return [(normalizedMapped, Self.normalizedLinearAttentionConv1DWeight(value))]
             }
             if Self.isOffsetRMSNormWeight(normalizedMapped) {
@@ -2179,7 +2238,7 @@ public actor Q35Generator: ChatGenerator {
         }
         let quantizedMapper: (String, MLXArray) -> [(String, MLXArray)] = { key, value in
             guard !key.hasPrefix("__unused__.") else { return [] }
-            if key.hasSuffix(".linear_attn.conv1d.weight"), value.ndim == 3 {
+            if key.hasSuffix(".conv1d.weight"), value.ndim == 3 {
                 return [(key, Self.normalizedLinearAttentionConv1DWeight(value))]
             }
             if Self.isOffsetRMSNormWeight(key) {
@@ -2239,6 +2298,62 @@ public actor Q35Generator: ChatGenerator {
         }
     }
 
+    private func loadQ38NGramEmbeddings(
+        into model: Q35Model,
+        from resources: Q35Resources
+    ) throws {
+        let targets = model.q38NGramEmbeddings
+        guard !targets.isEmpty else { return }
+
+        let data = try Data(contentsOf: resources.modelIndexURL)
+        let index = try JSONDecoder().decode(HFSafetensorsIndex.self, from: data)
+        for (pleLayerIndex, target) in targets.enumerated() {
+            let layerIndex = model.config.textConfig.pleLayerIds[pleLayerIndex] - 1
+            let base = "language_model.model.layers.\(layerIndex).ple.ple_embedding.ngram_embedding"
+            let shardCount = model.config.textConfig.splitNgramParts
+            var recordsByFilename: [String: [(index: Int, module: String)]] = [:]
+
+            for shardIndex in 0..<shardCount {
+                let module = "\(base).shard_\(shardIndex)"
+                let weightKey = "\(module).weight"
+                guard let filename = index.weightMap[weightKey] else {
+                    throw Q35Error.missingFiles([weightKey])
+                }
+                recordsByFilename[filename, default: []].append((shardIndex, module))
+            }
+
+            var loaded = [PreQuantizedEmbedding?](repeating: nil, count: shardCount)
+            for filename in recordsByFilename.keys.sorted() {
+                let arrays = try MLX.loadArrays(url: resources.rootURL.appendingPathComponent(filename))
+                for record in recordsByFilename[filename] ?? [] {
+                    let weightKey = "\(record.module).weight"
+                    let scalesKey = "\(record.module).scales"
+                    let biasesKey = "\(record.module).biases"
+                    guard let weight = arrays[weightKey], let scales = arrays[scalesKey] else {
+                        throw Q35Error.missingFiles([weightKey, scalesKey])
+                    }
+                    let inputDimensions = model.config.textConfig.pleEmbeddingDimensions
+                        / ((model.config.textConfig.ngramSize - 1) * model.config.textConfig.headsPerNgram)
+                    let inferredBits = weight.dim(1) * 32 / inputDimensions
+                    let inferredGroupSize = inputDimensions / scales.dim(1)
+                    loaded[record.index] = PreQuantizedEmbedding(
+                        weight: weight,
+                        scales: scales,
+                        biases: arrays[biasesKey],
+                        groupSize: inferredGroupSize,
+                        bits: inferredBits,
+                        mode: .affine
+                    )
+                }
+            }
+            let embeddings = loaded.compactMap { $0 }
+            guard embeddings.count == shardCount else {
+                throw Q35Error.missingFiles(["\(base).shard_[0-\(shardCount - 1)]"])
+            }
+            target.installShards(embeddings)
+        }
+    }
+
     private static func hasMTPWeights(resources: Q35Resources) -> Bool {
         if standaloneMTPWeightsURL(resources: resources) != nil {
             return true
@@ -2286,6 +2401,65 @@ public actor Q35Generator: ChatGenerator {
             return nil
         }
         return resources.modelWeightsURL
+    }
+
+    private func loadQ38MTPWeights(
+        into mtp: Q38MTPModel,
+        from resources: Q35Resources,
+        groupSize: Int,
+        bits: Int
+    ) throws {
+        guard FileManager.default.fileExists(atPath: resources.modelIndexURL.path) else {
+            throw Q35Error.missingFiles([resources.modelIndexURL.lastPathComponent])
+        }
+        let data = try Data(contentsOf: resources.modelIndexURL)
+        let index = try JSONDecoder().decode(HFSafetensorsIndex.self, from: data)
+        let filenames = Self.embeddedMTPShardFilenames(weightMap: index.weightMap)
+        guard !filenames.isEmpty else {
+            throw Q35Error.missingFiles(["mtp.*"])
+        }
+
+        var arrays: [String: MLXArray] = [:]
+        for filename in filenames {
+            let shard = try SafetensorsStreamingLoader.loadArrays(
+                url: resources.rootURL.appendingPathComponent(filename),
+                where: { $0.hasPrefix("mtp.") }
+            )
+            arrays.merge(shard) { _, replacement in replacement }
+        }
+
+        let required = [
+            "mtp.pre_fc_norm_embedding.weight",
+            "mtp.pre_fc_norm_hidden.weight",
+            "mtp.fc_embedding.weight",
+            "mtp.fc_hidden.weight",
+            "mtp.hyper_connection_mixer.hc_norm.weight",
+            "mtp.layers.0.self_attn.q_proj.weight",
+            "mtp.layers.0.mlp.switch_mlp.gate_proj.weight",
+        ]
+        let missing = required.filter { arrays[$0] == nil }
+        guard missing.isEmpty else {
+            throw Q35Error.missingFiles(missing)
+        }
+
+        try HFSafetensorsWeightsLoader.applyQuantizedWeightsFromArrays(
+            arrays,
+            to: mtp,
+            groupSize: groupSize,
+            bits: bits,
+            keyMapper: { key in
+                Self.mapQ38MTPWeightKey(key) ?? "__unused__.\(key)"
+            },
+            mapper: { key, value in
+                key.hasPrefix("__unused__.") ? [] : [(key, value)]
+            }
+        )
+        Memory.clearCache()
+    }
+
+    static func mapQ38MTPWeightKey(_ key: String) -> String? {
+        guard key.hasPrefix("mtp.") else { return nil }
+        return String(key.dropFirst("mtp.".count))
     }
 
     private func loadMTPWeights(
