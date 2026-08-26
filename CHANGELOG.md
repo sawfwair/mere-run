@@ -22,6 +22,11 @@ The format is based on Keep a Changelog.
   encoder and image VAE as soon as their conditioning tensors are materialized.
   Set `MERERUN_LTX_MEMORY_TRACE=1` to report MLX allocator use at the major
   generation phases.
+- fixed LTX convolutional-VAE decode admission to account for the large
+  temporary Metal working set of late 3D convolutions. Standard distilled
+  generation now automatically decodes long or high-resolution clips in
+  overlapped temporal tiles instead of attempting a full-frame decode that can
+  exhaust unified memory.
 
 ## 0.44.0 - 2026-08-25
 

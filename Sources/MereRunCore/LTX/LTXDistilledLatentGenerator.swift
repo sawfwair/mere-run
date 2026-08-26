@@ -636,6 +636,7 @@ public actor LTXDistilledLatentGenerator {
             frames = postprocessDecodedVideo(fullDecoded)
         }
         MLX.eval(frames)
+        ltxTraceMemory("video-decode-ready")
 
         if let debugPrefix = ProcessInfo.processInfo.environment["MERERUN_VIDEO_LTX_DEBUG_SAVE_PREFIX"], !debugPrefix.isEmpty {
             let base = URL(fileURLWithPath: debugPrefix).standardizedFileURL
@@ -2609,6 +2610,9 @@ struct LTXDecodeTilingConfig {
     let temporalTileOverlapInFrames: Int
 }
 
+private let ltxDecoderWorkspaceBytesPerOutputPixel = 1_280.0
+private let ltxMinimumTemporalDecodeTileFrames = 32
+
 func selectDecodeTilingConfig(
     width: Int,
     height: Int,
@@ -2618,40 +2622,32 @@ func selectDecodeTilingConfig(
     spatialTileSizeInPixels: Int? = nil,
     spatialTileOverlapInPixels: Int = 0
 ) -> LTXDecodeTilingConfig? {
-    let outputPixelBudget = 135_000_000.0
     let framePixels = Double(max(1, width)) * Double(max(1, height))
-    let totalOutputPixels = framePixels * Double(max(1, numFrames))
-
-    let latentFrames = 1 + ((numFrames - 1) / 8)
-    let latentH = max(1, height / 32)
-    let latentW = max(1, width / 32)
     let budgetGiB = decodeBudgetGiB ?? decodeTilingBudgetGiB()
     let budgetBytes = max(1.0, budgetGiB) * 1024.0 * 1024.0 * 1024.0
 
-    let bytesPerLatentFrame = Double(512 * 4) * Double(latentH * 4) * Double(latentW * 4) * 2.0
-    let totalActivationBytes = bytesPerLatentFrame * Double(latentFrames)
-    let activationLimitedTileFrames: Int?
-    if totalActivationBytes > budgetBytes {
-        let maxLatentFrames = max(2, Int(budgetBytes / max(bytesPerLatentFrame, 1.0)))
-        activationLimitedTileFrames = max(16, maxLatentFrames * 8)
+    let decodeFramePixels: Double
+    if let spatialTileSizeInPixels {
+        decodeFramePixels = Double(min(max(1, width), spatialTileSizeInPixels))
+            * Double(min(max(1, height), spatialTileSizeInPixels))
     } else {
-        activationLimitedTileFrames = nil
+        decodeFramePixels = framePixels
     }
 
-    let outputLimitedTileFrames: Int?
-    if totalOutputPixels > outputPixelBudget {
-        let rawTileFrames = max(16, Int(outputPixelBudget / max(framePixels, 1.0)))
-        outputLimitedTileFrames = max(16, (rawTileFrames / 8) * 8)
+    // The late 3D convolutions dominate decode memory. Counting only their output
+    // tensors misses the input transform and Metal workspace by roughly two orders
+    // of magnitude. This bound covers the BF16 3x3x3 working surfaces at the widest
+    // decoded stages and intentionally rounds above the measured native high-water.
+    let bytesPerDecodeFrame = decodeFramePixels * ltxDecoderWorkspaceBytesPerOutputPixel
+    let estimatedWorkspaceBytes = bytesPerDecodeFrame * Double(max(1, numFrames))
+    let tileFrames: Int?
+    if estimatedWorkspaceBytes > budgetBytes {
+        let budgetedFrames = max(1, Int(budgetBytes / max(bytesPerDecodeFrame, 1.0)))
+        let alignedFrames = (budgetedFrames / 8) * 8
+        tileFrames = max(ltxMinimumTemporalDecodeTileFrames, alignedFrames)
     } else {
-        outputLimitedTileFrames = nil
+        tileFrames = nil
     }
-
-    let tileFramesCandidates = [
-        activationLimitedTileFrames,
-        outputLimitedTileFrames,
-    ].compactMap { $0 }
-
-    let tileFrames = tileFramesCandidates.min()
     guard tileFrames != nil || spatialTileSizeInPixels != nil else {
         return nil
     }
@@ -2659,7 +2655,7 @@ func selectDecodeTilingConfig(
     let overlapFrames: Int
     if let tileFrames {
         let oneSecondFrames = max(8, (Int(max(1, fps).rounded()) / 8) * 8)
-        overlapFrames = min(oneSecondFrames, (tileFrames / 32) * 8)
+        overlapFrames = min(oneSecondFrames, max(8, (tileFrames / 32) * 8))
     } else {
         overlapFrames = 0
     }
@@ -5846,6 +5842,7 @@ public actor LTXUnifiedAVGenerator {
             }
         }
         MLX.eval(frames)
+        ltxTraceMemory("video-decode-ready")
         videoDecodeSeconds = ltxMonotonicSeconds() - videoDecodeStart
 
         return LTXAudioToVideoGenerationResult(
@@ -7518,6 +7515,7 @@ public actor LTXUnifiedAVGenerator {
             hdrOutput = hdrOutput?.cropped(width: options.width, height: options.height)
         }
         MLX.eval(frames)
+        ltxTraceMemory("video-decode-ready")
         videoDecodeSeconds = ltxMonotonicSeconds() - videoDecodeStart
 
         if let debugPrefix = ProcessInfo.processInfo.environment["MERERUN_VIDEO_LTX_DEBUG_SAVE_PREFIX"], !debugPrefix.isEmpty {

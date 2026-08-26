@@ -50,16 +50,44 @@ final class LTXVideoDecodeTilingTests: MereRunCoreTestCase {
         XCTAssertEqual(frames.asArray(UInt8.self), [0, 127, 255, 191, 95, 127, 191, 127, 255])
     }
 
-    func testSmallRepresentativeClipDecodesWithoutTilingUnderDefaultReferenceBudget() {
+    func testShortLowResolutionClipDecodesWithoutTilingUnderDefaultReferenceBudget() {
         let tiling = selectDecodeTilingConfig(
-            width: 640,
-            height: 384,
-            numFrames: 361,
+            width: 512,
+            height: 320,
+            numFrames: 33,
             fps: 24,
             decodeBudgetGiB: 8.0
         )
 
         XCTAssertNil(tiling)
+    }
+
+    func testFiveSecond1024By576ClipUsesBoundedTemporalDecode() throws {
+        let tiling = try XCTUnwrap(selectDecodeTilingConfig(
+            width: 1_024,
+            height: 576,
+            numFrames: 121,
+            fps: 24,
+            decodeBudgetGiB: 8.0
+        ))
+
+        XCTAssertNil(tiling.spatialTileSizeInPixels)
+        XCTAssertEqual(tiling.spatialTileOverlapInPixels, 0)
+        XCTAssertEqual(tiling.temporalTileSizeInFrames, 32)
+        XCTAssertEqual(tiling.temporalTileOverlapInFrames, 8)
+    }
+
+    func testLongLowerResolutionClipStillUsesBoundedTemporalDecode() throws {
+        let tiling = try XCTUnwrap(selectDecodeTilingConfig(
+            width: 640,
+            height: 384,
+            numFrames: 361,
+            fps: 24,
+            decodeBudgetGiB: 8.0
+        ))
+
+        XCTAssertEqual(tiling.temporalTileSizeInFrames, 32)
+        XCTAssertEqual(tiling.temporalTileOverlapInFrames, 8)
     }
 
     func testExplicitSpatialTileCreatesSpatialOnlyDecodePlan() throws {
@@ -90,8 +118,8 @@ final class LTXVideoDecodeTilingTests: MereRunCoreTestCase {
 
         XCTAssertNil(tiling.spatialTileSizeInPixels)
         XCTAssertEqual(tiling.spatialTileOverlapInPixels, 0)
-        XCTAssertEqual(tiling.temporalTileSizeInFrames, 144)
-        XCTAssertEqual(tiling.temporalTileOverlapInFrames, 24)
+        XCTAssertEqual(tiling.temporalTileSizeInFrames, 32)
+        XCTAssertEqual(tiling.temporalTileOverlapInFrames, 8)
     }
 
     func testLong720pClipUsesReferenceTemporalOnlyTiling() throws {
@@ -105,7 +133,7 @@ final class LTXVideoDecodeTilingTests: MereRunCoreTestCase {
 
         XCTAssertNil(tiling.spatialTileSizeInPixels)
         XCTAssertEqual(tiling.spatialTileOverlapInPixels, 0)
-        XCTAssertEqual(tiling.temporalTileSizeInFrames, 144)
-        XCTAssertEqual(tiling.temporalTileOverlapInFrames, 24)
+        XCTAssertEqual(tiling.temporalTileSizeInFrames, 32)
+        XCTAssertEqual(tiling.temporalTileOverlapInFrames, 8)
     }
 }
