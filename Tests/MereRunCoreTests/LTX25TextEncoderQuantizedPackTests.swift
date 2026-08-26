@@ -59,6 +59,15 @@ final class LTX25TextEncoderQuantizedPackTests: XCTestCase {
         XCTAssertNotNil(arrays["layers.0.mlp.up_proj.scales"])
         XCTAssertNotNil(arrays["norm.weight"])
         XCTAssertNil(arrays["text_embedding_projection.aggregate_embed.weight"])
+        let runtimeAssets = try MLX.loadArrays(
+            url: LTX25TextEncoderQuantizedPack.runtimeAssetsURL(
+                resources: fixture.resources
+            )
+        )
+        XCTAssertNotNil(runtimeAssets["tokenizer_json"])
+        XCTAssertNotNil(
+            runtimeAssets["text_embedding_projection.video_aggregate_embed.weight"]
+        )
 
         let restored = MLX.dequantized(
             try XCTUnwrap(arrays["layers.0.mlp.up_proj.weight"]),
@@ -99,6 +108,52 @@ final class LTX25TextEncoderQuantizedPackTests: XCTestCase {
         )
     }
 
+    func testBundledPackValidationUsesPinnedUpstreamReceiptWithoutSourceFile() throws {
+        let fixture = try makeFixture()
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        let result = try LTX25TextEncoderQuantizedPack.optimize(
+            resources: fixture.resources
+        )
+        let data = try Data(contentsOf: result.manifestURL)
+        let fixtureManifest = try JSONDecoder().decode(
+            LTX25TextEncoderQuantizedPackManifest.self,
+            from: data
+        )
+        let managedManifest = LTX25TextEncoderQuantizedPackManifest(
+            format: fixtureManifest.format,
+            sourceRevision: fixtureManifest.sourceRevision,
+            sourceFilename: fixtureManifest.sourceFilename,
+            sourceBytes: LTX25Resources.textEncoderSourceBytes,
+            bits: fixtureManifest.bits,
+            groupSize: fixtureManifest.groupSize,
+            sourceTensorCount: fixtureManifest.sourceTensorCount,
+            quantizedTensorCount: fixtureManifest.quantizedTensorCount,
+            packedBytes: fixtureManifest.packedBytes,
+            runtimeAssetsFilename: fixtureManifest.runtimeAssetsFilename,
+            shards: fixtureManifest.shards
+        )
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        try encoder.encode(managedManifest).write(to: result.manifestURL, options: .atomic)
+        try FileManager.default.removeItem(at: fixture.resources.textEncoderURL)
+        for relativePath in LTX25Resources.requiredRelativePaths {
+            let url = fixture.root.appendingPathComponent(relativePath)
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            XCTAssertTrue(FileManager.default.createFile(atPath: url.path, contents: Data()))
+        }
+
+        XCTAssertEqual(
+            LTX25TextEncoderQuantizedPack.optimizedIndexURLIfValid(
+                resources: fixture.resources
+            ),
+            result.indexURL
+        )
+        XCTAssertTrue(isLTX25ModelRoot(fixture.root))
+    }
+
     private func makeFixture() throws -> (
         root: URL,
         resources: LTX25Resources,
@@ -130,11 +185,26 @@ final class LTX25TextEncoderQuantizedPackTests: XCTestCase {
                 "model.embed_tokens.weight": embedding,
                 "model.layers.0.mlp.up_proj.weight": layerWeight,
                 "model.norm.weight": MLX.ones([64], dtype: .bfloat16),
-                "text_embedding_projection.aggregate_embed.weight": MLX.ones(
+                "hf_asset__tokenizer_config.json": MLXArray([UInt8(123), UInt8(125)]),
+                "text_embedding_projection.audio_aggregate_embed.bias": MLX.ones(
+                    [32],
+                    dtype: .bfloat16
+                ),
+                "text_embedding_projection.audio_aggregate_embed.weight": MLX.ones(
+                    [32, 64],
+                    dtype: .bfloat16
+                ),
+                "text_embedding_projection.video_aggregate_embed.bias": MLX.ones(
+                    [64],
+                    dtype: .bfloat16
+                ),
+                "text_embedding_projection.video_aggregate_embed.weight": MLX.ones(
                     [64, 64],
                     dtype: .bfloat16
                 ),
+                "tokenizer_json": MLXArray([UInt8(123), UInt8(125)]),
             ],
+            metadata: ["gemma_config": "{}"],
             url: resources.textEncoderURL
         )
         return (root, resources, layerWeight)

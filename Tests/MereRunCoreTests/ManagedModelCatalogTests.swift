@@ -2025,7 +2025,7 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertTrue(manifest.supports?.contains(.audioToVideoGeneration) == true)
     }
 
-    func testLTX25SpecPinsOfficialGatedPackedRelease() throws {
+    func testLTX25SpecPinsSelfContainedSawfwairRelease() throws {
         let id = ModelResolver.ModelID.ltxVideo25DistilledBF16.rawValue
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: id))
 
@@ -2033,13 +2033,14 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.category, .video)
         XCTAssertEqual(spec.installShape, .structuredRoot)
         XCTAssertEqual(spec.validationKind, .ltxVideo25)
-        XCTAssertEqual(spec.hubFallback?.repoId, LTX25Resources.sourceRepository)
-        XCTAssertEqual(spec.hubFallback?.revision, LTX25Resources.sourceRevision)
+        XCTAssertEqual(spec.hubFallback?.repoId, LTX25Resources.managedRepository)
+        XCTAssertEqual(spec.hubFallback?.revision, LTX25Resources.managedRevision)
         XCTAssertEqual(spec.hubFallback?.patterns, LTX25Resources.snapshotPatterns)
-        XCTAssertEqual(spec.upstreamRepoId, LTX25Resources.sourceRepository)
-        XCTAssertEqual(spec.upstreamRevision, LTX25Resources.sourceRevision)
+        XCTAssertEqual(spec.upstreamRepoId, LTX25Resources.managedRepository)
+        XCTAssertEqual(spec.upstreamRevision, LTX25Resources.managedRevision)
         XCTAssertEqual(spec.estimatedDownloadBytes, LTX25Resources.estimatedDownloadBytes)
         XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
+        XCTAssertTrue(spec.companionModelIDs.isEmpty)
         XCTAssertEqual(spec.usageRestriction?.terms.count, 2)
         XCTAssertTrue(spec.usageRestriction?.terms.contains { $0.component == "Gemma 4 text encoder" } == true)
 
@@ -2053,7 +2054,7 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(manifest.precision, .bf16)
         XCTAssertEqual(
             manifest.upstreamRepoId,
-            "\(LTX25Resources.sourceRepository)@\(LTX25Resources.sourceRevision)"
+            "\(LTX25Resources.managedRepository)@\(LTX25Resources.managedRevision)"
         )
     }
 
@@ -2070,6 +2071,7 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.hubFallback?.patterns, LTX25Resources.fullSnapshotPatterns)
         XCTAssertEqual(spec.estimatedDownloadBytes, LTX25Resources.fullEstimatedDownloadBytes)
         XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
+        XCTAssertTrue(spec.companionModelIDs.isEmpty)
         XCTAssertEqual(spec.usageRestriction?.terms.count, 2)
 
         let manifest = MereRunModelManifest.template(
@@ -2370,6 +2372,12 @@ final class ManagedModelCatalogTests: XCTestCase {
             )
             XCTAssertTrue(FileManager.default.createFile(atPath: url.path, contents: Data()))
         }
+        let textEncoder = root.appendingPathComponent(LTX25Resources.textEncoderRelativePath)
+        try FileManager.default.createDirectory(
+            at: textEncoder.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        XCTAssertTrue(FileManager.default.createFile(atPath: textEncoder.path, contents: Data()))
     }
 
     private func writeMinimalLTX25FullRoot(at root: URL) throws {

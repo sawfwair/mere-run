@@ -14,6 +14,12 @@ struct ModelOptimize: ParsableCommand {
     @Flag(name: [.long], help: "Replace an existing compatible optimization cache.")
     var force: Bool = false
 
+    @Flag(
+        name: [.customLong("text-encoder-only")],
+        help: "For LTX 2.5, build only the self-contained Q4 text-encoder pack."
+    )
+    var textEncoderOnly: Bool = false
+
     @Flag(name: [.long], help: "Emit the result as JSON.")
     var json: Bool = false
 
@@ -23,6 +29,19 @@ struct ModelOptimize: ParsableCommand {
         let optimization: String
         if isLTX25ModelRoot(rootURL) {
             let resources = LTX25Resources(rootURL: rootURL)
+            if textEncoderOnly {
+                _ = try optimizeLTX25TextEncoder(resources: resources)
+                artifacts = LTX25TextEncoderQuantizedPack.artifactURLs(
+                    resources: resources
+                )
+                optimization = "ltx25-text-q4-v1"
+                try emitResult(
+                    rootURL: rootURL,
+                    artifacts: artifacts,
+                    optimization: optimization
+                )
+                return
+            }
             var kinds: [LTX25NativeModelPackKind] = [.distilled, .connector]
             if isLTX25FullModelRoot(rootURL) {
                 kinds.append(.dev)
@@ -42,21 +61,16 @@ struct ModelOptimize: ParsableCommand {
                 )
                 return result.outputURL
             }
-            _ = try LTX25TextEncoderQuantizedPack.optimize(
-                resources: resources,
-                replacing: force,
-                progressHandler: { completed, total in
-                    CLIStderr.write(
-                        "LTX 2.5 Q4 text pack: \(completed)/\(total) shards\n"
-                    )
-                }
-            )
+            _ = try optimizeLTX25TextEncoder(resources: resources)
             ltxArtifacts.append(
                 contentsOf: LTX25TextEncoderQuantizedPack.artifactURLs(resources: resources)
             )
             artifacts = ltxArtifacts
             optimization = "ltx25-native-model-pack+text-q4-v1"
         } else {
+            if textEncoderOnly {
+                throw ValidationError("--text-encoder-only requires an LTX 2.5 model.")
+            }
             let resources = MiniMaxH3Resources(rootURL: rootURL)
             _ = try MiniMaxH3ModelOptimizer.optimize(
                 resources: resources,
@@ -68,6 +82,32 @@ struct ModelOptimize: ParsableCommand {
             artifacts = MiniMaxH3ModelOptimizer.artifactURLs(resources: resources)
             optimization = "minimax-h3-adaln-cache-pack-v1"
         }
+        try emitResult(
+            rootURL: rootURL,
+            artifacts: artifacts,
+            optimization: optimization
+        )
+    }
+
+    private func optimizeLTX25TextEncoder(
+        resources: LTX25Resources
+    ) throws -> LTX25TextEncoderQuantizedPackResult {
+        try LTX25TextEncoderQuantizedPack.optimize(
+            resources: resources,
+            replacing: force,
+            progressHandler: { completed, total in
+                CLIStderr.write(
+                    "LTX 2.5 Q4 text pack: \(completed)/\(total) shards\n"
+                )
+            }
+        )
+    }
+
+    private func emitResult(
+        rootURL: URL,
+        artifacts: [URL],
+        optimization: String
+    ) throws {
         let bytes = artifacts.reduce(0) { total, url in
             total + ((try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
         }

@@ -1032,11 +1032,11 @@ public enum ManagedModelCatalog {
 
     private static let ltx25GemmaTextEncoderUsageTerm = ManagedModelUsageTerm(
         component: "Gemma 4 text encoder",
-        license: "Gemma Terms of Use",
-        summary: "The packed LTX 2.5 text encoder includes Gemma 4 weights distributed under the Gemma Terms of Use and Gemma Prohibited Use Policy.",
+        license: "Apache License 2.0",
+        summary: "The packed LTX 2.5 text encoder includes Gemma 4 weights distributed under the Apache License 2.0.",
         sourceRepoId: LTX25Resources.sourceRepository,
         sourceRevision: LTX25Resources.sourceRevision,
-        licenseURL: "https://ai.google.dev/gemma/terms"
+        licenseURL: "https://ai.google.dev/gemma/apache_2"
     )
 
     private static let geoExpansionSpecs: [ManagedModelSpec] = [
@@ -3435,15 +3435,15 @@ public enum ManagedModelCatalog {
             category: .video,
             installShape: .structuredRoot,
             hubFallback: HubFallbackConfig(
-                repoId: LTX25Resources.sourceRepository,
-                revision: LTX25Resources.sourceRevision,
+                repoId: LTX25Resources.managedRepository,
+                revision: LTX25Resources.managedRevision,
                 patterns: LTX25Resources.snapshotPatterns
             ),
-            upstreamRepoId: LTX25Resources.sourceRepository,
-            upstreamRevision: LTX25Resources.sourceRevision,
+            upstreamRepoId: LTX25Resources.managedRepository,
+            upstreamRevision: LTX25Resources.managedRevision,
             usageRestriction: ltxUsageRestriction(
-                sourceRepoId: LTX25Resources.sourceRepository,
-                sourceRevision: LTX25Resources.sourceRevision,
+                sourceRepoId: LTX25Resources.managedRepository,
+                sourceRevision: LTX25Resources.managedRevision,
                 additionalTerms: [ltx25GemmaTextEncoderUsageTerm]
             ),
             validationKind: .ltxVideo25,

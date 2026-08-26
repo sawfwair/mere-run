@@ -7,8 +7,11 @@ The compatibility target is immutable:
 
 - **Code:** `Lightricks/LTX-2` release `v1.2.0`, commit
   `d151147788a9284cca791edc6ce898007e727fe6`
-- **Weights:** `Lightricks/LTX-2`, revision
+- **Weights:** `Lightricks/LTX-2.5`, revision
   `dd53cc2cd45bbeaa3563dfb575cba3f49cf44761`
+- **Managed distilled distribution:**
+  `Sawfwair/LTX-2.5-Distilled-BF16-MLX-Q4-Text`, revision
+  `9f316bfb18448bf67f716006fd78a37829223b74`
 - **DFR detailer:** `Lightricks/LTX-2.5-22b-IC-LoRA-Pixel-Spatial-Upscaler`,
   revision `74c4e68ee7dd99f3997d5a1bb1a3784941822222`
 
@@ -19,17 +22,18 @@ precedence.
 
 ## Install
 
-The standalone distilled bundle is about 71.1 GB. The complete bundle is
-about 123.8 GB and adds the dev transformer, distilled LoRA, DiffVAE, temporal
-upsampler, and duration head.
+The public self-contained managed distilled bundle is exactly 53,878,648,085
+bytes. The complete official BF16 bundle is about 123.8 GB and adds the dev
+transformer, distilled LoRA, DiffVAE, temporal upsampler, and duration head.
 
 ```bash
 mere.run model pull video-ltx25-distilled-bf16 --accept-model-license
 mere.run model pull video-ltx25-full-bf16 --accept-model-license
 ```
 
-The model and the DFR detailer are separately gated on Hugging Face. Accepting
-the main model gate does not accept the detailer gate.
+The managed distilled model is ungated. The official full/dev model and DFR
+detailer are separately gated on Hugging Face; accepting either one does not
+accept the other.
 
 ```bash
 mere.run adapter pull ltx25-pixel-spatial-upscaler-x2 --accept-license
@@ -113,16 +117,16 @@ The acceleration surface remains native Swift, MLX, and Metal:
 - DiffVAE neighborhood attention routes to a fused three-dimensional Metal
   online-softmax kernel on supported Apple GPUs. The bounded MLX SDPA tiling
   path remains the automatic compatibility fallback.
-- `mere.run model optimize video-ltx25-full-bf16` creates source-bound native
-  transformer and compact text-connector packs under
-  `.mere-run/ltx25-native-v1`. It also derives an MLX affine Q4/group-64 pack
-  for the checkpoint's custom Gemma 4 language tower under
-  `.mere-run/ltx25-text-q4-v1`; the LTX projection and embedded tokenizer stay
-  bound to the official BF16 checkpoint. Runtime loading validates the pinned
-  source revision and prefers this local Q4 tower, with the official BF16 tower
-  as the fallback. Transformer payloads are not quantized or rewritten.
-  Connector loading no longer has to touch the 42 GB official transformer
-  checkpoint.
+- The public, immutable
+  `Sawfwair/LTX-2.5-Distilled-BF16-MLX-Q4-Text` distribution is the single
+  managed distilled download after explicit license acceptance. Its LTX
+  transformer, VAEs, upsampler, and duration head preserve upstream BF16 bytes;
+  its self-contained text pack uses MLX affine Q4/group-64 for eligible Gemma
+  language weights while retaining the LTX projection and tokenizer assets in
+  BF16/raw form. Runtime validates the pinned source receipt. `mere.run model
+  optimize /path/to/LTX-2.5 --text-encoder-only` can reproduce the text pack
+  locally; full optimization also creates source-bound native transformer and
+  compact connector packs. The video transformer is never quantized.
 - Prompt tensors are evaluated and cached before the Gemma tower is unloaded.
   Image/reference latents are likewise evaluated before the video VAE encoder
   is released. Neither encoder remains resident during denoising; a later

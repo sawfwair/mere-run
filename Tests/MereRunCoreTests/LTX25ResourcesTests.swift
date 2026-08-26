@@ -16,6 +16,16 @@ final class LTX25ResourcesTests: XCTestCase {
             )
             XCTAssertTrue(FileManager.default.createFile(atPath: url.path, contents: Data()))
         }
+        try FileManager.default.createDirectory(
+            at: resources.textEncoderURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        XCTAssertTrue(
+            FileManager.default.createFile(
+                atPath: resources.textEncoderURL.path,
+                contents: Data()
+            )
+        )
 
         XCTAssertTrue(resources.validate().isEmpty)
         XCTAssertTrue(isLTX25ModelRoot(root))
@@ -25,7 +35,7 @@ final class LTX25ResourcesTests: XCTestCase {
         XCTAssertFalse(isLTX25ModelRoot(root))
     }
 
-    func testSnapshotPinsOfficialImmutableFiles() {
+    func testSnapshotPinsSelfContainedManagedDistribution() {
         XCTAssertEqual(LTX25Resources.sourceRepository, "Lightricks/LTX-2.5")
         XCTAssertEqual(
             LTX25Resources.sourceRevision,
@@ -36,9 +46,20 @@ final class LTX25ResourcesTests: XCTestCase {
             "d151147788a9284cca791edc6ce898007e727fe6"
         )
         XCTAssertEqual(LTX25Resources.upstreamCodeRelease, "v1.2.0")
-        XCTAssertEqual(LTX25Resources.estimatedDownloadBytes, 71_098_810_082)
+        XCTAssertEqual(
+            LTX25Resources.managedRepository,
+            "Sawfwair/LTX-2.5-Distilled-BF16-MLX-Q4-Text"
+        )
+        XCTAssertEqual(
+            LTX25Resources.managedRevision,
+            "9f316bfb18448bf67f716006fd78a37829223b74"
+        )
+        XCTAssertEqual(LTX25Resources.estimatedDownloadBytes, 53_878_648_085)
         XCTAssertTrue(LTX25Resources.snapshotPatterns.contains(LTX25Resources.transformerRelativePath))
-        XCTAssertTrue(LTX25Resources.snapshotPatterns.contains(LTX25Resources.textEncoderRelativePath))
+        XCTAssertFalse(LTX25Resources.snapshotPatterns.contains(LTX25Resources.textEncoderRelativePath))
+        XCTAssertTrue(LTX25Resources.snapshotPatterns.contains {
+            $0.contains(LTX25TextEncoderQuantizedPack.relativeDirectory)
+        })
         XCTAssertFalse(LTX25Resources.snapshotPatterns.contains {
             $0.contains("dev-transformer") || $0.contains("diffusion-video-vae")
         })

@@ -280,7 +280,12 @@ public actor LTXGemmaTextEncoder {
         loadConnectorWeights: Bool
     ) async throws {
         let resources = LTX25Resources(rootURL: root)
-        let textEncoderURL = resources.textEncoderURL
+        let quantizedIndexURL = LTX25TextEncoderQuantizedPack.optimizedIndexURLIfValid(
+            resources: resources
+        )
+        let textEncoderURL = quantizedIndexURL.map {
+            LTX25TextEncoderQuantizedPack.runtimeAssetsURL(indexURL: $0)
+        } ?? resources.textEncoderURL
         let connectorURL = LTX25NativeModelPack.optimizedURLIfValid(
             resources: resources,
             kind: .connector
@@ -302,9 +307,7 @@ public actor LTXGemmaTextEncoder {
         }
 
         let languageModel = Gemma4LanguageModel(config: config.textConfig)
-        if let quantizedIndexURL = LTX25TextEncoderQuantizedPack.optimizedIndexURLIfValid(
-            resources: resources
-        ) {
+        if let quantizedIndexURL {
             try HFSafetensorsWeightsLoader.applyQuantizedWeights(
                 indexURL: quantizedIndexURL,
                 to: languageModel,

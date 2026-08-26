@@ -69,7 +69,10 @@ final class ModelPullCommandParsingTests: XCTestCase {
             let blocked = try ModelPull.parse([id])
             let accepted = try ModelPull.parse([id, "--accept-model-license"])
 
-            XCTAssertEqual(spec.hubFallback?.repoId, "Lightricks/LTX-2.5")
+            let expectedRepoID = id == ModelResolver.ModelID.ltxVideo25DistilledBF16.rawValue
+                ? LTX25Resources.managedRepository
+                : LTX25Resources.sourceRepository
+            XCTAssertEqual(spec.hubFallback?.repoId, expectedRepoID)
             XCTAssertEqual(spec.usageRestriction?.terms.count, 2)
             XCTAssertTrue(try XCTUnwrap(blocked.licenseAcceptanceMessage(for: spec)).contains("Gemma 4"))
             XCTAssertNil(accepted.licenseAcceptanceMessage(for: spec))

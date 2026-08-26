@@ -307,7 +307,11 @@ struct ModelInfo: ParsableCommand {
         full: Bool = false,
         fileManager: FileManager = .default
     ) -> [String] {
-        var lines = ["  layout: official LTX 2.5 packed BF16 files"]
+        var lines = [
+            full
+                ? "  layout: official LTX 2.5 packed BF16 files"
+                : "  layout: self-contained LTX 2.5 BF16 + MLX Q4 text files",
+        ]
         for file in full ? ltx25FullComponentFiles : ltx25ComponentFiles {
             let url = rootURL.appendingPathComponent(file.relativePath).standardizedFileURL
             let suffix = fileManager.fileExists(atPath: url.path) ? "" : "  (missing)"
@@ -494,7 +498,14 @@ struct ModelInfo: ParsableCommand {
 
     private static let ltx25ComponentFiles: [(label: String, relativePath: String)] = [
         ("transformer_distilled", LTX25Resources.distilledTransformerRelativePath),
-        ("text_encoder", LTX25Resources.textEncoderRelativePath),
+        (
+            "text_encoder_q4",
+            "\(LTX25TextEncoderQuantizedPack.relativeDirectory)/model.safetensors.index.json"
+        ),
+        (
+            "text_encoder_assets",
+            "\(LTX25TextEncoderQuantizedPack.relativeDirectory)/\(LTX25TextEncoderQuantizedPack.runtimeAssetsFilename)"
+        ),
         ("video_vae_conv", LTX25Resources.videoVAERelativePath),
         ("audio_vae_vocoder", LTX25Resources.audioVAERelativePath),
         ("spatial_upscaler", LTX25Resources.spatialUpsamplerRelativePath),

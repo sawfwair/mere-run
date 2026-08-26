@@ -23,6 +23,7 @@ public struct LTX25TextEncoderQuantizedPackManifest: Codable, Hashable, Sendable
     public let sourceTensorCount: Int
     public let quantizedTensorCount: Int
     public let packedBytes: Int64
+    public let runtimeAssetsFilename: String
     public let shards: [String]
 
     private enum CodingKeys: String, CodingKey {
@@ -35,6 +36,7 @@ public struct LTX25TextEncoderQuantizedPackManifest: Codable, Hashable, Sendable
         case sourceTensorCount = "source_tensor_count"
         case quantizedTensorCount = "quantized_tensor_count"
         case packedBytes = "packed_bytes"
+        case runtimeAssetsFilename = "runtime_assets_filename"
         case shards
     }
 }
@@ -63,11 +65,12 @@ public enum LTX25TextEncoderQuantizedPackError: LocalizedError {
 }
 
 /// Builds a local, source-bound MLX affine Q4 pack for the custom Gemma 4
-/// language tower embedded in the official LTX 2.5 text encoder. The LTX
-/// projection and tokenizer assets remain in the official BF16 checkpoint.
+/// language tower embedded in the official LTX 2.5 text encoder. The pack also
+/// carries the BF16 LTX projection and embedded tokenizer assets required at runtime.
 public enum LTX25TextEncoderQuantizedPack {
     public static let format = "mere-run-ltx25-text-q4-v1"
     public static let relativeDirectory = ".mere-run/ltx25-text-q4-v1"
+    public static let runtimeAssetsFilename = "text-encoder-assets-bf16.safetensors"
     public static let bits = 4
     public static let groupSize = 64
 
@@ -85,14 +88,47 @@ public enum LTX25TextEncoderQuantizedPack {
             .appendingPathComponent("pack.json", isDirectory: false)
     }
 
+    public static func runtimeAssetsURL(resources: LTX25Resources) -> URL {
+        outputDirectoryURL(resources: resources)
+            .appendingPathComponent(runtimeAssetsFilename, isDirectory: false)
+    }
+
+    public static func runtimeAssetsURL(indexURL: URL) -> URL {
+        indexURL.deletingLastPathComponent()
+            .appendingPathComponent(runtimeAssetsFilename, isDirectory: false)
+    }
+
     public static func optimizedIndexURLIfValid(
         resources: LTX25Resources,
         fileManager: FileManager = .default
     ) -> URL? {
-        let outputDirectory = outputDirectoryURL(resources: resources)
-        let manifestURL = manifestURL(resources: resources)
-        let indexURL = indexURL(resources: resources)
-        guard fileManager.fileExists(atPath: resources.textEncoderURL.path),
+        let sourceURL = resources.textEncoderURL
+        return validatedIndexURL(
+            outputDirectory: outputDirectoryURL(resources: resources),
+            sourceURL: fileManager.fileExists(atPath: sourceURL.path) ? sourceURL : nil,
+            fileManager: fileManager
+        )
+    }
+
+    private static func validatedIndexURL(
+        outputDirectory: URL,
+        sourceURL: URL?,
+        fileManager: FileManager
+    ) -> URL? {
+        let manifestURL = outputDirectory.appendingPathComponent(
+            "pack.json",
+            isDirectory: false
+        )
+        let indexURL = outputDirectory.appendingPathComponent(
+            "model.safetensors.index.json",
+            isDirectory: false
+        )
+        let expectedSourceFilename = sourceURL?.lastPathComponent
+            ?? URL(fileURLWithPath: LTX25Resources.textEncoderRelativePath).lastPathComponent
+        let expectedSourceBytes = sourceURL.map(fileSize)
+            ?? LTX25Resources.textEncoderSourceBytes
+        let sourceExists = sourceURL.map { fileManager.fileExists(atPath: $0.path) } ?? true
+        guard sourceExists,
               fileManager.fileExists(atPath: manifestURL.path),
               fileManager.fileExists(atPath: indexURL.path),
               let manifestData = try? Data(contentsOf: manifestURL),
@@ -102,15 +138,33 @@ public enum LTX25TextEncoderQuantizedPack {
               ),
               manifest.format == format,
               manifest.sourceRevision == LTX25Resources.sourceRevision,
-              manifest.sourceFilename == resources.textEncoderURL.lastPathComponent,
+              manifest.sourceFilename == expectedSourceFilename,
               manifest.bits == bits,
               manifest.groupSize == groupSize,
-              manifest.sourceBytes == fileSize(resources.textEncoderURL),
+              manifest.sourceBytes == expectedSourceBytes,
+              manifest.runtimeAssetsFilename == runtimeAssetsFilename,
               !manifest.shards.isEmpty,
               let indexData = try? Data(contentsOf: indexURL),
               let index = try? JSONDecoder().decode(HFSafetensorsIndex.self, from: indexData),
               index.weightMap.keys.contains(where: { $0.hasSuffix(".scales") }),
               index.shardFilenames == manifest.shards.sorted() else {
+            return nil
+        }
+        let runtimeAssetsURL = outputDirectory.appendingPathComponent(
+            manifest.runtimeAssetsFilename,
+            isDirectory: false
+        )
+        guard fileManager.fileExists(atPath: runtimeAssetsURL.path),
+              let runtimeMetadata = try? SafetensorsStreamingLoader.metadata(
+                  url: runtimeAssetsURL
+              ),
+              requiredRuntimeAssetKeys.allSatisfy({ runtimeMetadata[$0] != nil }),
+              let runtimeFileMetadata = try? SafetensorsStreamingLoader.fileMetadata(
+                  url: runtimeAssetsURL
+              ),
+              runtimeFileMetadata["format"] == format,
+              runtimeFileMetadata["source_revision"] == LTX25Resources.sourceRevision,
+              runtimeFileMetadata["gemma_config"] != nil else {
             return nil
         }
         for shard in manifest.shards {
@@ -144,7 +198,11 @@ public enum LTX25TextEncoderQuantizedPack {
         let shards = manifest.shards.map {
             outputDirectory.appendingPathComponent($0, isDirectory: false)
         }
-        return [manifestURL(resources: resources), indexURL(resources: resources)] + shards
+        return [
+            manifestURL(resources: resources),
+            indexURL(resources: resources),
+            runtimeAssetsURL(resources: resources),
+        ] + shards
     }
 
     public static func optimize(
@@ -163,6 +221,10 @@ public enum LTX25TextEncoderQuantizedPack {
         }
 
         let sourceMetadata = try SafetensorsStreamingLoader.metadata(url: sourceURL)
+        let sourceFileMetadata = try SafetensorsStreamingLoader.fileMetadata(url: sourceURL)
+        guard let gemmaConfig = sourceFileMetadata["gemma_config"] else {
+            throw LTX25TextEncoderQuantizedPackError.invalidOutput(sourceURL)
+        }
         let languageKeys = sourceMetadata.keys.filter(isLanguageTensor).sorted()
         guard !languageKeys.isEmpty else {
             throw LTX25TextEncoderQuantizedPackError.noLanguageTensors(sourceURL)
@@ -244,6 +306,30 @@ public enum LTX25TextEncoderQuantizedPack {
                 progressHandler?(index + 1, groups.count)
             }
 
+            let runtimeAssets = try SafetensorsStreamingLoader.loadArrays(
+                url: sourceURL,
+                where: { requiredRuntimeAssetKeys.contains($0) }
+            )
+            guard requiredRuntimeAssetKeys.allSatisfy({ runtimeAssets[$0] != nil }) else {
+                throw LTX25TextEncoderQuantizedPackError.invalidOutput(sourceURL)
+            }
+            MLX.eval(Array(runtimeAssets.values))
+            let runtimeAssetsURL = temporaryDirectory.appendingPathComponent(
+                runtimeAssetsFilename,
+                isDirectory: false
+            )
+            try MLX.save(
+                arrays: runtimeAssets,
+                metadata: [
+                    "format": format,
+                    "source_revision": LTX25Resources.sourceRevision,
+                    "gemma_config": gemmaConfig,
+                ],
+                url: runtimeAssetsURL
+            )
+            packedBytes += fileSize(runtimeAssetsURL)
+            Memory.clearCache()
+
             let index = LTX25TextEncoderPackIndex(
                 metadata: .init(totalSize: packedBytes),
                 weightMap: weightMap
@@ -265,6 +351,7 @@ public enum LTX25TextEncoderQuantizedPack {
                 sourceTensorCount: languageKeys.count,
                 quantizedTensorCount: quantizedTensorCount,
                 packedBytes: packedBytes,
+                runtimeAssetsFilename: runtimeAssetsFilename,
                 shards: shardNames
             )
             try writeJSON(
@@ -304,6 +391,15 @@ public enum LTX25TextEncoderQuantizedPack {
             || key == "model.norm.weight"
             || key.hasPrefix("model.layers.")
     }
+
+    private static let requiredRuntimeAssetKeys: Set<String> = [
+        "hf_asset__tokenizer_config.json",
+        "text_embedding_projection.audio_aggregate_embed.bias",
+        "text_embedding_projection.audio_aggregate_embed.weight",
+        "text_embedding_projection.video_aggregate_embed.bias",
+        "text_embedding_projection.video_aggregate_embed.weight",
+        "tokenizer_json",
+    ]
 
     private static func shouldQuantize(
         key: String,

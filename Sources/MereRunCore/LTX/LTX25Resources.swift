@@ -5,10 +5,14 @@ public struct LTX25Resources: Sendable, Hashable {
     public static let fullModelID = "video-ltx25-full-bf16"
     public static let sourceRepository = "Lightricks/LTX-2.5"
     public static let sourceRevision = "dd53cc2cd45bbeaa3563dfb575cba3f49cf44761"
+    public static let managedRepository =
+        "Sawfwair/LTX-2.5-Distilled-BF16-MLX-Q4-Text"
+    public static let managedRevision = "9f316bfb18448bf67f716006fd78a37829223b74"
     public static let upstreamCodeRepository = "Lightricks/LTX-2"
     public static let upstreamCodeRevision = "d151147788a9284cca791edc6ce898007e727fe6"
     public static let upstreamCodeRelease = "v1.2.0"
-    public static let estimatedDownloadBytes: Int64 = 71_098_810_082
+    public static let textEncoderSourceBytes: Int64 = 26_263_860_594
+    public static let estimatedDownloadBytes: Int64 = 53_878_648_085
     public static let fullEstimatedDownloadBytes: Int64 = 123_751_083_670
 
     public static let distilledTransformerRelativePath =
@@ -35,7 +39,6 @@ public struct LTX25Resources: Sendable, Hashable {
 
     public static let requiredRelativePaths = [
         distilledTransformerRelativePath,
-        textEncoderRelativePath,
         videoVAERelativePath,
         audioVAERelativePath,
         spatialUpsamplerRelativePath,
@@ -56,12 +59,18 @@ public struct LTX25Resources: Sendable, Hashable {
 
     public static let snapshotPatterns = [
         "README.md",
+        "LICENSE.md",
+        "LTX-ACCEPTABLE-USE-POLICY.pdf",
+        "GEMMA-4-LICENSE.txt",
+        "NOTICE.md",
         transformerRelativePath,
-        textEncoderRelativePath,
         videoVAERelativePath,
         audioVAERelativePath,
         spatialUpsamplerRelativePath,
         durationHeadRelativePath,
+        "\(LTX25TextEncoderQuantizedPack.relativeDirectory)/pack.json",
+        "\(LTX25TextEncoderQuantizedPack.relativeDirectory)/model.safetensors.index.json",
+        "\(LTX25TextEncoderQuantizedPack.relativeDirectory)/*.safetensors",
     ]
 
     public static let fullSnapshotPatterns = [
@@ -103,10 +112,17 @@ public struct LTX25Resources: Sendable, Hashable {
     public var durationHeadURL: URL { rootURL.appendingPathComponent(Self.durationHeadRelativePath) }
 
     public func validate(fileManager: FileManager = .default) -> [URL] {
-        Self.requiredRelativePaths.compactMap { relativePath in
+        var missing = Self.requiredRelativePaths.compactMap { relativePath in
             let url = rootURL.appendingPathComponent(relativePath)
             return fileManager.fileExists(atPath: url.path) ? nil : url
         }
+        let hasOfficialTextEncoder = fileManager.fileExists(atPath: textEncoderURL.path)
+        let hasBundledQ4TextEncoder = LTX25TextEncoderQuantizedPack
+            .optimizedIndexURLIfValid(resources: self, fileManager: fileManager) != nil
+        if !hasOfficialTextEncoder, !hasBundledQ4TextEncoder {
+            missing.append(textEncoderURL)
+        }
+        return missing
     }
 
     public func validateFull(fileManager: FileManager = .default) -> [URL] {

@@ -58,6 +58,17 @@ final class ModelInfoCommandTests: XCTestCase {
             )
             try Data("fixture".utf8).write(to: url)
         }
+        for relativePath in [
+            "\(LTX25TextEncoderQuantizedPack.relativeDirectory)/model.safetensors.index.json",
+            "\(LTX25TextEncoderQuantizedPack.relativeDirectory)/\(LTX25TextEncoderQuantizedPack.runtimeAssetsFilename)",
+        ] {
+            let url = root.appendingPathComponent(relativePath)
+            try FileManager.default.createDirectory(
+                at: url.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try Data("fixture".utf8).write(to: url)
+        }
         let manifest = MereRunModelManifest.template(
             for: .ltxVideo25DistilledBF16,
             createdAt: Date(timeIntervalSince1970: 0)
@@ -65,9 +76,13 @@ final class ModelInfoCommandTests: XCTestCase {
         let lines = ModelInfo.ltx25ComponentLines(rootURL: root)
 
         XCTAssertTrue(ModelInfo.usesLTX25Layout(manifest: manifest, expectedModelID: nil))
-        XCTAssertTrue(lines.contains("  layout: official LTX 2.5 packed BF16 files"))
+        XCTAssertTrue(
+            lines.contains("  layout: self-contained LTX 2.5 BF16 + MLX Q4 text files")
+        )
         XCTAssertTrue(lines.contains { $0.contains(LTX25Resources.transformerRelativePath) })
-        XCTAssertTrue(lines.contains { $0.contains(LTX25Resources.textEncoderRelativePath) })
+        XCTAssertTrue(lines.contains {
+            $0.contains(LTX25TextEncoderQuantizedPack.relativeDirectory)
+        })
         XCTAssertTrue(lines.contains { $0.contains(LTX25Resources.audioVAERelativePath) })
         XCTAssertFalse(lines.contains { $0.contains("(missing)") })
     }
