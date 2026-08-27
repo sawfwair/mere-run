@@ -107,6 +107,7 @@ final class Q35FullAttention: Module {
     ) -> MLXArray {
         let b = x.dim(0)
         let s = x.dim(1)
+        let offsets = cache?.rowOffsets ?? Array(repeating: cache?.offset ?? 0, count: b)
 
         let qFlat: MLXArray
         let kFlat: MLXArray
@@ -161,7 +162,12 @@ final class Q35FullAttention: Module {
         let queryCount = q.dim(2)
         let keyCount = k.dim(2)
         let attn: MLXArray
-        if targetVerify,
+        if let indexer, let sparse = indexer.attention(
+            hidden: x, queries: q, keys: k, values: v, offsets: offsets,
+            positionIds: positionIds, cache: cache as? Q38QSACache, scale: scale
+        ) {
+            attn = sparse
+        } else if targetVerify,
            b == 1,
            (6...9).contains(queryCount),
            keyCount >= queryCount,

@@ -36,6 +36,10 @@ public enum Q35LayerCache: @unchecked Sendable {
         case .linear(let cache):
             return cache.restoreVerificationPrefix(tokenCount: tokenCount)
         case .full(let genericCache):
+            if let cache = genericCache as? Q38QSACache {
+                cache.rollback(toOffset: cache.offset - totalTokens + tokenCount)
+                return true
+            }
             guard let cache = genericCache as? KVCacheSimple else { return false }
             cache.rollback(toOffset: cache.offset - totalTokens + tokenCount)
             return true
@@ -48,6 +52,9 @@ public enum Q35LayerCache: @unchecked Sendable {
         case .linear(let cache):
             return cache.canRestoreVerificationPrefix(tokenCount: tokenCount)
         case .full(let cache):
+            if let cache = cache as? Q38QSACache {
+                return cache.canRollback && cache.offset >= totalTokens
+            }
             guard let cache = cache as? KVCacheSimple else { return false }
             return cache.offset >= totalTokens
         }

@@ -827,8 +827,10 @@ Key options:
 - `--context-size`: maximum prompt plus generation context. Qwen3.8 and Bonsai
   27B use their published 262,144-token limit by default. Inkling-Small advertises
   1,048,576 tokens but uses a 32,768-token operational default because KV
-  residency grows with context. Qwen3.8-Flash-Next currently requires prompt
-  plus requested generation to fit its 2,048-token QSA indexer budget.
+  residency grows with context. Qwen3.8-Flash-Next uses learned QSA selection
+  beyond 2,048 tokens in builds newer than v0.45.0. Its 262,144-token limit is
+  architectural, not a full-context memory qualification for a 128 GB Mac;
+  explicitly select a smaller window such as `32768` to bound retained history.
 - `--temperature`: defaults to 0.7, or the model's published value where one
   exists (Bonsai: 0.7; Qwen3.8 and Ornith lanes: 1.0)
 - `--top-p`: defaults to 0.9, or the model's published value (Qwen3.8/Bonsai/Ornith: 0.95)
@@ -867,7 +869,7 @@ Examples:
 ```bash
 swift run mere.run text chat --prompt "What is classifier-free guidance?"
 swift run mere.run text chat --model vision-chat-q38-27b --image ./diagram.png --prompt "Explain this diagram."
-swift run mere.run text chat --model vision-chat-q38-flash-next-mixed --context-size 2048 --max-tokens 256 --prompt "Explain sparse attention."
+swift run mere.run text chat --model vision-chat-q38-flash-next-mixed --context-size 32768 --max-tokens 256 --prompt "Explain sparse attention."
 swift run mere.run text chat --model text-chat-bonsai-27b-1bit --context-size 262144 --kv-bits 4 --prompt "Plan a long-context repository review."
 swift run mere.run text chat --model text-chat-bonsai-27b-2bit --context-size 262144 --kv-bits 4 --prompt "Compare two repository migration plans."
 swift run mere.run text chat --model text-chat-inkling-small --context-size 32768 --prompt "Plan a recovery-safe repository migration."

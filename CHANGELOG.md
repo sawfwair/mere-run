@@ -6,6 +6,17 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Text
+
+- added native Qwen3.8-Flash-Next QSA selection beyond the former 2,048-token
+  prompt-plus-generation cap. Learned compressed-block scoring selects causal
+  history for both target attention and the bundled MTP head. Query tiling and
+  chunked MTP priming bound temporary allocations; indexer state follows prefix
+  forks, rejected-draft rollback, and ragged batching. Existing model packs
+  already include the required weights. `--context-size` can use the checkpoint's
+  262,144-token architectural limit, subject to memory; this is not a full-262k
+  qualification on the 128 GB mixed-model profile.
+
 ## 0.45.0 - 2026-08-26
 
 This release adds native Qwen3.8 Flash Next inference with qualified mixed-Q2/Q4

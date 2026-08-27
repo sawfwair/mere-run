@@ -384,14 +384,24 @@ than as a 128 GB alternative.
 Both artifacts include the Qwen Community License 1.0 and a complete
 source/output hash receipt. Pulls are explicit and require either
 `--accept-model-license` or its equivalent `--accept-license-terms` alias. The
-native Qwen4Exp runtime currently qualifies text generation only and rejects
-requests whose prompt plus requested generation exceeds the published
-2,048-token QSA indexer budget. At or below that boundary every visible block
-is selected, so standard causal attention is exact. Long-context QSA
-selection and image input remain unqualified. The bundled one-layer MTP path is
-qualified for greedy text generation and enabled by default from short prompts.
-Every proposed token remains under exact target verification; the mixed
-checkpoint measured 1.43–1.78x faster decode in real-checkpoint comparisons.
+native Qwen4Exp runtime supports text generation; image input remains
+unqualified. Builds newer than v0.45.0 implement the trained QSA micro-block
+selector beyond 2,048 tokens, replacing that release's prompt-plus-generation
+cap. Up to the indexer budget, standard causal attention is exact because every
+visible block is selected. Beyond it, each query selects 512 complete four-token
+blocks and includes the current partial block. Future blocks are excluded
+before selection. The same QSA path is used by the bundled one-layer MTP head,
+with exact target verification of proposed tokens.
+
+`--context-size` bounds prompt plus generation up to the checkpoint's published
+262,144-token limit. This is an architectural limit, not a 262k memory or quality
+qualification on a 128 GB Mac. KV and MTP history still grow with context even
+though sparse-attention temporaries are tiled; an explicit `--context-size 32768`
+keeps the requested window smaller. Existing model downloads already contain
+the indexer weights, so no new quantization or download is needed.
+
+The mixed checkpoint measured 1.43–1.78x faster MTP decode in the original
+short-context real-checkpoint comparisons; these are not long-context timings.
 Set `MERERUN_Q35_MTP_SPECULATION=0` to retain target-only decode for comparison
 or memory pressure.
 

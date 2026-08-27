@@ -2,34 +2,6 @@ import Foundation
 import MLX
 import MLXNN
 
-final class Q38QSAIndexer: Module {
-    @ModuleInfo(key: "index_qk_proj") var indexQKProjection: Linear
-    @ModuleInfo(key: "q_layernorm") var queryNorm: Q35RMSNorm
-    @ModuleInfo(key: "k_layernorm") var keyNorm: Q35RMSNorm
-
-    init(config: Q35Config) {
-        let text = config.textConfig
-        let outputDimensions = (text.indexerHeadCount + text.indexerKVHeadCount)
-            * text.indexerHeadDimension
-        self._indexQKProjection.wrappedValue = Linear(
-            text.hiddenSize,
-            outputDimensions,
-            bias: false
-        )
-        self._queryNorm.wrappedValue = Q35RMSNorm(
-            dimensions: text.indexerHeadDimension,
-            eps: text.rmsNormEps,
-            zeroCenteredWeight: false
-        )
-        self._keyNorm.wrappedValue = Q35RMSNorm(
-            dimensions: text.indexerHeadDimension,
-            eps: text.rmsNormEps,
-            zeroCenteredWeight: false
-        )
-        super.init()
-    }
-}
-
 final class Q38GatedResidual: Module {
     @ModuleInfo(key: "hc_norm") var norm: Q35RMSNorm
     @ModuleInfo(key: "input_mix_weight_down") var inputMixDown: Linear

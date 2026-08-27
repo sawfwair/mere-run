@@ -301,6 +301,37 @@ SOFTWARE.
 
 ## Source-derived runtime implementations
 
+### Qwen4Exp sparse-attention reference
+
+The native QSA micro-block selection, index-key pooling, and sparse-attention
+math in `Sources/MereRunCore/Q35/Q38QSAIndexer.swift` and
+`Sources/MereRunCore/Q35/Q38SparseAttention.swift` are adapted from Ollama's
+`x/models/qwen4_exp/blocks.go` and `qsa.go` at commit
+`39f7f91563f65dd8e6183a5be1855820bf6e0ba8`.
+Upstream: <https://github.com/ollama/ollama>. License: MIT.
+
+```text
+Copyright (c) Ollama
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
 ### MLX Fast Qwen3.8 decode-kernel provenance
 
 - purpose: the macOS Metal path for serial-exact affine 4-bit, group-size-64
