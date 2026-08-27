@@ -68,13 +68,26 @@ parts are installed from the physical safetensors shards without duplicating
 the table. Four-layer evaluation boundaries keep the 48-layer lazy graph below
 the macOS Metal watchdog while preserving each hybrid block.
 
-QSA indexer weights load with every full-attention layer, but selection is not
-executed yet. Generation therefore fails closed when prompt plus requested
-output exceeds the model's 2,048-token indexer budget. At or below that budget,
-QSA selects every visible causal block and the regular causal attention result
-is exact. Qwen4Exp's bundled one-layer MTP head consumes the target's four-stream
+QSA indexers run in every full-attention layer. Raw index keys are mean-pooled
+in four-token blocks in FP32, normalized, and rotated at the block's first
+position. Normalized/rotated index queries score those blocks by summed ReLU
+head scores. Future blocks are masked before selecting the best 512 complete
+blocks; the current partial block is always included. At or below the 2,048-token
+budget every visible token is selected, so the original causal SDPA path remains
+exact. Above it, 16-query tiles bound gathered KV temporaries without allocating
+a dense sequence-squared attention matrix. The model's 262,144-token context
+limit remains subject to total KV, MTP-history, and model residency.
+
+`Q38QSACache` snapshots raw index keys and rotary positions alongside the main
+KV cache, including prefix forks, accepted-prefix MTP rollback, and right-padded
+ragged batching. Quantized main KV retains unquantized indexer history. Tests
+cover selector causality, GQA dense-mask parity, pool-before-norm/first-position
+RoPE, chunk/serial parity, cache lifecycle, and the published 2,048-token boundary.
+
+Qwen4Exp's bundled one-layer MTP head consumes the target's four-stream
 hidden state, drafts through its trained hyper-connection/full-attention/MoE
-block, and leaves every emitted token under exact target verification. Managed
+block with the same QSA history, and leaves every emitted token under exact
+target verification. MTP history priming uses 256-token chunks. Managed
 Flash-Next models enable this path from short prompts; API startup warmup runs a
 representative eight-token decode so its lazy target and draft graphs are paid
 before the server reports healthy. `MERERUN_Q35_MTP_SPECULATION=0` keeps the

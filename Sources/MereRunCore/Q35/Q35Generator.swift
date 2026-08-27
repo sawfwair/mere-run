@@ -600,13 +600,6 @@ public actor Q35Generator: ChatGenerator {
         if promptTokens.count > effectiveContext {
             promptTokens = Array(promptTokens.suffix(effectiveContext))
         }
-        if loadedConfig.textConfig.isQwen4Exp,
-           promptTokens.count + request.maxTokens > loadedConfig.textConfig.indexerBudget {
-            throw Q35Error.generationFailed(
-                "Qwen4Exp exact inference is currently limited to \(loadedConfig.textConfig.indexerBudget) "
-                    + "prompt-plus-generation tokens while the long-context QSA indexer is being integrated."
-            )
-        }
         if let dumpPath = ProcessInfo.processInfo.environment["MERERUN_Q35_DEBUG_PROMPT_TOKENS"] {
             try? promptTokens.map(String.init).joined(separator: ",")
                 .write(toFile: dumpPath, atomically: true, encoding: .utf8)
@@ -1080,7 +1073,8 @@ public actor Q35Generator: ChatGenerator {
         var mtpAdaptivePolicy = Q35MTPAdaptivePolicy(maxDraftDepth: mtpBlockSize - 1)
         let mtpDraftSession = Q35MTPDraftSession(
             promptTokens: promptTokens,
-            promptHidden: prefillMTPHidden
+            promptHidden: prefillMTPHidden,
+            historyCache: model.config.textConfig.isQwen4Exp ? Q38QSACache() : KVCacheSimple()
         )
         let decodeStart = Date()
 
@@ -1271,21 +1265,13 @@ public actor Q35Generator: ChatGenerator {
                             totalTokens: draftTokens.count + 1,
                             tokenCount: committedTokenCount
                         ) {
-                            mtpDraftSession.recordCommittedTransitions(
-                                hiddenStates: candidate.hidden,
-                                nextTokens: acceptedPrefix
+                            let restored = mtpDraftSession.restoredVerificationState(
+                                from: candidate,
+                                acceptedTokens: acceptedPrefix
                             )
                             layerCaches = candidateCaches
-                            logits = candidate.logits[
-                                0...,
-                                accepted..<(accepted + 1),
-                                0...
-                            ]
-                            previousHidden = candidate.hidden[
-                                0...,
-                                accepted..<(accepted + 1),
-                                0...
-                            ]
+                            logits = restored.logits
+                            previousHidden = restored.hidden
                             continue
                         }
 
@@ -2800,14 +2786,17 @@ public actor Q35Generator: ChatGenerator {
             }
             let layerType = layerIndex < text.layerTypes.count ? text.layerTypes[layerIndex] : "linear_attention"
             if layerType == "full_attention" {
+                let attention: KVCache
                 if kvCacheMode == .affine4 || kvCacheMode == .affine8 {
-                    return .full(AffineQuantizedKVCache(
+                    attention = AffineQuantizedKVCache(
                         groupSize: Self.affineKVGroupSize(headDimension: text.headDim),
                         bits: kvCacheMode == .affine4 ? 4 : 8,
                         step: 256
-                    ))
+                    )
+                } else {
+                    attention = KVCacheSimple(step: 256)
                 }
-                return .full(KVCacheSimple(step: 256))
+                return .full(text.isQwen4Exp ? Q38QSACache(attention: attention) : attention)
             }
             return .linear(Q35LinearCache())
         }
@@ -2816,11 +2805,12 @@ public actor Q35Generator: ChatGenerator {
     private func cacheMode(for caches: [Q35LayerCache?]) -> RuntimeKVCacheMode {
         caches.contains { entry in
             guard case .full(let cache)? = entry else { return false }
-            guard let affine = cache as? AffineQuantizedKVCache else { return false }
+            let main = (cache as? Q38QSACache)?.attention ?? cache
+            guard let affine = main as? AffineQuantizedKVCache else { return false }
             return affine.bitWidth == 4
         } ? .affine4 : caches.contains { entry in
             guard case .full(let cache)? = entry else { return false }
-            return cache is AffineQuantizedKVCache
+            return ((cache as? Q38QSACache)?.attention ?? cache) is AffineQuantizedKVCache
         } ? .affine8 : .default
     }
 

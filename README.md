@@ -355,12 +355,12 @@ swift run mere.run text chat \
   --context-size 32768 \
   --prompt "Plan a recovery-safe repository migration."
 
-# Qwen3.8-Flash-Next mixed Q2/Q4 is the 128 GB Mac profile. Its verified MTP
-# path is enabled by default for greedy decode. Prompt plus generation is
-# limited to 2,048 tokens while the long-context QSA selector is integrated.
+# Qwen3.8-Flash-Next mixed Q2/Q4 is the 128 GB Mac profile, with MTP enabled
+# for greedy decode. Long-context QSA requires a build newer than v0.45.0.
+# Context includes both prompt and generation; leave RAM for KV and MTP history.
 swift run mere.run text chat \
   --model vision-chat-q38-flash-next-mixed \
-  --context-size 2048 \
+  --context-size 32768 \
   --max-tokens 256 \
   --prompt "Explain sparse attention in one paragraph."
 

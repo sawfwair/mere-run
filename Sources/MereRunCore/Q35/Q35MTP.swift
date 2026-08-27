@@ -451,11 +451,12 @@ final class Q38MTPModel: Module, Q35MTPDraftModel {
 /// rows run on a fork and are discarded after the round, so proposal history
 /// can improve acceptance without becoming an output authority.
 final class Q35MTPDraftSession {
-    private let historyCache = KVCacheSimple(step: 256)
+    private let historyCache: KVCache
     private var backlogHidden: [MLXArray] = []
     private var backlogTokens: [Int] = []
 
-    init(promptTokens: [Int] = [], promptHidden: MLXArray? = nil) {
+    init(promptTokens: [Int] = [], promptHidden: MLXArray? = nil, historyCache: KVCache = KVCacheSimple()) {
+        self.historyCache = historyCache
         guard let promptHidden,
               promptTokens.count > 1,
               promptHidden.dim(1) == promptTokens.count else {
@@ -476,6 +477,21 @@ final class Q35MTPDraftSession {
         }
         backlogHidden.append(hiddenStates[0..., 0..<nextTokens.count, 0...])
         backlogTokens.append(contentsOf: nextTokens)
+    }
+
+    /// Reuse the target's accepted prefix after cache rollback. Flash-Next's
+    /// predictor consumes the four-stream residual, not the reduced LM hidden.
+    func restoredVerificationState(
+        from output: Q35ForwardOutput,
+        acceptedTokens: [Int]
+    ) -> (logits: MLXArray, hidden: MLXArray) {
+        let hidden = output.mtpHidden ?? output.hidden
+        recordCommittedTransitions(hiddenStates: hidden, nextTokens: acceptedTokens)
+        let last = acceptedTokens.count
+        return (
+            output.logits[0..., last..<(last + 1), 0...],
+            hidden[0..., last..<(last + 1), 0...]
+        )
     }
 
     func draftBlock(
@@ -500,10 +516,23 @@ final class Q35MTPDraftSession {
         backlogHidden.removeAll(keepingCapacity: true)
         backlogTokens.removeAll(keepingCapacity: true)
 
-        let flushEmbeddings = baseModel.embeddings(for: flushTokens)
+        // A long prompt must not become one giant MTP MoE/attention graph.
+        let chunkSize = 256
+        var processed = 0
+        while flushTokens.dim(1) - processed > chunkSize {
+            let end = processed + chunkSize
+            let partial = mtpModel.forwardDraft(
+                inputEmbeddings: baseModel.embeddings(for: flushTokens[0..., processed..<end]),
+                hiddenStates: flushHidden[0..., processed..<end, 0...],
+                cache: historyCache
+            )
+            MLX.eval(partial.recurrentHidden)
+            processed = end
+        }
+        let flushEmbeddings = baseModel.embeddings(for: flushTokens[0..., processed...])
         let flushed = mtpModel.forwardDraft(
             inputEmbeddings: flushEmbeddings,
-            hiddenStates: flushHidden,
+            hiddenStates: flushHidden[0..., processed..., 0...],
             cache: historyCache
         )
         var previousHidden = flushed.recurrentHidden[
