@@ -1,1250 +1,589 @@
 <p align="center">
-  <a href="https://mere.run"><img src="https://mere.run/showcase/banner.png" alt="mere.run — Create anything. Locally." /></a>
+  <a href="https://mere.run"><img src="https://mere.run/showcase/banner.png" alt="mere.run. Create anything locally." /></a>
 </p>
 
 <p align="center">
   <a href="https://mere.run">mere.run</a> ·
   <a href="https://docs.mere.run/">Documentation</a> ·
+  <a href="docs/cli.md#overview">Command reference</a> ·
   <a href="https://mere.run/releases">Downloads</a> ·
-  <a href="https://relay.mere.run">Relay + Nodes</a> ·
-  <a href="https://plugins.mere.run">Plugins</a> ·
-  <code>swift build</code>
+  <a href="https://relay.mere.run">Relay and nodes</a> ·
+  <a href="https://plugins.mere.run">Plugins</a>
 </p>
 
 # mere.run
 
-mere.run is a local-first inference runtime for Apple Silicon and headless Linux.
-One public CLI covers image, text, speech, vision, music, sound, video, 3D,
-worlds, training, and local API serving. The optional macOS Studio uses that
-same CLI, model store, and run history rather than a separate backend.
+mere.run is a local AI runtime for developers and creators. Use its command-line
+interface (CLI) to generate media, run language models, and analyze images or
+geospatial data. You can also train adapters, evaluate models, serve an
+OpenAI-compatible API, and run portable workflow graphs.
+
+Apple Silicon macOS is the primary platform. Headless Linux CUDA packages are
+also available. The macOS Studio app uses the same CLI, model store, and run
+history. The iOS client connects to your machines and offers experimental
+image and chat inference on supported iPhones.
 
 <p align="center">
-  <img src="docs/media/demo-inline.gif" alt="One terminal session: local chat, image generation, grounding, image-to-3D, SFX, music, TTS and ASR, video, an OpenAI-compatible API, and a workflow graph — rendered inline, all on one machine." />
+  <img src="docs/media/demo-inline.gif" alt="Terminal demonstration of local chat, image, speech, music, video, 3D, API serving, and workflow commands." />
 </p>
-<p align="center"><sub>One real terminal session on an M4 Max — chat, image, grounding, image→3D, SFX, music, speech round-trip, video, API serving, and a typed workflow graph. Everything local.</sub></p>
+
+The demonstration shows a local terminal session on an M4 Max. The workflows
+include chat, image generation, grounding, 3D reconstruction, sound, speech,
+video, API serving, and a workflow graph.
 
 ## Start here
 
-Install a signed release from [mere.run/downloads](https://mere.run/releases),
-then let the CLI inspect the machine before pulling a large model:
+[Install the CLI](#install-or-build) before running the examples. To choose a
+guided agent setup or a manual setup path, run:
 
 ```bash
 mere.run setup
+```
+
+Before downloading models, check your installed version, the machine's model
+recommendations, and the offline guides:
+
+```bash
+mere.run --version
 mere.run model capabilities --recommended
 mere.run guide --list
 ```
 
-For a small first image workflow:
+For every public command and subcommand, see the
+[complete command reference](./docs/cli.md#overview). Repository tests check
+its generated tree against the CLI. For flags in your installed version,
+run `mere.run COMMAND --help`. Replace `COMMAND` with a command path, such as
+`image generate`.
 
-```bash
-mere.run model pull image-zimage-nano
-mere.run image generate \
-  --model image-zimage-nano \
-  --prompt "a ceramic mug in soft morning light" \
-  --output ./mug.png
-```
+To generate your first image:
 
-Use `mere.run guide <command path>` for the packaged offline cookbook behind a
-creative or model-specific command, and `mere.run <group> --help` for the exact
-supported flags.
+1. Review the model download plan:
 
-## Supported capabilities
+   ```bash
+   mere.run model pull image-zimage-nano --preflight --json
+   ```
 
-| Area | Public commands | Supported behavior |
+2. Download the model:
+
+   ```bash
+   mere.run model pull image-zimage-nano
+   ```
+
+3. Generate `mug.png` in your working directory:
+
+   ```bash
+   mere.run image generate \
+     --model image-zimage-nano \
+     --prompt "a ceramic mug in soft morning light" \
+     --output ./mug.png
+   ```
+
+Model sizes, memory requirements, and licenses vary. Before downloading a
+model, review its [catalog entry](./docs/model-sources.md) and run a pull
+preflight. After installation, `mere.run model info MODEL_ID` reports the
+model's manifest and validation status. Replace `MODEL_ID` with its catalog ID.
+Local inference doesn't require a hosted inference service after the models
+are installed.
+
+## Release and source build status
+
+On August 28, 2026, the published release was
+[v0.45.0](https://github.com/sawfwair/mere-run/releases/tag/v0.45.0).
+The following sections distinguish release packages from source builds.
+
+Model names use Q2, Q4, and Q8 for 2-bit, 4-bit, and 8-bit quantization.
+BF16 refers to bfloat16, a 16-bit floating-point format.
+
+### Release v0.45.0
+
+- Qwen3.8-Flash-Next packages in mixed Q2/Q4 and Q4 precision, with verified
+  multi-token prediction (MTP) for greedy decoding.
+- A complete LTX 2.5 distilled bundle with a Q4 text encoder. The runtime
+  releases conditioning models early and decodes video in tiles to limit memory
+  use.
+- Faster model inventory for API clients.
+
+### Release v0.44.0
+
+- SenseNova U1.5 image generation and editing.
+- MiniMax Music 3 local composition and `q8-lm` and `q4-lm` precision modes.
+- Additional LiquidAI LFM2.5 quantized models and
+  DSpark companions for speculative decoding. The
+  [model catalog](./docs/model-sources.md) describes these variants.
+- Improvements to Nemotron tool calls, text training templates, and Gemma 4
+  Turbo API serving.
+
+### Source builds after v0.45.0
+
+Builds from `main` add Flash-Next Qwen Sparse Attention (QSA) beyond the release's
+2,048-token limit for the prompt and generated response combined.
+Qwen3.8 27B also has MTP decoding improvements. Its MTP path remains opt-in.
+
+The Flash-Next mixed model targets a Mac with 128 GB of memory. Its Q4 package
+requires more memory. The architecture's context limit is 262,144 tokens, but
+that full length hasn't been qualified on the 128 GB profile. Usable context
+depends on memory for weights, key/value caches, and MTP history.
+
+Flash-Next image input remains unqualified. For implementation details and
+validation limits, see the [release notes](./CHANGELOG.md) and
+[Qwen runtime guide](./Sources/MereRunCore/Q35/README.md).
+
+## What you can do
+
+Use the following table to choose a workflow. Each guide lists model IDs,
+prerequisites, examples, and limits. Available inputs and controls depend on
+the selected model.
+
+Some workflows use low-rank adaptation (LoRA) to train small adapters instead
+of updating all model weights.
+
+| Area | Commands | Capabilities |
 | --- | --- | --- |
-| Images and LoRAs | `image generate`, `image train-lora`, `adapter list`, `adapter pull` | Klein, ZImage, HiDream O1, SenseNova U1.5, Krea 2, Ideogram 4, and Bonsai; text-to-image, edits, multiple references, structured prompts, local Krea/Klein training, and checksum-pinned public adapters |
-| Text, code, and agents | `text chat`, `text code`, `text embed`, `text anonymize`, `text train-lora`, `agent` | Local chat and tool use, including Qwen3.8 27B BF16/4-bit and Bonsai 27B binary/ternary vision chat; code generation, embeddings, personally identifiable information (PII) redaction, text LoRA training, and guided local-agent setup |
-| Vision understanding | `vision embed`, `caption`, `inspect`, `face`, `ground`, `segment`, `track`, `track-live`, `pose`, `flow`, `ocr` | Shared text/image embeddings, captioning and VQA, local face detection/identity embeddings, LightOn/GLM/Infinity OCR, Falcon grounding, SAM 3.1 segmentation and tracking, body/hand/face landmarks, and dense optical flow |
-| Depth, geometry, and 3D | `vision depth-video`, `geometry`, `geometry-multiview`, `image-to-3d*`; `image reconstruct-3d*` | Video Depth Anything, MoGe-2, Depth Anything 3, TripoSR, InstantMesh, and TRELLIS.2; depth/confidence EXRs, cameras, point clouds, 3DGS initialization, OBJ, PLY, GLB, and PBR voxel artifacts |
-| Audio enhancement | `audio enhance` | Native AP-BWE speech bandwidth extension and UniverSR general-audio super-resolution to hashed 48 kHz mono WAVs |
-| Video and worlds | `video generate`, `video cosmos3`, `video prepare-masks`, `video animate`, `video session`, `video export-latents`, `world serve` | MiniMax-H3 FL2VA/Ref2VA synchronized video and audio, native LTX 2.5 and LTX 2.3 synchronized audio/video, resident distilled and full-dev LTX workers, Wan 2.2 TI2V, native Cosmos3-Edge generation/reasoning/action dynamics, native SAM 3.1 mask preparation, native SCAIL-2 subject animation/replacement, and warm DreamX or Cosmos3 world sessions |
-| Music and sound | `music analyze`, `generate`, `realtime`, `separate`, `transcribe`; `sfx generate`, `sfx video generate` | Native MiniMax Music 3 full-song generation; ACE-Step generation, analysis, and covers; Magenta RT2 real-time MIDI performance; native RoFormer separation, dereverb, and denoise; MuScriptor full-mix MIDI transcription; Woosh and native MMAudio text/video-conditioned sound |
-| Speech | `speech synthesize`, `speech transcribe`, `speech diarize`, `speech listen`, `speech profile` | Qwen3 TTS, saved voice profiles, Qwen3 live ASR, Parakeet transcription, and native MLX Sortformer speaker diarization |
-| Serving and operations | `api serve`, `open-webui quickstart`, `status`, `run`, `model runtime`, `gate` | OpenAI-compatible chat, embeddings, images, TTS, and STT; resident model pooling, TTL/pinning, memory guards, durable run inspection, and installed-model quality gates |
-| Automation | `--preflight --json`, `--progress-json`, `image run-plan`, `guide` | Typed preflight actions, machine-readable progress, replayable plans, durable run directories, checksums, and offline command cookbooks |
-| Portable workflows | `graph catalog`, `graph preflight`, `graph submit`, `executor`, `run watch`, `run fetch` | Immutable typed graphs and content-addressed bundles that run locally or through configured SSH and relay executors with the same events, diagnostics, and run directory |
+| [Text, code, and agents](./docs/runtime/text.md) | `text chat`, `text code`, `text embed`, `text anonymize`, `agent` | Chat, code generation, tool calls, structured responses, embeddings, and personal information redaction. Models include Gemma 4, Qwen3.8, LFM2.5, Laguna, Inkling, Nemotron Lightning, DeepSeek V4 Flash, and Ornith. |
+| [Multimodal chat](./docs/runtime/text.md) | `text chat`, `vision caption`, `vision inspect`, `vision embed` | Image understanding with Gemma, Qwen, LFM, Bonsai, and Muse Glimmer. Nemotron Nano Omni also supports audio and video understanding. Shared text and image embeddings support retrieval. |
+| [Images](./docs/runtime/image.md) | `image generate` | Generation and editing with Klein, ZImage, HiDream O1, SenseNova U1.5, Krea 2, Ideogram 4, and Bonsai. Controls include references, structured prompts, and LoRA adapters. |
+| [Video](./docs/runtime/video.md) | `video generate`, `video session`, `video animate`, `video prepare-masks` | Synchronized audio and video with LTX 2.5 and 2.3. MiniMax-H3 supports keyframes and ordered media references. Other workflows include Wan 2.2 generation and SCAIL-2 subject animation with SAM masks. |
+| [Worlds](./docs/runtime/world.md) | `video cosmos3`, `world serve` | Cosmos3-Edge generation, visual reasoning, and learned-action dynamics. DreamX and Cosmos3 support persistent world sessions. |
+| [Music](./docs/runtime/music.md) | `music generate`, `music analyze`, `music realtime`, `music transcribe`, `music serve` | MiniMax Music 3 songs and composition. ACE-Step generation, covers, and editing. Magenta RT2 realtime MIDI performance and MuScriptor transcription of full mixes into MIDI. |
+| [Sound effects](./docs/runtime/sfx.md) | `sfx generate`, `sfx video generate`, `sfx clap`, `sfx ae` | Woosh and MMAudio generation conditioned on text or video. Text and audio similarity scoring, plus audio latent encoding and decoding. |
+| [Speech](./docs/runtime/speech.md) | `speech synthesize`, `speech transcribe`, `speech listen`, `speech diarize`, `speech profile` | Qwen3 speech synthesis, saved voice profiles, Qwen3 and Parakeet transcription, live microphone input, and Sortformer speaker timelines. |
+| [Audio generation and restoration](./docs/runtime/audio.md) | `audio enhance`, `music separate`, `audio generate` | AP-BWE speech bandwidth extension and UniverSR audio super-resolution. RoFormer stem separation, reverb removal, and noise removal. LTX 2.5 text-to-audio generation. |
+| [Vision](./docs/runtime/vision.md) | `vision ground`, `vision segment`, `vision track`, `vision face`, `vision pose`, `vision flow`, `vision ocr` | Falcon object grounding, SAM 3.1 masks and tracking, face analysis, body, hand, and face landmarks, and optical flow. LightOn, GLM, and Infinity extract text from images. |
+| [Depth and 3D](./docs/runtime/vision.md) | `vision depth-video`, `vision geometry`, `vision geometry-multiview`, `image reconstruct-3d`, `image reconstruct-3d-trellis2`, `image reconstruct-3d-multiview` | Depth, cameras, point clouds, meshes, and materials for physically based rendering. Models include Video Depth Anything, MoGe-2, Depth Anything 3, TripoSR, TRELLIS.2, and InstantMesh. |
+| [Geospatial inference](./docs/runtime/geo.md) | `geo flood`, `geo fire`, `geo tessera`, `geo olmoearth` | TerraMind flood and fire class scores, TESSERA v2 Sentinel time-series embeddings, and OlmoEarth v1.2 multisensor spatial embeddings from prepared tensors. |
+| [Training and adapters](./docs/cli.md) | `image train-lora`, `text train-lora`, `music train-adapter`, `adapter` | Local image, text, and music adapter training, named recipes, checkpoints, and public adapters verified by checksum. Support varies by model family. |
+| [Evaluation](./docs/evaluation-packs.md) | `eval pack validate`, `eval run`, `eval promote`, `model benchmark`, `gate` | External text-chat evaluation packs, matched model and adapter runs, resumable reports, promotion receipts, benchmarks, and installed-model checks. |
+| [API serving](./docs/runtime/api-server.md) | `api serve`, `open-webui quickstart`, `model runtime`, `status` | OpenAI-compatible chat, embeddings, images, and speech, plus native vision routes. Model loading and pinning, idle expiry, memory limits, and runtime telemetry. |
+| [Portable workflows](./docs/workflows.md) | `graph`, `executor`, `relay`, `run` | Typed graphs and immutable job bundles for local, SSH, or relay execution. Resumable runs, progress events, verified artifact downloads, cancellation, and retry. |
 
-The [showcase](https://mere.run/#showcase) publishes real outputs across these
-surfaces. Model availability, memory fit, download size, and licensing still
-vary by command, so check `mere.run model capabilities` before a large pull and
-[`docs/model-sources.md`](./docs/model-sources.md) before redistributing model
-artifacts.
+Geospatial commands accept prepared tensors. Your workflow remains responsible
+for raster acquisition, reprojection, tiling, georeferencing, and evidence
+review. Some checkpoints require the documented conversion step before native
+inference. Predictions remain candidates for review.
 
-## Relay, nodes, and plugins
+The `vision track-live` command records a camera clip before tracking it. It
+doesn't run live frame-by-frame inference. Evaluation pack validation and
+promotion receipts verify the declared pack and report checks. They don't
+establish general model quality or operational approval.
 
-The core runtime stays local, but it does not have to stay on one machine.
+For generated examples, see the [showcase](https://mere.run/#showcase).
+Runtime support doesn't grant permission to use or redistribute a checkpoint.
+Review the [model sources and licenses](./docs/model-sources.md) for those terms.
 
-- [Relay](https://relay.mere.run) pools Macs and Linux hosts approved under the
-  same mere.world account. The separate `mere.run node` desktop app advertises
-  each machine's models and availability, then accepts work through an outbound
-  connection. Active Node builds are available for macOS and Linux x86_64.
-- [Official plugins](https://plugins.mere.run) are companion executables for
-  VFX, realtime performance, production tracking, private document workflows,
-  automation, and user-owned GPU training. They keep plans, manifests,
-  resumability, artifacts, and cleanup outside the core inference process.
+## Example workflows
+
+These examples use the installed CLI. From a source checkout, replace
+`mere.run` with `swift run mere.run`. Supply your own input files, such as
+`reference.png`. Model pulls download weights, and generation commands write
+the named outputs.
+
+### Chat locally
+
+To download the Gemma model and stream a response:
+
+1. Install the model:
+
+   ```bash
+   mere.run model pull text-chat-gemma4-12b-4bit
+   ```
+
+2. Send a prompt:
+
+   ```bash
+   mere.run text chat \
+     --model text-chat-gemma4-12b-4bit \
+     --stream \
+     --prompt "Explain unified memory for local inference."
+   ```
+
+The response appears in the terminal. To connect an agent, run
+`mere.run agent onboard`. For Pi installation, other agent clients, and tool
+permissions, see the [agent guide](./docs/getting-started.md#agent-commands).
+
+### Edit an image with SenseNova U1.5
+
+Place an input image named `reference.png` in your working directory, then
+follow these steps:
+
+1. Install the model:
+
+   ```bash
+   mere.run model pull image-sensenova-u1-5-8b-mot
+   ```
+
+2. Generate an edited image named `sensenova-edit.png`:
+
+   ```bash
+   mere.run image generate \
+     --model image-sensenova-u1-5-8b-mot \
+     --input ./reference.png \
+     --prompt "Turn this reference into a cinematic rainy-night scene" \
+     --output ./sensenova-edit.png
+   ```
+
+For multiple references, structured prompts, Krea and Klein LoRA training, and
+3D reconstruction, see the [image guide](./docs/runtime/image.md).
+
+### Compose a song with MiniMax Music 3
+
+This workflow uses a chat model to plan the song and a music model to generate
+the audio. First, install Gemma as described in [Chat locally](#chat-locally).
+Review the music model's terms and memory requirements before downloading it.
+
+1. Install MiniMax Music 3 after accepting its terms:
+
+   ```bash
+   mere.run model pull music-minimax-music3 --accept-license-terms
+   ```
+
+2. Compose and generate `song.wav`:
+
+   ```bash
+   mere.run music generate \
+     "slow-burn dream pop about leaving a familiar city and finding home" \
+     --model music-minimax-music3 \
+     --compose \
+     --composer-model text-chat-gemma4-12b-4bit \
+     --require-composer-installed \
+     --duration 180 \
+     --lyrics-preflight strict \
+     --performance-mode q8-lm \
+     --sampling-tier fast \
+     --output ./song.wav
+   ```
+
+The command also saves composition metadata. The
+`--require-composer-installed` option prevents an implicit composer download,
+and `--lyrics-preflight strict` enables strict lyric-duration checks.
+The `q8-lm` mode quantizes the global language model while retaining the
+residual-depth decoder in BF16.
+
+For supplied lyrics, ACE-Step covers, stem separation, MIDI transcription, and
+realtime performance, see the [music guide](./docs/runtime/music.md).
+
+### Generate synchronized video and audio
+
+Review the LTX model's terms and memory requirements before downloading it.
+Then follow these steps:
+
+1. Install the complete distilled bundle after accepting its terms:
+
+   ```bash
+   mere.run model pull video-ltx25-distilled-bf16 --accept-license-terms
+   ```
+
+2. Generate an MP4 file with video and audio:
+
+   ```bash
+   mere.run video generate \
+     "a small red robot walks across a wooden table, tiny mechanical footsteps" \
+     --model video-ltx25-distilled-bf16 \
+     --quality final \
+     --output-mode audio-video \
+     --fps 24 \
+     --output ./robot.mp4
+   ```
+
+The bundle uses BF16 weights for the video pipeline and a Q4 text encoder.
+For MiniMax-H3 references, long-form generation, the full LTX pipeline, source
+audio, and SCAIL subject animation, see the [video guide](./docs/runtime/video.md).
+
+### Serve the local API
+
+Install Gemma as described in [Chat locally](#chat-locally) before starting the
+server. The following procedure uses a loopback address, which accepts
+connections from the serving machine:
+
+1. Inspect the serving plan without starting the server:
+
+   ```bash
+   mere.run api serve \
+     --engine text-chat-gemma4 \
+     --model text-chat-gemma4-12b-4bit \
+     --preflight --json
+   ```
+
+2. Start the server:
+
+   ```bash
+   mere.run api serve \
+     --engine text-chat-gemma4 \
+     --model text-chat-gemma4-12b-4bit
+   ```
+
+3. In another terminal, send a chat request:
+
+   ```bash
+   curl http://127.0.0.1:8080/v1/chat/completions \
+     -H 'Content-Type: application/json' \
+     --data '{
+       "model": "text-chat-gemma4-12b-4bit",
+       "messages": [{
+         "role": "user",
+         "content": "Explain local inference in one sentence."
+       }]
+     }'
+   ```
+
+The server returns a JSON response containing the model's answer. To stop the
+server, press <kbd>Control+C</kbd> in its terminal.
+
+When their models are installed, the server also exposes embeddings, image
+generation and editing, speech, and native vision routes. The `/v1/models`
+endpoint reports capabilities, tool support, input modalities, and active
+limits. For authentication, model residency, and batching, see the
+[API guide](./docs/runtime/api-server.md). For a chat interface, see the
+[Open WebUI setup guide](./docs/runtime/api-server.md#open-webui-companion).
+
+## Apps and execution across machines
+
+Choose an interface based on where you want to create and run work:
+
+| Surface | Execution location | Main functions |
+| --- | --- | --- |
+| [macOS Studio](./apps/macos/README.md) | The local CLI or configured executors | Media creation, training, a local artifact library, run inspection, model management, API serving, and agents. Command previews and logs remain available. |
+| [iOS Studio](./docs/ios-studio.md) | A paired machine, a relay fleet, or selected iPhones | Job submission, progress monitoring, verified artifact downloads, Live Activities, and experimental local image and chat inference. |
+| [Graph Studio](./docs/graph/studio.md) | A configured executor | Visual authoring for portable workflows. |
+| [Relay and executors](./docs/workflows.md) | Local, SSH, relay fleet, or direct machine | Execution of the same job bundle across supported hosts. Credentials and machine-specific settings stay outside the bundle. |
+
+Local iPhone models depend on device memory. Simulator builds don't establish
+physical-device inference or lifecycle behavior. Graph Studio also has separate
+runtime and file-format versions: Graph v2 uses `schema_version: 1` workflow
+files.
+
+The separate [Relay and Node project](https://relay.mere.run) manages fleet
+hosts. [Official plugins](https://plugins.mere.run) add companion workflows and
+typed graph providers outside the inference process. To inspect an available
+plugin without installing it, run:
 
 ```bash
 mere.run plugin list
 mere.run plugin info mere-vfx-tools
-mere.run plugin install mere-vfx-tools --yes
-mere.run plugin doctor mere-vfx-tools
 ```
 
-Relay/Node code lives in `sawfwair/relay-mere-run`; plugin contracts and source
-live in [`sawfwair/mere-run-plugins`](https://github.com/sawfwair/mere-run-plugins).
-Neither adds a hosted inference backend to this repository.
+Relay and Node source lives in `sawfwair/relay-mere-run`. Plugin contracts and
+source live in [mere-run-plugins](https://github.com/sawfwair/mere-run-plugins).
+This repository provides the local runtime and clients, not a hosted inference
+backend. Remote execution sends work to the machine or fleet you select.
+Local execution keeps the work on your device.
 
-## Included components
+## Model storage
 
-- `Sources/MereRunCore`: shared model resolution, manifests, generation primitives, and MLX-backed inference code
-- `Sources/AudioCore`, `Sources/AudioCodecs`, `Sources/AudioSTT`, `Sources/AudioTTS`: audio generation and transcription support
-- `Sources/MereRunCLI`: the target that builds the public `mere.run` executable
-- `apps/macos/`: the SwiftUI `mere.run.app` target, tests, and assets for the user-facing macOS Studio
-- `apps/ios/`: the XcodeGen-managed iOS Studio app, widget, tests, and source-level signing metadata
-- `Tests`: SwiftPM test coverage for the core and CLI surfaces
-- `vendor/llama.xcframework`: vendored `llama.cpp` runtime used by `mere.run text code` and `mere.run api serve`
-- `vendor/mlx-swift_Cmlx.bundle`: vendored Metal shader resources needed by MLX-backed runtime paths
-- [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md): redistribution, provenance, and license notes for bundled third-party artifacts
-
-## Platform expectations
-
-- The public CLI and local runtime are developed and validated on Apple Silicon
-  with macOS 15 or later.
-- The optional SwiftUI Studio, app bundle, installer, and DMG are available only
-  on macOS. Linux compatibility work applies to the headless `mere.run` CLI.
-- `Package.swift` uses Swift tools 6.0 and declares macOS 15 and iOS 18 package
-  platforms.
-- `swift build` and `swift test` are the supported first-run validation path for
-  macOS contributors.
-- Linux CLI compatibility work requires a Swift 6.x toolchain, `clang`,
-  `cmake`, `ninja`, `pkg-config`, `gfortran`, curl/zlib/OpenBLAS/LAPACK
-  development headers, `ffmpeg`, `ffprobe`, `gzip`, `unzip`, and `zip`.
-- Media I/O discovers `ffmpeg` and `ffprobe` on `PATH`.
-  `MERERUN_FFMPEG` and `MERERUN_FFPROBE` provide absolute executable overrides.
-- Hosted Linux CI remains CPU MLX-oriented and fixture-sized. Active release
-  builds cover macOS and the configured `tensor.local` x86_64 CUDA builder.
-  The arm64 CUDA release lane is paused until a matching host is available.
-- Linux CUDA validation applies only to hosts that have run the CUDA package
-  and smoke path.
-- Some vendored binaries include additional Apple platform slices for package
-  consumers. Linux release artifacts remain headless and CLI-only.
-
-## Install a signed release
-
-The signed macOS build is mirrored at:
+The default macOS model store is
+`~/Library/Application Support/MereRun/models`. To select a different writable
+store, set `MERERUN_MODELS_DIR` or pass `--models-root`. For example, this command
+lists models in a store on an external volume:
 
 ```bash
-curl -L https://mere.run/releases/mere-run.dmg -o mere-run.dmg
-open mere-run.dmg
+mere.run --models-root /Volumes/Models/mere-run model list
 ```
 
-The DMG contains `MereRun.app`, a bundled CLI payload, an optional Codex skill,
-runtime assets, notices, and a terminal installer. Drag `MereRun.app` to
-Applications for the studio. The app uses its bundled CLI internally; use
-Settings to install the `mere.run` terminal command and optional `use-mere-run` skill
-when you want them. For terminal-only installs, open the mounted DMG and run:
+To register models already organized as `MODEL_ROOT/MODEL_ID`, add their root
+with `model location add`. This example uses `/Volumes/Models` as `MODEL_ROOT`:
+
+```bash
+mere.run model location add /Volumes/Models
+mere.run model location list
+```
+
+The registration adds a read-only search root. Model pulls continue to write
+to the primary store. An explicit store override doesn't include registered
+roots.
+
+To inspect disk usage and preview cache cleanup without deleting files, run:
+
+```bash
+mere.run model storage
+mere.run model gc
+```
+
+The `model gc` command only prints a plan unless you pass `--force`. The
+`model remove` command reclaims backing files only when no other model link
+uses them. Its `--keep-cache` option retains those files.
+
+Model pulls use a separate Hugging Face snapshot cache. To choose its location,
+set `MERERUN_HUB_CACHE` or pass `--cache-dir` to `model pull`. Keep an external
+cache volume connected while using models that link to its files.
+For resolution order and cache details, see
+[model management](./docs/runtime/model-management.md) and
+[configuration](./docs/configuration.md).
+
+## Automation and command discovery
+
+For agents, scripts, and other clients, inspect the capability metadata and
+command guides:
+
+```bash
+mere.run catalog --json
+mere.run guide video generate
+mere.run video --help
+```
+
+On commands that support preflight, `--preflight --json` reports a plan before
+loading a model or writing output. The `--progress-json` option provides
+structured progress on supported commands. Check the command's help for
+available options.
+
+Portable workflows preserve immutable plans, checksums, events, and run
+directories. To inspect or retrieve work, use `run list`, `run inspect`,
+`run watch`, and `run fetch`.
+
+## Install or build
+
+Choose the installation instructions for your platform. For workflows that
+use FFmpeg, make `ffmpeg` and `ffprobe` available on `PATH`.
+The `MERERUN_FFMPEG` and `MERERUN_FFPROBE` variables accept absolute paths to
+those executables.
+
+### Install on macOS
+
+Use an Apple Silicon Mac with macOS 15 or later:
+
+1. Download the signed disk image from the
+   [release downloads](https://mere.run/releases).
+2. Open the disk image.
+3. Drag `MereRun.app` to the **Applications** folder.
+4. In the app's **Settings**, install the optional `mere.run` terminal command.
+   You can also install the `use-mere-run` skill there.
+
+The app runs its bundled CLI even if you don't install the terminal command.
+For a terminal-only installation, run the installer after mounting the disk
+image:
 
 ```bash
 cd /Volumes/mere.run/.mere-run
 ./install.sh
 ```
 
-The installer copies `mere.run` and its colocated runtime assets to
-`/usr/local/bin/mere.run`, using `sudo` only when the destination requires it.
+The installer places the CLI and its runtime assets in `/usr/local/bin`. It
+uses `sudo` only if the destination requires it. For app integrations, see the
+[preview and Library import deep links](./docs/macos-deep-links.md) and the
+[Raycast integration](./docs/raycast.md).
 
-### Open local artifacts through macOS deep links
+### Install on Linux
 
-The macOS app registers typed `mererun://` routes so a launcher, automation,
-agent, or another local app can hand a completed artifact back to MereRun. Use
-`mererun://preview` for a non-importing native Quick Look panel, or
-`mererun://library/import` with a small versioned receipt to validate, persist,
-and select a completed result in MereRun Library.
+Linux packages contain the headless CLI and runtime assets, not macOS Studio.
+Release v0.45.0 provides CUDA x86_64 tarballs and Debian packages. Its release
+smoke test ran on an RTX 3080 Ti with Ubuntu 24.04. Hosted CPU tests and that
+CUDA test don't establish every model's compatibility on every Linux host.
 
-Pass `preview` one percent-encoded absolute artifact path. It supports images,
-audio, video, text, and Quick Look-compatible 3D files:
+For dependencies, CUDA setup, packaging, and validation limits, see the
+[Linux quickstart](./docs/linux-quickstart.md).
 
-```text
-mererun://preview?path=%2FUsers%2Fdana%2FDesktop%2Fresult.png
-```
+### Build from source
 
-```bash
-open 'mererun://preview?path=%2FUsers%2Fdana%2FDesktop%2Fresult.png'
-```
+The package uses Swift tools 6.0 and declares macOS 15 and iOS 18 platforms.
+For development on Apple Silicon macOS:
 
-The target must already exist and be a readable file. MereRun rejects relative
-paths, directories, missing files, duplicate `path` values, and extra query
-parameters. This route remains an explicit preview-only option; it does not
-import, move, or modify the artifact.
+1. Install the validation tools:
 
-See [macOS deep links](./docs/macos-deep-links.md) for both route contracts and
-security boundaries. The separate [Raycast integration](./docs/raycast.md) is
-one example client built on the same public handoff.
+   ```bash
+   brew install swiftlint ripgrep
+   ```
 
-Linux package builds are headless CLI-only. They install the `mere.run` CLI plus
-colocated runtime assets; they do not include the macOS SwiftUI studio or DMG
-layout. See the dedicated [Linux quickstart](./docs/linux-quickstart.md) for the
-validation boundary, CUDA notes, and first commands. On Linux arm64, if a distribution's Clang shadows Swift's
-bundled Clang and cannot compile MLX bf16 headers, the Linux scripts select a
-bf16-capable C++ driver or report the `CXX` override to use. Linux arm64 release
-packages must be built with CUDA enabled on a host with the CUDA Toolkit
-headers, CUDA CCCL headers, cuDNN, and NCCL installed. CUDA `.deb` artifacts
-derive their runtime/JIT dependencies from the linked `libcudart` major. CUDA
-12 packages target the 12.8 NVIDIA packages with Lambda Stack alternatives;
-CUDA 13 packages target the 13.0 NVIDIA packages. The
-installed launcher also exports the resolved CUDA CCCL include root through
-`MERERUN_CUDA_CCCL_INCLUDE_PATH` so MLX CUDA kernels can find `cuda/std/*`
-during NVRTC JIT compilation:
+2. From the repository root, build the package:
 
-```bash
-MERERUN_LINUX_ACCEL=cuda MERERUN_SKIP_MLX_CUDA_EXAMPLE=1 \
-  scripts/package-linux.sh --version 0.23.0 --artifact-suffix cuda
-```
+   ```bash
+   swift build
+   ```
 
-CUDA validation applies only to hosts that have run the CUDA package and smoke
-path.
+3. Run the tests:
 
-## Build from source
+   ```bash
+   swift test
+   ```
 
-Install SwiftLint and ripgrep once if you plan to run the contributor
-validation script:
+4. Inspect the CLI:
+
+   ```bash
+   swift run mere.run --help
+   ```
+
+To build and open the optional macOS app, run:
 
 ```bash
-brew install swiftlint ripgrep
-```
-
-Install Node.js and pnpm if you plan to run the docs site locally, and Gitleaks
-if you want to mirror the repository security scan before publishing changes:
-
-```bash
-brew install node pnpm gitleaks
-```
-
-```bash
-swift build
-swift test
-swift run mere.run --help
 app_path="$(./scripts/build_mere_run_app.sh debug)"
 open "$app_path"
 ```
 
-For Linux CLI compatibility work, install the platform packages first and keep
-the validation headless:
+Before opening a pull request, run `./scripts/check.sh`. To add runtime smoke
+tests, set `MERERUN_RUN_E2E=core` or `MERERUN_RUN_E2E=installed`.
+Installed-model checks require the relevant assets and hardware.
+
+To build the documentation, use Node.js 20 or later and the pnpm version
+pinned in `package.json`:
 
 ```bash
-sudo apt-get update
-sudo apt-get install -y cmake ninja-build pkg-config gfortran libcurl4-openssl-dev zlib1g-dev libopenblas-dev liblapacke-dev ffmpeg gzip unzip zip
-export MERERUN_FFMPEG=/usr/bin/ffmpeg
-export MERERUN_FFPROBE=/usr/bin/ffprobe
-./scripts/check-linux.sh
-swift run mere.run --help
+pnpm install --frozen-lockfile
+bash ./scripts/check-docs-examples.sh
+pnpm docs:build
 ```
 
-To build the x86_64 CUDA release package on a CUDA development host or a
-GPU-less builder with CUDA development packages:
-
-```bash
-MERERUN_LINUX_ACCEL=cuda MERERUN_SKIP_MLX_CUDA_EXAMPLE=1 \
-  scripts/package-linux.sh --version 0.23.0 --artifact-suffix cuda
-ls dist/linux/
-```
-
-On Linux arm64, use a CUDA-provisioned host:
-
-```bash
-MERERUN_LINUX_ACCEL=cuda scripts/package-linux.sh --version 0.23.0
-```
-
-Do not use the app bundle commands on Linux. `mere.run.app`, SwiftUI studio
-flows, and DMG packaging stay macOS-only. Linux release packaging is for the
-headless CUDA CLI tarball and `.deb` only; no CPU-only Linux artifact is
-published.
-
-## Quick start
-
-```bash
-# See the public command tree
-swift run mere.run --help
-
-# Read packaged command cookbooks
-swift run mere.run guide --list
-
-# Launch the optional macOS studio
-app_path="$(./scripts/build_mere_run_app.sh debug)"
-open "$app_path"
-
-# List known model IDs and local install status
-swift run mere.run model list
-
-# See the local server, served model, model-store path, and installed models
-swift run mere.run status
-
-# Set API runtime defaults beside the active model store
-swift run mere.run model runtime set text-chat-gemma4 \
-  --alias chat-default \
-  --pinned \
-  --ttl-seconds 3600 \
-  --max-tokens 1024
-# Runtime TTLs unload idle loaded models during pool operations.
-# Memory-guard tiers drive pressure LRU and admission pauses.
-# Pinned models are kept out of automatic eviction.
-
-# See what this Mac can run before pulling large models
-swift run mere.run model capabilities
-swift run mere.run model capabilities --recommended
-
-# Chat winners by RAM band
-# 16-23 GB: text-chat-gemma4-12b-4bit
-# 24-95 GB: text-chat-gemma4-12b-4bit
-# 96+ GB: text-agent-deepseek-v4-flash for agent/API chat; Gemma 12B 4-bit for normal local chat
-# Coding-agent comparison: text-code-north-mini, text-agent-ornith-35b-mlx, and text-agent-ornith-35b
-
-# Choose guided, bring-your-own-agent, or manual setup
-swift run mere.run setup
-
-# Or install Pi and launch it against a self-describing local provider
-swift run mere.run agent install-pi
-swift run mere.run agent start
-
-# Pull a Hugging Face-backed model into the local model store
-swift run mere.run model pull image-zimage-nano
-swift run mere.run model pull image-zimage-nano --preflight --json
-swift run mere.run model pull text-chat-lfm25-2.6b-4bit --accept-model-license
-swift run mere.run model pull text-chat-lfm25-2.6b-bf16 --accept-model-license
-swift run mere.run model pull text-chat-lfm25-1.2b-bf16 --accept-model-license
-swift run mere.run model pull text-chat-lfm25-a1b-8bit --accept-model-license
-swift run mere.run model pull text-chat-lfm25-a1b-bf16 --accept-model-license
-swift run mere.run model pull vision-chat-lfm25-3b-8bit --accept-model-license
-swift run mere.run model pull text-chat-laguna-s-2-1
-swift run mere.run model pull text-chat-laguna-xs-2-1
-swift run mere.run model pull text-chat-nemotron-35-lightning
-swift run mere.run model pull text-chat-inkling-small
-swift run mere.run model pull vision-chat-muse-glimmer-30b --accept-model-license
-swift run mere.run model pull vision-chat-q38-flash-next-mixed --accept-license-terms
-swift run mere.run model pull text-chat-bonsai-27b-1bit
-swift run mere.run model pull text-chat-bonsai-27b-2bit
-swift run mere.run model pull text-code-north-mini
-swift run mere.run model pull text-agent-ornith-35b-mlx
-swift run mere.run model pull text-agent-ornith-35b
-
-# Nemotron 3 Nano Omni is an explicit 66.06 GB BF16 pull for 112+ GB machines.
-# It runs text, image, audio, and video understanding through native Swift/MLX.
-swift run mere.run model pull omni-chat-nemotron3-nano-30b-a3b-bf16 \
-  --accept-model-license
-swift run mere.run text chat \
-  --model omni-chat-nemotron3-nano-30b-a3b-bf16 \
-  --image photo.png \
-  --prompt "Describe the image."
-swift run mere.run text chat \
-  --model omni-chat-nemotron3-nano-30b-a3b-bf16 \
-  --audio speech.wav \
-  --prompt "Transcribe the spoken audio."
-swift run mere.run text chat \
-  --model omni-chat-nemotron3-nano-30b-a3b-bf16 \
-  --video clip.mp4 \
-  --prompt "Summarize the video."
-
-# Run Prism ML's binary model for lower residency/faster decode, or substitute
-# text-chat-bonsai-27b-2bit for the larger ternary checkpoint.
-swift run mere.run text chat \
-  --model text-chat-bonsai-27b-1bit \
-  --prompt "Explain unified memory for local inference."
-
-# Inkling-Small is an explicit mixed-precision native MLX pull for 128 GB machines.
-swift run mere.run text chat \
-  --model text-chat-inkling-small \
-  --context-size 32768 \
-  --prompt "Plan a recovery-safe repository migration."
-
-# Qwen3.8-Flash-Next mixed Q2/Q4 is the 128 GB Mac profile, with MTP enabled
-# for greedy decode. Long-context QSA requires a build newer than v0.45.0.
-# Context includes both prompt and generation; leave RAM for KV and MTP history.
-swift run mere.run text chat \
-  --model vision-chat-q38-flash-next-mixed \
-  --context-size 32768 \
-  --max-tokens 256 \
-  --prompt "Explain sparse attention in one paragraph."
-
-# Muse Glimmer is a pinned native Swift/MLX multimodal agent model. The pull
-# installs Sawfwair's 21.38 GB selective MLX Q4 target and z-lab's 5.54 GB
-# DFlash2 companion; review the target's bundled usage policy first.
-swift run mere.run text chat \
-  --model vision-chat-muse-glimmer-30b \
-  --image ./screenshot.png \
-  --reasoning-effort 0.8 \
-  --stats \
-  --prompt "Inspect this interface and propose the safest next action."
-
-# The managed DFlash2 companion can also be refreshed independently.
-swift run mere.run model pull vision-chat-muse-glimmer-30b-dflash2
-
-# Nemotron 3.5 Lightning is a pinned native Swift/MLX hybrid Mamba/MoE target.
-# The managed pull also installs its converted DSpark speculative companion.
-swift run mere.run text chat \
-  --model text-chat-nemotron-35-lightning \
-  --stats \
-  --prompt "Design a recovery-safe Swift actor pipeline."
-
-# Pull and apply the promoted Mere Platform Assistant adapter
-swift run mere.run model pull text-chat-gemma4-12b-4bit
-swift run mere.run adapter pull mere-platform-assistant
-swift run mere.run text chat \
-  --model text-chat-gemma4-12b-4bit \
-  --lora mere-platform-assistant \
-  --prompt "What can you help me with in Mere?"
-
-# Generate an image
-swift run mere.run image generate \
-  --prompt "a ceramic coffee mug in soft morning light" \
-  --output ./mug.png
-
-# Preflight the same request as JSON before loading the image model
-swift run mere.run image generate \
-  --prompt "a ceramic coffee mug in soft morning light" \
-  --output ./mug.png \
-  --preflight \
-  --json
-
-# Pull and run the native Swift Bonsai binary or ternary image model
-swift run mere.run model pull image-bonsai-binary
-swift run mere.run image generate \
-  --model image-bonsai-binary \
-  --prompt "a tiny bonsai tree in a sunlit greenhouse" \
-  --output ./bonsai.png
-
-# HiDream O1 runs natively for text-only, edit, and multi-reference generation.
-swift run mere.run image generate \
-  --model image-hidream-o1-dev \
-  --prompt "a clean studio product photo of the subject" \
-  --ref-image ./subject.png \
-  --output ./subject-studio.png
-
-# SenseNova U1.5 runs its official raw-pixel model natively for generation and editing.
-swift run mere.run model pull image-sensenova-u1-5-8b-mot
-swift run mere.run image generate \
-  --model image-sensenova-u1-5-8b-mot \
-  --prompt "Turn this reference into a cinematic rainy-night scene" \
-  --input ./reference.png \
-  --width 2048 --height 2048 \
-  --output ./sensenova-edit.png
-
-# Krea 2 Turbo runs natively for 8-step text-to-image generation.
-swift run mere.run image generate \
-  --model image-krea2-turbo \
-  --prompt "a cinematic product photo of a translucent portable speaker, crisp reflections" \
-  --steps 8 \
-  --output ./speaker.png
-
-# Train Krea 2 LoRAs on Raw, then run them on Turbo.
-swift run mere.run image train-lora \
-  --model image-krea2-raw \
-  --data ./style-dataset \
-  --output ./style-krea2.safetensors \
-  --recipe krea-cinematic-style \
-  --quiet
-
-# Train a practical local Klein style LoRA with the fast 9B recipe.
-swift run mere.run image train-lora \
-  --data ./style-dataset \
-  --output ./style-klein.safetensors \
-  --recipe klein-fast-style \
-  --visualize \
-  --quiet
-
-# Apply a Klein LoRA to a reference image.
-swift run mere.run image generate \
-  --model image-klein-9b \
-  --ref-image ./reference-pose.png \
-  --strength 0.55 \
-  --prompt "TRIGGER_TOKEN two dancers in a rainy city street, natural human anatomy, no extra limbs" \
-  --lora ./style-adapter.safetensors \
-  --lora-scale 1.5 \
-  --width 1024 --height 768 \
-  --steps 16 \
-  --seed 525252 \
-  --output ./style-reference.png
-
-# Reopen the local run dashboard later from the run directory.
-swift run mere.run image visualize-run .
-
-# Discover and inspect run artifacts headlessly.
-swift run mere.run run list --root ./runs --json
-swift run mere.run run inspect ./runs/render --json
-swift run mere.run run inspect ./render.plan.json --json
-
-# Run local chat
-swift run mere.run text chat \
-  --stream \
-  --prompt "Summarize diffusion models in one paragraph."
-
-# Run LiquidAI LFM2.5 through the native Swift MLX runtime
-swift run mere.run text chat \
-  --model text-chat-lfm25-2.6b-bf16 \
-  --stats \
-  --prompt "Explain why local inference is useful in one paragraph."
-
-# Inspect an image with LiquidAI LFM2.5-VL through the same native runtime
-swift run mere.run text chat \
-  --model vision-chat-lfm25-3b-8bit \
-  --image ./photo.jpg \
-  --prompt "Describe this image and transcribe any visible text."
-
-# Redact PII locally
-swift run mere.run text anonymize \
-  "My name is Dana Example and my email is dana@example.com"
-
-# Serve the OpenAI-compatible local API on loopback
-swift run mere.run api serve --engine text-chat-gemma4
-swift run mere.run api serve --engine text-chat-lfm2
-swift run mere.run api serve --engine text-chat-laguna
-
-# Inspect the serving plan before starting the server or loading a model
-swift run mere.run api serve --engine text-chat-gemma4 --preflight --json
-
-# In another terminal, confirm the server and served model
-swift run mere.run status
-
-# Native embeddings for local RAG clients
-curl http://127.0.0.1:8080/v1/embeddings \
-  -H "Content-Type: application/json" \
-  --data '{"model":"text-embed-qwen3-0.6b","input":"mere.run native embeddings"}'
-
-# Shared text/image embeddings for local retrieval and candidate ranking
-swift run mere.run vision embed \
-  --image ./vehicle.jpg \
-  --text "a white SUV" \
-  --instruction "Retrieve visually similar vehicles" \
-  --pretty
-
-# Native image generation and audio through the same /v1 API
-curl http://127.0.0.1:8080/v1/images/generations \
-  -H "Content-Type: application/json" \
-  --data '{"model":"image-zimage-nano","prompt":"a compact local AI workstation","size":"1024x1024"}'
-curl http://127.0.0.1:8080/v1/images/edits \
-  -F model=qwen-image-edit \
-  -F prompt="make the workstation dusk-lit while preserving the layout" \
-  -F image=@input.png
-curl http://127.0.0.1:8080/v1/audio/speech \
-  -H "Content-Type: application/json" \
-  --output speech.wav \
-  --data '{"model":"speech-tts-qwen3-nano","input":"mere.run is online","voice":"nova","response_format":"wav"}'
-curl http://127.0.0.1:8080/v1/audio/transcriptions \
-  -F model=speech-asr-parakeet \
-  -F file=@speech.wav
-
-# Optional Open WebUI companion smoke
-swift run mere.run open-webui quickstart --dry-run
-swift run mere.run open-webui quickstart --pull --accept-model-license
-swift run mere.run guide open-webui
-scripts/smoke-open-webui.sh print-env
-scripts/smoke-open-webui.sh live-smoke
-
-# Gemma4 prefix KV reuse is on by default for api serve; set 0 for a baseline
-MERERUN_GEMMA4_PREFIX_KV_CACHE=0 swift run mere.run api serve --engine text-chat-gemma4
-
-# Qwen3.6 text-only prefix KV reuse is also on by default; set 0 for a baseline
-MERERUN_Q35_PREFIX_KV_CACHE=0 swift run mere.run api serve
-
-# Optional decode batching; overlap requires max-active > 1
-MERERUN_GEMMA4_CONTINUOUS_BATCHING=1 swift run mere.run api serve \
-  --engine text-chat-gemma4 \
-  --max-active-requests 2
-MERERUN_Q35_CONTINUOUS_BATCHING=1 swift run mere.run api serve \
-  --max-active-requests 2
-
-# Inspect both the server request queue and machine-wide inference admission
-swift run mere.run status
-
-# Experimental Gemma4 packed PolarKV for memory-pressure and long-context decode testing
-swift run mere.run api serve \
-  --engine text-chat-gemma4 \
-  --kv-quant-scheme polar \
-  --kv-bits 2
-
-# Conservative per-model runtime policy: default KV for short Gemma4 prompts,
-# decode-deferred PolarKV at or above 1024 prompt tokens
-swift run mere.run model runtime set text-chat-gemma4-turbo --kv-cache-mode auto
-
-# Fixed-token real-checkpoint Gemma4 KV benchmark: default TurboQuant vs decode-deferred PolarKV
-swift run mere.run model benchmark gemma4-kv \
-  --model text-chat-gemma4-turbo \
-  --prompt-repeat-values 32,128,220 \
-  --decode-token-values 32,128 \
-  --json
-
-# Fixed-token real-checkpoint Gemma4 MTP benchmark: serial decode vs verified MTP
-swift run mere.run model benchmark gemma4-mtp \
-  --model text-chat-gemma4-12b-4bit \
-  --prompt-repeat-values 128,220 \
-  --decode-token-values 48,128 \
-  --json
-
-# Requested-token real-checkpoint Qwen3.6 MTP benchmark: baseline vs adaptive vs forced
-swift run mere.run model benchmark q36-mtp \
-  --prompt-repeat-values 8,80,150 \
-  --temperature-values 0,0.7 \
-  --decode-tokens 32 \
-  --json
-
-# Real serving-path workload: streaming chat TTFT, throughput, cache, and batching counters
-swift run mere.run api serve \
-  --engine text-chat-gemma4 \
-  --model text-chat-gemma4-turbo \
-  --max-active-requests 1
-swift run mere.run model benchmark api-workload \
-  --model text-chat-gemma4-turbo \
-  --json
-
-# Small real coding-eval slice: Ornith vs North Mini vs Qwen3-Coder
-swift run mere.run model benchmark code \
-  --allow-code-execution \
-  --json
-
-# Versioned 24-case Lite quality plan; no model load in dry-run mode
-swift run mere.run model benchmark fused \
-  --suite lite \
-  --dry-run \
-  --json
-
-# 110-case chat/code/tools/long-context/vision suite with calibration diagnostics
-swift run mere.run model benchmark fused \
-  --suite comprehensive \
-  --logprobs summary \
-  --allow-code-execution \
-  --json
-
-# Small grounded-chat eval: local email/workspace evidence, abstention, and format checks
-swift run mere.run model benchmark chat --json
-
-# Small tool-call eval: synthetic Mere tools, parsed tool names/arguments only
-swift run mere.run model benchmark tool-calls --json
-
-# Gemma4 tool-result continuation: one- and two-tool chains against a real checkpoint
-swift run mere.run model benchmark tool-continuations --log-responses --json
-
-# Tiny synthetic VLM eval: Gemma4 12B vision chat vs existing Qwen3-VL inspect backend
-swift run mere.run model benchmark vlm --json
-
-# Existing-dataset VLM eval via lmms-eval; dry-run prints the exact command first
-swift run mere.run model benchmark vlm \
-  --dataset mathvista-testmini \
-  --limit 16 \
-  --lmms-eval-root ~/src/lmms-eval \
-  --dry-run \
-  --json
-
-# Expose the API beyond loopback only with an explicit key
-export MERERUN_API_KEY=change-me
-swift run mere.run api serve \
-  --host 0.0.0.0 \
-  --port 11434 \
-  --api-key "$MERERUN_API_KEY" \
-  --rate-limit-per-minute 120 \
-  --max-active-requests 1
-
-# Generate speech
-swift run mere.run speech synthesize \
-  "Hello from mere.run" \
-  --output ./hello.wav
-
-# Inspect an image
-swift run mere.run vision inspect ./image.png "Describe this image."
-
-# Ground objects in an image
-swift run mere.run model pull vision-ground-falcon-perception
-swift run mere.run vision ground ./image.png --query "a person"
-
-# Detect and compare faces locally
-swift run mere.run model pull vision-face-buffalo-l --accept-model-license
-swift run mere.run vision face detect ./group.jpg --json
-swift run mere.run vision face compare ./reference.jpg ./candidate.jpg --json
-
-# Segment an image
-swift run mere.run model pull vision-segment-sam31 --accept-model-license
-swift run mere.run vision segment ./image.png --prompt "a person"
-
-# Track prompted objects through a video
-swift run mere.run vision track ./clip.mp4 --prompt "a person"
-swift run mere.run vision track ./clip.mp4 --prompt "a person" --preflight --json
-
-# Record a short camera session and track it
-swift run mere.run vision track-live --output ./live.mp4 --prompt "a person"
-swift run mere.run vision pose ./person.png --json-output ./person-pose.json
-swift run mere.run vision flow ./frame-001.png ./frame-002.png --output ./motion.flo
-
-# Generate music
-swift run mere.run model pull music-acestep
-swift run mere.run music generate \
-  "upbeat electronic groove" \
-  --output ./track.wav
-
-# Generate a lyric-driven stereo song with native MiniMax Music 3
-swift run mere.run model pull music-minimax-music3 --accept-model-license
-swift run mere.run music generate \
-  "slow-burn dream pop about leaving a familiar city and finding home" \
-  --model music-minimax-music3 \
-  --compose \
-  --duration 180 \
-  --lyrics-preflight strict \
-  --performance-mode q8-lm \
-  --sampling-tier fast \
-  --output ./minimax-composed-song.wav
-
-swift run mere.run music generate \
-  "cinematic synth-pop, female lead, 118 bpm, wide guitars" \
-  --model music-minimax-music3 \
-  --lyrics-file ./lyrics.txt \
-  --duration 30 \
-  --minimum-duration 30 \
-  --sampling-tier fast \
-  --seed 7 \
-  --memory-mode staged \
-  --performance-mode q8-lm \
-  --output ./minimax-song.wav
-
-# Compare the experimental whole-song flow windowing recipe without changing defaults
-swift run mere.run music generate \
-  "cinematic synth-pop, female lead, 118 bpm, wide guitars" \
-  --model music-minimax-music3 \
-  --lyrics-file ./lyrics.txt \
-  --duration 30 \
-  --flow-strategy overlap-average \
-  --seed-strategy stage-separated-v1 \
-  --output ./minimax-overlap-average.wav
-
-# A/B opt-in solver and guidance-taper experiments; Euler and full CFG remain defaults
-swift run mere.run music generate \
-  "cinematic synth-pop, female lead, 118 bpm, wide guitars" \
-  --model music-minimax-music3 \
-  --lyrics-file ./lyrics.txt \
-  --duration 30 \
-  --flow-solver ab2 \
-  --ar-cfg-frames 50 \
-  --flow-cfg-end 0.4 \
-  --output ./minimax-ab2-taper.wav
-
-# Keep MiniMax Music 3 warm behind its speech-compatible HTTP route
-swift run mere.run music serve \
-  --model music-minimax-music3 \
-  --memory-mode resident \
-  --performance-mode q8-lm \
-  --port 8080
-
-# Generate with ACE-Step XL Turbo on larger Macs
-swift run mere.run model pull music-acestep-xl-turbo
-swift run mere.run music generate \
-  "cinematic synth pop with bright vocal harmonies" \
-  --model music-acestep-xl-turbo \
-  --output ./xl-track.wav
-
-# Generate an ACE-Step cover from a source song
-swift run mere.run music generate \
-  "dream-pop cover with soft vocals" \
-  --source-audio ./song.mp3 \
-  --analyze-source-audio \
-  --audio-cover-strength 1.0 \
-  --output ./cover.wav
-
-# Analyze a source song before cover/remix work
-swift run mere.run model pull music-acestep-lm-1.7b
-swift run mere.run music analyze ./song.mp3 \
-  --model music-acestep-xl-sft \
-  --lm-model music-acestep-lm-1.7b \
-  > ./song-analysis.json
-
-# Transcribe a full mix into instrument-separated MIDI with MuScriptor
-swift run mere.run model pull music-muscriptor-medium --accept-model-license
-swift run mere.run music transcribe ./song.mp3 \
-  --output ./song.mid \
-  --context-output ./song-context.json
-
-# Separate vocals and instrumental audio with native ViperX BS-RoFormer
-swift run mere.run model pull music-separate-bs-roformer-viperx-1297
-swift run mere.run music separate ./song.mp3 \
-  --output-dir ./song-stems
-
-# Separate drums, bass, other, and vocals with native four-stem BS-RoFormer
-swift run mere.run model pull music-separate-bs-roformer-4stem
-swift run mere.run music separate ./song.mp3 \
-  --model music-separate-bs-roformer-4stem \
-  --output-dir ./song-4stems
-
-# Remove room reverb or broadband noise with native MelBand RoFormer
-swift run mere.run model pull music-separate-mel-roformer-dereverb
-swift run mere.run music separate ./room.wav \
-  --model music-separate-mel-roformer-dereverb \
-  --output-dir ./room-restored
-
-swift run mere.run model pull music-separate-mel-roformer-denoise
-swift run mere.run music separate ./noisy.wav \
-  --model music-separate-mel-roformer-denoise \
-  --output-dir ./noise-restored
-
-# Extend narrowband speech from 16 kHz to 48 kHz with native AP-BWE
-swift run mere.run model pull audio-enhance-ap-bwe-16kto48k
-swift run mere.run audio enhance ./speech.wav \
-  --output ./speech-wideband.wav
-
-# Super-resolve bandwidth-limited speech, music, or sound effects with UniverSR
-swift run mere.run model pull audio-enhance-universr-audio
-swift run mere.run audio enhance ./music-12k.wav \
-  --model audio-enhance-universr-audio \
-  --output ./music-super-resolved.wav
-
-# Generate a style-transfer cover from a source song
-swift run mere.run music generate \
-  "modern reggaeton dance club remix, 96 bpm dembow rhythm, syncopated kick-snare groove, punchy 808 sub bass, bright Latin percussion" \
-  --model music-acestep-xl-turbo \
-  --source-audio ./song.mp3 \
-  --analyze-source-audio \
-  --audio-cover-strength 0.20 \
-  --cover-noise-strength 0.0 \
-  --output ./reggaeton-cover.wav
-
-# Stream and optionally capture Magenta RT2 music on Apple Silicon macOS
-swift run mere.run music realtime \
-  "ambient modular synths with brushed drums" \
-  --model music-magenta-rt2-small \
-  --duration 4 \
-  --output ./live.wav \
-  --no-play
-
-# Steer realtime Magenta RT2 from a CoreMIDI controller such as OP-1
-swift run mere.run music realtime --list-midi-inputs
-swift run mere.run music realtime \
-  --midi-monitor \
-  --midi-input "OP-1 Bluetooth" \
-  --midi-log-raw \
-  --duration 30
-swift run mere.run music realtime \
-  "minimal synth pop, dry drums, tape-warped bass" \
-  --model music-magenta-rt2-small \
-  --duration 120 \
-  --midi-input "OP-1 Bluetooth" \
-  --midi-channel all \
-  --midi-log-events \
-  --midi-cc 1=temp:0.2:1.4 \
-  --midi-cc 2=drums:0:2
-
-# Generate a Foley / sound-effect WAV with Woosh or MMAudio
-swift run mere.run model pull sfx-woosh-dflow --accept-model-license
-swift run mere.run model pull sfx-woosh-flow --accept-model-license
-swift run mere.run sfx generate \
-  "metal wrench dropping onto concrete, bright clang and brief ring" \
-  --model sfx-woosh-dflow \
-  --duration 5 \
-  --output ./wrench-clang.wav
-swift run mere.run sfx ae encode ./wrench-clang.wav -o ./wrench-clang-latents.npy
-swift run mere.run sfx ae decode ./wrench-clang-latents.npy -o ./wrench-clang-roundtrip.wav
-swift run mere.run sfx clap score \
-  "metal wrench dropping onto concrete" \
-  ./wrench-clang.wav
-swift run mere.run model pull sfx-woosh-dvflow-8s --accept-model-license
-swift run mere.run model pull sfx-woosh-synchformer --accept-model-license
-swift run mere.run sfx video generate \
-  "footsteps echoing in a hallway" \
-  ./silent-hallway.mp4 \
-  --model sfx-woosh-dvflow-8s \
-  --output ./hallway-footsteps.wav
-swift run mere.run sfx video generate \
-  "footsteps echoing in a hallway" \
-  ./silent-hallway.mp4 \
-  --model sfx-woosh-dvflow-8s \
-  --output ./hallway-footsteps.wav \
-  --preflight \
-  --json
-swift run mere.run model pull sfx-mmaudio-large-44k-v2 --accept-model-license
-swift run mere.run sfx generate \
-  "ocean waves striking a stone breakwater" \
-  --negative-prompt "speech, music" \
-  --model sfx-mmaudio-large-44k-v2 \
-  --duration 8 \
-  --steps 25 \
-  --output ./breakwater.wav
-
-# MMAudio weights are non-commercial; its Apple CLIP component is research-only.
-# See docs/model-sources.md for the component-level licenses.
-
-# Generate a fast video-only draft
-swift run mere.run video generate \
-  "a cinematic drone flythrough over snowy mountains" \
-  --num-frames 65 \
-  --output ./clip.mp4
-
-# Inspect the same render before loading MLX or writing an MP4
-swift run mere.run video generate \
-  "a cinematic drone flythrough over snowy mountains" \
-  --num-frames 65 \
-  --output ./clip.mp4 \
-  --preflight \
-  --json
-
-# Anchor the first and last keyframes for directed image-to-video
-swift run mere.run video generate \
-  "a car drives from a bright morning street into a warm sunset road, smooth forward motion" \
-  --image ./car-start.png \
-  --end-image ./car-end.png \
-  --num-frames 65 \
-  --output ./clip-directed.mp4
-
-# Generate final-quality video without an audio stream
-swift run mere.run model pull video-ltx23-full-mlx --accept-model-license
-swift run mere.run video generate \
-  "a red fox runs across a snowy clearing, detailed winter fur, natural motion" \
-  --quality final \
-  --duration 4 \
-  --output ./clip-final.mp4
-
-# Generate synchronized final-quality LTX 2.3 audio/video
-swift run mere.run model pull video-ltx23-full-mlx --accept-model-license
-swift run mere.run video generate \
-  "dialogue with clean background music and subtle city ambience" \
-  --quality final \
-  --output-mode audio-video \
-  --duration 15 \
-  --fps 24 \
-  --output ./clip-av.mp4
-
-# Generate synchronized final-quality LTX 2.5 audio/video (gated model)
-swift run mere.run model pull video-ltx25-distilled-bf16 --accept-model-license
-swift run mere.run video generate \
-  "a small red robot walks across a wooden table, tiny mechanical footsteps" \
-  --model video-ltx25-distilled-bf16 \
-  --quality final \
-  --output-mode audio-video \
-  --fps 24 \
-  --output ./clip-ltx25.mp4
-
-# Install the complete LTX 2.5 bundle and run the native full/dev pipeline.
-# Omitting --num-frames invokes DurationHead over the official 1...20s range.
-swift run mere.run model pull video-ltx25-full-bf16 --accept-model-license
-swift run mere.run video generate \
-  "an intricate clockwork observatory turns under a starry sky" \
-  --model video-ltx25-full-bf16 \
-  --output-mode audio-video \
-  --output ./clip-ltx25-full.mp4
-
-# Native LTX 2.5 text-to-audio, without constructing a video modality
-swift run mere.run audio generate \
-  "ocean surf, distant gulls, and a wooden buoy bell" \
-  --output ./surf.wav
-
-# Condition video on a selected source-audio segment and preserve that soundtrack
-swift run mere.run model pull video-ltx23-full-mlx --accept-model-license
-swift run mere.run video generate \
-  "a kinetic live performance, camera orbiting the vocalist" \
-  --audio ./song.wav \
-  --audio-start-time 30 \
-  --duration 5 \
-  --image ./performer.png \
-  --output ./performance.mp4
-
-# Legacy Q4 MiniMax-H3 compatibility package. Prefer BF16 or 8-bit for quality.
-# Passing --accept-model-license confirms review and acceptance of the listed
-# terms and agreement to comply before the download begins.
-swift run mere.run model pull video-minimax-h3-fl2va-mlx --accept-model-license
-swift run mere.run video generate \
-  "the paper bird takes flight with crisp wing sounds" \
-  --model video-minimax-h3-fl2va-mlx \
-  --image ./paper-bird.png \
-  --num-frames 124 \
-  --output ./paper-bird-h3.mp4
-
-# Maximum-fidelity H3: compact BF16 core plus exact production cache pack.
-# --cache-dir keeps the immutable payload on the selected external volume.
-swift run mere.run model pull video-minimax-h3-fl2va-bf16-mlx \
-  --cache-dir /Volumes/SALVATION/MereRun/hub \
-  --accept-model-license
-swift run mere.run video generate \
-  "a cinematic rain-soaked bus stop at night" \
-  --model video-minimax-h3-fl2va-bf16-mlx \
-  --width 1280 --height 768 --duration 10 --steps 21 \
-  --output ./bus-stop-bf16.mp4
-
-# Smaller high-quality H3 fallback: affine Q8/group-64 core. BF16 and Q8 share
-# byte-identical conditioner, VAE, tokenizer, license, and cache-pack blobs.
-# The verified runtime payload is 58,075,175,639 bytes before shared-blob reuse.
-swift run mere.run model pull video-minimax-h3-fl2va-8bit-mlx \
-  --cache-dir /Volumes/SALVATION/MereRun/hub \
-  --accept-model-license
-
-# Two checksum-pinned four-evaluation adapters for compact BF16 or Q8 H3
-swift run mere.run adapter pull minimax-h3-turbo-4step
-swift run mere.run adapter pull minimax-h3-lightx2v-4step
-swift run mere.run video generate \
-  "two actors cross a rain-soaked street while trading a whispered line" \
-  --model video-minimax-h3-fl2va-bf16-mlx \
-  --h3-adapter minimax-h3-lightx2v-4step \
-  --output ./street-dialogue-h3.mp4
-
-# Managed 8-bit Ref2VA preserves reference order semantically
-swift run mere.run model pull video-minimax-h3-ref2va-mlx --accept-model-license
-swift run mere.run adapter pull minimax-h3-lightx2v-ref2v-4step-v0.1
-swift run mere.run video generate \
-  "keep the subject, borrow the camera move, and follow the vocal rhythm" \
-  --model video-minimax-h3-ref2va-mlx \
-  --reference image:./subject.png \
-  --reference video:./camera-and-soundtrack.mp4 \
-  --reference audio:./voice.wav \
-  --h3-adapter minimax-h3-lightx2v-ref2v-4step-v0.1 \
-  --h3-weight-mode resident-bf16 \
-  --num-frames 124 \
-  --output ./referenced-h3.mp4
-
-# Resident H3 long-form generation carries prior motion and matching audio
-# through every overlap. The same flags work with FL2VA and Ref2VA roots.
-swift run mere.run video generate \
-  "one continuous tracking shot through the midnight market" \
-  --model video-minimax-h3-fl2va-bf16-mlx \
-  --duration 15 \
-  --h3-window-frames 124 \
-  --h3-window-overlap 35 \
-  --h3-acceleration maximum \
-  --output ./market-long-h3.mp4
-
-# FL2VA can inject up to 12 images at exact zero-based output-frame indices.
-swift run mere.run video generate \
-  "the same actor crosses three connected practical sets" \
-  --model video-minimax-h3-fl2va-bf16-mlx \
-  --num-frames 175 \
-  --h3-frame 72:./second-set.png \
-  --h3-frame 144:./third-set.png \
-  --output ./directed-sets-h3.mp4
-
-# Animate a masked reference subject from a driving video with native SCAIL-2
-swift run mere.run model pull video-scail2-14b-mlx
-swift run mere.run adapter pull scail2-lightx2v-4step
-swift run mere.run video animate \
-  "a dancer in a red silk dress" \
-  --reference ./reference-dancer-prepared.png \
-  --reference-mask ./reference-dancer-mask.png \
-  --driving-video ./pose.mp4 \
-  --driving-mask ./pose-mask.mp4 \
-  --tail-policy pad-trim \
-  --audio-source driving \
-  --output ./animated.mp4
-```
-
-## Command tree
-
-The public CLI is modality-first:
-
-- `mere.run guide`
-- `mere.run image { dataset, generate, reconstruct-3d, reconstruct-3d-trellis2, reconstruct-3d-multiview, run-plan, train-lora, visualize-run, validate }`
-- `mere.run text { chat, code, embed, anonymize, train-lora }`
-- `mere.run speech { synthesize, transcribe }`
-- `mere.run speech profile { list, create, delete }`
-- `mere.run vision { caption, inspect, ground, segment, track, track-live, pose, flow, depth-video, geometry, geometry-multiview, image-to-3d, image-to-3d-trellis2, image-to-3d-multiview, ocr }`
-- `mere.run music { analyze, generate, realtime, separate, transcribe }`
-- `mere.run sfx { ae, clap, condition, generate, video }`
-- `mere.run video { prepare-masks, animate, cosmos3, generate, session, export-latents }`
-- `mere.run world serve`
-- `mere.run run { list, inspect }`
-- `mere.run model { list, pull, remove, info, capabilities, runtime, benchmark, repair-manifests }`
-- `mere.run adapter { list, pull }`
-- `mere.run status`
-- `mere.run gate`
-- `mere.run config { set, get, unset, list, path }`
-- `mere.run api serve`
-- `mere.run open-webui quickstart`
-- `mere.run plugin { list, info, install, doctor }`
-- `mere.run setup`
-- `mere.run agent { onboard, install-pi, start }`
-
-The optional `mere.run.app` product opens to a user-facing studio for the same
-command families and keeps raw command previews, logs, runtime paths, model
-management, API serving, and arbitrary arguments in Advanced details.
-
-## Vision notes
-
-- `vision-segment-sam31` is the single managed SAM 3.1 package for segmentation and tracking.
-- `mere.run vision segment` supports text prompts and box or point prompting.
-- `mere.run vision track` seeds objects on the initial frame and then propagates them through later frames.
-- `mere.run vision track-live` records a camera clip, searches a short warm-up
-  window for seed objects, and then runs tracking over that recording.
-
-## Model store
-
-By default, mere.run uses:
-
-```text
-~/Library/Application Support/MereRun/models
-```
-
-Override that with:
-
-```bash
-export MERERUN_MODELS_DIR=/path/to/models
-swift run mere.run --models-root /path/to/models model list
-```
-
-Keep one writable store while unifying models already held on other disks:
-
-```bash
-# Search a catalog laid out as <root>/<canonical-model-id>/
-mere.run model location add /Volumes/Models
-
-# Or bind an arbitrary folder name to one canonical model ID
-mere.run model location bind video-ltx23-full-mlx /Volumes/ExampleModels/LTX-2.3 \
-  --accept-model-license
-
-mere.run model location list
-```
-
-Registered roots and bindings are read-only. Resolution is deterministic:
-primary store, explicit bindings in registration order, then search roots in
-registration order. Pulls still write only to the primary store; removing an
-external binding only unregisters it and never deletes its payload. Explicit
-`MERERUN_MODELS_DIR` and `--models-root` overrides remain isolated for
-reproducible jobs and do not merge registered locations.
-
-### Hugging Face snapshot cache
-
-`mere.run model pull` and runtime auto-download paths use the native Hugging
-Face snapshot cache before linking or resolving prepared models into the local
-model store. It is a mere.run-local cache, not the default
-`~/.cache/huggingface/hub` — the resolution chain is:
-
-1. `MERERUN_HUB_CACHE` (explicit override)
-2. `MERERUN_MODEL_CACHE_HOME/hub` (shared cache root)
-3. `~/Library/Application Support/MereRun/hub` (default)
-4. `~/Library/Caches/MereRun/hub`, then a temp dir as last-resort fallbacks
-
-Pass `model pull --cache-dir PATH` to select the cache for one pull. Disk
-preflight and downloads use that volume, and the installed model root links to
-its content-addressed blobs. Disconnecting an external cache volume makes that
-model unavailable until it is reconnected.
-
-If you already pull from Hugging Face elsewhere and want to share cached weights,
-point `MERERUN_HUB_CACHE` at your existing `huggingface/hub` directory.
-
-Inspect physical usage and sharing before deleting anything:
-
-```bash
-mere.run model storage
-mere.run model gc          # read-only plan
-mere.run model gc --force  # recompute under lock, then delete
-```
-
-`model remove <id>` reclaims backing payloads only when no other active or
-legacy model link uses them; `--keep-cache` retains those bytes intentionally.
-Managed pulls are revision-addressed and hard-link matching content blobs, while
-existing legacy cache directories remain compatible and can be adopted without
-copying payload bytes.
+For contribution requirements and platform-specific work, see
+[contributing](./CONTRIBUTING.md), [testing](./docs/testing.md), and the
+[iOS build instructions](./apps/ios/README.md).
 
 ## Security defaults
 
-The public open-source build keeps local-first behavior by default and requires
-explicit opt-in for higher-risk modes:
+The default configuration requires explicit opt-in for higher-risk behavior:
 
-- `mere.run api serve --preflight --json` reports host/port, auth, model,
-  runtime, and redacted follow-up actions before starting a server or loading a
-  model
-- `mere.run api serve` can bind to loopback without authentication, but
-  non-loopback hosts require `--api-key` or `MERERUN_API_KEY`.
-- the OpenAI-compatible chat and embedding routes require `Content-Type: application/json`, support `--rate-limit-per-minute` for basic abuse control, decode the common OpenAI request shapes, and reject unsupported high-impact fields before generation
-- `/v1/models` adds task, tool-call, reasoning, modality, limit, and
-  compatibility metadata. The bundled Pi provider uses these fields and
-  exposes only tool-capable chat models instead of guessing from model names.
-  Those fields project from typed managed-model catalog profiles; aliases and
-  active runtime limit overrides are layered on when the server responds.
-- API LoRA adapters are operator-controlled with `--lora`; it accepts a
-  verified installed adapter catalog id or a local path, while per-request LoRA
-  paths are rejected.
-- Tool-loop execution in `mere.run text chat` requires interactive approval
-  unless `--auto-approve-tools` is passed for non-shell tools.
-- `shell_exec` is disabled unless `--allow-shell-exec` is set and requires
-  interactive approval when enabled.
-- `write_file` stays inside the sandbox unless `--allow-absolute-tool-paths` is set.
-- Remote model and LoRA downloads reject plaintext HTTP except for loopback and
-  local-development cases.
+- API serving binds to loopback by default. Other addresses require
+  `MERERUN_API_KEY` or `--api-key`. Configure authentication and rate limits
+  before exposing the server. Use the environment variable to keep the key
+  out of process arguments.
+- Chat tools require interactive approval unless non-shell tools are explicitly
+  approved for automatic execution. Shell execution is off by default and still
+  requires interactive approval when enabled. File writes stay in the tool
+  sandbox unless absolute paths are explicitly permitted.
+- The server operator controls API LoRA selection. Requests can't supply
+  adapter paths. Remote model and adapter downloads reject plaintext HTTP
+  except for loopback and local development.
+- Model licenses are separate from the runtime license. Before passing
+  `--accept-license-terms` or its alias `--accept-model-license`, review the
+  model's terms. Some models restrict commercial use or particular applications.
+- External evaluation scorers require `--allow-external-scorer`. Before
+  authorizing a scorer executable, validate its pack and review the dry-run plan.
 
-These flags are intentionally explicit because they weaken the default safety posture:
+For the complete policies, see the [security policy](./SECURITY.md) and the
+[API guide](./docs/runtime/api-server.md).
 
-- `--allow-shell-exec`
-- `--allow-absolute-tool-paths`
-- `--auto-approve-tools`
-- non-loopback `api serve` binds
+## Repository and documentation
 
-## Validation
+The following paths contain the implementation, tests, and documentation:
 
-```bash
-./scripts/check.sh
-```
+| Path | Responsibility |
+| --- | --- |
+| `Sources/MereRunCLI` | Public `mere.run` command tree and local API server |
+| `Sources/MereRunCore` | Model resolution, manifests, native inference, and training |
+| `Sources/AudioCore`, `Sources/AudioCodecs`, `Sources/AudioSTT`, `Sources/AudioTTS`, `Sources/MediaIO` | Audio and media primitives, codecs, speech runtimes, and media input and output |
+| `Sources/MereRunContract` | Typed command capability contract shared by the CLI and Studio |
+| `Sources/MereRunEvaluation` | External evaluation-pack schemas, hashing, and validation |
+| `Sources/MereRunRelayKit` | Portable relay client, executor profiles, and workflow contracts |
+| `apps/macos`, `apps/ios` | Open-source Apple apps and tests |
+| `Tests`, `scripts` | Tests, quality checks, and packaging tools |
+| `docs` | VitePress documentation and runtime guides |
+| `vendor` | Bundled runtime artifacts with provenance in [third-party notices](./THIRD_PARTY_NOTICES.md) |
 
-Optional real-world smoke runs:
-
-```bash
-MERERUN_RUN_E2E=core ./scripts/check.sh
-MERERUN_RUN_E2E=installed ./scripts/check.sh
-```
-
-## Documentation
-
-Start with the docs home:
-
-- Published docs: [`docs.mere.run`](https://docs.mere.run/)
-- [`docs/README.md`](./docs/README.md): navigation hub for the full docs set
-- local docs site: `pnpm install && pnpm docs:dev`
-- production docs build: `pnpm docs:build`
-- GitHub Pages deploy: [`.github/workflows/docs.yml`](./.github/workflows/docs.yml)
-
-Core guides:
-
-- [`docs/getting-started.md`](./docs/getting-started.md): build, first commands, first models
-- [`docs/linux-quickstart.md`](./docs/linux-quickstart.md): Linux CLI package install, first commands, and validation boundaries
-- [`docs/cli.md`](./docs/cli.md): full CLI guide and command reference
-- [`docs/workflows.md`](./docs/workflows.md): portable graphs, job bundles, SSH,
-  relay, worker protocol, and remote run lifecycle
-- [`docs/repository-tour.md`](./docs/repository-tour.md): top-level layout and module ownership
-- [`docs/development-workflow.md`](./docs/development-workflow.md): how to work in the repo day to day
-- [`docs/documentation-style.md`](./docs/documentation-style.md): voice,
-  headings, accessibility, example data, and review checks
-- [`docs/testing.md`](./docs/testing.md): validation layers, smoke runs, and troubleshooting
-- [`docs/runtime/vision.md`](./docs/runtime/vision.md): native SAM 3.1 segmentation and tracking details
-- [`docs/runtime/sfx.md`](./docs/runtime/sfx.md): native Woosh and MMAudio SFX generation, CLAP scoring, and video-conditioned generation details
-
-Configuration and model management:
-
-- [`docs/configuration.md`](./docs/configuration.md): runtime environment variables and supported debug toggles
-- [`docs/model-sources.md`](./docs/model-sources.md): managed model IDs, Hugging Face sources, and model-store behavior
-- [`docs/runtime/model-management.md`](./docs/runtime/model-management.md): model store, manifests, and model commands
-- [`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md): vendored artifact provenance and license notices
-- [`CHANGELOG.md`](./CHANGELOG.md): public release notes and OSS-facing changes
-
-Implementation reading guides:
-
-- [`docs/architecture.md`](./docs/architecture.md): contributor reading order for the runtime families
-- [`docs/internals/cli-and-runtime.md`](./docs/internals/cli-and-runtime.md): how the CLI maps onto the runtime
-- [`docs/internals/source-layout.md`](./docs/internals/source-layout.md): source tree reference
-
-## Repository layout
-
-```text
-mere-run/
-  Package.swift
-  Sources/
-    ...
-  Tests/
-    ...
-  scripts/
-  docs/
-  vendor/
-```
+For an introduction to the repository, start with the
+[documentation hub](./docs/README.md), [repository tour](./docs/repository-tour.md),
+or [architecture map](./docs/architecture.md). For model-specific instructions,
+use the offline cookbooks packaged in `mere.run guide`.
 
 ## Acknowledgments
 
-mere.run exists because the Python MLX community proved that local-first inference on Apple Silicon could feel fast, practical, and joyful. This Swift package is not a replacement for that work; it is a port of those ideas into a public Swift runtime and CLI. The shape of mere.run — what to expose, how to manage models, how to keep inference paths Metal-native — was directly informed by these projects:
+The Python MLX community's reference implementations informed this Swift
+runtime. These projects shaped model loading, inference, media generation,
+and command design:
 
-- [`ml-explore/mlx-lm`](https://github.com/ml-explore/mlx-lm) — language model inference on MLX; the reference for `mere.run text` engine surfaces and chat / code paths.
-- [`Blaizzy/mlx-vlm`](https://github.com/Blaizzy/mlx-vlm) — vision-language models on MLX; informed `mere.run vision` captioning, OCR, and inspection commands.
-- [`Blaizzy/mlx-audio`](https://github.com/Blaizzy/mlx-audio) — TTS / STT / audio codecs on MLX; shaped `mere.run speech` (synthesis, transcription, voice profiles).
-- [`filipstrand/mflux`](https://github.com/filipstrand/mflux) — MLX
-  image-generation reference work for Z-Image and FLUX-family behavior; shaped
-  how `mere.run image` loads components, schedules denoising, decodes VAE
-  output, exposes engines, and validates generated images.
+- [ml-explore/mlx-lm](https://github.com/ml-explore/mlx-lm): Language model
+  inference on MLX, including chat and code workflows.
+- [Blaizzy/mlx-vlm](https://github.com/Blaizzy/mlx-vlm): Vision-language models,
+  including captioning, text recognition, and image inspection.
+- [Blaizzy/mlx-audio](https://github.com/Blaizzy/mlx-audio): Speech synthesis,
+  recognition, codecs, and voice profiles.
+- [filipstrand/mflux](https://github.com/filipstrand/mflux): Image-generation
+  reference work for Z-Image and FLUX models, including model loading, sampling,
+  and image decoding.
 
-When these projects ship runtime artifacts that mere.run links against,
-[`THIRD_PARTY_NOTICES.md`](./THIRD_PARTY_NOTICES.md) records their attribution
-and license terms. The acknowledgments recognize the design discussions,
-reference implementations, and model bring-up work that these repositories
-published before mere.run began its Swift implementation.
+For attribution and license terms for bundled third-party runtime artifacts,
+see [third-party notices](./THIRD_PARTY_NOTICES.md).
