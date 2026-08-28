@@ -12,7 +12,7 @@ final class PluginCommandTests: XCTestCase {
     func testPluginCommandExposesCatalogSubcommands() {
         let commandNames = Set(Plugin.configuration.subcommands.map { $0.configuration.commandName })
 
-        XCTAssertEqual(commandNames, Set(["list", "info", "install", "doctor"]))
+        XCTAssertEqual(commandNames, Set(["list", "info", "install", "doctor", "run", "rollback"]))
     }
 
     func testDefaultCatalogTargetsPublicPluginRepository() {
@@ -81,6 +81,122 @@ final class PluginCommandTests: XCTestCase {
             command,
             "pipx install --force git+https://github.com/sawfwair/mere-run-plugins.git@main#subdirectory=packages/mere-runpod"
         )
+    }
+
+    func testInstallConfirmationKeepsChannelAndForce() throws {
+        let command = try PluginInstall.parse([
+            "mere-doc-tools", "--catalog-url", "/tmp/plugin review.json", "--force",
+        ])
+
+        XCTAssertEqual(
+            command.confirmationCommand(channel: "review"),
+            "mere.run plugin install mere-doc-tools --catalog-url '/tmp/plugin review.json' --channel review --yes --force"
+        )
+    }
+
+    func testForcedInstallRejectsAffectedUVEnvironmentBeforeRunningInstaller() {
+        var executed = false
+        let command = workflowInstallCommand(force: true)
+
+        XCTAssertThrowsError(try command.run(
+            package: "mere-workflow-tools",
+            findExecutable: { _ in URL(fileURLWithPath: "/fixture/pipx") },
+            capture: pipxCapture(metadata: pipxMetadata(backend: "uv"), version: "1.15.0\n"),
+            execute: { _, _ in executed = true }
+        )) { error in
+            let message = String(describing: error)
+            XCTAssertTrue(message.contains("pipx 1.15.0"))
+            XCTAssertTrue(message.contains("mere-workflow-tools"))
+            XCTAssertTrue(message.contains("1.16.0 or later"))
+            XCTAssertTrue(message.contains("brew upgrade pipx"))
+            XCTAssertTrue(message.contains("plugin has not been changed"))
+        }
+        XCTAssertFalse(executed)
+    }
+
+    func testForcedInstallAllowsFixedPipxVersionsWithoutChangingArguments() throws {
+        let command = workflowInstallCommand(force: true)
+        for version in ["1.16.0\n", "1.16.1", "1.100.0", "2.0.0"] {
+            var arguments: [String] = []
+            try command.run(
+                package: "mere-workflow-tools",
+                findExecutable: { _ in URL(fileURLWithPath: "/fixture/pipx") },
+                capture: pipxCapture(metadata: pipxMetadata(backend: "uv"), version: version),
+                execute: { executable, args in
+                    XCTAssertEqual(executable, "pipx")
+                    arguments = args
+                }
+            )
+            XCTAssertEqual(arguments, ["install", "--force", command.install.spec], version)
+        }
+    }
+
+    func testNormalInstallDoesNotProbePipxCompatibility() throws {
+        let command = workflowInstallCommand(force: false)
+        var arguments: [String] = []
+
+        try command.run(
+            package: "mere-workflow-tools",
+            findExecutable: { _ in URL(fileURLWithPath: "/fixture/pipx") },
+            capture: { _, _ in
+                XCTFail("A normal install must not probe forced-reinstall compatibility.")
+                return Data()
+            },
+            execute: { _, args in arguments = args }
+        )
+
+        XCTAssertEqual(arguments, ["install", command.install.spec])
+    }
+
+    func testForcedInstallAllowsFreshPipAndLegacyEnvironmentsWithoutVersionProbe() throws {
+        let snapshots = [
+            Data(#"{"venvs":{}}"#.utf8),
+            pipxMetadata(backend: "pip"),
+            pipxMetadata(backend: nil),
+            pipxMetadata(backend: "uv", package: "unrelated-tools"),
+        ]
+        for metadata in snapshots {
+            var executed = false
+            try workflowInstallCommand(force: true).run(
+                package: "mere-workflow-tools",
+                findExecutable: { _ in URL(fileURLWithPath: "/fixture/pipx") },
+                capture: { executable, arguments in
+                    XCTAssertEqual(executable, "pipx")
+                    XCTAssertEqual(arguments, ["list", "--json"])
+                    return metadata
+                },
+                execute: { _, _ in executed = true }
+            )
+            XCTAssertTrue(executed)
+        }
+    }
+
+    func testForcedUVInstallRequiresARecognizableStableVersion() {
+        for version in ["", "unknown", "1.16.0rc1", "1.16.0\nother output"] {
+            var executed = false
+            XCTAssertThrowsError(try workflowInstallCommand(force: true).run(
+                package: "mere-workflow-tools",
+                findExecutable: { _ in URL(fileURLWithPath: "/fixture/pipx") },
+                capture: pipxCapture(metadata: pipxMetadata(backend: "uv"), version: version),
+                execute: { _, _ in executed = true }
+            )) { error in
+                XCTAssertTrue(String(describing: error).contains("Cannot verify pipx compatibility"))
+            }
+            XCTAssertFalse(executed)
+        }
+    }
+
+    func testForcedInstallDoesNotRunAfterMetadataInspectionFails() {
+        var executed = false
+        XCTAssertThrowsError(try workflowInstallCommand(force: true).run(
+            package: "mere-workflow-tools",
+            findExecutable: { _ in URL(fileURLWithPath: "/fixture/pipx") },
+            capture: pipxCapture(metadata: Data(#"{"venvs":[]}"#.utf8), version: "1.15.0"),
+            execute: { _, _ in executed = true }
+        )) { error in
+            XCTAssertTrue(String(describing: error).contains("Run pipx list --json"))
+        }
+        XCTAssertFalse(executed)
     }
 
     func testCatalogSnapshotAddsVerifiedInstallationStateWithoutDroppingCatalogFields() throws {
@@ -214,6 +330,47 @@ final class PluginCommandTests: XCTestCase {
             try? FileManager.default.removeItem(at: directory)
         }
         return catalogURL
+    }
+
+    private func workflowInstallCommand(force: Bool) -> PluginInstallCommand {
+        PluginInstallCommand(
+            install: PluginCatalogInstall(
+                manager: "pipx",
+                spec: "git+https://github.com/sawfwair/mere-run-plugins.git@main#subdirectory=packages/mere-workflow-tools",
+                ref: "main"
+            ),
+            force: force
+        )
+    }
+
+    private func pipxCapture(
+        metadata: Data,
+        version: String
+    ) -> (String, [String]) throws -> Data {
+        { executable, arguments in
+            XCTAssertEqual(executable, "pipx")
+            switch arguments {
+            case ["list", "--json"]: return metadata
+            case ["--version"]: return Data(version.utf8)
+            default:
+                XCTFail("Unexpected pipx probe: \(arguments)")
+                return Data()
+            }
+        }
+    }
+
+    private func pipxMetadata(backend: String?, package: String = "mere-workflow-tools") -> Data {
+        let backendField = backend.map { "\"backend\": \"\($0)\"," } ?? ""
+        return Data("""
+        {"venvs": {"\(package)": {"metadata": {
+          \(backendField)
+          "main_package": {
+            "package": "\(package)",
+            "package_or_url": "\(package)",
+            "pip_args": []
+          }
+        }}}}
+        """.utf8)
     }
 }
 

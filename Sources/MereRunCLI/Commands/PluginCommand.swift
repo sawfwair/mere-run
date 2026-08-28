@@ -13,6 +13,8 @@ struct Plugin: ParsableCommand {
             PluginInfo.self,
             PluginInstall.self,
             PluginDoctor.self,
+            PluginRun.self,
+            PluginRollback.self,
         ]
     )
 }
@@ -126,6 +128,15 @@ struct PluginInstall: ParsableCommand {
     @Flag(name: [.long], help: "Pass --force to pipx install.")
     var force: Bool = false
 
+    @Flag(name: .long, help: "Use the catalog's pipx source install instead of an advertised signed bundle.")
+    var source: Bool = false
+
+    @Option(name: .long, help: "Explicit signed bundle manifest URL or local path. Publisher verification is still required.")
+    var bundleManifest: String?
+
+    @Option(name: .long, help: "Local signed bundle DMG for offline installation; its signed hash must match.")
+    var bundleArchive: String?
+
     func run() throws {
         let catalog = try PluginCatalogClient.load(catalogURL: catalogURL)
         let plugin = try catalog.requirePlugin(id)
@@ -133,16 +144,47 @@ struct PluginInstall: ParsableCommand {
         let install = try plugin.install(channel: resolvedChannel)
         let command = PluginInstallCommand(install: install, force: force)
 
+        guard !source || (bundleManifest == nil && bundleArchive == nil) else {
+            throw ValidationError("--source cannot be combined with bundle options.")
+        }
+        let bundle = source ? nil : bundleManifest ?? install.bundles?[PluginBundleInstaller.platform]
+        if !source, install.bundles?.isEmpty == false, bundle == nil {
+            throw ValidationError("No signed bundle is available for this platform. Use --source to explicitly install with pipx.")
+        }
+        guard bundleArchive == nil || bundle != nil else {
+            throw ValidationError("--bundle-archive requires a signed bundle manifest.")
+        }
+        if let bundle {
+            guard bundleManifest != nil || URL(string: bundle)?.scheme == "https" else {
+                throw ValidationError("Catalog bundle manifests must use HTTPS. Use --bundle-manifest for an explicit local file.")
+            }
+            guard yes else {
+                print("Install signed bundle for \(plugin.package) from \(bundle).")
+                print("Verify publisher, platform, notarization, and entrypoints before activation; retain the previous version.")
+                print("  \(confirmationCommand(channel: resolvedChannel))")
+                return
+            }
+            try PluginBundleInstaller.install(plugin: plugin, source: bundle, archive: bundleArchive,
+                                               allowLocalManifest: bundleManifest != nil)
+            return
+        }
+
         if !yes {
             print("Install command:")
             print("  \(command.render())")
             print("")
             print("Run with --yes to execute it:")
-            print("  \(CLICommandDisplay.command("plugin install \(ShellCommand.quote(id)) --channel \(ShellCommand.quote(resolvedChannel)) --yes"))")
+            print("  \(confirmationCommand(channel: resolvedChannel))")
             return
         }
 
-        try command.run()
+        guard try PluginBundleStore.standard.state(plugin.package) == nil else {
+            throw ValidationError(
+                "A signed bundle is active for \(plugin.package). Supply its signed release manifest or use plugin rollback. "
+                    + "A pipx source install cannot replace an active managed bundle; existing PATH commands remain available."
+            )
+        }
+        try command.run(package: plugin.package)
         let manifest = try PluginVerifier.verify(entrypoint: plugin.entrypoint)
         guard manifest.name == plugin.id else {
             throw ValidationError(
@@ -154,6 +196,18 @@ struct PluginInstall: ParsableCommand {
         }
         print("Installed \(plugin.id) with \(install.manager).")
         print("Verified \(plugin.entrypoint) manifest version \(manifest.version).")
+    }
+
+    func confirmationCommand(channel: String) -> String {
+        let catalogArgument = catalogURL.map { " --catalog-url \(ShellCommand.quote($0))" } ?? ""
+        let forceArgument = force ? " --force" : ""
+        let sourceArgument = source ? " --source" : ""
+        let manifestArgument = bundleManifest.map { " --bundle-manifest \(ShellCommand.quote($0))" } ?? ""
+        let archiveArgument = bundleArchive.map { " --bundle-archive \(ShellCommand.quote($0))" } ?? ""
+        return CLICommandDisplay.command(
+            "plugin install \(ShellCommand.quote(id))\(catalogArgument) --channel \(ShellCommand.quote(channel))"
+                + " --yes\(forceArgument)\(sourceArgument)\(manifestArgument)\(archiveArgument)"
+        )
     }
 }
 
@@ -241,6 +295,7 @@ struct PluginCatalogInstall: Codable, Equatable {
     let manager: String
     let spec: String
     let ref: String?
+    var bundles: [String: String]?
 }
 
 struct PluginCatalogSnapshot: Codable, Equatable {
@@ -494,11 +549,20 @@ struct PluginInstallCommand {
         }
     }
 
-    func run() throws {
+    func run(
+        package: String,
+        findExecutable: (String) -> URL? = PluginProcess.which,
+        capture: (String, [String]) throws -> Data = {
+            try PluginProcess.captureExecutable($0, arguments: $1)
+        },
+        execute: (String, [String]) throws -> Void = {
+            try PluginProcess.runExecutable($0, arguments: $1)
+        }
+    ) throws {
         guard install.manager == "pipx" else {
             throw ValidationError("Unsupported plugin install manager: \(install.manager)")
         }
-        guard PluginProcess.which("pipx") != nil else {
+        guard findExecutable("pipx") != nil else {
             throw ValidationError(
                 """
                 pipx is required to install this plugin.
@@ -508,10 +572,11 @@ struct PluginInstallCommand {
         }
         var args = ["install"]
         if force {
+            try PluginPipxInstallCompatibility.validateForcedInstall(package: package, capture: capture)
             args.append("--force")
         }
         args.append(install.spec)
-        try PluginProcess.runExecutable("pipx", arguments: args)
+        try execute("pipx", args)
     }
 }
 
@@ -528,11 +593,17 @@ enum PluginVerifier {
 
 enum PluginProcess {
     static func which(_ name: String) -> URL? {
+        try? resolve(name)
+    }
+
+    static func resolve(_ name: String) throws -> URL? {
         if name.contains("/") {
             let url = URL(fileURLWithPath: NSString(string: name).expandingTildeInPath).standardizedFileURL
             guard FileManager.default.isExecutableFile(atPath: url.path) else { return nil }
             return url
         }
+        // A broken managed installation must never fall through to a different PATH executable.
+        if let managed = try PluginBundleStore.standard.resolve(name) { return managed }
         let process = Process()
         process.executableURL = URL(fileURLWithPath: "/usr/bin/which")
         process.arguments = [name]
@@ -550,7 +621,7 @@ enum PluginProcess {
     }
 
     static func runExecutable(_ executable: String, arguments: [String]) throws {
-        guard let url = which(executable) else {
+        guard let url = try resolve(executable) else {
             throw ValidationError("Executable not found on PATH: \(executable)")
         }
         let process = Process()
@@ -567,27 +638,10 @@ enum PluginProcess {
     }
 
     static func captureExecutable(_ executable: String, arguments: [String]) throws -> Data {
-        guard let url = which(executable) else {
+        guard let url = try resolve(executable) else {
             throw ValidationError("Executable not found on PATH: \(executable)")
         }
-        let process = Process()
-        process.executableURL = url
-        process.arguments = arguments
-        let output = Pipe()
-        let errors = Pipe()
-        process.standardOutput = output
-        process.standardError = errors
-        try process.run()
-        process.waitUntilExit()
-        let data = output.fileHandleForReading.readDataToEndOfFile()
-        let errorData = errors.fileHandleForReading.readDataToEndOfFile()
-        guard process.terminationStatus == 0 else {
-            let detail = String(decoding: errorData, as: UTF8.self)
-                .trimmingCharacters(in: .whitespacesAndNewlines)
-            let suffix = detail.isEmpty ? "" : ": \(String(detail.prefix(500)))"
-            throw ValidationError("\(executable) exited with status \(process.terminationStatus)\(suffix)")
-        }
-        return data
+        return try PluginBundleIO.capture(url.path, arguments)
     }
 }
 
