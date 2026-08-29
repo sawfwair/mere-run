@@ -529,7 +529,8 @@ Engine compatibility:
   or the pinned MLX 4-bit conversion. Both accept function tools, one
   local/base64 image content part per message, and structured JSON output; both
   default to thinking and the published 1.0/0.95/20 sampling. Pull the 55.59 GB
-  BF16 lane or 19.47 GB 4-bit-plus-MTP lane explicitly before serving it.
+  BF16 lane or 19.49 GB 4-bit lane with its MTP and official vision components
+  explicitly before serving it.
 - `text-chat-bonsai-27b-1bit` and `text-chat-bonsai-27b-2bit`: use the same
   native Qwen-family serving engine for Prism ML's dense packed binary and
   ternary 27B checkpoints. They accept function tools and one local/base64

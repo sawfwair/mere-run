@@ -88,11 +88,19 @@ are installed.
 ## Release status
 
 On August 29, 2026, the published release was
-[v0.46.0](https://github.com/sawfwair/mere-run/releases/tag/v0.46.0).
+[v0.46.1](https://github.com/sawfwair/mere-run/releases/tag/v0.46.1).
 The following sections summarize current and previous release packages.
 
 Model names use Q2, Q4, and Q8 for 2-bit, 4-bit, and 8-bit quantization.
 BF16 refers to bfloat16, a 16-bit floating-point format.
+
+### Release v0.46.1
+
+- Restored image inference for the optimized Qwen3.8 27B Q4 package by adding
+  its pinned official vision component without replacing the optimized text
+  target or MTP companion.
+- Restored LTX 2.3 text-to-video and audio-to-video loading while preserving
+  the separate LTX 2.5 checkpoint layout.
 
 ### Release v0.46.0
 
@@ -481,7 +489,7 @@ uses `sudo` only if the destination requires it. For app integrations, see the
 ### Install on Linux
 
 Linux packages contain the headless CLI and runtime assets, not macOS Studio.
-Release v0.46.0 provides CUDA x86_64 tarballs and Debian packages. Its release
+Release v0.46.1 provides CUDA x86_64 tarballs and Debian packages. Its release
 smoke test ran on an RTX 3080 Ti with Ubuntu 24.04. Hosted CPU tests and that
 CUDA test don't establish every model's compatibility on every Linux host.
 

@@ -486,9 +486,10 @@ Qwen3.8-Flash-Next profiles. Set this to
 window is large enough; set it to `0`, `false`, or `no` to disable MTP. Any other
 value, including unset, uses the model-specific policy. Qwen3.8's dense head is
 embedded in the BF16 checkpoint; `vision-chat-q38-27b-4bit` mounts the matching
-4-bit/group-64 MLX Fast proposal head with a 2-bit shortlist readout. The Q4
-target enables serial-exact MTP by default; BF16 remains opt-in. Qwen3.6 hybrid
-MoE retains its adaptive default. Flash-Next uses its bundled
+4-bit/group-64 MLX Fast proposal head with a 2-bit shortlist readout and mounts
+its pinned official vision tower separately under `vision/`. The Q4 target
+enables serial-exact MTP by default; BF16 remains opt-in. Qwen3.6 hybrid MoE
+retains its adaptive default. Flash-Next uses its bundled
 one-layer head by default for greedy short-prompt decode after exact target
 verification and real-checkpoint speed qualification. When continuous batching is enabled, an eligible
 MTP request takes the speculative lane only if no peer is already admitted. A

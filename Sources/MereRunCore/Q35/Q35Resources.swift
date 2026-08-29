@@ -127,6 +127,15 @@ public struct Q35Resources: Sendable, Hashable {
     public static let q38MTP4BitUpstreamRepoId = "morgan/qwen38-27b-mtp-r20k-lr3-q4-g64-q2-rerank"
     public static let q38MTP4BitUpstreamRevision = "fd4a99c590dd6e468c0e2a28168c235e32151a4b"
     public static let q38MTPComponentSnapshotPatterns = ["model.safetensors"]
+    public static let q38VisionComponentPath = "vision"
+    public static let q38VisionComponentSnapshotPatterns = [
+        "config.json",
+        "model.safetensors.index.json",
+        "model-00001-of-00018.safetensors",
+        "preprocessor_config.json",
+        "video_preprocessor_config.json",
+    ]
+    public static let q38VisionComponentEstimatedDownloadBytes: Int64 = 3_967_000_000
     public static let q38LicenseComponentPath = "licenses/qwen3.8"
     public static let q38LicenseComponentSnapshotPatterns = ["LICENSE"]
     public static let q38TwentySevenBContextLength = 262_144
@@ -400,6 +409,20 @@ public struct Q35Resources: Sendable, Hashable {
             isDirectory: true
         )
         return Self.q38MTPComponentSnapshotPatterns
+            .map { componentRoot.appendingPathComponent($0, isDirectory: false) }
+            .filter { !fileManager.fileExists(atPath: $0.path) }
+    }
+
+    public var q38VisionComponentResources: Q35Resources {
+        Q35Resources(rootURL: rootURL.appendingPathComponent(
+            Self.q38VisionComponentPath,
+            isDirectory: true
+        ))
+    }
+
+    public func validateQ38VisionComponent(fileManager: FileManager = .default) -> [URL] {
+        let componentRoot = q38VisionComponentResources.rootURL
+        return Self.q38VisionComponentSnapshotPatterns
             .map { componentRoot.appendingPathComponent($0, isDirectory: false) }
             .filter { !fileManager.fileExists(atPath: $0.path) }
     }

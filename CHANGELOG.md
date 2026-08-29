@@ -6,6 +6,24 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.46.1 - 2026-08-29
+
+This corrective release restores the advertised vision and video contracts
+that the full installed-model release gate caught before v0.46.0 publication.
+
+### Text
+
+- fixed `vision-chat-q38-27b-4bit` image inference by mounting the pinned
+  official Qwen3.8 vision configuration and first indexed weight shard under
+  `vision/`. The optimized EigenLabs language target and its MTP companion
+  remain unchanged.
+
+### Video
+
+- fixed LTX 2.3 text-to-video and audio-to-video checkpoint loading by matching
+  that release's biased video feed-forward layers. LTX 2.5 retains its
+  bias-free layer layout.
+
 ## 0.46.0 - 2026-08-29
 
 This release expands Qwen3.8 Flash Next with long-context QSA, a smaller

@@ -233,7 +233,7 @@ final class MereRunModelManifestTests: MereRunCoreTestCase {
         )
     }
 
-    func testQ38TwentySevenB4BitTemplateRecordsTargetAndMTPSources() throws {
+    func testQ38TwentySevenB4BitTemplateRecordsTargetMTPAndVisionSources() throws {
         let manifest = MereRunModelManifest.template(
             for: .q38TwentySevenB4Bit,
             createdAt: Date(timeIntervalSince1970: 0)
@@ -252,12 +252,15 @@ final class MereRunModelManifestTests: MereRunCoreTestCase {
             "\(Q35Resources.q38TwentySevenB4BitUpstreamRepoId)"
                 + "@\(Q35Resources.q38TwentySevenB4BitUpstreamRevision)"
         )
-        XCTAssertEqual(manifest.sources?.count, 3)
+        XCTAssertEqual(manifest.sources?.count, 4)
         XCTAssertEqual(manifest.sources?.first?.role, "primary")
         XCTAssertEqual(manifest.sources?.first?.repository, Q35Resources.q38TwentySevenB4BitUpstreamRepoId)
         XCTAssertEqual(manifest.sources?[1].role, "component")
         XCTAssertEqual(manifest.sources?[1].repository, Q35Resources.q38MTP4BitUpstreamRepoId)
         XCTAssertEqual(manifest.sources?[1].destinationPath, Q35Resources.q38MTPComponentPath)
+        XCTAssertEqual(manifest.sources?[2].role, "component")
+        XCTAssertEqual(manifest.sources?[2].repository, Q35Resources.q38TwentySevenBUpstreamRepoId)
+        XCTAssertEqual(manifest.sources?[2].destinationPath, Q35Resources.q38VisionComponentPath)
         XCTAssertEqual(manifest.sources?.last?.role, "component")
         XCTAssertEqual(manifest.sources?.last?.repository, Q35Resources.q38TwentySevenBUpstreamRepoId)
         XCTAssertEqual(manifest.sources?.last?.destinationPath, Q35Resources.q38LicenseComponentPath)

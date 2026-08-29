@@ -1799,6 +1799,14 @@ public enum ManagedModelCatalog {
                     )
                 ),
                 MountedHubFallbackConfig(
+                    destinationPath: Q35Resources.q38VisionComponentPath,
+                    hubFallback: HubFallbackConfig(
+                        repoId: Q35Resources.q38TwentySevenBUpstreamRepoId,
+                        revision: Q35Resources.q38TwentySevenBUpstreamRevision,
+                        patterns: Q35Resources.q38VisionComponentSnapshotPatterns
+                    )
+                ),
+                MountedHubFallbackConfig(
                     destinationPath: Q35Resources.q38LicenseComponentPath,
                     hubFallback: HubFallbackConfig(
                         repoId: Q35Resources.q38TwentySevenBUpstreamRepoId,
@@ -1811,7 +1819,8 @@ public enum ManagedModelCatalog {
             upstreamRevision: Q35Resources.q38TwentySevenB4BitUpstreamRevision,
             validationKind: .q35,
             runtimeAutoDownloadAllowed: false,
-            estimatedDownloadBytes: Q35Resources.q38TwentySevenB4BitEstimatedDownloadBytes,
+            estimatedDownloadBytes: Q35Resources.q38TwentySevenB4BitEstimatedDownloadBytes
+                + Q35Resources.q38VisionComponentEstimatedDownloadBytes,
             defaultCLICommands: [
                 "text chat",
                 "api serve",
@@ -4059,6 +4068,7 @@ public extension ManagedModelSpec {
             var missing = resources.validate(fileManager: fileManager)
             if id == Q35Resources.q38TwentySevenB4BitModelId {
                 missing.append(contentsOf: resources.validateQ38MTPComponent(fileManager: fileManager))
+                missing.append(contentsOf: resources.validateQ38VisionComponent(fileManager: fileManager))
             }
             return missing
         case .q35MTPAssistant:
