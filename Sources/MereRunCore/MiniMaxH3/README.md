@@ -23,7 +23,7 @@ The default schedule adapts to packed-row cost at 9, 16, or 21 points. The
 maximum acceleration mode caps automatic schedules at 12 points (11 model
 evaluations). A
 source-bound cache pack stores exact production schedules at 5, 9, 12, 16, 21,
-and 31 points for shifts 12/3 plus the LightX2V 5-point 6/3 schedule. Custom
+and 31 points for shifts 12/3 plus the LightX2V 5- and 9-point 6/3 schedules. Custom
 schedules resample the densest table and emit a visible not-bit-exact
 diagnostic. The converted transformer stores global Q/K/V slabs; the
 unmodified video VAE retains the released per-head interleave.
@@ -44,7 +44,8 @@ the GPU residency set.
 
 The checksum-pinned `minimax-h3-turbo-4step`,
 `minimax-h3-lightx2v-4step`, `minimax-h3-lightx2v-8step-v1`, and
-`minimax-h3-lightx2v-4step-v1-768p` LoRAs run with compact BF16 or affine Q8
+`minimax-h3-lightx2v-4step-v1-768p`, and
+`minimax-h3-lightx2v-8step-v1-768p` LoRAs run with compact BF16 or affine Q8
 FL2VA and reject the legacy Q4 package. `minimax-h3-lightx2v-ref2v-4step-v0.1`
 instead targets Ref2VA. Ref2VA behavior is unchanged: its managed package is
 expanded to resident BF16 before the adapter is installed, so this recipe
@@ -58,11 +59,15 @@ order. The EMA-850 adapter's 51 AdaLN pairs augment the selected in-memory
 source-bound cache from `silu(cached time embedding)`; the 26 GB base
 projections are never restored or fused. Adapter use disables the incompatible
 affine-Q8 exact kernels but retains blockwise compilation, adaptive reuse, and
-dynamic-sparse scheduling. Neither
-v1.0 recipe is treated as the legacy four-step release: the 8-step adapter
+dynamic-sparse scheduling. The v1.0 recipes don't use the legacy four-step
+defaults. The 8-step adapter
 defaults to nine schedule points with shifts 12/3 and also accepts its
-published five-point fallback, while the 768p adapter uses five points, shifts
-6/3, and alpha 128. The recommended 768p canvas is 1344x768. The Ref2VA v0.1
+published five-point fallback. The four-step 768p adapter uses five points,
+shifts 6/3, and alpha 128. The eight-step 768p adapter uses nine points, shifts
+6/3, and alpha 8, and it doesn't accept a five-point fallback. The recommended
+768p canvas is 1344x768. The pinned compact roots select an exact nine-point
+shifts-6/3 AdaLN table for this recipe. Full BF16 source roots compute the same
+table from their AdaLN weights. The Ref2VA v0.1
 recipe uses five schedule points, shifts 12/3, and alpha 8. FL2VA adapters
 cannot be combined with Ref2VA references, and the Ref2VA adapter requires
 them. Adapters retain blockwise compilation, dynamic-sparse attention, and the
@@ -132,14 +137,14 @@ quality-sensitive generation.
 
 The compact maximum-fidelity BF16 and smaller affine Q8/group-64 packages are
 published separately as
-`Sawfwair/MiniMax-H3-FL2VA-MLX-BF16@6f2c1edb4d31d9110d4a51457ba1d6401a05dfd0`
+`Sawfwair/MiniMax-H3-FL2VA-MLX-BF16@4ce4b1d870f7b1b0c75672fd4f2867c1f5df7b5f`
 and
-`Sawfwair/MiniMax-H3-FL2VA-MLX-8bit@57a926c2422e09c8563cd2e0c43b2e94ef791de4`.
+`Sawfwair/MiniMax-H3-FL2VA-MLX-8bit@86500cb6ebec22c006597e41840b26ef1099fdd7`.
 Both use only the same pinned official
 source, keep the Q8 conditioner, FP16 video VAE, and FP32 audio VAE, and omit
 the schedule-only AdaLN, timestep-MLP, and reconstructed RoPE weights. Their
 source-bound cache pack contains exact 5, 9, 12, 16, 21, and 31-point tables at
-shifts 12/3 plus the LightX2V 5-point 6/3 table. Custom schedules interpolate
+shifts 12/3 plus the LightX2V 5- and 9-point 6/3 tables. Custom schedules interpolate
 from the densest table with a visible not-bit-exact diagnostic.
 The explicit-pull Ref2VA package is published as
 `Sawfwair/MiniMax-H3-Ref2VA-MLX-8bit` and pinned to Hub commit

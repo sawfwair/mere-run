@@ -268,9 +268,9 @@ public struct MiniMaxH3Resources: Sendable {
     public static let legacyBF16ArtifactRepository = "pipenetwork/MiniMax-H3-MLX-bf16"
     public static let legacyBF16ArtifactRevision = "1486555759eed9e3037edf29f9e055a0713bab2f"
     public static let compactBF16ArtifactRepository = "Sawfwair/MiniMax-H3-FL2VA-MLX-BF16"
-    public static let compactBF16ArtifactRevision = "6f2c1edb4d31d9110d4a51457ba1d6401a05dfd0"
+    public static let compactBF16ArtifactRevision = "4ce4b1d870f7b1b0c75672fd4f2867c1f5df7b5f"
     public static let q8ArtifactRepository = "Sawfwair/MiniMax-H3-FL2VA-MLX-8bit"
-    public static let q8ArtifactRevision = "57a926c2422e09c8563cd2e0c43b2e94ef791de4"
+    public static let q8ArtifactRevision = "86500cb6ebec22c006597e41840b26ef1099fdd7"
     public static let ref2vaArtifactRepository = "Sawfwair/MiniMax-H3-Ref2VA-MLX-8bit"
     public static let ref2vaArtifactRevision = "61dc387ef1a7166425cdacd63c2340598dcc364f"
     public static let bf16TransformerDirectory = "transformer-bf16"
@@ -311,6 +311,7 @@ public struct MiniMaxH3Resources: Sendable {
     public static let cachePackFiles = [MiniMaxH3AdaLNCachePack.filename]
         + MiniMaxH3AdaLNCachePack.productionSchedules.map(\.filename)
     public static let compactBF16AndQ8ArtifactFiles = requiredFiles + cachePackFiles + [
+        "adaln_cache.refresh.json",
         "SOURCE_MANIFEST.json",
         "transformer.conversion.json",
         "SHA256SUMS",
@@ -525,6 +526,7 @@ public struct MiniMaxH3Resources: Sendable {
 
     func validateCompactCachePack(fileManager: FileManager = .default) -> [String] {
         let provenanceFiles = [
+            "adaln_cache.refresh.json",
             "SOURCE_MANIFEST.json",
             "transformer.conversion.json",
             "SHA256SUMS",

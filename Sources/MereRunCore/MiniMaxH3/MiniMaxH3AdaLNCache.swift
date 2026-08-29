@@ -283,7 +283,9 @@ struct MiniMaxH3AdaLNCachePack: Codable, Sendable {
     static let format = "mere.run.minimax-h3-adaln-cache-pack"
     static let productionSchedules = [5, 9, 12, 16, 21, 31].map {
         Schedule(pointCount: $0, videoFlowShift: 12, audioFlowShift: 3)
-    } + [Schedule(pointCount: 5, videoFlowShift: 6, audioFlowShift: 3)]
+    } + [5, 9].map {
+        Schedule(pointCount: $0, videoFlowShift: 6, audioFlowShift: 3)
+    }
 
     let schemaVersion: Int
     let format: String

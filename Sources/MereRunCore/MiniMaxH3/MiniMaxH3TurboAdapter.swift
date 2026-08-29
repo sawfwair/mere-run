@@ -52,6 +52,16 @@ public enum MiniMaxH3TurboAdapter {
         lightX2VAlpha: 8
     )
 
+    public static let lightX2VEightStepV1_768pRecipe = InferenceRecipe(
+        name: "lightx2v-v1-8-step-768p",
+        task: .fl2va,
+        defaultSchedulePointCount: 9,
+        supportedSchedulePointCounts: [9],
+        videoFlowShift: 6,
+        audioFlowShift: 3,
+        lightX2VAlpha: 8
+    )
+
     public static let lightX2VFourStepV1_768pRecipe = InferenceRecipe(
         name: "lightx2v-v1-4-step-768p",
         task: .fl2va,
@@ -82,6 +92,8 @@ public enum MiniMaxH3TurboAdapter {
             lightX2VRef2VFourStepV01Recipe
         case "minimax_h3_fl2v_turbo_8step_v1.0_bf16.safetensors":
             lightX2VEightStepV1Recipe
+        case "minimax_h3_fl2v_turbo_8step_v1.0_768p_bf16.safetensors":
+            lightX2VEightStepV1_768pRecipe
         case "minimax_h3_fl2v_turbo_4step_v1.0_768p_bf16.safetensors":
             lightX2VFourStepV1_768pRecipe
         default:

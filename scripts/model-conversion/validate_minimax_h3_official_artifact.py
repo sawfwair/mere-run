@@ -20,6 +20,21 @@ ADALN_SOURCE_TENSOR_BYTES = 26_142_079_488
 ADALN_SOURCE_TENSOR_CLOSURE_SHA256 = (
     "e2ccc0cab72b9183a0347e3999f4559cdc315b7b363a5fe9196890dd315f5a40"
 )
+ADALN_REFRESH_SOURCE_TENSOR_CLOSURE_SHA256 = (
+    "848573ca2bb9501fbd3f9df0b98dc1050c92d52ad06ec1557a57241fbbb714c8"
+)
+ADALN_REFRESH_RECEIPT_SHA256 = (
+    "5a4958385db13c007bf798856eabdb999ab1e142aa518a747cdf7234f4d16a9f"
+)
+ADALN_REFRESH_INDEX_SHA256 = (
+    "89e0f163b4cdd42e1c9cbde71c033c14002fc64919e47792f77928de352654c9"
+)
+ADALN_REFRESH_CACHE_SHA256 = (
+    "eb2afcce3dc917479129ea0e9accece55c27057991c2c48387b335da0e222854"
+)
+ADALN_REFRESH_CACHE_TENSOR_CLOSURE_SHA256 = (
+    "af871d020e8a77487f1da831503929c67aa4f658e58c8b62e6fbffa83a60aa24"
+)
 LICENSE_SHA256 = "59b99642b95ea21630e311198ddbfffbfe05aadba0c2f5d884cbdf4efcc90f44"
 LICENSE_BYTES = 17_604
 EXPECTED_QUANTIZER_SELF_TEST = {
@@ -43,6 +58,7 @@ EXPECTED_QKV_REORDER_SELF_TEST = {
 CACHE_SCHEDULES = (
     *((point_count, 12.0, 3.0) for point_count in (5, 9, 12, 16, 21, 31)),
     (5, 6.0, 3.0),
+    (9, 6.0, 3.0),
 )
 
 
@@ -66,6 +82,7 @@ RUNTIME_FILES = {
     "NOTICE",
     "SHA256SUMS",
     "SOURCE_MANIFEST.json",
+    "adaln_cache.refresh.json",
     "adaln_cache.index.json",
     "audio_vae.safetensors",
     "config.json",
@@ -269,6 +286,72 @@ def verify_vaes_and_cache(root: Path) -> None:
     require(observed_schedules == expected_schedules, "AdaLN production schedule closure differs")
 
 
+def verify_adaln_refresh(root: Path) -> None:
+    receipt_path = root / "adaln_cache.refresh.json"
+    require(sha256_file(receipt_path) == ADALN_REFRESH_RECEIPT_SHA256,
+            "AdaLN refresh receipt SHA-256 differs")
+    receipt = load_json(receipt_path)
+    require(receipt.get("schema_version") == 1, "wrong AdaLN refresh schema")
+    require(receipt.get("format") == "mere.run.minimax-h3-adaln-cache-pack-refresh",
+            "wrong AdaLN refresh format")
+    require(receipt.get("evaluation_backend") == "mlx-metal",
+            "AdaLN refresh was not evaluated on MLX Metal")
+    require(receipt.get("source_repository") == SOURCE_REPOSITORY,
+            "wrong AdaLN refresh source repository")
+    require(receipt.get("source_revision") == SOURCE_REVISION,
+            "wrong AdaLN refresh source revision")
+    require(receipt.get("source_index_sha256") ==
+            "fb457a26ffa6294660e249b0ddd03a337f2e5393f770b5c34c8b8f90a29a7efb",
+            "wrong AdaLN refresh source index")
+    require(receipt.get("source_tensor_count") == ADALN_SOURCE_TENSOR_COUNT,
+            "wrong AdaLN refresh source tensor count")
+    require(receipt.get("source_tensor_bytes") == ADALN_SOURCE_TENSOR_BYTES,
+            "wrong AdaLN refresh source tensor byte count")
+    require(receipt.get("source_tensor_closure_sha256") ==
+            ADALN_REFRESH_SOURCE_TENSOR_CLOSURE_SHA256,
+            "wrong AdaLN refresh source tensor closure")
+    require(receipt.get("baseline_tensor_closures_matched") is True,
+            "AdaLN refresh did not reproduce every baseline tensor closure")
+    require(receipt.get("hardware", {}).get("chip") == "Apple M4 Max",
+            "wrong AdaLN refresh hardware")
+    require(receipt.get("software", {}).get("mlx") == "0.32.1",
+            "wrong AdaLN refresh MLX version")
+
+    source_tensors = receipt.get("source_tensors")
+    require(isinstance(source_tensors, list)
+            and len(source_tensors) == ADALN_SOURCE_TENSOR_COUNT,
+            "wrong AdaLN refresh source tensor inventory")
+    require(sum(item.get("byte_count", 0) for item in source_tensors) ==
+            ADALN_SOURCE_TENSOR_BYTES,
+            "wrong AdaLN refresh source tensor inventory bytes")
+    require(all(re.fullmatch(r"[0-9a-f]{64}", item.get("sha256", "")) is not None
+                for item in source_tensors),
+            "bad AdaLN refresh source tensor hash")
+
+    baseline_hashes = receipt.get("published_baseline_cache_sha256")
+    baseline_files = CACHE_FILES - {"adaln_cache-p9-v6-a3.safetensors"}
+    require(isinstance(baseline_hashes, dict) and set(baseline_hashes) == baseline_files,
+            "wrong AdaLN refresh baseline file closure")
+    require(all(baseline_hashes[filename] == sha256_file(root / filename)
+                for filename in baseline_files),
+            "AdaLN refresh baseline file hash differs from the package")
+    baseline_closures = receipt.get("baseline_cache_tensor_closure_sha256")
+    require(isinstance(baseline_closures, dict)
+            and set(baseline_closures) == baseline_files,
+            "wrong AdaLN refresh baseline tensor closure")
+
+    output = receipt.get("outputs", {}).get("adaln_cache-p9-v6-a3.safetensors", {})
+    require(output.get("sha256") == ADALN_REFRESH_CACHE_SHA256,
+            "wrong refreshed AdaLN cache SHA-256")
+    require(output.get("tensor_closure_sha256") ==
+            ADALN_REFRESH_CACHE_TENSOR_CLOSURE_SHA256,
+            "wrong refreshed AdaLN tensor closure")
+    require(output.get("point_count") == 9
+            and output.get("video_shift") == 6.0
+            and output.get("audio_shift") == 3.0,
+            "wrong refreshed AdaLN schedule")
+
+
 def verify_receipts(
     root: Path,
     hashes: dict[str, str],
@@ -313,6 +396,8 @@ def verify_receipts(
             "wrong Metal AdaLN receipt format")
     require(cache_receipt.get("evaluation_backend") == "mlx-metal",
             "production AdaLN cache was not evaluated on MLX Metal")
+    require(cache_receipt.get("cache_pack_index_sha256") == ADALN_REFRESH_INDEX_SHA256,
+            "Metal AdaLN receipt has the wrong refreshed cache-pack index")
     require(cache_receipt.get("generator") == "mere.run model optimize",
             "production AdaLN cache did not come from the Mere optimizer")
     require(cache_receipt.get("source_identity") ==
@@ -329,6 +414,28 @@ def verify_receipts(
             "Metal AdaLN receipt has the wrong official-source tensor closure")
     require(cache_receipt.get("hardware", {}).get("chip") == "Apple M4 Max",
             "Metal AdaLN receipt has the wrong evaluation hardware")
+    refresh = cache_receipt.get("refresh", {})
+    require(refresh.get("format") == "mere.run.minimax-h3-adaln-cache-pack-refresh",
+            "Metal AdaLN receipt has the wrong refresh format")
+    require(refresh.get("generator") ==
+            "scripts/model-conversion/refresh_minimax_h3_adaln_cache_pack.py",
+            "Metal AdaLN receipt has the wrong refresh generator")
+    require(refresh.get("evaluation_backend") == "mlx-metal",
+            "Metal AdaLN refresh was not evaluated on MLX Metal")
+    require(refresh.get("mlx") == "0.32.1", "Metal AdaLN refresh used the wrong MLX")
+    require(refresh.get("baseline_tensor_closures_matched") is True,
+            "Metal AdaLN refresh did not reproduce the baseline closures")
+    require(refresh.get("receipt") == "adaln_cache.refresh.json"
+            and refresh.get("receipt_sha256") == ADALN_REFRESH_RECEIPT_SHA256,
+            "Metal AdaLN refresh receipt reference differs")
+    require(refresh.get("source_tensor_closure_sha256") ==
+            ADALN_REFRESH_SOURCE_TENSOR_CLOSURE_SHA256,
+            "Metal AdaLN refresh source closure differs")
+    require(refresh.get("added_schedule") == {
+        "point_count": 9,
+        "video_flow_shift": 6.0,
+        "audio_flow_shift": 3.0,
+    }, "Metal AdaLN refresh schedule differs")
     parity = cache_receipt.get("real_generation_parity", [])
     require({item.get("point_count") for item in parity} == {9, 21},
             "Metal AdaLN receipt lacks 9- and 21-point parity")
@@ -389,6 +496,7 @@ def main() -> int:
     verify_transformer(root, args.transformer_precision)
     verify_text_encoder(root)
     verify_vaes_and_cache(root)
+    verify_adaln_refresh(root)
     verify_receipts(root, hashes, args.conversion_location, args.transformer_precision)
     total = sum((root / filename).stat().st_size for filename in RUNTIME_FILES)
     print(json.dumps({"status": "verified", "files": len(RUNTIME_FILES), "bytes": total}, sort_keys=True))

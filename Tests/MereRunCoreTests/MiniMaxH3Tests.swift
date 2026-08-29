@@ -720,6 +720,29 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
             adapterURL: eightStepURL
         ))
 
+        let eightStep768pURL = URL(
+            fileURLWithPath: "/tmp/minimax_h3_fl2v_turbo_8step_v1.0_768p_bf16.safetensors"
+        )
+        let eightStep768p = try MiniMaxH3GenerationOptions(
+            prompt: "native eight-evaluation 768p recipe",
+            width: 1_344,
+            height: 768,
+            numFrames: 124,
+            adapterURL: eightStep768pURL
+        )
+        XCTAssertEqual(eightStep768p.steps, 9)
+        XCTAssertEqual(eightStep768p.adapterInferenceRecipe?.videoFlowShift, 6)
+        XCTAssertEqual(eightStep768p.adapterInferenceRecipe?.audioFlowShift, 3)
+        XCTAssertEqual(eightStep768p.adapterInferenceRecipe?.lightX2VAlpha, 8)
+        XCTAssertThrowsError(try MiniMaxH3GenerationOptions(
+            prompt: "unsupported four-evaluation fallback",
+            width: 1_344,
+            height: 768,
+            numFrames: 124,
+            steps: 5,
+            adapterURL: eightStep768pURL
+        ))
+
         let fourStep = try MiniMaxH3GenerationOptions(
             prompt: "native 768p recipe",
             width: 1_344,
@@ -1283,8 +1306,11 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         XCTAssertEqual(bf16.hubFallback?.repoId, MiniMaxH3Resources.compactBF16ArtifactRepository)
         XCTAssertEqual(bf16.hubFallback?.revision, MiniMaxH3Resources.compactBF16ArtifactRevision)
         XCTAssertEqual(bf16.hubFallback?.patterns, MiniMaxH3Resources.compactBF16AndQ8ArtifactFiles)
+        XCTAssertTrue(
+            MiniMaxH3Resources.compactBF16AndQ8ArtifactFiles.contains("adaln_cache.refresh.json")
+        )
         XCTAssertTrue(bf16.mountedHubFallbacks.isEmpty)
-        XCTAssertEqual(bf16.estimatedDownloadBytes, 76_861_026_073)
+        XCTAssertEqual(bf16.estimatedDownloadBytes, 77_094_088_403)
 
         let bf16Manifest = MereRunModelManifest.template(
             for: .miniMaxH3FL2VABF16MLX,
@@ -1305,7 +1331,7 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         XCTAssertEqual(q8.hubFallback?.revision, MiniMaxH3Resources.q8ArtifactRevision)
         XCTAssertEqual(q8.hubFallback?.patterns, MiniMaxH3Resources.compactBF16AndQ8ArtifactFiles)
         XCTAssertTrue(q8.mountedHubFallbacks.isEmpty)
-        XCTAssertEqual(q8.estimatedDownloadBytes, 58_075_175_639)
+        XCTAssertEqual(q8.estimatedDownloadBytes, 58_308_237_969)
 
         let q8Manifest = MereRunModelManifest.template(
             for: .miniMaxH3FL2VAQ8MLX,
@@ -3572,6 +3598,18 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         let result = decoder(MLXArray.zeros([1, 2, 2, 2, 2]))
         MLX.eval(result)
         XCTAssertEqual(result.shape, [1, 3, 4, 4, 4])
+    }
+
+    func testAdaLNProductionSchedulesCoverLightX2VEightStep768p() {
+        let schedule = MiniMaxH3AdaLNCachePack.Schedule(
+            pointCount: 9,
+            videoFlowShift: 6,
+            audioFlowShift: 3
+        )
+
+        XCTAssertEqual(MiniMaxH3AdaLNCachePack.productionSchedules.count, 8)
+        XCTAssertTrue(MiniMaxH3AdaLNCachePack.productionSchedules.contains(schedule))
+        XCTAssertEqual(schedule.filename, "adaln_cache-p9-v6-a3.safetensors")
     }
 
     func testAdaLNCachePackSelectsExactAndDisclosesCustomInterpolation() throws {

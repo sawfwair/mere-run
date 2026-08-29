@@ -311,8 +311,9 @@ Then follow these steps:
    ```
 
 The bundle uses BF16 weights for the video pipeline and a Q4 text encoder.
-For MiniMax-H3 references, long-form generation, the full LTX pipeline, source
-audio, and SCAIL subject animation, see the [video guide](./docs/runtime/video.md).
+For the checksum-pinned MiniMax-H3 LightX2V 8-step workflow, MiniMax-H3
+references, long-form generation, the full LTX pipeline, source audio, and
+SCAIL subject animation, see the [video guide](./docs/runtime/video.md).
 
 ### Serve the local API
 

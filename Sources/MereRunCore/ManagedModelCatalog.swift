@@ -3658,7 +3658,7 @@ public enum ManagedModelCatalog {
             usageRestriction: miniMaxH3UsageRestriction,
             validationKind: .miniMaxH3MLX,
             runtimeAutoDownloadAllowed: false,
-            estimatedDownloadBytes: 76_861_026_073,
+            estimatedDownloadBytes: 77_094_088_403,
             defaultCLICommands: ["video generate"]
         ),
         ManagedModelSpec(
@@ -3675,7 +3675,7 @@ public enum ManagedModelCatalog {
             usageRestriction: miniMaxH3UsageRestriction,
             validationKind: .miniMaxH3MLX,
             runtimeAutoDownloadAllowed: false,
-            estimatedDownloadBytes: 58_075_175_639,
+            estimatedDownloadBytes: 58_308_237_969,
             defaultCLICommands: ["video generate"]
         ),
         ManagedModelSpec(
