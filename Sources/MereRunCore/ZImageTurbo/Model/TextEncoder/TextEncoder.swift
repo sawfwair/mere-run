@@ -279,11 +279,18 @@ extension QwenTextEncoder {
     } else {
       attentionMaskUpdated = MLX.ones([hiddenStates.dim(0), hiddenStates.dim(1)], dtype: .int32)
     }
+    let positionIds = Self.multimodalPositionIDs(
+      inputIds: tokenIds,
+      imageTokenId: imageTokenId,
+      placeholderGridTHW: placeholderGridTHW,
+      spatialMergeSize: spatialMergeSize
+    )
 
     // For joint encoding, use the standard forward path
     let result = encoder.forward(
       embeddings: hiddenStates,
       attentionMask: attentionMaskUpdated,
+      positionIds: positionIds,
       outputHiddenStates: false
     )
 
@@ -293,6 +300,81 @@ extension QwenTextEncoder {
       dropIndex: dropIndexValue
     )
     return processed
+  }
+
+  static func multimodalPositionIDs(
+    inputIds: MLXArray,
+    imageTokenId: Int,
+    placeholderGridTHW: [(Int, Int, Int)],
+    spatialMergeSize: Int
+  ) -> MLXArray {
+    let ids = inputIds.asType(.int32)
+    MLX.eval(ids)
+    let values = ids.asArray(Int32.self)
+    let batch = ids.dim(0)
+    let sequenceLength = ids.dim(1)
+    var batchAxes = Array(repeating: [[Int32]](), count: batch)
+
+    for row in 0..<batch {
+      var ranges: [Range<Int>] = []
+      var start: Int?
+      for position in 0..<sequenceLength {
+        let isImage = values[row * sequenceLength + position] == Int32(imageTokenId)
+        if isImage, start == nil {
+          start = position
+        } else if !isImage, let lower = start {
+          ranges.append(lower..<position)
+          start = nil
+        }
+      }
+      if let lower = start { ranges.append(lower..<sequenceLength) }
+      precondition(ranges.count == placeholderGridTHW.count)
+
+      var axes = Array(repeating: [Int32](), count: 3)
+      for axis in axes.indices { axes[axis].reserveCapacity(sequenceLength) }
+      var cursor = 0
+      var nextPosition = 0
+
+      for (range, grid) in zip(ranges, placeholderGridTHW) {
+        while cursor < range.lowerBound {
+          for axis in axes.indices { axes[axis].append(Int32(nextPosition)) }
+          cursor += 1
+          nextPosition += 1
+        }
+
+        let temporal = max(1, grid.0)
+        let height = max(1, grid.1 / spatialMergeSize)
+        let width = max(1, grid.2 / spatialMergeSize)
+        precondition(range.count == temporal * height * width)
+        for temporalIndex in 0..<temporal {
+          for heightIndex in 0..<height {
+            for widthIndex in 0..<width {
+              axes[0].append(Int32(nextPosition + temporalIndex))
+              axes[1].append(Int32(nextPosition + heightIndex))
+              axes[2].append(Int32(nextPosition + widthIndex))
+              cursor += 1
+            }
+          }
+        }
+        nextPosition += max(temporal, max(height, width))
+      }
+
+      while cursor < sequenceLength {
+        for axis in axes.indices { axes[axis].append(Int32(nextPosition)) }
+        cursor += 1
+        nextPosition += 1
+      }
+      batchAxes[row] = axes
+    }
+
+    var flattened: [Int32] = []
+    flattened.reserveCapacity(3 * batch * sequenceLength)
+    for axis in 0..<3 {
+      for row in 0..<batch {
+        flattened.append(contentsOf: batchAxes[row][axis])
+      }
+    }
+    return MLXArray(flattened, [3, batch, sequenceLength])
   }
 
   private func replaceVisionTokens(

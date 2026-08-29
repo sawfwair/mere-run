@@ -91,6 +91,22 @@ enum DiffusionCFGExecution {
         return unconditional + (conditional - unconditional) * MLXArray(guidanceScale)
     }
 
+    /// Qwen Image true CFG with the reference pipeline's positive-norm
+    /// rescaling. Predictions must be ordered [negative, positive].
+    static func combineQwenImagePredictions(
+        _ predictions: MLXArray,
+        guidanceScale: Float
+    ) -> MLXArray {
+        precondition(predictions.dim(0) == 2, "CFG predictions must be ordered [negative, positive].")
+        let pair = MLX.split(predictions, parts: 2, axis: 0)
+        let negative = pair[0]
+        let positive = pair[1]
+        let combined = negative + (positive - negative) * MLXArray(guidanceScale)
+        let positiveNorm = MLX.sqrt(MLX.sum(positive * positive, axis: -1, keepDims: true))
+        let combinedNorm = MLX.sqrt(MLX.sum(combined * combined, axis: -1, keepDims: true))
+        return combined * (positiveNorm / combinedNorm)
+    }
+
     static func combinePositiveAnchoredPredictions(
         _ predictions: MLXArray,
         guidanceScale: Float

@@ -29,6 +29,30 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         try TestFileSystem.writeFile(schedulerDir.appendingPathComponent("scheduler_config.json"), contents: Data("{}".utf8))
     }
 
+    private func writeMinimalValidQwenImageEditModel(
+        at root: URL,
+        id: ModelResolver.ModelID
+    ) throws {
+        try TestFileSystem.createDirectory(root)
+        try MereRunModelManifest.template(for: id, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
+        try TestFileSystem.writeFile(root.appendingPathComponent("model_index.json"), contents: Data("{}".utf8))
+
+        let files = [
+            "scheduler/scheduler_config.json",
+            "transformer/config.json",
+            "transformer/diffusion_pytorch_model.safetensors",
+            "text_encoder/config.json",
+            "text_encoder/model.safetensors",
+            "vae/config.json",
+            "vae/diffusion_pytorch_model.safetensors",
+            "tokenizer/tokenizer_config.json",
+            "tokenizer/tokenizer.json",
+        ]
+        for relativePath in files {
+            try TestFileSystem.writeFile(root.appendingPathComponent(relativePath))
+        }
+    }
+
     private func writeMinimalValidQ35FamilyModel(at root: URL, id: ModelResolver.ModelID = .q36Nano) throws {
         try TestFileSystem.createDirectory(root)
         try MereRunModelManifest.template(for: id, createdAt: Date(timeIntervalSince1970: 0)).write(to: root)
@@ -710,6 +734,45 @@ final class MereRunModelValidatorTests: MereRunCoreTestCase {
         XCTAssertEqual(report.manifest?.engine, .hidreamO1)
         XCTAssertEqual(report.manifest?.defaults?.steps, 50)
         XCTAssertEqual(report.manifest?.defaults?.cfg, 5.0)
+    }
+
+    func testQwenImageEdit2511RootLayoutPassesValidation() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let root = temp.appendingPathComponent(QwenImageEditRepository.model2511Id, isDirectory: true)
+        try writeMinimalValidQwenImageEditModel(at: root, id: .qwenImageEdit2511)
+
+        let report = MereRunModelValidator.validate(
+            modelRoot: root,
+            expectedModelID: QwenImageEditRepository.model2511Id
+        )
+        XCTAssertTrue(report.isValid, report.errors.joined(separator: "\n"))
+        XCTAssertFalse(report.warnings.contains { $0.contains("family mismatch") })
+        XCTAssertFalse(report.warnings.contains { $0.contains("engine mismatch") })
+        XCTAssertEqual(report.manifest?.family, .qwen)
+        XCTAssertEqual(report.manifest?.engine, .qwenImageEdit)
+        XCTAssertEqual(report.manifest?.defaults?.steps, 40)
+        XCTAssertEqual(report.manifest?.defaults?.cfg, 4)
+    }
+
+    func testQwenImageEdit2511LightningRejectsUnpinnedAdapter() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let root = temp.appendingPathComponent(QwenImageEditRepository.lightning2511Id, isDirectory: true)
+        try writeMinimalValidQwenImageEditModel(at: root, id: .qwenImageEdit2511Lightning)
+        try TestFileSystem.writeFile(root.appendingPathComponent(QwenImageEditRepository.lightningRelativePath))
+
+        let report = MereRunModelValidator.validate(
+            modelRoot: root,
+            expectedModelID: QwenImageEditRepository.lightning2511Id
+        )
+        XCTAssertFalse(report.isValid)
+        XCTAssertTrue(report.errors.contains { error in
+            error.contains(QwenImageEditRepository.lightningFilename)
+                && (error.contains("size") || error.contains("SHA-256"))
+        })
     }
 
     func testKrea2TurboRootLayoutPassesValidation() throws {

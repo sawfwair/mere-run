@@ -95,6 +95,22 @@ struct ManagedAdapterCatalogTests {
         #expect(fourStep.upstreamRevision == ManagedAdapterCatalog.miniMaxH3LightX2VV1Revision)
         #expect(fourStep.artifact.byteCount == 1_383_677_808)
         #expect(fourStep.artifact.sha256 == "1bdabc2e9fce20b1db563b96bcf6e46adcad4c1964f423676436bf266cc7416c")
+
+        let eightStep768p = try #require(
+            ManagedAdapterCatalog.spec(for: ManagedAdapterCatalog.miniMaxH3LightX2VEightStepV1_768pID)
+        )
+        #expect(eightStep768p.version == "05ef678438e8")
+        #expect(eightStep768p.baseModelID == ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue)
+        #expect(eightStep768p.supports(baseModelID: ModelResolver.ModelID.miniMaxH3FL2VAQ8MLX.rawValue))
+        #expect(eightStep768p.format == MiniMaxH3TurboAdapter.lightX2VFormat)
+        #expect(
+            eightStep768p.upstreamRevision
+                == ManagedAdapterCatalog.miniMaxH3LightX2VEightStepV1_768pRevision
+        )
+        #expect(eightStep768p.artifact.filename == "minimax_h3_fl2v_turbo_8step_v1.0_768p_bf16.safetensors")
+        #expect(eightStep768p.artifact.byteCount == 1_383_677_808)
+        #expect(eightStep768p.artifact.sha256 == "9b0efe3613b43a84e30febaa43af27432ea9d0711eac7bba904b2556b175f6d4")
+        #expect(eightStep768p.downloadURL.absoluteString.contains(eightStep768p.upstreamRevision!))
     }
 
     @Test("MiniMax-H3 LightX2V Ref2VA release is an immutable runtime pin")

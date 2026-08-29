@@ -42,17 +42,20 @@ public final class AdaLNZero: Module {
     /// - Parameter conditioning: Conditioning tensor [batch, conditioningDim]
     /// - Returns: Tuple of 6 tensors each [batch, 1, hiddenSize]:
     ///           (attnShift, attnScale, attnGate, mlpShift, mlpScale, mlpGate)
-    public func callAsFunction(_ conditioning: MLXArray) -> AdaLNModulation {
+    public func callAsFunction(
+        _ conditioning: MLXArray,
+        tokenConditionMask: MLXArray? = nil
+    ) -> AdaLNModulation {
         let mod = linear(MLXNN.silu(conditioning))
 
         // Split into 6 chunks
         let chunk = hiddenSize
-        let attnShift = mod[0..., 0..<chunk].expandedDimensions(axis: 1)
-        let attnScale = mod[0..., chunk..<(2*chunk)].expandedDimensions(axis: 1)
-        let attnGate = mod[0..., (2*chunk)..<(3*chunk)].expandedDimensions(axis: 1)
-        let mlpShift = mod[0..., (3*chunk)..<(4*chunk)].expandedDimensions(axis: 1)
-        let mlpScale = mod[0..., (4*chunk)..<(5*chunk)].expandedDimensions(axis: 1)
-        let mlpGate = mod[0..., (5*chunk)...].expandedDimensions(axis: 1)
+        let attnShift = select(mod[0..., 0..<chunk], with: tokenConditionMask)
+        let attnScale = select(mod[0..., chunk..<(2*chunk)], with: tokenConditionMask)
+        let attnGate = select(mod[0..., (2*chunk)..<(3*chunk)], with: tokenConditionMask)
+        let mlpShift = select(mod[0..., (3*chunk)..<(4*chunk)], with: tokenConditionMask)
+        let mlpScale = select(mod[0..., (4*chunk)..<(5*chunk)], with: tokenConditionMask)
+        let mlpGate = select(mod[0..., (5*chunk)...], with: tokenConditionMask)
 
         return AdaLNModulation(
             attnShift: attnShift,
@@ -62,6 +65,18 @@ public final class AdaLNZero: Module {
             mlpScale: mlpScale,
             mlpGate: mlpGate
         )
+    }
+
+    private func select(_ parameter: MLXArray, with tokenConditionMask: MLXArray?) -> MLXArray {
+        guard let tokenConditionMask else {
+            return parameter.expandedDimensions(axis: 1)
+        }
+        precondition(parameter.dim(0) % 2 == 0)
+        let batch = parameter.dim(0) / 2
+        let outputCondition = parameter[0..<batch, 0...].expandedDimensions(axis: 1)
+        let referenceCondition = parameter[batch..., 0...].expandedDimensions(axis: 1)
+        let mask = tokenConditionMask.asType(parameter.dtype)
+        return outputCondition * (1 - mask) + referenceCondition * mask
     }
 }
 

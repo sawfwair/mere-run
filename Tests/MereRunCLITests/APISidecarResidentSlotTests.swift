@@ -1,6 +1,7 @@
 import Foundation
 import XCTest
 import AudioCore
+import MereRunCore
 @testable import MereRunCLI
 
 final class APISidecarResidentSlotTests: XCTestCase {
@@ -722,6 +723,20 @@ final class APISidecarResidentSlotTests: XCTestCase {
                 modelID: "Qwen/Qwen-Image-Edit"
             ),
             "qwen-image-edit"
+        )
+        XCTAssertEqual(
+            APISidecarModelPool.canonicalImageModelID(
+                kind: .qwenImageEdit,
+                modelID: "Qwen/Qwen-Image-Edit-2511"
+            ),
+            QwenImageEditRepository.model2511Id
+        )
+        XCTAssertEqual(
+            APISidecarModelPool.canonicalImageModelID(
+                kind: .qwenImageEdit,
+                modelID: QwenImageEditRepository.lightning2511Id
+            ),
+            QwenImageEditRepository.lightning2511Id
         )
         XCTAssertEqual(
             APISidecarModelPool.canonicalImageModelID(

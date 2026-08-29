@@ -18,7 +18,8 @@ final class QwenVisionBlock: Module {
     self._mlp.wrappedValue = QwenVisionMLP(
       dim: configuration.embedDim,
       hiddenDim: hiddenDim,
-      activation: configuration.hiddenAct
+      activation: configuration.hiddenAct,
+      style: configuration.mlpStyle
     )
   }
 

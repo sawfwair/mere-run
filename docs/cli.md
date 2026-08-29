@@ -1950,7 +1950,7 @@ published Ref2VA quality floor.
 When `--steps` is omitted, H3 selects 9, 16, or 21 schedule points from packed
 row cost. Maximum acceleration caps the automatic schedule at 12 points. The
 compact BF16 and Q8 cache pack selects exact 5, 9, 12, 16, 21, or 31-point
-tables at shifts 12/3 and an exact 5-point shifts-6/3 table for the LightX2V
+tables at shifts 12/3 and exact 5- and 9-point shifts-6/3 tables for the LightX2V
 768p recipe. Custom schedules interpolate from the densest table and disclose
 that they are not bit-exact. `--h3-weight-mode auto` keeps compact quantized
 weights on MacBooks below 96 GiB and expands to the faster resident BF16 path on memory-qualified
@@ -2026,7 +2026,9 @@ LoRA, while the `minimax-h3-lightx2v-*` ids select pinned LightX2V PEFT LoRAs.
 The FL2VA releases target `video-minimax-h3-fl2va-bf16-mlx`. The legacy releases use five
 schedule points (four transformer evaluations). The v1.0 8-step release
 defaults to nine schedule points and accepts the published five-point fallback;
-the v1.0 768p release uses five points, video/audio shifts 6/3, and alpha 128.
+the v1.0 four-step 768p release uses five points, video/audio shifts 6/3, and
+alpha 128. The v1.0 eight-step 768p release accepts only nine points and uses
+shifts 6/3 and alpha 8.
 EMA-850
 runs in activation space; LightX2V is fused once into the BF16 transformer
 before denoising and adds no LoRA matmuls to the generation loop. Both require
@@ -2039,6 +2041,11 @@ expanded to resident BF16 before fusion, so forced quantized execution is
 rejected. The preflight report resolves the managed
 adapter path, verifies its presence, and preserves the adapter id, strength,
 and resolved schedule in the declarative action.
+
+The pinned compact BF16 and Q8 roots contain the exact nine-point shifts-6/3
+AdaLN table used by the eight-step 768p adapter. Full BF16 source roots compute
+the same schedule from their AdaLN weights. Only schedules outside the cache
+pack report `interpolating-adaln-cache-not-bit-exact`.
 
 Preflight mode:
 
@@ -2197,8 +2204,8 @@ mere.run model optimize ./MiniMax-H3-FL2VA-full-MLX --json
 ```
 
 The generated `adaln_cache.index.json` binds exact AdaLN tables for 5, 9, 12,
-16, 21, and 31 points at shifts 12/3 plus the LightX2V 768p 5-point schedule at
-shifts 6/3. Compatible H3 generations skip the 13B-parameter
+16, 21, and 31 points at shifts 12/3 plus the LightX2V 768p 5- and 9-point
+schedules at shifts 6/3. Compatible H3 generations skip the 13B-parameter
 AdaLN/time-embedding branch. A custom schedule interpolates from the densest
 compatible table and emits a visible non-bit-exact diagnostic. `--force`
 atomically rebuilds a pack from a full legacy root; a pruned root can validate
@@ -2365,6 +2372,7 @@ mere.run adapter pull minimax-h3-turbo-4step
 mere.run adapter pull minimax-h3-lightx2v-4step
 mere.run adapter pull minimax-h3-lightx2v-8step-v1
 mere.run adapter pull minimax-h3-lightx2v-4step-v1-768p
+mere.run adapter pull minimax-h3-lightx2v-8step-v1-768p
 mere.run adapter pull minimax-h3-lightx2v-ref2v-4step-v0.1
 ```
 

@@ -329,6 +329,10 @@ public enum MereRunModelValidator {
             }
         }
 
+        if spec?.validationKind == .qwenImageEdit {
+            errors.append(contentsOf: spec?.validationMessages(in: rootURL, fileManager: fileManager) ?? [])
+        }
+
         // Incomplete download markers (HF snapshot downloads).
         if containsIncompleteFiles(in: rootURL, fileManager: fileManager) {
             errors.append("Found incomplete download markers (*.incomplete / *.partial).")
@@ -454,8 +458,10 @@ public enum MereRunModelValidator {
                 warnings.append("Manifest engine mismatch: family=liquid expects lfm2.")
             case .laguna where engine != .laguna:
                 warnings.append("Manifest engine mismatch: family=laguna expects laguna.")
-            case .qwen where engine != .qwen35HybridMoE:
-                warnings.append("Manifest engine mismatch: family=qwen expects qwen3.5-hybrid-moe.")
+            case .qwen where engine != .qwen35HybridMoE && engine != .qwenImageEdit:
+                warnings.append(
+                    "Manifest engine mismatch: family=qwen expects qwen3.5-hybrid-moe or qwen-image-edit."
+                )
             case .sam where engine != .samSegmentation:
                 warnings.append("Manifest engine mismatch: family=sam expects sam-segmentation.")
             case .falcon where engine != .falconPerception:
@@ -623,6 +629,7 @@ public enum MereRunModelValidator {
         if modelId.hasPrefix("image-hidream-") { return .hidream }
         if modelId.hasPrefix("image-sensenova-") { return .senseNova }
         if modelId.hasPrefix("image-krea2-") { return .krea }
+        if modelId.hasPrefix("image-qwen-edit-") { return .qwen }
         if modelId.hasPrefix("image-ideogram4-") { return .ideogram }
         if modelId.hasPrefix("text-chat-laguna-") { return .laguna }
         if modelId.hasPrefix("vision-segment-") { return .sam }

@@ -179,7 +179,7 @@ converting, using, or redistributing any artifact. Passing
 `--accept-model-license` and continuing with the download confirms that you
 accept those terms and agree to comply with them.
 
-The `minimax-h3-turbo-4step` EMA-850 adapter and all four LightX2V releases
+The `minimax-h3-turbo-4step` EMA-850 adapter and all five LightX2V releases
 are checksum-pinned separately.
 EMA-850 remains an activation-space adapter because its 51 AdaLN deltas
 participate in schedule-cache construction. For compact models those deltas are
@@ -190,10 +190,13 @@ or stock MLX quantized linears; base weights are never expanded or fused. The
 legacy releases default to five schedule
 points, which are four model evaluations. LightX2V v1.0 8-step defaults to nine
 schedule points (eight evaluations), accepts the upstream four-evaluation
-fallback, and uses video/audio shifts 12/3 with alpha 8. LightX2V v1.0 768p
-uses five schedule points, shifts 6/3, alpha 128, and is intended for a
-1344x768 canvas. Those four adapters were trained for FL2VA, support compact
-BF16 and Q8, reject legacy Q4, and cannot be combined with Ref2VA references. The separate
+fallback, and uses video/audio shifts 12/3 with alpha 8. The LightX2V v1.0
+four-step 768p release uses five schedule points, shifts 6/3, and alpha 128.
+The eight-step 768p release uses nine schedule points, shifts 6/3, and alpha 8;
+it doesn't accept the earlier release's four-evaluation fallback. Both 768p
+releases target a 1344x768 canvas. EMA-850 and the four LightX2V FL2VA adapters
+support compact BF16 and Q8, reject legacy Q4, and cannot be combined with
+Ref2VA references. The separate
 `minimax-h3-lightx2v-ref2v-4step-v0.1` release targets Ref2VA, uses five schedule
 points with shifts 12/3 and alpha 8, and requires ordered references. mere.run
 expands the managed INT8 Ref2VA transformer to resident BF16 before fusing the
@@ -205,6 +208,14 @@ keeps the fully dense path; `balanced` and `maximum` may use attention-only dyna
 sparsity while still executing all 50 blocks on every model evaluation.
 Strength `1.0` applies an adapter's released weights exactly; the strength
 control remains available for prompt-specific tuning.
+
+The pinned compact BF16 and Q8 model roots contain the exact nine-point
+shifts-6/3 AdaLN table used by the eight-step 768p adapter. The refreshed table
+closes against the pinned official source on MLX Metal. A tensor comparison
+against the former interpolation path covered 116,444,160 values: 88.40% were
+already exact, while the remaining values reached 0.125 maximum absolute error
+and 0.001427 RMSE. This proves why the exact table is preferable; it doesn't by
+itself constitute a same-seed visual or audio quality qualification.
 
 `--h3-frame FRAME:PATH` adds an FL2VA keyframe at an exact zero-based output
 frame. Values may be repeated up to the released 12-frame condition limit and
@@ -222,8 +233,8 @@ AdaLN table, reference encodings, and both VAEs remain resident across windows.
 The compact BF16, Q8, legacy Q4, and Ref2VA managed packages include
 source-bound inference-only AdaLN caches; no post-pull optimization is
 required. Compact BF16 and Q8 packages select exact tables for 5, 9, 12, 16, 21,
-or 31 points at shifts 12/3 and the LightX2V 768p 5-point schedule at shifts
-6/3. A custom schedule interpolates from the densest table and emits a visible
+or 31 points at shifts 12/3 and the LightX2V 768p 5- and 9-point schedules at
+shifts 6/3. A custom schedule interpolates from the densest table and emits a visible
 non-bit-exact diagnostic. Generation skips the 13B-parameter
 AdaLN/time-embedding branch. By default H3 uses 9 points through
 13,500 packed rows, 16 through 26,000, and 21 above that. Maximum acceleration

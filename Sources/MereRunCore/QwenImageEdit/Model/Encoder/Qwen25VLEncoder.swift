@@ -67,7 +67,13 @@ public final class Qwen25VLEncoder: Module {
         gridThw: [(Int, Int, Int)]
     ) throws -> MLXArray {
         // Prepare patches for vision tower
-        let patchInputs = preparePatchInputs(pixelValues: pixelValues, gridThw: gridThw)
+        let visionConfig = visionTower.configuration
+        let patchInputs = Self.preparePatchInputs(
+            pixelValues: pixelValues,
+            patchSize: visionConfig.patchSize,
+            temporalPatchSize: visionConfig.temporalPatchSize,
+            mergeSize: visionConfig.spatialMergeSize
+        )
 
         // Create grid metadata
         let grids = gridThw.map { thw in
@@ -136,59 +142,88 @@ public final class Qwen25VLEncoder: Module {
         imageTokenId: Int,
         visionStartTokenId: Int
     ) throws -> MLXArray {
-        // Calculate grid from image dimensions
-        let height = inputImage.dim(2)
-        let width = inputImage.dim(3)
-        let gridThw = [(1, height / 14, width / 14)]  // patch_size = 14
-
-        let (embeddings, _) = try encodeJoint(
-            inputIds: tokenBatch.inputIds,
-            attentionMask: tokenBatch.attentionMask,
-            pixelValues: inputImage,
-            gridThw: gridThw,
+        try encodeForEditing(
+            inputImages: [inputImage],
+            tokenBatch: tokenBatch,
             imageTokenId: imageTokenId,
             visionStartTokenId: visionStartTokenId
-        )
+        ).embeddings
+    }
 
-        return embeddings
+    public func encodeForEditing(
+        inputImages: [MLXArray],
+        tokenBatch: QwenTokenBatch,
+        imageTokenId: Int,
+        visionStartTokenId: Int
+    ) throws -> (embeddings: MLXArray, mask: MLXArray) {
+        let patchSize = visionTower.configuration.patchSize
+        let grids = inputImages.map { image in
+            (1, image.dim(2) / patchSize, image.dim(3) / patchSize)
+        }
+        let replacements = try zip(inputImages, grids).map { image, grid in
+            try encodeImage(pixelValues: image, gridThw: [grid])
+        }
+
+        return textEncoder.encodeJoint(
+            inputIds: tokenBatch.inputIds,
+            attentionMask: tokenBatch.attentionMask,
+            imageTokenId: imageTokenId,
+            visionStartTokenId: visionStartTokenId,
+            placeholderGridTHW: grids,
+            spatialMergeSize: 2,
+            replacements: replacements,
+            dropIndex: Qwen25VLTokenizer.promptDropIndex
+        )
     }
 
     // MARK: - Helper Methods
 
     /// Prepare patch inputs from pixel values
-    private func preparePatchInputs(
+    static func preparePatchInputs(
         pixelValues: MLXArray,
-        gridThw: [(Int, Int, Int)]
+        patchSize: Int,
+        temporalPatchSize: Int,
+        mergeSize: Int
     ) -> MLXArray {
-        // For single image editing, we typically have batch=1
-        // pixel_values shape: [batch, channels, height, width]
-        // Need to convert to patch format: [batch, num_patches, patch_volume]
-
         let batch = pixelValues.dim(0)
         let channels = pixelValues.dim(1)
         let height = pixelValues.dim(2)
         let width = pixelValues.dim(3)
-
-        let patchSize = 14  // Standard for Qwen-VL
-
         let patchH = height / patchSize
         let patchW = width / patchSize
         let numPatches = patchH * patchW
+        let blockH = patchH / mergeSize
+        let blockW = patchW / mergeSize
+        precondition(blockH > 0 && blockW > 0)
 
-        // Reshape to patches
-        // [B, C, H, W] -> [B, C, pH, patchSize, pW, patchSize]
-        var x = pixelValues.reshaped(batch, channels, patchH, patchSize, patchW, patchSize)
+        // Qwen's processor groups each mergeSize x mergeSize patch cell before
+        // flattening. The vision tower's rotary positions and patch merger use
+        // this exact ordering.
+        var patches = pixelValues.reshaped(
+            batch,
+            channels,
+            blockH,
+            mergeSize,
+            patchSize,
+            blockW,
+            mergeSize,
+            patchSize
+        )
+        patches = patches.transposed(0, 2, 5, 3, 6, 1, 4, 7)
+        patches = patches.reshaped(batch, numPatches, channels, patchSize * patchSize)
 
-        // Permute to [B, pH, pW, C, patchSize, patchSize]
-        x = x.transposed(0, 2, 4, 1, 3, 5)
-
-        // Flatten patches: [B, pH*pW, C*patchSize*patchSize]
-        x = x.reshaped(batch, numPatches, channels * patchSize * patchSize)
-
-        // For temporal dimension, repeat for single frame (temporalPatchSize = 2)
-        // This duplicates the spatial features along the channel dimension
-        let repeated = MLX.concatenated([x, x], axis: 2)
-        return repeated
+        let repeats = max(1, temporalPatchSize)
+        let temporalSlices = (0..<repeats).map { _ in
+            patches.expandedDimensions(axis: 3)
+        }
+        let temporal = temporalSlices.count == 1
+            ? temporalSlices[0]
+            : MLX.concatenated(temporalSlices, axis: 3)
+        return temporal.reshaped(
+            batch,
+            numPatches,
+            channels * repeats * patchSize * patchSize
+        )
     }
 }
 
@@ -211,7 +246,9 @@ extension Qwen25VLEncoder {
             maxPositionEmbeddings: textEncoderConfig.maxPositionEmbeddings ?? 32768,
             rmsNormEps: textEncoderConfig.rmsNormEps ?? 1e-6,
             promptDropIndex: 0,
-            headDim: textEncoderConfig.headDim ?? (textEncoderConfig.hiddenSize / textEncoderConfig.numAttentionHeads)
+            headDim: textEncoderConfig.headDim ?? (textEncoderConfig.hiddenSize / textEncoderConfig.numAttentionHeads),
+            mropeSection: textEncoderConfig.ropeScaling?.mropeSection,
+            mropeInterleaved: false
         )
 
         // Create vision config from nested config or defaults
@@ -220,6 +257,9 @@ extension Qwen25VLEncoder {
             visionConfig = QwenVisionConfiguration(
                 depth: vc.depth ?? 32,
                 embedDim: vc.hiddenSize ?? 1280,
+                mlpHiddenDim: vc.intermediateSize ?? 3420,
+                hiddenAct: vc.hiddenAct == "silu" ? .silu : .geluApproximate,
+                mlpStyle: .gated,
                 numHeads: vc.numHeads ?? 16,
                 patchSize: vc.spatialPatchSize ?? vc.patchSize ?? 14,
                 temporalPatchSize: vc.temporalPatchSize ?? 2,
@@ -234,6 +274,9 @@ extension Qwen25VLEncoder {
             visionConfig = QwenVisionConfiguration(
                 depth: 32,
                 embedDim: 1280,
+                mlpHiddenDim: 3420,
+                hiddenAct: .silu,
+                mlpStyle: .gated,
                 numHeads: 16,
                 patchSize: 14,
                 temporalPatchSize: 2,

@@ -20,6 +20,12 @@ production render.
 - **Q8 managed bytes:** `58,075,175,639`.
 - **Rollback source:** `Sawfwair/MiniMax-H3-FL2VA-MLX-BF16@c768b13a964f646a8000e641608189289e4514af`.
 
+These identities remain the historical roots used for the measurements below.
+The managed BF16 and Q8 pins were later refreshed to `4ce4b1d870f7b1b0c75672fd4f2867c1f5df7b5f`
+and `86500cb6ebec22c006597e41840b26ef1099fdd7` to add the exact LightX2V
+nine-point shifts-6/3 AdaLN table; the benchmark results weren't reattributed
+to those newer package revisions.
+
 Both denoising cores were reproduced from the pinned official checkpoint on an
 ephemeral RTX A6000 host in Sweden with MLX/MLX CUDA 0.29.3. The BF16 core is
 `40,138,395,701` bytes with SHA-256

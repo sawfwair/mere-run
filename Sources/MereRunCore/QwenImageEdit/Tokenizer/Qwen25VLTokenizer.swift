@@ -34,8 +34,16 @@ public final class Qwen25VLTokenizer {
         numImageTokens: Int = 256,
         maxLength: Int? = nil
     ) -> QwenTokenBatch {
-        // Format: <|vision_start|><|image_pad|>...<|image_pad|><|vision_end|>\n{prompt}
-        let formattedPrompt = formatEditingPrompt(prompt: prompt, numImageTokens: numImageTokens)
+        let formattedPrompt = Self.editingPrompt(prompt: prompt, numImageTokens: [numImageTokens])
+        return baseTokenizer.encodePlain(prompts: [formattedPrompt], maxLength: maxLength)
+    }
+
+    public func encodeForEditing(
+        prompt: String,
+        numImageTokens: [Int],
+        maxLength: Int? = nil
+    ) -> QwenTokenBatch {
+        let formattedPrompt = Self.editingPrompt(prompt: prompt, numImageTokens: numImageTokens)
         return baseTokenizer.encodePlain(prompts: [formattedPrompt], maxLength: maxLength)
     }
 
@@ -52,8 +60,8 @@ public final class Qwen25VLTokenizer {
         numImageTokens: Int = 256,
         maxLength: Int? = nil
     ) -> QwenTokenBatch {
-        let positiveFormatted = formatEditingPrompt(prompt: prompt, numImageTokens: numImageTokens)
-        let negativeFormatted = formatEditingPrompt(prompt: negativePrompt, numImageTokens: numImageTokens)
+        let positiveFormatted = Self.editingPrompt(prompt: prompt, numImageTokens: [numImageTokens])
+        let negativeFormatted = Self.editingPrompt(prompt: negativePrompt, numImageTokens: [numImageTokens])
         return baseTokenizer.encodePlain(prompts: [negativeFormatted, positiveFormatted], maxLength: maxLength)
     }
 
@@ -71,20 +79,13 @@ public final class Qwen25VLTokenizer {
 
     // MARK: - Formatting
 
-    private func formatEditingPrompt(prompt: String, numImageTokens: Int) -> String {
-        var result = ""
-
-        // Add vision tokens if we have them
-        if visionStartTokenId != nil, imageTokenId != nil, visionEndTokenId != nil {
-            // The actual tokens will be handled by the model, but we need placeholders
-            // Format: <|vision_start|><|image_pad|>...<|vision_end|>
-            result += "<|vision_start|>"
-            result += String(repeating: "<|image_pad|>", count: numImageTokens)
-            result += "<|vision_end|>\n"
-        }
-
-        result += prompt
-        return result
+    public static func editingPrompt(prompt: String, numImageTokens: [Int]) -> String {
+        let pictures = numImageTokens.enumerated().map { index, tokenCount in
+            "Picture \(index + 1): <|vision_start|>"
+                + String(repeating: "<|image_pad|>", count: tokenCount)
+                + "<|vision_end|>"
+        }.joined()
+        return editingPromptTemplate.replacingOccurrences(of: "{}", with: pictures + prompt)
     }
 
     /// Calculate number of image tokens for a given image size
@@ -106,10 +107,15 @@ public final class Qwen25VLTokenizer {
 // MARK: - Chat Templates for Editing
 
 extension Qwen25VLTokenizer {
-    /// Standard editing prompt template
-    public static let editingSystemPrompt = """
-        You are an image editing assistant. Analyze the input image and apply the requested modifications while preserving unaffected regions.
-        """
+    public static let promptDropIndex = 64
+
+    public static let editingPromptTemplate = "<|im_start|>system\n"
+        + "Describe the key features of the input image (color, shape, size, texture, objects, background), "
+        + "then explain how the user's text instruction should alter or modify the image. Generate a new image "
+        + "that meets the user's requirements while maintaining consistency with the original input where appropriate."
+        + "<|im_end|>\n<|im_start|>user\n{}<|im_end|>\n<|im_start|>assistant\n"
+
+    public static let editingSystemPrompt = "Describe the input image, then apply the requested edit."
 
     /// Format a complete editing conversation
     public func formatEditingConversation(

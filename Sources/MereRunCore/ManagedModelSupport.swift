@@ -323,6 +323,20 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 64
             ),
             descriptor(
+                QwenImageEditRepository.model2511Id,
+                "Image edit, Qwen 2511 quality",
+                "Runs the pinned BF16 Qwen Image Edit 2511 stack for one-to-three-image editing with the 40-step guided recipe.",
+                minimum: 96,
+                recommended: 128
+            ),
+            descriptor(
+                QwenImageEditRepository.lightning2511Id,
+                "Image edit, Qwen 2511 Lightning",
+                "Runs the pinned BF16 Qwen Image Edit 2511 stack with its exact four-step Lightning adapter.",
+                minimum: 96,
+                recommended: 128
+            ),
+            descriptor(
                 "text-chat-mebot",
                 "Local personal chat",
                 "Adds a compact local chat model for API serving and personal-agent style workflows.",

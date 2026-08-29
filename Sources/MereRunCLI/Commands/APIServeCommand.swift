@@ -5329,20 +5329,27 @@ actor CodeGenServer {
     }
 
     private func generateQwenImageEdit(_ plan: APIServerContract.ImageGenerationPlan) async throws -> URL {
-        guard let modelRoot = QwenImageEditRepository.resolveInstalledModelRoot() else {
+        guard let canonicalModelID = QwenImageEditRepository.canonicalModelId(for: plan.modelID),
+              let modelRoot = QwenImageEditRepository.resolveInstalledModelRoot(
+                modelSpec: canonicalModelID
+              ) else {
             throw APIRequestValidationError.invalidField(
                 "model",
-                "qwen-image-edit is not installed; pull it before serving image edits"
+                "\(plan.modelID) is not installed; pull it before serving image edits"
             )
         }
+        let manifest = try MereRunModelManifest.loadIfPresent(from: modelRoot)
+        let defaultSteps = manifest?.defaults?.steps ?? 20
+        let defaultCFG = manifest?.defaults?.cfg ?? 4
         let outputURL = try temporaryOutputURL(directoryName: "mere-run-api-images", extension: "png")
         let request = GenerationRequest(
             prompt: plan.prompt,
             negativePrompt: plan.negativePrompt,
+            referenceImages: plan.additionalInputImages,
             width: plan.width,
             height: plan.height,
-            steps: plan.steps ?? 20,
-            guidanceScale: plan.guidanceScale ?? 4.0,
+            steps: plan.steps ?? defaultSteps,
+            guidanceScale: plan.guidanceScale ?? defaultCFG,
             seed: plan.seed,
             outputURL: outputURL,
             model: modelRoot.path,
@@ -5352,7 +5359,7 @@ actor CodeGenServer {
         )
         _ = try await sidecarPool.generateImage(
             kind: .qwenImageEdit,
-            modelID: QwenImageEditRepository.modelId,
+            modelID: canonicalModelID,
             modelPath: modelRoot.path,
             request: request
         )

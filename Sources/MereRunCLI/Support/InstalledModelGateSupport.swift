@@ -175,6 +175,11 @@ enum InstalledModelSmokePlans {
                 try await runner.installedImageCheck(model: spec.id)
             }
 
+        case .qwenImageEdit:
+            return direct(spec, route: "image generate --input") { runner in
+                try await runner.installedQwenImageEditCheck(model: spec.id)
+            }
+
         case .gemma4, .gemma4Unified, .q35, .museGlimmer:
             if spec.category == .visionOCR {
                 return direct(spec, route: "vision ocr") { runner in
@@ -734,6 +739,39 @@ extension GateRunner {
             semanticFailure: image.width > 0 && image.height > 0 && data.count > 1_024
                 ? nil
                 : "generated image did not decode"
+        )
+    }
+
+    func installedQwenImageEditCheck(model: String) async throws -> GateObservation {
+        let input = try fixtureImage(name: "installed-qwen-edit-source.png")
+        let output = artifactURL(model, extension: "png")
+        let isLightning = model == QwenImageEditRepository.lightning2511Id
+        let run = try await exec(
+            [
+                "image", "generate",
+                "--model", model,
+                "--prompt", "Change the red cube to blue while preserving the composition.",
+                "--input", input.path,
+                "--width", "512",
+                "--height", "512",
+                "--steps", isLightning ? "4" : "1",
+                "--cfg", "1",
+                "--seed", "7",
+                "--output", output.path,
+                "--quiet",
+            ],
+            timeout: 3_600
+        )
+        let image = try MediaImageIO.decode(output)
+        let data = try Data(contentsOf: output)
+        return GateObservation(
+            hash: Self.sha256(data),
+            secondRunHash: nil,
+            wallSeconds: run.wallSeconds,
+            decodeTps: nil,
+            semanticFailure: image.width > 0 && image.height > 0 && data.count > 1_024
+                ? nil
+                : "edited image did not decode"
         )
     }
 

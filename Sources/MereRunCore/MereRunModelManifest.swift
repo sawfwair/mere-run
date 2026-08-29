@@ -24,6 +24,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         case senseNovaU15 = "sensenova-u1.5"
         /// Krea 2 text-to-image family.
         case krea2 = "krea-2"
+        /// Qwen Image Edit native multi-reference editing family.
+        case qwenImageEdit = "qwen-image-edit"
         /// Ideogram 4 text-to-image family.
         case ideogram4 = "ideogram-4"
         /// Gemma 4 family via the native Swift runtime.
@@ -1740,6 +1742,36 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 supports: [.txt2img, .loraInference],
                 components: defaultComponents,
                 upstreamRepoId: "\(Krea2Resources.upstreamRepoId)@\(Krea2Resources.upstreamRevision)",
+                createdAt: createdAt
+            )
+        case .qwenImageEdit2511:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .qwenImageEdit,
+                family: .qwen,
+                tier: .latest,
+                variant: .base,
+                precision: .bf16,
+                defaults: Defaults(steps: 40, cfg: 4.0),
+                supports: [.referenceEdit],
+                components: defaultComponents,
+                upstreamRepoId:
+                    "\(QwenImageEditRepository.id2511)@\(QwenImageEditRepository.revision2511)",
+                createdAt: createdAt
+            )
+        case .qwenImageEdit2511Lightning:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .qwenImageEdit,
+                family: .qwen,
+                tier: .turbo,
+                variant: .distilled,
+                precision: .bf16,
+                defaults: Defaults(steps: 4, cfg: 1.0),
+                supports: [.referenceEdit],
+                components: defaultComponents,
+                upstreamRepoId:
+                    "\(QwenImageEditRepository.id2511)@\(QwenImageEditRepository.revision2511)",
                 createdAt: createdAt
             )
         case .ideogram4SDNQUInt4:

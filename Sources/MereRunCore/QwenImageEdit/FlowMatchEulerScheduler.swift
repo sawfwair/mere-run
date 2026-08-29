@@ -34,12 +34,9 @@ public struct FlowMatchEulerScheduler {
         let steps = self.numInferenceSteps
         let numTrainTimestepsF = Float(numTrainTimesteps)
 
-        // Diffusers FlowMatchEulerDiscreteScheduler uses:
-        // - unshifted sigmas linearly spaced from 1.0 down to (1/num_train_timesteps),
-        //   with length == num_inference_steps
-        // - (optionally) time-shifts those sigmas
-        // - then appends a terminal 0.0 so we have num_inference_steps + 1 sigmas
-        let sigmaMin = 1.0 / numTrainTimestepsF
+        // Qwen Image supplies an explicit N-step schedule from 1.0 through
+        // 1/N before the scheduler applies its shift.
+        let sigmaMin = 1.0 / Float(steps)
         let sigmaMax: Float = 1.0
         let sigmasLinear: MLXArray
         if steps == 1 {
@@ -48,33 +45,32 @@ public struct FlowMatchEulerScheduler {
             sigmasLinear = linspace(sigmaMax, sigmaMin, count: steps).asType(.float32)
         }
 
-        // Timesteps passed to the model are the *unshifted* timesteps (scaled back to training range).
-        // The shifted sigmas are used only for Euler step sizing.
-        let timestepsLinear = sigmasLinear * numTrainTimestepsF
-
         // Compute mu (time shift factor).
         let mu: Float
         if useDynamicShifting, let seqLen = imageSeqLen {
             let m = (maxShift - baseShift) / Float(maxImageSeqLen - baseImageSeqLen)
             let b = baseShift - m * Float(baseImageSeqLen)
-            mu = max(baseShift, min(maxShift, m * Float(seqLen) + b))
+            mu = m * Float(seqLen) + b
         } else {
             mu = shift
         }
 
-        // Apply time shift (default: exponential).
-        // Exponential shift: shifted_sigma = exp(mu) / (exp(mu) + (1/sigma - 1))
-        let expMu = MLXArray(exp(mu))
         let one = MLXArray(Float(1.0))
-        let eps = MLXArray(Float(1e-8))
-        let sigmasShifted = expMu / (expMu + (one / maximum(sigmasLinear, eps)) - one)
+        let sigmasShifted: MLXArray
+        if useDynamicShifting {
+            let expMu = MLXArray(exp(mu))
+            sigmasShifted = expMu / (expMu + (one / sigmasLinear) - one)
+        } else {
+            let shiftArray = MLXArray(shift)
+            sigmasShifted = shiftArray * sigmasLinear / (one + (shiftArray - one) * sigmasLinear)
+        }
 
         // Append terminal 0.0 sigma.
         let zero = MLXArray([Float(0.0)]).asType(.float32)
         let sigmasWithZero = MLX.concatenated([sigmasShifted, zero], axis: 0)
 
         self.sigmas = sigmasWithZero
-        self.timesteps = timestepsLinear
+        self.timesteps = sigmasShifted * numTrainTimestepsF
     }
 
     /// Initialize from a scheduler config
@@ -89,7 +85,7 @@ public struct FlowMatchEulerScheduler {
         let numTrainTimesteps = config.numTrainTimesteps
         let numTrainTimestepsF = Float(numTrainTimesteps)
 
-        let sigmaMin = 1.0 / numTrainTimestepsF
+        let sigmaMin = 1.0 / Float(steps)
         let sigmaMax: Float = 1.0
         let sigmasLinear: MLXArray
         if steps == 1 {
@@ -97,8 +93,6 @@ public struct FlowMatchEulerScheduler {
         } else {
             sigmasLinear = linspace(sigmaMax, sigmaMin, count: steps).asType(.float32)
         }
-
-        let timestepsLinear = sigmasLinear * numTrainTimestepsF
 
         let one = MLXArray(Float(1.0))
 
@@ -112,28 +106,28 @@ public struct FlowMatchEulerScheduler {
 
             let m = (maxShift - baseShift) / Float(maxSeqLen - baseSeqLen)
             let b = baseShift - m * Float(baseSeqLen)
-            mu = max(baseShift, min(maxShift, m * Float(seqLen) + b))
+            mu = m * Float(seqLen) + b
         } else {
             mu = config.shift
         }
 
-        // Apply time shift.
-        let timeShiftType = (config.timeShiftType ?? "exponential").lowercased()
         var sigmasShifted: MLXArray
-        switch timeShiftType {
-        case "linear":
-            // Linear shift: shift * sigma / (1 + (shift - 1) * sigma)
-            let shiftArr = MLXArray(mu)
-            sigmasShifted = shiftArr * sigmasLinear / (one + (shiftArr - one) * sigmasLinear)
-        default:
-            // Exponential shift: exp(mu) / (exp(mu) + (1/sigma - 1))
-            let expMu = MLXArray(exp(mu))
-            let eps = MLXArray(Float(1e-8))
-            sigmasShifted = expMu / (expMu + (one / maximum(sigmasLinear, eps)) - one)
+        if config.useDynamicShifting {
+            let timeShiftType = (config.timeShiftType ?? "exponential").lowercased()
+            switch timeShiftType {
+            case "linear":
+                sigmasShifted = MLXArray(mu) / (MLXArray(mu) + (one / sigmasLinear) - one)
+            default:
+                let expMu = MLXArray(exp(mu))
+                sigmasShifted = expMu / (expMu + (one / sigmasLinear) - one)
+            }
+        } else {
+            let shiftArray = MLXArray(config.shift)
+            sigmasShifted = shiftArray * sigmasLinear / (one + (shiftArray - one) * sigmasLinear)
         }
 
         // Optional terminal stretching.
-        if let shiftTerminal = config.shiftTerminal {
+        if let shiftTerminal = config.shiftTerminal, shiftTerminal > 0 {
             let shiftTerminalClamped = min(max(shiftTerminal, 0.0), 1.0)
             let oneMinus = one - sigmasShifted
             let lastIndex = max(0, oneMinus.shape[0] - 1)
@@ -147,11 +141,13 @@ public struct FlowMatchEulerScheduler {
             sigmasShifted = one - sigmasShifted
         }
 
+        let timestepsShifted = sigmasShifted * numTrainTimestepsF
+
         let zero = MLXArray([Float(0.0)]).asType(.float32)
         let sigmasWithZero = MLX.concatenated([sigmasShifted, zero], axis: 0)
 
         self.sigmas = sigmasWithZero
-        self.timesteps = timestepsLinear
+        self.timesteps = timestepsShifted
     }
 
     /// Perform one Euler step
@@ -192,5 +188,12 @@ public struct FlowMatchEulerScheduler {
     /// Get the timestep value at a given step
     public func timestep(at index: Int) -> MLXArray {
         timesteps[index]
+    }
+
+    /// Qwen's transformer consumes the shifted sigma in the normalized [0, 1]
+    /// domain. Diffusers exposes the corresponding scheduler timestep scaled by
+    /// `num_train_timesteps`, then divides by 1,000 before the model call.
+    public func modelTimestep(at index: Int) -> MLXArray {
+        sigmas[index]
     }
 }

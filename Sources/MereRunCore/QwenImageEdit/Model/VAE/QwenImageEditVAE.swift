@@ -44,6 +44,12 @@ public final class QwenImageEditVAE: Module {
         return vae.encodeImage(images)
     }
 
+    /// Encode a Qwen Image reference with checkpoint per-channel latent
+    /// normalization.
+    public func encodeConditioning(_ images: MLXArray) -> MLXArray {
+        Self.normalizeLatents(vae.encodeImageUnscaled(images), config: config)
+    }
+
     // MARK: - Decoding
 
     /// Decode latents to image
@@ -52,6 +58,46 @@ public final class QwenImageEditVAE: Module {
     public func decode(_ latents: MLXArray) -> MLXArray {
         // Use single-image decode (adds/removes temporal dimension)
         return vae.decodeImage(latents)
+    }
+
+    /// Decode generated Qwen Image latents after reversing checkpoint
+    /// per-channel normalization.
+    public func decodeGenerated(_ latents: MLXArray) -> MLXArray {
+        vae.decodeImageUnscaled(Self.denormalizeLatents(latents, config: config))
+    }
+
+    static func normalizeLatents(
+        _ latents: MLXArray,
+        config: QwenImageEditVAEConfig
+    ) -> MLXArray {
+        guard let mean = config.latentsMean, let std = config.latentsStd else {
+            var scaled = latents * MLXArray(config.scalingFactor).asType(latents.dtype)
+            if let shift = config.shiftFactor, shift != 0 {
+                scaled = scaled - MLXArray(shift).asType(latents.dtype)
+            }
+            return scaled
+        }
+        precondition(mean.count == latents.dim(1) && std.count == latents.dim(1))
+        let meanTensor = MLXArray(mean).reshaped(1, mean.count, 1, 1).asType(latents.dtype)
+        let stdTensor = MLXArray(std).reshaped(1, std.count, 1, 1).asType(latents.dtype)
+        return (latents - meanTensor) / stdTensor
+    }
+
+    static func denormalizeLatents(
+        _ latents: MLXArray,
+        config: QwenImageEditVAEConfig
+    ) -> MLXArray {
+        guard let mean = config.latentsMean, let std = config.latentsStd else {
+            var raw = latents / MLXArray(config.scalingFactor).asType(latents.dtype)
+            if let shift = config.shiftFactor, shift != 0 {
+                raw = raw + MLXArray(shift).asType(latents.dtype)
+            }
+            return raw
+        }
+        precondition(mean.count == latents.dim(1) && std.count == latents.dim(1))
+        let meanTensor = MLXArray(mean).reshaped(1, mean.count, 1, 1).asType(latents.dtype)
+        let stdTensor = MLXArray(std).reshaped(1, std.count, 1, 1).asType(latents.dtype)
+        return latents * stdTensor + meanTensor
     }
 
     /// Decode packed latents to image
@@ -139,8 +185,9 @@ public final class QwenImageEditVAE: Module {
 // MARK: - Weight Loading
 
 extension QwenImageEditVAE {
-    /// Weight mapper for loading 3D VAE weights from safetensors
-    public static func weightMapper(key: String, value: MLXArray) -> [(String, MLXArray)] {
+    /// Convert a public Qwen VAE checkpoint key to the corresponding MLX
+    /// parameter key without materializing the tensor.
+    public static func weightKey(_ key: String) -> String {
         var mappedKey = key
 
         // AutoencoderKL3D keeps the public Qwen module keys in their source
@@ -151,10 +198,19 @@ extension QwenImageEditVAE {
             .replacingOccurrences(of: "post_quant_conv", with: "postQuantConv")
             .replacingOccurrences(of: "quant_conv", with: "quantConv")
 
-        // resample.1.* -> resample.0.* (PyTorch has [Upsample, Conv], we only have Conv at index 0)
+        // PyTorch stores the trainable convolution at resample.1 after a
+        // parameter-free resize/pool operation. The MLX module stores only the
+        // convolution, at index zero.
         if mappedKey.contains(".resample.1.") {
             mappedKey = mappedKey.replacingOccurrences(of: ".resample.1.", with: ".resample.0.")
         }
+
+        return mappedKey
+    }
+
+    /// Weight mapper for loading 3D VAE weights from safetensors
+    public static func weightMapper(key: String, value: MLXArray) -> [(String, MLXArray)] {
+        let mappedKey = weightKey(key)
 
         // Handle weight transposition based on dimension
         var mappedValue = value

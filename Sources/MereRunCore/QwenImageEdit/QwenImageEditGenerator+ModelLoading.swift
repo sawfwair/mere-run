@@ -33,9 +33,12 @@ extension QwenImageEditGenerator {
         let quantConfig = FileManager.default.fileExists(atPath: quantConfigURL.path)
             ? try QuantizedWeightLoader.loadConfig(from: quantConfigURL)
             : nil
+        let manifestID = try MereRunModelManifest.loadIfPresent(from: resolved)?.id
+        let runtimeModelID = manifestID ?? QwenImageEditRepository.canonicalModelId(for: modelSpec)
 
         let loadedModel = LoadedModel(
             modelSpec: modelSpec,
+            runtimeModelID: runtimeModelID,
             rootURL: resolved,
             resources: resources,
             configs: configs,
@@ -87,12 +90,14 @@ extension QwenImageEditGenerator {
         progressHandler?(GenerationProgress(stage: .loadingEncoder, stepIndex: 0, totalSteps: 2))
         try loadEncoderWeights(resources: model.resources, into: encoder)
         progressHandler?(GenerationProgress(stage: .loadingEncoder, stepIndex: 1, totalSteps: 2))
-        MLXNN.quantize(model: encoder, groupSize: 64, bits: 4) { _, module in
-            if let linear = module as? Linear {
-                let (_, inputDim) = linear.shape
-                return inputDim % 64 == 0
+        if !model.usesPinned2511BF16 {
+            MLXNN.quantize(model: encoder, groupSize: 64, bits: 4) { _, module in
+                if let linear = module as? Linear {
+                    let (_, inputDim) = linear.shape
+                    return inputDim % 64 == 0
+                }
+                return true
             }
-            return true
         }
         MLX.eval(encoder)
         Memory.clearCache()
@@ -122,6 +127,12 @@ extension QwenImageEditGenerator {
                     verify: [.shapeMismatch, .noUnusedKeys]
                 )
 
+                try installLightningAdapterIfNeeded(
+                    model: model,
+                    transformer: transformer,
+                    progressHandler: progressHandler
+                )
+
                 MLX.eval(transformer)
                 Memory.clearCache()
                 model.transformer = transformer
@@ -136,16 +147,39 @@ extension QwenImageEditGenerator {
         progressHandler?(GenerationProgress(stage: .loadingTransformer, stepIndex: 0, totalSteps: 1))
         let transformer = MMDiT(config: model.configs.transformer)
         try loadTransformerWeights(resources: model.resources, into: transformer)
-        MLXNN.quantize(model: transformer, groupSize: 64, bits: 4) { _, module in
-            if let linear = module as? Linear {
-                let (_, inputDim) = linear.shape
-                return inputDim % 64 == 0
+        if !model.usesPinned2511BF16 {
+            MLXNN.quantize(model: transformer, groupSize: 64, bits: 4) { _, module in
+                if let linear = module as? Linear {
+                    let (_, inputDim) = linear.shape
+                    return inputDim % 64 == 0
+                }
+                return true
             }
-            return true
         }
+        try installLightningAdapterIfNeeded(
+            model: model,
+            transformer: transformer,
+            progressHandler: progressHandler
+        )
         MLX.eval(transformer)
         Memory.clearCache()
         model.transformer = transformer
+    }
+
+    func installLightningAdapterIfNeeded(
+        model: LoadedModel,
+        transformer: MMDiT,
+        progressHandler: (@Sendable (GenerationProgress) -> Void)?
+    ) throws {
+        guard model.isLightning2511 else {
+            return
+        }
+        progressHandler?(GenerationProgress(stage: .loadingLoRA, stepIndex: 0, totalSteps: 1))
+        _ = try QwenImageEditLightningAdapter.install(
+            url: model.resources.lightningWeightsURL,
+            into: transformer
+        )
+        progressHandler?(GenerationProgress(stage: .loadingLoRA, stepIndex: 1, totalSteps: 1))
     }
 
     func ensureVAELoaded(
@@ -188,20 +222,29 @@ extension QwenImageEditGenerator {
     ) throws {
         let indexURL = resources.textEncoderWeightsIndexURL
         if FileManager.default.fileExists(atPath: indexURL.path) {
+            let data = try Data(contentsOf: indexURL)
+            let index = try JSONDecoder().decode(HFSafetensorsIndex.self, from: data)
+            try Self.validateEncoderCheckpointCoverage(rawKeys: Set(index.weightMap.keys), model: model)
             try HFSafetensorsWeightsLoader.applyShardedWeights(
                 indexURL: indexURL,
-                to: model.underlyingTextEncoder,
+                to: model,
                 dtype: .bfloat16,
                 verify: [.shapeMismatch],
-                mapper: Self.encoderWeightMapper
+                mapper: Self.textEncoderWeightMapper(config: model.config)
             )
         } else if FileManager.default.fileExists(atPath: resources.textEncoderWeightsURL.path) {
+            try Self.validateEncoderCheckpointCoverage(
+                rawKeys: Set(try SafetensorsStreamingLoader.metadata(
+                    url: resources.textEncoderWeightsURL
+                ).keys),
+                model: model
+            )
             try HFSafetensorsWeightsLoader.applyWeights(
                 url: resources.textEncoderWeightsURL,
-                to: model.underlyingTextEncoder,
+                to: model,
                 dtype: .bfloat16,
                 verify: [.shapeMismatch],
-                mapper: Self.encoderWeightMapper
+                mapper: Self.textEncoderWeightMapper(config: model.config)
             )
         } else {
             throw HFSafetensorsWeightsLoader.LoaderError.indexFileMissing(indexURL)
@@ -215,6 +258,12 @@ extension QwenImageEditGenerator {
         let mapper = Self.transformerWeightMapper(config: model.config)
         let indexURL = resources.transformerWeightsIndexURL
         if FileManager.default.fileExists(atPath: indexURL.path) {
+            let data = try Data(contentsOf: indexURL)
+            let index = try JSONDecoder().decode(HFSafetensorsIndex.self, from: data)
+            try Self.validateTransformerCheckpointCoverage(
+                rawKeys: Set(index.weightMap.keys),
+                model: model
+            )
             try HFSafetensorsWeightsLoader.applyShardedWeights(
                 indexURL: indexURL,
                 to: model,
@@ -223,6 +272,12 @@ extension QwenImageEditGenerator {
                 mapper: mapper
             )
         } else if FileManager.default.fileExists(atPath: resources.transformerWeightsURL.path) {
+            try Self.validateTransformerCheckpointCoverage(
+                rawKeys: Set(try SafetensorsStreamingLoader.metadata(
+                    url: resources.transformerWeightsURL
+                ).keys),
+                model: model
+            )
             try HFSafetensorsWeightsLoader.applyWeights(
                 url: resources.transformerWeightsURL,
                 to: model,
@@ -239,6 +294,12 @@ extension QwenImageEditGenerator {
         resources: QwenImageEditResources,
         into model: QwenImageEditVAE
     ) throws {
+        try Self.validateVAECheckpointCoverage(
+            rawKeys: Set(try SafetensorsStreamingLoader.metadata(
+                url: resources.vaeWeightsURL
+            ).keys),
+            model: model
+        )
         try HFSafetensorsWeightsLoader.applyWeights(
             url: resources.vaeWeightsURL,
             to: model.underlyingVAE,
@@ -254,6 +315,10 @@ extension QwenImageEditGenerator {
         config: QwenImageEditTransformerConfig
     ) async throws {
         let mapper = transformerWeightMapper(config: config)
+        let rawKeys = try weightFiles.reduce(into: Set<String>()) { keys, url in
+            keys.formUnion(try SafetensorsStreamingLoader.metadata(url: url).keys)
+        }
+        try validateTransformerCheckpointCoverage(rawKeys: rawKeys, model: model)
         for url in weightFiles {
             try HFSafetensorsWeightsLoader.applyWeights(
                 url: url,
@@ -271,6 +336,10 @@ extension QwenImageEditGenerator {
         config: QwenImageEditTextEncoderConfig
     ) async throws {
         let mapper = textEncoderWeightMapper(config: config)
+        let rawKeys = try weightFiles.reduce(into: Set<String>()) { keys, url in
+            keys.formUnion(try SafetensorsStreamingLoader.metadata(url: url).keys)
+        }
+        try validateEncoderCheckpointCoverage(rawKeys: rawKeys, model: encoder)
         for url in weightFiles {
             try HFSafetensorsWeightsLoader.applyWeights(
                 url: url,
@@ -286,79 +355,127 @@ extension QwenImageEditGenerator {
         config: QwenImageEditTextEncoderConfig
     ) -> (String, MLXArray) -> [(String, MLXArray)] {
         return { rawKey, value in
-            var key = rawKey
-            if key.hasPrefix("model.") {
-                key = "textEncoder.encoder." + String(key.dropFirst("model.".count))
-            }
-            if key.hasPrefix("visual.") {
-                key = "visionTower." + String(key.dropFirst("visual.".count))
-                if key.contains(".patch_embed.proj.") {
-                    key = key.replacingOccurrences(of: ".patch_embed.proj.", with: ".patch_embed.")
-                }
-                if key.contains(".merger.") {
-                    key = key.replacingOccurrences(of: ".merger.", with: ".patch_merger.")
-                }
-            }
-            if key.hasPrefix("lm_head.") {
-                return []
-            }
+            guard let key = textEncoderWeightKey(rawKey) else { return [] }
             return [(key, value)]
         }
     }
 
-    static func encoderWeightMapper(key: String, value: MLXArray) -> [(String, MLXArray)] {
-        if key.hasPrefix("model.") {
-            let remainder = String(key.dropFirst("model.".count))
-            return [("encoder.\(remainder)", value)]
+    static func textEncoderWeightKey(_ rawKey: String) -> String? {
+        if rawKey == "lm_head" || rawKey.hasPrefix("lm_head.") {
+            return nil
         }
-        return [(key, value)]
+        if rawKey.hasPrefix("model.") {
+            return "textEncoder.encoder." + String(rawKey.dropFirst("model.".count))
+        }
+        if rawKey.hasPrefix("visual.") {
+            var key = "visionTower." + String(rawKey.dropFirst("visual.".count))
+            key = key.replacingOccurrences(of: ".merger.", with: ".patch_merger.")
+            key = key.replacingOccurrences(of: ".patch_merger.mlp.0.", with: ".patch_merger.mlp_0.")
+            key = key.replacingOccurrences(of: ".patch_merger.mlp.2.", with: ".patch_merger.mlp_2.")
+            return key
+        }
+        return rawKey
     }
 
     static func transformerWeightMapper(
         config: QwenImageEditTransformerConfig
     ) -> (String, MLXArray) -> [(String, MLXArray)] {
         return { rawKey, value in
-            var key = rawKey
+            [(transformerWeightKey(rawKey), value)]
+        }
+    }
 
-            if key.hasPrefix("img_in.") {
-                return [("x_embedder." + String(key.dropFirst("img_in.".count)), value)]
-            }
-            if key.hasPrefix("txt_in.") {
-                return [("context_embedder." + String(key.dropFirst("txt_in.".count)), value)]
-            }
-            if key.hasPrefix("txt_norm.") {
-                return [(key, value)]
-            }
-            if key.hasPrefix("time_text_embed.timestep_embedder.linear_1.") {
-                let suffix = String(key.dropFirst("time_text_embed.timestep_embedder.linear_1.".count))
-                return [("t_embedder.mlp.0." + suffix, value)]
-            }
-            if key.hasPrefix("time_text_embed.timestep_embedder.linear_2.") {
-                let suffix = String(key.dropFirst("time_text_embed.timestep_embedder.linear_2.".count))
-                return [("t_embedder.mlp.1." + suffix, value)]
-            }
-            if key.contains(".attn.to_out.0.") {
-                key = key.replacingOccurrences(of: ".attn.to_out.0.", with: ".attn.to_out.")
-            }
-            if key.contains(".img_mlp.net.0.proj.") {
-                key = key.replacingOccurrences(of: ".img_mlp.net.0.proj.", with: ".ff.linear1.")
-            }
-            if key.contains(".img_mlp.net.2.") {
-                key = key.replacingOccurrences(of: ".img_mlp.net.2.", with: ".ff.linear2.")
-            }
-            if key.contains(".txt_mlp.net.0.proj.") {
-                key = key.replacingOccurrences(of: ".txt_mlp.net.0.proj.", with: ".ff_context.linear1.")
-            }
-            if key.contains(".txt_mlp.net.2.") {
-                key = key.replacingOccurrences(of: ".txt_mlp.net.2.", with: ".ff_context.linear2.")
-            }
-            if key.contains(".img_mod.1.") {
-                key = key.replacingOccurrences(of: ".img_mod.1.", with: ".adaLN_modulation.linear.")
-            }
-            if key.contains(".txt_mod.1.") {
-                key = key.replacingOccurrences(of: ".txt_mod.1.", with: ".adaLN_modulation_context.linear.")
-            }
-            return [(key, value)]
+    static func transformerWeightKey(_ rawKey: String) -> String {
+        var key = rawKey
+        if key.hasPrefix("img_in.") {
+            return "x_embedder." + String(key.dropFirst("img_in.".count))
+        }
+        if key.hasPrefix("txt_in.") {
+            return "context_embedder." + String(key.dropFirst("txt_in.".count))
+        }
+        if key.hasPrefix("txt_norm.") {
+            return key
+        }
+        if key.hasPrefix("time_text_embed.timestep_embedder.linear_1.") {
+            let suffix = String(key.dropFirst("time_text_embed.timestep_embedder.linear_1.".count))
+            return "t_embedder.mlp.0." + suffix
+        }
+        if key.hasPrefix("time_text_embed.timestep_embedder.linear_2.") {
+            let suffix = String(key.dropFirst("time_text_embed.timestep_embedder.linear_2.".count))
+            return "t_embedder.mlp.1." + suffix
+        }
+        if key.contains(".attn.to_out.0.") {
+            key = key.replacingOccurrences(of: ".attn.to_out.0.", with: ".attn.to_out.")
+        }
+        if key.contains(".img_mlp.net.0.proj.") {
+            key = key.replacingOccurrences(of: ".img_mlp.net.0.proj.", with: ".ff.linear1.")
+        }
+        if key.contains(".img_mlp.net.2.") {
+            key = key.replacingOccurrences(of: ".img_mlp.net.2.", with: ".ff.linear2.")
+        }
+        if key.contains(".txt_mlp.net.0.proj.") {
+            key = key.replacingOccurrences(of: ".txt_mlp.net.0.proj.", with: ".ff_context.linear1.")
+        }
+        if key.contains(".txt_mlp.net.2.") {
+            key = key.replacingOccurrences(of: ".txt_mlp.net.2.", with: ".ff_context.linear2.")
+        }
+        if key.contains(".img_mod.1.") {
+            key = key.replacingOccurrences(of: ".img_mod.1.", with: ".adaLN_modulation.linear.")
+        }
+        if key.contains(".txt_mod.1.") {
+            key = key.replacingOccurrences(of: ".txt_mod.1.", with: ".adaLN_modulation_context.linear.")
+        }
+        return key
+    }
+
+    static func validateTransformerCheckpointCoverage(
+        rawKeys: Set<String>,
+        model: MMDiT
+    ) throws {
+        let checkpointKeys = Set(rawKeys.map(transformerWeightKey))
+        let modelKeys = Set(model.parameters().flattened().map(\.0))
+        let missing = modelKeys.subtracting(checkpointKeys).sorted()
+        let unexpected = checkpointKeys.subtracting(modelKeys).sorted()
+        guard missing.isEmpty, unexpected.isEmpty else {
+            throw GeneratorError.checkpointCoverage(
+                component: "Qwen Image Edit transformer",
+                missing: missing,
+                unexpected: unexpected
+            )
+        }
+    }
+
+    static func validateEncoderCheckpointCoverage(
+        rawKeys: Set<String>,
+        model: Qwen25VLEncoder
+    ) throws {
+        let checkpointKeys = Set(rawKeys.compactMap(textEncoderWeightKey))
+        let modelKeys = Set(model.parameters().flattened().map(\.0))
+        let missing = modelKeys.subtracting(checkpointKeys).sorted()
+        let unexpected = checkpointKeys.subtracting(modelKeys).sorted()
+        guard missing.isEmpty, unexpected.isEmpty else {
+            throw GeneratorError.checkpointCoverage(
+                component: "Qwen2.5-VL encoder",
+                missing: missing,
+                unexpected: unexpected
+            )
+        }
+    }
+
+    static func validateVAECheckpointCoverage(
+        rawKeys: Set<String>,
+        model: QwenImageEditVAE
+    ) throws {
+        let checkpointKeys = Set(rawKeys.map(QwenImageEditVAE.weightKey))
+        let modelKeys = Set(model.underlyingVAE.parameters().flattened().map(\.0))
+        let missing = modelKeys.subtracting(checkpointKeys).sorted()
+        let unexpected = checkpointKeys.subtracting(modelKeys).sorted()
+        guard missing.isEmpty, unexpected.isEmpty else {
+            throw GeneratorError.checkpointCoverage(
+                component: "Qwen Image Edit VAE",
+                missing: missing,
+                unexpected: unexpected
+            )
         }
     }
 }

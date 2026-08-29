@@ -72,7 +72,7 @@ struct ImageGenerate: AsyncParsableCommand {
 
     @Option(
         name: [.customLong("ref-image")],
-        help: "Reference image path for Klein, HiDream O1, or SenseNova U1.5 editing. Repeat for multiple references."
+        help: "Reference image path for Klein, Qwen Edit, HiDream O1, or SenseNova U1.5 editing. Repeat for multiple references."
     )
     var referenceImages: [String] = []
 
@@ -266,14 +266,15 @@ struct ImageGenerate: AsyncParsableCommand {
             referenceImages: referenceImageURLs,
             strength: strength
         )
+        let usesManifestImageDefaults = manifest.engine == .qwenImageEdit
+            || manifest.family == .hidream || manifest.family == .senseNova
+            || manifest.family == .krea || manifest.family == .ideogram
         let effectiveSteps = steps
-            ?? ((manifest.family == .hidream || manifest.family == .senseNova
-                    || manifest.family == .krea || manifest.family == .ideogram)
+            ?? (usesManifestImageDefaults
                 ? (manifest.defaults?.steps ?? 4)
                 : 4)
         let effectiveCFG = cfgScale
-            ?? ((manifest.family == .hidream || manifest.family == .senseNova
-                    || manifest.family == .krea || manifest.family == .ideogram)
+            ?? (usesManifestImageDefaults
                 ? (manifest.defaults?.cfg ?? 1.0)
                 : 1.0)
         let effectiveSigmaShift = sigmaShift.map { Float($0) }
@@ -392,6 +393,9 @@ struct ImageGenerate: AsyncParsableCommand {
             case .ideogram:
                 let generator = Ideogram4Generator()
                 defer { generator.unload() }
+                result = try await generator.generate(request, progressHandler: progressHandler)
+            case .qwen where manifest.engine == .qwenImageEdit:
+                let generator = QwenImageEditGenerator()
                 result = try await generator.generate(request, progressHandler: progressHandler)
             case .gemma, .laguna, .liquid, .qwen, .sam, .falcon, .terramind, .tessera, .olmoEarth,
                  .face, .geometry, .depth, .threeD,

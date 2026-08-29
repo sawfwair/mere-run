@@ -827,6 +827,30 @@ final class VideoCommandTests: XCTestCase {
         )
     }
 
+    func testMiniMaxH3LightX2V768pPreflightSelectsPublishedEightEvaluations() throws {
+        let command = try VideoGenerate.parse([
+            "a train crosses a bright alpine valley",
+            "--model", ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue,
+            "--width", "1344",
+            "--height", "768",
+            "--h3-adapter", ManagedAdapterCatalog.miniMaxH3LightX2VEightStepV1_768pID,
+        ])
+        let envelope = command.makePreflightEnvelope(
+            outputURL: makeTempOutput(name: "h3-lightx2v-v1-8step-768p.mp4"),
+            fileManager: .default,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.result.plan.resolvedSteps, 9)
+        XCTAssertFalse(envelope.diagnostics.contains { $0.id == "h3_adapter_steps_invalid" })
+        XCTAssertEqual(
+            envelope.result.inputs.adapter?.path,
+            ManagedAdapterCatalog.spec(
+                for: ManagedAdapterCatalog.miniMaxH3LightX2VEightStepV1_768pID
+            )?.installedFileURL().path
+        )
+    }
+
     func testMiniMaxH3LightX2VRef2VAPreflightSelectsPublishedRecipe() throws {
         let reference = FileManager.default.temporaryDirectory
             .appendingPathComponent("h3-ref2va-turbo-\(UUID().uuidString).png")

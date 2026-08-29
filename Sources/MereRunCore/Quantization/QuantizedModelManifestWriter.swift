@@ -58,6 +58,7 @@ public enum QuantizedModelManifestWriter {
             case .hidreamO1: return .hidream
             case .senseNovaU15: return .senseNova
             case .krea2: return .krea
+            case .qwenImageEdit: return .qwen
             case .ideogram4: return .ideogram
             case .gemma4: return .gemma
             case .lfm2: return .liquid
@@ -125,6 +126,8 @@ public enum QuantizedModelManifestWriter {
                     return [.txt2img, .img2img, .referenceEdit, .subjectPersonalization]
                 case .krea2:
                     return [.txt2img]
+                case .qwenImageEdit:
+                    return [.referenceEdit]
                 case .ideogram4:
                     return [.txt2img]
                 case .gemma4:
@@ -267,6 +270,8 @@ public enum QuantizedModelManifestWriter {
                     cfg: 0.0,
                     sigmaShift: Double(Krea2SampleBuilder.defaultMu)
                 )
+            case .qwenImageEdit:
+                manifest.defaults = MereRunModelManifest.Defaults(steps: 40, cfg: 4.0)
             case .ideogram4:
                 manifest.defaults = MereRunModelManifest.Defaults(steps: 20, cfg: 7.0)
             case .gemma4:

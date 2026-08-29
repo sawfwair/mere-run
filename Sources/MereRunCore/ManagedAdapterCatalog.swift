@@ -94,6 +94,8 @@ public enum ManagedAdapterCatalog {
     public static let miniMaxH3LightX2VFourStepID = "minimax-h3-lightx2v-4step"
     public static let miniMaxH3LightX2VFourStepRevision = "b65e359c0d128b3c5e08e0f5bf2791b794378588"
     public static let miniMaxH3LightX2VEightStepV1ID = "minimax-h3-lightx2v-8step-v1"
+    public static let miniMaxH3LightX2VEightStepV1_768pID = "minimax-h3-lightx2v-8step-v1-768p"
+    public static let miniMaxH3LightX2VEightStepV1_768pRevision = "05ef678438e84933c406131b59abbf86919b3aac"
     public static let miniMaxH3LightX2VFourStepV1_768pID = "minimax-h3-lightx2v-4step-v1-768p"
     public static let miniMaxH3LightX2VV1Revision = "e6346777701aa2b64d42ed058cdd71ae00e7cd52"
     public static let miniMaxH3LightX2VRef2VFourStepV01ID = "minimax-h3-lightx2v-ref2v-4step-v0.1"
@@ -241,6 +243,31 @@ public enum ManagedAdapterCatalog {
                 filename: "minimax_h3_fl2v_turbo_4step_v1.0_768p_bf16.safetensors",
                 byteCount: 1_383_677_808,
                 sha256: "1bdabc2e9fce20b1db563b96bcf6e46adcad4c1964f423676436bf266cc7416c"
+            )
+        ),
+        ManagedAdapterSpec(
+            id: miniMaxH3LightX2VEightStepV1_768pID,
+            title: "MiniMax-H3 Turbo 8-step v1.0 768p (LightX2V)",
+            version: String(miniMaxH3LightX2VEightStepV1_768pRevision.prefix(12)),
+            summary: "LightX2V v1.0 eight-evaluation 1344x768 PEFT LoRA for native MiniMax-H3 compact BF16 and Q8 FL2VA.",
+            baseModelID: ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue,
+            compatibleBaseModelIDs: [
+                ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue,
+                MiniMaxH3Resources.fl2vaQ8ModelID,
+            ],
+            format: MiniMaxH3TurboAdapter.lightX2VFormat,
+            license: "Apache-2.0 (adapter); MiniMax-H3 Community License (base model)",
+            upstreamRevision: miniMaxH3LightX2VEightStepV1_768pRevision,
+            releaseManifestURL: URL(
+                string: "https://huggingface.co/lightx2v/Minimax-h3-Turbo/commit/\(miniMaxH3LightX2VEightStepV1_768pRevision)"
+            )!,
+            downloadURL: URL(
+                string: "https://huggingface.co/lightx2v/Minimax-h3-Turbo/resolve/\(miniMaxH3LightX2VEightStepV1_768pRevision)/minimax_h3_fl2v_turbo_8step_v1.0_768p_bf16.safetensors?download=true"
+            )!,
+            artifact: ModelArtifactPin(
+                filename: "minimax_h3_fl2v_turbo_8step_v1.0_768p_bf16.safetensors",
+                byteCount: 1_383_677_808,
+                sha256: "9b0efe3613b43a84e30febaa43af27432ea9d0711eac7bba904b2556b175f6d4"
             )
         ),
         ManagedAdapterSpec(

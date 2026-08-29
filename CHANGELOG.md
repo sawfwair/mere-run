@@ -15,6 +15,14 @@ The format is based on Keep a Changelog.
   Fresh installs no longer keep official transformer files beside generated
   native optimization copies, and `model optimize` treats a pre-keyed package
   as already optimized.
+- added the checksum-pinned LightX2V MiniMax-H3 FL2VA Turbo 8-step v1.0
+  768p adapter as `minimax-h3-lightx2v-8step-v1-768p`. The runtime selects
+  eight model evaluations, video and audio shifts 6/3, and the artifact's
+  embedded alpha 8. Refreshed compact BF16 and Q8 artifacts include an exact
+  nine-point shifts-6/3 AdaLN table generated from the pinned official source
+  on MLX Metal. The refresh receipt proves source-range and baseline-table
+  tensor closure; custom schedules still disclose interpolation as not
+  bit-exact.
 
 ## 0.46.1 - 2026-08-29
 

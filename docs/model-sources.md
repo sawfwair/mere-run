@@ -64,6 +64,8 @@ an effective overlay; they are not a second capability catalog.
 | `image` | `image-sensenova-u1-5-8b-mot` |
 | `image` | `image-krea2-raw` |
 | `image` | `image-krea2-turbo` |
+| `image` | `image-qwen-edit-2511` |
+| `image` | `image-qwen-edit-2511-lightning` |
 | `image` | `image-ideogram4-sdnq-uint4` |
 | `text-chat` | `text-chat-mebot` |
 | `text-chat` | `text-chat-psi-agent` |
@@ -749,6 +751,45 @@ Runtime defaults come from the managed manifest:
 The component install is about 36 GiB before filesystem compression effects.
 Expect high unified-memory pressure and prefer 96 GB+ Apple Silicon machines.
 
+`image-qwen-edit-2511` is the immutable quality lane for Qwen Image Edit 2511.
+It pulls `Qwen/Qwen-Image-Edit-2511` at revision
+`6f3ccc0b56e431dc6a0c2b2039706d7d26f22cb9`; it does not replace or redirect
+the legacy `qwen-image-edit` install. Its managed defaults are 40 steps and
+true CFG 4.0 with a blank negative prompt.
+
+`image-qwen-edit-2511-lightning` uses the same pinned base plus
+`lightx2v/Qwen-Image-Edit-2511-Lightning` at revision
+`d74eba145674fd7e31b949324e148e21e7118abd`. The runtime accepts only the
+four-step BF16 adapter named
+`Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors`, verifies its
+849,608,296-byte size and SHA-256
+`22226e8d05d354bb356627d428809f5afd7819399b077238a2b70a82883a904f`, and
+requires exactly four steps with CFG disabled.
+
+Both managed IDs use the native 2511 edit path. It accepts one to three ordered
+images across `--input` followed by repeated `--ref-image` arguments. Each
+reference retains its own aspect ratio for Qwen2.5-VL semantic conditioning and
+VAE appearance conditioning. The output starts from pure noise; packed
+reference latents remain conditioning tokens rather than being blended into
+the output latent. These two pinned lanes retain the base encoder and
+transformer in BF16 at runtime; the legacy `qwen-image-edit` compatibility path
+keeps its existing runtime Q4 behavior.
+
+```bash
+mere.run model pull image-qwen-edit-2511
+mere.run image generate \
+  --model image-qwen-edit-2511 \
+  --input ./primary.png \
+  --ref-image ./style.png \
+  --prompt "Apply the palette of Picture 2 while preserving Picture 1's layout" \
+  --output ./edited.png
+```
+
+The pinned base is about 53.75 GiB before filesystem compression; the Lightning
+lane adds about 810 MiB. These sizes and the current runtime's memory behavior
+require physical Apple Silicon qualification before publishing a supported
+memory class or performance claim.
+
 `image-ideogram4-sdnq-uint4` maps to WaveCut's public SDNQ uint4 Ideogram 4
 snapshot:
 
@@ -1251,10 +1292,10 @@ release visual-quality bar and is no longer recommended.
 
 The maximum-fidelity `video-minimax-h3-fl2va-bf16-mlx` ID now resolves to the
 single-root `Sawfwair/MiniMax-H3-FL2VA-MLX-BF16` compact artifact pinned at
-immutable Hub commit `6f2c1edb4d31d9110d4a51457ba1d6401a05dfd0`. Its active
+immutable Hub commit `4ce4b1d870f7b1b0c75672fd4f2867c1f5df7b5f`. Its active
 20.11B-parameter denoising core remains BF16 while the Q8 conditioner, FP16
 video VAE, FP32 audio VAE, tokenizer, license, provenance, and cache pack live
-beside it. The verified runtime payload is exactly 76,861,026,073 bytes. The old
+beside it. The verified runtime payload is exactly 77,094,088,403 bytes. The old
 full transformer overlay remains recoverable from
 `pipenetwork/MiniMax-H3-MLX-bf16@1486555759eed9e3037edf29f9e055a0713bab2f`,
 but is no longer a managed download source.
@@ -1262,16 +1303,18 @@ but is no longer a managed download source.
 The production AdaLN tables in both compact artifacts are generated from the
 pinned official projection tensors by `mere.run model optimize` on MLX Metal.
 Their source-closure receipt includes exact matched 9- and 21-point real-media
-hashes. CUDA is still used to reproduce and quantize the large transformer
-cores, but CUDA-generated BF16 modulation tables are rejected because backend
-reduction order is not bit-identical to Apple Silicon.
+hashes. A streaming MLX 0.32.1 Metal refresh adds the exact LightX2V 9-point
+shifts-6/3 table and proves that the seven pre-existing tables retain their
+tensor closures. CUDA is still used to reproduce and quantize the large
+transformer cores, but CUDA-generated BF16 modulation tables are rejected
+because backend reduction order is not bit-identical to Apple Silicon.
 
 `video-minimax-h3-fl2va-8bit-mlx` uses the sibling
 `Sawfwair/MiniMax-H3-FL2VA-MLX-8bit` artifact pinned at immutable Hub commit
-`57a926c2422e09c8563cd2e0c43b2e94ef791de4`. Eligible core linears use MLX
+`86500cb6ebec22c006597e41840b26ef1099fdd7`. Eligible core linears use MLX
 affine INT8/group-64; the conditioner, VAEs, tokenizer, cache tables, and
-official-source provenance remain the same as compact BF16. Its independently
-verified runtime payload is exactly 58,075,175,639 bytes. Q8 is a disk and
+official-source provenance remain the same as compact BF16. Its managed
+runtime payload is exactly 58,308,237,969 bytes. Q8 is a disk and
 memory option instead of a speed claim. Both compact packages are explicit-pull
 only and runtime auto-download remains disabled.
 
@@ -1305,7 +1348,7 @@ BF16 or directly quantizes eligible core linears to affine Q8/group-64 and
 always quantizes the conditioner to Q8 once. Before omitting the schedule-only
 AdaLN projections, timestep MLP, and reconstructed RoPE tensors, it evaluates
 source-bound exact tables for 5, 9, 12, 16, 21, and 31 points at video/audio
-shifts 12/3 plus the LightX2V 5-point shifts 6/3 schedule. The versioned pack
+shifts 12/3 plus the LightX2V 5- and 9-point shifts 6/3 schedules. The versioned pack
 index binds each geometry to its filename, byte count, SHA-256, and official
 transformer identity. Custom schedules interpolate from the densest table and
 are visibly disclosed as not bit-exact.
@@ -1359,6 +1402,17 @@ and 1,383,677,808 bytes /
 The runtime binds each filename to the upstream recipe so the 8-step release
 uses shifts 12/3 and alpha 8, while the 1344x768 four-step release uses shifts
 6/3 and alpha 128.
+
+The `minimax-h3-lightx2v-8step-v1-768p` adapter pins the non-ComfyUI BF16
+checkpoint `minimax_h3_fl2v_turbo_8step_v1.0_768p_bf16.safetensors` at
+immutable repository revision `05ef678438e84933c406131b59abbf86919b3aac`.
+The catalog verifies its exact 1,383,677,808-byte length and SHA-256
+`9b0efe3613b43a84e30febaa43af27432ea9d0711eac7bba904b2556b175f6d4`.
+The checkpoint contains 312 BF16 PEFT pairs at rank 128 and declares alpha 8.
+mere.run selects eight model evaluations and video/audio shifts 6/3 for its
+1344x768 recipe. The pinned compact model roots select the exact source-bound
+nine-point AdaLN table for this schedule; full BF16 source roots compute the
+same table from their AdaLN weights.
 
 The Ref2VA-specific `minimax-h3-lightx2v-ref2v-4step-v0.1` adapter pins the
 non-ComfyUI BF16 checkpoint

@@ -1,10 +1,16 @@
 import Foundation
 
 public struct QwenVisionConfiguration {
+  public enum MLPStyle {
+    case twoLayer
+    case gated
+  }
+
   public var depth: Int
   public var embedDim: Int
   public var mlpHiddenDim: Int
   public var hiddenAct: Activation
+  public var mlpStyle: MLPStyle
   public var numHeads: Int
   public var eps: Float
   public var patchSize: Int
@@ -32,6 +38,7 @@ public struct QwenVisionConfiguration {
     embedDim: Int = 1_280,
     mlpHiddenDim: Int = 3_420,
     hiddenAct: Activation = .silu,
+    mlpStyle: MLPStyle = .twoLayer,
     numHeads: Int = 16,
     eps: Float = 1e-6,
     patchSize: Int = 14,
@@ -50,6 +57,7 @@ public struct QwenVisionConfiguration {
     self.embedDim = embedDim
     self.mlpHiddenDim = mlpHiddenDim
     self.hiddenAct = hiddenAct
+    self.mlpStyle = mlpStyle
     self.numHeads = numHeads
     self.eps = eps
     self.patchSize = patchSize
