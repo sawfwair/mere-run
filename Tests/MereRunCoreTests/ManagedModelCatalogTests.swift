@@ -801,7 +801,7 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.apiProfile?.compatibility.supportsReasoningEffort, true)
     }
 
-    func testQ38TwentySevenB4BitUsesCrownedTargetAndQuantizedMTPHead() throws {
+    func testQ38TwentySevenB4BitUsesCrownedTargetWithMTPAndVisionComponents() throws {
         let spec = try XCTUnwrap(
             ManagedModelCatalog.spec(for: Q35Resources.q38TwentySevenB4BitModelId)
         )
@@ -811,7 +811,7 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.installShape, .directoryRoot)
         XCTAssertEqual(spec.hubFallback?.repoId, Q35Resources.q38TwentySevenB4BitUpstreamRepoId)
         XCTAssertEqual(spec.hubFallback?.revision, Q35Resources.q38TwentySevenB4BitUpstreamRevision)
-        XCTAssertEqual(spec.mountedHubFallbacks.count, 2)
+        XCTAssertEqual(spec.mountedHubFallbacks.count, 3)
         XCTAssertEqual(spec.mountedHubFallbacks.first?.destinationPath, Q35Resources.q38MTPComponentPath)
         XCTAssertEqual(
             spec.mountedHubFallbacks.first?.hubFallback.repoId,
@@ -834,6 +834,22 @@ final class ManagedModelCatalogTests: XCTestCase {
             Q35Resources.q38MTPComponentSnapshotPatterns
         )
         XCTAssertEqual(
+            spec.mountedHubFallbacks[1].destinationPath,
+            Q35Resources.q38VisionComponentPath
+        )
+        XCTAssertEqual(
+            spec.mountedHubFallbacks[1].hubFallback.repoId,
+            Q35Resources.q38TwentySevenBUpstreamRepoId
+        )
+        XCTAssertEqual(
+            spec.mountedHubFallbacks[1].hubFallback.revision,
+            Q35Resources.q38TwentySevenBUpstreamRevision
+        )
+        XCTAssertEqual(
+            spec.mountedHubFallbacks[1].hubFallback.patterns,
+            Q35Resources.q38VisionComponentSnapshotPatterns
+        )
+        XCTAssertEqual(
             spec.mountedHubFallbacks.last?.destinationPath,
             Q35Resources.q38LicenseComponentPath
         )
@@ -847,7 +863,7 @@ final class ManagedModelCatalogTests: XCTestCase {
         )
         XCTAssertEqual(spec.validationKind, .q35)
         XCTAssertEqual(spec.defaultRuntimeServingEngine, .textChatQ36)
-        XCTAssertEqual(spec.estimatedDownloadBytes, 15_520_000_000)
+        XCTAssertEqual(spec.estimatedDownloadBytes, 19_487_000_000)
         XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
         XCTAssertTrue(spec.defaultCLICommands.contains("model benchmark code"))
         XCTAssertEqual(spec.apiProfile?.thinkingLevels, [.low, .medium, .xhigh])
@@ -882,7 +898,7 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertNotNil(q4.usageRestriction)
     }
 
-    func testQ38TwentySevenB4BitValidationRequiresMountedMTPFiles() throws {
+    func testQ38TwentySevenB4BitValidationRequiresMountedComponents() throws {
         let spec = try XCTUnwrap(
             ManagedModelCatalog.spec(for: Q35Resources.q38TwentySevenB4BitModelId)
         )
@@ -894,13 +910,24 @@ final class ManagedModelCatalogTests: XCTestCase {
 
         XCTAssertEqual(
             Set(spec.missingPaths(in: root).map(\.lastPathComponent)),
-            Set(Q35Resources.q38MTPComponentSnapshotPatterns)
+            Set(
+                Q35Resources.q38MTPComponentSnapshotPatterns
+                    + Q35Resources.q38VisionComponentSnapshotPatterns
+            )
         )
 
         let mtpRoot = root.appendingPathComponent(Q35Resources.q38MTPComponentPath, isDirectory: true)
         try FileManager.default.createDirectory(at: mtpRoot, withIntermediateDirectories: true)
         for filename in Q35Resources.q38MTPComponentSnapshotPatterns {
             try Data().write(to: mtpRoot.appendingPathComponent(filename))
+        }
+        let visionRoot = root.appendingPathComponent(
+            Q35Resources.q38VisionComponentPath,
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(at: visionRoot, withIntermediateDirectories: true)
+        for filename in Q35Resources.q38VisionComponentSnapshotPatterns {
+            try Data().write(to: visionRoot.appendingPathComponent(filename))
         }
         let licenseRoot = root.appendingPathComponent(
             Q35Resources.q38LicenseComponentPath,

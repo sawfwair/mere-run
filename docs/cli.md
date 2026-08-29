@@ -2538,7 +2538,8 @@ uses the supported members of the coding comparison lane for this machine:
 specific explicit comparison. The installed `vision-chat-q38-27b` and
 `vision-chat-q38-27b-4bit` code-generation lanes are available as explicit
 targets but are not added to the default comparison. The BF16 checkpoint is
-55.59 GB; the 4-bit target plus official MTP shard is 19.47 GB.
+55.59 GB; the 4-bit target plus its MTP and official vision components is
+19.49 GB.
 
 ```bash
 swift run mere.run model benchmark code \

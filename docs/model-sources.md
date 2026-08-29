@@ -362,10 +362,14 @@ The managed pull mounts the track's matching proposal-only 4-bit/group-64 head,
 `morgan/qwen38-27b-mtp-r20k-lr3-q4-g64-q2-rerank` at revision
 `fd4a99c590dd6e468c0e2a28168c235e32151a4b`, under `mtp/`. The companion uses
 a proposal-only 2-bit compact readout with exact 4-bit shortlist reranking.
-Qwen's official Apache-2.0 license is retained separately from the official
-pinned revision. The sources total about 15.52 GB. Greedy MTP decode is enabled
-by default for this quantized target because its small-batch Q4 verification is
-serial-exact; set `MERERUN_Q35_MTP_SPECULATION=0` to use target-only decode.
+Because the optimized target doesn't contain a vision tower, the managed pull
+also mounts the official Qwen3.8 configuration, processor metadata, weight
+index, and the first indexed BF16 shard under `vision/` from the pinned official
+revision above. That shard contains all 333 vision tensors; language tensors in
+it are not loaded. Qwen's official Apache-2.0 license is retained separately.
+The sources total about 19.49 GB. Greedy MTP decode is enabled by default for
+this quantized target because its small-batch Q4 verification is serial-exact;
+set `MERERUN_Q35_MTP_SPECULATION=0` to use target-only decode.
 
 `vision-chat-q38-flash-next-mixed` installs Sawfwair's immutable
 `Qwen3.8-Flash-Next-MLX-Mixed-2bit` revision

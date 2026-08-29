@@ -36,4 +36,9 @@ final class LTXUnifiedAVTransformerV2Tests: XCTestCase {
             dtype: .float32
         ).isEmpty)
     }
+
+    func testLTX23AndLTX25UseTheirPublishedVideoFeedForwardBiasContracts() {
+        XCTAssertTrue(LTXUnifiedAVTransformerCheckpointKind.ltx23.videoFeedForwardBias)
+        XCTAssertFalse(LTXUnifiedAVTransformerCheckpointKind.ltx25.videoFeedForwardBias)
+    }
 }

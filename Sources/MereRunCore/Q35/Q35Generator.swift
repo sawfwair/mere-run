@@ -159,6 +159,7 @@ public actor Q35Generator: ChatGenerator {
     private var loadedConfig: Q35Config?
     private var loadedGenerationEOSTokenIds: [Int] = []
     private var loadedResources: Q35Resources?
+    private var loadedVisionResources: Q35Resources?
 
     #if DEBUG
     private var checkpointTransformForTesting: (@Sendable (Q35Model) throws -> Void)?
@@ -405,6 +406,7 @@ public actor Q35Generator: ChatGenerator {
         loadedConfig = nil
         loadedGenerationEOSTokenIds = []
         loadedResources = nil
+        loadedVisionResources = nil
         Memory.clearCache()
     }
 
@@ -496,7 +498,22 @@ public actor Q35Generator: ChatGenerator {
             _ = q35Model.prepareFusedSwitchGLU()
         }
 
-        let tower = config.visionConfig == nil ? nil : Q35VisionTower(config: config)
+        let primaryResources = Q35Resources(rootURL: normalizedRoot)
+        let visionConfigAndResources: (Q35Config, Q35Resources)?
+        if config.visionConfig != nil {
+            visionConfigAndResources = (config, primaryResources)
+        } else if modelId == Q35Resources.q38TwentySevenB4BitModelId {
+            let companionResources = primaryResources.q38VisionComponentResources
+            let companionConfigData = try Data(contentsOf: companionResources.configURL)
+            let companionConfig = try JSONDecoder().decode(Q35Config.self, from: companionConfigData)
+            guard companionConfig.visionConfig != nil else {
+                throw Q35Error.generationFailed("Qwen3.8 4-bit vision companion does not include a vision config.")
+            }
+            visionConfigAndResources = (companionConfig, companionResources)
+        } else {
+            visionConfigAndResources = nil
+        }
+        let tower = visionConfigAndResources.map { Q35VisionTower(config: $0.0) }
         // Load the MTP draft head whenever it ships with the model and isn't
         // explicitly disabled. Whether speculation is actually USED is decided
         // by the model-specific policy in Self.shouldSpeculate. Dense Qwen3.8
@@ -566,6 +583,7 @@ public actor Q35Generator: ChatGenerator {
         loadedConfig = config
         loadedGenerationEOSTokenIds = generationEOSTokenIds
         loadedResources = resources
+        loadedVisionResources = visionConfigAndResources?.1
         loadedModelPath = normalizedRoot.path
     }
 
@@ -2882,10 +2900,10 @@ public actor Q35Generator: ChatGenerator {
     ) throws {
         guard let visionTower else { return }
         guard !visionTower.isLoaded else { return }
-        guard let loadedResources else { throw Q35Error.modelNotLoaded }
+        guard let loadedVisionResources else { throw Q35Error.modelNotLoaded }
 
         progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Qwen-family vision tower"))
-        try visionTower.loadWeights(from: loadedResources)
+        try visionTower.loadWeights(from: loadedVisionResources)
     }
 
     private func buildVisionReplacements(

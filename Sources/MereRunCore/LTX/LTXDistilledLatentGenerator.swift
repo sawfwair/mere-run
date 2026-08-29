@@ -4583,7 +4583,9 @@ public actor LTXUnifiedAVGenerator {
         let textEncoderSeconds = ltxMonotonicSeconds() - textStart
 
         let transformerStart = ltxMonotonicSeconds()
-        let model = LTXUnifiedAVTransformerV2()
+        let model = LTXUnifiedAVTransformerV2(
+            checkpointKind: isLTX25 ? .ltx25 : .ltx23
+        )
         if isLTX25 {
             try loadLTX25TransformerWeights(url: transformerURL, model: model, dtype: dtype)
         } else {
@@ -4766,7 +4768,7 @@ public actor LTXUnifiedAVGenerator {
         let transformerStart = ltxMonotonicSeconds()
         let model: any LTXUnifiedAVTransformerRuntime
         if isLTX23 {
-            let splitModel = LTXUnifiedAVTransformerV2()
+            let splitModel = LTXUnifiedAVTransformerV2(checkpointKind: .ltx23)
             try SafetensorsStreamingLoader.applyWeightsStreaming(
                 url: transformerURL,
                 to: splitModel,
@@ -10187,6 +10189,15 @@ private struct LTXV2TextProjectionCache {
     let audio: [LTXAttentionProjectedContext]
 }
 
+enum LTXUnifiedAVTransformerCheckpointKind {
+    case ltx23
+    case ltx25
+
+    var videoFeedForwardBias: Bool {
+        self == .ltx23
+    }
+}
+
 private final class LTXUnifiedAVTransformerV2: Module, LTXUnifiedAVTransformerRuntime {
     let videoDim = 4096
     let audioDim = 2048
@@ -10205,6 +10216,7 @@ private final class LTXUnifiedAVTransformerV2: Module, LTXUnifiedAVTransformerRu
     private var activeTextProjectionCache: LTXV2TextProjectionCache?
     private var activeTeaCacheController: LTXTeaCacheController?
     private var activeTeaCacheRequest: LTXTeaCacheRequest?
+    private let videoFeedForwardBias: Bool
 
     @ModuleInfo(key: "patchify_proj") var patchifyProj: Linear
     @ModuleInfo(key: "keyframes_abs_pos_embedding") var keyframesAbsPosEmbedding: MLXArray
@@ -10226,7 +10238,8 @@ private final class LTXUnifiedAVTransformerV2: Module, LTXUnifiedAVTransformerRu
     @ModuleInfo(key: "norm_out") var normOut: LayerNorm
     @ModuleInfo(key: "audio_norm_out") var audioNormOut: LayerNorm
 
-    override init() {
+    init(checkpointKind: LTXUnifiedAVTransformerCheckpointKind = .ltx25) {
+        self.videoFeedForwardBias = checkpointKind.videoFeedForwardBias
         self._patchifyProj.wrappedValue = Linear(128, videoDim, bias: true)
         self._keyframesAbsPosEmbedding.wrappedValue = MLX.zeros([1, videoDim], dtype: .float32)
         self._audioPatchifyProj.wrappedValue = Linear(128, audioDim, bias: true)
@@ -10258,7 +10271,9 @@ private final class LTXUnifiedAVTransformerV2: Module, LTXUnifiedAVTransformerRu
             embeddingCoefficient: 1
         )
         self._transformerBlocks.wrappedValue = (0..<48).map { _ in
-            LTXUnifiedAVTransformerV2Block()
+            LTXUnifiedAVTransformerV2Block(
+                videoFeedForwardBias: checkpointKind.videoFeedForwardBias
+            )
         }
         self._normOut.wrappedValue = LayerNorm(dimensions: videoDim, eps: 1e-6, affine: false)
         self._audioNormOut.wrappedValue = LayerNorm(dimensions: audioDim, eps: 1e-6, affine: false)
@@ -10643,7 +10658,9 @@ private final class LTXUnifiedAVTransformerV2: Module, LTXUnifiedAVTransformerRu
         if let compiledBlockRunner {
             runner = compiledBlockRunner
         } else {
-            let created = LTXUnifiedAVTransformerV2Block()
+            let created = LTXUnifiedAVTransformerV2Block(
+                videoFeedForwardBias: videoFeedForwardBias
+            )
             compiledBlockRunner = created
             runner = created
         }
@@ -10767,7 +10784,7 @@ private final class LTXUnifiedAVTransformerV2Block: Module {
     @ModuleInfo(key: "scale_shift_table_a2v_ca_video") var scaleShiftTableA2VCAVideo: MLXArray
     @ModuleInfo(key: "scale_shift_table_a2v_ca_audio") var scaleShiftTableA2VCAAudio: MLXArray
 
-    override init() {
+    init(videoFeedForwardBias: Bool = false) {
         self._attn1.wrappedValue = LTXDistilledAttention(
             queryDim: videoDim,
             contextDim: nil,
@@ -10820,7 +10837,7 @@ private final class LTXUnifiedAVTransformerV2Block: Module {
             dim: videoDim,
             dimOut: videoDim,
             mult: 4,
-            bias: false
+            bias: videoFeedForwardBias
         )
         self._audioFF.wrappedValue = LTXDistilledFeedForward(dim: audioDim, dimOut: audioDim, mult: 4)
         self._scaleShiftTable.wrappedValue = MLX.zeros([9, videoDim], dtype: .float32)

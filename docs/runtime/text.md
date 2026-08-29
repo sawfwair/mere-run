@@ -44,7 +44,7 @@ help in the repository gate.
 - `text-chat-nemotron-35-lightning` (managed NVIDIA Nemotron 3.5 Lightning 30B-A3B NVFP4 target plus DSpark)
 - `text-chat-q36-nano`
 - `vision-chat-q38-27b` (managed official Qwen3.8 27B BF16 vision-language snapshot)
-- `vision-chat-q38-27b-4bit` (managed MLX 4-bit target plus pinned official MTP shard)
+- `vision-chat-q38-27b-4bit` (managed MLX 4-bit target plus pinned MTP and official vision components)
 - `text-chat-bonsai-27b-1bit` (managed packed 1-bit dense Qwen3.6 27B vision/reasoning snapshot)
 - `text-chat-bonsai-27b-2bit` (managed packed 2-bit ternary dense Qwen3.6 27B vision/reasoning snapshot)
 - `text-chat-lfm25-2.6b-4bit` (managed LiquidAI LFM2.5 2.6B dense MLX 4-bit snapshot)
@@ -349,10 +349,12 @@ swift run mere.run text chat \
   --prompt "Implement a bounded async work queue in Swift."
 ```
 
-This installs the pinned MLX Fast 4-bit/group-64 target and its matching
-proposal-only 4-bit/group-64 MTP head under `mtp/`, totaling about 15.39 GB;
-the managed install also retains Qwen's official Apache-2.0 license. On the
-measured M4 Max coding slice,
+This installs the pinned MLX Fast 4-bit/group-64 target, its matching
+proposal-only 4-bit/group-64 MTP head under `mtp/`, and the pinned official BF16
+vision component under `vision/`, totaling about 19.49 GB. Only the official
+shard containing the vision tower is mounted, and language tensors in that
+shard are not loaded. The managed install also retains Qwen's official
+Apache-2.0 license. On the measured M4 Max coding slice,
 target-only warm decode reached about 26.5 tok/s versus 8.8 tok/s for BF16;
 explicit MTP reached 37.8–43.8 tok/s across the three short cases. All cases
 passed. On a deterministic 24-task stride through the official HumanEval set,
