@@ -307,12 +307,28 @@ struct ModelInfo: ParsableCommand {
         full: Bool = false,
         fileManager: FileManager = .default
     ) -> [String] {
-        var lines = [
-            full
+        let resources = LTX25Resources(rootURL: rootURL)
+        let usesNativeLayout = !fileManager.fileExists(
+            atPath: resources.distilledTransformerURL.path
+        )
+        let layout: String
+        if usesNativeLayout {
+            layout = full
+                ? "  layout: self-contained native LTX 2.5 full BF16 files"
+                : "  layout: self-contained native LTX 2.5 BF16 + MLX Q4 text files"
+        } else {
+            layout = full
                 ? "  layout: official LTX 2.5 packed BF16 files"
-                : "  layout: self-contained LTX 2.5 BF16 + MLX Q4 text files",
-        ]
-        for file in full ? ltx25FullComponentFiles : ltx25ComponentFiles {
+                : "  layout: official LTX 2.5 BF16 + MLX Q4 text files"
+        }
+        var lines = [layout]
+        let componentFiles = switch (full, usesNativeLayout) {
+        case (true, true): ltx25NativeFullComponentFiles
+        case (true, false): ltx25FullComponentFiles
+        case (false, true): ltx25NativeComponentFiles
+        case (false, false): ltx25ComponentFiles
+        }
+        for file in componentFiles {
             let url = rootURL.appendingPathComponent(file.relativePath).standardizedFileURL
             let suffix = fileManager.fileExists(atPath: url.path) ? "" : "  (missing)"
             lines.append("  \(file.label): \(url.path)\(suffix)")
@@ -511,6 +527,11 @@ struct ModelInfo: ParsableCommand {
         ("spatial_upscaler", LTX25Resources.spatialUpsamplerRelativePath),
     ]
 
+    private static let ltx25NativeComponentFiles: [(label: String, relativePath: String)] = [
+        ("transformer_distilled", LTX25Resources.nativeDistilledTransformerRelativePath),
+        ("connector", LTX25Resources.nativeConnectorRelativePath),
+    ] + Array(ltx25ComponentFiles.dropFirst())
+
     private static let ltx25FullComponentFiles: [(label: String, relativePath: String)] = [
         ("transformer_dev", LTX25Resources.devTransformerRelativePath),
         ("transformer_distilled", LTX25Resources.distilledTransformerRelativePath),
@@ -523,6 +544,12 @@ struct ModelInfo: ParsableCommand {
         ("distilled_lora", LTX25Resources.distilledLoRARelativePath),
         ("duration_head", LTX25Resources.durationHeadRelativePath),
     ]
+
+    private static let ltx25NativeFullComponentFiles: [(label: String, relativePath: String)] = [
+        ("transformer_dev", LTX25Resources.nativeDevTransformerRelativePath),
+        ("transformer_distilled", LTX25Resources.nativeDistilledTransformerRelativePath),
+        ("connector", LTX25Resources.nativeConnectorRelativePath),
+    ] + Array(ltx25FullComponentFiles.dropFirst(2))
 
     private static let ltx23A2VidComponentFiles: [(label: String, relativePath: String)] = [
         ("split_model", "split_model.json"),

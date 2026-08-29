@@ -2123,7 +2123,7 @@ final class ManagedModelCatalogTests: XCTestCase {
         )
     }
 
-    func testLTX25FullSpecPinsEveryOfficialParityComponent() throws {
+    func testLTX25FullSpecPinsPrekeyedSawfwairRelease() throws {
         let id = ModelResolver.ModelID.ltxVideo25FullBF16.rawValue
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: id))
 
@@ -2131,9 +2131,11 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.category, .video)
         XCTAssertEqual(spec.installShape, .structuredRoot)
         XCTAssertEqual(spec.validationKind, .ltxVideo25)
-        XCTAssertEqual(spec.hubFallback?.repoId, LTX25Resources.sourceRepository)
-        XCTAssertEqual(spec.hubFallback?.revision, LTX25Resources.sourceRevision)
+        XCTAssertEqual(spec.hubFallback?.repoId, LTX25Resources.fullManagedRepository)
+        XCTAssertEqual(spec.hubFallback?.revision, LTX25Resources.fullManagedRevision)
         XCTAssertEqual(spec.hubFallback?.patterns, LTX25Resources.fullSnapshotPatterns)
+        XCTAssertEqual(spec.upstreamRepoId, LTX25Resources.fullManagedRepository)
+        XCTAssertEqual(spec.upstreamRevision, LTX25Resources.fullManagedRevision)
         XCTAssertEqual(spec.estimatedDownloadBytes, LTX25Resources.fullEstimatedDownloadBytes)
         XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
         XCTAssertTrue(spec.companionModelIDs.isEmpty)

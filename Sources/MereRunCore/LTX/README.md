@@ -16,12 +16,15 @@ Before stopping, run `swift test`, `./scripts/check.sh`, and a smoke path if you
 
 ## LTX 2.5
 
-The LTX 2.5 distilled release runs through the native `LTXUnifiedAVGenerator`
-with no Python sidecar. The managed Sawfwair distribution keeps the video
-transformer, VAEs, upsampler, and duration head in BF16 while bundling a
-self-contained MLX Q4 Gemma 4 language tower with its BF16 projection and
-tokenizer assets. Stage one uses the release's ancestral Euler update and stage
-two uses its deterministic refinement schedule.
+The LTX 2.5 release runs through the native `LTXUnifiedAVGenerator` with no
+Python sidecar. Both managed Sawfwair distributions store their BF16
+transformers directly in mere.run's native module-key layout, so a pull does
+not keep an official source transformer beside a generated optimization copy.
+The Distilled distribution bundles a self-contained MLX Q4 Gemma 4 language
+tower with its BF16 projection and tokenizer assets. The Full distribution
+retains the official BF16 text tower and every full/dev parity component.
+Stage one uses the release's ancestral Euler update and stage two uses its
+deterministic refinement schedule.
 
 Pull the public model into the managed model store after reviewing its terms:
 
@@ -29,9 +32,9 @@ Pull the public model into the managed model store after reviewing its terms:
 mere.run model pull video-ltx25-distilled-bf16 --accept-model-license
 ```
 
-This is one repository and one download; no Hugging Face gate, separate Gemma
-download, or local quantization step is required. Then use the managed ID (or
-pass a compatible official checkout with `--model-root`):
+Each model ID resolves to one inference-only repository and download; no local
+re-keying, optimization, or quantization step is required. Then use the managed
+ID (or pass a compatible official checkout with `--model-root`):
 
 ```bash
 mere.run video generate "a small robot walks across a wooden table" \

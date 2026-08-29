@@ -11,7 +11,9 @@ The compatibility target is immutable:
   `dd53cc2cd45bbeaa3563dfb575cba3f49cf44761`
 - **Managed distilled distribution:**
   `Sawfwair/LTX-2.5-Distilled-BF16-MLX-Q4-Text`, revision
-  `9f316bfb18448bf67f716006fd78a37829223b74`
+  `cf8a174746cd14796c81ca2b54e035dc32e69bd8`
+- **Managed full distribution:** `Sawfwair/LTX-2.5-Full-BF16-MLX`, revision
+  `ac74d124f7211fc3cb8b32f418a08d8e71655c8d`
 - **DFR detailer:** `Lightricks/LTX-2.5-22b-IC-LoRA-Pixel-Spatial-Upscaler`,
   revision `74c4e68ee7dd99f3997d5a1bb1a3784941822222`
 
@@ -22,16 +24,18 @@ precedence.
 
 ## Install
 
-The public self-contained managed distilled bundle is exactly 53,878,648,085
-bytes. The complete official BF16 bundle is about 123.8 GB and adds the dev
-transformer, distilled LoRA, DiffVAE, temporal upsampler, and duration head.
+The public self-contained managed distilled bundle is about 53.9 GB. The
+managed Full BF16 bundle is about 119.7 GB and adds the dev transformer,
+distilled LoRA, DiffVAE, temporal upsampler, and duration head. Both packages
+ship transformers directly in mere.run's native module-key layout, without a
+second source checkpoint or post-install re-keying step.
 
 ```bash
 mere.run model pull video-ltx25-distilled-bf16 --accept-model-license
 mere.run model pull video-ltx25-full-bf16 --accept-model-license
 ```
 
-The managed distilled model is ungated. The official full/dev model and DFR
+The managed distilled model is ungated. The managed full/dev model and DFR
 detailer are separately gated on Hugging Face; accepting either one does not
 accept the other.
 
@@ -117,16 +121,14 @@ The acceleration surface remains native Swift, MLX, and Metal:
 - DiffVAE neighborhood attention routes to a fused three-dimensional Metal
   online-softmax kernel on supported Apple GPUs. The bounded MLX SDPA tiling
   path remains the automatic compatibility fallback.
-- The public, immutable
-  `Sawfwair/LTX-2.5-Distilled-BF16-MLX-Q4-Text` distribution is the single
-  managed distilled download after explicit license acceptance. Its LTX
-  transformer, VAEs, upsampler, and duration head preserve upstream BF16 bytes;
-  its self-contained text pack uses MLX affine Q4/group-64 for eligible Gemma
-  language weights while retaining the LTX projection and tokenizer assets in
-  BF16/raw form. Runtime validates the pinned source receipt. `mere.run model
-  optimize /path/to/LTX-2.5 --text-encoder-only` can reproduce the text pack
-  locally; full optimization also creates source-bound native transformer and
-  compact connector packs. The video transformer is never quantized.
+- The public, immutable managed Distilled and Full distributions store their
+  transformers directly in mere.run's native module-key namespace. Tensor
+  payload bytes and BF16 precision are unchanged; no source transformer is
+  retained beside a generated cache. Distilled uses MLX affine Q4/group-64 for
+  eligible Gemma language weights while retaining the LTX projection and
+  tokenizer assets in BF16/raw form. Full retains the official BF16 text tower.
+  `mere.run model optimize` remains available for compatible official or
+  offline roots and treats a managed pre-keyed package as already optimized.
 - Prompt tensors are evaluated and cached before the Gemma tower is unloaded.
   Image/reference latents are likewise evaluated before the video VAE encoder
   is released. Neither encoder remains resident during denoising; a later
