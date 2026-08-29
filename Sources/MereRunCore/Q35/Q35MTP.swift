@@ -451,6 +451,7 @@ final class Q38MTPModel: Module, Q35MTPDraftModel {
 /// rows run on a fork and are discarded after the round, so proposal history
 /// can improve acceptance without becoming an output authority.
 final class Q35MTPDraftSession {
+    private static let historyChunkSize = 256
     private let historyCache: KVCache
     private var backlogHidden: [MLXArray] = []
     private var backlogTokens: [Int] = []
@@ -468,6 +469,27 @@ final class Q35MTPDraftSession {
 
     var committedHistoryCount: Int {
         historyCache.offset + backlogTokens.count
+    }
+
+    var pendingHistoryCount: Int { backlogTokens.count }
+
+    /// Prefix checkpoints never share a mutable draft cache with a request.
+    func fork() -> Q35MTPDraftSession {
+        let copy = Q35MTPDraftSession(historyCache: historyCache.fork())
+        copy.backlogHidden = backlogHidden
+        copy.backlogTokens = backlogTokens
+        return copy
+    }
+
+    /// Materialize complete history blocks during target prefill. Retaining the
+    /// incomplete block preserves the same 256-token boundaries as cold MTP
+    /// priming and keeps fewer than 256 pending transitions, rather than a
+    /// prompt-wide hidden history. A tail view can retain its prefill chunk.
+    func primeCommittedHistory(mtpModel: any Q35MTPDraftModel, baseModel: Q35Model) {
+        let count = backlogTokens.count / Self.historyChunkSize * Self.historyChunkSize
+        guard count > 0 else { return }
+        let output = flushCommittedHistory(count: count, mtpModel: mtpModel, baseModel: baseModel)
+        MLX.eval(output.recurrentHidden)
     }
 
     func recordCommittedTransitions(hiddenStates: MLXArray, nextTokens: [Int]) {
@@ -508,32 +530,8 @@ final class Q35MTPDraftSession {
 
         backlogHidden.append(hidden)
         backlogTokens.append(lastToken)
-        let flushHidden = backlogHidden.count == 1
-            ? backlogHidden[0]
-            : MLX.concatenated(backlogHidden, axis: 1)
-        let flushTokens = MLXArray(backlogTokens.map(Int32.init))
-            .reshaped(1, backlogTokens.count)
-        backlogHidden.removeAll(keepingCapacity: true)
-        backlogTokens.removeAll(keepingCapacity: true)
-
-        // A long prompt must not become one giant MTP MoE/attention graph.
-        let chunkSize = 256
-        var processed = 0
-        while flushTokens.dim(1) - processed > chunkSize {
-            let end = processed + chunkSize
-            let partial = mtpModel.forwardDraft(
-                inputEmbeddings: baseModel.embeddings(for: flushTokens[0..., processed..<end]),
-                hiddenStates: flushHidden[0..., processed..<end, 0...],
-                cache: historyCache
-            )
-            MLX.eval(partial.recurrentHidden)
-            processed = end
-        }
-        let flushEmbeddings = baseModel.embeddings(for: flushTokens[0..., processed...])
-        let flushed = mtpModel.forwardDraft(
-            inputEmbeddings: flushEmbeddings,
-            hiddenStates: flushHidden[0..., processed..., 0...],
-            cache: historyCache
+        let flushed = flushCommittedHistory(
+            count: backlogTokens.count, mtpModel: mtpModel, baseModel: baseModel
         )
         var previousHidden = flushed.recurrentHidden[
             0...,
@@ -567,5 +565,39 @@ final class Q35MTPDraftSession {
         let draftTokens = MLX.concatenated(tokenArrays, axis: 1)
         MLX.asyncEval(draftTokens)
         return Q35MTPDraftBlock(tokenIDs: draftTokens)
+    }
+
+    private func flushCommittedHistory(
+        count: Int,
+        mtpModel: any Q35MTPDraftModel,
+        baseModel: Q35Model
+    ) -> Q35MTPDraftOutput {
+        precondition(count > 0 && count <= backlogTokens.count)
+        let flushHidden = backlogHidden.count == 1
+            ? backlogHidden[0]
+            : MLX.concatenated(backlogHidden, axis: 1)
+        let flushTokens = MLXArray(backlogTokens.prefix(count).map(Int32.init)).reshaped(1, count)
+        backlogHidden = count < backlogTokens.count ? [flushHidden[0..., count..., 0...]] : []
+        backlogTokens = Array(backlogTokens.dropFirst(count))
+
+        // A long prompt must not become one giant MTP MoE/attention graph.
+        let chunkSize = Self.historyChunkSize
+        var processed = 0
+        while count - processed > chunkSize {
+            let end = processed + chunkSize
+            let partial = mtpModel.forwardDraft(
+                inputEmbeddings: baseModel.embeddings(for: flushTokens[0..., processed..<end]),
+                hiddenStates: flushHidden[0..., processed..<end, 0...],
+                cache: historyCache
+            )
+            MLX.eval(partial.recurrentHidden)
+            processed = end
+        }
+        let flushEmbeddings = baseModel.embeddings(for: flushTokens[0..., processed...])
+        return mtpModel.forwardDraft(
+            inputEmbeddings: flushEmbeddings,
+            hiddenStates: flushHidden[0..., processed..<count, 0...],
+            cache: historyCache
+        )
     }
 }

@@ -1,9 +1,9 @@
 # Native model conversion
 
-## Qwen3.8-Flash-Next MLX Q4 and mixed Q2/Q4
+## Qwen3.8-Flash-Next MLX quantization
 
 `convert_qwen38_flash_next_mlx.py` downloads Qwen's exact immutable BF16
-revision once and streams its 131 safetensors shards into two independent,
+revision once and streams its 131 safetensors shards into independent,
 resumable MLX artifacts. It never instantiates the 180B-parameter model.
 
 - `Qwen3.8-Flash-Next-MLX-4bit` applies affine Q4/group-64 to eligible
@@ -14,17 +14,41 @@ resumable MLX artifacts. It never instantiates the 180B-parameter model.
   routed-expert banks, keeps the n-gram table and eligible core/MTP matrices at
   Q4, and retains token/output embeddings, QSA indexers, routers, vision, and
   MTP fusion heads in BF16. This is the 128 GB Mac profile.
+- `Qwen3.8-Flash-Next-MLX-Activation-3bit` creates fresh Q3/group-64 expert
+  codes from BF16. It refits each accepted scale and bias against a frozen
+  image and text activation profile. Eligible non-expert matrices remain Q4,
+  and the n-gram table remains Q4/group-32.
 
-Both outputs retain the Qwen Community License 1.0 and include a complete
-source/output hash receipt. Publication is intentionally separate from
-conversion. The native `qwen4_exp` runtime has passed real short-context text
-generation with the mixed artifact on a 128 GB Mac. Long-context QSA selection,
-image input, the bundled MTP path, and a real Q4 generation run remain separate
-qualification gates.
+All outputs retain the Qwen Community License 1.0 and include a complete source
+and output hash receipt. Publication remains separate from conversion. The
+activation-weighted Q3 release also includes a native qualification receipt
+that records bounded text, image, Q4-control, memory, and swap results.
 
 ```bash
 uv run --script scripts/model-conversion/convert_qwen38_flash_next_mlx.py \
   --workspace /workspace/qwen38-flash-next
+```
+
+To build the activation-weighted profile, provide the frozen activation file
+whose SHA-256 is pinned by the converter:
+
+```bash
+uv run --script scripts/model-conversion/convert_qwen38_flash_next_mlx.py \
+  --workspace /workspace/qwen38-flash-next \
+  --profiles q3-activation \
+  --activation-profile /workspace/q4-expert-input-second-moments.safetensors
+```
+
+To run the upstream MLX-VLM diagnostic, provide the model, fixture directory,
+case manifests, and an output path:
+
+```bash
+uv run --script scripts/model-conversion/qualify_qwen38_flash_next_mlx.py \
+  --model /workspace/qwen38-flash-next/Qwen3.8-Flash-Next-MLX-Activation-3bit \
+  --external-ple-view /workspace/qwen38-flash-next/q3-external-ple \
+  --fixtures /workspace/qualification-fixtures \
+  --manifests /workspace/calibration/cases.json \
+  --output /workspace/q3-mlx-vlm-qualification.json
 ```
 
 Interrupted runs resume at the source-shard boundary. Do not publish an output

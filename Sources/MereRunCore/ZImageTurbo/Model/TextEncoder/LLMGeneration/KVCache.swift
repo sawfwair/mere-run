@@ -131,8 +131,10 @@ public class KVCacheSimple: KVCache {
         // silently corrupted by the request's remaining prefill and decode.
         // Fresh wrappers over the current (immutable) arrays isolate the fork;
         // the parent's rebinds can no longer reach it.
-        copy.keys = keys.map { $0.asType($0.dtype) }
-        copy.values = values.map { $0.asType($0.dtype) }
+        // No-op dtype casts return self in MLX; a same-shape reshape creates
+        // a fresh wrapper without copying the underlying tensor storage.
+        copy.keys = keys.map { $0.reshaped($0.shape) }
+        copy.values = values.map { $0.reshaped($0.shape) }
         copy.offset = offset
         return copy
     }
@@ -236,8 +238,8 @@ public final class KVCacheStatic: KVCache {
 
     public func fork() -> KVCache {
         let copy = KVCacheStatic(capacity: capacity)
-        copy.keys = keys.map { $0.asType($0.dtype) }
-        copy.values = values.map { $0.asType($0.dtype) }
+        copy.keys = keys.map { $0.reshaped($0.shape) }
+        copy.values = values.map { $0.reshaped($0.shape) }
         copy.offset = offset
         return copy
     }

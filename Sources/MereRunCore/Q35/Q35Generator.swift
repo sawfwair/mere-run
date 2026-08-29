@@ -18,14 +18,16 @@ private struct Q35PrefixKVCacheEntry {
     let caches: [Q35LayerCache?]
     let logits: MLXArray
     let hidden: MLXArray
+    let mtpSession: Q35MTPDraftSession?
     let priority: RuntimePrefixCacheEntryPriority
     var lastAccess: Date
 }
 
-private struct Q35PrefillOutput {
+struct Q35PrefillOutput {
     let logits: MLXArray
     let hidden: MLXArray?
     let mtpHistoryHidden: MLXArray?
+    let mtpSession: Q35MTPDraftSession?
 }
 
 private struct Q35BatchedDecodeResult {
@@ -128,6 +130,7 @@ public actor Q35Generator: ChatGenerator {
     private static let contendedPrefillChunkSize = 512
     private static let q38LowPrefillHeadroomBytes = UInt64(16) * 1_024 * 1_024 * 1_024
     private static let minimumReclaimableCacheBytes = 256 * 1_024 * 1_024
+    private static let flashNextReusableCacheBytes = 4 * 1_024 * 1_024 * 1_024
     private static let prefixKVCacheMaxEntries = 4
     private static let defaultMTPBlockSize = 4
     /// One committed token plus up to seven Qwen3.8 proposal tokens. Wider
@@ -156,6 +159,17 @@ public actor Q35Generator: ChatGenerator {
     private var loadedConfig: Q35Config?
     private var loadedGenerationEOSTokenIds: [Int] = []
     private var loadedResources: Q35Resources?
+
+    #if DEBUG
+    private var checkpointTransformForTesting: (@Sendable (Q35Model) throws -> Void)?
+
+    /// Installed-checkpoint experiments run before fusion releases source weights.
+    /// This hook is absent from production builds and never changes source files.
+    func setCheckpointTransformForTesting(_ transform: @escaping @Sendable (Q35Model) throws -> Void) {
+        precondition(model == nil, "Install checkpoint transforms before loading the model")
+        checkpointTransformForTesting = transform
+    }
+    #endif
 
     private let modelId: String
     private let prefixKVCacheEnabled: Bool
@@ -243,12 +257,19 @@ public actor Q35Generator: ChatGenerator {
     static func shouldClearMLXCache(
         activeMemory: Int,
         cacheMemory: Int,
-        memoryLimit: Int
+        memoryLimit: Int,
+        isFlashNext: Bool = false
     ) -> Bool {
         guard activeMemory >= 0,
               cacheMemory >= minimumReclaimableCacheBytes,
               memoryLimit > 0 else {
             return false
+        }
+        // Growing QSA shapes leave buffers that later chunks cannot reuse.
+        // The device-wide limit does not reserve headroom for other processes;
+        // reclaim disposable buffers without evicting live prefix/KV state.
+        if isFlashNext, cacheMemory >= flashNextReusableCacheBytes {
+            return true
         }
         let total = activeMemory.addingReportingOverflow(cacheMemory)
         guard !total.overflow else { return true }
@@ -260,7 +281,8 @@ public actor Q35Generator: ChatGenerator {
         if Self.shouldClearMLXCache(
             activeMemory: snapshot.activeMemory,
             cacheMemory: snapshot.cacheMemory,
-            memoryLimit: Memory.memoryLimit
+            memoryLimit: Memory.memoryLimit,
+            isFlashNext: loadedConfig?.textConfig.isQwen4Exp == true
         ) {
             Memory.clearCache()
         }
@@ -463,6 +485,9 @@ public actor Q35Generator: ChatGenerator {
             ))
             try loadQ38NGramEmbeddings(into: q35Model, from: resources)
         }
+        #if DEBUG
+        try checkpointTransformForTesting?(q35Model)
+        #endif
         if Q35FusedSwitchGLUPolicy.enabled, config.textConfig.usesMoE {
             progressHandler?(ChatProgress(
                 stage: .loadingModel,
@@ -554,6 +579,11 @@ public actor Q35Generator: ChatGenerator {
               let loadedConfig else {
             throw Q35Error.modelNotLoaded
         }
+        // An exact prefix-cache hit skips the prefill loop entirely. Reclaim
+        // disposable buffers from the previous request before forking its KV.
+        if loadedConfig.textConfig.isQwen4Exp {
+            clearMLXCacheUnderPressureIfNeeded()
+        }
 
         let messages = request.messages
         let jsonConstrained = request.requiresJSON
@@ -636,9 +666,11 @@ public actor Q35Generator: ChatGenerator {
             )
             && mtpModel != nil
         let retainMTPPromptHistory = mtpSpeculationEligible
+            && generationConfig.temperature == 0
             && (loadedConfig.textConfig.isQwen4Exp
                 || (!loadedConfig.textConfig.usesMoE
                     && promptTokens.count <= Self.mtpPromptHistoryLimit))
+        let streamMTPHistory = retainMTPPromptHistory && loadedConfig.textConfig.isQwen4Exp
         let retainPrefillHidden = prefixKVCacheEnabled || mtpSpeculationEligible
         let effectiveKVCacheMode: RuntimeKVCacheMode
         switch request.kvCacheMode {
@@ -658,10 +690,11 @@ public actor Q35Generator: ChatGenerator {
         var mropeRopeDelta: Int?
 
         if imageURLs.isEmpty {
-            let prefixSeed = retainMTPPromptHistory ? nil : prefixKVCacheSeed(
+            let prefixSeed = retainMTPPromptHistory && !streamMTPHistory ? nil : prefixKVCacheSeed(
                 modelPath: loadedModelPath ?? "",
                 promptTokens: promptTokens,
-                cacheMode: effectiveKVCacheMode
+                cacheMode: effectiveKVCacheMode,
+                requiresMTPSession: streamMTPHistory
             )
             let prefixCheckpoints = semanticPrefixCheckpoints(
                 tokenizerAndTemplate: tokenizerAndTemplate,
@@ -686,6 +719,9 @@ public actor Q35Generator: ChatGenerator {
                 checkpointTokenCounts: prefixCheckpoints,
                 retainHidden: retainPrefillHidden,
                 retainMTPHistory: retainMTPPromptHistory,
+                mtpSession: streamMTPHistory
+                    ? (prefixSeed?.mtpSession ?? Q35MTPDraftSession(historyCache: Q38QSACache())) : nil,
+                prefillMTPModel: streamMTPHistory ? mtpModel : nil,
                 progressHandler: progressHandler
             )
         } else {
@@ -724,6 +760,7 @@ public actor Q35Generator: ChatGenerator {
                     mropeRopeDelta = positionData?.ropeDelta
                     prefillOutput = try await chunkedPrefillEmbeddings(
                         model: model,
+                        inputIds: promptInput,
                         inputEmbeddings: promptEmbeddings,
                         cache: layerCaches,
                         positionIds: positionIds,
@@ -753,6 +790,7 @@ public actor Q35Generator: ChatGenerator {
             initialLogits: prefillOutput.logits,
             initialHidden: prefillOutput.hidden,
             prefillMTPHidden: prefillOutput.mtpHistoryHidden,
+            prefillMTPSession: prefillOutput.mtpSession,
             layerCaches: layerCaches,
             eosSet: eosSet,
             generationConfig: generationConfig,
@@ -897,6 +935,7 @@ public actor Q35Generator: ChatGenerator {
             return 0
         }
         if modelId == Q35Resources.q38FlashNextMixedModelId
+            || modelId == Q35Resources.q38FlashNext3BitModelId
             || modelId == Q35Resources.q38FlashNext4BitModelId {
             return 0
         }
@@ -907,7 +946,9 @@ public actor Q35Generator: ChatGenerator {
         modelId: String = Q35Resources.q36NanoModelId,
         environment env: [String: String] = ProcessInfo.processInfo.environment
     ) -> Int {
-        let modelDefault = Q35Resources.isQ38ModelId(modelId)
+        let denseQ38 = modelId == Q35Resources.q38TwentySevenBModelId
+            || modelId == Q35Resources.q38TwentySevenB4BitModelId
+        let modelDefault = denseQ38
             ? q38MTPBlockSize
             : defaultMTPBlockSize
         guard let raw = env["MERERUN_Q35_MTP_BLOCK_SIZE"],
@@ -924,6 +965,7 @@ public actor Q35Generator: ChatGenerator {
         initialLogits: MLXArray,
         initialHidden: MLXArray?,
         prefillMTPHidden: MLXArray?,
+        prefillMTPSession: Q35MTPDraftSession?,
         layerCaches: [Q35LayerCache?],
         eosSet: Set<Int>,
         generationConfig: GenerationConfig,
@@ -972,6 +1014,7 @@ public actor Q35Generator: ChatGenerator {
                 initialLogits: initialLogits,
                 initialHidden: initialHidden,
                 prefillMTPHidden: prefillMTPHidden,
+                prefillMTPSession: prefillMTPSession,
                 mtpModel: decodePath == .mtpSpeculativeSerial ? speculationMTP : nil,
                 layerCaches: layerCaches,
                 eosSet: eosSet,
@@ -1021,6 +1064,7 @@ public actor Q35Generator: ChatGenerator {
         initialLogits: MLXArray,
         initialHidden: MLXArray?,
         prefillMTPHidden: MLXArray?,
+        prefillMTPSession: Q35MTPDraftSession?,
         mtpModel: (any Q35MTPDraftModel)?,
         layerCaches: [Q35LayerCache?],
         eosSet: Set<Int>,
@@ -1071,7 +1115,7 @@ public actor Q35Generator: ChatGenerator {
         var mtpNonDraftingRounds = 0
         let mtpBlockSize = Self.mtpBlockSize(modelId: modelId)
         var mtpAdaptivePolicy = Q35MTPAdaptivePolicy(maxDraftDepth: mtpBlockSize - 1)
-        let mtpDraftSession = Q35MTPDraftSession(
+        let mtpDraftSession = prefillMTPSession ?? Q35MTPDraftSession(
             promptTokens: promptTokens,
             promptHidden: prefillMTPHidden,
             historyCache: model.config.textConfig.isQwen4Exp ? Q38QSACache() : KVCacheSimple()
@@ -1125,6 +1169,9 @@ public actor Q35Generator: ChatGenerator {
 
         while generated.count < tokenBudget {
             try Task.checkCancellation()
+            if model.config.textConfig.isQwen4Exp {
+                clearMLXCacheUnderPressureIfNeeded()
+            }
             var next = sampleToken(
                 logits: logits[0, -1, 0...],
                 config: generationConfig,
@@ -1471,7 +1518,10 @@ public actor Q35Generator: ChatGenerator {
                 logprobRegion: logprobRegion
             ),
             stepForward: { token in
-                model(
+                if model.config.textConfig.isQwen4Exp {
+                    clearMLXCacheUnderPressureIfNeeded()
+                }
+                return model(
                     token,
                     cache: layerCaches,
                     positionIds: decodePositionIds(layerCaches: layerCaches, tokenCount: 1, ropeDelta: mropeRopeDelta)
@@ -1571,6 +1621,9 @@ public actor Q35Generator: ChatGenerator {
                 failRows(rows, with: error)
             }
             finishCompletedDecodeRows()
+            if model.config.textConfig.isQwen4Exp {
+                clearMLXCacheUnderPressureIfNeeded()
+            }
             await Task.yield()
         }
     }
@@ -1888,6 +1941,8 @@ public actor Q35Generator: ChatGenerator {
         checkpointTokenCounts: Set<Int> = [],
         retainHidden: Bool = true,
         retainMTPHistory: Bool = false,
+        mtpSession: Q35MTPDraftSession? = nil,
+        prefillMTPModel: (any Q35MTPDraftModel)? = nil,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) async throws -> Q35PrefillOutput {
         guard !promptTokens.isEmpty else {
@@ -1928,11 +1983,28 @@ public actor Q35Generator: ChatGenerator {
                 MLX.eval(output.logits)
                 MLX.eval(outputMTPHidden)
                 logits = output.logits
-                hidden = lastTokenHidden(outputMTPHidden)
-                if retainMTPHistory {
+                if let mtpSession, let prefillMTPModel {
+                    if let hidden, processed > 0 {
+                        mtpSession.recordCommittedTransitions(
+                            hiddenStates: hidden, nextTokens: [promptTokens[processed]]
+                        )
+                    }
+                    mtpSession.recordCommittedTransitions(
+                        hiddenStates: outputMTPHidden,
+                        nextTokens: Array(promptTokens[(processed + 1)..<end])
+                    )
+                    mtpSession.primeCommittedHistory(mtpModel: prefillMTPModel, baseModel: model)
+                } else if retainMTPHistory {
                     mtpHistoryChunks.append(outputMTPHidden)
                 }
-                if let modelPath {
+                hidden = lastTokenHidden(outputMTPHidden)
+                let priority: RuntimePrefixCacheEntryPriority? = model.config.textConfig.isQwen4Exp
+                    ? RuntimePrefillCheckpointPlanner.storagePriority(
+                        tokenCount: end, total: promptTokens.count,
+                        semanticCheckpoints: checkpointTokenCounts
+                    )
+                    : (checkpointTokenCounts.contains(end) ? .semantic : .chunk)
+                if let modelPath, let priority {
                     storePrefixKVCache(
                         modelPath: modelPath,
                         promptTokens: promptTokens,
@@ -1940,7 +2012,8 @@ public actor Q35Generator: ChatGenerator {
                         cache: cache,
                         logits: output.logits,
                         hidden: lastTokenHidden(outputMTPHidden),
-                        priority: checkpointTokenCounts.contains(end) ? .semantic : .chunk
+                        mtpSession: mtpSession,
+                        priority: priority
                     )
                 }
             } else {
@@ -1966,12 +2039,14 @@ public actor Q35Generator: ChatGenerator {
         return Q35PrefillOutput(
             logits: logits,
             hidden: hidden,
-            mtpHistoryHidden: mtpHistoryHidden
+            mtpHistoryHidden: mtpHistoryHidden,
+            mtpSession: mtpSession
         )
     }
 
-    private func chunkedPrefillEmbeddings(
+    func chunkedPrefillEmbeddings(
         model: Q35Model,
+        inputIds: MLXArray,
         inputEmbeddings: MLXArray,
         cache: [Q35LayerCache?],
         positionIds: MLXArray? = nil,
@@ -1997,7 +2072,9 @@ public actor Q35Generator: ChatGenerator {
                 progressHandler?(ChatProgress(stage: .encoding, message: "Prefilling \(end)/\(tokenCount) tokens"))
             }
             let chunkEmbeddings = inputEmbeddings[0..., processed..<end, 0...]
-            let chunkInput = MLXArray.zeros([1, end - processed], dtype: .int32)
+            // Flash-Next PLE still consumes the original token IDs after
+            // image embeddings replace the multimodal placeholder vectors.
+            let chunkInput = inputIds[0..., processed..<end]
             let chunkPositionIds = positionIds?[0..., 0..., processed..<end]
             if retainHidden {
                 let output = model.forwardPrefill(
@@ -2033,7 +2110,8 @@ public actor Q35Generator: ChatGenerator {
         return Q35PrefillOutput(
             logits: logits,
             hidden: hidden,
-            mtpHistoryHidden: nil
+            mtpHistoryHidden: nil,
+            mtpSession: nil
         )
     }
 
@@ -2075,8 +2153,10 @@ public actor Q35Generator: ChatGenerator {
     private func prefixKVCacheSeed(
         modelPath: String,
         promptTokens: [Int],
-        cacheMode: RuntimeKVCacheMode
-    ) -> (tokenCount: Int, caches: [Q35LayerCache?], logits: MLXArray, hidden: MLXArray)? {
+        cacheMode: RuntimeKVCacheMode,
+        requiresMTPSession: Bool = false
+    ) -> (tokenCount: Int, caches: [Q35LayerCache?], logits: MLXArray,
+          hidden: MLXArray, mtpSession: Q35MTPDraftSession?)? {
         guard prefixKVCacheEnabled else { return nil }
         let matchingKey = prefixKVCache.keys
             .filter { key in
@@ -2084,6 +2164,7 @@ public actor Q35Generator: ChatGenerator {
                     && key.cacheMode == cacheMode
                     && key.tokens.count <= promptTokens.count
                     && promptTokens.starts(with: key.tokens)
+                    && (!requiresMTPSession || prefixKVCache[key]?.mtpSession != nil)
             }
             .max { $0.tokens.count < $1.tokens.count }
 
@@ -2101,7 +2182,8 @@ public actor Q35Generator: ChatGenerator {
             matchingKey.tokens.count,
             forkLayerCaches(entry.caches),
             entry.logits,
-            entry.hidden
+            entry.hidden,
+            entry.mtpSession?.fork()
         )
     }
 
@@ -2112,6 +2194,7 @@ public actor Q35Generator: ChatGenerator {
         cache: [Q35LayerCache?],
         logits: MLXArray,
         hidden: MLXArray,
+        mtpSession: Q35MTPDraftSession? = nil,
         priority: RuntimePrefixCacheEntryPriority
     ) {
         guard prefixKVCacheEnabled, tokenCount > 0 else { return }
@@ -2124,6 +2207,7 @@ public actor Q35Generator: ChatGenerator {
             caches: forkLayerCaches(cache),
             logits: logits,
             hidden: hidden,
+            mtpSession: mtpSession?.fork(),
             priority: priority,
             lastAccess: Date()
         )
@@ -2291,52 +2375,16 @@ public actor Q35Generator: ChatGenerator {
         let targets = model.q38NGramEmbeddings
         guard !targets.isEmpty else { return }
 
-        let data = try Data(contentsOf: resources.modelIndexURL)
-        let index = try JSONDecoder().decode(HFSafetensorsIndex.self, from: data)
         for (pleLayerIndex, target) in targets.enumerated() {
             let layerIndex = model.config.textConfig.pleLayerIds[pleLayerIndex] - 1
             let base = "language_model.model.layers.\(layerIndex).ple.ple_embedding.ngram_embedding"
-            let shardCount = model.config.textConfig.splitNgramParts
-            var recordsByFilename: [String: [(index: Int, module: String)]] = [:]
-
-            for shardIndex in 0..<shardCount {
-                let module = "\(base).shard_\(shardIndex)"
-                let weightKey = "\(module).weight"
-                guard let filename = index.weightMap[weightKey] else {
-                    throw Q35Error.missingFiles([weightKey])
-                }
-                recordsByFilename[filename, default: []].append((shardIndex, module))
-            }
-
-            var loaded = [PreQuantizedEmbedding?](repeating: nil, count: shardCount)
-            for filename in recordsByFilename.keys.sorted() {
-                let arrays = try MLX.loadArrays(url: resources.rootURL.appendingPathComponent(filename))
-                for record in recordsByFilename[filename] ?? [] {
-                    let weightKey = "\(record.module).weight"
-                    let scalesKey = "\(record.module).scales"
-                    let biasesKey = "\(record.module).biases"
-                    guard let weight = arrays[weightKey], let scales = arrays[scalesKey] else {
-                        throw Q35Error.missingFiles([weightKey, scalesKey])
-                    }
-                    let inputDimensions = model.config.textConfig.pleEmbeddingDimensions
-                        / ((model.config.textConfig.ngramSize - 1) * model.config.textConfig.headsPerNgram)
-                    let inferredBits = weight.dim(1) * 32 / inputDimensions
-                    let inferredGroupSize = inputDimensions / scales.dim(1)
-                    loaded[record.index] = PreQuantizedEmbedding(
-                        weight: weight,
-                        scales: scales,
-                        biases: arrays[biasesKey],
-                        groupSize: inferredGroupSize,
-                        bits: inferredBits,
-                        mode: .affine
-                    )
-                }
-            }
-            let embeddings = loaded.compactMap { $0 }
-            guard embeddings.count == shardCount else {
-                throw Q35Error.missingFiles(["\(base).shard_[0-\(shardCount - 1)]"])
-            }
-            target.installShards(embeddings)
+            let dimensions = model.config.textConfig.pleEmbeddingDimensions
+                / ((model.config.textConfig.ngramSize - 1) * model.config.textConfig.headsPerNgram)
+            target.installDiskTable(try Q38DiskNGramTable(
+                indexURL: resources.modelIndexURL, base: base,
+                shardCount: model.config.textConfig.splitNgramParts,
+                dimensions: dimensions, minimumRowCount: target.minimumRowCount
+            ))
         }
     }
 
@@ -2616,6 +2664,8 @@ public actor Q35Generator: ChatGenerator {
     }
 
     private static func mapTextWeightKey(_ key: String) -> String? {
+        // PLE tables are mapped separately and never installed as MLX weights.
+        if key.contains(".ple.ple_embedding.ngram_embedding.") { return nil }
         if key.hasPrefix("lm_head.") {
             return key
         }

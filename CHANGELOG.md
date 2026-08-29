@@ -15,6 +15,63 @@ The format is based on Keep a Changelog.
 
 ### Text
 
+- added an ungated activation-weighted Q3/group-64 Flash-Next profile from the
+  pinned BF16 checkpoint. Eligible non-expert matrices remain Q4, including
+  Q4/group-32 n-gram storage. The 89.67 GB managed pull requires explicit Qwen
+  Community License 1.0 acceptance. On a 128 GiB Apple Silicon host, the
+  candidate passed 58 of 61 bounded cases by exact expected output; the three
+  misses matched the published Q4 control. Candidate and Q4 outputs matched on
+  all 16 sealed holdout cases, including eight image and OCR cases. The holdout
+  peak was 62.1 GB for Q3 and 77.2 GB for Q4, with no swap growth. These results
+  don't establish general quality or BF16 parity.
+- fixed Qwen vision loading for affine-quantized position embeddings and
+  linear layers, including the Flash-Next Q4 checkpoint. Vision loading now
+  reads only indexed vision tensors and skips language-only shards.
+- fixed sharded model loading to use each tensor's file assignment in the
+  safetensors index. Duplicate or unindexed tensors in another referenced
+  shard no longer overwrite the selected weights.
+- aligned Flash-Next GDN query/key normalization with the reference FP32
+  sum-of-squares calculation, avoiding an intermediate BF16 rounding. Other
+  Qwen architectures retain their existing normalization path.
+- qualified the mixed Flash-Next checkpoint at 64k and 128k for retrieval,
+  prompt-cache replay, follow-up isolation, and MTP/serial agreement on an
+  M4 Max with 128 GiB. Observed peak footprints were 53.1 and 59.9 GiB with
+  no swap growth. Exact OCR remains unqualified; these bounded checks do not
+  establish general model quality or a throughput claim.
+- fixed Flash-Next verification attention using different arithmetic from
+  one-token decoding, including blocks crossing the dense/QSA boundary.
+  Attention now follows each token's causal history while projections and
+  expert work remain batched; added short-history and boundary regressions.
+- moved Flash-Next's PLE n-gram table to read-only disk-backed lookup using
+  existing model shards, keeping roughly 29.8 GiB out of persistent MLX
+  allocations. Selected packed rows retain MLX's existing dequantization.
+  QSA now caches completed pooled keys and processes only new blocks, with
+  prefix-fork and rejected-draft rollback coverage. These changes do not by
+  themselves qualify longer contexts or establish a decode-throughput claim.
+- fixed affine KV-cache reconstruction for padded multi-head histories by
+  materializing contiguous packed inputs before Metal dequantization. Added
+  long-history round-trip and fork-content checks. Flash-Next expert routing
+  now retains FP32 probabilities through selection and normalization before
+  restoring the model dtype.
+- fixed normal, static, and affine KV-cache forks sharing mutable MLX array
+  wrappers after no-op dtype casts. Qwen's compiled delta-decay calculation
+  also keeps head width dynamic when different model configurations share a process.
+- added MTP-aware prompt-cache reuse for Flash-Next: target and draft history
+  are checkpointed together, and draft priming proceeds in bounded blocks during
+  prefill instead of retaining the entire prompt's hidden history. Restored its
+  three-proposal default independently of dense Qwen3.8 27B. Flash-Next
+  retains only final/semantic prefill checkpoints and reclaims disposable MLX
+  buffers at 4 GiB during prefill, decode, and exact prompt replay without
+  dropping live model or prompt-cache state. Fixed rejected drafts leaving Flash-Next's PLE
+  n-gram and convolution histories ahead of the accepted prefix. Also fixed
+  measured arithmetic differences in unaligned affine-Q4, Flash-Next BF16
+  projections including its output head, and FP32 QSA scoring; full-checkpoint
+  serial parity and 32k/64k/128k cached-turn qualification are separate opt-in checks.
+- fixed Flash-Next vision patch-embedding bias initialization to match its
+  checkpoint, and preserved original token IDs for PLE during image-embedding
+  prefill. Vision rotary coefficients retain FP32 precision until Q/K rotation.
+  Added opt-in installed-model checks for vision weight coverage,
+  color/shape recognition, OCR, and image ordering.
 - added native Qwen3.8-Flash-Next QSA selection beyond the former 2,048-token
   prompt-plus-generation cap. Learned compressed-block scoring selects causal
   history for both target attention and the bundled MTP head. Query tiling and

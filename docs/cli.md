@@ -871,6 +871,7 @@ Examples:
 ```bash
 swift run mere.run text chat --prompt "What is classifier-free guidance?"
 swift run mere.run text chat --model vision-chat-q38-27b --image ./diagram.png --prompt "Explain this diagram."
+swift run mere.run text chat --model vision-chat-q38-flash-next-3bit --context-size 32768 --max-tokens 256 --prompt "Explain sparse attention."
 swift run mere.run text chat --model vision-chat-q38-flash-next-mixed --context-size 32768 --max-tokens 256 --prompt "Explain sparse attention."
 swift run mere.run text chat --model text-chat-bonsai-27b-1bit --context-size 262144 --kv-bits 4 --prompt "Plan a long-context repository review."
 swift run mere.run text chat --model text-chat-bonsai-27b-2bit --context-size 262144 --kv-bits 4 --prompt "Compare two repository migration plans."

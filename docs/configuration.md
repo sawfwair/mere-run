@@ -508,10 +508,12 @@ request context must be at least the selected threshold.
 
 ### `MERERUN_Q35_MTP_BLOCK_SIZE`
 
-Override the Qwen-family greedy MTP verification block size. Qwen3.8 defaults
-to `8` (one committed token plus up to seven proposals); other Qwen-family
-targets retain `4`. Qwen3.8 Q4 is capped at its serial-exact width of `9`;
-other targets retain the native maximum of `16`.
+Override the Qwen-family greedy MTP verification block size. Dense Qwen3.8 27B
+defaults to `8` (one committed token plus up to seven proposals). Flash-Next
+retains its measured `4`-token block (one committed token plus up to three
+proposals), as do the other Qwen-family targets. Qwen3.8 27B Q4 is capped at its
+serial-exact width of `9`; other targets retain the native maximum of `16`.
+Wider Flash-Next overrides are not qualified for serial-greedy parity.
 
 ### `MERERUN_Q35_PREFIX_KV_CACHE`
 
@@ -523,6 +525,18 @@ prefix KV counters as Gemma4. Text-only Qwen-family requests also store the
 stable chat prefix before the final message as an extra checkpoint when it is an
 exact token prefix of the full prompt, and the bounded cache gives those
 semantic checkpoints the same pruning priority as Gemma4.
+
+Flash-Next greedy MTP requests retain a forked draft-history checkpoint beside
+each target KV checkpoint. Matching follow-up prompts reuse both histories;
+requests never mutate the stored snapshot. Draft history is primed in aligned
+256-token blocks during prefill, retaining only the incomplete block of target
+hidden states rather than the entire prompt. The existing four-entry bound,
+model/cache-mode identity checks, and cache-disable switch still apply. A
+target-only checkpoint without draft history is not used to seed greedy MTP.
+Flash-Next saves final prompts and semantic conversation boundaries, not every
+prefill chunk. Reusable MLX buffers are reclaimed at 4 GiB during prefill,
+decode, and new requests (including exact cache hits); live model weights and
+target/draft checkpoints are not evicted.
 
 ### `affine8` runtime KV cache mode
 

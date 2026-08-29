@@ -171,7 +171,8 @@ enum SmallBatchAffineQMV {
         bits: Int,
         mode: QuantizationMode
     ) -> MLXArray? {
-        guard bits == 4, groupSize == 64, mode == .affine else { return nil }
+        guard Device.defaultDevice().deviceType == .gpu,
+              bits == 4, groupSize == 64, mode == .affine else { return nil }
         guard x.dtype == .bfloat16,
               weight.dtype == .uint32,
               scales.dtype == .bfloat16,
@@ -186,11 +187,23 @@ enum SmallBatchAffineQMV {
         let width = x.size / inputSize
         guard (2...9).contains(width),
               x.dim(-2) == width,
-              weight.dim(1) == inputSize / 8,
-              inputSize % 512 == 0,
-              outputSize % 8 == 0,
-              outputSize >= 8 else {
+              weight.dim(1) == inputSize / 8 else {
             return nil
+        }
+
+        // Flash-Next's 320-wide hyper-connection projections, 640-wide
+        // shared-expert outputs, and four-output injection gates do not fit
+        // the aligned kernel below. Native wide QMV changes their reduction
+        // order too. Keep those small verification blocks on native one-row
+        // QMV until a matching weight-reusing kernel covers the tail shapes.
+        guard inputSize % 512 == 0, outputSize % 8 == 0, outputSize >= 8 else {
+            return MLX.concatenated((0..<width).map { row in
+                MLX.quantizedMM(
+                    x[.ellipsis, row..<(row + 1), 0...], weight,
+                    scales: scales, biases: biases, transpose: true,
+                    groupSize: groupSize, bits: bits, mode: mode
+                )
+            }, axis: -2)
         }
 
         let inputsPerGroup: Int

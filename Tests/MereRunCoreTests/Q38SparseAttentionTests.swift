@@ -1,11 +1,191 @@
+import Dispatch
 import Foundation
 import MLX
 import MLXFast
+import MLXNN
 import MLXRandom
 import XCTest
 @testable import MereRunCore
 
 final class Q38SparseAttentionTests: MereRunCoreTestCase {
+    func testPooledCacheComponentBenchmark() throws {
+        try XCTSkipUnless(ProcessInfo.processInfo.environment["MERERUN_TEST_Q38_COMPONENT_BENCHMARK"] == "1"
+                          && Device.defaultDevice().deviceType == .gpu,
+                          "GPU component benchmark is opt-in; not a full-model throughput measurement.")
+        MLXRandom.seed(107)
+        let indexer = Q38QSAIndexer(config: try config(headDimension: 128))
+        indexer.keyNorm.update(parameters: ModuleParameters.unflattened([
+            ("weight", indexer.keyNorm.weight.asType(.bfloat16)),
+        ]))
+        for context in [32_768, 131_072] {
+            let keys = MLXRandom.normal([1, 1, context + 4, 128]).asType(.bfloat16)
+            let positions = Q38QSAIndexer.positionRows(batch: 1, count: context + 4, offsets: [0], positionIds: nil)
+            MLX.eval(keys, positions)
+            let base = Q38QSACache()
+            MLX.eval(base.compressedKeys(
+                keys[0..., 0..., 0..<context, 0...], positions: positions[0..., 0..., 0..<context, 0...], ratio: 4
+            ) { indexer.compressedKeys($0, positions: $1) })
+            var fullTimes: [Double] = []
+            var incrementalTimes: [Double] = []
+            for iteration in 0..<11 {
+                let branch = try XCTUnwrap(base.fork() as? Q38QSACache)
+                let fullStart = DispatchTime.now().uptimeNanoseconds
+                let full = indexer.compressedKeys(keys, positions: positions)
+                MLX.eval(full)
+                let fullEnd = DispatchTime.now().uptimeNanoseconds
+                let incremental = branch.compressedKeys(keys, positions: positions, ratio: 4) {
+                    indexer.compressedKeys($0, positions: $1)
+                }
+                MLX.eval(incremental)
+                let incrementalEnd = DispatchTime.now().uptimeNanoseconds
+                if iteration >= 2 {
+                    fullTimes.append(Double(fullEnd - fullStart) / 1_000_000)
+                    incrementalTimes.append(Double(incrementalEnd - fullEnd) / 1_000_000)
+                }
+                XCTAssertEqual((full - incremental).abs().max().item(Float.self), 0)
+            }
+            print("[q38-qsa-pool] context=\(context) full_ms=\(fullTimes.sorted()[4]) incremental_ms=\(incrementalTimes.sorted()[4])")
+        }
+    }
+
+    func testPooledCacheOnlyProcessesNewCompleteBlocks() throws {
+        MLXRandom.seed(105)
+        let indexer = Q38QSAIndexer(config: try config())
+        indexer.keyNorm.update(parameters: ModuleParameters.unflattened([
+            ("weight", indexer.keyNorm.weight.asType(.bfloat16)),
+        ]))
+        let cache = Q38QSACache()
+        let raw = MLXRandom.normal([1, 1, 32, 4]).asType(.bfloat16)
+        // Distinct three-axis positions also exercise image/mRoPE histories.
+        let positions = MLXArray((0..<96).map { Int32($0 * 3 + 5) }).reshaped(1, 1, 32, 3)
+        var processed = 0
+        for count in [4, 5, 7, 8, 13, 14, 31, 32] {
+            let keys = raw[0..., 0..., 0..<count, 0...]
+            let ids = positions[0..., 0..., 0..<count, 0...]
+            let actual = cache.compressedKeys(keys, positions: ids, ratio: 4) { added, addedIDs in
+                processed += added.dim(2)
+                return indexer.compressedKeys(added, positions: addedIDs)
+            }
+            let expected = indexer.compressedKeys(keys, positions: ids)
+            XCTAssertEqual(actual.asArray(Float.self), expected.asArray(Float.self))
+            XCTAssertEqual(cache.pooledBlockCount, count / 4)
+            XCTAssertEqual(processed, count / 4 * 4, "Previously pooled keys were recomputed")
+        }
+    }
+
+    func testPooledCacheForkRollbackAndReplacedBlockAreExact() throws {
+        MLXRandom.seed(106)
+        let indexer = Q38QSAIndexer(config: try config())
+        indexer.keyNorm.update(parameters: ModuleParameters.unflattened([
+            ("weight", indexer.keyNorm.weight.asType(.bfloat16)),
+        ]))
+        let cache = Q38QSACache()
+        let keys = MLXRandom.normal([1, 1, 16, 4]).asType(.bfloat16)
+        let positions = Q38QSAIndexer.positionRows(batch: 1, count: 16, offsets: [0], positionIds: nil)
+        _ = cache.update(keys: keys, values: keys)
+        _ = cache.updateIndexer(keys: keys, positions: positions)
+        let saved = cache.compressedKeys(keys, positions: positions, ratio: 4) {
+            indexer.compressedKeys($0, positions: $1)
+        }.asArray(Float.self)
+        let fork = try XCTUnwrap(cache.fork() as? Q38QSACache)
+        for accepted in [13, 7, 1, 0] {
+            let branch = try XCTUnwrap(fork.fork() as? Q38QSACache)
+            branch.rollback(toOffset: accepted)
+            XCTAssertEqual(branch.pooledBlockCount, accepted / 4)
+            let replacement = -keys[0..., 0..., accepted..., 0...]
+            _ = branch.update(keys: replacement, values: replacement)
+            let history = branch.updateIndexer(
+                keys: replacement, positions: positions[0..., 0..., accepted..., 0...]
+            )
+            var processed = 0
+            let actual = branch.compressedKeys(history.0, positions: history.1, ratio: 4) {
+                processed += $0.dim(2)
+                return indexer.compressedKeys($0, positions: $1)
+            }
+            let expected = indexer.compressedKeys(history.0, positions: history.1)
+            XCTAssertEqual(actual.asArray(Float.self), expected.asArray(Float.self))
+            XCTAssertEqual(processed, 16 - accepted / 4 * 4)
+            XCTAssertEqual(fork.pooledBlockCount, 4)
+            let unchanged = fork.compressedKeys(keys, positions: positions, ratio: 4) { _, _ in
+                XCTFail("Fork should reuse all completed blocks")
+                return keys
+            }
+            XCTAssertEqual(unchanged.asArray(Float.self), saved)
+        }
+    }
+
+    func testMaskedFutureBlocksPreserveSelectionAndMetalOrder() {
+        MLXRandom.seed(91)
+        let scores = MLXRandom.uniform(-2..<2, [1, 1, 600])
+        let reference = Q38SparseAttention.select(scores: scores, offsets: [2_400], budget: 2_048, ratio: 4)
+        let padded = MLX.concatenated([scores, MLXArray.ones([1, 1, 10]) * 100], axis: -1)
+        let actual = Q38SparseAttention.select(scores: padded, offsets: [2_400], budget: 2_048, ratio: 4)
+        XCTAssertEqual(selectedTokens(actual), selectedTokens(reference))
+        // CPU argPartition may permute the same selected set. Metal ordering
+        // is checked separately because it affects the GPU reduction order
+        // when a target-verification block adds masked future keys.
+        if Device.defaultDevice().deviceType == .gpu {
+            XCTAssertTrue(
+                actual.indices.asArray(Int32.self) == reference.indices.asArray(Int32.self),
+                "Masked future blocks changed Metal selection order"
+            )
+        }
+    }
+
+    func testIncrementalMTPHistoryAndForkMatchColdPriming() throws {
+        MLXRandom.seed(92)
+        let configuration = try config()
+        let model = Q35Model(config: configuration)
+        let mtp = Q38MTPModel(config: configuration)
+        let tokens = (0..<700).map { $0 % 30 }
+        let hidden = MLXRandom.normal([1, 700, 32])
+        let cache = Q38QSACache()
+        let session = Q35MTPDraftSession(historyCache: cache)
+        for bounds in [0..<301, 301..<521, 521..<700] {
+            if bounds.lowerBound > 0 {
+                session.recordCommittedTransitions(
+                    hiddenStates: hidden[0..., (bounds.lowerBound - 1)..<bounds.lowerBound, 0...],
+                    nextTokens: [tokens[bounds.lowerBound]]
+                )
+            }
+            session.recordCommittedTransitions(
+                hiddenStates: hidden[0..., bounds, 0...],
+                nextTokens: Array(tokens[(bounds.lowerBound + 1)..<bounds.upperBound])
+            )
+            session.primeCommittedHistory(mtpModel: mtp, baseModel: model)
+            XCTAssertEqual(session.committedHistoryCount, bounds.upperBound - 1)
+            XCTAssertLessThan(session.pendingHistoryCount, 256)
+        }
+        XCTAssertEqual(cache.offset, 512)
+        let checkpoint = session.fork()
+        let coldCache = Q38QSACache()
+        let cold = Q35MTPDraftSession(promptTokens: tokens, promptHidden: hidden, historyCache: coldCache)
+        let lastHidden = hidden[0..., 699..., 0...]
+        let actual = mtp.draftBlock(lastToken: 4, hidden: lastHidden, blockSize: 4, session: session, baseModel: model)
+        let expected = mtp.draftBlock(lastToken: 4, hidden: lastHidden, blockSize: 4, session: cold, baseModel: model)
+        XCTAssertEqual(actual.tokens, expected.tokens)
+        XCTAssertEqual(session.committedHistoryCount, 700)
+        XCTAssertEqual(checkpoint.committedHistoryCount, 699)
+        let probeEmbeddings = MLXRandom.normal([1, 2, 8])
+        let probeHidden = MLXRandom.normal([1, 2, 32])
+        let actualContinuation = mtp.forwardDraft(
+            inputEmbeddings: probeEmbeddings, hiddenStates: probeHidden, cache: cache.fork()
+        )
+        let expectedContinuation = mtp.forwardDraft(
+            inputEmbeddings: probeEmbeddings, hiddenStates: probeHidden, cache: coldCache.fork()
+        )
+        assertClose(actualContinuation.logitsHidden, expectedContinuation.logitsHidden)
+        assertClose(actualContinuation.recurrentHidden, expectedContinuation.recurrentHidden)
+        let sibling = checkpoint.fork()
+        let replay = mtp.draftBlock(lastToken: 4, hidden: lastHidden, blockSize: 4, session: sibling, baseModel: model)
+        XCTAssertEqual(replay.tokens, expected.tokens)
+        XCTAssertEqual(checkpoint.committedHistoryCount, 699)
+        let alternate = checkpoint.fork()
+        _ = mtp.draftBlock(lastToken: 8, hidden: lastHidden, blockSize: 4, session: alternate, baseModel: model).tokens
+        XCTAssertEqual(checkpoint.committedHistoryCount, 699)
+        XCTAssertEqual(alternate.committedHistoryCount, 700)
+    }
+
     func testSelectorIncludesTopCompleteBlocksAndCurrentPartialBlock() {
         let selection = Q38SparseAttention.select(
             scores: MLXArray([Float(1), 9, 2, 8]).reshaped(1, 1, 4),
@@ -302,7 +482,7 @@ final class Q38SparseAttentionTests: MereRunCoreTestCase {
         return Set(zip(indices, valid).compactMap { $1 ? Int($0) : nil })
     }
 
-    private func config(budget: Int = 8) throws -> Q35Config {
+    private func config(budget: Int = 8, headDimension: Int = 4) throws -> Q35Config {
         try JSONDecoder().decode(Q35Config.self, from: Data(#"""
         {
           "model_type": "qwen4_exp", "architectures": ["Qwen4ExpForConditionalGeneration"],
@@ -310,13 +490,13 @@ final class Q38SparseAttentionTests: MereRunCoreTestCase {
           "text_config": {
             "model_type": "qwen4_exp_text", "hidden_size": 8, "num_hidden_layers": 1,
             "intermediate_size": 8, "num_experts": 2, "num_experts_per_tok": 1,
-            "num_attention_heads": 4, "num_key_value_heads": 2, "head_dim": 4,
+            "num_attention_heads": 4, "num_key_value_heads": 2, "head_dim": \#(headDimension),
             "layer_types": ["full_attention"], "linear_num_value_heads": 1,
             "linear_num_key_heads": 1, "linear_key_head_dim": 4, "linear_value_head_dim": 4,
             "linear_conv_kernel_dim": 2, "max_position_embeddings": 4096,
             "rms_norm_eps": 0.000001, "attention_bias": false, "attention_dropout": 0,
             "attn_output_gate": true, "output_gate_type": "sigmoid", "hc_count": 4, "hc_lowrank": 4,
-            "indexer_n_heads": 2, "indexer_kv_heads": 1, "indexer_head_dim": 4,
+            "indexer_n_heads": 2, "indexer_kv_heads": 1, "indexer_head_dim": \#(headDimension),
             "indexer_budget": \#(budget), "indexer_compress_ratio": 4, "ple_layer_ids": [],
             "vocab_size": 32, "eos_token_id": 31,
             "mtp": {"hybrid": true, "layer_types": ["full_attention"], "num_hidden_layers": 1},

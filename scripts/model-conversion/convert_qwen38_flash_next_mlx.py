@@ -9,10 +9,10 @@
 #   "safetensors==0.8.0",
 # ]
 # ///
-"""Build resumable MLX Q4 and mixed Q2/Q4 Qwen3.8-Flash-Next artifacts.
+"""Build resumable MLX Q4, mixed Q2/Q4, and activation-weighted Q3 artifacts.
 
 This is release tooling, not an inference sidecar. It downloads one immutable
-BF16 snapshot, converts one source shard at a time, and writes both profiles
+BF16 snapshot, converts one source shard at a time, and writes the requested profiles
 without ever instantiating the 180B-parameter model.
 """
 
@@ -45,9 +45,10 @@ EXPECTED_EXPERT_TENSORS = 98
 EXPECTED_OUTPUT_LOGICAL_BYTES = {
     "q4": 104_741_817_208,
     "mixed": 73_094_818_808,
+    "q3-activation": 89_642_322_808,
 }
-EXPECTED_OUTPUT_TENSORS = {"q4": 3_817, "mixed": 3_615}
-EXPECTED_QUANTIZED_MODULES = {"q4": 1_055, "mixed": 954}
+EXPECTED_OUTPUT_TENSORS = {"q4": 3_817, "mixed": 3_615, "q3-activation": 3_817}
+EXPECTED_QUANTIZED_MODULES = {"q4": 1_055, "mixed": 954, "q3-activation": 1_055}
 
 MLX_VERSION = "0.32.2"
 HUGGINGFACE_HUB_VERSION = "1.28.0"
@@ -56,13 +57,19 @@ MODE = "affine"
 Q4 = {"bits": 4, "group_size": 64, "mode": MODE}
 NGRAM_Q4 = {"bits": 4, "group_size": 32, "mode": MODE}
 EXPERT_Q2 = {"bits": 2, "group_size": 128, "mode": MODE}
+EXPERT_Q3 = {"bits": 3, "group_size": 64, "mode": MODE}
+ACTIVATION_PROFILE_SHA256 = "c4d033b45e939a09e5ab08fb48b66d14262b7e14eef410c9d59c9361e84f89db"
+ACTIVATION_PROFILE_CALIBRATION_SHA256 = "467ae6c9002d63a201edbaba050a344fb275a1ae01b4116fdd19efa85cb718eb"
+ACTIVATION_PROFILE_SOURCE_REVISION = "6cc9bbc0fae9ce26b7670b3ed1e26d557c154506"
 OUTPUT_NAMES = {
     "q4": "Qwen3.8-Flash-Next-MLX-4bit",
     "mixed": "Qwen3.8-Flash-Next-MLX-Mixed-2bit",
+    "q3-activation": "Qwen3.8-Flash-Next-MLX-Activation-3bit",
 }
 HF_REPOSITORIES = {
     "q4": "Sawfwair/Qwen3.8-Flash-Next-MLX-4bit",
     "mixed": "Sawfwair/Qwen3.8-Flash-Next-MLX-Mixed-2bit",
+    "q3-activation": "Sawfwair/Qwen3.8-Flash-Next-MLX-Activation-3bit",
 }
 STATE_FILENAME = ".mererun-conversion-state.json"
 STATE_VERSION = 1
@@ -96,6 +103,65 @@ SHIFTED_TEXT_NORM_SUFFIXES = (
 class TensorPlan:
     key: str
     quantization: dict[str, int | str] | None
+
+
+class ActivationProfile:
+    """Lazy access to frozen Q4-teacher expert input second moments."""
+
+    def __init__(self, path: Path):
+        from safetensors import safe_open
+
+        self.path = path.expanduser().resolve()
+        if not self.path.is_file():
+            raise FileNotFoundError(f"Activation profile is missing: {self.path}")
+        self.sha256 = sha256_file(self.path)
+        if self.sha256 != ACTIVATION_PROFILE_SHA256:
+            raise ValueError(
+                f"Activation profile SHA-256 is {self.sha256}; expected {ACTIVATION_PROFILE_SHA256}"
+            )
+        self.archive = safe_open(self.path, framework="numpy")
+        self.metadata = self.archive.metadata() or {}
+        expected_metadata = {
+            "method": "q4-expert-input-second-moments-v1",
+            "calibration_sha256": ACTIVATION_PROFILE_CALIBRATION_SHA256,
+            "source_revision": ACTIVATION_PROFILE_SOURCE_REVISION,
+        }
+        for key, expected in expected_metadata.items():
+            if self.metadata.get(key) != expected:
+                raise ValueError(
+                    f"Activation profile metadata {key!r} is {self.metadata.get(key)!r}; expected {expected!r}"
+                )
+        keys = set(self.archive.keys())
+        if len(keys) != 576:
+            raise ValueError(f"Activation profile has {len(keys)} tensors; expected 576")
+
+    @staticmethod
+    def profile_path(module_path: str) -> str:
+        prefix = "language_model."
+        if not module_path.startswith(prefix):
+            raise ValueError(f"Expert module has an unexpected path: {module_path}")
+        return module_path.removeprefix(prefix)
+
+    def importance(self, module_path: str, expected_shape: tuple[int, int], mx: Any) -> Any:
+        import numpy as np
+
+        path = self.profile_path(module_path)
+        combined = np.zeros(expected_shape, dtype=np.float32)
+        for modality in ("image", "text"):
+            squared_key = f"{path}.{modality}.squared_sum"
+            count_key = f"{path}.{modality}.count"
+            squared = self.archive.get_tensor(squared_key)
+            count = self.archive.get_tensor(count_key)
+            if tuple(squared.shape) != expected_shape:
+                raise ValueError(
+                    f"Activation tensor {squared_key} has shape {squared.shape}; expected {expected_shape}"
+                )
+            if tuple(count.shape) != (expected_shape[0],):
+                raise ValueError(
+                    f"Activation tensor {count_key} has shape {count.shape}; expected {(expected_shape[0],)}"
+                )
+            combined += squared / np.maximum(count[:, None], 1.0)
+        return mx.array(combined)
 
 
 def utc_now() -> str:
@@ -278,6 +344,11 @@ def quantization_for(
             and key.startswith("language_model.model.layers.")
         ):
             return dict(EXPERT_Q2)
+        if (
+            profile == "q3-activation"
+            and key.startswith("language_model.model.layers.")
+        ):
+            return dict(EXPERT_Q3)
         return dict(Q4)
     if len(shape) != 2:
         return None
@@ -335,10 +406,20 @@ def quantize_value(
     value: Any,
     quantization: dict[str, int | str] | None,
     mx: Any,
-) -> dict[str, Any]:
+    activation_profile: ActivationProfile | None = None,
+) -> tuple[dict[str, Any], dict[str, Any] | None]:
     if quantization is None:
-        return {key: value}
+        return {key: value}, None
     base = key.removesuffix(".weight")
+    if quantization == EXPERT_Q3 and activation_profile is not None:
+        packed, scales, biases, metrics = activation_weighted_q3(
+            value, base, activation_profile, mx
+        )
+        return {
+            key: packed,
+            f"{base}.scales": scales,
+            f"{base}.biases": biases,
+        }, metrics
     packed = mx.quantize(
         value,
         group_size=int(quantization["group_size"]),
@@ -351,7 +432,147 @@ def quantize_value(
         key: packed[0],
         f"{base}.scales": packed[1],
         f"{base}.biases": packed[2],
+    }, None
+
+
+def activation_weighted_q3(
+    value: Any,
+    module_path: str,
+    profile: ActivationProfile,
+    mx: Any,
+    expert_batch: int = 8,
+) -> tuple[Any, Any, Any, dict[str, Any]]:
+    """Fresh BF16->Q3 packing with fixed-code activation-weighted affine refit.
+
+    The packed Q3 codes come directly from the original BF16 checkpoint. Only
+    their group scales and biases are refit, using the diagonal input-second-
+    moment objective frozen before this candidate existed. Every accepted
+    group is rescored through actual MLX dequantization in the exported
+    parameter dtype; unobserved or non-improving groups retain stock Q3.
+    """
+
+    if value.ndim != 3 or int(value.shape[-1]) % 64:
+        raise ValueError(f"Activation-weighted expert has an incompatible shape: {module_path} {value.shape}")
+    experts, output_dims, input_dims = (int(dimension) for dimension in value.shape)
+    importance = profile.importance(module_path, (experts, input_dims), mx)
+    packed_chunks = []
+    scale_chunks = []
+    bias_chunks = []
+    changed_groups = 0
+    observed_experts = 0
+    q3_error = 0.0
+    refit_error = 0.0
+    q4_error = 0.0
+
+    for start in range(0, experts, expert_batch):
+        end = min(start + expert_batch, experts)
+        count = end - start
+        source = value[start:end]
+        q3 = mx.quantize(source, group_size=64, bits=3, mode="affine")
+        if len(q3) != 3:
+            raise RuntimeError(f"MLX Q3 affine quantization emitted no biases for {module_path}")
+        packed, old_scales, old_biases = q3
+        teacher = source.astype(mx.float32).reshape(count, output_dims, -1, 64)
+        weights = importance[start:end].reshape(count, 1, -1, 64)
+        old_scale_f32 = old_scales.astype(mx.float32).reshape(count, output_dims, -1, 1)
+        old_bias_f32 = old_biases.astype(mx.float32).reshape(count, output_dims, -1, 1)
+        decoded = mx.dequantize(
+            packed,
+            old_scales.astype(mx.float32),
+            old_biases.astype(mx.float32),
+            group_size=64,
+            bits=3,
+            mode="affine",
+        ).reshape(teacher.shape)
+        codes = mx.clip(
+            mx.round((decoded - old_bias_f32) / mx.where(old_scale_f32 != 0, old_scale_f32, 1)),
+            0,
+            7,
+        )
+
+        mass = mx.sum(weights, axis=-1)
+        code_sum = mx.sum(weights * codes, axis=-1)
+        code_squared = mx.sum(weights * codes * codes, axis=-1)
+        target_sum = mx.sum(weights * teacher, axis=-1)
+        product_sum = mx.sum(weights * codes * teacher, axis=-1)
+        determinant = mass * code_squared - code_sum * code_sum
+        valid = (mass > 0) & (
+            determinant > mx.abs(mass * code_squared) * 0.000001
+        )
+        new_scale = (mass * product_sum - code_sum * target_sum) / mx.where(
+            valid, determinant, 1
+        )
+        new_bias = (target_sum - new_scale * code_sum) / mx.where(mass > 0, mass, 1)
+        cast_scale = new_scale.astype(old_scales.dtype)
+        cast_bias = new_bias.astype(old_biases.dtype)
+
+        def actual_error(scales: Any, biases: Any) -> Any:
+            reconstruction = mx.dequantize(
+                packed,
+                scales,
+                biases,
+                group_size=64,
+                bits=3,
+                mode="affine",
+            ).astype(mx.float32).reshape(teacher.shape)
+            difference = teacher - reconstruction
+            return mx.sum(weights * difference * difference, axis=-1)
+
+        old_error = actual_error(old_scales, old_biases)
+        candidate_error = actual_error(cast_scale, cast_bias)
+        accept = valid & (candidate_error < old_error)
+        accepted_scales = mx.where(accept, cast_scale, old_scales)
+        accepted_biases = mx.where(accept, cast_bias, old_biases)
+        accepted_error = actual_error(accepted_scales, accepted_biases)
+
+        q4 = mx.quantize(source, group_size=64, bits=4, mode="affine")
+        q4_reconstruction = mx.dequantize(
+            *q4,
+            group_size=64,
+            bits=4,
+            mode="affine",
+        ).astype(mx.float32).reshape(teacher.shape)
+        q4_difference = teacher - q4_reconstruction
+        q4_chunk_error = mx.sum(weights * q4_difference * q4_difference)
+        observed = mx.sum(weights.reshape(count, -1), axis=-1) > 0
+        summary = [
+            mx.sum(accept),
+            mx.sum(observed),
+            mx.sum(old_error),
+            mx.sum(accepted_error),
+            q4_chunk_error,
+        ]
+        mx.eval(packed, accepted_scales, accepted_biases, *summary)
+        packed_chunks.append(packed)
+        scale_chunks.append(accepted_scales)
+        bias_chunks.append(accepted_biases)
+        changed_groups += int(summary[0].item())
+        observed_experts += int(summary[1].item())
+        q3_error += float(summary[2].item())
+        refit_error += float(summary[3].item())
+        q4_error += float(summary[4].item())
+        del source, teacher, weights, decoded, codes, q3, q4
+        if hasattr(mx, "clear_cache"):
+            mx.clear_cache()
+
+    result = (
+        mx.concatenate(packed_chunks, axis=0),
+        mx.concatenate(scale_chunks, axis=0),
+        mx.concatenate(bias_chunks, axis=0),
+    )
+    mx.eval(*result)
+    metrics = {
+        "method": "fresh-bf16-fixed-code-diagonal-activation-refit-v1",
+        "experts": experts,
+        "observed_experts": observed_experts,
+        "groups": int(result[1].size),
+        "changed_groups": changed_groups,
+        "stock_q3_weighted_error": q3_error,
+        "refit_q3_weighted_error": refit_error,
+        "stock_q4_weighted_error": q4_error,
+        "q3_to_q4_error_ratio": refit_error / q4_error if q4_error > 0 else None,
     }
+    return result[0], result[1], result[2], metrics
 
 
 def transform_tensor(
@@ -359,7 +580,8 @@ def transform_tensor(
     source_key: str,
     value: Any,
     mx: Any,
-) -> tuple[dict[str, Any], dict[str, dict[str, int | str]]]:
+    activation_profile: ActivationProfile | None = None,
+) -> tuple[dict[str, Any], dict[str, dict[str, int | str]], dict[str, dict[str, Any]]]:
     floating = bool(mx.issubdtype(value.dtype, mx.floating))
     expert_keys = expert_output_keys(source_key)
     if expert_keys is not None:
@@ -369,6 +591,7 @@ def transform_tensor(
             values = (mx.contiguous(value),)
         outputs: dict[str, Any] = {}
         modules: dict[str, dict[str, int | str]] = {}
+        metrics: dict[str, dict[str, Any]] = {}
         for key, expert_value in zip(expert_keys, values):
             quantization = quantization_for(
                 profile,
@@ -376,10 +599,15 @@ def transform_tensor(
                 tuple(int(item) for item in expert_value.shape),
                 floating=floating,
             )
-            outputs.update(quantize_value(key, expert_value, quantization, mx))
+            arrays, module_metrics = quantize_value(
+                key, expert_value, quantization, mx, activation_profile
+            )
+            outputs.update(arrays)
             if quantization is not None:
                 modules[key.removesuffix(".weight")] = quantization
-        return outputs, modules
+            if module_metrics is not None:
+                metrics[key.removesuffix(".weight")] = module_metrics
+        return outputs, modules, metrics
 
     key = sanitize_key(source_key)
     value = transform_dense_value(key, value, mx)
@@ -389,29 +617,47 @@ def transform_tensor(
         tuple(int(item) for item in value.shape),
         floating=floating,
     )
-    outputs = quantize_value(key, value, quantization, mx)
+    outputs, module_metrics = quantize_value(
+        key, value, quantization, mx, activation_profile
+    )
     modules = (
         {key.removesuffix(".weight"): quantization}
         if quantization is not None
         else {}
     )
-    return outputs, modules
+    metrics = {key.removesuffix(".weight"): module_metrics} if module_metrics is not None else {}
+    return outputs, modules, metrics
 
 
-def initial_state(profile: str) -> dict[str, Any]:
-    return {
+def initial_state(
+    profile: str,
+    activation_profile: ActivationProfile | None = None,
+) -> dict[str, Any]:
+    state = {
         "schema_version": STATE_VERSION,
         "profile": profile,
         "source": {"repository": SOURCE_REPOSITORY, "revision": SOURCE_REVISION},
         "created_at": utc_now(),
         "completed_shards": {},
     }
+    if profile == "q3-activation":
+        if activation_profile is None:
+            raise ValueError("q3-activation requires --activation-profile")
+        state["activation_profile"] = {
+            "sha256": activation_profile.sha256,
+            "metadata": activation_profile.metadata,
+        }
+    return state
 
 
-def load_state(output: Path, profile: str) -> dict[str, Any]:
+def load_state(
+    output: Path,
+    profile: str,
+    activation_profile: ActivationProfile | None = None,
+) -> dict[str, Any]:
     path = output / STATE_FILENAME
     if not path.exists():
-        return initial_state(profile)
+        return initial_state(profile, activation_profile)
     state = json.loads(path.read_text(encoding="utf-8"))
     if state.get("schema_version") != STATE_VERSION:
         raise ValueError(f"Unsupported conversion state in {path}")
@@ -420,6 +666,12 @@ def load_state(output: Path, profile: str) -> dict[str, Any]:
     source = state.get("source", {})
     if source.get("repository") != SOURCE_REPOSITORY or source.get("revision") != SOURCE_REVISION:
         raise ValueError(f"Conversion state source mismatch in {path}")
+    if profile == "q3-activation":
+        if activation_profile is None:
+            raise ValueError("q3-activation requires --activation-profile")
+        recorded = state.get("activation_profile", {})
+        if recorded.get("sha256") != activation_profile.sha256:
+            raise ValueError(f"Conversion state activation profile mismatch in {path}")
     return state
 
 
@@ -456,6 +708,7 @@ def process_source_shard(
     states: dict[str, dict[str, Any]],
     expected_source: dict[str, int | str],
     mx: Any,
+    activation_profile: ActivationProfile | None,
 ) -> None:
     source_name = source_path.name
     missing_profiles = [
@@ -486,18 +739,21 @@ def process_source_shard(
     for profile in missing_profiles:
         converted: dict[str, Any] = {}
         modules: dict[str, dict[str, int | str]] = {}
+        metrics: dict[str, dict[str, Any]] = {}
         for source_key in source_keys:
-            arrays, tensor_modules = transform_tensor(
+            arrays, tensor_modules, tensor_metrics = transform_tensor(
                 profile,
                 source_key,
                 source_arrays[source_key],
                 mx,
+                activation_profile if profile == "q3-activation" else None,
             )
             duplicate_keys = set(converted).intersection(arrays)
             if duplicate_keys:
                 raise ValueError(f"Duplicate converted keys: {sorted(duplicate_keys)}")
             converted.update(arrays)
             modules.update(tensor_modules)
+            metrics.update(tensor_metrics)
 
         filename = output_shard_name(shard_index)
         byte_count, digest = save_output_shard(
@@ -514,9 +770,10 @@ def process_source_shard(
             "source_keys": source_keys,
             "output_keys": sorted(converted),
             "quantized_modules": modules,
+            "activation_metrics": metrics,
         }
         atomic_json(outputs[profile] / STATE_FILENAME, states[profile])
-        del converted, modules
+        del converted, modules, metrics
         if hasattr(mx, "clear_cache"):
             mx.clear_cache()
 
@@ -610,6 +867,10 @@ def converted_config(
     quantization: dict[str, Any] = dict(Q4)
     for path, parameters in modules.items():
         if parameters != Q4:
+            marker = ".ngram_embedding.shard_"
+            if marker in path:
+                prefix, shard = path.split(marker, 1)
+                path = f"{prefix}.ngram_embedding.shards.{shard}"
             quantization[path] = parameters
     config["quantization"] = quantization
     config["quantization_config"] = quantization
@@ -650,7 +911,7 @@ def model_card(profile: str, artifact_bytes: int, module_counts: Counter[str]) -
             "the 160-wide n-gram table uses Q4/group-32. Routers, norms, biases, "
             "convolutions, and incompatible shapes remain dense."
         )
-    else:
+    elif profile == "mixed":
         title = "Qwen3.8-Flash-Next MLX Mixed 2-bit/4-bit"
         description = (
             "The 48 base routed-expert banks use MLX affine Q2/group-128, the "
@@ -658,6 +919,43 @@ def model_card(profile: str, artifact_bytes: int, module_counts: Counter[str]) -
             "Q4, while token/output embeddings, QSA indexers, routers, vision, "
             "and MTP fusion heads remain BF16. This is the 128 GB Mac profile."
         )
+    else:
+        title = "Qwen3.8-Flash-Next MLX Activation-Weighted 3-bit"
+        description = (
+            "The 48 base routed-expert banks use fresh MLX affine Q3/group-64 "
+            "codes generated directly from the original BF16 checkpoint. Their "
+            "scales and biases are refit against frozen image-and-text expert-input "
+            "second moments. Remaining eligible core, MTP, and vision matrices stay "
+            "Q4; the 160-wide n-gram table stays Q4/group-32."
+        )
+    run_section = ""
+    if profile == "q3-activation":
+        run_section = """
+## Run locally with mere.run
+
+This profile uses the managed model ID `vision-chat-q38-flash-next-3bit`.
+Review the bundled license and pull the checkpoint:
+
+```bash
+mere.run model pull vision-chat-q38-flash-next-3bit \\
+    --accept-license-terms
+```
+
+Then generate text with the bundled multi-token prediction head:
+
+```bash
+mere.run text chat \\
+    --model vision-chat-q38-flash-next-3bit \\
+    --context-size 32768 \\
+    --max-tokens 256 \\
+    --temperature 0 \\
+    --no-thinking \\
+    --stream \\
+    --stats \\
+    --prompt "Explain sparse attention in three short sentences."
+```
+
+"""
     return f"""---
 library_name: mlx
 license: other
@@ -681,17 +979,19 @@ revision `{SOURCE_REVISION}`.
 
 - Artifact payload: {gib:.2f} GiB
 - Quantized Q2 modules: {module_counts['q2']}
+- Quantized Q3/group-64 modules: {module_counts['q3_g64']}
 - Quantized Q4/group-32 modules: {module_counts['q4_g32']}
 - Quantized Q4/group-64 modules: {module_counts['q4_g64']}
 - Source: 180B parameters including 125B main, 51B n-gram embedding, and 4B MTP
 - Native context: 262,144 tokens
 
+{run_section}
 ## Runtime status
 
 The tensor inventory, source hashes, MLX packing, fused-expert split, convolution
 layout, and zero-centered RMSNorm conversion are validated by the bundled
-`MERERUN_CONVERSION.json`. A Qwen4Exp-aware MLX runtime is required; do not
-expect an older `mlx-lm` or `mlx-vlm` release to dispatch this new architecture.
+`MERERUN_CONVERSION.json`. Use a Qwen4Exp-aware runtime such as mere.run or
+mlx-vlm.
 
 ## License
 
@@ -759,11 +1059,20 @@ def finalize_profile(
         group_size = int(parameters["group_size"])
         if bits == 2:
             module_counts["q2"] += 1
+        elif bits == 3:
+            module_counts["q3_g64"] += 1
         elif group_size == 32:
             module_counts["q4_g32"] += 1
         else:
             module_counts["q4_g64"] += 1
 
+    activation_metrics = {
+        path: metrics
+        for source_name in source_shard_names()
+        for path, metrics in state["completed_shards"][source_name]
+        .get("activation_metrics", {})
+        .items()
+    }
     receipt = {
         "schema_version": 1,
         "converter": "scripts/model-conversion/convert_qwen38_flash_next_mlx.py",
@@ -789,7 +1098,11 @@ def finalize_profile(
         "quantization": {
             "default": Q4,
             "ngram_embedding": NGRAM_Q4,
-            "base_routed_experts": EXPERT_Q2 if profile == "mixed" else Q4,
+            "base_routed_experts": (
+                EXPERT_Q2
+                if profile == "mixed"
+                else EXPERT_Q3 if profile == "q3-activation" else Q4
+            ),
             "module_counts": dict(sorted(module_counts.items())),
             "quantized_module_count": len(modules),
         },
@@ -801,7 +1114,7 @@ def finalize_profile(
             "source_shards_sha256_verified": EXPECTED_SOURCE_SHARDS,
             "output_shards_sha256_verified": len(artifacts),
             "generation_smoke": False,
-            "generation_smoke_reason": "Qwen4Exp MLX runtime integration is not yet present in upstream mlx-lm or mlx-vlm.",
+            "generation_smoke_reason": "Conversion completed before native output-quality qualification.",
         },
         "toolchain": {
             "python": platform.python_version(),
@@ -814,6 +1127,12 @@ def finalize_profile(
         "artifacts": artifacts,
         "hugging_face_repository": HF_REPOSITORIES[profile],
     }
+    if profile == "q3-activation":
+        receipt["activation_weighting"] = {
+            "profile": state["activation_profile"],
+            "method": "fresh-bf16-fixed-code-diagonal-activation-refit-v1",
+            "module_metrics": dict(sorted(activation_metrics.items())),
+        }
     atomic_json(output / "MERERUN_CONVERSION.json", receipt)
     (output / "README.md").write_text(
         model_card(profile, artifact_bytes, module_counts),
@@ -840,6 +1159,7 @@ def run_self_test() -> None:
     assert gate.endswith("mlp.switch_mlp.gate_proj.weight")
     assert up.endswith("mlp.switch_mlp.up_proj.weight")
     assert quantization_for("mixed", gate, (512, 640, 2560)) == EXPERT_Q2
+    assert quantization_for("q3-activation", gate, (512, 640, 2560)) == EXPERT_Q3
     assert quantization_for("q4", gate, (512, 640, 2560)) == Q4
     assert quantization_for("mixed", "mtp.layers.0.mlp.switch_mlp.gate_proj.weight", (512, 640, 2560)) == Q4
     assert quantization_for(
@@ -858,7 +1178,7 @@ def run_self_test() -> None:
     import mlx.core as mx
 
     fixture = mx.arange(4 * 128, dtype=mx.float32).reshape(4, 128) / 97.0 - 2.0
-    for parameters in (Q4, EXPERT_Q2, NGRAM_Q4):
+    for parameters in (Q4, EXPERT_Q2, EXPERT_Q3, NGRAM_Q4):
         packed = mx.quantize(
             fixture,
             group_size=int(parameters["group_size"]),
@@ -877,7 +1197,7 @@ def run_self_test() -> None:
             raise AssertionError(f"Unexpected MLX affine round-trip error: {maximum}")
 
     expert_fixture = mx.arange(2 * 8 * 128, dtype=mx.float32).reshape(2, 8, 128)
-    expert_arrays, expert_modules = transform_tensor(
+    expert_arrays, expert_modules, expert_metrics = transform_tensor(
         "mixed",
         "model.language_model.layers.0.mlp.experts.gate_up_proj",
         expert_fixture,
@@ -889,11 +1209,37 @@ def run_self_test() -> None:
     }
     assert set(expert_modules) == expected_expert_modules
     assert all(parameters == EXPERT_Q2 for parameters in expert_modules.values())
+    assert expert_metrics == {}
     assert set(expert_arrays) == {
         f"{module}.{suffix}"
         for module in expected_expert_modules
         for suffix in ("weight", "scales", "biases")
     }
+
+    class SyntheticProfile:
+        def importance(self, module_path, expected_shape, mlx):
+            assert module_path.endswith("switch_mlp.gate_proj")
+            assert expected_shape == (2, 128)
+            return mlx.ones(expected_shape, dtype=mlx.float32)
+
+    q3_source = (
+        mx.sin(mx.arange(2 * 8 * 128, dtype=mx.float32) / 17.0)
+        .reshape(2, 8, 128)
+        .astype(mx.bfloat16)
+    )
+    q3_packed, q3_scales, q3_biases, q3_metrics = activation_weighted_q3(
+        q3_source,
+        "language_model.model.layers.0.mlp.switch_mlp.gate_proj",
+        SyntheticProfile(),
+        mx,
+        expert_batch=1,
+    )
+    mx.eval(q3_packed, q3_scales, q3_biases)
+    assert q3_packed.dtype == mx.uint32
+    assert q3_scales.shape == (2, 8, 2)
+    assert q3_biases.shape == (2, 8, 2)
+    assert q3_metrics["refit_q3_weighted_error"] <= q3_metrics["stock_q3_weighted_error"]
+    assert q3_metrics["groups"] == 32
 
     shifted = transform_dense_value(
         "language_model.model.layers.0.attn_hyper_connection.hc_norm.weight",
@@ -942,8 +1288,9 @@ def parse_args() -> argparse.Namespace:
         "--profiles",
         nargs="+",
         choices=sorted(OUTPUT_NAMES),
-        default=sorted(OUTPUT_NAMES),
+        default=["mixed", "q4"],
     )
+    parser.add_argument("--activation-profile", type=Path)
     parser.add_argument("--max-workers", type=int, default=8)
     parser.add_argument("--skip-download", action="store_true")
     parser.add_argument("--validate-only", action="store_true")
@@ -974,11 +1321,19 @@ def main() -> None:
     validate_source_presence(source, manifest)
     source_index = load_source_index(source)
 
+    activation_profile = None
+    if "q3-activation" in args.profiles:
+        if args.activation_profile is None:
+            raise ValueError("q3-activation requires --activation-profile")
+        activation_profile = ActivationProfile(args.activation_profile)
+    elif args.activation_profile is not None:
+        raise ValueError("--activation-profile is only valid with q3-activation")
+
     outputs = {profile: workspace / OUTPUT_NAMES[profile] for profile in args.profiles}
     states: dict[str, dict[str, Any]] = {}
     for profile, output in outputs.items():
         output.mkdir(parents=True, exist_ok=True)
-        states[profile] = load_state(output, profile)
+        states[profile] = load_state(output, profile, activation_profile)
         (output / ".incomplete").write_text(
             "Conversion is resumable but not publishable until this marker is removed.\n",
             encoding="utf-8",
@@ -1001,6 +1356,7 @@ def main() -> None:
                 states,
                 manifest[filename],
                 mx,
+                activation_profile,
             )
             for profile in args.profiles:
                 record = states[profile]["completed_shards"].get(filename)

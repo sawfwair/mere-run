@@ -1137,6 +1137,7 @@ actor RuntimeModelPool {
 
     private static func isQwen4ExpWarmupModel(_ modelID: String) -> Bool {
         modelID == Q35Resources.q38FlashNextMixedModelId
+            || modelID == Q35Resources.q38FlashNext3BitModelId
             || modelID == Q35Resources.q38FlashNext4BitModelId
     }
 

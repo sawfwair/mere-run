@@ -84,10 +84,14 @@ public final class AffineQuantizedKVCache: KVCache {
         }
 
         func dequantized() -> MLXArray {
+            // Trimming allocation headroom leaves gaps between heads. Make
+            // all three inputs contiguous before the Metal dequantizer binds
+            // its buffers: an internal bias copy can overwrite earlier input
+            // bindings in the pinned MLX runtime.
             MLX.dequantized(
-                weight[0..., 0..., 0..<tokenCount, 0...],
-                scales: scales[0..., 0..., 0..<tokenCount, 0...],
-                biases: biases.map { $0[0..., 0..., 0..<tokenCount, 0...] },
+                MLX.contiguous(weight[0..., 0..., 0..<tokenCount, 0...]),
+                scales: MLX.contiguous(scales[0..., 0..., 0..<tokenCount, 0...]),
+                biases: biases.map { MLX.contiguous($0[0..., 0..., 0..<tokenCount, 0...]) },
                 groupSize: groupSize,
                 bits: bits,
                 mode: .affine,
@@ -97,11 +101,11 @@ public final class AffineQuantizedKVCache: KVCache {
 
         func fork() -> PackedStorage {
             PackedStorage(
-                // New wrappers are required because subscript assignment
-                // rebinds an MLXArray wrapper in place.
-                weight: weight.asType(weight.dtype),
-                scales: scales.asType(scales.dtype),
-                biases: biases.map { $0.asType($0.dtype) },
+                // A same-shape reshape creates a fresh wrapper without
+                // copying tensor storage. A no-op dtype cast returns self.
+                weight: weight.reshaped(weight.shape),
+                scales: scales.reshaped(scales.shape),
+                biases: biases.map { $0.reshaped($0.shape) },
                 sourceDType: sourceDType,
                 groupSize: groupSize,
                 bits: bits,

@@ -98,7 +98,10 @@ public enum HFSafetensorsWeightsLoader {
                 to: model,
                 dtype: dtype,
                 verify: verify,
-                mapper: mapper
+                mapper: { key, value in
+                    guard index.weightMap[key] == shardFilename else { return [] }
+                    return mapper(key, value)
+                }
             )
 
             progressHandler?(ShardProgress(
@@ -175,7 +178,7 @@ public enum HFSafetensorsWeightsLoader {
             }
 
             let arrays = try MLX.loadArrays(url: shardURL)
-            for (key, value) in arrays {
+            for (key, value) in arrays where index.weightMap[key] == shardFilename {
                 allArrays[key] = value
             }
 

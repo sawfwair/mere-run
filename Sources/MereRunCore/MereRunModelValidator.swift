@@ -501,7 +501,7 @@ public enum MereRunModelValidator {
 
         if let precision = manifest.precision {
             switch precision {
-            case .int1, .int2, .int4, .int6, .int8:
+            case .int1, .int2, .int3, .int4, .int6, .int8:
                 guard let q = manifest.quantization else {
                     if manifestRequiresInlineQuantization(manifest) {
                         errors.append("Quantized precision (\(precision.rawValue)) requires quantization metadata.")
@@ -672,6 +672,7 @@ public enum MereRunModelValidator {
             || modelId == ModelResolver.ModelID.q38TwentySevenB.rawValue
             || modelId == ModelResolver.ModelID.q38TwentySevenB4Bit.rawValue
             || modelId == ModelResolver.ModelID.q38FlashNextMixed.rawValue
+            || modelId == ModelResolver.ModelID.q38FlashNext3Bit.rawValue
             || modelId == ModelResolver.ModelID.q38FlashNext4Bit.rawValue {
             return .qwen
         }

@@ -95,6 +95,73 @@ final class AffineQuantizedKVCacheTests: MereRunCoreTestCase {
         }
     }
 
+    func testAffineHeadWidthsAndPaddedTailLayouts() throws {
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip("BF16 padded KV-cache layouts require MERERUN_TEST_MLX_DEVICE=gpu.")
+        }
+        MLXRandom.seed(7006)
+        for width in [64, 128, 256] {
+            for count in [4, 5, 256, 257] {
+                let strided = MLXRandom.uniform(low: -1, high: 1, [1, count, 2, width])
+                    .asType(.bfloat16).transposed(0, 2, 1, 3)
+                for bits in [4, 8] {
+                    for keys in [strided, MLX.contiguous(strided)] {
+                        let cache = AffineQuantizedKVCache(groupSize: 64, bits: bits, step: 256)
+                        let values = -keys
+                        let returned = cache.update(keys: keys, values: values)
+                        MLX.eval(returned.0, returned.1)
+                        let tolerance: Float = bits == 8 ? 0.0001 : 0.01
+                        XCTAssertLessThan(
+                            meanSquaredError(returned.0, keys), tolerance,
+                            "Keys changed at bits=\(bits), head width=\(width), tokens=\(count)"
+                        )
+                        XCTAssertLessThan(
+                            meanSquaredError(returned.1, values), tolerance,
+                            "Values changed at bits=\(bits), head width=\(width), tokens=\(count)"
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    func testLongStridedEightBitCacheRoundTripAndForkIsolation() throws {
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip("Long BF16 KV-cache fixtures require MERERUN_TEST_MLX_DEVICE=gpu.")
+        }
+        MLXRandom.seed(7005)
+        for count in [64_740, 129_700] {
+            let cache = AffineQuantizedKVCache(groupSize: 64, bits: 8, step: 256)
+            let keys = MLXRandom.uniform(low: -1, high: 1, [1, count, 2, 256])
+                .asType(.bfloat16).transposed(0, 2, 1, 3)
+            let values = -keys
+            let original = cache.update(keys: keys, values: values)
+            MLX.eval(original.0, original.1)
+            XCTAssertLessThan(meanSquaredError(original.0, keys), 0.0001)
+            XCTAssertLessThan(meanSquaredError(original.1, values), 0.0001)
+            XCTAssertLessThan((original.0.asType(.float32) - keys.asType(.float32)).abs().max().item(Float.self), 0.02)
+
+            let child = try XCTUnwrap(cache.fork() as? AffineQuantizedKVCache)
+            let next = MLXRandom.uniform(low: 0.25, high: 0.75, [1, 2, 4, 256]).asType(.bfloat16)
+            let childState = child.update(keys: next, values: -next)
+            MLX.eval(childState.0, childState.1)
+            let parentState = cache.update(keys: -next, values: next)
+            MLX.eval(parentState.0, parentState.1)
+            let childAfterParentWrite = try XCTUnwrap(child.currentState())
+            XCTAssertEqual(cache.offset, count + 4)
+            XCTAssertEqual(child.offset, count + 4)
+            for (old, parent, forked) in [
+                (original.0, parentState.0, childAfterParentWrite.0),
+                (original.1, parentState.1, childAfterParentWrite.1),
+            ] {
+                XCTAssertEqual((parent[0..., 0..., 0..<count, 0...] - old).abs().max().item(Float.self), 0)
+                XCTAssertEqual((forked[0..., 0..., 0..<count, 0...] - old).abs().max().item(Float.self), 0)
+            }
+            XCTAssertLessThan(meanSquaredError(childAfterParentWrite.0[0..., 0..., count..., 0...], next), 0.0001)
+            XCTAssertLessThan(meanSquaredError(parentState.0[0..., 0..., count..., 0...], -next), 0.0001)
+        }
+    }
+
     private func meanSquaredError(_ lhs: MLXArray, _ rhs: MLXArray) -> Float {
         let delta = lhs.asType(.float32) - rhs.asType(.float32)
         return MLX.mean(delta * delta).item(Float.self)

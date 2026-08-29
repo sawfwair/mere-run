@@ -25,7 +25,7 @@ public final class Q35VisionTower: Module {
 
         let spatialMerge = max(1, vision.spatialMergeSize ?? 2)
         let useLearnedPosEmbed = (vision.numPositionEmbeddings ?? 0) > 0
-        let inferredPatchEmbedBias = config.modelType.hasPrefix("qwen3_5")
+        let inferredPatchEmbedBias = config.modelType.hasPrefix("qwen3_5") || config.textConfig.isQwen4Exp
         let qwenVisionConfig = QwenVisionConfiguration(
             depth: vision.depth,
             embedDim: vision.hiddenSize,
@@ -62,22 +62,35 @@ public final class Q35VisionTower: Module {
     }
 
     public func loadWeights(from resources: Q35Resources) throws {
+        let arrays: [String: MLXArray]
         if FileManager.default.fileExists(atPath: resources.modelIndexURL.path) {
-            try HFSafetensorsWeightsLoader.applyShardedWeights(
-                indexURL: resources.modelIndexURL,
-                to: self,
-                dtype: .bfloat16,
-                verify: [.shapeMismatch],
-                mapper: Self.mapVisionWeight
-            )
+            let data = try Data(contentsOf: resources.modelIndexURL)
+            let index = try JSONDecoder().decode(HFSafetensorsIndex.self, from: data)
+            let filenames = Set(index.weightMap.compactMap { key, filename in
+                Self.mapVisionWeightKey(key) == nil ? nil : filename
+            })
+            var selected: [String: MLXArray] = [:]
+            for filename in filenames.sorted() {
+                let shard = try SafetensorsStreamingLoader.loadArrays(
+                    url: resources.rootURL.appendingPathComponent(filename),
+                    where: { index.weightMap[$0] == filename && Self.mapVisionWeightKey($0) != nil },
+                    dtype: .bfloat16
+                )
+                selected.merge(shard) { _, replacement in replacement }
+            }
+            arrays = selected
         } else {
-            try HFSafetensorsWeightsLoader.applyWeights(
+            arrays = try SafetensorsStreamingLoader.loadArrays(
                 url: resources.modelWeightsURL,
-                to: self,
-                dtype: .bfloat16,
-                verify: [.shapeMismatch],
-                mapper: Self.mapVisionWeight
+                where: { Self.mapVisionWeightKey($0) != nil },
+                dtype: .bfloat16
             )
+        }
+        let mapped = Dictionary(uniqueKeysWithValues: arrays.flatMap { Self.mapVisionWeight($0.key, $0.value) })
+        if HFSafetensorsWeightsLoader.isQuantized(mapped) {
+            try HFSafetensorsWeightsLoader.applyQuantizedWeightsFromArrays(mapped, to: self)
+        } else {
+            try update(parameters: ModuleParameters.unflattened(mapped), verify: [.shapeMismatch])
         }
 
         isLoaded = true
@@ -108,28 +121,7 @@ public final class Q35VisionTower: Module {
     }
 
     static func mapVisionWeight(_ rawKey: String, _ value: MLXArray) -> [(String, MLXArray)] {
-        var key = rawKey
-        if key.hasPrefix("model.vision_tower.") {
-            key = "visionTower." + String(key.dropFirst("model.vision_tower.".count))
-        } else if key.hasPrefix("model.visual.") {
-            key = "visionTower." + String(key.dropFirst("model.visual.".count))
-        } else if key.hasPrefix("vision_tower.") {
-            key = "visionTower." + String(key.dropFirst("vision_tower.".count))
-        } else if key.hasPrefix("visual.") {
-            key = "visionTower." + String(key.dropFirst("visual.".count))
-        } else {
-            return []
-        }
-
-        key = key.replacingOccurrences(of: ".merger.", with: ".patch_merger.")
-        key = key.replacingOccurrences(of: ".mlp.linear_fc1.", with: ".mlp.fc1.")
-        key = key.replacingOccurrences(of: ".mlp.linear_fc2.", with: ".mlp.fc2.")
-        key = key.replacingOccurrences(of: ".linear_fc1.", with: ".mlp_0.")
-        key = key.replacingOccurrences(of: ".linear_fc2.", with: ".mlp_2.")
-        key = key.replacingOccurrences(of: ".patch_merger.norm.", with: ".patch_merger.ln_q.")
-        key = key.replacingOccurrences(of: ".deepstack_merger_list.", with: ".deepstack_merger_list.")
-        key = key.replacingOccurrences(of: ".norm.", with: ".ln_q.")
-
+        guard let key = mapVisionWeightKey(rawKey) else { return [] }
         if key == "visionTower.patch_embed.proj.weight", value.ndim == 5 {
             // Converted MLX checkpoints such as Bonsai already store Conv3d
             // kernels as [out, temporal, height, width, channels]. PyTorch
@@ -141,6 +133,32 @@ public final class Q35VisionTower: Module {
         }
 
         return [(key, value)]
+    }
+
+    private static func mapVisionWeightKey(_ rawKey: String) -> String? {
+        var key = rawKey
+        if key.hasPrefix("model.vision_tower.") {
+            key = "visionTower." + String(key.dropFirst("model.vision_tower.".count))
+        } else if key.hasPrefix("model.visual.") {
+            key = "visionTower." + String(key.dropFirst("model.visual.".count))
+        } else if key.hasPrefix("vision_tower.") {
+            key = "visionTower." + String(key.dropFirst("vision_tower.".count))
+        } else if key.hasPrefix("visual.") {
+            key = "visionTower." + String(key.dropFirst("visual.".count))
+        } else {
+            return nil
+        }
+
+        key = key.replacingOccurrences(of: ".merger.", with: ".patch_merger.")
+        key = key.replacingOccurrences(of: ".mlp.linear_fc1.", with: ".mlp.fc1.")
+        key = key.replacingOccurrences(of: ".mlp.linear_fc2.", with: ".mlp.fc2.")
+        key = key.replacingOccurrences(of: ".linear_fc1.", with: ".mlp_0.")
+        key = key.replacingOccurrences(of: ".linear_fc2.", with: ".mlp_2.")
+        key = key.replacingOccurrences(of: ".patch_merger.norm.", with: ".patch_merger.ln_q.")
+        key = key.replacingOccurrences(of: ".deepstack_merger_list.", with: ".deepstack_merger_list.")
+        key = key.replacingOccurrences(of: ".norm.", with: ".ln_q.")
+
+        return key
     }
 
     private static func preparePatchInputs(

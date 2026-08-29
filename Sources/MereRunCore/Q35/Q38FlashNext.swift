@@ -2,6 +2,24 @@ import Foundation
 import MLX
 import MLXNN
 
+/// Flash-Next keeps its readout, router, and indexer in BF16. Small-batch GEMM
+/// can round differently from one-token GEMV, including at three/four rows.
+/// Keep those short batches on serial arithmetic; quantized projections
+/// retain their own weight-reusing QMV path and prefill stays batched.
+func q38SmallBatchProjection(_ layer: Linear, _ input: MLXArray) -> MLXArray {
+    #if os(macOS)
+    if Device.defaultDevice().deviceType == .gpu,
+       input.ndim == 3, input.dim(0) == 1,
+       (2...9).contains(input.dim(1)),
+       input.dtype == .bfloat16, layer.weight.dtype == .bfloat16 {
+        return MLX.concatenated((0..<input.dim(1)).map { row in
+            layer(input[0..., row..<(row + 1), 0...])
+        }, axis: 1)
+    }
+    #endif
+    return layer(input)
+}
+
 final class Q38GatedResidual: Module {
     @ModuleInfo(key: "hc_norm") var norm: Q35RMSNorm
     @ModuleInfo(key: "input_mix_weight_down") var inputMixDown: Linear
@@ -45,15 +63,16 @@ final class Q38GatedResidual: Module {
     ) {
         let normalized = norm(hyperInput)
         var inputWeights = MLXNN.silu(
-            inputMixDown(normalized) / MLXArray(Float(streamCount)).asType(normalized.dtype)
+            q38SmallBatchProjection(inputMixDown, normalized)
+                / MLXArray(Float(streamCount)).asType(normalized.dtype)
         )
-        inputWeights = MLX.sigmoid(inputMixUp(inputWeights))
+        inputWeights = MLX.sigmoid(q38SmallBatchProjection(inputMixUp, inputWeights))
             .reshaped(Array(hyperInput.shape.dropLast()) + [streamCount, hiddenSize])
         let streams = normalized.reshaped(
             Array(hyperInput.shape.dropLast()) + [streamCount, hiddenSize]
         )
         let mixed = (inputWeights * streams).mean(axis: -2)
-        let rawInjection = blockInjectWeight?(normalized)
+        let rawInjection = blockInjectWeight.map { q38SmallBatchProjection($0, normalized) }
             ?? MLXArray.zeros(
                 Array(hyperInput.shape.dropLast()) + [streamCount],
                 dtype: normalized.dtype
@@ -67,9 +86,10 @@ final class Q38GatedResidual: Module {
     func combine(_ hyperInput: MLXArray) -> MLXArray {
         let normalized = norm(hyperInput)
         var inputWeights = MLXNN.silu(
-            inputMixDown(normalized) / MLXArray(Float(streamCount)).asType(normalized.dtype)
+            q38SmallBatchProjection(inputMixDown, normalized)
+                / MLXArray(Float(streamCount)).asType(normalized.dtype)
         )
-        inputWeights = MLX.sigmoid(inputMixUp(inputWeights))
+        inputWeights = MLX.sigmoid(q38SmallBatchProjection(inputMixUp, inputWeights))
             .reshaped(Array(hyperInput.shape.dropLast()) + [streamCount, hiddenSize])
         let streams = normalized.reshaped(
             Array(hyperInput.shape.dropLast()) + [streamCount, hiddenSize]
@@ -103,6 +123,7 @@ final class Q38NGramEmbedding: Module {
     private let headOffsets: [Int64]
     private let outputDimensions: Int
     private var shards: [Shard] = []
+    private var diskTable: Q38DiskNGramTable?
 
     init(config: Q35Config, pleLayerIndex: Int) {
         let text = config.textConfig
@@ -134,9 +155,16 @@ final class Q38NGramEmbedding: Module {
         super.init()
     }
 
-    var isLoaded: Bool { !shards.isEmpty }
+    var isLoaded: Bool { diskTable != nil || !shards.isEmpty }
+    var minimumRowCount: Int { Int((headOffsets.last ?? 0) + (headVocabSizes.last ?? 0)) }
+
+    func installDiskTable(_ table: Q38DiskNGramTable) {
+        diskTable = table
+        shards = []
+    }
 
     func installShards(_ embeddings: [PreQuantizedEmbedding]) {
+        diskTable = nil
         var offset = 0
         shards = embeddings.map { embedding in
             defer { offset += embedding.weight.dim(0) }
@@ -145,7 +173,7 @@ final class Q38NGramEmbedding: Module {
     }
 
     func callAsFunction(_ inputIds: MLXArray, cache: Q35LinearCache?) -> MLXArray {
-        precondition(!shards.isEmpty, "Qwen4Exp n-gram embedding shards are not loaded")
+        precondition(isLoaded, "Qwen4Exp n-gram embedding shards are not loaded")
         let ids = hashedTokenIDs(inputIds, cache: cache)
         return lookup(ids).reshaped(inputIds.dim(0), inputIds.dim(1), outputDimensions)
     }
@@ -196,7 +224,16 @@ final class Q38NGramEmbedding: Module {
         return ids
     }
 
+    func verificationTokenHistory(_ inputIds: MLXArray, cache: Q35LinearCache?) -> MLXArray {
+        let batch = inputIds.dim(0)
+        let previous = cache?.pleTokenContext ?? MLXArray(
+            [Int32](repeating: eosTokenId, count: batch * contextLength)
+        ).reshaped(batch, contextLength)
+        return MLX.concatenated([previous, inputIds.asType(.int32)], axis: 1)
+    }
+
     private func lookup(_ ids: [Int32]) -> MLXArray {
+        if let diskTable { return diskTable.lookup(ids) }
         var grouped: [Int: [(position: Int, localId: Int32)]] = [:]
         grouped.reserveCapacity(shards.count)
         for (position, rawId) in ids.enumerated() {
@@ -295,6 +332,17 @@ final class Q38NGramEmbedding: Module {
     }
 }
 
+/// Inputs retained only for a speculative block, so rejection can rewind both
+/// PLE histories without recomputing embeddings or reading model weights.
+struct Q38PLEVerificationReplay {
+    let convolutionInput: MLXArray
+    let tokenHistory: MLXArray
+    let tokenCount: Int
+
+    var convolutionStateLength: Int { convolutionInput.dim(1) - tokenCount }
+    var tokenContextLength: Int { tokenHistory.dim(1) - tokenCount }
+}
+
 final class Q38PLELayer: Module {
     @ModuleInfo(key: "ple_embedding") var pleEmbedding: Q38NGramEmbedding
     @ModuleInfo(key: "key_proj") var keyProjection: Linear
@@ -362,13 +410,17 @@ final class Q38PLELayer: Module {
     func callAsFunction(
         _ hiddenStates: MLXArray,
         inputIds: MLXArray,
-        cache: Q35LinearCache?
+        cache: Q35LinearCache?,
+        targetVerify: Bool = false
     ) -> MLXArray {
+        let verificationTokens = targetVerify
+            ? pleEmbedding.verificationTokenHistory(inputIds, cache: cache)
+            : nil
         let embeddings = pleEmbedding(inputIds, cache: cache)
         let shapePrefix = Array(hiddenStates.shape.dropLast())
-        let keys = keyNorm(keyProjection(embeddings))
+        let keys = keyNorm(q38SmallBatchProjection(keyProjection, embeddings))
             .reshaped(shapePrefix + [streamCount, hiddenSize])
-        let values = valueProjection(embeddings)
+        let values = q38SmallBatchProjection(valueProjection, embeddings)
         let queries = queryNorm(hiddenStates)
             .reshaped(shapePrefix + [streamCount, hiddenSize])
         var gate = (keys * queries).sum(axis: -1, keepDims: true)
@@ -379,10 +431,12 @@ final class Q38PLELayer: Module {
         let gatedValues = MLX.sigmoid(gate) * MLX.expandedDimensions(values, axis: -2)
         let flattened = gatedValues.reshaped(shapePrefix + [streamCount * hiddenSize])
         let normalized = convolutionNorm(flattened)
-        return flattened + shortConvolution(normalized, cache: cache)
+        return flattened + shortConvolution(normalized, cache: cache, verificationTokens: verificationTokens)
     }
 
-    private func shortConvolution(_ hiddenStates: MLXArray, cache: Q35LinearCache?) -> MLXArray {
+    private func shortConvolution(
+        _ hiddenStates: MLXArray, cache: Q35LinearCache?, verificationTokens: MLXArray?
+    ) -> MLXArray {
         let batch = hiddenStates.dim(0)
         let previous = cache?.pleConvState
             ?? MLXArray.zeros(
@@ -390,6 +444,11 @@ final class Q38PLELayer: Module {
                 dtype: hiddenStates.dtype
             )
         let convolutionInput = MLX.concatenated([previous, hiddenStates], axis: 1)
+        cache?.pleVerificationReplay = verificationTokens.map {
+            Q38PLEVerificationReplay(
+                convolutionInput: convolutionInput, tokenHistory: $0, tokenCount: hiddenStates.dim(1)
+            )
+        }
         cache?.pleConvState = convolutionInput[
             0...,
             (convolutionInput.dim(1) - convolutionStateLength)...,
