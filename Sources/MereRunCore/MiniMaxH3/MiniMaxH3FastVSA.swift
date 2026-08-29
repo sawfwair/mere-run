@@ -92,6 +92,34 @@ struct MiniMaxH3FastVSAPreparedContext {
     let poolingSizes: MLXArray
 }
 
+enum MiniMaxH3FastVSAKernelMode: String, Sendable {
+    case halfTile = "half-tile"
+    case fullTile = "full-tile"
+    #if DEBUG
+    // Benchmark-only rejected candidate; never selected by the runtime environment.
+    case fullTileKV16 = "full-tile-kv16"
+    #endif
+
+    var queryTileRows: Int {
+        switch self {
+        case .halfTile: 32
+        case .fullTile: MiniMaxH3FastVSAGeometry.tileSize
+        #if DEBUG
+        case .fullTileKV16: MiniMaxH3FastVSAGeometry.tileSize
+        #endif
+        }
+    }
+
+    var simdgroupCount: Int { queryTileRows / 8 }
+
+    static let runtimeDefault: Self = {
+        let requested = Self(
+            rawValue: ProcessInfo.processInfo.environment["MERERUN_H3_FASTVSA_KERNEL"] ?? ""
+        )
+        return requested == .halfTile ? .halfTile : .fullTile
+    }()
+}
+
 /// Metal implementation of FastVideo's released VSA-H3 tile-64 inference contract.
 ///
 /// Prefix query tiles remain dense, every query retains all prefix key tiles,
@@ -108,7 +136,8 @@ enum MiniMaxH3FastVSA {
         values: MLXArray,
         compressionGate: MLXArray,
         layout: MiniMaxH3PackedLayout,
-        sparsity: Float = sparsity
+        sparsity: Float = sparsity,
+        kernelMode: MiniMaxH3FastVSAKernelMode = .fullTile
     ) -> MLXArray? {
         call(
             queries: queries,
@@ -116,7 +145,8 @@ enum MiniMaxH3FastVSA {
             values: values,
             compressionGate: compressionGate,
             prepared: prepare(layout: layout),
-            sparsity: sparsity
+            sparsity: sparsity,
+            kernelMode: kernelMode
         )
     }
 
@@ -143,7 +173,8 @@ enum MiniMaxH3FastVSA {
         values: MLXArray,
         compressionGate: MLXArray,
         prepared: MiniMaxH3FastVSAPreparedContext,
-        sparsity: Float = sparsity
+        sparsity: Float = sparsity,
+        kernelMode: MiniMaxH3FastVSAKernelMode = .fullTile
     ) -> MLXArray? {
         guard supports(queries: queries, keys: keys, values: values, gate: compressionGate),
               (0..<1).contains(sparsity) else { return nil }
@@ -190,7 +221,8 @@ enum MiniMaxH3FastVSA {
             videoRoutes: videoRoutes,
             blockSizes: prepared.blockSizes,
             prefixTileCount: geometry.prefixTileCount,
-            scale: scale
+            scale: scale,
+            kernelMode: kernelMode
         )
 
         let compressed = MLX.matmul(
@@ -233,6 +265,27 @@ enum MiniMaxH3FastVSA {
             prefixTileCount: prefixTileCount,
             videoTileCount: videoTileCount,
             sparsity: sparsity
+        )
+    }
+
+    static func sparseOutputForTesting(
+        queries: MLXArray,
+        keys: MLXArray,
+        values: MLXArray,
+        videoRoutes: MLXArray,
+        blockSizes: MLXArray,
+        prefixTileCount: Int,
+        kernelMode: MiniMaxH3FastVSAKernelMode
+    ) -> MLXArray {
+        sparseKernelOutput(
+            queries: queries,
+            keys: keys,
+            values: values,
+            videoRoutes: videoRoutes,
+            blockSizes: blockSizes,
+            prefixTileCount: prefixTileCount,
+            scale: 1 / sqrt(Float(headDimension)),
+            kernelMode: kernelMode
         )
     }
 
@@ -349,7 +402,8 @@ enum MiniMaxH3FastVSA {
         videoRoutes: MLXArray,
         blockSizes: MLXArray,
         prefixTileCount: Int,
-        scale: Float
+        scale: Float,
+        kernelMode: MiniMaxH3FastVSAKernelMode
     ) -> MLXArray {
         let tokenCount = queries.dim(2)
         let blockCount = blockSizes.dim(0)
@@ -358,16 +412,39 @@ enum MiniMaxH3FastVSA {
         precondition(videoRoutes.dim(2) == blockCount)
         precondition(prefixTileCount + keepVideo <= blockCount)
         #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
+        let queryTileRows = kernelMode.queryTileRows
+        let simdgroupCount = kernelMode.simdgroupCount
+        let inputs = [queries, keys, values, videoRoutes, blockSizes, MLXArray([scale])]
+        let template: [(String, any KernelTemplateArg)] = [
+            ("TOKEN_COUNT", tokenCount),
+            ("BLOCK_COUNT", blockCount),
+            ("PREFIX_TILE_COUNT", prefixTileCount),
+            ("KEEP_VIDEO", keepVideo),
+            ("QUERY_TILE_ROWS", queryTileRows),
+            ("SIMDGROUP_COUNT", simdgroupCount),
+        ]
+        let grid = (
+            32,
+            ((tokenCount + queryTileRows - 1) / queryTileRows) * simdgroupCount,
+            queries.dim(1)
+        )
+        #if DEBUG
+        if kernelMode == .fullTileKV16 {
+            return attentionKV16Kernel(
+                inputs,
+                template: template,
+                grid: grid,
+                threadGroup: (32, simdgroupCount, 1),
+                outputShapes: [queries.shape],
+                outputDTypes: [.bfloat16]
+            )[0]
+        }
+        #endif
         return attentionKernel(
-            [queries, keys, values, videoRoutes, blockSizes, MLXArray([scale])],
-            template: [
-                ("TOKEN_COUNT", tokenCount),
-                ("BLOCK_COUNT", blockCount),
-                ("PREFIX_TILE_COUNT", prefixTileCount),
-                ("KEEP_VIDEO", keepVideo),
-            ],
-            grid: (32, ((tokenCount + 31) / 32) * 4, queries.dim(1)),
-            threadGroup: (32, 4, 1),
+            inputs,
+            template: template,
+            grid: grid,
+            threadGroup: (32, simdgroupCount, 1),
             outputShapes: [queries.shape],
             outputDTypes: [.bfloat16]
         )[0]
@@ -378,7 +455,7 @@ enum MiniMaxH3FastVSA {
 
     #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
     private static let attentionKernel = MLXFast.metalKernel(
-        name: "mere_fasth3_vsa64_online_softmax_bf16_d128_compact_v2",
+        name: "mere_fasth3_vsa64_online_softmax_bf16_d128_compact_v3",
         inputNames: ["queries", "keys", "values", "video_routes", "block_sizes", "scale_value"],
         outputNames: ["output"],
         source: """
@@ -386,8 +463,8 @@ enum MiniMaxH3FastVSA {
             constexpr uint head_dimension = 128;
             constexpr uint matrix_size = 8;
             constexpr uint matrix_count = head_dimension / matrix_size;
-            constexpr uint query_tile_rows = 32;
-            constexpr uint simdgroup_count = 4;
+            constexpr uint query_tile_rows = QUERY_TILE_ROWS;
+            constexpr uint simdgroup_count = SIMDGROUP_COUNT;
             constexpr uint query_stride = head_dimension + 8;
             constexpr uint key_stride = matrix_size + 8;
             constexpr uint value_stride = head_dimension + 8;
@@ -553,5 +630,222 @@ enum MiniMaxH3FastVSA {
         header: "#include <metal_simdgroup_matrix>\n",
         ensureRowContiguous: true
     )
+
+    #if DEBUG
+    /// Full 64-row query tile with 16-row K/V staging. Two score fragments are
+    /// retained before each V load, halving barriers without the register and
+    /// occupancy cost of retaining an entire 64-column score tile.
+    private static let attentionKV16Kernel = MLXFast.metalKernel(
+        name: "mere_fasth3_vsa64_online_softmax_bf16_d128_kv16_v1",
+        inputNames: ["queries", "keys", "values", "video_routes", "block_sizes", "scale_value"],
+        outputNames: ["output"],
+        source: """
+            constexpr uint block_size = 64;
+            constexpr uint head_dimension = 128;
+            constexpr uint matrix_size = 8;
+            constexpr uint matrix_count = head_dimension / matrix_size;
+            constexpr uint key_tile_rows = 16;
+            constexpr uint key_matrix_count = key_tile_rows / matrix_size;
+            constexpr uint simdgroup_count = 8;
+            constexpr float log2e = 1.4426950408889634f;
+
+            uint lane = thread_index_in_simdgroup;
+            uint simd_group = simdgroup_index_in_threadgroup;
+            uint thread_linear = thread_position_in_threadgroup.y * 32
+                + thread_position_in_threadgroup.x;
+            uint query_block = threadgroup_position_in_grid.y;
+            uint head = threadgroup_position_in_grid.z;
+            uint quad = lane / 4;
+            uint matrix_row = (quad & 4) + ((lane / 2) % 4);
+            uint matrix_column = (quad & 2) * 2 + (lane % 2) * 2;
+            uint group_query_start = query_block * block_size;
+            uint local_query = group_query_start + simd_group * matrix_size + matrix_row;
+            uint query_offset = simd_group * matrix_size + matrix_row;
+            bool query_valid = query_offset < uint(block_sizes[query_block]);
+            float attention_scale = float(scale_value[0]) * log2e;
+
+            threadgroup bfloat query_shared[block_size * head_dimension];
+            threadgroup bfloat key_value_shared[key_tile_rows * head_dimension];
+            for (uint index = thread_linear;
+                 index < block_size * head_dimension;
+                 index += 32 * simdgroup_count) {
+                uint row = index / head_dimension;
+                uint dimension = index - row * head_dimension;
+                uint token = group_query_start + row;
+                bool valid = row < uint(block_sizes[query_block]);
+                query_shared[index] = valid
+                    ? bfloat(queries[(head * TOKEN_COUNT + token) * head_dimension + dimension])
+                    : bfloat(0.0f);
+            }
+            threadgroup_barrier(mem_flags::mem_threadgroup);
+
+            thread simdgroup_matrix<float, 8, 8> accumulated[matrix_count];
+            for (uint frag = 0; frag < matrix_count; ++frag) {
+                accumulated[frag].thread_elements()[0] = 0.0f;
+                accumulated[frag].thread_elements()[1] = 0.0f;
+            }
+            float row_maximum = -INFINITY;
+            float row_sum = 0.0f;
+
+            uint route_count = query_block < PREFIX_TILE_COUNT
+                ? BLOCK_COUNT
+                : PREFIX_TILE_COUNT + KEEP_VIDEO;
+            for (uint route_index = 0; route_index < route_count; ++route_index) {
+                uint key_block;
+                if (query_block < PREFIX_TILE_COUNT || route_index < PREFIX_TILE_COUNT) {
+                    key_block = route_index;
+                } else {
+                    uint route_offset = (head * BLOCK_COUNT + query_block) * KEEP_VIDEO
+                        + route_index - PREFIX_TILE_COUNT;
+                    key_block = uint(video_routes[route_offset]);
+                }
+                uint key_start = key_block * block_size;
+                uint key_size = uint(block_sizes[key_block]);
+                for (uint key_tile_offset = 0;
+                     key_tile_offset < key_size;
+                     key_tile_offset += key_tile_rows) {
+                    uint key_tile_size = metal::min(key_tile_rows, key_size - key_tile_offset);
+                    threadgroup_barrier(mem_flags::mem_threadgroup);
+                    for (uint index = thread_linear;
+                         index < key_tile_rows * head_dimension;
+                         index += 32 * simdgroup_count) {
+                        uint dimension = index / key_tile_rows;
+                        uint key_column = index - dimension * key_tile_rows;
+                        key_value_shared[index] = key_column < key_tile_size
+                            ? bfloat(keys[
+                                (head * TOKEN_COUNT + key_start + key_tile_offset + key_column)
+                                    * head_dimension + dimension
+                            ])
+                            : bfloat(0.0f);
+                    }
+                    threadgroup_barrier(mem_flags::mem_threadgroup);
+
+                    thread simdgroup_matrix<float, 8, 8> probabilities[key_matrix_count];
+                    float tile_maximum = -INFINITY;
+                    for (uint key_fragment_index = 0;
+                         key_fragment_index < key_matrix_count;
+                         ++key_fragment_index) {
+                        thread simdgroup_matrix<float, 8, 8> scores;
+                        scores.thread_elements()[0] = 0.0f;
+                        scores.thread_elements()[1] = 0.0f;
+                        for (uint frag = 0; frag < matrix_count; ++frag) {
+                            thread simdgroup_matrix<bfloat, 8, 8> query_fragment;
+                            thread simdgroup_matrix<bfloat, 8, 8> key_fragment;
+                            uint query_dimension = frag * matrix_size + matrix_column;
+                            uint query_row = simd_group * matrix_size + matrix_row;
+                            query_fragment.thread_elements()[0] =
+                                query_shared[query_row * head_dimension + query_dimension];
+                            query_fragment.thread_elements()[1] =
+                                query_shared[query_row * head_dimension + query_dimension + 1];
+                            uint key_dimension = frag * matrix_size + matrix_row;
+                            uint key_column = key_fragment_index * matrix_size + matrix_column;
+                            key_fragment.thread_elements()[0] =
+                                key_value_shared[key_dimension * key_tile_rows + key_column];
+                            key_fragment.thread_elements()[1] =
+                                key_value_shared[key_dimension * key_tile_rows + key_column + 1];
+                            thread simdgroup_matrix<float, 8, 8> next_scores;
+                            simdgroup_multiply_accumulate(
+                                next_scores, query_fragment, key_fragment, scores
+                            );
+                            scores = next_scores;
+                        }
+                        float score0 = scores.thread_elements()[0] * attention_scale;
+                        float score1 = scores.thread_elements()[1] * attention_scale;
+                        uint key_column = key_fragment_index * matrix_size + matrix_column;
+                        if (key_column >= key_tile_size) score0 = -INFINITY;
+                        if (key_column + 1 >= key_tile_size) score1 = -INFINITY;
+                        scores.thread_elements()[0] = score0;
+                        scores.thread_elements()[1] = score1;
+                        probabilities[key_fragment_index] = scores;
+                        tile_maximum = metal::max(tile_maximum, metal::max(score0, score1));
+                    }
+                    tile_maximum = metal::max(
+                        tile_maximum,
+                        simd_shuffle_xor(tile_maximum, ushort(1))
+                    );
+                    tile_maximum = metal::max(
+                        tile_maximum,
+                        simd_shuffle_xor(tile_maximum, ushort(8))
+                    );
+                    float new_maximum = metal::max(row_maximum, tile_maximum);
+                    float alpha = metal::fast::exp2(row_maximum - new_maximum);
+                    float probability_sum = 0.0f;
+                    for (uint key_fragment_index = 0;
+                         key_fragment_index < key_matrix_count;
+                         ++key_fragment_index) {
+                        float probability0 = metal::fast::exp2(
+                            probabilities[key_fragment_index].thread_elements()[0] - new_maximum
+                        );
+                        float probability1 = metal::fast::exp2(
+                            probabilities[key_fragment_index].thread_elements()[1] - new_maximum
+                        );
+                        probabilities[key_fragment_index].thread_elements()[0] = probability0;
+                        probabilities[key_fragment_index].thread_elements()[1] = probability1;
+                        probability_sum += probability0 + probability1;
+                    }
+                    probability_sum += simd_shuffle_xor(probability_sum, ushort(1));
+                    probability_sum += simd_shuffle_xor(probability_sum, ushort(8));
+                    row_sum = row_sum * alpha + probability_sum;
+                    row_maximum = new_maximum;
+                    for (uint frag = 0; frag < matrix_count; ++frag) {
+                        accumulated[frag].thread_elements()[0] *= alpha;
+                        accumulated[frag].thread_elements()[1] *= alpha;
+                    }
+
+                    threadgroup_barrier(mem_flags::mem_threadgroup);
+                    for (uint index = thread_linear;
+                         index < key_tile_rows * head_dimension;
+                         index += 32 * simdgroup_count) {
+                        uint value_row = index / head_dimension;
+                        uint dimension = index - value_row * head_dimension;
+                        key_value_shared[index] = value_row < key_tile_size
+                            ? bfloat(values[
+                                (head * TOKEN_COUNT + key_start + key_tile_offset + value_row)
+                                    * head_dimension + dimension
+                            ])
+                            : bfloat(0.0f);
+                    }
+                    threadgroup_barrier(mem_flags::mem_threadgroup);
+                    for (uint key_fragment_index = 0;
+                         key_fragment_index < key_matrix_count;
+                         ++key_fragment_index) {
+                        for (uint frag = 0; frag < matrix_count; ++frag) {
+                            thread simdgroup_matrix<bfloat, 8, 8> value_fragment;
+                            uint value_row = key_fragment_index * matrix_size + matrix_row;
+                            uint output_dimension = frag * matrix_size + matrix_column;
+                            value_fragment.thread_elements()[0] =
+                                key_value_shared[value_row * head_dimension + output_dimension];
+                            value_fragment.thread_elements()[1] =
+                                key_value_shared[value_row * head_dimension + output_dimension + 1];
+                            thread simdgroup_matrix<float, 8, 8> next_accumulated;
+                            simdgroup_multiply_accumulate(
+                                next_accumulated,
+                                probabilities[key_fragment_index],
+                                value_fragment,
+                                accumulated[frag]
+                            );
+                            accumulated[frag] = next_accumulated;
+                        }
+                    }
+                }
+            }
+
+            if (query_valid) {
+                uint output_base = (head * TOKEN_COUNT + local_query) * head_dimension;
+                for (uint frag = 0; frag < matrix_count; ++frag) {
+                    uint output_dimension = frag * matrix_size + matrix_column;
+                    output[output_base + output_dimension] = bfloat(
+                        accumulated[frag].thread_elements()[0] / row_sum
+                    );
+                    output[output_base + output_dimension + 1] = bfloat(
+                        accumulated[frag].thread_elements()[1] / row_sum
+                    );
+                }
+            }
+        """,
+        header: "#include <metal_simdgroup_matrix>\n",
+        ensureRowContiguous: true
+    )
+    #endif
     #endif
 }

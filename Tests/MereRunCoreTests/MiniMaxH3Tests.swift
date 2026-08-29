@@ -300,6 +300,63 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         XCTAssertEqual(candidate.asArray(Float.self), expected.asArray(Float.self))
     }
 
+    func testFastVSAFullTileKernelMatchesHalfTileKernel() throws {
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip("FastH3 VSA tile schedule parity requires a Metal GPU.")
+        }
+        let layout = try MiniMaxH3Geometry.buildFL2VA(
+            textTokenTags: Array(repeating: 1, count: 70),
+            videoLatentFrames: 5,
+            latentHeight: 10,
+            latentWidth: 10,
+            audioLatentFrames: 3,
+            keyframeAnchors: []
+        )
+        MLXRandom.seed(2_026_082_9)
+        let shape = [1, 2, layout.sequenceLength, MiniMaxH3FastVSA.headDimension]
+        let queries = (MLXRandom.normal(shape) * Float(0.2)).asType(.bfloat16)
+        let keys = (MLXRandom.normal(shape) * Float(0.2)).asType(.bfloat16)
+        let values = MLXRandom.normal(shape).asType(.bfloat16)
+        let gate = (MLXRandom.normal(shape) * Float(0.05)).asType(.bfloat16)
+        let halfTile = try XCTUnwrap(MiniMaxH3FastVSA.call(
+            queries: queries,
+            keys: keys,
+            values: values,
+            compressionGate: gate,
+            layout: layout,
+            kernelMode: .halfTile
+        ))
+        let fullTile = try XCTUnwrap(MiniMaxH3FastVSA.call(
+            queries: queries,
+            keys: keys,
+            values: values,
+            compressionGate: gate,
+            layout: layout,
+            kernelMode: .fullTile
+        ))
+        let fullTileKV16 = try XCTUnwrap(MiniMaxH3FastVSA.call(
+            queries: queries,
+            keys: keys,
+            values: values,
+            compressionGate: gate,
+            layout: layout,
+            kernelMode: .fullTileKV16
+        ))
+        MLX.eval(halfTile, fullTile, fullTileKV16)
+        XCTAssertEqual(halfTile.asArray(Float.self), fullTile.asArray(Float.self))
+        let reference = halfTile.asType(.float32)
+        let candidate = fullTileKV16.asType(.float32)
+        let delta = candidate - reference
+        let maximumAbsoluteError = MLX.max(MLX.abs(delta))
+        let relativeL2Error = MLX.sqrt(
+            MLX.sum(delta * delta)
+                / MLX.maximum(MLX.sum(reference * reference), MLXArray(Float(1e-12)))
+        )
+        MLX.eval(maximumAbsoluteError, relativeL2Error)
+        XCTAssertLessThanOrEqual(maximumAbsoluteError.item(Float.self), 0.02)
+        XCTAssertLessThanOrEqual(relativeL2Error.item(Float.self), 0.01)
+    }
+
     func testFastVSAMetalSparseRouteAndCompressionMatchTensorReference() throws {
         guard Device.defaultDevice().deviceType == .gpu else {
             throw XCTSkip("FastH3 sparse VSA parity requires a Metal GPU.")

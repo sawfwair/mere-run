@@ -1075,11 +1075,19 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
             keys: ["MERERUN_H3_PROFILE_BLOCKS"],
             prefix: "[minimax-h3-profile]"
         )
+        let fastVSAProfileLogger = MereRunRuntimeDebug.logger(
+            keys: ["MERERUN_H3_PROFILE_FASTVSA"],
+            prefix: "[minimax-h3-fastvsa-profile]"
+        )
         let stepProfileLogger = MereRunRuntimeDebug.logger(
             keys: ["MERERUN_H3_PROFILE_STEPS"],
             prefix: "[minimax-h3-step-profile]"
         )
         blockProfileLogger?("rows=\(layout.sequenceLength) blocks=\(transformer.configuration.layerCount)")
+        fastVSAProfileLogger?(
+            "rows=\(layout.sequenceLength) blocks=\(transformer.configuration.layerCount) "
+                + "kernel=\(MiniMaxH3FastVSAKernelMode.runtimeDefault.rawValue)"
+        )
         stepProfileLogger?(
             "rows=\(layout.sequenceLength) steps=\(videoSchedule.timesteps.count) "
                 + "resident_bf16=\(transformer.usesResidentBF16)"
@@ -1093,6 +1101,17 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                     Double(memory.activeMemory) / 1_073_741_824,
                     Double(memory.cacheMemory) / 1_073_741_824,
                     Double(memory.peakMemory) / 1_073_741_824
+                ))
+            }
+        }
+        transformer.fastH3BlockPhaseTimingHandler = fastVSAProfileLogger.map { logger in
+            { index, projection, attention, postAttention in
+                logger(String(
+                    format: "block=%02d projection=%.3f attention=%.3f post_attention=%.3f",
+                    index,
+                    projection,
+                    attention,
+                    postAttention
                 ))
             }
         }
@@ -1254,6 +1273,7 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         stepProfileLogger?(
             "execution_mode=\(executionMode) acceleration=\(accelerationMode.rawValue) "
                 + "exact_kernels=\(exactKernelMode.rawValue) "
+                + "fastvsa_kernel=\(MiniMaxH3FastVSAKernelMode.runtimeDefault.rawValue) "
                 + "fused_post_attention=\(transformer.usesFusedPostAttention) "
                 + "attention_query_tokens=\(transformer.maximumAttentionQueryTokensPerKernel) "
                 + "attention_heads_per_kernel=\(attentionHeadsPerKernel) "

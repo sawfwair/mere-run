@@ -1732,6 +1732,7 @@ public final class MiniMaxH3Transformer: Module {
     var dynamicSparseAttentionStepCount = 0
     var dynamicSparseAttentionLogHandler: ((String) -> Void)?
     var blockTimingHandler: ((Int, TimeInterval, Memory.Snapshot) -> Void)?
+    var fastH3BlockPhaseTimingHandler: ((Int, TimeInterval, TimeInterval, TimeInterval) -> Void)?
     var activeBlockIndices: Set<Int>?
     @ModuleInfo(key: "video_patch_proj") var videoInput: Linear
     @ModuleInfo(key: "audio_patch_proj") var audioInput: Linear
@@ -2306,6 +2307,8 @@ public final class MiniMaxH3Transformer: Module {
             let block = blocks[index]
             let blockStarted = blockTimingHandler.map { _ in CFAbsoluteTimeGetCurrent() }
             if let compressionGate = fastH3CompressionGates[index] {
+                let phaseTimingHandler = fastH3BlockPhaseTimingHandler
+                let projectionStarted = phaseTimingHandler.map { _ in CFAbsoluteTimeGetCurrent() }
                 let compiled = usesBlockwiseCompilation
                     ? compiledBlockForward(for: block, compressionGate: compressionGate)
                     : nil
@@ -2334,18 +2337,28 @@ public final class MiniMaxH3Transformer: Module {
                     )
                 }
                 MLX.eval(projectedAttention)
+                let projectionSeconds = projectionStarted.map {
+                    CFAbsoluteTimeGetCurrent() - $0
+                }
                 guard let fastVSA = context.fastVSA else {
                     preconditionFailure("FastH3 VSA prepared context is missing")
                 }
+                let attentionStarted = phaseTimingHandler.map { _ in CFAbsoluteTimeGetCurrent() }
                 guard let attended = MiniMaxH3FastVSA.call(
                     queries: projectedAttention[0],
                     keys: projectedAttention[1],
                     values: projectedAttention[2],
                     compressionGate: projectedAttention[4],
-                    prepared: fastVSA
+                    prepared: fastVSA,
+                    kernelMode: .runtimeDefault
                 ) else {
                     preconditionFailure("FastH3 VSA requires batch-one BF16 attention on Metal")
                 }
+                if phaseTimingHandler != nil { MLX.eval(attended) }
+                let attentionSeconds = attentionStarted.map {
+                    CFAbsoluteTimeGetCurrent() - $0
+                }
+                let postAttentionStarted = phaseTimingHandler.map { _ in CFAbsoluteTimeGetCurrent() }
                 if let compiled {
                     var postAttentionInputs = [
                         hidden,
@@ -2370,6 +2383,18 @@ public final class MiniMaxH3Transformer: Module {
                         timeEmbedding: timeEmbedding,
                         adaLNIndices: context.adaLNIndices,
                         cachedModulation: cachedAdaLN?.blockModulations[index]
+                    )
+                }
+                if let phaseTimingHandler,
+                   let projectionSeconds,
+                   let attentionSeconds,
+                   let postAttentionStarted {
+                    MLX.eval(hidden)
+                    phaseTimingHandler(
+                        index,
+                        projectionSeconds,
+                        attentionSeconds,
+                        CFAbsoluteTimeGetCurrent() - postAttentionStarted
                     )
                 }
             } else if usesBlockwiseCompilation {
