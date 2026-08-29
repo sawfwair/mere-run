@@ -16,6 +16,15 @@ enum MiniMaxH3ExactKernelMode: String, Sendable, Equatable {
     case disabled
     case boundaryLayout = "boundary-layout"
     case affineQ8 = "affine-q8"
+    case affineQ8MLP = "affine-q8-mlp"
+
+    var usesBoundaryLayout: Bool {
+        self == .boundaryLayout || self == .affineQ8
+    }
+
+    var usesAffineQ8FeedForward: Bool {
+        self == .affineQ8 || self == .affineQ8MLP
+    }
 }
 
 enum MiniMaxH3ExactKernelStage: String, CaseIterable, Sendable, Hashable {
@@ -393,7 +402,7 @@ private final class MiniMaxH3Attention: Module {
             }
         }
         let globalProjection = queryKeyValue(input)
-        if exactKernelMode != .disabled,
+        if exactKernelMode.usesBoundaryLayout,
            enabledExactKernelStages.contains(.qkvLayout) {
             if let rope {
                 if let projected = MiniMaxH3FusedKernels.prepareHeadMajorQKV(
@@ -548,16 +557,23 @@ private final class MiniMaxH3FeedForward: Module {
     }
 
     func project(_ value: MLXArray) -> MLXArray {
-        if exactKernelMode == .affineQ8,
+        if exactKernelMode.usesAffineQ8FeedForward,
            enabledExactKernelStages.contains(.feedForwardInput) {
             if let weights = miniMaxH3AffineQ8Weights(input) {
-                if let projected = MiniMaxH3FusedKernels
-                    .projectFeedForwardInputAffineInt8SwiGLU(
+                let projected = exactKernelMode == .affineQ8MLP
+                    ? MiniMaxH3FusedKernels.projectFeedForwardInputAffineInt8SwiGLUTiled(
                         input: value,
                         weightCodes: weights.codes,
                         weightScales: weights.scales,
                         weightBiases: weights.biases
-                    ) {
+                    )
+                    : MiniMaxH3FusedKernels.projectFeedForwardInputAffineInt8SwiGLU(
+                        input: value,
+                        weightCodes: weights.codes,
+                        weightScales: weights.scales,
+                        weightBiases: weights.biases
+                    )
+                if let projected {
                     exactKernelDispatchHandler?(.feedForwardInput)
                     return projected
                 }
@@ -574,15 +590,23 @@ private final class MiniMaxH3FeedForward: Module {
     }
 
     func projectOutput(_ value: MLXArray) -> MLXArray {
-        if exactKernelMode == .affineQ8,
+        if exactKernelMode.usesAffineQ8FeedForward,
            enabledExactKernelStages.contains(.feedForwardOutput) {
             if let weights = miniMaxH3AffineQ8Weights(output) {
-                if let projected = MiniMaxH3FusedKernels.projectFeedForwardOutputAffineInt8(
-                    input: value,
-                    weightCodes: weights.codes,
-                    weightScales: weights.scales,
-                    weightBiases: weights.biases
-                ) {
+                let projected = exactKernelMode == .affineQ8MLP
+                    ? MiniMaxH3FusedKernels.projectFeedForwardOutputAffineInt8Tiled(
+                        input: value,
+                        weightCodes: weights.codes,
+                        weightScales: weights.scales,
+                        weightBiases: weights.biases
+                    )
+                    : MiniMaxH3FusedKernels.projectFeedForwardOutputAffineInt8(
+                        input: value,
+                        weightCodes: weights.codes,
+                        weightScales: weights.scales,
+                        weightBiases: weights.biases
+                    )
+                if let projected {
                     exactKernelDispatchHandler?(.feedForwardOutput)
                     return projected
                 }
@@ -769,6 +793,20 @@ private final class MiniMaxH3TransformerBlock: Module {
             && feedForwardNorm.weight.dtype == .bfloat16
     }
 
+    #if DEBUG
+    func feedForwardForBenchmark(_ value: MLXArray) -> MLXArray {
+        feedForward(value)
+    }
+
+    func feedForwardInputForBenchmark(_ value: MLXArray) -> MLXArray {
+        feedForward.project(value)
+    }
+
+    func feedForwardOutputForBenchmark(_ value: MLXArray) -> MLXArray {
+        feedForward.projectOutput(value)
+    }
+    #endif
+
     func discardAdaLNWeights() {
         guard adaLNWeightsAvailable else { return }
         update(modules: ModuleChildren.unflattened([
@@ -784,7 +822,7 @@ private final class MiniMaxH3TransformerBlock: Module {
         rope: MiniMaxH3RotaryEmbedding,
         cachedModulation: MLXArray?
     ) -> MLXArray {
-        if exactKernelMode != .disabled,
+        if exactKernelMode.usesBoundaryLayout,
            enabledExactKernelStages.contains(.gateAdaLN),
            let exact = exactBoundaryCall(
                value,
@@ -1752,6 +1790,23 @@ public final class MiniMaxH3Transformer: Module {
     var supportsAffineQ8ExactKernels: Bool {
         !blocks.isEmpty && blocks.allSatisfy(\.supportsAffineQ8ExactKernels)
     }
+
+    #if DEBUG
+    func feedForwardForBenchmark(_ value: MLXArray, blockIndex: Int) -> MLXArray {
+        precondition(blocks.indices.contains(blockIndex))
+        return blocks[blockIndex].feedForwardForBenchmark(value)
+    }
+
+    func feedForwardInputForBenchmark(_ value: MLXArray, blockIndex: Int) -> MLXArray {
+        precondition(blocks.indices.contains(blockIndex))
+        return blocks[blockIndex].feedForwardInputForBenchmark(value)
+    }
+
+    func feedForwardOutputForBenchmark(_ value: MLXArray, blockIndex: Int) -> MLXArray {
+        precondition(blocks.indices.contains(blockIndex))
+        return blocks[blockIndex].feedForwardOutputForBenchmark(value)
+    }
+    #endif
 
     var affineQ8ExactKernelBlockCount: Int {
         blocks.count(where: \.supportsAffineQ8ExactKernels)

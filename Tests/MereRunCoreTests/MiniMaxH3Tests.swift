@@ -24,6 +24,10 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
             try MiniMaxH3ExactKernelMode.resolve(environmentValue: "AFFINE-Q8"),
             .affineQ8
         )
+        XCTAssertEqual(
+            try MiniMaxH3ExactKernelMode.resolve(environmentValue: "AFFINE-Q8-MLP"),
+            .affineQ8MLP
+        )
         let threshold = MiniMaxH3DenoiseExecutionPolicy.blockwiseSequenceThreshold
         XCTAssertFalse(MiniMaxH3ExactKernelMode.disabled.requiresEagerExecution(
             sequenceLength: threshold + 1
@@ -37,15 +41,59 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         XCTAssertTrue(MiniMaxH3ExactKernelMode.affineQ8.requiresEagerExecution(
             sequenceLength: 1
         ))
+        XCTAssertTrue(MiniMaxH3ExactKernelMode.affineQ8MLP.requiresEagerExecution(
+            sequenceLength: 1
+        ))
         XCTAssertThrowsError(
             try MiniMaxH3ExactKernelMode.resolve(environmentValue: "automatic")
         ) { error in
             XCTAssertTrue(
                 error.localizedDescription.contains(
-                    "must be disabled, boundary-layout, or affine-q8"
+                    "must be disabled, boundary-layout, affine-q8, or affine-q8-mlp"
                 )
             )
         }
+    }
+
+    func testFastH3AffineQ8MLPAutomaticSelectionAndOptOut() throws {
+        XCTAssertFalse(MiniMaxH3ExactKernelMode.affineQ8MLP.usesBoundaryLayout)
+        XCTAssertTrue(MiniMaxH3ExactKernelMode.affineQ8MLP.usesAffineQ8FeedForward)
+        XCTAssertEqual(
+            try MiniMaxH3ExactKernelMode.resolveForRuntime(
+                environmentValue: nil,
+                usesFastH3VSA: true,
+                supportsAffineQ8ExactKernels: true,
+                usesResidentBF16: false
+            ),
+            .affineQ8MLP
+        )
+        XCTAssertEqual(
+            try MiniMaxH3ExactKernelMode.resolveForRuntime(
+                environmentValue: "disabled",
+                usesFastH3VSA: true,
+                supportsAffineQ8ExactKernels: true,
+                usesResidentBF16: false
+            ),
+            .disabled
+        )
+        XCTAssertEqual(
+            try MiniMaxH3ExactKernelMode.resolveForRuntime(
+                environmentValue: nil,
+                usesFastH3VSA: false,
+                supportsAffineQ8ExactKernels: true,
+                usesResidentBF16: false
+            ),
+            .disabled
+        )
+        XCTAssertEqual(
+            try MiniMaxH3ExactKernelMode.resolveForRuntime(
+                environmentValue: nil,
+                usesFastH3VSA: true,
+                supportsAffineQ8ExactKernels: true,
+                usesResidentBF16: true
+            ),
+            .disabled
+        )
     }
 
     func testExactKernelModeFallsBackForUnsupportedTransformerContracts() throws {
@@ -1882,6 +1930,298 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
             configuration.layerCount
         )
         XCTAssertTrue(transformer.supportsAffineQ8ExactKernels)
+    }
+
+    func testInstalledAffineQ8MLPReleaseBenchmark() throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard environment["MERERUN_H3_AFFINE_MLP_REAL_BENCH"] == "1",
+              let root = environment["MERERUN_H3_EXACT_KERNEL_MODEL_ROOT"],
+              !root.isEmpty else {
+            throw XCTSkip(
+                "Set MERERUN_H3_AFFINE_MLP_REAL_BENCH=1 and "
+                    + "MERERUN_H3_EXACT_KERNEL_MODEL_ROOT to run the real-weight MLP benchmark."
+            )
+        }
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip("The real-weight H3 MLP benchmark requires a Metal GPU.")
+        }
+
+        let rows = max(1, Int(environment["MERERUN_H3_BENCH_ROWS"] ?? "") ?? 37_719)
+        let rounds = max(1, Int(environment["MERERUN_H3_BENCH_ROUNDS"] ?? "") ?? 3)
+        let resources = MiniMaxH3Resources(
+            rootURL: URL(fileURLWithPath: root, isDirectory: true)
+        )
+        let configuration = try resources.loadConfiguration()
+        let recipe = MiniMaxH3TurboAdapter.fastH3VSADataFreeRecipe
+        let baseSigmas = try XCTUnwrap(recipe.baseDenoisingSigmas)
+        let cache = try MiniMaxH3AdaLNCache.load(
+            from: resources.fastH3AdaLNCacheURL,
+            configuration: .init(configuration),
+            videoSchedule: MiniMaxH3Schedule(
+                baseSigmas: baseSigmas,
+                shift: recipe.videoFlowShift ?? configuration.videoFlowShift
+            ),
+            audioSchedule: MiniMaxH3Schedule(
+                baseSigmas: baseSigmas,
+                shift: recipe.audioFlowShift ?? configuration.audioFlowShift
+            ),
+            sourceIdentity: MiniMaxH3TurboAdapter.fastH3SourceIdentity
+        )
+        let transformer = try MiniMaxH3ModelLoader.loadInferenceTransformer(
+            resources: resources,
+            configuration: configuration,
+            cachedAdaLN: cache
+        )
+        XCTAssertTrue(transformer.supportsAffineQ8ExactKernels)
+
+        MLXRandom.seed(2_026_082_902)
+        let input = MLXRandom.normal(
+            [1, rows, configuration.hiddenSize]
+        ).asType(.bfloat16)
+        MLX.eval(input)
+
+        func portableRun() -> [MLXArray] {
+            transformer.exactKernelMode = .disabled
+            return [transformer.feedForwardForBenchmark(input, blockIndex: 0)]
+        }
+        func tiledRun() -> [MLXArray] {
+            transformer.exactKernelMode = .affineQ8MLP
+            return [transformer.feedForwardForBenchmark(input, blockIndex: 0)]
+        }
+        func measure(_ body: () -> [MLXArray]) -> Double {
+            let started = CFAbsoluteTimeGetCurrent()
+            MLX.eval(body())
+            return CFAbsoluteTimeGetCurrent() - started
+        }
+
+        MLX.eval(portableRun(), tiledRun())
+        var portableSeconds = 0.0
+        var tiledSeconds = 0.0
+        for round in 0..<rounds {
+            if round.isMultiple(of: 2) {
+                portableSeconds += measure(portableRun)
+                tiledSeconds += measure(tiledRun)
+            } else {
+                tiledSeconds += measure(tiledRun)
+                portableSeconds += measure(portableRun)
+            }
+        }
+        portableSeconds /= Double(rounds)
+        tiledSeconds /= Double(rounds)
+
+        let reference = portableRun()[0]
+        let candidate = tiledRun()[0]
+        let difference = reference.asType(.float32) - candidate.asType(.float32)
+        let maximum = MLX.max(MLX.abs(difference)).item(Float.self)
+        let numerator = MLX.sum(difference * difference)
+        let denominator = MLX.maximum(
+            MLX.sum(reference.asType(.float32) * reference.asType(.float32)),
+            MLXArray(Float(1e-12))
+        )
+        let relativeL2 = MLX.sqrt(numerator / denominator).item(Float.self)
+        let avoidedBytes = UInt64(rows) * UInt64(2 * configuration.feedForwardSize) * 2
+        print(String(
+            format: "[h3-transfer] real-affine-mlp rows=%d portable_ms=%.3f "
+                + "tiled_ms=%.3f speedup=%.3fx max_abs=%.6g rel_l2=%.6g "
+                + "fc1_materialization_avoided_bytes=%llu",
+            rows,
+            portableSeconds * 1_000,
+            tiledSeconds * 1_000,
+            portableSeconds / tiledSeconds,
+            maximum,
+            relativeL2,
+            avoidedBytes
+        ))
+
+        XCTAssertLessThan(relativeL2, 0.005)
+    }
+
+    func testInstalledAffineQ8MLPStageReleaseBenchmark() throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard environment["MERERUN_H3_AFFINE_MLP_REAL_STAGE_BENCH"] == "1",
+              let root = environment["MERERUN_H3_EXACT_KERNEL_MODEL_ROOT"],
+              !root.isEmpty else {
+            throw XCTSkip(
+                "Set MERERUN_H3_AFFINE_MLP_REAL_STAGE_BENCH=1 and "
+                    + "MERERUN_H3_EXACT_KERNEL_MODEL_ROOT to run real-weight MLP stages."
+            )
+        }
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip("The real-weight H3 MLP stage benchmark requires a Metal GPU.")
+        }
+
+        let rows = max(1, Int(environment["MERERUN_H3_BENCH_ROWS"] ?? "") ?? 37_719)
+        let rounds = max(2, Int(environment["MERERUN_H3_BENCH_ROUNDS"] ?? "") ?? 4)
+        let measuresTiming = environment["MERERUN_H3_BENCH_TIMING"] != "0"
+        let resources = MiniMaxH3Resources(
+            rootURL: URL(fileURLWithPath: root, isDirectory: true)
+        )
+        let configuration = try resources.loadConfiguration()
+        let recipe = MiniMaxH3TurboAdapter.fastH3VSADataFreeRecipe
+        let baseSigmas = try XCTUnwrap(recipe.baseDenoisingSigmas)
+        let cache = try MiniMaxH3AdaLNCache.load(
+            from: resources.fastH3AdaLNCacheURL,
+            configuration: .init(configuration),
+            videoSchedule: MiniMaxH3Schedule(
+                baseSigmas: baseSigmas,
+                shift: recipe.videoFlowShift ?? configuration.videoFlowShift
+            ),
+            audioSchedule: MiniMaxH3Schedule(
+                baseSigmas: baseSigmas,
+                shift: recipe.audioFlowShift ?? configuration.audioFlowShift
+            ),
+            sourceIdentity: MiniMaxH3TurboAdapter.fastH3SourceIdentity
+        )
+        let transformer = try MiniMaxH3ModelLoader.loadInferenceTransformer(
+            resources: resources,
+            configuration: configuration,
+            cachedAdaLN: cache
+        )
+        XCTAssertTrue(transformer.supportsAffineQ8ExactKernels)
+
+        MLXRandom.seed(2_026_082_903)
+        let input = MLXRandom.normal(
+            [1, rows, configuration.hiddenSize]
+        ).asType(.bfloat16)
+        MLX.eval(input)
+
+        let portableFC1ChunkRows = 32_768
+        func portableFC1() -> [MLXArray] {
+            transformer.exactKernelMode = .disabled
+            return stride(from: 0, to: rows, by: portableFC1ChunkRows).map { start in
+                let end = min(start + portableFC1ChunkRows, rows)
+                return transformer.feedForwardInputForBenchmark(
+                    input[0..., start..<end, 0...],
+                    blockIndex: 0
+                )
+            }
+        }
+        func tiledFC1() -> [MLXArray] {
+            transformer.exactKernelMode = .affineQ8MLP
+            return [transformer.feedForwardInputForBenchmark(input, blockIndex: 0)]
+        }
+        let fc2Input = tiledFC1()[0]
+        MLX.eval(fc2Input)
+        func portableFC2() -> [MLXArray] {
+            transformer.exactKernelMode = .disabled
+            return [transformer.feedForwardOutputForBenchmark(fc2Input, blockIndex: 0)]
+        }
+        func tiledFC2() -> [MLXArray] {
+            transformer.exactKernelMode = .affineQ8MLP
+            return [transformer.feedForwardOutputForBenchmark(fc2Input, blockIndex: 0)]
+        }
+        func measure(_ body: () -> [MLXArray]) -> Double {
+            let started = CFAbsoluteTimeGetCurrent()
+            MLX.eval(body())
+            return CFAbsoluteTimeGetCurrent() - started
+        }
+        func benchmark(
+            _ portable: () -> [MLXArray],
+            _ tiled: () -> [MLXArray]
+        ) -> (Double, Double) {
+            guard measuresTiming else { return (.nan, .nan) }
+            MLX.eval(portable(), tiled())
+            var portableSeconds = 0.0
+            var tiledSeconds = 0.0
+            for round in 0..<rounds {
+                if round.isMultiple(of: 2) {
+                    portableSeconds += measure(portable)
+                    tiledSeconds += measure(tiled)
+                } else {
+                    tiledSeconds += measure(tiled)
+                    portableSeconds += measure(portable)
+                }
+            }
+            return (
+                portableSeconds / Double(rounds),
+                tiledSeconds / Double(rounds)
+            )
+        }
+        func relativeL2(
+            referenceChunks: [MLXArray],
+            candidate: MLXArray
+        ) -> (Float, Float, Int) {
+            var numerator = 0.0
+            var denominator = 0.0
+            var worstRelativeL2: Float = 0
+            var worstStart = 0
+            var start = 0
+            for referenceChunk in referenceChunks {
+                let end = start + referenceChunk.dim(1)
+                let reference = referenceChunk.asType(.float32)
+                let difference = reference - candidate[
+                    0..., start..<end, 0...
+                ].asType(.float32)
+                let chunkNumerator = MLX.sum(difference * difference).item(Float.self)
+                let chunkDenominator = MLX.maximum(
+                    MLX.sum(reference * reference),
+                    MLXArray(Float(1e-12))
+                ).item(Float.self)
+                let chunkRelativeL2 = sqrt(chunkNumerator / chunkDenominator)
+                if chunkRelativeL2 >= 0.005 {
+                    print(String(
+                        format: "[h3-transfer] failing-chunk start=%d end=%d rel_l2=%.6g",
+                        start,
+                        end,
+                        chunkRelativeL2
+                    ))
+                }
+                numerator += Double(chunkNumerator)
+                denominator += Double(chunkDenominator)
+                if chunkRelativeL2 > worstRelativeL2 {
+                    worstRelativeL2 = chunkRelativeL2
+                    worstStart = start
+                }
+                start = end
+            }
+            return (
+                Float(sqrt(numerator / max(denominator, 1e-12))),
+                worstRelativeL2,
+                worstStart
+            )
+        }
+
+        let fc1Timing = benchmark(portableFC1, tiledFC1)
+        let fc2Timing = benchmark(portableFC2, tiledFC2)
+        let fc1References = portableFC1()
+        let fc1Candidate = tiledFC1()[0]
+        let fc2Reference = portableFC2()[0]
+        let fc2Candidate = tiledFC2()[0]
+        MLX.eval(fc1References, [fc1Candidate, fc2Reference, fc2Candidate])
+        let fc1RelativeL2 = relativeL2(
+            referenceChunks: fc1References,
+            candidate: fc1Candidate
+        )
+        let fc2RelativeL2 = relativeL2(
+            referenceChunks: [fc2Reference],
+            candidate: fc2Candidate
+        )
+        print(String(
+            format: "[h3-transfer] real-affine-mlp-stages rows=%d "
+                + "fc1_portable_ms=%.3f fc1_tiled_ms=%.3f fc1_speedup=%.3fx "
+                + "fc1_rel_l2=%.6g fc1_worst_chunk_rel_l2=%.6g "
+                + "fc1_worst_chunk_start=%d fc2_portable_ms=%.3f fc2_tiled_ms=%.3f "
+                + "fc2_speedup=%.3fx fc2_rel_l2=%.6g "
+                + "fc2_worst_chunk_rel_l2=%.6g fc2_worst_chunk_start=%d",
+            rows,
+            fc1Timing.0 * 1_000,
+            fc1Timing.1 * 1_000,
+            fc1Timing.0 / fc1Timing.1,
+            fc1RelativeL2.0,
+            fc1RelativeL2.1,
+            fc1RelativeL2.2,
+            fc2Timing.0 * 1_000,
+            fc2Timing.1 * 1_000,
+            fc2Timing.0 / fc2Timing.1,
+            fc2RelativeL2.0,
+            fc2RelativeL2.1,
+            fc2RelativeL2.2
+        ))
+
+        XCTAssertLessThan(fc1RelativeL2.0, 0.005)
+        XCTAssertLessThan(fc1RelativeL2.1, 0.005)
+        XCTAssertLessThan(fc2RelativeL2.0, 0.005)
+        XCTAssertLessThan(fc2RelativeL2.1, 0.005)
     }
 
     func testInstalledRef2VAExactKernelFullForwardWhenEnabled() throws {

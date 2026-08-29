@@ -243,6 +243,13 @@ dense, and video queries retain every prefix key tile. The recipe accepts
 text-only generation. It rejects frame conditioning, continuation, references,
 and additional H3 approximation modes.
 
+On affine Q8 FastH3 roots, Metal also selects the shape-specific tiled MLP.
+It fuses FC1 with SwiGLU, avoids the two-wide FC1 projection slab, and applies
+FC2 with a separate matrix tile. This keeps the 89,188-row high-resolution path
+below the 4 GiB intermediate boundary. Set
+`MERERUN_H3_EXACT_KERNELS=disabled` only when comparing against the portable
+MLX path.
+
 The package build uses
 `scripts/model-conversion/merge_minimax_h3_fasth3_q8.py` after creating the
 source-bound table with `prepare_minimax_h3_fasth3_vsa.py`. The merge script

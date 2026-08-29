@@ -7,16 +7,35 @@ memory, and fallback gates.
 
 ## Promotion conclusion
 
-The portable M4 result is decisive: keep stock MLX's tiled affine-Q8 matrix
-primitive and fuse the elementwise/layout boundaries around it. Promote only
-K1 gated AdaLN and K2a head-major QKV normalization/RoPE for shape-qualified
-evaluation. Do not promote K2b, K3, or K4's scalar-SIMD affine-Q8 matrix cores;
-they are roughly four to five times slower than stock MLX at H3's production
-shapes. MLX's public quantized-matmul primitive does not accept an output
-stride or custom epilogue, so eliminating the remaining projection
-materializations competitively requires an MLX/MLXFast primitive with a tiled
-quantized core and H3-specific epilogue, or an M5 TensorOps implementation. It
-is not achievable by further tuning the standalone scalar kernels.
+The original scalar-SIMD affine-Q8 matrix cores remain rejected: they are
+roughly four to five times slower than stock MLX at H3's production shapes.
+The FastH3 Q8 MLP now uses a separate matrix-tiled Metal schedule. K4a stages a
+32-row by 32-output tile and keeps both FC1 projections in registers through
+the SwiGLU epilogue; K4b stages a 32-row by 64-output tile. Both dequantize each
+Q8/group-64 weight tile once into threadgroup memory and accumulate BF16 matrix
+operands in FP32.
+
+The tiled K4 path is the default only for the managed FastH3 VSA Q8 recipe.
+Other H3 variants retain stock MLX unless `MERERUN_H3_EXACT_KERNELS=affine-q8-mlp`
+is selected explicitly. `MERERUN_H3_EXACT_KERNELS=disabled` opts the FastH3
+recipe out. K2b and K3 remain experimental because their scalar matrix cores
+did not win.
+
+At 89,188 rows on the packaged FastH3 checkpoint, the correct chunked portable
+oracle measured 3,813.785 ms for FC1 plus SwiGLU and 2,176.992 ms for FC2. The
+tiled kernels measured 3,445.900 ms and 2,073.032 ms respectively: 1.107x and
+1.050x. FC1 relative L2 was 0.000767212, with a worst 32,768-row chunk of
+0.000767620; FC2 was bit-identical. K4a also avoids the 5.11 GiB
+`[1, 89188, 28672]` FC1 projection. The unchunked stock path wraps that
+intermediate after its 4 GiB boundary, so high-resolution validation must use
+the chunked oracle rather than treating the corrupt tail as a baseline.
+
+Reproduce the installed-checkpoint stage gate with:
+
+```bash
+MERERUN_H3_EXACT_KERNEL_MODEL_ROOT=/path/to/video-minimax-h3-fasth3-vsa-datafree-mlx \
+  scripts/h3-kernel-lab.sh affine-mlp-real
+```
 
 Resident BF16 has a separate M3/M4 opportunity. The refreshed MLX source has
 a Metal 4 NAX GEMM implementation, but its runtime capability gate
@@ -278,6 +297,11 @@ quantization contract and falls back to the decomposed graph if that individual
 contract is unavailable. K1's activation-INT8 output remains a lab boundary:
 the installed path uses its BF16 sibling until a projection consumes the
 dynamic INT8 rows directly.
+
+`MERERUN_H3_EXACT_KERNELS=affine-q8-mlp` selects only the matrix-tiled K4a and
+K4b kernels. It does not select K1, K2, or K3. The managed FastH3 VSA Q8 recipe
+uses this mode automatically when the environment variable is absent; setting
+the variable to `disabled` retains the portable MLX MLP for diagnostics.
 
 The gated real-weight test can also enable one stage at a time before the
 combined run. On the installed Ref2VA artifact, all five stages selected in all

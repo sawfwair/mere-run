@@ -892,7 +892,7 @@ final class MiniMaxH3FusedKernelTests: MereRunCoreTestCase {
             )
         }
 
-        let rows = 1
+        let rows = 33
         let inputWidth = 5_376
         let outputWidth = 14_336
         let groupSize = 64
@@ -933,11 +933,22 @@ final class MiniMaxH3FusedKernelTests: MereRunCoreTestCase {
                 weightBiases: biases
             )
         )
-        MLX.eval(reference, candidate)
+        let tiledCandidate = try XCTUnwrap(
+            MiniMaxH3FusedKernels.projectFeedForwardInputAffineInt8SwiGLUTiled(
+                input: input,
+                weightCodes: codes,
+                weightScales: scales,
+                weightBiases: biases
+            )
+        )
+        MLX.eval(reference, candidate, tiledCandidate)
 
         XCTAssertEqual(candidate.shape, [1, rows, outputWidth])
         XCTAssertEqual(candidate.dtype, .bfloat16)
         XCTAssertLessThan(maximumDifference(candidate, reference), 0.032)
+        XCTAssertEqual(tiledCandidate.shape, [1, rows, outputWidth])
+        XCTAssertEqual(tiledCandidate.dtype, .bfloat16)
+        XCTAssertLessThan(maximumDifference(tiledCandidate, reference), 0.032)
     }
 
     func testProjectFeedForwardOutputAffineInt8MatchesManagedQ8Contract() throws {
@@ -947,7 +958,7 @@ final class MiniMaxH3FusedKernelTests: MereRunCoreTestCase {
             )
         }
 
-        let rows = 1
+        let rows = 33
         let inputWidth = 14_336
         let outputWidth = 5_376
         let groupSize = 64
@@ -986,11 +997,113 @@ final class MiniMaxH3FusedKernelTests: MereRunCoreTestCase {
                 weightBiases: biases
             )
         )
-        MLX.eval(reference, candidate)
+        let tiledCandidate = try XCTUnwrap(
+            MiniMaxH3FusedKernels.projectFeedForwardOutputAffineInt8Tiled(
+                input: input,
+                weightCodes: codes,
+                weightScales: scales,
+                weightBiases: biases
+            )
+        )
+        MLX.eval(reference, candidate, tiledCandidate)
 
         XCTAssertEqual(candidate.shape, [1, rows, outputWidth])
         XCTAssertEqual(candidate.dtype, .bfloat16)
         XCTAssertLessThan(maximumDifference(candidate, reference), 0.032)
+        XCTAssertEqual(tiledCandidate.shape, [1, rows, outputWidth])
+        XCTAssertEqual(tiledCandidate.dtype, .bfloat16)
+        XCTAssertLessThan(maximumDifference(tiledCandidate, reference), 0.032)
+    }
+
+    func testTiledAffineInt8MLPRunsInsideCompiledGraph() throws {
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip(
+                "Set MERERUN_TEST_MLX_DEVICE=gpu to run the compiled tiled H3 MLP canary."
+            )
+        }
+
+        let rows = 33
+        let hiddenSize = 5_376
+        let feedForwardSize = 14_336
+        let groupSize = 64
+        MLXRandom.seed(2_026_082_904)
+        let input = MLXRandom.uniform(
+            -0.25 ..< 0.25,
+            [1, rows, hiddenSize]
+        ).asType(.bfloat16)
+        let fc1Codes = MLXArray.full(
+            [2 * feedForwardSize, hiddenSize / 4],
+            values: MLXArray(UInt32(0x0403_0201))
+        )
+        let fc1Scales = MLXRandom.uniform(
+            0.0005 ..< 0.0025,
+            [2 * feedForwardSize, hiddenSize / groupSize]
+        ).asType(.bfloat16)
+        let fc1Biases = MLXRandom.uniform(
+            -0.01 ..< 0.01,
+            fc1Scales.shape
+        ).asType(.bfloat16)
+        let fc2Codes = MLXArray.full(
+            [hiddenSize, feedForwardSize / 4],
+            values: MLXArray(UInt32(0x0403_0201))
+        )
+        let fc2Scales = MLXRandom.uniform(
+            0.0005 ..< 0.0025,
+            [hiddenSize, feedForwardSize / groupSize]
+        ).asType(.bfloat16)
+        let fc2Biases = MLXRandom.uniform(
+            -0.01 ..< 0.01,
+            fc2Scales.shape
+        ).asType(.bfloat16)
+        let compiled = MLX.compile { inputs in
+            guard let activated = MiniMaxH3FusedKernels
+                .projectFeedForwardInputAffineInt8SwiGLUTiled(
+                    input: inputs[0],
+                    weightCodes: inputs[1],
+                    weightScales: inputs[2],
+                    weightBiases: inputs[3]
+                ),
+                let projected = MiniMaxH3FusedKernels
+                .projectFeedForwardOutputAffineInt8Tiled(
+                    input: activated,
+                    weightCodes: inputs[4],
+                    weightScales: inputs[5],
+                    weightBiases: inputs[6]
+                ) else {
+                return []
+            }
+            return [activated, projected]
+        }
+        let arguments = [
+            input,
+            fc1Codes,
+            fc1Scales,
+            fc1Biases,
+            fc2Codes,
+            fc2Scales,
+            fc2Biases,
+        ]
+        let eagerActivated = try XCTUnwrap(
+            MiniMaxH3FusedKernels.projectFeedForwardInputAffineInt8SwiGLUTiled(
+                input: input,
+                weightCodes: fc1Codes,
+                weightScales: fc1Scales,
+                weightBiases: fc1Biases
+            )
+        )
+        let eagerProjected = try XCTUnwrap(
+            MiniMaxH3FusedKernels.projectFeedForwardOutputAffineInt8Tiled(
+                input: eagerActivated,
+                weightCodes: fc2Codes,
+                weightScales: fc2Scales,
+                weightBiases: fc2Biases
+            )
+        )
+        let compiledOutputs = compiled(arguments)
+        XCTAssertEqual(compiledOutputs.count, 2)
+        MLX.eval(eagerActivated, eagerProjected, compiledOutputs)
+        XCTAssertEqual(maximumDifference(compiledOutputs[0], eagerActivated), 0)
+        XCTAssertEqual(maximumDifference(compiledOutputs[1], eagerProjected), 0)
     }
 
     func testCompiledResidualBoundaryDonatesUnretainedH3Buffer() throws {
@@ -1822,13 +1935,14 @@ final class MiniMaxH3FusedKernelTests: MereRunCoreTestCase {
         }
         func fusedRun() -> [MLXArray] {
             guard let activated = MiniMaxH3FusedKernels
-                .projectFeedForwardInputAffineInt8SwiGLU(
+                .projectFeedForwardInputAffineInt8SwiGLUTiled(
                     input: input,
                     weightCodes: fc1Codes,
                     weightScales: fc1Scales,
                     weightBiases: fc1Biases
                 ),
-                let projected = MiniMaxH3FusedKernels.projectFeedForwardOutputAffineInt8(
+                let projected = MiniMaxH3FusedKernels
+                .projectFeedForwardOutputAffineInt8Tiled(
                     input: activated,
                     weightCodes: fc2Codes,
                     weightScales: fc2Scales,
@@ -1859,17 +1973,116 @@ final class MiniMaxH3FusedKernelTests: MereRunCoreTestCase {
         let candidate = fusedRun()[0]
         MLX.eval(reference, candidate)
         let difference = maximumDifference(reference, candidate)
+        let relativeL2 = relativeL2Difference(reference, candidate)
         let avoidedBytes = UInt64(rows) * UInt64(2 * feedForwardSize) * 2
         print(String(
             format: "[h3-transfer] affine-ffn rows=%d portable_ms=%.3f "
-                + "fused_ms=%.3f speedup=%.3fx max_abs=%.6g "
+                + "fused_ms=%.3f speedup=%.3fx max_abs=%.6g rel_l2=%.6g "
                 + "fc1_materialization_avoided_bytes=%llu",
             rows,
             portableSeconds * 1_000,
             fusedSeconds * 1_000,
             portableSeconds / fusedSeconds,
             difference,
+            relativeL2,
             avoidedBytes
+        ))
+
+        XCTAssertLessThan(relativeL2, 0.005)
+    }
+
+    func testFeedForwardOutputAffineInt8TiledReleaseBenchmark() throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard environment["MERERUN_H3_AFFINE_FC2_TILED_BENCH"] == "1" else {
+            throw XCTSkip(
+                "Set MERERUN_H3_AFFINE_FC2_TILED_BENCH=1 and "
+                    + "MERERUN_TEST_MLX_DEVICE=gpu to run the tiled H3 FC2 benchmark."
+            )
+        }
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip("The tiled H3 FC2 benchmark requires a Metal GPU.")
+        }
+
+        let rows = max(
+            1,
+            Int(environment["MERERUN_H3_BENCH_ROWS"] ?? "") ?? 14_958
+        )
+        let rounds = max(
+            1,
+            Int(environment["MERERUN_H3_BENCH_ROUNDS"] ?? "") ?? 4
+        )
+        let inputWidth = 14_336
+        let outputWidth = 5_376
+        let groupSize = 64
+        MLXRandom.seed(2_026_082_901)
+        let input = MLXRandom.normal([1, rows, inputWidth]).asType(.bfloat16)
+        let codes = MLXArray.full(
+            [outputWidth, inputWidth / 4],
+            values: MLXArray(UInt32(0x0403_0201))
+        )
+        let scales = MLXRandom.uniform(
+            0.0005 ..< 0.0025,
+            [outputWidth, inputWidth / groupSize]
+        ).asType(.bfloat16)
+        let biases = MLXRandom.uniform(
+            -0.01 ..< 0.01,
+            scales.shape
+        ).asType(.bfloat16)
+        MLX.eval(input, codes, scales, biases)
+
+        func portableRun() -> [MLXArray] {
+            [MLX.quantizedMM(
+                input,
+                codes,
+                scales: scales,
+                biases: biases,
+                transpose: true,
+                groupSize: groupSize,
+                bits: 8,
+                mode: .affine
+            )]
+        }
+        func tiledRun() -> [MLXArray] {
+            guard let output = MiniMaxH3FusedKernels
+                .projectFeedForwardOutputAffineInt8Tiled(
+                    input: input,
+                    weightCodes: codes,
+                    weightScales: scales,
+                    weightBiases: biases
+                ) else {
+                XCTFail("Expected the tiled H3 FC2 kernel.")
+                return []
+            }
+            return [output]
+        }
+
+        MLX.eval(portableRun(), tiledRun())
+        var portableSeconds = 0.0
+        var tiledSeconds = 0.0
+        for round in 0..<rounds {
+            if round.isMultiple(of: 2) {
+                portableSeconds += measure(portableRun)
+                tiledSeconds += measure(tiledRun)
+            } else {
+                tiledSeconds += measure(tiledRun)
+                portableSeconds += measure(portableRun)
+            }
+        }
+        portableSeconds /= Double(rounds)
+        tiledSeconds /= Double(rounds)
+
+        let reference = portableRun()[0]
+        let candidate = tiledRun()[0]
+        MLX.eval(reference, candidate)
+        let difference = maximumDifference(reference, candidate)
+        print(String(
+            format: "[h3-transfer] affine-fc2-tiled rows=%d portable_ms=%.3f "
+                + "tiled_ms=%.3f speedup=%.3fx max_abs=%.6g",
+            rows,
+            portableSeconds * 1_000,
+            tiledSeconds * 1_000,
+            portableSeconds / tiledSeconds,
+            difference
         ))
 
         XCTAssertLessThan(difference, 0.125)
@@ -1878,6 +2091,14 @@ final class MiniMaxH3FusedKernelTests: MereRunCoreTestCase {
 
     private func maximumDifference(_ lhs: MLXArray, _ rhs: MLXArray) -> Float {
         MLX.max(MLX.abs(lhs.asType(.float32) - rhs.asType(.float32))).item(Float.self)
+    }
+
+    private func relativeL2Difference(_ lhs: MLXArray, _ rhs: MLXArray) -> Float {
+        let reference = lhs.asType(.float32)
+        let difference = reference - rhs.asType(.float32)
+        let numerator = MLX.sqrt(MLX.sum(difference * difference))
+        let denominator = MLX.sqrt(MLX.sum(reference * reference))
+        return (numerator / denominator).item(Float.self)
     }
 
     private func measure(_ body: () -> [MLXArray]) -> Double {

@@ -125,3 +125,26 @@ frames and stereo AAC audio. Its SHA-256 is
 Manual contact-sheet inspection confirmed the requested dark circular stage,
 cyan lighting, and multiple dancers. These runs don't prove numerical parity
 with CUDA, long-duration quality, or performance at 1,344 by 768 pixels.
+
+## High-resolution tiled MLP qualification
+
+The managed affine Q8 FastH3 recipe now selects matrix-tiled Metal FC1/SwiGLU
+and FC2 kernels. This qualification isolates those stages with block 0's real
+checkpoint weights at 89,188 rows, the sequence shape for a 1,344 by 768 pixel
+and 294-frame request.
+
+| Stage | Correct portable oracle | Tiled Metal | Speedup | Numerical result |
+| --- | ---: | ---: | ---: | --- |
+| FC1 plus SwiGLU | 3,813.785 ms | 3,445.900 ms | 1.107x | relative L2 0.000767212 |
+| FC2 | 2,176.992 ms | 2,073.032 ms | 1.050x | bit-identical |
+
+The FC1 gate compares against portable calls chunked to at most 32,768 rows.
+An unchunked portable call materializes a 5.11 GiB `[1, 89188, 28672]` BF16
+projection and produces an invalid tail after its 4 GiB byte-offset boundary.
+The tiled kernel fuses SwiGLU and never creates that projection. Its worst
+32,768-row chunk had relative L2 0.000767620.
+
+This is an isolated GPU-stage qualification, not a new end-to-end generation
+timing. A packaged MP4 rerun was stopped before inference by mere.run's 16 GB
+system-disk reserve gate, with 11.45 GB available. The earlier end-to-end
+package and media-closure results above remain the generation evidence.

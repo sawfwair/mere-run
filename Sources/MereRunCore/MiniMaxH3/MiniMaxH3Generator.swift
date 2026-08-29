@@ -42,7 +42,7 @@ extension MiniMaxH3ExactKernelMode {
             false
         case .boundaryLayout:
             sequenceLength > MiniMaxH3DenoiseExecutionPolicy.blockwiseSequenceThreshold
-        case .affineQ8:
+        case .affineQ8, .affineQ8MLP:
             true
         }
     }
@@ -52,12 +52,29 @@ extension MiniMaxH3ExactKernelMode {
         case nil, "", "disabled": .disabled
         case MiniMaxH3ExactKernelMode.boundaryLayout.rawValue: .boundaryLayout
         case MiniMaxH3ExactKernelMode.affineQ8.rawValue: .affineQ8
+        case MiniMaxH3ExactKernelMode.affineQ8MLP.rawValue: .affineQ8MLP
         case .some(let value):
             throw MiniMaxH3GeneratorError.invalidOptions(
                 "MERERUN_H3_EXACT_KERNELS must be disabled, boundary-layout, "
-                    + "or affine-q8, not \(value)"
+                    + "affine-q8, or affine-q8-mlp, not \(value)"
             )
         }
+    }
+
+    static func resolveForRuntime(
+        environmentValue: String?,
+        usesFastH3VSA: Bool,
+        supportsAffineQ8ExactKernels: Bool,
+        usesResidentBF16: Bool
+    ) throws -> Self {
+        let configured = try resolve(environmentValue: environmentValue)
+        if environmentValue == nil,
+           usesFastH3VSA,
+           supportsAffineQ8ExactKernels,
+           !usesResidentBF16 {
+            return .affineQ8MLP
+        }
+        return configured
     }
 }
 
@@ -1128,8 +1145,11 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         // compiled whole-step transform; very large graphs also stay blockwise
         // to avoid the macOS watchdog.
         let environment = ProcessInfo.processInfo.environment
-        let exactKernelMode = try MiniMaxH3ExactKernelMode.resolve(
-            environmentValue: environment["MERERUN_H3_EXACT_KERNELS"]
+        let exactKernelMode = try MiniMaxH3ExactKernelMode.resolveForRuntime(
+            environmentValue: environment["MERERUN_H3_EXACT_KERNELS"],
+            usesFastH3VSA: transformer.usesFastH3VSA,
+            supportsAffineQ8ExactKernels: transformer.supportsAffineQ8ExactKernels,
+            usesResidentBF16: transformer.usesResidentBF16
         )
         if exactKernelMode != .disabled {
             guard accelerationMode == .quality else {
@@ -1138,11 +1158,11 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                 )
             }
         }
-        if exactKernelMode == .affineQ8 {
+        if exactKernelMode.usesAffineQ8FeedForward {
             guard transformer.supportsAffineQ8ExactKernels,
                   !transformer.usesResidentBF16 else {
                 throw MiniMaxH3GeneratorError.invalidOptions(
-                    "affine-q8 exact kernels require the unadapted managed Q8/group-64 transformer"
+                    "affine Q8 exact kernels require the managed Q8/group-64 transformer"
                 )
             }
         }

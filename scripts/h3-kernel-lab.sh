@@ -191,6 +191,16 @@ case "$mode" in
     run_release_test \
       MiniMaxH3FusedKernelTests/testFusedFeedForwardAffineInt8ReleaseBenchmark
     ;;
+  affine-mlp-real)
+    default_fast_h3_root="${HOME}/Library/Application Support/MereRun/models/video-minimax-h3-fasth3-vsa-datafree-mlx"
+    export MERERUN_H3_AFFINE_MLP_REAL_STAGE_BENCH=1
+    export MERERUN_TEST_MLX_DEVICE=gpu
+    export MERERUN_H3_EXACT_KERNEL_MODEL_ROOT="${MERERUN_H3_EXACT_KERNEL_MODEL_ROOT:-$default_fast_h3_root}"
+    export MERERUN_H3_BENCH_ROWS="${MERERUN_H3_BENCH_ROWS:-89188}"
+    export MERERUN_H3_BENCH_ROUNDS="${MERERUN_H3_BENCH_ROUNDS:-2}"
+    run_release_test \
+      MiniMaxH3Tests/testInstalledAffineQ8MLPStageReleaseBenchmark
+    ;;
   buffer-alias)
     export MERERUN_H3_BUFFER_DONATION_BENCH=1
     export MERERUN_TEST_MLX_DEVICE=gpu

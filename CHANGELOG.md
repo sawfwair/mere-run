@@ -31,7 +31,11 @@ The format is based on Keep a Changelog.
   package premerges the student into an affine Q8/group-64 transformer and
   stores the compression gates in Q8. Prepared geometry and compact selected
   route tables reduce VSA traversal work on Metal without changing the released
-  90% video-key sparsity contract.
+  90% video-key sparsity contract. Managed affine Q8 FastH3 roots also select
+  matrix-tiled Metal FC1/SwiGLU and FC2 kernels. At 89,188 rows on an M4 Max,
+  the isolated real-checkpoint stages measured 1.107x and 1.050x faster than
+  the correct chunked portable path; the fused FC1 avoids a 5.11 GiB
+  intermediate that exceeds the portable path's 4 GiB addressing boundary.
 
 ## 0.46.1 - 2026-08-29
 
