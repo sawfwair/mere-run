@@ -82,6 +82,10 @@ mere.run plugin list \
 ## Troubleshooting
 
 - `pipx is required`: install it with `brew install pipx`, then retry.
+- `pipx cannot force-reinstall the uv environment`: update pipx to 1.16.0 or
+  later using its original installer, then retry the same command. For a
+  Homebrew installation, run `brew upgrade pipx`. The compatibility check
+  leaves the plugin unchanged; switching pipx backends is not required.
 - `Unknown plugin`: rerun `mere.run plugin list` or check the selected
   `--catalog-url`.
 - `Executable not found on PATH`: ensure `pipx ensurepath` has been run and
@@ -97,3 +101,17 @@ mere.run plugin list \
 
 - https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Commands/PluginCommand.swift
 - https://github.com/sawfwair/mere-run-plugins/blob/main/catalog/plugins.v1.json
+
+## Signed bundles
+
+Advertised macOS Apple Silicon bundles include their own runtime. Installation
+verifies the publisher, artifact hash, Developer ID, and notarization before
+activation. Existing pipx installations and PATH remain unchanged.
+
+- Run a managed plugin: `mere.run plugin run mere-doc-tools -- COMMAND ARGS`
+- Restore the previous shared package: `mere.run plugin rollback mere-doc-tools --yes`
+- Explicitly choose source installation: `mere.run plugin install mere-doc-tools --source --yes`
+
+Invalid signatures stop installation. `--force` does not bypass verification.
+Offline installation accepts `--bundle-manifest RELEASE_JSON` and
+`--bundle-archive BUNDLE_DMG` with the same verification requirements.

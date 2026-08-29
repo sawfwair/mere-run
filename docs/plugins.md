@@ -55,6 +55,35 @@ passes validation.
 Use `--channel` to select a non-default catalog channel and `--force` only when
 you intentionally want to forward a forced reinstall to the package manager.
 
+### Update or repair a plugin
+
+To replace a plugin with the selected catalog version, preview the command and
+then confirm it:
+
+```bash
+mere.run plugin install mere-doc-tools --force
+mere.run plugin install mere-doc-tools --yes --force
+```
+
+If the plugin uses a pipx environment managed by uv, forced reinstalls require
+pipx 1.16.0 or later. `mere.run` checks that environment's recorded backend and
+the pipx version before starting the reinstall. An affected version produces
+upgrade instructions and leaves the plugin unchanged. This check does not
+require you to switch backends, and it does not block fresh installations or
+environments managed by pip.
+
+If you installed pipx with Homebrew, update it and retry:
+
+```bash
+brew upgrade pipx
+mere.run plugin install mere-doc-tools --yes --force
+```
+
+For other installation methods, update pipx with the installer you used to
+install it. See the [pipx installation guide](https://pipx.pypa.io/latest/how-to/install-pipx.html).
+Pipx 1.16.0 includes the fix for
+[forced reinstalls in uv environments](https://github.com/pypa/pipx/issues/1924).
+
 ## Diagnose an installation
 
 ```bash
@@ -86,3 +115,52 @@ the graph ABI and [CLI reference](./cli.md) for every plugin option.
   `mere-run-plugins` repository.
 - Hosted-service, billing, and private deployment behavior do not belong in
   this public package.
+
+## Signed bundle pilot
+
+The signed bundle installer supports official macOS Apple Silicon releases on
+macOS 15 or later. The public catalog continues to use pipx until verified
+bundle artifacts and a compatible CLI release are published.
+
+When a channel advertises a bundle, `plugin install` verifies the publisher
+signature, exact download hash, Developer ID, and notarization. It checks the
+plugin manifests and graph providers before switching the active version.
+Installation does not require pipx, uv, Homebrew, a user-installed Python, or
+Xcode. The CLI verifies the app with macOS's built-in `codesign`,
+`syspolicy_check`, and Gatekeeper tools.
+
+```bash
+mere.run plugin install mere-doc-tools --yes
+mere.run plugin run mere-doc-tools -- process --input source.csv --output-dir output --extractor anydoc --no-redact
+mere.run plugin rollback mere-doc-tools --yes
+```
+
+Bundles are stored in the MereRun application support directory. A package's
+entrypoints share one private runtime. Existing pipx environments and PATH
+commands are not removed or rewritten. Use `plugin run` or native graph
+workflows to select the managed bundle; a bare PATH command can still refer
+to an existing pipx installation. Rollback affects all plugins in the shared
+package and revalidates the retained version before activation.
+
+To explicitly select source installation, use `--source`. A signature,
+notarization, compatibility, or download failure never falls back to pipx.
+`--force` does not bypass bundle verification or permit a downloaded downgrade.
+No unsigned bundle mode is provided.
+
+While a signed bundle is active, `plugin install --source` refuses to replace
+it. Its existing pipx entrypoints are still available directly on PATH. This
+pilot supports rollback between retained bundles, not automatic migration
+back to pipx.
+
+For an offline release review, supply the catalog, signed envelope, and DMG:
+
+```bash
+mere.run plugin install mere-doc-tools --catalog-url CATALOG_JSON \
+  --bundle-manifest RELEASE_JSON --bundle-archive BUNDLE_DMG --yes
+```
+
+These options do not change trust: the CLI still requires a known publisher
+key, a matching artifact hash, and valid macOS signatures and notarization.
+The catalog cannot introduce a new trusted key. Release metadata expires for
+new installations; existing installations continue to work offline. Signing
+proves publisher identity and integrity, not sandboxing or code safety.
