@@ -387,7 +387,7 @@ public extension ManagedModelAPIProfile {
         modelID: String,
         category: ManagedModelCategory?
     ) -> ManagedModelAPIProfile? {
-        if modelID == QwenImageEditRepository.modelId {
+        if QwenImageEditRepository.canonicalModelId(for: modelID) != nil {
             return ManagedModelAPIProfile(
                 task: .imageEdits,
                 inputModalities: [.text, .image],
@@ -497,6 +497,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case hidreamO1
     case senseNovaU15
     case krea2
+    case qwenImageEdit
     case ideogram4SDNQ
     case gemma4
     case gemma4Unified
@@ -1474,6 +1475,36 @@ public enum ManagedModelCatalog {
             validationKind: .krea2,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: Krea2Resources.estimatedDownloadBytes,
+            defaultCLICommands: ["image generate"]
+        ),
+        ManagedModelSpec(
+            id: QwenImageEditRepository.model2511Id,
+            category: .image,
+            installShape: .directoryRoot,
+            hubFallback: QwenImageEditRepository.hubFallback2511Config,
+            upstreamRepoId: QwenImageEditRepository.id2511,
+            upstreamRevision: QwenImageEditRepository.revision2511,
+            validationKind: .qwenImageEdit,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 57_720_463_453,
+            defaultCLICommands: ["image generate"]
+        ),
+        ManagedModelSpec(
+            id: QwenImageEditRepository.lightning2511Id,
+            category: .image,
+            installShape: .structuredRoot,
+            hubFallback: QwenImageEditRepository.hubFallback2511Config,
+            mountedHubFallbacks: [
+                MountedHubFallbackConfig(
+                    destinationPath: "lightning",
+                    hubFallback: QwenImageEditRepository.lightningHubFallbackConfig
+                ),
+            ],
+            upstreamRepoId: QwenImageEditRepository.id2511,
+            upstreamRevision: QwenImageEditRepository.revision2511,
+            validationKind: .qwenImageEdit,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 58_570_071_749,
             defaultCLICommands: ["image generate"]
         ),
         ManagedModelSpec(
@@ -4048,6 +4079,15 @@ public extension ManagedModelSpec {
             return SenseNovaU15Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .krea2:
             return Krea2Resources(rootURL: rootURL).validate(fileManager: fileManager)
+        case .qwenImageEdit:
+            var missing = QwenImageEditResources(rootURL: rootURL).validate(fileManager: fileManager)
+            if id == QwenImageEditRepository.lightning2511Id {
+                let adapter = rootURL.appendingPathComponent(QwenImageEditRepository.lightningRelativePath)
+                if !fileManager.fileExists(atPath: adapter.path) {
+                    missing.append(adapter)
+                }
+            }
+            return missing
         case .ideogram4SDNQ:
             return Ideogram4Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .gemma4:
@@ -4226,6 +4266,18 @@ public extension ManagedModelSpec {
 
     func validationMessages(in rootURL: URL, fileManager: FileManager = .default) -> [String] {
         switch validationKind {
+        case .qwenImageEdit where id == QwenImageEditRepository.lightning2511Id:
+            do {
+                _ = try QwenImageEditRepository.lightningPin.verify(
+                    in: normalizedRootURL(rootURL, fileManager: fileManager),
+                    fileManager: fileManager
+                )
+                return missingPaths(in: rootURL, fileManager: fileManager).map {
+                    "Missing required file: \($0.path)"
+                }
+            } catch {
+                return [error.localizedDescription]
+            }
         case .nemotronOmni:
             return NemotronOmniResources.validationMessages(
                 rootURL: normalizedRootURL(rootURL, fileManager: fileManager),
@@ -4447,6 +4499,12 @@ public extension ManagedModelSpec {
     }
 
     func managedSourceMatches(_ rootURL: URL, fileManager: FileManager) -> Bool {
+        if id == QwenImageEditRepository.lightning2511Id {
+            return (try? QwenImageEditRepository.lightningPin.verify(
+                in: normalizedRootURL(rootURL, fileManager: fileManager),
+                fileManager: fileManager
+            )) != nil
+        }
         let requiresPinnedSource = id == ModelResolver.ModelID.zetaNano.rawValue
             || id == ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue
             || id == ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue

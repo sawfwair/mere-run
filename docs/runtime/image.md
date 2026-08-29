@@ -3,8 +3,8 @@
 Use the image runtime to generate an image from a prompt, train a low-rank
 adaptation (LoRA) on your own pictures, replay a generation from a saved plan,
 or convert one photo into a textured three-dimensional (3D) mesh. The runtime
-supports eight model families, from compact ZImage checkpoints through FLUX.2
-Klein, HiDream O1, SenseNova U1.5, Krea 2, and Ideogram 4.
+supports local model families from compact ZImage checkpoints through FLUX.2
+Klein, HiDream O1, SenseNova U1.5, Krea 2, Qwen Image Edit 2511, and Ideogram 4.
 
 ## Commands
 
@@ -66,6 +66,8 @@ The public image families are:
 - `image-sensenova-u1-5-8b-mot`: SenseNova U1.5 raw-pixel generation and editing family
 - `image-krea2-raw`: Krea 2 Raw base checkpoint for LoRA training
 - `image-krea2-turbo`: Krea 2 Turbo text-to-image and LoRA inference family
+- `image-qwen-edit-2511`: Qwen Image Edit 2511 40-step quality lane
+- `image-qwen-edit-2511-lightning`: pinned four-step Qwen Edit Lightning lane
 - `image-ideogram4-sdnq-uint4`: Ideogram 4 SDNQ uint4 text-to-image family
 
 Common managed IDs:
@@ -84,6 +86,8 @@ Common managed IDs:
 - `image-sensenova-u1-5-8b-mot`
 - `image-krea2-raw`
 - `image-krea2-turbo`
+- `image-qwen-edit-2511`
+- `image-qwen-edit-2511-lightning`
 - `image-ideogram4-sdnq-uint4`
 
 ## Typical workflows
@@ -126,6 +130,41 @@ relocates the output image and optional structured-prompt sidecar into that
 directory; executing it appends `run_started`, `run_finished`, or `run_failed`
 events to the same stream. Hard blockers exit nonzero after the report is
 printed.
+
+### Qwen Image Edit 2511
+
+The native 2511 path accepts one to three ordered images. `--input` is Picture
+1; each repeated `--ref-image` appends the next picture. Every picture keeps
+its own aspect ratio and conditioning grid. The explicit `--width` and
+`--height` control the edited output independently.
+
+```bash
+swift run mere.run model pull image-qwen-edit-2511
+swift run mere.run image generate \
+  --model image-qwen-edit-2511 \
+  --input ./scene.png \
+  --ref-image ./material.png \
+  --prompt "Replace the chair in Picture 1 with the material from Picture 2" \
+  --output ./scene-edited.png
+```
+
+The quality model defaults to 40 steps and true CFG 4.0. The separate
+`image-qwen-edit-2511-lightning` model includes a checksum-pinned BF16 adapter
+and is intentionally strict: it requires four steps and CFG 1.0. Selecting four
+steps on the quality model does not silently activate Lightning weights.
+
+```bash
+swift run mere.run model pull image-qwen-edit-2511-lightning
+swift run mere.run image generate \
+  --model image-qwen-edit-2511-lightning \
+  --input ./scene.png \
+  --prompt "Change the chair to cobalt blue" \
+  --output ./scene-fast.png
+```
+
+The base download is about 57.7 GB. Hardware-specific memory, quality, and
+performance qualification remains required before treating either lane as a
+released default.
 
 ### Klein generation and LoRA training
 

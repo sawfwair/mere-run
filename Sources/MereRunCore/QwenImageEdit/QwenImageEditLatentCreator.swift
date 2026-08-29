@@ -4,6 +4,56 @@ import MLXRandom
 /// Utility for creating and manipulating latents for Qwen-Image-Edit
 public struct QwenImageEditLatentCreator {
 
+    public static func packLatents(_ latents: MLXArray, patchSize: Int = 2) -> MLXArray {
+        precondition(latents.ndim == 4)
+        let batch = latents.dim(0)
+        let channels = latents.dim(1)
+        let height = latents.dim(2)
+        let width = latents.dim(3)
+        precondition(height % patchSize == 0 && width % patchSize == 0)
+
+        var packed = latents.reshaped(
+            batch,
+            channels,
+            height / patchSize,
+            patchSize,
+            width / patchSize,
+            patchSize
+        )
+        packed = packed.transposed(0, 2, 4, 1, 3, 5)
+        return packed.reshaped(
+            batch,
+            (height / patchSize) * (width / patchSize),
+            channels * patchSize * patchSize
+        )
+    }
+
+    public static func unpackLatents(
+        _ latents: MLXArray,
+        height: Int,
+        width: Int,
+        channels: Int = 16,
+        patchSize: Int = 2
+    ) -> MLXArray {
+        precondition(latents.ndim == 3)
+        let batch = latents.dim(0)
+        let patchHeight = height / patchSize
+        let patchWidth = width / patchSize
+        precondition(latents.dim(1) == patchHeight * patchWidth)
+        precondition(latents.dim(2) == channels * patchSize * patchSize)
+
+        var unpacked = latents.reshaped(
+            batch,
+            patchHeight,
+            patchWidth,
+            channels,
+            patchSize,
+            patchSize
+        )
+        unpacked = unpacked.transposed(0, 3, 1, 4, 2, 5)
+        return unpacked.reshaped(batch, channels, height, width)
+    }
+
     /// Create random noise latents for generation
     /// - Parameters:
     ///   - batchSize: Number of samples

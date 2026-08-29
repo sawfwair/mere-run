@@ -1539,7 +1539,8 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
         kind: APISidecarImageKind,
         modelID: String
     ) -> String {
-        kind == .qwenImageEdit ? QwenImageEditRepository.modelId : modelID
+        guard kind == .qwenImageEdit else { return modelID }
+        return QwenImageEditRepository.canonicalModelId(for: modelID) ?? modelID
     }
 
     private static func imageBaseLoadBytes(for kind: APISidecarImageKind) -> UInt64 {

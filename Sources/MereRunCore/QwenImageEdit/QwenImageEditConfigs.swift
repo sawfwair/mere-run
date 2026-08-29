@@ -87,6 +87,7 @@ public struct QwenImageEditTransformerConfig: Decodable, Sendable, Hashable {
 
     // Guidance
     public let guidanceEmbeds: Bool
+    public let zeroCondT: Bool
 
     // Legacy/fallback keys for compatibility
     public let hiddenSize: Int?
@@ -107,6 +108,7 @@ public struct QwenImageEditTransformerConfig: Decodable, Sendable, Hashable {
         case patchSize = "patch_size"
         case axesDimsRope = "axes_dims_rope"
         case guidanceEmbeds = "guidance_embeds"
+        case zeroCondT = "zero_cond_t"
         // Legacy keys
         case hiddenSize = "hidden_size"
         case numKeyValueHeads = "num_key_value_heads"
@@ -129,6 +131,7 @@ public struct QwenImageEditTransformerConfig: Decodable, Sendable, Hashable {
         patchSize = try container.decodeIfPresent(Int.self, forKey: .patchSize) ?? 2
         axesDimsRope = try container.decodeIfPresent([Int].self, forKey: .axesDimsRope) ?? [16, 56, 56]
         guidanceEmbeds = try container.decodeIfPresent(Bool.self, forKey: .guidanceEmbeds) ?? false
+        zeroCondT = try container.decodeIfPresent(Bool.self, forKey: .zeroCondT) ?? false
 
         // Legacy/fallback
         hiddenSize = try container.decodeIfPresent(Int.self, forKey: .hiddenSize)
@@ -278,6 +281,15 @@ public struct QwenImageEditTextEncoderConfig: Decodable, Sendable, Hashable {
     // Position embedding
     public let ropeTheta: Float?
     public let maxPositionEmbeddings: Int?
+    public let ropeScaling: RopeScaling?
+
+    public struct RopeScaling: Decodable, Sendable, Hashable {
+        public let mropeSection: [Int]?
+
+        enum CodingKeys: String, CodingKey {
+            case mropeSection = "mrope_section"
+        }
+    }
 
     // Token IDs
     public let bosTokenId: Int?
@@ -297,6 +309,8 @@ public struct QwenImageEditTextEncoderConfig: Decodable, Sendable, Hashable {
         // Qwen2.5-VL vision config uses different key names
         public let depth: Int?  // num_hidden_layers equivalent
         public let hiddenSize: Int?
+        public let intermediateSize: Int?
+        public let hiddenAct: String?
         public let numHeads: Int?  // num_attention_heads equivalent
         public let patchSize: Int?
         public let spatialPatchSize: Int?
@@ -309,6 +323,8 @@ public struct QwenImageEditTextEncoderConfig: Decodable, Sendable, Hashable {
         enum CodingKeys: String, CodingKey {
             case depth
             case hiddenSize = "hidden_size"
+            case intermediateSize = "intermediate_size"
+            case hiddenAct = "hidden_act"
             case numHeads = "num_heads"
             case patchSize = "patch_size"
             case spatialPatchSize = "spatial_patch_size"
@@ -336,6 +352,7 @@ public struct QwenImageEditTextEncoderConfig: Decodable, Sendable, Hashable {
         case rmsNormEps = "rms_norm_eps"
         case ropeTheta = "rope_theta"
         case maxPositionEmbeddings = "max_position_embeddings"
+        case ropeScaling = "rope_scaling"
         case bosTokenId = "bos_token_id"
         case eosTokenId = "eos_token_id"
         case padTokenId = "pad_token_id"

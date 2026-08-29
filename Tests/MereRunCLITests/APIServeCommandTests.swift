@@ -751,6 +751,8 @@ final class APIServeCommandTests: XCTestCase {
             "speech-asr-parakeet",
             "text-embed-qwen3-0.6b",
             "qwen-image-edit",
+            "image-qwen-edit-2511",
+            "image-qwen-edit-2511-lightning",
         ]))
 
         XCTAssertTrue(ids.contains("text-embed-qwen3-0.6b"))
@@ -758,6 +760,8 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertTrue(ids.contains("speech-tts-qwen3-nano"))
         XCTAssertTrue(ids.contains("speech-asr-parakeet"))
         XCTAssertTrue(ids.contains("qwen-image-edit"))
+        XCTAssertTrue(ids.contains("image-qwen-edit-2511"))
+        XCTAssertTrue(ids.contains("image-qwen-edit-2511-lightning"))
         XCTAssertFalse(ids.contains("image-zimage-max"))
         XCTAssertFalse(ids.contains("speech-asr-qwen3"))
     }

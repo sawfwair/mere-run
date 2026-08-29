@@ -1,9 +1,41 @@
 import Foundation
 
 public enum QwenImageEditRepository {
+    public enum RepositoryError: LocalizedError {
+        case lightningManagedInstallRequired
+
+        public var errorDescription: String? {
+            switch self {
+            case .lightningManagedInstallRequired:
+                return "Qwen Image Edit 2511 Lightning requires its pinned base and adapter; "
+                    + "install it with `mere.run model pull \(lightning2511Id)`."
+            }
+        }
+    }
+
+    /// Legacy Qwen Image Edit identity. Keep this source mutable only for compatibility with
+    /// existing installs; 2511 uses separate immutable managed identities below.
     public static let modelId = "qwen-image-edit"
     public static let id = "Qwen/Qwen-Image-Edit"
     public static let revision = "main"
+    public static let model2511Id = "image-qwen-edit-2511"
+    public static let lightning2511Id = "image-qwen-edit-2511-lightning"
+    public static let id2511 = "Qwen/Qwen-Image-Edit-2511"
+    public static let revision2511 = "6f3ccc0b56e431dc6a0c2b2039706d7d26f22cb9"
+    public static let lightningRepoId = "lightx2v/Qwen-Image-Edit-2511-Lightning"
+    public static let lightningRevision = "d74eba145674fd7e31b949324e148e21e7118abd"
+    public static let lightningFilename =
+        "Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors"
+    public static let lightningRelativePath = "lightning/\(lightningFilename)"
+    public static let lightningSHA256 =
+        "22226e8d05d354bb356627d428809f5afd7819399b077238a2b70a82883a904f"
+    public static let lightningByteCount: Int64 = 849_608_296
+    public static let lightningPin = ModelArtifactPin(
+        filename: lightningRelativePath,
+        byteCount: lightningByteCount,
+        sha256: lightningSHA256
+    )
+
     public static let hubFallbackConfig = HubFallbackConfig(
         repoId: id,
         revision: revision,
@@ -15,6 +47,16 @@ public enum QwenImageEditRepository {
             "transformer/*",
             "vae/*",
         ]
+    )
+    public static let hubFallback2511Config = HubFallbackConfig(
+        repoId: id2511,
+        revision: revision2511,
+        patterns: hubFallbackConfig.patterns
+    )
+    public static let lightningHubFallbackConfig = HubFallbackConfig(
+        repoId: lightningRepoId,
+        revision: lightningRevision,
+        patterns: [lightningFilename]
     )
 
     public static func canonicalModelId(for modelSpec: String) -> String? {
@@ -31,6 +73,10 @@ public enum QwenImageEditRepository {
         switch raw {
         case modelId, id.lowercased():
             return modelId
+        case model2511Id, id2511.lowercased():
+            return model2511Id
+        case lightning2511Id:
+            return lightning2511Id
         default:
             return nil
         }
@@ -55,13 +101,17 @@ public enum QwenImageEditRepository {
         guard let canonicalId = canonicalModelId(for: modelSpec) else {
             throw PretrainedModelLoader.LoadError.unsupportedModelId(modelSpec)
         }
+        if canonicalId == lightning2511Id {
+            throw RepositoryError.lightningManagedInstallRequired
+        }
 
+        let source = source(for: canonicalId)
         return try await PretrainedModelLoader.fromPretrainedSnapshot(
             modelPath: nil,
             modelId: canonicalId,
-            defaultModelIds: [modelId],
-            storageId: modelId,
-            hubFallback: hubFallbackConfig,
+            defaultModelIds: [canonicalId],
+            storageId: canonicalId,
+            hubFallback: source,
             fileManager: fileManager,
             normalize: { base, manager in
                 resolveNestedIfNeeded(base: base, fileManager: manager)
@@ -74,10 +124,14 @@ public enum QwenImageEditRepository {
     }
 
     public static func resolveInstalledModelRoot(
+        modelSpec: String = modelId,
         fileManager: FileManager = .default
     ) -> URL? {
+        guard let canonicalId = canonicalModelId(for: modelSpec) else {
+            return nil
+        }
         let managed = PretrainedModelLoader.resolveManagedRoot(
-            storageId: modelId,
+            storageId: canonicalId,
             fileManager: fileManager,
             normalize: { base, manager in
                 resolveNestedIfNeeded(base: base, fileManager: manager)
@@ -90,6 +144,19 @@ public enum QwenImageEditRepository {
             return nil
         }
         return managed.resolvedRoot
+    }
+
+    public static func isLightningModel(_ modelSpec: String) -> Bool {
+        canonicalModelId(for: modelSpec) == lightning2511Id
+    }
+
+    private static func source(for canonicalId: String) -> HubFallbackConfig {
+        switch canonicalId {
+        case model2511Id, lightning2511Id:
+            return hubFallback2511Config
+        default:
+            return hubFallbackConfig
+        }
     }
 
     private static func resolveNestedIfNeeded(
@@ -157,6 +224,10 @@ public struct QwenImageEditResources: Sendable, Hashable {
 
     public var transformerWeightsURL: URL {
         rootURL.appending(path: "transformer/diffusion_pytorch_model.safetensors")
+    }
+
+    public var lightningWeightsURL: URL {
+        rootURL.appending(path: QwenImageEditRepository.lightningRelativePath)
     }
 
     // MARK: - Text Encoder (Qwen2.5-VL)

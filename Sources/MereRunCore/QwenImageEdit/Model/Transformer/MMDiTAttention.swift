@@ -201,10 +201,10 @@ public final class MMDiTAttention: Module {
             (qCtx, kCtx) = applyRoPE(query: qCtx, key: kCtx, freqsCis: contextFreqsCis)
         }
 
-        // Concatenate streams for joint attention
-        let q = MLX.concatenated([qImg, qCtx], axis: 1)  // [batch, imgSeq+ctxSeq, heads, headDim]
-        let k = MLX.concatenated([kImg, kCtx], axis: 1)
-        let v = MLX.concatenated([vImg, vCtx], axis: 1)
+        // Qwen's joint stream is ordered [text, image].
+        let q = MLX.concatenated([qCtx, qImg], axis: 1)
+        let k = MLX.concatenated([kCtx, kImg], axis: 1)
+        let v = MLX.concatenated([vCtx, vImg], axis: 1)
 
         // Transpose for attention
         let qT = q.transposed(0, 2, 1, 3)
@@ -219,19 +219,23 @@ public final class MMDiTAttention: Module {
         }
 
         // Scaled dot-product attention
+        let mask = jointAttentionMask(
+            textMask: attnMask,
+            imageSequenceLength: imgSeqLen
+        )
         let attnOut = MLXFast.scaledDotProductAttention(
             queries: qT,
             keys: kT,
             values: vT,
             scale: scale,
-            mask: attnMask
+            mask: mask
         )
 
         // Reshape and split back
         let output = attnOut.transposed(0, 2, 1, 3).reshaped(batch, imgSeqLen + ctxSeqLen, numHeads * headDim)
 
-        let imgOut = toOut(output[0..., 0..<imgSeqLen, 0...])
-        let ctxOut = toAddOut(output[0..., imgSeqLen..., 0...])
+        let ctxOut = toAddOut(output[0..., 0..<ctxSeqLen, 0...])
+        let imgOut = toOut(output[0..., ctxSeqLen..., 0...])
 
         return (imgOut, ctxOut)
     }
@@ -243,13 +247,17 @@ public final class MMDiTAttention: Module {
         key: MLXArray,
         freqsCis: MLXArray
     ) -> (MLXArray, MLXArray) {
-        // freqsCis shape: [seqLen, halfDim, 2] where last dim is (cos, sin)
         let halfDim = query.dim(-1) / 2
-
-        let qReal = query[0..., 0..., 0..., 0..<halfDim]
-        let qImag = query[0..., 0..., 0..., halfDim...]
-        let kReal = key[0..., 0..., 0..., 0..<halfDim]
-        let kImag = key[0..., 0..., 0..., halfDim...]
+        let queryPairs = query.asType(.float32).reshaped(
+            query.dim(0), query.dim(1), query.dim(2), halfDim, 2
+        )
+        let keyPairs = key.asType(.float32).reshaped(
+            key.dim(0), key.dim(1), key.dim(2), halfDim, 2
+        )
+        let qReal = queryPairs[0..., 0..., 0..., 0..., 0]
+        let qImag = queryPairs[0..., 0..., 0..., 0..., 1]
+        let kReal = keyPairs[0..., 0..., 0..., 0..., 0]
+        let kImag = keyPairs[0..., 0..., 0..., 0..., 1]
 
         // Extract cos and sin: [seqLen, halfDim]
         let cos = freqsCis[0..., 0..., 0]
@@ -265,10 +273,27 @@ public final class MMDiTAttention: Module {
         let kRotReal = kReal * cosExp - kImag * sinExp
         let kRotImag = kReal * sinExp + kImag * cosExp
 
-        let qRot = MLX.concatenated([qRotReal, qRotImag], axis: -1)
-        let kRot = MLX.concatenated([kRotReal, kRotImag], axis: -1)
+        let qRot = MLX.stacked([qRotReal, qRotImag], axis: -1)
+            .reshaped(query.shape)
+            .asType(query.dtype)
+        let kRot = MLX.stacked([kRotReal, kRotImag], axis: -1)
+            .reshaped(key.shape)
+            .asType(key.dtype)
 
         return (qRot, kRot)
+    }
+
+    private func jointAttentionMask(
+        textMask: MLXArray?,
+        imageSequenceLength: Int
+    ) -> MLXArray? {
+        guard let textMask else {
+            return nil
+        }
+        let imageMask = MLXArray.ones([textMask.dim(0), imageSequenceLength], dtype: .float32)
+        let jointMask = MLX.concatenated([textMask.asType(.float32), imageMask], axis: 1)
+        let additiveMask = (1 - jointMask) * -1e9
+        return additiveMask.reshaped(additiveMask.dim(0), 1, 1, additiveMask.dim(1))
     }
 
     private func repeatKV(_ x: MLXArray, repeats: Int) -> MLXArray {

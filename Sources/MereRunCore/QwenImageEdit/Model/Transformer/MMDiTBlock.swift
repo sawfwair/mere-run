@@ -18,12 +18,12 @@ public final class MMDiTBlock: Module {
     public let mlpRatio: Float
 
     // Layer norms for image stream
-    @ModuleInfo(key: "norm1") var norm1: LayerNorm
-    @ModuleInfo(key: "norm2") var norm2: LayerNorm
+    @ModuleInfo(key: "norm1") var norm1: QwenLayerNormNoAffine
+    @ModuleInfo(key: "norm2") var norm2: QwenLayerNormNoAffine
 
     // Layer norms for context stream (joint blocks only)
-    @ModuleInfo(key: "norm1_context") var norm1Context: LayerNorm?
-    @ModuleInfo(key: "norm2_context") var norm2Context: LayerNorm?
+    @ModuleInfo(key: "norm1_context") var norm1Context: QwenLayerNormNoAffine?
+    @ModuleInfo(key: "norm2_context") var norm2Context: QwenLayerNormNoAffine?
 
     // Attention
     @ModuleInfo(key: "attn") var attn: MMDiTAttention
@@ -65,8 +65,8 @@ public final class MMDiTBlock: Module {
         let ctxDim = contextDim ?? dim
 
         // Image stream norms
-        self._norm1.wrappedValue = LayerNorm(dimensions: dim, eps: normEps)
-        self._norm2.wrappedValue = LayerNorm(dimensions: dim, eps: normEps)
+        self._norm1.wrappedValue = QwenLayerNormNoAffine(eps: normEps)
+        self._norm2.wrappedValue = QwenLayerNormNoAffine(eps: normEps)
 
         // Image stream MLP (GELU)
         let ffPath = basePath.isEmpty ? "ff" : "\(basePath).ff"
@@ -89,8 +89,8 @@ public final class MMDiTBlock: Module {
         switch blockType {
         case .joint:
             // Context stream components
-            self._norm1Context.wrappedValue = LayerNorm(dimensions: ctxDim, eps: normEps)
-            self._norm2Context.wrappedValue = LayerNorm(dimensions: ctxDim, eps: normEps)
+            self._norm1Context.wrappedValue = QwenLayerNormNoAffine(eps: normEps)
+            self._norm2Context.wrappedValue = QwenLayerNormNoAffine(eps: normEps)
 
             let ctxMlpHidden = Int(Float(ctxDim) * mlpRatio)
             let ffCtxPath = basePath.isEmpty ? "ff_context" : "\(basePath).ff_context"
@@ -156,7 +156,9 @@ public final class MMDiTBlock: Module {
     public func forwardJoint(
         x: MLXArray,
         context: MLXArray,
-        conditioning: MLXArray,
+        imageConditioning: MLXArray,
+        textConditioning: MLXArray,
+        imageTokenConditionMask: MLXArray? = nil,
         xFreqsCis: MLXArray? = nil,
         contextFreqsCis: MLXArray? = nil,
         attnMask: MLXArray? = nil
@@ -170,10 +172,13 @@ public final class MMDiTBlock: Module {
         }
 
         // Get modulation parameters
-        let imgMod = adaLN!(conditioning)
+        let imgMod = adaLN!(
+            imageConditioning,
+            tokenConditionMask: imageTokenConditionMask
+        )
         let ctxMod: AdaLNModulation
         if let adaLNContext {
-            ctxMod = adaLNContext(conditioning)
+            ctxMod = adaLNContext(textConditioning)
         } else {
             ctxMod = imgMod  // Share modulation if no separate context AdaLN
         }
@@ -291,6 +296,23 @@ public final class MMDiTFeedForwardGELU: Module {
     }
 
     public func callAsFunction(_ x: MLXArray) -> MLXArray {
-        linear2(MLXNN.gelu(linear1(x)))
+        linear2(MLXNN.geluApproximate(linear1(x)))
+    }
+}
+
+public final class QwenLayerNormNoAffine: Module {
+    public let eps: Float
+
+    public init(eps: Float = 1e-6) {
+        self.eps = eps
+        super.init()
+    }
+
+    public func callAsFunction(_ input: MLXArray) -> MLXArray {
+        let compute = input.asType(.float32)
+        let mean = MLX.mean(compute, axis: -1, keepDims: true)
+        let centered = compute - mean
+        let variance = MLX.mean(centered * centered, axis: -1, keepDims: true)
+        return (centered * MLX.rsqrt(variance + eps)).asType(input.dtype)
     }
 }

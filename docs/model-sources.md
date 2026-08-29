@@ -64,6 +64,8 @@ an effective overlay; they are not a second capability catalog.
 | `image` | `image-sensenova-u1-5-8b-mot` |
 | `image` | `image-krea2-raw` |
 | `image` | `image-krea2-turbo` |
+| `image` | `image-qwen-edit-2511` |
+| `image` | `image-qwen-edit-2511-lightning` |
 | `image` | `image-ideogram4-sdnq-uint4` |
 | `text-chat` | `text-chat-mebot` |
 | `text-chat` | `text-chat-psi-agent` |
@@ -748,6 +750,45 @@ Runtime defaults come from the managed manifest:
 
 The component install is about 36 GiB before filesystem compression effects.
 Expect high unified-memory pressure and prefer 96 GB+ Apple Silicon machines.
+
+`image-qwen-edit-2511` is the immutable quality lane for Qwen Image Edit 2511.
+It pulls `Qwen/Qwen-Image-Edit-2511` at revision
+`6f3ccc0b56e431dc6a0c2b2039706d7d26f22cb9`; it does not replace or redirect
+the legacy `qwen-image-edit` install. Its managed defaults are 40 steps and
+true CFG 4.0 with a blank negative prompt.
+
+`image-qwen-edit-2511-lightning` uses the same pinned base plus
+`lightx2v/Qwen-Image-Edit-2511-Lightning` at revision
+`d74eba145674fd7e31b949324e148e21e7118abd`. The runtime accepts only the
+four-step BF16 adapter named
+`Qwen-Image-Edit-2511-Lightning-4steps-V1.0-bf16.safetensors`, verifies its
+849,608,296-byte size and SHA-256
+`22226e8d05d354bb356627d428809f5afd7819399b077238a2b70a82883a904f`, and
+requires exactly four steps with CFG disabled.
+
+Both managed IDs use the native 2511 edit path. It accepts one to three ordered
+images across `--input` followed by repeated `--ref-image` arguments. Each
+reference retains its own aspect ratio for Qwen2.5-VL semantic conditioning and
+VAE appearance conditioning. The output starts from pure noise; packed
+reference latents remain conditioning tokens rather than being blended into
+the output latent. These two pinned lanes retain the base encoder and
+transformer in BF16 at runtime; the legacy `qwen-image-edit` compatibility path
+keeps its existing runtime Q4 behavior.
+
+```bash
+mere.run model pull image-qwen-edit-2511
+mere.run image generate \
+  --model image-qwen-edit-2511 \
+  --input ./primary.png \
+  --ref-image ./style.png \
+  --prompt "Apply the palette of Picture 2 while preserving Picture 1's layout" \
+  --output ./edited.png
+```
+
+The pinned base is about 53.75 GiB before filesystem compression; the Lightning
+lane adds about 810 MiB. These sizes and the current runtime's memory behavior
+require physical Apple Silicon qualification before publishing a supported
+memory class or performance claim.
 
 `image-ideogram4-sdnq-uint4` maps to WaveCut's public SDNQ uint4 Ideogram 4
 snapshot:

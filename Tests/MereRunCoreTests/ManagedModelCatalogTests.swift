@@ -117,6 +117,20 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(imageEdit.task, .imageEdits)
         XCTAssertEqual(imageEdit.inputModalities, [.text, .image])
         XCTAssertEqual(imageEdit.outputModalities, [.image])
+
+        let imageEdit2511 = try XCTUnwrap(
+            ManagedModelCatalog.apiProfile(for: QwenImageEditRepository.model2511Id)
+        )
+        XCTAssertEqual(imageEdit2511.task, .imageEdits)
+        let lightning = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: QwenImageEditRepository.lightning2511Id)
+        )
+        XCTAssertEqual(lightning.hubFallback?.revision, QwenImageEditRepository.revision2511)
+        XCTAssertEqual(lightning.mountedHubFallbacks.count, 1)
+        XCTAssertEqual(
+            lightning.mountedHubFallbacks.first?.hubFallback.revision,
+            QwenImageEditRepository.lightningRevision
+        )
     }
 
     func testAllRuntimeAutoDownloadSpecsHaveManagedSource() {

@@ -14,17 +14,23 @@ import ImageIO
 public actor QwenImageEditGenerator: ImageGenerator {
     public enum GeneratorError: LocalizedError {
         case inputImageRequired
+        case tooManyReferenceImages(Int)
         case inputImageNotFound(URL)
         case inputImageDecodeFailed(URL)
         case tokenizerMissing(URL)
         case invalidOutputDirectory(URL)
         case modelLoadFailed(String)
+        case checkpointCoverage(component: String, missing: [String], unexpected: [String])
+        case lightningRequiresFourSteps(Int)
+        case lightningDoesNotSupportCFG(Double)
         case unsupportedPlatform
 
         public var errorDescription: String? {
             switch self {
             case .inputImageRequired:
-                return "Qwen-Image-Edit requires an input image for editing."
+                return "Qwen-Image-Edit requires at least one input or reference image."
+            case .tooManyReferenceImages(let count):
+                return "Qwen-Image-Edit supports up to 3 ordered images; received \(count)."
             case .inputImageNotFound(let url):
                 return "Input image not found: \(url.path)"
             case .inputImageDecodeFailed(let url):
@@ -35,6 +41,15 @@ public actor QwenImageEditGenerator: ImageGenerator {
                 return "Output directory does not exist: \(url.deletingLastPathComponent().path)"
             case .modelLoadFailed(let message):
                 return "Failed to load model: \(message)"
+            case .checkpointCoverage(let component, let missing, let unexpected):
+                let missingSummary = missing.prefix(8).joined(separator: ", ")
+                let unexpectedSummary = unexpected.prefix(8).joined(separator: ", ")
+                return "\(component) checkpoint coverage failed: missing [\(missingSummary)]; "
+                    + "unexpected [\(unexpectedSummary)]."
+            case .lightningRequiresFourSteps(let steps):
+                return "Qwen Image Edit 2511 Lightning requires exactly 4 steps; received \(steps)."
+            case .lightningDoesNotSupportCFG(let scale):
+                return "Qwen Image Edit 2511 Lightning requires CFG disabled (scale 1.0); received \(scale)."
             case .unsupportedPlatform:
                 return "Image editing is not supported on this platform."
             }
@@ -43,6 +58,7 @@ public actor QwenImageEditGenerator: ImageGenerator {
 
     struct LoadedModel {
         let modelSpec: String
+        let runtimeModelID: String?
         let rootURL: URL
         let resources: QwenImageEditResources
         let configs: QwenImageEditModelConfigs
@@ -53,6 +69,13 @@ public actor QwenImageEditGenerator: ImageGenerator {
         var vae: QwenImageEditVAE?
 
         var isPreQuantized: Bool { quantConfig != nil }
+        var usesPinned2511BF16: Bool {
+            runtimeModelID == QwenImageEditRepository.model2511Id
+                || runtimeModelID == QwenImageEditRepository.lightning2511Id
+        }
+        var isLightning2511: Bool {
+            runtimeModelID == QwenImageEditRepository.lightning2511Id
+        }
     }
 
     var loaded: LoadedModel?
@@ -63,14 +86,26 @@ public actor QwenImageEditGenerator: ImageGenerator {
         _ request: GenerationRequest,
         progressHandler: (@Sendable (GenerationProgress) -> Void)?
     ) async throws -> GenerationResult {
-        guard let inputImageURL = request.inputImage else {
+        let referenceURLs = [request.inputImage].compactMap { $0 } + request.referenceImages
+        guard !referenceURLs.isEmpty else {
             throw GeneratorError.inputImageRequired
+        }
+        guard referenceURLs.count <= QwenImageEditConditioningPlan.maximumReferenceCount else {
+            throw GeneratorError.tooManyReferenceImages(referenceURLs.count)
         }
 
         try ensureOutputDirectory(request.outputURL)
 
         let modelSpec = request.model ?? QwenImageEditRepository.id
         var model = try await loadBaseModelIfNeeded(modelSpec: modelSpec, progressHandler: progressHandler)
+        if model.isLightning2511 {
+            guard request.steps == 4 else {
+                throw GeneratorError.lightningRequiresFourSteps(request.steps)
+            }
+            guard request.guidanceScale == 1 else {
+                throw GeneratorError.lightningDoesNotSupportCFG(request.guidanceScale)
+            }
+        }
         try ensureVAELoaded(model: &model, progressHandler: progressHandler)
         try ensureEncoderLoaded(model: &model, progressHandler: progressHandler)
         loaded = model
@@ -96,20 +131,20 @@ public actor QwenImageEditGenerator: ImageGenerator {
             throw GeneratorError.modelLoadFailed("VAE was not loaded.")
         }
 
-        let (appearanceLatents, inputImageTensor) = try await encodeInputImage(
-            url: inputImageURL,
+        let encodedReferences = try await encodeReferenceImages(
+            urls: referenceURLs,
             vae: vae,
-            targetWidth: inferenceConfig.width,
-            targetHeight: inferenceConfig.height
+            outputWidth: inferenceConfig.width,
+            outputHeight: inferenceConfig.height
         )
 
         progressHandler?(GenerationProgress(stage: .encodingText, stepIndex: 1, totalSteps: encodingTotalSteps))
-        MLX.eval(appearanceLatents)
+        MLX.eval(encodedReferences.appearanceLatents)
         Memory.clearCache()
 
         let semanticEmbeds = try encodeSemanticEmbeddingsForRequest(
             request: request,
-            inputImageTensor: inputImageTensor,
+            inputImageTensors: encodedReferences.semanticImages,
             tokenizer: model.tokenizer,
             encoder: model.encoder,
             guidanceScale: inferenceConfig.guidanceScale,
@@ -135,11 +170,7 @@ public actor QwenImageEditGenerator: ImageGenerator {
             seed: seed
         )
 
-        var latents = QwenImageEditLatentCreator.blendWithNoise(
-            sourceLatents: appearanceLatents,
-            noise: noise,
-            sigma: scheduler.sigma(at: 0)
-        )
+        var latents = QwenImageEditLatentCreator.packLatents(noise)
 
         guard let transformer = model.transformer else {
             throw GeneratorError.modelLoadFailed("Transformer was not loaded.")
@@ -162,7 +193,7 @@ public actor QwenImageEditGenerator: ImageGenerator {
                 totalSteps: inferenceConfig.numInferenceSteps
             ))
 
-            let timestepBatch1 = scheduler.timestep(at: stepIndex).expandedDimensions(axis: 0)
+            let timestepBatch1 = scheduler.modelTimestep(at: stepIndex).expandedDimensions(axis: 0)
 
             let finalNoisePred: MLXArray
             if inferenceConfig.guidanceScale > 1.0 {
@@ -170,22 +201,30 @@ public actor QwenImageEditGenerator: ImageGenerator {
                     let predictions = transformer.forwardEdit(
                         latents: QwenImageEditCFGExecution.duplicateBatch(latents),
                         timestep: QwenImageEditCFGExecution.duplicateBatch(timestepBatch1),
-                        semanticEmbeds: semanticEmbeds,
-                        appearanceLatents: QwenImageEditCFGExecution.duplicateBatch(appearanceLatents)
+                        semanticEmbeds: semanticEmbeds.embeddings,
+                        semanticMask: semanticEmbeds.attentionMask,
+                        appearanceLatents: encodedReferences.appearanceLatents.map { reference in
+                            QwenImageEditCFGExecution.duplicateBatch(reference)
+                        },
+                        imageShapes: encodedReferences.plan.transformerImageShapes
                     )
-                    finalNoisePred = QwenImageEditCFGExecution.combinePredictions(
+                    finalNoisePred = QwenImageEditCFGExecution.combineQwenImagePredictions(
                         predictions,
                         guidanceScale: inferenceConfig.guidanceScale
                     )
                 } else {
-                    let uncondEmbeds = semanticEmbeds[0..<1, 0..., 0...]
-                    let condEmbeds = semanticEmbeds[1..<2, 0..., 0...]
+                    let uncondEmbeds = semanticEmbeds.embeddings[0..<1, 0..., 0...]
+                    let condEmbeds = semanticEmbeds.embeddings[1..<2, 0..., 0...]
+                    let uncondMask = semanticEmbeds.attentionMask[0..<1, 0...]
+                    let condMask = semanticEmbeds.attentionMask[1..<2, 0...]
 
                     let noisePredUncond = transformer.forwardEdit(
                         latents: latents,
                         timestep: timestepBatch1,
                         semanticEmbeds: uncondEmbeds,
-                        appearanceLatents: appearanceLatents
+                        semanticMask: uncondMask,
+                        appearanceLatents: encodedReferences.appearanceLatents,
+                        imageShapes: encodedReferences.plan.transformerImageShapes
                     )
                     MLX.eval(noisePredUncond)
                     Memory.clearCache()
@@ -194,18 +233,24 @@ public actor QwenImageEditGenerator: ImageGenerator {
                         latents: latents,
                         timestep: timestepBatch1,
                         semanticEmbeds: condEmbeds,
-                        appearanceLatents: appearanceLatents
+                        semanticMask: condMask,
+                        appearanceLatents: encodedReferences.appearanceLatents,
+                        imageShapes: encodedReferences.plan.transformerImageShapes
                     )
 
-                    finalNoisePred = noisePredUncond
-                        + (noisePredCond - noisePredUncond) * MLXArray(inferenceConfig.guidanceScale)
+                    finalNoisePred = QwenImageEditCFGExecution.combineQwenImagePredictions(
+                        MLX.concatenated([noisePredUncond, noisePredCond], axis: 0),
+                        guidanceScale: inferenceConfig.guidanceScale
+                    )
                 }
             } else {
                 finalNoisePred = transformer.forwardEdit(
                     latents: latents,
                     timestep: timestepBatch1,
-                    semanticEmbeds: semanticEmbeds,
-                    appearanceLatents: appearanceLatents
+                    semanticEmbeds: semanticEmbeds.embeddings,
+                    semanticMask: semanticEmbeds.attentionMask,
+                    appearanceLatents: encodedReferences.appearanceLatents,
+                    imageShapes: encodedReferences.plan.transformerImageShapes
                 )
             }
 
@@ -224,8 +269,14 @@ public actor QwenImageEditGenerator: ImageGenerator {
             stepIndex: inferenceConfig.numInferenceSteps,
             totalSteps: inferenceConfig.numInferenceSteps
         ))
-        let decoded = decodeLatents(
+        let unpackedLatents = QwenImageEditLatentCreator.unpackLatents(
             latents,
+            height: inferenceConfig.latentHeight,
+            width: inferenceConfig.latentWidth,
+            channels: model.configs.vae.latentChannels
+        )
+        let decoded = decodeLatents(
+            unpackedLatents,
             vae: vae,
             height: inferenceConfig.height,
             width: inferenceConfig.width

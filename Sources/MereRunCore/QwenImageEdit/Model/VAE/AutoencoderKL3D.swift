@@ -845,15 +845,19 @@ public final class AutoencoderKL3D: Module {
     /// - Parameter images: [B, C, T, H, W] in [-1, 1] range
     /// - Returns: [B, latent_channels, T/temporalScale, H/spatialScale, W/spatialScale] latent representation
     public func encode(_ images: MLXArray) -> MLXArray {
-        let encoded = quantConv(encoder(images))
-        // Take first half of channels (mean), ignore logvar
-        let mean = encoded[0..., 0..<config.latentChannels, 0..., 0..., 0...]
+        let mean = encodeUnscaled(images)
         // Scale latents
         var scaled = mean * MLXArray(config.scalingFactor)
         if config.shiftFactor != 0 {
             scaled = scaled - MLXArray(config.shiftFactor)
         }
         return scaled
+    }
+
+    /// Encode to the raw posterior mode without scalar wrapper normalization.
+    public func encodeUnscaled(_ images: MLXArray) -> MLXArray {
+        let encoded = quantConv(encoder(images))
+        return encoded[0..., 0..<config.latentChannels, 0..., 0..., 0...]
     }
 
     /// Encode single image (convenience)
@@ -867,6 +871,11 @@ public final class AutoencoderKL3D: Module {
         return encoded.squeezed(axis: 2)
     }
 
+    /// Encode one image to the raw posterior mode.
+    public func encodeImageUnscaled(_ images: MLXArray) -> MLXArray {
+        encodeUnscaled(images.expandedDimensions(axis: 2)).squeezed(axis: 2)
+    }
+
     /// Decode latents to images/video
     /// - Parameter latents: [B, C, T, H, W] in latent space
     /// - Returns: [B, 3, T*temporalScale, H*spatialScale, W*spatialScale] decoded output
@@ -876,8 +885,12 @@ public final class AutoencoderKL3D: Module {
         if config.shiftFactor != 0 {
             x = x + MLXArray(config.shiftFactor)
         }
-        let postQuantized = postQuantConv(x)
-        return decoder(postQuantized)
+        return decodeUnscaled(x)
+    }
+
+    /// Decode raw checkpoint latents without scalar wrapper normalization.
+    public func decodeUnscaled(_ latents: MLXArray) -> MLXArray {
+        decoder(postQuantConv(latents))
     }
 
     /// Decode single image (convenience)
@@ -889,6 +902,11 @@ public final class AutoencoderKL3D: Module {
         let decoded = decode(latents5d)
         // Remove temporal dimension: [B, 3, T, H, W] -> [B, 3, H, W]
         return decoded.squeezed(axis: 2)
+    }
+
+    /// Decode one raw latent image without scalar wrapper normalization.
+    public func decodeImageUnscaled(_ latents: MLXArray) -> MLXArray {
+        decodeUnscaled(latents.expandedDimensions(axis: 2)).squeezed(axis: 2)
     }
 }
 
