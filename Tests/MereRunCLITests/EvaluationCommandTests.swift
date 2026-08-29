@@ -71,6 +71,7 @@ final class EvaluationCommandTests: XCTestCase {
         XCTAssertEqual(resolved.plan.pack.packSHA256.count, 64)
         XCTAssertFalse(resolved.plan.models[0].installed)
         XCTAssertFalse(resolved.plan.settings.runtimeSeedControl)
+        XCTAssertNil(resolved.plan.settings.responseFormat)
         let encoded = String(
             decoding: try EvaluationJSON.canonicalEncoder.encode(resolved.plan),
             as: UTF8.self
@@ -78,6 +79,33 @@ final class EvaluationCommandTests: XCTestCase {
         XCTAssertFalse(encoded.contains("What is two plus two?"))
         XCTAssertFalse(encoded.contains("Answer with one short sentence."))
         XCTAssertFalse(encoded.contains(fixture.root.path))
+    }
+
+    func testVisionCaseResolvesOnlyManifestPinnedImageIntoRuntimeMessage() throws {
+        let fixture = try makePack(vision: true)
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        let loaded = try EvaluationPackLoader.load(from: fixture.root)
+        let benchmarkCase = try XCTUnwrap(loaded.cases.first)
+        let arm = EvaluationArmPlan(
+            id: "base-neutral",
+            modelSlot: "base",
+            adapterSlot: nil,
+            adapterScale: 1,
+            promptSet: nil,
+            profileIDs: ["sampled"]
+        )
+
+        let messages = try EvaluationRequestBuilder.messages(
+            benchmarkCase: benchmarkCase,
+            arm: arm,
+            pack: loaded
+        )
+
+        XCTAssertEqual(messages.count, 1)
+        XCTAssertEqual(
+            messages[0].imageURLs,
+            [fixture.root.appendingPathComponent("images/synthetic.png").path]
+        )
     }
 
     func testReportGatesPromotionAndCheckpointAreDerivedFromExactPlan() throws {
@@ -127,6 +155,7 @@ final class EvaluationCommandTests: XCTestCase {
             contextSize: changedSettings.contextSize,
             logprobs: changedSettings.logprobs,
             topLogprobs: changedSettings.topLogprobs,
+            responseFormat: changedSettings.responseFormat,
             logResponses: changedSettings.logResponses,
             externalScorerAuthorized: changedSettings.externalScorerAuthorized,
             runtimeSeedControl: changedSettings.runtimeSeedControl
@@ -145,6 +174,43 @@ final class EvaluationCommandTests: XCTestCase {
             settings: changedSettings
         )
         XCTAssertThrowsError(try store.loadResults(validating: changedPlan))
+    }
+
+    func testPlanPinsPackRequestedJSONResponseFormat() throws {
+        let fixture = try makePack(responseFormat: .jsonObject)
+        defer { try? FileManager.default.removeItem(at: fixture.root) }
+        let loaded = try EvaluationPackLoader.load(from: fixture.root)
+        let resolved = try EvaluationPlanBuilder.build(
+            pack: loaded,
+            modelReferences: ["base": "synthetic-uninstalled-model"],
+            adapterReferences: ["candidate": fixture.adapter.path],
+            trials: nil,
+            maxTokens: nil,
+            contextSize: nil,
+            logprobs: nil,
+            topLogprobs: nil,
+            logResponses: false,
+            externalScorerAuthorized: false
+        )
+
+        XCTAssertEqual(
+            resolved.plan.settings.responseFormat,
+            EvaluationResponseFormat.jsonObject.rawValue
+        )
+        XCTAssertThrowsError(try EvaluationPlanBuilder.build(
+            pack: loaded,
+            modelReferences: ["base": "synthetic-uninstalled-model"],
+            adapterReferences: ["candidate": fixture.adapter.path],
+            trials: nil,
+            maxTokens: nil,
+            contextSize: nil,
+            logprobs: .summary,
+            topLogprobs: nil,
+            logResponses: false,
+            externalScorerAuthorized: false
+        )) { error in
+            XCTAssertTrue(String(describing: error).contains("requires logprobs none"))
+        }
     }
 
     func testBuiltInAssertionsProduceTypedMetrics() throws {
@@ -256,7 +322,11 @@ final class EvaluationCommandTests: XCTestCase {
         XCTAssertEqual(score.metrics, [EvaluationMetric(id: "synthetic-quality", value: 1)])
     }
 
-    private func makePack(externalScorer: Bool = false) throws -> (
+    private func makePack(
+        externalScorer: Bool = false,
+        vision: Bool = false,
+        responseFormat: EvaluationResponseFormat? = nil
+    ) throws -> (
         root: URL,
         adapter: URL
     ) {
@@ -269,6 +339,14 @@ final class EvaluationCommandTests: XCTestCase {
             to: prompts.appendingPathComponent("concise.txt"),
             options: .atomic
         )
+        if vision {
+            let images = root.appendingPathComponent("images", isDirectory: true)
+            try FileManager.default.createDirectory(at: images, withIntermediateDirectories: true)
+            try Data("synthetic image bytes".utf8).write(
+                to: images.appendingPathComponent("synthetic.png"),
+                options: .atomic
+            )
+        }
         let scorer: EvaluationScorer
         if externalScorer {
             let scorerURL = root.appendingPathComponent("score.sh")
@@ -302,6 +380,7 @@ final class EvaluationCommandTests: XCTestCase {
             version: "1.0.0",
             description: "Synthetic arithmetic fixture.",
             caseFiles: ["cases.jsonl"],
+            imageFiles: vision ? ["images/synthetic.png"] : nil,
             promptSets: [EvaluationPromptSet(
                 id: "concise",
                 systemPromptFile: "prompts/concise.txt"
@@ -332,8 +411,9 @@ final class EvaluationCommandTests: XCTestCase {
                 trials: 1,
                 maxTokens: 16,
                 contextSize: 512,
-                logprobs: .summary,
-                topLogprobs: 5
+                logprobs: responseFormat == .jsonObject ? .none : .summary,
+                topLogprobs: 5,
+                responseFormat: responseFormat
             ),
             adapterRequirements: EvaluationAdapterRequirements(
                 requireTrainingManifest: true
@@ -355,7 +435,8 @@ final class EvaluationCommandTests: XCTestCase {
             capabilityTags: ["arithmetic"],
             messages: [EvaluationMessage(
                 role: .user,
-                content: "What is two plus two?"
+                content: "What is two plus two?",
+                imageFile: vision ? "images/synthetic.png" : nil
             )],
             assertions: assertions
         )
