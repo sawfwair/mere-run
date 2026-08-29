@@ -20,10 +20,22 @@ public enum EvaluationMessageRole: String, Codable, CaseIterable, Sendable {
 public struct EvaluationMessage: Codable, Hashable, Sendable {
     public let role: EvaluationMessageRole
     public let content: String
+    public let imageFile: String?
 
-    public init(role: EvaluationMessageRole, content: String) {
+    enum CodingKeys: String, CodingKey {
+        case role
+        case content
+        case imageFile = "image_file"
+    }
+
+    public init(
+        role: EvaluationMessageRole,
+        content: String,
+        imageFile: String? = nil
+    ) {
         self.role = role
         self.content = content
+        self.imageFile = imageFile
     }
 }
 
@@ -294,12 +306,18 @@ public enum EvaluationLogprobMode: String, Codable, CaseIterable, Sendable {
     case top
 }
 
+public enum EvaluationResponseFormat: String, Codable, CaseIterable, Sendable {
+    case text
+    case jsonObject = "json_object"
+}
+
 public struct EvaluationPackDefaults: Codable, Hashable, Sendable {
     public let trials: Int
     public let maxTokens: Int
     public let contextSize: Int
     public let logprobs: EvaluationLogprobMode
     public let topLogprobs: Int
+    public let responseFormat: EvaluationResponseFormat?
 
     enum CodingKeys: String, CodingKey {
         case trials
@@ -307,6 +325,7 @@ public struct EvaluationPackDefaults: Codable, Hashable, Sendable {
         case contextSize = "context_size"
         case logprobs
         case topLogprobs = "top_logprobs"
+        case responseFormat = "response_format"
     }
 
     public init(
@@ -314,13 +333,15 @@ public struct EvaluationPackDefaults: Codable, Hashable, Sendable {
         maxTokens: Int = 512,
         contextSize: Int = 32_768,
         logprobs: EvaluationLogprobMode = .summary,
-        topLogprobs: Int = 5
+        topLogprobs: Int = 5,
+        responseFormat: EvaluationResponseFormat? = nil
     ) {
         self.trials = trials
         self.maxTokens = maxTokens
         self.contextSize = contextSize
         self.logprobs = logprobs
         self.topLogprobs = topLogprobs
+        self.responseFormat = responseFormat
     }
 }
 
@@ -354,6 +375,7 @@ public struct EvaluationPackManifest: Codable, Hashable, Sendable {
     public let version: String
     public let description: String
     public let caseFiles: [String]
+    public let imageFiles: [String]?
     public let promptSets: [EvaluationPromptSet]
     public let arms: [EvaluationArm]
     public let samplingProfiles: [EvaluationSamplingProfile]
@@ -368,6 +390,7 @@ public struct EvaluationPackManifest: Codable, Hashable, Sendable {
         case version
         case description
         case caseFiles = "case_files"
+        case imageFiles = "image_files"
         case promptSets = "prompt_sets"
         case arms
         case samplingProfiles = "sampling_profiles"
@@ -383,6 +406,7 @@ public struct EvaluationPackManifest: Codable, Hashable, Sendable {
         version: String,
         description: String,
         caseFiles: [String],
+        imageFiles: [String]? = nil,
         promptSets: [EvaluationPromptSet] = [],
         arms: [EvaluationArm],
         samplingProfiles: [EvaluationSamplingProfile],
@@ -396,6 +420,7 @@ public struct EvaluationPackManifest: Codable, Hashable, Sendable {
         self.version = version
         self.description = description
         self.caseFiles = caseFiles
+        self.imageFiles = imageFiles
         self.promptSets = promptSets
         self.arms = arms
         self.samplingProfiles = samplingProfiles

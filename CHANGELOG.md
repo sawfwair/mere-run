@@ -6,6 +6,13 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Evaluation
+
+- added manifest-declared local image inputs and structured JSON object
+  responses to external evaluation packs. Validation pins image bytes into the
+  pack identity, rejects undeclared or unreferenced images, and rejects
+  unsupported manifest and case fields instead of silently ignoring them.
+
 ### Text
 
 - added native Qwen3.8-Flash-Next QSA selection beyond the former 2,048-token

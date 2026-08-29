@@ -112,6 +112,7 @@ struct EvaluationRunSettings: Codable, Hashable {
     let contextSize: Int
     let logprobs: String
     let topLogprobs: Int
+    let responseFormat: String?
     let logResponses: Bool
     let externalScorerAuthorized: Bool
     let runtimeSeedControl: Bool
