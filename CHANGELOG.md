@@ -6,6 +6,16 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Video
+
+- moved both managed LTX 2.5 downloads to immutable inference-only MLX
+  distributions whose BF16 transformers are already stored in mere.run's
+  native module-key layout. Distilled retains its bundled Q4 Gemma 4 text
+  tower, while Full retains BF16 text and every full/dev parity component.
+  Fresh installs no longer keep official transformer files beside generated
+  native optimization copies, and `model optimize` treats a pre-keyed package
+  as already optimized.
+
 ## 0.46.1 - 2026-08-29
 
 This corrective release restores the advertised vision and video contracts

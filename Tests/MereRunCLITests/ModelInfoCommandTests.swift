@@ -77,7 +77,7 @@ final class ModelInfoCommandTests: XCTestCase {
 
         XCTAssertTrue(ModelInfo.usesLTX25Layout(manifest: manifest, expectedModelID: nil))
         XCTAssertTrue(
-            lines.contains("  layout: self-contained LTX 2.5 BF16 + MLX Q4 text files")
+            lines.contains("  layout: official LTX 2.5 BF16 + MLX Q4 text files")
         )
         XCTAssertTrue(lines.contains { $0.contains(LTX25Resources.transformerRelativePath) })
         XCTAssertTrue(lines.contains {
@@ -120,7 +120,10 @@ final class ModelInfoCommandTests: XCTestCase {
 
         XCTAssertEqual(manifest.id, ModelResolver.ModelID.ltxVideo25FullBF16.rawValue)
         XCTAssertEqual(manifest.engine, .ltxVideo)
-        XCTAssertEqual(manifest.upstreamRepoId, "\(LTX25Resources.sourceRepository)@\(LTX25Resources.sourceRevision)")
+        XCTAssertEqual(
+            manifest.upstreamRepoId,
+            "\(LTX25Resources.fullManagedRepository)@\(LTX25Resources.fullManagedRevision)"
+        )
         XCTAssertEqual(manifest.usageTermsAcknowledged, true)
         XCTAssertNil(manifest.createdAt)
     }

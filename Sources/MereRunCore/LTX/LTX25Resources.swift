@@ -7,13 +7,15 @@ public struct LTX25Resources: Sendable, Hashable {
     public static let sourceRevision = "dd53cc2cd45bbeaa3563dfb575cba3f49cf44761"
     public static let managedRepository =
         "Sawfwair/LTX-2.5-Distilled-BF16-MLX-Q4-Text"
-    public static let managedRevision = "9f316bfb18448bf67f716006fd78a37829223b74"
+    public static let managedRevision = "cf8a174746cd14796c81ca2b54e035dc32e69bd8"
+    public static let fullManagedRepository = "Sawfwair/LTX-2.5-Full-BF16-MLX"
+    public static let fullManagedRevision = "ac74d124f7211fc3cb8b32f418a08d8e71655c8d"
     public static let upstreamCodeRepository = "Lightricks/LTX-2"
     public static let upstreamCodeRevision = "d151147788a9284cca791edc6ce898007e727fe6"
     public static let upstreamCodeRelease = "v1.2.0"
     public static let textEncoderSourceBytes: Int64 = 26_263_860_594
-    public static let estimatedDownloadBytes: Int64 = 53_878_648_085
-    public static let fullEstimatedDownloadBytes: Int64 = 123_751_083_670
+    public static let estimatedDownloadBytes: Int64 = 53_878_517_792
+    public static let fullEstimatedDownloadBytes: Int64 = 119_718_579_164
 
     public static let distilledTransformerRelativePath =
         "diffusion_models/ltx-2.5-22b-distilled-transformer-bf16.safetensors"
@@ -36,9 +38,21 @@ public struct LTX25Resources: Sendable, Hashable {
         "loras/ltx-2.5-22b-distilled-lora-450-bf16.safetensors"
     public static let durationHeadRelativePath =
         "model_patches/ltx-2.5-duration-head-bf16.safetensors"
+    public static let nativeDistilledTransformerRelativePath =
+        "\(LTX25NativeModelPack.relativeDirectory)/distilled-transformer-bf16.safetensors"
+    public static let nativeDevTransformerRelativePath =
+        "\(LTX25NativeModelPack.relativeDirectory)/dev-transformer-bf16.safetensors"
+    public static let nativeConnectorRelativePath =
+        "\(LTX25NativeModelPack.relativeDirectory)/connector-bf16.safetensors"
 
     public static let requiredRelativePaths = [
         distilledTransformerRelativePath,
+        videoVAERelativePath,
+        audioVAERelativePath,
+        spatialUpsamplerRelativePath,
+    ]
+
+    private static let sharedRequiredRelativePaths = [
         videoVAERelativePath,
         audioVAERelativePath,
         spatialUpsamplerRelativePath,
@@ -63,7 +77,8 @@ public struct LTX25Resources: Sendable, Hashable {
         "LTX-ACCEPTABLE-USE-POLICY.pdf",
         "GEMMA-4-LICENSE.txt",
         "NOTICE.md",
-        transformerRelativePath,
+        nativeDistilledTransformerRelativePath,
+        nativeConnectorRelativePath,
         videoVAERelativePath,
         audioVAERelativePath,
         spatialUpsamplerRelativePath,
@@ -75,8 +90,13 @@ public struct LTX25Resources: Sendable, Hashable {
 
     public static let fullSnapshotPatterns = [
         "README.md",
-        devTransformerRelativePath,
-        distilledTransformerRelativePath,
+        "LICENSE.md",
+        "LTX-ACCEPTABLE-USE-POLICY.pdf",
+        "GEMMA-4-LICENSE.txt",
+        "NOTICE.md",
+        nativeDevTransformerRelativePath,
+        nativeDistilledTransformerRelativePath,
+        nativeConnectorRelativePath,
         textEncoderRelativePath,
         videoVAERelativePath,
         diffusionVideoVAERelativePath,
@@ -112,9 +132,19 @@ public struct LTX25Resources: Sendable, Hashable {
     public var durationHeadURL: URL { rootURL.appendingPathComponent(Self.durationHeadRelativePath) }
 
     public func validate(fileManager: FileManager = .default) -> [URL] {
-        var missing = Self.requiredRelativePaths.compactMap { relativePath in
+        var missing = Self.sharedRequiredRelativePaths.compactMap { relativePath in
             let url = rootURL.appendingPathComponent(relativePath)
             return fileManager.fileExists(atPath: url.path) ? nil : url
+        }
+        missing.append(contentsOf: missingTransformerPaths(kinds: [.distilled], fileManager: fileManager))
+        if !fileManager.fileExists(atPath: distilledTransformerURL.path),
+           LTX25NativeModelPack.optimizedURLIfValid(
+               resources: self,
+               kind: .connector,
+               fileManager: fileManager
+           ) == nil
+        {
+            missing.append(LTX25NativeModelPack.outputURL(resources: self, kind: .connector))
         }
         let hasOfficialTextEncoder = fileManager.fileExists(atPath: textEncoderURL.path)
         let hasBundledQ4TextEncoder = LTX25TextEncoderQuantizedPack
@@ -126,9 +156,44 @@ public struct LTX25Resources: Sendable, Hashable {
     }
 
     public func validateFull(fileManager: FileManager = .default) -> [URL] {
-        Self.fullRequiredRelativePaths.compactMap { relativePath in
+        let transformerPaths = Set([
+            Self.devTransformerRelativePath,
+            Self.distilledTransformerRelativePath,
+        ])
+        var missing = Self.fullRequiredRelativePaths.compactMap { relativePath -> URL? in
+            guard !transformerPaths.contains(relativePath) else { return nil }
             let url = rootURL.appendingPathComponent(relativePath)
             return fileManager.fileExists(atPath: url.path) ? nil : url
+        }
+        missing.append(contentsOf: missingTransformerPaths(kinds: [.dev, .distilled], fileManager: fileManager))
+        if !fileManager.fileExists(atPath: distilledTransformerURL.path),
+           LTX25NativeModelPack.optimizedURLIfValid(
+               resources: self,
+               kind: .connector,
+               fileManager: fileManager
+           ) == nil
+        {
+            missing.append(LTX25NativeModelPack.outputURL(resources: self, kind: .connector))
+        }
+        return missing
+    }
+
+    private func missingTransformerPaths(
+        kinds: [LTX25NativeModelPackKind],
+        fileManager: FileManager
+    ) -> [URL] {
+        kinds.compactMap { kind in
+            let sourceURL = kind == .dev ? devTransformerURL : distilledTransformerURL
+            if fileManager.fileExists(atPath: sourceURL.path)
+                || LTX25NativeModelPack.optimizedURLIfValid(
+                    resources: self,
+                    kind: kind,
+                    fileManager: fileManager
+                ) != nil
+            {
+                return nil
+            }
+            return LTX25NativeModelPack.outputURL(resources: self, kind: kind)
         }
     }
 }

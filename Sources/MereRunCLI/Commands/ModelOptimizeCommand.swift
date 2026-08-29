@@ -30,7 +30,15 @@ struct ModelOptimize: ParsableCommand {
         if isLTX25ModelRoot(rootURL) {
             let resources = LTX25Resources(rootURL: rootURL)
             if textEncoderOnly {
-                _ = try optimizeLTX25TextEncoder(resources: resources)
+                let hasTextSource = FileManager.default.fileExists(
+                    atPath: resources.textEncoderURL.path
+                )
+                let hasOptimizedText = LTX25TextEncoderQuantizedPack.optimizedIndexURLIfValid(
+                    resources: resources
+                ) != nil
+                if !hasOptimizedText || (force && hasTextSource) {
+                    _ = try optimizeLTX25TextEncoder(resources: resources)
+                }
                 artifacts = LTX25TextEncoderQuantizedPack.artifactURLs(
                     resources: resources
                 )
@@ -46,7 +54,40 @@ struct ModelOptimize: ParsableCommand {
             if isLTX25FullModelRoot(rootURL) {
                 kinds.append(.dev)
             }
+            let existingNativeArtifacts = kinds.compactMap { kind in
+                LTX25NativeModelPack.optimizedURLIfValid(resources: resources, kind: kind)
+            }
+            let hasTransformerSources = FileManager.default.fileExists(
+                atPath: resources.distilledTransformerURL.path
+            ) && (!kinds.contains(.dev) || FileManager.default.fileExists(
+                atPath: resources.devTransformerURL.path
+            ))
+            if existingNativeArtifacts.count == kinds.count,
+               !force || !hasTransformerSources
+            {
+                let textArtifacts = LTX25TextEncoderQuantizedPack.artifactURLs(
+                    resources: resources
+                )
+                artifacts = existingNativeArtifacts + textArtifacts
+                optimization = textArtifacts.isEmpty
+                    ? "ltx25-native-model-pack-v1"
+                    : "ltx25-native-model-pack+text-q4-v1"
+                try emitResult(
+                    rootURL: rootURL,
+                    artifacts: artifacts,
+                    optimization: optimization
+                )
+                return
+            }
             var ltxArtifacts = try kinds.map { kind in
+                if !force,
+                   let existing = LTX25NativeModelPack.optimizedURLIfValid(
+                       resources: resources,
+                       kind: kind
+                   )
+                {
+                    return existing
+                }
                 let result = try LTX25NativeModelPack.optimize(
                     resources: resources,
                     kind: kind,
@@ -61,7 +102,11 @@ struct ModelOptimize: ParsableCommand {
                 )
                 return result.outputURL
             }
-            _ = try optimizeLTX25TextEncoder(resources: resources)
+            if LTX25TextEncoderQuantizedPack.optimizedIndexURLIfValid(
+                resources: resources
+            ) == nil {
+                _ = try optimizeLTX25TextEncoder(resources: resources)
+            }
             ltxArtifacts.append(
                 contentsOf: LTX25TextEncoderQuantizedPack.artifactURLs(resources: resources)
             )

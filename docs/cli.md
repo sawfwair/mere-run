@@ -2205,15 +2205,16 @@ atomically rebuilds a pack from a full legacy root; a pruned root can validate
 its existing pack but cannot synthesize a missing exact table. Managed compact
 BF16, Q8, legacy Q4, and Ref2VA artifacts already include source-bound caches.
 
-For LTX 2.5, the command streams the distilled transformer and, for a full
-root, the dev transformer into source-bound BF16 native packs. It also writes a
-compact connector pack so text setup does not open the 42 GB official
-transformer. Transformer packs use mere.run's module-key namespace and every
-artifact preserves its tensor payload bytes. The self-contained managed
-distilled model already bundles the Q4 text pack and needs no optimization.
-`--text-encoder-only` reproduces that pack from an official BF16 root for
-offline and development use; it retains the BF16 projection and tokenizer
-assets while quantizing eligible Gemma language weights.
+For official or offline LTX 2.5 roots, the command streams the distilled
+transformer and, for a full root, the dev transformer into source-bound BF16
+native packs. It also writes a compact connector pack so text setup does not
+open the 42 GB official transformer. Transformer packs use mere.run's
+module-key namespace and every artifact preserves its tensor payload bytes.
+Managed Distilled and Full downloads are already pre-keyed, so the command
+reports their existing artifacts without creating another copy.
+`--text-encoder-only` reproduces the Distilled Q4 text pack from an official
+BF16 root for offline and development use; it retains the BF16 projection and
+tokenizer assets while quantizing eligible Gemma language weights.
 
 ### `mere.run model remove`
 

@@ -3564,15 +3564,15 @@ public enum ManagedModelCatalog {
             category: .video,
             installShape: .structuredRoot,
             hubFallback: HubFallbackConfig(
-                repoId: LTX25Resources.sourceRepository,
-                revision: LTX25Resources.sourceRevision,
+                repoId: LTX25Resources.fullManagedRepository,
+                revision: LTX25Resources.fullManagedRevision,
                 patterns: LTX25Resources.fullSnapshotPatterns
             ),
-            upstreamRepoId: LTX25Resources.sourceRepository,
-            upstreamRevision: LTX25Resources.sourceRevision,
+            upstreamRepoId: LTX25Resources.fullManagedRepository,
+            upstreamRevision: LTX25Resources.fullManagedRevision,
             usageRestriction: ltxUsageRestriction(
-                sourceRepoId: LTX25Resources.sourceRepository,
-                sourceRevision: LTX25Resources.sourceRevision,
+                sourceRepoId: LTX25Resources.fullManagedRepository,
+                sourceRevision: LTX25Resources.fullManagedRevision,
                 additionalTerms: [ltx25GemmaTextEncoderUsageTerm]
             ),
             validationKind: .ltxVideo25,

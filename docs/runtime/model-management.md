@@ -176,14 +176,15 @@ Q4/group-64 Gemma language tower plus the BF16 LTX projection and tokenizer;
 users do not download the original BF16 text tower or quantize anything. The
 video transformer and every non-text model component remain BF16.
 
-For official or offline roots, LTX 2.5 optimization can stream BF16 transformer
-payloads into the exact native module namespace without changing precision. A
-full root produces distilled and dev packs under `.mere-run/ltx25-native-v1`
-plus a compact connector pack. `--text-encoder-only` builds the self-contained
-text pack under `.mere-run/ltx25-text-q4-v1`. Compatible loads validate the
-pinned source receipt and prefer a valid bundled/local Q4 pack, falling back to
-the official BF16 text tower when it is absent. Use `--force` for an explicit
-rebuild.
+Managed LTX 2.5 Distilled and Full downloads already contain BF16 transformers
+in the exact native module namespace, so no post-install optimization copy is
+created. For official or offline roots, `model optimize` can still stream the
+source transformer payloads into `.mere-run/ltx25-native-v1` without changing
+precision. `--text-encoder-only` builds the self-contained text pack under
+`.mere-run/ltx25-text-q4-v1`. Compatible loads validate the pinned source
+receipt and prefer a valid bundled/local Q4 pack, falling back to the official
+BF16 text tower when it is absent. Use `--force` for an explicit rebuild when
+source transformers are present.
 
 ### `mere.run status`
 

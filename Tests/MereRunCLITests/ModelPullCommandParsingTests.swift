@@ -86,7 +86,7 @@ final class ModelPullCommandParsingTests: XCTestCase {
 
             let expectedRepoID = id == ModelResolver.ModelID.ltxVideo25DistilledBF16.rawValue
                 ? LTX25Resources.managedRepository
-                : LTX25Resources.sourceRepository
+                : LTX25Resources.fullManagedRepository
             XCTAssertEqual(spec.hubFallback?.repoId, expectedRepoID)
             XCTAssertEqual(spec.usageRestriction?.terms.count, 2)
             XCTAssertTrue(try XCTUnwrap(blocked.licenseAcceptanceMessage(for: spec)).contains("Gemma 4"))

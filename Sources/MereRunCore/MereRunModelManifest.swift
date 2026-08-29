@@ -2397,7 +2397,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 defaults: Defaults(steps: 30, cfg: 3),
                 supports: [.videoGeneration, .audioToVideoGeneration],
                 components: nil,
-                upstreamRepoId: "\(LTX25Resources.sourceRepository)@\(LTX25Resources.sourceRevision)",
+                upstreamRepoId:
+                    "\(LTX25Resources.fullManagedRepository)@\(LTX25Resources.fullManagedRevision)",
                 createdAt: createdAt
             )
         case .wan22TI2V5BMLX:

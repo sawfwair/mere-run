@@ -3,7 +3,7 @@ import MLX
 import XCTest
 @testable import MereRunCore
 
-final class LTX25NativeModelPackTests: XCTestCase {
+final class LTX25NativeModelPackTests: MereRunCoreTestCase {
     func testRealNativePackCoversV2TransformerParameters() throws {
         guard let rootPath = ProcessInfo.processInfo.environment["MERERUN_LTX25_MODEL_ROOT"] else {
             throw XCTSkip("Set MERERUN_LTX25_MODEL_ROOT for real-checkpoint coverage.")

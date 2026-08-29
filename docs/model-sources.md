@@ -1184,14 +1184,15 @@ The official packed LTX 2.5 BF16 root is:
 `mere.run model pull video-ltx25-distilled-bf16 --accept-model-license` pulls
 the complete public runtime from
 `Sawfwair/LTX-2.5-Distilled-BF16-MLX-Q4-Text` at immutable revision
-`9f316bfb18448bf67f716006fd78a37829223b74`. It preserves the upstream BF16
-distilled transformer, video VAE, audio VAE/BWE vocoder, spatial upsampler, and
-duration head from `Lightricks/LTX-2.5@dd53cc2...`. The custom Gemma 4 language
-tower is MLX affine Q4/group-64; its LTX projection and tokenizer support remain
-BF16/raw. The complete selected payload is exactly 53,878,648,085 bytes. The
-repository is ungated, includes the full LTX license/AUP, Apache 2.0 text, and
-modification notice, and requires no separate component pull or local
-quantization.
+`cf8a174746cd14796c81ca2b54e035dc32e69bd8`. It stores the upstream BF16
+distilled transformer directly in mere.run's native module-key layout, together
+with the shared connector, video VAE, audio VAE/BWE vocoder, spatial upsampler,
+and duration head from `Lightricks/LTX-2.5@dd53cc2...`. The custom Gemma 4
+language tower is MLX affine Q4/group-64; its LTX projection and tokenizer
+support remain BF16/raw. The complete selected payload is exactly
+53,878,517,792 bytes. The repository is ungated, includes the governing LTX and
+Gemma terms and modification notice, and requires no separate component pull,
+local quantization, or post-install re-keying.
 
 This model runs natively through Swift and MLX; no Python process or sidecar is
 dispatched. Use `--quality final --output-mode audio-video` for synchronized
@@ -1205,15 +1206,15 @@ The complete official LTX 2.5 root is:
 .../models/video-ltx25-full-bf16
 ```
 
-`mere.run model pull video-ltx25-full-bf16 --accept-model-license` uses the
-same immutable weight revision and adds the dev transformer, official
-distilled LoRA, diffusion video VAE, temporal x2 latent upsampler, and duration
-head. The complete official BF16 payload is exactly 123,751,083,670 bytes. This
-full/dev tier still comes from the official upstream repository and requires
-its Hugging Face gate; unlike the distilled managed tier, it retains the
-original BF16 text encoder unless locally optimized. This root supports
-full/dev and HQ pipelines, source-audio A2Vid, DFR, Retake, HDR/EXR, IC-LoRA
-reference video, Dub-It, and native text-to-audio.
+`mere.run model pull video-ltx25-full-bf16 --accept-model-license` pulls
+`Sawfwair/LTX-2.5-Full-BF16-MLX` at immutable revision
+`ac74d124f7211fc3cb8b32f418a08d8e71655c8d`. It includes native-layout dev and
+distilled BF16 transformers, one shared connector, the official BF16 text
+encoder, distilled LoRA, diffusion video VAE, temporal x2 latent upsampler, and
+duration head. The complete selected payload is exactly 119,718,579,164 bytes.
+The repository is gated and needs no local optimization or source-transformer
+copy. This root supports full/dev and HQ pipelines, source-audio A2Vid, DFR,
+Retake, HDR/EXR, IC-LoRA reference video, Dub-It, and native text-to-audio.
 
 The official DFR pixel-space spatial upscaler is a separately gated managed
 adapter: `ltx25-pixel-spatial-upscaler-x2`. Its repository gate and
