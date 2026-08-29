@@ -65,7 +65,8 @@ func q35GDNPreworkOps(
     numValueHeads: Int,
     keyHeadDim: Int,
     valueHeadDim: Int,
-    rmsNormWeight: MLXArray? = nil
+    rmsNormWeight: MLXArray? = nil,
+    normalizeInFloat32: Bool = false
 ) -> Q35GDNPreworkOutput {
     let batch = qkv.dim(0)
     let sequence = qkv.dim(1)
@@ -85,6 +86,16 @@ func q35GDNPreworkOps(
     var k = kConv.reshaped(batch, sequence, numKeyHeads, keyHeadDim)
     let v = vConv.reshaped(batch, sequence, numValueHeads, valueHeadDim)
     let invScale = 1.0 / sqrt(Float(max(1, keyHeadDim)))
+    if normalizeInFloat32 {
+        // Qwen4Exp's reference/FLA normalizes Q/K in FP32 before the
+        // recurrent update. BF16 RMSNorm followed by scaling introduces
+        // an extra rounding step and changes epsilon from a sum to a mean.
+        q = q.asType(.float32)
+        k = k.asType(.float32)
+        q = q * MLX.rsqrt(MLX.square(q).sum(axis: -1, keepDims: true) + 1e-6) * invScale
+        k = k * MLX.rsqrt(MLX.square(k).sum(axis: -1, keepDims: true) + 1e-6)
+        return Q35GDNPreworkOutput(q: q, k: k, v: v.asType(.float32), convState: nextState)
+    }
     q = q35RmsNormNoWeight(q, weight: rmsNormWeight) * MLXArray(invScale * invScale).asType(q.dtype)
     k = q35RmsNormNoWeight(k, weight: rmsNormWeight) * MLXArray(invScale).asType(k.dtype)
 
@@ -269,8 +280,9 @@ func q35FusedPortableQuantizedLinear(_ lhs: Linear, _ rhs: Linear) -> PortableQu
 }
 
 private let q35ComputeGCompiled = compile(shapeless: true) { aLog, a, dtBias in
-    let dt = softplus(a.asType(.float32) + dtBias.asType(.float32).reshaped(1, 1, dtBias.dim(0)))
-    let decayBase = MLX.exp(aLog.asType(.float32)).reshaped(1, 1, dtBias.dim(0))
+    // Keep head width dynamic in the shapeless graph when models change.
+    let dt = softplus(a.asType(.float32) + dtBias.asType(.float32).expandedDimensions(axes: [0, 1]))
+    let decayBase = MLX.exp(aLog.asType(.float32)).expandedDimensions(axes: [0, 1])
     return MLX.exp(-decayBase * dt)
 }
 
@@ -543,6 +555,7 @@ public final class Q35LinearCache: @unchecked Sendable {
     fileprivate var verificationReplay: Q35LinearVerificationReplay?
     var pleConvState: MLXArray?
     var pleTokenContext: MLXArray?
+    var pleVerificationReplay: Q38PLEVerificationReplay?
 
     public init() {}
 
@@ -552,6 +565,7 @@ public final class Q35LinearCache: @unchecked Sendable {
         verificationReplay = nil
         pleConvState = nil
         pleTokenContext = nil
+        pleVerificationReplay = nil
     }
 
     public func fork() -> Q35LinearCache {
@@ -565,18 +579,23 @@ public final class Q35LinearCache: @unchecked Sendable {
 
     func canRestoreVerificationPrefix(tokenCount: Int) -> Bool {
         guard let verificationReplay else { return false }
+        if pleConvState != nil || pleTokenContext != nil {
+            guard let pleVerificationReplay,
+                  pleVerificationReplay.tokenCount == verificationReplay.q.dim(1) else { return false }
+        }
         return tokenCount > 0 && tokenCount <= verificationReplay.q.dim(1)
     }
 
     /// Commits a prefix of a speculative verification without reading target
     /// weights again. Convolution state is sliced from the saved projection;
-    /// recurrent state replays only the already-computed GDN inputs.
+    /// recurrent state replays only the already-computed GDN inputs. PLE's
+    /// convolution and n-gram histories are sliced to the same accepted prefix.
     func restoreVerificationPrefix(tokenCount: Int) -> Bool {
         guard canRestoreVerificationPrefix(tokenCount: tokenCount),
               let replay = verificationReplay else {
             return false
         }
-        defer { verificationReplay = nil }
+        defer { commitVerification() }
 
         if tokenCount == replay.q.dim(1) {
             return true
@@ -610,12 +629,22 @@ public final class Q35LinearCache: @unchecked Sendable {
         )
         convState = nextConvState
         recurrentState = nextRecurrentState
+        if let ple = pleVerificationReplay {
+            let nextPLEConv = ple.convolutionInput[
+                0..., tokenCount..<(tokenCount + ple.convolutionStateLength), 0...
+            ]
+            let nextPLETokens = ple.tokenHistory[0..., tokenCount..<(tokenCount + ple.tokenContextLength)]
+            pleConvState = nextPLEConv
+            pleTokenContext = nextPLETokens
+            MLX.asyncEval(nextPLEConv, nextPLETokens)
+        }
         MLX.asyncEval(nextConvState, nextRecurrentState)
         return true
     }
 
     func commitVerification() {
         verificationReplay = nil
+        pleVerificationReplay = nil
     }
 
     public func batched(with caches: [Q35LinearCache]) -> Q35LinearCache? {
@@ -719,6 +748,7 @@ final class Q35LinearAttention: Module {
     private let convDim: Int
     private let convKernelSize: Int
     private let qkNormWeightBF16: MLXArray
+    private let isQwen4Exp: Bool
     private var fusedInProjQKVZ: Linear?
     private var fusedInProjBA: Linear?
 
@@ -734,6 +764,7 @@ final class Q35LinearAttention: Module {
         self.convDim = self.keyDim * 2 + self.valueDim
         self.convKernelSize = max(1, text.linearConvKernelDim)
         self.qkNormWeightBF16 = MLXArray.ones([self.keyHeadDim], dtype: .bfloat16)
+        self.isQwen4Exp = text.isQwen4Exp
 
         precondition(
             self.numValueHeads % max(1, self.numKeyHeads) == 0,
@@ -809,7 +840,7 @@ final class Q35LinearAttention: Module {
         let rmsNormWeight = qkv.dtype == .bfloat16 ? qkNormWeightBF16 : nil
         let prework: Q35GDNPreworkOutput
         #if os(macOS)
-        if cache != nil,
+        if !isQwen4Exp, cache != nil,
            let fused = q35GDNPreworkMetal(
                qkv: qkv,
                convState: convState,
@@ -829,7 +860,8 @@ final class Q35LinearAttention: Module {
                 numValueHeads: numValueHeads,
                 keyHeadDim: keyHeadDim,
                 valueHeadDim: valueHeadDim,
-                rmsNormWeight: rmsNormWeight
+                rmsNormWeight: rmsNormWeight,
+                normalizeInFloat32: isQwen4Exp
             )
         }
         #else
@@ -841,7 +873,8 @@ final class Q35LinearAttention: Module {
             numValueHeads: numValueHeads,
             keyHeadDim: keyHeadDim,
             valueHeadDim: valueHeadDim,
-            rmsNormWeight: rmsNormWeight
+            rmsNormWeight: rmsNormWeight,
+            normalizeInFloat32: isQwen4Exp
         )
         #endif
         cache?.convState = prework.convState
@@ -881,7 +914,7 @@ final class Q35LinearAttention: Module {
             cache?.commitVerification()
         }
 
-        let normalized = norm(updated, gate: z)
+        let normalized = norm(updated.asType(qkv.dtype), gate: z)
         return outProj(normalized.reshaped(batch, sequence, valueDim))
     }
 }

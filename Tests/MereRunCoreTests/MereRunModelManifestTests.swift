@@ -263,6 +263,30 @@ final class MereRunModelManifestTests: MereRunCoreTestCase {
         XCTAssertEqual(manifest.sources?.last?.destinationPath, Q35Resources.q38LicenseComponentPath)
     }
 
+    func testQ38FlashNext3BitTemplatePinsActivationWeightedArtifact() {
+        let manifest = MereRunModelManifest.template(
+            for: .q38FlashNext3Bit,
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+
+        XCTAssertEqual(manifest.id, Q35Resources.q38FlashNext3BitModelId)
+        XCTAssertEqual(manifest.engine, .qwen35HybridMoE)
+        XCTAssertEqual(manifest.family, .qwen)
+        XCTAssertEqual(manifest.precision, .int3)
+        XCTAssertEqual(manifest.quantization?.bits, 3)
+        XCTAssertEqual(manifest.quantization?.groupSize, 64)
+        XCTAssertEqual(
+            manifest.quantization?.scheme,
+            "mlx-mixed-q3-q4-activation-refit-affine"
+        )
+        XCTAssertEqual(Set(manifest.supports ?? []), Set([.chat, .codeGeneration, .visionChat]))
+        XCTAssertEqual(
+            manifest.upstreamRepoId,
+            "\(Q35Resources.q38FlashNext3BitUpstreamRepoId)"
+                + "@\(Q35Resources.q38FlashNext3BitUpstreamRevision)"
+        )
+    }
+
     func testFalconPerceptionTemplateHasExpectedMetadata() throws {
         let manifest = MereRunModelManifest.template(for: .visionGroundFalconPerception, createdAt: Date(timeIntervalSince1970: 0))
 

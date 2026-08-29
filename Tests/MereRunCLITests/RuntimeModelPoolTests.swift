@@ -16,6 +16,10 @@ final class RuntimeModelPoolTests: XCTestCase {
             engine: .textChatQ35
         ))
         XCTAssertTrue(RuntimeModelPool.shouldWarmDefaultModel(
+            modelID: Q35Resources.q38FlashNext3BitModelId,
+            engine: .textChatQ36
+        ))
+        XCTAssertTrue(RuntimeModelPool.shouldWarmDefaultModel(
             modelID: Q35Resources.q38FlashNext4BitModelId,
             engine: .textChatQ36
         ))

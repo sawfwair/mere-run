@@ -167,7 +167,7 @@ final class Q35DecoderLayer: Module {
                 } else {
                     linearCache = nil
                 }
-                hyper = hyper + ple(hyper, inputIds: inputIds, cache: linearCache)
+                hyper = hyper + ple(hyper, inputIds: inputIds, cache: linearCache, targetVerify: targetVerify)
             }
 
             let attentionMix = attentionHyperConnection.mix(hyper)
@@ -196,7 +196,8 @@ final class Q35DecoderLayer: Module {
                     attentionMix.mixed,
                     mask: fullMask,
                     cache: fullCache,
-                    positionIds: positionIds
+                    positionIds: positionIds,
+                    targetVerify: targetVerify
                 )
             }
             hyper = attentionHyperConnection.inject(
@@ -502,7 +503,10 @@ public final class Q35Model: Module, @unchecked Sendable {
     }
 
     func logits(from hidden: MLXArray) -> MLXArray {
-        lmHead?(hidden) ?? model.embedTokens.asLinear(hidden)
+        if config.textConfig.isQwen4Exp, let lmHead {
+            return q38SmallBatchProjection(lmHead, hidden)
+        }
+        return lmHead?(hidden) ?? model.embedTokens.asLinear(hidden)
     }
 
     var q38NGramEmbeddings: [Q38NGramEmbedding] {

@@ -483,10 +483,12 @@ final class Q35FeedForward: Module {
     private let topK: Int
     private let normTopKProb: Bool
     private let usesMoE: Bool
+    private let isQwen4Exp: Bool
 
     init(config: Q35Config) {
         let text = config.textConfig
         self.usesMoE = text.usesMoE
+        self.isQwen4Exp = text.isQwen4Exp
         self.topK = max(1, text.numExpertsPerTok)
         self.normTopKProb = text.normTopKProb
 
@@ -525,21 +527,29 @@ final class Q35FeedForward: Module {
            let switchMLP,
            let sharedExpert,
            let sharedExpertGate {
-            var scores = softmax(gate(x), axis: -1, precise: true)
+            let routerLogits = isQwen4Exp ? q38SmallBatchProjection(gate, x) : gate(x)
+            // Flash-Next selects and normalizes experts in FP32. Rounding the
+            // softmax to BF16 first can turn distinct probabilities into ties.
+            var scores = softmax(
+                isQwen4Exp ? routerLogits.asType(.float32) : routerLogits,
+                axis: -1, precise: true
+            )
 
             let indices = argPartition(scores, kth: -topK, axis: -1)[.ellipsis, (-topK)...]
             scores = takeAlong(scores, indices, axis: -1)
 
-            if normTopKProb, topK > 1 {
+            if normTopKProb, topK > 1 || isQwen4Exp {
                 scores = scores / scores.sum(axis: -1, keepDims: true)
             }
+            if isQwen4Exp { scores = scores.asType(routerLogits.dtype) }
 
             let switched = switchMLP(x, indices: indices)
             var routed = switched * MLX.expandedDimensions(scores, axis: scores.ndim)
             routed = routed.sum(axis: -2)
 
             let shared = sharedExpert(x)
-            let gatedShared = MLX.sigmoid(sharedExpertGate(x)) * shared
+            let sharedGate = isQwen4Exp ? q38SmallBatchProjection(sharedExpertGate, x) : sharedExpertGate(x)
+            let gatedShared = MLX.sigmoid(sharedGate) * shared
             return routed + gatedShared
         }
 

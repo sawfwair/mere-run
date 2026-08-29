@@ -23,6 +23,15 @@ model families.
 - Cache implementations must maintain `[batch, heads, tokens, head-width]`
   layout, matching key/value offsets, source dtype, and independent wrappers
   when forked or split into rows.
+- Affine reconstruction makes packed data, scales, and biases contiguous before
+  invoking Metal dequantization. Slicing unused token capacity leaves gaps
+  between heads; copying those inputs inside the pinned dequantizer can clobber
+  already-bound buffers. Cover padded multi-head tails, not only aligned or
+  single-head caches, in round-trip and fork-content tests.
+- Forks need fresh MLX array wrappers: a same-dtype `asType` returns the original
+  object. Use same-shape reshaping to retain the immutable backing arrays while
+  isolating subsequent subscript assignments. Read cache state again after
+  parent/child mutations when testing this; an earlier array view can hide aliasing.
 - Quantized caches are memory-oriented opt-ins. Do not silently replace a
   model's native cache mode; dequantization can trade decode speed for lower
   persistent memory.

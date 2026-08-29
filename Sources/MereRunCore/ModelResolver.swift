@@ -50,6 +50,7 @@ public struct ModelResolver {
         case q38TwentySevenB = "vision-chat-q38-27b"
         case q38TwentySevenB4Bit = "vision-chat-q38-27b-4bit"
         case q38FlashNextMixed = "vision-chat-q38-flash-next-mixed"
+        case q38FlashNext3Bit = "vision-chat-q38-flash-next-3bit"
         case q38FlashNext4Bit = "vision-chat-q38-flash-next-4bit"
         case bonsai27B1Bit = "text-chat-bonsai-27b-1bit"
         case bonsai27B2Bit = "text-chat-bonsai-27b-2bit"

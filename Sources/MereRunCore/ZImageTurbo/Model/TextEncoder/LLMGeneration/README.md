@@ -14,3 +14,6 @@ engines that reuse the same primitives.
 When adding a cache implementation, keep the protocol typed and split/fork
 semantics exact: a batched decode row must produce the same logits as the same
 row decoded independently.
+Cache forks use fresh array wrappers, not no-op dtype casts (which return the
+same object). Test fresh cache reads after either branch writes, rather than
+only comparing array views captured before those writes.

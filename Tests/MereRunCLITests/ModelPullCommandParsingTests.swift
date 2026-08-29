@@ -61,14 +61,18 @@ final class ModelPullCommandParsingTests: XCTestCase {
     }
 
     func testFlashNextPullAcceptsLicenseTermsAlias() throws {
-        let spec = try XCTUnwrap(
-            ManagedModelCatalog.spec(for: Q35Resources.q38FlashNextMixedModelId)
-        )
-        let blocked = try ModelPull.parse([spec.id])
-        let accepted = try ModelPull.parse([spec.id, "--accept-license-terms"])
+        for modelID in [
+            Q35Resources.q38FlashNextMixedModelId,
+            Q35Resources.q38FlashNext3BitModelId,
+            Q35Resources.q38FlashNext4BitModelId,
+        ] {
+            let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: modelID))
+            let blocked = try ModelPull.parse([spec.id])
+            let accepted = try ModelPull.parse([spec.id, "--accept-license-terms"])
 
-        XCTAssertNotNil(blocked.licenseAcceptanceMessage(for: spec))
-        XCTAssertNil(accepted.licenseAcceptanceMessage(for: spec))
+            XCTAssertNotNil(blocked.licenseAcceptanceMessage(for: spec))
+            XCTAssertNil(accepted.licenseAcceptanceMessage(for: spec))
+        }
     }
 
     func testLTX25PullRequiresExplicitLicenseAcceptance() throws {

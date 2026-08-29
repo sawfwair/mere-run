@@ -367,7 +367,7 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         let valueHeadDim = 128
         let convDim = 2 * numKeyHeads * keyHeadDim + numValueHeads * valueHeadDim
 
-        for sequence in [3, 4, 5, 7, 9] {
+        for sequence in [1, 2, 3, 4, 5, 7, 9] {
             MLXRandom.seed(11)
             let qkv = MLXRandom.uniform(-0.5 ..< 0.5, [1, sequence, convDim]).asType(.bfloat16)
             let state = MLXRandom.uniform(-0.5 ..< 0.5, [1, 3, convDim]).asType(.bfloat16)
@@ -488,11 +488,11 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         }
     }
 
-    func testQ35GDNVerifyPreworkRejectsDecodeWidth() throws {
+    func testQ35GDNVerifyPreworkRejectsUnqualifiedWidth() throws {
         guard Device.defaultDevice().deviceType == .gpu else {
             throw XCTSkip("Q35 GDN prework eligibility requires MERERUN_TEST_MLX_DEVICE=gpu.")
         }
-        let qkv = MLXArray.zeros([1, 1, 10_240], dtype: .bfloat16)
+        let qkv = MLXArray.zeros([1, 10, 10_240], dtype: .bfloat16)
         let state = MLXArray.zeros([1, 3, 10_240], dtype: .bfloat16)
         let weight = MLXArray.zeros([10_240, 4, 1], dtype: .bfloat16)
 
@@ -797,7 +797,7 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
     }
 
     func testSamplingProbabilitiesGreedyReturnsOneHotDistribution() {
-        let logits = MLXArray([0.1, 2.0, -1.0, 0.7])
+        let logits = MLXArray([Float(0.1), 2.0, -1.0, 0.7])
         let config = GenerationConfig(
             maxTokens: 1,
             temperature: 0,
@@ -1317,6 +1317,13 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         )
         XCTAssertEqual(
             Q35Generator.defaultMTPMinimumPromptTokens(
+                modelId: Q35Resources.q38FlashNext3BitModelId,
+                usesMoE: true
+            ),
+            0
+        )
+        XCTAssertEqual(
+            Q35Generator.defaultMTPMinimumPromptTokens(
                 modelId: Q35Resources.q38FlashNext4BitModelId,
                 usesMoE: true
             ),
@@ -1338,6 +1345,17 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         XCTAssertEqual(Q35Generator.mtpBlockSize(environment: ["MERERUN_Q35_MTP_BLOCK_SIZE": "1"]), 4)
         XCTAssertEqual(Q35Generator.mtpBlockSize(environment: ["MERERUN_Q35_MTP_BLOCK_SIZE": "6"]), 6)
         XCTAssertEqual(Q35Generator.mtpBlockSize(environment: ["MERERUN_Q35_MTP_BLOCK_SIZE": "32"]), 16)
+        for modelID in [
+            Q35Resources.q38FlashNextMixedModelId,
+            Q35Resources.q38FlashNext3BitModelId,
+            Q35Resources.q38FlashNext4BitModelId,
+        ] {
+            XCTAssertEqual(Q35Generator.mtpBlockSize(modelId: modelID, environment: [:]), 4)
+            XCTAssertEqual(
+                Q35Generator.mtpBlockSize(modelId: modelID, environment: ["MERERUN_Q35_MTP_BLOCK_SIZE": "6"]),
+                6
+            )
+        }
         XCTAssertEqual(
             Q35Generator.mtpBlockSize(
                 modelId: Q35Resources.q38TwentySevenB4BitModelId,
@@ -1498,6 +1516,26 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
             activeMemory: 7 * gib,
             cacheMemory: 1 * gib,
             memoryLimit: 8 * gib
+        ))
+    }
+
+    func testFlashNextBoundsReusableBuffersBelowDeviceLimit() {
+        let gib = 1_024 * 1_024 * 1_024
+        XCTAssertFalse(Q35Generator.shouldClearMLXCache(
+            activeMemory: 71 * gib, cacheMemory: 4 * gib - 1,
+            memoryLimit: 121 * gib, isFlashNext: true
+        ))
+        XCTAssertTrue(Q35Generator.shouldClearMLXCache(
+            activeMemory: 71 * gib, cacheMemory: 4 * gib,
+            memoryLimit: 121 * gib, isFlashNext: true
+        ))
+        XCTAssertTrue(Q35Generator.shouldClearMLXCache(
+            activeMemory: 71 * gib, cacheMemory: 8 * gib,
+            memoryLimit: 121 * gib, isFlashNext: true
+        ))
+        XCTAssertFalse(Q35Generator.shouldClearMLXCache(
+            activeMemory: 71 * gib, cacheMemory: 8 * gib,
+            memoryLimit: 121 * gib, isFlashNext: false
         ))
     }
 

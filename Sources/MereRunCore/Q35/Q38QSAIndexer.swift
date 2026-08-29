@@ -52,7 +52,7 @@ final class Q38QSAIndexer: Module {
     ) -> MLXArray? {
         let batch = hidden.dim(0)
         let count = hidden.dim(1)
-        let projected = indexQKProjection(hidden)
+        let projected = q38SmallBatchProjection(indexQKProjection, hidden)
         let indexQueries = queryNorm(projected[.ellipsis, 0..<(headCount * headDimension)]
             .reshaped(batch, count, headCount, headDimension)).transposed(0, 2, 1, 3)
         var rawKeys = projected[.ellipsis, (headCount * headDimension)...]
@@ -69,13 +69,16 @@ final class Q38QSAIndexer: Module {
         // the boundary, including on a fork restored from a short prompt.
         guard keys.dim(2) > budget else { return nil }
         precondition(rawKeys.dim(2) == keys.dim(2), "QSA needs indexer history aligned with target KV")
-        let compressed = compressedKeys(rawKeys, positions: positions)
+        let compressed = cache?.compressedKeys(rawKeys, positions: positions, ratio: ratio) {
+            self.compressedKeys($0, positions: $1)
+        } ?? compressedKeys(rawKeys, positions: positions)
         var outputs: [MLXArray] = []
         for start in stride(from: 0, to: count, by: Q38SparseAttention.queryChunkSize) {
             let end = min(count, start + Q38SparseAttention.queryChunkSize)
             let indexQ = rotatedQueries[0..., 0..., start..<end, 0...]
-            let scoreHeads = MLX.matmul(
-                indexQ.asType(.float32), compressed.asType(.float32).swappedAxes(-1, -2)
+            let scoreHeads = Self.scoreHeads(
+                queries: indexQ, keys: compressed,
+                preserveSerialRows: batch == 1 && (2...9).contains(count)
             )
             let scores = MLX.maximum(scoreHeads, 0).sum(axis: 1) / sqrt(Float(headDimension))
             let selected = Q38SparseAttention.select(
@@ -89,6 +92,23 @@ final class Q38QSAIndexer: Module {
             outputs.append(output)
         }
         return outputs.count == 1 ? outputs[0] : MLX.concatenated(outputs, axis: 2)
+    }
+
+    static func scoreHeads(
+        queries: MLXArray, keys: MLXArray, preserveSerialRows: Bool
+    ) -> MLXArray {
+        let queries = queries.asType(.float32)
+        let keys = keys.asType(.float32).swappedAxes(-1, -2)
+        #if os(macOS)
+        if preserveSerialRows, Device.defaultDevice().deviceType == .gpu {
+            // Even FP32 matrix scoring can round differently from single-row
+            // GEMV. Preserve the serial scores before top-k block selection.
+            return MLX.concatenated((0..<queries.dim(2)).map { row in
+                MLX.matmul(queries[0..., 0..., row..<(row + 1), 0...], keys)
+            }, axis: 2)
+        }
+        #endif
+        return MLX.matmul(queries, keys)
     }
 
     func compressedKeys(_ rawKeys: MLXArray, positions: MLXArray) -> MLXArray {

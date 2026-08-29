@@ -115,16 +115,22 @@ BF16 refers to bfloat16, a 16-bit floating-point format.
 
 ### Source builds after v0.45.0
 
-Builds from `main` add Flash-Next Qwen Sparse Attention (QSA) beyond the release's
-2,048-token limit for the prompt and generated response combined.
-Qwen3.8 27B also has MTP decoding improvements. Its MTP path remains opt-in.
+Builds from `main` add Flash-Next Qwen Sparse Attention (QSA) beyond the
+release's 2,048-token limit for the prompt and generated response combined.
+They also add the public, ungated
+`vision-chat-q38-flash-next-3bit` activation-weighted Q3 profile. Its 89.67 GB
+managed pull requires explicit Qwen Community License 1.0 acceptance. Qwen3.8
+27B also has MTP decoding improvements. Its MTP path remains opt-in.
 
-The Flash-Next mixed model targets a Mac with 128 GB of memory. Its Q4 package
-requires more memory. The architecture's context limit is 262,144 tokens, but
-that full length hasn't been qualified on the 128 GB profile. Usable context
-depends on memory for weights, key/value caches, and MTP history.
+The Flash-Next mixed and Q3 models target Macs with 128 GB of memory. The Q4
+package requires more memory. The architecture's context limit is 262,144
+tokens, but that full length hasn't been qualified on the 128 GB profiles.
+Usable context depends on memory for weights, key/value caches, and MTP
+history.
 
-Flash-Next image input remains unqualified. For implementation details and
+The Q3 checkpoint's sealed holdout matched the pinned Q4 output on all 16
+cases, including eight image and OCR cases. These bounded checks don't
+establish general model quality or BF16 parity. For implementation details and
 validation limits, see the [release notes](./CHANGELOG.md) and
 [Qwen runtime guide](./Sources/MereRunCore/Q35/README.md).
 

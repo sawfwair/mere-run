@@ -1855,6 +1855,39 @@ public enum ManagedModelCatalog {
             apiProfile: .q38(contextWindow: Q35Resources.q38TwentySevenBContextLength)
         ),
         ManagedModelSpec(
+            id: Q35Resources.q38FlashNext3BitModelId,
+            category: .visionChat,
+            installShape: .directoryRoot,
+            hubFallback: Q35Resources.profile(
+                for: Q35Resources.q38FlashNext3BitModelId
+            )?.hubFallbackConfig,
+            upstreamRepoId: Q35Resources.q38FlashNext3BitUpstreamRepoId,
+            upstreamRevision: Q35Resources.q38FlashNext3BitUpstreamRevision,
+            usageRestriction: ManagedModelUsageRestriction(
+                summary: "Use is governed by the Qwen Community License 1.0; review and acknowledge the terms before download.",
+                terms: [
+                    ManagedModelUsageTerm(
+                        component: "Qwen3.8-Flash-Next activation-weighted Q3 MLX",
+                        license: "Qwen Community License 1.0",
+                        summary: "Review the upstream redistribution, attribution, and restricted-use terms before installing or deploying.",
+                        sourceRepoId: "Qwen/Qwen3.8-Flash-Next",
+                        sourceRevision: "f5d08274bafd880402bd16f5e3e6c514136ec06c",
+                        licenseURL: "https://huggingface.co/Qwen/Qwen3.8-Flash-Next/blob/f5d08274bafd880402bd16f5e3e6c514136ec06c/LICENSE"
+                    ),
+                ]
+            ),
+            validationKind: .q35,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: Q35Resources.q38FlashNext3BitEstimatedDownloadBytes,
+            defaultCLICommands: [
+                "text chat",
+                "api serve",
+                "model benchmark chat",
+                "model benchmark code",
+            ],
+            apiProfile: .q38(contextWindow: Q35Resources.q38TwentySevenBContextLength)
+        ),
+        ManagedModelSpec(
             id: Q35Resources.q38FlashNext4BitModelId,
             category: .visionChat,
             installShape: .directoryRoot,

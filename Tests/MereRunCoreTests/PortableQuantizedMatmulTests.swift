@@ -88,6 +88,60 @@ final class PortableQuantizedMatmulTests: MereRunCoreTestCase {
             }
         }
     }
+    func testFlashNextUnalignedQuantizedProjectionsMatchSerialRows() throws {
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip("Flash-Next projection parity requires MERERUN_TEST_MLX_DEVICE=gpu.")
+        }
+        MLXRandom.seed(90)
+        for (inputSize, outputSize) in [(320, 10_240), (640, 2_560), (10_240, 4)] {
+            let dense = MLXRandom.uniform(-0.2..<0.2, [outputSize, inputSize]).asType(.bfloat16)
+            let (weight, scales, biases) = MLX.quantized(dense, groupSize: 64, bits: 4)
+            let layer = PortableQuantizedLinear(
+                weight: weight, bias: nil, scales: scales, biases: biases,
+                groupSize: 64, bits: 4, mode: .affine
+            )
+            for count in [2, 3, 4, 7, 9] {
+                let input = MLXRandom.uniform(-0.5..<0.5, [1, count, inputSize]).asType(.bfloat16)
+                let serial = MLX.concatenated((0..<count).map {
+                    layer(input[0..., $0..<($0 + 1), 0...])
+                }, axis: 1)
+                let batched = layer(input)
+                let error = MLX.abs(serial.asType(.float32) - batched.asType(.float32)).max().item(Float.self)
+                XCTAssertEqual(error, 0, "M=\(count), K=\(inputSize), N=\(outputSize) changed serial QMV")
+            }
+        }
+    }
+
+    func testFlashNextDenseProjectionsMatchSerialRows() throws {
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip("Flash-Next projection parity requires MERERUN_TEST_MLX_DEVICE=gpu.")
+        }
+        MLXRandom.seed(93)
+        for (inputSize, outputSize) in [(2_560, 512), (2_560, 640), (10_240, 4), (320, 10_240)] {
+            let dense = MLXRandom.uniform(-0.2..<0.2, [outputSize, inputSize]).asType(.bfloat16)
+            let layer = Linear(weight: dense, bias: nil)
+            for count in [2, 3, 4, 7, 9] {
+                let input = MLXRandom.uniform(-0.5..<0.5, [1, count, inputSize]).asType(.bfloat16)
+                let serial = MLX.concatenated((0..<count).map {
+                    layer(input[0..., $0..<($0 + 1), 0...])
+                }, axis: 1)
+                let actual = q38SmallBatchProjection(layer, input)
+                let error = MLX.abs(serial.asType(.float32) - actual.asType(.float32)).max().item(Float.self)
+                XCTAssertEqual(error, 0, "M=\(count), K=\(inputSize), N=\(outputSize) changed serial GEMV")
+            }
+        }
+    }
+
+    func testFlashNextDenseProjectionKeepsPrefillAndBatchingNative() {
+        let layer = Linear(weight: MLXArray.ones([16, 32], dtype: .bfloat16), bias: nil)
+        for shape in [[1, 1, 32], [1, 10, 32], [2, 4, 32]] {
+            let input = MLXRandom.uniform(-0.5..<0.5, shape).asType(.bfloat16)
+            let expected = layer(input)
+            let actual = q38SmallBatchProjection(layer, input)
+            XCTAssertEqual(actual.shape, expected.shape)
+            XCTAssertEqual((actual - expected).abs().max().item(Float.self), 0)
+        }
+    }
     #endif
 
     func testCUDAQuantModeParsingDefaultsToAutomatic() {

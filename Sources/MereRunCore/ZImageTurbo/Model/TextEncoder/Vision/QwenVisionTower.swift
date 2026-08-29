@@ -310,7 +310,7 @@ final class QwenVisionTower: Module {
     hiddenStates = hiddenStates.reshaped(1, seqLen, configuration.embedDim)
 
     // Prepare rotary embeddings
-    let rotaryEmb = prepareQwen3Rotary(rotaryPosEmb: rotaryPosEmb, dtype: hiddenStates.dtype)
+    let rotaryEmb = Self.prepareQwen3Rotary(rotaryPosEmb: rotaryPosEmb)
 
     // Process through all blocks, capturing deepstack features at specified layers
     var deepstackFeatures: [MLXArray] = []
@@ -479,13 +479,15 @@ final class QwenVisionTower: Module {
   }
 
   /// Prepare rotary embeddings for attention (cos, sin)
-  private func prepareQwen3Rotary(rotaryPosEmb: MLXArray, dtype: DType) -> (cos: MLXArray, sin: MLXArray) {
+  static func prepareQwen3Rotary(rotaryPosEmb: MLXArray) -> (cos: MLXArray, sin: MLXArray) {
     // rotaryPosEmb is [seq, head_dim/2] (h+w embeddings concatenated, each head_dim/4)
     // Tile by 2 to match full head_dim
-    var cos = MLX.cos(rotaryPosEmb)  // [seq, head_dim/2]
-    var sin = MLX.sin(rotaryPosEmb)  // [seq, head_dim/2]
-    cos = MLX.tiled(cos, repetitions: [1, 2]).asType(dtype)  // [seq, head_dim]
-    sin = MLX.tiled(sin, repetitions: [1, 2]).asType(dtype)  // [seq, head_dim]
+    // Vision attention rotates Q/K in FP32 and only then casts back. Keep
+    // coefficients in FP32 too, matching the reference vision transformer.
+    var cos = MLX.cos(rotaryPosEmb.asType(.float32))  // [seq, head_dim/2]
+    var sin = MLX.sin(rotaryPosEmb.asType(.float32))  // [seq, head_dim/2]
+    cos = MLX.tiled(cos, repetitions: [1, 2])  // [seq, head_dim]
+    sin = MLX.tiled(sin, repetitions: [1, 2])  // [seq, head_dim]
     return (cos, sin)
   }
 

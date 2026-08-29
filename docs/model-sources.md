@@ -84,6 +84,7 @@ an effective overlay; they are not a second capability catalog.
 | `vision-chat` | `vision-chat-q38-27b` |
 | `vision-chat` | `vision-chat-q38-27b-4bit` |
 | `vision-chat` | `vision-chat-q38-flash-next-mixed` |
+| `vision-chat` | `vision-chat-q38-flash-next-3bit` |
 | `vision-chat` | `vision-chat-q38-flash-next-4bit` |
 | `text-chat` | `text-chat-bonsai-27b-1bit` |
 | `text-chat` | `text-chat-bonsai-27b-2bit` |
@@ -212,7 +213,7 @@ validates all configured models before downloading any; both accept the same
 | `image-ideogram4-sdnq-uint4` | Ideogram Non-Commercial Model Agreement |
 | LFM2.5 text and vision targets plus their DSpark companions | LFM Open License v1.0; commercial use by entities at or above USD 10M annual revenue is excluded |
 | `vision-chat-muse-glimmer-30b` | Apache-2.0 plus Meta's bundled usage policy; upstream says the model is not intended for download or use by people under 18 |
-| `vision-chat-q38-flash-next-mixed`, `vision-chat-q38-flash-next-4bit` | Qwen Community License 1.0; redistribution, attribution, and restricted-use terms |
+| `vision-chat-q38-flash-next-mixed`, `vision-chat-q38-flash-next-3bit`, `vision-chat-q38-flash-next-4bit` | Qwen Community License 1.0; redistribution, attribution, and restricted-use terms |
 | `vision-segment-sam31` | Meta SAM License custom use, trade-control, attribution, and redistribution conditions |
 | `vision-face-buffalo-l` | InsightFace pretrained weights; non-commercial research use |
 | `vision-embed-olmoearth-v12-{nano,tiny,small,base}` | OlmoEarth Artifact License; prohibited military, defense, intelligence, human-surveillance, policing, and listed extractive uses |
@@ -374,6 +375,21 @@ table, and retains embeddings, QSA indexers, routers, vision, and selected MTP
 paths in BF16. Its 73.10 GB of weights are the managed 128 GB Mac profile,
 with 112 GB minimum and 128 GB recommended.
 
+`vision-chat-q38-flash-next-3bit` installs Sawfwair's immutable
+`Qwen3.8-Flash-Next-MLX-Activation-3bit` revision
+`c699bd611366cbc441377275bd1b7a6d2e18e1df`. The 48 routed-expert banks use fresh
+BF16-to-Q3/group-64 codes with image and text activation-weighted scale and
+bias refits. Eligible core, MTP, and vision matrices remain Q4. The n-gram
+table remains Q4/group-32. The 89.67 GB managed pull is cataloged for 96 GB
+minimum and 128 GB recommended.
+
+The native qualification on a 128 GiB Apple Silicon host passed 58 of 61 cases
+by exact expected output. The three misses matched the pinned Q4 output. The
+sealed 16-case holdout produced identical Q3 and Q4 outputs, including exact
+output on all eight image and OCR cases. The holdout peak was 62.1 GB for Q3
+and 77.2 GB for Q4, with no swap growth. These bounded checks establish Q4
+no-regression for the tested cases, not general model quality or BF16 parity.
+
 `vision-chat-q38-flash-next-4bit` installs the companion immutable
 `Sawfwair/Qwen3.8-Flash-Next-MLX-4bit` revision
 `6cc9bbc0fae9ce26b7670b3ed1e26d557c154506`. Its 104.74 GB of weights use
@@ -381,7 +397,7 @@ affine Q4/group-64 for eligible matrices, with Q4/group-32 for the 160-wide
 n-gram table. It is cataloged for 160 GB minimum and 192 GB recommended rather
 than as a 128 GB alternative.
 
-Both artifacts include the Qwen Community License 1.0 and a complete
+All three artifacts include the Qwen Community License 1.0 and a complete
 source/output hash receipt. Pulls are explicit and require either
 `--accept-model-license` or its equivalent `--accept-license-terms` alias. The
 native Qwen4Exp runtime supports text generation; image input remains

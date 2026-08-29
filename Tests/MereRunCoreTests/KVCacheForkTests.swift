@@ -68,4 +68,29 @@ final class KVCacheForkTests: XCTestCase {
         XCTAssertTrue(forkTail.allSatisfy { $0 == 5.0 })
         XCTAssertTrue(parentTail.allSatisfy { $0 == 7.0 })
     }
+
+    func testFreshForkReadRetainsItsSuffixAfterParentWrite() {
+        let parents: [KVCache] = [KVCacheSimple(step: 8), KVCacheStatic(capacity: 8)]
+        for parent in parents {
+            let first = makeKV(1, tokens: 2)
+            let initial = parent.update(keys: first.0, values: first.1)
+            MLX.eval(initial.0, initial.1)
+            let fork = parent.fork()
+            let forkTokens = makeKV(5, tokens: 1)
+            let forkState = fork.update(keys: forkTokens.0, values: forkTokens.1)
+            MLX.eval(forkState.0, forkState.1)
+            let parentTokens = makeKV(7, tokens: 1)
+            let parentState = parent.update(keys: parentTokens.0, values: parentTokens.1)
+            MLX.eval(parentState.0, parentState.1)
+
+            // Read from the cache again, not from the pre-parent-write view:
+            // that old immutable view can hide a shared mutable wrapper.
+            let marker = makeKV(9, tokens: 1)
+            let reread = fork.update(keys: marker.0, values: marker.1)
+            for tensor in [reread.0, reread.1] {
+                let suffix = tensor[0..., 0..., 2..<3, 0...].asArray(Float.self)
+                XCTAssertTrue(suffix.allSatisfy { $0 == 5 }, "Parent changed the fork's stored suffix")
+            }
+        }
+    }
 }

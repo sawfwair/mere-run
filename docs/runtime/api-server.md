@@ -334,7 +334,10 @@ swift run mere.run api serve \
 - Qwen-family chat uses text-only prefix KV reuse by default in `api serve`; set
   `MERERUN_Q35_PREFIX_KV_CACHE=0` for a baseline. Vision prompts are excluded
   because image embeddings alter the effective prefix; text-only requests use
-  the same stable chat-prefix checkpoint and pruning rule as Gemma4.
+  the same stable chat-prefix checkpoint and pruning rule as Gemma4. Flash-Next
+  greedy MTP checkpoints include the draft history as well as the target KV,
+  so matching conversations no longer bypass prefix reuse to rebuild MTP
+  history. Each request receives a private fork of both states.
 - LFM2 chat uses prefix KV reuse by default in `api serve`; set
   `MERERUN_LFM2_PREFIX_KV_CACHE=0` for a baseline. It retains exact prompts and
   the stable conversation prefix before the final message, without cloning

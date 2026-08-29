@@ -162,7 +162,17 @@ final class Q35FullAttention: Module {
         let queryCount = q.dim(2)
         let keyCount = k.dim(2)
         let attn: MLXArray
-        if let indexer, let sparse = indexer.attention(
+        if let indexer, targetVerify, b == 1, (2...9).contains(queryCount),
+           keyCount >= queryCount, case .causal = mask {
+            // Flash-Next's BF16 dense attention and sparse reductions can
+            // round differently with multiple query rows. Also, a block can
+            // cross the dense/QSA boundary. Keep each row's attention on its
+            // exact serial history; Q/K/V and output projections stay batched.
+            attn = q38VerificationAttention(
+                hidden: x, queries: q, keys: k, values: v, offsets: offsets,
+                positionIds: positionIds, cache: cache as? Q38QSACache, indexer: indexer
+            )
+        } else if let indexer, let sparse = indexer.attention(
             hidden: x, queries: q, keys: k, values: v, offsets: offsets,
             positionIds: positionIds, cache: cache as? Q38QSACache, scale: scale
         ) {
@@ -207,6 +217,30 @@ final class Q35FullAttention: Module {
             out = out * MLX.sigmoid(gate)
         }
         return oProj(out)
+    }
+
+    private func q38VerificationAttention(
+        hidden: MLXArray, queries: MLXArray, keys: MLXArray, values: MLXArray,
+        offsets: [Int], positionIds: MLXArray?, cache: Q38QSACache?, indexer: Q38QSAIndexer
+    ) -> MLXArray {
+        let count = queries.dim(2)
+        let prefix = keys.dim(2) - count
+        let rows = (0..<count).map { row in
+            let query = queries[0..., 0..., row..<(row + 1), 0...]
+            let rowKeys = keys[0..., 0..., 0..<(prefix + row + 1), 0...]
+            let rowValues = values[0..., 0..., 0..<(prefix + row + 1), 0...]
+            let positions = positionIds.map {
+                $0.ndim == 3 ? $0[0..., 0..., row..<(row + 1)] : $0[0..., row..<(row + 1)]
+            }
+            return indexer.attention(
+                hidden: hidden[0..., row..<(row + 1), 0...],
+                queries: query, keys: rowKeys, values: rowValues, offsets: [offsets[0] + row],
+                positionIds: positions, cache: cache, scale: scale
+            ) ?? MLXFast.scaledDotProductAttention(
+                queries: query, keys: rowKeys, values: rowValues, scale: scale, mask: .none
+            )
+        }
+        return MLX.concatenated(rows, axis: 2)
     }
 
     private func applyMRoPE(
