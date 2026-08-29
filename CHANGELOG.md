@@ -32,10 +32,18 @@ The format is based on Keep a Changelog.
   stores the compression gates in Q8. Prepared geometry and compact selected
   route tables reduce VSA traversal work on Metal without changing the released
   90% video-key sparsity contract. Managed affine Q8 FastH3 roots also select
-  matrix-tiled Metal FC1/SwiGLU and FC2 kernels. At 89,188 rows on an M4 Max,
-  the isolated real-checkpoint stages measured 1.107x and 1.050x faster than
-  the correct chunked portable path; the fused FC1 avoids a 5.11 GiB
-  intermediate that exceeds the portable path's 4 GiB addressing boundary.
+  a combined Metal recipe that fuses attention AdaLN, the post-attention gate
+  and AdaLN, Q/K normalization and rotary embedding, FC1 and SwiGLU, and FC2.
+  The MLP kernels preserve the live Float32 activation stream with Float32
+  SIMD-group matrices. At 89,188 rows on an M4 Max, an exploratory
+  real-checkpoint run measured the FC1 and FC2 stages at 1.079x and 1.085x the
+  correct chunked portable path. FC1 relative L2 was `3.82194e-8`, and FC2 was
+  bit-identical. The fused FC1 avoids a 9.53 GiB intermediate that exceeds the
+  portable path's 4 GiB addressing boundary. The compiled runner materializes
+  the 4.76 GiB compact activation before FC2 when that activation exceeds
+  4 GiB. The installed 50-block gate dispatched all five selected stages
+  without fallback and stayed below `0.0012` relative L2 for both output
+  modalities.
 
 ## 0.46.1 - 2026-08-29
 

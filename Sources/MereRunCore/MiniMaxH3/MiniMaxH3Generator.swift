@@ -42,7 +42,7 @@ extension MiniMaxH3ExactKernelMode {
             false
         case .boundaryLayout:
             sequenceLength > MiniMaxH3DenoiseExecutionPolicy.blockwiseSequenceThreshold
-        case .affineQ8, .affineQ8MLP:
+        case .affineQ8, .affineQ8MLP, .fastH3Metal:
             true
         }
     }
@@ -53,10 +53,11 @@ extension MiniMaxH3ExactKernelMode {
         case MiniMaxH3ExactKernelMode.boundaryLayout.rawValue: .boundaryLayout
         case MiniMaxH3ExactKernelMode.affineQ8.rawValue: .affineQ8
         case MiniMaxH3ExactKernelMode.affineQ8MLP.rawValue: .affineQ8MLP
+        case MiniMaxH3ExactKernelMode.fastH3Metal.rawValue: .fastH3Metal
         case .some(let value):
             throw MiniMaxH3GeneratorError.invalidOptions(
                 "MERERUN_H3_EXACT_KERNELS must be disabled, boundary-layout, "
-                    + "affine-q8, or affine-q8-mlp, not \(value)"
+                    + "affine-q8, affine-q8-mlp, or fasth3-metal, not \(value)"
             )
         }
     }
@@ -72,7 +73,7 @@ extension MiniMaxH3ExactKernelMode {
            usesFastH3VSA,
            supportsAffineQ8ExactKernels,
            !usesResidentBF16 {
-            return .affineQ8MLP
+            return .fastH3Metal
         }
         return configured
     }

@@ -243,12 +243,21 @@ dense, and video queries retain every prefix key tile. The recipe accepts
 text-only generation. It rejects frame conditioning, continuation, references,
 and additional H3 approximation modes.
 
-On affine Q8 FastH3 roots, Metal also selects the shape-specific tiled MLP.
-It fuses FC1 with SwiGLU, avoids the two-wide FC1 projection slab, and applies
-FC2 with a separate matrix tile. This keeps the 89,188-row high-resolution path
-below the 4 GiB intermediate boundary. Set
+On affine Q8 FastH3 roots, Metal selects the `fasth3-metal` exact-kernel mode.
+This mode fuses attention AdaLN, post-attention gate and AdaLN, Q/K
+normalization and rotary embedding, FC1 and SwiGLU, and FC2. Float32 activation
+streams use Float32 SIMD-group matrix operands and accumulators. The mode runs
+inside FastH3's release-mode compiled block regions.
+
+The fused FC1 writes only the compact SwiGLU result. It doesn't create the
+9.53 GiB Float32 `[1, 89188, 28672]` projection for a 1,344 by 768 pixel,
+294-frame request. The remaining compact result is 4.76 GiB. At shapes where
+that result exceeds 4 GiB, the compiled runner evaluates FC1 and SwiGLU before
+FC2 to preserve 64-bit indexing. Each kernel validates its complete shape,
+dtype, and affine Q8/group-64 contract before dispatch. Set
 `MERERUN_H3_EXACT_KERNELS=disabled` only when comparing against the portable
-MLX path.
+MLX path. To select the combined mode explicitly, set
+`MERERUN_H3_EXACT_KERNELS=fasth3-metal`.
 
 The package build uses
 `scripts/model-conversion/merge_minimax_h3_fasth3_q8.py` after creating the

@@ -37,6 +37,43 @@ enum MiniMaxH3FusedKernels {
     private static let affineGroupSize = 64
     private static let feedForwardSize = 14_336
 
+    /// Fuses the first H3 block boundary: RMSNorm followed by the row-indexed
+    /// attention scale and shift. This is the Metal counterpart of FastVideo's
+    /// `fused_rmsnorm_modulate` Triton kernel.
+    static func prepareAttentionInput(
+        input: MLXArray,
+        normWeight: MLXArray,
+        modulation: MLXArray,
+        rowIndices: MLXArray,
+        eps: Float
+    ) -> MLXArray? {
+        #if os(macOS) || os(iOS)
+        guard eps.isFinite,
+              eps > 0,
+              supportsAdaLNShapeContract(
+                  input: input,
+                  normWeight: normWeight,
+                  modulation: modulation,
+                  rowIndices: rowIndices
+              ) else {
+            return nil
+        }
+
+        let kernel = input.dtype == .bfloat16
+            ? attentionAdaLNKernel
+            : attentionAdaLNMixedKernel
+        return kernel(
+            [input, normWeight, modulation, rowIndices, eps],
+            grid: (threadCount, input.dim(1), 1),
+            threadGroup: (threadCount, 1, 1),
+            outputShapes: [input.shape],
+            outputDTypes: [input.dtype]
+        )[0]
+        #else
+        return nil
+        #endif
+    }
+
     static func gateAttentionAndPrepareFeedForward(
         residual: MLXArray,
         attentionOutput: MLXArray,
@@ -416,8 +453,8 @@ enum MiniMaxH3FusedKernels {
     }
 
     /// Matrix-tiled K4a candidate that keeps the gate and up projections in
-    /// registers through the SwiGLU epilogue. This avoids materializing the
-    /// two-wide FC1 output while retaining the managed BF16 QMM boundary.
+    /// registers through the SwiGLU epilogue. Matrix operands and outputs keep
+    /// the residual stream's BF16 or Float32 type, with Float32 accumulation.
     static func projectFeedForwardInputAffineInt8SwiGLUTiled(
         input: MLXArray,
         weightCodes: MLXArray,
@@ -427,7 +464,7 @@ enum MiniMaxH3FusedKernels {
         #if os(macOS) || os(iOS)
         let scaleGroups = hiddenSize / affineGroupSize
         guard Device.defaultDevice().deviceType == .gpu,
-              input.dtype == .bfloat16,
+              [.bfloat16, .float32].contains(input.dtype),
               input.ndim == 3,
               input.dim(0) == 1,
               input.dim(1) > 0,
@@ -446,10 +483,11 @@ enum MiniMaxH3FusedKernels {
         let rowTileCount = (rows + 31) / 32
         return projectFeedForwardInputAffineInt8SwiGLUTiledKernel(
             [input, weightCodes, weightScales, weightBiases],
+            template: [("T", input.dtype)],
             grid: (32 * outputTileCount, 4 * rowTileCount, 1),
             threadGroup: (32, 4, 1),
             outputShapes: [[1, rows, feedForwardSize]],
-            outputDTypes: [.bfloat16]
+            outputDTypes: [input.dtype]
         )[0]
         #else
         return nil
@@ -512,7 +550,7 @@ enum MiniMaxH3FusedKernels {
         #if os(macOS) || os(iOS)
         let scaleGroups = feedForwardSize / affineGroupSize
         guard Device.defaultDevice().deviceType == .gpu,
-              input.dtype == .bfloat16,
+              [.bfloat16, .float32].contains(input.dtype),
               input.ndim == 3,
               input.dim(0) == 1,
               input.dim(1) > 0,
@@ -531,10 +569,11 @@ enum MiniMaxH3FusedKernels {
         let rowTileCount = (rows + 31) / 32
         return projectFeedForwardOutputAffineInt8TiledKernel(
             [input, weightCodes, weightScales, weightBiases],
+            template: [("T", input.dtype)],
             grid: (32 * outputTileCount, 4 * rowTileCount, 1),
             threadGroup: (32, 4, 1),
             outputShapes: [[1, rows, hiddenSize]],
-            outputDTypes: [.bfloat16]
+            outputDTypes: [input.dtype]
         )[0]
         #else
         return nil
@@ -542,19 +581,18 @@ enum MiniMaxH3FusedKernels {
     }
 
     #if os(macOS) || os(iOS)
-    private static func supportsGateAdaLNShapeContract(
-        residual: MLXArray,
-        branch: MLXArray,
+    private static func supportsAdaLNShapeContract(
+        input: MLXArray,
         normWeight: MLXArray,
         modulation: MLXArray,
         rowIndices: MLXArray
     ) -> Bool {
         Device.defaultDevice().deviceType == .gpu
-            && residual.shape == branch.shape
-            && residual.ndim == 3
-            && residual.dim(0) == 1
-            && residual.dim(1) > 0
-            && residual.dim(2) == hiddenSize
+            && [.bfloat16, .float32].contains(input.dtype)
+            && input.ndim == 3
+            && input.dim(0) == 1
+            && input.dim(1) > 0
+            && input.dim(2) == hiddenSize
             && normWeight.dtype == .bfloat16
             && normWeight.shape == [hiddenSize]
             && modulation.dtype == .bfloat16
@@ -562,7 +600,23 @@ enum MiniMaxH3FusedKernels {
             && modulation.dim(0) > 0
             && modulation.dim(1) == modulationPartCount * hiddenSize
             && rowIndices.dtype == .int32
-            && rowIndices.shape == [residual.dim(1)]
+            && rowIndices.shape == [input.dim(1)]
+    }
+
+    private static func supportsGateAdaLNShapeContract(
+        residual: MLXArray,
+        branch: MLXArray,
+        normWeight: MLXArray,
+        modulation: MLXArray,
+        rowIndices: MLXArray
+    ) -> Bool {
+        residual.shape == branch.shape
+            && supportsAdaLNShapeContract(
+                input: residual,
+                normWeight: normWeight,
+                modulation: modulation,
+                rowIndices: rowIndices
+            )
     }
 
     private static func supportsGateAdaLNInputs(
@@ -582,6 +636,134 @@ enum MiniMaxH3FusedKernels {
             && residual.dtype == .bfloat16
             && branch.dtype == .bfloat16
     }
+
+    private static let attentionAdaLNKernel = MLXFast.metalKernel(
+        name: "mere_h3_attention_adaln_bf16_h5376_v1",
+        inputNames: [
+            "input", "norm_weight", "modulation", "row_indices", "epsilon",
+        ],
+        outputNames: ["output"],
+        source: """
+            constexpr uint hidden_size = 5376;
+            constexpr uint modulation_parts = 6;
+            constexpr uint simd_width = 32;
+
+            uint row = threadgroup_position_in_grid.y;
+            uint tid = thread_position_in_threadgroup.x;
+            uint simd_lane = thread_index_in_simdgroup;
+            uint simd_group = simdgroup_index_in_threadgroup;
+            uint row_offset = row * hidden_size;
+            uint modulation_offset = uint(row_indices[row])
+                * modulation_parts * hidden_size;
+
+            threadgroup float partial_sums[simd_width];
+            threadgroup float inverse_rms[1];
+
+            float sum = 0.0f;
+            for (uint dimension = tid; dimension < hidden_size;
+                 dimension += threads_per_threadgroup.x) {
+                float value = float(input[row_offset + dimension]);
+                sum += value * value;
+            }
+
+            sum = simd_sum(sum);
+            if (simd_group == 0) {
+                partial_sums[simd_lane] = 0.0f;
+            }
+            threadgroup_barrier(metal::mem_flags::mem_threadgroup);
+            if (simd_lane == 0) {
+                partial_sums[simd_group] = sum;
+            }
+            threadgroup_barrier(metal::mem_flags::mem_threadgroup);
+            if (simd_group == 0) {
+                sum = simd_sum(partial_sums[simd_lane]);
+                if (simd_lane == 0) {
+                    inverse_rms[0] = metal::precise::rsqrt(
+                        sum / float(hidden_size) + float(epsilon));
+                }
+            }
+            threadgroup_barrier(metal::mem_flags::mem_threadgroup);
+
+            for (uint dimension = tid; dimension < hidden_size;
+                 dimension += threads_per_threadgroup.x) {
+                bfloat16_t normalized = bfloat16_t(
+                    float(input[row_offset + dimension]) * inverse_rms[0]);
+                bfloat16_t weighted = bfloat16_t(
+                    float(norm_weight[dimension]) * float(normalized));
+                bfloat16_t one_plus_scale = bfloat16_t(
+                    1.0f + float(modulation[
+                        modulation_offset + hidden_size + dimension]));
+                bfloat16_t scaled = bfloat16_t(
+                    float(weighted) * float(one_plus_scale));
+                output[row_offset + dimension] = bfloat16_t(
+                    float(scaled) + float(modulation[
+                        modulation_offset + dimension]));
+            }
+        """,
+        ensureRowContiguous: true
+    )
+
+    private static let attentionAdaLNMixedKernel = MLXFast.metalKernel(
+        name: "mere_h3_attention_adaln_mixed_h5376_v1",
+        inputNames: [
+            "input", "norm_weight", "modulation", "row_indices", "epsilon",
+        ],
+        outputNames: ["output"],
+        source: """
+            constexpr uint hidden_size = 5376;
+            constexpr uint modulation_parts = 6;
+            constexpr uint simd_width = 32;
+
+            uint row = threadgroup_position_in_grid.y;
+            uint tid = thread_position_in_threadgroup.x;
+            uint simd_lane = thread_index_in_simdgroup;
+            uint simd_group = simdgroup_index_in_threadgroup;
+            uint row_offset = row * hidden_size;
+            uint modulation_offset = uint(row_indices[row])
+                * modulation_parts * hidden_size;
+
+            threadgroup float partial_sums[simd_width];
+            threadgroup float inverse_rms[1];
+
+            float sum = 0.0f;
+            for (uint dimension = tid; dimension < hidden_size;
+                 dimension += threads_per_threadgroup.x) {
+                float value = float(input[row_offset + dimension]);
+                sum += value * value;
+            }
+
+            sum = simd_sum(sum);
+            if (simd_group == 0) {
+                partial_sums[simd_lane] = 0.0f;
+            }
+            threadgroup_barrier(metal::mem_flags::mem_threadgroup);
+            if (simd_lane == 0) {
+                partial_sums[simd_group] = sum;
+            }
+            threadgroup_barrier(metal::mem_flags::mem_threadgroup);
+            if (simd_group == 0) {
+                sum = simd_sum(partial_sums[simd_lane]);
+                if (simd_lane == 0) {
+                    inverse_rms[0] = metal::precise::rsqrt(
+                        sum / float(hidden_size) + float(epsilon));
+                }
+            }
+            threadgroup_barrier(metal::mem_flags::mem_threadgroup);
+
+            for (uint dimension = tid; dimension < hidden_size;
+                 dimension += threads_per_threadgroup.x) {
+                float weighted = float(input[row_offset + dimension])
+                    * inverse_rms[0] * float(norm_weight[dimension]);
+                bfloat16_t one_plus_scale = bfloat16_t(
+                    1.0f + float(modulation[
+                        modulation_offset + hidden_size + dimension]));
+                output[row_offset + dimension] = weighted
+                    * float(one_plus_scale) + float(modulation[
+                        modulation_offset + dimension]);
+            }
+        """,
+        ensureRowContiguous: true
+    )
 
     private static let gateAdaLNKernel = MLXFast.metalKernel(
         name: "mere_h3_gate_adaln_bf16_h5376_v1",
@@ -1466,7 +1648,7 @@ enum MiniMaxH3FusedKernels {
     )
 
     private static let projectFeedForwardInputAffineInt8SwiGLUTiledKernel = MLXFast.metalKernel(
-        name: "mere_h3_affine_fc1_swiglu_i8g64_tiled_v3",
+        name: "mere_h3_affine_fc1_swiglu_i8g64_tiled_v5",
         inputNames: ["input", "weight_codes", "weight_scales", "weight_biases"],
         outputNames: ["activated"],
         source: """
@@ -1492,13 +1674,13 @@ enum MiniMaxH3FusedKernels {
             uint matrix_row = (quad & 4) + ((lane / 2) % 4);
             uint matrix_column = (quad & 2) * 2 + (lane % 2) * 2;
 
-            threadgroup bfloat gate_weight_tile[
+            threadgroup T gate_weight_tile[
                 output_tile_columns * reduction_tile
             ];
-            threadgroup bfloat up_weight_tile[
+            threadgroup T up_weight_tile[
                 output_tile_columns * reduction_tile
             ];
-            threadgroup bfloat input_tile[row_tile_rows * reduction_tile];
+            threadgroup T input_tile[row_tile_rows * reduction_tile];
 
             thread simdgroup_matrix<float, 8, 8> gate_accumulated[4];
             thread simdgroup_matrix<float, 8, 8> up_accumulated[4];
@@ -1538,34 +1720,34 @@ enum MiniMaxH3FusedKernels {
                 for (uint index = 0; index < 8; ++index) {
                     uint tile_index = local_output * reduction_tile
                         + weight_eight + index;
-                    gate_weight_tile[tile_index] = bfloat(
+                    gate_weight_tile[tile_index] = T(
                         gate_scale * float(gate_values[index]) + gate_bias
                     );
-                    up_weight_tile[tile_index] = bfloat(
+                    up_weight_tile[tile_index] = T(
                         up_scale * float(up_values[index]) + up_bias
                     );
                 }
 
                 uint safe_row = metal::min(local_input_row, valid_rows - 1);
-                const device bfloat16_t* input_values = input
+                const device T* input_values = input
                     + uint64_t(row_start + safe_row) * uint64_t(input_width)
                     + reduction_start + input_eight;
                 #pragma clang loop unroll(full)
                 for (uint index = 0; index < 8; ++index) {
                     input_tile[local_input_row * reduction_tile + input_eight + index]
-                        = bfloat(input_values[index]);
+                        = T(input_values[index]);
                 }
                 threadgroup_barrier(mem_flags::mem_threadgroup);
 
-                threadgroup const bfloat* gate_fragments = gate_weight_tile
+                threadgroup const T* gate_fragments = gate_weight_tile
                     + (simd_group % 2) * 16 * reduction_tile;
-                threadgroup const bfloat* up_fragments = up_weight_tile
+                threadgroup const T* up_fragments = up_weight_tile
                     + (simd_group % 2) * 16 * reduction_tile;
-                threadgroup const bfloat* input_fragments = input_tile
+                threadgroup const T* input_fragments = input_tile
                     + (simd_group / 2) * 16 * reduction_tile;
-                thread simdgroup_matrix<bfloat, 8, 8> gate_weights[2];
-                thread simdgroup_matrix<bfloat, 8, 8> up_weights[2];
-                thread simdgroup_matrix<bfloat, 8, 8> inputs[2];
+                thread simdgroup_matrix<T, 8, 8> gate_weights[2];
+                thread simdgroup_matrix<T, 8, 8> up_weights[2];
+                thread simdgroup_matrix<T, 8, 8> inputs[2];
                 #pragma clang loop unroll(full)
                 for (uint reduction_fragment = 0;
                      reduction_fragment < 4;
@@ -1640,22 +1822,22 @@ enum MiniMaxH3FusedKernels {
                 if (output_row < valid_rows) {
                     uint64_t output_index = uint64_t(row_start + output_row)
                         * uint64_t(output_width) + uint64_t(output_start + output_column);
-                    float gate0 = float(bfloat(
+                    float gate0 = float(T(
                         gate_accumulated[result].thread_elements()[0]
                     ));
-                    float gate1 = float(bfloat(
+                    float gate1 = float(T(
                         gate_accumulated[result].thread_elements()[1]
                     ));
-                    float up0 = float(bfloat(
+                    float up0 = float(T(
                         up_accumulated[result].thread_elements()[0]
                     ));
-                    float up1 = float(bfloat(
+                    float up1 = float(T(
                         up_accumulated[result].thread_elements()[1]
                     ));
                     float sigmoid0 = 1.0f / (1.0f + metal::precise::exp(-gate0));
                     float sigmoid1 = 1.0f / (1.0f + metal::precise::exp(-gate1));
-                    activated[output_index] = bfloat16_t(gate0 * sigmoid0 * up0);
-                    activated[output_index + 1] = bfloat16_t(
+                    activated[output_index] = T(gate0 * sigmoid0 * up0);
+                    activated[output_index + 1] = T(
                         gate1 * sigmoid1 * up1
                     );
                 }
@@ -1929,7 +2111,7 @@ enum MiniMaxH3FusedKernels {
     )
 
     private static let projectFeedForwardOutputAffineInt8TiledKernel = MLXFast.metalKernel(
-        name: "mere_h3_affine_fc2_i8g64_tiled_v3",
+        name: "mere_h3_affine_fc2_i8g64_tiled_v5",
         inputNames: ["input", "weight_codes", "weight_scales", "weight_biases"],
         outputNames: ["projected"],
         source: """
@@ -1956,8 +2138,8 @@ enum MiniMaxH3FusedKernels {
             uint matrix_row = (quad & 4) + ((lane / 2) % 4);
             uint matrix_column = (quad & 2) * 2 + (lane % 2) * 2;
 
-            threadgroup bfloat weight_tile[output_tile_columns * reduction_tile];
-            threadgroup bfloat input_tile[row_tile_rows * reduction_tile];
+            threadgroup T weight_tile[output_tile_columns * reduction_tile];
+            threadgroup T input_tile[row_tile_rows * reduction_tile];
 
             thread simdgroup_matrix<float, 8, 8> accumulated[8];
             #pragma clang loop unroll(full)
@@ -1991,7 +2173,7 @@ enum MiniMaxH3FusedKernels {
                     uint local_x = local_output % 8;
                     uint local_y = index % 8;
                     uint block = 8 * section_x + section_y;
-                    weight_tile[64 * block + 8 * local_y + local_x] = bfloat(
+                    weight_tile[64 * block + 8 * local_y + local_x] = T(
                         scale * float(weight_values[index]) + bias
                     );
                 }
@@ -2001,22 +2183,22 @@ enum MiniMaxH3FusedKernels {
                 uint input_section_y = local_input_row / 8;
                 uint input_local_y = local_input_row % 8;
                 uint input_block = 4 * input_section_x + input_section_y;
-                const device bfloat16_t* input_values = input
+                const device T* input_values = input
                     + uint64_t(row_start + safe_row) * uint64_t(input_width)
                     + reduction_start + input_eight;
                 #pragma clang loop unroll(full)
                 for (uint index = 0; index < 8; ++index) {
                     input_tile[64 * input_block + 8 * input_local_y + index]
-                        = bfloat(input_values[index]);
+                        = T(input_values[index]);
                 }
                 threadgroup_barrier(mem_flags::mem_threadgroup);
 
-                threadgroup const bfloat* weight_fragments = weight_tile
+                threadgroup const T* weight_fragments = weight_tile
                     + 4 * 64 * (simd_group % 2);
-                threadgroup const bfloat* input_fragments = input_tile
+                threadgroup const T* input_fragments = input_tile
                     + 2 * 64 * (simd_group / 2);
-                thread simdgroup_matrix<bfloat, 8, 8> weights[4];
-                thread simdgroup_matrix<bfloat, 8, 8> inputs[2];
+                thread simdgroup_matrix<T, 8, 8> weights[4];
+                thread simdgroup_matrix<T, 8, 8> inputs[2];
                 #pragma clang loop unroll(full)
                 for (uint reduction_fragment = 0;
                      reduction_fragment < 4;
@@ -2072,10 +2254,10 @@ enum MiniMaxH3FusedKernels {
                 if (output_row < valid_rows) {
                     uint64_t output_index = uint64_t(row_start + output_row)
                         * uint64_t(output_width) + uint64_t(output_start + output_column);
-                    projected[output_index] = bfloat16_t(
+                    projected[output_index] = T(
                         accumulated[result].thread_elements()[0]
                     );
-                    projected[output_index + 1] = bfloat16_t(
+                    projected[output_index + 1] = T(
                         accumulated[result].thread_elements()[1]
                     );
                 }

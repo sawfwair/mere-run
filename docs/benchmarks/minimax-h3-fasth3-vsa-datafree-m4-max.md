@@ -126,25 +126,73 @@ Manual contact-sheet inspection confirmed the requested dark circular stage,
 cyan lighting, and multiple dancers. These runs don't prove numerical parity
 with CUDA, long-duration quality, or performance at 1,344 by 768 pixels.
 
-## High-resolution tiled MLP qualification
+## FastH3 Metal fusion qualification
 
-The managed affine Q8 FastH3 recipe now selects matrix-tiled Metal FC1/SwiGLU
-and FC2 kernels. This qualification isolates those stages with block 0's real
-checkpoint weights at 89,188 rows, the sequence shape for a 1,344 by 768 pixel
-and 294-frame request.
+The managed affine Q8 FastH3 recipe selects the combined `fasth3-metal` mode.
+The mode ports FastVideo's three H3 fusion families into the existing compiled
+Metal path:
 
-| Stage | Correct portable oracle | Tiled Metal | Speedup | Numerical result |
+- K0 fuses attention RMSNorm with row-indexed AdaLN scale and shift.
+- K1 fuses the attention residual and gate with feed-forward RMSNorm, scale,
+  and shift.
+- K2a writes head-major QKV and fuses Q/K RMSNorm with rotary embedding.
+- K4a fuses the affine Q8 FC1 projection with SwiGLU.
+- K4b applies the affine Q8 FC2 projection with a matrix tile.
+
+The first tiled K4 candidate accepted only BF16 activations. The live FastH3
+residual and MLP stream is Float32, so that candidate didn't dispatch during
+generation. A mixed candidate narrowed Float32 activations to BF16 matrix
+operands and failed the 50-block quality gate. The selected kernels use
+Float32 SIMD-group operands and accumulation for Float32 inputs.
+
+The installed checkpoint's deterministic seven-row, 50-block gate dispatched
+K0, K1, K2a, K4a, and K4b in every block with no fallback. The combined output
+measured video relative L2 `0.000926183` and audio relative L2 `0.00116363`
+against the decomposed graph. The boundary-only K0, K1, and K2a result measured
+`0.000169663` and `0.000345908`.
+
+The production-shape gate isolates block 0 with 89,188 rows, which is the
+sequence shape for a 1,344 by 768 pixel and 294-frame request. The following
+Float32 results compare the tiled kernels with a portable oracle chunked to at
+most 32,768 rows:
+
+| Stage | Portable oracle | Tiled Metal | Speedup | Numerical result |
 | --- | ---: | ---: | ---: | --- |
-| FC1 plus SwiGLU | 3,813.785 ms | 3,445.900 ms | 1.107x | relative L2 0.000767212 |
-| FC2 | 2,176.992 ms | 2,073.032 ms | 1.050x | bit-identical |
+| FC1 plus SwiGLU | 3,784.052 ms | 3,508.304 ms | 1.079x | relative L2 `3.82194e-8` |
+| FC2 | 2,042.034 ms | 1,881.471 ms | 1.085x | bit-identical |
 
-The FC1 gate compares against portable calls chunked to at most 32,768 rows.
-An unchunked portable call materializes a 5.11 GiB `[1, 89188, 28672]` BF16
-projection and produces an invalid tail after its 4 GiB byte-offset boundary.
-The tiled kernel fuses SwiGLU and never creates that projection. Its worst
-32,768-row chunk had relative L2 0.000767620.
+The timing host had approximately 31 GiB of system swap and another live
+inference service. The timings are exploratory and don't replace a zero-swap,
+clean-host receipt. Numerical parity was checked independently by chunk to
+avoid retaining two complete Float32 FC1 intermediates at once.
 
-This is an isolated GPU-stage qualification, not a new end-to-end generation
-timing. A packaged MP4 rerun was stopped before inference by mere.run's 16 GB
-system-disk reserve gate, with 11.45 GB available. The earlier end-to-end
-package and media-closure results above remain the generation evidence.
+K4a never creates the 9.53 GiB Float32 `[1, 89188, 28672]` FC1 projection.
+This removes the portable path's large intermediate and its 4 GiB addressing
+hazard. The earlier BF16 stage benchmark remains useful for the BF16 diagnostic
+path, but it didn't establish live FastH3 dispatch.
+
+The compact Float32 SwiGLU result is 4.76 GiB at this shape. The block runner
+evaluates K4a before K4b when the compact result exceeds 4 GiB. This boundary
+prevents a lazy compiled graph from applying a 32-bit offset to the K4a output.
+Smaller shapes keep K4a and K4b in one compiled post-attention region.
+
+This is an isolated GPU-stage and full-transformer arithmetic qualification,
+not a new end-to-end generation timing. A packaged MP4 rerun was stopped before
+inference by mere.run's 16 GB system-disk reserve gate, with 11.45 GB available.
+The earlier package and media-closure results in this document remain the
+generation evidence.
+
+## CUDA comparison boundary
+
+FastVideo reports warm 1,344 by 768 pixel generation after compilation. Its
+15-second VSA result is 47.2 seconds on one B200 and 12.88 seconds on eight B200
+GPUs. That runtime combines the four-call student, the `sm100a` tile-64 sparse
+kernel, regional DiT compilation, H3 fusions, FlashAttention 4, compiled video
+VAE decoding, and sequence-parallel VAE decoding on eight GPUs.
+
+The Metal path now matches the transferable model and fusion recipe: four DiT
+calls, 90% VSA, compact tile-64 routing, cached AdaLN, compiled block regions,
+and H3-specific modulation, Q/K, rotary, and SwiGLU kernels. It doesn't match
+B200 sparse-matrix throughput, FlashAttention 4, eight-device parallelism, or
+the CUDA VAE path. The port removes software disparity, but it doesn't imply
+the upstream eight-B200 wall time on one M4 Max.

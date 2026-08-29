@@ -17,17 +17,23 @@ enum MiniMaxH3ExactKernelMode: String, Sendable, Equatable {
     case boundaryLayout = "boundary-layout"
     case affineQ8 = "affine-q8"
     case affineQ8MLP = "affine-q8-mlp"
+    case fastH3Metal = "fasth3-metal"
 
     var usesBoundaryLayout: Bool {
-        self == .boundaryLayout || self == .affineQ8
+        self == .boundaryLayout || self == .affineQ8 || self == .fastH3Metal
     }
 
     var usesAffineQ8FeedForward: Bool {
-        self == .affineQ8 || self == .affineQ8MLP
+        self == .affineQ8 || self == .affineQ8MLP || self == .fastH3Metal
+    }
+
+    var usesTiledAffineQ8FeedForward: Bool {
+        self == .affineQ8MLP || self == .fastH3Metal
     }
 }
 
 enum MiniMaxH3ExactKernelStage: String, CaseIterable, Sendable, Hashable {
+    case attentionAdaLN = "k0-attention-adaln"
     case gateAdaLN = "k1-gate-adaln"
     case qkvLayout = "k2a-qkv-layout"
     case qkvProjection = "k2b-qkv-projection"
@@ -560,7 +566,7 @@ private final class MiniMaxH3FeedForward: Module {
         if exactKernelMode.usesAffineQ8FeedForward,
            enabledExactKernelStages.contains(.feedForwardInput) {
             if let weights = miniMaxH3AffineQ8Weights(input) {
-                let projected = exactKernelMode == .affineQ8MLP
+                let projected = exactKernelMode.usesTiledAffineQ8FeedForward
                     ? MiniMaxH3FusedKernels.projectFeedForwardInputAffineInt8SwiGLUTiled(
                         input: value,
                         weightCodes: weights.codes,
@@ -593,7 +599,7 @@ private final class MiniMaxH3FeedForward: Module {
         if exactKernelMode.usesAffineQ8FeedForward,
            enabledExactKernelStages.contains(.feedForwardOutput) {
             if let weights = miniMaxH3AffineQ8Weights(output) {
-                let projected = exactKernelMode == .affineQ8MLP
+                let projected = exactKernelMode.usesTiledAffineQ8FeedForward
                     ? MiniMaxH3FusedKernels.projectFeedForwardOutputAffineInt8Tiled(
                         input: value,
                         weightCodes: weights.codes,
@@ -815,6 +821,37 @@ private final class MiniMaxH3TransformerBlock: Module {
         adaLNWeightsAvailable = false
     }
 
+    private func prepareAttentionInput(
+        _ value: MLXArray,
+        modulation: MLXArray,
+        adaLNIndices: MLXArray
+    ) -> MLXArray {
+        if exactKernelMode.usesBoundaryLayout,
+           enabledExactKernelStages.contains(.attentionAdaLN) {
+            if let prepared = MiniMaxH3FusedKernels.prepareAttentionInput(
+                input: value,
+                normWeight: attentionNorm.weight,
+                modulation: modulation,
+                rowIndices: adaLNIndices,
+                eps: attentionNorm.eps
+            ) {
+                exactKernelDispatchHandler?(.attentionAdaLN)
+                return prepared
+            }
+            exactKernelFallbackHandler?(
+                .attentionAdaLN,
+                "input=\(value.dtype):\(value.shape) "
+                    + "norm=\(attentionNorm.weight.dtype) "
+                    + "modulation=\(modulation.dtype):\(modulation.shape) "
+                    + "indices=\(adaLNIndices.dtype):\(adaLNIndices.shape)"
+            )
+        }
+        let parts = MLX.split(modulation, parts: 6, axis: -1)
+        let shift = MLX.take(parts[0], adaLNIndices, axis: 0).expandedDimensions(axis: 0)
+        let scale = MLX.take(parts[1], adaLNIndices, axis: 0).expandedDimensions(axis: 0)
+        return attentionNorm(value) * (1 + scale) + shift
+    }
+
     func callAsFunction(
         _ value: MLXArray,
         timeEmbedding: MLXArray,
@@ -865,18 +902,11 @@ private final class MiniMaxH3TransformerBlock: Module {
             }
             completeModulation = adaLN.concatenated(timeEmbedding)
         }
-        let modulation = MLX.split(completeModulation, parts: 6, axis: -1)
-        let shiftAttention = MLX.take(
-            modulation[0],
-            adaLNIndices,
-            axis: 0
-        ).expandedDimensions(axis: 0)
-        let scaleAttention = MLX.take(
-            modulation[1],
-            adaLNIndices,
-            axis: 0
-        ).expandedDimensions(axis: 0)
-        let attentionInput = attentionNorm(value) * (1 + scaleAttention) + shiftAttention
+        let attentionInput = prepareAttentionInput(
+            value,
+            modulation: completeModulation,
+            adaLNIndices: adaLNIndices
+        )
         let attentionOutput = attention(attentionInput, rope: rope)
         guard let boundary = MiniMaxH3FusedKernels.gateAttentionAndPrepareFeedForward(
             residual: value,
@@ -908,17 +938,20 @@ private final class MiniMaxH3TransformerBlock: Module {
         rope: MiniMaxH3RotaryEmbedding,
         cachedModulation: MLXArray?
     ) -> MLXArray {
-        let modulation: [MLXArray]
+        let completeModulation: MLXArray
         if let cachedModulation {
-            modulation = MLX.split(cachedModulation, parts: 6, axis: -1)
+            completeModulation = cachedModulation
         } else {
             guard let adaLN else { preconditionFailure("MiniMax-H3 AdaLN cache is required") }
-            modulation = adaLN(timeEmbedding)
+            completeModulation = adaLN.concatenated(timeEmbedding)
         }
-        let shiftAttention = MLX.take(modulation[0], adaLNIndices, axis: 0).expandedDimensions(axis: 0)
-        let scaleAttention = MLX.take(modulation[1], adaLNIndices, axis: 0).expandedDimensions(axis: 0)
+        let modulation = MLX.split(completeModulation, parts: 6, axis: -1)
         let gateAttention = MLX.take(modulation[2], adaLNIndices, axis: 0).expandedDimensions(axis: 0)
-        let attentionInput = attentionNorm(value) * (1 + scaleAttention) + shiftAttention
+        let attentionInput = prepareAttentionInput(
+            value,
+            modulation: completeModulation,
+            adaLNIndices: adaLNIndices
+        )
         return value + gateAttention * attention(attentionInput, rope: rope)
     }
 
@@ -949,17 +982,20 @@ private final class MiniMaxH3TransformerBlock: Module {
         rope: MiniMaxH3RotaryEmbedding,
         cachedModulation: MLXArray?
     ) -> [MLXArray] {
-        let modulation: [MLXArray]
+        let completeModulation: MLXArray
         if let cachedModulation {
-            modulation = MLX.split(cachedModulation, parts: 6, axis: -1)
+            completeModulation = cachedModulation
         } else {
             guard let adaLN else { preconditionFailure("MiniMax-H3 AdaLN cache is required") }
-            modulation = adaLN(timeEmbedding)
+            completeModulation = adaLN.concatenated(timeEmbedding)
         }
-        let shiftAttention = MLX.take(modulation[0], adaLNIndices, axis: 0).expandedDimensions(axis: 0)
-        let scaleAttention = MLX.take(modulation[1], adaLNIndices, axis: 0).expandedDimensions(axis: 0)
+        let modulation = MLX.split(completeModulation, parts: 6, axis: -1)
         let gateAttention = MLX.take(modulation[2], adaLNIndices, axis: 0).expandedDimensions(axis: 0)
-        let attentionInput = attentionNorm(value) * (1 + scaleAttention) + shiftAttention
+        let attentionInput = prepareAttentionInput(
+            value,
+            modulation: completeModulation,
+            adaLNIndices: adaLNIndices
+        )
         return attention.project(attentionInput, rope: rope) + [gateAttention]
     }
 
@@ -991,17 +1027,20 @@ private final class MiniMaxH3TransformerBlock: Module {
         compressionGateStorage: MiniMaxH3FastH3CompressionGate.Storage,
         compressionGateParameters: [MLXArray]
     ) -> [MLXArray] {
-        let modulation: [MLXArray]
+        let completeModulation: MLXArray
         if let cachedModulation {
-            modulation = MLX.split(cachedModulation, parts: 6, axis: -1)
+            completeModulation = cachedModulation
         } else {
             guard let adaLN else { preconditionFailure("MiniMax-H3 AdaLN cache is required") }
-            modulation = adaLN(timeEmbedding)
+            completeModulation = adaLN.concatenated(timeEmbedding)
         }
-        let shiftAttention = MLX.take(modulation[0], adaLNIndices, axis: 0).expandedDimensions(axis: 0)
-        let scaleAttention = MLX.take(modulation[1], adaLNIndices, axis: 0).expandedDimensions(axis: 0)
+        let modulation = MLX.split(completeModulation, parts: 6, axis: -1)
         let gateAttention = MLX.take(modulation[2], adaLNIndices, axis: 0).expandedDimensions(axis: 0)
-        let attentionInput = attentionNorm(value) * (1 + scaleAttention) + shiftAttention
+        let attentionInput = prepareAttentionInput(
+            value,
+            modulation: completeModulation,
+            adaLNIndices: adaLNIndices
+        )
         let projected = attention.project(attentionInput, rope: rope)
         let compressed = MiniMaxH3FastH3CompressionGate.project(
             attentionInput,
@@ -1053,6 +1092,87 @@ private final class MiniMaxH3TransformerBlock: Module {
         gate: MLXArray
     ) -> MLXArray {
         value + gate * attention.projectOutput(attended)
+    }
+
+    func postAttention(
+        _ value: MLXArray,
+        attended: MLXArray,
+        gate: MLXArray,
+        timeEmbedding: MLXArray,
+        adaLNIndices: MLXArray,
+        cachedModulation: MLXArray?
+    ) -> MLXArray {
+        let projected = postAttentionProjection(
+            value,
+            attended: attended,
+            gate: gate,
+            timeEmbedding: timeEmbedding,
+            adaLNIndices: adaLNIndices,
+            cachedModulation: cachedModulation
+        )
+        return feedForwardProjectionResidual(
+            projected[0],
+            projected: projected[1],
+            gate: projected[2]
+        )
+    }
+
+    func postAttentionProjection(
+        _ value: MLXArray,
+        attended: MLXArray,
+        gate: MLXArray,
+        timeEmbedding: MLXArray,
+        adaLNIndices: MLXArray,
+        cachedModulation: MLXArray?
+    ) -> [MLXArray] {
+        let attentionOutput = attention.projectOutput(attended)
+        if exactKernelMode.usesBoundaryLayout,
+           enabledExactKernelStages.contains(.gateAdaLN) {
+            let completeModulation: MLXArray
+            if let cachedModulation {
+                completeModulation = cachedModulation
+            } else {
+                guard let adaLN else {
+                    preconditionFailure("MiniMax-H3 AdaLN cache is required")
+                }
+                completeModulation = adaLN.concatenated(timeEmbedding)
+            }
+            if let boundary = MiniMaxH3FusedKernels.gateAttentionAndPrepareFeedForward(
+                residual: value,
+                attentionOutput: attentionOutput,
+                normWeight: feedForwardNorm.weight,
+                modulation: completeModulation,
+                rowIndices: adaLNIndices,
+                eps: feedForwardNorm.eps
+            ) {
+                exactKernelDispatchHandler?(.gateAdaLN)
+                return [
+                    boundary.residual,
+                    feedForward.project(boundary.feedForwardInput),
+                    boundary.feedForwardGate,
+                ]
+            }
+            exactKernelFallbackHandler?(
+                .gateAdaLN,
+                "residual=\(value.dtype):\(value.shape) "
+                    + "attention=\(attentionOutput.dtype):\(attentionOutput.shape) "
+                    + "norm=\(feedForwardNorm.weight.dtype) "
+                    + "modulation=\(completeModulation.dtype):\(completeModulation.shape) "
+                    + "indices=\(adaLNIndices.dtype):\(adaLNIndices.shape)"
+            )
+        }
+        let attentionResidual = value + gate * attentionOutput
+        let feedForwardParts = feedForwardProjection(
+            attentionResidual,
+            timeEmbedding: timeEmbedding,
+            adaLNIndices: adaLNIndices,
+            cachedModulation: cachedModulation
+        )
+        return [
+            attentionResidual,
+            feedForwardParts[0],
+            feedForwardParts[1],
+        ]
     }
 
     func feedForwardProjection(
@@ -1292,6 +1412,7 @@ private struct MiniMaxH3CompiledBlockForwards {
     let attentionOutput: MiniMaxH3CompiledBlockForward
     let feedForwardProjection: MiniMaxH3CompiledBlockForward
     let feedForwardOutput: MiniMaxH3CompiledBlockForward
+    let postAttentionProjection: MiniMaxH3CompiledBlockForward
     let postAttention: MiniMaxH3CompiledBlockForward
 }
 
@@ -1385,17 +1506,24 @@ final class MiniMaxH3BlockScheduleBenchmark {
             )]
         }
         let postAttention = MLX.compile(inputs: [block]) { inputs in
-            let attended = block.attentionProjectionResidual(
+            [block.postAttention(
                 inputs[0],
                 attended: inputs[1],
-                gate: inputs[2]
-            )
-            return [block.feedForwardResidual(
-                attended,
+                gate: inputs[2],
                 timeEmbedding: inputs[3],
                 adaLNIndices: inputs[4],
                 cachedModulation: inputs[5]
             )]
+        }
+        let postAttentionProjection = MLX.compile(inputs: [block]) { inputs in
+            block.postAttentionProjection(
+                inputs[0],
+                attended: inputs[1],
+                gate: inputs[2],
+                timeEmbedding: inputs[3],
+                adaLNIndices: inputs[4],
+                cachedModulation: inputs[5]
+            )
         }
         self.forwards = MiniMaxH3CompiledBlockForwards(
             attentionProjection: attentionProjection,
@@ -1403,6 +1531,7 @@ final class MiniMaxH3BlockScheduleBenchmark {
             attentionOutput: attentionOutput,
             feedForwardProjection: feedForwardProjection,
             feedForwardOutput: feedForwardOutput,
+            postAttentionProjection: postAttentionProjection,
             postAttention: postAttention
         )
         self.fusedFeedForward = feedForward
@@ -1789,6 +1918,17 @@ public final class MiniMaxH3Transformer: Module {
 
     var supportsAffineQ8ExactKernels: Bool {
         !blocks.isEmpty && blocks.allSatisfy(\.supportsAffineQ8ExactKernels)
+    }
+
+    static func requiresTiledFeedForwardEvaluationBoundary(
+        rowCount: Int,
+        feedForwardSize: Int,
+        itemSize: Int
+    ) -> Bool {
+        precondition(rowCount > 0 && feedForwardSize > 0 && itemSize > 0)
+        return UInt64(rowCount)
+            * UInt64(feedForwardSize)
+            * UInt64(itemSize) > UInt64(UInt32.max)
     }
 
     #if DEBUG
@@ -2425,16 +2565,29 @@ public final class MiniMaxH3Transformer: Module {
                     if let modulation = cachedAdaLN?.blockModulations[index] {
                         postAttentionInputs.append(modulation)
                     }
-                    hidden = compiled.postAttention(postAttentionInputs)[0]
+                    if exactKernelMode.usesTiledAffineQ8FeedForward,
+                       Self.requiresTiledFeedForwardEvaluationBoundary(
+                        rowCount: hidden.dim(1),
+                        feedForwardSize: configuration.feedForwardSize,
+                        itemSize: hidden.itemSize
+                    ) {
+                        // MLX buffers use 32-bit byte offsets. Materialize the
+                        // compact SwiGLU result before compiling the FC2 stage
+                        // when that single activation exceeds 4 GiB.
+                        let feedForwardParts = compiled.postAttentionProjection(
+                            postAttentionInputs
+                        )
+                        MLX.eval(feedForwardParts)
+                        hidden = compiled.feedForwardOutput(feedForwardParts)[0]
+                    } else {
+                        hidden = compiled.postAttention(postAttentionInputs)[0]
+                    }
                     MLX.eval(hidden)
                 } else {
-                    hidden = block.attentionProjectionResidual(
+                    hidden = block.postAttention(
                         hidden,
                         attended: attended,
-                        gate: projectedAttention[3]
-                    )
-                    hidden = block.feedForwardResidual(
-                        hidden,
+                        gate: projectedAttention[3],
                         timeEmbedding: timeEmbedding,
                         adaLNIndices: context.adaLNIndices,
                         cachedModulation: cachedAdaLN?.blockModulations[index]
@@ -2663,14 +2816,23 @@ public final class MiniMaxH3Transformer: Module {
                 gate: inputs[2]
             )]
         }
-        let postAttention = MLX.compile(inputs: [runner]) { (inputs: [MLXArray]) -> [MLXArray] in
-            let attended = runner.attentionProjectionResidual(
+        let postAttentionProjection = MLX.compile(
+            inputs: [runner]
+        ) { (inputs: [MLXArray]) -> [MLXArray] in
+            runner.postAttentionProjection(
                 inputs[0],
                 attended: inputs[1],
-                gate: inputs[2]
+                gate: inputs[2],
+                timeEmbedding: inputs[3],
+                adaLNIndices: inputs[4],
+                cachedModulation: inputs.count == 6 ? inputs[5] : nil
             )
-            return [runner.feedForwardResidual(
-                attended,
+        }
+        let postAttention = MLX.compile(inputs: [runner]) { (inputs: [MLXArray]) -> [MLXArray] in
+            [runner.postAttention(
+                inputs[0],
+                attended: inputs[1],
+                gate: inputs[2],
                 timeEmbedding: inputs[3],
                 adaLNIndices: inputs[4],
                 cachedModulation: inputs.count == 6 ? inputs[5] : nil
@@ -2682,6 +2844,7 @@ public final class MiniMaxH3Transformer: Module {
             attentionOutput: attentionOutput,
             feedForwardProjection: feedForwardProjection,
             feedForwardOutput: feedForwardOutput,
+            postAttentionProjection: postAttentionProjection,
             postAttention: postAttention
         )
         compiledBlockRunner = runner
