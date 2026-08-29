@@ -867,6 +867,9 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
     ) throws -> (transformer: MiniMaxH3Transformer, adaLNCache: MiniMaxH3AdaLNCache?) {
         let modelSourceIdentity = try resources.adaLNCacheSourceIdentity()
         let adapterInferenceRecipe = adapterURL.map(MiniMaxH3TurboAdapter.inferenceRecipe(for:))
+        let usesPremergedFastH3Student = adapterURL.map(
+            MiniMaxH3TurboAdapter.isPremergedFastH3Artifact
+        ) ?? false
         let cacheKey = DenoisingRuntimeCacheKey(
             modelRoot: resources.rootURL.resolvingSymlinksInPath(),
             modelSourceIdentity: modelSourceIdentity,
@@ -891,10 +894,10 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         let cachedAdaLNForLoading: MiniMaxH3AdaLNCache?
         if adapterInferenceRecipe?.requiresFastH3VSA == true,
            !resources.usesShardedBF16Transformer {
-            guard try resources.transformerStorage() == .compactBF16,
+            guard try [.compactBF16, .affineQ8].contains(resources.transformerStorage()),
                   let adapterURL else {
                 throw MiniMaxH3GeneratorError.invalidOptions(
-                    "FastH3 VSA requires the compact BF16 or full sharded BF16 MiniMax-H3 transformer"
+                    "FastH3 VSA requires the compact BF16, affine Q8, or full sharded BF16 MiniMax-H3 transformer"
                 )
             }
             let cacheURL = adapterURL.deletingLastPathComponent().appending(
@@ -969,8 +972,10 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         } else {
             resolvedAdaLNCache = adaLNCache
         }
+        let effectiveWeightMode: MiniMaxH3TransformerWeightMode =
+            usesPremergedFastH3Student && weightMode == .automatic ? .quantized : weightMode
         let shouldMaterialize = try MiniMaxH3ResidentBF16Policy.shouldMaterialize(
-            mode: weightMode,
+            mode: effectiveWeightMode,
             physicalMemoryBytes: ProcessInfo.processInfo.physicalMemory,
             estimatedResidentBytes: transformer.estimatedResidentBF16ByteCount,
             sequenceLength: sequenceLength,
@@ -1197,8 +1202,11 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
             transformer.prepareTokenReduction(context: context)
         }
         let executionMode: MiniMaxH3DenoiseExecutionMode
-        if transformer.usesFastH3VSA
-            || exactKernelMode.requiresEagerExecution(sequenceLength: layout.sequenceLength) {
+        if transformer.usesFastH3VSA {
+            executionMode = environment["MERERUN_H3_EXECUTION_MODE"]?.lowercased() == "eager"
+                ? .eagerStep
+                : .blockwiseCompiled
+        } else if exactKernelMode.requiresEagerExecution(sequenceLength: layout.sequenceLength) {
             executionMode = .eagerStep
         } else if layerThinningPolicy == nil,
                   velocityReusePolicy == nil,
@@ -1239,9 +1247,8 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         transformer.dynamicSparseAttentionLogHandler = stepProfileLogger
         transformer.usesFusedPostAttention = ProcessInfo.processInfo
             .environment["MERERUN_H3_FUSED_POST_ATTENTION"] == "1"
-        transformer.usesLayerwiseEvaluation = transformer.usesFastH3VSA
-            || executionMode.usesLayerwiseEvaluation
-        transformer.clearsCacheAfterLayerwiseEvaluation = transformer.usesFastH3VSA
+        transformer.usesLayerwiseEvaluation = executionMode.usesLayerwiseEvaluation
+        transformer.clearsCacheAfterLayerwiseEvaluation = executionMode == .eagerStep
         let attentionHeadsPerKernel = transformer.maximumAttentionHeadsPerKernel
             ?? transformer.configuration.attentionHeadCount
         stepProfileLogger?(

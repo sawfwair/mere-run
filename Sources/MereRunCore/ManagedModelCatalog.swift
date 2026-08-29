@@ -3692,7 +3692,7 @@ public enum ManagedModelCatalog {
             usageRestriction: miniMaxH3UsageRestriction,
             validationKind: .miniMaxH3MLX,
             runtimeAutoDownloadAllowed: false,
-            estimatedDownloadBytes: 82_316_599_044,
+            estimatedDownloadBytes: 57_559_079_710,
             defaultCLICommands: ["video generate"]
         ),
         ManagedModelSpec(
@@ -4398,9 +4398,15 @@ public extension ManagedModelSpec {
                     return resources.validateCompactCachePack(fileManager: fileManager)
                 }
                 if id == ModelResolver.ModelID.miniMaxH3FastH3VSADataFreeMLX.rawValue {
-                    guard try resources.transformerStorage() == .compactBF16,
-                          configuration.quantization == nil else {
-                        return ["FastH3 VSA DataFree requires an unquantized compact BF16 transformer."]
+                    let expectedQuantization = MiniMaxH3QuantizationConfiguration(
+                        bits: 8,
+                        groupSize: 64,
+                        mode: "affine"
+                    )
+                    guard try resources.transformerStorage() == .affineQ8,
+                          configuration.quantization == expectedQuantization,
+                          configuration.textEncoderQuantization == expectedQuantization else {
+                        return ["FastH3 VSA DataFree requires MLX affine INT8/group-64 transformer and conditioner weights."]
                     }
                     return resources.validateManagedFastH3Artifact(fileManager: fileManager)
                 }

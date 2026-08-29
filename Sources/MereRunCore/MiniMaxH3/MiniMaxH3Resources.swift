@@ -272,8 +272,8 @@ public struct MiniMaxH3Resources: Sendable {
     public static let compactBF16ArtifactRevision = "4ce4b1d870f7b1b0c75672fd4f2867c1f5df7b5f"
     public static let q8ArtifactRepository = "Sawfwair/MiniMax-H3-FL2VA-MLX-8bit"
     public static let q8ArtifactRevision = "86500cb6ebec22c006597e41840b26ef1099fdd7"
-    public static let fastH3ArtifactRepository = "Sawfwair/MiniMax-H3-FastH3-VSA-DataFree-MLX-BF16"
-    public static let fastH3ArtifactRevision = "4208e52b28074fac87f7639281b1a4d564aba4a1"
+    public static let fastH3ArtifactRepository = "Sawfwair/MiniMax-H3-FastH3-VSA-DataFree-MLX-Q8"
+    public static let fastH3ArtifactRevision = "6068ae3dafafb1e4b2afb29f3109745a16912e07"
     public static let ref2vaArtifactRepository = "Sawfwair/MiniMax-H3-Ref2VA-MLX-8bit"
     public static let ref2vaArtifactRevision = "61dc387ef1a7166425cdacd63c2340598dcc364f"
     public static let bf16TransformerDirectory = "transformer-bf16"
@@ -295,6 +295,9 @@ public struct MiniMaxH3Resources: Sendable {
     public static let fastH3AdaLNCacheSHA256 =
         "d5e98c47a6a8924acbae4cfe34007049f22f56df7e9a4809f8d509320067fbe1"
     public static let fastH3AdaLNCacheByteCount: Int64 = 116_449_540
+    public static let fastH3PremergedGateSHA256 =
+        "4dee9a4fa80cadc13a602d7973b3c43a09bcfa0ef5e0baebe31a4d68a4b51dec"
+    public static let fastH3PremergedGateByteCount: Int64 = 2_047_200_096
 
     public static let requiredFiles = [
         "config.json",
@@ -322,8 +325,10 @@ public struct MiniMaxH3Resources: Sendable {
         "transformer.conversion.json",
         "SHA256SUMS",
     ]
-    public static let fastH3ArtifactFiles = compactBF16AndQ8ArtifactFiles + [
-        "adaln_cache-p5-v6-a3.safetensors",
+    public static let fastH3ArtifactFiles = requiredFiles + [
+        "SOURCE_MANIFEST.json",
+        "transformer.conversion.json",
+        "SHA256SUMS",
         MiniMaxH3TurboAdapter.fastH3VSADataFreeFilename,
         MiniMaxH3TurboAdapter.fastH3AdaLNCacheFilename,
         "FASTH3_SOURCE_MANIFEST.json",
@@ -531,8 +536,13 @@ public struct MiniMaxH3Resources: Sendable {
                 .filter { !fileManager.fileExists(atPath: $0.path) }
         }
         if fileManager.fileExists(atPath: transformerWeightsURL.path),
-           (try? requiresAdaLNCache()) == true {
-            if fileManager.fileExists(atPath: adaLNCachePackIndexURL.path) {
+           let metadata = try? transformerMetadata(),
+           metadata["cache_covered_weights_omitted"] == "true" {
+            let usesFastH3Cache = metadata["fasth3_premerged"] == "true"
+                && fileManager.fileExists(atPath: fastH3AdaLNCacheURL.path)
+            if usesFastH3Cache {
+                return missing
+            } else if fileManager.fileExists(atPath: adaLNCachePackIndexURL.path) {
                 missing += Self.cachePackFiles
                     .map { rootURL.appending(path: $0) }
                     .filter { !fileManager.fileExists(atPath: $0.path) }
@@ -570,8 +580,11 @@ public struct MiniMaxH3Resources: Sendable {
     }
 
     func validateManagedFastH3Artifact(fileManager: FileManager = .default) -> [String] {
-        var issues = validateCompactCachePack(fileManager: fileManager)
+        var issues: [String] = []
         let provenanceFiles = [
+            "SOURCE_MANIFEST.json",
+            "transformer.conversion.json",
+            "SHA256SUMS",
             "FASTH3_SOURCE_MANIFEST.json",
             "FASTH3_CONVERSION.json",
         ]
@@ -582,13 +595,15 @@ public struct MiniMaxH3Resources: Sendable {
         }
         guard issues.isEmpty else { return issues }
 
-        guard let adapter = ManagedAdapterCatalog.spec(
-            for: ManagedAdapterCatalog.miniMaxH3FastH3VSADataFreeID
-        ) else {
-            return ["Missing the pinned FastH3 adapter catalog entry."]
-        }
         do {
-            _ = try adapter.artifact.verify(in: rootURL, fileManager: fileManager)
+            guard MiniMaxH3TurboAdapter.isPremergedFastH3Artifact(fastH3AdapterURL) else {
+                return ["FastH3 package does not contain the premerged Q8 compression-gate artifact."]
+            }
+            _ = try ModelArtifactPin(
+                filename: MiniMaxH3TurboAdapter.fastH3VSADataFreeFilename,
+                byteCount: Self.fastH3PremergedGateByteCount,
+                sha256: Self.fastH3PremergedGateSHA256
+            ).verify(in: rootURL, fileManager: fileManager)
             _ = try ModelArtifactPin(
                 filename: MiniMaxH3TurboAdapter.fastH3AdaLNCacheFilename,
                 byteCount: Self.fastH3AdaLNCacheByteCount,

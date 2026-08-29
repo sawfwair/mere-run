@@ -6,6 +6,7 @@ public enum MiniMaxH3TurboAdapter {
     public static let format = "minimax-h3-runtime-lora-v1"
     public static let lightX2VFormat = "minimax-h3-peft-fused-lora-v1"
     public static let fastVideoFormat = "fastvideo-lora-v2"
+    public static let fastH3PremergedFormat = "mere.run.minimax-h3-fasth3-premerged-v1"
     public static let expectedPairCount = 259
     public static let lightX2VExpectedPairCount = 312
     public static let fastVideoExpectedPairCount = 362
@@ -78,7 +79,10 @@ public enum MiniMaxH3TurboAdapter {
         supportedSchedulePointCounts: [9],
         videoFlowShift: 6,
         audioFlowShift: 3,
-        lightX2VAlpha: 8
+        lightX2VAlpha: 8,
+        baseDenoisingSigmas: nil,
+        requiresFastH3VSA: false,
+        requiresTextOnlyConditioning: false
     )
 
     public static let lightX2VFourStepV1_768pRecipe = InferenceRecipe(
@@ -122,11 +126,17 @@ public enum MiniMaxH3TurboAdapter {
 
     public static func inferenceRecipe(for url: URL) -> InferenceRecipe {
         if let metadata = try? SafetensorsStreamingLoader.fileMetadata(url: url),
-           metadata["format"] == fastVideoFormat,
+           (metadata["format"] == fastVideoFormat
+            || metadata["format"] == fastH3PremergedFormat),
            metadata["finetuned_model"] == "FastVideo/FastVideo-FastH3-4-step-v1" {
             return fastH3VSADataFreeRecipe
         }
         return inferenceRecipe(filename: url.lastPathComponent)
+    }
+
+    static func isPremergedFastH3Artifact(_ url: URL) -> Bool {
+        (try? SafetensorsStreamingLoader.fileMetadata(url: url)["format"])
+            == fastH3PremergedFormat
     }
 
     public static func inferenceRecipe(filename: String) -> InferenceRecipe {
@@ -150,6 +160,7 @@ public enum MiniMaxH3TurboAdapter {
         case runtime
         case lightX2V
         case fastVideo
+        case fastH3Premerged
 
         var pairSuffixes: (String, String) {
             switch self {
@@ -157,7 +168,7 @@ public enum MiniMaxH3TurboAdapter {
                 return (".lora_A.weight", ".lora_B.weight")
             case .lightX2V:
                 return (".lora_A.default.weight", ".lora_B.default.weight")
-            case .fastVideo:
+            case .fastVideo, .fastH3Premerged:
                 return (".lora_A.weight", ".lora_B.weight")
             }
         }
@@ -170,6 +181,8 @@ public enum MiniMaxH3TurboAdapter {
                 return MiniMaxH3TurboAdapter.lightX2VExpectedPairCount
             case .fastVideo:
                 return MiniMaxH3TurboAdapter.fastVideoExpectedPairCount
+            case .fastH3Premerged:
+                return 0
             }
         }
     }
@@ -270,8 +283,23 @@ public enum MiniMaxH3TurboAdapter {
         expectedPairCount: Int? = nil
     ) throws -> Installation {
         let sourceFormat = try sourceFormat(at: url)
-        if sourceFormat == .fastVideo, strength != 1 {
+        if (sourceFormat == .fastVideo || sourceFormat == .fastH3Premerged), strength != 1 {
             throw AdapterError.requiresUnitStrength(strength)
+        }
+        if sourceFormat == .fastH3Premerged {
+            let gateCount = try installFastH3QuantizedCompressionGates(
+                url: url,
+                into: transformer
+            )
+            guard gateCount == fastVideoExpectedCompressionGateCount else {
+                throw AdapterError.unexpectedAuxiliaryTensorCount(
+                    kind: "quantized-compression-gate",
+                    expected: fastVideoExpectedCompressionGateCount,
+                    actual: gateCount
+                )
+            }
+            Memory.clearCache()
+            return Installation(pairCount: 0, adaLNCache: adaLNCache)
         }
         let inferenceRecipe = inferenceRecipe(for: url)
         let suffixes = sourceFormat.pairSuffixes
@@ -445,8 +473,12 @@ public enum MiniMaxH3TurboAdapter {
     }
 
     private static func sourceFormat(at url: URL) throws -> SourceFormat {
-        if try SafetensorsStreamingLoader.fileMetadata(url: url)["format"] == fastVideoFormat {
+        let format = try SafetensorsStreamingLoader.fileMetadata(url: url)["format"]
+        if format == fastVideoFormat {
             return .fastVideo
+        }
+        if format == fastH3PremergedFormat {
+            return .fastH3Premerged
         }
         let keys = try SafetensorsStreamingLoader.metadata(url: url).keys
         if keys.contains(where: { $0.hasSuffix(".lora_A.default.weight") }) {
@@ -465,6 +497,7 @@ public enum MiniMaxH3TurboAdapter {
         guard sourceFormat != .runtime else {
             return LightX2VTarget(modulePath: sourcePath, qkvBranch: nil)
         }
+        precondition(sourceFormat != .fastH3Premerged)
 
         let runtimePrefix: String
         let remainder: Substring
@@ -629,6 +662,46 @@ public enum MiniMaxH3TurboAdapter {
             }
             transformer.installFastH3CompressionGate(weight, blockIndex: blockIndex)
         }
+    }
+
+    private static func installFastH3QuantizedCompressionGates(
+        url: URL,
+        into transformer: MiniMaxH3Transformer
+    ) throws -> Int {
+        let metadata = try SafetensorsStreamingLoader.fileMetadata(url: url)
+        guard metadata["gate_quantization"] == "affine 8-bit g64" else {
+            throw AdapterError.unrecognizedFormat(url)
+        }
+        let arrays = try SafetensorsStreamingLoader.loadArrays(
+            url: url,
+            where: { $0.hasPrefix("transformer_blocks.") }
+        )
+        var installed = 0
+        for blockIndex in 0..<transformer.configuration.layerCount {
+            let prefix = "transformer_blocks.\(blockIndex).attn.to_gate_compress"
+            guard let codes = arrays["\(prefix).weight"],
+                  let scales = arrays["\(prefix).scales"],
+                  let biases = arrays["\(prefix).biases"] else {
+                throw AdapterError.missingTargetParameter(prefix)
+            }
+            transformer.installFastH3QuantizedCompressionGate(
+                codes: codes,
+                scales: scales,
+                biases: biases,
+                groupSize: 64,
+                bits: 8,
+                blockIndex: blockIndex
+            )
+            installed += 1
+        }
+        guard arrays.count == installed * 3 else {
+            throw AdapterError.unexpectedAuxiliaryTensorCount(
+                kind: "quantized-compression-gate tensor",
+                expected: installed * 3,
+                actual: arrays.count
+            )
+        }
+        return installed
     }
 
     private static func targetLinear(

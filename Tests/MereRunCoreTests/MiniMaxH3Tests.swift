@@ -204,6 +204,16 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
             XCTAssertEqual(Array(row.prefix(2)), [1, 1])
             XCTAssertEqual(row.suffix(3).reduce(0, +), 1)
         }
+
+        let compact = MiniMaxH3FastVSA.selectedVideoRoutesForTesting(
+            scores: scores,
+            prefixTileCount: 2,
+            videoTileCount: 3,
+            sparsity: 0.9
+        )
+        MLX.eval(compact)
+        XCTAssertEqual(compact.shape, [1, 1, 5, 1])
+        XCTAssertEqual(compact.asArray(Int32.self), [4, 4, 4, 4, 4])
     }
 
     func testFastVSAMetalDenseRouteMatchesFusedSDPA() throws {
@@ -1580,7 +1590,7 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         XCTAssertEqual(spec.hubFallback?.repoId, MiniMaxH3Resources.fastH3ArtifactRepository)
         XCTAssertEqual(spec.hubFallback?.revision, MiniMaxH3Resources.fastH3ArtifactRevision)
         XCTAssertEqual(spec.hubFallback?.patterns, MiniMaxH3Resources.fastH3ArtifactFiles)
-        XCTAssertEqual(spec.estimatedDownloadBytes, 82_316_599_044)
+        XCTAssertEqual(spec.estimatedDownloadBytes, 57_559_079_710)
         XCTAssertTrue(spec.mountedHubFallbacks.isEmpty)
         XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
         XCTAssertTrue(
@@ -1598,14 +1608,31 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
             for: .miniMaxH3FastH3VSADataFreeMLX,
             createdAt: Date(timeIntervalSince1970: 0)
         )
-        XCTAssertEqual(manifest.precision, .bf16)
-        XCTAssertNil(manifest.quantization)
+        XCTAssertEqual(manifest.precision, .int8)
+        XCTAssertEqual(manifest.quantization?.bits, 8)
+        XCTAssertEqual(manifest.quantization?.groupSize, 64)
+        XCTAssertEqual(manifest.quantization?.scheme, "mlx-affine")
         XCTAssertEqual(manifest.defaults?.steps, 5)
         XCTAssertEqual(
             manifest.upstreamRepoId,
             "\(MiniMaxH3Resources.fastH3ArtifactRepository)"
                 + "@\(MiniMaxH3Resources.fastH3ArtifactRevision)"
         )
+    }
+
+    func testManagedFastH3PackageValidationWhenConfigured() throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard let root = environment["MERERUN_H3_FASTH3_MODEL_ROOT"], !root.isEmpty else {
+            throw XCTSkip(
+                "Set MERERUN_H3_FASTH3_MODEL_ROOT to validate the complete managed FastH3 artifact."
+            )
+        }
+        let rootURL = URL(fileURLWithPath: root, isDirectory: true)
+        let spec = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: MiniMaxH3Resources.fastH3ModelID)
+        )
+        XCTAssertEqual(spec.validationMessages(in: rootURL), [])
+        XCTAssertTrue(spec.isManagedRootComplete(rootURL, fileManager: .default))
     }
 
     func testManagedRef2VAProfileUsesPinnedPublicEightBitArtifact() throws {
@@ -2655,6 +2682,63 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         XCTAssertEqual(
             MiniMaxH3TurboAdapter.inferenceRecipe(for: url),
             MiniMaxH3TurboAdapter.fastH3VSADataFreeRecipe
+        )
+    }
+
+    func testFastH3RecipeRecognizesPremergedGateArtifactMetadata() throws {
+        let url = FileManager.default.temporaryDirectory.appending(
+            path: "adapter_model-\(UUID().uuidString).safetensors"
+        )
+        defer { try? FileManager.default.removeItem(at: url) }
+        try MLX.save(
+            arrays: ["probe": MLXArray([Float(1)])],
+            metadata: [
+                "format": MiniMaxH3TurboAdapter.fastH3PremergedFormat,
+                "finetuned_model": "FastVideo/FastVideo-FastH3-4-step-v1",
+            ],
+            url: url
+        )
+
+        XCTAssertTrue(MiniMaxH3TurboAdapter.isPremergedFastH3Artifact(url))
+        XCTAssertEqual(
+            MiniMaxH3TurboAdapter.inferenceRecipe(for: url),
+            MiniMaxH3TurboAdapter.fastH3VSADataFreeRecipe
+        )
+    }
+
+    func testFastH3QuantizedCompressionGateMatchesMLXAffineProjection() throws {
+        let weight = (MLXArray(0..<320).reshaped(5, 64).asType(.bfloat16) - 160) / 64
+        let input = (MLXArray(0..<128).reshaped(2, 64).asType(.bfloat16) - 64) / 32
+        let (codes, scales, optionalBiases) = MLX.quantized(
+            weight,
+            groupSize: 64,
+            bits: 8,
+            mode: .affine
+        )
+        let biases = try XCTUnwrap(optionalBiases)
+        let gate = MiniMaxH3FastH3CompressionGate(
+            codes: codes,
+            scales: scales,
+            biases: biases,
+            groupSize: 64,
+            bits: 8
+        )
+        let candidate = gate.project(input)
+        let reference = MLX.quantizedMM(
+            input,
+            codes,
+            scales: scales,
+            biases: biases,
+            groupSize: 64,
+            bits: 8,
+            mode: .affine
+        )
+        MLX.eval(candidate, reference)
+        XCTAssertEqual(candidate.shape, [2, 5])
+        XCTAssertEqual(
+            MLX.max(MLX.abs(candidate.asType(.float32) - reference.asType(.float32)))
+                .item(Float.self),
+            0
         )
     }
 

@@ -1201,7 +1201,7 @@ public enum ManagedModelCapabilityCatalog {
             descriptor(
                 ModelResolver.ModelID.miniMaxH3FastH3VSADataFreeMLX.rawValue,
                 "MiniMax-H3 FastH3 VSA DataFree MLX",
-                "Runs the packaged FastH3 four-evaluation adapter and VSA-H3 sparse attention with no separate model assets.",
+                "Runs the premerged Q8 FastH3 student and compact VSA-H3 sparse attention with no separate model assets.",
                 minimum: 96,
                 recommended: 128
             ),

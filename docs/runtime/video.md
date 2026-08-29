@@ -64,8 +64,9 @@ are an escape hatch, not the capability contract.
   same conditioner, VAEs, cache pack, and provenance as compact BF16. Q8 is a
   storage and memory option, not an advertised speedup without measurements.
 - `video-minimax-h3-fasth3-vsa-datafree-mlx`: dedicated four-evaluation FastH3
-  package with the compact BF16 base, student adapter, AdaLN sidecar, and Metal
-  VSA-H3 sparse attention in one explicit license-accepting pull.
+  package with a premerged affine Q8/group-64 student, Q8 compression gates,
+  source-bound AdaLN table, and compact Metal VSA-H3 routing in one explicit
+  license-accepting pull.
 - `video-minimax-h3-ref2va-mlx`: explicit-pull 8-bit Ref2VA package. Repeated
   `--reference image:path|video:path|audio:path` options retain request order.
   Video soundtracks are conditioned with their video; a standalone audio
@@ -229,22 +230,26 @@ and 0.001427 RMSE. This proves why the exact table is preferable; it doesn't by
 itself constitute a same-seed visual or audio quality qualification.
 
 `video-minimax-h3-fasth3-vsa-datafree-mlx` is a self-contained FastVideo student
-package. One explicit model pull installs the compact BF16 base, FastH3 adapter,
-and source-bound AdaLN cache. Generation doesn't require another model or
-adapter download. The recipe requires adapter strength `1.0`. Its
+package. One explicit model pull installs the premerged Q8 student, Q8 text
+encoder, both VAEs, tokenizer, Q8 compression gates, and source-bound AdaLN
+table. Generation doesn't require another model or adapter download. The recipe
+requires adapter strength `1.0`. Its
 four denoising evaluations use base sigma points `0.999`, `0.749`, `0.5`, and
 `0.25`, followed by the clean endpoint. MLX Metal runs FastH3's 64-token VSA
 tiles, per-head top-k routes at 90% video-key sparsity, and learned pooled-value
-compression gates. Prefix queries remain dense, and video queries retain every
-prefix key tile. The recipe accepts text-only generation. It rejects frame
-conditioning, continuation, references, and additional H3 approximation modes.
+compression gates. The Metal kernel consumes compact selected-video route
+tables, so video queries don't scan rejected tiles. Prefix queries remain
+dense, and video queries retain every prefix key tile. The recipe accepts
+text-only generation. It rejects frame conditioning, continuation, references,
+and additional H3 approximation modes.
 
 The package build uses
-`scripts/model-conversion/prepare_minimax_h3_fasth3_vsa.py` to reconstruct the
-schedule-only AdaLN values that the compact BF16 base omits. The script verifies
-the adapter, range-reads about 26 GiB from the pinned student transformer, and
-writes only the approximately 120 MB source-bound cache. End users who pull the
-dedicated managed model don't run this build step.
+`scripts/model-conversion/merge_minimax_h3_fasth3_q8.py` after creating the
+source-bound table with `prepare_minimax_h3_fasth3_vsa.py`. The merge script
+verifies all 362 LoRA pairs, 82 direct differences, and 50 compression gates.
+It merges 208 inference linear targets with FP32 accumulation, rounds once to
+BF16, and writes MLX affine Q8/group-64 weights. End users who pull the managed
+model don't run either build step.
 
 `--h3-frame FRAME:PATH` adds an FL2VA keyframe at an exact zero-based output
 frame. Values may be repeated up to the released 12-frame condition limit and

@@ -1384,25 +1384,27 @@ The adapter contains 362 LoRA pairs, 82 direct differences, and 50 VSA-H3
 compression-gate weights. The runtime consumes the released `fastvideo-lora-v2`
 format without producing a fused checkpoint.
 
-The managed `video-minimax-h3-fasth3-vsa-datafree-mlx` package combines that
-adapter and its source-bound AdaLN cache with the compact BF16 FL2VA runtime
-files in `Sawfwair/MiniMax-H3-FastH3-VSA-DataFree-MLX-BF16` at immutable
-revision `4208e52b28074fac87f7639281b1a4d564aba4a1`. One explicit license-accepting
-pull installs every asset used by supported FastH3 inference; the runtime does
-not fetch a second model or adapter during generation.
+The managed `video-minimax-h3-fasth3-vsa-datafree-mlx` package stores a
+premerged affine Q8/group-64 student in
+`Sawfwair/MiniMax-H3-FastH3-VSA-DataFree-MLX-Q8` at immutable revision
+`6068ae3dafafb1e4b2afb29f3109745a16912e07`. The package also includes the Q8
+text encoder, both VAEs, tokenizer, Q8 compression gates, and source-bound AdaLN
+table. One explicit license-accepting pull installs every asset used by
+supported FastH3 inference. The runtime doesn't fetch a second model or adapter
+during generation.
 
-FastH3 changes the base transformer's time and AdaLN projections. For compact
-BF16, the preparation script range-reads the required tensors from
+FastH3 changes the base transformer's time and AdaLN projections. The
+preparation script range-reads the required tensors from
 `FastVideo/FastVideo-FastH3-4-step-Preview-v1-VSA-DataFree` at immutable
 revision `b65818d41939b5085451074fe8ca8b799f8d4921`. The script verifies the
 transformer index SHA-256, evaluates the four released DMD points with MLX
-Metal, and stores the source-bound cache beside the adapter. This workflow
-transfers about 26 GiB but doesn't store the 70 GB student transformer. It is
-not full-checkpoint or output-quality proof. The MiniMax-H3 Community License
-continues to govern the base and student weights.
-The runtime remaps the adapter's fused QKV output rows into the same global
-Q/K/V slab order as the converted base and applies all 362 LoRA pairs as live
-activation deltas, including the schedule-only AdaLN projections.
+Metal, and stores the source-bound cache beside the compression gates. The
+offline merge tool verifies all 362 LoRA pairs, 82 direct differences, and 50
+compression gates. It merges 208 inference linear targets with FP32
+accumulation, rounds once to BF16, and encodes the result as MLX affine
+Q8/group-64. The runtime loads the premerged transformer and doesn't apply live
+LoRA deltas. The MiniMax-H3 Community License continues to govern the base and
+student weights.
 
 Another managed H3 adapter, `minimax-h3-lightx2v-4step`, pins
 `minimax_h3_fl2v_turbo_4step_v0.1.safetensors` from

@@ -84,6 +84,14 @@ struct MiniMaxH3FastVSAGeometry: Sendable, Equatable {
     }
 }
 
+struct MiniMaxH3FastVSAPreparedContext {
+    let geometry: MiniMaxH3FastVSAGeometry
+    let paddedIndices: MLXArray
+    let originalIndices: MLXArray
+    let blockSizes: MLXArray
+    let poolingSizes: MLXArray
+}
+
 /// Metal implementation of FastVideo's released VSA-H3 tile-64 inference contract.
 ///
 /// Prefix query tiles remain dense, every query retains all prefix key tiles,
@@ -102,10 +110,45 @@ enum MiniMaxH3FastVSA {
         layout: MiniMaxH3PackedLayout,
         sparsity: Float = sparsity
     ) -> MLXArray? {
+        call(
+            queries: queries,
+            keys: keys,
+            values: values,
+            compressionGate: compressionGate,
+            prepared: prepare(layout: layout),
+            sparsity: sparsity
+        )
+    }
+
+    static func prepare(layout: MiniMaxH3PackedLayout) -> MiniMaxH3FastVSAPreparedContext {
+        let geometry = MiniMaxH3FastVSAGeometry(layout: layout)
+        let paddedIndices = MLXArray(geometry.paddedToOriginal)
+        let originalIndices = MLXArray(geometry.originalToPadded)
+        let blockSizes = MLXArray(geometry.blockSizes)
+        let poolingSizes = blockSizes.asType(.float32)
+            .reshaped(1, 1, geometry.tileCount, 1)
+        MLX.eval(paddedIndices, originalIndices, blockSizes, poolingSizes)
+        return MiniMaxH3FastVSAPreparedContext(
+            geometry: geometry,
+            paddedIndices: paddedIndices,
+            originalIndices: originalIndices,
+            blockSizes: blockSizes,
+            poolingSizes: poolingSizes
+        )
+    }
+
+    static func call(
+        queries: MLXArray,
+        keys: MLXArray,
+        values: MLXArray,
+        compressionGate: MLXArray,
+        prepared: MiniMaxH3FastVSAPreparedContext,
+        sparsity: Float = sparsity
+    ) -> MLXArray? {
         guard supports(queries: queries, keys: keys, values: values, gate: compressionGate),
               (0..<1).contains(sparsity) else { return nil }
-        let geometry = MiniMaxH3FastVSAGeometry(layout: layout)
-        guard queries.dim(2) == layout.sequenceLength else { return nil }
+        let geometry = prepared.geometry
+        guard queries.dim(2) == geometry.originalToPadded.count else { return nil }
 
         // RoPE coefficients are FP32, so the normal H3 projection path can
         // promote Q/K even when the checkpoint and hidden state are BF16.
@@ -117,24 +160,24 @@ enum MiniMaxH3FastVSA {
         let attentionValues = values.asType(.bfloat16)
         let attentionGate = compressionGate.asType(.bfloat16)
 
-        let paddedIndices = MLXArray(geometry.paddedToOriginal)
-        let originalIndices = MLXArray(geometry.originalToPadded)
-        let tiledQueries = tile(attentionQueries, paddedIndices: paddedIndices)
-        let tiledKeys = tile(attentionKeys, paddedIndices: paddedIndices)
-        let tiledValues = tile(attentionValues, paddedIndices: paddedIndices)
-        let tiledGate = tile(attentionGate, paddedIndices: paddedIndices)
-        let sizes = MLXArray(geometry.blockSizes).asType(.float32)
-            .reshaped(1, 1, geometry.tileCount, 1)
+        let tiledQueries = tile(attentionQueries, paddedIndices: prepared.paddedIndices)
+        let tiledKeys = tile(attentionKeys, paddedIndices: prepared.paddedIndices)
+        let tiledValues = tile(attentionValues, paddedIndices: prepared.paddedIndices)
+        let tiledGate = tile(attentionGate, paddedIndices: prepared.paddedIndices)
 
-        let pooledQueries = pool(tiledQueries, sizes: sizes, tileCount: geometry.tileCount)
-        let pooledKeys = pool(tiledKeys, sizes: sizes, tileCount: geometry.tileCount)
-        let pooledValues = pool(tiledValues, sizes: sizes, tileCount: geometry.tileCount)
+        let pooledQueries = pool(
+            tiledQueries,
+            sizes: prepared.poolingSizes,
+            tileCount: geometry.tileCount
+        )
+        let pooledKeys = pool(tiledKeys, sizes: prepared.poolingSizes, tileCount: geometry.tileCount)
+        let pooledValues = pool(tiledValues, sizes: prepared.poolingSizes, tileCount: geometry.tileCount)
         let scale = 1 / sqrt(Float(headDimension))
         let scores = MLX.matmul(
             pooledQueries,
             pooledKeys.transposed(0, 1, 3, 2)
         ) * scale
-        let routes = routes(
+        let videoRoutes = selectedVideoRoutes(
             scores: scores,
             prefixTileCount: geometry.prefixTileCount,
             videoTileCount: geometry.videoTileCount,
@@ -144,8 +187,9 @@ enum MiniMaxH3FastVSA {
             queries: tiledQueries,
             keys: tiledKeys,
             values: tiledValues,
-            routes: routes,
-            blockSizes: MLXArray(geometry.blockSizes),
+            videoRoutes: videoRoutes,
+            blockSizes: prepared.blockSizes,
+            prefixTileCount: geometry.prefixTileCount,
             scale: scale
         )
 
@@ -161,7 +205,7 @@ enum MiniMaxH3FastVSA {
         )
         let corrected = sparseTiles + compressed.expandedDimensions(axis: 3) * gateTiles
         let tiledOutput = corrected.reshaped(1, heads, geometry.paddedTokenCount, headDimension)
-        return MLX.take(tiledOutput, originalIndices, axis: 2)
+        return MLX.take(tiledOutput, prepared.originalIndices, axis: 2)
     }
 
     static func routesForTesting(
@@ -171,6 +215,20 @@ enum MiniMaxH3FastVSA {
         sparsity: Float = sparsity
     ) -> MLXArray {
         routes(
+            scores: scores,
+            prefixTileCount: prefixTileCount,
+            videoTileCount: videoTileCount,
+            sparsity: sparsity
+        )
+    }
+
+    static func selectedVideoRoutesForTesting(
+        scores: MLXArray,
+        prefixTileCount: Int,
+        videoTileCount: Int,
+        sparsity: Float = sparsity
+    ) -> MLXArray {
+        selectedVideoRoutes(
             scores: scores,
             prefixTileCount: prefixTileCount,
             videoTileCount: videoTileCount,
@@ -243,6 +301,28 @@ enum MiniMaxH3FastVSA {
         return result
     }
 
+    private static func selectedVideoRoutes(
+        scores: MLXArray,
+        prefixTileCount: Int,
+        videoTileCount: Int,
+        sparsity: Float
+    ) -> MLXArray {
+        precondition(scores.dim(2) == prefixTileCount + videoTileCount)
+        precondition(scores.dim(3) == prefixTileCount + videoTileCount)
+        let keepVideo = max(1, min(Int(ceil((1 - sparsity) * Float(videoTileCount))), videoTileCount))
+        let videoScores = scores[.ellipsis, prefixTileCount...]
+        if keepVideo == videoTileCount {
+            let indices = (
+                MLX.arange(videoTileCount, dtype: .int32) + MLXArray(Int32(prefixTileCount))
+            ).reshaped(1, 1, 1, videoTileCount)
+            return MLX.broadcast(indices, to: Array(scores.shape.dropLast()) + [videoTileCount])
+        }
+        return (
+            MLX.argPartition(-videoScores, kth: keepVideo - 1, axis: -1)[.ellipsis, 0..<keepVideo]
+                .asType(.int32) + MLXArray(Int32(prefixTileCount))
+        )
+    }
+
     private static func supports(
         queries: MLXArray,
         keys: MLXArray,
@@ -266,20 +346,25 @@ enum MiniMaxH3FastVSA {
         queries: MLXArray,
         keys: MLXArray,
         values: MLXArray,
-        routes: MLXArray,
+        videoRoutes: MLXArray,
         blockSizes: MLXArray,
+        prefixTileCount: Int,
         scale: Float
     ) -> MLXArray {
         let tokenCount = queries.dim(2)
-        let blockCount = routes.dim(3)
+        let blockCount = blockSizes.dim(0)
+        let keepVideo = videoRoutes.dim(3)
         precondition(tokenCount == blockCount * MiniMaxH3FastVSAGeometry.tileSize)
-        precondition(routes.dim(2) == blockCount)
+        precondition(videoRoutes.dim(2) == blockCount)
+        precondition(prefixTileCount + keepVideo <= blockCount)
         #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
         return attentionKernel(
-            [queries, keys, values, routes, blockSizes, MLXArray([scale])],
+            [queries, keys, values, videoRoutes, blockSizes, MLXArray([scale])],
             template: [
                 ("TOKEN_COUNT", tokenCount),
                 ("BLOCK_COUNT", blockCount),
+                ("PREFIX_TILE_COUNT", prefixTileCount),
+                ("KEEP_VIDEO", keepVideo),
             ],
             grid: (32, ((tokenCount + 31) / 32) * 4, queries.dim(1)),
             threadGroup: (32, 4, 1),
@@ -293,8 +378,8 @@ enum MiniMaxH3FastVSA {
 
     #if os(macOS) || os(iOS) || os(tvOS) || os(visionOS)
     private static let attentionKernel = MLXFast.metalKernel(
-        name: "mere_fasth3_vsa64_online_softmax_bf16_d128_v1",
-        inputNames: ["queries", "keys", "values", "routes", "block_sizes", "scale_value"],
+        name: "mere_fasth3_vsa64_online_softmax_bf16_d128_compact_v2",
+        inputNames: ["queries", "keys", "values", "video_routes", "block_sizes", "scale_value"],
         outputNames: ["output"],
         source: """
             constexpr uint block_size = 64;
@@ -352,9 +437,18 @@ enum MiniMaxH3FastVSA {
             float row_maximum = -INFINITY;
             float row_sum = 0.0f;
 
-            for (uint key_block = 0; key_block < BLOCK_COUNT; ++key_block) {
-                uint route_offset = (head * BLOCK_COUNT + query_block) * BLOCK_COUNT + key_block;
-                if (routes[route_offset] == 0) continue;
+            uint route_count = query_block < PREFIX_TILE_COUNT
+                ? BLOCK_COUNT
+                : PREFIX_TILE_COUNT + KEEP_VIDEO;
+            for (uint route_index = 0; route_index < route_count; ++route_index) {
+                uint key_block;
+                if (query_block < PREFIX_TILE_COUNT || route_index < PREFIX_TILE_COUNT) {
+                    key_block = route_index;
+                } else {
+                    uint route_offset = (head * BLOCK_COUNT + query_block) * KEEP_VIDEO
+                        + route_index - PREFIX_TILE_COUNT;
+                    key_block = uint(video_routes[route_offset]);
+                }
                 uint key_start = key_block * block_size;
                 uint key_end = key_start + uint(block_sizes[key_block]);
                 for (uint key_tile = key_start; key_tile < key_end; key_tile += matrix_size) {

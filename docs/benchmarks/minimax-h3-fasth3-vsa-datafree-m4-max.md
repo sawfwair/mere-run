@@ -86,3 +86,42 @@ red subject above breaking coastal waves against a blue sky.
 This single short sample proves execution and media closure only. It does not
 measure prompt adherence across a dataset, temporal quality at longer durations,
 audio semantic accuracy, or behavior on systems with less unified memory.
+
+## Premerged Q8 and compact-route qualification
+
+A later qualification used the self-contained premerged Q8 package and a
+six-shot dance prompt. The package is pinned at revision
+`6068ae3dafafb1e4b2afb29f3109745a16912e07` and contains the following converted
+artifacts:
+
+- Transformer: 21,352,545,115 bytes, SHA-256
+  `dd29127cbb4b1b81603e565b9783677be2eb868cc53d47be2db8b7ca7ba6045f`.
+- Compression gates: 2,047,200,096 bytes, SHA-256
+  `4dee9a4fa80cadc13a602d7973b3c43a09bcfa0ef5e0baebe31a4d68a4b51dec`.
+- Complete managed download set: 57,559,079,710 bytes.
+
+The 384 by 256 pixel run used 22 frames, seed 42, and release-mode compiled
+blocks. The following comparison changes only VSA route representation and
+prepared geometry reuse:
+
+| Measurement | Dense route mask | Compact route table |
+| --- | ---: | ---: |
+| Runtime generation total | 98.666 s | 91.006 s |
+| Denoising | 57.730 s | 52.162 s |
+| First evaluation with specialization | 17.705 s | 26.021 s |
+| Mean of evaluations 2-4 | 13.187 s | 8.407 s |
+| Peak process memory footprint | 29,749,842,680 bytes | 29,747,860,072 bytes |
+
+Compact routing reduces steady-state evaluation time by approximately 36% in
+this bounded sample. The cold total improves by approximately 9.6% because the
+first run includes a new Metal specialization compile.
+
+A later process generated 512 by 320 pixels and 22 frames in 58.34 s wall
+time. Denoising took 44.685 s, with evaluations between 10.749 s and 11.650 s.
+The peak process footprint was 30,226,551,496 bytes. The MP4 contains 22 H.264
+frames and stereo AAC audio. Its SHA-256 is
+`165f0cf19bda49545b1cea8ed5b3c4828d1ec3de06c81954b295a6074c68bb9f`.
+
+Manual contact-sheet inspection confirmed the requested dark circular stage,
+cyan lighting, and multiple dancers. These runs don't prove numerical parity
+with CUDA, long-duration quality, or performance at 1,344 by 768 pixels.

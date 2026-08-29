@@ -52,23 +52,23 @@ expanded to resident BF16 before the adapter is installed, so this recipe
 requires `resident-bf16` or a memory-qualified automatic selection; forced
 quantized execution is rejected.
 
-The managed `minimax-h3-fasth3-vsa-datafree-4step` release targets only compact
-BF16 FL2VA. It installs FastVideo's 5.3 GB student adapter, applies the exact
-four-evaluation DMD schedule, and runs its VSA-H3 tile routing and learned
-compression gates with MLX Metal. The runtime retains every prefix key tile and
-the highest-scoring 10% of video key tiles for each video query tile. Prefix
-query tiles remain dense.
+The managed `minimax-h3-fasth3-vsa-datafree-4step` adapter remains available
+for compact BF16 FL2VA package development. The preferred managed model stores
+the student as an affine Q8/group-64 transformer and stores its 50 compression
+gates in Q8. It applies the exact four-evaluation DMD schedule and runs VSA-H3
+with MLX Metal. The runtime retains every prefix key tile and the
+highest-scoring 10% of video key tiles for each video query tile. Prefix query
+tiles remain dense.
 
-FastH3 changes the schedule-only AdaLN weights that the compact BF16 model
-omits. The managed `video-minimax-h3-fasth3-vsa-datafree-mlx` package includes a
-source-bound cache beside the adapter, so end users need one model pull and no
-preparation step. Package builders use
-`scripts/model-conversion/prepare_minimax_h3_fasth3_vsa.py --adapter PATH`; the
-script range-reads about 26 GiB from the pinned student transformer but doesn't
-store the 70 GB transformer or the complete 148 GB checkpoint. FastH3 accepts
-text-only FL2VA generation with `--h3-acceleration quality`; it rejects frame
-conditioning, continuation, references, non-unit adapter strength, and other
-H3 approximation modes.
+FastH3 changes the schedule-only AdaLN weights that the compact base omits. The
+managed `video-minimax-h3-fasth3-vsa-datafree-mlx` package includes its
+source-bound table beside the Q8 compression-gate artifact. End users need one
+model pull and no preparation step. Package builders use
+`prepare_minimax_h3_fasth3_vsa.py` to create the table and
+`merge_minimax_h3_fasth3_q8.py` to create the premerged transformer. FastH3
+accepts text-only FL2VA generation with `--h3-acceleration quality`. It rejects
+frame conditioning, continuation, references, non-unit adapter strength, and
+other H3 approximation modes.
 
 All standard projection pairs execute as activation-space low-rank wrappers
 around the dense or stock MLX quantized base linear. QKV keeps independent

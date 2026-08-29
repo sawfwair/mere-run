@@ -27,7 +27,11 @@ The format is based on Keep a Changelog.
   exact four-evaluation sampler, 64-token sparse video attention, compression
   gates, and source-bound AdaLN cache. The dedicated
   `video-minimax-h3-fasth3-vsa-datafree-mlx` model packages every supported
-  inference asset behind one explicit license-accepting pull.
+  inference asset behind one explicit license-accepting pull. Its published
+  package premerges the student into an affine Q8/group-64 transformer and
+  stores the compression gates in Q8. Prepared geometry and compact selected
+  route tables reduce VSA traversal work on Metal without changing the released
+  90% video-key sparsity contract.
 
 ## 0.46.1 - 2026-08-29
 

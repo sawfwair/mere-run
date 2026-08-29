@@ -2399,11 +2399,12 @@ mere.run video generate "a lighthouse in a winter storm" \
   --output ./lighthouse-fasth3.mp4
 ```
 
-This package contains the compact BF16 base, FastH3 VSA DataFree adapter, and
-source-bound AdaLN cache. It doesn't require a separate download or preparation
-step after the model pull. The lower-level adapter command remains available to
-developers building or verifying the package. FastH3 accepts text-only FL2VA,
-requires adapter strength `1.0`, and uses the quality acceleration mode.
+This package contains the premerged affine Q8/group-64 FastH3 student, Q8
+compression gates, Q8 text encoder, both VAEs, tokenizer, and source-bound
+AdaLN cache. It doesn't require another download or preparation step after the
+model pull. The lower-level adapter command remains available to developers who
+build or verify the package. FastH3 accepts text-only FL2VA, requires adapter
+strength `1.0`, and uses the quality acceleration mode.
 
 For a cross-command decision guide, see [Benchmarking](./benchmarking.md). The
 following subsections provide the command reference for each benchmark lane.
