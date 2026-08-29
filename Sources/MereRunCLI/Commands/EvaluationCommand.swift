@@ -55,6 +55,8 @@ struct EvaluationPackValidationOutput: Codable {
     let packSHA256: String
     let files: [EvaluationPackFilePin]
     let caseCount: Int
+    let visionCaseCount: Int
+    let imageFileCount: Int
     let splits: [String: Int]
     let arms: [String]
     let profiles: [String]
@@ -72,6 +74,10 @@ struct EvaluationPackValidationOutput: Codable {
         packSHA256 = pack.packSHA256
         files = pack.files
         caseCount = pack.cases.count
+        visionCaseCount = pack.cases.filter { benchmarkCase in
+            benchmarkCase.specification.messages.contains { $0.imageFile != nil }
+        }.count
+        imageFileCount = pack.imageURLs.count
         splits = Dictionary(grouping: pack.cases, by: { $0.specification.split.rawValue })
             .mapValues(\.count)
         arms = pack.manifest.arms.map(\.id)
@@ -89,6 +95,8 @@ struct EvaluationPackValidationOutput: Codable {
             "manifest sha256: \(manifestSHA256)",
             "declared files: \(files.count)",
             "cases: \(caseCount)",
+            "vision cases: \(visionCaseCount)",
+            "image files: \(imageFileCount)",
             "arms: \(arms.joined(separator: ", "))",
             "profiles: \(profiles.joined(separator: ", "))",
             "model slots: \(modelSlots.joined(separator: ", "))",
@@ -389,14 +397,11 @@ struct EvaluationRunCommand: AsyncParsableCommand {
         trial: Int,
         pool: RuntimeModelPool
     ) async throws -> EvaluationResultRow {
-        var messages: [OpenAIChatMessage] = []
-        if let promptSetID = arm.promptSet,
-           let prompt = resolved.pack.promptSet(id: promptSetID)?.systemPrompt {
-            messages.append(OpenAIChatMessage(role: "system", content: prompt))
-        }
-        messages.append(contentsOf: benchmarkCase.specification.messages.map {
-            OpenAIChatMessage(role: $0.role.rawValue, content: $0.content)
-        })
+        let messages = try EvaluationRequestBuilder.messages(
+            benchmarkCase: benchmarkCase,
+            arm: arm,
+            pack: resolved.pack
+        )
         let capture = resolved.plan.settings.logprobCapture
         let openAIRequest = OpenAIChatRequest(
             model: modelID,
@@ -409,7 +414,10 @@ struct EvaluationRunCommand: AsyncParsableCommand {
             logprobs: capture != .none,
             top_logprobs: resolved.plan.settings.logprobs == EvaluationLogprobMode.top.rawValue
                 ? resolved.plan.settings.topLogprobs
-                : nil
+                : nil,
+            response_format: resolved.plan.settings.responseFormat.map {
+                OpenAIResponseFormat(type: $0)
+            }
         )
         let adapter = arm.adapterSlot.flatMap { resolved.adapters[$0] }
         let runtimePlan: RuntimeChatPlan
@@ -493,6 +501,39 @@ struct EvaluationRunCommand: AsyncParsableCommand {
             responseSHA256: FusedBenchmarkHash.sha256(visible),
             response: logResponses ? visible : nil
         )
+    }
+}
+
+enum EvaluationRequestBuilder {
+    static func messages(
+        benchmarkCase: LoadedEvaluationCase,
+        arm: EvaluationArmPlan,
+        pack: LoadedEvaluationPack
+    ) throws -> [OpenAIChatMessage] {
+        var messages: [OpenAIChatMessage] = []
+        if let promptSetID = arm.promptSet,
+           let prompt = pack.promptSet(id: promptSetID)?.systemPrompt {
+            messages.append(OpenAIChatMessage(role: "system", content: prompt))
+        }
+        messages.append(contentsOf: try benchmarkCase.specification.messages.map { message in
+            let imageURLs: [String]
+            if let imageFile = message.imageFile {
+                guard let imageURL = pack.imageURL(relativePath: imageFile) else {
+                    throw ValidationError(
+                        "Evaluation case \(benchmarkCase.specification.id) references unavailable image \(imageFile)."
+                    )
+                }
+                imageURLs = [imageURL.path]
+            } else {
+                imageURLs = []
+            }
+            return OpenAIChatMessage(
+                role: message.role.rawValue,
+                content: message.content,
+                imageURLs: imageURLs
+            )
+        })
+        return messages
     }
 }
 
@@ -632,12 +673,20 @@ enum EvaluationPlanBuilder {
         let scorerPin = pack.manifest.scorer.executable.flatMap { executable in
             pack.files.first { $0.relativePath == executable }
         }
+        let resolvedLogprobs = logprobs ?? pack.manifest.defaults.logprobs
+        let responseFormat = pack.manifest.defaults.responseFormat
+        guard responseFormat != .jsonObject || resolvedLogprobs == .none else {
+            throw ValidationError(
+                "Evaluation response_format json_object requires logprobs none."
+            )
+        }
         let settings = EvaluationRunSettings(
             trials: trials ?? pack.manifest.defaults.trials,
             maxTokens: maxTokens ?? pack.manifest.defaults.maxTokens,
             contextSize: contextSize ?? pack.manifest.defaults.contextSize,
-            logprobs: (logprobs ?? pack.manifest.defaults.logprobs).rawValue,
+            logprobs: resolvedLogprobs.rawValue,
             topLogprobs: topLogprobs ?? pack.manifest.defaults.topLogprobs,
+            responseFormat: responseFormat?.rawValue,
             logResponses: logResponses,
             externalScorerAuthorized: externalScorerAuthorized,
             runtimeSeedControl: false

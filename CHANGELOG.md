@@ -6,6 +6,13 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Evaluation
+
+- added manifest-declared local image inputs and structured JSON object
+  responses to external evaluation packs. Validation pins image bytes into the
+  pack identity, rejects undeclared or unreferenced images, and rejects
+  unsupported manifest and case fields instead of silently ignoring them.
+
 ### Text
 
 - added an ungated activation-weighted Q3/group-64 Flash-Next profile from the

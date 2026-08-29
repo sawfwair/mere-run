@@ -15,8 +15,10 @@ This is an ownership boundary, not a packaging convention:
 - The public source tree contains one synthetic fixture solely to test the
   contract.
 
-The first version evaluates text-chat models and adapters. Existing image,
-audio, video, vision, and training commands remain separate surfaces.
+Evaluation packs support text chat and image-conditioned vision-language model
+(VLM) chat through the shared managed runtime. Image generation, audio, video,
+grounding, segmentation, optical character recognition (OCR), and training use
+separate commands.
 
 ## Lifecycle
 
@@ -82,6 +84,8 @@ prompt sets and an optional scorer executable are separate declared files.
 example-pack/
 ├── eval-pack.json
 ├── cases.jsonl
+├── images/
+│   └── scene.png          # optional; declare the file in image_files
 ├── prompts/
 │   └── concise.txt
 └── score                 # optional executable
@@ -89,8 +93,14 @@ example-pack/
 
 Only files named by the manifest are read. Paths must remain inside the pack,
 and declared files may not be symlinks. Validation records the SHA-256 digest
-and byte count of every declared file, plus a digest for every canonical case
-and the aggregate pack.
+and byte count of every declared file, including each image. Validation also
+records a digest for every canonical case and the aggregate pack. Every
+declared image must be referenced by a case. Every case image must appear in
+`image_files`.
+
+Pack validation rejects unsupported fields at every manifest and case contract
+level. A misspelled or unavailable field can't validate and then disappear
+before inference.
 
 ## Cases
 
@@ -103,6 +113,46 @@ built-in assertions, and optional string metadata. For example:
 
 An acceptable response is `green`. That example is deliberately synthetic; a
 pack owner defines the real cases and holds them in its own repository.
+
+To attach an image, add the local file to `image_files` in the manifest:
+
+```json
+{
+  "case_files": ["cases.jsonl"],
+  "image_files": ["images/scene.png"]
+}
+```
+
+Then, add `image_file` to the user message that describes the image task:
+
+```json
+{
+  "id": "synthetic-vision/001",
+  "split": "held-out",
+  "capability_tags": ["visual-grounding", "negative-evidence"],
+  "messages": [
+    {
+      "role": "user",
+      "content": "Is a triangle visible? Answer yes or no.",
+      "image_file": "images/scene.png"
+    }
+  ],
+  "assertions": [
+    {
+      "id": "answers-no",
+      "kind": "contains",
+      "value": "no",
+      "case_insensitive": true
+    }
+  ]
+}
+```
+
+The `image_file` value must be a normalized relative path. The runner resolves
+the path inside the validated pack and sends the image through the multimodal
+chat contract. If the selected model doesn't support image input, the run fails
+before generation. Evaluation packs don't fetch images from the network or
+read undeclared files.
 
 Available splits are `training`, `validation`, `development`, `held-out`,
 `regression`, `stability`, and `sealed-frontier`. Evaluation reports record the
@@ -151,6 +201,11 @@ context budgets, and logprob mode. Logprob modes are `none`, `summary`,
 Reports derive calibration diagnostics per arm/profile, including expected
 calibration error, selective accuracy, fragile passes, and confident failures.
 These diagnostics complement correctness gates; they do not replace them.
+
+For a JSON object response, set `defaults.response_format` to `json_object` and
+set `defaults.logprobs` to `none`. The run plan pins the response format and
+uses the shared structured-output capability checks. Omit `response_format`,
+or set it to `text`, for unconstrained text.
 
 ## Scorers and gates
 

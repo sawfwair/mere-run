@@ -63,6 +63,7 @@ public struct LoadedEvaluationPack: Sendable {
     public let files: [EvaluationPackFilePin]
     public let cases: [LoadedEvaluationCase]
     public let promptSets: [LoadedEvaluationPromptSet]
+    public let imageURLs: [String: URL]
     public let scorerExecutableURL: URL?
 
     public init(
@@ -74,6 +75,7 @@ public struct LoadedEvaluationPack: Sendable {
         files: [EvaluationPackFilePin],
         cases: [LoadedEvaluationCase],
         promptSets: [LoadedEvaluationPromptSet],
+        imageURLs: [String: URL] = [:],
         scorerExecutableURL: URL?
     ) {
         self.rootURL = rootURL
@@ -84,11 +86,16 @@ public struct LoadedEvaluationPack: Sendable {
         self.files = files
         self.cases = cases
         self.promptSets = promptSets
+        self.imageURLs = imageURLs
         self.scorerExecutableURL = scorerExecutableURL
     }
 
     public func promptSet(id: String) -> LoadedEvaluationPromptSet? {
         promptSets.first { $0.specification.id == id }
+    }
+
+    public func imageURL(relativePath: String) -> URL? {
+        imageURLs[relativePath]
     }
 }
 
@@ -148,6 +155,7 @@ public enum EvaluationPackLoader {
         )
         let manifest: EvaluationPackManifest
         do {
+            try EvaluationSchemaValidation.validateManifestJSON(manifestData)
             manifest = try JSONDecoder().decode(EvaluationPackManifest.self, from: manifestData)
         } catch {
             throw EvaluationPackError.invalidManifest("cannot decode \(manifestURL.path): \(error)")
@@ -158,6 +166,18 @@ public enum EvaluationPackLoader {
             data: manifestData,
             relativePath: manifestURL.lastPathComponent
         )]
+        var imageURLs: [String: URL] = [:]
+        for relativePath in manifest.imageFiles ?? [] {
+            let fileURL = try declaredFileURL(
+                relativePath,
+                rootURL: rootURL,
+                fileManager: fileManager
+            )
+            let data = try Data(contentsOf: fileURL)
+            pins.append(try pin(data: data, relativePath: relativePath))
+            imageURLs[relativePath] = fileURL
+        }
+        let declaredImageFiles = Set(imageURLs.keys)
         var loadedCases: [LoadedEvaluationCase] = []
         var seenCaseIDs: Set<String> = []
         for relativePath in manifest.caseFiles {
@@ -187,13 +207,19 @@ public enum EvaluationPackLoader {
                 }
                 let specification: EvaluationCase
                 do {
+                    try EvaluationSchemaValidation.validateCaseJSON(lineData)
                     specification = try JSONDecoder().decode(EvaluationCase.self, from: lineData)
                 } catch {
                     throw EvaluationPackError.invalidCase(
                         "cannot decode \(relativePath):\(lineNumber): \(error)"
                     )
                 }
-                try validate(specification, scorer: manifest.scorer, source: "\(relativePath):\(lineNumber)")
+                try validate(
+                    specification,
+                    scorer: manifest.scorer,
+                    declaredImageFiles: declaredImageFiles,
+                    source: "\(relativePath):\(lineNumber)"
+                )
                 guard seenCaseIDs.insert(specification.id).inserted else {
                     throw EvaluationPackError.duplicateCaseID(specification.id)
                 }
@@ -207,6 +233,15 @@ public enum EvaluationPackLoader {
         }
         guard !loadedCases.isEmpty else {
             throw EvaluationPackError.invalidManifest("declared case files contain no cases")
+        }
+        let referencedImageFiles = Set(loadedCases.flatMap { loadedCase in
+            loadedCase.specification.messages.compactMap(\.imageFile)
+        })
+        let unusedImageFiles = declaredImageFiles.subtracting(referencedImageFiles)
+        guard unusedImageFiles.isEmpty else {
+            throw EvaluationPackError.invalidManifest(
+                "image_files contains unreferenced entries: \(unusedImageFiles.sorted().joined(separator: ", "))"
+            )
         }
 
         var loadedPromptSets: [LoadedEvaluationPromptSet] = []
@@ -263,6 +298,7 @@ public enum EvaluationPackLoader {
             files: uniquePins,
             cases: loadedCases,
             promptSets: loadedPromptSets,
+            imageURLs: imageURLs,
             scorerExecutableURL: scorerExecutableURL
         )
     }
@@ -282,6 +318,25 @@ public enum EvaluationPackLoader {
         }
         guard !manifest.caseFiles.isEmpty, Set(manifest.caseFiles).count == manifest.caseFiles.count else {
             throw EvaluationPackError.invalidManifest("case_files must be non-empty and unique")
+        }
+        let imageFiles = manifest.imageFiles ?? []
+        guard Set(imageFiles).count == imageFiles.count else {
+            throw EvaluationPackError.invalidManifest("image_files must be unique")
+        }
+        for imageFile in imageFiles {
+            try validateRelativePath(imageFile, field: "image_files")
+        }
+        let nonImageFiles = Set(
+            manifest.caseFiles
+                + manifest.promptSets.map(\.systemPromptFile)
+                + [manifest.scorer.executable].compactMap { $0 }
+        )
+        let conflictingImageFiles = Set(imageFiles).intersection(nonImageFiles)
+        guard conflictingImageFiles.isEmpty else {
+            throw EvaluationPackError.invalidManifest(
+                "image_files overlaps another declared file role: "
+                    + conflictingImageFiles.sorted().joined(separator: ", ")
+            )
         }
         let promptIDs = try uniqueIdentifiers(manifest.promptSets.map(\.id), field: "prompt_sets")
         let armIDs = try uniqueIdentifiers(manifest.arms.map(\.id), field: "arms")
@@ -415,11 +470,18 @@ public enum EvaluationPackLoader {
                 "defaults require positive trials, max_tokens, context_size, and top_logprobs from 1 through 20"
             )
         }
+        if manifest.defaults.responseFormat == .jsonObject,
+           manifest.defaults.logprobs != .none {
+            throw EvaluationPackError.invalidManifest(
+                "defaults.response_format json_object requires defaults.logprobs none"
+            )
+        }
     }
 
     private static func validate(
         _ specification: EvaluationCase,
         scorer: EvaluationScorer,
+        declaredImageFiles: Set<String>,
         source: String
     ) throws {
         do {
@@ -439,6 +501,24 @@ public enum EvaluationPackLoader {
             throw EvaluationPackError.invalidCase(
                 "\(source): messages require non-empty content and at least one user message"
             )
+        }
+        for message in specification.messages {
+            guard let imageFile = message.imageFile else { continue }
+            guard message.role == .user else {
+                throw EvaluationPackError.invalidCase(
+                    "\(source): image_file is supported only on user messages"
+                )
+            }
+            do {
+                try validateRelativePath(imageFile, field: "message.image_file")
+            } catch {
+                throw EvaluationPackError.invalidCase("\(source): \(error.localizedDescription)")
+            }
+            guard declaredImageFiles.contains(imageFile) else {
+                throw EvaluationPackError.invalidCase(
+                    "\(source): image_file \(imageFile) is not declared in image_files"
+                )
+            }
         }
         if let maxTokens = specification.maxTokens, maxTokens <= 0 {
             throw EvaluationPackError.invalidCase(

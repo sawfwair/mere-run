@@ -208,6 +208,8 @@ Public tree:
   - `mere.run plugin info` — Show one plugin's catalog entry and install command.
   - `mere.run plugin install` — Install one official plugin using its catalog install command.
   - `mere.run plugin doctor` — Run an installed plugin's doctor command.
+  - `mere.run plugin run` — Run an installed plugin without changing PATH.
+  - `mere.run plugin rollback` — Restore a retained signed plugin bundle.
 - [`mere.run setup`](/getting-started) — Choose a guided, BYOA, or manual mere.run setup path.
 - [`mere.run agent`](/getting-started) — Install and start the optional guided local setup agent.
   - `mere.run agent onboard` — Summarize this machine's model capabilities and prepare the optional Pi agent.

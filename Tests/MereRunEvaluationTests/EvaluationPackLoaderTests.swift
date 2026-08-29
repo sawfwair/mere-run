@@ -9,6 +9,7 @@ final class EvaluationPackLoaderTests: XCTestCase {
         XCTAssertEqual(pack.manifest.schemaVersion, 1)
         XCTAssertEqual(pack.manifest.id, "synthetic-color-check")
         XCTAssertEqual(pack.cases.count, 2)
+        XCTAssertEqual(pack.imageURLs.count, 0)
         XCTAssertEqual(pack.promptSets.count, 1)
         XCTAssertEqual(pack.manifest.arms.count, 4)
         XCTAssertEqual(pack.manifest.samplingProfiles.count, 2)
@@ -40,6 +41,90 @@ final class EvaluationPackLoaderTests: XCTestCase {
             original.promptSet(id: "concise")?.contentSHA256,
             changed.promptSet(id: "concise")?.contentSHA256
         )
+    }
+
+    func testLoadsAndPinsManifestDeclaredVisionInput() throws {
+        let copy = try visionPackCopy()
+        defer { try? FileManager.default.removeItem(at: copy) }
+
+        let pack = try EvaluationPackLoader.load(from: copy)
+        let imagePath = "images/synthetic.png"
+
+        XCTAssertEqual(pack.imageURLs.keys.sorted(), [imagePath])
+        XCTAssertEqual(
+            pack.imageURL(relativePath: imagePath)?.path,
+            copy.appendingPathComponent(imagePath).path
+        )
+        XCTAssertEqual(pack.cases[0].specification.messages[0].imageFile, imagePath)
+        XCTAssertEqual(pack.files.map(\.relativePath), [
+            "cases.jsonl",
+            "eval-pack.json",
+            imagePath,
+            "prompts/concise.txt",
+        ])
+    }
+
+    func testPackHashChangesWhenDeclaredImageChanges() throws {
+        let copy = try visionPackCopy()
+        defer { try? FileManager.default.removeItem(at: copy) }
+        let original = try EvaluationPackLoader.load(from: copy)
+        let imageURL = copy.appendingPathComponent("images/synthetic.png")
+        try Data("changed synthetic image bytes".utf8).write(to: imageURL, options: .atomic)
+        let changed = try EvaluationPackLoader.load(from: copy)
+
+        XCTAssertNotEqual(original.packSHA256, changed.packSHA256)
+        XCTAssertNotEqual(
+            original.files.first { $0.relativePath == "images/synthetic.png" }?.sha256,
+            changed.files.first { $0.relativePath == "images/synthetic.png" }?.sha256
+        )
+    }
+
+    func testRejectsVisionInputThatIsNotDeclaredByManifest() throws {
+        let copy = try visionPackCopy()
+        defer { try? FileManager.default.removeItem(at: copy) }
+        let manifestURL = copy.appendingPathComponent("eval-pack.json")
+        var text = try String(contentsOf: manifestURL, encoding: .utf8)
+        text = text.replacingOccurrences(
+            of: "  \"image_files\": [\n    \"images/synthetic.png\"\n  ],\n",
+            with: ""
+        )
+        try Data(text.utf8).write(to: manifestURL, options: .atomic)
+
+        XCTAssertThrowsError(try EvaluationPackLoader.load(from: copy)) { error in
+            XCTAssertTrue(error.localizedDescription.contains("not declared in image_files"))
+        }
+    }
+
+    func testRejectsUnsupportedFieldsInsteadOfSilentlyIgnoringThem() throws {
+        let source = try fixturePackURL()
+        let manifestCopy = try temporaryPackCopy(source)
+        defer { try? FileManager.default.removeItem(at: manifestCopy) }
+        let manifestURL = manifestCopy.appendingPathComponent("eval-pack.json")
+        var manifest = try String(contentsOf: manifestURL, encoding: .utf8)
+        manifest = manifest.replacingOccurrences(
+            of: "  \"schema_version\": 1,",
+            with: "  \"schema_version\": 1,\n  \"silent_manifest_field\": true,"
+        )
+        try Data(manifest.utf8).write(to: manifestURL, options: .atomic)
+
+        XCTAssertThrowsError(try EvaluationPackLoader.load(from: manifestCopy)) { error in
+            XCTAssertTrue(error.localizedDescription.contains("silent_manifest_field"))
+        }
+
+        let caseCopy = try temporaryPackCopy(source)
+        defer { try? FileManager.default.removeItem(at: caseCopy) }
+        let casesURL = caseCopy.appendingPathComponent("cases.jsonl")
+        var cases = try String(contentsOf: casesURL, encoding: .utf8)
+        cases = cases.replacingOccurrences(
+            of: "\"content\":\"What color is a clear daytime sky?\"}",
+            with: "\"content\":\"What color is a clear daytime sky?\",\"image\":\"ignored.png\"}"
+        )
+        try Data(cases.utf8).write(to: casesURL, options: .atomic)
+
+        XCTAssertThrowsError(try EvaluationPackLoader.load(from: caseCopy)) { error in
+            XCTAssertTrue(error.localizedDescription.contains("messages[0]"))
+            XCTAssertTrue(error.localizedDescription.contains("image"))
+        }
     }
 
     func testRejectsTraversalBeforeReadingExternalFiles() throws {
@@ -154,5 +239,34 @@ final class EvaluationPackLoaderTests: XCTestCase {
             .appendingPathComponent("evaluation-pack-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.copyItem(at: source, to: destination)
         return destination
+    }
+
+    private func visionPackCopy() throws -> URL {
+        let copy = try temporaryPackCopy(fixturePackURL())
+        let images = copy.appendingPathComponent("images", isDirectory: true)
+        try FileManager.default.createDirectory(at: images, withIntermediateDirectories: true)
+        try Data("synthetic image bytes".utf8).write(
+            to: images.appendingPathComponent("synthetic.png"),
+            options: .atomic
+        )
+
+        let manifestURL = copy.appendingPathComponent("eval-pack.json")
+        var manifest = try String(contentsOf: manifestURL, encoding: .utf8)
+        manifest = manifest.replacingOccurrences(
+            of: "  \"case_files\": [\n    \"cases.jsonl\"\n  ],\n",
+            with: "  \"case_files\": [\n    \"cases.jsonl\"\n  ],\n"
+                + "  \"image_files\": [\n    \"images/synthetic.png\"\n  ],\n"
+        )
+        try Data(manifest.utf8).write(to: manifestURL, options: .atomic)
+
+        let casesURL = copy.appendingPathComponent("cases.jsonl")
+        var cases = try String(contentsOf: casesURL, encoding: .utf8)
+        cases = cases.replacingOccurrences(
+            of: "\"content\":\"What color is a clear daytime sky?\"}",
+            with: "\"content\":\"What color is a clear daytime sky?\","
+                + "\"image_file\":\"images/synthetic.png\"}"
+        )
+        try Data(cases.utf8).write(to: casesURL, options: .atomic)
+        return copy
     }
 }

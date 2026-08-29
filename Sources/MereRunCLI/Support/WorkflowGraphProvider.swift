@@ -228,7 +228,8 @@ enum WorkflowGraphProviderRegistry {
         let persisted = loadInstallRegistry(fileManager: fileManager).entrypoints
         let knownInstalled = knownOfficialEntrypoints.filter { PluginProcess.which($0) != nil }
         var seen = Set<String>()
-        return (configured + persisted + knownInstalled).filter { seen.insert($0).inserted }
+        let managed = (try? PluginBundleStore.standard.entrypoints()) ?? []
+        return (configured + persisted + knownInstalled + managed).filter { seen.insert($0).inserted }
     }
 
     private static func loadInstallRegistry(fileManager: FileManager) -> WorkflowGraphProviderInstallRegistry {
