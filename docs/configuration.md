@@ -312,7 +312,7 @@ against progress-report granularity and per-chunk activation memory.
 Qwen3.8-Flash-Next additionally tiles sparse attention in 16-query groups and
 primes MTP history in 256-token chunks. Those internal bounds do not truncate
 context: retained KV and MTP history still scale with `--context-size`. The QSA
-long-context path is available in builds newer than v0.45.0.
+long-context path is available in version 0.46.0 and later.
 
 ### `MERERUN_Q35_BATCHED_GPU_SAMPLING`
 

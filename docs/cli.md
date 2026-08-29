@@ -830,7 +830,7 @@ Key options:
   27B use their published 262,144-token limit by default. Inkling-Small advertises
   1,048,576 tokens but uses a 32,768-token operational default because KV
   residency grows with context. Qwen3.8-Flash-Next uses learned QSA selection
-  beyond 2,048 tokens in builds newer than v0.45.0. Its 262,144-token limit is
+  beyond 2,048 tokens in version 0.46.0 and later. Its 262,144-token limit is
   architectural, not a full-context memory qualification for a 128 GB Mac;
   explicitly select a smaller window such as `32768` to bound retained history.
 - `--temperature`: defaults to 0.7, or the model's published value where one

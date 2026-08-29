@@ -85,14 +85,26 @@ model's manifest and validation status. Replace `MODEL_ID` with its catalog ID.
 Local inference doesn't require a hosted inference service after the models
 are installed.
 
-## Release and source build status
+## Release status
 
-On August 28, 2026, the published release was
-[v0.45.0](https://github.com/sawfwair/mere-run/releases/tag/v0.45.0).
-The following sections distinguish release packages from source builds.
+On August 29, 2026, the published release was
+[v0.46.0](https://github.com/sawfwair/mere-run/releases/tag/v0.46.0).
+The following sections summarize current and previous release packages.
 
 Model names use Q2, Q4, and Q8 for 2-bit, 4-bit, and 8-bit quantization.
 BF16 refers to bfloat16, a 16-bit floating-point format.
+
+### Release v0.46.0
+
+- Flash-Next Qwen Sparse Attention (QSA) beyond the earlier 2,048-token limit,
+  plus the public `vision-chat-q38-flash-next-3bit` activation-weighted Q3
+  profile and memory, cache, vision, and verification fixes.
+- Image inputs and structured JSON object responses in external evaluation
+  packs, with content-pinned images and strict schema validation.
+- Verified installation, execution, and rollback for signed macOS Apple
+  Silicon plugin bundles supplied through an explicit source.
+- Faster Qwen3.8 27B Q4 multi-token prediction (MTP) with exact greedy output
+  parity in the bounded release benchmark. BF16 MTP remains opt-in.
 
 ### Release v0.45.0
 
@@ -113,11 +125,11 @@ BF16 refers to bfloat16, a 16-bit floating-point format.
 - Improvements to Nemotron tool calls, text training templates, and Gemma 4
   Turbo API serving.
 
-### Source builds after v0.45.0
+### Qwen3.8 Flash Next qualification notes
 
-Builds from `main` add Flash-Next Qwen Sparse Attention (QSA) beyond the
-release's 2,048-token limit for the prompt and generated response combined.
-They also add the public, ungated
+Release v0.46.0 adds Flash-Next Qwen Sparse Attention (QSA) beyond the earlier
+2,048-token limit for the prompt and generated response combined. It also adds
+the public, ungated
 `vision-chat-q38-flash-next-3bit` activation-weighted Q3 profile. Its 89.67 GB
 managed pull requires explicit Qwen Community License 1.0 acceptance. Qwen3.8
 27B also has MTP decoding improvements. Its MTP path remains opt-in.
@@ -469,7 +481,7 @@ uses `sudo` only if the destination requires it. For app integrations, see the
 ### Install on Linux
 
 Linux packages contain the headless CLI and runtime assets, not macOS Studio.
-Release v0.45.0 provides CUDA x86_64 tarballs and Debian packages. Its release
+Release v0.46.0 provides CUDA x86_64 tarballs and Debian packages. Its release
 smoke test ran on an RTX 3080 Ti with Ubuntu 24.04. Hosted CPU tests and that
 CUDA test don't establish every model's compatibility on every Linux host.
 

@@ -6,6 +6,13 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.46.0 - 2026-08-29
+
+This release expands Qwen3.8 Flash Next with long-context QSA, a smaller
+activation-weighted Q3 profile, and memory and correctness hardening. It also
+adds image-aware external evaluation packs, verified signed plugin-bundle
+installation, and faster Qwen3.8 27B MTP decode.
+
 ### Evaluation
 
 - added manifest-declared local image inputs and structured JSON object
@@ -15,6 +22,11 @@ The format is based on Keep a Changelog.
 
 ### Text
 
+- accelerated Qwen3.8 27B Q4 greedy decoding with an adaptive MTP companion,
+  serial-exact affine-Q4 verification, and verification-state rollback. In a
+  real-checkpoint run with 521 prompt tokens and 128 output tokens, adaptive
+  decode measured 49.3979 tokens per second versus 24.8290 target-only, with
+  exact greedy output parity. BF16 MTP remains opt-in.
 - added an ungated activation-weighted Q3/group-64 Flash-Next profile from the
   pinned BF16 checkpoint. Eligible non-expert matrices remain Q4, including
   Q4/group-32 n-gram storage. The 89.67 GB managed pull requires explicit Qwen
@@ -80,6 +92,24 @@ The format is based on Keep a Changelog.
   already include the required weights. `--context-size` can use the checkpoint's
   262,144-token architectural limit, subject to memory; this is not a full-262k
   qualification on the 128 GB mixed-model profile.
+
+### Plugins
+
+- added verified installation, execution, and rollback for signed macOS Apple
+  Silicon plugin bundles. Before atomic activation, the CLI validates the
+  pinned Ed25519 publisher, package identity and expiry, archive size and hash,
+  contained paths, Developer ID and notarization policy, and plugin manifests.
+  Catalog URLs remain unchanged until compatible immutable bundles are
+  published and tested end to end.
+
+### Included pull requests
+
+- exact release range: [#368](https://github.com/sawfwair/mere-run/pull/368),
+  [#371](https://github.com/sawfwair/mere-run/pull/371),
+  [#372](https://github.com/sawfwair/mere-run/pull/372),
+  [#373](https://github.com/sawfwair/mere-run/pull/373),
+  [#374](https://github.com/sawfwair/mere-run/pull/374), and
+  [#375](https://github.com/sawfwair/mere-run/pull/375).
 
 ## 0.45.0 - 2026-08-26
 

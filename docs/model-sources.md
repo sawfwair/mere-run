@@ -401,8 +401,8 @@ All three artifacts include the Qwen Community License 1.0 and a complete
 source/output hash receipt. Pulls are explicit and require either
 `--accept-model-license` or its equivalent `--accept-license-terms` alias. The
 native Qwen4Exp runtime supports text generation; image input remains
-unqualified. Builds newer than v0.45.0 implement the trained QSA micro-block
-selector beyond 2,048 tokens, replacing that release's prompt-plus-generation
+unqualified. Version 0.46.0 and later implement the trained QSA micro-block
+selector beyond 2,048 tokens, replacing v0.45.0's prompt-plus-generation
 cap. Up to the indexer budget, standard causal attention is exact because every
 visible block is selected. Beyond it, each query selects 512 complete four-token
 blocks and includes the current partial block. Future blocks are excluded
