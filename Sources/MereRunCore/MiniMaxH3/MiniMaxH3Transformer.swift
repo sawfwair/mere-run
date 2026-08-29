@@ -870,6 +870,38 @@ private final class MiniMaxH3TransformerBlock: Module {
         return attention.project(attentionInput, rope: rope) + [gateAttention]
     }
 
+    func fastH3AttentionProjection(
+        _ value: MLXArray,
+        timeEmbedding: MLXArray,
+        adaLNIndices: MLXArray,
+        rope: MiniMaxH3RotaryEmbedding,
+        cachedModulation: MLXArray?,
+        compressionGateWeight: MLXArray
+    ) -> [MLXArray] {
+        let modulation: [MLXArray]
+        if let cachedModulation {
+            modulation = MLX.split(cachedModulation, parts: 6, axis: -1)
+        } else {
+            guard let adaLN else { preconditionFailure("MiniMax-H3 AdaLN cache is required") }
+            modulation = adaLN(timeEmbedding)
+        }
+        let shiftAttention = MLX.take(modulation[0], adaLNIndices, axis: 0).expandedDimensions(axis: 0)
+        let scaleAttention = MLX.take(modulation[1], adaLNIndices, axis: 0).expandedDimensions(axis: 0)
+        let gateAttention = MLX.take(modulation[2], adaLNIndices, axis: 0).expandedDimensions(axis: 0)
+        let attentionInput = attentionNorm(value) * (1 + scaleAttention) + shiftAttention
+        let projected = attention.project(attentionInput, rope: rope)
+        let compressed = MLX.matmul(
+            attentionInput.asType(compressionGateWeight.dtype),
+            compressionGateWeight.T
+        ).reshaped(
+            attentionInput.dim(0),
+            attentionInput.dim(1),
+            attention.heads,
+            attention.headDimension
+        ).transposed(0, 2, 1, 3).contiguous()
+        return projected + [gateAttention, compressed]
+    }
+
     func scaledDotProductAttention(
         queries: MLXArray,
         keys: MLXArray,
@@ -1635,6 +1667,7 @@ public final class MiniMaxH3Transformer: Module {
     private var compiledBlockRunner: MiniMaxH3TransformerBlock?
     private var compiledBlockForwards: MiniMaxH3CompiledBlockForwards?
     private var dynamicSparseAttentionGateResults: [String: Bool] = [:]
+    private var fastH3CompressionGateWeights: [MLXArray?]
 
     var supportsAffineQ8ExactKernels: Bool {
         !blocks.isEmpty && blocks.allSatisfy(\.supportsAffineQ8ExactKernels)
@@ -1651,6 +1684,7 @@ public final class MiniMaxH3Transformer: Module {
     ) {
         self.adaLNWeightsAvailable = includeAdaLN
         self.configuration = configuration
+        self.fastH3CompressionGateWeights = Array(repeating: nil, count: configuration.layerCount)
         self._videoInput.wrappedValue = Linear(
             configuration.videoPatchDimension,
             configuration.hiddenSize,
@@ -1696,6 +1730,23 @@ public final class MiniMaxH3Transformer: Module {
 
     var activeBlockCount: Int {
         activeBlockIndices?.count ?? blocks.count
+    }
+
+    var usesFastH3VSA: Bool {
+        !fastH3CompressionGateWeights.isEmpty
+            && fastH3CompressionGateWeights.allSatisfy { $0 != nil }
+    }
+
+    func installFastH3CompressionGate(_ weight: MLXArray, blockIndex: Int) {
+        precondition(fastH3CompressionGateWeights.indices.contains(blockIndex))
+        precondition(weight.shape == [
+            configuration.attentionHeadCount * configuration.attentionHeadDimension,
+            configuration.hiddenSize,
+        ])
+        fastH3CompressionGateWeights[blockIndex] = weight
+        MLX.eval(weight)
+        compiledBlockRunner = nil
+        compiledBlockForwards = nil
     }
 
     /// Expands compact quantized storage into resident bf16 linear weights.
@@ -2145,7 +2196,37 @@ public final class MiniMaxH3Transformer: Module {
             if let activeBlockIndices, !activeBlockIndices.contains(index) { continue }
             let block = blocks[index]
             let blockStarted = blockTimingHandler.map { _ in CFAbsoluteTimeGetCurrent() }
-            if usesBlockwiseCompilation {
+            if let compressionGateWeight = fastH3CompressionGateWeights[index] {
+                let projectedAttention = block.fastH3AttentionProjection(
+                    hidden,
+                    timeEmbedding: timeEmbedding,
+                    adaLNIndices: context.adaLNIndices,
+                    rope: context.rope,
+                    cachedModulation: cachedAdaLN?.blockModulations[index],
+                    compressionGateWeight: compressionGateWeight
+                )
+                MLX.eval(projectedAttention)
+                guard let attended = MiniMaxH3FastVSA.call(
+                    queries: projectedAttention[0],
+                    keys: projectedAttention[1],
+                    values: projectedAttention[2],
+                    compressionGate: projectedAttention[4],
+                    layout: context.layout
+                ) else {
+                    preconditionFailure("FastH3 VSA requires batch-one BF16 attention on Metal")
+                }
+                hidden = block.attentionProjectionResidual(
+                    hidden,
+                    attended: attended,
+                    gate: projectedAttention[3]
+                )
+                hidden = block.feedForwardResidual(
+                    hidden,
+                    timeEmbedding: timeEmbedding,
+                    adaLNIndices: context.adaLNIndices,
+                    cachedModulation: cachedAdaLN?.blockModulations[index]
+                )
+            } else if usesBlockwiseCompilation {
                 var attentionInputs = [
                     hidden,
                     timeEmbedding,

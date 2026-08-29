@@ -2374,6 +2374,7 @@ mere.run adapter pull minimax-h3-lightx2v-8step-v1
 mere.run adapter pull minimax-h3-lightx2v-4step-v1-768p
 mere.run adapter pull minimax-h3-lightx2v-8step-v1-768p
 mere.run adapter pull minimax-h3-lightx2v-ref2v-4step-v0.1
+mere.run adapter pull minimax-h3-fasth3-vsa-datafree-4step --accept-license
 ```
 
 The pull verifies the cataloged byte count and SHA-256 before atomically
@@ -2387,6 +2388,22 @@ adapters support the compact BF16 and affine Q8 FL2VA bases and reject the
 legacy Q4 compatibility package. The Ref2V adapter uses the managed Ref2VA base
 expanded to resident BF16. All bases remain subject to MiniMax-H3 Community
 License acceptance.
+
+The preferred FastH3 path is a single managed model pull:
+
+```bash
+mere.run model pull video-minimax-h3-fasth3-vsa-datafree-mlx \
+  --accept-model-license
+mere.run video generate "a lighthouse in a winter storm" \
+  --model video-minimax-h3-fasth3-vsa-datafree-mlx \
+  --output ./lighthouse-fasth3.mp4
+```
+
+This package contains the compact BF16 base, FastH3 VSA DataFree adapter, and
+source-bound AdaLN cache. It doesn't require a separate download or preparation
+step after the model pull. The lower-level adapter command remains available to
+developers building or verifying the package. FastH3 accepts text-only FL2VA,
+requires adapter strength `1.0`, and uses the quality acceleration mode.
 
 For a cross-command decision guide, see [Benchmarking](./benchmarking.md). The
 following subsections provide the command reference for each benchmark lane.

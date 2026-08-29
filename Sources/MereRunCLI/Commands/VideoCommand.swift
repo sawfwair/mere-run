@@ -1205,8 +1205,17 @@ struct VideoGenerate: AsyncParsableCommand {
             } else {
                 h3AdapterBaseModelID = ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue
             }
+            let effectiveH3Adapter: String?
+            if let h3Adapter {
+                effectiveH3Adapter = h3Adapter
+            } else if resolvedRequestedModel
+                == ModelResolver.ModelID.miniMaxH3FastH3VSADataFreeMLX.rawValue {
+                effectiveH3Adapter = h3Resources.fastH3AdapterURL.path
+            } else {
+                effectiveH3Adapter = nil
+            }
             let resolvedH3Adapter = try ManagedAdapterArgumentResolver.resolve(
-                h3Adapter,
+                effectiveH3Adapter,
                 baseModelID: h3AdapterBaseModelID
             ).map { URL(fileURLWithPath: $0).standardizedFileURL }
             let h3AdapterRecipe = resolvedH3Adapter.map(MiniMaxH3TurboAdapter.inferenceRecipe(for:))
@@ -2913,6 +2922,7 @@ struct VideoGenerate: AsyncParsableCommand {
         if requested == ModelResolver.ModelID.miniMaxH3FL2VAMLX.rawValue
             || requested == ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue
             || requested == ModelResolver.ModelID.miniMaxH3FL2VAQ8MLX.rawValue
+            || requested == ModelResolver.ModelID.miniMaxH3FastH3VSADataFreeMLX.rawValue
             || requested == ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue {
             return true
         }

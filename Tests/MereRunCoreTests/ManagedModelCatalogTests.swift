@@ -192,6 +192,7 @@ final class ManagedModelCatalogTests: XCTestCase {
             "video-minimax-h3-fl2va-mlx",
             "video-minimax-h3-fl2va-bf16-mlx",
             "video-minimax-h3-fl2va-8bit-mlx",
+            "video-minimax-h3-fasth3-vsa-datafree-mlx",
             "video-minimax-h3-ref2va-mlx",
         ])
         let visibleAndCompanionSpecs = ManagedModelCatalog.allSpecs
@@ -1551,6 +1552,11 @@ final class ManagedModelCatalogTests: XCTestCase {
                 .miniMaxH3FL2VAQ8MLX,
                 MiniMaxH3Resources.q8ArtifactRepository,
                 MiniMaxH3Resources.q8ArtifactRevision
+            ),
+            (
+                .miniMaxH3FastH3VSADataFreeMLX,
+                MiniMaxH3Resources.fastH3ArtifactRepository,
+                MiniMaxH3Resources.fastH3ArtifactRevision
             ),
         ]
         for (modelID, repository, revision) in cases {

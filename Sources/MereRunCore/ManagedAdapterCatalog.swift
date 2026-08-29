@@ -100,6 +100,8 @@ public enum ManagedAdapterCatalog {
     public static let miniMaxH3LightX2VV1Revision = "e6346777701aa2b64d42ed058cdd71ae00e7cd52"
     public static let miniMaxH3LightX2VRef2VFourStepV01ID = "minimax-h3-lightx2v-ref2v-4step-v0.1"
     public static let miniMaxH3LightX2VRef2VFourStepV01Revision = "5d1d4829fe614c1b93fcfd9cc7718e9ba71f73e1"
+    public static let miniMaxH3FastH3VSADataFreeID = "minimax-h3-fasth3-vsa-datafree-4step"
+    public static let miniMaxH3FastH3VSADataFreeRevision = "bcf40ca6f457ed66f8badf13514943e390205fca"
     public static let ltx25PixelSpatialUpscalerID = "ltx25-pixel-spatial-upscaler-x2"
     public static let ltx25PixelSpatialUpscalerRevision = "74c4e68ee7dd99f3997d5a1bb1a3784941822222"
 
@@ -292,6 +294,31 @@ public enum ManagedAdapterCatalog {
             )
         ),
         ManagedAdapterSpec(
+            id: miniMaxH3FastH3VSADataFreeID,
+            title: "FastH3 4-step VSA DataFree",
+            version: String(miniMaxH3FastH3VSADataFreeRevision.prefix(12)),
+            summary: "FastVideo four-evaluation MiniMax-H3 student with MLX Metal VSA-H3 sparse attention.",
+            baseModelID: ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue,
+            compatibleBaseModelIDs: [
+                ModelResolver.ModelID.miniMaxH3FastH3VSADataFreeMLX.rawValue,
+            ],
+            format: MiniMaxH3TurboAdapter.fastVideoFormat,
+            license: "MiniMax-H3 Community License",
+            upstreamRevision: miniMaxH3FastH3VSADataFreeRevision,
+            usageRestriction: miniMaxH3UsageRestriction,
+            releaseManifestURL: URL(
+                string: "https://huggingface.co/FastVideo/FastVideo-FastH3-4-step-Preview-v1-LoRA/commit/\(miniMaxH3FastH3VSADataFreeRevision)"
+            )!,
+            downloadURL: URL(
+                string: "https://huggingface.co/FastVideo/FastVideo-FastH3-4-step-Preview-v1-LoRA/resolve/\(miniMaxH3FastH3VSADataFreeRevision)/vsa-datafree/adapter_model.safetensors?download=true"
+            )!,
+            artifact: ModelArtifactPin(
+                filename: MiniMaxH3TurboAdapter.fastH3VSADataFreeFilename,
+                byteCount: 5_339_117_712,
+                sha256: "42dc502a2078f166c396a1fa75f29728d1844363652d345d5ef3e2b444ed6470"
+            )
+        ),
+        ManagedAdapterSpec(
             id: ltx25PixelSpatialUpscalerID,
             title: "LTX-2.5 Pixel Spatial Upscaler x2",
             version: String(ltx25PixelSpatialUpscalerRevision.prefix(12)),
@@ -326,6 +353,20 @@ public enum ManagedAdapterCatalog {
             )
         ),
     ]
+
+    private static let miniMaxH3UsageRestriction = ManagedModelUsageRestriction(
+        summary: "MiniMax-H3 weights may not be used, distributed, or displayed in the United States, European Union, United Kingdom, or Republic of Korea; downstream distribution also requires the Community License agreement, notice, and safeguards.",
+        terms: [
+            ManagedModelUsageTerm(
+                component: "MiniMax-H3 base and FastH3 student",
+                license: "MiniMax-H3 Community License",
+                summary: "Use is governed by the MiniMax-H3 Community License, including its territory and downstream-distribution restrictions.",
+                sourceRepoId: MiniMaxH3Resources.sourceRepository,
+                sourceRevision: MiniMaxH3Resources.sourceRevision,
+                licenseURL: "https://huggingface.co/MiniMaxAI/MiniMax-H3/blob/ec19cc6daf5d8add9417c18e86b6b58cc6c55027/LICENSE"
+            ),
+        ]
+    )
 
     public static func spec(for id: String) -> ManagedAdapterSpec? {
         let normalized = id.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()

@@ -129,6 +129,27 @@ struct ManagedAdapterCatalogTests {
         #expect(spec.downloadURL.absoluteString.contains(spec.upstreamRevision!))
     }
 
+    @Test("FastH3 VSA DataFree release is an immutable restricted BF16 pin")
+    func miniMaxH3FastH3VSADataFreeReleaseIsPinned() throws {
+        let spec = try #require(
+            ManagedAdapterCatalog.spec(for: ManagedAdapterCatalog.miniMaxH3FastH3VSADataFreeID)
+        )
+        #expect(spec.version == "bcf40ca6f457")
+        #expect(spec.baseModelID == ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue)
+        #expect(spec.supports(
+            baseModelID: ModelResolver.ModelID.miniMaxH3FastH3VSADataFreeMLX.rawValue
+        ))
+        #expect(!spec.supports(baseModelID: ModelResolver.ModelID.miniMaxH3FL2VAQ8MLX.rawValue))
+        #expect(spec.format == MiniMaxH3TurboAdapter.fastVideoFormat)
+        #expect(spec.usageRestriction != nil)
+        #expect(spec.upstreamRevision == ManagedAdapterCatalog.miniMaxH3FastH3VSADataFreeRevision)
+        #expect(spec.artifact.filename == MiniMaxH3TurboAdapter.fastH3VSADataFreeFilename)
+        #expect(spec.artifact.byteCount == 5_339_117_712)
+        #expect(spec.artifact.sha256 == "42dc502a2078f166c396a1fa75f29728d1844363652d345d5ef3e2b444ed6470")
+        #expect(spec.downloadURL.host == "huggingface.co")
+        #expect(spec.downloadURL.absoluteString.contains(spec.upstreamRevision!))
+    }
+
     @Test("Catalog ids resolve case-insensitively")
     func normalizedLookup() {
         #expect(ManagedAdapterCatalog.spec(for: " MERE-PLATFORM-ASSISTANT ")?.version == "22")

@@ -23,6 +23,11 @@ The format is based on Keep a Changelog.
   on MLX Metal. The refresh receipt proves source-range and baseline-table
   tensor closure; custom schedules still disclose interpolation as not
   bit-exact.
+- added native Metal execution for FastVideo FastH3 VSA DataFree, including its
+  exact four-evaluation sampler, 64-token sparse video attention, compression
+  gates, and source-bound AdaLN cache. The dedicated
+  `video-minimax-h3-fasth3-vsa-datafree-mlx` model packages every supported
+  inference asset behind one explicit license-accepting pull.
 
 ## 0.46.1 - 2026-08-29
 

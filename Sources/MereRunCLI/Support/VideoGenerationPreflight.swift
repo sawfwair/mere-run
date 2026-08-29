@@ -477,6 +477,7 @@ struct VideoGenerationPreflightAnalyzer {
         if requested == ModelResolver.ModelID.miniMaxH3FL2VAMLX.rawValue
             || requested == ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue
             || requested == ModelResolver.ModelID.miniMaxH3FL2VAQ8MLX.rawValue
+            || requested == ModelResolver.ModelID.miniMaxH3FastH3VSADataFreeMLX.rawValue
             || requested == ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue {
             return true
         }
@@ -492,7 +493,8 @@ struct VideoGenerationPreflightAnalyzer {
         }
         if requested == ModelResolver.ModelID.miniMaxH3FL2VAMLX.rawValue
             || requested == ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue
-            || requested == ModelResolver.ModelID.miniMaxH3FL2VAQ8MLX.rawValue {
+            || requested == ModelResolver.ModelID.miniMaxH3FL2VAQ8MLX.rawValue
+            || requested == ModelResolver.ModelID.miniMaxH3FastH3VSADataFreeMLX.rawValue {
             return false
         }
         let candidate = input.modelRoot ?? input.model
@@ -519,10 +521,20 @@ struct VideoGenerationPreflightAnalyzer {
     }
 
     private var h3AdapterInferenceRecipe: MiniMaxH3TurboAdapter.InferenceRecipe? {
-        guard let reference = input.h3Adapter else { return nil }
+        guard let reference = input.h3Adapter else {
+            return usesEmbeddedFastH3Adapter
+                ? MiniMaxH3TurboAdapter.fastH3VSADataFreeRecipe
+                : nil
+        }
         let filename = ManagedAdapterCatalog.spec(for: reference)?.artifact.filename
             ?? URL(fileURLWithPath: reference).lastPathComponent
         return MiniMaxH3TurboAdapter.inferenceRecipe(filename: filename)
+    }
+
+    private var usesEmbeddedFastH3Adapter: Bool {
+        input.h3Adapter == nil
+            && input.model.trimmingCharacters(in: .whitespacesAndNewlines)
+                == ModelResolver.ModelID.miniMaxH3FastH3VSADataFreeMLX.rawValue
     }
 
     func envelope() -> VideoGenerationPreflightEnvelope {
@@ -1100,7 +1112,7 @@ struct VideoGenerationPreflightAnalyzer {
                 message: "--video-decoder is available for official LTX 2.5 model roots."
             ))
         }
-        if input.h3Adapter != nil, usesMiniMaxH3Geometry {
+        if h3AdapterInferenceRecipe != nil, usesMiniMaxH3Geometry {
             let expectedBaseModelID: String
             if usesMiniMaxH3Ref2VA {
                 expectedBaseModelID = ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue
@@ -1129,6 +1141,7 @@ struct VideoGenerationPreflightAnalyzer {
                     supportsTurbo = model.requested
                         == ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue
                         || model.requested == MiniMaxH3Resources.fl2vaQ8ModelID
+                        || model.requested == MiniMaxH3Resources.fastH3ModelID
                 }
                 if !supportsTurbo {
                     diagnostics.append(PreflightDiagnostic(
@@ -1901,7 +1914,7 @@ struct VideoGenerationPreflightAnalyzer {
         }
         let h3AccelerationMode = MiniMaxH3AccelerationMode(rawValue: input.h3AccelerationMode) ?? .quality
         let resolvedH3Steps: Int? = if usesMiniMaxH3Geometry {
-            input.steps ?? (input.h3Adapter != nil
+            input.steps ?? (h3AdapterInferenceRecipe != nil
                 ? h3AdapterInferenceRecipe?.defaultSchedulePointCount
                 : (try? MiniMaxH3StepPolicy.recommendedPointCount(
                 width: validH3RenderWidth ?? resolvedWidth,
@@ -1939,8 +1952,12 @@ struct VideoGenerationPreflightAnalyzer {
             h3AccelerationMode: usesMiniMaxH3Geometry ? input.h3AccelerationMode : nil,
             h3RenderWidth: usesMiniMaxH3Geometry ? input.h3RenderWidth : nil,
             h3RenderHeight: usesMiniMaxH3Geometry ? input.h3RenderHeight : nil,
-            h3Adapter: usesMiniMaxH3Geometry ? input.h3Adapter : nil,
-            h3AdapterStrength: usesMiniMaxH3Geometry && input.h3Adapter != nil
+            h3Adapter: usesMiniMaxH3Geometry
+                ? (usesEmbeddedFastH3Adapter
+                    ? MiniMaxH3TurboAdapter.fastH3VSADataFreeFilename
+                    : input.h3Adapter)
+                : nil,
+            h3AdapterStrength: usesMiniMaxH3Geometry && h3AdapterInferenceRecipe != nil
                 ? input.h3AdapterStrength
                 : nil,
             h3FrameCount: usesMiniMaxH3Geometry ? input.h3FrameInputs.count : nil,

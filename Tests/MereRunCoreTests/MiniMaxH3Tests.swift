@@ -161,6 +161,232 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         ))
     }
 
+    func testFastVSAGeometryKeepsPrefixSegmentsPureAndTilesVideoIn3D() throws {
+        let layout = try MiniMaxH3Geometry.buildFL2VA(
+            textTokenTags: Array(repeating: 1, count: 70),
+            videoLatentFrames: 5,
+            latentHeight: 10,
+            latentWidth: 10,
+            audioLatentFrames: 3,
+            keyframeAnchors: []
+        )
+        let geometry = MiniMaxH3FastVSAGeometry(layout: layout)
+
+        XCTAssertEqual(geometry.prefixTileCount, 3)
+        XCTAssertEqual(geometry.videoTileCount, 8)
+        XCTAssertEqual(Array(geometry.blockSizes.prefix(3)), [64, 6, 6])
+        XCTAssertEqual(geometry.blockSizes.reduce(0, { $0 + Int($1) }), layout.sequenceLength)
+        XCTAssertEqual(geometry.originalToPadded.count, layout.sequenceLength)
+        XCTAssertEqual(
+            Set(geometry.originalToPadded).count,
+            layout.sequenceLength
+        )
+        for (original, padded) in geometry.originalToPadded.enumerated() {
+            XCTAssertEqual(geometry.paddedToOriginal[Int(padded)], Int32(original))
+        }
+    }
+
+    func testFastVSARoutingKeepsPrefixDenseAndTopKVideoKeys() {
+        let scores = MLXArray((0..<25).map(Float.init)).reshaped(1, 1, 5, 5)
+        let routes = MiniMaxH3FastVSA.routesForTesting(
+            scores: scores,
+            prefixTileCount: 2,
+            videoTileCount: 3,
+            sparsity: 0.9
+        )
+        MLX.eval(routes)
+        let values = routes.asArray(UInt8.self)
+        for query in 0..<2 {
+            XCTAssertEqual(Array(values[(query * 5)..<(query * 5 + 5)]), [1, 1, 1, 1, 1])
+        }
+        for query in 2..<5 {
+            let row = Array(values[(query * 5)..<(query * 5 + 5)])
+            XCTAssertEqual(Array(row.prefix(2)), [1, 1])
+            XCTAssertEqual(row.suffix(3).reduce(0, +), 1)
+        }
+    }
+
+    func testFastVSAMetalDenseRouteMatchesFusedSDPA() throws {
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip("FastH3 VSA parity requires a Metal GPU.")
+        }
+        let layout = try MiniMaxH3Geometry.buildFL2VA(
+            textTokenTags: Array(repeating: 1, count: 7),
+            videoLatentFrames: 2,
+            latentHeight: 4,
+            latentWidth: 4,
+            audioLatentFrames: 3,
+            keyframeAnchors: []
+        )
+        MLXRandom.seed(2_026_082_9)
+        let shape = [1, 2, layout.sequenceLength, MiniMaxH3FastVSA.headDimension]
+        let queries = (MLXRandom.normal(shape) * Float(0.2)).asType(.bfloat16)
+        let keys = (MLXRandom.normal(shape) * Float(0.2)).asType(.bfloat16)
+        let values = MLXRandom.normal(shape).asType(.bfloat16)
+        let gate = MLXArray.zeros(shape, dtype: .bfloat16)
+        let candidate = try XCTUnwrap(MiniMaxH3FastVSA.call(
+            queries: queries,
+            keys: keys,
+            values: values,
+            compressionGate: gate,
+            layout: layout,
+            sparsity: 0
+        ))
+        let reference = MLXFast.scaledDotProductAttention(
+            queries: queries,
+            keys: keys,
+            values: values,
+            scale: 1 / sqrt(Float(MiniMaxH3FastVSA.headDimension)),
+            mask: .none
+        )
+        let delta = candidate.asType(.float32) - reference.asType(.float32)
+        let relativeL2 = MLX.sqrt(
+            MLX.sum(delta * delta)
+                / MLX.maximum(
+                    MLX.sum(reference.asType(.float32) * reference.asType(.float32)),
+                    MLXArray(Float(1e-12))
+                )
+        )
+        MLX.eval(candidate, reference, relativeL2)
+        XCTAssertLessThanOrEqual(relativeL2.item(Float.self), 0.005)
+    }
+
+    func testFastVSAMetalAcceptsFP32RotaryQueriesAndKeys() throws {
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip("FastH3 VSA rotary promotion coverage requires a Metal GPU.")
+        }
+        let layout = try MiniMaxH3Geometry.buildFL2VA(
+            textTokenTags: Array(repeating: 1, count: 7),
+            videoLatentFrames: 2,
+            latentHeight: 4,
+            latentWidth: 4,
+            audioLatentFrames: 3,
+            keyframeAnchors: []
+        )
+        MLXRandom.seed(2_026_083_1)
+        let shape = [1, 2, layout.sequenceLength, MiniMaxH3FastVSA.headDimension]
+        let queries = MLXRandom.normal(shape) * Float(0.2)
+        let keys = MLXRandom.normal(shape) * Float(0.2)
+        let values = MLXRandom.normal(shape).asType(.bfloat16)
+        let gate = MLXArray.zeros(shape, dtype: .bfloat16)
+        let candidate = try XCTUnwrap(MiniMaxH3FastVSA.call(
+            queries: queries,
+            keys: keys,
+            values: values,
+            compressionGate: gate,
+            layout: layout,
+            sparsity: 0
+        ))
+        let expected = try XCTUnwrap(MiniMaxH3FastVSA.call(
+            queries: queries.asType(.bfloat16),
+            keys: keys.asType(.bfloat16),
+            values: values,
+            compressionGate: gate,
+            layout: layout,
+            sparsity: 0
+        ))
+        MLX.eval(candidate, expected)
+        XCTAssertEqual(candidate.dtype, .bfloat16)
+        XCTAssertEqual(candidate.asArray(Float.self), expected.asArray(Float.self))
+    }
+
+    func testFastVSAMetalSparseRouteAndCompressionMatchTensorReference() throws {
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip("FastH3 sparse VSA parity requires a Metal GPU.")
+        }
+        let layout = try MiniMaxH3Geometry.buildFL2VA(
+            textTokenTags: Array(repeating: 1, count: 7),
+            videoLatentFrames: 5,
+            latentHeight: 10,
+            latentWidth: 10,
+            audioLatentFrames: 3,
+            keyframeAnchors: []
+        )
+        let geometry = MiniMaxH3FastVSAGeometry(layout: layout)
+        MLXRandom.seed(2_026_083_0)
+        let shape = [1, 2, layout.sequenceLength, MiniMaxH3FastVSA.headDimension]
+        let queries = (MLXRandom.normal(shape) * Float(0.2)).asType(.bfloat16)
+        let keys = (MLXRandom.normal(shape) * Float(0.2)).asType(.bfloat16)
+        let values = MLXRandom.normal(shape).asType(.bfloat16)
+        let gate = (MLXRandom.normal(shape) * Float(0.05)).asType(.bfloat16)
+        let candidate = try XCTUnwrap(MiniMaxH3FastVSA.call(
+            queries: queries,
+            keys: keys,
+            values: values,
+            compressionGate: gate,
+            layout: layout
+        ))
+
+        let sentinel = MLXArray.zeros([1, 2, 1, MiniMaxH3FastVSA.headDimension], dtype: .bfloat16)
+        let paddedIndices = MLXArray(geometry.paddedToOriginal)
+        let inverseIndices = MLXArray(geometry.originalToPadded)
+        func tiled(_ value: MLXArray) -> MLXArray {
+            MLX.take(MLX.concatenated([value, sentinel], axis: 2), paddedIndices, axis: 2)
+        }
+        let tiledQueries = tiled(queries)
+        let tiledKeys = tiled(keys)
+        let tiledValues = tiled(values)
+        let tiledGate = tiled(gate)
+        let tileCount = geometry.tileCount
+        let paddedCount = geometry.paddedTokenCount
+        let sizes = MLXArray(geometry.blockSizes).asType(.float32).reshaped(1, 1, tileCount, 1)
+        func pooled(_ value: MLXArray) -> MLXArray {
+            value.asType(.float32)
+                .reshaped(1, 2, tileCount, MiniMaxH3FastVSAGeometry.tileSize, MiniMaxH3FastVSA.headDimension)
+                .sum(axis: 3) / sizes
+        }
+        let pooledQueries = pooled(tiledQueries)
+        let pooledKeys = pooled(tiledKeys)
+        let pooledValues = pooled(tiledValues)
+        let scale = 1 / sqrt(Float(MiniMaxH3FastVSA.headDimension))
+        let routeScores = MLX.matmul(pooledQueries, pooledKeys.transposed(0, 1, 3, 2)) * scale
+        let routes = MiniMaxH3FastVSA.routesForTesting(
+            scores: routeScores,
+            prefixTileCount: geometry.prefixTileCount,
+            videoTileCount: geometry.videoTileCount
+        )
+        let tokenRoutes = MLX.broadcast(
+            routes.reshaped(1, 2, tileCount, 1, tileCount, 1),
+            to: [1, 2, tileCount, 64, tileCount, 64]
+        ).reshaped(1, 2, paddedCount, paddedCount)
+        let validKeys = MLXArray(geometry.paddedToOriginal.map {
+            $0 == Int32(layout.sequenceLength) ? UInt8(0) : UInt8(1)
+        }).reshaped(1, 1, 1, paddedCount)
+        let exactScores = MLX.matmul(
+            tiledQueries.asType(.float32),
+            tiledKeys.asType(.float32).transposed(0, 1, 3, 2)
+        ) * scale
+        let maskedScores = MLX.where(
+            (tokenRoutes * validKeys) .== 1,
+            exactScores,
+            MLXArray(-Float.infinity)
+        )
+        let exact = MLX.matmul(
+            MLX.softmax(maskedScores, axis: -1, precise: true),
+            tiledValues.asType(.float32)
+        )
+        let compressed = MLX.matmul(
+            MLX.softmax(routeScores, axis: -1, precise: true),
+            pooledValues
+        )
+        let referenceTiled = exact.reshaped(
+            1, 2, tileCount, 64, MiniMaxH3FastVSA.headDimension
+        ) + compressed.expandedDimensions(axis: 3)
+            * tiledGate.asType(.float32).reshaped(1, 2, tileCount, 64, MiniMaxH3FastVSA.headDimension)
+        let reference = MLX.take(
+            referenceTiled.reshaped(1, 2, paddedCount, MiniMaxH3FastVSA.headDimension),
+            inverseIndices,
+            axis: 2
+        )
+        let delta = candidate.asType(.float32) - reference
+        let relativeL2 = MLX.sqrt(
+            MLX.sum(delta * delta)
+                / MLX.maximum(MLX.sum(reference * reference), MLXArray(Float(1e-12)))
+        )
+        MLX.eval(candidate, reference, relativeL2)
+        XCTAssertLessThanOrEqual(relativeL2.item(Float.self), 0.01)
+    }
+
     func testDynamicSparseAttentionRoutesAboveAdaptiveThreshold() {
         let queryCentroids = MLXArray([Float(1), 0]).reshaped(1, 1, 1, 2)
         let keyCentroids = MLXArray([
@@ -1347,6 +1573,41 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         )
     }
 
+    func testManagedFastH3ProfileIsOnePinnedSelfContainedArtifact() throws {
+        let spec = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: MiniMaxH3Resources.fastH3ModelID)
+        )
+        XCTAssertEqual(spec.hubFallback?.repoId, MiniMaxH3Resources.fastH3ArtifactRepository)
+        XCTAssertEqual(spec.hubFallback?.revision, MiniMaxH3Resources.fastH3ArtifactRevision)
+        XCTAssertEqual(spec.hubFallback?.patterns, MiniMaxH3Resources.fastH3ArtifactFiles)
+        XCTAssertEqual(spec.estimatedDownloadBytes, 82_316_599_044)
+        XCTAssertTrue(spec.mountedHubFallbacks.isEmpty)
+        XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
+        XCTAssertTrue(
+            MiniMaxH3Resources.fastH3ArtifactFiles.contains(
+                MiniMaxH3TurboAdapter.fastH3VSADataFreeFilename
+            )
+        )
+        XCTAssertTrue(
+            MiniMaxH3Resources.fastH3ArtifactFiles.contains(
+                MiniMaxH3TurboAdapter.fastH3AdaLNCacheFilename
+            )
+        )
+
+        let manifest = MereRunModelManifest.template(
+            for: .miniMaxH3FastH3VSADataFreeMLX,
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+        XCTAssertEqual(manifest.precision, .bf16)
+        XCTAssertNil(manifest.quantization)
+        XCTAssertEqual(manifest.defaults?.steps, 5)
+        XCTAssertEqual(
+            manifest.upstreamRepoId,
+            "\(MiniMaxH3Resources.fastH3ArtifactRepository)"
+                + "@\(MiniMaxH3Resources.fastH3ArtifactRevision)"
+        )
+    }
+
     func testManagedRef2VAProfileUsesPinnedPublicEightBitArtifact() throws {
         XCTAssertEqual(
             MiniMaxH3Resources.ref2vaArtifactRepository,
@@ -2352,6 +2613,55 @@ final class MiniMaxH3Tests: MereRunCoreTestCase {
         let final = video.step(sample: sample, velocity: velocity, index: video.timesteps.count - 1)
         MLX.eval(final)
         XCTAssertTrue(final.asArray(Float.self).allSatisfy(\.isFinite))
+    }
+
+    func testFastH3DMDJumpScheduleUsesReleasedTrainingPoints() throws {
+        let recipe = MiniMaxH3TurboAdapter.fastH3VSADataFreeRecipe
+        let baseSigmas = try XCTUnwrap(recipe.baseDenoisingSigmas)
+        let video = try MiniMaxH3Schedule(baseSigmas: baseSigmas, shift: 12)
+        let audio = try MiniMaxH3Schedule(baseSigmas: baseSigmas, shift: 3)
+
+        XCTAssertEqual(baseSigmas, [0.999, 0.749, 0.5, 0.25, 0])
+        XCTAssertEqual(video.sigmas.count, 5)
+        XCTAssertEqual(audio.sigmas.count, 5)
+        XCTAssertEqual(video.sigmas.last, 0)
+        XCTAssertEqual(audio.sigmas.last, 0)
+        XCTAssertEqual(video.timesteps.count, 4)
+        XCTAssertEqual(audio.timesteps.count, 4)
+        XCTAssertTrue(recipe.requiresFastH3VSA)
+        XCTAssertTrue(recipe.requiresTextOnlyConditioning)
+        XCTAssertEqual(
+            MiniMaxH3TurboAdapter.inferenceRecipe(
+                filename: MiniMaxH3TurboAdapter.fastH3VSADataFreeFilename
+            ),
+            recipe
+        )
+    }
+
+    func testFastH3RecipeRecognizesOriginalAdapterMetadata() throws {
+        let url = FileManager.default.temporaryDirectory.appending(
+            path: "adapter_model-\(UUID().uuidString).safetensors"
+        )
+        defer { try? FileManager.default.removeItem(at: url) }
+        try MLX.save(
+            arrays: ["probe": MLXArray([Float(1)])],
+            metadata: [
+                "format": MiniMaxH3TurboAdapter.fastVideoFormat,
+                "finetuned_model": "FastVideo/FastVideo-FastH3-4-step-v1",
+            ],
+            url: url
+        )
+
+        XCTAssertEqual(
+            MiniMaxH3TurboAdapter.inferenceRecipe(for: url),
+            MiniMaxH3TurboAdapter.fastH3VSADataFreeRecipe
+        )
+    }
+
+    func testExplicitDMDJumpScheduleRejectsInvalidBaseSigmas() {
+        XCTAssertThrowsError(try MiniMaxH3Schedule(baseSigmas: [1, 0.5], shift: 12))
+        XCTAssertThrowsError(try MiniMaxH3Schedule(baseSigmas: [0.5, 0.75, 0], shift: 12))
+        XCTAssertThrowsError(try MiniMaxH3Schedule(baseSigmas: [0.999, 0], shift: 0))
     }
 
     func testBlockReusePolicyBoundsCacheStepsForPracticalSchedule() throws {

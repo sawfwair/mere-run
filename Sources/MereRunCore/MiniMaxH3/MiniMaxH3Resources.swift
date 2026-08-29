@@ -260,6 +260,7 @@ public struct MiniMaxH3Resources: Sendable {
     public static let fl2vaModelID = "video-minimax-h3-fl2va-mlx"
     public static let fl2vaBF16ModelID = "video-minimax-h3-fl2va-bf16-mlx"
     public static let fl2vaQ8ModelID = "video-minimax-h3-fl2va-8bit-mlx"
+    public static let fastH3ModelID = "video-minimax-h3-fasth3-vsa-datafree-mlx"
     public static let ref2vaModelID = "video-minimax-h3-ref2va-mlx"
     public static let sourceRepository = "MiniMaxAI/MiniMax-H3"
     public static let sourceRevision = "ec19cc6daf5d8add9417c18e86b6b58cc6c55027"
@@ -271,6 +272,8 @@ public struct MiniMaxH3Resources: Sendable {
     public static let compactBF16ArtifactRevision = "4ce4b1d870f7b1b0c75672fd4f2867c1f5df7b5f"
     public static let q8ArtifactRepository = "Sawfwair/MiniMax-H3-FL2VA-MLX-8bit"
     public static let q8ArtifactRevision = "86500cb6ebec22c006597e41840b26ef1099fdd7"
+    public static let fastH3ArtifactRepository = "Sawfwair/MiniMax-H3-FastH3-VSA-DataFree-MLX-BF16"
+    public static let fastH3ArtifactRevision = "4208e52b28074fac87f7639281b1a4d564aba4a1"
     public static let ref2vaArtifactRepository = "Sawfwair/MiniMax-H3-Ref2VA-MLX-8bit"
     public static let ref2vaArtifactRevision = "61dc387ef1a7166425cdacd63c2340598dcc364f"
     public static let bf16TransformerDirectory = "transformer-bf16"
@@ -289,6 +292,9 @@ public struct MiniMaxH3Resources: Sendable {
     public static let ref2vaAdaLNCacheByteCount: Int64 = 873_820_740
     public static let ref2vaAdaLNCacheSourceIdentity =
         "sha256:\(ref2vaConvertedSHA256)"
+    public static let fastH3AdaLNCacheSHA256 =
+        "d5e98c47a6a8924acbae4cfe34007049f22f56df7e9a4809f8d509320067fbe1"
+    public static let fastH3AdaLNCacheByteCount: Int64 = 116_449_540
 
     public static let requiredFiles = [
         "config.json",
@@ -315,6 +321,13 @@ public struct MiniMaxH3Resources: Sendable {
         "SOURCE_MANIFEST.json",
         "transformer.conversion.json",
         "SHA256SUMS",
+    ]
+    public static let fastH3ArtifactFiles = compactBF16AndQ8ArtifactFiles + [
+        "adaln_cache-p5-v6-a3.safetensors",
+        MiniMaxH3TurboAdapter.fastH3VSADataFreeFilename,
+        MiniMaxH3TurboAdapter.fastH3AdaLNCacheFilename,
+        "FASTH3_SOURCE_MANIFEST.json",
+        "FASTH3_CONVERSION.json",
     ]
     public static let bf16SupportArtifactFiles = compactArtifactFiles.filter {
         $0 != "transformer.safetensors" && $0 != MiniMaxH3AdaLNCache.filename
@@ -368,6 +381,12 @@ public struct MiniMaxH3Resources: Sendable {
         rootURL.appending(path: MiniMaxH3AdaLNCachePack.filename)
     }
     public var conversionReceiptURL: URL { rootURL.appending(path: "transformer.conversion.json") }
+    public var fastH3AdapterURL: URL {
+        rootURL.appending(path: MiniMaxH3TurboAdapter.fastH3VSADataFreeFilename)
+    }
+    public var fastH3AdaLNCacheURL: URL {
+        rootURL.appending(path: MiniMaxH3TurboAdapter.fastH3AdaLNCacheFilename)
+    }
 
     public func transformerWeightsLayout(fileManager: FileManager = .default) -> TransformerWeightsLayout? {
         if fileManager.fileExists(atPath: bf16TransformerIndexURL.path) {
@@ -548,6 +567,50 @@ public struct MiniMaxH3Resources: Sendable {
         } catch {
             return ["Invalid MiniMax-H3 cache pack: \(error.localizedDescription)"]
         }
+    }
+
+    func validateManagedFastH3Artifact(fileManager: FileManager = .default) -> [String] {
+        var issues = validateCompactCachePack(fileManager: fileManager)
+        let provenanceFiles = [
+            "FASTH3_SOURCE_MANIFEST.json",
+            "FASTH3_CONVERSION.json",
+        ]
+        issues += provenanceFiles.compactMap { filename in
+            fileManager.fileExists(atPath: rootURL.appending(path: filename).path)
+                ? nil
+                : "Missing required FastH3 provenance file: \(filename)"
+        }
+        guard issues.isEmpty else { return issues }
+
+        guard let adapter = ManagedAdapterCatalog.spec(
+            for: ManagedAdapterCatalog.miniMaxH3FastH3VSADataFreeID
+        ) else {
+            return ["Missing the pinned FastH3 adapter catalog entry."]
+        }
+        do {
+            _ = try adapter.artifact.verify(in: rootURL, fileManager: fileManager)
+            _ = try ModelArtifactPin(
+                filename: MiniMaxH3TurboAdapter.fastH3AdaLNCacheFilename,
+                byteCount: Self.fastH3AdaLNCacheByteCount,
+                sha256: Self.fastH3AdaLNCacheSHA256
+            ).verify(in: rootURL, fileManager: fileManager)
+            let recipe = MiniMaxH3TurboAdapter.fastH3VSADataFreeRecipe
+            guard let baseSigmas = recipe.baseDenoisingSigmas,
+                  let videoShift = recipe.videoFlowShift,
+                  let audioShift = recipe.audioFlowShift else {
+                return ["FastH3 recipe is missing its pinned sampler schedule."]
+            }
+            _ = try MiniMaxH3AdaLNCache.load(
+                from: fastH3AdaLNCacheURL,
+                configuration: MiniMaxH3TransformerConfiguration(try loadConfiguration()),
+                videoSchedule: MiniMaxH3Schedule(baseSigmas: baseSigmas, shift: videoShift),
+                audioSchedule: MiniMaxH3Schedule(baseSigmas: baseSigmas, shift: audioShift),
+                sourceIdentity: MiniMaxH3TurboAdapter.fastH3SourceIdentity
+            )
+        } catch {
+            issues.append("Invalid pinned FastH3 artifact: \(error.localizedDescription)")
+        }
+        return issues
     }
 
     public func loadConfiguration() throws -> MiniMaxH3Configuration {

@@ -63,6 +63,9 @@ are an escape hatch, not the capability contract.
   uses MLX affine INT8/group-64 for eligible core linears while retaining the
   same conditioner, VAEs, cache pack, and provenance as compact BF16. Q8 is a
   storage and memory option, not an advertised speedup without measurements.
+- `video-minimax-h3-fasth3-vsa-datafree-mlx`: dedicated four-evaluation FastH3
+  package with the compact BF16 base, student adapter, AdaLN sidecar, and Metal
+  VSA-H3 sparse attention in one explicit license-accepting pull.
 - `video-minimax-h3-ref2va-mlx`: explicit-pull 8-bit Ref2VA package. Repeated
   `--reference image:path|video:path|audio:path` options retain request order.
   Video soundtracks are conditioned with their video; a standalone audio
@@ -131,6 +134,14 @@ mere.run adapter pull minimax-h3-lightx2v-4step
 mere.run adapter pull minimax-h3-lightx2v-8step-v1
 mere.run adapter pull minimax-h3-lightx2v-4step-v1-768p
 mere.run adapter pull minimax-h3-lightx2v-ref2v-4step-v0.1
+
+# The dedicated FastH3 package includes its base, adapter, and AdaLN cache.
+mere.run model pull video-minimax-h3-fasth3-vsa-datafree-mlx \
+  --accept-model-license
+mere.run video generate "a lighthouse in a winter storm" \
+  --model video-minimax-h3-fasth3-vsa-datafree-mlx \
+  --output ./lighthouse-fasth3.mp4
+
 mere.run video generate "a superhero waits beneath an umbrella at a bus stop" \
   --model video-minimax-h3-fl2va-8bit-mlx \
   --width 960 --height 544 \
@@ -216,6 +227,24 @@ against the former interpolation path covered 116,444,160 values: 88.40% were
 already exact, while the remaining values reached 0.125 maximum absolute error
 and 0.001427 RMSE. This proves why the exact table is preferable; it doesn't by
 itself constitute a same-seed visual or audio quality qualification.
+
+`video-minimax-h3-fasth3-vsa-datafree-mlx` is a self-contained FastVideo student
+package. One explicit model pull installs the compact BF16 base, FastH3 adapter,
+and source-bound AdaLN cache. Generation doesn't require another model or
+adapter download. The recipe requires adapter strength `1.0`. Its
+four denoising evaluations use base sigma points `0.999`, `0.749`, `0.5`, and
+`0.25`, followed by the clean endpoint. MLX Metal runs FastH3's 64-token VSA
+tiles, per-head top-k routes at 90% video-key sparsity, and learned pooled-value
+compression gates. Prefix queries remain dense, and video queries retain every
+prefix key tile. The recipe accepts text-only generation. It rejects frame
+conditioning, continuation, references, and additional H3 approximation modes.
+
+The package build uses
+`scripts/model-conversion/prepare_minimax_h3_fasth3_vsa.py` to reconstruct the
+schedule-only AdaLN values that the compact BF16 base omits. The script verifies
+the adapter, range-reads about 26 GiB from the pinned student transformer, and
+writes only the approximately 120 MB source-bound cache. End users who pull the
+dedicated managed model don't run this build step.
 
 `--h3-frame FRAME:PATH` adds an FL2VA keyframe at an exact zero-based output
 frame. Values may be repeated up to the released 12-frame condition limit and

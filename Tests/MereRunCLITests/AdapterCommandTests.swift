@@ -50,6 +50,16 @@ struct AdapterCommandTests {
         #expect(command.target == ManagedAdapterCatalog.miniMaxH3LightX2VRef2VFourStepV01ID)
     }
 
+    @Test("FastH3 VSA adapter pull parses its canonical id and license acknowledgement")
+    func parsesMiniMaxH3FastH3VSADataFreePull() throws {
+        let command = try AdapterPull.parse([
+            ManagedAdapterCatalog.miniMaxH3FastH3VSADataFreeID,
+            "--accept-license",
+        ])
+        #expect(command.target == ManagedAdapterCatalog.miniMaxH3FastH3VSADataFreeID)
+        #expect(command.acceptLicense)
+    }
+
     @Test("Gated LTX-2.5 DFR adapter pull requires explicit terms acceptance")
     func parsesLTX25DFRAdapterPull() throws {
         let command = try AdapterPull.parse([

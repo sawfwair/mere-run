@@ -243,6 +243,41 @@ public enum SafetensorsStreamingLoader {
         return pairCount
     }
 
+    /// Reads selected tensors in file order without retaining the complete checkpoint.
+    @discardableResult
+    public static func forEachTensor(
+        url: URL,
+        where shouldInclude: (String) -> Bool,
+        dtype: DType? = nil,
+        body: (_ key: String, _ value: MLXArray) throws -> Void
+    ) throws -> Int {
+        let parsed = try parseHeader(fileURL: url)
+        let tensorMetadata = try parseTensorMetadata(
+            header: parsed.header,
+            dataOffset: parsed.dataOffset,
+            fileDataCount: parsed.fileSize,
+            fileURL: url
+        )
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+        var count = 0
+        for (key, metadata) in tensorMetadata.sorted(by: {
+            $0.value.startOffset < $1.value.startOffset
+        }) where shouldInclude(key) {
+            try body(
+                key,
+                makeArray(
+                    metadata: metadata,
+                    fileHandle: handle,
+                    fileURL: url,
+                    dtype: dtype
+                )
+            )
+            count += 1
+        }
+        return count
+    }
+
     private static func makeArray(
         metadata: TensorMetadata,
         fileHandle: FileHandle,

@@ -5,9 +5,19 @@ import MLXNN
 public enum MiniMaxH3TurboAdapter {
     public static let format = "minimax-h3-runtime-lora-v1"
     public static let lightX2VFormat = "minimax-h3-peft-fused-lora-v1"
+    public static let fastVideoFormat = "fastvideo-lora-v2"
     public static let expectedPairCount = 259
     public static let lightX2VExpectedPairCount = 312
+    public static let fastVideoExpectedPairCount = 362
     public static let recommendedSchedulePointCount = 5
+    public static let fastH3VSADataFreeFilename =
+        "fastvideo_fasth3_4step_v1_vsa_datafree_rank64.safetensors"
+    public static let fastH3AdaLNCacheFilename = "fastvideo_fasth3_v1_vsa_datafree_adaln_cache.safetensors"
+    public static let fastH3SourceIdentity =
+        "FastVideo/FastVideo-FastH3-4-step-Preview-v1-VSA-DataFree"
+        + "@b65818d41939b5085451074fe8ca8b799f8d4921:transformer"
+    public static let fastVideoExpectedDiffCount = 82
+    public static let fastVideoExpectedCompressionGateCount = 50
 
     public enum Task: String, Sendable, Hashable {
         case fl2va
@@ -22,6 +32,9 @@ public enum MiniMaxH3TurboAdapter {
         public let videoFlowShift: Float?
         public let audioFlowShift: Float?
         public let lightX2VAlpha: Float
+        public let baseDenoisingSigmas: [Float]?
+        public let requiresFastH3VSA: Bool
+        public let requiresTextOnlyConditioning: Bool
 
         public func supports(schedulePointCount: Int) -> Bool {
             supportedSchedulePointCounts.contains(schedulePointCount)
@@ -39,7 +52,10 @@ public enum MiniMaxH3TurboAdapter {
         supportedSchedulePointCounts: [5],
         videoFlowShift: nil,
         audioFlowShift: nil,
-        lightX2VAlpha: 8
+        lightX2VAlpha: 8,
+        baseDenoisingSigmas: nil,
+        requiresFastH3VSA: false,
+        requiresTextOnlyConditioning: false
     )
 
     public static let lightX2VEightStepV1Recipe = InferenceRecipe(
@@ -49,7 +65,10 @@ public enum MiniMaxH3TurboAdapter {
         supportedSchedulePointCounts: [5, 9],
         videoFlowShift: 12,
         audioFlowShift: 3,
-        lightX2VAlpha: 8
+        lightX2VAlpha: 8,
+        baseDenoisingSigmas: nil,
+        requiresFastH3VSA: false,
+        requiresTextOnlyConditioning: false
     )
 
     public static let lightX2VEightStepV1_768pRecipe = InferenceRecipe(
@@ -69,7 +88,10 @@ public enum MiniMaxH3TurboAdapter {
         supportedSchedulePointCounts: [5],
         videoFlowShift: 6,
         audioFlowShift: 3,
-        lightX2VAlpha: 128
+        lightX2VAlpha: 128,
+        baseDenoisingSigmas: nil,
+        requiresFastH3VSA: false,
+        requiresTextOnlyConditioning: false
     )
 
     public static let lightX2VRef2VFourStepV01Recipe = InferenceRecipe(
@@ -79,11 +101,32 @@ public enum MiniMaxH3TurboAdapter {
         supportedSchedulePointCounts: [5],
         videoFlowShift: 12,
         audioFlowShift: 3,
-        lightX2VAlpha: 8
+        lightX2VAlpha: 8,
+        baseDenoisingSigmas: nil,
+        requiresFastH3VSA: false,
+        requiresTextOnlyConditioning: false
+    )
+
+    public static let fastH3VSADataFreeRecipe = InferenceRecipe(
+        name: "fastvideo-fasth3-v1-vsa-datafree",
+        task: .fl2va,
+        defaultSchedulePointCount: 5,
+        supportedSchedulePointCounts: [5],
+        videoFlowShift: 12,
+        audioFlowShift: 3,
+        lightX2VAlpha: 1,
+        baseDenoisingSigmas: [0.999, 0.749, 0.5, 0.25, 0],
+        requiresFastH3VSA: true,
+        requiresTextOnlyConditioning: true
     )
 
     public static func inferenceRecipe(for url: URL) -> InferenceRecipe {
-        inferenceRecipe(filename: url.lastPathComponent)
+        if let metadata = try? SafetensorsStreamingLoader.fileMetadata(url: url),
+           metadata["format"] == fastVideoFormat,
+           metadata["finetuned_model"] == "FastVideo/FastVideo-FastH3-4-step-v1" {
+            return fastH3VSADataFreeRecipe
+        }
+        return inferenceRecipe(filename: url.lastPathComponent)
     }
 
     public static func inferenceRecipe(filename: String) -> InferenceRecipe {
@@ -96,6 +139,8 @@ public enum MiniMaxH3TurboAdapter {
             lightX2VEightStepV1_768pRecipe
         case "minimax_h3_fl2v_turbo_4step_v1.0_768p_bf16.safetensors":
             lightX2VFourStepV1_768pRecipe
+        case fastH3VSADataFreeFilename:
+            fastH3VSADataFreeRecipe
         default:
             fourEvaluationRecipe
         }
@@ -104,6 +149,7 @@ public enum MiniMaxH3TurboAdapter {
     private enum SourceFormat: Equatable {
         case runtime
         case lightX2V
+        case fastVideo
 
         var pairSuffixes: (String, String) {
             switch self {
@@ -111,6 +157,8 @@ public enum MiniMaxH3TurboAdapter {
                 return (".lora_A.weight", ".lora_B.weight")
             case .lightX2V:
                 return (".lora_A.default.weight", ".lora_B.default.weight")
+            case .fastVideo:
+                return (".lora_A.weight", ".lora_B.weight")
             }
         }
 
@@ -120,6 +168,8 @@ public enum MiniMaxH3TurboAdapter {
                 return MiniMaxH3TurboAdapter.expectedPairCount
             case .lightX2V:
                 return MiniMaxH3TurboAdapter.lightX2VExpectedPairCount
+            case .fastVideo:
+                return MiniMaxH3TurboAdapter.fastVideoExpectedPairCount
             }
         }
     }
@@ -157,6 +207,9 @@ public enum MiniMaxH3TurboAdapter {
         case incompleteQKVTarget(String, missing: [QKVBranch])
         case invalidPairShape(String, a: [Int], b: [Int])
         case targetShapeMismatch(String, expected: [Int], actual: [Int])
+        case requiresUnitStrength(Float)
+        case unexpectedAuxiliaryTensorCount(kind: String, expected: Int, actual: Int)
+        case missingTargetParameter(String)
 
         var errorDescription: String? {
             switch self {
@@ -183,6 +236,12 @@ public enum MiniMaxH3TurboAdapter {
                 return "Invalid MiniMax-H3 LoRA pair for \(path): A=\(a), B=\(b)."
             case .targetShapeMismatch(let path, let expected, let actual):
                 return "MiniMax-H3 LoRA target \(path) has shape \(actual); expected \(expected)."
+            case .requiresUnitStrength(let strength):
+                return "FastH3 VSA is a complete student checkpoint and requires adapter strength 1, not \(strength)."
+            case .unexpectedAuxiliaryTensorCount(let kind, let expected, let actual):
+                return "FastH3 VSA \(kind) tensor count mismatch: expected \(expected), found \(actual)."
+            case .missingTargetParameter(let path):
+                return "FastH3 VSA target parameter is missing: \(path)"
             }
         }
     }
@@ -211,8 +270,28 @@ public enum MiniMaxH3TurboAdapter {
         expectedPairCount: Int? = nil
     ) throws -> Installation {
         let sourceFormat = try sourceFormat(at: url)
+        if sourceFormat == .fastVideo, strength != 1 {
+            throw AdapterError.requiresUnitStrength(strength)
+        }
         let inferenceRecipe = inferenceRecipe(for: url)
         let suffixes = sourceFormat.pairSuffixes
+        let usesNativeFastH3Cache = sourceFormat == .fastVideo
+            && adaLNCache?.sourceIdentity == fastH3SourceIdentity
+        if sourceFormat == .fastVideo {
+            let parameterCount = try applyFastVideoDifferences(
+                url: url,
+                to: transformer,
+                strength: strength,
+                omittingCacheCoveredParameters: usesNativeFastH3Cache
+            )
+            guard parameterCount == fastVideoExpectedDiffCount else {
+                throw AdapterError.unexpectedAuxiliaryTensorCount(
+                    kind: "difference",
+                    expected: fastVideoExpectedDiffCount,
+                    actual: parameterCount
+                )
+            }
+        }
         let leafModules = transformer.leafModules().flattened()
         let modulesByPath = Dictionary(uniqueKeysWithValues: leafModules)
         var replacements: [String: Module] = [:]
@@ -241,7 +320,8 @@ public enum MiniMaxH3TurboAdapter {
                 sourceFormat: sourceFormat,
                 lightX2VAlpha: inferenceRecipe.lightX2VAlpha
             )
-            if sourceFormat == .runtime, isAdaLNTarget(target.modulePath) {
+            if isAdaLNTarget(target.modulePath) {
+                if usesNativeFastH3Cache { return }
                 guard adaLNPairs[target.modulePath] == nil else {
                     throw AdapterError.duplicateTarget(target.modulePath)
                 }
@@ -349,12 +429,25 @@ public enum MiniMaxH3TurboAdapter {
         }
 
         applyModuleReplacements(replacements, leafModules: leafModules, to: transformer)
+        if sourceFormat == .fastVideo {
+            let gateCount = try installFastVideoCompressionGates(url: url, into: transformer)
+            guard gateCount == fastVideoExpectedCompressionGateCount else {
+                throw AdapterError.unexpectedAuxiliaryTensorCount(
+                    kind: "compression-gate",
+                    expected: fastVideoExpectedCompressionGateCount,
+                    actual: gateCount
+                )
+            }
+        }
         transformer.exactKernelMode = .disabled
         Memory.clearCache()
         return Installation(pairCount: pairCount, adaLNCache: resolvedAdaLNCache)
     }
 
     private static func sourceFormat(at url: URL) throws -> SourceFormat {
+        if try SafetensorsStreamingLoader.fileMetadata(url: url)["format"] == fastVideoFormat {
+            return .fastVideo
+        }
         let keys = try SafetensorsStreamingLoader.metadata(url: url).keys
         if keys.contains(where: { $0.hasSuffix(".lora_A.default.weight") }) {
             return .lightX2V
@@ -369,7 +462,7 @@ public enum MiniMaxH3TurboAdapter {
         for sourcePath: String,
         sourceFormat: SourceFormat
     ) throws -> LightX2VTarget {
-        guard sourceFormat == .lightX2V else {
+        guard sourceFormat != .runtime else {
             return LightX2VTarget(modulePath: sourcePath, qkvBranch: nil)
         }
 
@@ -401,6 +494,7 @@ public enum MiniMaxH3TurboAdapter {
             (".attn.to_out.0", ".attn.out_proj"),
             (".ff.net.0.proj", ".mlp.fc1"),
             (".ff.net.2", ".mlp.fc2"),
+            (".adaln_proj.linear", ".adaln_proj.linear"),
         ] where normalized.hasSuffix(suffix) {
             return LightX2VTarget(
                 modulePath: String(normalized.dropLast(suffix.count)) + replacement,
@@ -419,6 +513,122 @@ public enum MiniMaxH3TurboAdapter {
         guard sourceFormat == .lightX2V else { return up }
         let scale = MLXArray(lightX2VAlpha / Float(down.dim(0))).asType(up.dtype)
         return up * scale
+    }
+
+    private static func applyFastVideoDifferences(
+        url: URL,
+        to transformer: MiniMaxH3Transformer,
+        strength: Float,
+        omittingCacheCoveredParameters: Bool
+    ) throws -> Int {
+        var seenCount = 0
+        var targetPaths: Set<String> = []
+        let count = try SafetensorsStreamingLoader.forEachTensor(
+            url: url,
+            where: { $0.hasSuffix(".diff") || $0.hasSuffix(".diff_b") }
+        ) { sourceKey, difference in
+            seenCount += 1
+            let targetPath = try fastVideoDifferenceTarget(sourceKey)
+            guard targetPaths.insert(targetPath).inserted else {
+                throw AdapterError.duplicateTarget(targetPath)
+            }
+            if omittingCacheCoveredParameters,
+               (targetPath.hasPrefix("time_embedder.")
+                || (targetPath.hasPrefix("blocks.") && targetPath.contains(".adaln_proj."))
+                || targetPath.hasPrefix("final_layer.adaln_proj.")) {
+                return
+            }
+            let parameters = transformer.parameters().flattened()
+            guard let base = parameters.first(where: { $0.0 == targetPath })?.1 else {
+                throw AdapterError.missingTargetParameter(targetPath)
+            }
+            guard base.shape == difference.shape else {
+                throw AdapterError.targetShapeMismatch(
+                    targetPath,
+                    expected: base.shape,
+                    actual: difference.shape
+                )
+            }
+            let updated = base + difference.asType(base.dtype)
+                * MLXArray(strength).asType(base.dtype)
+            transformer.update(parameters: ModuleParameters.unflattened([(targetPath, updated)]))
+            MLX.eval(updated)
+            Memory.clearCache()
+        }
+        precondition(count == seenCount)
+        return count
+    }
+
+    private static func fastVideoDifferenceTarget(_ sourceKey: String) throws -> String {
+        let suffix: String
+        let parameter: String
+        if sourceKey.hasSuffix(".diff_b") {
+            suffix = ".diff_b"
+            parameter = ".bias"
+        } else if sourceKey.hasSuffix(".diff") {
+            suffix = ".diff"
+            parameter = ".weight"
+        } else {
+            throw AdapterError.unsupportedSourceModule(sourceKey)
+        }
+        let source = String(sourceKey.dropLast(suffix.count))
+        let mapped: String
+        switch source {
+        case "proj_in": mapped = "video_patch_proj"
+        case "audio_proj_in": mapped = "audio_patch_proj"
+        case "context_embedder": mapped = "condition_proj"
+        case "proj_out": mapped = "final_layer.video_out"
+        case "audio_proj_out": mapped = "final_layer.audio_out"
+        case "norm_out.norm": mapped = "final_layer.norm"
+        case "norm_out.linear": mapped = "final_layer.adaln_proj.linear"
+        case "time_embedder.linear_1": mapped = "time_embedder.proj_in"
+        case "time_embedder.linear_2": mapped = "time_embedder.proj_out"
+        default:
+            if source.hasPrefix("transformer_blocks.") {
+                mapped = "blocks." + String(source.dropFirst("transformer_blocks.".count))
+            } else {
+                throw AdapterError.unsupportedSourceModule(sourceKey)
+            }
+        }
+        return mapped + parameter
+    }
+
+    private static func installFastVideoCompressionGates(
+        url: URL,
+        into transformer: MiniMaxH3Transformer
+    ) throws -> Int {
+        var blockIndices: Set<Int> = []
+        return try SafetensorsStreamingLoader.forEachTensor(
+            url: url,
+            where: { $0.hasSuffix(".attn.to_gate_compress.set_weight") }
+        ) { sourceKey, weight in
+            let components = sourceKey.split(separator: ".")
+            guard components.count == 5,
+                  components[0] == "transformer_blocks",
+                  let blockIndex = Int(components[1]),
+                  components[2] == "attn",
+                  components[3] == "to_gate_compress",
+                  components[4] == "set_weight",
+                  (0..<transformer.configuration.layerCount).contains(blockIndex) else {
+                throw AdapterError.unsupportedSourceModule(sourceKey)
+            }
+            guard blockIndices.insert(blockIndex).inserted else {
+                throw AdapterError.duplicateTarget(sourceKey)
+            }
+            let expected = [
+                transformer.configuration.attentionHeadCount
+                    * transformer.configuration.attentionHeadDimension,
+                transformer.configuration.hiddenSize,
+            ]
+            guard weight.shape == expected else {
+                throw AdapterError.targetShapeMismatch(
+                    sourceKey,
+                    expected: expected,
+                    actual: weight.shape
+                )
+            }
+            transformer.installFastH3CompressionGate(weight, blockIndex: blockIndex)
+        }
     }
 
     private static func targetLinear(
