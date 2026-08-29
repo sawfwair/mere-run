@@ -67,6 +67,11 @@ struct PluginInstallationFailureDiagnosis: Equatable {
 }
 
 enum PluginPipxInstallationMetadata {
+    static func backend(for package: String, metadata: Data) throws -> String? {
+        let list = try JSONDecoder().decode(PipxList.self, from: metadata)
+        return list.venvs[package]?.metadata.backend
+    }
+
     static func missingEditableSourcePath(for plugin: PluginCatalogEntry) -> String? {
         guard PluginProcess.which("pipx") != nil,
               let data = try? PluginProcess.captureExecutable("pipx", arguments: ["list", "--json"]) else {
@@ -118,9 +123,11 @@ private struct PipxEnvironment: Decodable {
 
 private struct PipxEnvironmentMetadata: Decodable {
     let mainPackage: PipxMainPackage
+    let backend: String?
 
     enum CodingKeys: String, CodingKey {
         case mainPackage = "main_package"
+        case backend
     }
 }
 
