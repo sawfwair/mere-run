@@ -78,6 +78,10 @@ Prefer a version, date, or named state over words such as "latest" and
 - Use "current working directory" when it is the technical name of a process
   property.
 
+Keep `README.md` evergreen. Put version-specific release history,
+qualification results, and artifact details in `CHANGELOG.md` and GitHub
+releases, then link to those sources from the README.
+
 Do not rewrite a historical benchmark receipt to match a newer runtime. Add a
 new dated result and preserve the original hashes, environment, and limitations.
 

@@ -85,75 +85,6 @@ model's manifest and validation status. Replace `MODEL_ID` with its catalog ID.
 Local inference doesn't require a hosted inference service after the models
 are installed.
 
-## Release status
-
-On August 29, 2026, the published release was
-[v0.46.1](https://github.com/sawfwair/mere-run/releases/tag/v0.46.1).
-The following sections summarize current and previous release packages.
-
-Model names use Q2, Q4, and Q8 for 2-bit, 4-bit, and 8-bit quantization.
-BF16 refers to bfloat16, a 16-bit floating-point format.
-
-### Release v0.46.1
-
-- Restored image inference for the optimized Qwen3.8 27B Q4 package by adding
-  its pinned official vision component without replacing the optimized text
-  target or MTP companion.
-- Restored LTX 2.3 text-to-video and audio-to-video loading while preserving
-  the separate LTX 2.5 checkpoint layout.
-
-### Release v0.46.0
-
-- Flash-Next Qwen Sparse Attention (QSA) beyond the earlier 2,048-token limit,
-  plus the public `vision-chat-q38-flash-next-3bit` activation-weighted Q3
-  profile and memory, cache, vision, and verification fixes.
-- Image inputs and structured JSON object responses in external evaluation
-  packs, with content-pinned images and strict schema validation.
-- Verified installation, execution, and rollback for signed macOS Apple
-  Silicon plugin bundles supplied through an explicit source.
-- Faster Qwen3.8 27B Q4 multi-token prediction (MTP) with exact greedy output
-  parity in the bounded release benchmark. BF16 MTP remains opt-in.
-
-### Release v0.45.0
-
-- Qwen3.8-Flash-Next packages in mixed Q2/Q4 and Q4 precision, with verified
-  multi-token prediction (MTP) for greedy decoding.
-- A complete LTX 2.5 distilled bundle with a Q4 text encoder. The runtime
-  releases conditioning models early and decodes video in tiles to limit memory
-  use.
-- Faster model inventory for API clients.
-
-### Release v0.44.0
-
-- SenseNova U1.5 image generation and editing.
-- MiniMax Music 3 local composition and `q8-lm` and `q4-lm` precision modes.
-- Additional LiquidAI LFM2.5 quantized models and
-  DSpark companions for speculative decoding. The
-  [model catalog](./docs/model-sources.md) describes these variants.
-- Improvements to Nemotron tool calls, text training templates, and Gemma 4
-  Turbo API serving.
-
-### Qwen3.8 Flash Next qualification notes
-
-Release v0.46.0 adds Flash-Next Qwen Sparse Attention (QSA) beyond the earlier
-2,048-token limit for the prompt and generated response combined. It also adds
-the public, ungated
-`vision-chat-q38-flash-next-3bit` activation-weighted Q3 profile. Its 89.67 GB
-managed pull requires explicit Qwen Community License 1.0 acceptance. Qwen3.8
-27B also has MTP decoding improvements. Its MTP path remains opt-in.
-
-The Flash-Next mixed and Q3 models target Macs with 128 GB of memory. The Q4
-package requires more memory. The architecture's context limit is 262,144
-tokens, but that full length hasn't been qualified on the 128 GB profiles.
-Usable context depends on memory for weights, key/value caches, and MTP
-history.
-
-The Q3 checkpoint's sealed holdout matched the pinned Q4 output on all 16
-cases, including eight image and OCR cases. These bounded checks don't
-establish general model quality or BF16 parity. For implementation details and
-validation limits, see the [release notes](./CHANGELOG.md) and
-[Qwen runtime guide](./Sources/MereRunCore/Q35/README.md).
-
 ## What you can do
 
 Use the following table to choose a workflow. Each guide lists model IDs,
@@ -455,6 +386,14 @@ Portable workflows preserve immutable plans, checksums, events, and run
 directories. To inspect or retrieve work, use `run list`, `run inspect`,
 `run watch`, and `run fetch`.
 
+## Releases
+
+For version-specific features, fixes, and qualification results, see the
+[project changelog](./CHANGELOG.md). The
+[GitHub releases page](https://github.com/sawfwair/mere-run/releases) lists the
+published macOS and Linux artifacts for each release. To compare an installed
+CLI with a release, run `mere.run --version`.
+
 ## Install or build
 
 Choose the installation instructions for your platform. For workflows that
@@ -490,9 +429,9 @@ uses `sudo` only if the destination requires it. For app integrations, see the
 ### Install on Linux
 
 Linux packages contain the headless CLI and runtime assets, not macOS Studio.
-Release v0.46.1 provides CUDA x86_64 tarballs and Debian packages. Its release
-smoke test ran on an RTX 3080 Ti with Ubuntu 24.04. Hosted CPU tests and that
-CUDA test don't establish every model's compatibility on every Linux host.
+Published Linux CUDA artifacts include x86_64 tarballs and Debian packages.
+Hosted CPU tests and release-hardware checks don't establish every model's
+compatibility on every Linux host.
 
 For dependencies, CUDA setup, packaging, and validation limits, see the
 [Linux quickstart](./docs/linux-quickstart.md).
