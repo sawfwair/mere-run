@@ -5271,6 +5271,7 @@ private struct NumberField: View {
 }
 
 struct MereRunSettingsView: View {
+    @EnvironmentObject private var crashReporter: StudioCrashReporter
     @EnvironmentObject private var controller: MereRunController
     @State private var hfToken = ""
     @State private var hfStatus: String?
@@ -5380,6 +5381,48 @@ struct MereRunSettingsView: View {
                 configurationSummary = await controller.loadConfigurationSummary()
                 configurationPath = await controller.loadConfigurationPath()
             }
+            EditorSection("Diagnostics") {
+                Toggle(
+                    "Capture crash and hang reports locally",
+                    isOn: Binding(
+                        get: { crashReporter.isCapturing },
+                        set: { crashReporter.setCapturing($0) }
+                    )
+                )
+                Text(
+                    "Uses MetricKit to record crashes, hangs, and CPU exceptions that already "
+                        + "happened. Reports are written to your Application Support folder and "
+                        + "are never transmitted."
+                )
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+
+                HStack(spacing: 10) {
+                    Text(
+                        crashReporter.storedPayloadCount == 1
+                            ? "1 stored report"
+                            : "\(crashReporter.storedPayloadCount) stored reports"
+                    )
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.textMuted)
+                    Spacer(minLength: 0)
+                    Button("Reveal") {
+                        let directory = StudioCrashReporter.payloadDirectory()
+                        try? FileManager.default.createDirectory(
+                            at: directory,
+                            withIntermediateDirectories: true
+                        )
+                        NSWorkspace.shared.activateFileViewerSelecting([directory])
+                    }
+                    .buttonStyle(.mereSecondary)
+                    Button("Delete reports") { crashReporter.deleteStoredPayloads() }
+                        .buttonStyle(.mereSecondary)
+                        .disabled(crashReporter.storedPayloadCount == 0)
+                }
+            }
+            .task { crashReporter.refreshStoredPayloadCount() }
+
             EditorSection("Runtime server") {
                 HStack(spacing: 10) {
                     TextField("Host", text: $controller.runtimeHost)

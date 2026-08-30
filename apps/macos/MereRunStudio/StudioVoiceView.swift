@@ -1042,10 +1042,13 @@ struct StudioVoiceSheet: View {
                 Text("Live transcript")
                     .font(MereRunTheme.sectionFont)
                 if isListening {
-                    ProgressView().controlSize(.small)
+                    ProgressView()
+                        .controlSize(.small)
+                        .accessibilityHidden(true)
                     Text("Listening")
                         .font(MereRunTheme.captionFont)
                         .foregroundStyle(MereRunTheme.green)
+                        .accessibilityLabel("Currently listening to the microphone")
                 }
                 Spacer()
                 Button("Copy") {
@@ -1054,6 +1057,7 @@ struct StudioVoiceSheet: View {
                 }
                 .buttonStyle(.mereSecondary)
                 .disabled(listenTranscript.isEmpty)
+                .accessibilityLabel("Copy the live transcript")
                 Button("Save…") { saveLiveTranscript() }
                     .buttonStyle(.mereSecondary)
                     .disabled(listenTranscript.isEmpty)

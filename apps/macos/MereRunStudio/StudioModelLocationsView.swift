@@ -174,6 +174,7 @@ struct StudioModelLocationsSheet: View {
                     Spacer()
                     Button("Reveal") { reveal(store.path) }
                         .buttonStyle(.mereSecondary)
+                        .accessibilityLabel("Reveal the writable model store in Finder")
                 }
             }
         }
@@ -224,11 +225,13 @@ struct StudioModelLocationsSheet: View {
                         Button("Reveal") { reveal(root.path) }
                             .buttonStyle(.mereSecondary)
                             .disabled(!root.available)
+                            .accessibilityLabel("Reveal search root \(root.path) in Finder")
                         Button("Remove") {
                             confirmation = StudioModelLocationConfirmation(kind: .removeRoot(root.path))
                         }
                         .buttonStyle(.mereSecondary)
                         .disabled(busy)
+                        .accessibilityLabel("Remove search root \(root.path)")
                     }
                 }
             }
@@ -289,6 +292,7 @@ struct StudioModelLocationsSheet: View {
                         Button("Reveal") { reveal(binding.path) }
                             .buttonStyle(.mereSecondary)
                             .disabled(!binding.available)
+                            .accessibilityLabel("Reveal \(binding.modelID) directory in Finder")
                         Button("Unbind") {
                             confirmation = StudioModelLocationConfirmation(
                                 kind: .unbind(modelID: binding.modelID, path: binding.path)
@@ -296,6 +300,7 @@ struct StudioModelLocationsSheet: View {
                         }
                         .buttonStyle(.mereSecondary)
                         .disabled(busy)
+                        .accessibilityLabel("Unbind \(binding.modelID)")
                     }
                 }
             }
@@ -316,10 +321,13 @@ struct StudioModelLocationsSheet: View {
             }
     }
 
+    /// Availability is otherwise carried by colour alone, so the dot needs a spoken label.
     private func availabilityDot(_ available: Bool) -> some View {
         Circle()
             .fill(available ? MereRunTheme.green : MereRunTheme.textMuted)
             .frame(width: 7, height: 7)
+            .accessibilityElement()
+            .accessibilityLabel(available ? "Available" : "Offline")
     }
 
     private func reveal(_ path: String) {

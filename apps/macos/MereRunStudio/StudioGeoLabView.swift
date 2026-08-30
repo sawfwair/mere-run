@@ -143,6 +143,8 @@ struct StudioGeoLabSheet: View {
             }
             .pickerStyle(.segmented)
             .frame(width: 420)
+            .accessibilityLabel("Geospatial workflow")
+            .accessibilityValue(tool.title)
             Button("Done") { dismiss() }
                 .buttonStyle(.bordered)
         }
@@ -223,6 +225,11 @@ struct StudioGeoLabSheet: View {
                         .clipShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.sm))
                 }
             }
+            // Read as one phrase rather than a run of unrelated mono tokens.
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel(
+                "Required tensors: \(tool.requiredTensors.joined(separator: ", "))"
+            )
         }
     }
 

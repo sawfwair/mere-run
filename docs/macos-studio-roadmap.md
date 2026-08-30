@@ -23,6 +23,16 @@ identifies which findings no longer describe the product.
 > historical audit that motivated the implementation. They are not a statement
 > of product capability or release readiness.
 
+> **Closure update (August 30, 2026):** Every item in this document has been
+> re-checked against the sources rather than taken on trust. All eight historical
+> quick wins are closed — two by a different route than proposed, noted in the
+> table below. Phases 0 through 3 are closed. Phase 4's two remaining items,
+> opt-in MetricKit capture and Export Diagnostics, are now implemented, closing
+> the phase. The one deliberate deferral is Phase 4's sandbox posture, which the
+> risks section records as a product decision rather than an oversight.
+> Capability coverage against the CLI is tracked separately in
+> [`macos-studio-capability-review.md`](./macos-studio-capability-review.md).
+
 ## Historical verdict (superseded by the implementation update)
 
 At the time of the original audit, the app was **not 5% finished — it was a
@@ -58,7 +68,24 @@ the implementation update.
 
 ---
 
-## Historical quick wins
+## Historical quick wins (all verified closed)
+
+Each item below was re-checked against the sources on 2026-08-30. The result is
+recorded beside it. Two were closed by a different route than the audit
+proposed, which is noted rather than hidden.
+
+| Quick win | State | Where |
+|---|---|---|
+| Read Image default opens a blocked action | Closed by the alternative route: `inspect` and `caption` use a VLM the CLI auto-downloads, so they are no longer gated by the managed catalog | `StudioTypes.swift` `capabilityRequirement` |
+| Invalid `Image(systemName: "finder")` | Closed — no occurrences remain | — |
+| Force `.preferredColorScheme(.dark)` | Obsolete. Superseded by Phase 4: `MereRunTheme` resolves every token per effective appearance, so forcing dark would now be wrong | `MereRunTheme.swift` |
+| UTF-8 chunk loss | Closed — `IncrementalUTF8Decoder` retains partial trailing bytes and backs off to a codepoint boundary | `MereRunController.swift` |
+| Silent library persistence failures | Closed — `lastPersistenceError` is published | `StudioLibraryStore.swift` |
+| Prompt bar clipping | Closed — `.windowResizability(.contentMinSize)` plus an explicit minimum frame | `MereRunApp.swift` |
+| Missing `NSCameraUsageDescription` | Closed — camera and microphone usage strings are inserted, with matching entitlements, and `track-live` is gated behind `AVCaptureDevice.requestAccess` | `scripts/build_mere_run_app.sh`, `scripts/MereRun.entitlements` |
+| README DMG claim | Closed — no unsupported DMG claim remains | `README.md` |
+
+## Historical quick wins (original text)
 
 - **Read Image default:** Change `readImageAction` default and reset from
   `.inspect` to `.ocr`, or register the auto-download VLM in the capability
@@ -133,6 +160,15 @@ Turn shallow modes into full experiences; surface the missing CLI families.
 **Exit:** chat keeps context with history UI + vision; voice cloning end-to-end from Speak; Studio options have real depth; sfx/analyze/config/status usable from the GUI.
 
 ### Phase 4 — Native polish, accessibility, and distribution hardening _(4–5 weeks)_
+
+> **Verified 2026-08-30.** Menus, `SceneStorage` restore, `UNUserNotificationCenter`
+> completion notifications, Quick Look, the semantic light/dark token system, the
+> first-run welcome, Sparkle with an EdDSA appcast, and the app-to-CLI version
+> handshake are all implemented. The two outstanding items in this phase —
+> opt-in MetricKit capture and Export Diagnostics — are now implemented as
+> `StudioCrashReporter` (off until enabled in Settings, written locally, never
+> transmitted) and `StudioDiagnostics` (Help → Export Diagnostics, secret-free).
+> Phase 4 is closed.
 - **Native affordances** — real menus (File/View/Help, New Window, restore window/tabs removed by replacing `.newItem`); SceneStorage state restore; `UNUserNotificationCenter` completion notifications; Quick Look.
 - **Theming system** — semantic color tokens + a real light theme; themed Button/Toggle/Field styles; spacing/radius/type scales; `.ultraThinMaterial`/`NSVisualEffectView` for the chromeless title bar; one shared error/banner component (genuine failures in red, not warning yellow).
 - **Accessibility:** Add `.accessibilityLabel` and `value` to all icon buttons

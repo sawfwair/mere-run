@@ -1,10 +1,13 @@
+import AppKit
 import Sparkle
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// Top-level menu bar commands. View-toggle commands (Library/Advanced/Models) are
 /// installed by `StudioRootView` via focused scene values once the UI state is shared.
 struct MereRunCommands: Commands {
     @ObservedObject var controller: MereRunController
+    @ObservedObject var library: StudioLibraryStore
     let updater: SPUUpdater
 
     @FocusedValue(\.showLibrary) private var showLibrary: Binding<Bool>?
@@ -12,6 +15,22 @@ struct MereRunCommands: Commands {
     @FocusedValue(\.showModels) private var showModels: Binding<Bool>?
     @FocusedValue(\.showOperations) private var showOperations: Binding<Bool>?
     @FocusedValue(\.showPlugins) private var showPlugins: Binding<Bool>?
+
+    /// Writes a secret-free support report the user can attach to an issue.
+    private func exportDiagnostics() {
+        let report = controller.diagnosticsReport(libraryItems: library.items)
+        guard let url = StudioSpecialistFiles.saveFile(
+            title: "Export diagnostics",
+            suggestedName: StudioDiagnostics.suggestedFilename(),
+            allowedContentTypes: [.plainText]
+        ) else { return }
+        do {
+            try report.write(to: url, atomically: true, encoding: .utf8)
+            NSWorkspace.shared.activateFileViewerSelecting([url])
+        } catch {
+            NSApp.presentError(error)
+        }
+    }
 
     var body: some Commands {
         // Single-window studio: remove the default "New" item rather than spawn windows.
@@ -79,6 +98,8 @@ struct MereRunCommands: Commands {
 
         CommandGroup(replacing: .help) {
             Link("mere.run", destination: URL(string: "https://mere.run")!)
+            Divider()
+            Button("Export Diagnostics…") { exportDiagnostics() }
         }
     }
 }

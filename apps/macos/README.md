@@ -201,6 +201,14 @@ upload live in the separate private release-tools repository. Release proof
 must validate the mounted/installed app and its embedded CLI, not only the
 outer DMG.
 
+Help exposes **Export Diagnostics…**, which writes a support report carrying app
+and CLI versions, the resolved executable, machine shape, local server health,
+and recent run outcomes. It contains no configuration values, API keys, or
+tokens; command previews are already secret-masked when they are recorded.
+Settings adds opt-in local crash and hang capture over MetricKit. It is off
+until enabled, writes payloads to Application Support, never transmits them, and
+lets the user reveal or delete them in one action.
+
 The packaged app embeds Sparkle and exposes **Check for Updates…** in the app
 menu. Release builds use the stable HTTPS appcast, automatic daily discovery,
 an Ed25519-signed archive and feed, Developer ID verification, and

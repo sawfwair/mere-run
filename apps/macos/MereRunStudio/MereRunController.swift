@@ -923,6 +923,23 @@ final class MereRunController: ObservableObject {
         return result.exitCode == 0
     }
 
+    /// Builds the Export Diagnostics report from live app state. Log lines are rendered
+    /// newest-last so the tail reads like a terminal session.
+    func diagnosticsReport(libraryItems: [StudioLibraryItem]) -> String {
+        let recentLog = logs
+            .suffix(400)
+            .map { "[\($0.stream)] \($0.text)" }
+            .joined(separator: "\n")
+        return StudioDiagnostics.report(
+            appVersion: appVersion,
+            cliVersion: cliVersion,
+            resolvedCLI: resolvedCLI,
+            serverStatus: serverStatus,
+            libraryItems: libraryItems,
+            recentLog: recentLog
+        )
+    }
+
     /// Reads every persisted configuration value with secrets masked, for the Settings summary.
     func loadConfigurationSummary() async -> String {
         let result = await utilityCommandResult(args: ["config", "list"], masksSecrets: false)
