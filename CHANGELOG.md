@@ -6,6 +6,13 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.47.0 - 2026-08-29
+
+This release brings FastH3 VSA DataFree to Apple Silicon with a self-contained
+managed Q8 package and a fused MLX Metal execution recipe. It also moves LTX
+2.5 to immutable inference-only native packages and adds the pinned MiniMax-H3
+LightX2V 8-step adapter with source-bound AdaLN caching.
+
 ### Video
 
 - moved both managed LTX 2.5 downloads to immutable inference-only MLX
@@ -44,6 +51,12 @@ The format is based on Keep a Changelog.
   4 GiB. The installed 50-block gate dispatched all five selected stages
   without fallback and stayed below `0.0012` relative L2 for both output
   modalities.
+
+### Included pull requests
+
+- exact release range: [#378](https://github.com/sawfwair/mere-run/pull/378),
+  [#379](https://github.com/sawfwair/mere-run/pull/379), and
+  [#380](https://github.com/sawfwair/mere-run/pull/380).
 
 ## 0.46.1 - 2026-08-29
 
