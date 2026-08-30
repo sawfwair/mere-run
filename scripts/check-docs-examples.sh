@@ -54,4 +54,27 @@ then
   exit 1
 fi
 
+if rg --line-number --ignore-case \
+  -e '^## +release status[[:space:]]*$' \
+  -e "^#{2,3} +what'?s new([[:space:]]|$)" \
+  -e '^#{2,3} +release +v?[0-9]+\.[0-9]+\.[0-9]+([[:space:]]|$)' \
+  -e '\brelease +v?[0-9]+\.[0-9]+\.[0-9]+\b' \
+  -e 'github\.com/sawfwair/mere-run/releases/tag/v[0-9]+\.[0-9]+\.[0-9]+' \
+  README.md
+then
+  printf '%s\n' \
+    "README.md contains version-specific release history." \
+    "Keep README.md evergreen and put release chronology, qualification" \
+    "results, and version-specific changes in CHANGELOG.md and GitHub releases." >&2
+  exit 1
+fi
+
+if ! rg --quiet '\]\(\./CHANGELOG\.md\)' README.md || \
+   ! rg --quiet 'github\.com/sawfwair/mere-run/releases' README.md
+then
+  printf '%s\n' \
+    "README.md must link to CHANGELOG.md and the GitHub releases page." >&2
+  exit 1
+fi
+
 printf '%s\n' "Documentation example-data and link-text checks passed."
