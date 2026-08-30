@@ -29,6 +29,7 @@ export default defineConfig({
   srcExclude: [
     'README.md',
     'macos-studio-roadmap.md',
+    'macos-studio-capability-review.md',
     'falcon-perception-disparity-report.md',
     'architecture/vfx-geometry-model-report.md',
     'benchmarks/vfx-geometry-apple-silicon.md'
