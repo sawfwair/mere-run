@@ -141,18 +141,58 @@ channel selection and copyable pinned install commands, confirms install or
 update, and runs the plugin's fixed doctor verb. Plugin implementations remain
 out-of-process.
 
-Setup, Qwen3.6 MTP and Laguna DFlash benchmarks,
-API serving, and Open WebUI also use contract-backed typed forms. Laguna is
+Setup, the complete `model benchmark` family — fused Lite/Comprehensive quality
+suites, chat, code, VLM, tool-call and tool-continuation slices, Gemma4 KV and
+MTP, Qwen3.6 MTP, Laguna DFlash, and API workload replay — API serving, and Open
+WebUI also use contract-backed typed forms. Laguna is
 available as a managed chat/API engine, while Chat and Code expose min-p and
 the runtime-policy editors can persist or clear it. The run console recognizes
 adapter catalogs and structured JSON receipts, and can copy or save a receipt.
 Hugging Face tokens, API keys, and the Open WebUI admin password cross the
 process boundary through environment variables instead of appearing in argv.
+Geospatial Lab is a top-level first-class destination for native
+Earth-observation inference. It covers TerraMind flood and fire tile inference
+and the TESSERA v2 and OlmoEarth v1.2 encoders, names the tensors each input
+bundle must carry before a run rather than after it, exposes engine-specific
+controls (TESSERA output dimensions; OlmoEarth patch size, ground sample
+distance, and space-time tokens), and preserves every produced safetensors file
+as a durable Library artifact.
+
+Models opens a first-class store editor over `model location`. It shows the
+writable store, read-only search roots, and explicit per-model bindings with
+live availability, adds roots and bindings through a directory picker, reveals
+any of them in Finder, and confirms before removing a root or a binding — so a
+model kept on an external volume is registered without leaving the app.
+
+Health & Repair runs the complete benchmark family as durable Library jobs
+beside the manifest audit and quality gate: the fused Mere Lite and Mere
+Comprehensive suites, the chat, code, and vision-language slices, tool-call and
+tool-continuation evaluations, the Gemma4 KV and MTP and Qwen3.6 MTP decode
+comparisons, Laguna DFlash, API workload replay, and fixture hashing. Each run
+produces a reviewable, revealable JSON report.
+
+Voice Studio adds a live lane over `speech listen`. It enumerates capture
+devices through the CLI, streams partial transcripts as the recognizer emits
+them, and owns the child process directly so the operator can stop it, then
+copy or save the transcript.
+
+Serving gains a Vision Grounding section with the same lifecycle the API server
+has: preflight, app-owned start, stop, and restart, an honest reading of who
+owns the process, a loopback-exposure warning when the endpoint would bind
+beyond localhost without a key, and the live server log.
+
+Plugins covers the full lifecycle: catalog details, out-of-PATH runs with
+forwarded arguments, and rollback to a retained signed bundle behind a
+confirmation.
+
 The executable contract test requires every local Advanced template and every
 app-owned guide/config helper to resolve to a CLI help-verified capability.
 The inverse coverage test also requires every command in the shared contract to
-have an App-owned template or utility surface, so a newly cataloged CLI command
-cannot silently ship without a macOS path.
+have an App-owned template or utility surface. A third test walks the CLI
+command tree itself and requires every public leaf command to be either
+cataloged or listed in `contractExemptCommandIDs` with the reason it stays
+CLI-only, so a new CLI command cannot silently ship without a macOS path or a
+recorded decision that it should not have one.
 
 The public `scripts/build_mere_run_app.sh` path produces a contributor/CI app
 bundle and verifies its nested-code layout. Maintainer-only Developer ID
@@ -160,6 +200,14 @@ signing, notarization, stapling, DMG assembly, Sparkle feed generation, and
 upload live in the separate private release-tools repository. Release proof
 must validate the mounted/installed app and its embedded CLI, not only the
 outer DMG.
+
+Help exposes **Export Diagnostics…**, which writes a support report carrying app
+and CLI versions, the resolved executable, machine shape, local server health,
+and recent run outcomes. It contains no configuration values, API keys, or
+tokens; command previews are already secret-masked when they are recorded.
+Settings adds opt-in local crash and hang capture over MetricKit. It is off
+until enabled, writes payloads to Application Support, never transmits them, and
+lets the user reveal or delete them in one action.
 
 The packaged app embeds Sparkle and exposes **Check for Updates…** in the app
 menu. Release builds use the stable HTTPS appcast, automatic daily discovery,

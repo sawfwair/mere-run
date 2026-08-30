@@ -16,7 +16,8 @@ struct VisionServe: AsyncParsableCommand {
         more text queries as multipart/form-data to POST /v1/vision/ground, or
         a bounded set of images to POST /v1/vision/ground-batch.
 
-        The service is loopback-only by default. Non-loopback binds require --api-key.
+        The service is loopback-only by default. Non-loopback binds require --api-key or
+        MERERUN_API_KEY.
         """
     )
 
@@ -29,7 +30,7 @@ struct VisionServe: AsyncParsableCommand {
     @Option(name: [.customShort("m"), .long], help: "Managed model id or local Falcon Perception model root.")
     var model: String?
 
-    @Option(name: [.long], help: "Bearer token required by inference endpoints.")
+    @Option(name: [.long], help: "Bearer token required by inference endpoints. Also read from MERERUN_API_KEY.")
     var apiKey: String?
 
     @Option(name: [.customLong("max-frame-bytes")], help: "Maximum encoded image upload size.")
@@ -66,14 +67,14 @@ struct VisionServe: AsyncParsableCommand {
         if json && !preflight {
             throw ValidationError("--json is only supported with --preflight for vision serve.")
         }
-        let normalizedKey = apiKey?.trimmingCharacters(in: .whitespacesAndNewlines)
-        if !APIServe.isLoopbackHost(host), normalizedKey?.isEmpty != false {
-            throw ValidationError("Binding vision serve to a non-loopback host requires --api-key.")
+        if !APIServe.isLoopbackHost(host), resolvedAPIKey() == nil {
+            throw ValidationError("Binding vision serve to a non-loopback host requires --api-key or MERERUN_API_KEY.")
         }
     }
 
     func run() async throws {
         let resolvedModel = try VisionGround.resolveModelRoot(model)
+        let resolvedAPIKey = resolvedAPIKey()
         if preflight {
             let report = VisionServePreflightReport(
                 status: "ready",
@@ -85,7 +86,7 @@ struct VisionServe: AsyncParsableCommand {
                 maximumFrameBytes: maxFrameBytes,
                 maximumBatchSize: maxBatchSize,
                 maximumBatchBytes: maxBatchBytes,
-                authenticationRequired: apiKey?.isEmpty == false
+                authenticationRequired: resolvedAPIKey != nil
             )
             if json {
                 let encoder = JSONEncoder()
@@ -106,12 +107,26 @@ struct VisionServe: AsyncParsableCommand {
         let runtime = try ResidentFalconGroundingRuntime(resolvedModel: resolvedModel)
         let server = VisionGroundingServer(
             runtime: runtime,
-            apiKey: apiKey,
+            apiKey: resolvedAPIKey,
             maximumFrameBytes: maxFrameBytes,
             maximumBatchSize: maxBatchSize,
             maximumBatchBytes: maxBatchBytes
         )
         try await server.run(host: host, port: port)
+    }
+
+    func resolvedAPIKey(
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> String? {
+        if let apiKey = apiKey?.trimmingCharacters(in: .whitespacesAndNewlines), !apiKey.isEmpty {
+            return apiKey
+        }
+        if let apiKey = environment[APIServe.apiKeyEnvironmentKey]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+           !apiKey.isEmpty {
+            return apiKey
+        }
+        return nil
     }
 }
 

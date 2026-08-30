@@ -53,6 +53,103 @@ enum StudioModelHealthConfirmation: Identifiable {
     }
 }
 
+/// The benchmark family, as an operator would pick it: what the suite measures, not
+/// which decode path it exercises.
+enum StudioBenchmarkSuite: String, CaseIterable, Identifiable {
+    case fused
+    case chat
+    case code
+    case vlm
+    case toolCalls
+    case toolContinuations
+    case gemma4KV
+    case gemma4MTP
+    case q36MTP
+    case lagunaDFlash
+    case apiWorkload
+    case fusedFixture
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .fused: "Fused quality suite"
+        case .chat: "Chat slice"
+        case .code: "Code slice"
+        case .vlm: "Vision-language"
+        case .toolCalls: "Tool calls"
+        case .toolContinuations: "Tool continuations"
+        case .gemma4KV: "Gemma4 KV cache"
+        case .gemma4MTP: "Gemma4 MTP"
+        case .q36MTP: "Qwen3.6 MTP"
+        case .lagunaDFlash: "Laguna DFlash"
+        case .apiWorkload: "API workload"
+        case .fusedFixture: "Fixture hashes"
+        }
+    }
+
+    var summary: String {
+        switch self {
+        case .fused:
+            return "The versioned Mere Lite or Mere Comprehensive suite across every scored capability."
+        case .chat:
+            return "A grounded-chat evaluation slice against local assistant models."
+        case .code:
+            return "A real coding-evaluation slice. Execution stays inside the selected sandbox."
+        case .vlm:
+            return "Vision-language models over synthetic or lmms-eval datasets."
+        case .toolCalls:
+            return "Tool-selection accuracy across local chat models."
+        case .toolContinuations:
+            return "Gemma 4 continuation quality after completed tool calls."
+        case .gemma4KV:
+            return "Gemma4 default KV cache decode against packed PolarKV."
+        case .gemma4MTP:
+            return "Gemma4 serial decode against verified MTP speculative decode."
+        case .q36MTP:
+            return "Qwen-family serial decode against adaptive and forced MTP speculative decode."
+        case .lagunaDFlash:
+            return "Laguna target-only, fixed DFlash, and adaptive routing in one resident process."
+        case .apiWorkload:
+            return "Replays a chat workload against a running API server and reads cache counters."
+        case .fusedFixture:
+            return "Stamps or verifies normalized fused-benchmark JSONL fixture hashes."
+        }
+    }
+
+    var templateID: CommandTemplateID {
+        switch self {
+        case .fused: .modelBenchmarkFused
+        case .chat: .modelBenchmarkChat
+        case .code: .modelBenchmarkCode
+        case .vlm: .modelBenchmarkVLM
+        case .toolCalls: .modelBenchmarkToolCalls
+        case .toolContinuations: .modelBenchmarkToolContinuations
+        case .gemma4KV: .modelBenchmarkGemma4KV
+        case .gemma4MTP: .modelBenchmarkGemma4MTP
+        case .q36MTP: .modelBenchmark
+        case .lagunaDFlash: .modelBenchmarkLagunaDFlash
+        case .apiWorkload: .modelBenchmarkAPIWorkload
+        case .fusedFixture: .modelBenchmarkFusedFixture
+        }
+    }
+
+    /// Only the multi-model suites take a `--models` list.
+    var acceptsModels: Bool {
+        switch self {
+        case .fused, .chat, .code, .vlm, .toolCalls: true
+        default: false
+        }
+    }
+
+    var acceptsDryRun: Bool {
+        switch self {
+        case .fused, .chat, .code, .vlm, .toolCalls, .toolContinuations, .apiWorkload: true
+        default: false
+        }
+    }
+}
+
 struct StudioModelHealthSheet: View {
     @EnvironmentObject private var controller: MereRunController
     @EnvironmentObject private var library: StudioLibraryStore
@@ -71,6 +168,12 @@ struct StudioModelHealthSheet: View {
     @State private var isAuditing = false
     @State private var isRepairing = false
     @State private var confirmation: StudioModelHealthConfirmation?
+    @State private var benchmark: StudioBenchmarkSuite = .fused
+    @State private var benchmarkDraft = CommandCatalog.template(id: .modelBenchmarkFused)?
+        .defaultDraft() ?? CommandDraft()
+    @State private var benchmarkRequestID: UUID?
+    @State private var benchmarkModels = ""
+    @State private var benchmarkDryRun = false
 
     static let suites = ["text", "speech", "vision", "image", "embed"]
 
@@ -99,6 +202,7 @@ struct StudioModelHealthSheet: View {
                 VStack(alignment: .leading, spacing: MereRunTheme.Spacing.xl) {
                     manifestSection
                     qualitySection
+                    benchmarkSection
                 }
                 .padding(MereRunTheme.Spacing.xl)
             }
@@ -344,6 +448,131 @@ struct StudioModelHealthSheet: View {
         }
         .padding(16)
         .merePanel()
+    }
+
+    // MARK: - Benchmarks
+
+    private var benchmarkItem: StudioLibraryItem? {
+        guard let benchmarkRequestID else { return nil }
+        return library.items.first { $0.id == benchmarkRequestID }
+    }
+
+    /// The benchmark family runs as durable Library jobs beside the quality gate, so a
+    /// suite and a gate produce the same kind of reviewable, revealable JSON report.
+    private var benchmarkSection: some View {
+        VStack(alignment: .leading, spacing: MereRunTheme.Spacing.md) {
+            HStack {
+                Text("Benchmarks")
+                    .font(MereRunTheme.sectionFont)
+                Spacer()
+                if let item = benchmarkItem {
+                    Label(
+                        item.status.rawValue.capitalized,
+                        systemImage: qualityStatusIcon(item.status)
+                    )
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(qualityStatusColor(item.status))
+                }
+            }
+
+            Text(benchmark.summary)
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textMuted)
+                .fixedSize(horizontal: false, vertical: true)
+
+            Picker("Suite", selection: $benchmark) {
+                ForEach(StudioBenchmarkSuite.allCases) { suite in
+                    Text(suite.title).tag(suite)
+                }
+            }
+            .frame(maxWidth: 420)
+
+            if benchmark.acceptsModels {
+                TextField(
+                    "Models (comma-separated, blank runs the suite default)",
+                    text: $benchmarkModels
+                )
+                .mereField(cornerRadius: MereRunTheme.Radius.sm)
+            }
+
+            if benchmark == .fused {
+                Picker("Depth", selection: $benchmarkDraft.benchmarkSuite) {
+                    Text("Mere Lite").tag("lite")
+                    Text("Mere Comprehensive").tag("comprehensive")
+                }
+                .pickerStyle(.segmented)
+                .frame(maxWidth: 320)
+            }
+            if benchmark == .fusedFixture {
+                StudioPathField(
+                    label: "Fused benchmark JSONL fixture",
+                    placeholder: "Benchmark result JSONL",
+                    path: $benchmarkDraft.inputPath
+                )
+                Toggle("Verify existing hashes", isOn: $benchmarkDraft.benchmarkFixtureCheck)
+                    .help("Exit unsuccessfully when a stored fixture hash does not match")
+            }
+
+            if benchmark.acceptsDryRun {
+                Toggle("Plan only (dry run)", isOn: $benchmarkDryRun)
+                    .help("Resolve models and cases without running inference")
+            }
+
+            HStack(spacing: 8) {
+                Button {
+                    startBenchmark()
+                } label: {
+                    Label("Run \(benchmark.title)", systemImage: "speedometer")
+                }
+                .buttonStyle(.merePrimary)
+                .disabled(
+                    benchmarkItem?.status == .running
+                        || (benchmark == .fusedFixture && benchmarkDraft.inputPath.isBlank)
+                )
+
+                if let item = benchmarkItem, item.status == .completed {
+                    Button("Reveal report") {
+                        if let url = item.allArtifactURLs.first {
+                            NSWorkspace.shared.activateFileViewerSelecting([url])
+                        }
+                    }
+                    .buttonStyle(.mereSecondary)
+                }
+                Spacer()
+            }
+
+            if benchmarkRequestID != nil {
+                StudioSpecialistResultView(
+                    requestID: benchmarkRequestID,
+                    preferredKinds: [.text]
+                )
+                .frame(minHeight: 220)
+            }
+        }
+    }
+
+    private func startBenchmark() {
+        guard let template = CommandCatalog.template(id: benchmark.templateID) else { return }
+        var draft = template.defaultDraft()
+        draft.json = true
+        draft.dryRun = benchmark.acceptsDryRun && benchmarkDryRun
+        if benchmark.acceptsModels {
+            draft.benchmarkModels = benchmarkModels.trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if benchmark == .fused, !benchmarkDraft.benchmarkSuite.isBlank {
+            draft.benchmarkSuite = benchmarkDraft.benchmarkSuite
+        }
+        if benchmark == .fusedFixture {
+            draft.inputPath = benchmarkDraft.inputPath.trimmingCharacters(in: .whitespacesAndNewlines)
+            draft.benchmarkFixtureCheck = benchmarkDraft.benchmarkFixtureCheck
+        }
+        benchmarkRequestID = StudioSpecialistRunner.submit(
+            templateID: benchmark.templateID,
+            mode: .chat,
+            draft: draft,
+            controller: controller,
+            library: library
+        )
     }
 
     private func healthMetric(_ title: String, _ value: String, color: Color) -> some View {

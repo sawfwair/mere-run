@@ -7,6 +7,7 @@ enum StudioServingSection: String, CaseIterable, Identifiable {
     case resources = "Resources"
     case traffic = "Traffic"
     case agents = "Agents & Clients"
+    case vision = "Vision Grounding"
     case activity = "Activity"
     case configuration = "Configuration"
 
@@ -19,6 +20,7 @@ enum StudioServingSection: String, CaseIterable, Identifiable {
         case .resources: "gauge.with.dots.needle.67percent"
         case .traffic: "chart.xyaxis.line"
         case .agents: "person.2.badge.gearshape"
+        case .vision: "viewfinder.circle"
         case .activity: "waveform.path.ecg"
         case .configuration: "slider.horizontal.3"
         }
@@ -167,6 +169,10 @@ struct StudioServingConsoleSheet: View {
     @State private var section: StudioServingSection = .overview
     @State private var draft: CommandDraft
     @State private var serviceRequestID: UUID?
+    @State private var visionServeDraft = CommandCatalog.template(id: .visionServe)?.defaultDraft()
+        ?? CommandDraft()
+    @State private var visionServeRequestID: UUID?
+    @State private var visionServeMessage: String?
     @State private var agentRequestID: UUID?
     @State private var selectedAgentModel = ""
     @State private var agentPrompt = "Help me configure and use mere.run on this machine."
@@ -226,6 +232,7 @@ struct StudioServingConsoleSheet: View {
         .task {
             syncDraftFromController()
             serviceRequestID = controller.runningRequestID(for: .apiServe)
+            visionServeRequestID = controller.runningRequestID(for: .visionServe)
             monitor.start(controller: controller)
         }
         .onDisappear { monitor.stop() }
@@ -328,6 +335,7 @@ struct StudioServingConsoleSheet: View {
         case .resources: resources
         case .traffic: traffic
         case .agents: agentsAndClients
+        case .vision: visionGrounding
         case .activity: activity
         case .configuration: configuration
         }
@@ -536,6 +544,188 @@ struct StudioServingConsoleSheet: View {
                     }
                 }
             }
+        }
+    }
+
+    // MARK: - Vision grounding
+
+    /// The resident `vision serve` endpoint gets the same lifecycle the API server has:
+    /// preflight, app-owned start/stop, and an honest reading of who owns the process.
+    private var visionGrounding: some View {
+        VStack(alignment: .leading, spacing: MereRunTheme.Spacing.lg) {
+            StudioServingCard {
+                VStack(alignment: .leading, spacing: MereRunTheme.Spacing.sm) {
+                    HStack {
+                        Text("Resident grounding server")
+                            .font(MereRunTheme.sectionFont)
+                        Spacer()
+                        Text(visionServeRunning ? "Running" : "Stopped")
+                            .font(MereRunTheme.captionFont)
+                            .foregroundStyle(visionServeRunning ? MereRunTheme.green : MereRunTheme.textMuted)
+                    }
+                    Text(
+                        "Serves binary-frame vision grounding over HTTP so a client can stream frames "
+                            + "without paying model load on every request."
+                    )
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                    HStack(spacing: 8) {
+                        TextField("Host", text: $visionServeDraft.host)
+                            .mereField(cornerRadius: MereRunTheme.Radius.sm)
+                        TextField(
+                            "Port",
+                            value: $visionServeDraft.port,
+                            format: .number.grouping(.never)
+                        )
+                        .frame(width: 90)
+                        .mereField(cornerRadius: MereRunTheme.Radius.sm)
+                    }
+                    .disabled(visionServeRunning)
+
+                    TextField("Model id or path (optional)", text: $visionServeDraft.model)
+                        .mereField(cornerRadius: MereRunTheme.Radius.sm)
+                        .disabled(visionServeRunning)
+
+                    SecureField("API key (optional)", text: $visionServeDraft.apiKey)
+                        .mereField(cornerRadius: MereRunTheme.Radius.sm)
+                        .disabled(visionServeRunning)
+
+                    Stepper(
+                        "Maximum batch size: \(visionServeDraft.visionServeMaxBatchSize)",
+                        value: $visionServeDraft.visionServeMaxBatchSize,
+                        in: 1...32
+                    )
+                    .disabled(visionServeRunning)
+                    .help("Maximum image-query pairs accepted by one batch request")
+
+                    Text("Endpoint: \(visionServeEndpoint)")
+                        .font(MereRunTheme.monoFont)
+                        .foregroundStyle(MereRunTheme.textMuted)
+                        .textSelection(.enabled)
+
+                    if visionServeExposedWithoutKey {
+                        Label(
+                            "This binds beyond loopback with no API key. Add a key or bind to 127.0.0.1.",
+                            systemImage: "exclamationmark.triangle.fill"
+                        )
+                        .font(MereRunTheme.captionFont)
+                        .foregroundStyle(MereRunTheme.yellow)
+                    }
+
+                    HStack(spacing: 8) {
+                        Button("Preflight") { startVisionServe(preflight: true) }
+                            .buttonStyle(.mereSecondary)
+                            .disabled(visionServeRunning)
+                            .help("Validate the model and port without holding the server open")
+                        Button(visionServeRunning ? "Stop" : "Start") {
+                            if visionServeRunning {
+                                stopVisionServe()
+                            } else {
+                                startVisionServe(preflight: false)
+                            }
+                        }
+                        .buttonStyle(.merePrimary)
+                        .disabled(visionServeExposedWithoutKey && !visionServeRunning)
+                        Button("Restart") { restartVisionServe() }
+                            .buttonStyle(.mereSecondary)
+                            .disabled(!visionServeRunning)
+                        Spacer()
+                        Button("Copy endpoint") {
+                            NSPasteboard.general.clearContents()
+                            NSPasteboard.general.setString(visionServeEndpoint, forType: .string)
+                        }
+                        .buttonStyle(.mereSecondary)
+                    }
+
+                    if let visionServeMessage {
+                        Text(visionServeMessage)
+                            .font(MereRunTheme.captionFont)
+                            .foregroundStyle(MereRunTheme.textMuted)
+                    }
+                }
+            }
+
+            if let visionServeRequestID {
+                StudioServingCard {
+                    VStack(alignment: .leading, spacing: MereRunTheme.Spacing.sm) {
+                        Text("Server log")
+                            .font(MereRunTheme.sectionFont)
+                        StudioSpecialistResultView(
+                            requestID: visionServeRequestID,
+                            preferredKinds: [.text]
+                        )
+                        .frame(minHeight: 220)
+                    }
+                }
+            }
+        }
+    }
+
+    private var visionServeEndpoint: String {
+        let host = visionServeDraft.host.trimmingCharacters(in: .whitespacesAndNewlines)
+        return "http://\(host.isEmpty ? "127.0.0.1" : host):\(visionServeDraft.port)"
+    }
+
+    private var ownedVisionServeID: UUID? {
+        visionServeRequestID ?? controller.runningRequestID(for: .visionServe)
+    }
+
+    private var visionServeRunning: Bool {
+        guard let id = ownedVisionServeID else { return false }
+        return controller.isRequestRunning(id)
+    }
+
+    /// Binding beyond loopback without a key would publish the endpoint to the LAN.
+    private var visionServeExposedWithoutKey: Bool {
+        let host = visionServeDraft.host.trimmingCharacters(in: .whitespacesAndNewlines)
+        let isLoopback = host.isEmpty || host == "127.0.0.1" || host == "localhost"
+        return !isLoopback && visionServeDraft.apiKey.isBlank
+    }
+
+    private func startVisionServe(preflight: Bool) {
+        var draft = visionServeDraft
+        draft.preflight = preflight
+        draft.port = min(65_535, max(1, draft.port))
+        visionServeRequestID = StudioSpecialistRunner.submit(
+            templateID: .visionServe,
+            mode: .findObjects,
+            draft: draft,
+            controller: controller,
+            library: library
+        )
+        monitor.note(
+            preflight ? "Vision grounding preflight requested" : "Vision grounding start requested",
+            detail: visionServeEndpoint
+        )
+        visionServeMessage = preflight
+            ? "Preflighting the grounding server…"
+            : "Starting the grounding server…"
+    }
+
+    private func stopVisionServe() {
+        guard let requestID = ownedVisionServeID, controller.cancel(requestID: requestID) else {
+            visionServeMessage = "This server was started outside Studio and cannot be stopped here."
+            return
+        }
+        monitor.note("Vision grounding stop requested", detail: visionServeEndpoint)
+        visionServeMessage = "Stopping the grounding server…"
+    }
+
+    private func restartVisionServe() {
+        guard let requestID = ownedVisionServeID, controller.cancel(requestID: requestID) else {
+            visionServeMessage = "Only an app-owned server can be restarted."
+            return
+        }
+        monitor.note("Vision grounding restart requested", detail: visionServeEndpoint)
+        Task { @MainActor in
+            for _ in 0..<40 {
+                if !controller.isRequestRunning(requestID) { break }
+                try? await Task.sleep(for: .milliseconds(250))
+            }
+            visionServeRequestID = nil
+            startVisionServe(preflight: false)
         }
     }
 

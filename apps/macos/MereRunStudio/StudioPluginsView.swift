@@ -33,12 +33,19 @@ struct StudioPluginInstall: Decodable, Equatable {
     let ref: String?
 }
 
+enum StudioPluginConfirmationKind: String {
+    case install
+    case update
+    case rollback
+}
+
 struct StudioPluginConfirmation: Identifiable {
     let plugin: StudioPluginCatalogEntry
     let channel: String
     let force: Bool
+    var kind: StudioPluginConfirmationKind = .install
 
-    var id: String { "\(plugin.id):\(channel):\(force)" }
+    var id: String { "\(plugin.id):\(channel):\(force):\(kind.rawValue)" }
 }
 
 struct StudioPluginsSheet: View {
@@ -55,6 +62,7 @@ struct StudioPluginsSheet: View {
     @State private var isRefreshing = false
     @State private var busyAction: String?
     @State private var confirmation: StudioPluginConfirmation?
+    @State private var runArguments = ""
 
     private var visiblePlugins: [StudioPluginCatalogEntry] {
         guard let plugins = catalog?.plugins else { return [] }
@@ -95,7 +103,20 @@ struct StudioPluginsSheet: View {
             operationOutput = plugin.verificationError ?? ""
         }
         .alert(item: $confirmation) { pending in
-            Alert(
+            if pending.kind == .rollback {
+                return Alert(
+                    title: Text("Roll back \(pending.plugin.name)?"),
+                    message: Text(
+                        "mere.run will restore the retained signed bundle for \(pending.plugin.id) and "
+                            + "make it the active version. The current version stays on disk."
+                    ),
+                    primaryButton: .destructive(Text("Roll back")) {
+                        Task { await rollback(pending.plugin) }
+                    },
+                    secondaryButton: .cancel()
+                )
+            }
+            return Alert(
                 title: Text(pending.force ? "Update \(pending.plugin.name)?" : "Install \(pending.plugin.name)?"),
                 message: Text(
                     "mere.run will execute the catalog-pinned \(pending.channel) install through pipx, "
@@ -289,13 +310,20 @@ struct StudioPluginsSheet: View {
                             .frame(width: 220)
                             Link("Repository", destination: URL(string: plugin.repo)!)
                             Spacer()
+                            Button("Details") {
+                                Task { await details(plugin) }
+                            }
+                            .buttonStyle(.mereSecondary)
+                            .disabled(busyAction != nil)
+                            .help("Show this plugin's catalog entry and resolved install command")
                             Button("Copy command") { copyInstallCommand(plugin) }
                                 .buttonStyle(.mereSecondary)
                             Button(plugin.installed ? "Update" : "Install") {
                                 confirmation = StudioPluginConfirmation(
                                     plugin: plugin,
                                     channel: selectedChannel,
-                                    force: plugin.installed
+                                    force: plugin.installed,
+                                    kind: plugin.installed ? .update : .install
                                 )
                             }
                             .buttonStyle(.merePrimary)
@@ -328,6 +356,31 @@ struct StudioPluginsSheet: View {
                                 }
                                 .buttonStyle(.mereSecondary)
                                 .disabled(busyAction != nil)
+                                Button("Roll back") {
+                                    confirmation = StudioPluginConfirmation(
+                                        plugin: plugin,
+                                        channel: selectedChannel,
+                                        force: false,
+                                        kind: .rollback
+                                    )
+                                }
+                                .buttonStyle(.mereSecondary)
+                                .disabled(busyAction != nil)
+                                .help("Restore the retained signed bundle for this plugin")
+                            }
+
+                            HStack(spacing: 8) {
+                                TextField(
+                                    "Arguments passed to \(plugin.entrypoint)",
+                                    text: $runArguments
+                                )
+                                .mereField(cornerRadius: MereRunTheme.Radius.sm)
+                                Button("Run") {
+                                    Task { await run(plugin) }
+                                }
+                                .buttonStyle(.mereSecondary)
+                                .disabled(busyAction != nil)
+                                .help("Run the installed plugin without changing PATH")
                             }
                             if let path = plugin.installedPath {
                                 Text(path)
@@ -448,6 +501,49 @@ struct StudioPluginsSheet: View {
         }
         let result = await controller.utilityCommandResult(args: args)
         operationOutput = result.outputText
+        await refresh()
+    }
+
+    /// `plugin info` — the catalog entry and resolved install command for one plugin.
+    private func details(_ plugin: StudioPluginCatalogEntry) async {
+        busyAction = "Reading \(plugin.name)"
+        defer { busyAction = nil }
+        var args = ["plugin", "info", plugin.id]
+        if !catalogURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            args += ["--catalog-url", catalogURL]
+        }
+        if !selectedChannel.isEmpty { args += ["--channel", selectedChannel] }
+        let result = await controller.utilityCommandResult(args: args)
+        operationOutput = result.outputText
+        statusMessage = result.exitCode == 0
+            ? "Read the catalog entry for \(plugin.id)"
+            : "Could not read \(plugin.id)"
+    }
+
+    /// `plugin run` — runs the installed entrypoint out of process without touching PATH.
+    private func run(_ plugin: StudioPluginCatalogEntry) async {
+        let entrypoint = plugin.entrypoint
+        busyAction = "Running \(entrypoint)"
+        defer { busyAction = nil }
+        let forwarded = ShellWords.split(runArguments)
+        let result = await controller.utilityCommandResult(args: ["plugin", "run", entrypoint] + forwarded)
+        operationOutput = result.outputText
+        statusMessage = result.exitCode == 0
+            ? "\(entrypoint) finished"
+            : "\(entrypoint) exited with code \(result.exitCode)"
+    }
+
+    /// `plugin rollback --yes` — activates the retained signed bundle. Always confirmed first.
+    private func rollback(_ plugin: StudioPluginCatalogEntry) async {
+        busyAction = "Rolling back \(plugin.name)"
+        defer { busyAction = nil }
+        let result = await controller.utilityCommandResult(
+            args: ["plugin", "rollback", plugin.id, "--yes"]
+        )
+        operationOutput = result.outputText
+        statusMessage = result.exitCode == 0
+            ? "Restored the retained bundle for \(plugin.id)"
+            : "Could not roll back \(plugin.id)"
         await refresh()
     }
 

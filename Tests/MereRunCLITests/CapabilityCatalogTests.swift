@@ -1,3 +1,5 @@
+import ArgumentParser
+import Foundation
 import MereRunContract
 import Testing
 
@@ -105,19 +107,85 @@ import Testing
         "guide": GuideCommand.helpMessage(),
         "config.set": Config.SetCmd.helpMessage(),
         "config.get": Config.GetCmd.helpMessage(),
-        "config.unset": Config.UnsetCmd.helpMessage()
+        "config.unset": Config.UnsetCmd.helpMessage(),
+        "config.list": Config.ListCmd.helpMessage(),
+        "config.path": Config.PathCmd.helpMessage(),
+        "geo.flood": GeoFlood.helpMessage(),
+        "geo.fire": GeoFire.helpMessage(),
+        "geo.tessera": GeoTESSERA.helpMessage(),
+        "geo.olmoearth": GeoOlmoEarth.helpMessage(),
+        "model.location.list": ModelLocationList.helpMessage(),
+        "model.location.add": ModelLocationAdd.helpMessage(),
+        "model.location.remove": ModelLocationRemove.helpMessage(),
+        "model.location.bind": ModelLocationBind.helpMessage(),
+        "model.location.unbind": ModelLocationUnbind.helpMessage(),
+        "model.benchmark.chat": ModelBenchmarkChat.helpMessage(),
+        "model.benchmark.code": ModelBenchmarkCode.helpMessage(),
+        "model.benchmark.fused": ModelBenchmarkFused.helpMessage(),
+        "model.benchmark.fused-fixture": ModelBenchmarkFusedFixture.helpMessage(),
+        "model.benchmark.vlm": ModelBenchmarkVLM.helpMessage(),
+        "model.benchmark.tool-calls": ModelBenchmarkToolCalls.helpMessage(),
+        "model.benchmark.tool-continuations": ModelBenchmarkToolContinuations.helpMessage(),
+        "model.benchmark.gemma4-kv": ModelBenchmarkGemma4KV.helpMessage(),
+        "model.benchmark.gemma4-mtp": ModelBenchmarkGemma4MTP.helpMessage(),
+        "model.benchmark.api-workload": ModelBenchmarkAPIWorkload.helpMessage(),
+        "plugin.info": PluginInfo.helpMessage(),
+        "plugin.run": PluginRun.helpMessage(),
+        "plugin.rollback": PluginRollback.helpMessage(),
+        "speech.listen": SpeechListen.helpMessage(),
+        "vision.serve": VisionServe.helpMessage()
     ]
 
     for capability in MereRunCapabilityCatalog.document.commands {
         let help = helpByID[capability.id]
         #expect(help != nil, "Missing help fixture for \(capability.id)")
-        for option in capability.options {
+        let declaredFlags = Set(capability.options.map(\.flag))
+        let helpFlags = longOptionFlags(in: help ?? "")
+        if exactCapabilityOptionIDs.contains(capability.id) {
             #expect(
-                help?.contains(option.flag) == true,
-                "\(capability.id) advertises \(option.flag), but the CLI help does not"
+                declaredFlags == helpFlags,
+                "\(capability.id) contract flags \(declaredFlags.sorted()) do not match CLI help \(helpFlags.sorted())"
             )
+        } else {
+            for option in capability.options {
+                #expect(
+                    help?.contains(option.flag) == true,
+                    "\(capability.id) advertises \(option.flag), but the CLI help does not"
+                )
+            }
         }
     }
+}
+
+/// Newly cataloged capabilities begin with exact option parity. Older entries retain
+/// their existing compatibility aliases until those contracts are migrated deliberately.
+private let exactCapabilityOptionIDs: Set<String> = [
+    "geo.flood", "geo.fire", "geo.tessera", "geo.olmoearth",
+    "model.location.list", "model.location.add", "model.location.remove",
+    "model.location.bind", "model.location.unbind",
+    "model.benchmark.chat", "model.benchmark.code", "model.benchmark.fused",
+    "model.benchmark.fused-fixture", "model.benchmark.vlm", "model.benchmark.tool-calls",
+    "model.benchmark.tool-continuations", "model.benchmark.gemma4-kv",
+    "model.benchmark.gemma4-mtp", "model.benchmark.api-workload",
+    "plugin.info", "plugin.run", "plugin.rollback", "speech.listen", "vision.serve"
+]
+
+private func longOptionFlags(in help: String) -> Set<String> {
+    Set(help.split(separator: "\n").flatMap { line -> [String] in
+        guard line.hasPrefix("  -") else { return [] }
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        var flags: [String] = []
+        for token in trimmed.split(whereSeparator: \.isWhitespace) {
+            guard token.hasPrefix("-") else { break }
+            for alias in token.split(separator: ",") where alias.hasPrefix("--") {
+                let flag = alias.prefix { character in
+                    character == "-" || character.isLetter || character.isNumber
+                }
+                if flag != "--help" { flags.append(String(flag)) }
+            }
+        }
+        return flags
+    })
 }
 
 @Test func catalogCommandParsesASelectedCapability() throws {
@@ -125,4 +193,86 @@ import Testing
     #expect(command.id == "video.generate")
     #expect(command.json)
     #expect(MereRunCapabilityCatalog.command(id: command.id ?? "")?.id == "video.generate")
+}
+
+/// Every public CLI leaf command must either be described by the shared
+/// capability contract or appear in `contractExemptCommandIDs` with the reason
+/// it is deliberately absent. Without this the CLI can grow a command that no
+/// shell ever surfaces: `capabilityFlagsMatchArgumentParserHelp` only walks the
+/// contract, and the app's inverse coverage test is keyed to the contract too,
+/// so an uncataloged command is invisible to both.
+let contractExemptCommandIDs: [String: String] = [
+    "catalog": "Emits the contract itself; shells compile against MereRunContract instead.",
+    "relay.serve": "Relay console owns the control plane. See apps/macos/README.md.",
+    "executor.add.ssh": "Relay console owns executor profiles.",
+    "executor.add.relay": "Relay console owns executor profiles.",
+    "executor.list": "Relay console owns executor profiles.",
+    "executor.inspect": "Relay console owns executor profiles.",
+    "executor.probe": "Relay console owns executor profiles.",
+    "executor.login": "Relay console owns device sign-in.",
+    "executor.auth-status": "Relay console owns device sign-in.",
+    "executor.logout": "Relay console owns device sign-in.",
+    "executor.fleet": "Relay console owns fleet telemetry.",
+    "executor.node-refresh": "Relay console owns node lifecycle.",
+    "executor.node-configure": "Relay console owns scheduling policy.",
+    "executor.remove": "Relay console owns executor profiles.",
+    "graph.catalog": "Graph Studio owns workflow authoring.",
+    "graph.dataset.discover": "Graph Studio owns workflow authoring.",
+    "graph.validate": "Graph Studio owns workflow authoring.",
+    "graph.preflight": "Graph Studio owns workflow authoring.",
+    "graph.materialize": "Graph Studio owns workflow authoring.",
+    "graph.export-job": "Graph Studio owns workflow authoring.",
+    "graph.run": "Graph Studio owns workflow execution.",
+    "graph.run-job": "Graph Studio owns workflow execution.",
+    "graph.submit": "Graph Studio owns workflow execution.",
+    "graph.submit-job": "Graph Studio owns workflow execution.",
+    "graph.worker.probe": "Machine-to-machine worker protocol, not a shell surface.",
+    "graph.worker.execute": "Machine-to-machine worker protocol, not a shell surface.",
+    "graph.worker.inspect": "Machine-to-machine worker protocol, not a shell surface.",
+    "graph.worker.cancel": "Machine-to-machine worker protocol, not a shell surface.",
+    "vision.image-to-3d": "VFX alias of image.reconstruct-3d, surfaced through the Image workspace.",
+    "vision.image-to-3d-trellis2": "VFX alias of image.reconstruct-3d-trellis2.",
+    "vision.image-to-3d-multiview": "VFX alias of image.reconstruct-3d-multiview."
+]
+
+private func publicLeafCommandIDs() -> [String] {
+    var identifiers: [String] = []
+
+    func walk(_ commandTypes: [ParsableCommand.Type], path: [String]) {
+        for commandType in commandTypes {
+            let configuration = commandType.configuration
+            guard configuration.shouldDisplay, let name = configuration.commandName else { continue }
+            let next = path + [name]
+            if configuration.subcommands.isEmpty {
+                identifiers.append(next.joined(separator: "."))
+            } else {
+                walk(configuration.subcommands, path: next)
+            }
+        }
+    }
+
+    walk(MereRunCLI.configuration.subcommands, path: [])
+    return identifiers
+}
+
+@Test func everyPublicCLICommandIsCatalogedOrExplicitlyExempt() {
+    let cataloged = Set(MereRunCapabilityCatalog.document.commands.map(\.id))
+    let leaves = publicLeafCommandIDs()
+
+    for id in leaves {
+        #expect(
+            cataloged.contains(id) || contractExemptCommandIDs[id] != nil,
+            """
+            `mere.run \(id.replacingOccurrences(of: ".", with: " "))` is not in the shared \
+            capability contract. Add a MereRunCommandCapability for it so shells can surface \
+            it, or add it to contractExemptCommandIDs with the reason it stays CLI-only.
+            """
+        )
+    }
+
+    let leafIDs = Set(leaves)
+    for (id, reason) in contractExemptCommandIDs {
+        #expect(leafIDs.contains(id), "Exemption \(id) no longer matches a CLI command: \(reason)")
+        #expect(!cataloged.contains(id), "\(id) is cataloged now; remove its exemption.")
+    }
 }

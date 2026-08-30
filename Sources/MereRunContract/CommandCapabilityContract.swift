@@ -214,9 +214,15 @@ public enum MereRunCapabilityCatalog {
             evaluationRun,
             evaluationPromote,
             worldServe,
+            visionServe,
             status,
             gate,
             modelStorage,
+            modelLocationList,
+            modelLocationAdd,
+            modelLocationRemove,
+            modelLocationBind,
+            modelLocationUnbind,
             modelGarbageCollect,
             modelRuntimeGet,
             modelRuntimeSet,
@@ -234,12 +240,23 @@ public enum MereRunCapabilityCatalog {
             modelOptimize,
             modelBenchmarkQ36MTP,
             modelBenchmarkLagunaDFlash,
+            modelBenchmarkChat,
+            modelBenchmarkCode,
+            modelBenchmarkFused,
+            modelBenchmarkFusedFixture,
+            modelBenchmarkVLM,
+            modelBenchmarkToolCalls,
+            modelBenchmarkToolContinuations,
+            modelBenchmarkGemma4KV,
+            modelBenchmarkGemma4MTP,
+            modelBenchmarkAPIWorkload,
             speechSynthesize,
             speechTranscribe,
             speechDiarize,
             speechProfileList,
             speechProfileCreate,
             speechProfileDelete,
+            speechListen,
             sfxGenerate,
             sfxVideoGenerate,
             sfxAEEncode,
@@ -247,14 +264,23 @@ public enum MereRunCapabilityCatalog {
             sfxCLAPScore,
             sfxConditionText,
             pluginList,
+            pluginInfo,
             pluginInstall,
             pluginDoctor,
+            pluginRun,
+            pluginRollback,
             openWebUIQuickstart,
             apiServe,
             guide,
             configSet,
             configGet,
-            configUnset
+            configUnset,
+            configList,
+            configPath,
+            geoFlood,
+            geoFire,
+            geoTessera,
+            geoOlmoEarth
         ]
     )
 
@@ -2614,5 +2640,524 @@ public enum MereRunCapabilityCatalog {
         ],
         options: [],
         output: .init(kind: .text)
+    )
+
+    // MARK: - Geospatial
+
+    public static let geoFlood = MereRunCommandCapability(
+        id: "geo.flood",
+        command: ["geo", "flood"],
+        title: "Flood inference",
+        summary: "Run native TerraMind Flood tile inference with MLX on Apple Silicon.",
+        arguments: [
+            .init(name: "input", label: "Tile safetensors", kind: .file, required: true)
+        ],
+        options: [
+            .init(flag: "--output", label: "Logits output", kind: .file, required: true),
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--preflight", label: "Preflight", kind: .boolean),
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .file, fileExtension: "safetensors")
+    )
+
+    public static let geoFire = MereRunCommandCapability(
+        id: "geo.fire",
+        command: ["geo", "fire"],
+        title: "Fire inference",
+        summary: "Run native TerraMind Fire tile inference with MLX on Apple Silicon.",
+        arguments: [
+            .init(name: "input", label: "Tile safetensors", kind: .file, required: true)
+        ],
+        options: [
+            .init(flag: "--output", label: "Logits output", kind: .file, required: true),
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--preflight", label: "Preflight", kind: .boolean),
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .file, fileExtension: "safetensors")
+    )
+
+    public static let geoTessera = MereRunCommandCapability(
+        id: "geo.tessera",
+        command: ["geo", "tessera"],
+        title: "TESSERA embeddings",
+        summary: "Encode local Sentinel-1/2 time series with a native TESSERA v2 student.",
+        arguments: [
+            .init(name: "input", label: "Observation safetensors", kind: .file, required: true)
+        ],
+        options: [
+            .init(flag: "--output", label: "Embedding output", kind: .file, required: true),
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--dimensions", label: "Dimensions", kind: .integer),
+            .init(flag: "--preflight", label: "Preflight", kind: .boolean),
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .file, fileExtension: "safetensors")
+    )
+
+    public static let geoOlmoEarth = MereRunCommandCapability(
+        id: "geo.olmoearth",
+        command: ["geo", "olmoearth"],
+        title: "OlmoEarth embeddings",
+        summary: "Encode multisensor Earth observations with native OlmoEarth v1.2.",
+        arguments: [
+            .init(name: "input", label: "Observation safetensors", kind: .file, required: true)
+        ],
+        options: [
+            .init(flag: "--output", label: "Embedding output", kind: .file, required: true),
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--patch-size", label: "Patch size", kind: .integer),
+            .init(flag: "--input-resolution", label: "Input resolution", kind: .number),
+            .init(flag: "--include-tokens", label: "Include tokens", kind: .boolean),
+            .init(flag: "--preflight", label: "Preflight", kind: .boolean),
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .file, fileExtension: "safetensors")
+    )
+
+    // MARK: - Model store locations
+
+    public static let modelLocationList = MereRunCommandCapability(
+        id: "model.location.list",
+        command: ["model", "location", "list"],
+        title: "List model locations",
+        summary: "List the writable store, read-only search roots, and explicit bindings.",
+        options: [
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let modelLocationAdd = MereRunCommandCapability(
+        id: "model.location.add",
+        command: ["model", "location", "add"],
+        title: "Add search root",
+        summary: "Register a read-only root containing directories named for canonical model ids.",
+        arguments: [
+            .init(name: "path", label: "Search root", kind: .directory, required: true)
+        ],
+        options: [],
+        output: .init(kind: .text)
+    )
+
+    public static let modelLocationRemove = MereRunCommandCapability(
+        id: "model.location.remove",
+        command: ["model", "location", "remove"],
+        title: "Remove search root",
+        summary: "Unregister a read-only search root without deleting its files.",
+        arguments: [
+            .init(name: "path", label: "Search root", kind: .directory, required: true)
+        ],
+        options: [],
+        output: .init(kind: .text)
+    )
+
+    public static let modelLocationBind = MereRunCommandCapability(
+        id: "model.location.bind",
+        command: ["model", "location", "bind"],
+        title: "Bind model directory",
+        summary: "Bind a canonical model id to an arbitrary read-only directory.",
+        arguments: [
+            .init(name: "modelID", label: "Model id", kind: .string, required: true),
+            .init(name: "path", label: "Model directory", kind: .directory, required: true)
+        ],
+        options: [
+            .init(
+                flag: "--accept-model-license",
+                label: "Accept model license",
+                kind: .boolean
+            )
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let modelLocationUnbind = MereRunCommandCapability(
+        id: "model.location.unbind",
+        command: ["model", "location", "unbind"],
+        title: "Unbind model directory",
+        summary: "Remove explicit bindings without deleting model files.",
+        arguments: [
+            .init(name: "modelID", label: "Model id", kind: .string, required: true),
+            .init(name: "path", label: "Model directory", kind: .directory, required: false)
+        ],
+        options: [],
+        output: .init(kind: .text)
+    )
+
+    // MARK: - Model benchmarks
+
+    public static let modelBenchmarkChat = MereRunCommandCapability(
+        id: "model.benchmark.chat",
+        command: ["model", "benchmark", "chat"],
+        title: "Chat benchmark",
+        summary: "Run a small grounded-chat evaluation slice against local assistant models.",
+        options: [
+            .init(flag: "--models", label: "Models", kind: .string),
+            .init(flag: "--suite", label: "Suite", kind: .choice, choices: ["mere-chat-slice"]),
+            .init(flag: "--cases", label: "Cases", kind: .file),
+            .init(flag: "--max-tokens", label: "Max tokens", kind: .integer),
+            .init(flag: "--temperature", label: "Temperature", kind: .number),
+            .init(flag: "--top-p", label: "Top-p", kind: .number),
+            .init(flag: "--top-k", label: "Top-k", kind: .integer),
+            .init(flag: "--min-p", label: "Min-p", kind: .number),
+            .init(flag: "--context-size", label: "Context", kind: .integer),
+            .init(flag: "--concurrency", label: "Concurrency", kind: .integer),
+            .init(flag: "--laguna-path", label: "Laguna path", kind: .directory),
+            .init(flag: "--laguna-dflash-path", label: "DFlash path", kind: .directory),
+            .init(flag: "--laguna-dflash-tokens", label: "Speculative tokens", kind: .integer),
+            .init(flag: "--laguna-dflash-min-tokens", label: "Minimum speculative tokens", kind: .integer),
+            .init(
+                flag: "--laguna-dflash-routing",
+                label: "DFlash routing",
+                kind: .choice,
+                choices: ["automatic", "target-only", "dflash"]
+            ),
+            .init(flag: "--dry-run", label: "Dry run", kind: .boolean),
+            .init(flag: "--log-responses", label: "Log responses", kind: .boolean),
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let modelBenchmarkCode = MereRunCommandCapability(
+        id: "model.benchmark.code",
+        command: ["model", "benchmark", "code"],
+        title: "Code benchmark",
+        summary: "Run a real coding-evaluation slice against local coding models.",
+        options: [
+            .init(flag: "--models", label: "Models", kind: .string),
+            .init(flag: "--laguna-path", label: "Laguna path", kind: .directory),
+            .init(flag: "--laguna-dflash-path", label: "Laguna DFlash path", kind: .directory),
+            .init(flag: "--laguna-dflash-tokens", label: "Laguna DFlash tokens", kind: .integer),
+            .init(
+                flag: "--laguna-dflash-min-tokens",
+                label: "Laguna DFlash minimum tokens",
+                kind: .integer
+            ),
+            .init(flag: "--suite", label: "Suite", kind: .choice, choices: ["humaneval-slice"]),
+            .init(flag: "--tasks", label: "Tasks", kind: .string),
+            .init(flag: "--humaneval-file", label: "HumanEval file", kind: .file),
+            .init(flag: "--max-tokens", label: "Max tokens", kind: .integer),
+            .init(flag: "--temperature", label: "Temperature", kind: .number),
+            .init(flag: "--top-p", label: "Top-p", kind: .number),
+            .init(flag: "--top-k", label: "Top-k", kind: .integer),
+            .init(flag: "--min-p", label: "Min-p", kind: .number),
+            .init(flag: "--thinking", label: "Thinking", kind: .boolean),
+            .init(flag: "--execution-timeout", label: "Execution timeout", kind: .number),
+            .init(flag: "--python", label: "Python", kind: .string),
+            .init(
+                flag: "--sandbox",
+                label: "Sandbox",
+                kind: .choice,
+                choices: ["auto", "macos-sandbox-exec", "bubblewrap", "none"]
+            ),
+            .init(flag: "--allow-code-execution", label: "Allow code execution", kind: .boolean),
+            .init(flag: "--dry-run", label: "Dry run", kind: .boolean),
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let modelBenchmarkFused = MereRunCommandCapability(
+        id: "model.benchmark.fused",
+        command: ["model", "benchmark", "fused"],
+        title: "Fused quality suite",
+        summary: "Run the versioned Mere Lite or Mere Comprehensive fused quality suite.",
+        options: [
+            .init(flag: "--suite", label: "Suite", kind: .choice, choices: ["lite", "comprehensive"]),
+            .init(flag: "--models", label: "Models", kind: .string),
+            .init(flag: "--manifest", label: "Manifest", kind: .file),
+            .init(flag: "--external-cases", label: "External cases", kind: .file),
+            .init(flag: "--cases", label: "Cases", kind: .file),
+            .init(flag: "--capabilities", label: "Capabilities", kind: .string),
+            .init(flag: "--trials", label: "Trials", kind: .integer),
+            .init(flag: "--max-tokens", label: "Max tokens", kind: .integer),
+            .init(flag: "--context-size", label: "Context", kind: .integer),
+            .init(
+                flag: "--logprobs",
+                label: "Logprobs",
+                kind: .choice,
+                choices: ["summary", "tokens", "top"]
+            ),
+            .init(flag: "--top-logprobs", label: "Top logprobs", kind: .integer),
+            .init(
+                flag: "--performance-lane",
+                label: "Performance lane",
+                kind: .choice,
+                choices: ["none", "native"]
+            ),
+            .init(flag: "--execution-timeout", label: "Execution timeout", kind: .number),
+            .init(flag: "--python", label: "Python", kind: .string),
+            .init(
+                flag: "--sandbox",
+                label: "Sandbox",
+                kind: .choice,
+                choices: ["auto", "macos-sandbox-exec", "bubblewrap", "none"]
+            ),
+            .init(flag: "--allow-code-execution", label: "Allow code execution", kind: .boolean),
+            .init(flag: "--log-responses", label: "Log responses", kind: .boolean),
+            .init(flag: "--checkpoint", label: "Checkpoint", kind: .file),
+            .init(flag: "--resume", label: "Resume", kind: .boolean),
+            .init(flag: "--case-trial-limit", label: "Case trial limit", kind: .integer),
+            .init(flag: "--dry-run", label: "Dry run", kind: .boolean),
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let modelBenchmarkFusedFixture = MereRunCommandCapability(
+        id: "model.benchmark.fused-fixture",
+        command: ["model", "benchmark", "fused-fixture"],
+        title: "Fused fixture hashes",
+        summary: "Stamp or verify normalized fused-benchmark JSONL fixture hashes.",
+        arguments: [
+            .init(name: "input", label: "Fixture JSONL", kind: .file, required: true)
+        ],
+        options: [
+            .init(flag: "--check", label: "Verify only", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let modelBenchmarkVLM = MereRunCommandCapability(
+        id: "model.benchmark.vlm",
+        command: ["model", "benchmark", "vlm"],
+        title: "Vision-language benchmark",
+        summary: "Compare vision-language chat models on synthetic or lmms-eval datasets.",
+        options: [
+            .init(flag: "--models", label: "Models", kind: .string),
+            .init(
+                flag: "--dataset",
+                label: "Dataset",
+                kind: .choice,
+                choices: [
+                    "synthetic-vqa-v1", "mathvista-testmini", "mmmu-val",
+                    "chartqa", "docvqa-val", "mme"
+                ]
+            ),
+            .init(flag: "--lmms-tasks", label: "lmms-eval tasks", kind: .string),
+            .init(flag: "--fixture-dir", label: "Fixture directory", kind: .directory),
+            .init(flag: "--output-dir", label: "Output directory", kind: .directory),
+            .init(flag: "--lmms-eval-root", label: "lmms-eval root", kind: .directory),
+            .init(flag: "--lmms-eval-python", label: "lmms-eval Python", kind: .string),
+            .init(flag: "--external-endpoint", label: "External endpoint", kind: .boolean),
+            .init(flag: "--base-url", label: "Base URL", kind: .string),
+            .init(flag: "--api-key", label: "API key", kind: .string),
+            .init(flag: "--host", label: "Host", kind: .string),
+            .init(flag: "--port", label: "Port", kind: .integer),
+            .init(flag: "--limit", label: "Limit", kind: .string),
+            .init(flag: "--log-samples", label: "Log samples", kind: .boolean),
+            .init(flag: "--max-tokens", label: "Max tokens", kind: .integer),
+            .init(flag: "--context-size", label: "Context", kind: .integer),
+            .init(flag: "--temperature", label: "Temperature", kind: .number),
+            .init(flag: "--top-p", label: "Top-p", kind: .number),
+            .init(flag: "--dry-run", label: "Dry run", kind: .boolean),
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let modelBenchmarkToolCalls = MereRunCommandCapability(
+        id: "model.benchmark.tool-calls",
+        command: ["model", "benchmark", "tool-calls"],
+        title: "Tool-call benchmark",
+        summary: "Run a small tool-call selection evaluation against local chat models.",
+        options: [
+            .init(flag: "--models", label: "Models", kind: .string),
+            .init(flag: "--cases", label: "Cases", kind: .file),
+            .init(flag: "--max-tokens", label: "Max tokens", kind: .integer),
+            .init(flag: "--temperature", label: "Temperature", kind: .number),
+            .init(flag: "--top-p", label: "Top-p", kind: .number),
+            .init(flag: "--top-k", label: "Top-k", kind: .integer),
+            .init(flag: "--min-p", label: "Min-p", kind: .number),
+            .init(flag: "--context-size", label: "Context", kind: .integer),
+            .init(flag: "--laguna-path", label: "Laguna path", kind: .directory),
+            .init(flag: "--laguna-dflash-path", label: "DFlash path", kind: .directory),
+            .init(flag: "--laguna-dflash-tokens", label: "Speculative tokens", kind: .integer),
+            .init(flag: "--laguna-dflash-min-tokens", label: "Minimum speculative tokens", kind: .integer),
+            .init(flag: "--dry-run", label: "Dry run", kind: .boolean),
+            .init(flag: "--log-responses", label: "Log responses", kind: .boolean),
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let modelBenchmarkToolContinuations = MereRunCommandCapability(
+        id: "model.benchmark.tool-continuations",
+        command: ["model", "benchmark", "tool-continuations"],
+        title: "Tool continuation benchmark",
+        summary: "Evaluate Gemma 4 continuation after completed tool calls.",
+        options: [
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--model-root", label: "Model root", kind: .directory),
+            .init(flag: "--max-tokens", label: "Max tokens", kind: .integer),
+            .init(flag: "--context-size", label: "Context", kind: .integer),
+            .init(flag: "--dry-run", label: "Dry run", kind: .boolean),
+            .init(flag: "--log-responses", label: "Log responses", kind: .boolean),
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let modelBenchmarkGemma4KV = MereRunCommandCapability(
+        id: "model.benchmark.gemma4-kv",
+        command: ["model", "benchmark", "gemma4-kv"],
+        title: "Gemma4 KV benchmark",
+        summary: "Compare Gemma4 default KV cache decode against packed PolarKV.",
+        options: [
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--model-root", label: "Model root", kind: .directory),
+            .init(flag: "--prompt", label: "Prompt", kind: .string),
+            .init(flag: "--prompt-file", label: "Prompt file", kind: .file),
+            .init(flag: "--prompt-repeat", label: "Prompt repeat", kind: .integer),
+            .init(flag: "--prompt-repeat-values", label: "Prompt repeat matrix", kind: .string),
+            .init(flag: "--decode-tokens", label: "Decode tokens", kind: .integer),
+            .init(flag: "--decode-token-values", label: "Decode matrix", kind: .string),
+            .init(flag: "--temperature", label: "Temperature", kind: .number),
+            .init(flag: "--top-p", label: "Top-p", kind: .number),
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let modelBenchmarkGemma4MTP = MereRunCommandCapability(
+        id: "model.benchmark.gemma4-mtp",
+        command: ["model", "benchmark", "gemma4-mtp"],
+        title: "Gemma4 MTP benchmark",
+        summary: "Compare Gemma4 serial decode against verified MTP speculative decode.",
+        options: [
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--model-root", label: "Model root", kind: .directory),
+            .init(flag: "--prompt", label: "Prompt", kind: .string),
+            .init(flag: "--prompt-file", label: "Prompt file", kind: .file),
+            .init(flag: "--prompt-repeat", label: "Prompt repeat", kind: .integer),
+            .init(flag: "--prompt-repeat-values", label: "Prompt repeat matrix", kind: .string),
+            .init(flag: "--decode-tokens", label: "Decode tokens", kind: .integer),
+            .init(flag: "--decode-token-values", label: "Decode matrix", kind: .string),
+            .init(flag: "--mtp-block-size", label: "MTP block size", kind: .integer),
+            .init(flag: "--mtp-min-prompt-tokens", label: "MTP minimum prompt tokens", kind: .integer),
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let modelBenchmarkAPIWorkload = MereRunCommandCapability(
+        id: "model.benchmark.api-workload",
+        command: ["model", "benchmark", "api-workload"],
+        title: "API workload benchmark",
+        summary: "Replay a chat workload against a running API server and measure cache counters.",
+        options: [
+            .init(flag: "--host", label: "Host", kind: .string),
+            .init(flag: "--port", label: "Port", kind: .integer),
+            .init(flag: "--api-key", label: "API key", kind: .string),
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--workload-file", label: "Workload file", kind: .file),
+            .init(flag: "--turns", label: "Turns", kind: .integer),
+            .init(flag: "--shared-prefix-repeat", label: "Shared prefix repeat", kind: .integer),
+            .init(flag: "--max-tokens", label: "Max tokens", kind: .integer),
+            .init(flag: "--temperature", label: "Temperature", kind: .number),
+            .init(flag: "--top-p", label: "Top-p", kind: .number),
+            .init(flag: "--concurrency", label: "Concurrency", kind: .integer),
+            .init(flag: "--timeout-seconds", label: "Timeout", kind: .number),
+            .init(flag: "--dry-run", label: "Dry run", kind: .boolean),
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    // MARK: - Plugins, configuration, and resident services
+
+    public static let pluginInfo = MereRunCommandCapability(
+        id: "plugin.info",
+        command: ["plugin", "info"],
+        title: "Plugin details",
+        summary: "Show one plugin's catalog entry and install command.",
+        arguments: [.init(name: "id", label: "Plugin id", kind: .string, required: true)],
+        options: [
+            .init(flag: "--catalog-url", label: "Catalog", kind: .string),
+            .init(flag: "--channel", label: "Channel", kind: .string),
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let pluginRun = MereRunCommandCapability(
+        id: "plugin.run",
+        command: ["plugin", "run"],
+        title: "Run plugin",
+        summary: "Run an installed plugin without changing PATH.",
+        arguments: [
+            .init(name: "entrypoint", label: "Entrypoint", kind: .string, required: true)
+        ],
+        options: [],
+        output: .init(kind: .text)
+    )
+
+    public static let pluginRollback = MereRunCommandCapability(
+        id: "plugin.rollback",
+        command: ["plugin", "rollback"],
+        title: "Roll back plugin",
+        summary: "Restore a retained signed plugin bundle.",
+        arguments: [.init(name: "id", label: "Plugin id", kind: .string, required: true)],
+        options: [
+            .init(flag: "--yes", label: "Activate", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let configList = MereRunCommandCapability(
+        id: "config.list",
+        command: ["config", "list"],
+        title: "List configuration",
+        summary: "Show all persisted configuration values with secrets masked.",
+        options: [],
+        output: .init(kind: .text)
+    )
+
+    public static let configPath = MereRunCommandCapability(
+        id: "config.path",
+        command: ["config", "path"],
+        title: "Configuration path",
+        summary: "Print the path of the persisted configuration file.",
+        options: [],
+        output: .init(kind: .text)
+    )
+
+    public static let speechListen = MereRunCommandCapability(
+        id: "speech.listen",
+        command: ["speech", "listen"],
+        title: "Live transcription",
+        summary: "Transcribe a macOS microphone with live Qwen ASR.",
+        options: [
+            .init(flag: "--device", label: "Input device", kind: .string),
+            .init(flag: "--list-devices", label: "List devices", kind: .boolean),
+            .init(flag: "--language", label: "Language", kind: .string),
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--decode-ms", label: "Decode window", kind: .integer),
+            .init(flag: "--silence-ms", label: "Silence window", kind: .integer),
+            .init(flag: "--quiet", label: "Quiet", kind: .boolean),
+            .init(flag: "--jsonl", label: "JSONL", kind: .boolean)
+        ],
+        output: .init(kind: .text)
+    )
+
+    public static let visionServe = MereRunCommandCapability(
+        id: "vision.serve",
+        command: ["vision", "serve"],
+        title: "Vision grounding server",
+        summary: "Serve resident, binary-frame vision grounding over HTTP.",
+        options: [
+            .init(flag: "--host", label: "Host", kind: .string),
+            .init(flag: "--port", label: "Port", kind: .integer),
+            .init(flag: "--model", label: "Model", kind: .string),
+            .init(flag: "--api-key", label: "API key", kind: .string),
+            .init(flag: "--max-frame-bytes", label: "Max frame bytes", kind: .integer),
+            .init(flag: "--max-batch-size", label: "Max batch size", kind: .integer),
+            .init(flag: "--max-batch-bytes", label: "Max batch bytes", kind: .integer),
+            .init(flag: "--preflight", label: "Preflight", kind: .boolean),
+            .init(flag: "--json", label: "JSON", kind: .boolean)
+        ],
+        output: .init(kind: .service)
     )
 }

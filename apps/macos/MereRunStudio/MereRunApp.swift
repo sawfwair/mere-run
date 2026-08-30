@@ -29,6 +29,7 @@ struct MereRunApp: App {
     @StateObject private var controller = MereRunController()
     @StateObject private var library = StudioLibraryStore()
     @StateObject private var navigation = StudioNavigationCoordinator()
+    @StateObject private var crashReporter = StudioCrashReporter()
     @State private var deepLinkError: String?
     private let updaterController = SPUStandardUpdaterController(
         startingUpdater: true,
@@ -47,6 +48,7 @@ struct MereRunApp: App {
                     minHeight: StudioLayoutPolicy.minimumWindowHeight
                 )
                 .onAppear {
+                    crashReporter.applyStoredPreference()
                     appDelegate.onTerminate = { [weak controller] in
                         MainActor.assumeIsolated {
                             controller?.terminateAllProcesses()
@@ -73,6 +75,7 @@ struct MereRunApp: App {
         .commands {
             MereRunCommands(
                 controller: controller,
+                library: library,
                 updater: updaterController.updater
             )
         }
@@ -80,6 +83,7 @@ struct MereRunApp: App {
         Settings {
             MereRunSettingsView()
                 .environmentObject(controller)
+                .environmentObject(crashReporter)
                 .frame(width: 560)
         }
     }

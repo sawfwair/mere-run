@@ -6,6 +6,7 @@ import UniformTypeIdentifiers
 enum StudioVoiceTask: String, CaseIterable, Identifiable {
     case synthesize
     case transcribe
+    case listen
     case diarize
     case profiles
 
@@ -15,6 +16,7 @@ enum StudioVoiceTask: String, CaseIterable, Identifiable {
         switch self {
         case .synthesize: "Create"
         case .transcribe: "Transcribe"
+        case .listen: "Listen Live"
         case .diarize: "Who Spoke"
         case .profiles: "Voices"
         }
@@ -24,8 +26,128 @@ enum StudioVoiceTask: String, CaseIterable, Identifiable {
         switch self {
         case .synthesize: "waveform.badge.plus"
         case .transcribe: "text.bubble"
+        case .listen: "waveform.badge.mic"
         case .diarize: "person.2.wave.2"
         case .profiles: "person.wave.2"
+        }
+    }
+}
+
+struct StudioListenDevice: Equatable, Identifiable {
+    let uid: String
+    let name: String
+    let isDefault: Bool
+
+    var id: String { uid }
+
+    static func parseList(_ output: String) -> [StudioListenDevice] {
+        output.split(separator: "\n").compactMap { rawLine in
+            let line = String(rawLine)
+            guard let marker = line.first else { return nil }
+            let fields = line.dropFirst()
+                .trimmingCharacters(in: .whitespaces)
+                .split(separator: "\t", maxSplits: 1, omittingEmptySubsequences: false)
+            guard fields.count == 2 else { return nil }
+            let uid = String(fields[0]).trimmingCharacters(in: .whitespacesAndNewlines)
+            let name = String(fields[1]).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !uid.isEmpty, !name.isEmpty else { return nil }
+            return StudioListenDevice(uid: uid, name: name, isDefault: marker == "*")
+        }
+    }
+}
+
+struct StudioLiveTranscriptAccumulator: Equatable {
+    private struct Event: Decodable {
+        let protocolVersion: Int
+        let type: String
+        let utteranceID: String?
+        let revision: Int?
+        let text: String?
+        let message: String?
+
+        enum CodingKeys: String, CodingKey {
+            case protocolVersion = "protocol"
+            case type
+            case utteranceID = "utteranceId"
+            case legacyUtteranceID = "utterance_id"
+            case revision
+            case text
+            case message
+        }
+
+        init(from decoder: Decoder) throws {
+            let values = try decoder.container(keyedBy: CodingKeys.self)
+            protocolVersion = try values.decode(Int.self, forKey: .protocolVersion)
+            type = try values.decode(String.self, forKey: .type)
+            utteranceID = try values.decodeIfPresent(String.self, forKey: .utteranceID)
+                ?? values.decodeIfPresent(String.self, forKey: .legacyUtteranceID)
+            revision = try values.decodeIfPresent(Int.self, forKey: .revision)
+            text = try values.decodeIfPresent(String.self, forKey: .text)
+            message = try values.decodeIfPresent(String.self, forKey: .message)
+        }
+    }
+
+    private var buffer = ""
+    private var committedUtteranceIDs: Set<String> = []
+    private var latestRevisions: [String: Int] = [:]
+    private var committedSegments: [String] = []
+    private(set) var partialText = ""
+    private(set) var errorMessage: String?
+
+    var committedText: String { committedSegments.joined(separator: "\n") }
+
+    var displayText: String {
+        [committedText, partialText]
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+    }
+
+    mutating func beginSession() {
+        buffer = ""
+        partialText = ""
+        errorMessage = nil
+        latestRevisions.removeAll(keepingCapacity: true)
+    }
+
+    mutating func clear() {
+        self = StudioLiveTranscriptAccumulator()
+    }
+
+    mutating func receive(_ chunk: String) {
+        buffer += chunk
+        while let newline = buffer.firstIndex(of: "\n") {
+            let line = String(buffer[..<newline])
+            buffer.removeSubrange(...newline)
+            receiveLine(line)
+        }
+    }
+
+    private mutating func receiveLine(_ line: String) {
+        guard let data = line.data(using: .utf8),
+              let event = try? JSONDecoder().decode(Event.self, from: data),
+              event.protocolVersion == 1 else { return }
+
+        switch event.type {
+        case "partial":
+            guard let id = event.utteranceID,
+                  !committedUtteranceIDs.contains(id),
+                  let text = event.text else { return }
+            let revision = event.revision ?? 0
+            guard revision >= latestRevisions[id, default: -1] else { return }
+            latestRevisions[id] = revision
+            partialText = text
+        case "commit":
+            guard let id = event.utteranceID,
+                  !committedUtteranceIDs.contains(id),
+                  let text = event.text?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !text.isEmpty else { return }
+            committedUtteranceIDs.insert(id)
+            committedSegments.append(text)
+            partialText = ""
+        case "error":
+            errorMessage = event.message ?? "Live transcription failed."
+        default:
+            break
         }
     }
 }
@@ -150,6 +272,11 @@ struct StudioVoiceSheet: View {
     @State private var statusMessage: String?
     @State private var comparisonA: UUID?
     @State private var comparisonB: UUID?
+    @State private var listenDraft: CommandDraft
+    @State private var listenTranscript = StudioLiveTranscriptAccumulator()
+    @State private var listenDevices: [StudioListenDevice] = []
+    @State private var listenCommandID: UUID?
+    @State private var isListening = false
 
     private let recorderTicker = Timer.publish(every: 0.2, on: .main, in: .common).autoconnect()
 
@@ -169,6 +296,10 @@ struct StudioVoiceSheet: View {
         transcription.inputPath = initialDraft.inputPath
         transcription.outputPath = Self.timestampedOutput(prefix: "transcript", extension: "txt")
         _transcriptionDraft = State(initialValue: transcription)
+
+        _listenDraft = State(
+            initialValue: CommandCatalog.template(id: .speechListen)?.defaultDraft() ?? CommandDraft()
+        )
 
         var diarization = CommandCatalog.template(id: .speechDiarize)?.defaultDraft() ?? CommandDraft()
         diarization.inputPath = initialDraft.inputPath
@@ -310,6 +441,8 @@ struct StudioVoiceSheet: View {
                     synthesisControls
                 case .transcribe:
                     transcriptionControls
+                case .listen:
+                    listenControls
                 case .diarize:
                     diarizationControls
                 case .profiles:
@@ -615,6 +748,8 @@ struct StudioVoiceSheet: View {
             synthesisResults
         case .transcribe:
             transcriptionResults
+        case .listen:
+            listenResults
         case .diarize:
             diarizationResults
         case .profiles:
@@ -943,6 +1078,218 @@ struct StudioVoiceSheet: View {
             statusMessage = "Saved \(url.lastPathComponent)."
         } catch {
             statusMessage = error.localizedDescription
+        }
+    }
+
+    // MARK: - Live transcription
+
+    /// `speech listen --jsonl` streams versioned events until the process is interrupted,
+    /// so this lane owns the child process directly instead of going through the run queue.
+    private var listenControls: some View {
+        VStack(alignment: .leading, spacing: MereRunTheme.Spacing.md) {
+            sectionTitle("Microphone")
+            HStack(spacing: 8) {
+                Picker("Input device", selection: $listenDraft.speechListenDevice) {
+                    Text("System default").tag("")
+                    ForEach(listenDevices) { device in
+                        Text(device.isDefault ? "\(device.name) — default" : device.name)
+                            .tag(device.uid)
+                    }
+                }
+                .disabled(isListening)
+                Button("Refresh") {
+                    Task { await refreshListenDevices() }
+                }
+                .buttonStyle(.mereSecondary)
+                .disabled(isListening)
+                .help("List the microphones the CLI can capture from")
+            }
+
+            sectionTitle("Recognition")
+            labeledTextField(
+                "Language",
+                placeholder: "auto",
+                text: $listenDraft.language
+            )
+            labeledTextField(
+                "Model",
+                placeholder: "Managed ASR model id (optional)",
+                text: $listenDraft.model
+            )
+            HStack {
+                Stepper(
+                    "Decode window \(listenDraft.speechListenDecodeMS) ms",
+                    value: $listenDraft.speechListenDecodeMS,
+                    in: 0...10_000,
+                    step: 250
+                )
+                Stepper(
+                    "Silence \(listenDraft.speechListenSilenceMS) ms",
+                    value: $listenDraft.speechListenSilenceMS,
+                    in: 0...5_000,
+                    step: 100
+                )
+            }
+            .disabled(isListening)
+            Text("Leave a window at zero to use the runtime default.")
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textMuted)
+
+            Button {
+                if isListening {
+                    stopListening()
+                } else {
+                    startListening()
+                }
+            } label: {
+                Label(
+                    isListening ? "Stop listening" : "Start listening",
+                    systemImage: isListening ? "stop.fill" : "mic.fill"
+                )
+                .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .tint(isListening ? MereRunTheme.red : MereRunTheme.accent)
+        }
+        .task {
+            if listenDevices.isEmpty { await refreshListenDevices() }
+        }
+    }
+
+    private var listenResults: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("Live transcript")
+                    .font(MereRunTheme.sectionFont)
+                if isListening {
+                    ProgressView()
+                        .controlSize(.small)
+                        .accessibilityHidden(true)
+                    Text("Listening")
+                        .font(MereRunTheme.captionFont)
+                        .foregroundStyle(MereRunTheme.green)
+                        .accessibilityLabel("Currently listening to the microphone")
+                }
+                Spacer()
+                Button("Copy") {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(listenTranscript.committedText, forType: .string)
+                }
+                .buttonStyle(.mereSecondary)
+                .disabled(listenTranscript.committedText.isEmpty)
+                .accessibilityLabel("Copy the live transcript")
+                Button("Save…") { saveLiveTranscript() }
+                    .buttonStyle(.mereSecondary)
+                    .disabled(listenTranscript.committedText.isEmpty)
+                Button("Clear") { listenTranscript.clear() }
+                    .buttonStyle(.mereSecondary)
+                    .disabled(listenTranscript.displayText.isEmpty || isListening)
+            }
+
+            if listenTranscript.displayText.isEmpty {
+                ContentUnavailableView(
+                    isListening ? "Waiting for speech" : "Not listening",
+                    systemImage: "waveform.badge.mic",
+                    description: Text(
+                        isListening
+                            ? "Partial transcripts appear here as the recognizer emits them."
+                            : "Start listening to stream microphone audio through live Qwen ASR."
+                    )
+                )
+            } else {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 8) {
+                        if !listenTranscript.committedText.isEmpty {
+                            Text(listenTranscript.committedText)
+                        }
+                        if !listenTranscript.partialText.isEmpty {
+                            Text(listenTranscript.partialText)
+                                .foregroundStyle(MereRunTheme.textMuted)
+                                .italic()
+                                .accessibilityLabel("Partial transcript: \(listenTranscript.partialText)")
+                        }
+                    }
+                    .font(MereRunTheme.bodyFont)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
+                }
+                .merePanel()
+            }
+        }
+        .padding(18)
+    }
+
+    private func refreshListenDevices() async {
+        let result = await controller.utilityCommandResult(args: ["speech", "listen", "--list-devices"])
+        guard result.exitCode == 0 else {
+            statusMessage = "Could not list microphones."
+            return
+        }
+        listenDevices = StudioListenDevice.parseList(result.stdout)
+        if !listenDraft.speechListenDevice.isEmpty,
+           !listenDevices.contains(where: { $0.uid == listenDraft.speechListenDevice }) {
+            listenDraft.speechListenDevice = ""
+        }
+    }
+
+    private func startListening() {
+        guard let template = CommandCatalog.template(id: .speechListen) else {
+            statusMessage = "Live transcription is unavailable."
+            return
+        }
+        let commandID = UUID()
+        listenCommandID = commandID
+        isListening = true
+        statusMessage = "Listening. Speak into the selected microphone."
+        listenTranscript.beginSession()
+        var draft = listenDraft
+        draft.speechJSONL = true
+        draft.quiet = true
+        let args = template.arguments(from: draft)
+        Task {
+            let result = await controller.utilityCommandResult(
+                args: args,
+                commandID: commandID,
+                onStandardOutput: { chunk in
+                    listenTranscript.receive(chunk)
+                }
+            )
+            isListening = false
+            listenCommandID = nil
+            if let errorMessage = listenTranscript.errorMessage {
+                statusMessage = errorMessage
+            } else if result.exitCode != 0, !listenTranscript.committedText.isEmpty {
+                statusMessage = "Listening stopped."
+            } else if result.exitCode != 0 {
+                statusMessage = "Live transcription exited with code \(result.exitCode)."
+            } else {
+                statusMessage = "Listening stopped."
+            }
+        }
+    }
+
+    private func stopListening() {
+        guard let commandID = listenCommandID else {
+            isListening = false
+            return
+        }
+        _ = controller.interruptUtilityCommand(commandID)
+        statusMessage = "Stopping…"
+    }
+
+    private func saveLiveTranscript() {
+        let suggested = URL(fileURLWithPath: Self.timestampedOutput(prefix: "live-transcript", extension: "txt"))
+        guard let url = StudioSpecialistFiles.saveFile(
+            title: "Save live transcript",
+            suggestedName: suggested.lastPathComponent,
+            allowedContentTypes: [.plainText]
+        ) else { return }
+        do {
+            try listenTranscript.committedText.write(to: url, atomically: true, encoding: .utf8)
+            statusMessage = "Saved the live transcript."
+        } catch {
+            statusMessage = "Could not save the transcript: \(error.localizedDescription)"
         }
     }
 

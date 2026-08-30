@@ -13,6 +13,7 @@ enum CommandCategory: String, CaseIterable, Identifiable {
     case text = "Text"
     case speech = "Speech"
     case vision = "Vision"
+    case geospatial = "Geospatial"
     case media = "Music & Video"
     case sfx = "Sound FX"
     case operations = "Operations"
@@ -122,6 +123,30 @@ enum CommandTemplateID: String, CaseIterable, Codable {
     case pluginDoctor
     case openWebui
     case apiServe
+    case geoFlood
+    case geoFire
+    case geoTessera
+    case geoOlmoEarth
+    case modelLocationList
+    case modelLocationAdd
+    case modelLocationRemove
+    case modelLocationBind
+    case modelLocationUnbind
+    case modelBenchmarkChat
+    case modelBenchmarkCode
+    case modelBenchmarkFused
+    case modelBenchmarkFusedFixture
+    case modelBenchmarkVLM
+    case modelBenchmarkToolCalls
+    case modelBenchmarkToolContinuations
+    case modelBenchmarkGemma4KV
+    case modelBenchmarkGemma4MTP
+    case modelBenchmarkAPIWorkload
+    case pluginInfo
+    case pluginRun
+    case pluginRollback
+    case speechListen
+    case visionServe
     case custom
 
     var capabilityID: String? {
@@ -224,6 +249,30 @@ enum CommandTemplateID: String, CaseIterable, Codable {
         case .pluginDoctor: return "plugin.doctor"
         case .openWebui: return "open-webui.quickstart"
         case .apiServe: return "api.serve"
+        case .geoFlood: return "geo.flood"
+        case .geoFire: return "geo.fire"
+        case .geoTessera: return "geo.tessera"
+        case .geoOlmoEarth: return "geo.olmoearth"
+        case .modelLocationList: return "model.location.list"
+        case .modelLocationAdd: return "model.location.add"
+        case .modelLocationRemove: return "model.location.remove"
+        case .modelLocationBind: return "model.location.bind"
+        case .modelLocationUnbind: return "model.location.unbind"
+        case .modelBenchmarkChat: return "model.benchmark.chat"
+        case .modelBenchmarkCode: return "model.benchmark.code"
+        case .modelBenchmarkFused: return "model.benchmark.fused"
+        case .modelBenchmarkFusedFixture: return "model.benchmark.fused-fixture"
+        case .modelBenchmarkVLM: return "model.benchmark.vlm"
+        case .modelBenchmarkToolCalls: return "model.benchmark.tool-calls"
+        case .modelBenchmarkToolContinuations: return "model.benchmark.tool-continuations"
+        case .modelBenchmarkGemma4KV: return "model.benchmark.gemma4-kv"
+        case .modelBenchmarkGemma4MTP: return "model.benchmark.gemma4-mtp"
+        case .modelBenchmarkAPIWorkload: return "model.benchmark.api-workload"
+        case .pluginInfo: return "plugin.info"
+        case .pluginRun: return "plugin.run"
+        case .pluginRollback: return "plugin.rollback"
+        case .speechListen: return "speech.listen"
+        case .visionServe: return "vision.serve"
         }
     }
 }
@@ -822,6 +871,26 @@ struct CommandDraft: Equatable, Codable {
     var sfxClipBatchSize = 4
     var pluginCatalogURL = ""
     var pluginChannel = ""
+    var geoDimensions = ""
+    var geoPatchSize = 4
+    var geoInputResolution = 10.0
+    var geoIncludeTokens = false
+    var benchmarkModels = ""
+    var benchmarkSuite = ""
+    var benchmarkDataset = ""
+    var benchmarkCases = ""
+    var benchmarkTrials = ""
+    var benchmarkResume = false
+    var benchmarkFixtureCheck = false
+    var benchmarkSandbox = ""
+    var benchmarkAllowCodeExecution = false
+    var speechListenDevice = ""
+    var speechListenListDevices = false
+    var speechListenDecodeMS = 0
+    var speechListenSilenceMS = 0
+    var visionServeMaxFrameBytes = 0
+    var visionServeMaxBatchSize = 8
+    var visionServeMaxBatchBytes = 0
     var openWebUIHost = "127.0.0.1"
     var openWebUIPort = 3_000
     var openWebUIContainerName = "open-webui-mere-run"
@@ -970,6 +1039,30 @@ struct CommandTemplate: Identifiable, Equatable {
             draft.maxSequenceLength = 512
         case .imageDatasetDiscover:
             draft.json = true
+        case .geoFlood, .geoFire, .geoTessera, .geoOlmoEarth:
+            draft.json = true
+        case .modelLocationList:
+            draft.json = true
+        case .modelBenchmarkFused:
+            draft.benchmarkSuite = "lite"
+            draft.json = true
+        case .modelBenchmarkChat, .modelBenchmarkToolCalls, .modelBenchmarkToolContinuations:
+            draft.json = true
+        case .modelBenchmarkCode:
+            draft.benchmarkSandbox = "auto"
+            draft.json = true
+        case .modelBenchmarkVLM:
+            draft.benchmarkDataset = "synthetic-vqa-v1"
+            draft.json = true
+        case .modelBenchmarkGemma4KV, .modelBenchmarkGemma4MTP:
+            draft.json = true
+        case .modelBenchmarkAPIWorkload:
+            draft.port = 8080
+            draft.json = true
+        case .pluginInfo:
+            draft.json = true
+        case .visionServe:
+            draft.port = 8_091
         case .imageRunPlan:
             draft.preflight = true
             draft.json = true
@@ -3089,6 +3182,180 @@ struct CommandTemplate: Identifiable, Equatable {
             if draft.preflight { args.append("--preflight") }
             if draft.preflight, draft.json { args.append("--json") }
 
+        case .geoFlood, .geoFire, .geoTessera, .geoOlmoEarth:
+            let verb: String
+            switch id {
+            case .geoFire: verb = "fire"
+            case .geoTessera: verb = "tessera"
+            case .geoOlmoEarth: verb = "olmoearth"
+            default: verb = "flood"
+            }
+            args = ["geo", verb, draft.inputPath]
+            if !draft.outputPath.isBlank { args += ["--output", draft.outputPath] }
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            if id == .geoTessera, !draft.geoDimensions.isBlank {
+                args += ["--dimensions", draft.geoDimensions]
+            }
+            if id == .geoOlmoEarth {
+                args += ["--patch-size", String(draft.geoPatchSize)]
+                args += ["--input-resolution", String(draft.geoInputResolution)]
+                if draft.geoIncludeTokens { args.append("--include-tokens") }
+            }
+            if draft.preflight { args.append("--preflight") }
+            if draft.json { args.append("--json") }
+
+        case .modelLocationList:
+            args = ["model", "location", "list"]
+            if draft.json { args.append("--json") }
+
+        case .modelLocationAdd:
+            args = ["model", "location", "add", draft.inputPath]
+
+        case .modelLocationRemove:
+            args = ["model", "location", "remove", draft.inputPath]
+
+        case .modelLocationBind:
+            args = ["model", "location", "bind", draft.model, draft.inputPath]
+            if draft.acceptModelLicense { args.append("--accept-model-license") }
+
+        case .modelLocationUnbind:
+            args = ["model", "location", "unbind", draft.model]
+            if !draft.inputPath.isBlank { args.append(draft.inputPath) }
+
+        case .modelBenchmarkChat, .modelBenchmarkToolCalls:
+            args = ["model", "benchmark", id == .modelBenchmarkChat ? "chat" : "tool-calls"]
+            if !draft.benchmarkModels.isBlank { args += ["--models", draft.benchmarkModels] }
+            if id == .modelBenchmarkChat, !draft.benchmarkSuite.isBlank {
+                args += ["--suite", draft.benchmarkSuite]
+            }
+            if !draft.benchmarkCases.isBlank { args += ["--cases", draft.benchmarkCases] }
+            if draft.maxTokens > 0 { args += ["--max-tokens", String(draft.maxTokens)] }
+            if draft.contextSize > 0 { args += ["--context-size", String(draft.contextSize)] }
+            if draft.dryRun { args.append("--dry-run") }
+            if draft.benchmarkLogResponses { args.append("--log-responses") }
+            if draft.json { args.append("--json") }
+
+        case .modelBenchmarkCode:
+            args = ["model", "benchmark", "code"]
+            if !draft.benchmarkModels.isBlank { args += ["--models", draft.benchmarkModels] }
+            if !draft.benchmarkSuite.isBlank { args += ["--suite", draft.benchmarkSuite] }
+            if draft.maxTokens > 0 { args += ["--max-tokens", String(draft.maxTokens)] }
+            if !draft.benchmarkSandbox.isBlank { args += ["--sandbox", draft.benchmarkSandbox] }
+            if draft.benchmarkAllowCodeExecution { args.append("--allow-code-execution") }
+            if draft.dryRun { args.append("--dry-run") }
+            if draft.json { args.append("--json") }
+
+        case .modelBenchmarkFused:
+            args = ["model", "benchmark", "fused"]
+            if !draft.benchmarkSuite.isBlank { args += ["--suite", draft.benchmarkSuite] }
+            if !draft.benchmarkModels.isBlank { args += ["--models", draft.benchmarkModels] }
+            if !draft.benchmarkCases.isBlank { args += ["--cases", draft.benchmarkCases] }
+            if !draft.benchmarkTrials.isBlank { args += ["--trials", draft.benchmarkTrials] }
+            if draft.maxTokens > 0 { args += ["--max-tokens", String(draft.maxTokens)] }
+            if draft.contextSize > 0 { args += ["--context-size", String(draft.contextSize)] }
+            if !draft.benchmarkSandbox.isBlank { args += ["--sandbox", draft.benchmarkSandbox] }
+            if draft.benchmarkAllowCodeExecution { args.append("--allow-code-execution") }
+            if draft.benchmarkLogResponses { args.append("--log-responses") }
+            if draft.benchmarkResume { args.append("--resume") }
+            if draft.dryRun { args.append("--dry-run") }
+            if draft.json { args.append("--json") }
+
+        case .modelBenchmarkFusedFixture:
+            args = ["model", "benchmark", "fused-fixture", draft.inputPath]
+            if draft.benchmarkFixtureCheck { args.append("--check") }
+
+        case .modelBenchmarkVLM:
+            args = ["model", "benchmark", "vlm"]
+            if !draft.benchmarkModels.isBlank { args += ["--models", draft.benchmarkModels] }
+            if !draft.benchmarkDataset.isBlank { args += ["--dataset", draft.benchmarkDataset] }
+            if !draft.outputPath.isBlank { args += ["--output-dir", draft.outputPath] }
+            if draft.maxTokens > 0 { args += ["--max-tokens", String(draft.maxTokens)] }
+            if draft.contextSize > 0 { args += ["--context-size", String(draft.contextSize)] }
+            if draft.dryRun { args.append("--dry-run") }
+            if draft.json { args.append("--json") }
+
+        case .modelBenchmarkToolContinuations:
+            args = ["model", "benchmark", "tool-continuations"]
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            if draft.maxTokens > 0 { args += ["--max-tokens", String(draft.maxTokens)] }
+            if draft.contextSize > 0 { args += ["--context-size", String(draft.contextSize)] }
+            if draft.dryRun { args.append("--dry-run") }
+            if draft.benchmarkLogResponses { args.append("--log-responses") }
+            if draft.json { args.append("--json") }
+
+        case .modelBenchmarkGemma4KV, .modelBenchmarkGemma4MTP:
+            args = ["model", "benchmark", id == .modelBenchmarkGemma4KV ? "gemma4-kv" : "gemma4-mtp"]
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            if !draft.benchmarkPromptFile.isBlank {
+                args += ["--prompt-file", draft.benchmarkPromptFile]
+            }
+            if draft.benchmarkPromptRepeat > 0 {
+                args += ["--prompt-repeat", String(draft.benchmarkPromptRepeat)]
+            }
+            if draft.benchmarkDecodeTokens > 0 {
+                args += ["--decode-tokens", String(draft.benchmarkDecodeTokens)]
+            }
+            if !draft.benchmarkDecodeTokenValues.isBlank {
+                args += ["--decode-token-values", draft.benchmarkDecodeTokenValues]
+            }
+            if id == .modelBenchmarkGemma4MTP, !draft.benchmarkMTPBlockSize.isBlank {
+                args += ["--mtp-block-size", draft.benchmarkMTPBlockSize]
+            }
+            if draft.json { args.append("--json") }
+
+        case .modelBenchmarkAPIWorkload:
+            args = ["model", "benchmark", "api-workload", "--host", draft.host]
+            args += ["--port", String(draft.port)]
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            if draft.maxTokens > 0 { args += ["--max-tokens", String(draft.maxTokens)] }
+            if draft.dryRun { args.append("--dry-run") }
+            if draft.json { args.append("--json") }
+
+        case .pluginInfo:
+            args = ["plugin", "info", draft.prompt]
+            if !draft.pluginCatalogURL.isBlank {
+                args += ["--catalog-url", draft.pluginCatalogURL]
+            }
+            if !draft.pluginChannel.isBlank { args += ["--channel", draft.pluginChannel] }
+            if draft.json { args.append("--json") }
+
+        case .pluginRun:
+            args = ["plugin", "run", draft.prompt]
+
+        case .pluginRollback:
+            args = ["plugin", "rollback", draft.prompt]
+            if draft.all { args.append("--yes") }
+
+        case .speechListen:
+            args = ["speech", "listen"]
+            if draft.speechListenListDevices { args.append("--list-devices") }
+            if !draft.speechListenDevice.isBlank { args += ["--device", draft.speechListenDevice] }
+            if !draft.language.isBlank { args += ["--language", draft.language] }
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            if draft.speechListenDecodeMS > 0 {
+                args += ["--decode-ms", String(draft.speechListenDecodeMS)]
+            }
+            if draft.speechListenSilenceMS > 0 {
+                args += ["--silence-ms", String(draft.speechListenSilenceMS)]
+            }
+            if draft.quiet { args.append("--quiet") }
+            if draft.speechJSONL { args.append("--jsonl") }
+
+        case .visionServe:
+            args = ["vision", "serve", "--host", draft.host, "--port", String(draft.port)]
+            if !draft.model.isBlank { args += ["--model", draft.model] }
+            if draft.visionServeMaxFrameBytes > 0 {
+                args += ["--max-frame-bytes", String(draft.visionServeMaxFrameBytes)]
+            }
+            if draft.visionServeMaxBatchSize > 0 {
+                args += ["--max-batch-size", String(draft.visionServeMaxBatchSize)]
+            }
+            if draft.visionServeMaxBatchBytes > 0 {
+                args += ["--max-batch-bytes", String(draft.visionServeMaxBatchBytes)]
+            }
+            if draft.preflight { args.append("--preflight") }
+            if draft.json { args.append("--json") }
+
         case .custom:
             return ShellWords.split(draft.extraArguments)
         }
@@ -3179,10 +3446,14 @@ extension CommandTemplate {
             return .speak
         case .speechTranscribe, .speechDiarize:
             return .listen
+        case .speechListen:
+            return .listen
         case .audioEnhance, .audioGenerate:
             return .listen
 
         case .visionGround:
+            return .findObjects
+        case .visionServe:
             return .findObjects
         case .visionSegment:
             return .segment
@@ -3200,7 +3471,11 @@ extension CommandTemplate {
              .visionFlow,
              .visionDepthVideo,
              .visionGeometry,
-             .visionGeometryMultiview:
+             .visionGeometryMultiview,
+             .geoFlood,
+             .geoFire,
+             .geoTessera,
+             .geoOlmoEarth:
             return .readImage
 
         case .musicGenerate,
@@ -3260,13 +3535,31 @@ extension CommandTemplate {
              .modelGarbageCollect,
              .modelRuntimeGet,
              .modelRuntimeSet,
+             .modelLocationList,
+             .modelLocationAdd,
+             .modelLocationRemove,
+             .modelLocationBind,
+             .modelLocationUnbind,
              .graphStudio,
              .nodeConsole,
              .modelBenchmark,
              .modelBenchmarkLagunaDFlash,
+             .modelBenchmarkChat,
+             .modelBenchmarkCode,
+             .modelBenchmarkFused,
+             .modelBenchmarkFusedFixture,
+             .modelBenchmarkVLM,
+             .modelBenchmarkToolCalls,
+             .modelBenchmarkToolContinuations,
+             .modelBenchmarkGemma4KV,
+             .modelBenchmarkGemma4MTP,
+             .modelBenchmarkAPIWorkload,
              .pluginList,
              .pluginInstall,
              .pluginDoctor,
+             .pluginInfo,
+             .pluginRun,
+             .pluginRollback,
              .openWebui,
              .apiServe,
              .custom:
@@ -3284,6 +3577,7 @@ enum CommandLaunchEnvironment {
             || templateID == .openWebui
             || templateID == .musicServe
             || templateID == .worldServe
+            || templateID == .visionServe
             || templateID == .statusSnapshot else { return [:] }
         var overrides: [String: String] = [:]
         let apiKey = draft.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -4181,6 +4475,196 @@ enum CommandCatalog {
             subtitle: "OpenAI-compatible local server",
             systemImage: "network",
             defaultModel: StudioChatDefaults.fallbackModelID
+        ),
+        CommandTemplate(
+            id: .geoFlood,
+            category: .geospatial,
+            title: "Flood inference",
+            subtitle: "TerraMind flood logits from a normalized tile batch",
+            systemImage: "water.waves",
+            inputKind: .file([.data]),
+            outputKind: .file("safetensors")
+        ),
+        CommandTemplate(
+            id: .geoFire,
+            category: .geospatial,
+            title: "Fire inference",
+            subtitle: "TerraMind fire logits from a normalized tile batch",
+            systemImage: "flame",
+            inputKind: .file([.data]),
+            outputKind: .file("safetensors")
+        ),
+        CommandTemplate(
+            id: .geoTessera,
+            category: .geospatial,
+            title: "TESSERA embeddings",
+            subtitle: "Encode Sentinel-1/2 time series with TESSERA v2",
+            systemImage: "square.stack.3d.down.right",
+            inputKind: .file([.data]),
+            outputKind: .file("safetensors")
+        ),
+        CommandTemplate(
+            id: .geoOlmoEarth,
+            category: .geospatial,
+            title: "OlmoEarth embeddings",
+            subtitle: "Encode multisensor Earth observations with OlmoEarth v1.2",
+            systemImage: "globe.europe.africa",
+            inputKind: .file([.data]),
+            outputKind: .file("safetensors")
+        ),
+        CommandTemplate(
+            id: .modelLocationList,
+            category: .models,
+            title: "Model locations",
+            subtitle: "Writable store, search roots, and explicit bindings",
+            systemImage: "externaldrive.badge.checkmark"
+        ),
+        CommandTemplate(
+            id: .modelLocationAdd,
+            category: .models,
+            title: "Add search root",
+            subtitle: "Register a read-only root of canonical model directories",
+            systemImage: "externaldrive.badge.plus",
+            inputKind: .directory
+        ),
+        CommandTemplate(
+            id: .modelLocationRemove,
+            category: .models,
+            title: "Remove search root",
+            subtitle: "Unregister a search root without deleting files",
+            systemImage: "externaldrive.badge.minus",
+            inputKind: .directory
+        ),
+        CommandTemplate(
+            id: .modelLocationBind,
+            category: .models,
+            title: "Bind model directory",
+            subtitle: "Point a canonical model id at a read-only directory",
+            systemImage: "link.badge.plus",
+            inputKind: .directory
+        ),
+        CommandTemplate(
+            id: .modelLocationUnbind,
+            category: .models,
+            title: "Unbind model directory",
+            subtitle: "Remove explicit bindings without deleting files",
+            systemImage: "link.circle"
+        ),
+        CommandTemplate(
+            id: .modelBenchmarkFused,
+            category: .models,
+            title: "Fused quality suite",
+            subtitle: "Mere Lite or Mere Comprehensive versioned suite",
+            systemImage: "chart.bar.doc.horizontal",
+            outputKind: .file("json")
+        ),
+        CommandTemplate(
+            id: .modelBenchmarkChat,
+            category: .models,
+            title: "Chat benchmark",
+            subtitle: "Grounded-chat evaluation slice",
+            systemImage: "bubble.left.and.text.bubble.right",
+            outputKind: .file("json")
+        ),
+        CommandTemplate(
+            id: .modelBenchmarkCode,
+            category: .models,
+            title: "Code benchmark",
+            subtitle: "Real coding-evaluation slice with sandboxed execution",
+            systemImage: "chevron.left.forwardslash.chevron.right",
+            outputKind: .file("json")
+        ),
+        CommandTemplate(
+            id: .modelBenchmarkVLM,
+            category: .models,
+            title: "Vision-language benchmark",
+            subtitle: "Synthetic or lmms-eval multimodal datasets",
+            systemImage: "photo.badge.checkmark",
+            outputKind: .file("json")
+        ),
+        CommandTemplate(
+            id: .modelBenchmarkToolCalls,
+            category: .models,
+            title: "Tool-call benchmark",
+            subtitle: "Tool selection accuracy across chat models",
+            systemImage: "wrench.and.screwdriver",
+            outputKind: .file("json")
+        ),
+        CommandTemplate(
+            id: .modelBenchmarkToolContinuations,
+            category: .models,
+            title: "Tool continuation benchmark",
+            subtitle: "Gemma 4 continuation after completed tool calls",
+            systemImage: "arrow.turn.down.right",
+            outputKind: .file("json")
+        ),
+        CommandTemplate(
+            id: .modelBenchmarkGemma4KV,
+            category: .models,
+            title: "Gemma4 KV benchmark",
+            subtitle: "Default KV cache decode against packed PolarKV",
+            systemImage: "memorychip"
+        ),
+        CommandTemplate(
+            id: .modelBenchmarkGemma4MTP,
+            category: .models,
+            title: "Gemma4 MTP benchmark",
+            subtitle: "Serial decode against verified MTP speculative decode",
+            systemImage: "bolt.badge.clock"
+        ),
+        CommandTemplate(
+            id: .modelBenchmarkAPIWorkload,
+            category: .models,
+            title: "API workload benchmark",
+            subtitle: "Replay a chat workload against a running API server",
+            systemImage: "server.rack",
+            outputKind: .file("json")
+        ),
+        CommandTemplate(
+            id: .modelBenchmarkFusedFixture,
+            category: .models,
+            title: "Fused fixture hashes",
+            subtitle: "Stamp or verify normalized fixture JSONL hashes",
+            systemImage: "number.square",
+            inputKind: .file([.json, .plainText])
+        ),
+        CommandTemplate(
+            id: .pluginInfo,
+            category: .server,
+            title: "Plugin details",
+            subtitle: "Catalog entry and install command for one plugin",
+            systemImage: "info.circle",
+            promptLabel: "Plugin id"
+        ),
+        CommandTemplate(
+            id: .pluginRun,
+            category: .server,
+            title: "Run plugin",
+            subtitle: "Run an installed plugin without changing PATH",
+            systemImage: "play.rectangle",
+            promptLabel: "Plugin entrypoint"
+        ),
+        CommandTemplate(
+            id: .pluginRollback,
+            category: .server,
+            title: "Roll back plugin",
+            subtitle: "Restore a retained signed plugin bundle",
+            systemImage: "arrow.uturn.backward.circle",
+            promptLabel: "Plugin id"
+        ),
+        CommandTemplate(
+            id: .speechListen,
+            category: .speech,
+            title: "Live transcription",
+            subtitle: "Stream microphone audio through live Qwen ASR",
+            systemImage: "waveform.badge.mic"
+        ),
+        CommandTemplate(
+            id: .visionServe,
+            category: .server,
+            title: "Vision grounding server",
+            subtitle: "Resident binary-frame grounding over HTTP",
+            systemImage: "viewfinder.circle"
         ),
         CommandTemplate(
             id: .custom,
