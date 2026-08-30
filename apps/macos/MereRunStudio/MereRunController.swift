@@ -267,10 +267,15 @@ enum MereRunProcessInputError: LocalizedError {
 
 protocol MereRunRunningProcess: AnyObject {
     func terminate()
+    func interrupt()
     func sendStandardInput(_ text: String) throws
 }
 
 extension MereRunRunningProcess {
+    func interrupt() {
+        terminate()
+    }
+
     func sendStandardInput(_ text: String) throws {
         throw MereRunProcessInputError.unavailable
     }
@@ -309,6 +314,10 @@ private final class FoundationRunningProcess: MereRunRunningProcess, @unchecked 
     func terminate() {
         try? stdinPipe?.fileHandleForWriting.close()
         process.terminate()
+    }
+
+    func interrupt() {
+        process.interrupt()
     }
 
     func sendStandardInput(_ text: String) throws {
@@ -923,13 +932,16 @@ final class MereRunController: ObservableObject {
         return result.exitCode == 0
     }
 
-    /// Builds the Export Diagnostics report from live app state. Log lines are rendered
-    /// newest-last so the tail reads like a terminal session.
+    /// Builds the Export Diagnostics report from live app state without copying console
+    /// text or command arguments, both of which can contain private user content.
     func diagnosticsReport(libraryItems: [StudioLibraryItem]) -> String {
-        let recentLog = logs
-            .suffix(400)
-            .map { "[\($0.stream)] \($0.text)" }
-            .joined(separator: "\n")
+        let recentLog = logs.suffix(400).reduce(into: StudioDiagnostics.LogSummary()) { summary, line in
+            switch line.stream {
+            case .system: summary.systemCount += 1
+            case .stdout: summary.stdoutCount += 1
+            case .stderr: summary.stderrCount += 1
+            }
+        }
         return StudioDiagnostics.report(
             appVersion: appVersion,
             cliVersion: cliVersion,
@@ -1008,6 +1020,51 @@ final class MereRunController: ObservableObject {
         environmentOverrides: [String: String] = [:],
         onOutput: (@MainActor @Sendable (String) -> Void)? = nil
     ) async -> MereRunUtilityCommandResult {
+        await utilityCommandResult(
+            args: args,
+            commandID: commandID,
+            masksSecrets: masksSecrets,
+            environmentOverrides: environmentOverrides,
+            callbacks: .init(onOutput: onOutput)
+        )
+    }
+
+    func utilityCommandResult(
+        args: [String],
+        commandID: UUID = UUID(),
+        masksSecrets: Bool = true,
+        environmentOverrides: [String: String] = [:],
+        onStandardOutput: @escaping @MainActor @Sendable (String) -> Void
+    ) async -> MereRunUtilityCommandResult {
+        await utilityCommandResult(
+            args: args,
+            commandID: commandID,
+            masksSecrets: masksSecrets,
+            environmentOverrides: environmentOverrides,
+            callbacks: .init(onStandardOutput: onStandardOutput)
+        )
+    }
+
+    private struct UtilityOutputCallbacks {
+        let onOutput: (@MainActor @Sendable (String) -> Void)?
+        let onStandardOutput: (@MainActor @Sendable (String) -> Void)?
+
+        init(
+            onOutput: (@MainActor @Sendable (String) -> Void)? = nil,
+            onStandardOutput: (@MainActor @Sendable (String) -> Void)? = nil
+        ) {
+            self.onOutput = onOutput
+            self.onStandardOutput = onStandardOutput
+        }
+    }
+
+    private func utilityCommandResult(
+        args: [String],
+        commandID: UUID,
+        masksSecrets: Bool,
+        environmentOverrides: [String: String],
+        callbacks: UtilityOutputCallbacks
+    ) async -> MereRunUtilityCommandResult {
         let launch = cliResolve(cliPath)
         let cliArgs: [String]
         if !modelsRoot.isBlank {
@@ -1031,13 +1088,16 @@ final class MereRunController: ObservableObject {
                     ),
                     stdout: { text in
                         output.append(text)
-                        if let onOutput {
-                            Task { @MainActor in onOutput(text) }
+                        if callbacks.onOutput != nil || callbacks.onStandardOutput != nil {
+                            Task { @MainActor in
+                                callbacks.onOutput?(text)
+                                callbacks.onStandardOutput?(text)
+                            }
                         }
                     },
                     stderr: { text in
                         errors.append(text)
-                        if let onOutput {
+                        if let onOutput = callbacks.onOutput {
                             Task { @MainActor in onOutput(text) }
                         }
                     },
@@ -1072,6 +1132,13 @@ final class MereRunController: ObservableObject {
     func cancelUtilityCommand(_ commandID: UUID) -> Bool {
         guard let process = utilityProcesses[commandID] else { return false }
         process.terminate()
+        return true
+    }
+
+    @discardableResult
+    func interruptUtilityCommand(_ commandID: UUID) -> Bool {
+        guard let process = utilityProcesses[commandID] else { return false }
+        process.interrupt()
         return true
     }
 

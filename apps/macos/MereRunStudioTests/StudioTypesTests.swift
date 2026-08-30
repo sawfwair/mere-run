@@ -2317,6 +2317,75 @@ final class StudioTypesTests: XCTestCase {
         XCTAssertEqual(env["MERERUN_API_KEY"], "secret-token")
     }
 
+    func testVisionServerUsesEnvironmentKeyAndDeclaresBatchSize() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .visionServe))
+        var draft = template.defaultDraft()
+        draft.apiKey = " vision-secret "
+        draft.visionServeMaxBatchSize = 12
+
+        let args = template.arguments(from: draft)
+        let env = CommandLaunchEnvironment.overrides(templateID: template.id, draft: draft)
+
+        XCTAssertFalse(args.contains("--api-key"))
+        XCTAssertFalse(args.contains("vision-secret"))
+        assertPair(args, "--max-batch-size", "12")
+        XCTAssertEqual(env["MERERUN_API_KEY"], "vision-secret")
+    }
+
+    func testModelLocationBindCanAcknowledgeModelTerms() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .modelLocationBind))
+        var draft = template.defaultDraft()
+        draft.model = "vision-ground-falcon-perception"
+        draft.inputPath = "/Volumes/Models/falcon"
+        draft.acceptModelLicense = true
+
+        XCTAssertEqual(
+            template.arguments(from: draft),
+            [
+                "model", "location", "bind", "vision-ground-falcon-perception",
+                "/Volumes/Models/falcon", "--accept-model-license"
+            ]
+        )
+    }
+
+    func testFusedFixtureBenchmarkIncludesSelectedInputAndCheckMode() throws {
+        let template = try XCTUnwrap(CommandCatalog.template(id: .modelBenchmarkFusedFixture))
+        var draft = template.defaultDraft()
+        draft.inputPath = "/tmp/fused-results.jsonl"
+        draft.benchmarkFixtureCheck = true
+
+        XCTAssertEqual(
+            template.arguments(from: draft),
+            ["model", "benchmark", "fused-fixture", "/tmp/fused-results.jsonl", "--check"]
+        )
+    }
+
+    func testListenDeviceListKeepsUIDSeparateFromDisplayName() {
+        let devices = StudioListenDevice.parseList(
+            "* BuiltInDeviceUID\tMacBook Pro Microphone\n  USBDeviceUID\tStudio USB Mic\n"
+        )
+
+        XCTAssertEqual(
+            devices,
+            [
+                .init(uid: "BuiltInDeviceUID", name: "MacBook Pro Microphone", isDefault: true),
+                .init(uid: "USBDeviceUID", name: "Studio USB Mic", isDefault: false)
+            ]
+        )
+    }
+
+    func testLiveTranscriptReplacesPartialsAndCommitsOnceAcrossChunks() {
+        var transcript = StudioLiveTranscriptAccumulator()
+        transcript.receive(#"{"protocol":1,"type":"partial","utteranceId":"u1","revision":1,"text":"hel"}"#)
+        transcript.receive("\n" + #"{"protocol":1,"type":"partial","utteranceId":"u1","revision":2,"text":"hello"}"#)
+        transcript.receive("\n" + #"{"protocol":1,"type":"commit","utteranceId":"u1","revision":3,"text":"hello world"}"#)
+        transcript.receive("\n" + #"{"protocol":1,"type":"commit","utteranceId":"u1","revision":3,"text":"hello world"}"# + "\n")
+
+        XCTAssertEqual(transcript.committedText, "hello world")
+        XCTAssertEqual(transcript.displayText, "hello world")
+        XCTAssertEqual(transcript.partialText, "")
+    }
+
     func testOpenWebUISecretsUseEnvironmentInsteadOfArguments() throws {
         let template = try XCTUnwrap(CommandCatalog.template(id: .openWebui))
         var draft = template.defaultDraft()

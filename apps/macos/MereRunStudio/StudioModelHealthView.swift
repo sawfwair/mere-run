@@ -503,6 +503,15 @@ struct StudioModelHealthSheet: View {
                 .pickerStyle(.segmented)
                 .frame(maxWidth: 320)
             }
+            if benchmark == .fusedFixture {
+                StudioPathField(
+                    label: "Fused benchmark JSONL fixture",
+                    placeholder: "Benchmark result JSONL",
+                    path: $benchmarkDraft.inputPath
+                )
+                Toggle("Verify existing hashes", isOn: $benchmarkDraft.benchmarkFixtureCheck)
+                    .help("Exit unsuccessfully when a stored fixture hash does not match")
+            }
 
             if benchmark.acceptsDryRun {
                 Toggle("Plan only (dry run)", isOn: $benchmarkDryRun)
@@ -516,7 +525,10 @@ struct StudioModelHealthSheet: View {
                     Label("Run \(benchmark.title)", systemImage: "speedometer")
                 }
                 .buttonStyle(.merePrimary)
-                .disabled(benchmarkItem?.status == .running)
+                .disabled(
+                    benchmarkItem?.status == .running
+                        || (benchmark == .fusedFixture && benchmarkDraft.inputPath.isBlank)
+                )
 
                 if let item = benchmarkItem, item.status == .completed {
                     Button("Reveal report") {
@@ -549,6 +561,10 @@ struct StudioModelHealthSheet: View {
         }
         if benchmark == .fused, !benchmarkDraft.benchmarkSuite.isBlank {
             draft.benchmarkSuite = benchmarkDraft.benchmarkSuite
+        }
+        if benchmark == .fusedFixture {
+            draft.inputPath = benchmarkDraft.inputPath.trimmingCharacters(in: .whitespacesAndNewlines)
+            draft.benchmarkFixtureCheck = benchmarkDraft.benchmarkFixtureCheck
         }
         benchmarkRequestID = StudioSpecialistRunner.submit(
             templateID: benchmark.templateID,

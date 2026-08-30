@@ -841,6 +841,58 @@ final class MereRunControllerTests: XCTestCase {
         XCTAssertTrue(result.stdout.contains("relay:fleet"))
         XCTAssertTrue(streamed.joined().contains("https://relay.example/device"))
     }
+
+    func testUtilityCommandCanStreamStandardOutputWithoutStandardError() async {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        var streamed: [String] = []
+
+        let pending = Task {
+            await controller.utilityCommandResult(
+                args: ["speech", "listen", "--jsonl"],
+                onStandardOutput: { streamed.append($0) }
+            )
+        }
+        while runner.starts.isEmpty { await Task.yield() }
+
+        runner.starts[0].stderr("Loading private checkpoint path.\n")
+        runner.starts[0].stdout(#"{"protocol":1,"type":"ready"}"# + "\n")
+        runner.starts[0].termination(0)
+        _ = await pending.value
+        await Task.yield()
+
+        XCTAssertEqual(streamed, [#"{"protocol":1,"type":"ready"}"# + "\n"])
+    }
+
+    func testDiagnosticsOmitConsoleTextAndCommandArguments() {
+        let controller = MereRunController(processRunner: RecordingProcessRunner(), resolvesCLIOnInit: false)
+        controller.logs = [
+            LogLine(stream: .stdout, text: "generated private answer"),
+            LogLine(stream: .stderr, text: "Bearer secret-token")
+        ]
+        let item = StudioLibraryItem(
+            id: UUID(),
+            mode: .chat,
+            prompt: "private prompt",
+            inputURL: nil,
+            outputURL: nil,
+            createdAt: Date(),
+            updatedAt: Date(),
+            status: .failed,
+            exitCode: 1,
+            commandPreview: "mere.run text chat --prompt 'private prompt' --api-key secret-token",
+            outputText: "generated private answer"
+        )
+
+        let report = controller.diagnosticsReport(libraryItems: [item])
+
+        XCTAssertFalse(report.contains("private prompt"))
+        XCTAssertFalse(report.contains("generated private answer"))
+        XCTAssertFalse(report.contains("secret-token"))
+        XCTAssertTrue(report.contains("Captured lines: 2"))
+        XCTAssertTrue(report.contains("Console text omitted"))
+    }
 }
 
 private func supportedCapabilitiesOutput(for modelID: String, minimum: Int) -> String {

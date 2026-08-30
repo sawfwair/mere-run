@@ -5,9 +5,17 @@ import Foundation
 ///
 /// The report is meant to be pasted into an issue, so it carries versions, the resolved
 /// executable, machine shape, and recent run outcomes — and deliberately carries no
-/// secrets. Command previews are already secret-masked by `MereRunController`, and no
-/// configuration values, API keys, or tokens are read here.
+/// console text or command arguments. Those surfaces can contain prompts, generated
+/// content, local paths, configuration values, API keys, or tokens.
 enum StudioDiagnostics {
+    struct LogSummary: Equatable {
+        var systemCount = 0
+        var stdoutCount = 0
+        var stderrCount = 0
+
+        var totalCount: Int { systemCount + stdoutCount + stderrCount }
+    }
+
     /// How many recent runs to include. Enough to show a failure in context without
     /// turning the report into a log dump.
     static let recentRunLimit = 20
@@ -18,7 +26,7 @@ enum StudioDiagnostics {
         resolvedCLI: String,
         serverStatus: StudioServerStatus?,
         libraryItems: [StudioLibraryItem],
-        recentLog: String,
+        recentLog: LogSummary,
         generatedAt: Date = Date()
     ) -> String {
         var lines: [String] = []
@@ -78,20 +86,24 @@ enum StudioDiagnostics {
                     "- \(ISO8601DateFormatter().string(from: item.updatedAt)) "
                         + "[\(item.status.rawValue)] exit \(exit) · \(item.mode.rawValue)"
                 )
-                // Already masked by the controller when the preview was recorded.
-                lines.append("    \(item.commandPreview)")
             }
         }
         lines.append("")
 
-        lines.append("## Recent log")
-        let trimmed = recentLog.trimmingCharacters(in: .whitespacesAndNewlines)
-        lines.append(trimmed.isEmpty ? "No log output captured this session." : trimmed)
+        lines.append("## Console summary")
+        if recentLog.totalCount == 0 {
+            lines.append("No console output captured this session.")
+        } else {
+            lines.append("Captured lines: \(recentLog.totalCount)")
+            lines.append("System: \(recentLog.systemCount)")
+            lines.append("Standard output: \(recentLog.stdoutCount)")
+            lines.append("Standard error: \(recentLog.stderrCount)")
+            lines.append("Console text omitted to protect prompts, outputs, paths, and credentials.")
+        }
         lines.append("")
 
         lines.append(
-            "This report contains no configuration values, API keys, or tokens. "
-                + "Command previews are secret-masked when they are recorded."
+            "This report contains no command arguments or console text."
         )
 
         return lines.joined(separator: "\n")

@@ -33,6 +33,125 @@ enum StudioVoiceTask: String, CaseIterable, Identifiable {
     }
 }
 
+struct StudioListenDevice: Equatable, Identifiable {
+    let uid: String
+    let name: String
+    let isDefault: Bool
+
+    var id: String { uid }
+
+    static func parseList(_ output: String) -> [StudioListenDevice] {
+        output.split(separator: "\n").compactMap { rawLine in
+            let line = String(rawLine)
+            guard let marker = line.first else { return nil }
+            let fields = line.dropFirst()
+                .trimmingCharacters(in: .whitespaces)
+                .split(separator: "\t", maxSplits: 1, omittingEmptySubsequences: false)
+            guard fields.count == 2 else { return nil }
+            let uid = String(fields[0]).trimmingCharacters(in: .whitespacesAndNewlines)
+            let name = String(fields[1]).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !uid.isEmpty, !name.isEmpty else { return nil }
+            return StudioListenDevice(uid: uid, name: name, isDefault: marker == "*")
+        }
+    }
+}
+
+struct StudioLiveTranscriptAccumulator: Equatable {
+    private struct Event: Decodable {
+        let protocolVersion: Int
+        let type: String
+        let utteranceID: String?
+        let revision: Int?
+        let text: String?
+        let message: String?
+
+        enum CodingKeys: String, CodingKey {
+            case protocolVersion = "protocol"
+            case type
+            case utteranceID = "utteranceId"
+            case legacyUtteranceID = "utterance_id"
+            case revision
+            case text
+            case message
+        }
+
+        init(from decoder: Decoder) throws {
+            let values = try decoder.container(keyedBy: CodingKeys.self)
+            protocolVersion = try values.decode(Int.self, forKey: .protocolVersion)
+            type = try values.decode(String.self, forKey: .type)
+            utteranceID = try values.decodeIfPresent(String.self, forKey: .utteranceID)
+                ?? values.decodeIfPresent(String.self, forKey: .legacyUtteranceID)
+            revision = try values.decodeIfPresent(Int.self, forKey: .revision)
+            text = try values.decodeIfPresent(String.self, forKey: .text)
+            message = try values.decodeIfPresent(String.self, forKey: .message)
+        }
+    }
+
+    private var buffer = ""
+    private var committedUtteranceIDs: Set<String> = []
+    private var latestRevisions: [String: Int] = [:]
+    private var committedSegments: [String] = []
+    private(set) var partialText = ""
+    private(set) var errorMessage: String?
+
+    var committedText: String { committedSegments.joined(separator: "\n") }
+
+    var displayText: String {
+        [committedText, partialText]
+            .filter { !$0.isEmpty }
+            .joined(separator: "\n")
+    }
+
+    mutating func beginSession() {
+        buffer = ""
+        partialText = ""
+        errorMessage = nil
+        latestRevisions.removeAll(keepingCapacity: true)
+    }
+
+    mutating func clear() {
+        self = StudioLiveTranscriptAccumulator()
+    }
+
+    mutating func receive(_ chunk: String) {
+        buffer += chunk
+        while let newline = buffer.firstIndex(of: "\n") {
+            let line = String(buffer[..<newline])
+            buffer.removeSubrange(...newline)
+            receiveLine(line)
+        }
+    }
+
+    private mutating func receiveLine(_ line: String) {
+        guard let data = line.data(using: .utf8),
+              let event = try? JSONDecoder().decode(Event.self, from: data),
+              event.protocolVersion == 1 else { return }
+
+        switch event.type {
+        case "partial":
+            guard let id = event.utteranceID,
+                  !committedUtteranceIDs.contains(id),
+                  let text = event.text else { return }
+            let revision = event.revision ?? 0
+            guard revision >= latestRevisions[id, default: -1] else { return }
+            latestRevisions[id] = revision
+            partialText = text
+        case "commit":
+            guard let id = event.utteranceID,
+                  !committedUtteranceIDs.contains(id),
+                  let text = event.text?.trimmingCharacters(in: .whitespacesAndNewlines),
+                  !text.isEmpty else { return }
+            committedUtteranceIDs.insert(id)
+            committedSegments.append(text)
+            partialText = ""
+        case "error":
+            errorMessage = event.message ?? "Live transcription failed."
+        default:
+            break
+        }
+    }
+}
+
 struct StudioVoiceProfileRecord: Codable, Identifiable, Equatable {
     let id: UUID
     let name: String
@@ -154,8 +273,8 @@ struct StudioVoiceSheet: View {
     @State private var comparisonA: UUID?
     @State private var comparisonB: UUID?
     @State private var listenDraft: CommandDraft
-    @State private var listenTranscript = ""
-    @State private var listenDevices: [String] = []
+    @State private var listenTranscript = StudioLiveTranscriptAccumulator()
+    @State private var listenDevices: [StudioListenDevice] = []
     @State private var listenCommandID: UUID?
     @State private var isListening = false
 
@@ -964,7 +1083,7 @@ struct StudioVoiceSheet: View {
 
     // MARK: - Live transcription
 
-    /// `speech listen` streams partial transcripts on stdout until the process is stopped,
+    /// `speech listen --jsonl` streams versioned events until the process is interrupted,
     /// so this lane owns the child process directly instead of going through the run queue.
     private var listenControls: some View {
         VStack(alignment: .leading, spacing: MereRunTheme.Spacing.md) {
@@ -972,8 +1091,9 @@ struct StudioVoiceSheet: View {
             HStack(spacing: 8) {
                 Picker("Input device", selection: $listenDraft.speechListenDevice) {
                     Text("System default").tag("")
-                    ForEach(listenDevices, id: \.self) { device in
-                        Text(device).tag(device)
+                    ForEach(listenDevices) { device in
+                        Text(device.isDefault ? "\(device.name) — default" : device.name)
+                            .tag(device.uid)
                     }
                 }
                 .disabled(isListening)
@@ -1053,20 +1173,20 @@ struct StudioVoiceSheet: View {
                 Spacer()
                 Button("Copy") {
                     NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(listenTranscript, forType: .string)
+                    NSPasteboard.general.setString(listenTranscript.committedText, forType: .string)
                 }
                 .buttonStyle(.mereSecondary)
-                .disabled(listenTranscript.isEmpty)
+                .disabled(listenTranscript.committedText.isEmpty)
                 .accessibilityLabel("Copy the live transcript")
                 Button("Save…") { saveLiveTranscript() }
                     .buttonStyle(.mereSecondary)
-                    .disabled(listenTranscript.isEmpty)
-                Button("Clear") { listenTranscript = "" }
+                    .disabled(listenTranscript.committedText.isEmpty)
+                Button("Clear") { listenTranscript.clear() }
                     .buttonStyle(.mereSecondary)
-                    .disabled(listenTranscript.isEmpty || isListening)
+                    .disabled(listenTranscript.displayText.isEmpty || isListening)
             }
 
-            if listenTranscript.isEmpty {
+            if listenTranscript.displayText.isEmpty {
                 ContentUnavailableView(
                     isListening ? "Waiting for speech" : "Not listening",
                     systemImage: "waveform.badge.mic",
@@ -1078,11 +1198,21 @@ struct StudioVoiceSheet: View {
                 )
             } else {
                 ScrollView {
-                    Text(listenTranscript)
-                        .font(MereRunTheme.bodyFont)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding(12)
+                    VStack(alignment: .leading, spacing: 8) {
+                        if !listenTranscript.committedText.isEmpty {
+                            Text(listenTranscript.committedText)
+                        }
+                        if !listenTranscript.partialText.isEmpty {
+                            Text(listenTranscript.partialText)
+                                .foregroundStyle(MereRunTheme.textMuted)
+                                .italic()
+                                .accessibilityLabel("Partial transcript: \(listenTranscript.partialText)")
+                        }
+                    }
+                    .font(MereRunTheme.bodyFont)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(12)
                 }
                 .merePanel()
             }
@@ -1096,10 +1226,11 @@ struct StudioVoiceSheet: View {
             statusMessage = "Could not list microphones."
             return
         }
-        listenDevices = result.stdout
-            .split(separator: "\n")
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .filter { !$0.isEmpty }
+        listenDevices = StudioListenDevice.parseList(result.stdout)
+        if !listenDraft.speechListenDevice.isEmpty,
+           !listenDevices.contains(where: { $0.uid == listenDraft.speechListenDevice }) {
+            listenDraft.speechListenDevice = ""
+        }
     }
 
     private func startListening() {
@@ -1111,18 +1242,24 @@ struct StudioVoiceSheet: View {
         listenCommandID = commandID
         isListening = true
         statusMessage = "Listening. Speak into the selected microphone."
-        let args = template.arguments(from: listenDraft)
+        listenTranscript.beginSession()
+        var draft = listenDraft
+        draft.speechJSONL = true
+        draft.quiet = true
+        let args = template.arguments(from: draft)
         Task {
             let result = await controller.utilityCommandResult(
                 args: args,
                 commandID: commandID,
-                onOutput: { chunk in
-                    listenTranscript += chunk
+                onStandardOutput: { chunk in
+                    listenTranscript.receive(chunk)
                 }
             )
             isListening = false
             listenCommandID = nil
-            if result.exitCode != 0, !listenTranscript.isEmpty {
+            if let errorMessage = listenTranscript.errorMessage {
+                statusMessage = errorMessage
+            } else if result.exitCode != 0, !listenTranscript.committedText.isEmpty {
                 statusMessage = "Listening stopped."
             } else if result.exitCode != 0 {
                 statusMessage = "Live transcription exited with code \(result.exitCode)."
@@ -1137,7 +1274,7 @@ struct StudioVoiceSheet: View {
             isListening = false
             return
         }
-        _ = controller.cancelUtilityCommand(commandID)
+        _ = controller.interruptUtilityCommand(commandID)
         statusMessage = "Stopping…"
     }
 
@@ -1149,7 +1286,7 @@ struct StudioVoiceSheet: View {
             allowedContentTypes: [.plainText]
         ) else { return }
         do {
-            try listenTranscript.write(to: url, atomically: true, encoding: .utf8)
+            try listenTranscript.committedText.write(to: url, atomically: true, encoding: .utf8)
             statusMessage = "Saved the live transcript."
         } catch {
             statusMessage = "Could not save the transcript: \(error.localizedDescription)"

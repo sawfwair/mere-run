@@ -2762,7 +2762,13 @@ public enum MereRunCapabilityCatalog {
             .init(name: "modelID", label: "Model id", kind: .string, required: true),
             .init(name: "path", label: "Model directory", kind: .directory, required: true)
         ],
-        options: [],
+        options: [
+            .init(
+                flag: "--accept-model-license",
+                label: "Accept model license",
+                kind: .boolean
+            )
+        ],
         output: .init(kind: .text)
     )
 
@@ -2821,6 +2827,14 @@ public enum MereRunCapabilityCatalog {
         summary: "Run a real coding-evaluation slice against local coding models.",
         options: [
             .init(flag: "--models", label: "Models", kind: .string),
+            .init(flag: "--laguna-path", label: "Laguna path", kind: .directory),
+            .init(flag: "--laguna-dflash-path", label: "Laguna DFlash path", kind: .directory),
+            .init(flag: "--laguna-dflash-tokens", label: "Laguna DFlash tokens", kind: .integer),
+            .init(
+                flag: "--laguna-dflash-min-tokens",
+                label: "Laguna DFlash minimum tokens",
+                kind: .integer
+            ),
             .init(flag: "--suite", label: "Suite", kind: .choice, choices: ["humaneval-slice"]),
             .init(flag: "--tasks", label: "Tasks", kind: .string),
             .init(flag: "--humaneval-file", label: "HumanEval file", kind: .file),
@@ -2929,6 +2943,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--lmms-eval-python", label: "lmms-eval Python", kind: .string),
             .init(flag: "--external-endpoint", label: "External endpoint", kind: .boolean),
             .init(flag: "--base-url", label: "Base URL", kind: .string),
+            .init(flag: "--api-key", label: "API key", kind: .string),
             .init(flag: "--host", label: "Host", kind: .string),
             .init(flag: "--port", label: "Port", kind: .integer),
             .init(flag: "--limit", label: "Limit", kind: .string),
@@ -3138,6 +3153,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--model", label: "Model", kind: .string),
             .init(flag: "--api-key", label: "API key", kind: .string),
             .init(flag: "--max-frame-bytes", label: "Max frame bytes", kind: .integer),
+            .init(flag: "--max-batch-size", label: "Max batch size", kind: .integer),
             .init(flag: "--max-batch-bytes", label: "Max batch bytes", kind: .integer),
             .init(flag: "--preflight", label: "Preflight", kind: .boolean),
             .init(flag: "--json", label: "JSON", kind: .boolean)

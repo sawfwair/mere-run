@@ -88,6 +88,7 @@ struct StudioModelLocationsSheet: View {
     @State private var busy = false
     @State private var bindModelID = ""
     @State private var bindPath = ""
+    @State private var bindAcceptModelLicense = false
     @State private var confirmation: StudioModelLocationConfirmation?
 
     var body: some View {
@@ -264,6 +265,13 @@ struct StudioModelLocationsSheet: View {
                 .disabled(busy || bindModelID.isBlank || bindPath.isBlank)
             }
 
+            Toggle(
+                "I reviewed and accept this model's listed third-party terms",
+                isOn: $bindAcceptModelLicense
+            )
+            .font(MereRunTheme.captionFont)
+            .disabled(busy)
+
             let bindings = snapshot?.bindings ?? []
             if bindings.isEmpty {
                 Text("No explicit bindings.")
@@ -362,12 +370,17 @@ struct StudioModelLocationsSheet: View {
     private func bind() async {
         let modelID = bindModelID.trimmingCharacters(in: .whitespacesAndNewlines)
         let path = bindPath.trimmingCharacters(in: .whitespacesAndNewlines)
-        await runLocationCommand(
-            ["model", "location", "bind", modelID, path],
+        var args = ["model", "location", "bind", modelID, path]
+        if bindAcceptModelLicense { args.append("--accept-model-license") }
+        let succeeded = await runLocationCommand(
+            args,
             success: "Bound \(modelID)"
         )
-        bindModelID = ""
-        bindPath = ""
+        if succeeded {
+            bindModelID = ""
+            bindPath = ""
+            bindAcceptModelLicense = false
+        }
     }
 
     private func apply(_ pending: StudioModelLocationConfirmation) async {
@@ -385,7 +398,8 @@ struct StudioModelLocationsSheet: View {
         }
     }
 
-    private func runLocationCommand(_ args: [String], success: String) async {
+    @discardableResult
+    private func runLocationCommand(_ args: [String], success: String) async -> Bool {
         busy = true
         let result = await controller.utilityCommandResult(args: args, masksSecrets: false)
         busy = false
@@ -393,10 +407,12 @@ struct StudioModelLocationsSheet: View {
             statusMessage = success
             await refresh()
             onLocationsChanged()
+            return true
         } else {
             statusMessage = result.outputText.isEmpty
                 ? "The location command failed."
                 : result.outputText
+            return false
         }
     }
 }

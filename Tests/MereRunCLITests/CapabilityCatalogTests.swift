@@ -1,4 +1,5 @@
 import ArgumentParser
+import Foundation
 import MereRunContract
 import Testing
 
@@ -138,13 +139,53 @@ import Testing
     for capability in MereRunCapabilityCatalog.document.commands {
         let help = helpByID[capability.id]
         #expect(help != nil, "Missing help fixture for \(capability.id)")
-        for option in capability.options {
+        let declaredFlags = Set(capability.options.map(\.flag))
+        let helpFlags = longOptionFlags(in: help ?? "")
+        if exactCapabilityOptionIDs.contains(capability.id) {
             #expect(
-                help?.contains(option.flag) == true,
-                "\(capability.id) advertises \(option.flag), but the CLI help does not"
+                declaredFlags == helpFlags,
+                "\(capability.id) contract flags \(declaredFlags.sorted()) do not match CLI help \(helpFlags.sorted())"
             )
+        } else {
+            for option in capability.options {
+                #expect(
+                    help?.contains(option.flag) == true,
+                    "\(capability.id) advertises \(option.flag), but the CLI help does not"
+                )
+            }
         }
     }
+}
+
+/// Newly cataloged capabilities begin with exact option parity. Older entries retain
+/// their existing compatibility aliases until those contracts are migrated deliberately.
+private let exactCapabilityOptionIDs: Set<String> = [
+    "geo.flood", "geo.fire", "geo.tessera", "geo.olmoearth",
+    "model.location.list", "model.location.add", "model.location.remove",
+    "model.location.bind", "model.location.unbind",
+    "model.benchmark.chat", "model.benchmark.code", "model.benchmark.fused",
+    "model.benchmark.fused-fixture", "model.benchmark.vlm", "model.benchmark.tool-calls",
+    "model.benchmark.tool-continuations", "model.benchmark.gemma4-kv",
+    "model.benchmark.gemma4-mtp", "model.benchmark.api-workload",
+    "plugin.info", "plugin.run", "plugin.rollback", "speech.listen", "vision.serve"
+]
+
+private func longOptionFlags(in help: String) -> Set<String> {
+    Set(help.split(separator: "\n").flatMap { line -> [String] in
+        guard line.hasPrefix("  -") else { return [] }
+        let trimmed = line.trimmingCharacters(in: .whitespaces)
+        var flags: [String] = []
+        for token in trimmed.split(whereSeparator: \.isWhitespace) {
+            guard token.hasPrefix("-") else { break }
+            for alias in token.split(separator: ",") where alias.hasPrefix("--") {
+                let flag = alias.prefix { character in
+                    character == "-" || character.isLetter || character.isNumber
+                }
+                if flag != "--help" { flags.append(String(flag)) }
+            }
+        }
+        return flags
+    })
 }
 
 @Test func catalogCommandParsesASelectedCapability() throws {

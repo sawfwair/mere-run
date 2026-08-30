@@ -889,6 +889,7 @@ struct CommandDraft: Equatable, Codable {
     var speechListenDecodeMS = 0
     var speechListenSilenceMS = 0
     var visionServeMaxFrameBytes = 0
+    var visionServeMaxBatchSize = 8
     var visionServeMaxBatchBytes = 0
     var openWebUIHost = "127.0.0.1"
     var openWebUIPort = 3_000
@@ -3215,6 +3216,7 @@ struct CommandTemplate: Identifiable, Equatable {
 
         case .modelLocationBind:
             args = ["model", "location", "bind", draft.model, draft.inputPath]
+            if draft.acceptModelLicense { args.append("--accept-model-license") }
 
         case .modelLocationUnbind:
             args = ["model", "location", "unbind", draft.model]
@@ -3345,6 +3347,9 @@ struct CommandTemplate: Identifiable, Equatable {
             if draft.visionServeMaxFrameBytes > 0 {
                 args += ["--max-frame-bytes", String(draft.visionServeMaxFrameBytes)]
             }
+            if draft.visionServeMaxBatchSize > 0 {
+                args += ["--max-batch-size", String(draft.visionServeMaxBatchSize)]
+            }
             if draft.visionServeMaxBatchBytes > 0 {
                 args += ["--max-batch-bytes", String(draft.visionServeMaxBatchBytes)]
             }
@@ -3441,10 +3446,14 @@ extension CommandTemplate {
             return .speak
         case .speechTranscribe, .speechDiarize:
             return .listen
+        case .speechListen:
+            return .listen
         case .audioEnhance, .audioGenerate:
             return .listen
 
         case .visionGround:
+            return .findObjects
+        case .visionServe:
             return .findObjects
         case .visionSegment:
             return .segment
@@ -3462,7 +3471,11 @@ extension CommandTemplate {
              .visionFlow,
              .visionDepthVideo,
              .visionGeometry,
-             .visionGeometryMultiview:
+             .visionGeometryMultiview,
+             .geoFlood,
+             .geoFire,
+             .geoTessera,
+             .geoOlmoEarth:
             return .readImage
 
         case .musicGenerate,
@@ -3522,13 +3535,31 @@ extension CommandTemplate {
              .modelGarbageCollect,
              .modelRuntimeGet,
              .modelRuntimeSet,
+             .modelLocationList,
+             .modelLocationAdd,
+             .modelLocationRemove,
+             .modelLocationBind,
+             .modelLocationUnbind,
              .graphStudio,
              .nodeConsole,
              .modelBenchmark,
              .modelBenchmarkLagunaDFlash,
+             .modelBenchmarkChat,
+             .modelBenchmarkCode,
+             .modelBenchmarkFused,
+             .modelBenchmarkFusedFixture,
+             .modelBenchmarkVLM,
+             .modelBenchmarkToolCalls,
+             .modelBenchmarkToolContinuations,
+             .modelBenchmarkGemma4KV,
+             .modelBenchmarkGemma4MTP,
+             .modelBenchmarkAPIWorkload,
              .pluginList,
              .pluginInstall,
              .pluginDoctor,
+             .pluginInfo,
+             .pluginRun,
+             .pluginRollback,
              .openWebui,
              .apiServe,
              .custom:
@@ -3546,6 +3577,7 @@ enum CommandLaunchEnvironment {
             || templateID == .openWebui
             || templateID == .musicServe
             || templateID == .worldServe
+            || templateID == .visionServe
             || templateID == .statusSnapshot else { return [:] }
         var overrides: [String: String] = [:]
         let apiKey = draft.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)

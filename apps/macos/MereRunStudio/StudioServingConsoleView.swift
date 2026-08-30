@@ -592,6 +592,14 @@ struct StudioServingConsoleSheet: View {
                         .mereField(cornerRadius: MereRunTheme.Radius.sm)
                         .disabled(visionServeRunning)
 
+                    Stepper(
+                        "Maximum batch size: \(visionServeDraft.visionServeMaxBatchSize)",
+                        value: $visionServeDraft.visionServeMaxBatchSize,
+                        in: 1...32
+                    )
+                    .disabled(visionServeRunning)
+                    .help("Maximum image-query pairs accepted by one batch request")
+
                     Text("Endpoint: \(visionServeEndpoint)")
                         .font(MereRunTheme.monoFont)
                         .foregroundStyle(MereRunTheme.textMuted)

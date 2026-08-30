@@ -34,6 +34,20 @@ final class VisionServeCommandTests: XCTestCase {
         XCTAssertEqual(command.apiKey, "test-secret")
     }
 
+    func testResolvesAPIKeyFromEnvironmentWithoutOverridingExplicitKey() throws {
+        let environmentOnly = try VisionServe.parse([])
+        XCTAssertEqual(
+            environmentOnly.resolvedAPIKey(environment: ["MERERUN_API_KEY": " environment-secret "]),
+            "environment-secret"
+        )
+
+        let explicit = try VisionServe.parse(["--api-key", " explicit-secret "])
+        XCTAssertEqual(
+            explicit.resolvedAPIKey(environment: ["MERERUN_API_KEY": "environment-secret"]),
+            "explicit-secret"
+        )
+    }
+
     func testBuildsRepeatedQueryRequestPlan() throws {
         let form = MultipartFormData(parts: [
             .init(name: "query", filename: nil, contentType: nil, body: Data("car".utf8)),
