@@ -5276,6 +5276,8 @@ struct MereRunSettingsView: View {
     @State private var hfStatus: String?
     @State private var hfEndpoint = ""
     @State private var hfEndpointStatus: String?
+    @State private var configurationSummary = ""
+    @State private var configurationPath = ""
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
@@ -5341,6 +5343,42 @@ struct MereRunSettingsView: View {
             }
             .task {
                 hfEndpoint = await controller.loadHuggingFaceEndpoint()
+            }
+            EditorSection("Stored configuration") {
+                if configurationSummary.isEmpty {
+                    Text("No configuration values are stored yet.")
+                        .font(MereRunTheme.captionFont)
+                        .foregroundStyle(MereRunTheme.textMuted)
+                } else {
+                    Text(configurationSummary)
+                        .font(MereRunTheme.monoFont)
+                        .foregroundStyle(MereRunTheme.textPrimary)
+                        .textSelection(.enabled)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(10)
+                        .merePanel()
+                }
+                if !configurationPath.isEmpty {
+                    HStack(spacing: 10) {
+                        Text(configurationPath)
+                            .font(MereRunTheme.captionFont)
+                            .foregroundStyle(MereRunTheme.textMuted)
+                            .textSelection(.enabled)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                        Spacer(minLength: 0)
+                        Button("Reveal in Finder") {
+                            NSWorkspace.shared.activateFileViewerSelecting(
+                                [URL(fileURLWithPath: configurationPath)]
+                            )
+                        }
+                        .buttonStyle(.mereSecondary)
+                    }
+                }
+            }
+            .task {
+                configurationSummary = await controller.loadConfigurationSummary()
+                configurationPath = await controller.loadConfigurationPath()
             }
             EditorSection("Runtime server") {
                 HStack(spacing: 10) {

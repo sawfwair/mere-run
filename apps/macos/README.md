@@ -150,13 +150,18 @@ the runtime-policy editors can persist or clear it. The run console recognizes
 adapter catalogs and structured JSON receipts, and can copy or save a receipt.
 Hugging Face tokens, API keys, and the Open WebUI admin password cross the
 process boundary through environment variables instead of appearing in argv.
-Geospatial is a first-class category covering TerraMind flood and fire tile
-inference and TESSERA and OlmoEarth encoders. Models adds read-only store
-locations — search roots and explicit model bindings — so an external volume is
-registered without leaving the app. Plugins covers catalog details, out-of-PATH
-runs, and rollback to a retained signed bundle. Voice Studio streams live
-microphone transcription in addition to file transcription, and Serving hosts
-the resident vision grounding endpoint.
+Advanced additionally covers the geospatial family (TerraMind flood and fire
+tile inference, TESSERA and OlmoEarth encoders) under its own Geospatial
+category, read-only model store locations, the complete benchmark family,
+plugin details/run/rollback, live microphone transcription, and the resident
+vision grounding server. These are contract-backed typed forms in the Advanced
+command surface, not yet dedicated workspaces: geospatial has no raster preview
+or mask overlay, benchmarks do not yet render structured reports through Health
+& Repair, store locations are not yet edited from the Models destination,
+`speech listen` does not yet stream into Voice Studio, and `vision serve` does
+not yet participate in the Serving console's preflight/start/stop lifecycle.
+Promoting each to a first-class workspace is tracked in
+[`docs/macos-studio-capability-review.md`](../docs/macos-studio-capability-review.md).
 
 The executable contract test requires every local Advanced template and every
 app-owned guide/config helper to resolve to a CLI help-verified capability.

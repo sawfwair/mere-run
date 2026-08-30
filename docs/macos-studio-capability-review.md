@@ -8,13 +8,18 @@ Reviewed at commit `5525608` against `Sources/MereRunCLI`,
 `Sources/MereRunContract/CommandCapabilityContract.swift`, and
 `apps/macos/MereRunStudio`.
 
-> **Resolved.** Every gap below is closed. The contract now describes 127 of the
-> CLI's 158 leaf commands, Studio owns a surface for all 127, and the remaining
-> 31 are named exemptions in `contractExemptCommandIDs` rather than silent
-> absences. `everyPublicCLICommandIsCatalogedOrExplicitlyExempt` in
-> `Tests/MereRunCLITests/CapabilityCatalogTests.swift` now walks the CLI command
-> tree itself, closing the unguarded link this review identified. The findings
-> are kept as the audit that motivated the change.
+> **Reachability closed; workspaces outstanding.** The contract now describes
+> 127 of the CLI's 158 leaf commands, every one has a Studio surface, and the
+> remaining 31 are named exemptions in `contractExemptCommandIDs` rather than
+> silent absences. `everyPublicCLICommandIsCatalogedOrExplicitlyExempt` walks
+> the CLI command tree itself, closing the unguarded link this review
+> identified, so no future command can go missing silently.
+>
+> That makes every capability *reachable and contract-backed*. It does not yet
+> make each one first class in this repo's sense — a dedicated workspace with
+> typed result rendering and the Library lifecycle, as Voice Studio, Audio Lab,
+> the Vision Lab, and the Serving console have. The new surfaces are typed forms
+> in the Advanced panel. See [Remaining work](#remaining-work).
 
 ## Summary
 
@@ -227,3 +232,25 @@ that Studio compiles against, so the app has no need to shell out for it.
 4. **Stale counts corrected.** `docs/macos-studio-roadmap.md` described the app
    as consuming an "89-command capability contract"; it now names the current
    127 and records the external boundaries as named exemptions.
+
+## Remaining work
+
+Reachability is done. Promotion to a first-class workspace is not. Each item
+below is a form today and should become a dedicated surface, in impact order.
+
+| Capability | Today | First-class target |
+|---|---|---|
+| `geo` (4) | Typed form, path in / path out | Geospatial Lab: tile preview, logits-to-mask overlay, band and date inspection, durable Library artifacts — comparable to the Vision Lab |
+| `model benchmark` (10) | Form, text output | Structured reports in Health & Repair as durable Library jobs, matching the existing correctness and performance gates |
+| `model location` (5) | Form taking a raw path string | Store editor in the Models destination: a directory picker, the resolved root and binding list, and validation before writing |
+| `speech listen` (1) | Form, stdout only | Streaming transcript in Voice Studio with a device picker and live level metering, beside the existing file transcription path |
+| `vision serve` (1) | Form that starts a process | A serving lane in the Serving console with preflight, start/stop/restart, health, and reconnection, as `api serve` has |
+| `plugin` info/run/rollback (3) | Forms | Actions inside the Plugins workspace; rollback needs a confirm step and the retained-bundle version shown |
+
+`config list` and `config path` are wired into Settings as
+`loadConfigurationSummary()` and `loadConfigurationPath()`, with a stored-value
+summary and a Reveal in Finder control, so that pair is complete.
+
+The contract and the coverage guard are the prerequisite for this work: each
+workspace can now be built against a typed capability that is already proven to
+match CLI help, rather than against a hand-copied argument list.
