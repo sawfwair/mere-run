@@ -131,6 +131,13 @@ case "$mode" in
   projections)
     run_release_test DiTShapeBenchTests/testMiniMaxH3QmmVsResidentBF16
     ;;
+  mxfp8)
+    export MERERUN_TEST_MLX_DEVICE=gpu
+    export MERERUN_H3_BENCH_ROWS="${MERERUN_H3_BENCH_ROWS:-128}"
+    export MERERUN_H3_BENCH_ROUNDS="${MERERUN_H3_BENCH_ROUNDS:-2}"
+    export MERERUN_H3_BENCH_ITERATIONS="${MERERUN_H3_BENCH_ITERATIONS:-2}"
+    run_release_test DiTShapeBenchTests/testMiniMaxH3MXFP8QQMM
+    ;;
   mpp-projections)
     export MERERUN_H3_MPP_BENCH=1
     export MERERUN_TEST_MLX_DEVICE=gpu
@@ -281,7 +288,7 @@ case "$mode" in
     run_release_test MiniMaxH3Tests/testInstalledAudioVAEDecodeMatchesReference
     ;;
   *)
-    print -u2 "usage: scripts/h3-kernel-lab.sh [quick|attention|attention-block|projections|mpp-projections|modulation|attention-adaln|gate-adaln|gate-adaln-int8|qkv-layout|qkv-direct|affine-oproj|affine-ffn|buffer-alias|exact-ref2va|block|post|dtype|turnover|boundary|gemm|gemm-block|vae|audio-parity]"
+    print -u2 "usage: scripts/h3-kernel-lab.sh [quick|attention|attention-block|projections|mxfp8|mpp-projections|modulation|attention-adaln|gate-adaln|gate-adaln-int8|qkv-layout|qkv-direct|affine-oproj|affine-ffn|buffer-alias|exact-ref2va|block|post|dtype|turnover|boundary|gemm|gemm-block|vae|audio-parity]"
     exit 64
     ;;
 esac

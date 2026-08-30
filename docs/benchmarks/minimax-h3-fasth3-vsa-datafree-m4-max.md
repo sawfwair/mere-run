@@ -182,6 +182,66 @@ inference by mere.run's 16 GB system-disk reserve gate, with 11.45 GB available.
 The earlier package and media-closure results in this document remain the
 generation evidence.
 
+## Output-resolution-preserving reduced-canvas proof
+
+A clean-host release run used the same six-shot dance prompt, 294 frames, seed
+42, and requested 1,344 by 768 output. The run selected an explicit 672 by 384
+internal render canvas. FastH3 retained its exact four-evaluation quality mode;
+the approximation is spatial resolution. DiT and the video VAE operated on the
+smaller canvas, then the pinned high-quality vImage scaler returned decoded RGB
+frames to 1,344 by 768 before muxing.
+
+The packed transformer shape was 23,687 rows: 21,924 target-video rows, 980
+target-audio rows, and 783 prompt rows. A clean real-checkpoint K4 diagnostic at
+that shape measured 627.871 ms for tiled FC1 plus SwiGLU and 487.725 ms for
+tiled FC2. Both results retained the installed Float32 arithmetic contract;
+FC1 measured relative L2 `3.82343e-8` and FC2 was bit-identical to its chunked
+portable oracle.
+
+The complete command used the release binary with SHA-256
+`d1aae95781eda202130a18b49962a149f3bb09c9034b3a0ad110e1a618436c63`.
+Set `VIDEO_PROMPT` to the six-shot dance prompt, then run:
+
+```bash
+mere.run video generate "$VIDEO_PROMPT" \
+  --model video-minimax-h3-fasth3-vsa-datafree-mlx \
+  --model-root /path/to/video-minimax-h3-fasth3-vsa-datafree-q8-mlx \
+  --width 1344 \
+  --height 768 \
+  --h3-render-width 672 \
+  --h3-render-height 384 \
+  --num-frames 294 \
+  --fps 24 \
+  --h3-weight-mode auto \
+  --h3-acceleration quality \
+  --seed 42 \
+  --output fasth3-metal-1344x768-from-672x384x294-seed42.mp4
+```
+
+Phase and step profiling were disabled so their synchronization did not enter
+the measured wall time. The preflight reported no diagnostics. The run
+completed in 1,083.12 seconds, or 18 minutes 3.12 seconds. `/usr/bin/time -l`
+reported a 27,818,442,752-byte maximum resident set, a 45,079,204,600-byte peak
+process footprint, and zero process swaps. System swap was zero before, during,
+and after the run.
+
+The 10,100,029-byte MP4 has SHA-256
+`9f78da1110b9aa43af2bea028032e789ff37c74b225346e782ae7776b0c58056`.
+`ffprobe` reported 294 H.264 frames at 1,344 by 768 and 24 fps, plus stereo AAC
+at 32 kHz; both streams and the container are 12.25 seconds. A complete decode
+to null succeeded. The audio is not silent: `volumedetect` measured -12.5 dB
+mean and 0.0 dB maximum volume. Contact-sheet inspection showed the dark
+circular stage, cyan perimeter lights, multiple dancers, movement, and the
+requested overhead view. This single sample does not prove exact dancer count,
+spoken-word accuracy, or native-1,344-by-768 visual quality.
+
+This is the first complete local M4 Max long-form proof that finished in less
+than 20 minutes, but it does not meet a five-minute target. The earlier
+native-canvas attempt was stopped after 799.66 seconds without finishing its
+first denoise evaluation. The reduced canvas makes the 12.25-second deliverable
+practical by quartering spatial video tokens. Present this result as 672-by-384
+generation upscaled to 1,344 by 768, not as native latent-resolution inference.
+
 ## CUDA comparison boundary
 
 FastVideo reports warm 1,344 by 768 pixel generation after compilation. Its

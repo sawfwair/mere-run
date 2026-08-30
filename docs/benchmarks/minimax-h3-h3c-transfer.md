@@ -89,6 +89,41 @@ scripts/h3-kernel-lab.sh mpp-projections
 This round deliberately targets the resident-BF16 M3/M4 path; M5-specific
 TensorOps work is out of scope.
 
+### M4 W8A8 and MXFP8 rejection
+
+The MLX Metal backend does not expose a competitive W8A8 path on the M4 Max.
+MLX's `QQMatmul` quantizes and dequantizes the activation, then routes the
+prepared weight through the quantized matrix-vector dispatcher. The NAX path
+requires Apple GPU generation 18 or later. The measured M4 Max is generation
+16.
+
+An env-gated synthetic projection gate prequantized the weight outside the
+timed region and compared MLX MXFP8 QQMM with resident BF16 matrix
+multiplication. The 5,376 to 14,336 half-FC1 shape produced:
+
+| Rows | Resident BF16 | MXFP8 QQMM | Speedup | Relative L2 |
+| ---: | ---: | ---: | ---: | ---: |
+| 128 | 1.671 ms | 5.679 ms | 0.294x | 0.110748 |
+| 1,024 | 10.971 ms | 43.908 ms | 0.250x | 0.110763 |
+
+The 1,024-row result rules out a tiny-matrix artifact: MXFP8 was four times
+slower and already introduced approximately 11% relative L2 error before any
+50-block accumulation. The runtime therefore does not select this path on M4.
+Reproduce the research gate with:
+
+```bash
+MERERUN_H3_BENCH_PROJECTION=ff1-half \
+MERERUN_H3_BENCH_ROWS=1024 \
+  scripts/h3-kernel-lab.sh mxfp8
+```
+
+Resident BF16 cannot close the native-canvas target through software dispatch
+alone either. At 89,459 rows, the real-checkpoint BF16 K4 diagnostic measured
+2,779.228 ms for FC1 plus SwiGLU and 1,808.893 ms for FC2. Its 4.588-second MLP
+floor per block execution is only 1.095x below the 5.024-second Float32 K4
+result and remains 3.6 times above the complete 1.275-second block budget for a
+five-minute 1,344 by 768 request, before attention and the other block phases.
+
 The quality-sensitive algorithm arms remain non-default. Reduced canvas,
 layer thinning, complete velocity reuse, and token reduction all produced
 material same-seed trajectory changes. The three-seed Ref2VA follow-up closed

@@ -750,10 +750,11 @@ final class DiTShapeBenchTests: XCTestCase {
         }
     }
 
-    /// MiniMax-H3's dominant projections at its practical 512-square and
-    /// 768x448 packed row counts. The cached arm models loading a compact
-    /// checkpoint, dequantizing each projection once, and keeping bf16 weights
-    /// resident for the denoising loop.
+    /// MiniMax-H3's dominant projections at its practical packed row counts.
+    /// The cached arm models loading a compact checkpoint, dequantizing each
+    /// projection once, and keeping bf16 weights resident for the denoising
+    /// loop. Set `MERERUN_H3_BENCH_BITS=8` to match the managed FastH3 package
+    /// and `MERERUN_H3_BENCH_INCLUDE_FF1=1` to include its largest projection.
     func testMiniMaxH3QmmVsResidentBF16() throws {
         try benchGate()
 
@@ -790,22 +791,40 @@ final class DiTShapeBenchTests: XCTestCase {
                 .compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
                 .filter { $0 > 0 } ?? []
             let rowCounts = configuredRows.isEmpty ? [4_608, 12_925] : configuredRows
+            let bits = Int(
+                ProcessInfo.processInfo.environment["MERERUN_H3_BENCH_BITS"] ?? ""
+            ) ?? 4
+            precondition([4, 8].contains(bits))
+            var projections = [
+                ("qkv", 5_376, 21_504),
+                ("attention-out", 7_168, 5_376),
+                ("ff2", 14_336, 5_376),
+            ]
+            if ProcessInfo.processInfo.environment["MERERUN_H3_BENCH_INCLUDE_FF1"] == "1" {
+                projections.insert(("ff1", 5_376, 28_672), at: 1)
+            }
+            let configuredProjections = Set(
+                ProcessInfo.processInfo.environment["MERERUN_H3_BENCH_PROJECTIONS"]?
+                    .split(separator: ",")
+                    .map { String($0.trimmingCharacters(in: .whitespaces)) } ?? []
+            )
+            if !configuredProjections.isEmpty {
+                projections = projections.filter { configuredProjections.contains($0.0) }
+            }
+            precondition(!projections.isEmpty)
             for rows in rowCounts {
-                for (name, inputDimension, outputDimension) in [
-                    ("qkv", 5_376, 21_504),
-                    ("ff2", 14_336, 5_376),
-                ] {
+                for (name, inputDimension, outputDimension) in projections {
                     let input = MLXRandom.normal([1, rows, inputDimension]).asType(.bfloat16)
                     let qmm = QuantizedLinear(
                         inputDimension,
                         outputDimension,
                         bias: false,
                         groupSize: 64,
-                        bits: 4
+                        bits: bits
                     )
                     MLX.eval(input, qmm.parameters())
                     pairedTime(
-                        "rows=\(rows) \(name) \(inputDimension)->\(outputDimension)",
+                        "rows=\(rows) q\(bits) \(name) \(inputDimension)->\(outputDimension)",
                         qmm: qmm,
                         dense: BenchCachedDenseLinear(copying: qmm),
                         input: input
@@ -813,6 +832,106 @@ final class DiTShapeBenchTests: XCTestCase {
                     MLX.Memory.clearCache()
                 }
             }
+        }
+    }
+
+    /// Probes MLX's built-in MXFP8 activation-and-weight path at H3's dense
+    /// projection shapes. Weight quantization is treated as package preparation
+    /// and excluded; each timed QQMM includes MLX's on-the-fly activation
+    /// quantization. This is a research gate, not runtime dispatch.
+    func testMiniMaxH3MXFP8QQMM() throws {
+        try benchGate()
+
+        let environment = ProcessInfo.processInfo.environment
+        let rows = max(1, Int(environment["MERERUN_H3_BENCH_ROWS"] ?? "") ?? 128)
+        let projection = environment["MERERUN_H3_BENCH_PROJECTION"] ?? "ff1-half"
+        let shape: (input: Int, output: Int)
+        switch projection {
+        case "qkv":
+            shape = (5_376, 21_504)
+        case "attention-out":
+            shape = (7_168, 5_376)
+        case "ff1-half":
+            shape = (5_376, 14_336)
+        case "ff2":
+            shape = (14_336, 5_376)
+        default:
+            preconditionFailure("Unsupported H3 MXFP8 projection: \(projection)")
+        }
+        let rounds = max(1, Int(environment["MERERUN_H3_BENCH_ROUNDS"] ?? "") ?? 2)
+        let iterations = max(
+            1,
+            Int(environment["MERERUN_H3_BENCH_ITERATIONS"] ?? "") ?? 2
+        )
+
+        Stream.withNewDefaultStream {
+            MLXRandom.seed(2_026_082_906)
+            let input = MLXRandom.normal([rows, shape.input]).asType(.bfloat16)
+            let denseWeight = MLXRandom.normal([shape.output, shape.input])
+                .asType(.bfloat16)
+            let preparedWeight = MLX.quantized(
+                denseWeight,
+                groupSize: 32,
+                bits: 8,
+                mode: .mxfp8
+            )
+            MLX.eval(input, denseWeight, preparedWeight.wq, preparedWeight.scales)
+
+            func dense() -> MLXArray {
+                MLX.matmul(input, denseWeight.T)
+            }
+            func mxfp8() -> MLXArray {
+                MLX.quantizedQuantizedMM(
+                    input,
+                    preparedWeight.wq,
+                    scales: preparedWeight.scales,
+                    groupSize: 32,
+                    bits: 8,
+                    mode: .mxfp8
+                )
+            }
+            func benchmark(_ body: () -> MLXArray) -> Double {
+                MLX.eval(body())
+                var best = Double.greatestFiniteMagnitude
+                for _ in 0..<rounds {
+                    let started = CFAbsoluteTimeGetCurrent()
+                    for _ in 0..<iterations {
+                        MLX.eval(body())
+                    }
+                    best = min(
+                        best,
+                        (CFAbsoluteTimeGetCurrent() - started) / Double(iterations)
+                    )
+                }
+                return best
+            }
+
+            let reference = dense()
+            let candidate = mxfp8()
+            MLX.eval(reference, candidate)
+            let difference = reference.asType(.float32) - candidate.asType(.float32)
+            let relativeL2 = MLX.sqrt(
+                MLX.sum(difference * difference)
+                    / MLX.maximum(
+                        MLX.sum(reference.asType(.float32) * reference.asType(.float32)),
+                        MLXArray(Float(1e-12))
+                    )
+            ).item(Float.self)
+            let denseSeconds = benchmark(dense)
+            let mxfp8Seconds = benchmark(mxfp8)
+            print(String(
+                format: "[dit-bench] H3 MXFP8 projection=%@ rows=%d shape=%d->%d "
+                    + "dense-bf16=%.3fms mxfp8-qqmm=%.3fms speedup=%.3fx rel_l2=%.6g",
+                projection,
+                rows,
+                shape.input,
+                shape.output,
+                denseSeconds * 1_000,
+                mxfp8Seconds * 1_000,
+                denseSeconds / mxfp8Seconds,
+                relativeL2
+            ))
+            XCTAssertTrue(relativeL2.isFinite)
         }
     }
 
