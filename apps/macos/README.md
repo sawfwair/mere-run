@@ -150,18 +150,40 @@ the runtime-policy editors can persist or clear it. The run console recognizes
 adapter catalogs and structured JSON receipts, and can copy or save a receipt.
 Hugging Face tokens, API keys, and the Open WebUI admin password cross the
 process boundary through environment variables instead of appearing in argv.
-Advanced additionally covers the geospatial family (TerraMind flood and fire
-tile inference, TESSERA and OlmoEarth encoders) under its own Geospatial
-category, read-only model store locations, the complete benchmark family,
-plugin details/run/rollback, live microphone transcription, and the resident
-vision grounding server. These are contract-backed typed forms in the Advanced
-command surface, not yet dedicated workspaces: geospatial has no raster preview
-or mask overlay, benchmarks do not yet render structured reports through Health
-& Repair, store locations are not yet edited from the Models destination,
-`speech listen` does not yet stream into Voice Studio, and `vision serve` does
-not yet participate in the Serving console's preflight/start/stop lifecycle.
-Promoting each to a first-class workspace is tracked in
-[`docs/macos-studio-capability-review.md`](../docs/macos-studio-capability-review.md).
+Geospatial Lab is a top-level first-class destination for native
+Earth-observation inference. It covers TerraMind flood and fire tile inference
+and the TESSERA v2 and OlmoEarth v1.2 encoders, names the tensors each input
+bundle must carry before a run rather than after it, exposes engine-specific
+controls (TESSERA output dimensions; OlmoEarth patch size, ground sample
+distance, and space-time tokens), and preserves every produced safetensors file
+as a durable Library artifact.
+
+Models opens a first-class store editor over `model location`. It shows the
+writable store, read-only search roots, and explicit per-model bindings with
+live availability, adds roots and bindings through a directory picker, reveals
+any of them in Finder, and confirms before removing a root or a binding — so a
+model kept on an external volume is registered without leaving the app.
+
+Health & Repair runs the complete benchmark family as durable Library jobs
+beside the manifest audit and quality gate: the fused Mere Lite and Mere
+Comprehensive suites, the chat, code, and vision-language slices, tool-call and
+tool-continuation evaluations, the Gemma4 KV and MTP and Qwen3.6 MTP decode
+comparisons, Laguna DFlash, API workload replay, and fixture hashing. Each run
+produces a reviewable, revealable JSON report.
+
+Voice Studio adds a live lane over `speech listen`. It enumerates capture
+devices through the CLI, streams partial transcripts as the recognizer emits
+them, and owns the child process directly so the operator can stop it, then
+copy or save the transcript.
+
+Serving gains a Vision Grounding section with the same lifecycle the API server
+has: preflight, app-owned start, stop, and restart, an honest reading of who
+owns the process, a loopback-exposure warning when the endpoint would bind
+beyond localhost without a key, and the live server log.
+
+Plugins covers the full lifecycle: catalog details, out-of-PATH runs with
+forwarded arguments, and rollback to a retained signed bundle behind a
+confirmation.
 
 The executable contract test requires every local Advanced template and every
 app-owned guide/config helper to resolve to a CLI help-verified capability.

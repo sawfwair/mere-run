@@ -18,6 +18,7 @@ struct StudioRootView: View {
     @State private var showServing = false
     @State private var showOperations = false
     @State private var showPlugins = false
+    @State private var showGeoLab = false
     @State private var showAdapters = false
     @State private var showRealtimeMusic = false
     @State private var showSCAIL = false
@@ -162,6 +163,7 @@ struct StudioRootView: View {
                         onShowOperations: { showOperations = true },
                         onShowPlugins: { showPlugins = true },
                         onShowModels: { showModels = true },
+                        onShowGeoLab: { showGeoLab = true },
                         onShowHelp: { showHelp = true }
                     )
 
@@ -214,6 +216,7 @@ struct StudioRootView: View {
             onShowOperations: { showOperations = true },
             onShowPlugins: { showPlugins = true },
             onShowModels: { showModels = true },
+            onShowGeoLab: { showGeoLab = true },
             onShowHelp: { showHelp = true }
         )
         .frame(width: StudioLayoutPolicy.sidebarWidth)
@@ -480,6 +483,11 @@ struct StudioRootView: View {
             .sheet(isPresented: $showPlugins) {
                 StudioPluginsSheet()
                     .environmentObject(controller)
+            }
+            .sheet(isPresented: $showGeoLab) {
+                StudioGeoLabSheet()
+                    .environmentObject(controller)
+                    .environmentObject(library)
             }
             .sheet(isPresented: $showModels) {
                 StudioModelsSheet(onModelsChanged: {

@@ -13,6 +13,7 @@ struct StudioSidebar: View {
     let onShowOperations: () -> Void
     let onShowPlugins: () -> Void
     let onShowModels: () -> Void
+    let onShowGeoLab: () -> Void
     let onShowHelp: () -> Void
 
     @Namespace private var selectionNamespace
@@ -128,13 +129,20 @@ struct StudioSidebar: View {
                 .buttonStyle(.mereSecondary)
                 .help("Browse and manage local models (⇧⌘M)")
 
-                Button(action: onShowHelp) {
-                    Label("Guide", systemImage: "questionmark.circle")
+                Button(action: onShowGeoLab) {
+                    Label("Geospatial", systemImage: "globe.europe.africa")
                         .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.mereSecondary)
-                .help("Open the offline guide")
+                .help("Run native Earth-observation inference (⇧⌘G)")
             }
+
+            Button(action: onShowHelp) {
+                Label("Guide", systemImage: "questionmark.circle")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.mereSecondary)
+            .help("Open the offline guide")
         }
         .padding(MereRunTheme.Spacing.sm)
     }
@@ -211,6 +219,7 @@ struct StudioSidebarRail: View {
     let onShowOperations: () -> Void
     let onShowPlugins: () -> Void
     let onShowModels: () -> Void
+    let onShowGeoLab: () -> Void
     let onShowHelp: () -> Void
 
     @Namespace private var selectionNamespace
@@ -267,6 +276,7 @@ struct StudioSidebarRail: View {
                 railAction(system: "list.bullet.rectangle.portrait", help: "Runs & Operations (⌃⌘R)", label: "Runs & Operations", action: onShowOperations)
                 railAction(system: "puzzlepiece.extension", help: "Plugins (⇧⌘P)", label: "Plugins", action: onShowPlugins)
                 railAction(system: "shippingbox", help: "Models (⇧⌘M)", label: "Models", action: onShowModels)
+                railAction(system: "globe.europe.africa", help: "Geospatial Lab (⇧⌘G)", label: "Geospatial Lab", action: onShowGeoLab)
                 railAction(system: "questionmark.circle", help: "Guide", label: "Guide", action: onShowHelp)
             }
             .padding(.bottom, MereRunTheme.Spacing.sm)

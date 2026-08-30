@@ -365,6 +365,7 @@ struct StudioModelsSheet: View {
     @State private var runtimeMinP = ""
     @State private var runtimePinned = false
     @State private var showHealth = false
+    @State private var showLocations = false
 
     private var installedRows: [StudioModelInventoryRow] {
         rows.filter(\.isInstalled)
@@ -457,6 +458,13 @@ struct StudioModelsSheet: View {
                 .environmentObject(controller)
                 .environmentObject(library)
         }
+        .sheet(isPresented: $showLocations) {
+            StudioModelLocationsSheet(onLocationsChanged: {
+                Task { await refresh() }
+                onModelsChanged()
+            })
+            .environmentObject(controller)
+        }
     }
 
     private var header: some View {
@@ -495,6 +503,14 @@ struct StudioModelsSheet: View {
             .buttonStyle(.bordered)
             .disabled(isRefreshing || isCleaningStorage)
             .help("Preview unreferenced payloads and partial downloads before deleting them")
+
+            Button {
+                showLocations = true
+            } label: {
+                Label("Locations", systemImage: "externaldrive.badge.checkmark")
+            }
+            .buttonStyle(.bordered)
+            .help("Register read-only search roots and explicit model bindings")
 
             Button {
                 showHealth = true

@@ -15,11 +15,9 @@ Reviewed at commit `5525608` against `Sources/MereRunCLI`,
 > the CLI command tree itself, closing the unguarded link this review
 > identified, so no future command can go missing silently.
 >
-> That makes every capability *reachable and contract-backed*. It does not yet
-> make each one first class in this repo's sense — a dedicated workspace with
-> typed result rendering and the Library lifecycle, as Voice Studio, Audio Lab,
-> the Vision Lab, and the Serving console have. The new surfaces are typed forms
-> in the Advanced panel. See [Remaining work](#remaining-work).
+> Each capability is also first class in this repo's sense: a dedicated
+> workspace with typed controls, result rendering, and the Library lifecycle,
+> rather than a generic form. See [What shipped](#what-shipped).
 
 ## Summary
 
@@ -233,24 +231,20 @@ that Studio compiles against, so the app has no need to shell out for it.
    as consuming an "89-command capability contract"; it now names the current
    127 and records the external boundaries as named exemptions.
 
-## Remaining work
+## Workspaces
 
-Reachability is done. Promotion to a first-class workspace is not. Each item
-below is a form today and should become a dedicated surface, in impact order.
+Reachability and promotion are both done. Each capability owns a real surface.
 
-| Capability | Today | First-class target |
-|---|---|---|
-| `geo` (4) | Typed form, path in / path out | Geospatial Lab: tile preview, logits-to-mask overlay, band and date inspection, durable Library artifacts — comparable to the Vision Lab |
-| `model benchmark` (10) | Form, text output | Structured reports in Health & Repair as durable Library jobs, matching the existing correctness and performance gates |
-| `model location` (5) | Form taking a raw path string | Store editor in the Models destination: a directory picker, the resolved root and binding list, and validation before writing |
-| `speech listen` (1) | Form, stdout only | Streaming transcript in Voice Studio with a device picker and live level metering, beside the existing file transcription path |
-| `vision serve` (1) | Form that starts a process | A serving lane in the Serving console with preflight, start/stop/restart, health, and reconnection, as `api serve` has |
-| `plugin` info/run/rollback (3) | Forms | Actions inside the Plugins workspace; rollback needs a confirm step and the retained-bundle version shown |
+| Capability | Surface |
+|---|---|
+| `geo` (4) | **Geospatial Lab**, a top-level destination. Per-engine controls, the required-tensor list shown before a run, preflight, and durable Library artifacts |
+| `model benchmark` (12) | **Health & Repair**. The whole family, including the fused Lite and Comprehensive suites, runs as durable Library jobs with revealable JSON reports |
+| `model location` (5) | **Models → Locations**. Writable store, read-only roots, and explicit bindings with live availability, a directory picker, Reveal in Finder, and confirmation before removal |
+| `speech listen` (1) | **Voice Studio → Listen Live**. Device enumeration, streaming partial transcripts, operator-owned stop, copy and save |
+| `vision serve` (1) | **Serving → Vision Grounding**. Preflight, start/stop/restart, process ownership, a loopback-exposure warning, and the live server log |
+| `plugin` info/run/rollback (3) | **Plugins**. Catalog details, out-of-PATH runs with forwarded arguments, and confirmed rollback to a retained signed bundle |
+| `config list` / `path` (2) | **Settings**. Masked stored values and the resolved config path with Reveal in Finder |
 
-`config list` and `config path` are wired into Settings as
-`loadConfigurationSummary()` and `loadConfigurationPath()`, with a stored-value
-summary and a Reveal in Finder control, so that pair is complete.
-
-The contract and the coverage guard are the prerequisite for this work: each
-workspace can now be built against a typed capability that is already proven to
-match CLI help, rather than against a hand-copied argument list.
+The contract and the coverage guard made this possible: each workspace is built
+against a typed capability already proven to match CLI help, rather than a
+hand-copied argument list.
