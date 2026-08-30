@@ -50,6 +50,7 @@ done
 
 if (( ${#modes} == 0 )); then
   modes=(
+    attention-adaln
     gate-adaln
     gate-adaln-int8
     qkv-layout

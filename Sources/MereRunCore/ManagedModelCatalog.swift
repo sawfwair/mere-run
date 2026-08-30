@@ -3679,6 +3679,23 @@ public enum ManagedModelCatalog {
             defaultCLICommands: ["video generate"]
         ),
         ManagedModelSpec(
+            id: ModelResolver.ModelID.miniMaxH3FastH3VSADataFreeMLX.rawValue,
+            category: .video,
+            installShape: .structuredRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: MiniMaxH3Resources.fastH3ArtifactRepository,
+                revision: MiniMaxH3Resources.fastH3ArtifactRevision,
+                patterns: MiniMaxH3Resources.fastH3ArtifactFiles
+            ),
+            upstreamRepoId: MiniMaxH3Resources.fastH3ArtifactRepository,
+            upstreamRevision: MiniMaxH3Resources.fastH3ArtifactRevision,
+            usageRestriction: miniMaxH3UsageRestriction,
+            validationKind: .miniMaxH3MLX,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 57_559_079_710,
+            defaultCLICommands: ["video generate"]
+        ),
+        ManagedModelSpec(
             id: ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue,
             category: .video,
             installShape: .structuredRoot,
@@ -4380,6 +4397,19 @@ public extension ManagedModelSpec {
                     }
                     return resources.validateCompactCachePack(fileManager: fileManager)
                 }
+                if id == ModelResolver.ModelID.miniMaxH3FastH3VSADataFreeMLX.rawValue {
+                    let expectedQuantization = MiniMaxH3QuantizationConfiguration(
+                        bits: 8,
+                        groupSize: 64,
+                        mode: "affine"
+                    )
+                    guard try resources.transformerStorage() == .affineQ8,
+                          configuration.quantization == expectedQuantization,
+                          configuration.textEncoderQuantization == expectedQuantization else {
+                        return ["FastH3 VSA DataFree requires MLX affine INT8/group-64 transformer and conditioner weights."]
+                    }
+                    return resources.validateManagedFastH3Artifact(fileManager: fileManager)
+                }
                 if id == ModelResolver.ModelID.miniMaxH3FL2VAQ8MLX.rawValue {
                     let expectedQuantization = MiniMaxH3QuantizationConfiguration(
                         bits: 8,
@@ -4509,6 +4539,7 @@ public extension ManagedModelSpec {
             || id == ModelResolver.ModelID.miniMaxH3Ref2VAMLX.rawValue
             || id == ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue
             || id == ModelResolver.ModelID.miniMaxH3FL2VAQ8MLX.rawValue
+            || id == ModelResolver.ModelID.miniMaxH3FastH3VSADataFreeMLX.rawValue
         guard requiresPinnedSource, let expectedRepo = upstreamRepoId else {
             return true
         }
@@ -4517,10 +4548,12 @@ public extension ManagedModelSpec {
               let installedRepo = manifest.upstreamRepoId else {
             return id != ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue
                 && id != ModelResolver.ModelID.miniMaxH3FL2VAQ8MLX.rawValue
+                && id != ModelResolver.ModelID.miniMaxH3FastH3VSADataFreeMLX.rawValue
         }
 
         let requiresExactRevision = id == ModelResolver.ModelID.miniMaxH3FL2VABF16MLX.rawValue
             || id == ModelResolver.ModelID.miniMaxH3FL2VAQ8MLX.rawValue
+            || id == ModelResolver.ModelID.miniMaxH3FastH3VSADataFreeMLX.rawValue
         if installedRepo == expectedRepo, !requiresExactRevision {
             return true
         }

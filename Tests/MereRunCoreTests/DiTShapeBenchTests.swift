@@ -78,6 +78,233 @@ final class DiTShapeBenchTests: XCTestCase {
         return best
     }
 
+    /// Compares the previous 32-row FastH3 VSA workgroup with the 64-row
+    /// workgroup used by the released CUDA recipe. This benchmark is isolated
+    /// from model loading so large production geometries can be searched
+    /// without paying for every transformer block. Configure with
+    /// `MERERUN_H3_FASTVSA_BENCH_WIDTH`, `MERERUN_H3_FASTVSA_BENCH_HEIGHT`,
+    /// `MERERUN_H3_FASTVSA_BENCH_FRAMES`, `MERERUN_H3_FASTVSA_BENCH_HEADS`,
+    /// and `MERERUN_H3_FASTVSA_BENCH_ROUNDS`.
+    func testFastVSATileSchedule() throws {
+        let environment = ProcessInfo.processInfo.environment
+        guard environment["MERERUN_H3_FASTVSA_BENCH"] == "1" else {
+            throw XCTSkip("Set MERERUN_H3_FASTVSA_BENCH=1 to run the FastH3 VSA benchmark")
+        }
+        guard Device.defaultDevice().deviceType == .gpu else {
+            throw XCTSkip("The FastH3 VSA benchmark requires a Metal GPU.")
+        }
+        let width = max(
+            64,
+            Int(environment["MERERUN_H3_FASTVSA_BENCH_WIDTH"] ?? "") ?? 1_024
+        )
+        let height = max(
+            64,
+            Int(environment["MERERUN_H3_FASTVSA_BENCH_HEIGHT"] ?? "") ?? 576
+        )
+        let frames = max(
+            5,
+            Int(environment["MERERUN_H3_FASTVSA_BENCH_FRAMES"] ?? "") ?? 22
+        )
+        let heads = max(
+            1,
+            Int(environment["MERERUN_H3_FASTVSA_BENCH_HEADS"] ?? "") ?? 1
+        )
+        let rounds = max(
+            1,
+            Int(environment["MERERUN_H3_FASTVSA_BENCH_ROUNDS"] ?? "") ?? 2
+        )
+        let textTokens = max(
+            1,
+            Int(environment["MERERUN_H3_FASTVSA_BENCH_TEXT_TOKENS"] ?? "") ?? 512
+        )
+        let layout = try MiniMaxH3Geometry.buildFL2VA(
+            textTokenTags: Array(repeating: 1, count: textTokens),
+            videoLatentFrames: MiniMaxH3Geometry.videoLatentFrameCount(for: frames),
+            latentHeight: height / 16,
+            latentWidth: width / 16,
+            audioLatentFrames: MiniMaxH3Geometry.audioLatentFrameCount(for: frames),
+            keyframeAnchors: []
+        )
+        let prepared = MiniMaxH3FastVSA.prepare(layout: layout)
+        let geometry = prepared.geometry
+        let keepVideo = max(
+            1,
+            min(
+                Int(ceil((1 - MiniMaxH3FastVSA.sparsity) * Float(geometry.videoTileCount))),
+                geometry.videoTileCount
+            )
+        )
+        var routeValues: [Int32] = []
+        routeValues.reserveCapacity(heads * geometry.tileCount * keepVideo)
+        for head in 0..<heads {
+            for queryBlock in 0..<geometry.tileCount {
+                let offset = (head * 17 + queryBlock * 31) % geometry.videoTileCount
+                for route in 0..<keepVideo {
+                    routeValues.append(Int32(
+                        geometry.prefixTileCount
+                            + (offset + route * 13) % geometry.videoTileCount
+                    ))
+                }
+            }
+        }
+        let videoRoutes = MLXArray(routeValues).reshaped(
+            1, heads, geometry.tileCount, keepVideo
+        )
+        MLXRandom.seed(2_026_082_9)
+        let shape = [1, heads, layout.sequenceLength, MiniMaxH3FastVSA.headDimension]
+        let queries = (MLXRandom.normal(shape) * Float(0.2)).asType(.bfloat16)
+        let keys = (MLXRandom.normal(shape) * Float(0.2)).asType(.bfloat16)
+        let values = MLXRandom.normal(shape).asType(.bfloat16)
+        let gate = (MLXRandom.normal(shape) * Float(0.05)).asType(.bfloat16)
+        let sentinel = MLXArray.zeros(
+            [1, heads, 1, MiniMaxH3FastVSA.headDimension],
+            dtype: .bfloat16
+        )
+        func tiled(_ value: MLXArray) -> MLXArray {
+            MLX.take(
+                MLX.concatenated([value, sentinel], axis: 2),
+                prepared.paddedIndices,
+                axis: 2
+            )
+        }
+        let tiledQueries = tiled(queries)
+        let tiledKeys = tiled(keys)
+        let tiledValues = tiled(values)
+        MLX.eval(
+            queries, keys, values, gate,
+            tiledQueries, tiledKeys, tiledValues,
+            videoRoutes
+        )
+
+        func sparse(_ mode: MiniMaxH3FastVSAKernelMode) -> MLXArray {
+            MiniMaxH3FastVSA.sparseOutputForTesting(
+                queries: tiledQueries,
+                keys: tiledKeys,
+                values: tiledValues,
+                videoRoutes: videoRoutes,
+                blockSizes: prepared.blockSizes,
+                prefixTileCount: geometry.prefixTileCount,
+                kernelMode: mode
+            )
+        }
+        func complete(_ mode: MiniMaxH3FastVSAKernelMode) -> MLXArray {
+            MiniMaxH3FastVSA.call(
+                queries: queries,
+                keys: keys,
+                values: values,
+                compressionGate: gate,
+                prepared: prepared,
+                kernelMode: mode
+            )!
+        }
+        func elapsed(_ body: () -> MLXArray) -> Double {
+            let started = CFAbsoluteTimeGetCurrent()
+            MLX.eval(body())
+            return CFAbsoluteTimeGetCurrent() - started
+        }
+
+        MLX.eval(sparse(.halfTile), sparse(.fullTile), sparse(.fullTileKV16))
+        let halfTile = sparse(.halfTile).asType(.float32)
+        let fullTile = sparse(.fullTile).asType(.float32)
+        let delta = fullTile - halfTile
+        let maximumAbsoluteError = MLX.max(MLX.abs(delta)).item(Float.self)
+        let relativeL2Error = MLX.sqrt(
+            MLX.sum(delta * delta)
+                / MLX.maximum(MLX.sum(halfTile * halfTile), MLXArray(Float(1e-12)))
+        ).item(Float.self)
+        let fullTileKV16 = sparse(.fullTileKV16).asType(.float32)
+        let kv16Delta = fullTileKV16 - halfTile
+        let kv16MaximumAbsoluteError = MLX.max(MLX.abs(kv16Delta)).item(Float.self)
+        let kv16RelativeL2Error = MLX.sqrt(
+            MLX.sum(kv16Delta * kv16Delta)
+                / MLX.maximum(MLX.sum(halfTile * halfTile), MLXArray(Float(1e-12)))
+        ).item(Float.self)
+
+        var halfSparseTotal = 0.0
+        var fullSparseTotal = 0.0
+        var kv16SparseTotal = 0.0
+        for round in 0..<rounds {
+            switch round % 3 {
+            case 0:
+                halfSparseTotal += elapsed { sparse(.halfTile) }
+                fullSparseTotal += elapsed { sparse(.fullTile) }
+                kv16SparseTotal += elapsed { sparse(.fullTileKV16) }
+            case 1:
+                fullSparseTotal += elapsed { sparse(.fullTile) }
+                kv16SparseTotal += elapsed { sparse(.fullTileKV16) }
+                halfSparseTotal += elapsed { sparse(.halfTile) }
+            default:
+                kv16SparseTotal += elapsed { sparse(.fullTileKV16) }
+                halfSparseTotal += elapsed { sparse(.halfTile) }
+                fullSparseTotal += elapsed { sparse(.fullTile) }
+            }
+        }
+        let halfSparseSeconds = halfSparseTotal / Double(rounds)
+        let fullSparseSeconds = fullSparseTotal / Double(rounds)
+        let kv16SparseSeconds = kv16SparseTotal / Double(rounds)
+
+        MLX.eval(complete(.halfTile), complete(.fullTile), complete(.fullTileKV16))
+        var halfCompleteTotal = 0.0
+        var fullCompleteTotal = 0.0
+        var kv16CompleteTotal = 0.0
+        Memory.peakMemory = 0
+        for round in 0..<rounds {
+            switch round % 3 {
+            case 0:
+                halfCompleteTotal += elapsed { complete(.halfTile) }
+                fullCompleteTotal += elapsed { complete(.fullTile) }
+                kv16CompleteTotal += elapsed { complete(.fullTileKV16) }
+            case 1:
+                fullCompleteTotal += elapsed { complete(.fullTile) }
+                kv16CompleteTotal += elapsed { complete(.fullTileKV16) }
+                halfCompleteTotal += elapsed { complete(.halfTile) }
+            default:
+                kv16CompleteTotal += elapsed { complete(.fullTileKV16) }
+                halfCompleteTotal += elapsed { complete(.halfTile) }
+                fullCompleteTotal += elapsed { complete(.fullTile) }
+            }
+        }
+        let halfCompleteSeconds = halfCompleteTotal / Double(rounds)
+        let fullCompleteSeconds = fullCompleteTotal / Double(rounds)
+        let kv16CompleteSeconds = kv16CompleteTotal / Double(rounds)
+        let peakGiB = Double(Memory.peakMemory) / 1_073_741_824
+        print(String(
+            format: "[h3-fastvsa] %dx%d frames=%d rows=%d padded=%d tiles=%d "
+                + "prefix_tiles=%d video_tiles=%d keep=%d heads=%d "
+                + "sparse_half_ms=%.1f sparse_full_ms=%.1f sparse_kv16_ms=%.1f "
+                + "full_speedup=%.3fx kv16_speedup=%.3fx "
+                + "complete_half_ms=%.1f complete_full_ms=%.1f complete_kv16_ms=%.1f "
+                + "complete_full_speedup=%.3fx complete_kv16_speedup=%.3fx "
+                + "full_max_abs=%.6g full_rel_l2=%.6g "
+                + "kv16_max_abs=%.6g kv16_rel_l2=%.6g peak_gib=%.3f",
+            width,
+            height,
+            frames,
+            layout.sequenceLength,
+            geometry.paddedTokenCount,
+            geometry.tileCount,
+            geometry.prefixTileCount,
+            geometry.videoTileCount,
+            keepVideo,
+            heads,
+            halfSparseSeconds * 1_000,
+            fullSparseSeconds * 1_000,
+            kv16SparseSeconds * 1_000,
+            halfSparseSeconds / fullSparseSeconds,
+            halfSparseSeconds / kv16SparseSeconds,
+            halfCompleteSeconds * 1_000,
+            fullCompleteSeconds * 1_000,
+            kv16CompleteSeconds * 1_000,
+            halfCompleteSeconds / fullCompleteSeconds,
+            halfCompleteSeconds / kv16CompleteSeconds,
+            maximumAbsoluteError,
+            relativeL2Error,
+            kv16MaximumAbsoluteError,
+            kv16RelativeL2Error,
+            peakGiB
+        ))
+    }
+
     /// Measures the fused SDPA dispatch used by a full upstream-equivalent
     /// SCAIL-2 window. This is env-gated because the key/value tensors occupy
     /// about 900 MB and the larger query sizes intentionally stress Metal's
@@ -523,10 +750,11 @@ final class DiTShapeBenchTests: XCTestCase {
         }
     }
 
-    /// MiniMax-H3's dominant projections at its practical 512-square and
-    /// 768x448 packed row counts. The cached arm models loading a compact
-    /// checkpoint, dequantizing each projection once, and keeping bf16 weights
-    /// resident for the denoising loop.
+    /// MiniMax-H3's dominant projections at its practical packed row counts.
+    /// The cached arm models loading a compact checkpoint, dequantizing each
+    /// projection once, and keeping bf16 weights resident for the denoising
+    /// loop. Set `MERERUN_H3_BENCH_BITS=8` to match the managed FastH3 package
+    /// and `MERERUN_H3_BENCH_INCLUDE_FF1=1` to include its largest projection.
     func testMiniMaxH3QmmVsResidentBF16() throws {
         try benchGate()
 
@@ -563,22 +791,40 @@ final class DiTShapeBenchTests: XCTestCase {
                 .compactMap { Int($0.trimmingCharacters(in: .whitespaces)) }
                 .filter { $0 > 0 } ?? []
             let rowCounts = configuredRows.isEmpty ? [4_608, 12_925] : configuredRows
+            let bits = Int(
+                ProcessInfo.processInfo.environment["MERERUN_H3_BENCH_BITS"] ?? ""
+            ) ?? 4
+            precondition([4, 8].contains(bits))
+            var projections = [
+                ("qkv", 5_376, 21_504),
+                ("attention-out", 7_168, 5_376),
+                ("ff2", 14_336, 5_376),
+            ]
+            if ProcessInfo.processInfo.environment["MERERUN_H3_BENCH_INCLUDE_FF1"] == "1" {
+                projections.insert(("ff1", 5_376, 28_672), at: 1)
+            }
+            let configuredProjections = Set(
+                ProcessInfo.processInfo.environment["MERERUN_H3_BENCH_PROJECTIONS"]?
+                    .split(separator: ",")
+                    .map { String($0.trimmingCharacters(in: .whitespaces)) } ?? []
+            )
+            if !configuredProjections.isEmpty {
+                projections = projections.filter { configuredProjections.contains($0.0) }
+            }
+            precondition(!projections.isEmpty)
             for rows in rowCounts {
-                for (name, inputDimension, outputDimension) in [
-                    ("qkv", 5_376, 21_504),
-                    ("ff2", 14_336, 5_376),
-                ] {
+                for (name, inputDimension, outputDimension) in projections {
                     let input = MLXRandom.normal([1, rows, inputDimension]).asType(.bfloat16)
                     let qmm = QuantizedLinear(
                         inputDimension,
                         outputDimension,
                         bias: false,
                         groupSize: 64,
-                        bits: 4
+                        bits: bits
                     )
                     MLX.eval(input, qmm.parameters())
                     pairedTime(
-                        "rows=\(rows) \(name) \(inputDimension)->\(outputDimension)",
+                        "rows=\(rows) q\(bits) \(name) \(inputDimension)->\(outputDimension)",
                         qmm: qmm,
                         dense: BenchCachedDenseLinear(copying: qmm),
                         input: input
@@ -586,6 +832,106 @@ final class DiTShapeBenchTests: XCTestCase {
                     MLX.Memory.clearCache()
                 }
             }
+        }
+    }
+
+    /// Probes MLX's built-in MXFP8 activation-and-weight path at H3's dense
+    /// projection shapes. Weight quantization is treated as package preparation
+    /// and excluded; each timed QQMM includes MLX's on-the-fly activation
+    /// quantization. This is a research gate, not runtime dispatch.
+    func testMiniMaxH3MXFP8QQMM() throws {
+        try benchGate()
+
+        let environment = ProcessInfo.processInfo.environment
+        let rows = max(1, Int(environment["MERERUN_H3_BENCH_ROWS"] ?? "") ?? 128)
+        let projection = environment["MERERUN_H3_BENCH_PROJECTION"] ?? "ff1-half"
+        let shape: (input: Int, output: Int)
+        switch projection {
+        case "qkv":
+            shape = (5_376, 21_504)
+        case "attention-out":
+            shape = (7_168, 5_376)
+        case "ff1-half":
+            shape = (5_376, 14_336)
+        case "ff2":
+            shape = (14_336, 5_376)
+        default:
+            preconditionFailure("Unsupported H3 MXFP8 projection: \(projection)")
+        }
+        let rounds = max(1, Int(environment["MERERUN_H3_BENCH_ROUNDS"] ?? "") ?? 2)
+        let iterations = max(
+            1,
+            Int(environment["MERERUN_H3_BENCH_ITERATIONS"] ?? "") ?? 2
+        )
+
+        Stream.withNewDefaultStream {
+            MLXRandom.seed(2_026_082_906)
+            let input = MLXRandom.normal([rows, shape.input]).asType(.bfloat16)
+            let denseWeight = MLXRandom.normal([shape.output, shape.input])
+                .asType(.bfloat16)
+            let preparedWeight = MLX.quantized(
+                denseWeight,
+                groupSize: 32,
+                bits: 8,
+                mode: .mxfp8
+            )
+            MLX.eval(input, denseWeight, preparedWeight.wq, preparedWeight.scales)
+
+            func dense() -> MLXArray {
+                MLX.matmul(input, denseWeight.T)
+            }
+            func mxfp8() -> MLXArray {
+                MLX.quantizedQuantizedMM(
+                    input,
+                    preparedWeight.wq,
+                    scales: preparedWeight.scales,
+                    groupSize: 32,
+                    bits: 8,
+                    mode: .mxfp8
+                )
+            }
+            func benchmark(_ body: () -> MLXArray) -> Double {
+                MLX.eval(body())
+                var best = Double.greatestFiniteMagnitude
+                for _ in 0..<rounds {
+                    let started = CFAbsoluteTimeGetCurrent()
+                    for _ in 0..<iterations {
+                        MLX.eval(body())
+                    }
+                    best = min(
+                        best,
+                        (CFAbsoluteTimeGetCurrent() - started) / Double(iterations)
+                    )
+                }
+                return best
+            }
+
+            let reference = dense()
+            let candidate = mxfp8()
+            MLX.eval(reference, candidate)
+            let difference = reference.asType(.float32) - candidate.asType(.float32)
+            let relativeL2 = MLX.sqrt(
+                MLX.sum(difference * difference)
+                    / MLX.maximum(
+                        MLX.sum(reference.asType(.float32) * reference.asType(.float32)),
+                        MLXArray(Float(1e-12))
+                    )
+            ).item(Float.self)
+            let denseSeconds = benchmark(dense)
+            let mxfp8Seconds = benchmark(mxfp8)
+            print(String(
+                format: "[dit-bench] H3 MXFP8 projection=%@ rows=%d shape=%d->%d "
+                    + "dense-bf16=%.3fms mxfp8-qqmm=%.3fms speedup=%.3fx rel_l2=%.6g",
+                projection,
+                rows,
+                shape.input,
+                shape.output,
+                denseSeconds * 1_000,
+                mxfp8Seconds * 1_000,
+                denseSeconds / mxfp8Seconds,
+                relativeL2
+            ))
+            XCTAssertTrue(relativeL2.isFinite)
         }
     }
 

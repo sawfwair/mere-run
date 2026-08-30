@@ -1637,7 +1637,9 @@ extension GateRunner {
             "--width", "128",
             "--height", "128",
             "--num-frames", "22",
-            "--steps", "2",
+            "--steps", model == ModelResolver.ModelID.miniMaxH3FastH3VSADataFreeMLX.rawValue
+                ? "5"
+                : "2",
             "--seed", "7",
             "--output", output.path,
             "--quiet",

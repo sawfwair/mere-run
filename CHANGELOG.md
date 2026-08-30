@@ -23,6 +23,27 @@ The format is based on Keep a Changelog.
   on MLX Metal. The refresh receipt proves source-range and baseline-table
   tensor closure; custom schedules still disclose interpolation as not
   bit-exact.
+- added native Metal execution for FastVideo FastH3 VSA DataFree, including its
+  exact four-evaluation sampler, 64-token sparse video attention, compression
+  gates, and source-bound AdaLN cache. The dedicated
+  `video-minimax-h3-fasth3-vsa-datafree-mlx` model packages every supported
+  inference asset behind one explicit license-accepting pull. Its published
+  package premerges the student into an affine Q8/group-64 transformer and
+  stores the compression gates in Q8. Prepared geometry and compact selected
+  route tables reduce VSA traversal work on Metal without changing the released
+  90% video-key sparsity contract. Managed affine Q8 FastH3 roots also select
+  a combined Metal recipe that fuses attention AdaLN, the post-attention gate
+  and AdaLN, Q/K normalization and rotary embedding, FC1 and SwiGLU, and FC2.
+  The MLP kernels preserve the live Float32 activation stream with Float32
+  SIMD-group matrices. At 89,188 rows on an M4 Max, an exploratory
+  real-checkpoint run measured the FC1 and FC2 stages at 1.079x and 1.085x the
+  correct chunked portable path. FC1 relative L2 was `3.82194e-8`, and FC2 was
+  bit-identical. The fused FC1 avoids a 9.53 GiB intermediate that exceeds the
+  portable path's 4 GiB addressing boundary. The compiled runner materializes
+  the 4.76 GiB compact activation before FC2 when that activation exceeds
+  4 GiB. The installed 50-block gate dispatched all five selected stages
+  without fallback and stayed below `0.0012` relative L2 for both output
+  modalities.
 
 ## 0.46.1 - 2026-08-29
 

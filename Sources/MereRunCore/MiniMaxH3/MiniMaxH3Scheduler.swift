@@ -23,6 +23,26 @@ public struct MiniMaxH3Schedule: Sendable {
         self.timesteps = shifted.dropLast().map { 1 - $0 }
     }
 
+    public init(baseSigmas: [Float], shift: Float) throws {
+        guard baseSigmas.count >= 2 else {
+            throw MiniMaxH3LayoutError.invalidGeometry("schedule needs at least two points")
+        }
+        guard shift > 0 else {
+            throw MiniMaxH3LayoutError.invalidGeometry("schedule shift must be positive")
+        }
+        guard baseSigmas.first.map({ $0 > 0 && $0 <= 1 }) == true,
+              baseSigmas.last == 0,
+              zip(baseSigmas, baseSigmas.dropFirst()).allSatisfy({ $0 > $1 }) else {
+            throw MiniMaxH3LayoutError.invalidGeometry(
+                "base sigmas must strictly descend from (0, 1] to 0"
+            )
+        }
+        self.sigmas = baseSigmas.map { base in
+            shift * base / (1 + (shift - 1) * base)
+        }
+        self.timesteps = sigmas.dropLast().map { 1 - $0 }
+    }
+
     public func step(sample: MLXArray, velocity: MLXArray, index: Int) -> MLXArray {
         precondition(index >= 0 && index + 1 < sigmas.count)
         let sigma = sigmas[index]

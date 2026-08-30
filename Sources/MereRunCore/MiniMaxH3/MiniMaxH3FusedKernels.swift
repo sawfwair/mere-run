@@ -37,6 +37,43 @@ enum MiniMaxH3FusedKernels {
     private static let affineGroupSize = 64
     private static let feedForwardSize = 14_336
 
+    /// Fuses the first H3 block boundary: RMSNorm followed by the row-indexed
+    /// attention scale and shift. This is the Metal counterpart of FastVideo's
+    /// `fused_rmsnorm_modulate` Triton kernel.
+    static func prepareAttentionInput(
+        input: MLXArray,
+        normWeight: MLXArray,
+        modulation: MLXArray,
+        rowIndices: MLXArray,
+        eps: Float
+    ) -> MLXArray? {
+        #if os(macOS) || os(iOS)
+        guard eps.isFinite,
+              eps > 0,
+              supportsAdaLNShapeContract(
+                  input: input,
+                  normWeight: normWeight,
+                  modulation: modulation,
+                  rowIndices: rowIndices
+              ) else {
+            return nil
+        }
+
+        let kernel = input.dtype == .bfloat16
+            ? attentionAdaLNKernel
+            : attentionAdaLNMixedKernel
+        return kernel(
+            [input, normWeight, modulation, rowIndices, eps],
+            grid: (threadCount, input.dim(1), 1),
+            threadGroup: (threadCount, 1, 1),
+            outputShapes: [input.shape],
+            outputDTypes: [input.dtype]
+        )[0]
+        #else
+        return nil
+        #endif
+    }
+
     static func gateAttentionAndPrepareFeedForward(
         residual: MLXArray,
         attentionOutput: MLXArray,
@@ -415,6 +452,48 @@ enum MiniMaxH3FusedKernels {
         #endif
     }
 
+    /// Matrix-tiled K4a candidate that keeps the gate and up projections in
+    /// registers through the SwiGLU epilogue. Matrix operands and outputs keep
+    /// the residual stream's BF16 or Float32 type, with Float32 accumulation.
+    static func projectFeedForwardInputAffineInt8SwiGLUTiled(
+        input: MLXArray,
+        weightCodes: MLXArray,
+        weightScales: MLXArray,
+        weightBiases: MLXArray
+    ) -> MLXArray? {
+        #if os(macOS) || os(iOS)
+        let scaleGroups = hiddenSize / affineGroupSize
+        guard Device.defaultDevice().deviceType == .gpu,
+              [.bfloat16, .float32].contains(input.dtype),
+              input.ndim == 3,
+              input.dim(0) == 1,
+              input.dim(1) > 0,
+              input.dim(2) == hiddenSize,
+              weightCodes.dtype == .uint32,
+              weightCodes.shape == [2 * feedForwardSize, hiddenSize / 4],
+              weightScales.dtype == .bfloat16,
+              weightScales.shape == [2 * feedForwardSize, scaleGroups],
+              weightBiases.dtype == .bfloat16,
+              weightBiases.shape == weightScales.shape else {
+            return nil
+        }
+
+        let rows = input.dim(1)
+        let outputTileCount = feedForwardSize / 32
+        let rowTileCount = (rows + 31) / 32
+        return projectFeedForwardInputAffineInt8SwiGLUTiledKernel(
+            [input, weightCodes, weightScales, weightBiases],
+            template: [("T", input.dtype)],
+            grid: (32 * outputTileCount, 4 * rowTileCount, 1),
+            threadGroup: (32, 4, 1),
+            outputShapes: [[1, rows, feedForwardSize]],
+            outputDTypes: [input.dtype]
+        )[0]
+        #else
+        return nil
+        #endif
+    }
+
     /// K4b applies H3's exact 14336 -> 5376 affine Q8/group-64 FC2 without
     /// relying on a generic shape selection path. It consumes K4a's compact
     /// SwiGLU result directly and preserves the managed artifact arithmetic.
@@ -457,20 +536,63 @@ enum MiniMaxH3FusedKernels {
         #endif
     }
 
+    /// SIMD-group matrix candidate for K4b. Each workgroup dequantizes one
+    /// 64-output by 32-input weight tile once, shares a 32-row activation
+    /// tile, and accumulates eight 8x8 matrix products per SIMD group.
+    /// The managed FastH3 Q8 recipe selects this after realistic-shape timing
+    /// and installed-checkpoint validation.
+    static func projectFeedForwardOutputAffineInt8Tiled(
+        input: MLXArray,
+        weightCodes: MLXArray,
+        weightScales: MLXArray,
+        weightBiases: MLXArray
+    ) -> MLXArray? {
+        #if os(macOS) || os(iOS)
+        let scaleGroups = feedForwardSize / affineGroupSize
+        guard Device.defaultDevice().deviceType == .gpu,
+              [.bfloat16, .float32].contains(input.dtype),
+              input.ndim == 3,
+              input.dim(0) == 1,
+              input.dim(1) > 0,
+              input.dim(2) == feedForwardSize,
+              weightCodes.dtype == .uint32,
+              weightCodes.shape == [hiddenSize, feedForwardSize / 4],
+              weightScales.dtype == .bfloat16,
+              weightScales.shape == [hiddenSize, scaleGroups],
+              weightBiases.dtype == .bfloat16,
+              weightBiases.shape == weightScales.shape else {
+            return nil
+        }
+
+        let rows = input.dim(1)
+        let outputTileCount = hiddenSize / 64
+        let rowTileCount = (rows + 31) / 32
+        return projectFeedForwardOutputAffineInt8TiledKernel(
+            [input, weightCodes, weightScales, weightBiases],
+            template: [("T", input.dtype)],
+            grid: (32 * outputTileCount, 4 * rowTileCount, 1),
+            threadGroup: (32, 4, 1),
+            outputShapes: [[1, rows, hiddenSize]],
+            outputDTypes: [input.dtype]
+        )[0]
+        #else
+        return nil
+        #endif
+    }
+
     #if os(macOS) || os(iOS)
-    private static func supportsGateAdaLNShapeContract(
-        residual: MLXArray,
-        branch: MLXArray,
+    private static func supportsAdaLNShapeContract(
+        input: MLXArray,
         normWeight: MLXArray,
         modulation: MLXArray,
         rowIndices: MLXArray
     ) -> Bool {
         Device.defaultDevice().deviceType == .gpu
-            && residual.shape == branch.shape
-            && residual.ndim == 3
-            && residual.dim(0) == 1
-            && residual.dim(1) > 0
-            && residual.dim(2) == hiddenSize
+            && [.bfloat16, .float32].contains(input.dtype)
+            && input.ndim == 3
+            && input.dim(0) == 1
+            && input.dim(1) > 0
+            && input.dim(2) == hiddenSize
             && normWeight.dtype == .bfloat16
             && normWeight.shape == [hiddenSize]
             && modulation.dtype == .bfloat16
@@ -478,7 +600,23 @@ enum MiniMaxH3FusedKernels {
             && modulation.dim(0) > 0
             && modulation.dim(1) == modulationPartCount * hiddenSize
             && rowIndices.dtype == .int32
-            && rowIndices.shape == [residual.dim(1)]
+            && rowIndices.shape == [input.dim(1)]
+    }
+
+    private static func supportsGateAdaLNShapeContract(
+        residual: MLXArray,
+        branch: MLXArray,
+        normWeight: MLXArray,
+        modulation: MLXArray,
+        rowIndices: MLXArray
+    ) -> Bool {
+        residual.shape == branch.shape
+            && supportsAdaLNShapeContract(
+                input: residual,
+                normWeight: normWeight,
+                modulation: modulation,
+                rowIndices: rowIndices
+            )
     }
 
     private static func supportsGateAdaLNInputs(
@@ -498,6 +636,134 @@ enum MiniMaxH3FusedKernels {
             && residual.dtype == .bfloat16
             && branch.dtype == .bfloat16
     }
+
+    private static let attentionAdaLNKernel = MLXFast.metalKernel(
+        name: "mere_h3_attention_adaln_bf16_h5376_v1",
+        inputNames: [
+            "input", "norm_weight", "modulation", "row_indices", "epsilon",
+        ],
+        outputNames: ["output"],
+        source: """
+            constexpr uint hidden_size = 5376;
+            constexpr uint modulation_parts = 6;
+            constexpr uint simd_width = 32;
+
+            uint row = threadgroup_position_in_grid.y;
+            uint tid = thread_position_in_threadgroup.x;
+            uint simd_lane = thread_index_in_simdgroup;
+            uint simd_group = simdgroup_index_in_threadgroup;
+            uint row_offset = row * hidden_size;
+            uint modulation_offset = uint(row_indices[row])
+                * modulation_parts * hidden_size;
+
+            threadgroup float partial_sums[simd_width];
+            threadgroup float inverse_rms[1];
+
+            float sum = 0.0f;
+            for (uint dimension = tid; dimension < hidden_size;
+                 dimension += threads_per_threadgroup.x) {
+                float value = float(input[row_offset + dimension]);
+                sum += value * value;
+            }
+
+            sum = simd_sum(sum);
+            if (simd_group == 0) {
+                partial_sums[simd_lane] = 0.0f;
+            }
+            threadgroup_barrier(metal::mem_flags::mem_threadgroup);
+            if (simd_lane == 0) {
+                partial_sums[simd_group] = sum;
+            }
+            threadgroup_barrier(metal::mem_flags::mem_threadgroup);
+            if (simd_group == 0) {
+                sum = simd_sum(partial_sums[simd_lane]);
+                if (simd_lane == 0) {
+                    inverse_rms[0] = metal::precise::rsqrt(
+                        sum / float(hidden_size) + float(epsilon));
+                }
+            }
+            threadgroup_barrier(metal::mem_flags::mem_threadgroup);
+
+            for (uint dimension = tid; dimension < hidden_size;
+                 dimension += threads_per_threadgroup.x) {
+                bfloat16_t normalized = bfloat16_t(
+                    float(input[row_offset + dimension]) * inverse_rms[0]);
+                bfloat16_t weighted = bfloat16_t(
+                    float(norm_weight[dimension]) * float(normalized));
+                bfloat16_t one_plus_scale = bfloat16_t(
+                    1.0f + float(modulation[
+                        modulation_offset + hidden_size + dimension]));
+                bfloat16_t scaled = bfloat16_t(
+                    float(weighted) * float(one_plus_scale));
+                output[row_offset + dimension] = bfloat16_t(
+                    float(scaled) + float(modulation[
+                        modulation_offset + dimension]));
+            }
+        """,
+        ensureRowContiguous: true
+    )
+
+    private static let attentionAdaLNMixedKernel = MLXFast.metalKernel(
+        name: "mere_h3_attention_adaln_mixed_h5376_v1",
+        inputNames: [
+            "input", "norm_weight", "modulation", "row_indices", "epsilon",
+        ],
+        outputNames: ["output"],
+        source: """
+            constexpr uint hidden_size = 5376;
+            constexpr uint modulation_parts = 6;
+            constexpr uint simd_width = 32;
+
+            uint row = threadgroup_position_in_grid.y;
+            uint tid = thread_position_in_threadgroup.x;
+            uint simd_lane = thread_index_in_simdgroup;
+            uint simd_group = simdgroup_index_in_threadgroup;
+            uint row_offset = row * hidden_size;
+            uint modulation_offset = uint(row_indices[row])
+                * modulation_parts * hidden_size;
+
+            threadgroup float partial_sums[simd_width];
+            threadgroup float inverse_rms[1];
+
+            float sum = 0.0f;
+            for (uint dimension = tid; dimension < hidden_size;
+                 dimension += threads_per_threadgroup.x) {
+                float value = float(input[row_offset + dimension]);
+                sum += value * value;
+            }
+
+            sum = simd_sum(sum);
+            if (simd_group == 0) {
+                partial_sums[simd_lane] = 0.0f;
+            }
+            threadgroup_barrier(metal::mem_flags::mem_threadgroup);
+            if (simd_lane == 0) {
+                partial_sums[simd_group] = sum;
+            }
+            threadgroup_barrier(metal::mem_flags::mem_threadgroup);
+            if (simd_group == 0) {
+                sum = simd_sum(partial_sums[simd_lane]);
+                if (simd_lane == 0) {
+                    inverse_rms[0] = metal::precise::rsqrt(
+                        sum / float(hidden_size) + float(epsilon));
+                }
+            }
+            threadgroup_barrier(metal::mem_flags::mem_threadgroup);
+
+            for (uint dimension = tid; dimension < hidden_size;
+                 dimension += threads_per_threadgroup.x) {
+                float weighted = float(input[row_offset + dimension])
+                    * inverse_rms[0] * float(norm_weight[dimension]);
+                bfloat16_t one_plus_scale = bfloat16_t(
+                    1.0f + float(modulation[
+                        modulation_offset + hidden_size + dimension]));
+                output[row_offset + dimension] = weighted
+                    * float(one_plus_scale) + float(modulation[
+                        modulation_offset + dimension]);
+            }
+        """,
+        ensureRowContiguous: true
+    )
 
     private static let gateAdaLNKernel = MLXFast.metalKernel(
         name: "mere_h3_gate_adaln_bf16_h5376_v1",
@@ -1381,6 +1647,206 @@ enum MiniMaxH3FusedKernels {
         ensureRowContiguous: true
     )
 
+    private static let projectFeedForwardInputAffineInt8SwiGLUTiledKernel = MLXFast.metalKernel(
+        name: "mere_h3_affine_fc1_swiglu_i8g64_tiled_v5",
+        inputNames: ["input", "weight_codes", "weight_scales", "weight_biases"],
+        outputNames: ["activated"],
+        source: """
+            constexpr uint input_width = 5376;
+            constexpr uint output_width = 14336;
+            constexpr uint group_size = 64;
+            constexpr uint scale_groups = input_width / group_size;
+            constexpr uint output_tile_columns = 32;
+            constexpr uint row_tile_rows = 32;
+            constexpr uint reduction_tile = 32;
+
+            uint output_tile = threadgroup_position_in_grid.x;
+            uint row_tile = threadgroup_position_in_grid.y;
+            uint output_start = output_tile * output_tile_columns;
+            uint row_start = row_tile * row_tile_rows;
+            uint rows = uint(input_shape[1]);
+            uint valid_rows = metal::min(row_tile_rows, rows - row_start);
+            uint thread_linear = thread_position_in_threadgroup.y * 32
+                + thread_position_in_threadgroup.x;
+            uint simd_group = simdgroup_index_in_threadgroup;
+            uint lane = thread_index_in_simdgroup;
+            uint quad = lane / 4;
+            uint matrix_row = (quad & 4) + ((lane / 2) % 4);
+            uint matrix_column = (quad & 2) * 2 + (lane % 2) * 2;
+
+            threadgroup T gate_weight_tile[
+                output_tile_columns * reduction_tile
+            ];
+            threadgroup T up_weight_tile[
+                output_tile_columns * reduction_tile
+            ];
+            threadgroup T input_tile[row_tile_rows * reduction_tile];
+
+            thread simdgroup_matrix<float, 8, 8> gate_accumulated[4];
+            thread simdgroup_matrix<float, 8, 8> up_accumulated[4];
+            #pragma clang loop unroll(full)
+            for (uint index = 0; index < 4; ++index) {
+                gate_accumulated[index].thread_elements()[0] = 0.0f;
+                gate_accumulated[index].thread_elements()[1] = 0.0f;
+                up_accumulated[index].thread_elements()[0] = 0.0f;
+                up_accumulated[index].thread_elements()[1] = 0.0f;
+            }
+
+            const device uint8_t* codes = (const device uint8_t*)weight_codes;
+            uint local_output = thread_linear / 4;
+            uint weight_eight = 8 * (thread_linear % 4);
+            uint local_input_row = thread_linear / 4;
+            uint input_eight = 8 * (thread_linear % 4);
+            for (uint reduction_start = 0;
+                 reduction_start < input_width;
+                 reduction_start += reduction_tile) {
+                threadgroup_barrier(mem_flags::mem_threadgroup);
+
+                uint gate_column = output_start + local_output;
+                uint up_column = gate_column + output_width;
+                uint scale_group = reduction_start / group_size;
+                uint gate_scale_index = gate_column * scale_groups + scale_group;
+                uint up_scale_index = up_column * scale_groups + scale_group;
+                float gate_scale = float(weight_scales[gate_scale_index]);
+                float gate_bias = float(weight_biases[gate_scale_index]);
+                float up_scale = float(weight_scales[up_scale_index]);
+                float up_bias = float(weight_biases[up_scale_index]);
+                uint weight_reduction_start = reduction_start + weight_eight;
+                const device uint8_t* gate_values = codes
+                    + gate_column * input_width + weight_reduction_start;
+                const device uint8_t* up_values = codes
+                    + up_column * input_width + weight_reduction_start;
+                #pragma clang loop unroll(full)
+                for (uint index = 0; index < 8; ++index) {
+                    uint tile_index = local_output * reduction_tile
+                        + weight_eight + index;
+                    gate_weight_tile[tile_index] = T(
+                        gate_scale * float(gate_values[index]) + gate_bias
+                    );
+                    up_weight_tile[tile_index] = T(
+                        up_scale * float(up_values[index]) + up_bias
+                    );
+                }
+
+                uint safe_row = metal::min(local_input_row, valid_rows - 1);
+                const device T* input_values = input
+                    + uint64_t(row_start + safe_row) * uint64_t(input_width)
+                    + reduction_start + input_eight;
+                #pragma clang loop unroll(full)
+                for (uint index = 0; index < 8; ++index) {
+                    input_tile[local_input_row * reduction_tile + input_eight + index]
+                        = T(input_values[index]);
+                }
+                threadgroup_barrier(mem_flags::mem_threadgroup);
+
+                threadgroup const T* gate_fragments = gate_weight_tile
+                    + (simd_group % 2) * 16 * reduction_tile;
+                threadgroup const T* up_fragments = up_weight_tile
+                    + (simd_group % 2) * 16 * reduction_tile;
+                threadgroup const T* input_fragments = input_tile
+                    + (simd_group / 2) * 16 * reduction_tile;
+                thread simdgroup_matrix<T, 8, 8> gate_weights[2];
+                thread simdgroup_matrix<T, 8, 8> up_weights[2];
+                thread simdgroup_matrix<T, 8, 8> inputs[2];
+                #pragma clang loop unroll(full)
+                for (uint reduction_fragment = 0;
+                     reduction_fragment < 4;
+                     ++reduction_fragment) {
+                    simdgroup_barrier(mem_flags::mem_none);
+                    #pragma clang loop unroll(full)
+                    for (uint output_fragment = 0;
+                         output_fragment < 2;
+                         ++output_fragment) {
+                        simdgroup_load(
+                            gate_weights[output_fragment],
+                            gate_fragments
+                                + output_fragment * 8 * reduction_tile
+                                + reduction_fragment * 8,
+                            reduction_tile,
+                            0,
+                            true
+                        );
+                        simdgroup_load(
+                            up_weights[output_fragment],
+                            up_fragments
+                                + output_fragment * 8 * reduction_tile
+                                + reduction_fragment * 8,
+                            reduction_tile,
+                            0,
+                            true
+                        );
+                    }
+                    simdgroup_barrier(mem_flags::mem_none);
+                    #pragma clang loop unroll(full)
+                    for (uint row_fragment = 0; row_fragment < 2; ++row_fragment) {
+                        simdgroup_load(
+                            inputs[row_fragment],
+                            input_fragments
+                                + row_fragment * 8 * reduction_tile
+                                + reduction_fragment * 8,
+                            reduction_tile,
+                            0,
+                            false
+                        );
+                    }
+                    simdgroup_barrier(mem_flags::mem_none);
+                    #pragma clang loop unroll(full)
+                    for (uint result = 0; result < 4; ++result) {
+                        thread simdgroup_matrix<float, 8, 8> next_gate;
+                        thread simdgroup_matrix<float, 8, 8> next_up;
+                        simdgroup_multiply_accumulate(
+                            next_gate,
+                            inputs[result / 2],
+                            gate_weights[result % 2],
+                            gate_accumulated[result]
+                        );
+                        simdgroup_multiply_accumulate(
+                            next_up,
+                            inputs[result / 2],
+                            up_weights[result % 2],
+                            up_accumulated[result]
+                        );
+                        gate_accumulated[result] = next_gate;
+                        up_accumulated[result] = next_up;
+                    }
+                }
+            }
+
+            uint simd_output_start = (simd_group & 1) * 16;
+            uint simd_row_start = (simd_group >> 1) * 16;
+            #pragma clang loop unroll(full)
+            for (uint result = 0; result < 4; ++result) {
+                uint output_row = simd_row_start + (result / 2) * 8 + matrix_row;
+                uint output_column = simd_output_start
+                    + (result % 2) * 8 + matrix_column;
+                if (output_row < valid_rows) {
+                    uint64_t output_index = uint64_t(row_start + output_row)
+                        * uint64_t(output_width) + uint64_t(output_start + output_column);
+                    float gate0 = float(T(
+                        gate_accumulated[result].thread_elements()[0]
+                    ));
+                    float gate1 = float(T(
+                        gate_accumulated[result].thread_elements()[1]
+                    ));
+                    float up0 = float(T(
+                        up_accumulated[result].thread_elements()[0]
+                    ));
+                    float up1 = float(T(
+                        up_accumulated[result].thread_elements()[1]
+                    ));
+                    float sigmoid0 = 1.0f / (1.0f + metal::precise::exp(-gate0));
+                    float sigmoid1 = 1.0f / (1.0f + metal::precise::exp(-gate1));
+                    activated[output_index] = T(gate0 * sigmoid0 * up0);
+                    activated[output_index + 1] = T(
+                        gate1 * sigmoid1 * up1
+                    );
+                }
+            }
+        """,
+        header: "#include <metal_simdgroup_matrix>\n",
+        ensureRowContiguous: true
+    )
+
     private static let projectFeedForwardInputAffineInt8SwiGLUKernel = MLXFast.metalKernel(
         name: "mere_h3_affine_fc1_swiglu_i8g64_v1",
         inputNames: ["input", "weight_codes", "weight_scales", "weight_biases"],
@@ -1641,6 +2107,163 @@ enum MiniMaxH3FusedKernels {
                 }
             }
         """,
+        ensureRowContiguous: true
+    )
+
+    private static let projectFeedForwardOutputAffineInt8TiledKernel = MLXFast.metalKernel(
+        name: "mere_h3_affine_fc2_i8g64_tiled_v5",
+        inputNames: ["input", "weight_codes", "weight_scales", "weight_biases"],
+        outputNames: ["projected"],
+        source: """
+            constexpr uint input_width = 14336;
+            constexpr uint output_width = 5376;
+            constexpr uint group_size = 64;
+            constexpr uint scale_groups = input_width / group_size;
+            constexpr uint output_tile_columns = 64;
+            constexpr uint row_tile_rows = 32;
+            constexpr uint reduction_tile = 32;
+            constexpr uint simdgroups_per_workgroup = 4;
+
+            uint output_tile = threadgroup_position_in_grid.x;
+            uint row_tile = threadgroup_position_in_grid.y;
+            uint output_start = output_tile * output_tile_columns;
+            uint row_start = row_tile * row_tile_rows;
+            uint rows = uint(input_shape[1]);
+            uint valid_rows = metal::min(row_tile_rows, rows - row_start);
+            uint thread_linear = thread_position_in_threadgroup.y * 32
+                + thread_position_in_threadgroup.x;
+            uint simd_group = simdgroup_index_in_threadgroup;
+            uint lane = thread_index_in_simdgroup;
+            uint quad = lane / 4;
+            uint matrix_row = (quad & 4) + ((lane / 2) % 4);
+            uint matrix_column = (quad & 2) * 2 + (lane % 2) * 2;
+
+            threadgroup T weight_tile[output_tile_columns * reduction_tile];
+            threadgroup T input_tile[row_tile_rows * reduction_tile];
+
+            thread simdgroup_matrix<float, 8, 8> accumulated[8];
+            #pragma clang loop unroll(full)
+            for (uint index = 0; index < 8; ++index) {
+                accumulated[index].thread_elements()[0] = 0.0f;
+                accumulated[index].thread_elements()[1] = 0.0f;
+            }
+
+            const device uint8_t* codes = (const device uint8_t*)weight_codes;
+            uint local_output = thread_linear / 2;
+            uint weight_half = thread_linear % 2;
+            uint local_input_row = thread_linear / 4;
+            uint input_eight = 8 * (thread_linear % 4);
+            for (uint reduction_start = 0;
+                 reduction_start < input_width;
+                 reduction_start += reduction_tile) {
+                threadgroup_barrier(mem_flags::mem_threadgroup);
+
+                uint output_column = output_start + local_output;
+                uint scale_index = output_column * scale_groups
+                    + reduction_start / group_size;
+                float scale = float(weight_scales[scale_index]);
+                float bias = float(weight_biases[scale_index]);
+                uint weight_reduction_start = reduction_start + 16 * weight_half;
+                const device uint8_t* weight_values = codes
+                    + output_column * input_width + weight_reduction_start;
+                #pragma clang loop unroll(full)
+                for (uint index = 0; index < 16; ++index) {
+                    uint section_x = 2 * weight_half + index / 8;
+                    uint section_y = local_output / 8;
+                    uint local_x = local_output % 8;
+                    uint local_y = index % 8;
+                    uint block = 8 * section_x + section_y;
+                    weight_tile[64 * block + 8 * local_y + local_x] = T(
+                        scale * float(weight_values[index]) + bias
+                    );
+                }
+
+                uint safe_row = metal::min(local_input_row, valid_rows - 1);
+                uint input_section_x = thread_linear % 4;
+                uint input_section_y = local_input_row / 8;
+                uint input_local_y = local_input_row % 8;
+                uint input_block = 4 * input_section_x + input_section_y;
+                const device T* input_values = input
+                    + uint64_t(row_start + safe_row) * uint64_t(input_width)
+                    + reduction_start + input_eight;
+                #pragma clang loop unroll(full)
+                for (uint index = 0; index < 8; ++index) {
+                    input_tile[64 * input_block + 8 * input_local_y + index]
+                        = T(input_values[index]);
+                }
+                threadgroup_barrier(mem_flags::mem_threadgroup);
+
+                threadgroup const T* weight_fragments = weight_tile
+                    + 4 * 64 * (simd_group % 2);
+                threadgroup const T* input_fragments = input_tile
+                    + 2 * 64 * (simd_group / 2);
+                thread simdgroup_matrix<T, 8, 8> weights[4];
+                thread simdgroup_matrix<T, 8, 8> inputs[2];
+                #pragma clang loop unroll(full)
+                for (uint reduction_fragment = 0;
+                     reduction_fragment < 4;
+                     ++reduction_fragment) {
+                    simdgroup_barrier(mem_flags::mem_none);
+                    #pragma clang loop unroll(full)
+                    for (uint output_fragment = 0;
+                         output_fragment < 4;
+                         ++output_fragment) {
+                        simdgroup_load(
+                            weights[output_fragment],
+                            weight_fragments + 64 * output_fragment,
+                            8,
+                            0,
+                            false
+                        );
+                    }
+                    simdgroup_barrier(mem_flags::mem_none);
+                    #pragma clang loop unroll(full)
+                    for (uint row_fragment = 0; row_fragment < 2; ++row_fragment) {
+                        simdgroup_load(
+                            inputs[row_fragment],
+                            input_fragments + 64 * row_fragment,
+                            8,
+                            0,
+                            false
+                        );
+                    }
+                    simdgroup_barrier(mem_flags::mem_none);
+                    #pragma clang loop unroll(full)
+                    for (uint result = 0; result < 8; ++result) {
+                        thread simdgroup_matrix<float, 8, 8> next;
+                        simdgroup_multiply_accumulate(
+                            next,
+                            inputs[result / 4],
+                            weights[result % 4],
+                            accumulated[result]
+                        );
+                        accumulated[result] = next;
+                    }
+                    weight_fragments += 8 * 64;
+                    input_fragments += 4 * 64;
+                }
+            }
+
+            uint simd_output_start = (simd_group & 1) * 32;
+            uint simd_row_start = (simd_group >> 1) * 16;
+            #pragma clang loop unroll(full)
+            for (uint result = 0; result < 8; ++result) {
+                uint output_row = simd_row_start + (result / 4) * 8 + matrix_row;
+                uint output_column = simd_output_start
+                    + (result % 4) * 8 + matrix_column;
+                if (output_row < valid_rows) {
+                    uint64_t output_index = uint64_t(row_start + output_row)
+                        * uint64_t(output_width) + uint64_t(output_start + output_column);
+                    projected[output_index] = T(
+                        accumulated[result].thread_elements()[0]
+                    );
+                    projected[output_index + 1] = T(
+                        accumulated[result].thread_elements()[1]
+                    );
+                }
+            }
+        """,
+        header: "#include <metal_simdgroup_matrix>\n",
         ensureRowContiguous: true
     )
 

@@ -2495,6 +2495,28 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                     + "@\(MiniMaxH3Resources.compactBF16ArtifactRevision)",
                 createdAt: createdAt
             )
+        case .miniMaxH3FastH3VSADataFreeMLX:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .miniMaxH3,
+                family: .video,
+                tier: .latest,
+                variant: .distilled,
+                precision: .int8,
+                quantization: Quantization(bits: 8, groupSize: 64, scheme: "mlx-affine"),
+                defaults: Defaults(steps: 5, cfg: 1.0, sigmaShift: 12.0),
+                supports: [.videoGeneration],
+                components: Components(
+                    tokenizer: .local(path: "."),
+                    textEncoder: .local(path: "."),
+                    transformer: .local(path: "."),
+                    vae: .local(path: "."),
+                    scheduler: nil
+                ),
+                upstreamRepoId: "\(MiniMaxH3Resources.fastH3ArtifactRepository)"
+                    + "@\(MiniMaxH3Resources.fastH3ArtifactRevision)",
+                createdAt: createdAt
+            )
         case .miniMaxH3FL2VAQ8MLX:
             return MereRunModelManifest(
                 id: modelID.rawValue,

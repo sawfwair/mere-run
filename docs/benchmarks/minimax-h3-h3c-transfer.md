@@ -7,16 +7,69 @@ memory, and fallback gates.
 
 ## Promotion conclusion
 
-The portable M4 result is decisive: keep stock MLX's tiled affine-Q8 matrix
-primitive and fuse the elementwise/layout boundaries around it. Promote only
-K1 gated AdaLN and K2a head-major QKV normalization/RoPE for shape-qualified
-evaluation. Do not promote K2b, K3, or K4's scalar-SIMD affine-Q8 matrix cores;
-they are roughly four to five times slower than stock MLX at H3's production
-shapes. MLX's public quantized-matmul primitive does not accept an output
-stride or custom epilogue, so eliminating the remaining projection
-materializations competitively requires an MLX/MLXFast primitive with a tiled
-quantized core and H3-specific epilogue, or an M5 TensorOps implementation. It
-is not achievable by further tuning the standalone scalar kernels.
+The original scalar-SIMD affine-Q8 matrix cores remain rejected because they
+are roughly four to five times slower than stock MLX at H3's production shapes.
+The FastH3 Q8 MLP uses a separate matrix-tiled Metal schedule. K4a stages a
+32-row by 32-output tile and keeps both FC1 projections in registers through
+the SwiGLU epilogue. K4b stages a 32-row by 64-output tile. Both kernels
+dequantize each Q8/group-64 weight tile once into threadgroup memory.
+
+The live FastH3 residual and MLP activation stream is Float32. The production
+K4 path therefore uses Float32 SIMD-group matrix operands and accumulators.
+The kernel template retains BF16 operands only when a BF16 diagnostic input
+selects that type. An earlier BF16-only candidate passed an isolated benchmark
+but didn't dispatch in the live transformer. Narrowing the live Float32 stream
+to BF16 caused unacceptable error across 50 blocks and was rejected.
+
+The managed FastH3 VSA Q8 recipe selects `fasth3-metal` automatically. This
+mode combines attention AdaLN, post-attention gate and AdaLN, Q/K normalization
+and rotary embedding, and the tiled Q8 MLP. Other H3 variants retain stock MLX
+unless you select an exact mode explicitly. Set
+`MERERUN_H3_EXACT_KERNELS=disabled` to compare FastH3 with the portable MLX
+path. K2b and K3 remain experimental because their scalar matrix cores didn't
+win.
+
+At 89,188 rows on the packaged FastH3 checkpoint, the Float32 tiled FC1 plus
+SwiGLU result had relative L2 `3.82194e-8` against the chunked portable oracle.
+FC2 was bit-identical. An exploratory run measured 3,784.052 ms compared with
+3,508.304 ms for FC1 and 2,042.034 ms compared with 1,881.471 ms for FC2. These
+values are `1.079x` and `1.085x`. The host had approximately 31 GiB of system
+swap and another inference service, so these timings are candidate evidence,
+not a clean performance receipt.
+
+K4a also avoids the 9.53 GiB Float32 `[1, 89188, 28672]` FC1 projection. The
+portable oracle remains chunked to 32,768 rows. Evaluating both complete
+89,188-row intermediates together under memory pressure produced an invalid
+comparison, so the production-shape gate compares each chunk independently.
+The compact `[1, 89188, 14336]` result is 4.76 GiB. At shapes where this result
+exceeds 4 GiB, the compiled block runner evaluates K4a before K4b. Smaller
+shapes retain one compiled post-attention region.
+
+Reproduce the installed-checkpoint stage gate with:
+
+```bash
+MERERUN_H3_EXACT_KERNEL_MODEL_ROOT=/path/to/video-minimax-h3-fasth3-vsa-datafree-mlx \
+  scripts/h3-kernel-lab.sh affine-mlp-real
+```
+
+## FastH3 CUDA recipe parity
+
+FastVideo's published B200 path combines four independent optimizations:
+
+- The student uses four DiT calls instead of Base H3's 49 calls.
+- VSA-H3 keeps approximately 10% of eligible video-to-video tile-64 attention.
+- H3-specific kernels fuse modulation, Q/K normalization and rotary embedding,
+  and SwiGLU boundaries.
+- The runtime uses regional full-graph DiT compilation, FlashAttention 4,
+  compiled video VAE decoding, and multi-GPU sequence parallelism.
+
+The Metal recipe implements the transferable parts: the four-call schedule,
+compact tile-64 VSA routes, compiled block regions, cached AdaLN, and the same
+three fusion families. The M4 Max doesn't provide the B200 `sm100a`
+block-sparse kernel, FlashAttention 4, eight-GPU parallelism, or the same VAE
+decode throughput. FastVideo's 12.88-second result also uses eight B200 GPUs
+and excludes model loading and compilation after warmup. It isn't a
+single-device latency target for the M4 Max.
 
 Resident BF16 has a separate M3/M4 opportunity. The refreshed MLX source has
 a Metal 4 NAX GEMM implementation, but its runtime capability gate
@@ -35,6 +88,41 @@ scripts/h3-kernel-lab.sh mpp-projections
 
 This round deliberately targets the resident-BF16 M3/M4 path; M5-specific
 TensorOps work is out of scope.
+
+### M4 W8A8 and MXFP8 rejection
+
+The MLX Metal backend does not expose a competitive W8A8 path on the M4 Max.
+MLX's `QQMatmul` quantizes and dequantizes the activation, then routes the
+prepared weight through the quantized matrix-vector dispatcher. The NAX path
+requires Apple GPU generation 18 or later. The measured M4 Max is generation
+16.
+
+An env-gated synthetic projection gate prequantized the weight outside the
+timed region and compared MLX MXFP8 QQMM with resident BF16 matrix
+multiplication. The 5,376 to 14,336 half-FC1 shape produced:
+
+| Rows | Resident BF16 | MXFP8 QQMM | Speedup | Relative L2 |
+| ---: | ---: | ---: | ---: | ---: |
+| 128 | 1.671 ms | 5.679 ms | 0.294x | 0.110748 |
+| 1,024 | 10.971 ms | 43.908 ms | 0.250x | 0.110763 |
+
+The 1,024-row result rules out a tiny-matrix artifact: MXFP8 was four times
+slower and already introduced approximately 11% relative L2 error before any
+50-block accumulation. The runtime therefore does not select this path on M4.
+Reproduce the research gate with:
+
+```bash
+MERERUN_H3_BENCH_PROJECTION=ff1-half \
+MERERUN_H3_BENCH_ROWS=1024 \
+  scripts/h3-kernel-lab.sh mxfp8
+```
+
+Resident BF16 cannot close the native-canvas target through software dispatch
+alone either. At 89,459 rows, the real-checkpoint BF16 K4 diagnostic measured
+2,779.228 ms for FC1 plus SwiGLU and 1,808.893 ms for FC2. Its 4.588-second MLP
+floor per block execution is only 1.095x below the 5.024-second Float32 K4
+result and remains 3.6 times above the complete 1.275-second block budget for a
+five-minute 1,344 by 768 request, before attention and the other block phases.
 
 The quality-sensitive algorithm arms remain non-default. Reduced canvas,
 layer thinning, complete velocity reuse, and token reduction all produced
@@ -227,9 +315,11 @@ immediate SwiGLU into the same dispatch, writing only the compact
 `[1, rows, 14336]` activation. It therefore removes the 28,672-wide FC1 tensor.
 K4b applies the exact `14336 -> 5376` FC2 projection to that compact result.
 Both candidates retain the graph's BF16 or Float32 activation boundary and
-compare independently with MLX `quantizedMM`; they do not yet consume K1's symmetric activation-INT8
-rows. The whole-path isolated release arm alternates the decomposed and fused
-orders and reports the FC1 materialization bytes avoided:
+compare independently with MLX `quantizedMM`. Float32 inputs use Float32
+SIMD-group matrix operands instead of narrowing the live residual stream. The
+kernels don't consume K1's symmetric activation-INT8 rows. The whole-path
+isolated release arm alternates the decomposed and fused orders and reports the
+FC1 materialization bytes avoided:
 
 ```bash
 scripts/h3-kernel-lab.sh affine-ffn
@@ -252,10 +342,10 @@ scripts/h3-kernel-lab.sh buffer-alias
 
 ### Installed-checkpoint exact-kernel dispatch
 
-`MERERUN_H3_EXACT_KERNELS=boundary-layout` enables only the exact candidates
-that won their clean production-shape microbenchmarks: K1 gated AdaLN and K2a
-head-major QKV layout with fused Q/K normalization and RoPE. It retains MLX's
-quantized projections instead of selecting the slower custom affine-Q8 GEMMs.
+`MERERUN_H3_EXACT_KERNELS=boundary-layout` enables only the exact boundary
+candidates: K0 attention AdaLN, K1 gated AdaLN, and K2a head-major QKV layout
+with fused Q/K normalization and RoPE. It retains MLX's quantized projections
+instead of selecting the slower custom affine-Q8 GEMMs.
 The mode remains explicit, requires `--h3-acceleration quality`, and falls back
 per call when the exact H3 shape or dtype contract is unavailable. Sequences at
 or below 12,000 rows retain whole-step compilation. Larger sequences use eager
@@ -270,14 +360,31 @@ transformer block must retain its unadapted affine Q8/group-64 QKV, output, FC1,
 and FC2 linears, and resident-BF16 materialization must be off. The mode forces
 eager block execution so custom-kernel behavior and memory remain attributable.
 
-Within an admitted block, K2b handles QKV projection plus Q/K norm/RoPE, K3
-handles the head-major attention output projection, K1 fuses the attention
-residual into the following feed-forward AdaLN, and K4 handles both feed-forward
-projections. Every custom call still validates its complete shape, dtype, and
-quantization contract and falls back to the decomposed graph if that individual
-contract is unavailable. K1's activation-INT8 output remains a lab boundary:
-the installed path uses its BF16 sibling until a projection consumes the
-dynamic INT8 rows directly.
+Within an admitted block, K0 fuses attention RMSNorm with the row-indexed scale
+and shift. K2b handles QKV projection plus Q/K norm and RoPE. K3 handles the
+head-major attention output projection. K1 fuses the attention residual into
+the following feed-forward AdaLN, and K4 handles both feed-forward projections.
+Every custom call validates its complete shape, dtype, and quantization contract
+and falls back to the decomposed graph if that contract is unavailable. K1's
+activation-INT8 output remains a lab boundary. The installed path uses its
+floating-point sibling until a projection consumes the dynamic INT8 rows
+directly.
+
+`MERERUN_H3_EXACT_KERNELS=affine-q8-mlp` selects only the matrix-tiled K4a and
+K4b kernels. It doesn't select K0, K1, K2, or K3.
+
+`MERERUN_H3_EXACT_KERNELS=fasth3-metal` selects K0, K1, K2a, K4a, and K4b.
+The managed FastH3 VSA Q8 recipe uses this mode automatically when the
+environment variable is absent. FastH3 retains release-mode block compilation;
+the custom kernels run inside the compiled projection and post-attention
+regions. Setting the variable to `disabled` retains the portable MLX path for
+diagnostics.
+
+The installed FastH3 50-block gate dispatched all five selected stages in every
+block with no fallback. Against the decomposed graph, the seven-row deterministic
+forward measured video relative L2 `0.000926183` and audio relative L2
+`0.00116363`. The corresponding `boundary-layout` comparison measured
+`0.000169663` and `0.000345908`.
 
 The gated real-weight test can also enable one stage at a time before the
 combined run. On the installed Ref2VA artifact, all five stages selected in all
@@ -344,9 +451,11 @@ K5 buffer donation avoided a 160,841,728-byte retained peak increment. The
 direct QKV and FFN arms also exceeded their synthetic absolute-error envelopes;
 all affine stages nevertheless remained below `0.00044` combined relative L2
 in the installed 50-block Ref2VA arithmetic gate. The speed regressions are
-decisive: K2b/K3/K4 remain research prototypes until their GEMM core uses a
-competitive MLX/Metal matrix path. `boundary-layout` is the only exact mode
-advanced to generated-media evaluation from this run.
+decisive: K2b/K3 and the scalar K4 implementation remain research prototypes
+until their GEMM core uses a competitive MLX/Metal matrix path.
+`boundary-layout` was the only exact mode advanced to generated-media
+evaluation from this historical run. The separate FastH3 tiled K4 schedule was
+qualified later.
 
 ### Clean generated-media result
 
@@ -728,8 +837,9 @@ The portable direction is therefore narrower, not more aggressive: retain the
 exact reference-serving alignment, evaluate a 448 x 224 (87.5%) internal canvas,
 at most one reused middle evaluation, less aggressive token pairing/block
 spans, and true load-time pruning for A2 before another promotion attempt.
-Exact `boundary-layout` remains the only h3.c kernel lane with a supported
-experimental execution policy in this PR.
+For the Ref2VA and FL2VA h3.c comparison in this section, exact
+`boundary-layout` remains the only supported experimental execution policy.
+The dedicated FastH3 recipe uses its separately qualified `fasth3-metal` mode.
 
 ## Acceptance gates
 

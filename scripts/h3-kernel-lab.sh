@@ -131,6 +131,13 @@ case "$mode" in
   projections)
     run_release_test DiTShapeBenchTests/testMiniMaxH3QmmVsResidentBF16
     ;;
+  mxfp8)
+    export MERERUN_TEST_MLX_DEVICE=gpu
+    export MERERUN_H3_BENCH_ROWS="${MERERUN_H3_BENCH_ROWS:-128}"
+    export MERERUN_H3_BENCH_ROUNDS="${MERERUN_H3_BENCH_ROUNDS:-2}"
+    export MERERUN_H3_BENCH_ITERATIONS="${MERERUN_H3_BENCH_ITERATIONS:-2}"
+    run_release_test DiTShapeBenchTests/testMiniMaxH3MXFP8QQMM
+    ;;
   mpp-projections)
     export MERERUN_H3_MPP_BENCH=1
     export MERERUN_TEST_MLX_DEVICE=gpu
@@ -142,6 +149,14 @@ case "$mode" in
   modulation)
     export MERERUN_H3_BENCH_ROWS="${MERERUN_H3_BENCH_ROWS:-29018}"
     run_release_test DiTShapeBenchTests/testMiniMaxH3AdaLNRunModulation
+    ;;
+  attention-adaln)
+    export MERERUN_H3_ATTENTION_ADALN_BENCH=1
+    export MERERUN_TEST_MLX_DEVICE=gpu
+    export MERERUN_H3_BENCH_ROWS="${MERERUN_H3_BENCH_ROWS:-14958}"
+    export MERERUN_H3_BENCH_ROUNDS="${MERERUN_H3_BENCH_ROUNDS:-4}"
+    run_release_test \
+      MiniMaxH3FusedKernelTests/testPrepareAttentionInputReleaseBenchmark
     ;;
   gate-adaln)
     export MERERUN_H3_FUSED_KERNEL_BENCH=1
@@ -186,10 +201,22 @@ case "$mode" in
   affine-ffn)
     export MERERUN_H3_AFFINE_FFN_BENCH=1
     export MERERUN_TEST_MLX_DEVICE=gpu
+    export MERERUN_H3_BENCH_DTYPE="${MERERUN_H3_BENCH_DTYPE:-float32}"
     export MERERUN_H3_BENCH_ROWS="${MERERUN_H3_BENCH_ROWS:-14958}"
     export MERERUN_H3_BENCH_ROUNDS="${MERERUN_H3_BENCH_ROUNDS:-4}"
     run_release_test \
       MiniMaxH3FusedKernelTests/testFusedFeedForwardAffineInt8ReleaseBenchmark
+    ;;
+  affine-mlp-real)
+    default_fast_h3_root="${HOME}/Library/Application Support/MereRun/models/video-minimax-h3-fasth3-vsa-datafree-mlx"
+    export MERERUN_H3_AFFINE_MLP_REAL_STAGE_BENCH=1
+    export MERERUN_TEST_MLX_DEVICE=gpu
+    export MERERUN_H3_BENCH_DTYPE="${MERERUN_H3_BENCH_DTYPE:-float32}"
+    export MERERUN_H3_EXACT_KERNEL_MODEL_ROOT="${MERERUN_H3_EXACT_KERNEL_MODEL_ROOT:-$default_fast_h3_root}"
+    export MERERUN_H3_BENCH_ROWS="${MERERUN_H3_BENCH_ROWS:-89188}"
+    export MERERUN_H3_BENCH_ROUNDS="${MERERUN_H3_BENCH_ROUNDS:-2}"
+    run_release_test \
+      MiniMaxH3Tests/testInstalledAffineQ8MLPStageReleaseBenchmark
     ;;
   buffer-alias)
     export MERERUN_H3_BUFFER_DONATION_BENCH=1
@@ -261,7 +288,7 @@ case "$mode" in
     run_release_test MiniMaxH3Tests/testInstalledAudioVAEDecodeMatchesReference
     ;;
   *)
-    print -u2 "usage: scripts/h3-kernel-lab.sh [quick|attention|attention-block|projections|mpp-projections|modulation|gate-adaln|gate-adaln-int8|qkv-layout|qkv-direct|affine-oproj|affine-ffn|buffer-alias|exact-ref2va|block|post|dtype|turnover|boundary|gemm|gemm-block|vae|audio-parity]"
+    print -u2 "usage: scripts/h3-kernel-lab.sh [quick|attention|attention-block|projections|mxfp8|mpp-projections|modulation|attention-adaln|gate-adaln|gate-adaln-int8|qkv-layout|qkv-direct|affine-oproj|affine-ffn|buffer-alias|exact-ref2va|block|post|dtype|turnover|boundary|gemm|gemm-block|vae|audio-parity]"
     exit 64
     ;;
 esac

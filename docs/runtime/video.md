@@ -63,6 +63,10 @@ are an escape hatch, not the capability contract.
   uses MLX affine INT8/group-64 for eligible core linears while retaining the
   same conditioner, VAEs, cache pack, and provenance as compact BF16. Q8 is a
   storage and memory option, not an advertised speedup without measurements.
+- `video-minimax-h3-fasth3-vsa-datafree-mlx`: dedicated four-evaluation FastH3
+  package with a premerged affine Q8/group-64 student, Q8 compression gates,
+  source-bound AdaLN table, and compact Metal VSA-H3 routing in one explicit
+  license-accepting pull.
 - `video-minimax-h3-ref2va-mlx`: explicit-pull 8-bit Ref2VA package. Repeated
   `--reference image:path|video:path|audio:path` options retain request order.
   Video soundtracks are conditioned with their video; a standalone audio
@@ -131,6 +135,14 @@ mere.run adapter pull minimax-h3-lightx2v-4step
 mere.run adapter pull minimax-h3-lightx2v-8step-v1
 mere.run adapter pull minimax-h3-lightx2v-4step-v1-768p
 mere.run adapter pull minimax-h3-lightx2v-ref2v-4step-v0.1
+
+# The dedicated FastH3 package includes its base, adapter, and AdaLN cache.
+mere.run model pull video-minimax-h3-fasth3-vsa-datafree-mlx \
+  --accept-model-license
+mere.run video generate "a lighthouse in a winter storm" \
+  --model video-minimax-h3-fasth3-vsa-datafree-mlx \
+  --output ./lighthouse-fasth3.mp4
+
 mere.run video generate "a superhero waits beneath an umbrella at a bus stop" \
   --model video-minimax-h3-fl2va-8bit-mlx \
   --width 960 --height 544 \
@@ -216,6 +228,44 @@ against the former interpolation path covered 116,444,160 values: 88.40% were
 already exact, while the remaining values reached 0.125 maximum absolute error
 and 0.001427 RMSE. This proves why the exact table is preferable; it doesn't by
 itself constitute a same-seed visual or audio quality qualification.
+
+`video-minimax-h3-fasth3-vsa-datafree-mlx` is a self-contained FastVideo student
+package. One explicit model pull installs the premerged Q8 student, Q8 text
+encoder, both VAEs, tokenizer, Q8 compression gates, and source-bound AdaLN
+table. Generation doesn't require another model or adapter download. The recipe
+requires adapter strength `1.0`. Its
+four denoising evaluations use base sigma points `0.999`, `0.749`, `0.5`, and
+`0.25`, followed by the clean endpoint. MLX Metal runs FastH3's 64-token VSA
+tiles, per-head top-k routes at 90% video-key sparsity, and learned pooled-value
+compression gates. The Metal kernel consumes compact selected-video route
+tables, so video queries don't scan rejected tiles. Prefix queries remain
+dense, and video queries retain every prefix key tile. The recipe accepts
+text-only generation. It rejects frame conditioning, continuation, references,
+and additional H3 approximation modes.
+
+On affine Q8 FastH3 roots, Metal selects the `fasth3-metal` exact-kernel mode.
+This mode fuses attention AdaLN, post-attention gate and AdaLN, Q/K
+normalization and rotary embedding, FC1 and SwiGLU, and FC2. Float32 activation
+streams use Float32 SIMD-group matrix operands and accumulators. The mode runs
+inside FastH3's release-mode compiled block regions.
+
+The fused FC1 writes only the compact SwiGLU result. It doesn't create the
+9.53 GiB Float32 `[1, 89188, 28672]` projection for a 1,344 by 768 pixel,
+294-frame request. The remaining compact result is 4.76 GiB. At shapes where
+that result exceeds 4 GiB, the compiled runner evaluates FC1 and SwiGLU before
+FC2 to preserve 64-bit indexing. Each kernel validates its complete shape,
+dtype, and affine Q8/group-64 contract before dispatch. Set
+`MERERUN_H3_EXACT_KERNELS=disabled` only when comparing against the portable
+MLX path. To select the combined mode explicitly, set
+`MERERUN_H3_EXACT_KERNELS=fasth3-metal`.
+
+The package build uses
+`scripts/model-conversion/merge_minimax_h3_fasth3_q8.py` after creating the
+source-bound table with `prepare_minimax_h3_fasth3_vsa.py`. The merge script
+verifies all 362 LoRA pairs, 82 direct differences, and 50 compression gates.
+It merges 208 inference linear targets with FP32 accumulation, rounds once to
+BF16, and writes MLX affine Q8/group-64 weights. End users who pull the managed
+model don't run either build step.
 
 `--h3-frame FRAME:PATH` adds an FL2VA keyframe at an exact zero-based output
 frame. Values may be repeated up to the released 12-frame condition limit and

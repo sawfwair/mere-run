@@ -803,6 +803,31 @@ final class VideoCommandTests: XCTestCase {
         XCTAssertTrue(action?.command?.argv.contains(missingAdapter.path) == true)
     }
 
+    func testManagedFastH3PreflightUsesEmbeddedAdapterWithoutAnotherDownload() throws {
+        let command = try VideoGenerate.parse([
+            "a red kite crosses a bright coastal sky",
+            "--model", ModelResolver.ModelID.miniMaxH3FastH3VSADataFreeMLX.rawValue,
+        ])
+        XCTAssertNil(command.h3Adapter)
+
+        let envelope = command.makePreflightEnvelope(
+            outputURL: makeTempOutput(name: "h3-fasth3-managed.mp4"),
+            fileManager: .default,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+        XCTAssertNil(envelope.request.h3Adapter)
+        XCTAssertEqual(envelope.result.plan.resolvedSteps, 5)
+        XCTAssertEqual(
+            envelope.result.plan.h3Adapter,
+            MiniMaxH3TurboAdapter.fastH3VSADataFreeFilename
+        )
+        XCTAssertFalse(envelope.diagnostics.contains { $0.id == "h3_adapter_missing" })
+        let actionArguments = envelope.actions.first {
+            $0.id == "start-video-generation"
+        }?.command?.argv
+        XCTAssertFalse(actionArguments?.contains("--h3-adapter") == true)
+    }
+
     func testMiniMaxH3LightX2VV1PreflightSelectsPublishedEightEvaluations() throws {
         let command = try VideoGenerate.parse([
             "a train crosses a bright alpine valley",

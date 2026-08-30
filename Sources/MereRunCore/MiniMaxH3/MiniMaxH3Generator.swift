@@ -42,7 +42,7 @@ extension MiniMaxH3ExactKernelMode {
             false
         case .boundaryLayout:
             sequenceLength > MiniMaxH3DenoiseExecutionPolicy.blockwiseSequenceThreshold
-        case .affineQ8:
+        case .affineQ8, .affineQ8MLP, .fastH3Metal:
             true
         }
     }
@@ -52,12 +52,30 @@ extension MiniMaxH3ExactKernelMode {
         case nil, "", "disabled": .disabled
         case MiniMaxH3ExactKernelMode.boundaryLayout.rawValue: .boundaryLayout
         case MiniMaxH3ExactKernelMode.affineQ8.rawValue: .affineQ8
+        case MiniMaxH3ExactKernelMode.affineQ8MLP.rawValue: .affineQ8MLP
+        case MiniMaxH3ExactKernelMode.fastH3Metal.rawValue: .fastH3Metal
         case .some(let value):
             throw MiniMaxH3GeneratorError.invalidOptions(
                 "MERERUN_H3_EXACT_KERNELS must be disabled, boundary-layout, "
-                    + "or affine-q8, not \(value)"
+                    + "affine-q8, affine-q8-mlp, or fasth3-metal, not \(value)"
             )
         }
+    }
+
+    static func resolveForRuntime(
+        environmentValue: String?,
+        usesFastH3VSA: Bool,
+        supportsAffineQ8ExactKernels: Bool,
+        usesResidentBF16: Bool
+    ) throws -> Self {
+        let configured = try resolve(environmentValue: environmentValue)
+        if environmentValue == nil,
+           usesFastH3VSA,
+           supportsAffineQ8ExactKernels,
+           !usesResidentBF16 {
+            return .fastH3Metal
+        }
+        return configured
     }
 }
 
@@ -682,6 +700,18 @@ public struct MiniMaxH3GenerationOptions: Sendable, Hashable {
                     )
                 }
             }
+            if adapterInferenceRecipe.requiresTextOnlyConditioning,
+               firstFrameURL != nil || lastFrameURL != nil || !frameInputs.isEmpty {
+                throw MiniMaxH3GeneratorError.invalidOptions(
+                    "FastH3 Preview v1 supports text-to-audio/video only; frame conditioning is unsupported"
+                )
+            }
+            if adapterInferenceRecipe.requiresFastH3VSA,
+               accelerationMode != .quality {
+                throw MiniMaxH3GeneratorError.invalidOptions(
+                    "FastH3 VSA cannot be combined with additional H3 approximation modes; use --h3-acceleration quality"
+                )
+            }
         }
         let resolvedSteps: Int
         if let steps {
@@ -854,6 +884,10 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         progressHandler: (@Sendable (MiniMaxH3GenerationProgress) -> Void)?
     ) throws -> (transformer: MiniMaxH3Transformer, adaLNCache: MiniMaxH3AdaLNCache?) {
         let modelSourceIdentity = try resources.adaLNCacheSourceIdentity()
+        let adapterInferenceRecipe = adapterURL.map(MiniMaxH3TurboAdapter.inferenceRecipe(for:))
+        let usesPremergedFastH3Student = adapterURL.map(
+            MiniMaxH3TurboAdapter.isPremergedFastH3Artifact
+        ) ?? false
         let cacheKey = DenoisingRuntimeCacheKey(
             modelRoot: resources.rootURL.resolvingSymlinksInPath(),
             modelSourceIdentity: modelSourceIdentity,
@@ -876,7 +910,33 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         }
         let adaLNCache: MiniMaxH3AdaLNCache?
         let cachedAdaLNForLoading: MiniMaxH3AdaLNCache?
-        if resources.usesShardedBF16Transformer {
+        if adapterInferenceRecipe?.requiresFastH3VSA == true,
+           !resources.usesShardedBF16Transformer {
+            guard try [.compactBF16, .affineQ8].contains(resources.transformerStorage()),
+                  let adapterURL else {
+                throw MiniMaxH3GeneratorError.invalidOptions(
+                    "FastH3 VSA requires the compact BF16, affine Q8, or full sharded BF16 MiniMax-H3 transformer"
+                )
+            }
+            let cacheURL = adapterURL.deletingLastPathComponent().appending(
+                path: MiniMaxH3TurboAdapter.fastH3AdaLNCacheFilename
+            )
+            guard FileManager.default.fileExists(atPath: cacheURL.path) else {
+                throw MiniMaxH3GeneratorError.invalidOptions(
+                    "FastH3 VSA requires its source-bound AdaLN cache at \(cacheURL.path). "
+                        + "Build it with scripts/model-conversion/prepare_minimax_h3_fasth3_vsa.py."
+                )
+            }
+            let cache = try MiniMaxH3AdaLNCache.load(
+                from: cacheURL,
+                configuration: .init(configuration),
+                videoSchedule: videoSchedule,
+                audioSchedule: audioSchedule,
+                sourceIdentity: MiniMaxH3TurboAdapter.fastH3SourceIdentity
+            )
+            adaLNCache = cache
+            cachedAdaLNForLoading = cache
+        } else if resources.usesShardedBF16Transformer {
             // A legacy full BF16 root retains the schedule-only projections.
             // Build an exact table for the requested run; compact managed roots
             // select their source-bound production cache pack below.
@@ -911,7 +971,6 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                 ))
             }
         )
-        let adapterInferenceRecipe = adapterURL.map(MiniMaxH3TurboAdapter.inferenceRecipe(for:))
         if let adapterURL, resources.usesShardedBF16Transformer {
             try MiniMaxH3TurboAdapter.install(
                 url: adapterURL,
@@ -931,8 +990,10 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         } else {
             resolvedAdaLNCache = adaLNCache
         }
+        let effectiveWeightMode: MiniMaxH3TransformerWeightMode =
+            usesPremergedFastH3Student && weightMode == .automatic ? .quantized : weightMode
         let shouldMaterialize = try MiniMaxH3ResidentBF16Policy.shouldMaterialize(
-            mode: weightMode,
+            mode: effectiveWeightMode,
             physicalMemoryBytes: ProcessInfo.processInfo.physicalMemory,
             estimatedResidentBytes: transformer.estimatedResidentBF16ByteCount,
             sequenceLength: sequenceLength,
@@ -1032,11 +1093,19 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
             keys: ["MERERUN_H3_PROFILE_BLOCKS"],
             prefix: "[minimax-h3-profile]"
         )
+        let fastVSAProfileLogger = MereRunRuntimeDebug.logger(
+            keys: ["MERERUN_H3_PROFILE_FASTVSA"],
+            prefix: "[minimax-h3-fastvsa-profile]"
+        )
         let stepProfileLogger = MereRunRuntimeDebug.logger(
             keys: ["MERERUN_H3_PROFILE_STEPS"],
             prefix: "[minimax-h3-step-profile]"
         )
         blockProfileLogger?("rows=\(layout.sequenceLength) blocks=\(transformer.configuration.layerCount)")
+        fastVSAProfileLogger?(
+            "rows=\(layout.sequenceLength) blocks=\(transformer.configuration.layerCount) "
+                + "kernel=\(MiniMaxH3FastVSAKernelMode.runtimeDefault.rawValue)"
+        )
         stepProfileLogger?(
             "rows=\(layout.sequenceLength) steps=\(videoSchedule.timesteps.count) "
                 + "resident_bf16=\(transformer.usesResidentBF16)"
@@ -1053,6 +1122,17 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                 ))
             }
         }
+        transformer.fastH3BlockPhaseTimingHandler = fastVSAProfileLogger.map { logger in
+            { index, projection, attention, postAttention in
+                logger(String(
+                    format: "block=%02d projection=%.3f attention=%.3f post_attention=%.3f",
+                    index,
+                    projection,
+                    attention,
+                    postAttention
+                ))
+            }
+        }
         let context = transformer.prepare(textStates: promptStates, layout: layout)
         var videoRows = initialVideoRows
         var audioRows = initialAudioRows
@@ -1066,8 +1146,11 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         // compiled whole-step transform; very large graphs also stay blockwise
         // to avoid the macOS watchdog.
         let environment = ProcessInfo.processInfo.environment
-        let exactKernelMode = try MiniMaxH3ExactKernelMode.resolve(
-            environmentValue: environment["MERERUN_H3_EXACT_KERNELS"]
+        let exactKernelMode = try MiniMaxH3ExactKernelMode.resolveForRuntime(
+            environmentValue: environment["MERERUN_H3_EXACT_KERNELS"],
+            usesFastH3VSA: transformer.usesFastH3VSA,
+            supportsAffineQ8ExactKernels: transformer.supportsAffineQ8ExactKernels,
+            usesResidentBF16: transformer.usesResidentBF16
         )
         if exactKernelMode != .disabled {
             guard accelerationMode == .quality else {
@@ -1076,11 +1159,11 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
                 )
             }
         }
-        if exactKernelMode == .affineQ8 {
+        if exactKernelMode.usesAffineQ8FeedForward {
             guard transformer.supportsAffineQ8ExactKernels,
                   !transformer.usesResidentBF16 else {
                 throw MiniMaxH3GeneratorError.invalidOptions(
-                    "affine-q8 exact kernels require the unadapted managed Q8/group-64 transformer"
+                    "affine Q8 exact kernels require the managed Q8/group-64 transformer"
                 )
             }
         }
@@ -1158,24 +1241,29 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         let tokenReduction = tokenReductionPolicy.map { _ in
             transformer.prepareTokenReduction(context: context)
         }
-        let executionMode = exactKernelMode.requiresEagerExecution(
-            sequenceLength: layout.sequenceLength
-        )
-            ? MiniMaxH3DenoiseExecutionMode.eagerStep
-            : layerThinningPolicy == nil
-            && velocityReusePolicy == nil
-            && tokenReductionPolicy == nil
-            && adaptiveCachePolicy == nil
-            && blockReusePolicy == nil
-            && dynamicSparseAttentionPolicy == nil
-            ? MiniMaxH3DenoiseExecutionPolicy.mode(
+        let executionMode: MiniMaxH3DenoiseExecutionMode
+        if transformer.usesFastH3VSA {
+            executionMode = environment["MERERUN_H3_EXECUTION_MODE"]?.lowercased() == "eager"
+                ? .eagerStep
+                : .blockwiseCompiled
+        } else if exactKernelMode.requiresEagerExecution(sequenceLength: layout.sequenceLength) {
+            executionMode = .eagerStep
+        } else if layerThinningPolicy == nil,
+                  velocityReusePolicy == nil,
+                  tokenReductionPolicy == nil,
+                  adaptiveCachePolicy == nil,
+                  blockReusePolicy == nil,
+                  dynamicSparseAttentionPolicy == nil {
+            executionMode = MiniMaxH3DenoiseExecutionPolicy.mode(
                 usesResidentBF16: transformer.usesResidentBF16,
                 sequenceLength: layout.sequenceLength,
                 usesBlockProfiling: blockProfileLogger != nil,
                 denoiseStepCount: videoSchedule.timesteps.count,
                 profilingOverride: ProcessInfo.processInfo.environment["MERERUN_H3_EXECUTION_MODE"]
             )
-            : .blockwiseCompiled
+        } else {
+            executionMode = .blockwiseCompiled
+        }
         let usesCompiledStep = executionMode == .compiledStep
         transformer.usesBlockwiseCompilation = executionMode == .blockwiseCompiled
         let attentionKernelSchedule = MiniMaxH3DenoiseExecutionPolicy.attentionKernelSchedule(
@@ -1200,12 +1288,13 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         transformer.usesFusedPostAttention = ProcessInfo.processInfo
             .environment["MERERUN_H3_FUSED_POST_ATTENTION"] == "1"
         transformer.usesLayerwiseEvaluation = executionMode.usesLayerwiseEvaluation
-        transformer.clearsCacheAfterLayerwiseEvaluation = false
+        transformer.clearsCacheAfterLayerwiseEvaluation = executionMode == .eagerStep
         let attentionHeadsPerKernel = transformer.maximumAttentionHeadsPerKernel
             ?? transformer.configuration.attentionHeadCount
         stepProfileLogger?(
             "execution_mode=\(executionMode) acceleration=\(accelerationMode.rawValue) "
                 + "exact_kernels=\(exactKernelMode.rawValue) "
+                + "fastvsa_kernel=\(MiniMaxH3FastVSAKernelMode.runtimeDefault.rawValue) "
                 + "fused_post_attention=\(transformer.usesFusedPostAttention) "
                 + "attention_query_tokens=\(transformer.maximumAttentionQueryTokensPerKernel) "
                 + "attention_heads_per_kernel=\(attentionHeadsPerKernel) "
@@ -1631,6 +1720,11 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
         let latentWidth = options.internalWidth / 16
         let audioFrames = MiniMaxH3Geometry.audioLatentFrameCount(for: options.numFrames)
         if let continuation {
+            if options.adapterInferenceRecipe?.requiresTextOnlyConditioning == true {
+                throw MiniMaxH3GeneratorError.invalidOptions(
+                    "FastH3 Preview v1 supports text-to-audio/video only; continuation is unsupported"
+                )
+            }
             guard !options.usesReducedRenderCanvas else {
                 throw MiniMaxH3GeneratorError.invalidOptions(
                     "reduced internal rendering does not yet support continuation or sliding windows"
@@ -1765,14 +1859,17 @@ public final class MiniMaxH3Generator: @unchecked Sendable {
             seed: options.seed,
             latentFrames: audioFrames
         )
-        let videoSchedule = try MiniMaxH3Schedule(
-            pointCount: options.steps,
-            shift: options.adapterInferenceRecipe?.videoFlowShift ?? configuration.videoFlowShift
-        )
-        let audioSchedule = try MiniMaxH3Schedule(
-            pointCount: options.steps,
-            shift: options.adapterInferenceRecipe?.audioFlowShift ?? configuration.audioFlowShift
-        )
+        let videoShift = options.adapterInferenceRecipe?.videoFlowShift ?? configuration.videoFlowShift
+        let audioShift = options.adapterInferenceRecipe?.audioFlowShift ?? configuration.audioFlowShift
+        let videoSchedule: MiniMaxH3Schedule
+        let audioSchedule: MiniMaxH3Schedule
+        if let baseSigmas = options.adapterInferenceRecipe?.baseDenoisingSigmas {
+            videoSchedule = try MiniMaxH3Schedule(baseSigmas: baseSigmas, shift: videoShift)
+            audioSchedule = try MiniMaxH3Schedule(baseSigmas: baseSigmas, shift: audioShift)
+        } else {
+            videoSchedule = try MiniMaxH3Schedule(pointCount: options.steps, shift: videoShift)
+            audioSchedule = try MiniMaxH3Schedule(pointCount: options.steps, shift: audioShift)
+        }
 
         progressHandler?(.init(stage: .loadingTransformer, stepIndex: 0, totalSteps: options.steps - 1))
         try withMiniMaxH3AutoreleasePool {

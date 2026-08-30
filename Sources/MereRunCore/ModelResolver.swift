@@ -147,6 +147,7 @@ public struct ModelResolver {
         case miniMaxH3FL2VAMLX = "video-minimax-h3-fl2va-mlx"
         case miniMaxH3FL2VABF16MLX = "video-minimax-h3-fl2va-bf16-mlx"
         case miniMaxH3FL2VAQ8MLX = "video-minimax-h3-fl2va-8bit-mlx"
+        case miniMaxH3FastH3VSADataFreeMLX = "video-minimax-h3-fasth3-vsa-datafree-mlx"
         case miniMaxH3Ref2VAMLX = "video-minimax-h3-ref2va-mlx"
         case cosmos3EdgeMLX = "video-cosmos3-edge-mlx"
         case scail2Video14BMLX = "video-scail2-14b-mlx"

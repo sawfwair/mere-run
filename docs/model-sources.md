@@ -167,6 +167,7 @@ an effective overlay; they are not a second capability catalog.
 | `video` | `video-minimax-h3-fl2va-mlx` |
 | `video` | `video-minimax-h3-fl2va-bf16-mlx` |
 | `video` | `video-minimax-h3-fl2va-8bit-mlx` |
+| `video` | `video-minimax-h3-fasth3-vsa-datafree-mlx` |
 | `video` | `video-minimax-h3-ref2va-mlx` |
 | `video` | `video-cosmos3-edge-mlx` |
 | `video` | `video-scail2-14b-mlx` |
@@ -219,7 +220,7 @@ validates all configured models before downloading any; both accept the same
 | `vision-segment-sam31` | Meta SAM License custom use, trade-control, attribution, and redistribution conditions |
 | `vision-face-buffalo-l` | InsightFace pretrained weights; non-commercial research use |
 | `vision-embed-olmoearth-v12-{nano,tiny,small,base}` | OlmoEarth Artifact License; prohibited military, defense, intelligence, human-surveillance, policing, and listed extractive uses |
-| `video-minimax-h3-fl2va-mlx`, `video-minimax-h3-fl2va-bf16-mlx`, `video-minimax-h3-fl2va-8bit-mlx`, `video-minimax-h3-ref2va-mlx` | MiniMax-H3 Community License; use, distribution, and display are excluded in the United States, European Union, United Kingdom, and Republic of Korea, with downstream notice and safeguard obligations |
+| `video-minimax-h3-fl2va-mlx`, `video-minimax-h3-fl2va-bf16-mlx`, `video-minimax-h3-fl2va-8bit-mlx`, `video-minimax-h3-fasth3-vsa-datafree-mlx`, `video-minimax-h3-ref2va-mlx` | MiniMax-H3 Community License; use, distribution, and display are excluded in the United States, European Union, United Kingdom, and Republic of Korea, with downstream notice and safeguard obligations |
 | `image-3d-trellis2-4b` | the mounted DINOv3 encoder is gated under Meta's custom DINOv3 License |
 | `music-muscriptor-{small,medium,large}` | CC BY-NC 4.0 model weights |
 | `sfx-woosh-*` | CC BY-NC 4.0 Woosh or MMAudio Synchformer weights |
@@ -1372,11 +1373,40 @@ The optional `minimax-h3-turbo-4step` runtime adapter is the EMA checkpoint
 `5a6eeba171cf183020a4ad48774bb2968f29f8168afd6ec17a04987f3528b4ea`.
 The adapter card declares Apache-2.0, but using it does not replace or relax
 the MiniMax-H3 Community License governing the required BF16 base model.
-The runtime remaps the adapter's fused QKV output rows into the same global
-Q/K/V slab order as the converted base and applies all 259 LoRA pairs as live
-activation deltas, including the schedule-only AdaLN projections.
 
-The second managed H3 adapter, `minimax-h3-lightx2v-4step`, pins
+The managed `minimax-h3-fasth3-vsa-datafree-4step` adapter pins
+`vsa-datafree/adapter_model.safetensors` from
+`FastVideo/FastVideo-FastH3-4-step-Preview-v1-LoRA` at immutable revision
+`bcf40ca6f457ed66f8badf13514943e390205fca`. The catalog verifies its exact
+5,339,117,712-byte length and SHA-256
+`42dc502a2078f166c396a1fa75f29728d1844363652d345d5ef3e2b444ed6470`.
+The adapter contains 362 LoRA pairs, 82 direct differences, and 50 VSA-H3
+compression-gate weights. The runtime consumes the released `fastvideo-lora-v2`
+format without producing a fused checkpoint.
+
+The managed `video-minimax-h3-fasth3-vsa-datafree-mlx` package stores a
+premerged affine Q8/group-64 student in
+`Sawfwair/MiniMax-H3-FastH3-VSA-DataFree-MLX-Q8` at immutable revision
+`6068ae3dafafb1e4b2afb29f3109745a16912e07`. The package also includes the Q8
+text encoder, both VAEs, tokenizer, Q8 compression gates, and source-bound AdaLN
+table. One explicit license-accepting pull installs every asset used by
+supported FastH3 inference. The runtime doesn't fetch a second model or adapter
+during generation.
+
+FastH3 changes the base transformer's time and AdaLN projections. The
+preparation script range-reads the required tensors from
+`FastVideo/FastVideo-FastH3-4-step-Preview-v1-VSA-DataFree` at immutable
+revision `b65818d41939b5085451074fe8ca8b799f8d4921`. The script verifies the
+transformer index SHA-256, evaluates the four released DMD points with MLX
+Metal, and stores the source-bound cache beside the compression gates. The
+offline merge tool verifies all 362 LoRA pairs, 82 direct differences, and 50
+compression gates. It merges 208 inference linear targets with FP32
+accumulation, rounds once to BF16, and encodes the result as MLX affine
+Q8/group-64. The runtime loads the premerged transformer and doesn't apply live
+LoRA deltas. The MiniMax-H3 Community License continues to govern the base and
+student weights.
+
+Another managed H3 adapter, `minimax-h3-lightx2v-4step`, pins
 `minimax_h3_fl2v_turbo_4step_v0.1.safetensors` from
 `lightx2v/Minimax-h3-Turbo` at immutable commit
 `b65e359c0d128b3c5e08e0f5bf2791b794378588`. The catalog verifies its exact
