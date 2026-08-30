@@ -8,6 +8,14 @@ Reviewed at commit `5525608` against `Sources/MereRunCLI`,
 `Sources/MereRunContract/CommandCapabilityContract.swift`, and
 `apps/macos/MereRunStudio`.
 
+> **Resolved.** Every gap below is closed. The contract now describes 127 of the
+> CLI's 158 leaf commands, Studio owns a surface for all 127, and the remaining
+> 31 are named exemptions in `contractExemptCommandIDs` rather than silent
+> absences. `everyPublicCLICommandIsCatalogedOrExplicitlyExempt` in
+> `Tests/MereRunCLITests/CapabilityCatalogTests.swift` now walks the CLI command
+> tree itself, closing the unguarded link this review identified. The findings
+> are kept as the audit that motivated the change.
+
 ## Summary
 
 Studio is not drifting from the contract it tracks. It matches that contract
@@ -20,13 +28,13 @@ documented product boundaries or by aliases Studio already covers elsewhere.
 The remaining **26 commands across seven families are genuine gaps**: they ship
 in the CLI, they have no macOS Studio path, and no test reports them.
 
-| Measure | Count |
-|---|---|
-| CLI leaf commands | 158 |
-| Commands in the shared capability contract | 101 |
-| Commands with no contract entry | 57 |
-| Explained by external boundaries or aliases | 31 |
-| Genuine first-class gaps | 26 |
+| Measure | Before | After |
+|---|---|---|
+| CLI leaf commands | 158 | 158 |
+| Commands in the shared capability contract | 101 | 127 |
+| Commands with no contract entry | 57 | 31 |
+| Explained by external boundaries or aliases | 31 | 31 |
+| Genuine first-class gaps | 26 | 0 |
 
 ## Why the gaps are invisible
 
@@ -50,8 +58,8 @@ differently.
    asserts set equality between the app's capability IDs and the contract's.
    This is the strongest guard in the chain, and it works.
 
-The unguarded link is **CLI to contract**. Adding a command to the CLI does not
-require adding it to the contract, and nothing fails when you skip that step.
+The unguarded link was **CLI to contract**. Adding a command to the CLI did not
+require adding it to the contract, and nothing failed when you skipped that step.
 Because the Studio gate is keyed to the contract rather than to the CLI, an
 omission at that first link propagates silently: the command ships, Studio
 never gets a surface, and every test still passes.
@@ -191,23 +199,31 @@ workflows share the Image workspace instead of being duplicated."
 **Contract introspection — 1 command.** `mere.run catalog` emits the contract
 that Studio compiles against, so the app has no need to shell out for it.
 
-## Recommendations
+## What changed
 
-1. **Close the unguarded link first.** Add a test that walks
-   `MereRunCLI.configuration.subcommands` and asserts every leaf command either
-   has a contract entry or appears in an explicit, named exemption list. The
-   exemption list is where `graph`, `executor`, `relay serve`, the
-   `image-to-3d` aliases, and `catalog` are recorded as deliberate, which turns
-   today's undocumented absence into a reviewed decision. Without this, any
-   surface work done now will drift again.
+1. **The unguarded link is closed.**
+   `everyPublicCLICommandIsCatalogedOrExplicitlyExempt` walks
+   `MereRunCLI.configuration.subcommands` and requires every public leaf command
+   to have a contract entry or an entry in `contractExemptCommandIDs` carrying
+   the reason it stays CLI-only. The test also rejects a stale exemption — one
+   that no longer matches a CLI command, or one that has since been cataloged —
+   so the list cannot rot. `graph`, `executor`, `relay serve`, the
+   `image-to-3d` aliases, and `catalog` are recorded there as deliberate
+   decisions rather than undocumented absences.
 
-2. **Then close the gaps by impact.** Geospatial is the only missing product
-   pillar and needs a new `CommandCategory`. The benchmark suites, model store
-   locations, and plugin rollback are additions to workspaces that already
-   exist. Configuration list and path extend an existing utility set.
-   `speech listen` and `vision serve` each need a streaming surface rather than
-   a form.
+2. **All 26 capabilities are cataloged and surfaced.** The contract grew from
+   101 to 127 commands, each with the flags its ArgumentParser command actually
+   declares, and `CapabilityCatalogTests` verifies every one against CLI help.
+   Studio gained 24 templates and 2 app-owned utilities, so the inverse coverage
+   test still holds at set equality.
 
-3. **Correct the stale count.** `docs/macos-studio-roadmap.md` describes the
-   app as consuming an "89-command capability contract." The contract now holds
-   101 commands.
+3. **Geospatial is a first-class category.** `CommandCategory.geospatial` carries
+   flood, fire, TESSERA, and OlmoEarth. Benchmarks, model store locations, and
+   plugin details/run/rollback extend the Models and Plugins workspaces.
+   `config list` and `config path` join the existing configuration utilities as
+   `loadConfigurationSummary()` and `loadConfigurationPath()`. `speech listen`
+   and `vision serve` are typed resident-service surfaces.
+
+4. **Stale counts corrected.** `docs/macos-studio-roadmap.md` described the app
+   as consuming an "89-command capability contract"; it now names the current
+   127 and records the external boundaries as named exemptions.

@@ -141,18 +141,31 @@ channel selection and copyable pinned install commands, confirms install or
 update, and runs the plugin's fixed doctor verb. Plugin implementations remain
 out-of-process.
 
-Setup, Qwen3.6 MTP and Laguna DFlash benchmarks,
-API serving, and Open WebUI also use contract-backed typed forms. Laguna is
+Setup, the complete `model benchmark` family — fused Lite/Comprehensive quality
+suites, chat, code, VLM, tool-call and tool-continuation slices, Gemma4 KV and
+MTP, Qwen3.6 MTP, Laguna DFlash, and API workload replay — API serving, and Open
+WebUI also use contract-backed typed forms. Laguna is
 available as a managed chat/API engine, while Chat and Code expose min-p and
 the runtime-policy editors can persist or clear it. The run console recognizes
 adapter catalogs and structured JSON receipts, and can copy or save a receipt.
 Hugging Face tokens, API keys, and the Open WebUI admin password cross the
 process boundary through environment variables instead of appearing in argv.
+Geospatial is a first-class category covering TerraMind flood and fire tile
+inference and TESSERA and OlmoEarth encoders. Models adds read-only store
+locations — search roots and explicit model bindings — so an external volume is
+registered without leaving the app. Plugins covers catalog details, out-of-PATH
+runs, and rollback to a retained signed bundle. Voice Studio streams live
+microphone transcription in addition to file transcription, and Serving hosts
+the resident vision grounding endpoint.
+
 The executable contract test requires every local Advanced template and every
 app-owned guide/config helper to resolve to a CLI help-verified capability.
 The inverse coverage test also requires every command in the shared contract to
-have an App-owned template or utility surface, so a newly cataloged CLI command
-cannot silently ship without a macOS path.
+have an App-owned template or utility surface. A third test walks the CLI
+command tree itself and requires every public leaf command to be either
+cataloged or listed in `contractExemptCommandIDs` with the reason it stays
+CLI-only, so a new CLI command cannot silently ship without a macOS path or a
+recorded decision that it should not have one.
 
 The public `scripts/build_mere_run_app.sh` path produces a contributor/CI app
 bundle and verifies its nested-code layout. Maintainer-only Developer ID

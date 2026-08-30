@@ -8,11 +8,12 @@ identifies which findings no longer describe the product.
 > **Implementation update (July 27, 2026):** This document preserves the original
 > pre-parity audit and sequencing rationale. The capability gaps in the
 > historical findings no longer describe the product. The app consumes the shared
-> machine-readable 89-command capability contract and has executable drift tests
+> machine-readable 127-command capability contract and has executable drift tests
 > for every local Advanced template. Studio provides typed Text, Image, Video,
-> Music, Speech, SFX, Vision/VFX, adapter, run, world, setup, model, plugin,
-> Qwen3.6/Laguna benchmark, Open WebUI, and API workflows; Graph Studio and Node remain explicit
-> external boundaries. Structured receipts, file pickers, validation, retry and
+> Music, Speech, SFX, Vision/VFX, geospatial, adapter, run, world, setup, model,
+> model-location, plugin, benchmark, Open WebUI, and API workflows; Graph Studio
+> and Node remain explicit external boundaries, now recorded as named exemptions
+> in the CLI coverage test rather than as silent absences. Structured receipts, file pickers, validation, retry and
 > resume controls are implemented. See
 > [`apps/macos/README.md`](../apps/macos/README.md) for the
 > implemented surface. On July 27, 2026, the release pipeline produced a Developer

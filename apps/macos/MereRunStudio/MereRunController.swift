@@ -923,6 +923,20 @@ final class MereRunController: ObservableObject {
         return result.exitCode == 0
     }
 
+    /// Reads every persisted configuration value with secrets masked, for the Settings summary.
+    func loadConfigurationSummary() async -> String {
+        let result = await utilityCommandResult(args: ["config", "list"], masksSecrets: false)
+        guard result.exitCode == 0 else { return "" }
+        return result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    /// Resolves the on-disk configuration file path so Settings can reveal it in Finder.
+    func loadConfigurationPath() async -> String {
+        let result = await utilityCommandResult(args: ["config", "path"], masksSecrets: false)
+        guard result.exitCode == 0 else { return "" }
+        return result.stdout.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     /// Lists saved voice-clone profiles via `speech profile list` (tab-separated id/name/updated).
     func loadVoiceProfiles() async -> [StudioVoiceProfile] {
         let result = await utilityCommandResult(args: ["speech", "profile", "list"])

@@ -43,6 +43,8 @@ final class StudioTypesTests: XCTestCase {
             ),
             ("config.get", ["config", "get", "hf-endpoint", "--reveal"]),
             ("config.unset", ["config", "unset", "hf-token"]),
+            ("config.list", ["config", "list"]),
+            ("config.path", ["config", "path"]),
         ]
 
         for (capabilityID, arguments) in fixtures {
@@ -67,6 +69,8 @@ final class StudioTypesTests: XCTestCase {
             "config.set",
             "config.get",
             "config.unset",
+            "config.list",
+            "config.path",
         ]
         let appCapabilityIDs = templateCapabilityIDs.union(appUtilityCapabilityIDs)
         let sharedCapabilityIDs = Set(
