@@ -32,10 +32,16 @@ final class CLIBootstrapInstallerTests: XCTestCase {
             .appendingPathComponent("mere.run", isDirectory: false)
 
         try makePayload(at: payloadURL)
+        try FileManager.default.createDirectory(
+            at: destinationURL.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        try "stale".write(to: destinationURL, atomically: true, encoding: .utf8)
 
         try CLIBootstrapInstaller.installBundledCLI(from: payloadURL, to: destinationURL)
 
         XCTAssertTrue(FileManager.default.isExecutableFile(atPath: destinationURL.path))
+        XCTAssertEqual(try String(contentsOf: destinationURL, encoding: .utf8), "#!/usr/bin/env bash\n")
         XCTAssertTrue(
             FileManager.default.fileExists(
                 atPath: destinationURL
@@ -49,6 +55,14 @@ final class CLIBootstrapInstallerTests: XCTestCase {
                 atPath: destinationURL
                     .deletingLastPathComponent()
                     .appendingPathComponent("mlx-swift_Cmlx.bundle", isDirectory: true)
+                    .path
+            )
+        )
+        XCTAssertTrue(
+            FileManager.default.fileExists(
+                atPath: destinationURL
+                    .deletingLastPathComponent()
+                    .appendingPathComponent("libonnxruntime.1.20.1.dylib", isDirectory: false)
                     .path
             )
         )
@@ -89,6 +103,11 @@ final class CLIBootstrapInstallerTests: XCTestCase {
         try fm.createDirectory(
             at: payloadURL.appendingPathComponent("Resources", isDirectory: true),
             withIntermediateDirectories: true
+        )
+        try "fake".write(
+            to: payloadURL.appendingPathComponent("libonnxruntime.1.20.1.dylib", isDirectory: false),
+            atomically: true,
+            encoding: .utf8
         )
         try "fake".write(
             to: payloadURL.appendingPathComponent("Resources/default.metallib", isDirectory: false),

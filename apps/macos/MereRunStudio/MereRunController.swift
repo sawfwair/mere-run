@@ -881,7 +881,7 @@ final class MereRunController: ObservableObject {
     }
 
     func installTerminalCLI() {
-        let outcome = CLIBootstrapInstaller.installBundledCLIIfNeeded()
+        let outcome = CLIBootstrapInstaller.installBundledCLI()
         handleCLIInstall(outcome)
         refreshResolvedCLI()
     }
@@ -1833,9 +1833,6 @@ final class MereRunController: ObservableObject {
         case .failed(let message):
             status = "CLI install failed"
             append("Terminal CLI install failed: \(message)", stream: .stderr)
-        case .alreadyInstalled(let url):
-            status = "CLI already installed"
-            append("Terminal CLI already installed at \(url.abbreviatedForDisplay).", stream: .system)
         case .skippedNoBundledCLI:
             status = "No bundled CLI"
             append("Terminal CLI install skipped: bundled CLI payload was not found.", stream: .stderr)
