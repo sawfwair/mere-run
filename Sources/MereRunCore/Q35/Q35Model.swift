@@ -156,7 +156,8 @@ final class Q35DecoderLayer: Module {
         cache: Q35LayerCache?,
         inputIds: MLXArray? = nil,
         positionIds: MLXArray? = nil,
-        targetVerify: Bool = false
+        targetVerify: Bool = false,
+        preparedPLEInput: Q38PLELayer.PreparedInput? = nil
     ) -> MLXArray {
         if let attentionHyperConnection, let mlpHyperConnection {
             var hyper = x
@@ -167,7 +168,13 @@ final class Q35DecoderLayer: Module {
                 } else {
                     linearCache = nil
                 }
-                hyper = hyper + ple(hyper, inputIds: inputIds, cache: linearCache, targetVerify: targetVerify)
+                hyper = hyper + ple(
+                    hyper,
+                    inputIds: inputIds,
+                    cache: linearCache,
+                    targetVerify: targetVerify,
+                    preparedInput: preparedPLEInput
+                )
             }
 
             let attentionMix = attentionHyperConnection.mix(hyper)
@@ -312,6 +319,26 @@ final class Q35Transformer: Module {
         positionIds: MLXArray? = nil,
         targetVerify: Bool = false
     ) -> Q35TransformerOutput {
+        var preparedPLEInputs: [Int: Q38PLELayer.PreparedInput] = [:]
+        if isQwen4Exp {
+            for (index, layer) in layers.enumerated() {
+                let layerCache = cache?[index] ?? nil
+                let linearCache: Q35LinearCache?
+                if case .linear(let value)? = layerCache {
+                    linearCache = value
+                } else {
+                    linearCache = nil
+                }
+                if let prepared = layer.ple?.prefetch(
+                    inputIds: inputIds,
+                    cache: linearCache,
+                    targetVerify: targetVerify
+                ) {
+                    preparedPLEInputs[index] = prepared
+                }
+            }
+        }
+
         var hidden = inputEmbeddings ?? embeddings(for: inputIds)
         if isQwen4Exp {
             hidden = MLX.tiled(hidden, repetitions: [1, 1, hyperConnectionCount])
@@ -328,8 +355,16 @@ final class Q35Transformer: Module {
                 cache: layerCache,
                 inputIds: isQwen4Exp ? inputIds : nil,
                 positionIds: positionIds,
-                targetVerify: targetVerify
+                targetVerify: targetVerify,
+                preparedPLEInput: preparedPLEInputs[index]
             )
+            if preparedPLEInputs[index + 1] != nil {
+                // Start the preceding decoder block without waiting for it.
+                // Its GPU work can overlap the already-running packed PLE row
+                // reads; the next layer joins the reads only when it consumes
+                // the exact dequantized embeddings.
+                MLX.asyncEval(hidden)
+            }
             if isQwen4Exp,
                (index + 1).isMultiple(of: 4) || index + 1 == layers.count {
                 // Qwen4Exp adds two hyper-connection projections per block.

@@ -114,6 +114,30 @@ final class Q38NGramEmbedding: Module {
         let embedding: PreQuantizedEmbedding
     }
 
+    final class PreparedLookup {
+        fileprivate let diskLookup: Q38DiskNGramTable.PreparedLookup
+        fileprivate let nextTokenContext: [Int32]
+        fileprivate let batch: Int
+        fileprivate let sequence: Int
+
+        fileprivate init(
+            diskLookup: Q38DiskNGramTable.PreparedLookup,
+            nextTokenContext: [Int32],
+            batch: Int,
+            sequence: Int
+        ) {
+            self.diskLookup = diskLookup
+            self.nextTokenContext = nextTokenContext
+            self.batch = batch
+            self.sequence = sequence
+        }
+    }
+
+    private struct HashedTokenIDs {
+        let ids: [Int32]
+        let nextTokenContext: [Int32]
+    }
+
     private let ngramSize: Int
     private let headsPerNgram: Int
     private let contextLength: Int
@@ -178,7 +202,37 @@ final class Q38NGramEmbedding: Module {
         return lookup(ids).reshaped(inputIds.dim(0), inputIds.dim(1), outputDimensions)
     }
 
+    func callAsFunction(
+        _ inputIds: MLXArray,
+        cache: Q35LinearCache?,
+        prepared: PreparedLookup
+    ) -> MLXArray {
+        precondition(prepared.batch == inputIds.dim(0) && prepared.sequence == inputIds.dim(1))
+        cache?.pleTokenContext = MLXArray(prepared.nextTokenContext)
+            .reshaped(prepared.batch, contextLength)
+        return prepared.diskLookup.materialize()
+            .reshaped(prepared.batch, prepared.sequence, outputDimensions)
+    }
+
+    func prefetch(_ inputIds: MLXArray, cache: Q35LinearCache?) -> PreparedLookup? {
+        guard let diskTable else { return nil }
+        let hashed = hash(inputIds, cache: cache)
+        return PreparedLookup(
+            diskLookup: diskTable.prefetch(hashed.ids),
+            nextTokenContext: hashed.nextTokenContext,
+            batch: inputIds.dim(0),
+            sequence: inputIds.dim(1)
+        )
+    }
+
     func hashedTokenIDs(_ inputIds: MLXArray, cache: Q35LinearCache?) -> [Int32] {
+        let hashed = hash(inputIds, cache: cache)
+        cache?.pleTokenContext = MLXArray(hashed.nextTokenContext)
+            .reshaped(inputIds.dim(0), contextLength)
+        return hashed.ids
+    }
+
+    private func hash(_ inputIds: MLXArray, cache: Q35LinearCache?) -> HashedTokenIDs {
         let batch = inputIds.dim(0)
         let sequence = inputIds.dim(1)
         let current = inputIds.asType(.int32).asArray(Int32.self)
@@ -220,8 +274,7 @@ final class Q38NGramEmbedding: Module {
             }
             nextContext.append(contentsOf: history.suffix(contextLength))
         }
-        cache?.pleTokenContext = MLXArray(nextContext).reshaped(batch, contextLength)
-        return ids
+        return HashedTokenIDs(ids: ids, nextTokenContext: nextContext)
     }
 
     func verificationTokenHistory(_ inputIds: MLXArray, cache: Q35LinearCache?) -> MLXArray {
@@ -356,6 +409,11 @@ final class Q38PLELayer: Module {
     private let hiddenSize: Int
     private let convolutionStateLength: Int
 
+    struct PreparedInput {
+        let lookup: Q38NGramEmbedding.PreparedLookup
+        let verificationTokens: MLXArray?
+    }
+
     init(config: Q35Config, pleLayerIndex: Int) {
         let text = config.textConfig
         let hyperDimensions = text.hyperConnectionCount * text.hiddenSize
@@ -411,12 +469,20 @@ final class Q38PLELayer: Module {
         _ hiddenStates: MLXArray,
         inputIds: MLXArray,
         cache: Q35LinearCache?,
-        targetVerify: Bool = false
+        targetVerify: Bool = false,
+        preparedInput: PreparedInput? = nil
     ) -> MLXArray {
-        let verificationTokens = targetVerify
-            ? pleEmbedding.verificationTokenHistory(inputIds, cache: cache)
-            : nil
-        let embeddings = pleEmbedding(inputIds, cache: cache)
+        let verificationTokens: MLXArray?
+        let embeddings: MLXArray
+        if let preparedInput {
+            verificationTokens = preparedInput.verificationTokens
+            embeddings = pleEmbedding(inputIds, cache: cache, prepared: preparedInput.lookup)
+        } else {
+            verificationTokens = targetVerify
+                ? pleEmbedding.verificationTokenHistory(inputIds, cache: cache)
+                : nil
+            embeddings = pleEmbedding(inputIds, cache: cache)
+        }
         let shapePrefix = Array(hiddenStates.shape.dropLast())
         let keys = keyNorm(q38SmallBatchProjection(keyProjection, embeddings))
             .reshaped(shapePrefix + [streamCount, hiddenSize])
@@ -432,6 +498,18 @@ final class Q38PLELayer: Module {
         let flattened = gatedValues.reshaped(shapePrefix + [streamCount * hiddenSize])
         let normalized = convolutionNorm(flattened)
         return flattened + shortConvolution(normalized, cache: cache, verificationTokens: verificationTokens)
+    }
+
+    func prefetch(
+        inputIds: MLXArray,
+        cache: Q35LinearCache?,
+        targetVerify: Bool
+    ) -> PreparedInput? {
+        let verificationTokens = targetVerify
+            ? pleEmbedding.verificationTokenHistory(inputIds, cache: cache)
+            : nil
+        guard let lookup = pleEmbedding.prefetch(inputIds, cache: cache) else { return nil }
+        return PreparedInput(lookup: lookup, verificationTokens: verificationTokens)
     }
 
     private func shortConvolution(

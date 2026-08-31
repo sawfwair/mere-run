@@ -1928,6 +1928,39 @@ public enum ManagedModelCatalog {
             apiProfile: .q38(contextWindow: Q35Resources.q38TwentySevenBContextLength)
         ),
         ManagedModelSpec(
+            id: Q35Resources.q38FlashNext3BitNativePLEModelId,
+            category: .visionChat,
+            installShape: .directoryRoot,
+            hubFallback: Q35Resources.profile(
+                for: Q35Resources.q38FlashNext3BitNativePLEModelId
+            )?.hubFallbackConfig,
+            upstreamRepoId: Q35Resources.q38FlashNext3BitNativePLEUpstreamRepoId,
+            upstreamRevision: Q35Resources.q38FlashNext3BitNativePLEUpstreamRevision,
+            usageRestriction: ManagedModelUsageRestriction(
+                summary: "Use is governed by the Qwen Community License 1.0; review and acknowledge the terms before download.",
+                terms: [
+                    ManagedModelUsageTerm(
+                        component: "Qwen3.8-Flash-Next activation-weighted Q3 MLX native PLE pack",
+                        license: "Qwen Community License 1.0",
+                        summary: "Review the upstream redistribution, attribution, and restricted-use terms before installing or deploying.",
+                        sourceRepoId: "Qwen/Qwen3.8-Flash-Next",
+                        sourceRevision: "f5d08274bafd880402bd16f5e3e6c514136ec06c",
+                        licenseURL: "https://huggingface.co/Qwen/Qwen3.8-Flash-Next/blob/f5d08274bafd880402bd16f5e3e6c514136ec06c/LICENSE"
+                    ),
+                ]
+            ),
+            validationKind: .q35,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: Q35Resources.q38FlashNext3BitNativePLEEstimatedDownloadBytes,
+            defaultCLICommands: [
+                "text chat",
+                "api serve",
+                "model benchmark chat",
+                "model benchmark code",
+            ],
+            apiProfile: .q38(contextWindow: Q35Resources.q38TwentySevenBContextLength)
+        ),
+        ManagedModelSpec(
             id: Q35Resources.q38FlashNext4BitModelId,
             category: .visionChat,
             installShape: .directoryRoot,
@@ -4126,6 +4159,14 @@ public extension ManagedModelSpec {
             if id == Q35Resources.q38TwentySevenB4BitModelId {
                 missing.append(contentsOf: resources.validateQ38MTPComponent(fileManager: fileManager))
                 missing.append(contentsOf: resources.validateQ38VisionComponent(fileManager: fileManager))
+            }
+            if id == Q35Resources.q38FlashNext3BitNativePLEModelId {
+                for filename in [Q38PLEPlacement.manifestFilename, "MERERUN_PLE_PACK.json"] {
+                    let url = rootURL.appendingPathComponent(filename)
+                    if !fileManager.fileExists(atPath: url.path) {
+                        missing.append(url)
+                    }
+                }
             }
             return missing
         case .q35MTPAssistant:

@@ -1,8 +1,8 @@
 import Foundation
 
 /// Hugging Face sharded safetensors index format (`*.safetensors.index.json`).
-public struct HFSafetensorsIndex: Decodable, Sendable, Hashable {
-    public struct Metadata: Decodable, Sendable, Hashable {
+public struct HFSafetensorsIndex: Codable, Sendable, Hashable {
+    public struct Metadata: Codable, Sendable, Hashable {
         public let totalSize: Int64?
 
         enum CodingKeys: String, CodingKey {
@@ -12,6 +12,11 @@ public struct HFSafetensorsIndex: Decodable, Sendable, Hashable {
 
     public let metadata: Metadata?
     public let weightMap: [String: String]
+
+    public init(metadata: Metadata?, weightMap: [String: String]) {
+        self.metadata = metadata
+        self.weightMap = weightMap
+    }
 
     enum CodingKeys: String, CodingKey {
         case metadata
@@ -28,4 +33,3 @@ public struct HFSafetensorsIndex: Decodable, Sendable, Hashable {
         Array(Set(weightMap.values)).sorted()
     }
 }
-

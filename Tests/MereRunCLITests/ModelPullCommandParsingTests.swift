@@ -64,6 +64,7 @@ final class ModelPullCommandParsingTests: XCTestCase {
         for modelID in [
             Q35Resources.q38FlashNextMixedModelId,
             Q35Resources.q38FlashNext3BitModelId,
+            Q35Resources.q38FlashNext3BitNativePLEModelId,
             Q35Resources.q38FlashNext4BitModelId,
         ] {
             let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: modelID))

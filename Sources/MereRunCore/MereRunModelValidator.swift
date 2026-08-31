@@ -680,6 +680,7 @@ public enum MereRunModelValidator {
             || modelId == ModelResolver.ModelID.q38TwentySevenB4Bit.rawValue
             || modelId == ModelResolver.ModelID.q38FlashNextMixed.rawValue
             || modelId == ModelResolver.ModelID.q38FlashNext3Bit.rawValue
+            || modelId == ModelResolver.ModelID.q38FlashNext3BitNativePLE.rawValue
             || modelId == ModelResolver.ModelID.q38FlashNext4Bit.rawValue {
             return .qwen
         }

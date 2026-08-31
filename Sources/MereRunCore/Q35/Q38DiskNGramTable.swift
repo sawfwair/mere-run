@@ -90,6 +90,50 @@ final class Q38DiskNGramTable: @unchecked Sendable {
         let biases: UnsafeMutableRawPointer
     }
 
+    fileprivate struct PackedRows: Sendable {
+        let weights: Data
+        let scales: Data
+        let biases: Data
+    }
+
+    /// A disk gather started before the decoder reaches its PLE layer. Only
+    /// immutable packed bytes cross the queue boundary; MLX arrays are created
+    /// on the inference thread when the lookup is consumed.
+    final class PreparedLookup: @unchecked Sendable {
+        private let condition = NSCondition()
+        private let table: Q38DiskNGramTable
+        private let rowCount: Int
+        private var packedRows: PackedRows?
+
+        fileprivate init(table: Q38DiskNGramTable, rowCount: Int) {
+            self.table = table
+            self.rowCount = rowCount
+        }
+
+        fileprivate func finish(with packedRows: PackedRows) {
+            condition.lock()
+            self.packedRows = packedRows
+            condition.broadcast()
+            condition.unlock()
+        }
+
+        func materialize() -> MLXArray {
+            condition.lock()
+            while packedRows == nil {
+                condition.wait()
+            }
+            let result = packedRows!
+            condition.unlock()
+            return table.dequantized(result, rowCount: rowCount)
+        }
+    }
+
+    private static let prefetchQueue = DispatchQueue(
+        label: "run.mere.q38-ple-prefetch",
+        qos: .userInitiated,
+        attributes: .concurrent
+    )
+
     private let shards: [Shard]
     let rowCount: Int
     let dimensions: Int
@@ -159,6 +203,23 @@ final class Q38DiskNGramTable: @unchecked Sendable {
     func lookup(_ ids: [Int32]) -> MLXArray {
         precondition(ids.allSatisfy { $0 >= 0 && Int($0) < rowCount })
         guard !ids.isEmpty else { return MLXArray.zeros([0, dimensions], dtype: dtype) }
+        return dequantized(copyRows(ids), rowCount: ids.count)
+    }
+
+    func prefetch(_ ids: [Int32]) -> PreparedLookup {
+        precondition(ids.allSatisfy { $0 >= 0 && Int($0) < rowCount })
+        let prepared = PreparedLookup(table: self, rowCount: ids.count)
+        if ids.isEmpty {
+            prepared.finish(with: PackedRows(weights: Data(), scales: Data(), biases: Data()))
+        } else {
+            Self.prefetchQueue.async {
+                prepared.finish(with: self.copyRows(ids))
+            }
+        }
+        return prepared
+    }
+
+    private func copyRows(_ ids: [Int32]) -> PackedRows {
         let first = shards[0]
         var weights = Data(count: ids.count * first.weight.rowBytes)
         var scales = Data(count: ids.count * first.scales.rowBytes)
@@ -181,10 +242,16 @@ final class Q38DiskNGramTable: @unchecked Sendable {
                 }
             }
         }
+        return PackedRows(weights: weights, scales: scales, biases: biases)
+    }
+
+    private func dequantized(_ rows: PackedRows, rowCount: Int) -> MLXArray {
+        guard rowCount > 0 else { return MLXArray.zeros([0, dimensions], dtype: dtype) }
+        let first = shards[0]
         return MLX.dequantized(
-            MLXArray(weights, [ids.count, first.weight.metadata.shape[1]], dtype: .uint32),
-            scales: MLXArray(scales, [ids.count, dimensions / groupSize], dtype: dtype),
-            biases: MLXArray(biases, [ids.count, dimensions / groupSize], dtype: dtype),
+            MLXArray(rows.weights, [rowCount, first.weight.metadata.shape[1]], dtype: .uint32),
+            scales: MLXArray(rows.scales, [rowCount, dimensions / groupSize], dtype: dtype),
+            biases: MLXArray(rows.biases, [rowCount, dimensions / groupSize], dtype: dtype),
             groupSize: groupSize, bits: bits
         )
     }
@@ -198,4 +265,5 @@ final class Q38DiskNGramTable: @unchecked Sendable {
         }
         return shards[low]
     }
+
 }
