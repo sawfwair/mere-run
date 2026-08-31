@@ -210,6 +210,29 @@ final class LinuxNativeBridgeTests: XCTestCase {
         XCTAssertTrue(script.contains(#"if [[ "$identity" == "-" ]]"#))
         XCTAssertTrue(script.contains(#"-ffile-prefix-map=${source_path_map}"#))
         XCTAssertTrue(script.contains(#"-Xswiftc -file-prefix-map"#))
+        let releaseBuildGuard = try XCTUnwrap(
+            script.range(
+                of: #"""
+                if [[ "$configuration" == "release" ]]; then
+                  # Only distributable builds need checkout-path sanitization.
+                """#
+            )
+        )
+        let releaseBuildEnd = try XCTUnwrap(
+            script.range(
+                of: #"""
+                fi
+
+                swift "${swift_app_args[@]}"
+                """#,
+                range: releaseBuildGuard.lowerBound..<script.endIndex
+            )
+        )
+        let releaseBuildBlock = script[releaseBuildGuard.lowerBound..<releaseBuildEnd.upperBound]
+        XCTAssertTrue(releaseBuildBlock.contains(#"-ffile-prefix-map=${source_path_map}"#))
+        XCTAssertTrue(releaseBuildBlock.contains(#"-Xswiftc -file-prefix-map"#))
+        XCTAssertTrue(releaseBuildBlock.contains(#"swift_app_args+=(--configuration release)"#))
+        XCTAssertEqual(script.components(separatedBy: #"swift_app_args+=("${swift_path_map_args[@]}")"#).count, 2)
         XCTAssertTrue(script.contains("MERERUN_SWIFT_SCRATCH_PATH"))
         XCTAssertTrue(script.contains(#"${swift_scratch_path}=/src/mere-run/.build"#))
         XCTAssertTrue(script.contains("verify_private_build_path_absent"))

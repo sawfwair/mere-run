@@ -57,23 +57,26 @@ if [[ -n "$swift_scratch_path" && "$swift_scratch_path" != "${repo_root}/.build"
   source_path_maps+=("${swift_scratch_path}=/src/mere-run/.build")
 fi
 swift_path_map_args=()
-for source_path_map in "${source_path_maps[@]}"; do
-  swift_path_map_args+=(
-    -Xcc "-ffile-prefix-map=${source_path_map}"
-    -Xcxx "-ffile-prefix-map=${source_path_map}"
-    -Xswiftc -file-prefix-map
-    -Xswiftc "$source_path_map"
-  )
-done
-swift_app_args+=("${swift_path_map_args[@]}")
-swift_cli_args+=("${swift_path_map_args[@]}")
-swift_bin_path_args+=("${swift_path_map_args[@]}")
 if [[ "${MERERUN_SWIFT_DISABLE_INDEX_STORE:-0}" == "1" ]]; then
   swift_app_args+=(--disable-index-store)
   swift_cli_args+=(--disable-index-store)
   swift_bin_path_args+=(--disable-index-store)
 fi
 if [[ "$configuration" == "release" ]]; then
+  # Only distributable builds need checkout-path sanitization. Keeping debug
+  # builds on the same command line as scripts/check.sh lets CI reuse the warm
+  # SwiftPM build directory instead of recompiling MereRunCore for the bundle.
+  for source_path_map in "${source_path_maps[@]}"; do
+    swift_path_map_args+=(
+      -Xcc "-ffile-prefix-map=${source_path_map}"
+      -Xcxx "-ffile-prefix-map=${source_path_map}"
+      -Xswiftc -file-prefix-map
+      -Xswiftc "$source_path_map"
+    )
+  done
+  swift_app_args+=("${swift_path_map_args[@]}")
+  swift_cli_args+=("${swift_path_map_args[@]}")
+  swift_bin_path_args+=("${swift_path_map_args[@]}")
   swift_app_args+=(--configuration release)
   swift_cli_args+=(--configuration release)
   swift_bin_path_args+=(--configuration release)
