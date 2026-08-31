@@ -87,6 +87,7 @@ an effective overlay; they are not a second capability catalog.
 | `vision-chat` | `vision-chat-q38-27b-4bit` |
 | `vision-chat` | `vision-chat-q38-flash-next-mixed` |
 | `vision-chat` | `vision-chat-q38-flash-next-3bit` |
+| `vision-chat` | `vision-chat-q38-flash-next-3bit-native-ple` |
 | `vision-chat` | `vision-chat-q38-flash-next-4bit` |
 | `text-chat` | `text-chat-bonsai-27b-1bit` |
 | `text-chat` | `text-chat-bonsai-27b-2bit` |
@@ -216,7 +217,7 @@ validates all configured models before downloading any; both accept the same
 | `image-ideogram4-sdnq-uint4` | Ideogram Non-Commercial Model Agreement |
 | LFM2.5 text and vision targets plus their DSpark companions | LFM Open License v1.0; commercial use by entities at or above USD 10M annual revenue is excluded |
 | `vision-chat-muse-glimmer-30b` | Apache-2.0 plus Meta's bundled usage policy; upstream says the model is not intended for download or use by people under 18 |
-| `vision-chat-q38-flash-next-mixed`, `vision-chat-q38-flash-next-3bit`, `vision-chat-q38-flash-next-4bit` | Qwen Community License 1.0; redistribution, attribution, and restricted-use terms |
+| `vision-chat-q38-flash-next-mixed`, `vision-chat-q38-flash-next-3bit`, `vision-chat-q38-flash-next-3bit-native-ple`, `vision-chat-q38-flash-next-4bit` | Qwen Community License 1.0; redistribution, attribution, and restricted-use terms |
 | `vision-segment-sam31` | Meta SAM License custom use, trade-control, attribution, and redistribution conditions |
 | `vision-face-buffalo-l` | InsightFace pretrained weights; non-commercial research use |
 | `vision-embed-olmoearth-v12-{nano,tiny,small,base}` | OlmoEarth Artifact License; prohibited military, defense, intelligence, human-surveillance, policing, and listed extractive uses |
@@ -396,6 +397,19 @@ sealed 16-case holdout produced identical Q3 and Q4 outputs, including exact
 output on all eight image and OCR cases. The holdout peak was 62.1 GB for Q3
 and 77.2 GB for Q4, with no swap growth. These bounded checks establish Q4
 no-regression for the tested cases, not general model quality or BF16 parity.
+
+`vision-chat-q38-flash-next-3bit-native-ple` installs the complete
+`Sawfwair/Qwen3.8-Flash-Next-MLX-Activation-3bit-Native-PLE` revision
+`1cee9301c745836e0abb8933e89cf27a38b98125`. It preserves the Q3 model payload
+and adds a checksum-bound placement manifest. No user conversion or
+`model optimize` command is required. If the configured model store is on an
+external volume, mere.run copies and verifies the 33 PLE-bearing safetensors
+(32.43 GB) into its internal model cache on first load, writes a PLE-only
+safetensors index, and reuses that cache on later loads. The remaining model
+files stay in the configured model store. If the model is already on the
+internal volume, the runtime reads the PLE table there without making a copy.
+The cache requires enough free internal space to retain an 8 GiB reserve;
+otherwise the runtime uses the original model-store files.
 
 `vision-chat-q38-flash-next-4bit` installs the companion immutable
 `Sawfwair/Qwen3.8-Flash-Next-MLX-4bit` revision

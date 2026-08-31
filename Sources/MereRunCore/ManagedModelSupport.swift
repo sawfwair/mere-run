@@ -516,6 +516,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 128
             ),
             descriptor(
+                Q35Resources.q38FlashNext3BitNativePLEModelId,
+                "Qwen3.8 Flash Next activation-weighted Q3 native PLE",
+                "Runs the complete pinned Q3 checkpoint and automatically stages its disk-backed PLE shards on the internal SSD when the model store is external.",
+                minimum: 96,
+                recommended: 128
+            ),
+            descriptor(
                 Q35Resources.q38FlashNext4BitModelId,
                 "Qwen3.8 Flash Next Q4 vision chat",
                 "Runs Sawfwair's pinned all-Q4-compatible profile for higher quality on Macs with more than 128 GB unified memory.",

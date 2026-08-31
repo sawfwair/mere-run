@@ -290,6 +290,30 @@ final class MereRunModelManifestTests: MereRunCoreTestCase {
         )
     }
 
+    func testQ38FlashNext3BitNativePLETemplatePinsCompletePack() {
+        let manifest = MereRunModelManifest.template(
+            for: .q38FlashNext3BitNativePLE,
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+
+        XCTAssertEqual(manifest.id, Q35Resources.q38FlashNext3BitNativePLEModelId)
+        XCTAssertEqual(manifest.engine, .qwen35HybridMoE)
+        XCTAssertEqual(manifest.family, .qwen)
+        XCTAssertEqual(manifest.precision, .int3)
+        XCTAssertEqual(manifest.quantization?.bits, 3)
+        XCTAssertEqual(manifest.quantization?.groupSize, 64)
+        XCTAssertEqual(
+            manifest.quantization?.scheme,
+            "mlx-mixed-q3-q4-activation-refit-affine-native-ple"
+        )
+        XCTAssertEqual(Set(manifest.supports ?? []), Set([.chat, .codeGeneration, .visionChat]))
+        XCTAssertEqual(
+            manifest.upstreamRepoId,
+            "\(Q35Resources.q38FlashNext3BitNativePLEUpstreamRepoId)"
+                + "@\(Q35Resources.q38FlashNext3BitNativePLEUpstreamRevision)"
+        )
+    }
+
     func testFalconPerceptionTemplateHasExpectedMetadata() throws {
         let manifest = MereRunModelManifest.template(for: .visionGroundFalconPerception, createdAt: Date(timeIntervalSince1970: 0))
 

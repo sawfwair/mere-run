@@ -33,6 +33,7 @@ public struct Q35Resources: Sendable, Hashable {
     public static let q38TwentySevenB4BitModelId = "vision-chat-q38-27b-4bit"
     public static let q38FlashNextMixedModelId = "vision-chat-q38-flash-next-mixed"
     public static let q38FlashNext3BitModelId = "vision-chat-q38-flash-next-3bit"
+    public static let q38FlashNext3BitNativePLEModelId = "vision-chat-q38-flash-next-3bit-native-ple"
     public static let q38FlashNext4BitModelId = "vision-chat-q38-flash-next-4bit"
     public static let bonsai27B1BitModelId = "text-chat-bonsai-27b-1bit"
     public static let bonsai27B2BitModelId = "text-chat-bonsai-27b-2bit"
@@ -91,6 +92,7 @@ public struct Q35Resources: Sendable, Hashable {
              q38TwentySevenB4BitModelId,
              q38FlashNextMixedModelId,
              q38FlashNext3BitModelId,
+             q38FlashNext3BitNativePLEModelId,
              q38FlashNext4BitModelId:
             return RecommendedSampling(temperature: 1.0, topP: 0.95, topK: 20)
         case bonsai27B1BitModelId, bonsai27B2BitModelId:
@@ -120,6 +122,11 @@ public struct Q35Resources: Sendable, Hashable {
     public static let q38FlashNext3BitUpstreamRepoId = "Sawfwair/Qwen3.8-Flash-Next-MLX-Activation-3bit"
     public static let q38FlashNext3BitUpstreamRevision = "c699bd611366cbc441377275bd1b7a6d2e18e1df"
     public static let q38FlashNext3BitEstimatedDownloadBytes: Int64 = 89_666_463_470
+    public static let q38FlashNext3BitNativePLEUpstreamRepoId =
+        "Sawfwair/Qwen3.8-Flash-Next-MLX-Activation-3bit-Native-PLE"
+    public static let q38FlashNext3BitNativePLEUpstreamRevision =
+        "1cee9301c745836e0abb8933e89cf27a38b98125"
+    public static let q38FlashNext3BitNativePLEEstimatedDownloadBytes: Int64 = 89_667_182_797
     public static let q38FlashNext4BitUpstreamRepoId = "Sawfwair/Qwen3.8-Flash-Next-MLX-4bit"
     public static let q38FlashNext4BitUpstreamRevision = "6cc9bbc0fae9ce26b7670b3ed1e26d557c154506"
     public static let q38FlashNext4BitEstimatedDownloadBytes: Int64 = 104_742_357_706
@@ -245,6 +252,21 @@ public struct Q35Resources: Sendable, Hashable {
                 "MERERUN_QUALIFICATION.json",
             ]
         ),
+        q38FlashNext3BitNativePLEModelId: Profile(
+            modelId: q38FlashNext3BitNativePLEModelId,
+            upstreamRepoId: q38FlashNext3BitNativePLEUpstreamRepoId,
+            upstreamRevision: q38FlashNext3BitNativePLEUpstreamRevision,
+            snapshotPatterns: snapshotPatterns + [
+                "generation_config.json",
+                "preprocessor_config.json",
+                "video_preprocessor_config.json",
+                "README.md",
+                "MERERUN_CONVERSION.json",
+                "MERERUN_QUALIFICATION.json",
+                "MERERUN_PLE_STORE.json",
+                "MERERUN_PLE_PACK.json",
+            ]
+        ),
         bonsai27B1BitModelId: Profile(
             modelId: bonsai27B1BitModelId,
             upstreamRepoId: bonsai27B1BitUpstreamRepoId,
@@ -313,6 +335,7 @@ public struct Q35Resources: Sendable, Hashable {
              q38TwentySevenB4BitModelId,
              q38FlashNextMixedModelId,
              q38FlashNext3BitModelId,
+             q38FlashNext3BitNativePLEModelId,
              q38FlashNext4BitModelId:
             q38TwentySevenBContextLength
         case bonsai27B1BitModelId:
@@ -341,6 +364,7 @@ public struct Q35Resources: Sendable, Hashable {
             || modelId == q38TwentySevenB4BitModelId
             || modelId == q38FlashNextMixedModelId
             || modelId == q38FlashNext3BitModelId
+            || modelId == q38FlashNext3BitNativePLEModelId
             || modelId == q38FlashNext4BitModelId
     }
 

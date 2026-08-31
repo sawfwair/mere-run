@@ -162,6 +162,7 @@ final class ManagedModelCatalogTests: XCTestCase {
             "vision-chat-lfm25-3b-8bit",
             Q35Resources.q38FlashNextMixedModelId,
             Q35Resources.q38FlashNext3BitModelId,
+            Q35Resources.q38FlashNext3BitNativePLEModelId,
             Q35Resources.q38FlashNext4BitModelId,
             "vision-segment-sam31",
             "vision-face-buffalo-l",
@@ -900,6 +901,9 @@ final class ManagedModelCatalogTests: XCTestCase {
         let q3 = try XCTUnwrap(
             ManagedModelCatalog.spec(for: Q35Resources.q38FlashNext3BitModelId)
         )
+        let nativePLE = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: Q35Resources.q38FlashNext3BitNativePLEModelId)
+        )
 
         XCTAssertEqual(mixed.hubFallback?.repoId, Q35Resources.q38FlashNextMixedUpstreamRepoId)
         XCTAssertEqual(mixed.hubFallback?.revision, Q35Resources.q38FlashNextMixedUpstreamRevision)
@@ -911,6 +915,19 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(q3.estimatedDownloadBytes, 89_666_463_470)
         XCTAssertEqual(q3.usageRestriction?.terms.first?.license, "Qwen Community License 1.0")
         XCTAssertFalse(q3.runtimeAutoDownloadAllowed)
+        XCTAssertEqual(
+            nativePLE.hubFallback?.repoId,
+            "Sawfwair/Qwen3.8-Flash-Next-MLX-Activation-3bit-Native-PLE"
+        )
+        XCTAssertEqual(
+            nativePLE.hubFallback?.revision,
+            "1cee9301c745836e0abb8933e89cf27a38b98125"
+        )
+        XCTAssertEqual(nativePLE.estimatedDownloadBytes, 89_667_182_797)
+        XCTAssertEqual(nativePLE.usageRestriction?.terms.first?.license, "Qwen Community License 1.0")
+        XCTAssertFalse(nativePLE.runtimeAutoDownloadAllowed)
+        XCTAssertTrue(nativePLE.hubFallback?.patterns.contains("MERERUN_PLE_STORE.json") == true)
+        XCTAssertTrue(nativePLE.hubFallback?.patterns.contains("MERERUN_PLE_PACK.json") == true)
         XCTAssertEqual(q4.hubFallback?.repoId, Q35Resources.q38FlashNext4BitUpstreamRepoId)
         XCTAssertEqual(q4.hubFallback?.revision, Q35Resources.q38FlashNext4BitUpstreamRevision)
         XCTAssertEqual(q4.estimatedDownloadBytes, 104_742_357_706)
@@ -956,6 +973,25 @@ final class ManagedModelCatalogTests: XCTestCase {
         for filename in Q35Resources.q38LicenseComponentSnapshotPatterns {
             try Data().write(to: licenseRoot.appendingPathComponent(filename))
         }
+        XCTAssertTrue(spec.missingPaths(in: root).isEmpty)
+    }
+
+    func testQ38FlashNextNativePLEValidationRequiresPackMetadata() throws {
+        let spec = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: Q35Resources.q38FlashNext3BitNativePLEModelId)
+        )
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        for filename in ["config.json", "model.safetensors", "tokenizer.json", "tokenizer_config.json"] {
+            try Data().write(to: root.appendingPathComponent(filename))
+        }
+
+        XCTAssertEqual(
+            Set(spec.missingPaths(in: root).map(\.lastPathComponent)),
+            Set([Q38PLEPlacement.manifestFilename, "MERERUN_PLE_PACK.json"])
+        )
+        try Data().write(to: root.appendingPathComponent(Q38PLEPlacement.manifestFilename))
+        try Data().write(to: root.appendingPathComponent("MERERUN_PLE_PACK.json"))
         XCTAssertTrue(spec.missingPaths(in: root).isEmpty)
     }
 

@@ -72,7 +72,20 @@ two preceding token IDs in each incremental cache. `Q38DiskNGramTable` maps its
 Only requested packed rows are copied to MLX and dequantized with the same
 affine operation as resident embeddings. No conversion or additional download
 is required. The roughly 29.8 GiB table stays in reclaimable OS file cache
-instead of the MLX allocation; storage latency can affect cold lookups.
+instead of the MLX allocation. Packed row reads begin before the first decoder
+block, whose nonblocking MLX evaluation overlaps the storage work before PLE is
+injected at the second block. PLE cache history is committed only when those
+exact rows are consumed, preserving speculative rollback and replacement-input
+vision prefills. Storage latency can still affect cold lookups when it exceeds
+the first block's compute time.
+
+The optional `MERERUN_PLE_STORE.json` placement manifest makes this transparent
+for complete packaged checkpoints. When the checkpoint is on an external
+volume, first load copies only the manifest's checksum-pinned PLE shard files
+to `MereRunModelPaths.modelCacheBase` on the internal SSD and builds a PLE-only
+safetensors index there. Later loads reuse the verified cache; all non-PLE
+files remain in the configured model store. Internal checkpoints are used in
+place, and insufficient internal free space falls back to the original shards.
 Four-layer evaluation boundaries keep the 48-layer lazy graph below
 the macOS Metal watchdog while preserving each hybrid block.
 

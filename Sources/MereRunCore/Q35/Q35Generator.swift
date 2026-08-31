@@ -485,7 +485,11 @@ public actor Q35Generator: ChatGenerator {
                 stage: .loadingModel,
                 message: "Loading Qwen4Exp n-gram embedding shards"
             ))
-            try loadQ38NGramEmbeddings(into: q35Model, from: resources)
+            try loadQ38NGramEmbeddings(
+                into: q35Model,
+                from: resources,
+                progressHandler: progressHandler
+            )
         }
         #if DEBUG
         try checkpointTransformForTesting?(q35Model)
@@ -954,6 +958,7 @@ public actor Q35Generator: ChatGenerator {
         }
         if modelId == Q35Resources.q38FlashNextMixedModelId
             || modelId == Q35Resources.q38FlashNext3BitModelId
+            || modelId == Q35Resources.q38FlashNext3BitNativePLEModelId
             || modelId == Q35Resources.q38FlashNext4BitModelId {
             return 0
         }
@@ -2388,10 +2393,18 @@ public actor Q35Generator: ChatGenerator {
 
     private func loadQ38NGramEmbeddings(
         into model: Q35Model,
-        from resources: Q35Resources
+        from resources: Q35Resources,
+        progressHandler: (@Sendable (ChatProgress) -> Void)?
     ) throws {
         let targets = model.q38NGramEmbeddings
         guard !targets.isEmpty else { return }
+
+        let placement = try Q38PLEPlacement.resolve(
+            rootURL: resources.rootURL,
+            progressHandler: { message in
+                progressHandler?(ChatProgress(stage: .loadingModel, message: message))
+            }
+        )
 
         for (pleLayerIndex, target) in targets.enumerated() {
             let layerIndex = model.config.textConfig.pleLayerIds[pleLayerIndex] - 1
@@ -2399,9 +2412,11 @@ public actor Q35Generator: ChatGenerator {
             let dimensions = model.config.textConfig.pleEmbeddingDimensions
                 / ((model.config.textConfig.ngramSize - 1) * model.config.textConfig.headsPerNgram)
             target.installDiskTable(try Q38DiskNGramTable(
-                indexURL: resources.modelIndexURL, base: base,
+                indexURL: placement?.indexURL ?? resources.modelIndexURL,
+                base: base,
                 shardCount: model.config.textConfig.splitNgramParts,
-                dimensions: dimensions, minimumRowCount: target.minimumRowCount
+                dimensions: dimensions,
+                minimumRowCount: target.minimumRowCount
             ))
         }
     }

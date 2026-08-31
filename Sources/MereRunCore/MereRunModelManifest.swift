@@ -1220,6 +1220,26 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                     + "@\(Q35Resources.q38FlashNext3BitUpstreamRevision)",
                 createdAt: createdAt
             )
+        case .q38FlashNext3BitNativePLE:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .qwen35HybridMoE,
+                family: .qwen,
+                tier: .latest,
+                variant: .standard,
+                precision: .int3,
+                quantization: Quantization(
+                    bits: 3,
+                    groupSize: 64,
+                    scheme: "mlx-mixed-q3-q4-activation-refit-affine-native-ple"
+                ),
+                defaults: nil,
+                supports: [.chat, .codeGeneration, .visionChat],
+                components: q35TextComponents,
+                upstreamRepoId: "\(Q35Resources.q38FlashNext3BitNativePLEUpstreamRepoId)"
+                    + "@\(Q35Resources.q38FlashNext3BitNativePLEUpstreamRevision)",
+                createdAt: createdAt
+            )
         case .bonsai27B1Bit:
             return MereRunModelManifest(
                 id: modelID.rawValue,

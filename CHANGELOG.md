@@ -6,6 +6,18 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Runtime
+
+- started Qwen3.8 Flash Next's disk-backed PLE row reads before the first
+  decoder block and overlapped them with its nonblocking MLX evaluation. The
+  activation-weighted Q3 profile keeps the same packed Q4 PLE rows,
+  dequantization, model weights, activation precision, and vision input path.
+- added `vision-chat-q38-flash-next-3bit-native-ple`, a complete immutable Q3
+  checkpoint that requires no `model optimize` step. When its model store is
+  external, mere.run verifies and stages only the 33 PLE-bearing safetensors on
+  the internal SSD, then reuses that cache while all remaining files stay in
+  the configured model store.
+
 ### Text training
 
 - added attention-only QLoRA training and adapter loading for

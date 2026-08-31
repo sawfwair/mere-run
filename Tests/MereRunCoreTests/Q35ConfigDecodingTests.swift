@@ -1348,6 +1348,7 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         for modelID in [
             Q35Resources.q38FlashNextMixedModelId,
             Q35Resources.q38FlashNext3BitModelId,
+            Q35Resources.q38FlashNext3BitNativePLEModelId,
             Q35Resources.q38FlashNext4BitModelId,
         ] {
             XCTAssertEqual(Q35Generator.mtpBlockSize(modelId: modelID, environment: [:]), 4)
