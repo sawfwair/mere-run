@@ -55,6 +55,9 @@ struct MereRunApp: App {
                         }
                     }
                 }
+                .task {
+                    await controller.synchronizeCLIInstallationAfterLaunch()
+                }
                 .onOpenURL(perform: openDeepLink)
                 .alert(
                     "Couldn’t open MereRun link",

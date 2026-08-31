@@ -175,7 +175,7 @@ enum CLIResolver {
         ]
     }
 
-    private static func installedCandidates(fileManager fm: FileManager) -> [URL] {
+    static func installedCandidates(fileManager fm: FileManager) -> [URL] {
         [
             "/usr/local/bin/mere.run",
             "/opt/homebrew/bin/mere.run",
@@ -560,6 +560,7 @@ final class MereRunController: ObservableObject {
     /// the foreground canvas.
     @Published private(set) var progressByRequestID: [UUID: StudioRunProgress] = [:]
     @Published private(set) var cliVersion: String?
+    @Published private(set) var cliInstallationStatus = CLIInstallationStatus.checking
 
     /// The app's own version, read from the bundle for the version handshake display.
     var appVersion: String {
@@ -580,6 +581,7 @@ final class MereRunController: ObservableObject {
     private let processRunner: MereRunProcessRunning
     private let fileSystem: MereRunFileProbing
     private let cliResolve: (String) -> MereRunLaunch
+    private var didSynchronizeCLIInstallationAfterLaunch = false
     private var utilityProcesses: [UUID: MereRunRunningProcess] = [:]
     private var readinessProcesses: [StudioMode: MereRunRunningProcess] = [:]
     private var readinessRequests: [StudioMode: ReadinessRequest] = [:]
@@ -881,9 +883,26 @@ final class MereRunController: ObservableObject {
     }
 
     func installTerminalCLI() {
-        let outcome = CLIBootstrapInstaller.installBundledCLI()
-        handleCLIInstall(outcome)
-        refreshResolvedCLI()
+        guard cliInstallationStatus.phase != .synchronizing else { return }
+        let context = CLIInstallationContext.current(customCLIPath: cliPath)
+        cliInstallationStatus = synchronizingCLIStatus(from: cliInstallationStatus)
+        Task { @MainActor in
+            let nextStatus = await Task.detached(priority: .utility) {
+                CLIInstallationSynchronizer.performManualAction(context: context)
+            }.value
+            publishCLIInstallationStatus(nextStatus, automatic: false)
+        }
+    }
+
+    func synchronizeCLIInstallationAfterLaunch() async {
+        guard !didSynchronizeCLIInstallationAfterLaunch else { return }
+        didSynchronizeCLIInstallationAfterLaunch = true
+        let context = CLIInstallationContext.current(customCLIPath: cliPath)
+        cliInstallationStatus = synchronizingCLIStatus(from: cliInstallationStatus)
+        let nextStatus = await Task.detached(priority: .utility) {
+            CLIInstallationSynchronizer.synchronizeAfterLaunch(context: context)
+        }.value
+        publishCLIInstallationStatus(nextStatus, automatic: true)
     }
 
     func installCodexSkills() {
@@ -1825,17 +1844,34 @@ final class MereRunController: ObservableObject {
         }
     }
 
-    private func handleCLIInstall(_ outcome: CLIBootstrapInstallOutcome) {
-        switch outcome {
-        case .installed(let url):
+    private func synchronizingCLIStatus(from current: CLIInstallationStatus) -> CLIInstallationStatus {
+        CLIInstallationStatus(
+            phase: .synchronizing,
+            kind: current.kind,
+            resolvedPath: current.resolvedPath,
+            installedVersion: current.installedVersion,
+            bundledVersion: current.bundledVersion,
+            detail: "Validating and staging the complete CLI payload…",
+            lastSynchronizationError: nil,
+            allowsManualAction: false
+        )
+    }
+
+    private func publishCLIInstallationStatus(_ nextStatus: CLIInstallationStatus, automatic: Bool) {
+        cliInstallationStatus = nextStatus
+        refreshResolvedCLI()
+        refreshCLIVersion()
+
+        if let message = nextStatus.lastSynchronizationError {
+            if !automatic {
+                status = "CLI synchronization needs attention"
+            }
+            append("Terminal CLI synchronization: \(message)", stream: .stderr)
+        } else if !automatic, nextStatus.phase == .upToDate {
             status = "CLI installed"
-            append("Installed Terminal CLI at \(url.abbreviatedForDisplay).", stream: .system)
-        case .failed(let message):
-            status = "CLI install failed"
-            append("Terminal CLI install failed: \(message)", stream: .stderr)
-        case .skippedNoBundledCLI:
-            status = "No bundled CLI"
-            append("Terminal CLI install skipped: bundled CLI payload was not found.", stream: .stderr)
+            if let path = nextStatus.resolvedPath {
+                append("Installed Terminal CLI at \(URL(fileURLWithPath: path).abbreviatedForDisplay).", stream: .system)
+            }
         }
     }
 

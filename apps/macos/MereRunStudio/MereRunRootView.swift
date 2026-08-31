@@ -5447,13 +5447,51 @@ struct MereRunSettingsView: View {
                     .foregroundStyle(MereRunTheme.textMuted)
             }
             EditorSection("Install") {
-                HStack(spacing: 10) {
-                    Button {
-                        controller.installTerminalCLI()
-                    } label: {
-                        Label("Install CLI", systemImage: "terminal")
+                VStack(alignment: .leading, spacing: 8) {
+                    Label(
+                        controller.cliInstallationStatus.title,
+                        systemImage: controller.cliInstallationStatus.phase == .upToDate
+                            ? "checkmark.circle.fill"
+                            : "terminal"
+                    )
+                    .font(MereRunTheme.bodyFont.weight(.semibold))
+
+                    Text(controller.cliInstallationStatus.detail)
+                        .font(MereRunTheme.captionFont)
+                        .foregroundStyle(MereRunTheme.textMuted)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    if let path = controller.cliInstallationStatus.resolvedPath {
+                        Text("Path: \(path)")
+                            .font(MereRunTheme.monoFont)
+                            .foregroundStyle(MereRunTheme.textMuted)
+                            .textSelection(.enabled)
                     }
-                    .buttonStyle(.borderedProminent)
+
+                    HStack(spacing: 14) {
+                        Text("Installed: \(controller.cliInstallationStatus.installedVersion ?? "—")")
+                        Text("Bundled: \(controller.cliInstallationStatus.bundledVersion ?? "—")")
+                    }
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.textMuted)
+
+                    if let error = controller.cliInstallationStatus.lastSynchronizationError {
+                        Text(error)
+                            .font(MereRunTheme.captionFont)
+                            .foregroundStyle(MereRunTheme.yellow)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
+
+                HStack(spacing: 10) {
+                    if let actionTitle = controller.cliInstallationStatus.actionTitle {
+                        Button {
+                            controller.installTerminalCLI()
+                        } label: {
+                            Label(actionTitle, systemImage: "terminal")
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
 
                     Button {
                         controller.installCodexSkills()
@@ -5462,7 +5500,7 @@ struct MereRunSettingsView: View {
                     }
                     .buttonStyle(.bordered)
                 }
-                Text("CLI installs from the app bundle without sudo. Skill install copies the bundled `use-mere-run` Codex skill to `~/.codex/skills`.")
+                Text("Studio-managed CLI payloads keep every runtime asset in Application Support and activate the command with an atomic symlink. Skill install copies the bundled `use-mere-run` Codex skill to `~/.codex/skills`.")
                     .font(MereRunTheme.captionFont)
                     .foregroundStyle(MereRunTheme.textMuted)
             }
