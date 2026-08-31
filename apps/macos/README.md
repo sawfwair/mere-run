@@ -214,3 +214,16 @@ menu. Release builds use the stable HTTPS appcast, automatic daily discovery,
 an Ed25519-signed archive and feed, Developer ID verification, and
 pre-extraction signature validation. Sparkle updates the complete app bundle,
 including its embedded CLI, as one atomic unit.
+
+Studio installs the Terminal CLI as a complete, versioned payload under
+`~/Library/Application Support/mere.run/cli/`. The public `mere.run` command is
+an atomic symlink to that payload. Studio records the destination, app build,
+payload fingerprint, and installed assets in the
+`~/Library/Application Support/mere.run/studio-cli-install.json` file.
+
+After Studio starts, it synchronizes only an installation that still matches
+this ownership receipt. Studio doesn't replace custom paths, package-manager
+symlinks, or unmarked CLI copies. In **Settings**, use **Update CLI** to adopt
+an unmarked copy or use **Repair CLI** after an owned payload changes. Studio
+validates the staged command with `mere.run --version` before it updates the
+public symlink.
