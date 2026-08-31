@@ -58,6 +58,7 @@ mere.run model pull text-chat-gemma4-12b-4bit
 mere.run model pull text-chat-lfm25-1.2b-qad-4bit --accept-model-license
 mere.run model pull text-chat-lfm25-2.6b-4bit --accept-model-license
 mere.run model pull vision-chat-lfm25-3b-8bit --accept-model-license
+mere.run model pull text-chat-lfm25-a1b-8bit --accept-model-license
 mere.run model pull text-chat-laguna-s-2-1
 mere.run model pull text-chat-laguna-xs-2-1
 mere.run text chat --help
@@ -97,6 +98,24 @@ mere.run text train-lora \
   --model text-chat-gemma4-12b-4bit \
   --visualize
 ```
+
+For an LFM2.5 A1B canary, use the same reviewed dataset format and a 10-step
+attention-only run:
+
+```bash
+mere.run text train-lora \
+  --data ./copper-finch-canary.jsonl \
+  --eval ./copper-finch-heldout.jsonl \
+  --output ./copper-finch-lfm25.safetensors \
+  --model text-chat-lfm25-a1b-8bit \
+  --training-steps 10 \
+  --rank 16 \
+  --alpha 32
+```
+
+The command writes a `mererun.lfm2.text-lora` manifest and keeps convolution
+and MoE expert matrices frozen. The LFM Open License v1.0 applies to the base
+model and derived adapters.
 
 ## Parameters
 

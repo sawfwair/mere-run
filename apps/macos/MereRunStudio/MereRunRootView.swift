@@ -1928,6 +1928,7 @@ private struct TextLoRATrainingOptions: View {
                     Text("Gemma 4 12B").tag("text-chat-gemma4-12b-4bit")
                     Text("Laguna XS 2.1").tag("text-chat-laguna-xs-2-1")
                     Text("Inkling-Small").tag("text-chat-inkling-small")
+                    Text("LFM2.5 A1B").tag("text-chat-lfm25-a1b-8bit")
                 }
                 .pickerStyle(.segmented)
                 PathField(

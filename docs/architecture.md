@@ -69,6 +69,15 @@ Krea 2 generation and LoRA training:
   - `Sources/MereRunCore/Krea2/Krea2ModelLoader.swift`
   - `Sources/MereRunCore/Krea2/Krea2SampleBuilder.swift`
 
+LFM2.5 text generation and LoRA training:
+
+- Runtime entry point: `Sources/MereRunCore/LFM2/LFM2Generator.swift`
+- Read next:
+  - `Sources/MereRunCore/LFM2/LFM2Model.swift`
+  - `Sources/MereRunCore/LFM2/LFM2TextModelLoader.swift`
+  - `Sources/MereRunCore/LFM2/LFM2TextLoRAInjector.swift`
+  - `Sources/MereRunCore/LFM2/LFM2TextLoRATrainingPipeline.swift`
+
 Shared text encoder stack used by image models:
 
 - Public entry point:

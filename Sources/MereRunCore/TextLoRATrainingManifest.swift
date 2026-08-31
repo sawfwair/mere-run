@@ -5,6 +5,7 @@ public struct TextLoRATrainingManifest: Codable, Sendable, Hashable {
     public static let gemma4Format = "mererun.gemma4.text-lora"
     public static let lagunaFormat = "mererun.laguna.text-lora"
     public static let inklingFormat = "mererun.inkling.text-lora"
+    public static let lfm2Format = "mererun.lfm2.text-lora"
     /// Compatibility alias for the first native text adapter format.
     public static let format = gemma4Format
 

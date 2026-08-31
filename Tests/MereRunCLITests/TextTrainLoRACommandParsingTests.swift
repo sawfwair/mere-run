@@ -91,6 +91,20 @@ final class TextTrainLoRACommandParsingTests: XCTestCase {
         )
     }
 
+    func testTrainLoRAParsesLFM25A1BModel() throws {
+        let command = try TextTrainLoRA.parse([
+            "--data", "pairs.jsonl",
+            "--output", "lfm25-support.safetensors",
+            "--model", LFM2Resources.defaultModelId,
+        ])
+
+        XCTAssertEqual(command.model, LFM2Resources.defaultModelId)
+        XCTAssertEqual(
+            command.resolvedTargetModules(),
+            ["q_proj", "k_proj", "v_proj", "out_proj"]
+        )
+    }
+
     func testInklingReceptivityFixturesAreHeldOutParaphrases() throws {
         let fixtureRoot = URL(fileURLWithPath: #filePath)
             .deletingLastPathComponent()

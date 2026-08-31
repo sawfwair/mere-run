@@ -674,6 +674,7 @@ struct StudioTrainingSheet: View {
                 Text("Gemma 4").tag("text-chat-gemma4-12b-4bit")
                 Text("Laguna XS 2.1").tag("text-chat-laguna-xs-2-1")
                 Text("Inkling-Small").tag("text-chat-inkling-small")
+                Text("LFM2.5 A1B").tag("text-chat-lfm25-a1b-8bit")
             }
             .pickerStyle(.segmented)
             labeledTextField("Base model", placeholder: "Managed text model", text: $textDraft.model)
@@ -696,7 +697,7 @@ struct StudioTrainingSheet: View {
                 placeholder: "Model-family defaults",
                 text: $textDraft.targetModules
             )
-            Text("Leave target modules empty for the native family recipe. Inkling includes attention, MLP, routed/shared experts, and unembedding.")
+            Text("Leave target modules empty for the native family recipe. LFM2.5 v1 is attention-only; Inkling also includes MLP, expert, and unembedding targets.")
                 .font(MereRunTheme.captionFont)
                 .foregroundStyle(MereRunTheme.textMuted)
             if textDraft.model.localizedCaseInsensitiveContains("inkling") {

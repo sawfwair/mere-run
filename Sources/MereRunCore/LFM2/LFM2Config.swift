@@ -157,6 +157,7 @@ public enum LFM2Error: LocalizedError {
     case unsupportedModelId(String)
     case missingFiles([String])
     case downloadFailed(String)
+    case adapterSwitchDuringActiveGeneration
     case generationFailed(String)
 
     public var errorDescription: String? {
@@ -169,6 +170,8 @@ public enum LFM2Error: LocalizedError {
             return "Missing required LFM2 files: \(files.joined(separator: ", "))"
         case .downloadFailed(let message):
             return "LFM2 download failed: \(message)"
+        case .adapterSwitchDuringActiveGeneration:
+            return "LFM2 cannot switch text LoRA adapters while batched generation is active."
         case .generationFailed(let message):
             return message
         }

@@ -122,6 +122,12 @@ public struct LFM2Resources: Sendable, Hashable {
             || normalized.contains("liquidai/")
     }
 
+    public static func supportsTextLoRATraining(modelSpec: String) -> Bool {
+        let normalized = modelSpec.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return normalized == defaultModelId.lowercased()
+            || normalized == upstreamRepoId.lowercased()
+    }
+
     public var rootURL: URL
 
     public init(rootURL: URL) {

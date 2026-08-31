@@ -454,15 +454,24 @@ final class LFM2SwitchGLU: Module {
         super.init()
     }
 
-    func callAsFunction(_ x: MLXArray, indices: MLXArray) -> MLXArray {
-        return unsorted(x, indices: indices)
+    func callAsFunction(
+        _ x: MLXArray,
+        indices: MLXArray,
+        useCustomKernels: Bool = true
+    ) -> MLXArray {
+        return unsorted(x, indices: indices, useCustomKernels: useCustomKernels)
     }
 
-    private func unsorted(_ x: MLXArray, indices: MLXArray) -> MLXArray {
+    private func unsorted(
+        _ x: MLXArray,
+        indices: MLXArray,
+        useCustomKernels: Bool
+    ) -> MLXArray {
         let batch = x.dim(0)
         let sequenceLength = x.dim(1)
         let topK = indices.dim(2)
-        if LFM2MoEAccelerationPolicy.fusedAffine8MoEEnabled,
+        if useCustomKernels,
+           LFM2MoEAccelerationPolicy.fusedAffine8MoEEnabled,
            gateProj.groupSize == upProj.groupSize,
            gateProj.bits == upProj.bits,
            let gateScales = gateProj.scales,
@@ -537,7 +546,7 @@ final class LFM2FeedForward: Module {
         super.init()
     }
 
-    func callAsFunction(_ x: MLXArray) -> MLXArray {
+    func callAsFunction(_ x: MLXArray, useCustomKernels: Bool = true) -> MLXArray {
         if usesDenseWeightNames, let w1, let w2, let w3 {
             return w2(lfm2Swiglu(w1(x), w3(x)))
         }
@@ -553,14 +562,22 @@ final class LFM2FeedForward: Module {
             scores = scores + expertBias
         }
 
-        let indices = argPartition(-scores, kth: topK - 1, axis: -1)[.ellipsis, 0..<topK]
+        // Expert selection is discrete. Preserve gradients through the
+        // selected scores, but do not request a VJP for integer indices.
+        let indices = stopGradient(
+            argPartition(-scores, kth: topK - 1, axis: -1)[.ellipsis, 0..<topK]
+        )
         scores = takeAlong(scores, indices, axis: -1)
         if normTopKProb, topK > 1 {
             scores = scores / (scores.sum(axis: -1, keepDims: true) + MLXArray(1e-20))
         }
         scores = scores.asType(x.dtype)
 
-        let switched = switchMLP(x, indices: indices)
+        let switched = switchMLP(
+            x,
+            indices: indices,
+            useCustomKernels: useCustomKernels
+        )
         var routed = switched * MLX.expandedDimensions(scores, axis: scores.ndim)
         routed = routed.sum(axis: -2)
         return routed
@@ -593,7 +610,8 @@ final class LFM2DecoderLayer: Module {
         _ x: MLXArray,
         attentionMask: MLXFast.ScaledDotProductAttentionMaskMode,
         cache: LFM2LayerCache?,
-        captureSpeculativeState: Bool = false
+        captureSpeculativeState: Bool = false,
+        useCustomKernels: Bool = true
     ) -> MLXArray {
         let normed = operatorNorm(x)
         let operatorOut: MLXArray
@@ -626,7 +644,10 @@ final class LFM2DecoderLayer: Module {
         }
 
         let hidden = x + operatorOut
-        return hidden + feedForward(ffnNorm(hidden))
+        return hidden + feedForward(
+            ffnNorm(hidden),
+            useCustomKernels: useCustomKernels
+        )
     }
 }
 
@@ -670,7 +691,8 @@ final class LFM2Transformer: Module {
         cache: [LFM2LayerCache?]?,
         inputEmbeddings: MLXArray? = nil,
         captureLayerIndices: Set<Int> = [],
-        captureSpeculativeState: Bool = false
+        captureSpeculativeState: Bool = false,
+        useCustomKernels: Bool = true
     ) -> (hidden: MLXArray, captures: [Int: MLXArray]) {
         var hidden = inputEmbeddings ?? embeddings(for: inputIds)
         let attentionMask = createAttentionMask(h: hidden, cache: firstAttentionCache(from: cache))
@@ -681,7 +703,8 @@ final class LFM2Transformer: Module {
                 hidden,
                 attentionMask: attentionMask,
                 cache: cache?[index] ?? nil,
-                captureSpeculativeState: captureSpeculativeState
+                captureSpeculativeState: captureSpeculativeState,
+                useCustomKernels: useCustomKernels
             )
             if captureLayerIndices.contains(index) {
                 captures[index] = hidden
@@ -733,14 +756,16 @@ public final class LFM2Model: Module, @unchecked Sendable {
         cache: [LFM2LayerCache?]?,
         inputEmbeddings: MLXArray? = nil,
         captureLayerIndices: Set<Int> = [],
-        captureSpeculativeState: Bool = false
+        captureSpeculativeState: Bool = false,
+        useCustomKernels: Bool = true
     ) -> LFM2ForwardOutput {
         let output = model.forward(
             inputIds,
             cache: cache,
             inputEmbeddings: inputEmbeddings,
             captureLayerIndices: captureLayerIndices,
-            captureSpeculativeState: captureSpeculativeState
+            captureSpeculativeState: captureSpeculativeState,
+            useCustomKernels: useCustomKernels
         )
         return LFM2ForwardOutput(
             hidden: output.hidden,
@@ -776,6 +801,38 @@ public final class LFM2Model: Module, @unchecked Sendable {
             logits: logits(from: hidden),
             capturedHiddenStates: output.captures
         )
+    }
+
+    /// Projects only loss-bearing token positions through the tied vocabulary
+    /// head while retaining the full differentiable LFM2 graph. The native
+    /// affine-8 fused MoE kernel is inference-only and does not define a VJP.
+    func trainingLogits(
+        inputIDs: MLXArray,
+        flatTargetPositions: MLXArray
+    ) -> MLXArray {
+        let hidden = model.forward(
+            inputIDs,
+            cache: nil,
+            useCustomKernels: false
+        ).hidden
+        let flattened = hidden.reshaped([-1, hidden.dim(-1)])
+        let selected = take(
+            flattened,
+            flatTargetPositions.asType(.int32),
+            axis: 0
+        )
+        return logits(from: selected)
+    }
+
+    /// Full-vocabulary fallback for training configurations that disable the
+    /// gathered assistant-token loss.
+    func trainingForward(_ inputIDs: MLXArray) -> MLXArray {
+        let hidden = model.forward(
+            inputIDs,
+            cache: nil,
+            useCustomKernels: false
+        ).hidden
+        return logits(from: hidden)
     }
 
     func forkCache(_ cache: [LFM2LayerCache?]) -> [LFM2LayerCache?] {
