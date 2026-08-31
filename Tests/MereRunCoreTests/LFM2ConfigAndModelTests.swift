@@ -432,6 +432,111 @@ final class LFM2ConfigAndModelTests: MereRunCoreTestCase {
         XCTAssertTrue(MLX.max(MLX.abs(logits.asType(.float32))).item(Float.self).isFinite)
     }
 
+    func testTrainingLogitsMatchFullProjectionAtSelectedPositions() throws {
+        MLXRandom.seed(73)
+        let config = try makeTinyConfig()
+        let model = LFM2Model(config: config)
+        let input = MLXArray([Int32(1), 2, 3, 4, 5, 6]).reshaped(2, 3)
+        let positions = MLXArray([Int32(1), Int32(3), Int32(5)])
+        let full = model.trainingForward(input).reshaped(-1, config.vocabSize)
+        let expected = take(full, positions, axis: 0)
+        let gathered = model.trainingLogits(
+            inputIDs: input,
+            flatTargetPositions: positions
+        )
+        MLX.eval(expected, gathered)
+
+        XCTAssertEqual(gathered.shape, [3, config.vocabSize])
+        XCTAssertEqual(
+            MLX.max(MLX.abs(expected - gathered)).item(Float.self),
+            0,
+            accuracy: 1e-6
+        )
+    }
+
+    func testNativeLFM2TrainerUpdatesAttentionLoRA() throws {
+        MLXRandom.seed(74)
+        let model = LFM2Model(config: try makeTinyConfig())
+        let layers = try LFM2TextLoRAInjector.inject(into: model, rank: 2)
+        let inputTokenIDs = (0..<40).map { ($0 % 8) + 1 }
+        let labelTokenIDs = Array(inputTokenIDs.dropFirst()) + [1]
+
+        let report = try TextLoRATrainer.train(
+            model: model,
+            loraLayers: layers,
+            examples: [
+                TextSFTTokenizedExample(
+                    inputTokenIds: inputTokenIDs,
+                    labelTokenIds: labelTokenIDs,
+                    lossMask: [0] + Array(repeating: 1, count: 39)
+                ),
+            ],
+            config: TextLoRATrainingConfig(
+                trainingSteps: 2,
+                batchSize: 1,
+                learningRate: 0.01
+            ),
+            gatheredForward: { model, inputIDs, positions in
+                model.trainingLogits(
+                    inputIDs: inputIDs,
+                    flatTargetPositions: positions
+                )
+            }
+        ) { model, inputIDs in
+            model.trainingForward(inputIDs)
+        }
+
+        XCTAssertEqual(report.steps, 2)
+        XCTAssertEqual(report.layerCount, 8)
+        XCTAssertTrue(report.finalLoss?.isFinite == true)
+        XCTAssertTrue(layers.values.contains {
+            MLX.sum(MLX.abs($0.loraUp)).item(Float.self) > 0
+        })
+    }
+
+    func testNativeLFM2AdapterReloadsSavedTrainingWeights() async throws {
+        MLXRandom.seed(75)
+        let config = try makeTinyConfig()
+        let source = LFM2Model(config: config)
+        let sourceLayers = try LFM2TextLoRAInjector.inject(
+            into: source,
+            rank: 2,
+            alpha: 4
+        )
+        for layer in sourceLayers.values {
+            layer.loraDown = MLXArray.ones(like: layer.loraDown) * 0.125
+            layer.loraUp = MLXArray.ones(like: layer.loraUp) * 0.25
+        }
+
+        let directory = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let adapterURL = directory.appendingPathComponent("lfm2-attention.safetensors")
+        try LoRASafetensorsWriter.save(
+            loraLayers: sourceLayers,
+            to: adapterURL,
+            metadata: ["format": TextLoRATrainingManifest.lfm2Format]
+        )
+
+        MLXRandom.seed(75)
+        let target = LFM2Model(config: config)
+        let input = MLXArray([Int32(1), 2, 3]).reshaped(1, 3)
+        let baseline = target.trainingForward(input)
+        MLX.eval(baseline)
+        let report = try await LFM2TextLoRAAdapter.apply(
+            .local(path: adapterURL.path, scale: 1),
+            to: target
+        )
+        let adapted = target.trainingForward(input)
+        MLX.eval(adapted)
+
+        XCTAssertEqual(report.matchedLayerCount, sourceLayers.count)
+        XCTAssertEqual(report.injectedLayerCount, sourceLayers.count)
+        XCTAssertGreaterThan(
+            MLX.max(MLX.abs(adapted - baseline)).item(Float.self),
+            0
+        )
+    }
+
     func testTinyDenseLFM2ForwardUsesOfficialWeightNames() throws {
         MLXRandom.seed(43)
         let config = try makeTinyDenseConfig()

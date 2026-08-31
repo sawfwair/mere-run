@@ -52,6 +52,13 @@ applies sharded safetensor weights with `HFSafetensorsWeightsLoader`, pre-fills
 in cancellable chunks, then uses either the pipelined serial loop or the
 row-compacting continuous decode scheduler selected by the serving runtime.
 
+The A1B 8-bit text model also supports attention-only low-rank adaptation
+(LoRA) training and loading. `LFM2TextLoRAInjector.swift` wraps only the
+`q_proj`, `k_proj`, `v_proj`, and `out_proj` modules under `self_attn`.
+Convolution output projections and MoE expert matrices remain frozen. The
+training path turns off the inference-only fused affine-8 MoE kernel so that
+MLX can differentiate through the frozen base graph.
+
 For text targets, the managed catalog also installs the matching pinned
 `*-dspark` companion. `LFM2DSpark.swift` projects hidden states captured at
 the inputs to the checkpoint's five configured target layers into a five-layer,
@@ -75,6 +82,10 @@ fall back to MLX's portable gather path.
 ## Notes
 
 - This runtime is Swift-native and does not bridge to Python.
+- LFM2 text adapters use the `mererun.lfm2.text-lora` manifest. The
+  `text-chat-lfm25-a1b-8bit` model remains subject to the LFM Open License
+  v1.0 acceptance gate. The license also applies to adapters derived from the
+  model.
 - The QAD checkpoints keep Q4_0 projection nibbles and scales exactly in MLX
   affine group-32 tensors. Their Q6_K tied embeddings are decoded and
   requantized to MLX affine 6-bit/group-64; the published conversion receipts

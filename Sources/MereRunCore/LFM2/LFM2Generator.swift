@@ -168,6 +168,7 @@ public actor LFM2Generator: ChatGenerator {
     private var loadedConfig: LFM2Config?
     private var loadedVisionConfig: LFM2VLConfig?
     private var loadedVisionProcessorConfig: LFM2VLProcessorConfig?
+    private var loadedTextLoRASignature: String?
 
     private let modelId: String
 
@@ -212,7 +213,15 @@ public actor LFM2Generator: ChatGenerator {
                 progressHandler: progressHandler
             )
             let loadStart = Date()
+            let requestedLoRASignature = Self.loraSignature(request.lora)
+            if loadedTextLoRASignature != requestedLoRASignature {
+                guard !hasActiveGeneration else {
+                    throw LFM2Error.adapterSwitchDuringActiveGeneration
+                }
+                beginResidencyTransition()
+            }
             try await ensureLoaded(rootURL: rootURL, progressHandler: progressHandler)
+            try await applyTextLoRAIfNeeded(request.lora, progressHandler: progressHandler)
             let loadSeconds = Date().timeIntervalSince(loadStart)
 
             var response = try await generate(request, progressHandler: progressHandler)
@@ -704,6 +713,45 @@ public actor LFM2Generator: ChatGenerator {
             promptTokens: promptTokens.count,
             acceleration: decodeResult.acceleration
         )
+    }
+
+    private func applyTextLoRAIfNeeded(
+        _ lora: LoRA?,
+        progressHandler: (@Sendable (ChatProgress) -> Void)?
+    ) async throws {
+        guard let lora else {
+            loadedTextLoRASignature = nil
+            return
+        }
+        let signature = Self.loraSignature(lora)
+        guard loadedTextLoRASignature != signature else { return }
+        guard let model, let loadedConfig else {
+            throw LFM2Error.modelNotLoaded
+        }
+        guard loadedVisionConfig == nil,
+              loadedConfig.modelType == "lfm2_moe",
+              loadedConfig.quantization?.bits == 8 else {
+            throw LFM2Error.generationFailed(
+                "Native LFM2 text LoRA adapters v1 require the affine 8-bit LFM2.5 A1B text runtime."
+            )
+        }
+        progressHandler?(ChatProgress(
+            stage: .loadingModel,
+            message: "Loading LFM2 text LoRA"
+        ))
+        _ = try await LFM2TextLoRAAdapter.apply(lora, to: model)
+        loadedTextLoRASignature = signature
+        prefixKVCache.removeAll(keepingCapacity: false)
+    }
+
+    private static func loraSignature(_ lora: LoRA?) -> String? {
+        guard let lora else { return nil }
+        switch lora {
+        case .local(let path, let scale):
+            return "local:\(URL(fileURLWithPath: path).standardizedFileURL.path):\(scale)"
+        case .remote(let reference, let scale):
+            return "remote:\(reference):\(scale)"
+        }
     }
 
     private func decodeTokens(
@@ -1321,6 +1369,12 @@ public actor LFM2Generator: ChatGenerator {
         }
     }
 
+    private var hasActiveGeneration: Bool {
+        decodeLoopEpochState.runningEpoch != nil
+            || !decodeQueue.isEmpty
+            || !activeDecodeRows.isEmpty
+    }
+
     private func cacheMode(for caches: [LFM2LayerCache?]) -> RuntimeKVCacheMode {
         caches.contains { entry in
             guard case .attention(let cache)? = entry else { return false }
@@ -1349,6 +1403,7 @@ public actor LFM2Generator: ChatGenerator {
         loadedConfig = nil
         loadedVisionConfig = nil
         loadedVisionProcessorConfig = nil
+        loadedTextLoRASignature = nil
         prefixKVCache.removeAll(keepingCapacity: false)
         Memory.clearCache()
         return epoch

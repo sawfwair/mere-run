@@ -419,11 +419,11 @@ cadence.
 ### `MERERUN_TEXT_LORA_TRAIN_GATHERED_LOSS`
 
 Native text LoRA training (`text train-lora`) projects only loss-masked
-target positions through the 262k-vocabulary lm_head and computes cross
-entropy as logSumExp-minus-gather, instead of materializing full-sequence
+target positions through the model's vocabulary head and computes cross
+entropy as logSumExp-minus-gather instead of materializing full-sequence
 logits plus a second full-vocabulary log-probability tensor. Gradients are
 identical to the full path. Prompt and padding rows do not contribute loss, so
-so this is on by default; set `0`, `false`, or `off` to restore the legacy
+this optimization is on by default. Set `0`, `false`, or `off` to restore the
 full-logits loss. The trainer prints its decision at startup
 (`gathered_loss=` on stderr).
 

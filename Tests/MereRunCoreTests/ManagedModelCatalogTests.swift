@@ -681,11 +681,15 @@ final class ManagedModelCatalogTests: XCTestCase {
         let inkling = try XCTUnwrap(
             ManagedModelCatalog.spec(for: InklingResources.modelID)
         )
+        let lfm2A1B = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: LFM2Resources.defaultModelId)
+        )
 
         XCTAssertTrue(gemma.defaultCLICommands.contains("text train-lora"))
         XCTAssertTrue(lagunaXS.defaultCLICommands.contains("text train-lora"))
         XCTAssertFalse(lagunaS.defaultCLICommands.contains("text train-lora"))
         XCTAssertTrue(inkling.defaultCLICommands.contains("text train-lora"))
+        XCTAssertTrue(lfm2A1B.defaultCLICommands.contains("text train-lora"))
     }
 
     func testLagunaUsesPinnedOfficialTargetAndCompanion() throws {

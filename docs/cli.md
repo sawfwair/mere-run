@@ -862,7 +862,7 @@ generated text still arrives incrementally on stdout while diagnostics remain
 suppressed.
 
 `--lora` accepts a compatible local adapter file or cataloged adapter id.
-Native Gemma 4, Laguna XS 2.1, and Inkling-Small adapters produced by
+Native Gemma 4, Laguna XS 2.1, Inkling-Small, and LFM2.5 A1B adapters produced by
 `text train-lora` load directly in their matching runtime; `--lora-scale`
 scales the adapter.
 
@@ -895,9 +895,9 @@ Apple Silicon for this release.
 
 ### `mere.run text train-lora`
 
-Train a native LoRA from reviewed chat-style SFT JSONL. Supported
-families are Gemma 4 text models, `text-chat-laguna-xs-2-1`, and
-`text-chat-inkling-small`.
+Train a native LoRA from reviewed chat-style SFT JSONL. Supported families are
+Gemma 4 text models, `text-chat-laguna-xs-2-1`, `text-chat-inkling-small`, and
+`text-chat-lfm25-a1b-8bit`.
 
 ```bash
 swift run mere.run text train-lora \
@@ -919,12 +919,18 @@ checks include the complete conversation state and schemas, so successive
 tool-loop states may repeat a user question. `--dry-run --json` validates and
 fingerprints the dataset and writes the family-specific manifest without
 loading the model. Gemma 4 and Laguna default to
-`q_proj,k_proj,v_proj,o_proj`. Inkling defaults to those attention projections
-plus `gate_proj,up_proj,down_proj,lm_head`; expert MLPs use shared-outer factors
-to keep the 256-expert adapter tractable. Inkling `--reasoning-effort` accepts
+`q_proj,k_proj,v_proj,o_proj`. LFM2.5 defaults to
+`q_proj,k_proj,v_proj,out_proj` under attention only. Inkling defaults to its
+attention projections plus `gate_proj,up_proj,down_proj,lm_head`; expert MLPs
+use shared-outer factors to keep the 256-expert adapter tractable. Inkling
+`--reasoning-effort` accepts
 0 through 0.99 and is recorded in the training manifest. Use the same value for
 inference. See [Text Runtime](/runtime/text) for the full dataset,
 training-artifact, and behavioral validation flow.
+
+Before you train LFM2.5, install the model with
+`model pull text-chat-lfm25-a1b-8bit --accept-model-license`. The LFM Open
+License v1.0 applies to the base model and derived adapters.
 
 ### `mere.run text code`
 

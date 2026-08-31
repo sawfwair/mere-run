@@ -547,10 +547,11 @@ repeat a question after an assistant tool call and tool result, while an exact
 duplicate controller state remains invalid.
 
 Without `--dry-run`, the command resolves a supported Gemma 4 text model,
-`text-chat-laguna-xs-2-1`, or `text-chat-inkling-small` through the same managed
-model store as chat, applies that family's released chat template, masks loss
-to assistant tokens, injects native LoRA layers into the family-specific target
-surface, and writes a `.safetensors` adapter plus a family-specific manifest. Add
+`text-chat-laguna-xs-2-1`, `text-chat-inkling-small`, or
+`text-chat-lfm25-a1b-8bit` through the same managed model store as chat. The
+command applies the model's chat template, masks loss to assistant tokens,
+injects LoRA layers into the family-specific target surface, and writes a
+`.safetensors` adapter plus a family-specific manifest. Add
 `--visualize` to start the same loopback LoRA training dashboard used by image
 training; text runs write `run.json`, `*.events.jsonl`, `*.loss.csv`, and
 `*.loss.html` beside the adapter so loss and training events can be inspected
@@ -575,8 +576,9 @@ Core hyperparameters (defaults are tuned for local Gemma4 SFT):
 - `--reasoning-effort` — Inkling renderer effort from `0` through `0.99`
   (default `0.9`; use the same value for inference)
 - `--seed` — random seed (default `42`)
-- `--target-modules` — comma-separated LoRA target suffixes (Gemma/Laguna
-  default to q/k/v/o attention; Inkling also defaults to MLPs and `lm_head`)
+- `--target-modules` — comma-separated LoRA target suffixes. Gemma and Laguna
+  default to q/k/v/o attention. LFM2.5 defaults to q/k/v/output attention.
+  Inkling also defaults to MLPs and `lm_head`.
 - `--adapter-name` — adapter display name (default `local-assistant`)
 
 This list is deliberately not exhaustive; run
@@ -656,6 +658,36 @@ Inkling adapters write `mererun.inkling.text-lora` in their manifest. The
 training graph uses a differentiable MLX mask path and treats discrete expert
 selection indices as non-differentiable while retaining gradients through the
 selected router scores and quantized expert computation.
+
+LFM2.5 A1B uses a frozen affine 8-bit base and adapts only the four attention
+projections. This first target surface excludes short-convolution blocks,
+dense feed-forward layers, routers, and expert matrices. The native module
+name is `out_proj`; the injector also accepts the upstream LoRA alias
+`o_proj`.
+
+```bash
+mere.run model pull text-chat-lfm25-a1b-8bit --accept-model-license
+
+mere.run text train-lora \
+  --model text-chat-lfm25-a1b-8bit \
+  --data ./copper-finch-canary.jsonl \
+  --eval ./copper-finch-heldout.jsonl \
+  --output ./copper-finch-lfm25.safetensors \
+  --training-steps 10 \
+  --rank 16 \
+  --alpha 32
+
+mere.run text chat \
+  --model text-chat-lfm25-a1b-8bit \
+  --lora ./copper-finch-lfm25.safetensors \
+  --prompt "Introduce yourself in two sentences."
+```
+
+LFM2.5 adapters write `mererun.lfm2.text-lora` in their manifest. The LFM
+Open License v1.0 applies to the base model and derived adapters. You must
+accept the model license before installation. Commercial use by a legal entity
+with annual revenue of at least USD 10 million isn't licensed under the
+community terms.
 
 Loss improvement is diagnostic, not a behavioral acceptance gate. The repository
 includes a deterministic codebook task with 32 train examples and four unseen
@@ -746,11 +778,12 @@ plain redacted text or structured JSON spans.
 
 ### `mere.run text train-lora`
 
-Use this to prepare and train Gemma-family, Laguna XS 2.1, or Inkling-Small text
-LoRA adapters from reviewed chat SFT data. The Laguna lane is
+Use this to prepare and train Gemma-family, Laguna XS 2.1, Inkling-Small, or
+LFM2.5 A1B 8-bit text LoRA adapters from reviewed chat SFT data. The Laguna lane is
 `text-chat-laguna-xs-2-1`; Laguna S and DFlash are inference-only here. The
 Inkling lane is `text-chat-inkling-small` and trains against its pinned native
 mixed-precision MLX artifact.
+The LFM2.5 lane is `text-chat-lfm25-a1b-8bit` and uses attention-only QLoRA.
 
 ## Reading the code
 

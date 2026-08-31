@@ -2169,7 +2169,7 @@ public enum ManagedModelCatalog {
             validationKind: .lfm2,
             runtimeAutoDownloadAllowed: false,
             estimatedDownloadBytes: 10 * 1_073_741_824,
-            defaultCLICommands: ["text chat", "api serve"],
+            defaultCLICommands: ["text chat", "text train-lora", "api serve"],
             apiProfile: .lfm2()
         ),
         ManagedModelSpec(

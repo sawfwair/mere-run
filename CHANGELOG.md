@@ -6,6 +6,14 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Text training
+
+- added attention-only QLoRA training and adapter loading for
+  `text-chat-lfm25-a1b-8bit`, using a frozen affine 8-bit LFM2.5 base and the
+  `mererun.lfm2.text-lora` manifest. The v1 target surface is limited to
+  q/k/v/output attention projections and keeps convolution and MoE expert
+  matrices frozen.
+
 ## 0.48.0 - 2026-08-31
 
 This release makes every public CLI capability first class in macOS Studio,

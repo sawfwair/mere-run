@@ -9,7 +9,7 @@ struct TextTrainLoRA: AsyncParsableCommand {
         discussion: """
         This is the native mere.run text fine-tuning entrypoint. It accepts OpenAI-style chat
         JSONL records with system/user/assistant messages and trains Gemma 4, Laguna XS 2.1,
-        or Inkling-Small.
+        Inkling-Small, or the LFM2.5 A1B 8-bit text model.
         It writes a model-family-specific MereRun adapter manifest beside the safetensors file.
         Use --dry-run to validate data, create manifests, and prepare a reproducible run.
         """
@@ -65,7 +65,7 @@ struct TextTrainLoRA: AsyncParsableCommand {
 
     @Option(
         name: [.customLong("target-modules")],
-        help: "Comma-separated LoRA target suffixes. Defaults to attention for Gemma/Laguna and attention, MLP, experts, and unembedding for Inkling."
+        help: "Comma-separated LoRA target suffixes. Defaults to attention for Gemma, Laguna, and LFM2.5; Inkling also includes MLP, expert, and unembedding targets."
     )
     var targetModules: String?
 
@@ -175,6 +175,28 @@ struct TextTrainLoRA: AsyncParsableCommand {
                             trainingConfig: config,
                             maxSequenceLength: maxSequenceLength,
                             reasoningEffort: reasoningEffort,
+                            rank: rank,
+                            alpha: alpha ?? Float(rank),
+                            targetSuffixes: resolvedTargetModules(),
+                            metadata: metadata
+                        ),
+                        progressHandler: makeChatProgressHandler(
+                            eventLogger: visualization?.logger
+                        ),
+                        trainingProgressHandler: makeTrainingProgressHandler(
+                            eventLogger: visualization?.logger
+                        )
+                    )
+                case .lfm2A1B:
+                    report = try await LFM2TextLoRATrainingPipeline.train(
+                        LFM2TextLoRATrainingPipelineRequest(
+                            modelId: model,
+                            modelPath: modelPath,
+                            examples: examples,
+                            evaluationExamples: evaluationExamples,
+                            outputURL: outputURL,
+                            trainingConfig: config,
+                            maxSequenceLength: maxSequenceLength,
                             rank: rank,
                             alpha: alpha ?? Float(rank),
                             targetSuffixes: resolvedTargetModules(),
@@ -339,6 +361,9 @@ struct TextTrainLoRA: AsyncParsableCommand {
         if InklingResources.handles(modelSpec: model) {
             return InklingTextLoRAInjector.defaultTargetSuffixes
         }
+        if LFM2Resources.supportsTextLoRATraining(modelSpec: model) {
+            return LFM2TextLoRAInjector.defaultTargetSuffixes
+        }
         return ["q_proj", "k_proj", "v_proj", "o_proj"]
     }
 
@@ -353,8 +378,12 @@ struct TextTrainLoRA: AsyncParsableCommand {
         if InklingResources.handles(modelSpec: model) {
             return .inkling
         }
+        if LFM2Resources.supportsTextLoRATraining(modelSpec: model) {
+            return .lfm2A1B
+        }
         throw ValidationError(
-            "--model must be a supported Gemma 4 text model, \(LagunaResources.xsModelID), or \(InklingResources.modelID)."
+            "--model must be a supported Gemma 4 text model, \(LagunaResources.xsModelID), "
+                + "\(InklingResources.modelID), or \(LFM2Resources.defaultModelId)."
         )
     }
 
@@ -524,6 +553,7 @@ private enum NativeTextLoRATrainingFamily {
     case gemma4
     case lagunaXS
     case inkling
+    case lfm2A1B
 
     var manifestFormat: String {
         switch self {
@@ -533,6 +563,8 @@ private enum NativeTextLoRATrainingFamily {
             TextLoRATrainingManifest.lagunaFormat
         case .inkling:
             TextLoRATrainingManifest.inklingFormat
+        case .lfm2A1B:
+            TextLoRATrainingManifest.lfm2Format
         }
     }
 }
