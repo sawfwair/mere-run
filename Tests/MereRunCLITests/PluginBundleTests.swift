@@ -4,6 +4,11 @@ import XCTest
 @testable import MereRunCLI
 
 final class PluginBundleTests: XCTestCase {
+    private struct InstalledPluginManifest: Decodable {
+        let name: String
+        let version: String
+    }
+
     private let key = Curve25519.Signing.PrivateKey()
     private var keys: [String: String] { ["test": key.publicKey.rawRepresentation.base64EncodedString()] }
 
@@ -177,18 +182,27 @@ final class PluginBundleTests: XCTestCase {
         XCTAssertEqual(run.arguments, ["process", "--input", "document.csv"])
     }
 
-    func testRealSignedPilotInstallsAndConvertsAfterRelocation() throws {
+    func testRealSignedBundleInstallsAndRunsAfterRelocation() throws {
         guard let directory = ProcessInfo.processInfo.environment["MERERUN_BUNDLE_TEST_ARTIFACT"] else {
-            throw XCTSkip("Set MERERUN_BUNDLE_TEST_ARTIFACT to a signed pilot directory for the real macOS acceptance test.")
+            throw XCTSkip("Set MERERUN_BUNDLE_TEST_ARTIFACT to a signed bundle directory for the real macOS acceptance test.")
         }
         let fixture = URL(fileURLWithPath: directory)
         let data = try Data(contentsOf: fixture.appendingPathComponent("release.json"))
         let manifest = try JSONDecoder().decode(PluginBundleEnvelope.self, from: data).verified()
+        let requested = ProcessInfo.processInfo.environment["MERERUN_BUNDLE_TEST_PLUGIN"]
+        let pluginID = try XCTUnwrap(requested ?? (manifest.entrypoints["mere-doc-tools"] == nil
+            ? manifest.entrypoints.keys.sorted().first : "mere-doc-tools"))
+        XCTAssertNotNil(manifest.entrypoints[pluginID])
         let root = try temporary().appendingPathComponent("Relocated plugin with spaces")
         let store = PluginBundleStore(root: root)
         _ = try store.install(envelopeData: data, archive: fixture.appendingPathComponent("bundle.dmg"),
-                              package: manifest.package, pluginID: "mere-doc-tools")
-        let executable = try XCTUnwrap(store.resolve("mere-doc-tools"))
+                              package: manifest.package, pluginID: pluginID)
+        let executable = try XCTUnwrap(store.resolve(pluginID))
+        let installed = try JSONDecoder().decode(InstalledPluginManifest.self,
+            from: PluginBundleIO.capture(executable.path, ["manifest", "--json"]))
+        XCTAssertEqual(installed.name, pluginID)
+        XCTAssertEqual(installed.version, manifest.version)
+        guard pluginID == "mere-doc-tools" else { return }
         let input = root.appendingPathComponent("source.csv")
         try Data("item,count\nNotebook,3\nPencil,4\n".utf8).write(to: input)
         _ = try PluginBundleIO.capture(executable.path, ["process", "--extractor", "anydoc", "--no-redact",
