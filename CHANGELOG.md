@@ -6,11 +6,45 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.48.0 - 2026-08-31
+
+This release makes every public CLI capability first class in macOS Studio,
+including geospatial workflows, model-location management, benchmarks, live
+transcription, vision serving, and signed-plugin operations. It also makes the
+terminal CLI installer self-repairing for app releases whose runtime payload
+was incomplete.
+
 ### macOS
 
+- expanded Studio's exhaustive command contract from 101 to 127 commands and
+  added dedicated surfaces for Geospatial Lab, model-store locations, the full
+  benchmark family, Listen Live, Vision Grounding serving, and signed-plugin
+  details, execution, and rollback. New diagnostics exports remain bounded and
+  secret-safe, while local MetricKit crash capture is opt-in.
 - fixed Studio's Install CLI action to copy the bundled ONNX Runtime dylib
   alongside `mere.run` and to replace an existing CLI install, so rerunning the
   action repairs incomplete terminal payloads from earlier app releases.
+
+### CLI
+
+- exposed the 26 newly cataloged commands through `mere.run catalog --json`
+  and let `mere.run vision serve` read `MERERUN_API_KEY` when `--api-key` is
+  omitted, while preserving explicit-argument precedence.
+
+### Documentation and release quality
+
+- moved version-specific release history out of the README and added a guard
+  that keeps the project overview evergreen.
+- generalized signed-plugin acceptance coverage to derive each test bundle
+  from its verified release manifest, then install, relocate, run, and validate
+  that bundle through the production plugin store.
+
+### Included pull requests
+
+- exact release range: [#382](https://github.com/sawfwair/mere-run/pull/382),
+  [#383](https://github.com/sawfwair/mere-run/pull/383),
+  [#384](https://github.com/sawfwair/mere-run/pull/384), and
+  [#385](https://github.com/sawfwair/mere-run/pull/385).
 
 ## 0.47.0 - 2026-08-29
 
