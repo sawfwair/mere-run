@@ -263,6 +263,68 @@ final class ManagedModelSupportTests: XCTestCase {
         XCTAssertEqual(recommendedReport.descriptor.recommendedUnifiedMemoryGB, 48)
     }
 
+    func testOrnith35BVisionRequiresNinetySixGBAndRecommendsOneTwentyEightGB() throws {
+        let spec = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: Q35Resources.ornith35BVisionModelId)
+        )
+        let undersized = MereRunMachineProfile(
+            physicalMemoryBytes: 64 * 1_073_741_824,
+            processorName: "M4 Max",
+            isAppleSiliconMac: true
+        )
+        let recommended = MereRunMachineProfile(
+            physicalMemoryBytes: 128 * 1_073_741_824,
+            processorName: "M4 Max",
+            isAppleSiliconMac: true
+        )
+
+        let rejected = ManagedModelCapabilityCatalog.support(for: spec, on: undersized)
+        let accepted = ManagedModelCapabilityCatalog.support(for: spec, on: recommended)
+
+        XCTAssertFalse(rejected.isSupported)
+        XCTAssertTrue(rejected.reasons.joined(separator: " ").contains("Requires at least 96 GB"))
+        XCTAssertTrue(accepted.isSupported)
+        XCTAssertTrue(accepted.meetsRecommendedMemory)
+        XCTAssertEqual(accepted.descriptor.minimumUnifiedMemoryGB, 96)
+        XCTAssertEqual(accepted.descriptor.recommendedUnifiedMemoryGB, 128)
+        let recommendation = try XCTUnwrap(
+            MereRunAgentModelCatalog.allTierRecommendations(on: recommended)
+                .first { $0.id == Q35Resources.ornith35BVisionModelId }
+        )
+        XCTAssertTrue(recommendation.isStartableByMereRun)
+        XCTAssertEqual(recommendation.servingEngine, .textChatQ35)
+    }
+
+    func testOrnith35BMLX4BitVisionRequiresThirtyTwoGBAndRecommendsFortyEightGB() throws {
+        let spec = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: Q35Resources.ornith35BMLX4BitModelId)
+        )
+        let undersized = MereRunMachineProfile(
+            physicalMemoryBytes: 24 * 1_073_741_824,
+            processorName: "M4 Max",
+            isAppleSiliconMac: true
+        )
+        let recommended = MereRunMachineProfile(
+            physicalMemoryBytes: 48 * 1_073_741_824,
+            processorName: "M4 Max",
+            isAppleSiliconMac: true
+        )
+
+        let rejected = ManagedModelCapabilityCatalog.support(for: spec, on: undersized)
+        XCTAssertFalse(rejected.isSupported)
+        let accepted = ManagedModelCapabilityCatalog.support(for: spec, on: recommended)
+        XCTAssertTrue(accepted.isSupported)
+        XCTAssertTrue(accepted.meetsRecommendedMemory)
+        XCTAssertEqual(accepted.descriptor.minimumUnifiedMemoryGB, 32)
+        XCTAssertEqual(accepted.descriptor.recommendedUnifiedMemoryGB, 48)
+        let recommendation = try XCTUnwrap(
+            MereRunAgentModelCatalog.allTierRecommendations(on: recommended)
+                .first { $0.id == Q35Resources.ornith35BMLX4BitModelId }
+        )
+        XCTAssertTrue(recommendation.isStartableByMereRun)
+        XCTAssertEqual(recommendation.servingEngine, .textChatQ35)
+    }
+
     func testBonsai27BIsSupportedOnSixteenGB() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Q35Resources.bonsai27B1BitModelId))
         let machine = MereRunMachineProfile(

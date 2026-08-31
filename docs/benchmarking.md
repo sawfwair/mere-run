@@ -280,6 +280,14 @@ Use the synthetic suite for quick regression checks:
 swift run mere.run model benchmark vlm --json
 ```
 
+To benchmark the recommended installed Ornith 4-bit vision lane directly:
+
+```bash
+swift run mere.run model benchmark vlm \
+  --models text-agent-ornith-35b-mlx-4bit \
+  --json
+```
+
 Use the external lane when you want existing dataset coverage. Start with
 `--dry-run` so the command prints the exact `lmms-eval` invocation before it
 starts servers or runs datasets:

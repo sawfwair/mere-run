@@ -17,6 +17,15 @@ The format is based on Keep a Changelog.
   external, mere.run verifies and stages only the 33 PLE-bearing safetensors on
   the internal SSD, then reuses that cache while all remaining files stay in
   the configured model store.
+### Vision
+
+- Added vision support to `text-agent-ornith-35b-mlx-4bit` by combining its
+  official 4-bit MLX target with the authoritative base checkpoint's 4.42 GiB
+  vision shard and shared BF16 MTP companion. It is the recommended local lane
+  for local image chat, API serving, agent use, and VLM, chat, and code
+  benchmarks. Image requests remain target-only; text and code retain verified
+  MTP speculation. The optional `vision-chat-ornith-35b` full-BF16 reference lane
+  remains available. Both resize inputs to a watchdog-safe 65,536-pixel budget.
 
 ### Text training
 

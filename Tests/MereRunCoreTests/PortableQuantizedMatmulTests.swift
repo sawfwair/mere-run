@@ -225,6 +225,38 @@ final class PortableQuantizedMatmulTests: MereRunCoreTestCase {
         XCTAssertLessThan(maxDiff, 0.0001)
     }
 
+    func testQ35SwitchLinearDenseBF16ExpertPathUsesSelectedBatchedMatmul() throws {
+        let weight = MLXArray([
+            1.0, 2.0, 3.0,
+            4.0, 5.0, 6.0,
+            -1.0, 0.5, 2.0,
+            0.0, -2.0, 1.0,
+        ] as [Float], [2, 2, 3]).asType(.bfloat16)
+        let x = MLXArray([
+            0.5, 1.0, -1.0,
+            2.0, -0.5, 1.5,
+        ] as [Float], [1, 2, 3]).asType(.bfloat16)
+        let indices = MLXArray([0, 1] as [Int32], [1, 2, 1])
+        let layer = Q35SwitchLinear(
+            inputDims: 3,
+            outputDims: 2,
+            numExperts: 2,
+            groupSize: 64,
+            bits: 4,
+            quantized: false,
+            bias: false
+        )
+        try layer.update(parameters: ModuleParameters.unflattened([("weight", weight)]), verify: .none)
+
+        let actual = layer(x, indices: indices).asType(.float32)
+        MLX.eval(actual)
+
+        let expected: [Float] = [-0.5, 1.0, 0.75, 2.5]
+        for (value, reference) in zip(actual.asArray(Float.self), expected) {
+            XCTAssertEqual(value, reference, accuracy: 0.02)
+        }
+    }
+
     func testQ35SwitchLinearInfersMixedPrecisionExpertBits() throws {
         let weightValues = (0..<384).map { Float($0 % 19) / 18.0 - 0.5 }
         let denseWeight = MLXArray(weightValues, [3, 4, 32])

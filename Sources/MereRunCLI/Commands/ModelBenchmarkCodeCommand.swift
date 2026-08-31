@@ -424,7 +424,7 @@ struct ModelBenchmarkCode: AsyncParsableCommand {
 
     static func supportsCodingBenchmark(_ spec: ManagedModelSpec) -> Bool {
         spec.category == .textCode
-            || Q35Resources.isQ38ModelId(spec.id)
+            || spec.defaultCLICommands.contains("model benchmark code")
     }
 
     static func scoredCodeResponse(_ response: ChatResponse) -> String {

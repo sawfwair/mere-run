@@ -274,11 +274,13 @@ final class Q35Transformer: Module {
     @ModuleInfo(key: "hyper_connection_mixer") var hyperConnectionMixer: Q38GatedResidual?
 
     private let isQwen4Exp: Bool
+    private let usesMoE: Bool
     private let hyperConnectionCount: Int
 
     init(config: Q35Config) {
         let text = config.textConfig
         self.isQwen4Exp = text.isQwen4Exp
+        self.usesMoE = text.usesMoE
         self.hyperConnectionCount = text.hyperConnectionCount
         self._embedTokens.wrappedValue = Embedding(
             embeddingCount: text.vocabSize,
@@ -365,11 +367,12 @@ final class Q35Transformer: Module {
                 // the exact dequantized embeddings.
                 MLX.asyncEval(hidden)
             }
-            if isQwen4Exp,
+            if (isQwen4Exp || usesMoE),
                (index + 1).isMultiple(of: 4) || index + 1 == layers.count {
-                // Qwen4Exp adds two hyper-connection projections per block.
-                // Materialize each four-layer hybrid block so a 48-layer
+                // Materialize each four-layer hybrid block so a deep MoE
                 // prefill is not submitted as one watchdog-sized lazy graph.
+                // This is also required by full-BF16 Qwen3.5 checkpoints;
+                // Qwen4Exp adds two hyper-connection projections per block.
                 MLX.eval(hidden)
             }
             Q35DebugLayerDump.record(stage: "layer\(index)", hidden)

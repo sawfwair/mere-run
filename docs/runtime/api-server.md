@@ -545,7 +545,13 @@ Engine compatibility:
   `text-agent-ornith-35b-mlx`: use the Qwen-family serving engine for Ornith's
   official 1.5 35B-A3B MLX family. Install a RAM-appropriate tier explicitly,
   then pass that id to `api serve --engine text-chat-q36 --model`.
-- Both Ornith lanes serve with thinking-enabled generation by default (the
+- `text-agent-ornith-35b-mlx-4bit`: the recommended lane, using Ornith's official
+  Q4 target with the authoritative base vision shard and shared MTP companion.
+  `vision-chat-ornith-35b` remains the full-BF16 quality reference. Both
+  accept one local/base64 image content part per message, advertise text and
+  image input modalities, and resize inputs to a watchdog-safe 65,536-pixel
+  budget before encoding. Image requests decode target-only.
+- The Ornith lanes serve with thinking-enabled generation by default (the
   models degenerate without it); the reasoning arrives in the response's
   `reasoning_content` field while `content` carries only the visible answer.
   When a request sets no explicit `temperature`/`top_p`/`min_p`, these lanes

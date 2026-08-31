@@ -321,6 +321,11 @@ final class QwenVisionTower: Module {
         attentionMask: nil,
         cuSeqlens: cuSeqlensArray
       )
+      // Full-BF16 learned-position towers can exceed the macOS Metal watchdog
+      // when several blocks share one command buffer. Materialize each block;
+      // image encoding is a one-time prefill cost and remains deterministic.
+      MLX.eval(hiddenStates)
+      Stream.gpu.synchronize()
 
       // Capture deepstack features at intermediate layers
       if let mergerIdx = deepstackVisualIndexes.firstIndex(of: layerIdx) {

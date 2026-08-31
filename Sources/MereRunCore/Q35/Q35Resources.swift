@@ -43,6 +43,7 @@ public struct Q35Resources: Sendable, Hashable {
     public static let ornith35BMLX8BitModelId = "text-agent-ornith-35b-mlx-8bit"
     /// Compatibility id for the official unquantized BF16 MLX snapshot.
     public static let ornith35BMLXModelId = "text-agent-ornith-35b-mlx"
+    public static let ornith35BVisionModelId = "vision-chat-ornith-35b"
     public static let ornith35BMTPModelId = "text-agent-ornith-35b-mtp"
     public static let infinityParser2ProModelId = "vision-ocr-infinity-pro"
     public static let infinityParser2ProInt8ModelId = "vision-ocr-infinity-pro-int8"
@@ -56,7 +57,7 @@ public struct Q35Resources: Sendable, Hashable {
         isQ38ModelId(modelId)
             || isBonsai27BModelId(modelId)
             || modelId == ornith9BModelId
-            || isOrnith35BMLXModelId(modelId)
+            || isOrnith35BModelId(modelId)
     }
 
     public static func isBonsai27BModelId(_ modelId: String) -> Bool {
@@ -101,7 +102,8 @@ public struct Q35Resources: Sendable, Hashable {
              ornith35BMLX4BitModelId,
              ornith35BMLX6BitModelId,
              ornith35BMLX8BitModelId,
-             ornith35BMLXModelId:
+             ornith35BMLXModelId,
+             ornith35BVisionModelId:
             return RecommendedSampling(temperature: 1.0, topP: 0.95, topK: 20)
         default:
             return nil
@@ -148,6 +150,7 @@ public struct Q35Resources: Sendable, Hashable {
     public static let q38TwentySevenBContextLength = 262_144
     public static let q38TwentySevenBVisionMinPixels = 65_536
     public static let q38TwentySevenBVisionMaxPixels = 16_777_216
+    public static let ornith35BVisionMaxPixels = 65_536
     public static let bonsai27B1BitUpstreamRepoId = "prism-ml/Bonsai-27B-mlx-1bit"
     public static let bonsai27B1BitUpstreamRevision = "ef22f239c670078e1507f9769bcaa66657332b96"
     public static let bonsai27B1BitEstimatedDownloadBytes: Int64 = 5_128_837_600
@@ -171,6 +174,18 @@ public struct Q35Resources: Sendable, Hashable {
     public static let ornith35BMLX8BitUpstreamRepoId = "ornith-ai/Ornith-1.5-35B-A3B-MLX-8bit"
     public static let ornith35BMLX8BitUpstreamRevision = "02440c39bdf7365c494a7f55f2a8b104ba87562f"
     public static let ornith35BMLX8BitEstimatedDownloadBytes: Int64 = 36_850_134_639
+    public static let ornith35BVisionUpstreamRepoId = "ornith-ai/Ornith-1.5-35B-A3B"
+    public static let ornith35BVisionUpstreamRevision = "10fbf86fed7ecee4a061f8b499a618f46001cac1"
+    public static let ornith35BVisionEstimatedDownloadBytes: Int64 = 71_926_980_382
+    public static let ornith35BVisionComponentPath = "vision"
+    public static let ornith35BVisionComponentSnapshotPatterns = [
+        "config.json",
+        "model.safetensors.index.json",
+        "model-00001-of-00016.safetensors",
+        "preprocessor_config.json",
+        "video_preprocessor_config.json",
+    ]
+    public static let ornith35BVisionComponentEstimatedDownloadBytes: Int64 = 4_744_402_377
     public static let ornith35BMTPUpstreamRepoId = "ornith-ai/Ornith-1.5-35B-A3B"
     public static let ornith35BMTPUpstreamRevision = "e4dfb35a93d4b6822a811a7676f3488514abe7e2"
     public static let ornith35BMTPShardFilename = "model-00016-of-00016.safetensors"
@@ -306,6 +321,19 @@ public struct Q35Resources: Sendable, Hashable {
             upstreamRevision: ornith35BMLX8BitUpstreamRevision,
             snapshotPatterns: snapshotPatterns + ["generation_config.json", "README.md"]
         ),
+        ornith35BVisionModelId: Profile(
+            modelId: ornith35BVisionModelId,
+            upstreamRepoId: ornith35BVisionUpstreamRepoId,
+            upstreamRevision: ornith35BVisionUpstreamRevision,
+            snapshotPatterns: snapshotPatterns + [
+                "generation_config.json",
+                "preprocessor_config.json",
+                "video_preprocessor_config.json",
+                "merges.txt",
+                "vocab.json",
+                "README.md",
+            ]
+        ),
         infinityParser2ProModelId: Profile(
             modelId: infinityParser2ProModelId,
             upstreamRepoId: infinityParser2ProUpstreamRepoId,
@@ -345,7 +373,8 @@ public struct Q35Resources: Sendable, Hashable {
         case ornith35BMLX4BitModelId,
              ornith35BMLX6BitModelId,
              ornith35BMLX8BitModelId,
-             ornith35BMLXModelId:
+             ornith35BMLXModelId,
+             ornith35BVisionModelId:
             ornith35BMLXContextLength
         default:
             defaultContextLength
@@ -353,6 +382,9 @@ public struct Q35Resources: Sendable, Hashable {
     }
 
     public static func visionPixelBounds(forModelId modelId: String) -> (minimum: Int, maximum: Int) {
+        if modelId == ornith35BMLX4BitModelId || modelId == ornith35BVisionModelId {
+            return (q38TwentySevenBVisionMinPixels, ornith35BVisionMaxPixels)
+        }
         if isQ38ModelId(modelId) {
             return (q38TwentySevenBVisionMinPixels, q38TwentySevenBVisionMaxPixels)
         }
@@ -373,6 +405,10 @@ public struct Q35Resources: Sendable, Hashable {
             || modelId == ornith35BMLX6BitModelId
             || modelId == ornith35BMLX8BitModelId
             || modelId == ornith35BMLXModelId
+    }
+
+    public static func isOrnith35BModelId(_ modelId: String) -> Bool {
+        isOrnith35BMLXModelId(modelId) || modelId == ornith35BVisionModelId
     }
 
     public static let snapshotPatterns = [
@@ -442,6 +478,20 @@ public struct Q35Resources: Sendable, Hashable {
             Self.q38VisionComponentPath,
             isDirectory: true
         ))
+    }
+
+    public var ornithVisionComponentResources: Q35Resources {
+        Q35Resources(rootURL: rootURL.appendingPathComponent(
+            Self.ornith35BVisionComponentPath,
+            isDirectory: true
+        ))
+    }
+
+    public func validateOrnithVisionComponent(fileManager: FileManager = .default) -> [URL] {
+        let componentRoot = ornithVisionComponentResources.rootURL
+        return Self.ornith35BVisionComponentSnapshotPatterns
+            .map { componentRoot.appendingPathComponent($0, isDirectory: false) }
+            .filter { !fileManager.fileExists(atPath: $0.path) }
     }
 
     public func validateQ38VisionComponent(fileManager: FileManager = .default) -> [URL] {

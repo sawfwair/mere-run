@@ -243,7 +243,7 @@ are:
   `image-hidream-o1`, `image-hidream-o1-dev`, `image-sensenova-u1-5-8b-mot`, `image-krea2-raw`,
   `image-krea2-turbo`,
   `image-ideogram4-sdnq-uint4`
-- Text chat: `text-chat-gemma4`, `text-chat-mebot`, `text-chat-psi-agent`, `text-chat-q36-nano`, `vision-chat-q38-27b`, `vision-chat-q38-27b-4bit`, `text-chat-lfm25-2.6b-4bit`, `text-chat-lfm25-a1b-8bit`, `vision-chat-lfm25-3b-8bit`
+- Text chat: `text-chat-gemma4`, `text-chat-mebot`, `text-chat-psi-agent`, `text-chat-q36-nano`, `vision-chat-q38-27b`, `vision-chat-q38-27b-4bit`, `text-agent-ornith-35b-mlx-4bit`, `vision-chat-ornith-35b`, `text-chat-lfm25-2.6b-4bit`, `text-chat-lfm25-a1b-8bit`, `vision-chat-lfm25-3b-8bit`
 - Text code / agents: `text-agent-qwen35-9b`, `text-agent-ornith-9b`, `text-agent-ornith-35b-mlx-4bit`, `text-agent-ornith-35b-mlx-6bit`, `text-agent-ornith-35b-mlx-8bit`, `text-agent-ornith-35b-mlx`, `text-agent-ornith-35b`, `text-code-north-mini`, `text-code-qwen3`
 - Text embed: `text-embed-qwen3-0.6b`
 - Multimodal embed: `vision-embed-qwen3-vl-2b`
@@ -872,6 +872,7 @@ Examples:
 swift run mere.run text chat --prompt "What is classifier-free guidance?"
 swift run mere.run text chat --model vision-chat-q38-27b --image ./diagram.png --prompt "Explain this diagram."
 swift run mere.run text chat --model vision-chat-q38-flash-next-3bit-native-ple --context-size 32768 --max-tokens 256 --prompt "Explain sparse attention."
+swift run mere.run text chat --model text-agent-ornith-35b-mlx-4bit --image ./screenshot.png --prompt "Describe this interface."
 swift run mere.run text chat --model vision-chat-q38-flash-next-3bit --context-size 32768 --max-tokens 256 --prompt "Explain sparse attention."
 swift run mere.run text chat --model vision-chat-q38-flash-next-mixed --context-size 32768 --max-tokens 256 --prompt "Explain sparse attention."
 swift run mere.run text chat --model text-chat-bonsai-27b-1bit --context-size 262144 --kv-bits 4 --prompt "Plan a long-context repository review."
@@ -2642,6 +2643,10 @@ swift run mere.run model benchmark vlm --json
 The default synthetic suite compares `vision-chat-gemma4-12b` with the existing
 `vision-inspect-qwen3-vl-2b` backend on deterministic color, location, and
 counting fixtures.
+
+Pass `--models text-agent-ornith-35b-mlx-4bit` to exercise the recommended Ornith
+Q4 target plus BF16 vision companion against the same fixtures. Use
+`vision-chat-ornith-35b` for the optional full-BF16 reference lane.
 
 For existing datasets, install or check out `lmms-eval`, then start with a
 dry-run:

@@ -196,6 +196,7 @@ public enum MereRunAgentModelCatalog {
             ornith35BMLX6Bit(),
             ornith35BMLX8Bit(),
             ornith35BMLX(),
+            ornith35BVision(),
             q36Nano(),
             q38TwentySevenB4Bit(),
             q38TwentySevenB(),
@@ -312,12 +313,27 @@ public enum MereRunAgentModelCatalog {
         )
     }
 
+    private static func ornith35BVision() -> MereRunAgentModelRecommendation {
+        MereRunAgentModelRecommendation(
+            id: Q35Resources.ornith35BVisionModelId,
+            displayName: "Ornith 1.5 35B-A3B Vision",
+            summary: "Full BF16 Ornith coding and vision agent for native Swift Qwen-family workflows.",
+            minimumUnifiedMemoryGB: 96,
+            recommendedUnifiedMemoryGB: 128,
+            servingEngine: .textChatQ35,
+            managedModelID: Q35Resources.ornith35BVisionModelId
+        )
+    }
+
     private static func ornith35BMLX4Bit() -> MereRunAgentModelRecommendation {
-        ornith35BMLXQuantized(
+        MereRunAgentModelRecommendation(
             id: Q35Resources.ornith35BMLX4BitModelId,
-            label: "4-bit",
-            minimum: 32,
-            recommended: 48
+            displayName: "Ornith 1.5 35B-A3B 4-bit Vision",
+            summary: "Recommended Q4 Ornith target with the BF16 vision tower and shared MTP companion.",
+            minimumUnifiedMemoryGB: 32,
+            recommendedUnifiedMemoryGB: 48,
+            servingEngine: .textChatQ35,
+            managedModelID: Q35Resources.ornith35BMLX4BitModelId
         )
     }
 

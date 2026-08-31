@@ -2040,15 +2040,33 @@ public enum ManagedModelCatalog {
         ),
         ManagedModelSpec(
             id: Q35Resources.ornith35BMLX4BitModelId,
-            category: .textCode,
+            category: .visionChat,
             installShape: .directoryRoot,
             hubFallback: Q35Resources.profile(for: Q35Resources.ornith35BMLX4BitModelId)?.hubFallbackConfig,
+            mountedHubFallbacks: [
+                MountedHubFallbackConfig(
+                    destinationPath: Q35Resources.ornith35BVisionComponentPath,
+                    hubFallback: HubFallbackConfig(
+                        repoId: Q35Resources.ornith35BVisionUpstreamRepoId,
+                        revision: Q35Resources.ornith35BVisionUpstreamRevision,
+                        patterns: Q35Resources.ornith35BVisionComponentSnapshotPatterns
+                    )
+                ),
+            ],
             upstreamRepoId: Q35Resources.ornith35BMLX4BitUpstreamRepoId,
             upstreamRevision: Q35Resources.ornith35BMLX4BitUpstreamRevision,
             validationKind: .q35,
             runtimeAutoDownloadAllowed: false,
-            estimatedDownloadBytes: Q35Resources.ornith35BMLX4BitEstimatedDownloadBytes,
-            defaultCLICommands: ["chat", "api serve", "agent start", "model benchmark code"],
+            estimatedDownloadBytes: Q35Resources.ornith35BMLX4BitEstimatedDownloadBytes
+                + Q35Resources.ornith35BVisionComponentEstimatedDownloadBytes,
+            defaultCLICommands: [
+                "text chat",
+                "api serve",
+                "agent start",
+                "model benchmark chat",
+                "model benchmark code",
+                "model benchmark vlm",
+            ],
             companionModelIDs: [Q35Resources.ornith35BMTPModelId],
             apiProfile: .q36(
                 contextWindow: Q35Resources.ornith35BMLXContextLength,
@@ -2101,6 +2119,29 @@ public enum ManagedModelCatalog {
             estimatedDownloadBytes: Q35Resources.ornith35BMLXEstimatedDownloadBytes,
             defaultCLICommands: ["chat", "api serve", "agent start", "model benchmark code"],
             companionModelIDs: [Q35Resources.ornith35BMTPModelId],
+            apiProfile: .q36(
+                contextWindow: Q35Resources.ornith35BMLXContextLength,
+                fixedReasoning: true
+            )
+        ),
+        ManagedModelSpec(
+            id: Q35Resources.ornith35BVisionModelId,
+            category: .visionChat,
+            installShape: .directoryRoot,
+            hubFallback: Q35Resources.profile(for: Q35Resources.ornith35BVisionModelId)?.hubFallbackConfig,
+            upstreamRepoId: Q35Resources.ornith35BVisionUpstreamRepoId,
+            upstreamRevision: Q35Resources.ornith35BVisionUpstreamRevision,
+            validationKind: .q35,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: Q35Resources.ornith35BVisionEstimatedDownloadBytes,
+            defaultCLICommands: [
+                "text chat",
+                "api serve",
+                "agent start",
+                "model benchmark chat",
+                "model benchmark code",
+                "model benchmark vlm",
+            ],
             apiProfile: .q36(
                 contextWindow: Q35Resources.ornith35BMLXContextLength,
                 fixedReasoning: true
@@ -4167,6 +4208,9 @@ public extension ManagedModelSpec {
                         missing.append(url)
                     }
                 }
+            }
+            if id == Q35Resources.ornith35BMLX4BitModelId {
+                missing.append(contentsOf: resources.validateOrnithVisionComponent(fileManager: fileManager))
             }
             return missing
         case .q35MTPAssistant:

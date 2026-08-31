@@ -93,6 +93,14 @@ public final class Q35VisionTower: Module {
             try update(parameters: ModuleParameters.unflattened(mapped), verify: [.shapeMismatch])
         }
 
+        // A managed model may be backed by an external-volume snapshot. Page
+        // weights in through bounded command buffers before the first vision
+        // forward so disk I/O cannot turn that forward into a Metal timeout.
+        let values = parameters().flattened().map(\.1)
+        for start in stride(from: 0, to: values.count, by: 8) {
+            MLX.eval(Array(values[start..<min(start + 8, values.count)]))
+            Stream.gpu.synchronize()
+        }
         isLoaded = true
     }
 
@@ -117,6 +125,8 @@ public final class Q35VisionTower: Module {
         if let projection = visionProjection {
             embeds = projection(embeds)
         }
+        MLX.eval(embeds)
+        Stream.gpu.synchronize()
         return embeds
     }
 

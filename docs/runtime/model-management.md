@@ -104,7 +104,7 @@ a download.
 The following list shows representative canonical IDs by modality:
 
 - images: `image-klein-nano`, `image-bonsai-binary`, `image-bonsai-ternary`, `image-zimage-nano`, `image-klein-max`, `image-zimage-max`
-- text, chat, and embeddings: `text-chat-gemma4`, `text-chat-laguna-s-2-1`, `text-chat-laguna-xs-2-1`, `text-chat-nemotron-35-lightning`, `omni-chat-nemotron3-nano-30b-a3b-bf16`, `text-chat-q36-nano`, `vision-chat-q38-27b`, `vision-chat-q38-27b-4bit`, `vision-chat-q38-flash-next-mixed`, `vision-chat-q38-flash-next-3bit`, `vision-chat-q38-flash-next-3bit-native-ple`, `vision-chat-q38-flash-next-4bit`, `text-chat-bonsai-27b-1bit`, `text-chat-bonsai-27b-2bit`, `text-chat-lfm25-1.2b-bf16`, `text-chat-lfm25-1.2b-qad-4bit`, `text-chat-lfm25-2.6b-4bit`, `text-chat-lfm25-2.6b-bf16`, `text-chat-lfm25-2.6b-qad-4bit`, `text-chat-lfm25-a1b-8bit`, `text-chat-lfm25-a1b-bf16`, `vision-chat-lfm25-3b-8bit`, `text-agent-deepseek-v4-flash`, `text-agent-qwen35-9b`, `text-agent-ornith-9b`, `text-agent-ornith-35b-mlx-4bit`, `text-agent-ornith-35b-mlx-6bit`, `text-agent-ornith-35b-mlx-8bit`, `text-agent-ornith-35b-mlx`, `text-agent-ornith-35b`, `text-code-north-mini`, `text-code-qwen3`, `text-embed-qwen3-0.6b`, `vision-embed-qwen3-vl-2b`
+- text, chat, and embeddings: `text-chat-gemma4`, `text-chat-laguna-s-2-1`, `text-chat-laguna-xs-2-1`, `text-chat-nemotron-35-lightning`, `omni-chat-nemotron3-nano-30b-a3b-bf16`, `text-chat-q36-nano`, `vision-chat-q38-27b`, `vision-chat-q38-27b-4bit`, `vision-chat-q38-flash-next-mixed`, `vision-chat-q38-flash-next-3bit`, `vision-chat-q38-flash-next-3bit-native-ple`, `vision-chat-q38-flash-next-4bit`, `text-chat-bonsai-27b-1bit`, `text-chat-bonsai-27b-2bit`, `text-chat-lfm25-1.2b-bf16`, `text-chat-lfm25-1.2b-qad-4bit`, `text-chat-lfm25-2.6b-4bit`, `text-chat-lfm25-2.6b-bf16`, `text-chat-lfm25-2.6b-qad-4bit`, `text-chat-lfm25-a1b-8bit`, `text-chat-lfm25-a1b-bf16`, `vision-chat-lfm25-3b-8bit`, `text-agent-deepseek-v4-flash`, `text-agent-qwen35-9b`, `text-agent-ornith-9b`, `text-agent-ornith-35b-mlx-4bit`, `text-agent-ornith-35b-mlx-6bit`, `text-agent-ornith-35b-mlx-8bit`, `text-agent-ornith-35b-mlx`, `vision-chat-ornith-35b`, `text-agent-ornith-35b`, `text-code-north-mini`, `text-code-qwen3`, `text-embed-qwen3-0.6b`, `vision-embed-qwen3-vl-2b`
 
 Pulling an exact BF16 LFM2.5 DSpark target also pulls its pinned `*-dspark` companion after
 the same LFM Open License acknowledgement. Companions remain separately
@@ -329,6 +329,12 @@ also installs one shared, pinned BF16 MTP head from the authoritative base
 checkpoint. Use `model capabilities` for the current machine's explicit
 speed/balanced/quality choices. The conservative tiers are Q4 at 32 GB, Q6 at
 48 GB, Q8 at 64 GB, and BF16 at 96 GB; 128 GB is recommended for BF16.
+The recommended `text-agent-ornith-35b-mlx-4bit` explicit-pull lane reuses the Q4
+target, mounts the authoritative base vision shard, and installs the shared MTP
+companion. It has a 32 GB minimum and 48 GB recommendation. The full
+`vision-chat-ornith-35b` BF16 quality reference has a 96 GB minimum and
+128 GB recommendation.
+
 `text-agent-ornith-35b` is the larger GGUF Ornith eval target and runs through
 the native `text-code`/llama.cpp path.
 
