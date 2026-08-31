@@ -6,6 +6,12 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### macOS
+
+- fixed Studio's Install CLI action to copy the bundled ONNX Runtime dylib
+  alongside `mere.run` and to replace an existing CLI install, so rerunning the
+  action repairs incomplete terminal payloads from earlier app releases.
+
 ## 0.47.0 - 2026-08-29
 
 This release brings FastH3 VSA DataFree to Apple Silicon with a self-contained

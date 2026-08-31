@@ -13,25 +13,21 @@ enum CLIBootstrapInstallError: LocalizedError {
 
 enum CLIBootstrapInstallOutcome: Equatable {
     case installed(URL)
-    case alreadyInstalled(URL)
     case skippedNoBundledCLI
     case failed(String)
 }
 
 enum CLIBootstrapInstaller {
-    static func installBundledCLIIfNeeded(
+    static func installBundledCLI(
         fileManager fm: FileManager = .default,
         bundle: Bundle = .main
     ) -> CLIBootstrapInstallOutcome {
-        if let installed = CLIResolver.existingInstalledCLI(fileManager: fm) {
-            return .alreadyInstalled(installed)
-        }
-
         guard let payloadURL = bundledPayloadURL(fileManager: fm, bundle: bundle) else {
             return .skippedNoBundledCLI
         }
 
-        let destinationURL = preferredAutomaticInstallURL(fileManager: fm)
+        let destinationURL = CLIResolver.existingInstalledCLI(fileManager: fm)
+            ?? preferredAutomaticInstallURL(fileManager: fm)
         do {
             try installBundledCLI(from: payloadURL, to: destinationURL, fileManager: fm)
             return .installed(destinationURL)
@@ -52,8 +48,6 @@ enum CLIBootstrapInstaller {
 
         let destinationDirectoryURL = destinationURL.deletingLastPathComponent()
         try fm.createDirectory(at: destinationDirectoryURL, withIntermediateDirectories: true)
-        try copyReplacingItem(at: binaryURL, to: destinationURL, fileManager: fm)
-        try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: destinationURL.path)
 
         for assetURL in supportAssetURLs(in: payloadURL, fileManager: fm) {
             try copyReplacingItem(
@@ -62,6 +56,9 @@ enum CLIBootstrapInstaller {
                 fileManager: fm
             )
         }
+
+        try copyReplacingItem(at: binaryURL, to: destinationURL, fileManager: fm)
+        try fm.setAttributes([.posixPermissions: 0o755], ofItemAtPath: destinationURL.path)
     }
 
     static func bundledPayloadURL(
@@ -116,6 +113,7 @@ enum CLIBootstrapInstaller {
             .filter { url in
                 url.pathExtension == "framework"
                     || url.pathExtension == "bundle"
+                    || url.pathExtension == "dylib"
                     || url.lastPathComponent == "Resources"
                     || url.lastPathComponent == "mlx.metallib"
             }
