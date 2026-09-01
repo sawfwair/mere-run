@@ -887,6 +887,22 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 upstreamRepoId: Gemma4Resources.turboUpstreamModelId,
                 createdAt: createdAt
             )
+        case .diffusionGemma26BOptiQ4Bit:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .gemma4,
+                family: .gemma,
+                tier: .max,
+                variant: .standard,
+                precision: .int4,
+                quantization: Quantization(bits: 4, groupSize: 64, scheme: "optiq-mixed-affine"),
+                defaults: nil,
+                supports: [.chat, .codeGeneration],
+                components: gemma4TextComponents,
+                upstreamRepoId: DiffusionGemmaResources.upstreamModelID
+                    + "@\(DiffusionGemmaResources.upstreamRevision)",
+                createdAt: createdAt
+            )
         case .gemma4TwelveB:
             return MereRunModelManifest(
                 id: modelID.rawValue,

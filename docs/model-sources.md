@@ -70,6 +70,7 @@ an effective overlay; they are not a second capability catalog.
 | `text-chat` | `text-chat-mebot` |
 | `text-chat` | `text-chat-psi-agent` |
 | `text-chat` | `text-chat-gemma4` |
+| `text-chat` | `text-chat-diffusiongemma-26b-optiq-4bit` |
 | `text-chat` | `text-chat-gemma4-turbo` |
 | `text-chat` | `text-chat-gemma4-12b` |
 | `text-chat` | `text-chat-gemma4-12b-4bit` |
@@ -570,6 +571,17 @@ managed Gemma 12B chat tier. Sawfwair's package is independently converted
 from Google's verified dense checkpoint, includes `MERERUN_CONVERSION.json`
 with source and emitted artifact hashes, and is published as the user-facing
 `v1.0.0` release.
+
+`text-chat-diffusiongemma-26b-optiq-4bit` pins the public Apache-2.0
+`mlx-community/diffusiongemma-26B-A4B-it-OptiQ-4bit` snapshot at revision
+`30f3c7c7746bf41cfd1a290155cc3b777ab588b9`. The 17.85 GB snapshot stores the
+ordinary projections and shared embedding in mixed 4-bit and 8-bit affine MLX
+tensors. Its separate `optiq/optiq_vision.safetensors` file retains the vision
+tower in BF16. The native Swift runtime consumes the OptiQ tensors in place,
+uses a causal prompt cache plus a bidirectional denoising canvas, and supports
+text and function-tool output with at most 256 generated tokens. The text
+runtime validates the vision sidecar but rejects image input because that path
+has no real-checkpoint qualification.
 
 `text-chat-lfm25-a1b-8bit` uses the public
 `LiquidAI/LFM2.5-8B-A1B-MLX-8bit` snapshot at the pinned catalog revision. It is

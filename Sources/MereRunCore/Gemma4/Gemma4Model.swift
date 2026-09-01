@@ -6,7 +6,7 @@ import MLXRandom
 import Cmlx
 
 @inline(__always)
-private func gemma4RMSNormNoScale(_ x: MLXArray, eps: Float) -> MLXArray {
+func gemma4RMSNormNoScale(_ x: MLXArray, eps: Float) -> MLXArray {
     let noWeight = MLXArray.mlxNone
     let stream = StreamOrDevice.default
     var result = mlx_array_new()
@@ -17,7 +17,7 @@ private func gemma4RMSNormNoScale(_ x: MLXArray, eps: Float) -> MLXArray {
 }
 
 @inline(__always)
-private func gemma4RMSNormNoScale(_ x: MLXArray, weight: MLXArray, eps: Float) -> MLXArray {
+func gemma4RMSNormNoScale(_ x: MLXArray, weight: MLXArray, eps: Float) -> MLXArray {
     MLXFast.rmsNorm(x, weight: weight, eps: eps)
 }
 

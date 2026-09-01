@@ -76,6 +76,24 @@ final class ManagedModelSupportTests: XCTestCase {
         XCTAssertEqual(report.reasons, [])
     }
 
+    func testDiffusionGemmaRequiresFortyEightGBAndRecommendsSixtyFourGB() throws {
+        let spec = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: DiffusionGemmaResources.modelID)
+        )
+        let machine = MereRunMachineProfile(
+            physicalMemoryBytes: 48 * 1_073_741_824,
+            processorName: "M4 Max",
+            isAppleSiliconMac: true
+        )
+
+        let report = ManagedModelCapabilityCatalog.support(for: spec, on: machine)
+
+        XCTAssertTrue(report.isSupported)
+        XCTAssertEqual(report.descriptor.minimumUnifiedMemoryGB, 48)
+        XCTAssertEqual(report.descriptor.recommendedUnifiedMemoryGB, 64)
+        XCTAssertFalse(report.descriptor.isRecommendedForSetup)
+    }
+
     func testDenseGemma4IsRejectedOnThirtyTwoGB() throws {
         let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Gemma4Resources.defaultModelId))
         let machine = MereRunMachineProfile(

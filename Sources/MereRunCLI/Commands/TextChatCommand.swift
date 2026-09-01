@@ -40,6 +40,7 @@ struct TextChat: AsyncParsableCommand {
           - text-chat-gemma4 (Gemma 4 31B; large/slow, kept for compatibility)
           - text-chat-gemma4-max (Gemma 4 31B native Swift runtime)
           - text-chat-gemma4-nano (Gemma 4 4B native Swift runtime)
+          - text-chat-diffusiongemma-26b-optiq-4bit (DiffusionGemma 26B-A4B OptiQ native Swift runtime)
           - text-chat-laguna-s-2-1 (Poolside Laguna S 2.1 118B-A8B NVFP4 with DFlash)
           - text-chat-laguna-xs-2-1 (Poolside Laguna XS 2.1 33B-A3B NVFP4)
           - text-chat-nemotron-35-lightning (NVIDIA Nemotron 3.5 Lightning 30B-A3B NVFP4 with DSpark)
@@ -167,7 +168,7 @@ struct TextChat: AsyncParsableCommand {
             + firstTokenSeconds
     }
 
-    @Option(name: [.long], help: "Canonical model id. Default: text-chat-gemma4-12b-4bit (Apple Silicon) / text-chat-q36-nano-gguf (Linux CUDA). Others include omni-chat-nemotron3-nano-30b-a3b-bf16, vision-chat-muse-glimmer-30b, text-chat-nemotron-35-lightning, text-chat-laguna-s-2-1, text-chat-inkling-small, text-chat-bonsai-27b-1bit, text-chat-q36-nano, text-agent-ornith-9b, text-chat-gemma4[-12b|-12b-4bit|-turbo|-max|-nano], text-chat-lfm25-{1.2b,2.6b,a1b}-bf16, and text-chat-lfm25-a1b-8bit.")
+    @Option(name: [.long], help: "Canonical model id. Default: text-chat-gemma4-12b-4bit (Apple Silicon) / text-chat-q36-nano-gguf (Linux CUDA). Others include text-chat-diffusiongemma-26b-optiq-4bit, omni-chat-nemotron3-nano-30b-a3b-bf16, vision-chat-muse-glimmer-30b, text-chat-nemotron-35-lightning, text-chat-laguna-s-2-1, text-chat-inkling-small, text-chat-bonsai-27b-1bit, text-chat-q36-nano, text-agent-ornith-9b, text-chat-gemma4[-12b|-12b-4bit|-turbo|-max|-nano], text-chat-lfm25-{1.2b,2.6b,a1b}-bf16, and text-chat-lfm25-a1b-8bit.")
     var model: String = TextChat.defaultChatModelId
 
     @Option(
@@ -192,8 +193,17 @@ struct TextChat: AsyncParsableCommand {
     @Flag(name: [.customLong("stats")], help: "Print generation timing and tokens/sec.")
     var stats: Bool = false
 
+    @Option(name: [.customLong("seed")], help: "Deterministic DiffusionGemma canvas seed.")
+    var seed: UInt64?
+
     @Flag(name: [.customLong("stream")], help: "Stream generated text to stdout as tokens arrive.")
     var stream: Bool = false
+
+    @Flag(
+        name: [.customLong("show-unmasking")],
+        help: "Show revision-aware DiffusionGemma canvas drafts on stderr."
+    )
+    var showUnmasking: Bool = false
 
     @Option(name: [.customLong("tools")], help: "Comma-separated built-in tool names: write_file, shell_exec.")
     var tools: String?
@@ -229,6 +239,11 @@ struct TextChat: AsyncParsableCommand {
         let normalizedModelId = model.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         try Self.validate(responseFormat: responseFormat, modelID: normalizedModelId)
         try Self.validateReasoningEffort(reasoningEffort, modelID: normalizedModelId)
+        try Self.validateDiffusionOptions(
+            seed: seed,
+            showUnmasking: showUnmasking,
+            modelID: normalizedModelId
+        )
         let installedModelPath = resolvedInstalledModelPath(modelID: normalizedModelId)
         if preflight {
             try emitPreflight(modelID: normalizedModelId, installedModelPath: installedModelPath)
@@ -371,13 +386,15 @@ struct TextChat: AsyncParsableCommand {
             topP: resolvedTopP,
             topK: resolvedTopK,
             minP: resolvedMinP,
+            seed: seed,
             reasoningEffort: reasoningEffort,
             showThinking: resolvedShowThinking,
             lora: lora,
             requiresJSON: requiresJSON,
             tools: toolDefs,
             kvCacheMode: q35KVCacheMode,
-            maxContextTokens: contextSize
+            maxContextTokens: contextSize,
+            showUnmasking: showUnmasking
         )
 
         let streamingOutput = StreamingChatOutput(enabled: stream)
@@ -416,6 +433,13 @@ struct TextChat: AsyncParsableCommand {
             if normalizedModelId == Psi3ChatResources.defaultModelId {
                 let generator = Psi3ChatGenerator(modelId: Psi3ChatResources.defaultModelId)
                 return try await generator.chat(req, modelPath: runtimeModelRoot, progressHandler: progressHandler)
+            } else if normalizedModelId == DiffusionGemmaResources.modelID {
+                let generator = DiffusionGemmaGenerator(modelID: normalizedModelId)
+                return try await generator.chat(
+                    req,
+                    modelPath: runtimeModelRoot,
+                    progressHandler: progressHandler
+                )
             } else if Gemma4Resources.handles(modelSpec: normalizedModelId) {
                 let effectiveModelId = normalizedModelId.isEmpty ? Gemma4Resources.defaultModelId : normalizedModelId
                 let kvQuantization = try self.resolveGemma4KVCacheQuantization(for: effectiveModelId)
@@ -604,6 +628,20 @@ struct TextChat: AsyncParsableCommand {
                     if let firstToken = timing.firstTokenSeconds,
                        let ttft = Self.ttftSeconds(for: timing) {
                         line += String(format: " ttft_s=%.3f first_token_s=%.3f", ttft, firstToken)
+                    }
+                    if let diffusion = result.diffusion {
+                        line += String(
+                            format: " seed=%llu canvas_tokens=%d denoise_steps=%d work_tokens=%d canvas_tps=%.2f work_tps=%.2f",
+                            diffusion.seed,
+                            diffusion.canvasTokens,
+                            diffusion.denoisingSteps,
+                            diffusion.workTokens,
+                            diffusion.canvasTokensPerSecond,
+                            diffusion.workTokensPerSecond
+                        )
+                        if let firstDraftSeconds = diffusion.firstDraftSeconds {
+                            line += String(format: " first_draft_s=%.3f", firstDraftSeconds)
+                        }
                     }
                     CLIStderr.write("\(line)\n")
                     if let mtp = lastGemma4MTPStats {
@@ -885,6 +923,19 @@ struct TextChat: AsyncParsableCommand {
         }
     }
 
+    static func validateDiffusionOptions(
+        seed: UInt64?,
+        showUnmasking: Bool,
+        modelID: String
+    ) throws {
+        guard seed != nil || showUnmasking else { return }
+        guard modelID == DiffusionGemmaResources.modelID else {
+            throw ValidationError(
+                "--seed and --show-unmasking are currently supported only by \(DiffusionGemmaResources.modelID)."
+            )
+        }
+    }
+
     func cleanResponse(_ response: String, showThinking: Bool) -> String {
         guard !showThinking else { return response }
         return ChatReasoningMarkup.splitThinkBlocks(in: response).visibleContent
@@ -1006,6 +1057,17 @@ enum TextChatProgressHandler {
         }
 
         return { progress in
+            if let diffusion = progress.diffusion {
+                guard !quiet else { return }
+                let terminator = diffusion.blockComplete ? "\n" : "\r"
+                diagnosticWriter(
+                    "[unmasking canvas=\(diffusion.canvasIndex) step=\(diffusion.step)/\(diffusion.totalSteps)] "
+                        + diffusion.draftText
+                        + "\u{001B}[K"
+                        + terminator
+                )
+                return
+            }
             if streamingOutput.write(progress: progress) {
                 return
             }

@@ -38,6 +38,7 @@ help in the repository gate.
 - `text-chat-gemma4-12b` (managed dense Google Gemma 4 12B-it snapshot)
 - `text-chat-gemma4-12b-4bit` (managed MLX 4-bit Gemma 4 12B-it snapshot)
 - `text-chat-gemma4-turbo` (managed MLX NVFP4 Gemma 4 26B-A4B MoE snapshot)
+- `text-chat-diffusiongemma-26b-optiq-4bit` (managed mixed-bit MLX DiffusionGemma 26B-A4B snapshot)
 - `vision-chat-muse-glimmer-30b` (pinned Sawfwair selective MLX Q4 conversion of Meta Muse Glimmer 30B)
 - `text-chat-laguna-s-2-1` (managed Poolside Laguna S 2.1 118B-A8B NVFP4 target plus DFlash)
 - `text-chat-laguna-xs-2-1` (managed Poolside Laguna XS 2.1 33B-A3B NVFP4 target)
@@ -116,6 +117,50 @@ fallback state.
 Loading performs one target and DFlash warmup before the first user-visible
 decode, so lazy MLX graph compilation is reported in `loadSeconds` and a
 persistent CLI/API model session pays that cost once.
+
+### DiffusionGemma block diffusion
+
+`text-chat-diffusiongemma-26b-optiq-4bit` runs the pinned MLX OptiQ conversion
+through a dedicated native Swift runtime. The runtime caches the causal prompt,
+then denoises a bidirectional token canvas in parallel instead of decoding one
+token at a time. It supports output budgets from 1 through 256 tokens and uses
+up to 48 denoising steps per canvas. Set both `--temperature 0` and `--seed`
+when you need a repeatable run.
+
+```bash
+mere.run model pull text-chat-diffusiongemma-26b-optiq-4bit
+mere.run text chat \
+  --model text-chat-diffusiongemma-26b-optiq-4bit \
+  --max-tokens 256 \
+  --seed 123 \
+  --stats \
+  --prompt "Explain block diffusion in one paragraph."
+```
+
+Diffusion stats distinguish conventional output throughput from the actual
+parallel work performed by the model. `decode_tps` counts returned tokens,
+`canvas_tps` counts canvas tokens, and `work_tps` counts one canvas token for
+every denoising step. The same line includes `seed`, `denoise_steps`, and
+`work_tokens`, making fixed-seed performance comparisons reproducible.
+
+Use `--show-unmasking` to render revision-aware canvas drafts on stderr while
+keeping the final answer on stdout:
+
+```bash
+mere.run text chat \
+  --model text-chat-diffusiongemma-26b-optiq-4bit \
+  --max-tokens 128 \
+  --seed 123 \
+  --show-unmasking \
+  --prompt "Explain why diffusion generation revises tokens."
+```
+
+Progressive drafts are observability output, not an append-only token stream:
+later steps can replace text shown by earlier steps.
+
+The managed snapshot includes and validates its separate BF16 vision sidecar,
+but this runtime supports text input only. It rejects `--image`, `--audio`, and
+`--video` rather than claiming an unqualified multimodal path.
 
 DFlash2 adds two-phase grouped dynamic causal convolution and predecessor-aware
 sparse candidate selection. It is installed and preferred automatically; an

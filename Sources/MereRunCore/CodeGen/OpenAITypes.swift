@@ -113,6 +113,7 @@ public struct OpenAIChatRequest: Codable, Sendable {
     public var think: Bool?
     public var thinking: OpenAIJSONValue?
     public var lora: String?
+    public var mere_show_unmasking: Bool?
     public var unknownFields: [String: OpenAIJSONValue]
 
     private enum CodingKeys: String, CodingKey, CaseIterable {
@@ -147,6 +148,7 @@ public struct OpenAIChatRequest: Codable, Sendable {
         case think
         case thinking
         case lora
+        case mere_show_unmasking
     }
 
     public init(
@@ -180,7 +182,8 @@ public struct OpenAIChatRequest: Codable, Sendable {
         prediction: OpenAIJSONValue? = nil,
         think: Bool? = nil,
         thinking: OpenAIJSONValue? = nil,
-        lora: String? = nil
+        lora: String? = nil,
+        mere_show_unmasking: Bool? = nil
     ) {
         self.model = model
         self.messages = messages
@@ -213,6 +216,7 @@ public struct OpenAIChatRequest: Codable, Sendable {
         self.think = think
         self.thinking = thinking
         self.lora = lora
+        self.mere_show_unmasking = mere_show_unmasking
         self.unknownFields = [:]
     }
 
@@ -249,6 +253,7 @@ public struct OpenAIChatRequest: Codable, Sendable {
         think = try container.decodeIfPresent(Bool.self, forKey: .think)
         thinking = try container.decodeIfPresent(OpenAIJSONValue.self, forKey: .thinking)
         lora = try container.decodeIfPresent(String.self, forKey: .lora)
+        mere_show_unmasking = try container.decodeIfPresent(Bool.self, forKey: .mere_show_unmasking)
 
         let knownKeys = Set(CodingKeys.allCases.map(\.rawValue))
         let dynamic = try decoder.container(keyedBy: OpenAIDynamicCodingKey.self)
@@ -292,6 +297,7 @@ public struct OpenAIChatRequest: Codable, Sendable {
         try container.encodeIfPresent(think, forKey: .think)
         try container.encodeIfPresent(thinking, forKey: .thinking)
         try container.encodeIfPresent(lora, forKey: .lora)
+        try container.encodeIfPresent(mere_show_unmasking, forKey: .mere_show_unmasking)
 
         var dynamic = encoder.container(keyedBy: OpenAIDynamicCodingKey.self)
         for (key, value) in unknownFields {
@@ -732,6 +738,7 @@ public struct OpenAIChatResponse: Codable, Sendable {
     public var model: String
     public var choices: [OpenAIChatChoice]
     public var usage: OpenAIUsage?
+    public var mere_diffusion: ChatDiffusionDiagnostics?
 
     public init(
         id: String,
@@ -739,7 +746,8 @@ public struct OpenAIChatResponse: Codable, Sendable {
         created: Int,
         model: String,
         choices: [OpenAIChatChoice],
-        usage: OpenAIUsage? = nil
+        usage: OpenAIUsage? = nil,
+        mere_diffusion: ChatDiffusionDiagnostics? = nil
     ) {
         self.id = id
         self.object = object
@@ -747,6 +755,7 @@ public struct OpenAIChatResponse: Codable, Sendable {
         self.model = model
         self.choices = choices
         self.usage = usage
+        self.mere_diffusion = mere_diffusion
     }
 }
 
@@ -839,17 +848,36 @@ public struct OpenAIChatDelta: Codable, Sendable {
     public var content: String?
     public var reasoning_content: String?
     public var tool_calls: [OpenAIChatToolCallDelta]?
+    public var mere_diffusion_draft: OpenAIDiffusionDraft?
 
     public init(
         role: String? = nil,
         content: String? = nil,
         reasoning_content: String? = nil,
-        tool_calls: [OpenAIChatToolCallDelta]? = nil
+        tool_calls: [OpenAIChatToolCallDelta]? = nil,
+        mere_diffusion_draft: OpenAIDiffusionDraft? = nil
     ) {
         self.role = role
         self.content = content
         self.reasoning_content = reasoning_content
         self.tool_calls = tool_calls
+        self.mere_diffusion_draft = mere_diffusion_draft
+    }
+}
+
+public struct OpenAIDiffusionDraft: Codable, Hashable, Sendable {
+    public var text: String
+    public var step: Int
+    public var total_steps: Int
+    public var canvas_index: Int
+    public var block_complete: Bool
+
+    public init(_ progress: ChatDiffusionProgress) {
+        self.text = progress.draftText
+        self.step = progress.step
+        self.total_steps = progress.totalSteps
+        self.canvas_index = progress.canvasIndex
+        self.block_complete = progress.blockComplete
     }
 }
 

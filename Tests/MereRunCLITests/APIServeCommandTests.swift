@@ -110,6 +110,20 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertFalse(cmd.engine.openAICompatibility.supportsStructuredOutputs)
     }
 
+    func testAPIServeParsesDiffusionGemmaEngine() throws {
+        let cmd = try APIServe.parse([
+            "--engine", "text-chat-diffusiongemma",
+            "--model", DiffusionGemmaResources.modelID,
+        ])
+
+        XCTAssertEqual(cmd.engine, .textChatDiffusionGemma)
+        XCTAssertEqual(cmd.model, DiffusionGemmaResources.modelID)
+        XCTAssertEqual(cmd.defaultRuntimeModelID(modelPath: nil), DiffusionGemmaResources.modelID)
+        XCTAssertTrue(cmd.engine.openAICompatibility.supportsTools)
+        XCTAssertFalse(cmd.engine.openAICompatibility.supportsVisionContentParts)
+        XCTAssertFalse(cmd.engine.openAICompatibility.supportsStructuredOutputs)
+    }
+
     func testAPIServeParsesNemotronHNativeEngine() throws {
         let cmd = try APIServe.parse([
             "--engine", "text-chat-nemotron-h",
@@ -2876,6 +2890,73 @@ final class APIServeCommandTests: XCTestCase {
         }
     }
 
+    func testDiffusionGemmaRequestMapsSeedAndProgressiveUnmasking() throws {
+        let profile = try XCTUnwrap(
+            ManagedModelCatalog.apiProfile(for: DiffusionGemmaResources.modelID)
+        )
+        let request = OpenAIChatRequest(
+            model: DiffusionGemmaResources.modelID,
+            messages: [OpenAIChatMessage(role: "user", content: "hello")],
+            max_tokens: 128,
+            stream: true,
+            seed: 123,
+            mere_show_unmasking: true
+        )
+
+        let chatRequest = try APIServerContract.chatRequest(
+            from: request,
+            fallbackLoraPath: nil,
+            contextSize: DiffusionGemmaResources.defaultContextLength,
+            capabilities: .catalog(profile),
+            servedModelID: DiffusionGemmaResources.modelID,
+            apiProfile: profile
+        )
+
+        XCTAssertEqual(chatRequest.seed, 123)
+        XCTAssertTrue(chatRequest.showUnmasking)
+    }
+
+    func testDiffusionGemmaRequestRejectsNegativeSeed() throws {
+        let profile = try XCTUnwrap(
+            ManagedModelCatalog.apiProfile(for: DiffusionGemmaResources.modelID)
+        )
+        let request = OpenAIChatRequest(
+            model: DiffusionGemmaResources.modelID,
+            messages: [OpenAIChatMessage(role: "user", content: "hello")],
+            seed: -1
+        )
+
+        XCTAssertThrowsError(try APIServerContract.chatRequest(
+            from: request,
+            fallbackLoraPath: nil,
+            contextSize: DiffusionGemmaResources.defaultContextLength,
+            capabilities: .catalog(profile),
+            servedModelID: DiffusionGemmaResources.modelID,
+            apiProfile: profile
+        )) { error in
+            XCTAssertTrue(error.localizedDescription.contains("unsigned"))
+        }
+    }
+
+    func testDiffusionDraftEncodesAsRevisionAwareDeltaExtension() throws {
+        let delta = OpenAIChatDelta(
+            mere_diffusion_draft: OpenAIDiffusionDraft(ChatDiffusionProgress(
+                draftText: "A [Mask] draft",
+                step: 4,
+                totalSteps: 48,
+                canvasIndex: 1
+            ))
+        )
+
+        let object = try XCTUnwrap(
+            JSONSerialization.jsonObject(with: JSONEncoder().encode(delta)) as? [String: Any]
+        )
+        let draft = try XCTUnwrap(object["mere_diffusion_draft"] as? [String: Any])
+        XCTAssertEqual(draft["text"] as? String, "A [Mask] draft")
+        XCTAssertEqual(draft["step"] as? Int, 4)
+        XCTAssertEqual(draft["total_steps"] as? Int, 48)
+    }
+
     func testQ38LogprobRequestMapsToTopCapture() throws {
         let profile = try XCTUnwrap(
             ManagedModelCatalog.apiProfile(for: Q35Resources.q38TwentySevenB4BitModelId)
@@ -3132,7 +3213,16 @@ final class APIServeCommandTests: XCTestCase {
                 prefillTokensPerSecond: 100,
                 decodeTokensPerSecond: 2
             ),
-            promptTokens: 200
+            promptTokens: 200,
+            diffusion: ChatDiffusionDiagnostics(
+                seed: 123,
+                canvasTokens: 128,
+                denoisingSteps: 17,
+                workTokens: 2_176,
+                canvasTokensPerSecond: 42.7,
+                workTokensPerSecond: 726.1,
+                firstDraftSeconds: 0.3
+            )
         )
 
         let headers = CodeGenServer.openAITimingHeaders(for: result)
@@ -3142,6 +3232,11 @@ final class APIServeCommandTests: XCTestCase {
         XCTAssertEqual(headers["x-mere-prefill-tokens-per-second"], "100.000")
         XCTAssertEqual(headers["x-mere-decode-tokens-per-second"], "2.000")
         XCTAssertEqual(headers["x-mere-kv-cache"], "full-precision")
+        XCTAssertEqual(headers["x-mere-diffusion-seed"], "123")
+        XCTAssertEqual(headers["x-mere-diffusion-denoising-steps"], "17")
+        XCTAssertEqual(headers["x-mere-diffusion-work-tokens"], "2176")
+        XCTAssertEqual(headers["x-mere-diffusion-work-tokens-per-second"], "726.100")
+        XCTAssertEqual(headers["x-mere-diffusion-first-draft-seconds"], "0.300")
         XCTAssertEqual(
             headers["server-timing"],
             "model_load;dur=250.000, prefill;dur=2000.000, kv_pack;dur=125.000, "

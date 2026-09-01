@@ -1089,6 +1089,7 @@ actor RuntimeModelPool {
         )
         if warmup, Self.shouldWarmDefaultModel(modelID: resolved.id, engine: resolved.engine) {
             let isQwen4Exp = Self.isQwen4ExpWarmupModel(resolved.id)
+            let isDiffusionGemma = resolved.engine == .textChatDiffusionGemma
             let warmupStart = currentDate()
             let response = try await loaded.chat(
                 ChatRequest(
@@ -1101,6 +1102,7 @@ actor RuntimeModelPool {
                     maxTokens: isQwen4Exp ? 8 : 1,
                     temperature: 0,
                     topP: 1,
+                    seed: isDiffusionGemma ? 0 : nil,
                     showThinking: false
                 ),
                 progressHandler: nil
@@ -1112,7 +1114,7 @@ actor RuntimeModelPool {
                 warmupPrefillSeconds: timing?.prefillSeconds,
                 warmupDecodeSeconds: timing?.decodeSeconds,
                 warmupTimeToFirstTokenSeconds: timing.map(Self.timeToFirstToken),
-                graphCompilationAccounting: isQwen4Exp
+                graphCompilationAccounting: isQwen4Exp || isDiffusionGemma
                     ? "included_in_warmup_prefill_and_decode"
                     : "included_in_warmup_prefill",
                 completedAt: currentDate()
@@ -1127,6 +1129,10 @@ actor RuntimeModelPool {
         modelID: String,
         engine: RuntimeServingEngine
     ) -> Bool {
+        if engine == .textChatDiffusionGemma,
+           modelID == DiffusionGemmaResources.modelID {
+            return true
+        }
         if engine == .textChatGemma4,
            Gemma4Resources.usesTurboDefaults(modelSpec: modelID) {
             return true
@@ -1802,6 +1808,11 @@ actor RuntimeModelPool {
                 ),
                 modelPath: resolved.installPath
             )
+        case .textChatDiffusionGemma:
+            return .textChatDiffusionGemma(
+                DiffusionGemmaGenerator(modelID: resolved.id),
+                modelPath: resolved.installPath
+            )
         case .textChatLaguna:
             return .textChatLaguna(
                 LagunaGenerator(
@@ -2081,6 +2092,7 @@ actor RuntimeModelPool {
             return ManagedModelCategory.textCode.rawValue
         case .textChatKlein,
              .textChatGemma4,
+             .textChatDiffusionGemma,
              .textChatLaguna,
              .textChatQ36,
              .textChatQ35,
@@ -2582,6 +2594,7 @@ enum RuntimeLoadedModel: Sendable {
     case textCode(CodeGenGenerator, modelPath: String?)
     case textChatKlein(Flux2KleinGenerator, modelPath: String?, useStandalone: Bool)
     case textChatGemma4(Gemma4Generator, modelPath: String?)
+    case textChatDiffusionGemma(DiffusionGemmaGenerator, modelPath: String?)
     case textChatLaguna(LagunaGenerator, modelPath: String?)
     case textChatQ35(Q35Generator, modelPath: String?)
     case textChatLFM2(LFM2Generator, modelPath: String?)
@@ -2604,6 +2617,8 @@ enum RuntimeLoadedModel: Sendable {
                 progressHandler: progressHandler
             )
         case .textChatGemma4(let generator, let modelPath):
+            try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
+        case .textChatDiffusionGemma(let generator, let modelPath):
             try await generator.prepare(modelPath: modelPath, progressHandler: progressHandler)
         case .textChatLaguna(let generator, let modelPath):
             guard let modelPath else {
@@ -2633,6 +2648,8 @@ enum RuntimeLoadedModel: Sendable {
             await generator.unload()
         case .textChatGemma4(let generator, _):
             await generator.unload()
+        case .textChatDiffusionGemma(let generator, _):
+            await generator.unload()
         case .textChatLaguna(let generator, _):
             await generator.unload()
         case .textChatQ35(let generator, _):
@@ -2658,7 +2675,7 @@ enum RuntimeLoadedModel: Sendable {
             return await generator.prefixKVCacheStats()
         case .textChatLFM2(let generator, _):
             return await generator.prefixKVCacheStats()
-        case .textCode, .textChatKlein, .textChatLaguna, .textChatDeepseekV4Flash,
+        case .textCode, .textChatKlein, .textChatDiffusionGemma, .textChatLaguna, .textChatDeepseekV4Flash,
              .textChatMuseGlimmer, .textChatNemotronH, .textChatNemotronOmni:
             return nil
         }
@@ -2674,7 +2691,7 @@ enum RuntimeLoadedModel: Sendable {
             return await generator.continuousBatchingStats()
         case .textChatLFM2(let generator, _):
             return await generator.continuousBatchingStats()
-        case .textCode, .textChatKlein, .textChatDeepseekV4Flash, .textChatMuseGlimmer,
+        case .textCode, .textChatKlein, .textChatDiffusionGemma, .textChatDeepseekV4Flash, .textChatMuseGlimmer,
              .textChatNemotronH, .textChatNemotronOmni:
             return nil
         }
@@ -2684,7 +2701,7 @@ enum RuntimeLoadedModel: Sendable {
         switch self {
         case .textChatGemma4(let generator, _):
             return await generator.mtpStats()
-        case .textCode, .textChatKlein, .textChatLaguna, .textChatQ35, .textChatLFM2,
+        case .textCode, .textChatKlein, .textChatDiffusionGemma, .textChatLaguna, .textChatQ35, .textChatLFM2,
              .textChatDeepseekV4Flash, .textChatMuseGlimmer, .textChatNemotronH,
              .textChatNemotronOmni:
             return nil
@@ -2711,6 +2728,8 @@ enum RuntimeLoadedModel: Sendable {
             }
             return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
         case .textChatGemma4(let generator, let modelPath):
+            return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
+        case .textChatDiffusionGemma(let generator, let modelPath):
             return try await generator.chat(request, modelPath: modelPath, progressHandler: progressHandler)
         case .textChatLaguna(let generator, let modelPath):
             guard let modelPath else {
@@ -2745,7 +2764,7 @@ enum RuntimeLoadedModel: Sendable {
                 modelPath: modelPath,
                 progressHandler: progressHandler
             )
-        case .textCode, .textChatKlein, .textChatGemma4, .textChatLaguna, .textChatQ35,
+        case .textCode, .textChatKlein, .textChatGemma4, .textChatDiffusionGemma, .textChatLaguna, .textChatQ35,
              .textChatLFM2, .textChatMuseGlimmer, .textChatNemotronH,
              .textChatNemotronOmni:
             throw RuntimeModelPoolError.rawProxyUnavailable("")
