@@ -6,6 +6,18 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Text
+
+- added native Swift/MLX text generation and OpenAI-compatible serving for the
+  pinned DiffusionGemma 26B-A4B OptiQ snapshot. The dedicated runtime performs
+  causal prompt caching and 48-step bidirectional block denoising, preserves
+  the checkpoint's mixed 4-bit and 8-bit affine weights, and keeps image input
+  disabled until the separate vision path receives real-checkpoint
+  qualification. Diffusion generation now supports deterministic seeds,
+  revision-aware progressive unmasking, denoising-step and work-throughput
+  diagnostics, sorted expert routing, selected-token confidence without a full
+  probability tensor, and resident graph warmup in API serving.
+
 ## 0.49.0 - 2026-08-31
 
 This release adds native attention QLoRA training for LFM2.5, a complete

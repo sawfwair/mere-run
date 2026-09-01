@@ -48,6 +48,9 @@ struct APIServe: AsyncParsableCommand {
           # Start a Gemma 4 text-chat server
           mere.run api serve --engine text-chat-gemma4
 
+          # Start a DiffusionGemma block-diffusion text server
+          mere.run api serve --engine text-chat-diffusiongemma
+
           # Start a Qwen3.6 text-chat server with an explicit model root
           mere.run api serve --engine text-chat-q36 -m ~/Models/text-chat-q36-nano
 
@@ -149,10 +152,10 @@ struct APIServe: AsyncParsableCommand {
     @Option(name: [.long], help: "Host to bind to.")
     var host: String = "127.0.0.1"
 
-    @Option(name: [.customShort("m"), .long, .customLong("model-path")], help: "Model path. For --engine text-code, pass a GGUF file. For --engine text-chat-klein, pass a Klein-root text chat model. For --engine text-chat-gemma4, pass a Gemma 4 model root or repo ID. For --engine text-chat-laguna, pass text-chat-laguna-s-2-1, text-chat-laguna-xs-2-1, or an installed Laguna MLX root. For --engine text-chat-q36, pass a Qwen3.6 text chat model root. For --engine text-chat-lfm2, pass an LFM2 MLX model root or repo ID. For --engine text-chat-deepseek-v4-flash, pass a DS4 GGUF file or managed model root. For --engine text-chat-muse-glimmer, pass vision-chat-muse-glimmer-30b or an installed Muse Glimmer MLX root. For --engine text-chat-nemotron-omni, pass omni-chat-nemotron3-nano-30b-a3b-bf16 or its installed wrapper root.")
+    @Option(name: [.customShort("m"), .long, .customLong("model-path")], help: "Model path. For --engine text-code, pass a GGUF file. For --engine text-chat-klein, pass a Klein-root text chat model. For --engine text-chat-gemma4, pass a Gemma 4 model root or repo ID. For --engine text-chat-diffusiongemma, pass text-chat-diffusiongemma-26b-optiq-4bit or its installed MLX root. For --engine text-chat-laguna, pass text-chat-laguna-s-2-1, text-chat-laguna-xs-2-1, or an installed Laguna MLX root. For --engine text-chat-q36, pass a Qwen3.6 text chat model root. For --engine text-chat-lfm2, pass an LFM2 MLX model root or repo ID. For --engine text-chat-deepseek-v4-flash, pass a DS4 GGUF file or managed model root. For --engine text-chat-muse-glimmer, pass vision-chat-muse-glimmer-30b or an installed Muse Glimmer MLX root. For --engine text-chat-nemotron-omni, pass omni-chat-nemotron3-nano-30b-a3b-bf16 or its installed wrapper root.")
     var model: String?
 
-    @Option(name: [.long], help: "Serving engine: text-chat-q36 (default; serves text-chat-q36-nano), text-code, text-chat-klein, text-chat-gemma4, text-chat-laguna, text-chat-lfm2, text-chat-deepseek-v4-flash, text-chat-muse-glimmer, text-chat-nemotron-h, or text-chat-nemotron-omni.")
+    @Option(name: [.long], help: "Serving engine: text-chat-q36 (default; serves text-chat-q36-nano), text-code, text-chat-klein, text-chat-gemma4, text-chat-diffusiongemma, text-chat-laguna, text-chat-lfm2, text-chat-deepseek-v4-flash, text-chat-muse-glimmer, text-chat-nemotron-h, or text-chat-nemotron-omni.")
     var engine: APIEngine = .textChatQ36
 
     @Option(name: [.long], help: "Default cataloged adapter id or local LoRA path for all requests.")
@@ -265,6 +268,8 @@ struct APIServe: AsyncParsableCommand {
             return ModelResolver.ModelID.mebot.rawValue
         case .textChatGemma4:
             return ModelResolver.ModelID.gemma4.rawValue
+        case .textChatDiffusionGemma:
+            return DiffusionGemmaResources.modelID
         case .textChatLaguna:
             return LagunaResources.modelID
         case .textChatQ36, .textChatQ35:
@@ -315,6 +320,13 @@ struct APIServe: AsyncParsableCommand {
                 return resolved.rootURL.path
             }
             return nil
+        case .textChatDiffusionGemma:
+            if let explicit = model {
+                return explicit
+            }
+            return ManagedModelResolver.resolveInstalledModel(
+                id: DiffusionGemmaResources.modelID
+            )?.path
         case .textChatLaguna:
             if let explicit = model {
                 if LagunaResources.isManagedIdentifier(explicit) {
@@ -520,6 +532,7 @@ enum APIEngine: String, ExpressibleByArgument {
     case textCode = "text-code"
     case textChatKlein = "text-chat-klein"
     case textChatGemma4 = "text-chat-gemma4"
+    case textChatDiffusionGemma = "text-chat-diffusiongemma"
     case textChatLaguna = "text-chat-laguna"
     case textChatQ36 = "text-chat-q36"
     case textChatQ35 = "text-chat-q35"
@@ -537,6 +550,8 @@ enum APIEngine: String, ExpressibleByArgument {
             return .textChatKlein
         case .textChatGemma4:
             return .textChatGemma4
+        case .textChatDiffusionGemma:
+            return .textChatDiffusionGemma
         case .textChatLaguna:
             return .textChatLaguna
         case .textChatQ36:
@@ -2592,6 +2607,20 @@ enum APIServerContract {
         } else {
             logprobCapture = .none
         }
+        if openaiRequest.mere_show_unmasking == true {
+            guard laneModelID == DiffusionGemmaResources.modelID else {
+                throw APIRequestValidationError.invalidField(
+                    "mere_show_unmasking",
+                    "progressive unmasking is supported only by \(DiffusionGemmaResources.modelID)"
+                )
+            }
+            guard openaiRequest.stream == true else {
+                throw APIRequestValidationError.invalidField(
+                    "mere_show_unmasking",
+                    "requires stream=true"
+                )
+            }
+        }
 
         return ChatRequest(
             messages: messages,
@@ -2610,6 +2639,7 @@ enum APIServerContract {
             minP: openaiRequest.min_p == nil && isLaguna
                 ? LagunaResources.recommendedMinP
                 : minP,
+            seed: openaiRequest.seed.map(UInt64.init),
             reasoningEffort: reasoningEffort,
             showThinking: requiresJSON
                 ? false
@@ -2622,7 +2652,8 @@ enum APIServerContract {
             parallelToolCalls: parallelToolCalls,
             stopSequences: openaiRequest.stop?.values ?? [],
             maxContextTokens: contextSize,
-            logprobCapture: logprobCapture
+            logprobCapture: logprobCapture,
+            showUnmasking: openaiRequest.mere_show_unmasking == true
         )
     }
 
@@ -2829,6 +2860,9 @@ enum APIServerContract {
         }
         if request.seed != nil, !capabilities.supportsSeed {
             throw APIRequestValidationError.invalidField("seed", "deterministic seeds are not supported by this engine")
+        }
+        if let seed = request.seed, seed < 0 {
+            throw APIRequestValidationError.invalidField("seed", "must be an unsigned integer")
         }
         if let penalty = request.presence_penalty, penalty != 0, !capabilities.supportsPenalties {
             throw APIRequestValidationError.invalidField("presence_penalty", "presence penalties are not supported by this engine")
@@ -5108,7 +5142,8 @@ actor CodeGenServer {
                             logprobs: OpenAIChatLogprobs(result.logprobs)
                         )
                     ],
-                    usage: Self.openAIUsage(for: result)
+                    usage: Self.openAIUsage(for: result),
+                    mere_diffusion: result.diffusion
                 )
                 let data = try JSONEncoder().encode(response)
                 var trailers = Self.openAITimingHeaders(for: result)
@@ -5771,6 +5806,28 @@ actor CodeGenServer {
                 let result = try await lease.chat(request) { progress in
                     admissionLease.observe(progress)
                     guard !shouldBufferForToolCalls else { return }
+                    if let diffusion = progress.diffusion {
+                        let chunk = OpenAIChatResponse(
+                            id: id,
+                            object: "chat.completion.chunk",
+                            created: Int(Date().timeIntervalSince1970),
+                            model: modelID,
+                            choices: [
+                                OpenAIChatChoice(
+                                    index: 0,
+                                    delta: OpenAIChatDelta(
+                                        mere_diffusion_draft: OpenAIDiffusionDraft(diffusion)
+                                    ),
+                                    finish_reason: nil
+                                )
+                            ]
+                        )
+                        if let data = try? encoder.encode(chunk),
+                           let json = String(data: data, encoding: .utf8) {
+                            continuation.yield(ByteBuffer(string: "data: \(json)\n\n"))
+                        }
+                        return
+                    }
                     if progress.stage == .generating,
                        let token = progress.message,
                        !token.isEmpty,
@@ -5860,7 +5917,8 @@ actor CodeGenServer {
                                 hasToolCalls: responseToolCalls?.isEmpty == false
                             )
                         )
-                    ]
+                    ],
+                    mere_diffusion: result.diffusion
                 )
                 if let data = try? encoder.encode(finalChunk),
                    let json = String(data: data, encoding: .utf8) {
@@ -6011,6 +6069,18 @@ actor CodeGenServer {
         }
         if let kvCache = timing.decodeKVCache {
             headers["x-mere-kv-cache"] = kvCache
+        }
+        if let diffusion = result.diffusion {
+            headers["x-mere-diffusion-seed"] = String(diffusion.seed)
+            headers["x-mere-diffusion-canvas-tokens"] = String(diffusion.canvasTokens)
+            headers["x-mere-diffusion-denoising-steps"] = String(diffusion.denoisingSteps)
+            headers["x-mere-diffusion-work-tokens"] = String(diffusion.workTokens)
+            headers["x-mere-diffusion-work-tokens-per-second"] = fixedPrecision(
+                diffusion.workTokensPerSecond
+            )
+            if let firstDraftSeconds = diffusion.firstDraftSeconds {
+                headers["x-mere-diffusion-first-draft-seconds"] = fixedPrecision(firstDraftSeconds)
+            }
         }
         return headers
     }

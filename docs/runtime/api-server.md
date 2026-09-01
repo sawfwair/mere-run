@@ -102,6 +102,40 @@ swift run mere.run api serve \
   --model vision-chat-gemma4-12b
 ```
 
+For DiffusionGemma text chat:
+
+```bash
+swift run mere.run model pull text-chat-diffusiongemma-26b-optiq-4bit
+swift run mere.run api serve \
+  --engine text-chat-diffusiongemma \
+  --model text-chat-diffusiongemma-26b-optiq-4bit
+```
+
+This engine serves text and function tools with a maximum output budget of 256
+tokens. It rejects image content parts even though the managed checkpoint
+includes a validated BF16 vision sidecar. The resident model pool runs one
+seeded denoising warmup after loading so the first user request does not pay the
+initial MLX graph-compilation cost.
+
+OpenAI-compatible requests accept `seed`. Streaming requests can also set the
+Mere extension `mere_show_unmasking: true`; revision-aware drafts arrive in
+`delta.mere_diffusion_draft`, while the final response remains in
+`delta.content`. Completion responses expose diffusion diagnostics in
+`mere_diffusion`, and response headers include the seed, canvas tokens,
+denoising steps, work tokens, work tokens per second, and first-draft latency.
+
+```json
+{
+  "model": "text-chat-diffusiongemma-26b-optiq-4bit",
+  "messages": [{"role": "user", "content": "Explain block diffusion."}],
+  "max_tokens": 128,
+  "temperature": 0,
+  "seed": 123,
+  "stream": true,
+  "mere_show_unmasking": true
+}
+```
+
 For Muse Glimmer multimodal agent chat (explicit 21.38 GB Q4 target plus the
 5.54 GB DFlash2 assistant):
 
@@ -509,6 +543,9 @@ Engine compatibility:
   `ds4-server`, preserving DS4's OpenAI-compatible behavior.
 - `text-chat-gemma4`: accepts function tools and emits OpenAI tool-call
   responses when the model generates a tool call.
+- `text-chat-diffusiongemma`: accepts text and function tools, then generates
+  each block through parallel token denoising. It rejects image content parts,
+  structured JSON mode, LoRA adapters, and log-probability capture.
 - `text-chat-nemotron-h`: accepts function tools using the checkpoint's native
   Qwen-style XML envelope. Both final-target and DSpark decode stop at the first
   structurally complete envelope when parallel calls are disabled; malformed

@@ -358,6 +358,13 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 64
             ),
             descriptor(
+                DiffusionGemmaResources.modelID,
+                "DiffusionGemma 26B-A4B OptiQ",
+                "Runs the mixed 4-bit and 8-bit DiffusionGemma checkpoint through native Swift/MLX parallel block denoising.",
+                minimum: 48,
+                recommended: 64
+            ),
+            descriptor(
                 Gemma4Resources.turboModelId,
                 "Gemma 4 NVFP4 MoE",
                 "Installs the MLX NVFP4 Gemma 4 26B-A4B-it MoE snapshot for the native Swift 32 GB tier.",

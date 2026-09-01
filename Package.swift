@@ -354,6 +354,7 @@ targets.append(contentsOf: [
       "Cosmos3/README.md",
       "Decode/README.md",
       "DeepseekV4Flash/README.md",
+      "DiffusionGemma/README.md",
       "DepthAnything3/README.md",
       "FaceAnalysis/README.md",
       "FalconPerception/README.md",

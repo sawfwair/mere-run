@@ -6,7 +6,11 @@ import XCTest
 final class RuntimeModelPoolTests: XCTestCase {
     private let gib = UInt64(1024 * 1024 * 1024)
 
-    func testDefaultWarmupCoversGemmaTurboAndQwen4ExpOnly() {
+    func testDefaultWarmupCoversDiffusionGemmaGemmaTurboAndQwen4Exp() {
+        XCTAssertTrue(RuntimeModelPool.shouldWarmDefaultModel(
+            modelID: DiffusionGemmaResources.modelID,
+            engine: .textChatDiffusionGemma
+        ))
         XCTAssertTrue(RuntimeModelPool.shouldWarmDefaultModel(
             modelID: Gemma4Resources.turboModelId,
             engine: .textChatGemma4

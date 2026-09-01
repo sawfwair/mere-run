@@ -34,6 +34,7 @@ public struct ModelResolver {
         case gemma4Nano = "text-chat-gemma4-nano"
         case gemma4Max = "text-chat-gemma4-max"
         case gemma4Turbo = "text-chat-gemma4-turbo"
+        case diffusionGemma26BOptiQ4Bit = "text-chat-diffusiongemma-26b-optiq-4bit"
         case gemma4TwelveB = "text-chat-gemma4-12b"
         case gemma4TwelveB4Bit = "text-chat-gemma4-12b-4bit"
         case gemma4VisionTwelveB = "vision-chat-gemma4-12b"

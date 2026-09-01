@@ -212,6 +212,17 @@ public extension ManagedModelAPIProfile {
         )
     }
 
+    static func diffusionGemma() -> ManagedModelAPIProfile {
+        chat(
+            servingEngine: .textChatDiffusionGemma,
+            contextWindow: DiffusionGemmaResources.defaultContextLength,
+            maximumOutputTokens: DiffusionGemmaResources.maximumCanvasLength,
+            toolCall: true,
+            supportsStopSequences: true,
+            supportsSeed: true
+        )
+    }
+
     static func laguna(contextWindow: Int = LagunaResources.defaultContextLength) -> ManagedModelAPIProfile {
         chat(
             servingEngine: .textChatLaguna,
@@ -366,6 +377,8 @@ public extension ManagedModelAPIProfile {
             return .klein()
         case .textChatGemma4:
             return .gemma4()
+        case .textChatDiffusionGemma:
+            return .diffusionGemma()
         case .textChatLaguna:
             return .laguna()
         case .textChatQ36, .textChatQ35:
@@ -500,6 +513,7 @@ public enum ManagedModelValidationKind: String, Hashable, Sendable {
     case qwenImageEdit
     case ideogram4SDNQ
     case gemma4
+    case diffusionGemma
     case gemma4Unified
     case gemma4MTPAssistant
     case laguna
@@ -1560,6 +1574,22 @@ public enum ManagedModelCatalog {
             estimatedDownloadBytes: 62_578_654_199,
             defaultCLICommands: ["text chat", "text train-lora", "api serve"],
             apiProfile: .gemma4()
+        ),
+        ManagedModelSpec(
+            id: DiffusionGemmaResources.modelID,
+            category: .textChat,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: DiffusionGemmaResources.upstreamModelID,
+                revision: DiffusionGemmaResources.upstreamRevision,
+                patterns: DiffusionGemmaResources.snapshotPatterns
+            ),
+            upstreamRepoId: DiffusionGemmaResources.upstreamModelID,
+            upstreamRevision: DiffusionGemmaResources.upstreamRevision,
+            validationKind: .diffusionGemma,
+            estimatedDownloadBytes: DiffusionGemmaResources.estimatedDownloadBytes,
+            defaultCLICommands: ["text chat", "api serve"],
+            apiProfile: .diffusionGemma()
         ),
         ManagedModelSpec(
             id: Gemma4Resources.turboModelId,
@@ -4183,6 +4213,11 @@ public extension ManagedModelSpec {
             return Ideogram4Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .gemma4:
             return Gemma4Resources(rootURL: rootURL).validate(fileManager: fileManager)
+        case .diffusionGemma:
+            return DiffusionGemmaResources(rootURL: rootURL).validate(
+                fileManager: fileManager,
+                requireVision: true
+            )
         case .gemma4Unified:
             return Gemma4Resources(rootURL: rootURL).validate(
                 fileManager: fileManager,

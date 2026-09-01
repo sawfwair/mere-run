@@ -469,6 +469,8 @@ public struct ChatRequest: Sendable, Hashable {
     public var topK: Int?
     /// Min-p sampling cutoff relative to the most likely token; zero disables it.
     public var minP: Double
+    /// Optional deterministic seed for runtimes with an explicit random canvas or sampler.
+    public var seed: UInt64?
     /// Model-specific reasoning budget. Inkling-Small accepts values from 0 through 0.99.
     public var reasoningEffort: Double?
     public var showThinking: Bool
@@ -489,6 +491,8 @@ public struct ChatRequest: Sendable, Hashable {
     /// Optional semantic region for visible generated tokens. Reasoning and
     /// protocol markup detected by the runtime override this hint.
     public var logprobRegionHint: ChatLogprobRegion?
+    /// Emit revision-aware masked-diffusion drafts through `ChatProgress`.
+    public var showUnmasking: Bool
 
     public init(
         messages: [ChatMessage],
@@ -497,6 +501,7 @@ public struct ChatRequest: Sendable, Hashable {
         topP: Double = 0.9,
         topK: Int? = nil,
         minP: Double = 0,
+        seed: UInt64? = nil,
         reasoningEffort: Double? = nil,
         showThinking: Bool = true,
         lora: LoRA? = nil,
@@ -510,7 +515,8 @@ public struct ChatRequest: Sendable, Hashable {
         kvCacheMode: RuntimeKVCacheMode? = nil,
         maxContextTokens: Int? = nil,
         logprobCapture: ChatLogprobCapture = .none,
-        logprobRegionHint: ChatLogprobRegion? = nil
+        logprobRegionHint: ChatLogprobRegion? = nil,
+        showUnmasking: Bool = false
     ) {
         self.messages = messages
         self.maxTokens = maxTokens
@@ -518,6 +524,7 @@ public struct ChatRequest: Sendable, Hashable {
         self.topP = topP
         self.topK = topK
         self.minP = minP
+        self.seed = seed
         self.reasoningEffort = reasoningEffort
         self.showThinking = showThinking
         self.lora = lora
@@ -532,6 +539,35 @@ public struct ChatRequest: Sendable, Hashable {
         self.maxContextTokens = maxContextTokens
         self.logprobCapture = logprobCapture
         self.logprobRegionHint = logprobRegionHint
+        self.showUnmasking = showUnmasking
+    }
+}
+
+public struct ChatDiffusionDiagnostics: Codable, Sendable, Hashable {
+    public let seed: UInt64
+    public let canvasTokens: Int
+    public let denoisingSteps: Int
+    public let workTokens: Int
+    public let canvasTokensPerSecond: Double
+    public let workTokensPerSecond: Double
+    public let firstDraftSeconds: Double?
+
+    public init(
+        seed: UInt64,
+        canvasTokens: Int,
+        denoisingSteps: Int,
+        workTokens: Int,
+        canvasTokensPerSecond: Double,
+        workTokensPerSecond: Double,
+        firstDraftSeconds: Double? = nil
+    ) {
+        self.seed = seed
+        self.canvasTokens = canvasTokens
+        self.denoisingSteps = denoisingSteps
+        self.workTokens = workTokens
+        self.canvasTokensPerSecond = canvasTokensPerSecond
+        self.workTokensPerSecond = workTokensPerSecond
+        self.firstDraftSeconds = firstDraftSeconds
     }
 }
 
@@ -613,6 +649,7 @@ public struct ChatResponse: Sendable, Hashable {
     public var hasReopenedReasoning: Bool
     public var logprobs: ChatLogprobDiagnostics?
     public var acceleration: ChatAccelerationDiagnostics?
+    public var diffusion: ChatDiffusionDiagnostics?
 
     public init(
         response: String,
@@ -626,7 +663,8 @@ public struct ChatResponse: Sendable, Hashable {
         reasoningBlockCount: Int = 0,
         hasReopenedReasoning: Bool = false,
         logprobs: ChatLogprobDiagnostics? = nil,
-        acceleration: ChatAccelerationDiagnostics? = nil
+        acceleration: ChatAccelerationDiagnostics? = nil,
+        diffusion: ChatDiffusionDiagnostics? = nil
     ) {
         self.response = response
         self.tokensGenerated = tokensGenerated
@@ -641,6 +679,7 @@ public struct ChatResponse: Sendable, Hashable {
         self.hasReopenedReasoning = hasReopenedReasoning
         self.logprobs = logprobs
         self.acceleration = acceleration
+        self.diffusion = diffusion
     }
 
     public init(
@@ -652,7 +691,8 @@ public struct ChatResponse: Sendable, Hashable {
         promptTokens: Int? = nil,
         finishReason: ChatFinishReason? = nil,
         logprobs: ChatLogprobDiagnostics? = nil,
-        acceleration: ChatAccelerationDiagnostics? = nil
+        acceleration: ChatAccelerationDiagnostics? = nil,
+        diffusion: ChatDiffusionDiagnostics? = nil
     ) {
         let split = ChatReasoningMarkup.splitThinkBlocks(in: generatedText)
         let visibleResponse = showThinking
@@ -670,7 +710,8 @@ public struct ChatResponse: Sendable, Hashable {
             reasoningBlockCount: split.reasoningBlockCount,
             hasReopenedReasoning: split.hasReopenedReasoning,
             logprobs: logprobs,
-            acceleration: acceleration
+            acceleration: acceleration,
+            diffusion: diffusion
         )
     }
 }
@@ -841,13 +882,41 @@ public enum ChatStage: String, Sendable, Hashable {
     case generating
 }
 
+public struct ChatDiffusionProgress: Sendable, Hashable {
+    public let draftText: String
+    public let step: Int
+    public let totalSteps: Int
+    public let canvasIndex: Int
+    public let blockComplete: Bool
+
+    public init(
+        draftText: String,
+        step: Int,
+        totalSteps: Int,
+        canvasIndex: Int,
+        blockComplete: Bool = false
+    ) {
+        self.draftText = draftText
+        self.step = step
+        self.totalSteps = totalSteps
+        self.canvasIndex = canvasIndex
+        self.blockComplete = blockComplete
+    }
+}
+
 public struct ChatProgress: Sendable, Hashable {
     public let stage: ChatStage
     public let message: String?
+    public let diffusion: ChatDiffusionProgress?
 
-    public init(stage: ChatStage, message: String? = nil) {
+    public init(
+        stage: ChatStage,
+        message: String? = nil,
+        diffusion: ChatDiffusionProgress? = nil
+    ) {
         self.stage = stage
         self.message = message
+        self.diffusion = diffusion
     }
 }
 

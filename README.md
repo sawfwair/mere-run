@@ -96,7 +96,7 @@ of updating all model weights.
 
 | Area | Commands | Capabilities |
 | --- | --- | --- |
-| [Text, code, and agents](./docs/runtime/text.md) | `text chat`, `text code`, `text embed`, `text anonymize`, `agent` | Chat, code generation, tool calls, structured responses, embeddings, and personal information redaction. Models include Gemma 4, Qwen3.8, LFM2.5, Laguna, Inkling, Nemotron Lightning, DeepSeek V4 Flash, and Ornith. |
+| [Text, code, and agents](./docs/runtime/text.md) | `text chat`, `text code`, `text embed`, `text anonymize`, `agent` | Chat, code generation, tool calls, structured responses, embeddings, and personal information redaction. Models include Gemma 4, DiffusionGemma, Qwen3.8, LFM2.5, Laguna, Inkling, Nemotron Lightning, DeepSeek V4 Flash, and Ornith. |
 | [Multimodal chat](./docs/runtime/text.md) | `text chat`, `vision caption`, `vision inspect`, `vision embed` | Image understanding with Gemma, Qwen, LFM, Bonsai, and Muse Glimmer. Nemotron Nano Omni also supports audio and video understanding. Shared text and image embeddings support retrieval. |
 | [Images](./docs/runtime/image.md) | `image generate` | Generation and editing with Klein, ZImage, HiDream O1, SenseNova U1.5, Krea 2, Qwen Image Edit 2511, Ideogram 4, and Bonsai. Controls include ordered references, structured prompts, and LoRA adapters. |
 | [Video](./docs/runtime/video.md) | `video generate`, `video session`, `video animate`, `video prepare-masks` | Synchronized audio and video with LTX 2.5 and 2.3. MiniMax-H3 supports keyframes and ordered media references. Other workflows include Wan 2.2 generation and SCAIL-2 subject animation with SAM masks. |

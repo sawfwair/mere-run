@@ -45,6 +45,61 @@ final class TextChatCommandParsingTests: XCTestCase {
         XCTAssertTrue(cmd.stream)
     }
 
+    func testTextChatParsesDiffusionGemmaModel() throws {
+        let cmd = try TextChat.parse([
+            "--model", DiffusionGemmaResources.modelID,
+            "--max-tokens", "256",
+            "--seed", "123",
+            "--show-unmasking",
+            "--prompt", "Explain block diffusion.",
+        ])
+
+        XCTAssertEqual(cmd.model, DiffusionGemmaResources.modelID)
+        XCTAssertEqual(cmd.maxTokens, DiffusionGemmaResources.maximumCanvasLength)
+        XCTAssertEqual(cmd.seed, 123)
+        XCTAssertTrue(cmd.showUnmasking)
+        XCTAssertNoThrow(try TextChat.validateDiffusionOptions(
+            seed: cmd.seed,
+            showUnmasking: cmd.showUnmasking,
+            modelID: cmd.model
+        ))
+    }
+
+    func testTextChatRejectsDiffusionOptionsForOtherModels() {
+        XCTAssertThrowsError(try TextChat.validateDiffusionOptions(
+            seed: 123,
+            showUnmasking: false,
+            modelID: Gemma4Resources.nanoModelId
+        ))
+    }
+
+    func testDiffusionDraftProgressUsesStderrWithoutMarkingFinalOutputStreamed() throws {
+        let stdout = TextOutputRecorder()
+        let stderr = TextOutputRecorder()
+        let streamingOutput = StreamingChatOutput(enabled: true, writer: stdout.write)
+        let progressHandler = try XCTUnwrap(TextChatProgressHandler.make(
+            quiet: false,
+            streamingOutput: streamingOutput,
+            diagnosticWriter: stderr.write
+        ))
+
+        progressHandler(ChatProgress(
+            stage: .generating,
+            diffusion: ChatDiffusionProgress(
+                draftText: "The [Mask] answer",
+                step: 2,
+                totalSteps: 48,
+                canvasIndex: 1,
+                blockComplete: true
+            )
+        ))
+
+        XCTAssertEqual(stdout.value, "")
+        XCTAssertFalse(streamingOutput.hasWritten)
+        XCTAssertTrue(stderr.value.contains("canvas=1 step=2/48"))
+        XCTAssertTrue(stderr.value.contains("The [Mask] answer"))
+    }
+
     func testQuietStreamingKeepsGeneratingCallbackAndSuppressesDiagnostics() throws {
         let stdout = TextOutputRecorder()
         let stderr = TextOutputRecorder()
