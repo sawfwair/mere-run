@@ -148,6 +148,39 @@ final class SetupCommandParsingTests: XCTestCase {
         XCTAssertEqual(runtime.recommendation.servingEngine, .textChatQ36)
     }
 
+    func testOrnithVisionProviderUsesNativeQwenRuntime() throws {
+        let runtime = try SetupAgentRuntime.runtime(
+            forManagedModelID: Q35Resources.ornith35BVisionModelId
+        )
+        let providerModel = runtime.providerModel
+
+        XCTAssertEqual(runtime.engine, .textChatQ36)
+        XCTAssertEqual(providerModel.id, Q35Resources.ornith35BVisionModelId)
+        XCTAssertEqual(providerModel.contextWindow, Q35Resources.ornith35BMLXContextLength)
+        XCTAssertEqual(providerModel.maxTokens, 4_096)
+        XCTAssertTrue(providerModel.reasoning)
+        XCTAssertTrue(providerModel.toolCall)
+        XCTAssertTrue(providerModel.inputModalities.contains("image"))
+        XCTAssertTrue(runtime.recommendation.isStartableByMereRun)
+        XCTAssertEqual(runtime.recommendation.servingEngine, .textChatQ35)
+    }
+
+    func testOrnithMLX4BitVisionProviderUsesNativeQwenRuntime() throws {
+        let runtime = try SetupAgentRuntime.runtime(
+            forManagedModelID: Q35Resources.ornith35BMLX4BitModelId
+        )
+        let providerModel = runtime.providerModel
+
+        XCTAssertEqual(runtime.engine, .textChatQ36)
+        XCTAssertEqual(providerModel.id, Q35Resources.ornith35BMLX4BitModelId)
+        XCTAssertEqual(providerModel.contextWindow, Q35Resources.ornith35BMLXContextLength)
+        XCTAssertTrue(providerModel.reasoning)
+        XCTAssertTrue(providerModel.toolCall)
+        XCTAssertTrue(providerModel.inputModalities.contains("image"))
+        XCTAssertTrue(runtime.recommendation.isStartableByMereRun)
+        XCTAssertEqual(runtime.recommendation.servingEngine, .textChatQ35)
+    }
+
     func testOrnith35BProviderUsesNativeManagedModelID() throws {
         let recommendation = try XCTUnwrap(
             MereRunAgentModelCatalog

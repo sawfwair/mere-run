@@ -1464,6 +1464,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 bits: 4,
                 upstreamRepoId: Q35Resources.ornith35BMLX4BitUpstreamRepoId,
                 upstreamRevision: Q35Resources.ornith35BMLX4BitUpstreamRevision,
+                supports: [.chat, .codeGeneration, .visionChat],
                 createdAt: createdAt
             )
         case .ornith35BMLX6Bit:
@@ -1498,6 +1499,22 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 components: q35TextComponents,
                 upstreamRepoId: "\(Q35Resources.ornith35BMLXUpstreamRepoId)"
                     + "@\(Q35Resources.ornith35BMLXUpstreamRevision)",
+                createdAt: createdAt
+            )
+        case .ornith35BVision:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .qwen35HybridMoE,
+                family: .code,
+                tier: .large,
+                variant: .standard,
+                precision: .bf16,
+                quantization: nil,
+                defaults: nil,
+                supports: [.chat, .codeGeneration, .visionChat],
+                components: q35TextComponents,
+                upstreamRepoId: "\(Q35Resources.ornith35BVisionUpstreamRepoId)"
+                    + "@\(Q35Resources.ornith35BVisionUpstreamRevision)",
                 createdAt: createdAt
             )
         case .ornith35BMTP:
@@ -2649,6 +2666,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
         bits: Int,
         upstreamRepoId: String,
         upstreamRevision: String,
+        supports: [Capability] = [.chat, .codeGeneration],
         createdAt: Date
     ) -> MereRunModelManifest {
         MereRunModelManifest(
@@ -2660,7 +2678,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
             precision: precision,
             quantization: Quantization(bits: bits, groupSize: 64, scheme: "mlx-affine"),
             defaults: nil,
-            supports: [.chat, .codeGeneration],
+            supports: supports,
             components: Components(
                 tokenizer: .local(path: "."),
                 textEncoder: .local(path: "."),

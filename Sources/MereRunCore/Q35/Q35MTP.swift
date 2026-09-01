@@ -62,20 +62,20 @@ final class Q35MTPExperts: Module {
         let flatX = expanded.reshaped([batchTokens * topK, 1, inputDim])
         let flatIndices = indices.reshaped([batchTokens * topK])
 
-        let gateUp = gatherMM(
+        let gateUp = q35DenseExpertMM(
             flatX,
-            gateUpProj.swappedAxes(-1, -2),
-            rhsIndices: flatIndices,
+            weight: gateUpProj,
+            indices: flatIndices,
             sortedIndices: false
         )
         let gate = gateUp[.ellipsis, 0..<intermediateSize]
         let up = gateUp[.ellipsis, intermediateSize...]
         let activated = q35MTPSwiglu(gate, up)
 
-        let output = gatherMM(
+        let output = q35DenseExpertMM(
             activated,
-            downProj.swappedAxes(-1, -2),
-            rhsIndices: flatIndices,
+            weight: downProj,
+            indices: flatIndices,
             sortedIndices: false
         )
         let outDim = output.dim(2)

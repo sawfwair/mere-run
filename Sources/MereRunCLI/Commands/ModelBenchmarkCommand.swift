@@ -92,6 +92,7 @@ struct ModelBenchmarkQ36MTP: AsyncParsableCommand {
             Q35Resources.ornith35BMLX6BitModelId,
             Q35Resources.ornith35BMLX8BitModelId,
             Q35Resources.ornith35BMLXModelId,
+            Q35Resources.ornith35BVisionModelId,
         ]
         guard supportedModels.contains(model) else {
             throw ValidationError(

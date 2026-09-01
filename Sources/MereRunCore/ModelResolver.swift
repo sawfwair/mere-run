@@ -75,6 +75,7 @@ public struct ModelResolver {
         case ornith35BMLX6Bit = "text-agent-ornith-35b-mlx-6bit"
         case ornith35BMLX8Bit = "text-agent-ornith-35b-mlx-8bit"
         case ornith35BMLX = "text-agent-ornith-35b-mlx"
+        case ornith35BVision = "vision-chat-ornith-35b"
         case ornith35BMTP = "text-agent-ornith-35b-mtp"
         case northMiniCode = "text-code-north-mini"
         case q36NanoGGUF = "text-chat-q36-nano-gguf"

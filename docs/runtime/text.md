@@ -56,10 +56,11 @@ help in the repository gate.
 - `text-chat-lfm25-a1b-bf16` (managed LiquidAI LFM2.5 8B-A1B BF16 target plus DSpark)
 - `vision-chat-lfm25-3b-8bit` (managed LiquidAI LFM2.5-VL 3B MLX 8-bit vision-language snapshot)
 - `text-agent-ornith-9b` (experimental native MLX/OptiQ coding-agent snapshot)
-- `text-agent-ornith-35b-mlx-4bit` (Ornith 1.5 speed tier)
+- `text-agent-ornith-35b-mlx-4bit` (recommended Ornith 1.5 Q4 coding and vision composite)
 - `text-agent-ornith-35b-mlx-6bit` (Ornith 1.5 balanced tier)
 - `text-agent-ornith-35b-mlx-8bit` (Ornith 1.5 quantized quality tier)
 - `text-agent-ornith-35b-mlx` (Ornith 1.5 35B-A3B BF16 MLX coding-agent snapshot)
+- `vision-chat-ornith-35b` (Ornith 1.5 full BF16 coding and vision reference)
 - `text-agent-deepseek-v4-flash` (API/agent serving)
 - `text-chat-mebot` (API serving; not a `text chat` dispatch lane)
 - `text-chat-psi-agent`
@@ -407,7 +408,28 @@ authoritative base checkpoint; target verification remains authoritative for
 every emitted speculative token. Ornith enables that verified MTP path from
 short prompts; Qwen3.6 retains its separate 6,144-token adaptive threshold.
 
-Both Ornith lanes are R1-style reasoning tunes and generate with thinking
+The recommended `text-agent-ornith-35b-mlx-4bit` ID combines the official 4-bit
+text target with the authoritative base checkpoint's vision shard and the
+shared MTP head. Pull it explicitly on a 32 GB-or-larger Apple Silicon Mac;
+48 GB is the conservative recommendation:
+
+```bash
+swift run mere.run model pull text-agent-ornith-35b-mlx-4bit
+swift run mere.run text chat \
+  --model text-agent-ornith-35b-mlx-4bit \
+  --image ./screenshot.png \
+  --prompt "Describe the interface and identify the most likely next action."
+```
+
+Image requests are resized to a 65,536-pixel runtime budget and disable
+MTP speculation, so vision output remains target-only. The pinned processor
+metadata still records its published 16,777,216-pixel upper bound; the lower
+local cap prevents Metal watchdog failures. Text-only requests use the shared
+verified MTP companion. `vision-chat-ornith-35b` remains the explicit-pull full
+BF16 quality reference for systems with at least 96 GB. The recommended memory
+for this reference lane is 128 GB.
+
+The Ornith lanes are R1-style reasoning tunes and generate with thinking
 enabled by default in `text chat` and `api serve` — without it the models
 degenerate into repetition loops or signature echo on constrained prompts.
 The reasoning stays hidden in `text chat` unless `--thinking` is passed;

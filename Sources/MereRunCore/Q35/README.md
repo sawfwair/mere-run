@@ -89,6 +89,16 @@ place, and insufficient internal free space falls back to the original shards.
 Four-layer evaluation boundaries keep the 48-layer lazy graph below
 the macOS Metal watchdog while preserving each hybrid block.
 
+The same four-layer evaluation boundaries keep other deep MoE lazy graphs below
+the macOS Metal watchdog while preserving each decoder block. Full-precision BF16 expert
+weights use selected batched matrix multiplication because MLX's dense
+`gatherMM` kernel accepts only FP32 weights.
+
+Qwen3 learned-position vision towers materialize checkpoint weights in bounded
+batches and synchronize after each vision block and final projection. This
+keeps external-volume page-in and the full BF16 Ornith vision graph below the
+macOS Metal watchdog without changing the checkpoint tensors.
+
 QSA indexers run in every full-attention layer. Raw index keys are mean-pooled
 in four-token blocks in FP32, normalized, and rotated at the block's first
 position. Normalized/rotated index queries score those blocks by summed ReLU

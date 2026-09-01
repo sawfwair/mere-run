@@ -13,6 +13,27 @@ private func q35Swiglu(_ gate: MLXArray, _ up: MLXArray) -> MLXArray {
     q35SwigluCompiled(gate, up)
 }
 
+/// MLX `gatherMM` currently accepts dense float32 expert banks only. Preserve
+/// native BF16 checkpoints by gathering just the routed expert matrices and
+/// applying the regular batched matmul path, which supports BF16 on Metal.
+func q35DenseExpertMM(
+    _ x: MLXArray,
+    weight: MLXArray,
+    indices: MLXArray,
+    sortedIndices: Bool
+) -> MLXArray {
+    if weight.dtype == .float32 {
+        return gatherMM(
+            x,
+            weight.swappedAxes(-1, -2),
+            rhsIndices: indices,
+            sortedIndices: sortedIndices
+        )
+    }
+    let selected = weight.take(indices, axis: 0)
+    return MLX.matmul(x, selected.swappedAxes(-1, -2))
+}
+
 enum Q35FusedSwitchGLUPolicy {
     /// Kill switch: MERERUN_Q35_FUSED_SWITCH_GLU=0 disables the stacked
     /// gate+up expert matmul. The fusion halves the gather-matmul launches per
@@ -134,10 +155,10 @@ class Q35SwitchLinear: Module {
                 sortedIndices: sortedIndices
             )
         } else {
-            output = gatherMM(
+            output = q35DenseExpertMM(
                 x,
-                weight.swappedAxes(-1, -2),
-                rhsIndices: indices,
+                weight: weight,
+                indices: indices,
                 sortedIndices: sortedIndices
             )
         }
@@ -417,10 +438,10 @@ final class Q35SwitchGLU: Module {
                 sortedIndices: sortedIndices
             )
         } else {
-            output = gatherMM(
+            output = q35DenseExpertMM(
                 x,
-                fused.weight.swappedAxes(-1, -2),
-                rhsIndices: indices,
+                weight: fused.weight,
+                indices: indices,
                 sortedIndices: sortedIndices
             )
         }

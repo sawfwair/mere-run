@@ -92,10 +92,11 @@ an effective overlay; they are not a second capability catalog.
 | `text-chat` | `text-chat-bonsai-27b-1bit` |
 | `text-chat` | `text-chat-bonsai-27b-2bit` |
 | `text-code` | `text-agent-ornith-9b` |
-| `text-code` | `text-agent-ornith-35b-mlx-4bit` |
+| `vision-chat` | `text-agent-ornith-35b-mlx-4bit` |
 | `text-code` | `text-agent-ornith-35b-mlx-6bit` |
 | `text-code` | `text-agent-ornith-35b-mlx-8bit` |
 | `text-code` | `text-agent-ornith-35b-mlx` |
+| `vision-chat` | `vision-chat-ornith-35b` |
 | `text-code` | `text-agent-qwen35-9b` |
 | `text-code` | `text-code-north-mini` |
 | `text-code` | `text-agent-ornith-35b` |
@@ -322,6 +323,27 @@ pinned authoritative base checkpoint as the shared
 [`ornith-ai/Ornith-1.5-35B-A3B`](https://huggingface.co/ornith-ai/Ornith-1.5-35B-A3B)
 base checkpoint declares the model under the MIT license in its model-card
 metadata; the MLX conversion repository does not duplicate the license file.
+
+`text-agent-ornith-35b-mlx-4bit` is the recommended local multimodal lane. It
+combines the official `Ornith-1.5-35B-A3B-MLX-4bit` text target with the
+authoritative base checkpoint's `model-00001-of-00016.safetensors` vision
+shard, vision configuration, processor metadata, and the shared BF16 MTP
+companion. The primary and vision payloads total about 22.6 GiB; the shared MTP
+companion adds about 4.1 GiB when it is not already installed. Image requests
+use target-only decoding because MTP speculation is disabled when image
+embeddings are present; text and code requests retain verified MTP.
+
+`vision-chat-ornith-35b` installs the authoritative full BF16 base checkpoint
+at immutable revision `10fbf86fed7ecee4a061f8b499a618f46001cac1`. Unlike
+the text-only MLX conversions, the 67.0 GiB snapshot includes Ornith's Qwen3.5
+vision tower, processor metadata, and embedded `mtp.*` tensors. It accepts
+local images through `text chat` and the OpenAI-compatible API, retains the
+262,144-token advertised context, and is available to the VLM, chat, and code
+benchmark commands. Runtime auto-download remains disabled; the catalog
+requires 96 GB unified memory and recommends 128 GB. Use it as the optional
+quality reference instead of the recommended Q4 lane. The source processor
+advertises images up to 16,777,216 pixels, but this full-BF16 local lane caps
+the encoded input at 65,536 pixels to remain below the macOS Metal watchdog.
 
 `text-agent-ornith-35b` installs DeepReinforce's public
 `deepreinforce-ai/Ornith-1.0-35B-GGUF` Q4_K_M file at the pinned catalog

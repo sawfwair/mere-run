@@ -465,6 +465,57 @@ final class MereRunModelManifestTests: MereRunCoreTestCase {
         )
     }
 
+    func testOrnith35BVisionTemplateHasExpectedMetadata() throws {
+        let manifest = MereRunModelManifest.template(
+            for: .ornith35BVision,
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+
+        XCTAssertEqual(manifest.id, Q35Resources.ornith35BVisionModelId)
+        XCTAssertEqual(manifest.engine, .qwen35HybridMoE)
+        XCTAssertEqual(manifest.family, .code)
+        XCTAssertEqual(manifest.tier, .large)
+        XCTAssertEqual(manifest.variant, .standard)
+        XCTAssertEqual(manifest.precision, .bf16)
+        XCTAssertNil(manifest.quantization)
+        XCTAssertEqual(Set(manifest.supports ?? []), Set([.chat, .codeGeneration, .visionChat]))
+        XCTAssertEqual(
+            manifest.upstreamRepoId,
+            "\(Q35Resources.ornith35BVisionUpstreamRepoId)"
+                + "@\(Q35Resources.ornith35BVisionUpstreamRevision)"
+        )
+    }
+
+    func testOrnith35BMLX4BitTemplateRecordsTargetAndVisionSources() throws {
+        let manifest = MereRunModelManifest.template(
+            for: .ornith35BMLX4Bit,
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+
+        XCTAssertEqual(manifest.id, Q35Resources.ornith35BMLX4BitModelId)
+        XCTAssertEqual(manifest.engine, .qwen35HybridMoE)
+        XCTAssertEqual(manifest.precision, .int4)
+        XCTAssertEqual(manifest.quantization?.bits, 4)
+        XCTAssertEqual(manifest.quantization?.groupSize, 64)
+        XCTAssertEqual(manifest.quantization?.scheme, "mlx-affine")
+        XCTAssertEqual(Set(manifest.supports ?? []), Set([.chat, .codeGeneration, .visionChat]))
+        XCTAssertEqual(manifest.sources?.count, 2)
+        XCTAssertEqual(manifest.sources?.first?.role, "primary")
+        XCTAssertEqual(
+            manifest.sources?.first?.repository,
+            Q35Resources.ornith35BMLX4BitUpstreamRepoId
+        )
+        XCTAssertEqual(manifest.sources?.last?.role, "component")
+        XCTAssertEqual(
+            manifest.sources?.last?.repository,
+            Q35Resources.ornith35BVisionUpstreamRepoId
+        )
+        XCTAssertEqual(
+            manifest.sources?.last?.destinationPath,
+            Q35Resources.ornith35BVisionComponentPath
+        )
+    }
+
     func testOrnith35BMLXQuantizedTemplatesPinOfficialConversions() throws {
         let createdAt = Date(timeIntervalSince1970: 0)
         let cases: [(
@@ -511,7 +562,10 @@ final class MereRunModelManifestTests: MereRunCoreTestCase {
             XCTAssertEqual(manifest.quantization?.bits, bits)
             XCTAssertEqual(manifest.quantization?.groupSize, 64)
             XCTAssertEqual(manifest.quantization?.scheme, "mlx-affine")
-            XCTAssertEqual(Set(manifest.supports ?? []), Set([.chat, .codeGeneration]))
+            let expectedSupports: Set<MereRunModelManifest.Capability> = bits == 4
+                ? [.chat, .codeGeneration, .visionChat]
+                : [.chat, .codeGeneration]
+            XCTAssertEqual(Set(manifest.supports ?? []), expectedSupports)
             XCTAssertEqual(manifest.upstreamRepoId, "\(repoID)@\(revision)")
         }
     }

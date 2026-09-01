@@ -552,8 +552,8 @@ public enum ManagedModelCapabilityCatalog {
             ),
             descriptor(
                 Q35Resources.ornith35BMLX4BitModelId,
-                "Ornith 1.5 35B-A3B MLX 4-bit",
-                "Fastest official Ornith 35B MLX tier with the shared BF16 MTP companion for verified speculative decode.",
+                "Ornith 1.5 35B-A3B 4-bit vision agent",
+                "Runs the official 4-bit Ornith target with its BF16 vision tower and shared MTP companion.",
                 minimum: 32,
                 recommended: 48
             ),
@@ -575,6 +575,13 @@ public enum ManagedModelCapabilityCatalog {
                 Q35Resources.ornith35BMLXModelId,
                 "Ornith 1.5 35B-A3B MLX BF16",
                 "Runs Ornith's official unquantized BF16 coding agent with the shared BF16 MTP companion.",
+                minimum: 96,
+                recommended: 128
+            ),
+            descriptor(
+                Q35Resources.ornith35BVisionModelId,
+                "Ornith 1.5 35B-A3B vision agent",
+                "Runs Ornith's full BF16 agentic coding and vision checkpoint through the native Qwen-family runtime.",
                 minimum: 96,
                 recommended: 128
             ),
@@ -1468,7 +1475,8 @@ public enum ManagedModelCapabilityCatalog {
             CodeGenResources.defaultModelId,
         ].filter { modelID in
             guard let spec = ManagedModelCatalog.spec(for: modelID),
-                  spec.category == .textCode else {
+                  spec.category == .textCode
+                    || spec.defaultCLICommands.contains("model benchmark code") else {
                 return false
             }
             return support(for: spec, on: machine).isSupported

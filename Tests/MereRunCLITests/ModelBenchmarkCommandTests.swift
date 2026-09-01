@@ -250,6 +250,17 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         }
     }
 
+    func testCodeBenchmarkAcceptsOrnithVisionAgentLane() throws {
+        for modelID in [
+            Q35Resources.ornith35BMLX4BitModelId,
+            Q35Resources.ornith35BVisionModelId,
+        ] {
+            let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: modelID))
+            XCTAssertEqual(spec.category, .visionChat)
+            XCTAssertTrue(ModelBenchmarkCode.supportsCodingBenchmark(spec))
+        }
+    }
+
     func testCodeBenchmarkScoresOnlyVisibleCodeAfterImplicitThinkingPrefix() {
         let response = ChatResponse(
             response: """
@@ -537,6 +548,7 @@ final class ModelBenchmarkCommandTests: XCTestCase {
             Q35Resources.ornith35BMLX4BitModelId,
             Q35Resources.ornith35BMLX6BitModelId,
             Q35Resources.ornith35BMLX8BitModelId,
+            Q35Resources.ornith35BVisionModelId,
         ] {
             let cmd = try ModelBenchmarkQ36MTP.parse(["--model", modelId])
             XCTAssertNoThrow(try cmd.validate())

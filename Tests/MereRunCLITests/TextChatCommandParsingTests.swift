@@ -416,6 +416,8 @@ final class TextChatCommandParsingTests: XCTestCase {
 
     func testQwenAgentAndQ38LanesDefaultToThinkingAndRecommendedSampling() {
         XCTAssertTrue(Q35Resources.thinkingDefault(forModelId: Q35Resources.ornith35BMLXModelId))
+        XCTAssertTrue(Q35Resources.thinkingDefault(forModelId: Q35Resources.ornith35BMLX4BitModelId))
+        XCTAssertTrue(Q35Resources.thinkingDefault(forModelId: Q35Resources.ornith35BVisionModelId))
         XCTAssertTrue(Q35Resources.thinkingDefault(forModelId: Q35Resources.ornith9BModelId))
         XCTAssertTrue(Q35Resources.thinkingDefault(forModelId: Q35Resources.q38TwentySevenBModelId))
         XCTAssertTrue(Q35Resources.thinkingDefault(forModelId: Q35Resources.q38TwentySevenB4BitModelId))
@@ -426,6 +428,14 @@ final class TextChatCommandParsingTests: XCTestCase {
         XCTAssertEqual(sampling?.temperature, 1.0)
         XCTAssertEqual(sampling?.topP, 0.95)
         XCTAssertEqual(sampling?.topK, 20)
+        XCTAssertEqual(
+            Q35Resources.recommendedSampling(forModelId: Q35Resources.ornith35BMLX4BitModelId),
+            sampling
+        )
+        XCTAssertEqual(
+            Q35Resources.recommendedSampling(forModelId: Q35Resources.ornith35BVisionModelId),
+            sampling
+        )
         let q38Sampling = Q35Resources.recommendedSampling(forModelId: Q35Resources.q38TwentySevenBModelId)
         XCTAssertEqual(q38Sampling?.temperature, 1.0)
         XCTAssertEqual(q38Sampling?.topP, 0.95)

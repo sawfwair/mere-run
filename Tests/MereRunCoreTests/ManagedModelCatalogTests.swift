@@ -821,6 +821,72 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.apiProfile?.compatibility.supportsReasoningEffort, true)
     }
 
+    func testOrnith35BVisionUsesPinnedOfficialMultimodalSource() throws {
+        let spec = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: Q35Resources.ornith35BVisionModelId)
+        )
+
+        XCTAssertEqual(ModelResolver.ModelID.ornith35BVision.rawValue, spec.id)
+        XCTAssertEqual(spec.category, .visionChat)
+        XCTAssertEqual(spec.installShape, .directoryRoot)
+        XCTAssertEqual(spec.hubFallback?.repoId, Q35Resources.ornith35BVisionUpstreamRepoId)
+        XCTAssertEqual(spec.hubFallback?.revision, Q35Resources.ornith35BVisionUpstreamRevision)
+        XCTAssertEqual(spec.upstreamRepoId, Q35Resources.ornith35BVisionUpstreamRepoId)
+        XCTAssertEqual(spec.upstreamRevision, Q35Resources.ornith35BVisionUpstreamRevision)
+        XCTAssertEqual(spec.validationKind, .q35)
+        XCTAssertEqual(spec.defaultRuntimeServingEngine, .textChatQ36)
+        XCTAssertEqual(spec.estimatedDownloadBytes, 71_926_980_382)
+        XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
+        XCTAssertTrue(spec.defaultCLICommands.contains("agent start"))
+        XCTAssertTrue(spec.defaultCLICommands.contains("model benchmark code"))
+        XCTAssertTrue(spec.defaultCLICommands.contains("model benchmark vlm"))
+        XCTAssertEqual(spec.hubFallback?.patterns.contains("generation_config.json"), true)
+        XCTAssertEqual(spec.hubFallback?.patterns.contains("preprocessor_config.json"), true)
+        XCTAssertEqual(spec.hubFallback?.patterns.contains("video_preprocessor_config.json"), true)
+        XCTAssertEqual(spec.apiProfile?.inputModalities, [.text, .image])
+        XCTAssertEqual(spec.apiProfile?.thinkingLevels, [.high])
+        let pixelBounds = Q35Resources.visionPixelBounds(forModelId: spec.id)
+        XCTAssertEqual(pixelBounds.minimum, 65_536)
+        XCTAssertEqual(pixelBounds.maximum, 65_536)
+    }
+
+    func testOrnith35BMLX4BitUsesQuantizedTargetWithVisionAndMTPCompanions() throws {
+        let spec = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: Q35Resources.ornith35BMLX4BitModelId)
+        )
+
+        XCTAssertEqual(ModelResolver.ModelID.ornith35BMLX4Bit.rawValue, spec.id)
+        XCTAssertEqual(spec.category, .visionChat)
+        XCTAssertEqual(spec.hubFallback?.repoId, Q35Resources.ornith35BMLX4BitUpstreamRepoId)
+        XCTAssertEqual(spec.hubFallback?.revision, Q35Resources.ornith35BMLX4BitUpstreamRevision)
+        XCTAssertEqual(spec.mountedHubFallbacks.count, 1)
+        XCTAssertEqual(
+            spec.mountedHubFallbacks.first?.destinationPath,
+            Q35Resources.ornith35BVisionComponentPath
+        )
+        XCTAssertEqual(
+            spec.mountedHubFallbacks.first?.hubFallback.repoId,
+            Q35Resources.ornith35BVisionUpstreamRepoId
+        )
+        XCTAssertEqual(
+            spec.mountedHubFallbacks.first?.hubFallback.revision,
+            Q35Resources.ornith35BVisionUpstreamRevision
+        )
+        XCTAssertEqual(
+            spec.mountedHubFallbacks.first?.hubFallback.patterns,
+            Q35Resources.ornith35BVisionComponentSnapshotPatterns
+        )
+        XCTAssertEqual(spec.companionModelIDs, [Q35Resources.ornith35BMTPModelId])
+        XCTAssertEqual(spec.estimatedDownloadBytes, 24_275_338_655)
+        XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
+        XCTAssertTrue(spec.defaultCLICommands.contains("model benchmark code"))
+        XCTAssertTrue(spec.defaultCLICommands.contains("model benchmark vlm"))
+        XCTAssertEqual(spec.apiProfile?.inputModalities, [.text, .image])
+        let pixelBounds = Q35Resources.visionPixelBounds(forModelId: spec.id)
+        XCTAssertEqual(pixelBounds.minimum, 65_536)
+        XCTAssertEqual(pixelBounds.maximum, 65_536)
+    }
+
     func testQ38TwentySevenB4BitUsesCrownedTargetWithMTPAndVisionComponents() throws {
         let spec = try XCTUnwrap(
             ManagedModelCatalog.spec(for: Q35Resources.q38TwentySevenB4BitModelId)
@@ -1066,6 +1132,7 @@ final class ManagedModelCatalogTests: XCTestCase {
                 Q35Resources.ornith35BMLX4BitUpstreamRepoId,
                 Q35Resources.ornith35BMLX4BitUpstreamRevision,
                 Q35Resources.ornith35BMLX4BitEstimatedDownloadBytes
+                    + Q35Resources.ornith35BVisionComponentEstimatedDownloadBytes
             ),
             (
                 Q35Resources.ornith35BMLX6BitModelId,
