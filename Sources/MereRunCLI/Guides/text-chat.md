@@ -64,7 +64,7 @@ mere.run model pull text-chat-laguna-xs-2-1
 mere.run text chat --help
 ```
 
-## Native Assistant Tuning
+## Native assistant tuning
 
 Use `mere.run text train-lora` for reviewed chat-style SFT data. Keep the data
 source-tagged and run `--dry-run --json` first so the dataset fingerprint,
@@ -83,6 +83,27 @@ mere.run text train-lora \
 For a real run, `--eval` is a held-out SFT JSONL dataset. It is validated and
 tokenized with the same model template, but never enters the training order;
 the result reports assistant-token loss before and after optimization.
+
+For Gemma 4 12B vision tuning, add exactly one dataset-relative `imageUrl`
+value to a user message in every example. Run the validation-only command
+before optimizer work:
+
+```bash
+mere.run model pull vision-chat-gemma4-12b
+mere.run text train-lora \
+  --model vision-chat-gemma4-12b \
+  --data ./vlm-sft/pairs.jsonl \
+  --eval ./vlm-sft/heldout.jsonl \
+  --output ./gemma4-vision-adapter.safetensors \
+  --batch-size 1 \
+  --dry-run \
+  --json
+```
+
+The VLM loader rejects remote URLs, absolute paths, path escapes, symbolic
+links, audio, video, and multiple images. The manifest includes the decoded
+image contents in the dataset fingerprint. Gemma 4 VLM training freezes the
+vision stack and base language model, then adapts language attention.
 
 The native optimizer path is intentionally part of `mere.run`; keep local
 fine-tune workflows in the same command plane as model resolution and runtime

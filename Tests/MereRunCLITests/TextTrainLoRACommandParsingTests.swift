@@ -1,3 +1,5 @@
+import Foundation
+import MediaIO
 import XCTest
 @testable import MereRunCLI
 @testable import MereRunCore
@@ -103,6 +105,79 @@ final class TextTrainLoRACommandParsingTests: XCTestCase {
             command.resolvedTargetModules(),
             ["q_proj", "k_proj", "v_proj", "out_proj"]
         )
+    }
+
+    func testGemma4VisionDryRunWritesVLMManifestAndImageProvenance() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let imageDirectory = directory.appendingPathComponent("images", isDirectory: true)
+        try FileManager.default.createDirectory(at: imageDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let imageURL = imageDirectory.appendingPathComponent("frame.png")
+        try MediaImageIO.writePNG(
+            try MediaImage(width: 2, height: 2, rgba8: Array(repeating: 96, count: 16)),
+            to: imageURL
+        )
+        let datasetURL = directory.appendingPathComponent("pairs.jsonl")
+        let example = TextSFTExample(
+            id: "vlm-dry-run",
+            sources: ["test"],
+            messages: [
+                ChatMessage(role: .system, content: "Describe visible evidence."),
+                ChatMessage(
+                    role: .user,
+                    content: "What is visible in this image?",
+                    imageUrl: "images/frame.png"
+                ),
+                ChatMessage(role: .assistant, content: "A test frame is visible."),
+            ]
+        )
+        let encodedExample = try JSONEncoder().encode(example)
+        try Data(encodedExample + Data("\n".utf8)).write(to: datasetURL)
+        let outputURL = directory.appendingPathComponent("adapter.safetensors")
+        let command = try TextTrainLoRA.parse([
+            "--model", Gemma4Resources.visionTwelveBModelId,
+            "--data", datasetURL.path,
+            "--output", outputURL.path,
+            "--dry-run",
+            "--json",
+        ])
+
+        try await command.run()
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let manifest = try decoder.decode(
+            TextLoRATrainingManifest.self,
+            from: Data(contentsOf: TextLoRATrainingManifest.url(nextTo: outputURL))
+        )
+        XCTAssertEqual(manifest.format, TextLoRATrainingManifest.gemma4VLMFormat)
+        XCTAssertEqual(manifest.modality, "image")
+        XCTAssertEqual(manifest.trainingScope, "language_attention")
+        XCTAssertEqual(manifest.training.dataset.imageReferenceCount, 1)
+        XCTAssertEqual(manifest.training.dataset.uniqueImageCount, 1)
+        XCTAssertEqual(manifest.training.dataset.imageFingerprint?.count, 64)
+    }
+
+    func testGemma4VisionRejectsBatchSizeGreaterThanOne() async throws {
+        let command = try TextTrainLoRA.parse([
+            "--model", Gemma4Resources.visionTwelveBModelId,
+            "--data", "/tmp/missing-vlm.jsonl",
+            "--output", "/tmp/missing-vlm.safetensors",
+            "--batch-size", "2",
+            "--dry-run",
+        ])
+
+        do {
+            try await command.run()
+            XCTFail("Expected Gemma 4 VLM batch-size validation to fail.")
+        } catch {
+            XCTAssertEqual(
+                String(describing: error),
+                "Gemma 4 VLM LoRA training currently requires --batch-size 1"
+            )
+        }
     }
 
     func testInklingReceptivityFixturesAreHeldOutParaphrases() throws {

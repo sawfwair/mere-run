@@ -123,9 +123,14 @@ public enum TextLoRATrainer {
         metadata: [String: String] = [:],
         progressHandler: (@Sendable (TextLoRATrainingProgress) -> Void)? = nil,
         gatheredForward: ((Model, MLXArray, MLXArray) -> MLXArray)? = nil,
+        multimodalBatchBuilder: (([TextSFTTokenizedExample]) throws -> TextLoRAMultimodalTrainingBatch)? = nil,
+        multimodalGatheredForward: ((Model, [MLXArray]) -> MLXArray)? = nil,
         forward: @escaping (Model, MLXArray) -> MLXArray
     ) throws -> TextLoRATrainingReport {
         try validate(config: config, examples: examples, loraLayers: loraLayers)
+        guard (multimodalBatchBuilder == nil) == (multimodalGatheredForward == nil) else {
+            throw TextLoRATrainerError.incompleteMultimodalConfiguration
+        }
         try model.freeze(recursive: true, keys: nil, strict: false)
         for layer in loraLayers.values {
             guard let module = layer as? Module else { continue }
@@ -137,10 +142,23 @@ public enum TextLoRATrainer {
             .map { (path: $0.key, layer: $0.value) }
             .sorted { $0.path < $1.path }
 
-        let useGatheredLoss = gatheredForward != nil && TextLoRATrainingEnvironment.gatheredLossEnabled
+        let useMultimodalLoss = multimodalBatchBuilder != nil
+            && multimodalGatheredForward != nil
+        let useGatheredLoss = useMultimodalLoss
+            || (gatheredForward != nil && TextLoRATrainingEnvironment.gatheredLossEnabled)
         let evaluationTargetTokenCount = targetTokenCount(in: evaluationExamples)
         let lossAndGrad: (Model, [MLXArray]) -> ([MLXArray], ModuleParameters)
-        if useGatheredLoss, let gatheredForward {
+        if useMultimodalLoss, let multimodalGatheredForward {
+            lossAndGrad = valueAndGrad(model: model) { model, arrays in
+                let targetLabels = arrays[arrays.count - 1]
+                let modelInputs = Array(arrays.dropLast())
+                let logits = multimodalGatheredForward(model, modelInputs)
+                return [TextSFTTrainingLoss.gatheredNextTokenCrossEntropy(
+                    logits: logits,
+                    labels: targetLabels
+                )]
+            }
+        } else if useGatheredLoss, let gatheredForward {
             lossAndGrad = valueAndGrad(model: model) { model, arrays in
                 let logits = gatheredForward(model, arrays[0], arrays[1])
                 return [TextSFTTrainingLoss.gatheredNextTokenCrossEntropy(logits: logits, labels: arrays[2])]
@@ -177,6 +195,8 @@ public enum TextLoRATrainer {
             examples: evaluationExamples,
             batchSize: config.batchSize,
             gatheredForward: useGatheredLoss ? gatheredForward : nil,
+            multimodalBatchBuilder: multimodalBatchBuilder,
+            multimodalGatheredForward: multimodalGatheredForward,
             forward: forward
         )
         if let initialEvaluationLoss {
@@ -213,7 +233,10 @@ public enum TextLoRATrainer {
                 step: step
             )
             let stepInputs: [MLXArray]
-            if useGatheredLoss {
+            if let multimodalBatchBuilder {
+                let batch = try multimodalBatchBuilder(batchExamples)
+                stepInputs = batch.modelInputs + [batch.targetLabels]
+            } else if useGatheredLoss {
                 let batch = try TextSFTTrainingBatchBuilder.makeGatheredBatch(batchExamples)
                 stepInputs = [batch.inputIds, batch.targetPositions, batch.targetLabels]
             } else {
@@ -292,6 +315,8 @@ public enum TextLoRATrainer {
             examples: evaluationExamples,
             batchSize: config.batchSize,
             gatheredForward: useGatheredLoss ? gatheredForward : nil,
+            multimodalBatchBuilder: multimodalBatchBuilder,
+            multimodalGatheredForward: multimodalGatheredForward,
             forward: forward
         )
         if let finalEvaluationLoss {
@@ -330,6 +355,8 @@ public enum TextLoRATrainer {
         examples: [TextSFTTokenizedExample],
         batchSize: Int,
         gatheredForward: ((Model, MLXArray, MLXArray) -> MLXArray)?,
+        multimodalBatchBuilder: (([TextSFTTokenizedExample]) throws -> TextLoRAMultimodalTrainingBatch)?,
+        multimodalGatheredForward: ((Model, [MLXArray]) -> MLXArray)?,
         forward: (Model, MLXArray) -> MLXArray
     ) throws -> Float? {
         guard !examples.isEmpty else { return nil }
@@ -344,7 +371,14 @@ public enum TextLoRATrainer {
             guard chunkTargets > 0 else { continue }
 
             let loss: MLXArray
-            if let gatheredForward {
+            if let multimodalBatchBuilder, let multimodalGatheredForward {
+                let batch = try multimodalBatchBuilder(chunk)
+                let logits = multimodalGatheredForward(model, batch.modelInputs)
+                loss = TextSFTTrainingLoss.gatheredNextTokenCrossEntropy(
+                    logits: logits,
+                    labels: batch.targetLabels
+                )
+            } else if let gatheredForward {
                 let batch = try TextSFTTrainingBatchBuilder.makeGatheredBatch(chunk)
                 let logits = gatheredForward(model, batch.inputIds, batch.targetPositions)
                 loss = TextSFTTrainingLoss.gatheredNextTokenCrossEntropy(
@@ -512,6 +546,7 @@ public enum TextLoRATrainerError: Error, LocalizedError, Sendable {
     case invalidLearningRate(Float)
     case emptyDataset
     case noLoRALayers
+    case incompleteMultimodalConfiguration
 
     public var errorDescription: String? {
         switch self {
@@ -525,6 +560,8 @@ public enum TextLoRATrainerError: Error, LocalizedError, Sendable {
             return "Text LoRA training requires at least one tokenized example."
         case .noLoRALayers:
             return "Text LoRA training requires at least one injected LoRA layer."
+        case .incompleteMultimodalConfiguration:
+            return "Text LoRA multimodal training requires both a batch builder and gathered forward."
         }
     }
 }

@@ -8,11 +8,37 @@ struct Gemma4UnifiedImageBatch {
     let softTokenCounts: [Int]
 }
 
+struct Gemma4UnifiedImageStorage: Sendable, Hashable {
+    let pixelValues: [Float]
+    let pixelShape: [Int]
+    let imagePositionIds: [Int32]
+    let imagePositionShape: [Int]
+    let softTokenCounts: [Int]
+
+    func materialized() -> Gemma4UnifiedImageBatch {
+        Gemma4UnifiedImageBatch(
+            pixelValues: MLXArray(pixelValues, pixelShape),
+            imagePositionIds: MLXArray(imagePositionIds, imagePositionShape),
+            softTokenCounts: softTokenCounts
+        )
+    }
+}
+
 enum Gemma4UnifiedImageProcessor {
     static func makeBatch(
         imageReferences: [String],
         visionConfig: Gemma4UnifiedVisionConfig
     ) throws -> Gemma4UnifiedImageBatch {
+        try makeStorage(
+            imageReferences: imageReferences,
+            visionConfig: visionConfig
+        ).materialized()
+    }
+
+    static func makeStorage(
+        imageReferences: [String],
+        visionConfig: Gemma4UnifiedVisionConfig
+    ) throws -> Gemma4UnifiedImageStorage {
         guard !imageReferences.isEmpty else {
             throw Gemma4Error.unsupportedConfiguration("Gemma4 unified image batch is empty.")
         }
@@ -41,11 +67,37 @@ enum Gemma4UnifiedImageProcessor {
             allPositions.append(contentsOf: processed.positions)
         }
 
-        return Gemma4UnifiedImageBatch(
-            pixelValues: MLXArray(allPatches, [imageReferences.count, maxSoftTokens, patchDim]),
-            imagePositionIds: MLXArray(allPositions, [imageReferences.count, maxSoftTokens, 2]),
+        return Gemma4UnifiedImageStorage(
+            pixelValues: allPatches,
+            pixelShape: [imageReferences.count, maxSoftTokens, patchDim],
+            imagePositionIds: allPositions,
+            imagePositionShape: [imageReferences.count, maxSoftTokens, 2],
             softTokenCounts: softTokenCounts
         )
+    }
+
+    static func softTokenCounts(
+        imageReferences: [String],
+        visionConfig: Gemma4UnifiedVisionConfig
+    ) throws -> [Int] {
+        guard !imageReferences.isEmpty else {
+            throw Gemma4Error.unsupportedConfiguration("Gemma4 unified image batch is empty.")
+        }
+        let maxSoftTokens = max(1, visionConfig.numSoftTokens)
+        let modelPatchSize = max(1, visionConfig.modelPatchSize)
+        return try imageReferences.map { reference in
+            let image = try decodeImage(reference)
+            let size = targetSize(
+                originalWidth: image.width,
+                originalHeight: image.height,
+                patchSize: max(1, visionConfig.patchSize),
+                poolingKernelSize: max(1, visionConfig.poolingKernelSize),
+                maxSoftTokens: maxSoftTokens
+            )
+            let patchRows = max(1, size.height / modelPatchSize)
+            let patchColumns = max(1, size.width / modelPatchSize)
+            return min(maxSoftTokens, patchRows * patchColumns)
+        }
     }
 
     static func expandedPromptTokens(

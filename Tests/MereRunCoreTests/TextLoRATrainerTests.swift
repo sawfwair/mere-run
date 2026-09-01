@@ -264,8 +264,111 @@ final class TextLoRATrainerTests: MereRunCoreTestCase {
         XCTAssertEqual(legacyLoss, gatheredLoss, accuracy: 2e-4)
     }
 
+    func testMultimodalTrainerUpdatesTinyGemma4UnifiedLoRA() throws {
+        MLXRandom.seed(37)
+        let model = try Gemma4UnifiedCausalLM(config: tinyGemma4UnifiedConfig())
+        let layers = try Gemma4TextLoRAInjector.inject(
+            into: model,
+            rank: 2,
+            targetSuffixes: ["q_proj"]
+        )
+        let example = TextSFTTokenizedExample(
+            inputTokenIds: [6, 5, 5, 7, 8],
+            labelTokenIds: [5, 5, 7, 8, 9],
+            lossMask: [0, 0, 0, 0, 1],
+            multimodalInputs: TextSFTMultimodalInputs(
+                imageReferences: ["synthetic"],
+                imageSHA256: ["synthetic"],
+                softTokenCounts: [2],
+                mmTokenTypeIds: [0, 1, 1, 0, 0],
+                mmTokenTypeShape: [1, 5]
+            )
+        )
+
+        let report = try TextLoRATrainer.train(
+            model: model,
+            loraLayers: layers,
+            examples: [example],
+            evaluationExamples: [example],
+            config: TextLoRATrainingConfig(
+                trainingSteps: 2,
+                batchSize: 1,
+                learningRate: 0.01
+            ),
+            multimodalBatchBuilder: { examples in
+                let gathered = try TextSFTTrainingBatchBuilder.makeGatheredBatch(examples)
+                return TextLoRAMultimodalTrainingBatch(
+                    modelInputs: [
+                        gathered.inputIds,
+                        MLXArray(Array(repeating: Float(0.25), count: 24), [1, 2, 12]),
+                        MLXArray([Int32(0), 0, 1, 0], [1, 2, 2]),
+                        MLXArray([Int32(2)]),
+                        MLXArray([Int32(0), 1, 1, 0, 0], [1, 5]),
+                        gathered.targetPositions,
+                    ],
+                    targetLabels: gathered.targetLabels
+                )
+            },
+            multimodalGatheredForward: { model, inputs in
+                model.trainingLogits(
+                    inputIds: inputs[0],
+                    pixelValues: inputs[1],
+                    imagePositionIds: inputs[2],
+                    softTokenCounts: inputs[3],
+                    mmTokenTypeIds: inputs[4],
+                    flatTargetPositions: inputs[5]
+                )
+            }
+        ) { model, inputIds in
+            model.forward(inputIds: inputIds)
+        }
+
+        XCTAssertEqual(report.steps, 2)
+        XCTAssertGreaterThan(report.layerCount, 0)
+        XCTAssertNotNil(report.initialEvaluationLoss)
+        XCTAssertNotNil(report.finalEvaluationLoss)
+        let upNorm = layers.values.reduce(Float(0)) { partial, layer in
+            partial + MLX.sqrt((layer.loraUp * layer.loraUp).sum()).item(Float.self)
+        }
+        XCTAssertGreaterThan(upNorm, 0)
+    }
+
     private func tinyGemma4TextConfig() throws -> Gemma4TextConfig {
+        let data = try JSONSerialization.data(
+            withJSONObject: tinyGemma4TextConfigObject(),
+            options: []
+        )
+        return try JSONDecoder().decode(Gemma4TextConfig.self, from: data)
+    }
+
+    private func tinyGemma4UnifiedConfig() throws -> Gemma4Config {
         let object: [String: Any] = [
+            "model_type": "gemma4_unified",
+            "architectures": ["Gemma4UnifiedForConditionalGeneration"],
+            "tie_word_embeddings": true,
+            "eos_token_id": [1, 2],
+            "image_token_id": 5,
+            "boi_token_id": 6,
+            "eoi_token_id": 7,
+            "text_config": tinyGemma4TextConfigObject(),
+            "vision_config": [
+                "model_type": "gemma4_unified_vision",
+                "patch_size": 1,
+                "pooling_kernel_size": 2,
+                "model_patch_size": 2,
+                "mm_embed_dim": 8,
+                "mm_posemb_size": 4,
+                "num_soft_tokens": 2,
+                "rms_norm_eps": 0.000001,
+                "output_proj_dims": 8,
+            ],
+        ]
+        let data = try JSONSerialization.data(withJSONObject: object, options: [])
+        return try JSONDecoder().decode(Gemma4Config.self, from: data)
+    }
+
+    private func tinyGemma4TextConfigObject() -> [String: Any] {
+        [
             "model_type": "gemma4_text",
             "hidden_size": 8,
             "num_hidden_layers": 1,
@@ -300,8 +403,6 @@ final class TextLoRATrainerTests: MereRunCoreTestCase {
             "num_kv_shared_layers": 0,
             "tie_word_embeddings": true,
         ]
-        let data = try JSONSerialization.data(withJSONObject: object, options: [])
-        return try JSONDecoder().decode(Gemma4TextConfig.self, from: data)
     }
 }
 

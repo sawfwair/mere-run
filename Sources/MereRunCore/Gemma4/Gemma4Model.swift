@@ -1946,6 +1946,54 @@ public final class Gemma4UnifiedCausalLM: Module, Gemma4CausalModel, @unchecked 
         return logits
     }
 
+    /// Projects logits only at assistant-target positions for image-conditioned
+    /// SFT. The VLM training pipeline validates a single-image, batch-one
+    /// contract before this differentiable path is constructed.
+    func trainingLogits(
+        inputIds: MLXArray,
+        pixelValues: MLXArray,
+        imagePositionIds: MLXArray,
+        softTokenCounts: MLXArray,
+        mmTokenTypeIds: MLXArray,
+        flatTargetPositions: MLXArray
+    ) -> MLXArray {
+        var tokenIds = inputIds
+        if tokenIds.dtype != .int32 {
+            tokenIds = tokenIds.asType(.int32)
+        }
+        let embeddings = languageModel.embeddings(inputIds: tokenIds)
+        let embeddedImages = visionEmbedder(
+            pixelValues: pixelValues,
+            imagePositionIds: imagePositionIds
+        )
+        let projectedImages = embedVision(embeddedImages).asType(embeddings.dtype)
+
+        let typedSoftTokenCounts = softTokenCounts.asType(.int32)
+        let typedTokenIds = tokenIds.asType(.int32)
+        MLX.eval(typedSoftTokenCounts, typedTokenIds)
+        let softTokenCount = Int(typedSoftTokenCounts.asArray(Int32.self)[0])
+        let imageFeatures = projectedImages[0, 0..<softTokenCount, 0...]
+        let imagePositions = typedTokenIds.asArray(Int32.self).enumerated().compactMap { index, value in
+            value == Int32(imageTokenId) ? index : nil
+        }
+        for (featureIndex, position) in imagePositions.enumerated() {
+            embeddings[0, position, 0...] = imageFeatures[featureIndex, 0...]
+        }
+
+        let hidden = languageModel.forward(
+            embeddings: embeddings,
+            inputIds: tokenIds,
+            mmTokenTypeIds: mmTokenTypeIds
+        )
+        let flattened = hidden.reshaped([-1, hidden.dim(-1)])
+        let selected = take(
+            flattened,
+            flatTargetPositions.asType(.int32),
+            axis: 0
+        )
+        return applyFinalSoftcap(languageModel.embedTokens.asLinear(selected))
+    }
+
     func forwardForSpeculation(
         inputIds: MLXArray,
         pixelValues: MLXArray,

@@ -1,4 +1,5 @@
 import Foundation
+import MediaIO
 import XCTest
 @testable import MereRunCore
 
@@ -210,6 +211,105 @@ final class TextSFTDatasetTests: XCTestCase {
         let example = try JSONDecoder().decode(TextSFTExample.self, from: Data(row.utf8))
 
         XCTAssertNil(example.tools)
+    }
+
+    func testPreparesDatasetRelativeVLMImagesWithContentProvenance() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let imageDirectory = directory.appendingPathComponent("images", isDirectory: true)
+        try FileManager.default.createDirectory(at: imageDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let imageURL = imageDirectory.appendingPathComponent("frame.png")
+        try MediaImageIO.writePNG(
+            try MediaImage(width: 2, height: 2, rgba8: Array(repeating: 64, count: 16)),
+            to: imageURL
+        )
+        let datasetURL = directory.appendingPathComponent("pairs.jsonl")
+        try writeVLMExample(imageReference: "images/frame.png", to: datasetURL)
+
+        let first = try TextSFTDataset.loadForTraining(
+            from: datasetURL,
+            mediaPolicy: .requireSingleLocalImage
+        )
+
+        XCTAssertEqual(first.summary.imageReferenceCount, 1)
+        XCTAssertEqual(first.summary.uniqueImageCount, 1)
+        XCTAssertEqual(first.summary.imageFingerprint?.count, 64)
+        XCTAssertEqual(first.examples[0].messages[1].imageUrl, imageURL.path)
+
+        try MediaImageIO.writePNG(
+            try MediaImage(width: 2, height: 2, rgba8: Array(repeating: 192, count: 16)),
+            to: imageURL
+        )
+        let second = try TextSFTDataset.loadForTraining(
+            from: datasetURL,
+            mediaPolicy: .requireSingleLocalImage
+        )
+
+        XCTAssertNotEqual(first.summary.imageFingerprint, second.summary.imageFingerprint)
+        XCTAssertNotEqual(first.summary.fingerprint, second.summary.fingerprint)
+    }
+
+    func testVLMTrainingRejectsRemoteAbsoluteAndEscapingImages() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let datasetURL = directory.appendingPathComponent("pairs.jsonl")
+
+        for reference in ["https://example.com/frame.png", "/tmp/frame.png", "../frame.png"] {
+            try writeVLMExample(imageReference: reference, to: datasetURL)
+            XCTAssertThrowsError(try TextSFTDataset.loadForTraining(
+                from: datasetURL,
+                mediaPolicy: .requireSingleLocalImage
+            ))
+        }
+    }
+
+    func testVLMTrainingRejectsImageSymlinks() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        let imageDirectory = directory.appendingPathComponent("images", isDirectory: true)
+        try FileManager.default.createDirectory(at: imageDirectory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let sourceURL = directory.appendingPathComponent("source.png")
+        try MediaImageIO.writePNG(
+            try MediaImage(width: 1, height: 1, rgba8: [255, 0, 0, 255]),
+            to: sourceURL
+        )
+        try FileManager.default.createSymbolicLink(
+            at: imageDirectory.appendingPathComponent("frame.png"),
+            withDestinationURL: sourceURL
+        )
+        let datasetURL = directory.appendingPathComponent("pairs.jsonl")
+        try writeVLMExample(imageReference: "images/frame.png", to: datasetURL)
+
+        XCTAssertThrowsError(try TextSFTDataset.loadForTraining(
+            from: datasetURL,
+            mediaPolicy: .requireSingleLocalImage
+        )) { error in
+            XCTAssertTrue(String(describing: error).contains("imageSymlinkNotAllowed"))
+        }
+    }
+
+    private func writeVLMExample(imageReference: String, to url: URL) throws {
+        let example = TextSFTExample(
+            id: "vlm-1",
+            sources: ["test"],
+            messages: [
+                ChatMessage(role: .system, content: "Describe images precisely."),
+                ChatMessage(
+                    role: .user,
+                    content: "What is visible in this image?",
+                    imageUrl: imageReference
+                ),
+                ChatMessage(role: .assistant, content: "A simple test image is visible."),
+            ]
+        )
+        let data = try JSONEncoder().encode(example)
+        try Data(data + Data("\n".utf8)).write(to: url, options: .atomic)
     }
 
     private static func summaryTool() -> ToolDefinition {

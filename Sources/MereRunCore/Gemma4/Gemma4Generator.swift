@@ -347,7 +347,7 @@ public actor Gemma4Generator: ChatGenerator {
         progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading Gemma4 weights"))
         if Gemma4Resources.supportsVision(modelSpec: modelId) {
             let unifiedModel = try Gemma4UnifiedCausalLM(config: config)
-            try loadWeights(into: unifiedModel, from: resources, config: config)
+            try Gemma4UnifiedModelLoader.loadWeights(into: unifiedModel, from: resources)
             model = unifiedModel
         } else {
             let textModel = Gemma4TextCausalLM(config: config.textConfig)
@@ -2353,66 +2353,4 @@ public actor Gemma4Generator: ChatGenerator {
         return index.weightMap.keys.contains { $0.hasSuffix(".scales") }
     }
 
-    private func loadWeights(
-        into model: Gemma4UnifiedCausalLM,
-        from resources: Gemma4Resources,
-        config: Gemma4Config
-    ) throws {
-        let include: (String) -> Bool = { key in
-            Self.normalizedUnifiedWeightKey(key) != nil
-        }
-        let mapper: (String, MLXArray) -> [(String, MLXArray)] = { key, value in
-            guard let mapped = Self.normalizedUnifiedWeightKey(key) else {
-                return []
-            }
-            return [(mapped, value)]
-        }
-
-        if FileManager.default.fileExists(atPath: resources.modelIndexURL.path) {
-            try HFSafetensorsWeightsLoader.applyShardedWeights(
-                indexURL: resources.modelIndexURL,
-                to: model,
-                dtype: .bfloat16,
-                verify: .none,
-                mapper: mapper
-            )
-        } else if FileManager.default.fileExists(atPath: resources.modelWeightsURL.path) {
-            try SafetensorsStreamingLoader.applyWeightsStreaming(
-                url: resources.modelWeightsURL,
-                to: model,
-                dtype: .bfloat16,
-                verify: .none,
-                include: include,
-                mapper: mapper,
-                batchSize: 24
-            )
-        } else {
-            throw Gemma4Error.missingFiles([resources.modelIndexURL.lastPathComponent, resources.modelWeightsURL.lastPathComponent])
-        }
-        _ = config
-    }
-
-    private static func normalizedUnifiedWeightKey(_ key: String) -> String? {
-        guard !key.contains("rotary_emb"),
-              key != "lm_head.weight",
-              !key.contains("embed_audio") else {
-            return nil
-        }
-
-        let withoutModelPrefix = key.hasPrefix("model.")
-            ? String(key.dropFirst("model.".count))
-            : key
-
-        if withoutModelPrefix.hasPrefix("language_model.model.") {
-            return "language_model.\(withoutModelPrefix.dropFirst("language_model.model.".count))"
-        }
-        if withoutModelPrefix.hasPrefix("language_model.") {
-            return withoutModelPrefix
-        }
-        if withoutModelPrefix.hasPrefix("vision_embedder.")
-            || withoutModelPrefix.hasPrefix("embed_vision.") {
-            return withoutModelPrefix
-        }
-        return nil
-    }
 }

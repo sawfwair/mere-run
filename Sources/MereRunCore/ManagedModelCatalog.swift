@@ -1649,7 +1649,7 @@ public enum ManagedModelCatalog {
             upstreamRepoId: Gemma4Resources.twelveBUpstreamModelId,
             validationKind: .gemma4Unified,
             estimatedDownloadBytes: 25 * 1_073_741_824,
-            defaultCLICommands: ["api serve"],
+            defaultCLICommands: ["text chat", "text train-lora", "api serve"],
             companionModelIDs: [Gemma4MTPResources.modelId],
             apiProfile: .gemma4(inputModalities: [.text, .image])
         ),
