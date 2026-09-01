@@ -851,34 +851,19 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(pixelBounds.maximum, 65_536)
     }
 
-    func testOrnith35BMLX4BitUsesQuantizedTargetWithVisionAndMTPCompanions() throws {
+    func testOrnith35BMLX4BitUsesSingleVisionMTPBundle() throws {
         let spec = try XCTUnwrap(
             ManagedModelCatalog.spec(for: Q35Resources.ornith35BMLX4BitModelId)
         )
 
         XCTAssertEqual(ModelResolver.ModelID.ornith35BMLX4Bit.rawValue, spec.id)
         XCTAssertEqual(spec.category, .visionChat)
-        XCTAssertEqual(spec.hubFallback?.repoId, Q35Resources.ornith35BMLX4BitUpstreamRepoId)
-        XCTAssertEqual(spec.hubFallback?.revision, Q35Resources.ornith35BMLX4BitUpstreamRevision)
-        XCTAssertEqual(spec.mountedHubFallbacks.count, 1)
-        XCTAssertEqual(
-            spec.mountedHubFallbacks.first?.destinationPath,
-            Q35Resources.ornith35BVisionComponentPath
-        )
-        XCTAssertEqual(
-            spec.mountedHubFallbacks.first?.hubFallback.repoId,
-            Q35Resources.ornith35BVisionUpstreamRepoId
-        )
-        XCTAssertEqual(
-            spec.mountedHubFallbacks.first?.hubFallback.revision,
-            Q35Resources.ornith35BVisionUpstreamRevision
-        )
-        XCTAssertEqual(
-            spec.mountedHubFallbacks.first?.hubFallback.patterns,
-            Q35Resources.ornith35BVisionComponentSnapshotPatterns
-        )
-        XCTAssertEqual(spec.companionModelIDs, [Q35Resources.ornith35BMTPModelId])
-        XCTAssertEqual(spec.estimatedDownloadBytes, 24_275_338_655)
+        XCTAssertEqual(spec.hubFallback?.repoId, Q35Resources.ornith35BMLX4BitBundleRepoId)
+        XCTAssertEqual(spec.hubFallback?.revision, Q35Resources.ornith35BMLX4BitBundleRevision)
+        XCTAssertEqual(spec.hubFallback?.patterns, Q35Resources.ornith35BMLX4BitBundleSnapshotPatterns)
+        XCTAssertTrue(spec.mountedHubFallbacks.isEmpty)
+        XCTAssertTrue(spec.companionModelIDs.isEmpty)
+        XCTAssertEqual(spec.estimatedDownloadBytes, Q35Resources.ornith35BMLX4BitBundleEstimatedDownloadBytes)
         XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
         XCTAssertTrue(spec.defaultCLICommands.contains("model benchmark code"))
         XCTAssertTrue(spec.defaultCLICommands.contains("model benchmark vlm"))
@@ -999,6 +984,47 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(q4.hubFallback?.revision, Q35Resources.q38FlashNext4BitUpstreamRevision)
         XCTAssertEqual(q4.estimatedDownloadBytes, 104_742_357_706)
         XCTAssertNotNil(q4.usageRestriction)
+    }
+
+    func testOrnith35BMLX4BitValidationRequiresBundledVisionAndMTP() throws {
+        let spec = try XCTUnwrap(
+            ManagedModelCatalog.spec(for: Q35Resources.ornith35BMLX4BitModelId)
+        )
+        let root = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: root) }
+        for filename in ["config.json", "model.safetensors", "tokenizer.json", "tokenizer_config.json"] {
+            try Data().write(to: root.appendingPathComponent(filename))
+        }
+
+        let missing = Set(spec.missingPaths(in: root).map {
+            $0.path.replacingOccurrences(of: root.path + "/", with: "")
+        })
+        let expectedVision = Q35Resources.ornith35BVisionComponentSnapshotPatterns.map {
+            "\(Q35Resources.ornith35BVisionComponentPath)/\($0)"
+        }
+        let expectedMTP = [
+            "\(Q35Resources.ornith35BMTPComponentPath)/model.safetensors.index.json",
+            "\(Q35Resources.ornith35BMTPComponentPath)/\(Q35Resources.ornith35BMTPShardFilename)",
+        ]
+        XCTAssertEqual(missing, Set(expectedVision + expectedMTP))
+
+        for (directory, filenames) in [
+            (
+                Q35Resources.ornith35BVisionComponentPath,
+                Q35Resources.ornith35BVisionComponentSnapshotPatterns
+            ),
+            (
+                Q35Resources.ornith35BMTPComponentPath,
+                ["model.safetensors.index.json", Q35Resources.ornith35BMTPShardFilename]
+            ),
+        ] {
+            let componentRoot = root.appendingPathComponent(directory, isDirectory: true)
+            try FileManager.default.createDirectory(at: componentRoot, withIntermediateDirectories: true)
+            for filename in filenames {
+                try Data().write(to: componentRoot.appendingPathComponent(filename))
+            }
+        }
+        XCTAssertTrue(spec.missingPaths(in: root).isEmpty)
     }
 
     func testQ38TwentySevenB4BitValidationRequiresMountedComponents() throws {
@@ -1126,30 +1152,32 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.companionModelIDs, [Q35Resources.ornith35BMTPModelId])
     }
 
-    func testOrnith35BMLXQuantizedVariantsUsePinnedOfficialSourcesAndMTPCompanion() throws {
-        let expected: [(String, String, String, Int64)] = [
+    func testOrnith35BMLXQuantizedVariantsUsePinnedSources() throws {
+        let expected: [(String, String, String, Int64, [String])] = [
             (
                 Q35Resources.ornith35BMLX4BitModelId,
-                Q35Resources.ornith35BMLX4BitUpstreamRepoId,
-                Q35Resources.ornith35BMLX4BitUpstreamRevision,
-                Q35Resources.ornith35BMLX4BitEstimatedDownloadBytes
-                    + Q35Resources.ornith35BVisionComponentEstimatedDownloadBytes
+                Q35Resources.ornith35BMLX4BitBundleRepoId,
+                Q35Resources.ornith35BMLX4BitBundleRevision,
+                Q35Resources.ornith35BMLX4BitBundleEstimatedDownloadBytes,
+                []
             ),
             (
                 Q35Resources.ornith35BMLX6BitModelId,
                 Q35Resources.ornith35BMLX6BitUpstreamRepoId,
                 Q35Resources.ornith35BMLX6BitUpstreamRevision,
-                Q35Resources.ornith35BMLX6BitEstimatedDownloadBytes
+                Q35Resources.ornith35BMLX6BitEstimatedDownloadBytes,
+                [Q35Resources.ornith35BMTPModelId]
             ),
             (
                 Q35Resources.ornith35BMLX8BitModelId,
                 Q35Resources.ornith35BMLX8BitUpstreamRepoId,
                 Q35Resources.ornith35BMLX8BitUpstreamRevision,
-                Q35Resources.ornith35BMLX8BitEstimatedDownloadBytes
+                Q35Resources.ornith35BMLX8BitEstimatedDownloadBytes,
+                [Q35Resources.ornith35BMTPModelId]
             ),
         ]
 
-        for (modelID, repoID, revision, downloadBytes) in expected {
+        for (modelID, repoID, revision, downloadBytes, companions) in expected {
             let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: modelID))
             XCTAssertEqual(spec.hubFallback?.repoId, repoID)
             XCTAssertEqual(spec.hubFallback?.revision, revision)
@@ -1157,7 +1185,7 @@ final class ManagedModelCatalogTests: XCTestCase {
             XCTAssertEqual(spec.upstreamRevision, revision)
             XCTAssertEqual(spec.validationKind, .q35)
             XCTAssertEqual(spec.estimatedDownloadBytes, downloadBytes)
-            XCTAssertEqual(spec.companionModelIDs, [Q35Resources.ornith35BMTPModelId])
+            XCTAssertEqual(spec.companionModelIDs, companions)
         }
 
         let companion = try XCTUnwrap(ManagedModelCatalog.spec(for: Q35Resources.ornith35BMTPModelId))

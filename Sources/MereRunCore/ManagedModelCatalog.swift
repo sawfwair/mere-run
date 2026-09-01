@@ -2073,22 +2073,11 @@ public enum ManagedModelCatalog {
             category: .visionChat,
             installShape: .directoryRoot,
             hubFallback: Q35Resources.profile(for: Q35Resources.ornith35BMLX4BitModelId)?.hubFallbackConfig,
-            mountedHubFallbacks: [
-                MountedHubFallbackConfig(
-                    destinationPath: Q35Resources.ornith35BVisionComponentPath,
-                    hubFallback: HubFallbackConfig(
-                        repoId: Q35Resources.ornith35BVisionUpstreamRepoId,
-                        revision: Q35Resources.ornith35BVisionUpstreamRevision,
-                        patterns: Q35Resources.ornith35BVisionComponentSnapshotPatterns
-                    )
-                ),
-            ],
-            upstreamRepoId: Q35Resources.ornith35BMLX4BitUpstreamRepoId,
-            upstreamRevision: Q35Resources.ornith35BMLX4BitUpstreamRevision,
+            upstreamRepoId: Q35Resources.ornith35BMLX4BitBundleRepoId,
+            upstreamRevision: Q35Resources.ornith35BMLX4BitBundleRevision,
             validationKind: .q35,
             runtimeAutoDownloadAllowed: false,
-            estimatedDownloadBytes: Q35Resources.ornith35BMLX4BitEstimatedDownloadBytes
-                + Q35Resources.ornith35BVisionComponentEstimatedDownloadBytes,
+            estimatedDownloadBytes: Q35Resources.ornith35BMLX4BitBundleEstimatedDownloadBytes,
             defaultCLICommands: [
                 "text chat",
                 "api serve",
@@ -2097,7 +2086,6 @@ public enum ManagedModelCatalog {
                 "model benchmark code",
                 "model benchmark vlm",
             ],
-            companionModelIDs: [Q35Resources.ornith35BMTPModelId],
             apiProfile: .q36(
                 contextWindow: Q35Resources.ornith35BMLXContextLength,
                 fixedReasoning: true
@@ -4246,6 +4234,7 @@ public extension ManagedModelSpec {
             }
             if id == Q35Resources.ornith35BMLX4BitModelId {
                 missing.append(contentsOf: resources.validateOrnithVisionComponent(fileManager: fileManager))
+                missing.append(contentsOf: resources.validateOrnithMTPComponent(fileManager: fileManager))
             }
             return missing
         case .q35MTPAssistant:

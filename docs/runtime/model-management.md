@@ -321,17 +321,18 @@ The `text-code` API lane rejects tool calls, so these models are not Pi setup
 agents.
 `text-agent-ornith-9b` can be pulled, inspected, and run through the native
 Qwen-family MLX/OptiQ runtime for coding-agent comparisons.
-Ornith 1.5 35B-A3B has four official native MLX targets:
+Ornith 1.5 35B-A3B has four native MLX targets:
 `text-agent-ornith-35b-mlx-4bit`, `text-agent-ornith-35b-mlx-6bit`,
 `text-agent-ornith-35b-mlx-8bit`, and the unquantized BF16 compatibility id
-`text-agent-ornith-35b-mlx`. All require an explicit `model pull`; each pull
-also installs one shared, pinned BF16 MTP head from the authoritative base
-checkpoint. Use `model capabilities` for the current machine's explicit
+`text-agent-ornith-35b-mlx`. All require an explicit `model pull`. Q6, Q8, and
+BF16 pulls also install one shared, pinned BF16 MTP head from the authoritative
+base checkpoint. Q4 pulls one Sawfwair packaging snapshot with its target,
+vision shard, and MTP head embedded. Use `model capabilities` for the current machine's explicit
 speed/balanced/quality choices. The conservative tiers are Q4 at 32 GB, Q6 at
 48 GB, Q8 at 64 GB, and BF16 at 96 GB; 128 GB is recommended for BF16.
-The recommended `text-agent-ornith-35b-mlx-4bit` explicit-pull lane reuses the Q4
-target, mounts the authoritative base vision shard, and installs the shared MTP
-companion. It has a 32 GB minimum and 48 GB recommendation. The full
+The recommended `text-agent-ornith-35b-mlx-4bit` explicit-pull lane installs
+its Q4 target, authoritative base vision shard, and MTP head from one pinned
+snapshot. It has a 32 GB minimum and 48 GB recommendation. The full
 `vision-chat-ornith-35b` BF16 quality reference has a 96 GB minimum and
 128 GB recommendation.
 

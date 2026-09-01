@@ -57,7 +57,7 @@ help in the repository gate.
 - `text-chat-lfm25-a1b-bf16` (managed LiquidAI LFM2.5 8B-A1B BF16 target plus DSpark)
 - `vision-chat-lfm25-3b-8bit` (managed LiquidAI LFM2.5-VL 3B MLX 8-bit vision-language snapshot)
 - `text-agent-ornith-9b` (experimental native MLX/OptiQ coding-agent snapshot)
-- `text-agent-ornith-35b-mlx-4bit` (recommended Ornith 1.5 Q4 coding and vision composite)
+- `text-agent-ornith-35b-mlx-4bit` (recommended self-contained Ornith 1.5 Q4 coding and vision bundle)
 - `text-agent-ornith-35b-mlx-6bit` (Ornith 1.5 balanced tier)
 - `text-agent-ornith-35b-mlx-8bit` (Ornith 1.5 quantized quality tier)
 - `text-agent-ornith-35b-mlx` (Ornith 1.5 35B-A3B BF16 MLX coding-agent snapshot)

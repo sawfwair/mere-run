@@ -987,8 +987,10 @@ swift run mere.run model pull text-agent-ornith-35b
 swift run mere.run text code --model text-agent-ornith-35b --prompt "Sketch a small Swift Result helper."
 ```
 
-Ornith 1.5's native Swift/MLX lane has official Q4/Q6/Q8 ids plus the BF16
-compatibility id `text-agent-ornith-35b-mlx`. Use `model capabilities` to pick
+Ornith 1.5's native Swift/MLX lane has Q4/Q6/Q8 ids plus the BF16 compatibility
+id `text-agent-ornith-35b-mlx`. Q4 is a single packaging snapshot containing
+the official Q4 target, authoritative vision shard, and MTP head. Use
+`model capabilities` to pick
 the speed, balanced, or quality tier for this machine. Pull it explicitly;
 runtime auto-download is disabled for these large checkpoints:
 

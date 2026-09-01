@@ -17,7 +17,7 @@ final class OrnithVisionCheckpointTests: MereRunCoreTestCase {
             )
         }
         let rootURL = URL(fileURLWithPath: root, isDirectory: true)
-        Self.report("validating 4-bit target, MTP companion, and vision tensors")
+        Self.report("validating bundled 4-bit target, MTP head, and vision tensors")
         try validatePublishedConfigurationAndVisionWeights(primaryRootURL: rootURL)
         Self.report("vision tensor validation complete")
         Memory.clearCache()
@@ -81,8 +81,9 @@ final class OrnithVisionCheckpointTests: MereRunCoreTestCase {
         XCTAssertEqual(primaryConfig.quantization?.bits, 4)
         XCTAssertNil(primaryConfig.visionConfig)
 
-        let mtpRoot = try XCTUnwrap(
-            ManagedModelResolver.resolveInstalledModel(id: Q35Resources.ornith35BMTPModelId)
+        let mtpRoot = primaryRootURL.appendingPathComponent(
+            Q35Resources.ornith35BMTPComponentPath,
+            isDirectory: true
         )
         XCTAssertTrue(Q35Resources(rootURL: mtpRoot).validateOrnith35BMTPCompanion().isEmpty)
 

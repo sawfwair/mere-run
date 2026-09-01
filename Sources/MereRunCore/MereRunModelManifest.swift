@@ -1478,8 +1478,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 modelID: modelID,
                 precision: .int4,
                 bits: 4,
-                upstreamRepoId: Q35Resources.ornith35BMLX4BitUpstreamRepoId,
-                upstreamRevision: Q35Resources.ornith35BMLX4BitUpstreamRevision,
+                upstreamRepoId: Q35Resources.ornith35BMLX4BitBundleRepoId,
+                upstreamRevision: Q35Resources.ornith35BMLX4BitBundleRevision,
                 supports: [.chat, .codeGeneration, .visionChat],
                 createdAt: createdAt
             )

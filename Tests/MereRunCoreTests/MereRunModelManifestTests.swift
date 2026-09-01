@@ -486,7 +486,7 @@ final class MereRunModelManifestTests: MereRunCoreTestCase {
         )
     }
 
-    func testOrnith35BMLX4BitTemplateRecordsTargetAndVisionSources() throws {
+    func testOrnith35BMLX4BitTemplateRecordsSingleBundleSource() throws {
         let manifest = MereRunModelManifest.template(
             for: .ornith35BMLX4Bit,
             createdAt: Date(timeIntervalSince1970: 0)
@@ -499,21 +499,17 @@ final class MereRunModelManifestTests: MereRunCoreTestCase {
         XCTAssertEqual(manifest.quantization?.groupSize, 64)
         XCTAssertEqual(manifest.quantization?.scheme, "mlx-affine")
         XCTAssertEqual(Set(manifest.supports ?? []), Set([.chat, .codeGeneration, .visionChat]))
-        XCTAssertEqual(manifest.sources?.count, 2)
+        XCTAssertEqual(manifest.sources?.count, 1)
         XCTAssertEqual(manifest.sources?.first?.role, "primary")
         XCTAssertEqual(
             manifest.sources?.first?.repository,
-            Q35Resources.ornith35BMLX4BitUpstreamRepoId
-        )
-        XCTAssertEqual(manifest.sources?.last?.role, "component")
-        XCTAssertEqual(
-            manifest.sources?.last?.repository,
-            Q35Resources.ornith35BVisionUpstreamRepoId
+            Q35Resources.ornith35BMLX4BitBundleRepoId
         )
         XCTAssertEqual(
-            manifest.sources?.last?.destinationPath,
-            Q35Resources.ornith35BVisionComponentPath
+            manifest.sources?.first?.revision,
+            Q35Resources.ornith35BMLX4BitBundleRevision
         )
+        XCTAssertNil(manifest.sources?.first?.destinationPath)
     }
 
     func testOrnith35BMLXQuantizedTemplatesPinOfficialConversions() throws {
@@ -531,8 +527,8 @@ final class MereRunModelManifestTests: MereRunCoreTestCase {
                 Q35Resources.ornith35BMLX4BitModelId,
                 .int4,
                 4,
-                Q35Resources.ornith35BMLX4BitUpstreamRepoId,
-                Q35Resources.ornith35BMLX4BitUpstreamRevision
+                Q35Resources.ornith35BMLX4BitBundleRepoId,
+                Q35Resources.ornith35BMLX4BitBundleRevision
             ),
             (
                 .ornith35BMLX6Bit,
