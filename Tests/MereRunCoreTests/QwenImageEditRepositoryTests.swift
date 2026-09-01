@@ -1,9 +1,65 @@
 import Foundation
+import MediaIO
 import MLX
 import XCTest
 @testable import MereRunCore
 
 final class QwenImageEditRepositoryTests: MereRunCoreTestCase {
+    func testInstalledQwenImageEditVAERoundTripWhenRequested() throws {
+        let env = ProcessInfo.processInfo.environment
+        guard let root = env["MERERUN_TEST_QWEN_EDIT_ROOT"], !root.isEmpty else {
+            throw XCTSkip("Set MERERUN_TEST_QWEN_EDIT_ROOT to test an installed Qwen Image Edit VAE.")
+        }
+        guard let input = env["MERERUN_TEST_QWEN_EDIT_IMAGE"], !input.isEmpty else {
+            throw XCTSkip("Set MERERUN_TEST_QWEN_EDIT_IMAGE to test an installed Qwen Image Edit VAE.")
+        }
+
+        let output = env["MERERUN_TEST_QWEN_EDIT_VAE_OUTPUT"] ?? "/tmp/qwen-image-edit-vae-round-trip.png"
+        let resources = QwenImageEditResources(rootURL: URL(fileURLWithPath: root))
+        let configs = try QwenImageEditModelConfigs.load(from: resources)
+        let vae = QwenImageEditVAE(config: configs.vae)
+        try QwenImageEditGenerator.validateVAECheckpointCoverage(
+            rawKeys: Set(try SafetensorsStreamingLoader.metadata(url: resources.vaeWeightsURL).keys),
+            model: vae
+        )
+        try HFSafetensorsWeightsLoader.applyWeights(
+            url: resources.vaeWeightsURL,
+            to: vae.underlyingVAE,
+            dtype: .bfloat16,
+            verify: [.shapeMismatch],
+            mapper: QwenImageEditVAE.weightMapper
+        )
+        MLX.eval(vae)
+
+        let decodedInput = try MediaImageIO.decode(URL(fileURLWithPath: input))
+        let source = try QwenImageIO.resizedCenterCropPixelArray(
+            from: decodedInput,
+            width: 256,
+            height: 256,
+            dtype: .float32
+        )
+        let normalized = QwenImageIO.normalizeForEncoder(source)
+        let latents = vae.encodeConditioning(normalized)
+        let reconstruction = MLX.clip(
+            QwenImageIO.denormalizeFromDecoder(vae.decodeGenerated(latents)).asType(.float32),
+            min: 0,
+            max: 1
+        )
+        MLX.eval(source, latents, reconstruction)
+        try QwenImageIO.saveImage(
+            array: reconstruction,
+            to: URL(fileURLWithPath: output)
+        )
+
+        let meanAbsoluteError = MLX.mean(MLX.abs(reconstruction - source)).item(Float.self)
+        FileHandle.standardError.write(
+            "qwen_image_edit_vae_round_trip mae=\(meanAbsoluteError) "
+                .appending("latent_shape=\(latents.shape) output=\(output)\n")
+                .data(using: .utf8)!
+        )
+        XCTAssertLessThan(meanAbsoluteError, 0.25, "The installed VAE should reconstruct the source image.")
+    }
+
     func testRepositoryIdentitiesKeepLegacyAnd2511Separate() {
         XCTAssertEqual(
             QwenImageEditRepository.canonicalModelId(for: "Qwen/Qwen-Image-Edit"),
@@ -138,6 +194,20 @@ final class QwenImageEditRepositoryTests: MereRunCoreTestCase {
         XCTAssertTrue(config.zeroCondT)
     }
 
+    func testQwenTimestepEmbeddingUsesOfficialThousandScale() {
+        let embedding = TimestepEmbedder.sinusoidalEmbedding(
+            MLXArray([Float(0.5)]),
+            frequencyDim: 4
+        )
+        MLX.eval(embedding)
+
+        let values = embedding.asArray(Float.self)
+        XCTAssertEqual(values[0], cos(500), accuracy: 0.000_01)
+        XCTAssertEqual(values[1], cos(5), accuracy: 0.000_01)
+        XCTAssertEqual(values[2], sin(500), accuracy: 0.000_01)
+        XCTAssertEqual(values[3], sin(5), accuracy: 0.000_01)
+    }
+
     func testTransformerCheckpointCoverageRejectsMissingAndUnexpectedKeys() throws {
         let json = #"""
         {
@@ -189,6 +259,8 @@ final class QwenImageEditRepositoryTests: MereRunCoreTestCase {
           "num_key_value_heads": 1,
           "intermediate_size": 32,
           "vocab_size": 128,
+          "model_type": "qwen2_5_vl",
+          "attention_bias": true,
           "rope_scaling": {"mrope_section": [1, 1, 2]},
           "vision_config": {
             "depth": 1,
@@ -215,6 +287,17 @@ final class QwenImageEditRepositoryTests: MereRunCoreTestCase {
         XCTAssertTrue(modelKeys.contains("visionTower.blocks.0.mlp.down_proj.weight"))
         XCTAssertFalse(modelKeys.contains("visionTower.blocks.0.mlp.fc1.weight"))
         XCTAssertEqual(encoder.textEncoder.configuration.mropeSection, [1, 1, 2])
+        XCTAssertTrue(encoder.textEncoder.configuration.attentionBias)
+        XCTAssertFalse(encoder.textEncoder.configuration.useQKNorm)
+        XCTAssertTrue(modelKeys.contains("textEncoder.encoder.layers.0.self_attn.q_proj.bias"))
+        XCTAssertTrue(modelKeys.contains("textEncoder.encoder.layers.0.self_attn.k_proj.bias"))
+        XCTAssertTrue(modelKeys.contains("textEncoder.encoder.layers.0.self_attn.v_proj.bias"))
+        XCTAssertFalse(modelKeys.contains("textEncoder.encoder.layers.0.self_attn.q_norm.weight"))
+        XCTAssertFalse(modelKeys.contains("textEncoder.encoder.layers.0.self_attn.k_norm.weight"))
+        XCTAssertFalse(modelKeys.contains { $0.hasPrefix("textEncoder.visionTower.") })
+        XCTAssertFalse(modelKeys.contains("visionTower.blocks.0.norm1.bias"))
+        XCTAssertFalse(modelKeys.contains("visionTower.blocks.0.norm2.bias"))
+        XCTAssertFalse(modelKeys.contains("visionTower.patch_merger.ln_q.bias"))
 
         var rawKeys = Set(modelKeys.map(Self.inverseTextEncoderCheckpointKey))
         rawKeys.insert("lm_head.weight")
@@ -229,6 +312,25 @@ final class QwenImageEditRepositoryTests: MereRunCoreTestCase {
             rawKeys: rawKeys,
             model: encoder
         ))
+    }
+
+    func testQwen25VLEncoderTransposesPyTorchPatchEmbeddingWeightForMLX() throws {
+        let json = #"""
+        {
+          "hidden_size": 16,
+          "num_hidden_layers": 1,
+          "num_attention_heads": 2,
+          "intermediate_size": 32,
+          "vocab_size": 128
+        }
+        """#
+        let config = try JSONDecoder().decode(QwenImageEditTextEncoderConfig.self, from: Data(json.utf8))
+        let mapper = QwenImageEditGenerator.textEncoderWeightMapper(config: config)
+        let weight = MLXArray.zeros([8, 3, 2, 4, 4])
+        let mapped = try XCTUnwrap(mapper("visual.patch_embed.proj.weight", weight).first)
+
+        XCTAssertEqual(mapped.0, "visionTower.patch_embed.proj.weight")
+        XCTAssertEqual(mapped.1.shape, [8, 2, 4, 4, 3])
     }
 
     func testQwen25VLMultimodalPositionsTrackEachOrderedPictureGrid() {

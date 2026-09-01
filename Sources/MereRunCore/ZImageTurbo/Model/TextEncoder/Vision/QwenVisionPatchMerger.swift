@@ -16,7 +16,13 @@ final class QwenVisionPatchMerger: Module {
   @ModuleInfo(key: "mlp_0") private var mlpInput: Linear
   @ModuleInfo(key: "mlp_2") private var mlpOutput: Linear
 
-  init(contextDim: Int, outputDim: Int, spatialMergeSize: Int, usePostshuffleNorm: Bool = false) {
+  init(
+    contextDim: Int,
+    outputDim: Int,
+    spatialMergeSize: Int,
+    usePostshuffleNorm: Bool = false,
+    normBias: Bool = true
+  ) {
     self.contextDim = contextDim
     self.outputDim = outputDim
     self.spatialMergeSize = spatialMergeSize
@@ -26,7 +32,12 @@ final class QwenVisionPatchMerger: Module {
 
     // For deepstack (postshuffle norm), the norm operates on hiddenDim instead of contextDim
     let normDim = usePostshuffleNorm ? contextDim * mergeUnit : contextDim
-    self._norm.wrappedValue = LayerNorm(dimensions: normDim, eps: 1e-6, affine: true)
+    self._norm.wrappedValue = LayerNorm(
+      dimensions: normDim,
+      eps: 1e-6,
+      affine: true,
+      bias: normBias
+    )
     self._mlpInput.wrappedValue = Linear(hiddenDim, hiddenDim)
     self._mlpOutput.wrappedValue = Linear(hiddenDim, outputDim)
   }

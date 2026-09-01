@@ -30,9 +30,6 @@ public final class Qwen25VLEncoder: Module {
             )
         }
         super.init()
-
-        // Connect vision tower to text encoder
-        textEncoder.setVisionTower(visionTower)
     }
 
     /// Access underlying text encoder for weight loading
@@ -248,7 +245,9 @@ extension Qwen25VLEncoder {
             promptDropIndex: 0,
             headDim: textEncoderConfig.headDim ?? (textEncoderConfig.hiddenSize / textEncoderConfig.numAttentionHeads),
             mropeSection: textEncoderConfig.ropeScaling?.mropeSection,
-            mropeInterleaved: false
+            mropeInterleaved: false,
+            attentionBias: textEncoderConfig.attentionBias ?? true,
+            useQKNorm: false
         )
 
         // Create vision config from nested config or defaults
@@ -267,7 +266,8 @@ extension Qwen25VLEncoder {
                 inChannels: 3,
                 outHiddenDim: vc.outHiddenSize ?? textEncoderConfig.hiddenSize,
                 windowSize: vc.windowSize ?? 112,
-                fullAttentionBlockIndices: vc.fullattBlockIndexes ?? [7, 15, 23, 31]
+                fullAttentionBlockIndices: vc.fullattBlockIndexes ?? [7, 15, 23, 31],
+                normBias: false
             )
         } else {
             // Default Qwen2.5-VL vision config
@@ -284,7 +284,8 @@ extension Qwen25VLEncoder {
                 inChannels: 3,
                 outHiddenDim: textEncoderConfig.hiddenSize,
                 windowSize: 112,
-                fullAttentionBlockIndices: [7, 15, 23, 31]
+                fullAttentionBlockIndices: [7, 15, 23, 31],
+                normBias: false
             )
         }
 

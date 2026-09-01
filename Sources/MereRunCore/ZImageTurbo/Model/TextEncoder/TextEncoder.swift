@@ -8,7 +8,6 @@ import MLXNN
 // through architecture internals.
 
 enum QwenTextEncoderError: Error {
-  case visionTowerUnavailable
   case mismatchedVisionTokenCount
 }
 
@@ -37,6 +36,8 @@ public struct QwenTextEncoderConfiguration {
   public var headDim: Int
   public var mropeSection: [Int]?
   public var mropeInterleaved: Bool
+  public var attentionBias: Bool
+  public var useQKNorm: Bool
   public var useFloat32Activations: Bool
   public var cachedDecodeAttentionMode: QwenCachedDecodeAttentionMode
 
@@ -54,6 +55,8 @@ public struct QwenTextEncoderConfiguration {
     headDim: Int = 128,
     mropeSection: [Int]? = nil,
     mropeInterleaved: Bool = false,
+    attentionBias: Bool = false,
+    useQKNorm: Bool = true,
     useFloat32Activations: Bool = false,
     cachedDecodeAttentionMode: QwenCachedDecodeAttentionMode = .automatic
   ) {
@@ -70,6 +73,8 @@ public struct QwenTextEncoderConfiguration {
     self.headDim = headDim
     self.mropeSection = mropeSection
     self.mropeInterleaved = mropeInterleaved
+    self.attentionBias = attentionBias
+    self.useQKNorm = useQKNorm
     self.useFloat32Activations = useFloat32Activations
     self.cachedDecodeAttentionMode = cachedDecodeAttentionMode
   }
@@ -79,15 +84,10 @@ public final class QwenTextEncoder: Module {
 
   public let configuration: QwenTextEncoderConfiguration
   @ModuleInfo(key: "encoder") var encoder: QwenEncoder
-  private var visionTower: QwenVisionTower?
 
   public init(configuration: QwenTextEncoderConfiguration = .init()) {
     self.configuration = configuration
     self._encoder.wrappedValue = QwenEncoder(configuration: configuration)
-  }
-
-  func setVisionTower(_ tower: QwenVisionTower) {
-    self.visionTower = tower
   }
 
   public func callAsFunction(

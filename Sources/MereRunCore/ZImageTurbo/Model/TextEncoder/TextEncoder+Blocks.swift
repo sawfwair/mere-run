@@ -20,8 +20,8 @@ public final class QwenAttention: Module {
   @ModuleInfo(key: "k_proj") var kProj: Linear
   @ModuleInfo(key: "v_proj") var vProj: Linear
   @ModuleInfo(key: "o_proj") var oProj: Linear
-  @ModuleInfo(key: "q_norm") var qNorm: RMSNorm
-  @ModuleInfo(key: "k_norm") var kNorm: RMSNorm
+  @ModuleInfo(key: "q_norm") var qNorm: RMSNorm?
+  @ModuleInfo(key: "k_norm") var kNorm: RMSNorm?
 
   private var usesFusedProjections = false
 
@@ -44,13 +44,18 @@ public final class QwenAttention: Module {
       self.cachedDecodeAttentionMode = configuration.cachedDecodeAttentionMode
     }
 
-    self._qProj.wrappedValue = Linear(hiddenSize, numAttentionHeads * headDim, bias: false)
-    self._kProj.wrappedValue = Linear(hiddenSize, numKeyValueHeads * headDim, bias: false)
-    self._vProj.wrappedValue = Linear(hiddenSize, numKeyValueHeads * headDim, bias: false)
+    self._qProj.wrappedValue = Linear(hiddenSize, numAttentionHeads * headDim, bias: configuration.attentionBias)
+    self._kProj.wrappedValue = Linear(hiddenSize, numKeyValueHeads * headDim, bias: configuration.attentionBias)
+    self._vProj.wrappedValue = Linear(hiddenSize, numKeyValueHeads * headDim, bias: configuration.attentionBias)
     self._oProj.wrappedValue = Linear(numAttentionHeads * headDim, hiddenSize, bias: false)
 
-    self._qNorm.wrappedValue = RMSNorm(dimensions: headDim, eps: configuration.rmsNormEps)
-    self._kNorm.wrappedValue = RMSNorm(dimensions: headDim, eps: configuration.rmsNormEps)
+    if configuration.useQKNorm {
+      self._qNorm.wrappedValue = RMSNorm(dimensions: headDim, eps: configuration.rmsNormEps)
+      self._kNorm.wrappedValue = RMSNorm(dimensions: headDim, eps: configuration.rmsNormEps)
+    } else {
+      self._qNorm.wrappedValue = nil
+      self._kNorm.wrappedValue = nil
+    }
 
     if let mropeSection = configuration.mropeSection, !mropeSection.isEmpty {
       self.mropeSection = mropeSection
@@ -111,8 +116,12 @@ public final class QwenAttention: Module {
         print("[Attn] K pre-norm: std=\(MLX.std(keys).item(Float.self))")
     }
 
-    queries = qNorm(queries.reshaped(B, L, numAttentionHeads, headDim)).transposed(0, 2, 1, 3)
-    keys = kNorm(keys.reshaped(B, L, numKeyValueHeads, headDim)).transposed(0, 2, 1, 3)
+    queries = queries.reshaped(B, L, numAttentionHeads, headDim)
+    keys = keys.reshaped(B, L, numKeyValueHeads, headDim)
+    if let qNorm { queries = qNorm(queries) }
+    if let kNorm { keys = kNorm(keys) }
+    queries = queries.transposed(0, 2, 1, 3)
+    keys = keys.transposed(0, 2, 1, 3)
     values = values.reshaped(B, L, numKeyValueHeads, headDim).transposed(0, 2, 1, 3)
 
     if debug {
