@@ -6,6 +6,13 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.49.0 - 2026-08-31
+
+This release adds native attention QLoRA training for LFM2.5, a complete
+Flash-Next Q3 package with internal-SSD PLE staging, and 4-bit Ornith vision.
+It also keeps Studio-managed CLI installations synchronized with their app
+bundle.
+
 ### Runtime
 
 - started Qwen3.8 Flash Next's disk-backed PLE row reads before the first
@@ -17,9 +24,10 @@ The format is based on Keep a Changelog.
   external, mere.run verifies and stages only the 33 PLE-bearing safetensors on
   the internal SSD, then reuses that cache while all remaining files stay in
   the configured model store.
+
 ### Vision
 
-- Added vision support to `text-agent-ornith-35b-mlx-4bit` by combining its
+- added vision support to `text-agent-ornith-35b-mlx-4bit` by combining its
   official 4-bit MLX target with the authoritative base checkpoint's 4.42 GiB
   vision shard and shared BF16 MTP companion. It is the recommended local lane
   for local image chat, API serving, agent use, and VLM, chat, and code
@@ -34,6 +42,26 @@ The format is based on Keep a Changelog.
   `mererun.lfm2.text-lora` manifest. The v1 target surface is limited to
   q/k/v/output attention projections and keeps convolution and MoE expert
   matrices frozen.
+
+### macOS
+
+- added versioned, fingerprinted receipts for Studio-managed CLI installations.
+  Studio validates a staged payload before atomically activating it, preserves
+  rollback behavior, and synchronizes owned installations at startup without
+  replacing external or unowned CLI installations.
+
+### Release quality
+
+- let debug app-bundle builds reuse the Swift package build from the main gate.
+  Release bundles retain checkout-path sanitization and private-path checks.
+
+### Included pull requests
+
+- exact release range: [#387](https://github.com/sawfwair/mere-run/pull/387),
+  [#388](https://github.com/sawfwair/mere-run/pull/388),
+  [#389](https://github.com/sawfwair/mere-run/pull/389),
+  [#390](https://github.com/sawfwair/mere-run/pull/390), and
+  [#391](https://github.com/sawfwair/mere-run/pull/391).
 
 ## 0.48.0 - 2026-08-31
 
