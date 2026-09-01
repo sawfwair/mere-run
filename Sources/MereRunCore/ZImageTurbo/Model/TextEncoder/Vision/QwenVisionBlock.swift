@@ -11,8 +11,18 @@ final class QwenVisionBlock: Module {
 
   init(configuration: QwenVisionConfiguration, blockIndex: Int) {
     self.blockIndex = blockIndex
-    self._norm1.wrappedValue = LayerNorm(dimensions: configuration.embedDim, eps: configuration.eps, affine: true)
-    self._norm2.wrappedValue = LayerNorm(dimensions: configuration.embedDim, eps: configuration.eps, affine: true)
+    self._norm1.wrappedValue = LayerNorm(
+      dimensions: configuration.embedDim,
+      eps: configuration.eps,
+      affine: true,
+      bias: configuration.normBias
+    )
+    self._norm2.wrappedValue = LayerNorm(
+      dimensions: configuration.embedDim,
+      eps: configuration.eps,
+      affine: true,
+      bias: configuration.normBias
+    )
     self._attention.wrappedValue = QwenVisionAttention(embedDim: configuration.embedDim, numHeads: configuration.numHeads)
     let hiddenDim = configuration.mlpHiddenDim
     self._mlp.wrappedValue = QwenVisionMLP(

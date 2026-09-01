@@ -585,6 +585,71 @@ final class ImageGenerateCommandParsingTests: XCTestCase {
         XCTAssertTrue(envelope.diagnostics.contains { $0.id == "model_family_unsupported" })
     }
 
+    func testImageGenerationPreflightAcceptsQwenImageEditAndUsesManifestDefaults() throws {
+        let temp = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let model = temp.appendingPathComponent("model", isDirectory: true)
+        try writeManifest(
+            id: "local-qwen-edit",
+            family: .qwen,
+            engine: .qwenImageEdit,
+            defaults: .init(steps: 40, cfg: 4),
+            to: model
+        )
+        let input = temp.appendingPathComponent("input.png")
+        try Data("input".utf8).write(to: input)
+        let output = temp.appendingPathComponent("render.png")
+
+        let cmd = try ImageGenerate.parse([
+            "--prompt", "remove the truck",
+            "--model", model.path,
+            "--input", input.path,
+            "--output", output.path,
+            "--preflight",
+            "--json",
+        ])
+        let envelope = cmd.makePreflightEnvelope(
+            outputURL: output,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.status, .ok)
+        XCTAssertEqual(envelope.result.model.family, "qwen")
+        XCTAssertEqual(envelope.result.plan.effectiveSteps, 40)
+        XCTAssertEqual(envelope.result.plan.effectiveCFGScale, 4)
+        XCTAssertEqual(envelope.result.plan.inputMode, "image_to_image")
+        XCTAssertTrue(try XCTUnwrap(envelope.actions.first { $0.id == "start-generation" }).enabled)
+    }
+
+    func testImageGenerationPreflightRejectsNonImageQwenEngine() throws {
+        let temp = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let model = temp.appendingPathComponent("model", isDirectory: true)
+        try writeManifest(
+            id: "local-qwen-text",
+            family: .qwen,
+            engine: .qwen35HybridMoE,
+            to: model
+        )
+        let output = temp.appendingPathComponent("render.png")
+        let cmd = try ImageGenerate.parse([
+            "--prompt", "a clean product render",
+            "--model", model.path,
+            "--output", output.path,
+            "--preflight",
+            "--json",
+        ])
+        let envelope = cmd.makePreflightEnvelope(
+            outputURL: output,
+            now: { Date(timeIntervalSince1970: 0) }
+        )
+
+        XCTAssertEqual(envelope.status, .blocked)
+        XCTAssertTrue(envelope.diagnostics.contains { $0.id == "model_family_unsupported" })
+    }
+
     func testStructuredPromptAdapterValidatesPaperSchema() throws {
         let caption = try StructuredImagePromptAdapter.validateCaptionJSON(Self.validStructuredCaptionJSON)
 
@@ -752,14 +817,18 @@ final class ImageGenerateCommandParsingTests: XCTestCase {
     private func writeManifest(
         id: String,
         family: MereRunModelManifest.Family,
+        engine: MereRunModelManifest.Engine? = nil,
+        defaults: MereRunModelManifest.Defaults? = nil,
         to directory: URL
     ) throws {
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
         let manifest = MereRunModelManifest(
             id: id,
+            engine: engine,
             family: family,
             variant: .distilled,
             precision: .bf16,
+            defaults: defaults,
             supports: []
         )
         let encoder = JSONEncoder()

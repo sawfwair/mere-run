@@ -880,7 +880,7 @@ struct ImageGenerationPreflightAnalyzer {
     ) -> MereRunModelManifest? {
         do {
             let manifest = try MereRunModelManifest.loadRequired(from: modelRoot, fileManager: fileManager)
-            if !Self.supportedImageFamilies.contains(manifest.family) {
+            if !Self.supportsImageGeneration(manifest) {
                 let family = manifest.family?.rawValue ?? "unknown"
                 diagnostics.append(
                     PreflightDiagnostic(
@@ -954,7 +954,14 @@ struct ImageGenerationPreflightAnalyzer {
     }
 
     private static func familyUsesManifestDefaults(_ family: MereRunModelManifest.Family) -> Bool {
-        family == .hidream || family == .krea || family == .ideogram || family == .senseNova
+        family == .hidream || family == .krea || family == .qwen || family == .ideogram || family == .senseNova
+    }
+
+    private static func supportsImageGeneration(_ manifest: MereRunModelManifest) -> Bool {
+        if manifest.family == .qwen {
+            return manifest.engine == .qwenImageEdit
+        }
+        return supportedImageFamilies.contains(manifest.family)
     }
 
     private static let supportedImageFamilies: Set<MereRunModelManifest.Family?> = [

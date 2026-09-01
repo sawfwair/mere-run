@@ -356,6 +356,9 @@ extension QwenImageEditGenerator {
     ) -> (String, MLXArray) -> [(String, MLXArray)] {
         return { rawKey, value in
             guard let key = textEncoderWeightKey(rawKey) else { return [] }
+            if key == "visionTower.patch_embed.proj.weight", value.ndim == 5 {
+                return [(key, value.transposed(0, 2, 3, 4, 1))]
+            }
             return [(key, value)]
         }
     }

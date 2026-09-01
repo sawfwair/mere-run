@@ -164,7 +164,6 @@ public final class QwenVLEncoder: Module {
             self._visionProjection.wrappedValue = Linear(visionConfig.outHiddenDim, textEncoderConfig.hiddenSize)
         }
         super.init()
-        textEncoder.setVisionTower(visionTower)
     }
 
     public static func imageTokenCount(

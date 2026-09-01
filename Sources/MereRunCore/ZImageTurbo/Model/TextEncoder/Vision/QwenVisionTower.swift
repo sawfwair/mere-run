@@ -92,7 +92,8 @@ final class QwenVisionTower: Module {
     self._patchMerger.wrappedValue = QwenVisionPatchMerger(
       contextDim: configuration.embedDim,
       outputDim: configuration.outHiddenDim,
-      spatialMergeSize: configuration.spatialMergeSize
+      spatialMergeSize: configuration.spatialMergeSize,
+      normBias: configuration.normBias
     )
 
     // Qwen3-VL: deepstack mergers (with postshuffle norm)
@@ -101,7 +102,8 @@ final class QwenVisionTower: Module {
         contextDim: configuration.embedDim,
         outputDim: configuration.outHiddenDim,
         spatialMergeSize: configuration.spatialMergeSize,
-        usePostshuffleNorm: true
+        usePostshuffleNorm: true,
+        normBias: configuration.normBias
       )
     }
 

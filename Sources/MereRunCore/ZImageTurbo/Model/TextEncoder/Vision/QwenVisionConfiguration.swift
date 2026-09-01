@@ -21,6 +21,7 @@ public struct QwenVisionConfiguration {
   public var windowSize: Int
   public var fullAttentionBlockIndices: [Int]
   public var patchEmbedBias: Bool
+  public var normBias: Bool
   /// Qwen3-VL: number of learned position embeddings (e.g. 2304 = 48*48)
   public var numPositionEmbeddings: Int?
   /// Qwen3-VL: use learned position embeddings + rotary (vs rotary-only for Qwen2-VL)
@@ -49,6 +50,7 @@ public struct QwenVisionConfiguration {
     windowSize: Int = 112,
     fullAttentionBlockIndices: [Int] = [7, 15, 23, 31],
     patchEmbedBias: Bool = false,
+    normBias: Bool = true,
     numPositionEmbeddings: Int? = nil,
     useLearnedPosEmbed: Bool = false,
     deepstackVisualIndexes: [Int] = []
@@ -68,6 +70,7 @@ public struct QwenVisionConfiguration {
     self.windowSize = windowSize
     self.fullAttentionBlockIndices = fullAttentionBlockIndices
     self.patchEmbedBias = patchEmbedBias
+    self.normBias = normBias
     self.numPositionEmbeddings = numPositionEmbeddings
     self.useLearnedPosEmbed = useLearnedPosEmbed
     self.deepstackVisualIndexes = deepstackVisualIndexes

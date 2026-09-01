@@ -217,14 +217,27 @@ public final class TimestepEmbedder: Module {
     }
 
     public func callAsFunction(_ timestep: MLXArray) -> MLXArray {
+        let embedding = Self.sinusoidalEmbedding(
+            timestep,
+            frequencyDim: frequencyDim
+        )
+        return mlp.1(MLXNN.silu(mlp.0(embedding)))
+    }
+
+    static func sinusoidalEmbedding(
+        _ timestep: MLXArray,
+        frequencyDim: Int,
+        scale: Float = 1_000
+    ) -> MLXArray {
         let halfDimension = frequencyDim / 2
         let exponent = -MLXArray(Float.log(10_000))
             * MLXArray(0..<halfDimension).asType(.float32)
             / MLXArray(Float(halfDimension))
         let frequencies = MLX.exp(exponent)
-        let arguments = timestep.asType(.float32)[.ellipsis, .newAxis] * frequencies[.newAxis]
-        let embedding = MLX.concatenated([MLX.cos(arguments), MLX.sin(arguments)], axis: -1)
-        return mlp.1(MLXNN.silu(mlp.0(embedding)))
+        let arguments = timestep.asType(.float32)[.ellipsis, .newAxis]
+            * MLXArray(scale)
+            * frequencies[.newAxis]
+        return MLX.concatenated([MLX.cos(arguments), MLX.sin(arguments)], axis: -1)
     }
 }
 
