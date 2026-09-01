@@ -179,13 +179,15 @@ concurrency. Lightweight inspection and management commands such as `status`,
 `model list`, and `--help` do not consume permits.
 
 Capacity scales with physical memory: one permit below 48 GiB, two below 96
-GiB, four below 192 GiB, and six on larger hosts. Speech and lightweight audio
-use one permit; ordinary image, text, music, and vision work use two; video,
-world generation, model training/benchmarks, geometry/3D, and DeepSeek V4 Flash
-use the entire capacity. Any selected catalog model estimated at 48 GiB or
-larger, and an explicit local model file of that size, is also promoted to the
-exclusive class. FIFO ordering prevents a stream of small jobs from starving
-an earlier large job.
+GiB, four below 192 GiB, and six on larger hosts. Speech, lightweight audio,
+and managed music models estimated at 16 GiB or smaller use one permit and
+require 6 GiB of reclaimable memory. Ordinary image, text, vision, and larger
+music models use two permits and require 16 GiB. Video, world generation, model
+training/benchmarks, geometry/3D, and DeepSeek V4 Flash use the entire capacity
+and require 32 GiB. Any selected catalog model estimated at 48 GiB or larger,
+and an explicit local model file of that size, is also promoted to the exclusive
+class. FIFO ordering prevents a stream of small jobs from starving an earlier
+large job.
 
 Before it registers and admits a command, the coordinator checks reclaimable
 memory and preserves free disk for swap and temporary files. The disk floor is one

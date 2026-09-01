@@ -6,6 +6,18 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Runtime
+
+- made machine-wide music admission use managed checkpoint size: models at or
+  below 16 GiB, including ACE-Step and Magenta RT2, now use the 6 GiB small-work
+  headroom floor instead of the fixed 16 GiB standard floor. Larger music
+  checkpoints and training retain their stricter admission classes.
+
+### macOS
+
+- linked AVKit explicitly into Studio so opening a generated or saved video no
+  longer aborts while resolving `AVPlayerView`.
+
 ### Text
 
 - added native Swift/MLX text generation and OpenAI-compatible serving for the
