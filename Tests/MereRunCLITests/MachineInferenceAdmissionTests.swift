@@ -273,6 +273,28 @@ final class MachineInferenceAdmissionTests: XCTestCase {
         }
     }
 
+    func testSmallMusicModelsAdmitWithLessThanStandardHeadroom() async throws {
+        for (offset, modelID) in ["music-acestep", "music-magenta-rt2-small"].enumerated() {
+            let directory = try temporaryDirectory()
+            let coordinator = makeCoordinator(
+                directory: directory,
+                processID: Int32(107 + offset),
+                physicalMemoryBytes: 24 * gibibyte,
+                availableMemoryBytes: 14 * gibibyte
+            )
+            let request = try XCTUnwrap(
+                CLIInferenceAdmissionClassifier.request(
+                    arguments: ["mere.run", "music", "generate", "test", "--model", modelID]
+                )
+            )
+
+            let lease = try await coordinator.acquire(request)
+            XCTAssertEqual(request.resourceClass, .small, modelID)
+            XCTAssertEqual(try coordinator.snapshot().activePermits, 1, modelID)
+            lease.release()
+        }
+    }
+
     func testCLIClassifierProtectsMediaAndLeavesLightweightCommandsFree() {
         XCTAssertEqual(
             CLIInferenceAdmissionClassifier.request(
@@ -285,6 +307,42 @@ final class MachineInferenceAdmissionTests: XCTestCase {
                 arguments: ["mere.run", "speech", "synthesize", "hello"]
             ),
             MachineInferenceRequest(label: "speech synthesize", resourceClass: .small)
+        )
+        XCTAssertEqual(
+            CLIInferenceAdmissionClassifier.request(
+                arguments: ["mere.run", "music", "generate", "test"]
+            ),
+            MachineInferenceRequest(label: "music generate", resourceClass: .small)
+        )
+        XCTAssertEqual(
+            CLIInferenceAdmissionClassifier.request(
+                arguments: [
+                    "mere.run", "music", "generate", "test", "--model", "music-magenta-rt2-small",
+                ]
+            ),
+            MachineInferenceRequest(label: "music generate", resourceClass: .small)
+        )
+        XCTAssertEqual(
+            CLIInferenceAdmissionClassifier.request(
+                arguments: [
+                    "mere.run", "music", "generate", "test", "--model", "music-acestep-xl-sft",
+                ]
+            ),
+            MachineInferenceRequest(label: "music generate", resourceClass: .standard)
+        )
+        XCTAssertEqual(
+            CLIInferenceAdmissionClassifier.request(
+                arguments: [
+                    "mere.run", "music", "generate", "test", "--model", "music-minimax-music3",
+                ]
+            ),
+            MachineInferenceRequest(label: "music generate", resourceClass: .standard)
+        )
+        XCTAssertEqual(
+            CLIInferenceAdmissionClassifier.request(
+                arguments: ["mere.run", "music", "train-adapter", "dataset.jsonl"]
+            ),
+            MachineInferenceRequest(label: "music train-adapter", resourceClass: .large)
         )
         XCTAssertEqual(
             CLIInferenceAdmissionClassifier.request(
@@ -391,6 +449,7 @@ final class MachineInferenceAdmissionTests: XCTestCase {
         directory: URL,
         processID: Int32,
         bootSessionID: String = "test-boot",
+        physicalMemoryBytes: UInt64 = 128 * 1_073_741_824,
         availableMemoryBytes: UInt64? = 96 * 1_073_741_824,
         availableDiskBytes: UInt64? = 100 * 1_073_741_824,
         processIsAlive: @escaping @Sendable (Int32) -> Bool = { _ in true }
@@ -402,7 +461,7 @@ final class MachineInferenceAdmissionTests: XCTestCase {
             currentDate: { Date() },
             hostSnapshot: {
                 MachineInferenceHostSnapshot(
-                    physicalMemoryBytes: 128 * 1_073_741_824,
+                    physicalMemoryBytes: physicalMemoryBytes,
                     availableMemoryBytes: availableMemoryBytes,
                     memoryPressure: .nominal,
                     availableDiskBytes: availableDiskBytes

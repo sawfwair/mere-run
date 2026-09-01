@@ -536,6 +536,7 @@ if !isLinuxPackage {
       ],
       path: "apps/macos/MereRunStudio",
       linkerSettings: [
+        .linkedFramework("AVKit"),
         .unsafeFlags([
           "-Xlinker", "-rpath",
           "-Xlinker", "@loader_path/../Frameworks"

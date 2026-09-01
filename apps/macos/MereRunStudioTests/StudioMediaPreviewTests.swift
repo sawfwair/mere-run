@@ -1,7 +1,21 @@
+import AppKit
 @testable import MereRunApp
+import SwiftUI
 import XCTest
 
 final class StudioMediaPreviewTests: XCTestCase {
+    @MainActor
+    func testVideoPlayerViewCanBeHosted() {
+        let url = URL(fileURLWithPath: "/tmp/mere-run-video-player-linkage-smoke.mp4")
+        let hostingView = NSHostingView(rootView: StudioVideoPlayerView(url: url))
+        hostingView.frame = NSRect(x: 0, y: 0, width: 320, height: 180)
+
+        hostingView.layoutSubtreeIfNeeded()
+        hostingView.displayIfNeeded()
+
+        XCTAssertEqual(hostingView.frame.size, NSSize(width: 320, height: 180))
+    }
+
     func testMovieOutputsAreNotReadAsTextPreviews() throws {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString)

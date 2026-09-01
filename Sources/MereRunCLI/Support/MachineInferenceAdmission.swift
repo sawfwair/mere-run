@@ -557,6 +557,7 @@ final class MachineInferenceLease: @unchecked Sendable {
 }
 
 enum CLIInferenceAdmissionClassifier {
+    private static let smallModelBytes = Int64(16 * 1_073_741_824)
     private static let largeModelBytes = Int64(48 * 1_073_741_824)
 
     static func request(arguments: [String]) -> MachineInferenceRequest? {
@@ -588,7 +589,8 @@ enum CLIInferenceAdmissionClassifier {
         }) {
             return MachineInferenceRequest(label: label, resourceClass: .large)
         }
-        if modelIdentifiers(in: tokens).contains(where: isLargeModel) {
+        let selectedModelIdentifiers = modelIdentifiers(in: tokens)
+        if selectedModelIdentifiers.contains(where: isLargeModel) {
             return MachineInferenceRequest(label: label, resourceClass: .large)
         }
 
@@ -617,7 +619,13 @@ enum CLIInferenceAdmissionClassifier {
                 "depth-video",
             ].contains(subcommand)
             return MachineInferenceRequest(label: label, resourceClass: large ? .large : .standard)
-        case "music", "sfx":
+        case "music":
+            let large = ["train-adapter"].contains(subcommand)
+            let resourceClass = large
+                ? MachineInferenceClass.large
+                : musicResourceClass(modelIdentifiers: selectedModelIdentifiers)
+            return MachineInferenceRequest(label: label, resourceClass: resourceClass)
+        case "sfx":
             let large = ["train-adapter"].contains(subcommand)
             return MachineInferenceRequest(label: label, resourceClass: large ? .large : .standard)
         case "video", "world":
@@ -661,17 +669,32 @@ enum CLIInferenceAdmissionClassifier {
     }
 
     private static func isLargeModel(_ identifier: String?) -> Bool {
-        guard let identifier, !identifier.isEmpty else { return false }
+        estimatedModelBytes(identifier).map { $0 >= largeModelBytes } ?? false
+    }
+
+    private static func musicResourceClass(modelIdentifiers: [String]) -> MachineInferenceClass {
+        let identifiers = modelIdentifiers.isEmpty
+            ? [ModelResolver.ModelID.aceStep.rawValue]
+            : modelIdentifiers
+        return identifiers.allSatisfy(isSmallModel) ? .small : .standard
+    }
+
+    private static func isSmallModel(_ identifier: String) -> Bool {
+        estimatedModelBytes(identifier).map { $0 <= smallModelBytes } ?? false
+    }
+
+    private static func estimatedModelBytes(_ identifier: String?) -> Int64? {
+        guard let identifier, !identifier.isEmpty else { return nil }
         if let estimatedBytes = ManagedModelCatalog.spec(for: identifier)?.estimatedDownloadBytes {
-            return estimatedBytes >= largeModelBytes
+            return estimatedBytes
         }
         let fileURL = URL(fileURLWithPath: identifier)
         guard let values = try? fileURL.resourceValues(forKeys: [.isRegularFileKey, .fileSizeKey]),
               values.isRegularFile == true,
               let fileSize = values.fileSize else {
-            return false
+            return nil
         }
-        return Int64(fileSize) >= largeModelBytes
+        return Int64(fileSize)
     }
 
     private static func commandPath(_ tokens: [String]) -> [String] {
