@@ -317,20 +317,23 @@ The Ornith 1.5 native family pins the official
 `text-agent-ornith-35b-mlx-4bit`, `-6bit`, `-8bit`, and
 `text-agent-ornith-35b-mlx`. The 35B-parameter MoE activates about 3B
 parameters per token, advertises a 262,144-token context, and runs through the
-native Qwen-family runtime. Runtime auto-download remains disabled. Every pull
-also installs the final safetensors shard and index containing `mtp.*` from the
-pinned authoritative base checkpoint as the shared
-`text-agent-ornith-35b-mtp` companion. The authoritative
+native Qwen-family runtime. Runtime auto-download remains disabled. Q6, Q8,
+and BF16 pulls also install the final safetensors shard and index containing
+`mtp.*` from the pinned authoritative base checkpoint as the shared
+`text-agent-ornith-35b-mtp` companion. The Q4 lane instead pulls the pinned
+`Sawfwair/Ornith-1.5-35B-A3B-MLX-4bit-Vision-MTP` packaging snapshot, which
+contains its target, vision, and MTP files together. The authoritative
 [`ornith-ai/Ornith-1.5-35B-A3B`](https://huggingface.co/ornith-ai/Ornith-1.5-35B-A3B)
 base checkpoint declares the model under the MIT license in its model-card
 metadata; the MLX conversion repository does not duplicate the license file.
 
-`text-agent-ornith-35b-mlx-4bit` is the recommended local multimodal lane. It
-combines the official `Ornith-1.5-35B-A3B-MLX-4bit` text target with the
+`text-agent-ornith-35b-mlx-4bit` is the recommended local multimodal lane. Its
+single packaging snapshot combines the official
+`Ornith-1.5-35B-A3B-MLX-4bit` text target with the
 authoritative base checkpoint's `model-00001-of-00016.safetensors` vision
-shard, vision configuration, processor metadata, and the shared BF16 MTP
-companion. The primary and vision payloads total about 22.6 GiB; the shared MTP
-companion adds about 4.1 GiB when it is not already installed. Image requests
+shard, vision configuration, processor metadata, and BF16 MTP head. The
+complete snapshot is about 26.7 GiB and records every packaged file in
+`SHA256SUMS`. Image requests
 use target-only decoding because MTP speculation is disabled when image
 embeddings are present; text and code requests retain verified MTP.
 

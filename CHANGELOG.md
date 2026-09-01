@@ -20,6 +20,11 @@ The format is based on Keep a Changelog.
 
 ### Text
 
+- consolidated the recommended Ornith 1.5 35B-A3B Q4 target, authoritative
+  BF16 vision shard, and BF16 MTP draft head into one pinned
+  `Sawfwair/Ornith-1.5-35B-A3B-MLX-4bit-Vision-MTP` snapshot. The Q4 managed
+  pull no longer installs separate vision or MTP companions; validation now
+  requires both embedded components.
 - added image-conditioned LoRA training for `vision-chat-gemma4-12b` through
   `text train-lora`. The first target freezes the Gemma 4 vision stack and base
   language weights, then trains q/k/v/o language-attention adapters with

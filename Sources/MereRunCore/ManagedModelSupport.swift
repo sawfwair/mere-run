@@ -560,7 +560,7 @@ public enum ManagedModelCapabilityCatalog {
             descriptor(
                 Q35Resources.ornith35BMLX4BitModelId,
                 "Ornith 1.5 35B-A3B 4-bit vision agent",
-                "Runs the official 4-bit Ornith target with its BF16 vision tower and shared MTP companion.",
+                "Runs the official 4-bit Ornith target with its BF16 vision tower and MTP head in one bundle.",
                 minimum: 32,
                 recommended: 48
             ),

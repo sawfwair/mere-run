@@ -168,6 +168,9 @@ public struct Q35Resources: Sendable, Hashable {
     public static let ornith35BMLX4BitUpstreamRepoId = "ornith-ai/Ornith-1.5-35B-A3B-MLX-4bit"
     public static let ornith35BMLX4BitUpstreamRevision = "19504d912fa8fc7622bf6b1de3db5d5d890b1f02"
     public static let ornith35BMLX4BitEstimatedDownloadBytes: Int64 = 19_530_936_278
+    public static let ornith35BMLX4BitBundleRepoId = "Sawfwair/Ornith-1.5-35B-A3B-MLX-4bit-Vision-MTP"
+    public static let ornith35BMLX4BitBundleRevision = "2323acfa0fd0a01c452c89991558e6bbd86f0f05"
+    public static let ornith35BMLX4BitBundleEstimatedDownloadBytes: Int64 = 28_652_830_929
     public static let ornith35BMLX6BitUpstreamRepoId = "ornith-ai/Ornith-1.5-35B-A3B-MLX-6bit"
     public static let ornith35BMLX6BitUpstreamRevision = "585b7867b0517980293ece857b26d64e84491352"
     public static let ornith35BMLX6BitEstimatedDownloadBytes: Int64 = 28_190_535_198
@@ -188,6 +191,7 @@ public struct Q35Resources: Sendable, Hashable {
     public static let ornith35BVisionComponentEstimatedDownloadBytes: Int64 = 4_744_402_377
     public static let ornith35BMTPUpstreamRepoId = "ornith-ai/Ornith-1.5-35B-A3B"
     public static let ornith35BMTPUpstreamRevision = "e4dfb35a93d4b6822a811a7676f3488514abe7e2"
+    public static let ornith35BMTPComponentPath = q38MTPComponentPath
     public static let ornith35BMTPShardFilename = "model-00016-of-00016.safetensors"
     public static let ornith35BMTPSnapshotPatterns = [
         "README.md",
@@ -195,6 +199,13 @@ public struct Q35Resources: Sendable, Hashable {
         ornith35BMTPShardFilename,
     ]
     public static let ornith35BMTPEstimatedDownloadBytes: Int64 = 4_379_189_705
+    public static let ornith35BMLX4BitBundleSnapshotPatterns = snapshotPatterns + [
+        "generation_config.json",
+        "README.md",
+        "mererun_model.json",
+        "SHA256SUMS",
+    ] + ornith35BVisionComponentSnapshotPatterns.map { "\(ornith35BVisionComponentPath)/\($0)" }
+        + ornith35BMTPSnapshotPatterns.map { "\(ornith35BMTPComponentPath)/\($0)" }
     public static let ornith35BMLXContextLength = 262_144
     public static let infinityParser2ProUpstreamRepoId = "infly/Infinity-Parser2-Pro"
     public static let infinityParser2ProUpstreamRevision = "1d070df7db5acca0ffa75596229070a047704f89"
@@ -305,9 +316,9 @@ public struct Q35Resources: Sendable, Hashable {
         ),
         ornith35BMLX4BitModelId: Profile(
             modelId: ornith35BMLX4BitModelId,
-            upstreamRepoId: ornith35BMLX4BitUpstreamRepoId,
-            upstreamRevision: ornith35BMLX4BitUpstreamRevision,
-            snapshotPatterns: snapshotPatterns + ["generation_config.json", "README.md"]
+            upstreamRepoId: ornith35BMLX4BitBundleRepoId,
+            upstreamRevision: ornith35BMLX4BitBundleRevision,
+            snapshotPatterns: ornith35BMLX4BitBundleSnapshotPatterns
         ),
         ornith35BMLX6BitModelId: Profile(
             modelId: ornith35BMLX6BitModelId,
@@ -492,6 +503,17 @@ public struct Q35Resources: Sendable, Hashable {
         return Self.ornith35BVisionComponentSnapshotPatterns
             .map { componentRoot.appendingPathComponent($0, isDirectory: false) }
             .filter { !fileManager.fileExists(atPath: $0.path) }
+    }
+
+    public func validateOrnithMTPComponent(fileManager: FileManager = .default) -> [URL] {
+        let componentRoot = rootURL.appendingPathComponent(
+            Self.ornith35BMTPComponentPath,
+            isDirectory: true
+        )
+        return [
+            componentRoot.appendingPathComponent("model.safetensors.index.json", isDirectory: false),
+            componentRoot.appendingPathComponent(Self.ornith35BMTPShardFilename, isDirectory: false),
+        ].filter { !fileManager.fileExists(atPath: $0.path) }
     }
 
     public func validateQ38VisionComponent(fileManager: FileManager = .default) -> [URL] {
