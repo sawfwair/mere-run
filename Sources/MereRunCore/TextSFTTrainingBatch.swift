@@ -2,15 +2,54 @@ import Foundation
 import MLX
 import MLXNN
 
+public struct TextSFTMultimodalInputs: Sendable, Hashable {
+    public let imageReferences: [String]
+    public let imageSHA256: [String]
+    public let softTokenCounts: [Int]
+    public let mmTokenTypeIds: [Int32]
+    public let mmTokenTypeShape: [Int]
+
+    public init(
+        imageReferences: [String],
+        imageSHA256: [String],
+        softTokenCounts: [Int],
+        mmTokenTypeIds: [Int32],
+        mmTokenTypeShape: [Int]
+    ) {
+        self.imageReferences = imageReferences
+        self.imageSHA256 = imageSHA256
+        self.softTokenCounts = softTokenCounts
+        self.mmTokenTypeIds = mmTokenTypeIds
+        self.mmTokenTypeShape = mmTokenTypeShape
+    }
+}
+
 public struct TextSFTTokenizedExample: Sendable, Hashable {
     public let inputTokenIds: [Int]
     public let labelTokenIds: [Int]
     public let lossMask: [Float]
+    public let multimodalInputs: TextSFTMultimodalInputs?
 
-    public init(inputTokenIds: [Int], labelTokenIds: [Int], lossMask: [Float]) {
+    public init(
+        inputTokenIds: [Int],
+        labelTokenIds: [Int],
+        lossMask: [Float],
+        multimodalInputs: TextSFTMultimodalInputs? = nil
+    ) {
         self.inputTokenIds = inputTokenIds
         self.labelTokenIds = labelTokenIds
         self.lossMask = lossMask
+        self.multimodalInputs = multimodalInputs
+    }
+}
+
+public struct TextLoRAMultimodalTrainingBatch: @unchecked Sendable {
+    public let modelInputs: [MLXArray]
+    public let targetLabels: MLXArray
+
+    public init(modelInputs: [MLXArray], targetLabels: MLXArray) {
+        self.modelInputs = modelInputs
+        self.targetLabels = targetLabels
     }
 }
 

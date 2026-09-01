@@ -3,6 +3,7 @@ import Foundation
 public struct TextLoRATrainingManifest: Codable, Sendable, Hashable {
     public static let schemaVersion = 1
     public static let gemma4Format = "mererun.gemma4.text-lora"
+    public static let gemma4VLMFormat = "mererun.gemma4.vlm-lora"
     public static let lagunaFormat = "mererun.laguna.text-lora"
     public static let inklingFormat = "mererun.inkling.text-lora"
     public static let lfm2Format = "mererun.lfm2.text-lora"
@@ -55,6 +56,8 @@ public struct TextLoRATrainingManifest: Codable, Sendable, Hashable {
     public let baseModel: String
     public let outputFile: String
     public let adapterName: String
+    public let modality: String?
+    public let trainingScope: String?
     public let training: Training
     public let lora: LoRA
     public let evalPromptCount: Int?
@@ -66,6 +69,8 @@ public struct TextLoRATrainingManifest: Codable, Sendable, Hashable {
         baseModel: String,
         outputFile: String,
         adapterName: String,
+        modality: String? = nil,
+        trainingScope: String? = nil,
         training: Training,
         lora: LoRA,
         evalPromptCount: Int?,
@@ -77,6 +82,8 @@ public struct TextLoRATrainingManifest: Codable, Sendable, Hashable {
         self.baseModel = baseModel
         self.outputFile = outputFile
         self.adapterName = adapterName
+        self.modality = modality
+        self.trainingScope = trainingScope
         self.training = training
         self.lora = lora
         self.evalPromptCount = evalPromptCount

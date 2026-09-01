@@ -20,6 +20,12 @@ The format is based on Keep a Changelog.
 
 ### Text
 
+- added image-conditioned LoRA training for `vision-chat-gemma4-12b` through
+  `text train-lora`. The first target freezes the Gemma 4 vision stack and base
+  language weights, then trains q/k/v/o language-attention adapters with
+  assistant-token loss. Dataset-relative local images are decoded and included
+  in the dataset fingerprint; the VLM path rejects remote, escaping, symbolic
+  link, audio, video, multi-image, and batch-size-greater-than-one inputs.
 - added native Swift/MLX text generation and OpenAI-compatible serving for the
   pinned DiffusionGemma 26B-A4B OptiQ snapshot. The dedicated runtime performs
   causal prompt caching and 48-step bidirectional block denoising, preserves

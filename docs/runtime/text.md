@@ -14,7 +14,7 @@ redaction.
 | `mere.run text code` | Run local code generation with GGUF models via llama.cpp. |
 | `mere.run text embed` | Generate text embeddings using native Qwen3-Embedding-0.6B. |
 | `mere.run text anonymize` | Detect and redact PII using OpenAI Privacy Filter. |
-| `mere.run text train-lora` | Train a native text LoRA adapter from chat-style SFT JSONL. |
+| `mere.run text train-lora` | Train a text or Gemma 4 image-conditioned LoRA adapter from chat-style SFT JSONL. |
 
 ## macOS Studio
 
@@ -584,7 +584,7 @@ swift run mere.run text anonymize \
   "My name is Dana Example and my email is dana@example.com"
 ```
 
-### Native text LoRA training
+### Native text and VLM LoRA training
 
 ```bash
 swift run mere.run text train-lora \
@@ -614,11 +614,12 @@ repeat a question after an assistant tool call and tool result, while an exact
 duplicate controller state remains invalid.
 
 Without `--dry-run`, the command resolves a supported Gemma 4 text model,
-`text-chat-laguna-xs-2-1`, `text-chat-inkling-small`, or
-`text-chat-lfm25-a1b-8bit` through the same managed model store as chat. The
-command applies the model's chat template, masks loss to assistant tokens,
-injects LoRA layers into the family-specific target surface, and writes a
-`.safetensors` adapter plus a family-specific manifest. Add
+`vision-chat-gemma4-12b`, `text-chat-laguna-xs-2-1`,
+`text-chat-inkling-small`, or `text-chat-lfm25-a1b-8bit` through the same
+managed model store as chat. The command applies the model's chat template,
+masks loss to assistant tokens, injects LoRA layers into the family-specific
+target surface, and writes a `.safetensors` adapter plus a family-specific
+manifest. Add
 `--visualize` to start the same loopback LoRA training dashboard used by image
 training; text runs write `run.json`, `*.events.jsonl`, `*.loss.csv`, and
 `*.loss.html` beside the adapter so loss and training events can be inspected
@@ -631,6 +632,58 @@ held-out SFT JSONL with the same model chat template and reports assistant-token
 negative log-likelihood immediately before and after optimization. The held-out
 examples never enter the training order. The machine-readable training report
 includes both losses plus the evaluated example and assistant-token counts.
+
+#### Train Gemma 4 with image-conditioned examples
+
+For Gemma 4 12B vision training, store each image under the dataset directory.
+Add exactly one dataset-relative `imageUrl` value to a user message in each
+training and evaluation example. The following `pairs.jsonl` record references
+the `images/frame-001.png` file:
+
+```json
+{"id":"frame-001","sources":["review:001"],"messages":[{"role":"system","content":"Describe visible evidence precisely."},{"role":"user","content":"What is visible?","imageUrl":"images/frame-001.png"},{"role":"assistant","content":"A red vehicle is parked beside a gray building."}]}
+```
+
+To validate the image paths and write the VLM manifest, run:
+
+```bash
+mere.run model pull vision-chat-gemma4-12b
+
+mere.run text train-lora \
+  --model vision-chat-gemma4-12b \
+  --data ./vlm-sft/pairs.jsonl \
+  --eval ./vlm-sft/heldout.jsonl \
+  --output ./gemma4-vision-adapter.safetensors \
+  --batch-size 1 \
+  --dry-run \
+  --json
+```
+
+The loader rejects remote URLs, absolute paths, path escapes, symbolic links,
+audio, video, and multiple images per example. It decodes every image before
+training. The dataset manifest records image reference count, unique image
+count, byte count, and a content fingerprint. Changing an image changes the
+dataset fingerprint, even when the JSONL file doesn't change.
+
+The first Gemma 4 VLM target freezes the vision encoder, multimodal projector,
+and base language weights. It trains q/k/v/o LoRA parameters in language
+attention with assistant-token loss. VLM batches contain one example. The
+runtime preprocesses the referenced image again for each optimizer step and
+verifies that its visual-token shape still matches the validated dataset.
+
+After training, use the adapter with the same base model:
+
+```bash
+mere.run text chat \
+  --model vision-chat-gemma4-12b \
+  --lora ./gemma4-vision-adapter.safetensors \
+  --image ./test-images/frame.png \
+  --prompt "Describe the evidence in this image."
+```
+
+An improving held-out loss proves that the optimizer path works. It doesn't
+prove task quality. Before promotion, compare the base and adapted model on a
+separate image-conditioned evaluation pack.
 
 Core hyperparameters (defaults are tuned for local Gemma4 SFT):
 

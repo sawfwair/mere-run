@@ -655,6 +655,7 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(spec.upstreamRepoId, Gemma4Resources.twelveBUpstreamModelId)
         XCTAssertEqual(spec.validationKind, .gemma4Unified)
         XCTAssertEqual(spec.defaultRuntimeServingEngine, .textChatGemma4)
+        XCTAssertEqual(spec.defaultCLICommands, ["text chat", "text train-lora", "api serve"])
         XCTAssertEqual(spec.hubFallback?.patterns.contains("processor_config.json"), true)
         XCTAssertEqual(spec.hubFallback?.patterns.contains("preprocessor_config.json"), true)
         XCTAssertEqual(spec.companionModelIDs, [Gemma4MTPResources.modelId])

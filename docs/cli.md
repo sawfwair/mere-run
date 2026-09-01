@@ -40,7 +40,7 @@ Public tree:
   - `mere.run text code` — Run local code generation with GGUF models via llama.cpp.
   - `mere.run text embed` — Generate text embeddings using native Qwen3-Embedding-0.6B.
   - `mere.run text anonymize` — Detect and redact PII using OpenAI Privacy Filter.
-  - `mere.run text train-lora` — Train a native text LoRA adapter from chat-style SFT JSONL.
+  - `mere.run text train-lora` — Train a native text or image-conditioned LoRA adapter from chat-style SFT JSONL.
 - [`mere.run speech`](/runtime/speech) — Synthesize, transcribe, diarize, and manage voice profiles.
   - `mere.run speech synthesize` — Generate speech from text using Qwen3-TTS.
   - `mere.run speech transcribe` — Transcribe or translate speech to text using native ASR backends.
@@ -898,8 +898,9 @@ Apple Silicon for this release.
 
 ### `mere.run text train-lora`
 
-Train a native LoRA from reviewed chat-style SFT JSONL. Supported families are
-Gemma 4 text models, `text-chat-laguna-xs-2-1`, `text-chat-inkling-small`, and
+Train a LoRA from reviewed chat-style supervised fine-tuning (SFT) JSONL.
+Supported families are Gemma 4 text models, `vision-chat-gemma4-12b`,
+`text-chat-laguna-xs-2-1`, `text-chat-inkling-small`, and
 `text-chat-lfm25-a1b-8bit`.
 
 ```bash
@@ -930,6 +931,13 @@ use shared-outer factors to keep the 256-expert adapter tractable. Inkling
 0 through 0.99 and is recorded in the training manifest. Use the same value for
 inference. See [Text Runtime](/runtime/text) for the full dataset,
 training-artifact, and behavioral validation flow.
+
+For Gemma 4 vision training, add one dataset-relative `imageUrl` value to the
+user message in every example. The command rejects remote URLs, absolute
+paths, symbolic links, audio, video, multiple images, and `--batch-size`
+values other than `1`. The manifest records image counts, bytes, and a content
+fingerprint. The optimizer freezes the vision stack and base language model,
+then trains q/k/v/o attention LoRA parameters with assistant-token loss.
 
 Before you train LFM2.5, install the model with
 `model pull text-chat-lfm25-a1b-8bit --accept-model-license`. The LFM Open

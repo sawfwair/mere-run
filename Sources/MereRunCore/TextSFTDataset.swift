@@ -4,6 +4,7 @@ import CryptoKit
 import Crypto
 #endif
 import Foundation
+import MediaIO
 
 public struct TextSFTExample: Sendable, Hashable, Codable {
     public let id: String?
@@ -30,6 +31,10 @@ public struct TextSFTDatasetSummary: Sendable, Hashable, Codable {
     public let fingerprint: String
     public let averageAssistantCharacters: Double
     public let maxAssistantCharacters: Int
+    public let imageReferenceCount: Int?
+    public let uniqueImageCount: Int?
+    public let imageByteCount: Int64?
+    public let imageFingerprint: String?
 
     public init(
         exampleCount: Int,
@@ -37,7 +42,11 @@ public struct TextSFTDatasetSummary: Sendable, Hashable, Codable {
         sourceCount: Int,
         fingerprint: String,
         averageAssistantCharacters: Double,
-        maxAssistantCharacters: Int
+        maxAssistantCharacters: Int,
+        imageReferenceCount: Int? = nil,
+        uniqueImageCount: Int? = nil,
+        imageByteCount: Int64? = nil,
+        imageFingerprint: String? = nil
     ) {
         self.exampleCount = exampleCount
         self.messageCount = messageCount
@@ -45,6 +54,31 @@ public struct TextSFTDatasetSummary: Sendable, Hashable, Codable {
         self.fingerprint = fingerprint
         self.averageAssistantCharacters = averageAssistantCharacters
         self.maxAssistantCharacters = maxAssistantCharacters
+        self.imageReferenceCount = imageReferenceCount
+        self.uniqueImageCount = uniqueImageCount
+        self.imageByteCount = imageByteCount
+        self.imageFingerprint = imageFingerprint
+    }
+}
+
+public enum TextSFTMediaPolicy: Sendable, Hashable {
+    case forbid
+    case requireSingleLocalImage
+}
+
+public struct TextSFTPreparedDataset: Sendable, Hashable {
+    public let examples: [TextSFTExample]
+    public let summary: TextSFTDatasetSummary
+    public let imageDigestsByPath: [String: String]
+
+    public init(
+        examples: [TextSFTExample],
+        summary: TextSFTDatasetSummary,
+        imageDigestsByPath: [String: String] = [:]
+    ) {
+        self.examples = examples
+        self.summary = summary
+        self.imageDigestsByPath = imageDigestsByPath
     }
 }
 
@@ -65,6 +99,26 @@ public enum TextSFTDataset {
         }
         try validate(examples)
         return examples
+    }
+
+    public static func loadForTraining(
+        from url: URL,
+        mediaPolicy: TextSFTMediaPolicy
+    ) throws -> TextSFTPreparedDataset {
+        let examples = try load(from: url)
+        switch mediaPolicy {
+        case .forbid:
+            try validateNoMedia(examples)
+            return TextSFTPreparedDataset(
+                examples: examples,
+                summary: summarize(examples)
+            )
+        case .requireSingleLocalImage:
+            return try prepareSingleLocalImages(
+                examples,
+                datasetURL: url.standardizedFileURL
+            )
+        }
     }
 
     public static func validate(_ examples: [TextSFTExample]) throws {
@@ -136,6 +190,159 @@ public enum TextSFTDataset {
         digest(canonicalData(examples.map(CanonicalExample.init)))
     }
 
+    private static func validateNoMedia(_ examples: [TextSFTExample]) throws {
+        for (exampleIndex, example) in examples.enumerated() {
+            for message in example.messages where message.imageUrl != nil
+                || message.audioUrl != nil
+                || message.videoUrl != nil {
+                throw TextSFTDatasetError.mediaNotSupported(exampleIndex + 1)
+            }
+        }
+    }
+
+    private static func prepareSingleLocalImages(
+        _ examples: [TextSFTExample],
+        datasetURL: URL
+    ) throws -> TextSFTPreparedDataset {
+        let datasetRoot = datasetURL.deletingLastPathComponent().standardizedFileURL
+        let fileManager = FileManager.default
+        var rewrittenExamples: [TextSFTExample] = []
+        rewrittenExamples.reserveCapacity(examples.count)
+        var imageReferences: [(relativePath: String, url: URL)] = []
+
+        for (exampleIndex, example) in examples.enumerated() {
+            guard !example.messages.contains(where: { $0.audioUrl != nil || $0.videoUrl != nil }) else {
+                throw TextSFTDatasetError.mediaNotSupported(exampleIndex + 1)
+            }
+
+            let referencedMessages = example.messages.indices.filter { index in
+                let value = example.messages[index].imageUrl?
+                    .trimmingCharacters(in: .whitespacesAndNewlines)
+                return value?.isEmpty == false
+            }
+            guard referencedMessages.count == 1,
+                  let messageIndex = referencedMessages.first,
+                  example.messages[messageIndex].role == .user,
+                  let rawReference = example.messages[messageIndex].imageUrl else {
+                throw TextSFTDatasetError.singleUserImageRequired(exampleIndex + 1)
+            }
+
+            let resolved = try resolveDatasetImage(
+                rawReference,
+                datasetRoot: datasetRoot,
+                exampleLine: exampleIndex + 1,
+                fileManager: fileManager
+            )
+            var messages = example.messages
+            messages[messageIndex].imageUrl = resolved.url.path
+            rewrittenExamples.append(TextSFTExample(
+                id: example.id,
+                sources: example.sources,
+                messages: messages,
+                tools: example.tools
+            ))
+            imageReferences.append((resolved.relativePath, resolved.url))
+        }
+
+        let uniqueImages = Dictionary(
+            imageReferences.map { ($0.relativePath, $0.url) },
+            uniquingKeysWith: { first, _ in first }
+        )
+        var totalBytes: Int64 = 0
+        var imageRows: [CanonicalImage] = []
+        var imageDigestsByPath: [String: String] = [:]
+        imageRows.reserveCapacity(uniqueImages.count)
+        for (relativePath, imageURL) in uniqueImages.sorted(by: { $0.key < $1.key }) {
+            let values = try imageURL.resourceValues(forKeys: [.fileSizeKey])
+            let byteCount = Int64(values.fileSize ?? 0)
+            let sha256 = try fileDigest(imageURL)
+            totalBytes += byteCount
+            imageDigestsByPath[imageURL.path] = sha256
+            imageRows.append(CanonicalImage(
+                relativePath: relativePath,
+                byteCount: byteCount,
+                sha256: sha256
+            ))
+        }
+
+        let imageFingerprint = digest(canonicalData(imageRows))
+        let baseSummary = summarize(examples)
+        let combinedFingerprint = digest(Data(
+            "\(baseSummary.fingerprint)\n\(imageFingerprint)".utf8
+        ))
+        let summary = TextSFTDatasetSummary(
+            exampleCount: baseSummary.exampleCount,
+            messageCount: baseSummary.messageCount,
+            sourceCount: baseSummary.sourceCount,
+            fingerprint: combinedFingerprint,
+            averageAssistantCharacters: baseSummary.averageAssistantCharacters,
+            maxAssistantCharacters: baseSummary.maxAssistantCharacters,
+            imageReferenceCount: imageReferences.count,
+            uniqueImageCount: uniqueImages.count,
+            imageByteCount: totalBytes,
+            imageFingerprint: imageFingerprint
+        )
+        return TextSFTPreparedDataset(
+            examples: rewrittenExamples,
+            summary: summary,
+            imageDigestsByPath: imageDigestsByPath
+        )
+    }
+
+    private static func resolveDatasetImage(
+        _ rawReference: String,
+        datasetRoot: URL,
+        exampleLine: Int,
+        fileManager: FileManager
+    ) throws -> (relativePath: String, url: URL) {
+        let trimmed = rawReference.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty,
+              URL(string: trimmed)?.scheme == nil,
+              !trimmed.hasPrefix("/") else {
+            throw TextSFTDatasetError.invalidImageReference(exampleLine, rawReference)
+        }
+
+        let imageURL = datasetRoot.appendingPathComponent(trimmed).standardizedFileURL
+        let rootPath = datasetRoot.path.hasSuffix("/") ? datasetRoot.path : datasetRoot.path + "/"
+        guard imageURL.path.hasPrefix(rootPath), imageURL.path != datasetRoot.path else {
+            throw TextSFTDatasetError.imageOutsideDataset(exampleLine, rawReference)
+        }
+
+        var componentURL = datasetRoot
+        for component in trimmed.split(separator: "/").map(String.init)
+            where component != "." && component != ".." {
+            componentURL.appendPathComponent(component)
+            let componentValues = try componentURL.resourceValues(forKeys: [.isSymbolicLinkKey])
+            guard componentValues.isSymbolicLink != true else {
+                throw TextSFTDatasetError.imageSymlinkNotAllowed(exampleLine, trimmed)
+            }
+        }
+
+        let attributes = try imageURL.resourceValues(forKeys: [
+            .isRegularFileKey,
+        ])
+        guard attributes.isRegularFile == true else {
+            throw TextSFTDatasetError.imageMissing(exampleLine, trimmed)
+        }
+        _ = try MediaImageIO.decode(imageURL)
+
+        let relativePath = String(imageURL.path.dropFirst(rootPath.count))
+        guard !relativePath.isEmpty, fileManager.fileExists(atPath: imageURL.path) else {
+            throw TextSFTDatasetError.imageMissing(exampleLine, trimmed)
+        }
+        return (relativePath, imageURL)
+    }
+
+    static func fileDigest(_ url: URL) throws -> String {
+        let handle = try FileHandle(forReadingFrom: url)
+        defer { try? handle.close() }
+        var hasher = SHA256()
+        while let data = try handle.read(upToCount: 1_048_576), !data.isEmpty {
+            hasher.update(data: data)
+        }
+        return hasher.finalize().map { String(format: "%02x", $0) }.joined()
+    }
+
     private static func controllerStateFingerprint(_ example: TextSFTExample) -> String {
         digest(canonicalData(CanonicalControllerState(
             messages: example.messages.dropLast().map { message in
@@ -180,6 +387,12 @@ public enum TextSFTDataset {
     }
 }
 
+private struct CanonicalImage: Encodable {
+    let relativePath: String
+    let byteCount: Int64
+    let sha256: String
+}
+
 private struct CanonicalControllerState: Encodable {
     let messages: [ChatMessage]
     let tools: [ToolDefinition]?
@@ -208,6 +421,12 @@ public enum TextSFTDatasetError: Error, LocalizedError, Sendable {
     case invalidRoleOrder(Int, String)
     case missingSources(Int)
     case emptyMessage(Int)
+    case mediaNotSupported(Int)
+    case singleUserImageRequired(Int)
+    case invalidImageReference(Int, String)
+    case imageOutsideDataset(Int, String)
+    case imageMissing(Int, String)
+    case imageSymlinkNotAllowed(Int, String)
 
     public var errorDescription: String? {
         switch self {
@@ -227,6 +446,18 @@ public enum TextSFTDatasetError: Error, LocalizedError, Sendable {
             return "Text SFT example at line \(line) must include at least one source id."
         case .emptyMessage(let line):
             return "Text SFT example at line \(line) contains an empty message."
+        case .mediaNotSupported(let line):
+            return "Text SFT example at line \(line) includes media, but the selected model is text-only."
+        case .singleUserImageRequired(let line):
+            return "VLM SFT example at line \(line) must include exactly one imageUrl on a user message."
+        case .invalidImageReference(let line, let reference):
+            return "VLM SFT example at line \(line) must use a dataset-relative image path, not \(reference)."
+        case .imageOutsideDataset(let line, let reference):
+            return "VLM SFT image at line \(line) escapes the dataset directory: \(reference)."
+        case .imageMissing(let line, let reference):
+            return "VLM SFT image at line \(line) is missing or not a regular file: \(reference)."
+        case .imageSymlinkNotAllowed(let line, let reference):
+            return "VLM SFT image at line \(line) must not be a symbolic link: \(reference)."
         }
     }
 }

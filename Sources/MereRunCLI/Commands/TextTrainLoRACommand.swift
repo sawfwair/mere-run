@@ -5,11 +5,12 @@ import MereRunCore
 struct TextTrainLoRA: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "train-lora",
-        abstract: "Train a native text LoRA adapter from chat-style SFT JSONL.",
+        abstract: "Train a native text or image-conditioned LoRA adapter from chat-style SFT JSONL.",
         discussion: """
         This is the native mere.run text fine-tuning entrypoint. It accepts OpenAI-style chat
         JSONL records with system/user/assistant messages and trains Gemma 4, Laguna XS 2.1,
-        Inkling-Small, or the LFM2.5 A1B 8-bit text model.
+        Inkling-Small, or the LFM2.5 A1B 8-bit text model. Gemma 4 12B vision
+        fine-tuning accepts one dataset-relative local image on each user message.
         It writes a model-family-specific MereRun adapter manifest beside the safetensors file.
         Use --dry-run to validate data, create manifests, and prepare a reproducible run.
         """
@@ -21,7 +22,7 @@ struct TextTrainLoRA: AsyncParsableCommand {
     @Option(name: [.customShort("o"), .long], help: "Output .safetensors adapter path.")
     var output: String
 
-    @Option(name: [.customShort("m"), .long], help: "Base text model id.")
+    @Option(name: [.customShort("m"), .long], help: "Base text or Gemma 4 vision model id.")
     var model: String = Gemma4Resources.twelveB4BitModelId
 
     @Option(name: [.customLong("model-path")], help: "Optional explicit base model directory.")
@@ -84,19 +85,31 @@ struct TextTrainLoRA: AsyncParsableCommand {
     func run() async throws {
         try validateOptions()
         let family = try resolvedTrainingFamily()
+        if family == .gemma4VLM, batchSize != 1 {
+            throw ValidationError("Gemma 4 VLM LoRA training currently requires --batch-size 1")
+        }
         if !dryRun {
             try MLXBundleSupport.ensureAvailable(quiet: json)
         }
 
         let dataURL = URL(fileURLWithPath: data).standardizedFileURL
         let outputURL = URL(fileURLWithPath: output).standardizedFileURL
-        let examples = try TextSFTDataset.load(from: dataURL)
-        let evaluationExamples = try eval.map {
-            try TextSFTDataset.load(
-                from: URL(fileURLWithPath: $0).standardizedFileURL
+        let mediaPolicy: TextSFTMediaPolicy = family == .gemma4VLM
+            ? .requireSingleLocalImage
+            : .forbid
+        let preparedDataset = try TextSFTDataset.loadForTraining(
+            from: dataURL,
+            mediaPolicy: mediaPolicy
+        )
+        let preparedEvaluationDataset = try eval.map {
+            try TextSFTDataset.loadForTraining(
+                from: URL(fileURLWithPath: $0).standardizedFileURL,
+                mediaPolicy: mediaPolicy
             )
-        } ?? []
-        let summary = TextSFTDataset.summarize(examples)
+        }
+        let examples = preparedDataset.examples
+        let evaluationExamples = preparedEvaluationDataset?.examples ?? []
+        let summary = preparedDataset.summary
         let evalCount = eval == nil ? nil : evaluationExamples.count
         try FileManager.default.createDirectory(
             at: outputURL.deletingLastPathComponent(),
@@ -119,10 +132,13 @@ struct TextTrainLoRA: AsyncParsableCommand {
                     learningRate: learningRate,
                     seed: seed
                 )
-                let metadata = [
+                var metadata = [
                     "adapter_name": adapterName,
                     "dataset_fingerprint": summary.fingerprint,
                 ]
+                if let imageFingerprint = summary.imageFingerprint {
+                    metadata["dataset_image_fingerprint"] = imageFingerprint
+                }
                 switch family {
                 case .gemma4:
                     report = try await Gemma4TextLoRATrainingPipeline.train(
@@ -141,6 +157,31 @@ struct TextTrainLoRA: AsyncParsableCommand {
                         ),
                         progressHandler: makeChatProgressHandler(eventLogger: visualization?.logger),
                         trainingProgressHandler: makeTrainingProgressHandler(eventLogger: visualization?.logger)
+                    )
+                case .gemma4VLM:
+                    report = try await Gemma4VLMLoRATrainingPipeline.train(
+                        Gemma4VLMLoRATrainingPipelineRequest(
+                            modelId: model,
+                            modelPath: modelPath,
+                            examples: examples,
+                            evaluationExamples: evaluationExamples,
+                            trainingImageDigestsByPath: preparedDataset.imageDigestsByPath,
+                            evaluationImageDigestsByPath: preparedEvaluationDataset?
+                                .imageDigestsByPath ?? [:],
+                            outputURL: outputURL,
+                            trainingConfig: config,
+                            maxSequenceLength: maxSequenceLength,
+                            rank: rank,
+                            alpha: alpha ?? Float(rank),
+                            targetSuffixes: resolvedTargetModules(),
+                            metadata: metadata
+                        ),
+                        progressHandler: makeChatProgressHandler(
+                            eventLogger: visualization?.logger
+                        ),
+                        trainingProgressHandler: makeTrainingProgressHandler(
+                            eventLogger: visualization?.logger
+                        )
                     )
                 case .lagunaXS:
                     report = try await LagunaTextLoRATrainingPipeline.train(
@@ -330,6 +371,8 @@ struct TextTrainLoRA: AsyncParsableCommand {
             baseModel: model,
             outputFile: outputURL.lastPathComponent,
             adapterName: adapterName,
+            modality: family == .gemma4VLM ? "image" : nil,
+            trainingScope: family == .gemma4VLM ? "language_attention" : nil,
             training: TextLoRATrainingManifest.Training(
                 trainingSteps: trainingSteps,
                 batchSize: batchSize,
@@ -368,9 +411,8 @@ struct TextTrainLoRA: AsyncParsableCommand {
     }
 
     private func resolvedTrainingFamily() throws -> NativeTextLoRATrainingFamily {
-        if Gemma4Resources.handles(modelSpec: model),
-           !Gemma4Resources.supportsVision(modelSpec: model) {
-            return .gemma4
+        if Gemma4Resources.handles(modelSpec: model) {
+            return Gemma4Resources.supportsVision(modelSpec: model) ? .gemma4VLM : .gemma4
         }
         if LagunaResources.managedModelID(for: model) == LagunaResources.xsModelID {
             return .lagunaXS
@@ -382,7 +424,7 @@ struct TextTrainLoRA: AsyncParsableCommand {
             return .lfm2A1B
         }
         throw ValidationError(
-            "--model must be a supported Gemma 4 text model, \(LagunaResources.xsModelID), "
+            "--model must be a supported Gemma 4 text or vision model, \(LagunaResources.xsModelID), "
                 + "\(InklingResources.modelID), or \(LFM2Resources.defaultModelId)."
         )
     }
@@ -549,8 +591,9 @@ struct TextTrainLoRA: AsyncParsableCommand {
     }
 }
 
-private enum NativeTextLoRATrainingFamily {
+private enum NativeTextLoRATrainingFamily: Equatable {
     case gemma4
+    case gemma4VLM
     case lagunaXS
     case inkling
     case lfm2A1B
@@ -559,6 +602,8 @@ private enum NativeTextLoRATrainingFamily {
         switch self {
         case .gemma4:
             TextLoRATrainingManifest.gemma4Format
+        case .gemma4VLM:
+            TextLoRATrainingManifest.gemma4VLMFormat
         case .lagunaXS:
             TextLoRATrainingManifest.lagunaFormat
         case .inkling:
