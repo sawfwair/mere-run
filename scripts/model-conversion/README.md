@@ -1,5 +1,35 @@
 # Native model conversion
 
+## NVIDIA Nemotron 3 Nano Omni BF16 native layout
+
+`mere.run model optimize` can stream NVIDIA's pinned 17-shard Nemotron Omni
+BF16 checkpoint into a standalone native layout. The output keeps every tensor
+payload exactly once: non-expert tensors retain their upstream keys across 17
+slim shards, while 5,888 routed-expert tensors become 46 stacked MLX expert
+tensors. No tensor value is quantized, rounded, or materialized during the
+conversion.
+
+```bash
+mere.run model optimize /path/to/upstream-checkpoint \
+  --output /path/to/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16-MLX-Native
+```
+
+Before publication, run the byte-for-byte validator. It compares every one of
+the 7,349 source tensor payloads with the native partition and writes a
+machine-readable verification receipt:
+
+```bash
+python3 scripts/model-conversion/validate_nemotron_omni_native.py \
+  --source /path/to/upstream-checkpoint \
+  --native /path/to/native-checkpoint \
+  --output /path/to/native-checkpoint/NEMOTRON_OMNI_NATIVE_VALIDATION.json
+```
+
+The publishable artifact must also include the NVIDIA Open Model Agreement,
+attribution notice, source revision, model card, and upstream safety documents.
+The conversion is release tooling; inference downloads only the standalone
+native checkpoint and never rebuilds an expert cache locally.
+
 ## Qwen3.8-Flash-Next MLX quantization
 
 `convert_qwen38_flash_next_mlx.py` downloads Qwen's exact immutable BF16

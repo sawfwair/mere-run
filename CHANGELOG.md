@@ -8,6 +8,10 @@ The format is based on Keep a Changelog.
 
 ### Runtime
 
+- changed the managed Nemotron 3 Nano Omni BF16 installation to one standalone
+  native MLX checkpoint. The published artifact stores every parameter once,
+  includes a byte-level conversion receipt, and removes the first-run 58.75 GB
+  expert-cache build while retaining compatibility with legacy local caches.
 - made machine-wide music admission use managed checkpoint size: models at or
   below 16 GiB, including ACE-Step and Magenta RT2, now use the 6 GiB small-work
   headroom floor instead of the fixed 16 GiB standard floor. Larger music

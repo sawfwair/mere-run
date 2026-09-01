@@ -5,6 +5,10 @@ public struct HFSafetensorsIndex: Codable, Sendable, Hashable {
     public struct Metadata: Codable, Sendable, Hashable {
         public let totalSize: Int64?
 
+        public init(totalSize: Int64?) {
+            self.totalSize = totalSize
+        }
+
         enum CodingKeys: String, CodingKey {
             case totalSize = "total_size"
         }

@@ -24,19 +24,20 @@ public enum NemotronOmniError: LocalizedError {
 }
 
 /// Pinned artifacts and runtime limits for NVIDIA Nemotron 3 Nano Omni.
-///
-/// The upstream repository contains executable Python reference code. mere.run
-/// downloads it only as provenance for the published checkpoint contract; the
-/// native runtime never imports or executes repository code.
 public enum NemotronOmniResources {
     public static let modelID = "omni-chat-nemotron3-nano-30b-a3b-bf16"
+    public static let nativeRepoID =
+        "Sawfwair/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16-MLX-Native"
+    public static let nativeRevision = "9256528c67910cc390c3286157b1527eac44ef04"
     public static let upstreamRepoID =
         "nvidia/Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16"
     public static let upstreamRevision = "24e67ea000b7c2837fc8f9488aa2008524fac8ba"
-    public static let estimatedDownloadBytes: Int64 = 66_059_015_328
+    public static let estimatedDownloadBytes: Int64 = 66_049_002_038
     public static let checkpointWeightBytes: Int64 = 66_031_270_520
     public static let checkpointShardCount = 17
     public static let packedExpertWeightBytes: Int64 = 58_749_616_128
+    public static let nativeNonExpertWeightBytes =
+        checkpointWeightBytes - packedExpertWeightBytes
 
     /// The composed checkpoint advertises 131,072 tokens even though the
     /// underlying Nemotron-H text backbone has 262,144 positional slots.
@@ -56,6 +57,10 @@ public enum NemotronOmniResources {
 
     public static let snapshotPatterns = [
         "README.md",
+        "LICENSE.pdf",
+        "NOTICE",
+        "NEMOTRON_OMNI_NATIVE_VALIDATION.json",
+        "SHA256SUMS",
         "bias.md",
         "explainability.md",
         "privacy.md",
@@ -67,29 +72,19 @@ public enum NemotronOmniResources {
         "special_tokens_map.json",
         "tokenizer.json",
         "tokenizer_config.json",
+        NemotronOmniNativeCheckpoint.manifestFilename,
+        NemotronOmniExpertPack.publishedFilename,
         "model.safetensors.index.json",
         "model-*.safetensors",
-        // Reference implementation files are retained for pinned provenance.
-        "__init__.py",
-        "audio_model.py",
-        "configuration.py",
-        "configuration_nemotron_h.py",
-        "configuration_radio.py",
-        "evs.py",
-        "image_processing.py",
-        "modeling.py",
-        "modeling_nemotron_h.py",
-        "processing.py",
-        "processing_utils.py",
-        "video_io.py",
-        "video_processing.py",
     ]
 
     public static func handles(modelSpec raw: String) -> Bool {
         let normalized = raw.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
         let localName = URL(fileURLWithPath: normalized).lastPathComponent
         return normalized == modelID
+            || normalized == nativeRepoID.lowercased()
             || normalized == upstreamRepoID.lowercased()
+            || localName == nativeRepoID.split(separator: "/").last?.lowercased()
             || localName == upstreamRepoID.split(separator: "/").last?.lowercased()
     }
 
@@ -126,6 +121,14 @@ public enum NemotronOmniResources {
         rootURL: URL,
         fileManager: FileManager = .default
     ) -> [String] {
+        if fileManager.fileExists(
+            atPath: NemotronOmniNativeCheckpoint.manifestURL(rootURL: rootURL).path
+        ) {
+            return NemotronOmniNativeCheckpoint.validationMessages(
+                rootURL: rootURL,
+                fileManager: fileManager
+            )
+        }
         let missing = missingTargetFiles(rootURL: rootURL, fileManager: fileManager)
         guard missing.isEmpty else {
             return missing.map { "Missing required file: \($0.path)" }

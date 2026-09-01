@@ -86,6 +86,36 @@ final class NemotronOmniMoE: NemotronHMixer {
         _ input: MLXArray,
         cache: NemotronHLayerCache?
     ) -> MLXArray {
+        let tokenCount = input.ndim == 3 ? input.dim(1) : 1
+        let ranges = Self.prefillRanges(tokenCount: tokenCount)
+        guard ranges.count > 1 else {
+            return mixedOutput(input)
+        }
+
+        // BF16 gather matmul selects routed matrices with `take` because
+        // MLX's native gatherMM path is float32-only. Evaluating an entire
+        // prompt at once can therefore page several gigabytes of selected
+        // expert rows into one Metal command buffer and trip the macOS GPU
+        // watchdog. Materialize small token runs independently; decode keeps
+        // the original single-token path.
+        var pieces: [MLXArray] = []
+        pieces.reserveCapacity(ranges.count)
+        for range in ranges {
+            let piece = mixedOutput(input[0..., range, 0...])
+            MLX.eval(piece)
+            pieces.append(piece)
+        }
+        return MLX.concatenated(pieces, axis: 1)
+    }
+
+    static func prefillRanges(tokenCount: Int, chunkSize: Int = 4) -> [Range<Int>] {
+        precondition(tokenCount > 0 && chunkSize > 0)
+        return stride(from: 0, to: tokenCount, by: chunkSize).map { start in
+            start..<min(start + chunkSize, tokenCount)
+        }
+    }
+
+    private func mixedOutput(_ input: MLXArray) -> MLXArray {
         let route = gate(input)
         let routed = (
             experts(input, indices: route.indices)

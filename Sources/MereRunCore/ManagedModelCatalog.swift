@@ -1787,8 +1787,8 @@ public enum ManagedModelCatalog {
             category: .omniChat,
             installShape: .directoryRoot,
             hubFallback: HubFallbackConfig(
-                repoId: NemotronOmniResources.upstreamRepoID,
-                revision: NemotronOmniResources.upstreamRevision,
+                repoId: NemotronOmniResources.nativeRepoID,
+                revision: NemotronOmniResources.nativeRevision,
                 patterns: NemotronOmniResources.snapshotPatterns
             ),
             upstreamRepoId: NemotronOmniResources.upstreamRepoID,
