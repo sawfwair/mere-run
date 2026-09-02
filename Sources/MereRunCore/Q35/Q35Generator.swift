@@ -325,6 +325,34 @@ public actor Q35Generator: ChatGenerator {
         return (targetWidth, targetHeight)
     }
 
+    static func visionTokenLimitPerImage(
+        contextLength: Int,
+        generationTokenCount: Int,
+        nonVisionPromptTokenCount: Int,
+        imageCount: Int
+    ) -> Int? {
+        guard contextLength > 0, imageCount > 0 else { return nil }
+        let reservedGenerationTokens = min(contextLength, max(0, generationTokenCount))
+        let availableVisionTokens = contextLength
+            - reservedGenerationTokens
+            - max(0, nonVisionPromptTokenCount)
+        guard availableVisionTokens >= imageCount else { return nil }
+        return availableVisionTokens / imageCount
+    }
+
+    static func visionPixelLimit(
+        tokenLimit: Int,
+        patchSize: Int,
+        spatialMergeSize: Int,
+        configuredMaximum: Int
+    ) -> Int {
+        let factor = max(1, patchSize * max(1, spatialMergeSize))
+        let factorArea = factor * factor
+        let requestedArea = max(1, tokenLimit).multipliedReportingOverflow(by: factorArea)
+        let contextMaximum = requestedArea.overflow ? Int.max : requestedArea.partialValue
+        return min(configuredMaximum, contextMaximum)
+    }
+
     public func chat(
         _ request: ChatRequest,
         progressHandler: (@Sendable (ChatProgress) -> Void)?
@@ -633,17 +661,50 @@ public actor Q35Generator: ChatGenerator {
         let prefillStart = Date()
         let imageURLs = collectImageURLs(from: messages)
         var visionReplacements: [Q35VisionReplacement] = []
+        var visionTokenLimitPerImage: Int?
 
         if !imageURLs.isEmpty {
             progressHandler?(ChatProgress(stage: .encoding, message: "Encoding images"))
             guard visionTower != nil else {
                 throw Q35Error.generationFailed("Model \(modelId) does not include a vision tower; use text-only prompts.")
             }
+            guard let imageTokenId = loadedConfig.imageTokenId ?? tokenizerAndTemplate.tokenizer.imageTokenId else {
+                throw Q35Error.generationFailed("Qwen-family tokenizer is missing the image placeholder token.")
+            }
+            let promptWithSingleImageTokens = try tokenizerAndTemplate.encodeForGeneration(
+                messages: messages,
+                tools: request.tools,
+                addGenerationPrompt: true,
+                includeThinking: includeThinking,
+                reasoningEffort: nativeReasoningEffort,
+                maxLength: loadedConfig.textConfig.maxPositionEmbeddings,
+                imageTokenCounts: Array(repeating: 1, count: imageURLs.count)
+            )
+            let placeholderCount = promptWithSingleImageTokens.filter { $0 == imageTokenId }.count
+            guard placeholderCount == imageURLs.count else {
+                throw Q35Error.generationFailed(
+                    "Qwen-family prompt did not preserve one placeholder for each encoded image."
+                )
+            }
+            let nonVisionPromptTokenCount = promptWithSingleImageTokens.count - placeholderCount
+            guard let perImageLimit = Self.visionTokenLimitPerImage(
+                contextLength: effectiveContext,
+                generationTokenCount: request.maxTokens,
+                nonVisionPromptTokenCount: nonVisionPromptTokenCount,
+                imageCount: imageURLs.count
+            ) else {
+                throw Q35Error.generationFailed(
+                    "Qwen-family prompt and requested generation leave no context for \(imageURLs.count) image(s); "
+                        + "increase maxContextTokens or lower maxTokens."
+                )
+            }
+            visionTokenLimitPerImage = perImageLimit
             try ensureVisionWeightsLoaded(progressHandler: progressHandler)
             if let visionTower {
                 visionReplacements = try buildVisionReplacements(
                     imageURLs: imageURLs,
-                    visionTower: visionTower
+                    visionTower: visionTower,
+                    maximumTokensPerImage: perImageLimit
                 )
             }
         }
@@ -654,10 +715,16 @@ public actor Q35Generator: ChatGenerator {
             addGenerationPrompt: true,
             includeThinking: includeThinking,
             reasoningEffort: nativeReasoningEffort,
-            maxLength: effectiveContext,
+            maxLength: imageURLs.isEmpty
+                ? effectiveContext
+                : loadedConfig.textConfig.maxPositionEmbeddings,
             imageTokenCounts: visionReplacements.map { max(1, $0.embeddings.dim(0)) }
         )
-        if promptTokens.count > effectiveContext {
+        if visionTokenLimitPerImage != nil, promptTokens.count > effectiveContext {
+            throw Q35Error.generationFailed(
+                "Qwen-family vision prompt exceeded maxContextTokens after context-aware image resizing."
+            )
+        } else if promptTokens.count > effectiveContext {
             promptTokens = Array(promptTokens.suffix(effectiveContext))
         }
         if let dumpPath = ProcessInfo.processInfo.environment["MERERUN_Q35_DEBUG_PROMPT_TOKENS"] {
@@ -2932,7 +2999,8 @@ public actor Q35Generator: ChatGenerator {
 
     private func buildVisionReplacements(
         imageURLs: [String],
-        visionTower: Q35VisionTower
+        visionTower: Q35VisionTower,
+        maximumTokensPerImage: Int
     ) throws -> [Q35VisionReplacement] {
         var replacements: [Q35VisionReplacement] = []
         replacements.reserveCapacity(imageURLs.count)
@@ -2941,7 +3009,8 @@ public actor Q35Generator: ChatGenerator {
             let prepared = try loadImageTensor(
                 from: imageURL,
                 patchSize: visionTower.patchSize,
-                spatialMergeSize: visionTower.spatialMergeSize
+                spatialMergeSize: visionTower.spatialMergeSize,
+                maximumVisionTokens: maximumTokensPerImage
             )
             let embeds = try visionTower.encodeImage(
                 pixelValues: prepared.tensor,
@@ -3119,16 +3188,23 @@ public actor Q35Generator: ChatGenerator {
     private func loadImageTensor(
         from imageRef: String,
         patchSize: Int,
-        spatialMergeSize: Int
+        spatialMergeSize: Int,
+        maximumVisionTokens: Int
     ) throws -> (tensor: MLXArray, gridTHW: (Int, Int, Int)) {
         let image = try loadImage(from: imageRef)
+        let contextMaximumPixels = Self.visionPixelLimit(
+            tokenLimit: maximumVisionTokens,
+            patchSize: patchSize,
+            spatialMergeSize: spatialMergeSize,
+            configuredMaximum: visionMaxPixels
+        )
         let target = try Self.qwen3VLTargetSize(
             originalWidth: image.width,
             originalHeight: image.height,
             patchSize: patchSize,
             spatialMergeSize: spatialMergeSize,
-            minPixels: visionMinPixels,
-            maxPixels: visionMaxPixels
+            minPixels: min(visionMinPixels, contextMaximumPixels),
+            maxPixels: contextMaximumPixels
         )
         let resized = try MediaImageIO.resized(
             image,
