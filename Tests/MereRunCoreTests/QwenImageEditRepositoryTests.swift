@@ -5,6 +5,18 @@ import XCTest
 @testable import MereRunCore
 
 final class QwenImageEditRepositoryTests: MereRunCoreTestCase {
+    func testQwenImageEditDeduplicatesInputAndReferenceURLs() {
+        let input = URL(fileURLWithPath: "/tmp/qwen-edit/source.png")
+        let second = URL(fileURLWithPath: "/tmp/qwen-edit/second.png")
+
+        let resolved = QwenImageEditGenerator.deduplicatedReferenceURLs(
+            inputImage: input,
+            referenceImages: [input, second, input]
+        )
+
+        XCTAssertEqual(resolved, [input, second])
+    }
+
     func testInstalledQwenImageEditVAERoundTripWhenRequested() throws {
         let env = ProcessInfo.processInfo.environment
         guard let root = env["MERERUN_TEST_QWEN_EDIT_ROOT"], !root.isEmpty else {

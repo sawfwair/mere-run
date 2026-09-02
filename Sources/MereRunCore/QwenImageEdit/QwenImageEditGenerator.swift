@@ -86,7 +86,10 @@ public actor QwenImageEditGenerator: ImageGenerator {
         _ request: GenerationRequest,
         progressHandler: (@Sendable (GenerationProgress) -> Void)?
     ) async throws -> GenerationResult {
-        let referenceURLs = [request.inputImage].compactMap { $0 } + request.referenceImages
+        let referenceURLs = Self.deduplicatedReferenceURLs(
+            inputImage: request.inputImage,
+            referenceImages: request.referenceImages
+        )
         guard !referenceURLs.isEmpty else {
             throw GeneratorError.inputImageRequired
         }
@@ -291,6 +294,14 @@ public actor QwenImageEditGenerator: ImageGenerator {
 
         Memory.clearCache()
         return GenerationResult(outputURL: request.outputURL, seed: seed)
+    }
+
+    static func deduplicatedReferenceURLs(inputImage: URL?, referenceImages: [URL]) -> [URL] {
+        var seen = Set<String>()
+        return ([inputImage].compactMap { $0 } + referenceImages).filter { url in
+            let identity = url.standardizedFileURL.resolvingSymlinksInPath().path
+            return seen.insert(identity).inserted
+        }
     }
 
     func ensureOutputDirectory(_ outputURL: URL) throws {
