@@ -6,6 +6,14 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+## 0.50.0 - 2026-09-01
+
+This release adds native DiffusionGemma text generation and image-conditioned
+Gemma 4 VLM LoRA training. It consolidates Ornith Q4 vision and MTP into one
+managed bundle and moves Nemotron Omni to a standalone native checkpoint. It
+also restores native Qwen Image Edit 2511 inference and fixes Studio video
+playback and model-aware music admission.
+
 ### Runtime
 
 - changed the managed Nemotron 3 Nano Omni BF16 installation to one standalone
@@ -44,6 +52,22 @@ The format is based on Keep a Changelog.
   revision-aware progressive unmasking, denoising-step and work-throughput
   diagnostics, sorted expert routing, selected-token confidence without a full
   probability tensor, and resident graph warmup in API serving.
+
+### Image
+
+- fixed native `image-qwen-edit-2511-lightning` inference by admitting its
+  manifest during image-generation preflight, aligning the Qwen 2.5 VL encoder
+  with the checkpoint, removing duplicate vision-tower registration, and
+  applying the required 1,000 timestep scale before sinusoidal embedding.
+
+### Included pull requests
+
+- exact release range: [#393](https://github.com/sawfwair/mere-run/pull/393),
+  [#396](https://github.com/sawfwair/mere-run/pull/396),
+  [#397](https://github.com/sawfwair/mere-run/pull/397),
+  [#399](https://github.com/sawfwair/mere-run/pull/399),
+  [#400](https://github.com/sawfwair/mere-run/pull/400), and
+  [#401](https://github.com/sawfwair/mere-run/pull/401).
 
 ## 0.49.0 - 2026-08-31
 
