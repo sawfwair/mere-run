@@ -526,13 +526,20 @@ OpenMDW-1.1 license and upstream model cards, never download implicitly, and do
 not require an additional mere.run acceptance gate solely because the public
 repositories use a custom license identifier.
 
-`omni-chat-nemotron3-nano-30b-a3b-bf16` stages NVIDIA's official
-`Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16` snapshot at immutable revision
-`24e67ea000b7c2837fc8f9488aa2008524fac8ba`. The 66.06 GB checkpoint accepts
-text, images, audio, and video and produces reasoning text. Its document
-examples render PDF pages to images before prompting; PDF is not a separate raw
-input modality. The catalog pins all 17 BF16 weight shards, typed
-Nemotron-H/C-RADIO v4-H/Parakeet configuration contracts, tokenizer and media
+`omni-chat-nemotron3-nano-30b-a3b-bf16` stages one standalone native MLX
+checkpoint derived losslessly from NVIDIA's
+`Nemotron-3-Nano-Omni-30B-A3B-Reasoning-BF16` source revision
+`24e67ea000b7c2837fc8f9488aa2008524fac8ba`. The native artifact is pinned at
+revision `9256528c67910cc390c3286157b1527eac44ef04`. Its approximately 66 GB
+download stores every BF16 parameter once: 17 slim shards retain the non-expert tensor
+keys and payload bytes, while one published shard stacks the routed experts in
+the physical layout used by MLX. No first-run conversion or second 58.75 GB
+expert cache is required.
+
+The checkpoint accepts text, images, audio, and video and produces reasoning
+text. Its document examples render PDF pages to images before prompting; PDF is
+not a separate raw input modality. The catalog pins the native artifact,
+byte-level conversion receipt, configuration contracts, tokenizer and media
 processor metadata, NVIDIA Open Model Agreement terms, 131,072-token composed
 context, and 20,480-token maximum output.
 
@@ -551,11 +558,10 @@ mere.run text chat \
   --prompt "Summarize the clip."
 ```
 
-The runtime consumes the 17 upstream BF16 shards in place and creates a
-source-bound stacked expert cache. A lightweight managed-model wrapper may
-point at an immutable snapshot on external storage, avoiding a second copy of
-the checkpoint while keeping it visible to `model list`, `text chat`, and
-`api serve`.
+The runtime consumes the published native shards in place. A lightweight
+managed-model wrapper may point at an immutable snapshot on external storage,
+keeping it visible to `model list`, `text chat`, and `api serve` without
+duplicating model weights.
 
 `text-chat-gemma4-12b` and `vision-chat-gemma4-12b` share Google's dense Gemma
 4 12B-it checkpoint; the text id uses the native chat path, while the vision id

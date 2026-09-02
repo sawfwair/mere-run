@@ -32,53 +32,86 @@ public enum NemotronOmniExpertPackError: LocalizedError {
 /// model tensor is converted, rounded, or materialized in unified memory.
 public enum NemotronOmniExpertPack {
     public static let format = "mere-run-nemotron-omni-experts-v1"
+    public static let publishedFilename = "experts-bf16.safetensors"
     public static let relativePath = ".mere-run/nemotron-omni-experts-v1/experts-bf16.safetensors"
+
+    public static func publishedURL(
+        rootURL: URL,
+        fileManager: FileManager = .default
+    ) throws -> URL {
+        try artifactRootURL(rootURL: rootURL, fileManager: fileManager)
+            .appendingPathComponent(publishedFilename)
+    }
 
     public static func outputURL(
         rootURL: URL,
         fileManager: FileManager = .default
     ) throws -> URL {
+        try artifactRootURL(rootURL: rootURL, fileManager: fileManager)
+            .appendingPathComponent(relativePath)
+    }
+
+    private static func artifactRootURL(
+        rootURL: URL,
+        fileManager: FileManager
+    ) throws -> URL {
         let standardized = rootURL.standardizedFileURL
         let configURL = standardized.appendingPathComponent("config.json")
-        let base: URL
         if let destination = try? fileManager.destinationOfSymbolicLink(atPath: configURL.path) {
             let destinationURL = URL(fileURLWithPath: destination)
             let absolute = destinationURL.path.hasPrefix("/")
                 ? destinationURL
                 : configURL.deletingLastPathComponent().appendingPathComponent(destination)
-            base = absolute.deletingLastPathComponent()
-        } else {
-            base = standardized
+            return absolute.deletingLastPathComponent()
         }
-        return base.appendingPathComponent(relativePath)
+        return standardized
     }
 
     public static func optimizedURLIfValid(
         rootURL: URL,
         fileManager: FileManager = .default
     ) -> URL? {
-        guard let url = try? outputURL(rootURL: rootURL, fileManager: fileManager),
-              fileManager.fileExists(atPath: url.path),
+        let candidates = [
+            try? publishedURL(rootURL: rootURL, fileManager: fileManager),
+            try? outputURL(rootURL: rootURL, fileManager: fileManager),
+        ].compactMap { $0 }
+        return candidates.first {
+            isValid(url: $0, fileManager: fileManager)
+        }
+    }
+
+    public static func isValid(
+        url: URL,
+        fileManager: FileManager = .default
+    ) -> Bool {
+        guard fileManager.fileExists(atPath: url.path),
               let metadata = try? SafetensorsStreamingLoader.fileMetadata(url: url),
               metadata["format"] == format,
               metadata["source_revision"] == NemotronOmniResources.upstreamRevision,
               metadata["payload_bytes"] == String(NemotronOmniResources.packedExpertWeightBytes),
               let tensors = try? SafetensorsStreamingLoader.metadata(url: url),
               tensors.count == 46 else {
-            return nil
+            return false
         }
-        return url
+        return true
     }
 
     @discardableResult
     public static func optimize(
         rootURL: URL,
+        destinationURL: URL? = nil,
         replacing: Bool = false,
         progressHandler: ((Int, Int) -> Void)? = nil,
         fileManager: FileManager = .default
     ) throws -> URL {
         let rootURL = rootURL.standardizedFileURL
-        let outputURL = try outputURL(rootURL: rootURL, fileManager: fileManager)
+        let resolvedOutputURL: URL
+        if let destinationURL {
+            resolvedOutputURL = destinationURL.standardizedFileURL
+        } else {
+            resolvedOutputURL = try outputURL(rootURL: rootURL, fileManager: fileManager)
+        }
+        let outputURL = resolvedOutputURL
         if fileManager.fileExists(atPath: outputURL.path), !replacing {
             throw NemotronOmniExpertPackError.outputExists(outputURL)
         }
@@ -269,7 +302,7 @@ public enum NemotronOmniExpertPack {
             try fileManager.removeItem(at: outputURL)
         }
         try fileManager.moveItem(at: temporaryURL, to: outputURL)
-        guard optimizedURLIfValid(rootURL: rootURL, fileManager: fileManager) == outputURL else {
+        guard isValid(url: outputURL, fileManager: fileManager) else {
             throw NemotronOmniExpertPackError.invalidOutput(outputURL)
         }
         return outputURL

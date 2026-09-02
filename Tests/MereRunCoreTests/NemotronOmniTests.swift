@@ -12,6 +12,44 @@ final class NemotronOmniTests: MereRunCoreTestCase {
         XCTAssertGreaterThan(capacity, 0)
     }
 
+    func testPublishedExpertPackTakesPrecedenceOverLegacyCache() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(
+            "nemotron-published-pack-\(UUID().uuidString)",
+            isDirectory: true
+        )
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let publishedURL = root.appendingPathComponent(
+            NemotronOmniExpertPack.publishedFilename
+        )
+        let tensors = Dictionary(uniqueKeysWithValues: (0..<46).map {
+            ("tensor.\($0)", MLXArray([UInt8($0)]))
+        })
+        try MLX.save(
+            arrays: tensors,
+            metadata: [
+                "format": NemotronOmniExpertPack.format,
+                "source_revision": NemotronOmniResources.upstreamRevision,
+                "payload_bytes": String(NemotronOmniResources.packedExpertWeightBytes),
+            ],
+            url: publishedURL
+        )
+
+        XCTAssertEqual(
+            NemotronOmniExpertPack.optimizedURLIfValid(rootURL: root),
+            publishedURL
+        )
+    }
+
+    func testNativeRepositoryAndLocalRootAreRecognized() {
+        XCTAssertTrue(NemotronOmniResources.handles(
+            modelSpec: NemotronOmniResources.nativeRepoID
+        ))
+        XCTAssertTrue(NemotronOmniResources.handles(
+            modelSpec: "/models/\(NemotronOmniResources.nativeRepoID.split(separator: "/").last!)"
+        ))
+    }
+
     func testPinnedOmniConfigDecodesAllThreeMediaTowers() throws {
         let config = try JSONDecoder().decode(
             NemotronOmniConfig.self,
@@ -123,6 +161,14 @@ final class NemotronOmniTests: MereRunCoreTestCase {
         )
     }
 
+    func testMoEPrefillPlanBoundsWatchdogSafeTokenBatches() {
+        XCTAssertEqual(
+            NemotronOmniMoE.prefillRanges(tokenCount: 10),
+            [0..<4, 4..<8, 8..<10]
+        )
+        XCTAssertEqual(NemotronOmniMoE.prefillRanges(tokenCount: 1), [0..<1])
+    }
+
     func testBF16ExpertWeightKeyDecodesExactCheckpointNamespace() throws {
         let key = try XCTUnwrap(NemotronOmniExpertWeightKey(
             checkpointKey:
@@ -173,9 +219,14 @@ final class NemotronOmniTests: MereRunCoreTestCase {
 
         XCTAssertEqual(spec.category, .omniChat)
         XCTAssertEqual(spec.validationKind, .nemotronOmni)
-        XCTAssertEqual(spec.hubFallback?.repoId, NemotronOmniResources.upstreamRepoID)
-        XCTAssertEqual(spec.hubFallback?.revision, NemotronOmniResources.upstreamRevision)
-        XCTAssertEqual(spec.estimatedDownloadBytes, 66_059_015_328)
+        XCTAssertEqual(spec.hubFallback?.repoId, NemotronOmniResources.nativeRepoID)
+        XCTAssertEqual(spec.hubFallback?.revision, NemotronOmniResources.nativeRevision)
+        XCTAssertEqual(spec.upstreamRepoId, NemotronOmniResources.upstreamRepoID)
+        XCTAssertEqual(spec.upstreamRevision, NemotronOmniResources.upstreamRevision)
+        XCTAssertEqual(
+            spec.estimatedDownloadBytes,
+            NemotronOmniResources.estimatedDownloadBytes
+        )
         XCTAssertFalse(spec.runtimeAutoDownloadAllowed)
         XCTAssertEqual(spec.defaultRuntimeServingEngine, .textChatNemotronOmni)
         XCTAssertEqual(profile.inputModalities, [.text, .image, .audio, .video])
@@ -299,6 +350,74 @@ final class NemotronOmniTests: MereRunCoreTestCase {
                     + "66031270520-byte checkpoint contract.",
             ]
         )
+    }
+
+    func testStructuralValidationAcceptsStandaloneNativeCheckpoint() throws {
+        let root = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: root) }
+        for filename in NemotronOmniNativeCheckpoint.supportFilenames {
+            try Data().write(to: root.appendingPathComponent(filename))
+        }
+        let manifest = NemotronOmniNativeCheckpointManifest(
+            schemaVersion: 1,
+            format: NemotronOmniNativeCheckpoint.format,
+            sourceRepository: NemotronOmniResources.upstreamRepoID,
+            sourceRevision: NemotronOmniResources.upstreamRevision,
+            totalWeightBytes: NemotronOmniResources.checkpointWeightBytes,
+            expertWeightBytes: NemotronOmniResources.packedExpertWeightBytes,
+            nonExpertWeightBytes: NemotronOmniResources.nativeNonExpertWeightBytes,
+            nonExpertShardCount: NemotronOmniResources.checkpointShardCount
+        )
+        try JSONEncoder().encode(manifest).write(
+            to: NemotronOmniNativeCheckpoint.manifestURL(rootURL: root)
+        )
+        let expertArrays = Dictionary(uniqueKeysWithValues: (0..<46).map {
+            ("tensor.\($0)", MLXArray([UInt8($0)]))
+        })
+        try MLX.save(
+            arrays: expertArrays,
+            metadata: [
+                "format": NemotronOmniExpertPack.format,
+                "source_revision": NemotronOmniResources.upstreamRevision,
+                "payload_bytes": String(NemotronOmniResources.packedExpertWeightBytes),
+            ],
+            url: root.appendingPathComponent(NemotronOmniExpertPack.publishedFilename)
+        )
+        var weightMap: [String: String] = [:]
+        for index in 1...NemotronOmniResources.checkpointShardCount {
+            let filename = String(
+                format: "model-%05d-of-%05d.safetensors",
+                index,
+                NemotronOmniResources.checkpointShardCount
+            )
+            weightMap["tensor.\(index)"] = filename
+            try Data([0]).write(to: root.appendingPathComponent(filename))
+        }
+        let nativeIndex = HFSafetensorsIndex(
+            metadata: .init(totalSize: NemotronOmniResources.nativeNonExpertWeightBytes),
+            weightMap: weightMap
+        )
+        try JSONEncoder().encode(nativeIndex).write(
+            to: root.appendingPathComponent("model.safetensors.index.json")
+        )
+
+        XCTAssertEqual(NemotronOmniResources.validationMessages(rootURL: root), [])
+    }
+
+    func testNativeExporterRejectsAnAlreadyNativeSource() throws {
+        let root = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: root) }
+        try Data().write(to: NemotronOmniNativeCheckpoint.manifestURL(rootURL: root))
+
+        XCTAssertThrowsError(try NemotronOmniNativeCheckpoint.export(
+            sourceRootURL: root,
+            destinationRootURL: root.appendingPathComponent("output")
+        )) { error in
+            guard case NemotronOmniNativeCheckpointError.invalidSource(let messages) = error else {
+                return XCTFail("Unexpected error: \(error)")
+            }
+            XCTAssertEqual(messages, ["Source is already a standalone native checkpoint."])
+        }
     }
 
     func testOpenAIContentRoundTripsImageAudioAndVideoURLs() throws {

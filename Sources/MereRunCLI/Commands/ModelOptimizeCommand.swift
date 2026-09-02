@@ -20,6 +20,12 @@ struct ModelOptimize: ParsableCommand {
     )
     var textEncoderOnly: Bool = false
 
+    @Option(
+        name: [.customLong("output")],
+        help: "For Nemotron Omni, write a standalone native checkpoint to this directory."
+    )
+    var output: String?
+
     @Flag(name: [.long], help: "Emit the result as JSON.")
     var json: Bool = false
 
@@ -27,7 +33,44 @@ struct ModelOptimize: ParsableCommand {
         let rootURL = try resolveRootURL()
         let artifacts: [URL]
         let optimization: String
-        if isLTX25ModelRoot(rootURL) {
+        if NemotronOmniNativeCheckpoint.isValid(rootURL: rootURL) {
+            throw ValidationError(
+                "Nemotron Omni model root is already a standalone native checkpoint."
+            )
+        } else if NemotronOmniResources.validationMessages(rootURL: rootURL).isEmpty {
+            guard !textEncoderOnly else {
+                throw ValidationError("--text-encoder-only requires an LTX 2.5 model.")
+            }
+            guard let output, !output.isEmpty else {
+                throw ValidationError(
+                    "Nemotron Omni standalone optimization requires --output <directory>."
+                )
+            }
+            let result = try NemotronOmniNativeCheckpoint.export(
+                sourceRootURL: rootURL,
+                destinationRootURL: URL(fileURLWithPath: output),
+                replacing: force,
+                progressHandler: { phase, completed, total in
+                    if completed == total || completed.isMultiple(of: 32) {
+                        CLIStderr.write(
+                            "Nemotron Omni native \(phase): \(completed)/\(total)\n"
+                        )
+                    }
+                }
+            )
+            artifacts = [result.expertPackURL]
+                + result.nonExpertShardURLs
+                + [
+                    result.indexURL,
+                    NemotronOmniNativeCheckpoint.manifestURL(
+                        rootURL: result.outputRootURL
+                    ),
+                ]
+            optimization = NemotronOmniNativeCheckpoint.format
+        } else if isLTX25ModelRoot(rootURL) {
+            guard output == nil else {
+                throw ValidationError("--output is supported only for Nemotron Omni.")
+            }
             let resources = LTX25Resources(rootURL: rootURL)
             if textEncoderOnly {
                 let hasTextSource = FileManager.default.fileExists(
@@ -113,6 +156,9 @@ struct ModelOptimize: ParsableCommand {
             artifacts = ltxArtifacts
             optimization = "ltx25-native-model-pack+text-q4-v1"
         } else {
+            guard output == nil else {
+                throw ValidationError("--output is supported only for Nemotron Omni.")
+            }
             if textEncoderOnly {
                 throw ValidationError("--text-encoder-only requires an LTX 2.5 model.")
             }
@@ -195,8 +241,11 @@ struct ModelOptimize: ParsableCommand {
                 || modelID == .miniMaxH3FL2VAQ8MLX
                 || modelID == .miniMaxH3Ref2VAMLX
                 || modelID == .ltxVideo25DistilledBF16
-                || modelID == .ltxVideo25FullBF16 else {
-            throw ValidationError("Model optimization supports MiniMax-H3 MLX and LTX 2.5 models.")
+                || modelID == .ltxVideo25FullBF16
+                || modelID == .nemotron3NanoOmni30BA3BBF16 else {
+            throw ValidationError(
+                "Model optimization supports MiniMax-H3 MLX, LTX 2.5, and Nemotron Omni models."
+            )
         }
         do {
             return try ModelResolver().resolve(modelID).rootURL

@@ -12,11 +12,13 @@ final class ModelOptimizeCommandTests: XCTestCase {
             "video-minimax-h3-fl2va-mlx",
             "--force",
             "--text-encoder-only",
+            "--output", "/tmp/native-model",
             "--json",
         ])
         XCTAssertEqual(command.target, "video-minimax-h3-fl2va-mlx")
         XCTAssertTrue(command.force)
         XCTAssertTrue(command.textEncoderOnly)
+        XCTAssertEqual(command.output, "/tmp/native-model")
         XCTAssertTrue(command.json)
     }
 }
