@@ -234,6 +234,43 @@ final class Q35ConfigDecodingTests: MereRunCoreTestCase {
         XCTAssertEqual(target.height, 192)
     }
 
+    func testQ38ImageResizeFitsVisualTokensInsideRequestedContext() throws {
+        let tokenLimit = try XCTUnwrap(Q35Generator.visionTokenLimitPerImage(
+            contextLength: 8_192,
+            generationTokenCount: 128,
+            nonVisionPromptTokenCount: 27,
+            imageCount: 1
+        ))
+        let pixelLimit = Q35Generator.visionPixelLimit(
+            tokenLimit: tokenLimit,
+            patchSize: 16,
+            spatialMergeSize: 2,
+            configuredMaximum: Q35Resources.q38TwentySevenBVisionMaxPixels
+        )
+        let target = try Q35Generator.qwen3VLTargetSize(
+            originalWidth: 3_400,
+            originalHeight: 3_272,
+            patchSize: 16,
+            spatialMergeSize: 2,
+            minPixels: Q35Resources.q38TwentySevenBVisionMinPixels,
+            maxPixels: pixelLimit
+        )
+        let visualTokenCount = (target.width / 32) * (target.height / 32)
+
+        XCTAssertEqual(tokenLimit, 8_037)
+        XCTAssertLessThanOrEqual(visualTokenCount, tokenLimit)
+        XCTAssertLessThan(target.width * target.height, 3_400 * 3_272)
+    }
+
+    func testQ38VisionContextRejectsBudgetSmallerThanImageCount() {
+        XCTAssertNil(Q35Generator.visionTokenLimitPerImage(
+            contextLength: 130,
+            generationTokenCount: 128,
+            nonVisionPromptTokenCount: 1,
+            imageCount: 2
+        ))
+    }
+
     func testQ35ImageResizeUsesPythonTieToEvenRounding() throws {
         let target = try Q35Generator.qwen3VLTargetSize(
             originalWidth: 80,
