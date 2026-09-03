@@ -536,6 +536,10 @@ if !isLinuxPackage {
         .product(name: "Sparkle", package: "Sparkle")
       ],
       path: "apps/macos/MereRunStudio",
+      resources: [
+        // Caveat (OFL 1.1) for the sidebar wordmark; registered at launch by MereRunTheme.Brand.
+        .copy("Resources/Fonts")
+      ],
       linkerSettings: [
         .linkedFramework("AVKit"),
         .unsafeFlags([
