@@ -35,8 +35,12 @@ and the Guide). `StudioDestination` (domain + task) persists per window under
 `studio.destination`; `studio.mode` still records the last prompt mode so its
 draft and readiness survive a detour through a System task.
 
-The Library column is filtered to the current domain by default with an All
-segment; picking a row from another domain switches the destination to it.
+The Library column appears in the domains that have a prompt mode (Image, Video,
+Music, Sound, Voice, Chat, Vision, Audio); the form- and list-shaped domains use
+the full width. It is filtered to the current domain by default with an All
+segment — a row is filed under its command's domain (`CommandTemplateID.studioDomain`),
+so 3D meshes land under 3D and benchmark reports under Models — and picking a
+row from another domain switches the destination to it.
 Menus follow macOS convention: File ▸ New Chat (⌘N) and Import Receipt…, View ▸
 Show Library (⌥⌘L), Command Console (⌥⌘C), and the system sidebar toggle, Go ▸
 every domain (⌘1–⌘9, then ⌥⌘1…) plus the current domain's tasks, Run ▸ Run
@@ -50,7 +54,10 @@ console in three resizable panes. It opens from the toolbar, the View menu, the
 readiness overlay's Details button, a Library row's "Edit command…", and the
 adapter fallbacks for modes whose adapters are typed only in the raw command.
 Opening it from the toolbar carries the composer's draft into the matching
-template; the console's own Run stays independent of the composer's.
+template; raising an already-open console only brings it forward, so its edits
+stay. The console's own Run stays independent of the composer's, and while the
+console is key the Run menu drives it while Go and Help keep acting on the
+Studio window.
 
 Do not duplicate runtime logic here. The app should translate UI state into CLI
 arguments and let the public executable remain the behavioral source of truth.
