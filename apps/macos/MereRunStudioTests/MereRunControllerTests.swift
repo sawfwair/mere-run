@@ -55,7 +55,7 @@ final class MereRunControllerTests: XCTestCase {
         )
     }
 
-    func testReadinessCheckTerminatesStaleRequestAndIgnoresItsResult() async {
+    func testReadinessProbesRunInTheProbeLaneAndReuseTheInFlightProbeAcrossAModelChange() async {
         let runner = RecordingProcessRunner()
         let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
         controller.cliPath = "/usr/bin/true"
@@ -66,26 +66,96 @@ final class MereRunControllerTests: XCTestCase {
         draft.model = "video-ltx-av"
         controller.checkReadiness(for: .createImage, draft: draft)
 
-        XCTAssertEqual(runner.starts.count, 2)
-        XCTAssertEqual(runner.processes.first?.terminateCallCount, 1)
-
-        runner.starts[0].stdout(supportedCapabilitiesOutput(for: "image-zimage-nano", minimum: 12))
-        runner.starts[0].termination(0)
-        await Task.yield()
-        await Task.yield()
+        // `model capabilities --all --json` does not depend on the model, so the second request
+        // rides the probe already in flight instead of killing it and launching an identical one.
+        XCTAssertEqual(runner.starts.count, 1)
+        XCTAssertEqual(runner.processes[0].terminateCallCount, 0)
+        XCTAssertEqual(controller.jobs.running(in: .probe).count, 1)
+        XCTAssertEqual(controller.jobs.running(in: .probe).first?.request.dedupeKey, StudioMode.createImage.rawValue)
+        XCTAssertTrue(controller.jobs.running(in: .utility).isEmpty)
+        XCTAssertTrue(controller.jobs.running(in: .inference).isEmpty)
         XCTAssertEqual(controller.readinessByMode[.createImage], .checking)
 
-        runner.starts[1].stdout(supportedCapabilitiesOutput(for: "video-ltx-av", minimum: 64))
+        runner.starts[0].stdout(supportedCapabilitiesOutput(for: "video-ltx-av", minimum: 64))
+        runner.starts[0].termination(0)
+        await settle()
+        XCTAssertEqual(controller.readinessByMode[.createImage], .checking)
+        XCTAssertEqual(runner.starts.count, 2)
+        XCTAssertEqual(Array(runner.starts[1].configuration.arguments.suffix(2)), ["model", "list"])
+
+        // The result is evaluated against the model current at completion: the new one is
+        // installed, the original is not.
+        runner.starts[1].stdout(
+            "ID Category Status Size\nvideo-ltx-av media installed 12 GB\nimage-zimage-nano media missing 1 GB\n"
+        )
         runner.starts[1].termination(0)
-        await Task.yield()
-        await Task.yield()
+        await settle()
+        XCTAssertEqual(controller.readinessByMode[.createImage], .ready)
+        XCTAssertTrue(controller.jobs.running.isEmpty)
+    }
+
+    func testReadinessSettingsChangeSupersedesTheInFlightProbeAndIgnoresItsResult() async {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        // Settings persist through UserDefaults; leave the test domain as it was found.
+        let originalModelsRoot = controller.modelsRoot
+        defer { controller.modelsRoot = originalModelsRoot }
+        controller.modelsRoot = ""
+        var draft = StudioDraft()
+        draft.reset(for: .createImage)
+
+        controller.checkReadiness(for: .createImage, draft: draft)
+        controller.modelsRoot = "/Volumes/Models"
+        controller.checkReadiness(for: .createImage, draft: draft)
+
+        XCTAssertEqual(runner.starts.count, 2)
+        XCTAssertEqual(runner.processes[0].terminateCallCount, 1)
+        XCTAssertFalse(runner.starts[0].configuration.arguments.contains("--models-root"))
+        XCTAssertTrue(runner.starts[1].configuration.arguments.contains("--models-root"))
+
+        // The superseded probe still reports before it dies; nothing of it is applied.
+        runner.starts[0].stdout(supportedCapabilitiesOutput(for: "image-zimage-nano", minimum: 12))
+        runner.starts[0].termination(0)
+        await settle()
+        XCTAssertEqual(controller.readinessByMode[.createImage], .checking)
+        XCTAssertTrue(controller.modelCapabilitiesByID.isEmpty)
+        XCTAssertEqual(runner.starts.count, 2)
+
+        runner.starts[1].stdout(supportedCapabilitiesOutput(for: "image-zimage-nano", minimum: 12))
+        runner.starts[1].termination(0)
+        await settle()
+        XCTAssertEqual(controller.modelCapabilitiesByID["image-zimage-nano"]?.minimumUnifiedMemoryGB, 12)
         XCTAssertEqual(runner.starts.count, 3)
 
-        runner.starts[2].stdout("ID Category Status Size\nvideo-ltx-av media installed 12 GB\n")
+        runner.starts[2].stdout("ID Category Status Size\nimage-zimage-nano media installed 1 GB\n")
         runner.starts[2].termination(0)
-        await Task.yield()
-        await Task.yield()
+        await settle()
         XCTAssertEqual(controller.readinessByMode[.createImage], .ready)
+    }
+
+    func testReadinessProbeIsCancelledWhenTheModeStopsNeedingAModel() async {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        var draft = StudioDraft()
+        draft.reset(for: .readImage)
+        draft.readImageAction = .ocr
+
+        controller.checkReadiness(for: .readImage, draft: draft)
+        XCTAssertEqual(runner.starts.count, 1)
+        XCTAssertEqual(controller.readinessByMode[.readImage], .checking)
+
+        draft.readImageAction = .inspect
+        controller.checkReadiness(for: .readImage, draft: draft)
+        XCTAssertEqual(controller.readinessByMode[.readImage], .ready)
+        XCTAssertEqual(runner.processes[0].terminateCallCount, 1)
+
+        runner.starts[0].stdout(supportedCapabilitiesOutput(for: "vision-ocr-lighton", minimum: 8))
+        runner.starts[0].termination(15)
+        await settle()
+        XCTAssertEqual(controller.readinessByMode[.readImage], .ready)
+        XCTAssertEqual(runner.starts.count, 1)
     }
 
     func testReadinessBlocksUnsupportedCapabilityBeforeModelList() async {
@@ -104,8 +174,7 @@ final class MereRunControllerTests: XCTestCase {
             )
         )
         runner.starts[0].termination(0)
-        await Task.yield()
-        await Task.yield()
+        await settle()
 
         XCTAssertEqual(runner.starts.count, 1)
         XCTAssertEqual(
@@ -137,8 +206,7 @@ final class MereRunControllerTests: XCTestCase {
             supportedModelID: StudioChatDefaults.fallbackModelID
         ))
         runner.starts[0].termination(0)
-        await Task.yield()
-        await Task.yield()
+        await settle()
 
         XCTAssertEqual(controller.recommendedChatModelID, "text-agent-deepseek-v4-flash")
         XCTAssertEqual(controller.recommendedCodeModelID, "text-code-north-mini")
@@ -865,6 +933,201 @@ final class MereRunControllerTests: XCTestCase {
         XCTAssertEqual(streamed, [#"{"protocol":1,"type":"ready"}"# + "\n"])
     }
 
+    func testUtilityCommandIsAUtilityLaneJobThatNeverTouchesTheConsole() async throws {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        var completions = 0
+        let subscription = controller.runCompletions.sink { _ in completions += 1 }
+        defer { subscription.cancel() }
+        let commandID = UUID()
+
+        let pending = Task {
+            await controller.utilityCommandResult(args: ["model", "list"], commandID: commandID)
+        }
+        while runner.starts.isEmpty { await Task.yield() }
+
+        let job = try XCTUnwrap(controller.jobs.job(JobID(raw: commandID)))
+        XCTAssertEqual(job.lane, .utility)
+        XCTAssertNil(job.request.templateID)
+        XCTAssertFalse(job.detectsArtifacts)
+        XCTAssertEqual(job.displayCommand, "/usr/bin/true model list")
+        XCTAssertEqual(Array(runner.starts[0].configuration.arguments.suffix(2)), ["model", "list"])
+        XCTAssertFalse(runner.starts[0].configuration.keepsStandardInputOpen)
+        XCTAssertFalse(controller.isRunning)
+        XCTAssertEqual(controller.status, "Idle")
+        XCTAssertTrue(controller.logs.isEmpty)
+
+        runner.starts[0].stdout("ID Category\nimage-zimage-nano image\n")
+        runner.starts[0].stderr("warning: slow disk\n")
+        runner.starts[0].termination(0)
+        let result = await pending.value
+
+        XCTAssertEqual(result.exitCode, 0)
+        XCTAssertEqual(result.stdout, "ID Category\nimage-zimage-nano image\n")
+        XCTAssertEqual(result.stderr, "warning: slow disk\n")
+        XCTAssertEqual(result.commandPreview, "/usr/bin/true model list")
+        XCTAssertEqual(job.result?.templateID, .custom)
+        XCTAssertTrue(job.artifacts.isEmpty)
+        XCTAssertEqual(completions, 0)
+        XCTAssertNil(controller.lastRunResult)
+        XCTAssertNil(controller.lastExitCode)
+        XCTAssertTrue(controller.logs.isEmpty)
+        XCTAssertEqual(controller.status, "Idle")
+    }
+
+    func testUtilityLaneQueuesAFifthCommandUntilASlotFrees() async {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+
+        let pending = (0..<5).map { index in
+            Task { await controller.utilityCommandResult(args: ["guide", "topic-\(index)", "--json"]) }
+        }
+        while runner.starts.count < 4 { await Task.yield() }
+        await settle()
+
+        XCTAssertEqual(JobLane.utility.capacity, 4)
+        XCTAssertEqual(runner.starts.count, 4)
+        XCTAssertEqual(controller.jobs.running(in: .utility).count, 4)
+        XCTAssertEqual(controller.jobs.queued(in: .utility).count, 1)
+        XCTAssertEqual(controller.queuedRunCount, 0, "utility queueing is not the run queue")
+
+        runner.starts[0].termination(0)
+        await settle()
+        XCTAssertEqual(runner.starts.count, 5)
+        XCTAssertTrue(controller.jobs.queued(in: .utility).isEmpty)
+
+        for start in runner.starts.dropFirst() { start.termination(0) }
+        for task in pending {
+            let result = await task.value
+            XCTAssertEqual(result.exitCode, 0)
+        }
+    }
+
+    func testCancellingAQueuedUtilityCommandResolvesTheAwaitingCaller() async {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        let occupants = (0..<4).map { index in
+            Task { await controller.utilityCommandResult(args: ["guide", "topic-\(index)"]) }
+        }
+        while runner.starts.count < 4 { await Task.yield() }
+        let commandID = UUID()
+        let queued = Task {
+            await controller.utilityCommandResult(args: ["model", "list"], commandID: commandID)
+        }
+        while controller.jobs.queued(in: .utility).isEmpty { await Task.yield() }
+
+        XCTAssertTrue(controller.cancelUtilityCommand(commandID))
+        let result = await queued.value
+        XCTAssertEqual(result.exitCode, JobResult.cancelledBeforeStartExitCode)
+        XCTAssertEqual(runner.starts.count, 4, "the cancelled command never launched")
+        XCTAssertFalse(controller.cancelUtilityCommand(commandID), "a settled command cannot be cancelled twice")
+
+        for start in runner.starts { start.termination(0) }
+        for task in occupants { _ = await task.value }
+    }
+
+    func testServerStatusProbeDedupesConcurrentRefreshesAndParsesTheSnapshot() async {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        let restoreRuntimeSettings = runtimeSettingsRestorer(for: controller)
+        defer { restoreRuntimeSettings() }
+        controller.runtimeHost = "127.0.0.1"
+        controller.runtimePort = 8080
+        controller.runtimeAPIKey = "secret-key"
+
+        let first = Task { await controller.refreshServerStatus() }
+        let second = Task { await controller.refreshServerStatus() }
+        while runner.starts.isEmpty { await Task.yield() }
+        await settle()
+
+        XCTAssertEqual(runner.starts.count, 1)
+        XCTAssertEqual(controller.jobs.running(in: .probe).count, 1)
+        XCTAssertEqual(
+            Array(runner.starts[0].configuration.arguments.suffix(8)),
+            ["status", "--json", "--host", "127.0.0.1", "--port", "8080", "--api-key", "secret-key"]
+        )
+        XCTAssertEqual(
+            controller.jobs.running(in: .probe).first?.displayCommand,
+            "/usr/bin/true status --json --host 127.0.0.1 --port 8080 --api-key '••••••••'"
+        )
+
+        runner.starts[0].stdout("probing...\n")
+        runner.starts[0].stdout(
+            #"{"server":{"health":"ok","loadedModels":["text-agent-deepseek-v4-flash"]},"#
+                + #""installedModels":[{"id":"a"},{"id":"b"}]}"# + "\n"
+        )
+        runner.starts[0].termination(0)
+        await first.value
+        await second.value
+
+        XCTAssertEqual(
+            controller.serverStatus,
+            StudioServerStatus(health: "ok", loadedModels: ["text-agent-deepseek-v4-flash"], installedCount: 2)
+        )
+        XCTAssertTrue(controller.jobs.running.isEmpty)
+    }
+
+    func testSupersededServerStatusProbeKeepsTheLastSnapshot() async {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        let restoreRuntimeSettings = runtimeSettingsRestorer(for: controller)
+        defer { restoreRuntimeSettings() }
+        controller.runtimePort = 8080
+
+        let initial = Task { await controller.refreshServerStatus() }
+        while runner.starts.isEmpty { await Task.yield() }
+        runner.starts[0].stdout(#"{"server":{"health":"ok"},"installedModels":[]}"#)
+        runner.starts[0].termination(0)
+        await initial.value
+        XCTAssertEqual(controller.serverStatus?.health, "ok")
+
+        let stale = Task { await controller.refreshServerStatus() }
+        while runner.starts.count < 2 { await Task.yield() }
+        controller.runtimePort = 9090
+        let fresh = Task { await controller.refreshServerStatus() }
+        while runner.starts.count < 3 { await Task.yield() }
+        XCTAssertEqual(runner.processes[1].terminateCallCount, 1)
+        XCTAssertTrue(runner.starts[2].configuration.arguments.contains("9090"))
+
+        runner.starts[1].termination(15)
+        await stale.value
+        XCTAssertEqual(controller.serverStatus?.health, "ok", "a superseded poll does not blank the pill")
+
+        runner.starts[2].stdout(#"{"server":{"health":"unreachable"},"installedModels":[]}"#)
+        runner.starts[2].termination(0)
+        await fresh.value
+        XCTAssertEqual(controller.serverStatus?.health, "unreachable")
+    }
+
+    func testTerminateAllProcessesStopsUtilityCommandsAndReadinessProbes() async {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        var draft = StudioDraft()
+        draft.reset(for: .createImage)
+
+        let listening = Task {
+            await controller.utilityCommandResult(args: ["speech", "listen", "--jsonl"])
+        }
+        controller.checkReadiness(for: .createImage, draft: draft)
+        while runner.starts.count < 2 { await Task.yield() }
+
+        controller.terminateAllProcesses()
+        XCTAssertEqual(runner.processes.map(\.terminateCallCount), [1, 1])
+
+        runner.starts[0].termination(15)
+        runner.starts[1].termination(15)
+        let result = await listening.value
+        XCTAssertEqual(result.exitCode, 15)
+        await settle()
+        XCTAssertTrue(controller.jobs.running.isEmpty)
+    }
+
     func testStudioRunIsObservableAsAJobWhileTheFacadeMirrorsIt() async throws {
         let runner = RecordingProcessRunner()
         let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
@@ -1022,6 +1285,26 @@ final class MereRunControllerTests: XCTestCase {
         XCTAssertFalse(report.contains("secret-token"))
         XCTAssertTrue(report.contains("Captured lines: 2"))
         XCTAssertTrue(report.contains("Console text omitted"))
+    }
+}
+
+private extension MereRunControllerTests {
+    /// Lets the main-actor hops between a process callback, the store's completion and an
+    /// awaiting submitter's continuation run to completion.
+    func settle() async {
+        for _ in 0..<10 { await Task.yield() }
+    }
+
+    /// Runtime settings persist through UserDefaults; a test that changes them puts them back.
+    func runtimeSettingsRestorer(for controller: MereRunController) -> @MainActor () -> Void {
+        let host = controller.runtimeHost
+        let port = controller.runtimePort
+        let apiKey = controller.runtimeAPIKey
+        return {
+            controller.runtimeHost = host
+            controller.runtimePort = port
+            controller.runtimeAPIKey = apiKey
+        }
     }
 }
 
