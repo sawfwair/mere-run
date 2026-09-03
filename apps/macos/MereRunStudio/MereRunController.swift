@@ -4,67 +4,6 @@ import Combine
 import Foundation
 import UserNotifications
 
-/// Decodes a byte stream into UTF-8 incrementally, retaining any incomplete trailing
-/// multibyte sequence until the next read so codepoints split across pipe reads are
-/// never dropped. Each stream owns its own decoder; the readability queue is serial
-/// per file handle, so no locking is required within a single stream.
-private final class IncrementalUTF8Decoder: @unchecked Sendable {
-    private var buffer = Data()
-    private static let lossyFlushThreshold = 1 << 20
-
-    func push(_ data: Data) -> String? {
-        buffer.append(data)
-        guard !buffer.isEmpty else { return nil }
-
-        // A well-formed UTF-8 stream only fails to decode when the final codepoint is
-        // truncated (at most 3 trailing bytes). Trim up to 3 bytes to find the boundary.
-        let maxBackoff = min(3, buffer.count)
-        for back in 0...maxBackoff {
-            let length = buffer.count - back
-            guard length > 0 else { break }
-            if let decoded = String(data: buffer.prefix(length), encoding: .utf8) {
-                buffer.removeFirst(length)
-                return decoded.isEmpty ? nil : decoded
-            }
-        }
-
-        // Genuinely malformed mid-stream bytes (should not happen from the CLI): avoid
-        // unbounded buffering by flushing lossily once the backlog grows too large.
-        if buffer.count > Self.lossyFlushThreshold {
-            return flush()
-        }
-        return nil
-    }
-
-    func flush() -> String? {
-        guard !buffer.isEmpty else { return nil }
-        let decoded = String(decoding: buffer, as: UTF8.self)
-        buffer.removeAll(keepingCapacity: false)
-        return decoded.isEmpty ? nil : decoded
-    }
-}
-
-enum LogStream {
-    case system
-    case stdout
-    case stderr
-
-    var label: String {
-        switch self {
-        case .system: return "mere"
-        case .stdout: return "out"
-        case .stderr: return "err"
-        }
-    }
-}
-
-struct LogLine: Identifiable, Equatable {
-    let id = UUID()
-    let date = Date()
-    let stream: LogStream
-    let text: String
-}
-
 enum MereRunLaunch: Equatable {
     case executable(URL)
     case swiftRun(packagePath: URL)
@@ -249,155 +188,6 @@ enum CLIResolver {
     }
 }
 
-struct MereRunProcessConfiguration: Equatable {
-    let executableURL: URL
-    let arguments: [String]
-    let currentDirectoryURL: URL
-    let environment: [String: String]
-    let keepsStandardInputOpen: Bool
-}
-
-enum MereRunProcessInputError: LocalizedError {
-    case unavailable
-
-    var errorDescription: String? {
-        "This command does not accept interactive input."
-    }
-}
-
-protocol MereRunRunningProcess: AnyObject {
-    func terminate()
-    func interrupt()
-    func sendStandardInput(_ text: String) throws
-}
-
-extension MereRunRunningProcess {
-    func interrupt() {
-        terminate()
-    }
-
-    func sendStandardInput(_ text: String) throws {
-        throw MereRunProcessInputError.unavailable
-    }
-}
-
-protocol MereRunProcessRunning: AnyObject {
-    func start(
-        configuration: MereRunProcessConfiguration,
-        stdout: @escaping @Sendable (String) -> Void,
-        stderr: @escaping @Sendable (String) -> Void,
-        termination: @escaping @Sendable (Int32) -> Void
-    ) throws -> MereRunRunningProcess
-}
-
-/// A seam over filesystem existence checks so run-output detection can be unit-tested without
-/// touching the real disk. `FileManager` is the production implementation.
-protocol MereRunFileProbing {
-    func fileExists(atPath path: String) -> Bool
-}
-
-extension FileManager: MereRunFileProbing {}
-
-private final class FoundationRunningProcess: MereRunRunningProcess, @unchecked Sendable {
-    private let process: Process
-    private let stdinPipe: Pipe?
-    private let stdoutPipe: Pipe
-    private let stderrPipe: Pipe
-
-    init(process: Process, stdinPipe: Pipe?, stdoutPipe: Pipe, stderrPipe: Pipe) {
-        self.process = process
-        self.stdinPipe = stdinPipe
-        self.stdoutPipe = stdoutPipe
-        self.stderrPipe = stderrPipe
-    }
-
-    func terminate() {
-        try? stdinPipe?.fileHandleForWriting.close()
-        process.terminate()
-    }
-
-    func interrupt() {
-        process.interrupt()
-    }
-
-    func sendStandardInput(_ text: String) throws {
-        guard let stdinPipe else {
-            throw MereRunProcessInputError.unavailable
-        }
-        try stdinPipe.fileHandleForWriting.write(contentsOf: Data(text.utf8))
-    }
-
-    func cleanup() {
-        try? stdinPipe?.fileHandleForWriting.close()
-        stdoutPipe.fileHandleForReading.readabilityHandler = nil
-        stderrPipe.fileHandleForReading.readabilityHandler = nil
-    }
-
-    func waitUntilExit() -> Int32 {
-        process.waitUntilExit()
-        cleanup()
-        return process.terminationStatus
-    }
-}
-
-private final class FoundationMereRunProcessRunner: MereRunProcessRunning {
-    func start(
-        configuration: MereRunProcessConfiguration,
-        stdout: @escaping @Sendable (String) -> Void,
-        stderr: @escaping @Sendable (String) -> Void,
-        termination: @escaping @Sendable (Int32) -> Void
-    ) throws -> MereRunRunningProcess {
-        let process = Process()
-        process.executableURL = configuration.executableURL
-        process.arguments = configuration.arguments
-        process.currentDirectoryURL = configuration.currentDirectoryURL
-        process.environment = configuration.environment
-
-        let stdinPipe = configuration.keepsStandardInputOpen ? Pipe() : nil
-        let stdoutPipe = Pipe()
-        let stderrPipe = Pipe()
-        process.standardInput = stdinPipe
-        process.standardOutput = stdoutPipe
-        process.standardError = stderrPipe
-
-        let runningProcess = FoundationRunningProcess(
-            process: process,
-            stdinPipe: stdinPipe,
-            stdoutPipe: stdoutPipe,
-            stderrPipe: stderrPipe
-        )
-
-        let stdoutDecoder = IncrementalUTF8Decoder()
-        let stderrDecoder = IncrementalUTF8Decoder()
-
-        stdoutPipe.fileHandleForReading.readabilityHandler = { handle in
-            let data = handle.availableData
-            if data.isEmpty {
-                if let tail = stdoutDecoder.flush() { stdout(tail) }
-                return
-            }
-            if let text = stdoutDecoder.push(data) { stdout(text) }
-        }
-
-        stderrPipe.fileHandleForReading.readabilityHandler = { handle in
-            let data = handle.availableData
-            if data.isEmpty {
-                if let tail = stderrDecoder.flush() { stderr(tail) }
-                return
-            }
-            if let text = stderrDecoder.push(data) { stderr(text) }
-        }
-
-        try process.run()
-
-        DispatchQueue.global(qos: .userInitiated).async {
-            termination(runningProcess.waitUntilExit())
-        }
-
-        return runningProcess
-    }
-}
-
 private final class ReadinessOutputBuffer: @unchecked Sendable {
     private let lock = NSLock()
     private var value = ""
@@ -415,45 +205,6 @@ private final class ReadinessOutputBuffer: @unchecked Sendable {
     }
 }
 
-struct MereRunRunResult: Identifiable, Equatable {
-    let id: UUID
-    let requestID: UUID?
-    let templateID: CommandTemplateID
-    let commandPreview: String
-    let exitCode: Int32
-    let outputURL: URL?
-    let artifactURLs: [URL]
-    let outputText: String?
-    let completedAt: Date
-    /// When this run was a chat/code turn, the conversation it belongs to (so completion routes
-    /// to the thread rather than the legacy single-result path).
-    let conversationID: UUID?
-
-    init(
-        id: UUID = UUID(),
-        requestID: UUID? = nil,
-        templateID: CommandTemplateID,
-        commandPreview: String,
-        exitCode: Int32,
-        outputURL: URL?,
-        artifactURLs: [URL] = [],
-        outputText: String?,
-        completedAt: Date = Date(),
-        conversationID: UUID? = nil
-    ) {
-        self.id = id
-        self.requestID = requestID
-        self.templateID = templateID
-        self.commandPreview = commandPreview
-        self.exitCode = exitCode
-        self.outputURL = outputURL
-        self.artifactURLs = artifactURLs
-        self.outputText = outputText
-        self.completedAt = completedAt
-        self.conversationID = conversationID
-    }
-}
-
 struct MereRunUtilityCommandResult: Equatable {
     let commandPreview: String
     let exitCode: Int32
@@ -467,27 +218,6 @@ struct MereRunUtilityCommandResult: Equatable {
         if trimmedStderr.isEmpty { return trimmedStdout }
         return "\(trimmedStdout)\n\nSTDERR\n\(trimmedStderr)"
     }
-}
-
-private struct StudioVideoSessionRequest: Encodable {
-    let id: String
-    let prompt: String
-    let output: String
-    let width: Int
-    let height: Int
-    let numFrames: Int
-    let fps: Int
-    let seed: Int?
-    let image: String?
-    let imageStrength: Double?
-    let endImage: String?
-    let endImageStrength: Double?
-}
-
-private struct StudioVideoSessionResponse: Decodable {
-    let status: String
-    let output: String?
-    let error: String?
 }
 
 @MainActor
@@ -585,29 +315,19 @@ final class MereRunController: ObservableObject {
     private var utilityProcesses: [UUID: MereRunRunningProcess] = [:]
     private var readinessProcesses: [StudioMode: MereRunRunningProcess] = [:]
     private var readinessRequests: [StudioMode: ReadinessRequest] = [:]
-    /// Runs currently in flight, each with its own isolated process, buffers, logs, progress
-    /// and output. Up to `maxConcurrentRuns` run at once; the rest wait in `queuedRuns`.
-    private var sessions: [RunSession] = []
-    /// The session whose live state mirrors into the published console fields (the run the
-    /// single-pane console/canvas currently shows). Background sessions still complete into the
+    /// Owns every run's lifecycle: lanes, FIFO queues, child processes, buffers, progress and
+    /// artifact detection. The controller mirrors the foreground job into its published console
+    /// fields and re-broadcasts completions; views may also observe a `Job` directly.
+    let jobs: JobStore
+    /// The job whose live state mirrors into the published console fields (the run the
+    /// single-pane console/canvas currently shows). Background jobs still complete into the
     /// library by request id. Persists past completion so the last run's result stays visible.
-    private var foregroundSessionID: UUID?
-    private var queuedRuns: [StudioRunRequest] = []
+    private var foregroundJob: Job?
+    private var jobEventSubscription: AnyCancellable?
 
-    private var foregroundSession: RunSession? {
-        sessions.first { $0.id == foregroundSessionID }
-    }
-
-    private static let stdoutBufferByteLimit = 32 * 1024
-    private static let stderrBufferByteLimit = 32 * 1024
-    private static let outputDetectionLineLimit = 40
-    private static let logLineLimit = 1200
-    /// Min growth in a conversation reply before the live think-stripped text is re-published,
-    /// bounding per-chunk re-strip cost. The final reply is always published in full on finish.
-    private static let liveStripGranularity = 80
-    /// Conservative cap on simultaneous runs. ML inference is memory-heavy, so this stays small;
-    /// it is the single knob for how many runs may execute at once before further ones queue.
-    static let maxConcurrentRuns = 2
+    /// Conservative cap on simultaneous inference runs. ML inference is memory-heavy, so this
+    /// stays small; `JobLane.inference.capacity` is the single knob.
+    static let maxConcurrentRuns = JobLane.inference.capacity
 
     private struct ReadinessRequest: Equatable {
         let modelID: String
@@ -629,40 +349,28 @@ final class MereRunController: ObservableObject {
     }
 
     var canSubmitVideoSessionRequest: Bool {
-        guard let session = foregroundSession else { return false }
-        return session.spec.template.id == .videoSession
-            && session.process != nil
-            && session.exitCode == nil
+        guard let job = foregroundJob else { return false }
+        return job.request.template.id == .videoSession && job.state.isRunning
     }
 
     func canSteerRealtimeMusic(requestID: UUID) -> Bool {
-        sessions.contains {
-            $0.spec.requestID == requestID
-                && $0.spec.template.id == .musicRealtime
-                && $0.process != nil
-                && $0.exitCode == nil
+        jobs.running.contains {
+            $0.request.requestID == requestID && $0.request.template.id == .musicRealtime
         }
     }
 
     func isRequestRunning(_ requestID: UUID) -> Bool {
-        sessions.contains {
-            $0.spec.requestID == requestID
-                && $0.process != nil
-                && $0.exitCode == nil
-        }
+        jobs.running.contains { $0.request.requestID == requestID }
     }
 
     func runningRequestID(for templateID: CommandTemplateID) -> UUID? {
-        sessions.first {
-            $0.spec.template.id == templateID
-                && $0.spec.requestID != nil
-                && $0.process != nil
-                && $0.exitCode == nil
-        }?.spec.requestID
+        jobs.running.first {
+            $0.request.template.id == templateID && $0.request.requestID != nil
+        }?.request.requestID
     }
 
     func logs(for requestID: UUID) -> [LogLine] {
-        sessions.first { $0.spec.requestID == requestID }?.logs ?? []
+        jobs.job(requestID: requestID)?.log.lines ?? []
     }
 
     init(
@@ -674,6 +382,7 @@ final class MereRunController: ObservableObject {
         self.processRunner = processRunner
         self.fileSystem = fileSystem
         self.cliResolve = cliResolver
+        jobs = JobStore(processRunner: processRunner, fileSystem: fileSystem)
         let initial = CommandCatalog.templates.first!
         selectedTemplate = initial
         draft = initial.defaultDraft()
@@ -685,6 +394,9 @@ final class MereRunController: ObservableObject {
         runtimeHost = UserDefaults.standard.string(forKey: Keys.runtimeHost) ?? "127.0.0.1"
         runtimePort = (UserDefaults.standard.object(forKey: Keys.runtimePort) as? Int) ?? 8080
         runtimeAPIKey = UserDefaults.standard.string(forKey: Keys.runtimeAPIKey) ?? ""
+        jobEventSubscription = jobs.events.sink { [weak self] event in
+            self?.handle(event)
+        }
         if resolvesCLIOnInit {
             refreshResolvedCLI()
         }
@@ -1161,70 +873,28 @@ final class MereRunController: ObservableObject {
         return true
     }
 
-    /// A captured snapshot of what to run, decoupled from the live editing state
-    /// (`selectedTemplate`/`draft`). A queued or Studio-initiated run executes from its own
-    /// snapshot, so it never overwrites whatever the user is currently editing in either surface.
-    private struct RunSpec {
-        let template: CommandTemplate
-        let draft: CommandDraft
-        let requestID: UUID?
-        var conversationID: UUID? = nil
-    }
-
-    /// All mutable state for a single in-flight run, isolated so concurrent runs never clobber
-    /// each other's process, buffers, logs, progress or output. `@MainActor` (so it is Sendable
-    /// and can be captured by the process callbacks); every field is touched only on the main actor.
-    @MainActor
-    private final class RunSession: Identifiable {
-        let id = UUID()
-        let spec: RunSpec
-        let preview: String
-        let expectedOutput: URL?
-        var process: MereRunRunningProcess?
-        var stdoutBuffer = ""
-        var stderrBuffer = ""
-        /// Unbounded stdout accumulator for conversation turns only (chat/code), so a long reply
-        /// is captured in full — `stdoutBuffer` is capped at 32 KB for the console.
-        var fullOutput = ""
-        /// Length of `fullOutput` at the last live think-strip; used to throttle re-stripping the
-        /// whole accumulator on every chunk (it would otherwise be O(n²) over a long reply).
-        var lastLiveStripLength = 0
-        var logs: [LogLine] = []
-        var liveOutputText = ""
-        var currentProgress: StudioRunProgress?
-        var lastOutputURL: URL?
-        var exitCode: Int32?
-        var status: String
-        var interactiveOutputBuffer = ""
-        var outputWatchTask: Task<Void, Never>?
-
-        init(spec: RunSpec, preview: String, expectedOutput: URL?, status: String) {
-            self.spec = spec
-            self.preview = preview
-            self.expectedOutput = expectedOutput
-            self.status = status
-        }
-    }
 
     @discardableResult
     func run(studio request: StudioRunRequest) -> Bool {
         // Track the conversation as in-flight at SUBMISSION time, not at start, so a turn that
         // queues behind the concurrency cap still blocks a second send into the same thread and
-        // shows a pending bubble. Idempotent with the insert in startRun; cleared on every exit.
+        // shows a pending bubble. Cleared on every exit.
         if let conversationID = request.conversationID {
             runningConversationIDs.insert(conversationID)
         }
-        guard sessions.count < Self.maxConcurrentRuns, queuedRuns.isEmpty else {
-            enqueue(request)
-            return true
+        if let shortCircuit = ensureCameraAccess(
+            for: request.template.id,
+            retry: { _ = $0.run(studio: request) }
+        ) {
+            return shortCircuit
         }
-
-        return startRun(RunSpec(
+        return submitInferenceJob(
             template: request.template,
             draft: request.draft,
             requestID: request.id,
-            conversationID: request.conversationID
-        ))
+            conversationID: request.conversationID,
+            queueNotice: "Queued \(request.mode.title.lowercased()) job."
+        )
     }
 
     func checkReadiness(for mode: StudioMode, draft studioDraft: StudioDraft) {
@@ -1392,130 +1062,81 @@ final class MereRunController: ObservableObject {
 
     @discardableResult
     func run() -> Bool {
-        guard sessions.count < Self.maxConcurrentRuns else { return false }
-        return startRun(RunSpec(template: selectedTemplate, draft: draft, requestID: nil))
-    }
-
-    @discardableResult
-    private func startRun(_ spec: RunSpec) -> Bool {
-        guard sessions.count < Self.maxConcurrentRuns else { return false }
-        if let shortCircuit = ensureCameraAccess(spec: spec) {
+        guard jobs.hasCapacity(in: .inference) else { return false }
+        if let shortCircuit = ensureCameraAccess(for: selectedTemplate.id, retry: { _ = $0.run() }) {
             return shortCircuit
         }
+        return submitInferenceJob(
+            template: selectedTemplate,
+            draft: draft,
+            requestID: nil,
+            conversationID: nil,
+            queueNotice: nil
+        )
+    }
+
+    /// Snapshots the launch (resolved CLI, argv, environment, working directory) into a
+    /// `JobRequest` and hands it to the inference lane. Returns false only when the job failed
+    /// preflight or could not launch; a queued job returns true.
+    private func submitInferenceJob(
+        template: CommandTemplate,
+        draft: CommandDraft,
+        requestID: UUID?,
+        conversationID: UUID?,
+        queueNotice: String?
+    ) -> Bool {
         refreshResolvedCLI()
-
         let launch = cliResolve(cliPath)
-        let args = commandArguments(template: spec.template, draft: spec.draft)
-        let display = launch.displayCommand(for: args)
-        let expectedOutput = expectedOutputURL(template: spec.template, draft: spec.draft)
-        let initialStatus = spec.template.id == .modelPull ? "Downloading model" : "Running"
-        let session = RunSession(spec: spec, preview: display, expectedOutput: expectedOutput, status: initialStatus)
-
-        if let message = spec.template.validationMessage(for: spec.draft) {
-            append(message, stream: .system)
-            status = message
-            finishPreflightFailure(session: session, exitCode: 64, outputText: message)
-            return false
+        let args = commandArguments(template: template, draft: draft)
+        let request = JobRequest(
+            lane: .inference,
+            template: template,
+            draft: draft,
+            requestID: requestID,
+            conversationID: conversationID,
+            configuration: processConfiguration(
+                launch: launch,
+                args: args,
+                environmentTemplateID: template.id,
+                environmentDraft: draft
+            ),
+            displayCommand: launch.displayCommand(for: args)
+        )
+        let id = jobs.submit(request)
+        refreshQueuedRunCount()
+        guard let job = jobs.job(id) else { return false }
+        if job.state.isQueued, let queueNotice {
+            append(queueNotice, stream: .system)
         }
-
-        if let prepError = prepareOutputLocation(template: spec.template, draft: spec.draft) {
-            append(prepError, stream: .stderr)
-            status = "Output path unavailable"
-            finishPreflightFailure(session: session, exitCode: -1, outputText: prepError)
-            return false
-        }
-
-        sessions.append(session)
-        if let conversationID = spec.conversationID {
-            runningConversationIDs.insert(conversationID)
-        }
-        setForeground(session)
-        append(display, stream: .system, to: session)
-        if spec.conversationID == nil {
-            startOutputWatch(for: session)
-        }
-
-        do {
-            session.process = try processRunner.start(
-                configuration: processConfiguration(
-                    launch: launch,
-                    args: args,
-                    environmentTemplateID: spec.template.id,
-                    environmentDraft: spec.draft
-                ),
-                stdout: { [weak self, weak session] text in
-                    Task { @MainActor in
-                        guard let self, let session else { return }
-                        self.append(text, stream: .stdout, to: session)
-                    }
-                },
-                stderr: { [weak self, weak session] text in
-                    Task { @MainActor in
-                        guard let self, let session else { return }
-                        self.append(text, stream: .stderr, to: session)
-                    }
-                },
-                termination: { [weak self, weak session] code in
-                    Task { @MainActor in
-                        guard let self, let session else { return }
-                        self.finishRun(session: session, exitCode: code)
-                    }
-                }
-            )
-        } catch {
-            append(error.localizedDescription, stream: .stderr, to: session)
-            finishRun(session: session, exitCode: -1)
-            return false
-        }
-        return true
+        return !job.state.isTerminal
     }
 
     func cancel() {
-        guard let session = foregroundSession, session.process != nil else { return }
-        session.process?.terminate()
-        append("Termination requested.", stream: .system, to: session)
+        guard let job = foregroundJob, job.state.isRunning else { return }
+        jobs.cancel(job.id)
     }
 
     @discardableResult
     func cancel(requestID: UUID) -> Bool {
-        guard let session = sessions.first(where: {
-            $0.spec.requestID == requestID && $0.process != nil && $0.exitCode == nil
-        }) else {
-            return false
-        }
-        session.process?.terminate()
-        append("Termination requested.", stream: .system, to: session)
-        mirrorForeground(session)
-        return true
+        guard let job = jobs.job(requestID: requestID), job.state.isRunning else { return false }
+        return jobs.cancel(job.id)
     }
 
     @discardableResult
     func submitRealtimeMusicCommand(_ line: String, requestID: UUID) -> Bool {
-        guard let session = sessions.first(where: {
-            $0.spec.requestID == requestID && $0.spec.template.id == .musicRealtime
-        }),
-        let process = session.process,
-        session.exitCode == nil else {
+        guard let job = jobs.job(requestID: requestID),
+              job.request.template.id == .musicRealtime,
+              job.state.isRunning else {
             return false
         }
-        do {
-            try process.sendStandardInput(line + "\n")
-            append("Live control → \(line)", stream: .system, to: session)
-            mirrorForeground(session)
-            return true
-        } catch {
-            append(error.localizedDescription, stream: .stderr, to: session)
-            mirrorForeground(session)
-            return false
-        }
+        return jobs.sendLiveControl(line, to: job.id)
     }
 
     @discardableResult
     func submitVideoSessionRequest() -> Bool {
-        guard let session = foregroundSession,
-              session.spec.template.id == .videoSession,
-              let process = session.process,
-              session.exitCode == nil else {
+        guard let job = foregroundJob,
+              job.request.template.id == .videoSession,
+              job.state.isRunning else {
             status = "Start the resident session first"
             append("Start the resident LTX session before submitting a render.", stream: .stderr)
             return false
@@ -1524,87 +1145,140 @@ final class MereRunController: ObservableObject {
         let prompt = draft.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !prompt.isEmpty else {
             status = "Prompt required"
-            append("Enter a prompt for the resident render.", stream: .stderr, to: session)
+            jobs.annotate(job.id, "Enter a prompt for the resident render.", stream: .stderr)
             return false
         }
         guard !draft.outputPath.isBlank else {
             status = "Output required"
-            append("Choose an output MP4 path for the resident render.", stream: .stderr, to: session)
+            jobs.annotate(job.id, "Choose an output MP4 path for the resident render.", stream: .stderr)
             return false
         }
 
-        let output = NSString(string: draft.outputPath).expandingTildeInPath
-        do {
-            try FileManager.default.createDirectory(
-                at: URL(fileURLWithPath: output).deletingLastPathComponent(),
-                withIntermediateDirectories: true
-            )
-            let request = StudioVideoSessionRequest(
-                id: UUID().uuidString,
-                prompt: prompt,
-                output: output,
-                width: draft.width,
-                height: draft.height,
-                numFrames: draft.numFrames,
-                fps: draft.fps,
-                seed: Int(draft.seed),
-                image: expandedOptionalPath(draft.imagePath),
-                imageStrength: draft.imagePath.isBlank ? nil : draft.strength,
-                endImage: expandedOptionalPath(draft.endImagePath),
-                endImageStrength: draft.endImagePath.isBlank ? nil : draft.endImageStrength
-            )
-            let encoder = JSONEncoder()
-            encoder.keyEncodingStrategy = .convertToSnakeCase
-            encoder.outputFormatting = [.sortedKeys]
-            let data = try encoder.encode(request)
-            guard let line = String(data: data, encoding: .utf8) else {
-                throw CocoaError(.fileWriteInapplicableStringEncoding)
+        let request = StudioVideoSessionRequest(
+            id: UUID().uuidString,
+            prompt: prompt,
+            output: NSString(string: draft.outputPath).expandingTildeInPath,
+            width: draft.width,
+            height: draft.height,
+            numFrames: draft.numFrames,
+            fps: draft.fps,
+            seed: Int(draft.seed),
+            image: expandedOptionalPath(draft.imagePath),
+            imageStrength: draft.imagePath.isBlank ? nil : draft.strength,
+            endImage: expandedOptionalPath(draft.endImagePath),
+            endImageStrength: draft.endImagePath.isBlank ? nil : draft.endImageStrength
+        )
+        return jobs.sendVideoSessionRequest(request, to: job.id)
+    }
+
+    // MARK: Foreground mirror
+
+    private func handle(_ event: JobStore.Event) {
+        switch event {
+        case .started(let job):
+            setForeground(job)
+        case .changed(let job):
+            mirrorForeground(job)
+            mirrorCrossRunState(job)
+        case .finished(let job, let result):
+            finish(job, result: result)
+        }
+        refreshQueuedRunCount()
+    }
+
+    /// Resets the published console fields to reflect `job` as the run the single-pane
+    /// console/canvas shows. Background jobs keep their own state and complete into the library.
+    private func setForeground(_ job: Job) {
+        foregroundJob = job
+        logs = job.log.lines
+        liveOutputText = job.liveText
+        currentProgress = job.progress
+        status = job.status
+        activeRunRequestID = job.request.requestID
+        lastOutputURL = job.primaryArtifactURL
+        lastExitCode = job.exitCode
+        isRunning = job.state.isRunning
+    }
+
+    /// Mirrors `job`'s live state into the published console fields while it is the foreground.
+    private func mirrorForeground(_ job: Job) {
+        guard job === foregroundJob else { return }
+        logs = job.log.lines
+        liveOutputText = job.liveText
+        currentProgress = job.progress
+        status = job.status
+        if let url = job.primaryArtifactURL { lastOutputURL = url }
+    }
+
+    /// Publishes the per-request and per-conversation state every run reports, foreground or not.
+    private func mirrorCrossRunState(_ job: Job) {
+        if let requestID = job.request.requestID, progressByRequestID[requestID] != job.progress {
+            progressByRequestID[requestID] = job.progress
+        }
+        if let conversationID = job.request.conversationID,
+           conversationLiveText[conversationID] != job.conversationLiveText {
+            conversationLiveText[conversationID] = job.conversationLiveText
+        }
+    }
+
+    private func finish(_ job: Job, result: JobResult) {
+        if case .preflightFailed(let failure) = job.state {
+            // Preflight failures never became the foreground: report them on the console the
+            // user is looking at, as the run would have.
+            switch failure {
+            case .invalidRequest(let message):
+                append(message, stream: .system)
+                status = message
+            case .outputLocationUnavailable(let message):
+                append(message, stream: .stderr)
+                status = "Output path unavailable"
             }
-            try process.sendStandardInput(line + "\n")
-            session.status = "Rendering resident request"
-            session.lastOutputURL = nil
-            append("Submitted resident render → \(output)", stream: .system, to: session)
-            mirrorForeground(session)
-            return true
-        } catch {
-            session.status = "Session submission failed"
-            append(error.localizedDescription, stream: .stderr, to: session)
-            mirrorForeground(session)
-            return false
+            lastExitCode = result.exitCode
+        } else if job === foregroundJob {
+            logs = job.log.lines
+            liveOutputText = job.liveText
+            currentProgress = nil
+            status = job.status
+            lastExitCode = result.exitCode
+            if let outputURL = result.outputURL { lastOutputURL = outputURL }
+            isRunning = false
+            activeRunRequestID = nil
+        }
+
+        if let requestID = job.request.requestID {
+            progressByRequestID[requestID] = nil
+        }
+        if let conversationID = job.request.conversationID {
+            conversationLiveText[conversationID] = nil
+            runningConversationIDs.remove(conversationID)
+        }
+        if job.startedAt != nil {
+            notifyCompletionIfNeeded(
+                success: result.exitCode == 0,
+                summary: result.exitCode == 0
+                    ? (result.outputURL?.lastPathComponent ?? "Completed")
+                    : "Exited with code \(result.exitCode)"
+            )
+        }
+
+        // Every run — foreground or background — publishes its result so the library (keyed by
+        // request id) records it.
+        lastRunResult = result
+        runCompletions.send(result)
+    }
+
+    private func refreshQueuedRunCount() {
+        let count = jobs.queued(in: .inference).count
+        if queuedRunCount != count {
+            queuedRunCount = count
         }
     }
 
-    /// Resets the published console fields to reflect `session` as the run the single-pane
-    /// console/canvas shows. Background sessions keep their own state and complete into the library.
-    private func setForeground(_ session: RunSession) {
-        foregroundSessionID = session.id
-        logs = session.logs
-        liveOutputText = session.liveOutputText
-        currentProgress = session.currentProgress
-        status = session.status
-        activeRunRequestID = session.spec.requestID
-        lastOutputURL = session.lastOutputURL
-        lastExitCode = session.exitCode
-        isRunning = session.exitCode == nil
-    }
-
-    /// Mirrors `session`'s live state into the published console fields while it is the foreground.
-    private func mirrorForeground(_ session: RunSession) {
-        guard session.id == foregroundSessionID else { return }
-        logs = session.logs
-        liveOutputText = session.liveOutputText
-        currentProgress = session.currentProgress
-        status = session.status
-        if let url = session.lastOutputURL { lastOutputURL = url }
-    }
-
-    /// Terminates every child process the app launched (active run, queued utility, and
+    /// Terminates every child process the app launched (runs, queued utility commands, and
     /// readiness probes, including a long-lived `api serve`). Called on app termination so
     /// child CLIs are never orphaned.
     func terminateAllProcesses() {
-        for session in sessions {
-            session.process?.terminate()
-        }
+        jobs.terminateAll()
         for process in utilityProcesses.values {
             process.terminate()
         }
@@ -1618,11 +1292,14 @@ final class MereRunController: ObservableObject {
     }
 
     /// Returns `nil` when the run may proceed (no camera needed, or already authorized).
-    /// Returns a `Bool` to short-circuit `startRun` when access is pending (async request
-    /// will retry) or denied. The CLI captures the camera as a child of this app bundle,
+    /// Returns a `Bool` to short-circuit submission when access is pending (`retry` runs once
+    /// the user grants it) or denied. The CLI captures the camera as a child of this app bundle,
     /// so TCC attributes access here and the usage string lives in the app's Info.plist.
-    private func ensureCameraAccess(spec: RunSpec) -> Bool? {
-        guard requiresCameraAccess(spec.template.id) else { return nil }
+    private func ensureCameraAccess(
+        for templateID: CommandTemplateID,
+        retry: @escaping @MainActor (MereRunController) -> Void
+    ) -> Bool? {
+        guard requiresCameraAccess(templateID) else { return nil }
         switch AVCaptureDevice.authorizationStatus(for: .video) {
         case .authorized:
             return nil
@@ -1631,7 +1308,7 @@ final class MereRunController: ObservableObject {
                 Task { @MainActor in
                     guard let self else { return }
                     if granted {
-                        _ = self.startRun(spec)
+                        retry(self)
                     } else {
                         self.reportCameraDenied()
                     }
@@ -1688,160 +1365,6 @@ final class MereRunController: ObservableObject {
     func revealLastOutput() {
         guard let lastOutputURL else { return }
         NSWorkspace.shared.activateFileViewerSelecting([lastOutputURL])
-    }
-
-    private func finishRun(session: RunSession, exitCode: Int32) {
-        session.outputWatchTask?.cancel()
-        session.outputWatchTask = nil
-        session.process = nil
-        session.exitCode = exitCode
-        session.currentProgress = nil
-        if let requestID = session.spec.requestID {
-            progressByRequestID[requestID] = nil
-        }
-
-        // Conversation replies are prose, not artifacts — never run output-file detection on them
-        // (a path-like substring in a reply must not become a bogus lastOutputURL/status).
-        let detectedOutput = session.spec.conversationID == nil
-            ? detectOutputURL(expected: session.expectedOutput, stdout: session.stdoutBuffer)
-            : nil
-        let reportedOutputs = session.spec.conversationID == nil
-            ? detectedOutputURLs(stdout: session.stdoutBuffer)
-            : []
-        let artifactURLs = StudioArtifactDiscovery.urls(
-            templateID: session.spec.template.id,
-            draft: session.spec.draft,
-            primaryOutput: detectedOutput,
-            reportedOutputs: reportedOutputs
-        )
-        // Conversation turns finalize from the unbounded, think-stripped accumulator so long
-        // replies are not clipped by the 32 KB console buffer; other modes use the buffer.
-        let outputText: String?
-        if session.spec.conversationID != nil {
-            // Strip reasoning for conversation turns on EVERY exit path (not just success) so
-            // <think> blocks and STDERR never leak into the next turn's replayed prompt; use the
-            // full accumulator, not the capped console buffer.
-            outputText = ConversationTranscript.stripThinkTags(session.fullOutput.replacingOccurrences(of: "\0", with: ""))
-        } else {
-            outputText = capturedResultText(for: session, exitCode: exitCode)
-        }
-        if let detectedOutput { session.lastOutputURL = detectedOutput }
-        if let conversationID = session.spec.conversationID {
-            conversationLiveText[conversationID] = nil
-        }
-
-        if exitCode == 0 {
-            session.status = detectedOutput == nil ? "Completed" : "Completed: \(detectedOutput!.lastPathComponent)"
-            session.logs.append(LogLine(stream: .system, text: "Completed with exit code 0."))
-        } else {
-            session.status = "Exited \(exitCode)"
-            session.logs.append(LogLine(stream: .system, text: "Exited with code \(exitCode)."))
-        }
-
-        notifyCompletionIfNeeded(
-            success: exitCode == 0,
-            summary: exitCode == 0
-                ? (detectedOutput?.lastPathComponent ?? "Completed")
-                : "Exited with code \(exitCode)"
-        )
-
-        // Every run — foreground or background — publishes its result so the library (keyed by
-        // request id) records it. Only the foreground updates the shared console fields.
-        if session.id == foregroundSessionID {
-            logs = session.logs
-            liveOutputText = session.liveOutputText
-            currentProgress = nil
-            status = session.status
-            lastExitCode = exitCode
-            if let detectedOutput { lastOutputURL = detectedOutput }
-            isRunning = false
-            activeRunRequestID = nil
-        }
-
-        if let conversationID = session.spec.conversationID {
-            runningConversationIDs.remove(conversationID)
-        }
-
-        let result = MereRunRunResult(
-            requestID: session.spec.requestID,
-            templateID: session.spec.template.id,
-            commandPreview: session.preview,
-            exitCode: exitCode,
-            outputURL: detectedOutput,
-            artifactURLs: artifactURLs,
-            outputText: outputText,
-            conversationID: session.spec.conversationID
-        )
-        lastRunResult = result
-        runCompletions.send(result)
-
-        sessions.removeAll { $0.id == session.id }
-        startNextQueuedRun()
-    }
-
-    private func finishPreflightFailure(session: RunSession, exitCode: Int32, outputText: String?) {
-        lastExitCode = exitCode
-        if let requestID = session.spec.requestID {
-            progressByRequestID[requestID] = nil
-        }
-        if let conversationID = session.spec.conversationID {
-            runningConversationIDs.remove(conversationID)
-        }
-        let result = MereRunRunResult(
-            requestID: session.spec.requestID,
-            templateID: session.spec.template.id,
-            commandPreview: session.preview,
-            exitCode: exitCode,
-            outputURL: nil,
-            artifactURLs: [],
-            outputText: outputText,
-            conversationID: session.spec.conversationID
-        )
-        lastRunResult = result
-        runCompletions.send(result)
-        startNextQueuedRun()
-    }
-
-    private func enqueue(_ request: StudioRunRequest) {
-        queuedRuns.append(request)
-        queuedRunCount = queuedRuns.count
-        append("Queued \(request.mode.title.lowercased()) job.", stream: .system)
-    }
-
-    private func startNextQueuedRun() {
-        guard sessions.count < Self.maxConcurrentRuns, !queuedRuns.isEmpty else { return }
-        let next = queuedRuns.removeFirst()
-        queuedRunCount = queuedRuns.count
-        _ = startRun(RunSpec(
-            template: next.template,
-            draft: next.draft,
-            requestID: next.id,
-            conversationID: next.conversationID
-        ))
-    }
-
-    private func startOutputWatch(for session: RunSession) {
-        session.outputWatchTask = Task { [weak self, weak session] in
-            while !Task.isCancelled {
-                await MainActor.run {
-                    guard let self, let session else { return }
-                    self.publishDetectedOutputIfNeeded(for: session)
-                }
-                try? await Task.sleep(for: .milliseconds(350))
-            }
-        }
-    }
-
-    private func publishDetectedOutputIfNeeded(for session: RunSession) {
-        guard session.exitCode == nil else { return }
-        let detectedOutput = detectOutputURL(expected: session.expectedOutput, stdout: session.stdoutBuffer)
-        guard let detectedOutput, detectedOutput != session.lastOutputURL else { return }
-        session.lastOutputURL = detectedOutput
-        session.status = "Generated: \(detectedOutput.lastPathComponent)"
-        if session.id == foregroundSessionID {
-            lastOutputURL = detectedOutput
-            status = session.status
-        }
     }
 
     private func synchronizingCLIStatus(from current: CLIInstallationStatus) -> CLIInstallationStatus {
@@ -1909,100 +1432,6 @@ final class MereRunController: ObservableObject {
         readinessProcesses[mode] = nil
     }
 
-    /// Appends a run's output to its session, mirroring into the published console fields when
-    /// that session is the foreground one.
-    private func append(_ text: String, stream: LogStream, to session: RunSession) {
-        if stream == .stdout {
-            if session.spec.template.id == .videoSession {
-                consumeVideoSessionOutput(text, session: session)
-            }
-            session.stdoutBuffer += text
-            session.stdoutBuffer = Self.trimmed(session.stdoutBuffer, toByteLimit: Self.stdoutBufferByteLimit)
-            session.liveOutputText = session.stdoutBuffer.replacingOccurrences(of: "\0", with: "")
-            if let conversationID = session.spec.conversationID {
-                // Conversation turns accumulate the full (untrimmed) reply and publish a live,
-                // think-stripped view so a streaming bubble renders even when backgrounded. The
-                // streaming variant hides an in-progress (unclosed) reasoning block. Re-stripping
-                // the whole accumulator on every chunk is O(n²), so throttle to ~every 80 chars of
-                // growth; finishRun always publishes the complete, fully-stripped reply.
-                session.fullOutput += text
-                // Publish immediately on the first chunk (fast first render), then throttle.
-                if session.lastLiveStripLength == 0
-                    || session.fullOutput.count - session.lastLiveStripLength >= Self.liveStripGranularity {
-                    session.lastLiveStripLength = session.fullOutput.count
-                    conversationLiveText[conversationID] = ConversationTranscript.stripThinkTags(
-                        session.fullOutput.replacingOccurrences(of: "\0", with: ""),
-                        streaming: true
-                    )
-                }
-            } else {
-                publishDetectedOutputIfNeeded(for: session)
-            }
-        } else if stream == .stderr {
-            session.stderrBuffer += text
-            session.stderrBuffer = Self.trimmed(session.stderrBuffer, toByteLimit: Self.stderrBufferByteLimit)
-            if session.spec.template.id == .videoSession,
-               text.localizedCaseInsensitiveContains("session ready") {
-                session.status = "Resident session ready"
-            }
-        }
-
-        let normalized = text
-            .replacingOccurrences(of: "\r", with: "\n")
-            .components(separatedBy: .newlines)
-
-        for line in normalized {
-            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { continue }
-            // Collapse repeated carriage-return progress updates into one structured value
-            // instead of flooding the log with hundreds of lines.
-            if let progress = StudioProgressParser.parse(trimmed) {
-                session.currentProgress = progress
-                if let requestID = session.spec.requestID {
-                    progressByRequestID[requestID] = progress
-                }
-                continue
-            }
-            session.logs.append(LogLine(stream: stream, text: trimmed))
-        }
-
-        if session.logs.count > Self.logLineLimit {
-            session.logs.removeFirst(session.logs.count - Self.logLineLimit)
-        }
-        mirrorForeground(session)
-    }
-
-    private func consumeVideoSessionOutput(_ text: String, session: RunSession) {
-        session.interactiveOutputBuffer += text
-        let lines = session.interactiveOutputBuffer.components(separatedBy: .newlines)
-        session.interactiveOutputBuffer = lines.last ?? ""
-
-        let decoder = JSONDecoder()
-        decoder.keyDecodingStrategy = .convertFromSnakeCase
-        for line in lines.dropLast() {
-            let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty,
-                  let data = trimmed.data(using: .utf8),
-                  let response = try? decoder.decode(StudioVideoSessionResponse.self, from: data) else {
-                continue
-            }
-
-            if response.status == "result", let output = response.output {
-                let url = URL(fileURLWithPath: output)
-                session.lastOutputURL = url
-                session.status = "Generated: \(url.lastPathComponent)"
-                if session.id == foregroundSessionID {
-                    lastOutputURL = url
-                }
-            } else if response.status == "error" {
-                session.status = "Resident render failed"
-                if let error = response.error, !error.isBlank {
-                    session.logs.append(LogLine(stream: .stderr, text: error))
-                }
-            }
-        }
-    }
-
     private func expandedOptionalPath(_ path: String) -> String? {
         guard !path.isBlank else { return nil }
         return NSString(string: path).expandingTildeInPath
@@ -2016,114 +1445,15 @@ final class MereRunController: ObservableObject {
             guard !trimmed.isEmpty else { continue }
             logs.append(LogLine(stream: stream, text: trimmed))
         }
-        if logs.count > Self.logLineLimit {
-            logs.removeFirst(logs.count - Self.logLineLimit)
+        if logs.count > LogRing.defaultCapacity {
+            logs.removeFirst(logs.count - LogRing.defaultCapacity)
         }
     }
 
-    private static func trimmed(_ buffer: String, toByteLimit limit: Int) -> String {
-        guard buffer.utf8.count > limit else { return buffer }
-        return String(decoding: buffer.utf8.suffix(limit), as: UTF8.self)
-    }
-
-    private func nonEmptyTrimmed(_ buffer: String) -> String? {
-        let trimmed = buffer
-            .replacingOccurrences(of: "\0", with: "")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        return trimmed.isEmpty ? nil : trimmed
-    }
-
-    private func capturedResultText(for session: RunSession, exitCode: Int32) -> String? {
-        let stdout = nonEmptyTrimmed(session.stdoutBuffer)
-        guard exitCode != 0, let stderr = nonEmptyTrimmed(session.stderrBuffer) else {
-            return stdout
-        }
-
-        if let stdout {
-            return "\(stdout)\n\nSTDERR\n\(stderr)"
-        }
-        return stderr
-    }
-
-    private func expectedOutputURL(template: CommandTemplate, draft: CommandDraft) -> URL? {
-        guard template.outputKind != .none, !draft.outputPath.isBlank else {
-            return nil
-        }
-        return URL(fileURLWithPath: NSString(string: draft.outputPath).expandingTildeInPath)
-    }
-
-    /// Ensures the run's output directory exists. Returns `nil` on success, or a diagnostic
-    /// message when the directory could not be created (so the caller can surface it per run).
-    private func prepareOutputLocation(template: CommandTemplate, draft: CommandDraft) -> String? {
-        guard !draft.outputPath.isBlank else {
-            return nil
-        }
-
-        let outputURL = URL(fileURLWithPath: NSString(string: draft.outputPath).expandingTildeInPath)
-        let directoryURL: URL
-        switch template.outputKind {
-        case .file:
-            directoryURL = outputURL.deletingLastPathComponent()
-        case .directory:
-            directoryURL = outputURL
-        case .none:
-            return nil
-        }
-
-        do {
-            try FileManager.default.createDirectory(at: directoryURL, withIntermediateDirectories: true)
-            return nil
-        } catch {
-            return "Could not create output directory \(directoryURL.path): \(error.localizedDescription)"
-        }
-    }
-
+    /// Output detection for one run; see `ArtifactResolver`. Kept on the controller so callers
+    /// and tests have a single entry point that shares the injected file probe.
     func detectOutputURL(expected: URL?, stdout: String) -> URL? {
-        let fm = fileSystem
-
-        // 1. The explicit `--output` path the request asked for, once it has landed.
-        if let expected, fm.fileExists(atPath: expected.path) {
-            return expected
-        }
-
-        // 2. Honor the CLI's stdout contract: media commands print the artifact path as a bare
-        //    line and directory/OCR commands as `input -> output` pairs, most-recent first.
-        //    This is the only path that detects `input -> output` outputs at all (a whole pair
-        //    line never resolves as a file), and it targets the result line rather than guessing.
-        for candidate in StudioResultParser.outputPaths(fromStdout: stdout) {
-            let expanded = NSString(string: candidate).expandingTildeInPath
-            if fm.fileExists(atPath: expanded) {
-                return URL(fileURLWithPath: expanded)
-            }
-        }
-
-        // 3. Fallback for commands without a clean path contract: the last trailing stdout
-        //    line that happens to resolve to an existing file (e.g. a relative path).
-        let candidates = stdout
-            .components(separatedBy: .newlines)
-            .compactMap { line -> String? in
-                let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)
-                return trimmed.isEmpty ? nil : trimmed
-            }
-            .suffix(Self.outputDetectionLineLimit)
-            .reversed()
-
-        for candidate in candidates {
-            let expanded = NSString(string: candidate).expandingTildeInPath
-            if fm.fileExists(atPath: expanded) {
-                return URL(fileURLWithPath: expanded)
-            }
-        }
-
-        return nil
-    }
-
-    private func detectedOutputURLs(stdout: String) -> [URL] {
-        StudioResultParser.outputPaths(fromStdout: stdout).compactMap { candidate in
-            let expanded = NSString(string: candidate).expandingTildeInPath
-            guard fileSystem.fileExists(atPath: expanded) else { return nil }
-            return URL(fileURLWithPath: expanded)
-        }
+        ArtifactResolver(fileSystem: fileSystem).primaryOutput(expected: expected, stdout: stdout)
     }
 
     private func processEnvironment(templateID: CommandTemplateID, draft: CommandDraft) -> [String: String] {

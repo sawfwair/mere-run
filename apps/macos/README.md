@@ -13,7 +13,17 @@ owns persistence and deduplication, and publishes navigation through
 
 - `StudioTypes.swift`: user-facing mode, draft, and request types.
 - `CommandCatalog.swift`: mode-to-command templates.
-- `MereRunController.swift`: child-process launching and log capture.
+- `Jobs/`: the run model. `JobStore` owns every child process behind the
+  `MereRunProcessRunning` seam, with three lanes (`inference`, capped at two
+  with a FIFO queue; `utility`, capped at four; `probe`, deduplicated by key),
+  and publishes one observable `Job` per run (state, status, progress, log,
+  live output, artifacts, result) plus a lossless `completions` stream.
+  `ArtifactResolver` finds a run's outputs from the request and the CLI's
+  stdout.
+- `MereRunController.swift`: the facade views bind to. It snapshots Settings
+  and the CLI launch into a `JobRequest`, mirrors the foreground job into its
+  published console fields, and still owns readiness probes, utility commands,
+  the Advanced draft, and persisted settings.
 - `StudioLibraryStore.swift`: local library persistence.
 
 Do not duplicate runtime logic here. The app should translate UI state into CLI
