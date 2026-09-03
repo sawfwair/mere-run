@@ -565,10 +565,14 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         XCTAssertTrue(cmd.json)
     }
 
-    func testQ36MTPBenchmarkAcceptsQ38AndOfficialOrnithQuantizedTargets() throws {
+    func testQ36MTPBenchmarkAcceptsQ38FlashNextAndOfficialOrnithQuantizedTargets() throws {
         for modelId in [
             Q35Resources.q38TwentySevenBModelId,
             Q35Resources.q38TwentySevenB4BitModelId,
+            Q35Resources.q38FlashNextMixedModelId,
+            Q35Resources.q38FlashNext3BitModelId,
+            Q35Resources.q38FlashNext3BitNativePLEModelId,
+            Q35Resources.q38FlashNext4BitModelId,
             Q35Resources.ornith35BMLX4BitModelId,
             Q35Resources.ornith35BMLX6BitModelId,
             Q35Resources.ornith35BMLX8BitModelId,

@@ -2517,9 +2517,10 @@ and context limits.
 ### `mere.run model benchmark q36-mtp`
 
 Run a requested-token real-checkpoint Qwen-family MTP comparison. The command
-supports `text-chat-q36-nano` (default), Qwen3.8 27B BF16 and Q4,
-`text-agent-ornith-9b`, and the official Ornith 1.5 Q4/Q6/Q8/BF16 ids. It runs
-the selected model with three policies:
+supports `text-chat-q36-nano` (default), Qwen3.8 27B BF16 and Q4, the
+Flash-Next mixed, Q3, native-PLE Q3, and Q4 ids, `text-agent-ornith-9b`, and the
+official Ornith 1.5 Q4/Q6/Q8/BF16 ids. It runs the selected model with three
+policies:
 
 - `baseline`: MTP disabled with `MERERUN_Q35_MTP_SPECULATION=0`.
 - `adaptive`: production policy (short-prompt MTP for Ornith 1.5; the measured
@@ -2543,6 +2544,9 @@ parity. Greedy forced MTP uses the native
 block verifier; non-greedy forced MTP stays on the exact probabilistic
 speculative path. Use `--mtp-block-size` to test a different greedy draft block
 cap and `--forced-mtp-min-prompt-tokens` to adjust the forced policy threshold.
+Each fresh variant receives an untimed warm-up with prefix caching and
+continuous batching disabled, so reported timing compares equivalent warm
+single-request paths.
 
 ### `mere.run model benchmark q38-verification`
 

@@ -352,6 +352,11 @@ They run real checkpoint paths with fixed prompt and decode lengths so runtime
 changes can be compared consistently. The built-in prompt fixtures are for
 runtime comparison, not model-quality evaluation.
 
+The `q36-mtp` lane warms each fresh baseline, adaptive, and forced generator
+before timing it. Prefix caching and continuous batching are disabled for this
+comparison so run order does not turn cold compilation into a reported policy
+difference.
+
 The `q38-verification` lane is narrower. It measures target-only linear blocks
 against target-generated oracle tokens. Use it to find the useful verification
 width before implementing a drafter or tree-aware recurrent kernels. Don't

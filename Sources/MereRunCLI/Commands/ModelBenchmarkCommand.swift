@@ -193,6 +193,10 @@ struct ModelBenchmarkQ36MTP: AsyncParsableCommand {
             Q35Resources.q36NanoModelId,
             Q35Resources.q38TwentySevenBModelId,
             Q35Resources.q38TwentySevenB4BitModelId,
+            Q35Resources.q38FlashNextMixedModelId,
+            Q35Resources.q38FlashNext3BitModelId,
+            Q35Resources.q38FlashNext3BitNativePLEModelId,
+            Q35Resources.q38FlashNext4BitModelId,
             Q35Resources.ornith9BModelId,
             Q35Resources.ornith35BMLX4BitModelId,
             Q35Resources.ornith35BMLX6BitModelId,
@@ -367,16 +371,33 @@ struct ModelBenchmarkQ36MTP: AsyncParsableCommand {
         _ variant: Q36MTPBenchmarkVariant,
         request: ChatRequest
     ) async throws -> Q36MTPBenchmarkVariantResult {
-        let generator = Q35Generator(modelId: model)
-        let memoryBefore = ProcessMemorySnapshot.currentResidentBytes()
-        let start = Date()
-        let response = try await withTemporaryEnvironment(variant.environmentOverrides(self)) {
-            try await generator.chat(request, modelPath: modelRoot, progressHandler: nil)
+        let generator = Q35Generator(
+            modelId: model,
+            prefixKVCacheEnabled: false,
+            continuousBatchingEnabled: false
+        )
+        let measurement = try await withTemporaryEnvironment(variant.environmentOverrides(self)) {
+            var warmup = request
+            warmup.maxTokens = min(16, request.maxTokens)
+            _ = try await generator.chat(warmup, modelPath: modelRoot, progressHandler: nil)
+
+            let memoryBefore = ProcessMemorySnapshot.currentResidentBytes()
+            let start = Date()
+            let response = try await generator.chat(
+                request,
+                modelPath: modelRoot,
+                progressHandler: nil
+            )
+            return (
+                response: response,
+                elapsed: Date().timeIntervalSince(start),
+                memoryBefore: memoryBefore,
+                memoryAfter: ProcessMemorySnapshot.currentResidentBytes()
+            )
         }
-        let elapsed = Date().timeIntervalSince(start)
-        let memoryAfter = ProcessMemorySnapshot.currentResidentBytes()
         await generator.unload()
 
+        let response = measurement.response
         guard let timing = response.timing else {
             throw ValidationError("\(variant.name) did not return timing data.")
         }
@@ -392,7 +413,7 @@ struct ModelBenchmarkQ36MTP: AsyncParsableCommand {
             ),
             promptTokens: promptTokens,
             generatedTokens: response.tokensGenerated,
-            elapsedSeconds: elapsed,
+            elapsedSeconds: measurement.elapsed,
             loadSeconds: timing.loadSeconds,
             prefillSeconds: timing.prefillSeconds,
             decodeSeconds: timing.decodeSeconds,
@@ -403,9 +424,11 @@ struct ModelBenchmarkQ36MTP: AsyncParsableCommand {
             decodeTokensPerSecond: timing.decodeSeconds > 0
                 ? Double(response.tokensGenerated) / timing.decodeSeconds
                 : nil,
-            endToEndTokensPerSecond: elapsed > 0 ? Double(response.tokensGenerated) / elapsed : nil,
-            residentMemoryBeforeBytes: memoryBefore,
-            residentMemoryAfterBytes: memoryAfter,
+            endToEndTokensPerSecond: measurement.elapsed > 0
+                ? Double(response.tokensGenerated) / measurement.elapsed
+                : nil,
+            residentMemoryBeforeBytes: measurement.memoryBefore,
+            residentMemoryAfterBytes: measurement.memoryAfter,
             acceleration: response.acceleration,
             outputSHA256: FusedBenchmarkHash.sha256(
                 (response.reasoningContent ?? "") + "\u{0}" + response.response
