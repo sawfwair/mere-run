@@ -34,9 +34,19 @@ imported row. External launchers must never edit `library.json` directly.
 The window is one `NavigationSplitView`. The sidebar lists fifteen **domains**
 in four sections — Create (Image, Video, Music, Sound, Voice, 3D), Converse
 (Chat), Understand (Vision, Audio, Text, Earth), System (Models, Server, Runs,
-Plugins) — with the machine status cluster as its only footer. Every domain has
-**tasks** in the toolbar: a segmented control for four or fewer, a menu
-otherwise. Twelve tasks are the composer-driven prompt modes (`StudioMode`) and
+Plugins) — with the machine status cluster as its only footer. The sidebar
+header is the wordmark (`mere` and a green period in Caveat Medium, bundled
+under `Resources/Fonts` and registered at launch by `MereRunTheme.Brand`), and
+the selected row is a solid accent pill drawn by the row itself (the native
+`List` highlight is switched off; selection, arrow keys, and VoiceOver are
+unchanged). The footer pill reads "Ready · N models" once the status probe
+answers, "Serving · N models" while the local server is up, and "Server
+unreachable" if the probe never answers; its popover holds the details. Every
+domain has **tasks** in the toolbar: one segmented pill for up to six tasks,
+or five segments plus a "More" menu segment for Vision. The toolbar's leading
+item is the domain glyph, title, and one-line subtitle; trailing are the
+Library, Inspector (placeholder, disabled), and Command Console toggles.
+Twelve tasks are the composer-driven prompt modes (`StudioMode`) and
 keep the canvas, composer, and Library column; every other task hosts a former
 specialist sheet inline, full height, with its own controls and no Done button.
 Nothing that used to be a sheet is modal any more; the remaining sheets are
