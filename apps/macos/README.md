@@ -109,7 +109,11 @@ candidate ranking, LM planning, adapter stacks, stems, LRC, recipes, and DAW
 delivery. Music ▸ Analyze adds standalone ACE-Step understanding with structured
 results and Music ▸ Transcribe MuScriptor transcription with an embedded MIDI
 piano roll; the resident ACE-Step server's health and lifecycle live under
-Server ▸ Music server. Music ▸ Realtime is the Magenta RT2 workspace;
+Server ▸ Music server. Music ▸ Realtime is the Magenta RT2 session: a transport
+with the live clock, the recording's waveform, Prompt A/B steering with a blend
+slider, temperature, top-k, and guidance sent over the CLI's stdin protocol as
+you release each control, the session log, and a job bar with Cancel and Log;
+it re-attaches to a running session when you navigate back to it.
 Music ▸ Train is the shared LoRA/LoKr trainer with dataset audio previews and live
 loss events. The Command Console retains the complete raw command surface.
 Audio ▸ Enhance and Audio ▸ Separate (also reachable as Music ▸ Separate) are
