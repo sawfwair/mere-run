@@ -18,8 +18,12 @@ struct MereRunRootView: View {
 }
 
 /// The Command Console's content: the full contract surface as three panes (template sidebar ·
-/// editor · run console) that share the window's width and resize with it.
+/// editor · run console) that share the window's width and resize with it. While its window is
+/// key the menu bar acts on the console's own Run/Stop and on the Studio window's navigation.
 struct AdvancedControlSurface: View {
+    @EnvironmentObject private var controller: MereRunController
+    @EnvironmentObject private var navigation: NavigationModel
+
     var body: some View {
         HSplitView {
             CommandSidebar()
@@ -34,6 +38,31 @@ struct AdvancedControlSurface: View {
         }
         .background(MereRunTheme.background.ignoresSafeArea())
         .foregroundStyle(MereRunTheme.textPrimary)
+        .onAppear { navigation.isConsoleOpen = true }
+        .onDisappear { navigation.isConsoleOpen = false }
+        .focusedSceneValue(\.studioActions, sceneActions)
+    }
+
+    private var sceneActions: StudioSceneActions {
+        StudioSceneActions(
+            destination: navigation.destination,
+            showLibrary: Binding(
+                get: { navigation.showLibrary },
+                set: { navigation.showLibrary = $0 }
+            ),
+            canShowLibrary: navigation.destination.domain.hasPromptWorkspace,
+            open: { navigation.open(destination: $0) },
+            openDomain: { navigation.open(domain: $0) },
+            newChat: {},
+            canNewChat: false,
+            runComposer: { _ = controller.run() },
+            canRun: !controller.isRunning,
+            stop: controller.cancel,
+            canStop: controller.isRunning,
+            openConsole: {},
+            showGuide: { navigation.showGuide = true },
+            importReceipt: {}
+        )
     }
 }
 

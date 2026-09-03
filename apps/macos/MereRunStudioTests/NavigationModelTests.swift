@@ -98,7 +98,115 @@ final class NavigationModelTests: XCTestCase {
         XCTAssertNil(StudioTask.visionRead.visionLabTask)
     }
 
+    // MARK: - Library attribution
+
+    func testEveryCommandTemplateMapsToADomain() {
+        var counts: [StudioDomain: Int] = [:]
+        for templateID in CommandTemplateID.allCases {
+            counts[templateID.studioDomain, default: 0] += 1
+        }
+        XCTAssertEqual(CommandTemplateID.imageReconstruct3DTrellis2.studioDomain, .threeD)
+        XCTAssertEqual(CommandTemplateID.geoFlood.studioDomain, .earth)
+        XCTAssertEqual(CommandTemplateID.textEmbed.studioDomain, .text)
+        XCTAssertEqual(CommandTemplateID.qualityGate.studioDomain, .models)
+        XCTAssertEqual(CommandTemplateID.modelBenchmarkFused.studioDomain, .models)
+        XCTAssertEqual(CommandTemplateID.apiServe.studioDomain, .server)
+        XCTAssertEqual(CommandTemplateID.musicServe.studioDomain, .server)
+        XCTAssertEqual(CommandTemplateID.speechDiarize.studioDomain, .audio)
+        XCTAssertEqual(CommandTemplateID.speechSynthesize.studioDomain, .voice)
+        XCTAssertEqual(CommandTemplateID.runFetch.studioDomain, .runs)
+        XCTAssertEqual(CommandTemplateID.pluginInstall.studioDomain, .plugins)
+        for mode in StudioMode.allCases {
+            XCTAssertEqual(mode.defaultTemplateID.studioDomain, mode.destination.domain, "\(mode)")
+        }
+        // Every domain files at least one command.
+        XCTAssertEqual(Set(counts.keys), Set(StudioDomain.allCases))
+    }
+
+    func testLibraryRowsFileUnderTheirCommandsDomainNotTheAttributingMode() {
+        let now = Date()
+        func row(_ mode: StudioMode, _ templateID: CommandTemplateID?) -> StudioLibraryItem {
+            StudioLibraryItem(
+                id: UUID(), mode: mode, prompt: "p", inputURL: nil, outputURL: nil,
+                createdAt: now, updatedAt: now, status: .completed, exitCode: 0,
+                commandPreview: "", outputText: nil, customTitle: nil, templateID: templateID
+            )
+        }
+        let mesh = row(.createImage, .imageReconstruct3D)
+        let flood = row(.readImage, .geoFlood)
+        let gate = row(.chat, .qualityGate)
+        let legacyImage = row(.createImage, nil)
+        let items = [mesh, flood, gate, legacyImage]
+
+        XCTAssertEqual(mesh.domain, .threeD)
+        XCTAssertEqual(flood.domain, .earth)
+        XCTAssertEqual(gate.domain, .models)
+        XCTAssertEqual(legacyImage.domain, .image)
+        XCTAssertEqual(items.filter { $0.domain == .image }.map(\.id), [legacyImage.id])
+        XCTAssertEqual(items.filter { $0.domain == .vision }, [])
+        XCTAssertEqual(items.filter { $0.domain == .chat }, [])
+    }
+
+    func testOnlyDomainsWithAPromptModeShowTheLibraryColumn() {
+        let withLibrary = StudioDomain.allCases.filter(\.hasPromptWorkspace)
+        XCTAssertEqual(withLibrary, [.image, .video, .music, .sound, .voice, .chat, .vision, .audio])
+        for domain in [StudioDomain.threeD, .text, .earth, .models, .server, .runs, .plugins] {
+            XCTAssertFalse(domain.hasPromptWorkspace, "\(domain)")
+        }
+    }
+
     // MARK: - NavigationModel
+
+    func testConsolePresenceGatesTheComposerSync() {
+        let navigation = NavigationModel()
+        XCTAssertTrue(navigation.shouldSyncComposerToConsole(requested: true))
+        XCTAssertFalse(navigation.shouldSyncComposerToConsole(requested: false))
+
+        navigation.isConsoleOpen = true
+        XCTAssertFalse(navigation.shouldSyncComposerToConsole(requested: true), "raising an open console keeps its edits")
+
+        navigation.isConsoleOpen = false
+        XCTAssertTrue(navigation.shouldSyncComposerToConsole(requested: true))
+    }
+
+    func testRestoreReconcilesRememberedTaskVisionVariantAndPromptMode() {
+        let navigation = NavigationModel()
+
+        // A v1 upgrader: studio.mode says chat while the destination defaults to Image.
+        XCTAssertEqual(navigation.restore(destination: .default, lastPromptMode: .chat), .createImage)
+        XCTAssertEqual(navigation.destination, .default)
+
+        // A persisted Vision ▸ Pose destination sets the rail variant and remembers the task.
+        let pose = StudioDestination(domain: .vision, task: .visionPose)
+        XCTAssertEqual(navigation.restore(destination: pose, lastPromptMode: .music), .music)
+        XCTAssertEqual(navigation.destination, pose)
+        XCTAssertEqual(navigation.visionLabTask, .pose)
+        XCTAssertEqual(navigation.rememberedTasks[.vision], .visionPose)
+
+        // A System destination keeps the persisted prompt mode.
+        let models = StudioDestination(domain: .models, task: .modelsHealth)
+        XCTAssertEqual(navigation.restore(destination: models, lastPromptMode: .code), .code)
+        navigation.open(domain: .vision)
+        XCTAssertEqual(navigation.destination.task, .visionPose)
+    }
+
+    func testVisionLabVariantFollowsTheToolbarAndTheRail() {
+        let navigation = NavigationModel(destination: StudioDestination(domain: .vision, task: .visionRead))
+        navigation.open(task: .visionFaces)
+        XCTAssertEqual(navigation.visionLabTask, .faceDetect)
+
+        navigation.selectVisionLabVariant(.faceCompare)
+        XCTAssertEqual(navigation.visionLabTask, .faceCompare)
+        XCTAssertEqual(navigation.destination.task, .visionFaces)
+
+        navigation.open(task: .visionFaces)
+        XCTAssertEqual(navigation.visionLabTask, .faceCompare, "re-picking the same toolbar task keeps the variant")
+
+        navigation.selectVisionLabVariant(.geometryMultiview)
+        XCTAssertEqual(navigation.destination.task, .visionGeometry)
+        navigation.open(task: .visionRead)
+        XCTAssertEqual(navigation.visionLabTask, .geometryMultiview, "prompt tasks leave the lab variant alone")
+    }
 
     func testOpenDomainRemembersTheLastTaskShownThere() {
         let navigation = NavigationModel()

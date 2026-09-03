@@ -6,6 +6,8 @@ import SwiftUI
 struct StudioSceneActions {
     let destination: StudioDestination
     let showLibrary: Binding<Bool>
+    /// False on domains without a prompt workspace, which have no Library column.
+    let canShowLibrary: Bool
     let open: (StudioDestination) -> Void
     /// Opens a domain at the task last shown there.
     let openDomain: (StudioDomain) -> Void

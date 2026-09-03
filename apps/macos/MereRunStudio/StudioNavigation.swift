@@ -119,6 +119,64 @@ enum StudioDomain: String, CaseIterable, Codable, Identifiable {
         StudioDestination(domain: self, task: defaultTask)
     }
 
+    /// Whether one of this domain's tasks is a composer-driven prompt mode. Only those domains
+    /// show the Library column; the others host list-and-detail or form pages full width.
+    var hasPromptWorkspace: Bool {
+        tasks.contains { $0.mode != nil }
+    }
+
+    /// The domain a command belongs to, so Library rows land where the work was done rather
+    /// than under the prompt mode a specialist view happened to attribute them to.
+    init(templateID: CommandTemplateID) {
+        switch templateID {
+        case .imageGenerate, .imageTrainLoRA, .imageValidate, .imageDatasetDiscover, .imageRunPlan,
+             .imageVisualizeRun, .adapterList, .adapterPull:
+            self = .image
+        case .imageReconstruct3D, .imageReconstruct3DTrellis2, .imageReconstruct3DMultiview:
+            self = .threeD
+        case .videoGenerate, .videoRetake, .videoDubIt, .videoAnimate, .videoCosmos3, .videoPrepareMasks,
+             .videoExportLatents, .videoSession:
+            self = .video
+        case .musicGenerate, .musicAnalyze, .musicTranscribe, .musicSeparate, .musicRealtime,
+             .musicTrainAdapter:
+            self = .music
+        case .sfxGenerate, .sfxVideo, .sfxAEEncode, .sfxAEDecode, .sfxClapScore, .sfxConditionText,
+             .audioGenerate:
+            self = .sound
+        case .speechSynthesize, .speechProfileList, .speechProfileCreate, .speechProfileDelete:
+            self = .voice
+        case .textChat, .textCode, .textTrainLoRA:
+            self = .chat
+        case .visionInspect, .visionEmbed, .visionCaption, .visionOCR, .visionGround, .visionSegment,
+             .visionTrack, .visionTrackLive, .visionFaceDetect, .visionFaceEmbed, .visionFaceCompare,
+             .visionFaceBatch, .visionPose, .visionFlow, .visionDepthVideo, .visionGeometry,
+             .visionGeometryMultiview:
+            self = .vision
+        case .speechTranscribe, .speechDiarize, .speechListen, .audioEnhance:
+            self = .audio
+        case .textEmbed, .textAnonymize:
+            self = .text
+        case .geoFlood, .geoFire, .geoTessera, .geoOlmoEarth:
+            self = .earth
+        case .modelList, .modelCapabilities, .modelPull, .modelInfo, .modelRemove, .modelRepairManifests,
+             .modelOptimize, .modelStorage, .modelGarbageCollect, .modelRuntimeGet, .modelRuntimeSet,
+             .modelLocationList, .modelLocationAdd, .modelLocationRemove, .modelLocationBind,
+             .modelLocationUnbind, .qualityGate, .modelBenchmark, .modelBenchmarkLagunaDFlash,
+             .modelBenchmarkChat, .modelBenchmarkCode, .modelBenchmarkFused, .modelBenchmarkFusedFixture,
+             .modelBenchmarkVLM, .modelBenchmarkToolCalls, .modelBenchmarkToolContinuations,
+             .modelBenchmarkGemma4KV, .modelBenchmarkGemma4MTP, .modelBenchmarkAPIWorkload:
+            self = .models
+        case .apiServe, .visionServe, .musicServe, .openWebui, .worldServe, .statusSnapshot, .agentOnboard,
+             .agentStatus, .agentInstallPi, .agentStart, .setup, .graphStudio, .nodeConsole, .custom:
+            self = .server
+        case .runList, .runInspect, .runWatch, .runFetch, .runCancel, .runRetry, .evaluationPackValidate,
+             .evaluationRun, .evaluationPromote:
+            self = .runs
+        case .pluginList, .pluginInstall, .pluginDoctor, .pluginInfo, .pluginRun, .pluginRollback:
+            self = .plugins
+        }
+    }
+
     /// ⌘1…⌘9 for the first nine domains, ⌥⌘1… for the rest, in sidebar order.
     var keyboardShortcut: KeyboardShortcut? {
         guard let index = Self.allCases.firstIndex(of: self) else { return nil }
@@ -347,6 +405,20 @@ struct StudioDestination: Hashable, Codable, RawRepresentable {
     }
 }
 
+extension CommandTemplateID {
+    var studioDomain: StudioDomain {
+        StudioDomain(templateID: self)
+    }
+}
+
+extension StudioLibraryItem {
+    /// The domain a row is filed under: its command's domain when the row records one, otherwise
+    /// the domain of the mode that created it.
+    var domain: StudioDomain {
+        templateID?.studioDomain ?? mode.destination.domain
+    }
+}
+
 extension StudioMode {
     /// The v2 task that renders this mode. Every mode maps to exactly one task.
     var task: StudioTask {
@@ -387,9 +459,11 @@ enum StudioTaskControlStyle: Equatable {
     }
 }
 
-/// Per-window navigation state: the destination, the selected Library row, and the Library
-/// column's visibility, plus the entry points that used to be scattered across the root view,
-/// the App's deep-link handler, and `StudioNavigationCoordinator`.
+/// The Studio's navigation state: the destination, the selected Library row, the Library column's
+/// visibility, and whether the Command Console window is open, plus the entry points that used
+/// to be scattered across the root view, the App's deep-link handler, and
+/// `StudioNavigationCoordinator`. It is app-level so the Console scene and the menu bar can act
+/// on the Studio window; the root view mirrors what must persist into `@SceneStorage`.
 @MainActor
 final class NavigationModel: ObservableObject {
     @Published var destination: StudioDestination
@@ -398,16 +472,49 @@ final class NavigationModel: ObservableObject {
     @Published var deepLinkError: String?
     /// The task last shown in each domain, so returning to a domain lands where you left it.
     @Published private(set) var rememberedTasks: [StudioDomain: StudioTask] = [:]
+    /// The Vision Lab variant its rail shows (Faces covers detect/embed/compare/batch, Geometry
+    /// covers single and multi-view); kept in step with the Vision toolbar task.
+    @Published private(set) var visionLabTask: StudioVisionTask = .faceDetect
+    /// Set by the Command Console scene while its window exists. Opening the console syncs the
+    /// composer draft only when this is false, so raising an open console never clobbers edits.
+    @Published var isConsoleOpen = false
+    /// Help ▸ mere.run Guide presents the Guide sheet on the Studio window from any key window.
+    @Published var showGuide = false
 
     init(destination: StudioDestination = .default) {
         self.destination = destination
         rememberedTasks[destination.domain] = destination.task
+        if let variant = destination.task.visionLabTask { visionLabTask = variant }
     }
 
     func open(destination: StudioDestination) {
         rememberedTasks[destination.domain] = destination.task
+        if let variant = destination.task.visionLabTask, visionLabTask.studioTask != destination.task {
+            visionLabTask = variant
+        }
         guard destination != self.destination else { return }
         self.destination = destination
+    }
+
+    /// Whether opening the Console should carry the composer's draft into it: only when the
+    /// caller asks for it and no console window already holds the user's edits.
+    func shouldSyncComposerToConsole(requested: Bool) -> Bool {
+        requested && !isConsoleOpen
+    }
+
+    /// The Vision Lab rail picked a variant: show it and move the toolbar task to its group.
+    func selectVisionLabVariant(_ variant: StudioVisionTask) {
+        visionLabTask = variant
+        open(task: variant.studioTask)
+    }
+
+    /// Scene restore: applies the persisted destination through `open` so remembered tasks and
+    /// the Vision Lab variant learn it, and returns the prompt mode the composer should hold —
+    /// the destination's own mode when it has one, otherwise the persisted last prompt mode.
+    @discardableResult
+    func restore(destination: StudioDestination, lastPromptMode: StudioMode) -> StudioMode {
+        open(destination: destination)
+        return destination.task.mode ?? lastPromptMode
     }
 
     func open(domain: StudioDomain) {

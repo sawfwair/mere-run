@@ -36,6 +36,7 @@ struct MereRunApp: App {
     @NSApplicationDelegateAdaptor(MereRunAppDelegate.self) private var appDelegate
     @StateObject private var controller = MereRunController()
     @StateObject private var library = StudioLibraryStore()
+    @StateObject private var navigation = NavigationModel()
     @StateObject private var crashReporter = StudioCrashReporter()
     private let updaterController = SPUStandardUpdaterController(
         startingUpdater: true,
@@ -48,6 +49,7 @@ struct MereRunApp: App {
             MereRunRootView()
                 .environmentObject(controller)
                 .environmentObject(library)
+                .environmentObject(navigation)
                 .frame(
                     minWidth: StudioLayoutPolicy.minimumWindowWidth,
                     minHeight: StudioLayoutPolicy.minimumWindowHeight
@@ -83,6 +85,7 @@ struct MereRunApp: App {
             AdvancedControlSurface()
                 .environmentObject(controller)
                 .environmentObject(library)
+                .environmentObject(navigation)
                 .frame(minWidth: 960, minHeight: 560)
         }
         .defaultSize(width: 1_260, height: 780)

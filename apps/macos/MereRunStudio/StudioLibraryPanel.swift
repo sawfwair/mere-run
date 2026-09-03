@@ -25,7 +25,7 @@ struct StudioLibraryPanel: View {
     private var scopedItems: [StudioLibraryItem] {
         switch scope {
         case .all: return items
-        case .domain: return items.filter { $0.mode.destination.domain == domain }
+        case .domain: return items.filter { $0.domain == domain }
         }
     }
 

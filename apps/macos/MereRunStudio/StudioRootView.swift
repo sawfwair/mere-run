@@ -9,8 +9,9 @@ import UniformTypeIdentifiers
 struct StudioRootView: View {
     @EnvironmentObject private var controller: MereRunController
     @EnvironmentObject private var library: StudioLibraryStore
+    @EnvironmentObject private var navigation: NavigationModel
     @Environment(\.openWindow) private var openWindow
-    @StateObject private var navigation = NavigationModel()
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     // Persisted per scene so relaunch restores the last place, the last prompt mode, and the panel
     // layout. `studio.mode` keeps its v1 meaning (the last prompt mode) so drafts and readiness
     // stay attached to it while a System or Lab task is shown.
@@ -19,10 +20,11 @@ struct StudioRootView: View {
     @SceneStorage("studio.showLibrary") private var storedShowLibrary = true
     @SceneStorage("studio.libraryScope") private var libraryScope: StudioLibraryScope = .domain
     @State private var columnVisibility: NavigationSplitViewVisibility = .all
-    @State private var isRestoringDestination = false
+    /// The prompt mode the composer, canvas, and readiness were last set up for, so the
+    /// destination observer activates a mode exactly once however the destination arrived.
+    @State private var activatedMode: StudioMode?
     @State private var draft = StudioDraft()
     @State private var showOptions = false
-    @State private var showHelp = false
     @State private var isDropTargeted = false
     /// The conversation the canvas/composer targets in chat/code modes. nil means a fresh,
     /// not-yet-sent conversation (so the library has no empty row until the first message).
@@ -33,9 +35,6 @@ struct StudioRootView: View {
     /// Locally installed models feeding the composer's quick-picker.
     @State private var installedModels: [StudioModelInventoryRow] = []
     @State private var modelUsageTermsByID: [String: StudioModelUsageTerms] = [:]
-    /// Vision Lab keeps sub-variants (face embed/compare/batch, multi-view geometry) behind one
-    /// toolbar task each; this is the variant its rail currently shows.
-    @State private var visionLabTask: StudioVisionTask = .faceDetect
     @State private var imageDatasetTask: StudioUtilityTask = .datasetDiscovery
     @AppStorage("mererun.app.hasCompletedWelcome") private var hasCompletedWelcome = false
     @FocusState private var promptFocused: Bool
@@ -50,6 +49,12 @@ struct StudioRootView: View {
 
     private var showsPromptWorkspace: Bool {
         destination.task.mode != nil
+    }
+
+    /// The Library column belongs to domains with a prompt workspace; System pages and the
+    /// form-shaped domains (3D, Earth, Text) use the full width.
+    private var showsLibraryColumn: Bool {
+        navigation.showLibrary && destination.domain.hasPromptWorkspace
     }
 
     private var selectedItem: StudioLibraryItem? {
@@ -181,10 +186,10 @@ struct StudioRootView: View {
             banners
 
             HStack(spacing: 0) {
-                if navigation.showLibrary {
+                if showsLibraryColumn {
                     libraryColumn
                         .frame(width: StudioLayoutPolicy.libraryWidth)
-                        .transition(.move(edge: .leading).combined(with: .opacity))
+                        .transition(reduceMotion ? .identity : .move(edge: .leading).combined(with: .opacity))
 
                     Divider()
                         .overlay(MereRunTheme.border.opacity(0.5))
@@ -250,16 +255,16 @@ struct StudioRootView: View {
         }
 
         ToolbarItemGroup(placement: .primaryAction) {
-            Button {
-                withAnimation(MereRunTheme.Motion.standard) {
-                    navigation.showLibrary.toggle()
+            if destination.domain.hasPromptWorkspace {
+                Button {
+                    toggleLibrary()
+                } label: {
+                    Image(systemName: "sidebar.squares.left")
+                        .foregroundStyle(navigation.showLibrary ? MereRunTheme.accent : MereRunTheme.textSecondary)
                 }
-            } label: {
-                Image(systemName: "sidebar.squares.left")
-                    .foregroundStyle(navigation.showLibrary ? MereRunTheme.accent : MereRunTheme.textSecondary)
+                .help(navigation.showLibrary ? "Hide Library (⌥⌘L)" : "Show Library (⌥⌘L)")
+                .accessibilityLabel(navigation.showLibrary ? "Hide Library" : "Show Library")
             }
-            .help(navigation.showLibrary ? "Hide Library (⌥⌘L)" : "Show Library (⌥⌘L)")
-            .accessibilityLabel(navigation.showLibrary ? "Hide Library" : "Show Library")
 
             Button {
                 openConsole()
@@ -523,11 +528,8 @@ struct StudioRootView: View {
 
     private var visionLabBinding: Binding<StudioVisionTask> {
         Binding(
-            get: { visionLabTask },
-            set: { task in
-                visionLabTask = task
-                navigation.open(task: task.studioTask)
-            }
+            get: { navigation.visionLabTask },
+            set: { navigation.selectVisionLabVariant($0) }
         )
     }
 
@@ -646,7 +648,7 @@ struct StudioRootView: View {
 
     private var presentedShell: some View {
         shell
-            .sheet(isPresented: $showHelp) {
+            .sheet(isPresented: $navigation.showGuide) {
                 StudioHelpSheet()
                     .environmentObject(controller)
                     .frame(width: 720, height: 560)
@@ -695,6 +697,7 @@ struct StudioRootView: View {
         StudioSceneActions(
             destination: destination,
             showLibrary: showLibraryBinding,
+            canShowLibrary: destination.domain.hasPromptWorkspace,
             open: { navigation.open(destination: $0) },
             openDomain: { navigation.open(domain: $0) },
             newChat: startNewConversation,
@@ -705,7 +708,7 @@ struct StudioRootView: View {
             stop: controller.cancel,
             canStop: controller.isRunning,
             openConsole: { openConsole() },
-            showGuide: { showHelp = true },
+            showGuide: { navigation.showGuide = true },
             importReceipt: importReceipt
         )
     }
@@ -722,12 +725,11 @@ struct StudioRootView: View {
         }
         .onAppear {
             navigation.showLibrary = storedShowLibrary
-            if storedDestination != navigation.destination {
-                // The destination observer would re-run the mode activation below; skip that one.
-                isRestoringDestination = true
-                navigation.destination = storedDestination
-            }
-            activateMode(mode)
+            // Restore goes through the model so remembered tasks and the Vision Lab variant learn
+            // the persisted destination; the reconciled prompt mode replaces a stale studio.mode.
+            let restoredMode = navigation.restore(destination: storedDestination, lastPromptMode: lastPromptMode)
+            lastPromptMode = restoredMode
+            activateMode(restoredMode)
             refreshInstalledModels()
         }
         .onOpenURL { url in
@@ -737,19 +739,11 @@ struct StudioRootView: View {
 
     private var navigationObservedShell: some View {
         lifecycleShell
-        .onChange(of: navigation.destination) { previous, next in
+        .onChange(of: navigation.destination) { _, next in
             storedDestination = next
-            if isRestoringDestination {
-                isRestoringDestination = false
-                return
-            }
-            if let visionTask = next.task.visionLabTask, visionLabTask.studioTask != next.task {
-                visionLabTask = visionTask
-            }
             guard let nextMode = next.task.mode else { return }
-            let previousMode = previous.task.mode ?? lastPromptMode
             lastPromptMode = nextMode
-            if nextMode != previousMode {
+            if nextMode != activatedMode {
                 activateMode(nextMode)
             } else if nextMode != .listen {
                 promptFocused = true
@@ -886,6 +880,7 @@ struct StudioRootView: View {
     /// Library row the user just picked (so selecting a row of another domain lands on that row),
     /// otherwise opens the most recent item or thread of the mode.
     private func activateMode(_ newMode: StudioMode) {
+        activatedMode = newMode
         var nextDraft = freshDraft(for: newMode)
         studioError = nil
         let preferred = navigation.selectedLibraryID.flatMap { id in
@@ -924,12 +919,23 @@ struct StudioRootView: View {
     }
 
     /// Opens the Command Console window with the composer's draft carried into the Advanced
-    /// template for the current mode, so the console deepens the current task.
+    /// template for the current mode, so the console deepens the current task. An already-open
+    /// console is only raised: its edits and run state are never reset from here.
     private func openConsole(syncingComposer: Bool = true) {
-        if syncingComposer {
+        if navigation.shouldSyncComposerToConsole(requested: syncingComposer) {
             controller.syncAdvanced(to: mode, from: draft)
         }
         openWindow(id: StudioConsoleWindow.id)
+    }
+
+    private func toggleLibrary() {
+        if reduceMotion {
+            navigation.showLibrary.toggle()
+        } else {
+            withAnimation(MereRunTheme.Motion.standard) {
+                navigation.showLibrary.toggle()
+            }
+        }
     }
 
     /// File ▸ Import Receipt…: the same validated path as the `mererun://library/import` link.

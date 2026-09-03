@@ -3,9 +3,11 @@ import Sparkle
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Top-level menu bar commands. Everything that acts on a Studio window goes through the
-/// `StudioSceneActions` the key window publishes as a focused scene value, so File, View, Go, Run,
-/// and Help target the key window and stay disabled when no Studio window is key.
+/// Top-level menu bar commands. Everything that acts on a window goes through the
+/// `StudioSceneActions` the key window publishes as a focused scene value: the Studio window
+/// publishes its composer, Library, and navigation; the Command Console publishes its own
+/// Run/Stop and forwards navigation to the Studio window. Items stay disabled when no window
+/// of ours is key.
 struct MereRunCommands: Commands {
     @ObservedObject var controller: MereRunController
     @ObservedObject var library: StudioLibraryStore
@@ -52,17 +54,17 @@ struct MereRunCommands: Commands {
 
         // The system Show/Hide Sidebar item already lives in this group (NavigationSplitView owns it).
         CommandGroup(after: .sidebar) {
-            if let actions {
-                Toggle("Show Library", isOn: actions.showLibrary)
-                    .keyboardShortcut("l", modifiers: [.command, .option])
+            Toggle("Show Library", isOn: actions?.showLibrary ?? .constant(false))
+                .keyboardShortcut("l", modifiers: [.command, .option])
+                .disabled(actions?.canShowLibrary != true)
 
-                Button("Command Console") {
-                    actions.openConsole()
-                }
-                .keyboardShortcut("c", modifiers: [.command, .option])
-
-                Divider()
+            Button("Command Console") {
+                actions?.openConsole()
             }
+            .keyboardShortcut("c", modifiers: [.command, .option])
+            .disabled(actions == nil)
+
+            Divider()
         }
 
         CommandMenu("Go") {
@@ -78,15 +80,15 @@ struct MereRunCommands: Commands {
             if let actions, actions.destination.domain.tasks.count > 1 {
                 Divider()
                 ForEach(actions.destination.domain.tasks) { task in
-                    Button {
-                        actions.open(task.destination)
-                    } label: {
-                        if task == actions.destination.task {
-                            Label(task.title, systemImage: "checkmark")
-                        } else {
-                            Text(task.title)
-                        }
-                    }
+                    Toggle(
+                        task.title,
+                        isOn: Binding(
+                            get: { task == actions.destination.task },
+                            set: { isOn in
+                                if isOn { actions.open(task.destination) }
+                            }
+                        )
+                    )
                 }
             }
         }
