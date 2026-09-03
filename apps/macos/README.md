@@ -249,6 +249,26 @@ cataloged or listed in `contractExemptCommandIDs` with the reason it stays
 CLI-only, so a new CLI command cannot silently ship without a macOS path or a
 recorded decision that it should not have one.
 
+`StudioSnapshotTests` renders the shell for visual review without driving the
+live app: every domain at its default task at 1280×820 in light and dark, plus
+the Settings content and the Command Console. It is skipped unless
+`MERERUN_STUDIO_SNAPSHOT_DIR` names a directory, so CI and a plain `swift test`
+never render anything:
+
+```
+MERERUN_STUDIO_SNAPSHOT_DIR=/tmp/shell-shots swift test --filter StudioSnapshotTests
+```
+
+`StudioSnapshotRenderer` hosts each view in an `NSWindow` that is never ordered
+on screen and captures it with `cacheDisplay`, so nothing appears on the Mac
+running it. The controller uses a process runner that refuses every launch and
+the Library is a temporary `library.json` seeded with fixture rows, so no CLI
+process starts and the user's Library is never read or written. Two fidelity
+gaps are deliberate: macOS 26 glass and scroll-edge effects only composite on
+screen, so the renderer lifts glass content out and hides those effects (the
+sidebar and toolbar draw as plain views), and the window keeps an opaque title
+bar because a transparent one blanks every offscreen `ScrollView`.
+
 The public `scripts/build_mere_run_app.sh` path produces a contributor/CI app
 bundle and verifies its nested-code layout. Maintainer-only Developer ID
 signing, notarization, stapling, DMG assembly, Sparkle feed generation, and
