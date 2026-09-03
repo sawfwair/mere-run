@@ -20,6 +20,27 @@ The managed model pins `nvidia/Cosmos3-Edge` at revision
 OpenMDW-1.1. The public pull retains `LICENSE.md` and does not add a separate
 mere.run acceptance gate.
 
+For distilled text-to-image generation, download the native MLX Q4
+`Sawfwair/Cosmos3-Super-Text2Image-4Step-MLX-4bit` repository and pass its local
+root explicitly:
+
+```bash
+mere.run video cosmos3 "a glass observatory above a glowing ocean" \
+  --mode text-to-image \
+  --model /path/to/Cosmos3-Super-Text2Image-4Step-MLX-4bit \
+  --width 768 --height 768 \
+  -o observatory.png
+```
+
+The Super checkpoint supports text-to-image only. It requires its published
+four-step stochastic schedule and a guidance scale of 1; the command selects
+both defaults from `modular_model_index.json`. The runtime rejects incompatible
+mode, step, guidance, flow-shift, and scheduler overrides. It ignores negative
+prompts because the distilled model has no unconditional branch. This native
+path does not bundle or run NVIDIA's separate Cosmos guardrail; add
+application-appropriate prompt and output safety checks before showing
+generated images to users.
+
 ## Generation Modes
 
 ```bash
@@ -135,6 +156,7 @@ decoding.
 ## Sources
 
 - https://huggingface.co/nvidia/Cosmos3-Edge
+- https://huggingface.co/nvidia/Cosmos3-Super-Text2Image-4Step
 - https://github.com/NVIDIA/Cosmos
 - https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCore/Cosmos3
 - https://github.com/sawfwair/mere-run/blob/main/Sources/MereRunCLI/Commands/VideoCosmos3Command.swift

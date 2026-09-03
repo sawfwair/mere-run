@@ -10,7 +10,7 @@ public enum Cosmos3ModelLoaderError: LocalizedError, Sendable {
         case .checkpointInventoryMismatch(let missing, let unexpected):
             let missingText = missing.prefix(8).joined(separator: ", ")
             let unexpectedText = unexpected.prefix(8).joined(separator: ", ")
-            return "Cosmos3-Edge checkpoint inventory mismatch"
+            return "Cosmos3 checkpoint inventory mismatch"
                 + " (missing: [\(missingText)], unexpected: [\(unexpectedText)])."
         }
     }
@@ -22,7 +22,6 @@ public enum Cosmos3CheckpointInventory {
             "embed_tokens.weight",
             "norm.weight",
             "norm_moe_gen.weight",
-            "lm_head.weight",
             "proj_in.weight",
             "proj_in.bias",
             "proj_out.weight",
@@ -32,6 +31,9 @@ public enum Cosmos3CheckpointInventory {
             "time_embedder.linear_2.weight",
             "time_embedder.linear_2.bias",
         ]
+        if configuration.includesLanguageModelHead {
+            keys.insert("lm_head.weight")
+        }
         if configuration.generatesActions {
             keys.formUnion([
                 "action_modality_embed",
@@ -62,10 +64,36 @@ public enum Cosmos3CheckpointInventory {
                 prefix + "self_attn.to_add_out.weight",
                 prefix + "self_attn.norm_added_q.weight",
                 prefix + "self_attn.norm_added_k.weight",
-                prefix + "self_attn.k_norm_und_for_gen.weight",
             ])
+            if configuration.feedForwardActivation == .siluGated {
+                keys.formUnion([
+                    prefix + "mlp.gate_proj.weight",
+                    prefix + "mlp_moe_gen.gate_proj.weight",
+                ])
+            }
+            if configuration.normalizesUnderstandingQueriesAndKeys {
+                keys.formUnion([
+                    prefix + "self_attn.norm_q.weight",
+                    prefix + "self_attn.norm_k.weight",
+                ])
+            }
+            if configuration.normalizesUnderstandingKeysForGeneration {
+                keys.insert(prefix + "self_attn.k_norm_und_for_gen.weight")
+            }
         }
         return keys
+    }
+
+    private static func logicalKey(for storedKey: String) -> String {
+        for suffix in [".scales", ".biases"] where storedKey.hasSuffix(suffix) {
+            return String(storedKey.dropLast(suffix.count)) + ".weight"
+        }
+        return storedKey
+    }
+
+    static func isUnusedSoundKey(_ key: String) -> Bool {
+        key == "audio_modality_embed" || key.hasPrefix("audio_proj_in.")
+            || key.hasPrefix("audio_proj_out.")
     }
 
     public static func validateTransformerIndex(
@@ -73,7 +101,7 @@ public enum Cosmos3CheckpointInventory {
         configuration: Cosmos3TransformerConfiguration
     ) throws {
         let expected = transformerKeys(configuration: configuration)
-        let actual = Set(index.weightMap.keys)
+        let actual = Set(index.weightMap.keys.filter { !isUnusedSoundKey($0) }.map(logicalKey))
         let missing = expected.subtracting(actual).sorted()
         let unexpected = actual.subtracting(expected).sorted()
         guard missing.isEmpty, unexpected.isEmpty else {
@@ -125,16 +153,33 @@ public enum Cosmos3ModelLoader {
             index,
             configuration: configuration
         )
-        progress?("Loading Cosmos3-Edge transformer")
+        progress?("Loading Cosmos3 transformer")
         let model = Cosmos3OmniTransformerModel(configuration: configuration)
+        if let quantization = configuration.quantization {
+            try HFSafetensorsWeightsLoader.applyQuantizedWeights(
+                indexURL: resources.transformerIndexURL,
+                to: model,
+                groupSize: quantization.groupSize,
+                bits: quantization.bits,
+                progressHandler: { shard in
+                    progress?(
+                        "Loading Cosmos3 transformer shard "
+                            + "\(shard.shardIndex + 1)/\(shard.shardCount)"
+                    )
+                }
+            )
+            eval(model.parameters().flattened().map(\.1))
+            return model
+        }
         let shardNames = index.shardFilenames
         for (index, shardName) in shardNames.enumerated() {
-            progress?("Loading Cosmos3-Edge transformer shard \(index + 1)/\(shardNames.count)")
+            progress?("Loading Cosmos3 transformer shard \(index + 1)/\(shardNames.count)")
             try SafetensorsStreamingLoader.applyWeightsStreaming(
                 url: resources.transformerRootURL.appendingPathComponent(shardName),
                 to: model,
                 dtype: dtype,
                 verify: .none,
+                include: { !Cosmos3CheckpointInventory.isUnusedSoundKey($0) },
                 batchSize: 8
             )
         }

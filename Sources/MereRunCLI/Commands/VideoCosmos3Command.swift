@@ -39,7 +39,7 @@ enum Cosmos3CLISchedule: String, CaseIterable, ExpressibleByArgument {
 struct VideoCosmos3: AsyncParsableCommand {
     static let configuration = CommandConfiguration(
         commandName: "cosmos3",
-        abstract: "Run native NVIDIA Cosmos3-Edge generation and action modes."
+        abstract: "Run native NVIDIA Cosmos3 generation and action modes."
     )
 
     @Argument(help: "Text prompt or action task description.")
@@ -48,7 +48,7 @@ struct VideoCosmos3: AsyncParsableCommand {
     @Option(name: [.long], help: "Cosmos3 mode.")
     var mode: Cosmos3CLIMode = .textToVideo
 
-    @Option(name: [.customShort("m"), .long], help: "Managed model id or local Cosmos3-Edge root.")
+    @Option(name: [.customShort("m"), .long], help: "Managed model id or local Cosmos3 model root.")
     var model = Cosmos3Resources.modelID
 
     @Option(name: [.customShort("o"), .long], help: "Output PNG or MP4 path.")
@@ -182,9 +182,16 @@ struct VideoCosmos3: AsyncParsableCommand {
         let missing = resources.validate()
         guard missing.isEmpty else {
             throw ValidationError(
-                "Cosmos3-Edge resources are incomplete: "
+                "Cosmos3 resources are incomplete: "
                     + missing.map(\.path).joined(separator: ", ")
             )
+        }
+        let distilled = try resources.loadDistilledConfiguration()
+        if distilled != nil, shift != nil {
+            throw ValidationError("The distilled Cosmos3-Super checkpoint does not accept --shift.")
+        }
+        if distilled != nil, schedule != .nvidia {
+            throw ValidationError("The distilled Cosmos3-Super checkpoint does not accept --schedule overrides.")
         }
         let options = try Cosmos3GenerationOptions(
             prompt: trimmedPrompt,
@@ -198,17 +205,20 @@ struct VideoCosmos3: AsyncParsableCommand {
             width: width,
             height: height,
             numFrames: resolvedFrames,
-            steps: steps,
-            guidanceScale: guidanceScale,
+            steps: steps ?? distilled?.sigmas.count,
+            guidanceScale: guidanceScale ?? (distilled == nil ? nil : 1),
             shift: shift,
             schedule: schedule.value,
             seed: UInt64(bitPattern: Int64(seed)),
             fps: fps
         )
         if !quiet {
-            CLIStderr.write("Engine: native Cosmos3-Edge MLX\n")
+            CLIStderr.write("Engine: native Cosmos3 MLX\n")
             CLIStderr.write("Model root: \(root.path)\n")
             CLIStderr.write("Mode: \(mode.rawValue)\n")
+            if distilled != nil, !negativePrompt.isEmpty {
+                CLIStderr.write("Warning: the distilled checkpoint ignores --negative-prompt.\n")
+            }
         }
         let reportsProgress = !quiet
         let generator = Cosmos3EdgeGenerator()
