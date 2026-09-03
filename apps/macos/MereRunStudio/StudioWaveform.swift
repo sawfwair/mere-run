@@ -112,3 +112,83 @@ struct StudioWaveformView: View {
         onSeek(min(1, max(0, locationX / width)))
     }
 }
+
+extension StudioWaveformLoader {
+    /// Peaks for a WAV that is still being written. The realtime recorder (`StreamingWAVWriter`)
+    /// patches the RIFF and data sizes only when it closes the file, so `AVAudioFile` reports zero
+    /// frames mid-session. This reads the `fmt ` chunk itself and treats every byte after the
+    /// `data` chunk header as samples, so a growing file yields a growing waveform. Supports the
+    /// recorder's float32 PCM and plain 16-bit PCM; returns nil for anything else.
+    static func growingWAVPeaks(url: URL, barCount: Int = 96) -> [Float]? {
+        guard barCount > 0, let data = try? Data(contentsOf: url, options: .mappedIfSafe) else {
+            return nil
+        }
+        guard data.count >= 12,
+              data[0..<4].elementsEqual("RIFF".utf8),
+              data[8..<12].elementsEqual("WAVE".utf8) else {
+            return nil
+        }
+
+        func uint16(_ offset: Int) -> Int {
+            Int(data[offset]) | Int(data[offset + 1]) << 8
+        }
+        func uint32(_ offset: Int) -> Int {
+            uint16(offset) | uint16(offset + 2) << 16
+        }
+
+        var offset = 12
+        var formatCode = 0
+        var channelCount = 0
+        var bitsPerSample = 0
+        var samplesStart: Int?
+        while offset + 8 <= data.count {
+            let chunkID = data[offset..<offset + 4]
+            let chunkSize = uint32(offset + 4)
+            let body = offset + 8
+            if chunkID.elementsEqual("fmt ".utf8), body + 16 <= data.count {
+                formatCode = uint16(body)
+                channelCount = uint16(body + 2)
+                bitsPerSample = uint16(body + 14)
+            } else if chunkID.elementsEqual("data".utf8) {
+                samplesStart = body
+                break
+            }
+            offset = body + chunkSize + (chunkSize % 2)
+        }
+
+        guard let samplesStart, channelCount > 0 else { return nil }
+        let bytesPerSample: Int
+        switch (formatCode, bitsPerSample) {
+        case (3, 32): bytesPerSample = 4
+        case (1, 16): bytesPerSample = 2
+        default: return nil
+        }
+        let frameBytes = channelCount * bytesPerSample
+        let totalFrames = (data.count - samplesStart) / frameBytes
+        guard totalFrames > 0 else { return [Float](repeating: 0, count: barCount) }
+
+        let framesPerBar = max(1, totalFrames / barCount)
+        let sampleStride = max(1, framesPerBar / 128)
+        var peaks = [Float](repeating: 0, count: barCount)
+        data.withUnsafeBytes { raw in
+            guard let base = raw.baseAddress?.advanced(by: samplesStart) else { return }
+            for frame in stride(from: 0, to: totalFrames, by: sampleStride) {
+                var amplitude: Float = 0
+                for channel in 0..<channelCount {
+                    let pointer = base.advanced(by: (frame * channelCount + channel) * bytesPerSample)
+                    let value: Float
+                    if bytesPerSample == 4 {
+                        value = Float(bitPattern: UInt32(littleEndian: pointer.loadUnaligned(as: UInt32.self)))
+                    } else {
+                        value = Float(Int16(littleEndian: pointer.loadUnaligned(as: Int16.self))) / Float(Int16.max)
+                    }
+                    amplitude = max(amplitude, abs(value))
+                }
+                let bar = min(barCount - 1, frame / framesPerBar)
+                peaks[bar] = max(peaks[bar], amplitude)
+            }
+        }
+        guard let maxPeak = peaks.max(), maxPeak > 0 else { return peaks }
+        return peaks.map { $0 / maxPeak }
+    }
+}

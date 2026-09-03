@@ -61,4 +61,54 @@ final class StudioWaveformTests: XCTestCase {
 
         XCTAssertNil(StudioWaveformLoader.peaks(url: url, barCount: 0))
     }
+
+    /// The realtime recorder leaves the RIFF/data sizes at zero until it closes the file, which
+    /// makes `AVAudioFile` see no frames. The growing-file reader ignores the declared sizes.
+    func testGrowingWAVPeaksReadPastAZeroLengthHeader() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("waveform-growing-\(UUID().uuidString).wav")
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        var data = Data()
+        func appendLE32(_ value: UInt32) { withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) } }
+        func appendLE16(_ value: UInt16) { withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) } }
+        data.append(contentsOf: Array("RIFF".utf8))
+        appendLE32(36)
+        data.append(contentsOf: Array("WAVE".utf8))
+        data.append(contentsOf: Array("fmt ".utf8))
+        appendLE32(16)
+        appendLE16(3) // IEEE float
+        appendLE16(1)
+        appendLE32(48_000)
+        appendLE32(48_000 * 4)
+        appendLE16(4)
+        appendLE16(32)
+        data.append(contentsOf: Array("data".utf8))
+        appendLE32(0) // not yet patched by the writer
+        let frames = 4_000
+        for frame in 0..<frames {
+            let value: Float = frame < frames / 2 ? 0.8 * sin(Float(frame) * 0.3) : 0
+            withUnsafeBytes(of: value.bitPattern.littleEndian) { data.append(contentsOf: $0) }
+        }
+        try data.write(to: url)
+
+        XCTAssertNil(StudioWaveformLoader.peaks(url: url), "AVAudioFile should see zero frames")
+        let peaks = try XCTUnwrap(StudioWaveformLoader.growingWAVPeaks(url: url, barCount: 8))
+        XCTAssertEqual(peaks.count, 8)
+        XCTAssertEqual(peaks.max(), 1.0)
+        for bar in 0..<3 {
+            XCTAssertGreaterThan(peaks[bar], 0.7, "bar \(bar) should carry the sine")
+        }
+        for bar in 5..<8 {
+            XCTAssertEqual(peaks[bar], 0, "bar \(bar) should be silence")
+        }
+    }
+
+    func testGrowingWAVPeaksRejectsNonWAVData() throws {
+        let url = FileManager.default.temporaryDirectory
+            .appendingPathComponent("waveform-notwav-\(UUID().uuidString).bin")
+        defer { try? FileManager.default.removeItem(at: url) }
+        try Data(repeating: 7, count: 256).write(to: url)
+        XCTAssertNil(StudioWaveformLoader.growingWAVPeaks(url: url))
+    }
 }
