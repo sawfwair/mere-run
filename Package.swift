@@ -358,6 +358,7 @@ targets.append(contentsOf: [
       "DepthAnything3/README.md",
       "FaceAnalysis/README.md",
       "FalconPerception/README.md",
+      "Flux1/README.md",
       "Flux2Klein/README.md",
       "Flux2Klein/Model/Transformer/README.md",
       "Gemma4/README.md",

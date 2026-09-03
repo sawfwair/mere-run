@@ -421,7 +421,7 @@ public extension ManagedModelSpec {
 
     var isAPISidecarRuntimeModel: Bool {
         switch validationKind {
-        case .flux2Klein, .zimageTurbo, .hidreamO1, .krea2, .ideogram4SDNQ,
+        case .flux1, .flux2Klein, .zimageTurbo, .hidreamO1, .krea2, .ideogram4SDNQ,
              .qwen3TTS, .qwen3ASR, .parakeet, .qwen3Embedding:
             return true
         default:

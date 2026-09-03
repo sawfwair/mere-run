@@ -18,6 +18,16 @@ struct AdapterCommandTests {
         #expect(command.quiet)
     }
 
+    @Test("FLUX.2-dev Turbo pull parses explicit license acceptance")
+    func parsesFlux2DevTurboPull() throws {
+        let command = try AdapterPull.parse([
+            ManagedAdapterCatalog.flux2DevTurboEightStepID,
+            "--accept-license",
+        ])
+        #expect(command.target == ManagedAdapterCatalog.flux2DevTurboEightStepID)
+        #expect(command.acceptLicense)
+    }
+
     @Test("SCAIL-2 distilled adapter pull parses its canonical id")
     func parsesSCAIL2Pull() throws {
         let command = try AdapterPull.parse([

@@ -238,6 +238,20 @@ public enum ManagedModelCapabilityCatalog {
                 recommended: 32
             ),
             descriptor(
+                "image-flux2-dev",
+                "Image, FLUX.2-dev LoRA",
+                "Installs gated FLUX.2-dev with a compatible 4-bit Mistral conditioner for high-quality generation and existing Dev LoRAs.",
+                minimum: 96,
+                recommended: 128
+            ),
+            descriptor(
+                Flux1Resources.modelID,
+                "Image, FLUX.1-dev LoRA",
+                "Installs gated FLUX.1-dev for native text-to-image generation and existing FLUX.1 adapters.",
+                minimum: 48,
+                recommended: 64
+            ),
+            descriptor(
                 "image-klein-shared",
                 "Shared Klein components",
                 "Represents shared FLUX.2 Klein components resolved from another installed Klein image model.",

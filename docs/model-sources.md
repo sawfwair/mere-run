@@ -54,6 +54,8 @@ an effective overlay; they are not a second capability catalog.
 | `image` | `image-klein-base` |
 | `image` | `image-klein-base-9b` |
 | `image` | `image-klein-shared` |
+| `image` | `image-flux2-dev` |
+| `image` | `image-flux1-dev` |
 | `image` | `image-bonsai-binary` |
 | `image` | `image-bonsai-ternary` |
 | `image` | `image-zimage-nano` |
@@ -213,6 +215,8 @@ validates all configured models before downloading any; both accept the same
 
 | Models | Upstream terms that require acceptance |
 | --- | --- |
+| `image-flux1-dev` | FLUX.1 dev Non-Commercial License v1.1.1; non-commercial, non-production use |
+| `image-flux2-dev` | FLUX Non-Commercial License and BFL Acceptable Use Policy; non-commercial, non-production use |
 | `image-klein-9b`, `image-klein-base-9b` | FLUX Non-Commercial License v2.1; non-commercial, non-production use |
 | `image-krea2-raw`, `image-krea2-turbo` | Krea 2 Community License; commercial use is limited to entities below USD 1M trailing annual revenue, plus use/distribution conditions |
 | `image-sensenova-u1-5-8b-mot` | Apache License 2.0 |
@@ -669,6 +673,83 @@ Useful environment variables for that path:
 larger distilled Klein generation and reference-image workflows. It is distinct
 from `image-klein-base-9b`, which pulls the undistilled Base 9B transformer plus
 shared 9B components for higher-capacity LoRA training and research workflows.
+
+`image-flux1-dev` installs the gated Diffusers layout from
+`black-forest-labs/FLUX.1-dev` at revision
+`3de623fc3c33e44ffbe2bad470d0f45bccf2eb21`. The approximately 34 GB managed
+download includes the FLUX.1 transformer, CLIP-L and T5-XXL text encoders,
+tokenizers, VAE, and flow-matching scheduler. The managed patterns exclude the
+duplicate root checkpoint files.
+
+Before you pull the model, accept its access terms on Hugging Face and
+configure a Hugging Face token in mere.run. The pull also requires explicit
+local acceptance of the FLUX.1 dev Non-Commercial License v1.1.1:
+
+```bash
+swift run mere.run model pull image-flux1-dev --accept-model-license
+swift run mere.run image generate \
+  --model image-flux1-dev \
+  --prompt "TRIGGER_TOKEN a portrait in a glass conservatory" \
+  --lora ./flux1-subject.safetensors=0.8 \
+  --output ./flux1-subject.png
+```
+
+The runtime defaults to 28 denoising steps and embedded guidance scale 3.5.
+Repeat `--lora PATH_OR_ID[=SCALE]` to apply ordered FLUX.1 adapters with
+independent scales. Each adapter must target FLUX.1-dev. FLUX.2 and Klein
+adapters use different transformer dimensions and fail tensor-shape validation.
+
+The model license limits the weights and derivatives to non-commercial,
+non-production use. It also requires filters or manual review for generated
+content. The mere.run acceptance record doesn't determine whether a workflow
+complies with those requirements.
+
+`image-flux2-dev` installs the gated FLUX.2-dev transformer, variational
+autoencoder (VAE), tokenizer, and scheduler from
+`black-forest-labs/FLUX.2-dev`. The install mounts a pinned 4-bit MLX conversion
+of the matching Mistral Small 3.2 24B text encoder. This layout reduces the
+managed download from approximately 113 GB to 78 GB without changing the
+transformer that a FLUX.2-dev LoRA targets.
+
+Before you pull the model, accept its access terms on Hugging Face, and
+configure a Hugging Face token in mere.run. The pull also requires explicit
+local acceptance because the FLUX Non-Commercial License limits the weights to
+non-commercial, non-production use, and the BFL Acceptable Use Policy applies:
+
+```bash
+swift run mere.run model pull image-flux2-dev --accept-model-license
+swift run mere.run adapter pull flux2-dev-turbo-8step --accept-license
+swift run mere.run image generate \
+  --model image-flux2-dev \
+  --prompt "a ceramic vessel on dark linen, precise studio lighting" \
+  --lora flux2-dev-turbo-8step=1.0 \
+  --lora ./flux2-dev-style.safetensors=0.8 \
+  --output ./flux2-dev-style.png
+```
+
+The managed Turbo adapter is the `fal/FLUX.2-dev-Turbo` artifact pinned at
+revision `9ee51cd87578162cf8d02355a870bc5f4570045c`. mere.run verifies its
+2,760,818,216-byte safetensors file against SHA-256
+`f76cf9c2cc546ddca878799136434a1098477af3f4b0adff2cfd79f2ebe4aa01`.
+The separate adapter pull requires explicit acceptance because the adapter
+inherits the FLUX.2-dev noncommercial terms and BFL Acceptable Use Policy.
+
+Selecting `flux2-dev-turbo-8step` applies the publisher's eight-step,
+guidance-2.5 sigma recipe. Repeated `--lora PATH_OR_ID[=SCALE]` values preserve
+their order and combine the Turbo update with local FLUX.2-dev style or subject
+adapters. FLUX.1-dev adapters are structurally incompatible and are rejected by
+the runtime's tensor-shape validation.
+
+The license treats generated outputs separately and permits personal,
+scientific, and commercial output use subject to its terms. It also requires
+filters or manual review for generated content. The mere.run acceptance record
+does not provide legal clearance or certify that a workflow satisfies those
+requirements.
+
+The default profile uses 50 denoising steps and embedded guidance scale 4.0.
+The capability catalog requires at least 96 GB of unified memory and recommends
+128 GB. Real-checkpoint qualification remains separate from catalog and
+synthetic runtime tests.
 
 `image-bonsai-binary` and `image-bonsai-ternary` map to PrismML Apple Silicon
 Bonsai Image snapshots:

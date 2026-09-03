@@ -7,6 +7,11 @@ import Glibc
 #endif
 import MLX
 
+public enum LoRAWeightArchitecture: Sendable, Hashable {
+    case flux2Klein
+    case flux1
+}
+
 public enum LoRAWeightLoader {
     private static let remoteCacheDirName = "lora"
     private static let defaultTrainingAdapterRepoId = "ostris/zimage_turbo_training_adapter"
@@ -17,9 +22,12 @@ public enum LoRAWeightLoader {
         (".lora_A.", ".lora_B."),
     ]
 
-    public static func load(from lora: LoRA) async throws -> LoRAWeights {
+    public static func load(
+        from lora: LoRA,
+        architecture: LoRAWeightArchitecture = .flux2Klein
+    ) async throws -> LoRAWeights {
         let url = try await resolveURL(for: lora)
-        return try load(from: url)
+        return try load(from: url, architecture: architecture)
     }
 
     public static func resolveURL(for lora: LoRA) async throws -> URL {
@@ -60,7 +68,10 @@ public enum LoRAWeightLoader {
         )
     }
 
-    public static func load(from url: URL) throws -> LoRAWeights {
+    public static func load(
+        from url: URL,
+        architecture: LoRAWeightArchitecture = .flux2Klein
+    ) throws -> LoRAWeights {
         guard FileManager.default.fileExists(atPath: url.path) else {
             throw LoRAError.fileNotFound(url.path)
         }
@@ -79,7 +90,12 @@ public enum LoRAWeightLoader {
                 continue
             }
 
-            if isKrea2NativeBaseKey(baseKey) {
+            if architecture == .flux1 {
+                let mapped = Flux1LoRAKeyMapper.map(baseKey: baseKey, down: downWeight, up: upWeight)
+                for (mappedKey, pair) in mapped {
+                    loraWeights[mappedKey] = pair
+                }
+            } else if isKrea2NativeBaseKey(baseKey) {
                 loraWeights[baseKey] = (down: downWeight, up: upWeight)
             } else if let mapped = Krea2LoRAKeyMapper.map(baseKey: baseKey) {
                 loraWeights[mapped] = (down: downWeight, up: upWeight)

@@ -31,6 +31,12 @@ struct ImageGenerate: AsyncParsableCommand {
     @Option(name: [.customLong("sigma-shift")], help: "Sigma shift for the FlowMatch schedule (i2L recommends 8).")
     var sigmaShift: Double?
 
+    @Option(
+        name: [.customLong("sigmas")],
+        help: "Pre-shifted descending sigma values. A terminal zero is optional."
+    )
+    var sigmaList: String?
+
     @Option(name: [.customShort("o"), .long], help: "Output PNG path (default: ./mererun-image-<timestamp>.png).")
     var output: String?
 
@@ -106,10 +112,15 @@ struct ImageGenerate: AsyncParsableCommand {
     @Option(name: [.customLong("structured-prompt-output")], help: "Write the generated structured JSON caption to this path.")
     var structuredPromptOutput: String?
 
-    @Option(name: [.customShort("l"), .long], help: "LoRA safetensors file path.")
-    var lora: String?
+    @Option(
+        name: [.customShort("l"), .customLong("lora")],
+        help: "LoRA as PATH_OR_ID[=SCALE]. Repeat to stack FLUX.1 or FLUX.2 adapters."
+    )
+    var loraArguments: [String] = []
 
-    @Option(name: [.long], help: "LoRA scale (default: 1.0).")
+    var lora: String? { loraArguments.first }
+
+    @Option(name: [.long], help: "Default scale for --lora values without an inline scale.")
     var loraScale: Double = 1.0
 
     @Option(
@@ -150,6 +161,11 @@ struct ImageGenerate: AsyncParsableCommand {
         let kreaConditioningRebalance = try Self.resolveKreaConditioningRebalance(
             multiplier: kreaConditioningMultiplier,
             layerWeights: kreaConditioningLayerWeights
+        )
+        let explicitSigmas = try Self.parseSigmaList(sigmaList)
+        let parsedLoRAs = try Self.parseLoRAArguments(
+            loraArguments,
+            defaultScale: loraScale
         )
 
         let outputURL = CLIOutput.resolveOutputURL(output, defaultPrefix: "mererun-image", defaultExtension: "png")
@@ -245,18 +261,23 @@ struct ImageGenerate: AsyncParsableCommand {
             }
         }
 
-        let loraConfig: LoRA?
-        if let loraPath = lora {
-            let loraURL = URL(fileURLWithPath: loraPath).standardizedFileURL
-            guard FileManager.default.fileExists(atPath: loraURL.path) else {
-                throw ValidationError("LoRA file not found: \(loraPath)")
-            }
-            loraConfig = .local(path: loraURL.path, scale: loraScale)
-        } else {
-            loraConfig = nil
-        }
-
         let manifest = try MereRunModelManifest.loadRequired(from: URL(fileURLWithPath: resolvedModel!))
+        if parsedLoRAs.count > 1, manifest.family != .klein, manifest.family != .flux1 {
+            throw ValidationError("Stacked image LoRAs are supported only for FLUX.1 and FLUX.2 models.")
+        }
+        if explicitSigmas != nil, manifest.family != .klein {
+            throw ValidationError("--sigmas is supported only for FLUX.2 models.")
+        }
+        let loraConfigs = try Self.resolveLoRAs(
+            parsedLoRAs,
+            baseModelID: manifest.id
+        )
+        let usesTurboRecipe = parsedLoRAs.contains {
+            ManagedAdapterCatalog.spec(for: $0.reference)?.id
+                == ManagedAdapterCatalog.flux2DevTurboEightStepID
+        }
+        let effectiveSigmas = explicitSigmas
+            ?? (usesTurboRecipe ? Flux2DevTurboRecipe.sigmas : nil)
         if kreaBaseQuantizationBits != nil, manifest.family != .krea {
             throw ValidationError("--krea-base-quantization-bits is only supported for Krea 2 generation")
         }
@@ -269,11 +290,20 @@ struct ImageGenerate: AsyncParsableCommand {
         let usesManifestImageDefaults = manifest.engine == .qwenImageEdit
             || manifest.family == .hidream || manifest.family == .senseNova
             || manifest.family == .krea || manifest.family == .ideogram
+            || manifest.family == .klein || manifest.family == .flux1
         let effectiveSteps = steps
+            ?? effectiveSigmas?.count
             ?? (usesManifestImageDefaults
                 ? (manifest.defaults?.steps ?? 4)
                 : 4)
+        if let effectiveSigmas, effectiveSigmas.count != effectiveSteps {
+            throw ValidationError(
+                "--steps must equal the number of non-terminal --sigmas values "
+                    + "(\(effectiveSigmas.count))."
+            )
+        }
         let effectiveCFG = cfgScale
+            ?? (usesTurboRecipe ? Flux2DevTurboRecipe.guidanceScale : nil)
             ?? (usesManifestImageDefaults
                 ? (manifest.defaults?.cfg ?? 1.0)
                 : 1.0)
@@ -287,6 +317,7 @@ struct ImageGenerate: AsyncParsableCommand {
             effectiveSteps: effectiveSteps,
             effectiveCFGScale: effectiveCFG,
             effectiveSigmaShift: effectiveSigmaShift,
+            effectiveSigmas: effectiveSigmas,
             inputMode: Self.inputMode(
                 family: manifest.family,
                 inputImage: inputURL,
@@ -347,13 +378,15 @@ struct ImageGenerate: AsyncParsableCommand {
                 outputURL: outputURL,
                 model: resolvedModel,
                 maxSequenceLength: effectiveMaxSequenceLength,
-                lora: loraConfig,
+                lora: loraConfigs.first,
+                loras: loraConfigs,
                 enhancePrompt: false,
                 inputImage: conditioning.inputImage,
                 strength: conditioning.strength,
                 keepOriginalAspect: keepOriginalAspect,
                 useBetaSigmas: false,
                 sigmaShift: effectiveSigmaShift,
+                sigmas: effectiveSigmas,
                 kreaConditioningRebalance: kreaConditioningRebalance,
                 kreaBaseQuantizationBits: kreaBaseQuantizationBits
             )
@@ -372,6 +405,9 @@ struct ImageGenerate: AsyncParsableCommand {
 
             let result: GenerationResult
             switch manifest.family {
+            case .flux1:
+                let generator = Flux1Generator()
+                result = try await generator.generate(request, progressHandler: progressHandler)
             case .klein:
                 let generator = Flux2KleinGenerator()
                 result = try await generator.generate(request, progressHandler: progressHandler)
@@ -448,6 +484,93 @@ struct ImageGenerate: AsyncParsableCommand {
         if let kreaBaseQuantizationBits, kreaBaseQuantizationBits != 4, kreaBaseQuantizationBits != 8 {
             throw ValidationError("--krea-base-quantization-bits must be 4 or 8")
         }
+        guard loraScale.isFinite else {
+            throw ValidationError("--lora-scale must be finite")
+        }
+        if sigmaList != nil, sigmaShift != nil {
+            throw ValidationError("--sigmas cannot be combined with --sigma-shift")
+        }
+    }
+
+    struct LoRAArgument: Equatable {
+        let raw: String
+        let reference: String
+        let scale: Double
+    }
+
+    static func parseLoRAArguments(
+        _ arguments: [String],
+        defaultScale: Double
+    ) throws -> [LoRAArgument] {
+        guard defaultScale.isFinite else {
+            throw ValidationError("--lora-scale must be finite")
+        }
+        return try arguments.map { raw in
+            let separator = raw.lastIndex(of: "=")
+            let reference: String
+            let scale: Double
+            if let separator {
+                reference = String(raw[..<separator])
+                let rawScale = String(raw[raw.index(after: separator)...])
+                guard let parsed = Double(rawScale), parsed.isFinite else {
+                    throw ValidationError("--lora scale must be finite (got \(rawScale)).")
+                }
+                scale = parsed
+            } else {
+                reference = raw
+                scale = defaultScale
+            }
+            guard !reference.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw ValidationError("--lora must be PATH_OR_ID[=SCALE].")
+            }
+            return LoRAArgument(raw: raw, reference: reference, scale: scale)
+        }
+    }
+
+    static func resolveLoRAs(
+        _ arguments: [LoRAArgument],
+        baseModelID: String,
+        fileManager: FileManager = .default
+    ) throws -> [LoRA] {
+        var resolvedPaths = Set<String>()
+        return try arguments.map { argument in
+            let resolved = try ManagedAdapterArgumentResolver.resolve(
+                argument.reference,
+                baseModelID: baseModelID,
+                fileManager: fileManager
+            ) ?? argument.reference
+            let url = URL(fileURLWithPath: resolved).standardizedFileURL
+            guard fileManager.fileExists(atPath: url.path) else {
+                throw ValidationError("LoRA file not found: \(url.path)")
+            }
+            guard resolvedPaths.insert(url.path).inserted else {
+                throw ValidationError("Duplicate LoRA adapter: \(url.path)")
+            }
+            return .local(path: url.path, scale: argument.scale)
+        }
+    }
+
+    static func parseSigmaList(_ raw: String?) throws -> [Float]? {
+        guard let raw else { return nil }
+        var values = try raw.split(separator: ",", omittingEmptySubsequences: false).map { item in
+            let trimmed = item.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard let value = Float(trimmed), value.isFinite else {
+                throw ValidationError("--sigmas must contain finite comma-separated values.")
+            }
+            return value
+        }
+        if values.last == 0 {
+            values.removeLast()
+        }
+        guard !values.isEmpty else {
+            throw ValidationError("--sigmas must include at least one non-terminal value.")
+        }
+        do {
+            try Flux2EulerScheduler.validateCustomSigmas(values, expectedSteps: values.count)
+        } catch {
+            throw ValidationError(error.localizedDescription)
+        }
+        return values
     }
 
     func makePreflightEnvelope(
@@ -473,13 +596,14 @@ struct ImageGenerate: AsyncParsableCommand {
             strength: strength,
             cfgScale: cfgScale,
             sigmaShift: sigmaShift,
+            sigmaList: sigmaList,
             maxSequenceLength: maxSequenceLength,
             structuredPrompt: structuredPrompt,
             structuredPromptModel: structuredPromptModel,
             structuredPromptModelRoot: structuredPromptModelRoot,
             structuredPromptMaxTokens: structuredPromptMaxTokens,
             structuredPromptOutput: structuredPromptOutput,
-            lora: lora,
+            loras: loraArguments,
             loraScale: loraScale,
             kreaConditioningMultiplier: kreaConditioningMultiplier,
             kreaConditioningLayerWeights: kreaConditioningLayerWeights,
@@ -520,6 +644,9 @@ struct ImageGenerate: AsyncParsableCommand {
         }
         if let sigmaShift {
             args += ["--sigma-shift", String(sigmaShift)]
+        }
+        if let sigmaList {
+            args += ["--sigmas", sigmaList]
         }
         if let steps {
             args += ["--steps", String(steps)]
@@ -569,7 +696,7 @@ struct ImageGenerate: AsyncParsableCommand {
         if let structuredPromptOutput {
             args += ["--structured-prompt-output", structuredPromptOutput]
         }
-        if let lora {
+        for lora in loraArguments {
             args += ["--lora", lora]
         }
         if loraScale != 1.0 {
@@ -607,6 +734,7 @@ struct ImageGenerate: AsyncParsableCommand {
         effectiveSteps: Int,
         effectiveCFGScale: Double,
         effectiveSigmaShift: Float?,
+        effectiveSigmas: [Float]? = nil,
         inputMode: String
     ) throws -> LoRATrainingEventLogger? {
         guard let materializedPlanURL = materializedPlanURL(for: outputURL) else {
@@ -636,15 +764,18 @@ struct ImageGenerate: AsyncParsableCommand {
         if let effectiveSigmaShift {
             metadata["sigma_shift"] = String(effectiveSigmaShift)
         }
+        if let effectiveSigmas {
+            metadata["sigmas"] = effectiveSigmas.map { String($0) }.joined(separator: ",")
+        }
         if let input {
             metadata["input"] = input
         }
         if !referenceImages.isEmpty {
             metadata["reference_images"] = referenceImages.joined(separator: "\n")
         }
-        if let lora {
-            metadata["lora"] = lora
-            metadata["lora_scale"] = String(loraScale)
+        if !loraArguments.isEmpty {
+            metadata["loras"] = loraArguments.joined(separator: "\n")
+            metadata["lora_default_scale"] = String(loraScale)
         }
         try logger.record(
             type: "run_started",

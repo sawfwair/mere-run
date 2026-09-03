@@ -20,13 +20,14 @@ struct ImageGenerationPreflightInput {
     let strength: Double?
     let cfgScale: Double?
     let sigmaShift: Double?
+    let sigmaList: String?
     let maxSequenceLength: Int
     let structuredPrompt: Bool
     let structuredPromptModel: String
     let structuredPromptModelRoot: String?
     let structuredPromptMaxTokens: Int
     let structuredPromptOutput: String?
-    let lora: String?
+    let loras: [String]
     let loraScale: Double
     let kreaConditioningMultiplier: Double?
     let kreaConditioningLayerWeights: String?
@@ -53,13 +54,14 @@ struct ImageGenerationPreflightRequest: Codable, Equatable {
     let strength: Double?
     let cfgScale: Double?
     let sigmaShift: Double?
+    let sigmaList: String?
     let maxSequenceLength: Int
     let structuredPrompt: Bool
     let structuredPromptModel: String
     let structuredPromptModelRoot: String?
     let structuredPromptMaxTokens: Int
     let structuredPromptOutput: String?
-    let lora: String?
+    let loras: [String]
     let loraScale: Double
     let kreaConditioningMultiplier: Double?
     let kreaConditioningLayerWeights: String?
@@ -83,13 +85,14 @@ struct ImageGenerationPreflightRequest: Codable, Equatable {
         case strength
         case cfgScale = "cfg_scale"
         case sigmaShift = "sigma_shift"
+        case sigmaList = "sigmas"
         case maxSequenceLength = "max_sequence_length"
         case structuredPrompt = "structured_prompt"
         case structuredPromptModel = "structured_prompt_model"
         case structuredPromptModelRoot = "structured_prompt_model_root"
         case structuredPromptMaxTokens = "structured_prompt_max_tokens"
         case structuredPromptOutput = "structured_prompt_output"
-        case lora
+        case loras
         case loraScale = "lora_scale"
         case kreaConditioningMultiplier = "krea_conditioning_multiplier"
         case kreaConditioningLayerWeights = "krea_conditioning_layer_weights"
@@ -102,6 +105,7 @@ struct ImageGenerationPreflightResult: Codable, Equatable {
     let output: ImageGenerationOutputPreflightSummary
     let inputs: ImageGenerationInputPreflightSummary
     let lora: ImageGenerationLoRAPreflightSummary?
+    let loras: [ImageGenerationLoRAPreflightSummary]
     let structuredPrompt: ImageGenerationStructuredPromptPreflightSummary
     let plan: ImageGenerationPlanPreflightSummary
     let runPlan: ImageGenerationRunPlan
@@ -111,6 +115,7 @@ struct ImageGenerationPreflightResult: Codable, Equatable {
         case output
         case inputs
         case lora
+        case loras
         case structuredPrompt = "structured_prompt"
         case plan
         case runPlan = "run_plan"
@@ -237,6 +242,8 @@ struct ImageGenerationPlanPreflightSummary: Codable, Equatable {
     let effectiveCFGScale: Double?
     let requestedSigmaShift: Double?
     let effectiveSigmaShift: Double?
+    let requestedSigmas: String?
+    let effectiveSigmas: [Float]?
     let maxSequenceLength: Int
     let effectiveMaxSequenceLength: Int
     let inputMode: String
@@ -251,6 +258,8 @@ struct ImageGenerationPlanPreflightSummary: Codable, Equatable {
         case effectiveCFGScale = "effective_cfg_scale"
         case requestedSigmaShift = "requested_sigma_shift"
         case effectiveSigmaShift = "effective_sigma_shift"
+        case requestedSigmas = "requested_sigmas"
+        case effectiveSigmas = "effective_sigmas"
         case maxSequenceLength = "max_sequence_length"
         case effectiveMaxSequenceLength = "effective_max_sequence_length"
         case inputMode = "input_mode"
@@ -281,6 +290,7 @@ struct ImageGenerationPreflightAnalyzer {
         var diagnostics: [PreflightDiagnostic] = []
         let createdAt = now()
         validatePrompt(diagnostics: &diagnostics)
+        validateSampling(diagnostics: &diagnostics)
         let model = modelSummary(diagnostics: &diagnostics)
         let output = outputSummary(
             for: input.outputURL,
@@ -291,12 +301,12 @@ struct ImageGenerationPreflightAnalyzer {
             diagnostics: &diagnostics
         )
         let inputs = inputSummary(diagnostics: &diagnostics)
-        let lora = loraSummary(diagnostics: &diagnostics)
+        let loras = loraSummaries(model: model, diagnostics: &diagnostics)
         let structuredPrompt = structuredPromptSummary(diagnostics: &diagnostics)
         let plan = planSummary(model: model)
         let runPlan = runPlan(resolved: plan, createdAt: createdAt)
         let status = StructuredRunOutput.status(for: diagnostics)
-        let actions = actions(status: status, model: model, output: output, inputs: inputs, lora: lora)
+        let actions = actions(status: status, model: model, output: output, inputs: inputs, loras: loras)
 
         return ImageGenerationPreflightEnvelope(
             schemaVersion: 1,
@@ -312,7 +322,8 @@ struct ImageGenerationPreflightAnalyzer {
                 model: model,
                 output: output,
                 inputs: inputs,
-                lora: lora,
+                lora: loras.first,
+                loras: loras,
                 structuredPrompt: structuredPrompt,
                 plan: plan,
                 runPlan: runPlan
@@ -341,13 +352,14 @@ struct ImageGenerationPreflightAnalyzer {
             strength: input.strength,
             cfgScale: input.cfgScale,
             sigmaShift: input.sigmaShift,
+            sigmaList: input.sigmaList,
             maxSequenceLength: input.maxSequenceLength,
             structuredPrompt: input.structuredPrompt,
             structuredPromptModel: input.structuredPromptModel,
             structuredPromptModelRoot: input.structuredPromptModelRoot,
             structuredPromptMaxTokens: input.structuredPromptMaxTokens,
             structuredPromptOutput: input.structuredPromptOutput,
-            lora: input.lora,
+            loras: input.loras,
             loraScale: input.loraScale,
             kreaConditioningMultiplier: input.kreaConditioningMultiplier,
             kreaConditioningLayerWeights: input.kreaConditioningLayerWeights,
@@ -367,6 +379,43 @@ struct ImageGenerationPreflightAnalyzer {
                     severity: .blocker,
                     title: "Prompt is empty",
                     message: "--prompt must include non-whitespace text."
+                )
+            )
+        }
+    }
+
+    private func validateSampling(diagnostics: inout [PreflightDiagnostic]) {
+        if input.sigmaList != nil, input.sigmaShift != nil {
+            diagnostics.append(
+                PreflightDiagnostic(
+                    id: "sigma_options_conflict",
+                    severity: .blocker,
+                    title: "Sigma options conflict",
+                    message: "--sigmas cannot be combined with --sigma-shift."
+                )
+            )
+        }
+        do {
+            _ = try ImageGenerate.parseSigmaList(input.sigmaList)
+        } catch {
+            diagnostics.append(
+                PreflightDiagnostic(
+                    id: "sigma_schedule_invalid",
+                    severity: .blocker,
+                    title: "Sigma schedule is invalid",
+                    message: error.localizedDescription
+                )
+            )
+        }
+        if let sigmas = resolvedSigmas(),
+           let steps = input.steps,
+           steps != sigmas.count {
+            diagnostics.append(
+                PreflightDiagnostic(
+                    id: "sigma_step_count_mismatch",
+                    severity: .blocker,
+                    title: "Sigma count doesn't match the step count",
+                    message: "--steps must equal the number of non-terminal --sigmas values."
                 )
             )
         }
@@ -559,39 +608,96 @@ struct ImageGenerationPreflightAnalyzer {
         )
     }
 
-    private func loraSummary(
+    private func loraSummaries(
+        model: ImageGenerationModelPreflightSummary,
         diagnostics: inout [PreflightDiagnostic]
-    ) -> ImageGenerationLoRAPreflightSummary? {
-        guard let lora = input.lora else { return nil }
-        let summary = pathSummary(requested: lora)
-        if !summary.exists {
+    ) -> [ImageGenerationLoRAPreflightSummary] {
+        let parsed: [ImageGenerate.LoRAArgument]
+        do {
+            parsed = try ImageGenerate.parseLoRAArguments(
+                input.loras,
+                defaultScale: input.loraScale
+            )
+        } catch {
             diagnostics.append(
                 PreflightDiagnostic(
-                    id: "lora_missing",
+                    id: "lora_argument_invalid",
                     severity: .blocker,
-                    title: "LoRA missing",
-                    message: "LoRA file not found: \(summary.path)",
-                    locations: [.init(kind: "file", path: summary.path)]
+                    title: "LoRA argument is invalid",
+                    message: error.localizedDescription
                 )
             )
-        } else if summary.isDirectory {
+            return []
+        }
+
+        if parsed.count > 1,
+           model.family != MereRunModelManifest.Family.klein.rawValue,
+           model.family != MereRunModelManifest.Family.flux1.rawValue {
             diagnostics.append(
                 PreflightDiagnostic(
-                    id: "lora_is_directory",
+                    id: "lora_stack_model_unsupported",
                     severity: .blocker,
-                    title: "LoRA path is a directory",
-                    message: "LoRA path is a directory: \(summary.path)",
-                    locations: [.init(kind: "directory", path: summary.path)]
+                    title: "Model doesn't support stacked LoRAs",
+                    message: "Stacked image LoRAs require a FLUX.1 or FLUX.2 model."
                 )
             )
         }
-        return ImageGenerationLoRAPreflightSummary(
-            requested: lora,
-            path: summary.path,
-            exists: summary.exists,
-            isDirectory: summary.isDirectory,
-            scale: input.loraScale
-        )
+
+        let baseModelID = model.id ?? model.requested
+        return parsed.enumerated().map { index, argument in
+            let resolved: String
+            do {
+                resolved = try ManagedAdapterArgumentResolver.resolve(
+                    argument.reference,
+                    baseModelID: baseModelID,
+                    fileManager: fileManager,
+                    requireInstalled: false
+                ) ?? argument.reference
+            } catch {
+                diagnostics.append(
+                    PreflightDiagnostic(
+                        id: "lora_base_model_incompatible",
+                        severity: .blocker,
+                        title: "LoRA base model is incompatible",
+                        message: error.localizedDescription
+                    )
+                )
+                resolved = argument.reference
+            }
+            let summary = pathSummary(requested: resolved)
+            if !summary.exists {
+                let managed = ManagedAdapterCatalog.spec(for: argument.reference)
+                diagnostics.append(
+                    PreflightDiagnostic(
+                        id: managed == nil ? "lora_missing" : "managed_lora_missing",
+                        severity: .blocker,
+                        title: managed == nil ? "LoRA missing" : "Managed LoRA missing",
+                        message: managed == nil
+                            ? "LoRA file not found: \(summary.path)"
+                            : "Adapter \(argument.reference) is not installed. Pull it before generation.",
+                        locations: [.init(kind: "file", path: summary.path)],
+                        suggestedActionIDs: managed == nil ? [] : ["pull-adapter-\(index + 1)"]
+                    )
+                )
+            } else if summary.isDirectory {
+                diagnostics.append(
+                    PreflightDiagnostic(
+                        id: "lora_is_directory",
+                        severity: .blocker,
+                        title: "LoRA path is a directory",
+                        message: "LoRA path is a directory: \(summary.path)",
+                        locations: [.init(kind: "directory", path: summary.path)]
+                    )
+                )
+            }
+            return ImageGenerationLoRAPreflightSummary(
+                requested: argument.reference,
+                path: summary.path,
+                exists: summary.exists,
+                isDirectory: summary.isDirectory,
+                scale: argument.scale
+            )
+        }
     }
 
     private func structuredPromptSummary(
@@ -662,6 +768,7 @@ struct ImageGenerationPreflightAnalyzer {
         let effectiveSteps = effectiveSteps(for: family, modelPath: model.path)
         let effectiveCFG = effectiveCFGScale(for: family, modelPath: model.path)
         let effectiveSigma = input.sigmaShift ?? manifestDefaultSigmaShift(modelPath: model.path)
+        let effectiveSigmas = resolvedSigmas()
         let effectiveMaxSequenceLength = input.structuredPrompt
             ? max(input.maxSequenceLength, StructuredImagePromptAdapter.recommendedImagePromptTokens)
             : input.maxSequenceLength
@@ -676,6 +783,8 @@ struct ImageGenerationPreflightAnalyzer {
             effectiveCFGScale: effectiveCFG,
             requestedSigmaShift: input.sigmaShift,
             effectiveSigmaShift: effectiveSigma,
+            requestedSigmas: input.sigmaList,
+            effectiveSigmas: effectiveSigmas,
             maxSequenceLength: input.maxSequenceLength,
             effectiveMaxSequenceLength: effectiveMaxSequenceLength,
             inputMode: inputMode(family: family)
@@ -707,13 +816,15 @@ struct ImageGenerationPreflightAnalyzer {
                 strength: input.strength,
                 cfgScale: input.cfgScale,
                 sigmaShift: input.sigmaShift,
+                sigmaList: input.sigmaList,
                 maxSequenceLength: input.maxSequenceLength,
                 structuredPrompt: input.structuredPrompt,
                 structuredPromptModel: input.structuredPromptModel,
                 structuredPromptModelRoot: input.structuredPromptModelRoot,
                 structuredPromptMaxTokens: input.structuredPromptMaxTokens,
                 structuredPromptOutput: input.structuredPromptOutput,
-                lora: input.lora,
+                lora: input.loras.first,
+                loras: input.loras,
                 loraScale: input.loraScale,
                 kreaConditioningMultiplier: input.kreaConditioningMultiplier,
                 kreaConditioningLayerWeights: input.kreaConditioningLayerWeights,
@@ -729,7 +840,7 @@ struct ImageGenerationPreflightAnalyzer {
         model: ImageGenerationModelPreflightSummary,
         output: ImageGenerationOutputPreflightSummary,
         inputs: ImageGenerationInputPreflightSummary,
-        lora: ImageGenerationLoRAPreflightSummary?
+        loras: [ImageGenerationLoRAPreflightSummary]
     ) -> [DeclarativeAction] {
         var actions: [DeclarativeAction] = []
         let blocked = status == .blocked
@@ -782,17 +893,32 @@ struct ImageGenerationPreflightAnalyzer {
             actions.append(action)
         }
 
-        if let lora {
+        for (index, lora) in loras.enumerated() {
             actions.append(
                 DeclarativeAction(
-                    id: "reveal-lora",
-                    label: "Reveal LoRA",
+                    id: "reveal-lora-\(index + 1)",
+                    label: "Reveal LoRA \(index + 1)",
                     kind: .revealFile,
                     style: .link,
                     enabled: lora.exists && !lora.isDirectory,
                     path: lora.path
                 )
             )
+            if let managed = ManagedAdapterCatalog.spec(for: lora.requested), !lora.exists {
+                actions.append(
+                    DeclarativeAction(
+                        id: "pull-adapter-\(index + 1)",
+                        label: "Pull \(managed.id)",
+                        kind: .command,
+                        style: .secondary,
+                        command: DeclarativeCommand(
+                            argv: ["mere.run", "adapter", "pull", managed.id],
+                            cwd: input.cwd,
+                            commandPath: ["adapter", "pull"]
+                        )
+                    )
+                )
+            }
         }
 
         return actions
@@ -909,6 +1035,7 @@ struct ImageGenerationPreflightAnalyzer {
 
     private func effectiveSteps(for family: MereRunModelManifest.Family?, modelPath: String?) -> Int? {
         if let steps = input.steps { return steps }
+        if let sigmas = resolvedSigmas() { return sigmas.count }
         guard let family else { return nil }
         if Self.familyUsesManifestDefaults(family) {
             return manifestDefaults(modelPath: modelPath)?.steps ?? 4
@@ -918,6 +1045,7 @@ struct ImageGenerationPreflightAnalyzer {
 
     private func effectiveCFGScale(for family: MereRunModelManifest.Family?, modelPath: String?) -> Double? {
         if let cfgScale = input.cfgScale { return cfgScale }
+        if usesTurboRecipe { return Flux2DevTurboRecipe.guidanceScale }
         guard let family else { return nil }
         if Self.familyUsesManifestDefaults(family) {
             return manifestDefaults(modelPath: modelPath)?.cfg ?? 1.0
@@ -928,6 +1056,21 @@ struct ImageGenerationPreflightAnalyzer {
     private func manifestDefaultSigmaShift(modelPath: String?) -> Double? {
         guard let modelPath else { return nil }
         return manifestDefaults(modelPath: modelPath)?.sigmaShift
+    }
+
+    private var usesTurboRecipe: Bool {
+        (try? ImageGenerate.parseLoRAArguments(input.loras, defaultScale: input.loraScale))?
+            .contains {
+                ManagedAdapterCatalog.spec(for: $0.reference)?.id
+                    == ManagedAdapterCatalog.flux2DevTurboEightStepID
+            } == true
+    }
+
+    private func resolvedSigmas() -> [Float]? {
+        if let parsed = try? ImageGenerate.parseSigmaList(input.sigmaList) {
+            return parsed
+        }
+        return usesTurboRecipe ? Flux2DevTurboRecipe.sigmas : nil
     }
 
     private func manifestDefaults(modelPath: String?) -> MereRunModelManifest.Defaults? {
@@ -954,7 +1097,8 @@ struct ImageGenerationPreflightAnalyzer {
     }
 
     private static func familyUsesManifestDefaults(_ family: MereRunModelManifest.Family) -> Bool {
-        family == .hidream || family == .krea || family == .qwen || family == .ideogram || family == .senseNova
+        family == .hidream || family == .krea || family == .qwen || family == .ideogram
+            || family == .senseNova || family == .klein || family == .flux1
     }
 
     private static func supportsImageGeneration(_ manifest: MereRunModelManifest) -> Bool {
@@ -965,6 +1109,7 @@ struct ImageGenerationPreflightAnalyzer {
     }
 
     private static let supportedImageFamilies: Set<MereRunModelManifest.Family?> = [
+        .flux1,
         .klein,
         .zimage,
         .hidream,

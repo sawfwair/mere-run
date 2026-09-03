@@ -6,6 +6,27 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### Image
+
+- added the gated `image-flux1-dev` managed model with a separate Swift and MLX
+  FLUX.1 runtime. The runtime loads the pinned BFL transformer, CLIP-L,
+  T5-XXL, VAE, tokenizer, and scheduler components, uses the published
+  28-step flow-matching profile, and requires explicit acceptance of the
+  FLUX.1 dev Non-Commercial License v1.1.1.
+- added ordered, independently scaled FLUX.1 LoRA stacks. The loader supports
+  Diffusers and BFL target names and preserves FLUX.1 single-block projection
+  targets, while incompatible FLUX.2 and Klein adapters fail shape validation.
+- added the gated `image-flux2-dev` managed model for native Swift and MLX
+  generation with FLUX.2-dev LoRAs. The install pins the authoritative BFL
+  transformer, VAE, tokenizer, and scheduler, mounts a compatible 4-bit
+  Mistral Small 3.2 text encoder, requires explicit acceptance of the FLUX
+  Non-Commercial License and BFL Acceptable Use Policy, and uses the published
+  embedded-guidance and empirical scheduler behavior.
+- added ordered, independently scaled FLUX.2 LoRA stacks and the gated,
+  checksum-pinned `flux2-dev-turbo-8step` adapter. Selecting the managed Turbo
+  adapter applies its published eight-step sigma schedule and guidance default,
+  so it can run alongside a local FLUX.2-dev style or subject LoRA.
+
 ## 0.50.0 - 2026-09-01
 
 This release adds native DiffusionGemma text generation and image-conditioned

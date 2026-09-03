@@ -531,6 +531,7 @@ actor APISidecarResidentSlot<Key: Equatable & Sendable, Value: Sendable> {
 }
 
 enum APISidecarImageKind: String, Hashable, Sendable {
+    case flux1
     case flux2Klein
     case zImageTurbo
     case hiDreamO1
@@ -666,6 +667,7 @@ enum APISidecarEvictionPlanner {
 /// Non-actor image generators are safe here because the resident slot holds an
 /// exclusive lease for their entire lifetime of use.
 private enum APISidecarImageGenerator: @unchecked Sendable {
+    case flux1(Flux1Generator)
     case flux2Klein(Flux2KleinGenerator)
     case zImageTurbo(ZImageTurboGenerator)
     case hiDreamO1(HiDreamO1Generator)
@@ -793,6 +795,8 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                 },
                 make: {
                     switch kind {
+                    case .flux1:
+                        return .flux1(Flux1Generator())
                     case .flux2Klein:
                         return .flux2Klein(Flux2KleinGenerator())
                     case .zImageTurbo:
@@ -811,6 +815,8 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                 },
                 unload: { generator in
                     switch generator {
+                    case .flux1(let generator):
+                        await generator.unload()
                     case .flux2Klein(let generator):
                         await generator.unload()
                     case .zImageTurbo(let generator):
@@ -829,6 +835,8 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                 },
                 operation: { generator in
                     switch generator {
+                    case .flux1(let generator):
+                        return try await generator.generate(request, progressHandler: nil)
                     case .flux2Klein(let generator):
                         return try await generator.generate(request, progressHandler: nil)
                     case .zImageTurbo(let generator):
@@ -1449,6 +1457,8 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
 
     private static func unloadImage(_ generator: APISidecarImageGenerator) async {
         switch generator {
+        case .flux1(let generator):
+            await generator.unload()
         case .flux2Klein(let generator):
             await generator.unload()
         case .zImageTurbo(let generator):
@@ -1545,6 +1555,8 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
 
     private static func imageBaseLoadBytes(for kind: APISidecarImageKind) -> UInt64 {
         switch kind {
+        case .flux1:
+            return 40 * gibibyte
         case .flux2Klein:
             return 10 * gibibyte
         case .zImageTurbo:
@@ -1568,7 +1580,7 @@ struct APISidecarModelPool: Sendable, CLIASRTranscriptionExecutor {
                 height: height
             )
             return (resolution.width, resolution.height)
-        case .flux2Klein, .zImageTurbo, .senseNovaU15, .krea2, .ideogram4, .qwenImageEdit:
+        case .flux1, .flux2Klein, .zImageTurbo, .senseNovaU15, .krea2, .ideogram4, .qwenImageEdit:
             return (width, height)
         }
     }

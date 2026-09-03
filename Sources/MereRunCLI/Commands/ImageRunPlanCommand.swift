@@ -576,9 +576,10 @@ struct ImageRunPlan: AsyncParsableCommand {
         if !plan.arguments.referenceImages.isEmpty {
             configSnapshot["reference_images"] = plan.arguments.referenceImages.joined(separator: "\n")
         }
-        if let lora = plan.arguments.lora {
-            configSnapshot["lora"] = lora
-            configSnapshot["lora_scale"] = String(plan.arguments.loraScale)
+        let loras = plan.arguments.loras ?? plan.arguments.lora.map { [$0] } ?? []
+        if !loras.isEmpty {
+            configSnapshot["loras"] = loras.joined(separator: "\n")
+            configSnapshot["lora_default_scale"] = String(plan.arguments.loraScale)
         }
 
         let manifest = LoRATrainingRunManifest(

@@ -14,6 +14,8 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
     public static let filename: String = "mererun_model.json"
 
     public enum Engine: String, Codable, CaseIterable, Hashable, Sendable {
+        /// FLUX.1 Diffusers family.
+        case flux1 = "flux1"
         /// MereRun family (FLUX.2 Klein based).
         case flux2Klein = "flux2-klein"
         /// Zeta family (Z-Image Turbo based).
@@ -121,6 +123,7 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
     }
 
     public enum Family: String, Codable, CaseIterable, Hashable, Sendable {
+        case flux1
         case klein
         case zimage
         case hidream
@@ -787,6 +790,34 @@ public struct MereRunModelManifest: Codable, Hashable, Sendable {
                 precision: .unknown,
                 supports: [.txt2img, .referenceEdit, .loraInference],
                 components: kleinSharedComponents,
+                createdAt: createdAt
+            )
+        case .flux2Dev:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .flux2Klein,
+                family: .klein,
+                tier: .max,
+                variant: .standard,
+                precision: .bf16,
+                defaults: Defaults(steps: 50, cfg: 4.0),
+                supports: [.txt2img, .referenceEdit, .loraInference],
+                components: defaultComponents,
+                upstreamRepoId: "black-forest-labs/FLUX.2-dev",
+                createdAt: createdAt
+            )
+        case .flux1Dev:
+            return MereRunModelManifest(
+                id: modelID.rawValue,
+                engine: .flux1,
+                family: .flux1,
+                tier: .max,
+                variant: .standard,
+                precision: .bf16,
+                defaults: Defaults(steps: 28, cfg: 3.5),
+                supports: [.txt2img, .loraInference],
+                components: defaultComponents,
+                upstreamRepoId: "\(Flux1Resources.upstreamRepoID)@\(Flux1Resources.upstreamRevision)",
                 createdAt: createdAt
             )
         case .bonsaiBinary:

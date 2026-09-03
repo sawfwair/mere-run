@@ -3,8 +3,9 @@
 Use the image runtime to generate an image from a prompt, train a low-rank
 adaptation (LoRA) on your own pictures, replay a generation from a saved plan,
 or convert one photo into a textured three-dimensional (3D) mesh. The runtime
-supports local model families from compact ZImage checkpoints through FLUX.2
-Klein, HiDream O1, SenseNova U1.5, Krea 2, Qwen Image Edit 2511, and Ideogram 4.
+supports local model families from compact ZImage checkpoints through FLUX.1
+Dev, FLUX.2 Dev and Klein, HiDream O1, SenseNova U1.5, Krea 2, Qwen Image Edit
+2511, and Ideogram 4.
 
 ## Commands
 
@@ -59,6 +60,8 @@ shared contract tests keep every form flag aligned with ArgumentParser help.
 The public image families are:
 
 - `image-klein-*`: Klein image family
+- `image-flux1-dev`: gated FLUX.1-dev generation and LoRA inference
+- `image-flux2-dev`: gated FLUX.2-dev generation and LoRA inference
 - `image-bonsai-binary`: PrismML Bonsai binary FLUX.2 Klein deployment
 - `image-bonsai-ternary`: PrismML Bonsai ternary FLUX.2 Klein deployment
 - `image-zimage-*`: ZImage image family
@@ -72,6 +75,8 @@ The public image families are:
 
 Common managed IDs:
 
+- `image-flux1-dev`
+- `image-flux2-dev`
 - `image-klein-nano`
 - `image-klein-base`
 - `image-klein-base-9b`
@@ -165,6 +170,103 @@ swift run mere.run image generate \
 The base download is about 57.7 GB. Hardware-specific memory, quality, and
 performance qualification remains required before treating either lane as a
 released default.
+
+### Generate with FLUX.1-dev LoRAs
+
+FLUX.1-dev runs through a dedicated Swift and MLX runtime. The managed package
+pins the official Diffusers transformer, CLIP-L and T5-XXL text encoders,
+tokenizers, VAE, and flow-matching scheduler. The download is approximately
+34 GB.
+
+To install the model, accept access on Hugging Face, configure a Hugging Face
+token, and acknowledge the FLUX.1 dev Non-Commercial License v1.1.1:
+
+```bash
+swift run mere.run model pull image-flux1-dev --accept-model-license
+```
+
+To run one or more FLUX.1 adapters, repeat `--lora`. Each value accepts an
+independent inline scale as `PATH_OR_ID=SCALE`:
+
+```bash
+swift run mere.run image generate \
+  --model image-flux1-dev \
+  --prompt "TRIGGER_TOKEN a glass sculpture in a quiet museum" \
+  --lora ./flux1-fast.safetensors=1.0 \
+  --lora ./flux1-style.safetensors=0.8 \
+  --output ./flux1-fast-style.png
+```
+
+The model defaults to 28 denoising steps and embedded guidance scale 3.5.
+FLUX.1 adapters target a 3,072-wide transformer. FLUX.2-dev uses a 6,144-wide
+transformer, and Klein uses a separate architecture. mere.run rejects adapters
+that don't match the selected model before denoising.
+
+The license limits the weights and derivatives to non-commercial,
+non-production use. It also requires filters or manual review for generated
+content. The local acceptance record doesn't certify that a workflow complies
+with the license.
+
+### Generate with FLUX.2-dev LoRAs
+
+FLUX.2-dev runs through the shared Swift and MLX FLUX.2 runtime. The managed
+layout keeps the gated BFL transformer unchanged and uses a pinned 4-bit
+Mistral Small 3.2 text encoder. Existing FLUX.2-dev transformer LoRAs remain
+compatible with this layout.
+
+To install the model, accept access on Hugging Face, configure a Hugging Face
+token, and acknowledge the FLUX Non-Commercial License and BFL Acceptable Use
+Policy:
+
+```bash
+swift run mere.run model pull image-flux2-dev --accept-model-license
+```
+
+To run an adapter, pass its local safetensors file to `--lora`. Repeat the
+option to stack adapters in order. Each value accepts an inline scale as
+`PATH_OR_ID=SCALE`; `--lora-scale` remains the default for values without an
+inline scale.
+
+```bash
+swift run mere.run image generate \
+  --model image-flux2-dev \
+  --prompt "TRIGGER_TOKEN a glass sculpture in a quiet museum" \
+  --lora ./flux2-dev-style.safetensors \
+  --lora-scale 1.0 \
+  --output ./flux2-dev-style.png
+```
+
+For the fast path, pull the checksum-pinned `fal/FLUX.2-dev-Turbo` adapter after
+reviewing and accepting its inherited FLUX.2-dev terms:
+
+```bash
+swift run mere.run adapter pull flux2-dev-turbo-8step --accept-license
+swift run mere.run image generate \
+  --model image-flux2-dev \
+  --prompt "TRIGGER_TOKEN a glass sculpture in a quiet museum" \
+  --lora flux2-dev-turbo-8step=1.0 \
+  --lora ./flux2-dev-style.safetensors=0.8 \
+  --output ./flux2-dev-turbo-style.png
+```
+
+Selecting the managed Turbo adapter defaults to eight steps, guidance scale
+2.5, and the publisher's pre-shifted sigma schedule. An explicit `--cfg`
+overrides the guidance default. An explicit `--sigmas` overrides the recipe;
+when you also pass `--steps`, its value must equal the number of nonterminal
+sigma values. Don't combine `--sigmas` with `--sigma-shift`.
+
+Every adapter in a stack must target the exact loaded architecture. In
+particular, FLUX.1-dev adapters use a 3,072-wide transformer and aren't
+compatible with the 6,144-wide FLUX.2-dev transformer. mere.run rejects these
+shape mismatches before denoising.
+
+The model defaults to 50 steps and embedded guidance scale 4.0. The managed
+download is approximately 78 GB. The capability catalog requires 96 GB of
+unified memory and recommends 128 GB.
+
+The license requires filters or manual review for generated content. The local
+acceptance record does not certify that a workflow satisfies the license or the
+BFL Acceptable Use Policy.
 
 ### Klein generation and LoRA training
 

@@ -4,6 +4,23 @@ import Testing
 
 @Suite("Managed adapter catalog")
 struct ManagedAdapterCatalogTests {
+    @Test("FLUX.2-dev Turbo is an immutable gated eight-step pin")
+    func flux2DevTurboIsPinned() throws {
+        let spec = try #require(
+            ManagedAdapterCatalog.spec(for: ManagedAdapterCatalog.flux2DevTurboEightStepID)
+        )
+        #expect(spec.version == "9ee51cd87578")
+        #expect(spec.baseModelID == ModelResolver.ModelID.flux2Dev.rawValue)
+        #expect(spec.format == ManagedAdapterCatalog.flux2DevLoRAFormat)
+        #expect(spec.upstreamRevision == ManagedAdapterCatalog.flux2DevTurboEightStepRevision)
+        #expect(spec.usageRestriction != nil)
+        #expect(spec.artifact.filename == "flux.2-turbo-lora.safetensors")
+        #expect(spec.artifact.byteCount == 2_760_818_216)
+        #expect(spec.artifact.sha256 == "f76cf9c2cc546ddca878799136434a1098477af3f4b0adff2cfd79f2ebe4aa01")
+        #expect(spec.downloadURL.host == "huggingface.co")
+        #expect(spec.downloadURL.absoluteString.contains(spec.upstreamRevision!))
+    }
+
     @Test("Mere platform assistant release is pinned")
     func releaseIsPinned() throws {
         let spec = try #require(

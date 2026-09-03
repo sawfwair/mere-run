@@ -103,7 +103,7 @@ a download.
 
 The following list shows representative canonical IDs by modality:
 
-- images: `image-klein-nano`, `image-bonsai-binary`, `image-bonsai-ternary`, `image-zimage-nano`, `image-klein-max`, `image-zimage-max`
+- images: `image-flux1-dev`, `image-flux2-dev`, `image-klein-nano`, `image-bonsai-binary`, `image-bonsai-ternary`, `image-zimage-nano`, `image-klein-max`, `image-zimage-max`
 - text, chat, and embeddings: `text-chat-gemma4`, `text-chat-laguna-s-2-1`, `text-chat-laguna-xs-2-1`, `text-chat-nemotron-35-lightning`, `omni-chat-nemotron3-nano-30b-a3b-bf16`, `text-chat-q36-nano`, `vision-chat-q38-27b`, `vision-chat-q38-27b-4bit`, `vision-chat-q38-flash-next-mixed`, `vision-chat-q38-flash-next-3bit`, `vision-chat-q38-flash-next-3bit-native-ple`, `vision-chat-q38-flash-next-4bit`, `text-chat-bonsai-27b-1bit`, `text-chat-bonsai-27b-2bit`, `text-chat-lfm25-1.2b-bf16`, `text-chat-lfm25-1.2b-qad-4bit`, `text-chat-lfm25-2.6b-4bit`, `text-chat-lfm25-2.6b-bf16`, `text-chat-lfm25-2.6b-qad-4bit`, `text-chat-lfm25-a1b-8bit`, `text-chat-lfm25-a1b-bf16`, `vision-chat-lfm25-3b-8bit`, `text-agent-deepseek-v4-flash`, `text-agent-qwen35-9b`, `text-agent-ornith-9b`, `text-agent-ornith-35b-mlx-4bit`, `text-agent-ornith-35b-mlx-6bit`, `text-agent-ornith-35b-mlx-8bit`, `text-agent-ornith-35b-mlx`, `vision-chat-ornith-35b`, `text-agent-ornith-35b`, `text-code-north-mini`, `text-code-qwen3`, `text-embed-qwen3-0.6b`, `vision-embed-qwen3-vl-2b`
 
 Pulling an exact BF16 LFM2.5 DSpark target also pulls its pinned `*-dspark` companion after
@@ -237,6 +237,16 @@ does not determine whether your intended use is
 permitted. The complete inventory is in
 [`model-sources.md`](../model-sources.md#restricted-model-downloads).
 
+For example, the FLUX.1-dev package is gated and noncommercial. To keep its
+approximately 34 GB payload on an external volume, provide both acceptance and
+the cache directory:
+
+```bash
+mere.run model pull image-flux1-dev \
+  --accept-model-license \
+  --cache-dir /Volumes/Models/mere-run-cache
+```
+
 Laguna XS 2.1 is released under the permissive OpenMDW-1.1 license, and its
 public Hugging Face repository is not gated. It therefore installs without a
 separate acceptance flag while retaining the upstream license file:
@@ -284,12 +294,14 @@ Adapters use a separate checksum-pinned catalog and install under:
 ```
 
 Catalog entries include the promoted Mere Platform Assistant v22 and the
-remote-only Apache-2.0 LightX2V Wan 2.1 I2V four-step adapter:
+gated FLUX.2-dev Turbo and remote-only Apache-2.0 LightX2V Wan 2.1 I2V
+adapters:
 
 ```bash
 mere.run model pull text-chat-gemma4-12b-4bit
 mere.run adapter list
 mere.run adapter pull mere-platform-assistant
+mere.run adapter pull flux2-dev-turbo-8step --accept-license
 mere.run adapter pull scail2-lightx2v-4step
 mere.run adapter pull minimax-h3-lightx2v-ref2v-4step-v0.1
 mere.run text chat \
@@ -301,9 +313,11 @@ mere.run text chat \
 `adapter pull` downloads the immutable upstream artifact, verifies its exact
 byte count and SHA-256, and prints the installed adapter path on stdout.
 Catalog IDs are accepted by `text chat --lora`, `api serve --lora`, and the
-compatible SCAIL `video animate --distilled-adapter` surface; local paths
-remain supported. The default `video animate --profile fast` selects the SCAIL
-adapter ID and its published four-step schedule automatically.
+compatible image and SCAIL video adapter surfaces; local paths remain
+supported. `image generate --lora flux2-dev-turbo-8step` applies its published
+eight-step FLUX.2-dev recipe and can be combined with repeated local
+`--lora PATH[=SCALE]` values. The default `video animate --profile fast`
+selects the SCAIL adapter ID and its published four-step schedule automatically.
 
 ### `mere.run setup`
 
