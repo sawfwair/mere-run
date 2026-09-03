@@ -45,6 +45,12 @@ struct SFXGenerate: AsyncParsableCommand {
     @Flag(name: [.short, .long], help: "Quiet mode (suppress stderr diagnostics).")
     var quiet: Bool = false
 
+    @Flag(name: [.customLong(CLIGenerationProgressPrinter.flagName)], help: CLIGenerationProgressPrinter.flagHelp)
+    var progressJson: Bool = false
+
+    @Flag(name: [.customLong(RunReceipt.flagName)], help: RunReceipt.flagHelp)
+    var receipt: Bool = false
+
     var durationSeconds: Float {
         durationOverride ?? (SFXMMAudioRuntime.isMMAudio(model: model)
             ? MMAudioResources.defaultDurationSeconds
@@ -95,6 +101,10 @@ struct SFXGenerate: AsyncParsableCommand {
                 renoiseSchedule: renoiseSchedule
             ),
             progress: { completed, total in
+                if progressJson {
+                    CLIGenerationProgressPrinter.writeJSONProgress(stage: "denoising", step: completed, totalSteps: total)
+                    return
+                }
                 guard !quiet else { return }
                 CLIStderr.write("Generated Woosh step \(completed)/\(total)\n")
             }
@@ -105,6 +115,7 @@ struct SFXGenerate: AsyncParsableCommand {
             CLIStderr.write("Saved audio: \(outputURL.path)\n")
         }
         print(outputURL.path)
+        try RunReceipt.emit(RunReceipt.generatedAudioOutputs(audio: outputURL), enabled: receipt)
     }
 
     private func runMMAudio() async throws {
@@ -135,6 +146,10 @@ struct SFXGenerate: AsyncParsableCommand {
                 seed: seed
             ),
             progress: { completed, total in
+                if progressJson {
+                    CLIGenerationProgressPrinter.writeJSONProgress(stage: "denoising", step: completed, totalSteps: total)
+                    return
+                }
                 guard !quiet else { return }
                 CLIStderr.write("Generated MMAudio step \(completed)/\(total)\n")
             }
@@ -148,6 +163,7 @@ struct SFXGenerate: AsyncParsableCommand {
             CLIStderr.write("Saved audio: \(outputURL.path)\n")
         }
         print(outputURL.path)
+        try RunReceipt.emit(RunReceipt.generatedAudioOutputs(audio: outputURL), enabled: receipt)
     }
 
     func parseRenoiseSchedule() throws -> [Float] {

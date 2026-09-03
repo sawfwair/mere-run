@@ -63,6 +63,9 @@ struct VisionTrack: AsyncParsableCommand {
     @Flag(name: [.customShort("q"), .long], help: "Suppress normal progress output.")
     var quiet: Bool = false
 
+    @Flag(name: [.customLong(RunReceipt.flagName)], help: RunReceipt.flagHelp)
+    var receipt: Bool = false
+
     func validate() throws {
         if json && !preflight {
             throw ValidationError("--json is only supported with --preflight for vision track.")
@@ -145,6 +148,14 @@ struct VisionTrack: AsyncParsableCommand {
                 print("Masks: \(maskOutputDirectoryURL.path)")
             }
         }
+        try RunReceipt.emit(
+            RunReceipt.annotatedVideoOutputs(
+                videoPath: result.annotatedVideoPath,
+                trackingPath: result.jsonOutputPath,
+                masks: maskOutputDirectoryURL
+            ),
+            enabled: receipt
+        )
     }
 
     func parsedPromptSet() throws -> SAM31PromptSet {

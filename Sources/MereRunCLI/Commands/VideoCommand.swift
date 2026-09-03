@@ -688,6 +688,12 @@ struct VideoGenerate: AsyncParsableCommand {
     @Flag(name: [.short, .long], help: "Quiet mode (suppress stderr diagnostics).")
     var quiet: Bool = false
 
+    @Flag(name: [.customLong(CLIGenerationProgressPrinter.flagName)], help: CLIGenerationProgressPrinter.flagHelp)
+    var progressJson: Bool = false
+
+    @Flag(name: [.customLong(RunReceipt.flagName)], help: RunReceipt.flagHelp)
+    var receipt: Bool = false
+
     var variant: LTXVideoVariant {
         effectiveOutputMode.compatibilityVariant
     }
@@ -1314,7 +1320,16 @@ struct VideoGenerate: AsyncParsableCommand {
             )
             let generator = MiniMaxH3Generator(retainsRuntime: slidingWindowOptions != nil)
             let reportsProgress = !quiet
+            let progressJson = progressJson
             let progressHandler: @Sendable (MiniMaxH3GenerationProgress) -> Void = { progress in
+                if progressJson {
+                    CLIGenerationProgressPrinter.writeJSONProgress(
+                        stage: progress.stage.rawValue,
+                        step: progress.stepIndex,
+                        totalSteps: progress.totalSteps
+                    )
+                    return
+                }
                 guard reportsProgress else { return }
                 if progress.stage == .denoising {
                     CLIStderr.write("Denoising \(progress.stepIndex + 1)/\(progress.totalSteps)\n")
@@ -1333,6 +1348,14 @@ struct VideoGenerate: AsyncParsableCommand {
                             slidingWindowOptions: slidingWindowOptions,
                             resources: h3Resources,
                             windowHandler: { index, count in
+                                if progressJson {
+                                    CLIGenerationProgressPrinter.writeJSONProgress(
+                                        stage: "window",
+                                        step: index,
+                                        totalSteps: count
+                                    )
+                                    return
+                                }
                                 guard reportsProgress else { return }
                                 CLIStderr.write("H3 window \(index + 1)/\(count)\n")
                             },
@@ -1355,6 +1378,7 @@ struct VideoGenerate: AsyncParsableCommand {
             )
             if !quiet { CLIStderr.write("Saved: \(outputURL.path)\n") }
             print(outputURL.path)
+            try emitReceipt(primary: outputURL, kind: .video, includesTimings: false)
             return
         }
         if h3Adapter != nil {
@@ -1880,11 +1904,20 @@ struct VideoGenerate: AsyncParsableCommand {
             CLIStderr.write("Mode: image-to-video\n")
         }
         let reportsProgress = !quiet
+        let progressJson = progressJson
         let generator = Wan2TI2VGenerator()
         let result = try await generator.generate(
             options: options,
             resources: Wan2Resources(rootURL: modelRoot),
             progressHandler: { progress in
+                if progressJson {
+                    CLIGenerationProgressPrinter.writeJSONProgress(
+                        stage: progress.stage.rawValue,
+                        step: progress.stepIndex,
+                        totalSteps: progress.totalSteps
+                    )
+                    return
+                }
                 guard reportsProgress else { return }
                 if progress.stage == .denoising {
                     CLIStderr.write("Denoising \(progress.stepIndex + 1)/\(progress.totalSteps)\n")
@@ -1902,6 +1935,7 @@ struct VideoGenerate: AsyncParsableCommand {
             CLIStderr.write("Saved: \(outputURL.path)\n")
         }
         print(outputURL.path)
+        try emitReceipt(primary: outputURL, kind: .video, includesTimings: false)
     }
 
     private func runNativeAudioToVideoGenerate(
@@ -2045,6 +2079,7 @@ struct VideoGenerate: AsyncParsableCommand {
             CLIStderr.write("Saved: \(outputURL.path)\n")
         }
         print(outputURL.path)
+        try emitReceipt(primary: outputURL, kind: .video, includesTimings: true)
     }
 
     private func runNativeGenerate(
@@ -2524,6 +2559,24 @@ struct VideoGenerate: AsyncParsableCommand {
             CLIStderr.write("Saved: \(savedArtifactURL.path)\n")
         }
         print(savedArtifactURL.path)
+        try emitReceipt(
+            primary: savedArtifactURL,
+            kind: skipHDRMP4 ? .directory : .video,
+            includesTimings: true
+        )
+    }
+
+    /// The `--receipt` line for every video lane. Only the LTX lanes write the
+    /// optional `--timings-output` JSON, so the other lanes leave it out.
+    private func emitReceipt(primary: URL, kind: RunReceipt.OutputKind, includesTimings: Bool) throws {
+        try RunReceipt.emit(
+            RunReceipt.generatedVideoOutputs(
+                primary: primary,
+                kind: kind,
+                timings: includesTimings ? timingsOutput.map { URL(fileURLWithPath: $0) } : nil
+            ),
+            enabled: receipt
+        )
     }
 
     private func resolveAutoDuration(

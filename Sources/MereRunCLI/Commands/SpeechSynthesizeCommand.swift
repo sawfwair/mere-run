@@ -69,6 +69,12 @@ struct SpeechSynthesize: AsyncParsableCommand {
     @Flag(name: [.short, .long], help: "Quiet mode (suppress progress output).")
     var quiet: Bool = false
 
+    @Flag(name: [.customLong(CLIGenerationProgressPrinter.flagName)], help: CLIGenerationProgressPrinter.flagHelp)
+    var progressJson: Bool = false
+
+    @Flag(name: [.customLong(RunReceipt.flagName)], help: RunReceipt.flagHelp)
+    var receipt: Bool = false
+
     func run() async throws {
         if stream {
             guard streamChunkTokens > 0 else {
@@ -99,7 +105,17 @@ struct SpeechSynthesize: AsyncParsableCommand {
         }
 
         let progressHandler: (@Sendable (TTSProgress) -> Void)?
-        if quiet {
+        if progressJson {
+            // Qwen3-TTS reports stage changes and a running token count with no
+            // known total, so every event is indeterminate (`total_steps: 0`).
+            progressHandler = { progress in
+                CLIGenerationProgressPrinter.writeJSONProgress(
+                    stage: progress.stage.rawValue,
+                    step: progress.tokensGenerated,
+                    totalSteps: 0
+                )
+            }
+        } else if quiet {
             progressHandler = nil
         } else {
             progressHandler = { progress in
@@ -127,6 +143,7 @@ struct SpeechSynthesize: AsyncParsableCommand {
         }
 
         print(result.audioURL.path)
+        try RunReceipt.emit(RunReceipt.generatedAudioOutputs(audio: result.audioURL), enabled: receipt)
     }
 
     private func runStreaming(
@@ -155,10 +172,18 @@ struct SpeechSynthesize: AsyncParsableCommand {
             switch event {
             case .token:
                 tokenCount += 1
-                if !quiet && tokenCount % 25 == 0 {
-                    FileHandle.standardError.write(
-                        Data("[generating] \(tokenCount) tokens\n".utf8)
-                    )
+                if tokenCount % 25 == 0 {
+                    if progressJson {
+                        CLIGenerationProgressPrinter.writeJSONProgress(
+                            stage: TTSStage.generating.rawValue,
+                            step: tokenCount,
+                            totalSteps: 0
+                        )
+                    } else if !quiet {
+                        FileHandle.standardError.write(
+                            Data("[generating] \(tokenCount) tokens\n".utf8)
+                        )
+                    }
                 }
 
             case .audioChunk(let samples, let sampleRate):
@@ -183,6 +208,7 @@ struct SpeechSynthesize: AsyncParsableCommand {
         }
 
         print(result.audioURL.path)
+        try RunReceipt.emit(RunReceipt.generatedAudioOutputs(audio: result.audioURL), enabled: receipt)
     }
 
     private func buildRequest(

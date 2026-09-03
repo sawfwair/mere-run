@@ -31,6 +31,52 @@ final class CLIGenerationProgressPrinterTests: XCTestCase {
         )
     }
 
+    func testGenericProgressLineMatchesTheImageEventShape() {
+        XCTAssertEqual(
+            CLIGenerationProgressPrinter.progressJSONLine(stage: "denoising", step: 2, totalSteps: 4),
+            CLIGenerationProgressPrinter.progressJSONLine(
+                GenerationProgress(stage: .denoising, stepIndex: 2, totalSteps: 4)
+            )
+        )
+        XCTAssertEqual(
+            CLIGenerationProgressPrinter.progressJSONLine(stage: "generating", step: 50, totalSteps: 0),
+            #"{"event":"progress","stage":"generating","step":50,"total_steps":0}"#
+        )
+    }
+
+    func testMiniMaxMusicProgressFlattensChunksSoTheLastStepReachesTheTotal() throws {
+        func decode(_ line: String) throws -> (stage: String, step: Int, total: Int) {
+            let object = try XCTUnwrap(JSONSerialization.jsonObject(with: Data(line.utf8)) as? [String: Any])
+            XCTAssertEqual(object["event"] as? String, "progress")
+            return (
+                try XCTUnwrap(object["stage"] as? String),
+                try XCTUnwrap(object["step"] as? Int),
+                try XCTUnwrap(object["total_steps"] as? Int)
+            )
+        }
+
+        let semantic = try decode(MusicGenerate.miniMaxProgressJSONLine(.semantic(frame: 25, maximum: 1_500)))
+        XCTAssertEqual(semantic.stage, "semantic")
+        XCTAssertEqual(semantic.step, 25)
+        XCTAssertEqual(semantic.total, 1_500)
+
+        let firstChunk = try decode(MusicGenerate.miniMaxProgressJSONLine(
+            .denoise(chunk: 1, chunkCount: 3, step: 1, stepCount: 30)
+        ))
+        XCTAssertEqual(firstChunk.stage, "denoising")
+        XCTAssertEqual(firstChunk.step, 1)
+        XCTAssertEqual(firstChunk.total, 90)
+
+        let lastChunk = try decode(MusicGenerate.miniMaxProgressJSONLine(
+            .denoise(chunk: 3, chunkCount: 3, step: 30, stepCount: 30)
+        ))
+        XCTAssertEqual(lastChunk.step, lastChunk.total)
+
+        let decodeStage = try decode(MusicGenerate.miniMaxProgressJSONLine(.decode(chunk: 2, chunkCount: 2)))
+        XCTAssertEqual(decodeStage.stage, "decoding")
+        XCTAssertEqual(decodeStage.step, decodeStage.total)
+    }
+
     func testJSONProgressHandlerEmitsOneLinePerDistinctEvent() {
         final class Sink: @unchecked Sendable {
             var lines: [String] = []

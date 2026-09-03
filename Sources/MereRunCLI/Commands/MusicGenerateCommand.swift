@@ -447,6 +447,12 @@ struct MusicGenerate: AsyncParsableCommand {
     @Flag(name: [.short, .long], help: "Quiet mode (suppress stderr diagnostics).")
     var quiet: Bool = false
 
+    @Flag(name: [.customLong(CLIGenerationProgressPrinter.flagName)], help: CLIGenerationProgressPrinter.flagHelp)
+    var progressJson: Bool = false
+
+    @Flag(name: [.customLong(RunReceipt.flagName)], help: RunReceipt.flagHelp)
+    var receipt: Bool = false
+
     @Option(name: [.customLong("temperature")], help: "Magenta RT2 sampling temperature.")
     var magentaTemperature: Float = 1.0
 
@@ -951,6 +957,7 @@ struct MusicGenerate: AsyncParsableCommand {
             sampleRate: 48_000,
             options: exportOptions
         )
+        var receiptSidecars: [RunReceipt.Output] = []
         if keepCandidates {
             for candidate in ranked.candidates {
                 let candidateURL = candidateOutputURL(
@@ -964,6 +971,7 @@ struct MusicGenerate: AsyncParsableCommand {
                     sampleRate: 48_000,
                     options: exportOptions
                 )
+                receiptSidecars.append(.init(url: candidateURL, kind: .audio, role: "candidate"))
             }
         }
 
@@ -1006,6 +1014,7 @@ struct MusicGenerate: AsyncParsableCommand {
                     audio: extracted.audio
                 )
             )
+            receiptSidecars.append(.init(url: stemURL, kind: .audio, role: "stem"))
         }
 
         let synchronizedLyrics: ACEStepLRCDocument? = {
@@ -1163,6 +1172,16 @@ struct MusicGenerate: AsyncParsableCommand {
             CLIStderr.write("Saved audio: \(outputURL.path)\n")
         }
         print(outputURL.path)
+        if let synchronizedLyricsURL {
+            receiptSidecars.append(.init(url: synchronizedLyricsURL, kind: .text, role: "lyrics"))
+        }
+        if let recipeURL {
+            receiptSidecars.append(.init(url: recipeURL, kind: .json, role: "recipe"))
+        }
+        if let dawBundle {
+            receiptSidecars.append(.init(url: resolveUserPath(dawBundle), kind: .directory, role: "daw-bundle"))
+        }
+        try RunReceipt.emit(RunReceipt.generatedAudioOutputs(audio: outputURL, sidecars: receiptSidecars), enabled: receipt)
     }
 
     private func loadAdapters(
@@ -1221,6 +1240,7 @@ struct MusicGenerate: AsyncParsableCommand {
     }
 
     private func runMiniMaxMusic3(explicitDurationSeconds: Float?) async throws {
+        var receiptSidecars: [RunReceipt.Output] = []
         try validateMiniMaxMusic3Options(explicitDurationSeconds: explicitDurationSeconds)
         let inputLRC = try loadLRC()
         let inputLyrics = instrumental
@@ -1303,6 +1323,7 @@ struct MusicGenerate: AsyncParsableCommand {
             if !quiet {
                 CLIStderr.write("Saved composition: \(compositionURL.path)\n")
             }
+            receiptSidecars.append(.init(url: compositionURL, kind: .json, role: "composition"))
         } else {
             composition = nil
         }
@@ -1390,6 +1411,10 @@ struct MusicGenerate: AsyncParsableCommand {
                 seedStrategy: seedStrategy
             ),
             progress: { event in
+                if progressJson {
+                    CLIStderr.write(Self.miniMaxProgressJSONLine(event) + "\n")
+                    return
+                }
                 guard !quiet else { return }
                 switch event {
                 case .semantic(let frame, let maximum):
@@ -1422,6 +1447,7 @@ struct MusicGenerate: AsyncParsableCommand {
             if !quiet {
                 CLIStderr.write("Saved MiniMax profile: \(profileURL.path)\n")
             }
+            receiptSidecars.append(.init(url: profileURL, kind: .json, role: "profile"))
         }
         let exportOptions = ACEStepAudioExportOptions(
             format: exportFormat,
@@ -1486,6 +1512,7 @@ struct MusicGenerate: AsyncParsableCommand {
             if !quiet {
                 CLIStderr.write("Saved recipe: \(recipeURL.path)\n")
             }
+            receiptSidecars.append(.init(url: recipeURL, kind: .json, role: "recipe"))
         }
         if !quiet {
             CLIStderr.write(
@@ -1494,6 +1521,25 @@ struct MusicGenerate: AsyncParsableCommand {
             CLIStderr.write("Saved audio: \(outputURL.path)\n")
         }
         print(outputURL.path)
+        try RunReceipt.emit(RunReceipt.generatedAudioOutputs(audio: outputURL, sidecars: receiptSidecars), enabled: receipt)
+    }
+
+    /// MiniMax Music 3 reports three sequential stages with 1-based counters;
+    /// flow denoising is flattened across chunks so `step` reaches `total_steps`
+    /// exactly once at the end of the last chunk.
+    static func miniMaxProgressJSONLine(_ event: MiniMaxMusic3Progress) -> String {
+        switch event {
+        case .semantic(let frame, let maximum):
+            return CLIGenerationProgressPrinter.progressJSONLine(stage: "semantic", step: frame, totalSteps: maximum)
+        case .denoise(let chunk, let chunkCount, let step, let stepCount):
+            return CLIGenerationProgressPrinter.progressJSONLine(
+                stage: "denoising",
+                step: (chunk - 1) * stepCount + step,
+                totalSteps: chunkCount * stepCount
+            )
+        case .decode(let chunk, let chunkCount):
+            return CLIGenerationProgressPrinter.progressJSONLine(stage: "decoding", step: chunk, totalSteps: chunkCount)
+        }
     }
 
     var resolvedMiniMaxInferenceSteps: Int {
@@ -1763,7 +1809,16 @@ struct MusicGenerate: AsyncParsableCommand {
                 controls: controls
             ),
             progress: { frame, total in
-                guard !quiet, frame % 10 == 0 || frame + 1 == total else { return }
+                guard frame % 10 == 0 || frame + 1 == total else { return }
+                if progressJson {
+                    CLIGenerationProgressPrinter.writeJSONProgress(
+                        stage: "generating",
+                        step: frame + 1 == total ? total : frame,
+                        totalSteps: total
+                    )
+                    return
+                }
+                guard !quiet else { return }
                 CLIStderr.write("Generated Magenta RT2 frame \(frame + 1)/\(total)\n")
             }
         )
@@ -1778,6 +1833,7 @@ struct MusicGenerate: AsyncParsableCommand {
             CLIStderr.write("Saved audio: \(outputURL.path)\n")
         }
         print(outputURL.path)
+        try RunReceipt.emit(RunReceipt.generatedAudioOutputs(audio: outputURL), enabled: receipt)
     }
 
     private func validateMagentaRT2Options() throws {

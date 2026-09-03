@@ -150,11 +150,11 @@ struct ImageGenerate: AsyncParsableCommand {
     @Flag(name: [.short, .long], help: "Print only the output path.")
     var quiet: Bool = false
 
-    @Flag(
-        name: [.customLong("progress-json")],
-        help: "Stream progress to stderr as JSON lines (one object per event) instead of human-readable text. Takes precedence over --quiet for progress output."
-    )
+    @Flag(name: [.customLong(CLIGenerationProgressPrinter.flagName)], help: CLIGenerationProgressPrinter.flagHelp)
     var progressJson: Bool = false
+
+    @Flag(name: [.customLong(RunReceipt.flagName)], help: RunReceipt.flagHelp)
+    var receipt: Bool = false
 
     func run() async throws {
         try validateStaticOptions()
@@ -451,6 +451,13 @@ struct ImageGenerate: AsyncParsableCommand {
             )
             // stdout: machine-readable path (easy for scripts)
             print(result.outputURL.path)
+            try RunReceipt.emit(
+                RunReceipt.generatedImageOutputs(
+                    image: result.outputURL,
+                    structuredPrompt: structuredPrompt ? structuredPromptOutput.map { URL(fileURLWithPath: $0) } : nil
+                ),
+                enabled: receipt
+            )
         } catch {
             try? runEventLogger?.record(
                 type: "run_failed",

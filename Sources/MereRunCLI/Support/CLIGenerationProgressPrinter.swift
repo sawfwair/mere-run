@@ -1,14 +1,31 @@
+import ArgumentParser
 import Foundation
 import MereRunCore
 
 enum CLIGenerationProgressPrinter {
+    static let flagName = "progress-json"
+    static let flagHelpText = "Stream progress to stderr as JSON lines (one object per event) instead of human-readable text. Takes precedence over --quiet for progress output."
+    static let flagHelp = ArgumentHelp(flagHelpText)
+
     /// One NDJSON object per distinct progress event, e.g.
     /// `{"event":"progress","stage":"denoising","step":2,"total_steps":4}`.
     /// `step` is the generator's raw 0-based step index; stages emit a final
     /// event with `step == total_steps` when they finish.
     static func progressJSONLine(_ progress: GenerationProgress) -> String {
-        "{\"event\":\"progress\",\"stage\":\"\(progress.stage.rawValue)\"," +
-            "\"step\":\(progress.stepIndex),\"total_steps\":\(progress.totalSteps)}"
+        progressJSONLine(stage: progress.stage.rawValue, step: progress.stepIndex, totalSteps: progress.totalSteps)
+    }
+
+    /// The same event shape for pipelines that report progress with their own
+    /// types. `totalSteps == 0` marks an indeterminate stage (for example token
+    /// streaming with no known length); readers should show a spinner for it.
+    static func progressJSONLine(stage: String, step: Int, totalSteps: Int) -> String {
+        "{\"event\":\"progress\",\"stage\":\"\(stage)\",\"step\":\(step),\"total_steps\":\(totalSteps)}"
+    }
+
+    /// Writes one progress line to stderr. Stage names are `rawValue`-style
+    /// identifiers without quotes or newlines, so no escaping is needed.
+    static func writeJSONProgress(stage: String, step: Int, totalSteps: Int) {
+        CLIStderr.write(progressJSONLine(stage: stage, step: step, totalSteps: totalSteps) + "\n")
     }
 
     /// Machine-readable progress for wrappers (`--progress-json`): one JSON
