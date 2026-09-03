@@ -150,11 +150,19 @@ enum StudioBenchmarkSuite: String, CaseIterable, Identifiable {
     }
 }
 
-struct StudioModelHealthSheet: View {
+/// Which half of the former Health & Repair sheet a Models task shows.
+enum StudioModelHealthScope: Equatable {
+    /// Manifest audit and repair plus the installed-model quality gate.
+    case health
+    /// The benchmark family.
+    case benchmarks
+}
+
+struct StudioModelHealthView: View {
     @EnvironmentObject private var controller: MereRunController
     @EnvironmentObject private var library: StudioLibraryStore
-    @Environment(\.dismiss) private var dismiss
 
+    let scope: StudioModelHealthScope
     let onModelsChanged: () -> Void
 
     @State private var repairReport: StudioModelRepairReport?
@@ -177,7 +185,8 @@ struct StudioModelHealthSheet: View {
 
     static let suites = ["text", "speech", "vision", "image", "embed"]
 
-    init(onModelsChanged: @escaping () -> Void) {
+    init(scope: StudioModelHealthScope, onModelsChanged: @escaping () -> Void) {
+        self.scope = scope
         self.onModelsChanged = onModelsChanged
         let template = CommandCatalog.template(id: .qualityGate)
         _qualityDraft = State(initialValue: template?.defaultDraft() ?? CommandDraft())
@@ -195,22 +204,23 @@ struct StudioModelHealthSheet: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Divider().overlay(MereRunTheme.border.opacity(0.6))
-            ScrollView {
-                VStack(alignment: .leading, spacing: MereRunTheme.Spacing.xl) {
+        ScrollView {
+            VStack(alignment: .leading, spacing: MereRunTheme.Spacing.xl) {
+                switch scope {
+                case .health:
                     manifestSection
                     qualitySection
+                case .benchmarks:
                     benchmarkSection
                 }
-                .padding(MereRunTheme.Spacing.xl)
             }
+            .padding(MereRunTheme.Spacing.xl)
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .frame(minWidth: 930, idealWidth: 1_020, minHeight: 680, idealHeight: 760)
         .background(MereRunTheme.background)
         .foregroundStyle(MereRunTheme.textPrimary)
         .task {
+            guard scope == .health else { return }
             await auditManifests()
             await loadGateList()
         }
@@ -244,33 +254,6 @@ struct StudioModelHealthSheet: View {
                 )
             }
         }
-    }
-
-    private var header: some View {
-        HStack(spacing: MereRunTheme.Spacing.md) {
-            ZStack {
-                RoundedRectangle(cornerRadius: MereRunTheme.Radius.lg)
-                    .fill(MereRunTheme.accentSoft)
-                Image(systemName: "checkmark.shield")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(MereRunTheme.accent)
-            }
-            .frame(width: 42, height: 42)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Model Health & Repair")
-                    .font(MereRunTheme.titleFont)
-                Text("Audit manifests and run installed-model quality gates")
-                    .font(MereRunTheme.captionFont)
-                    .foregroundStyle(MereRunTheme.textMuted)
-            }
-            Spacer()
-            Button("Done") { dismiss() }
-                .buttonStyle(.merePrimary)
-                .keyboardShortcut(.defaultAction)
-        }
-        .padding(.horizontal, MereRunTheme.Spacing.xl)
-        .padding(.vertical, MereRunTheme.Spacing.md)
     }
 
     private var manifestSection: some View {

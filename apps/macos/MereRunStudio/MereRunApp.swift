@@ -23,14 +23,20 @@ final class MereRunAppDelegate: NSObject, NSApplicationDelegate {
     }
 }
 
+/// The Command Console: the raw contract surface in its own resizable window, opened from the
+/// toolbar, View ▸ Command Console, readiness "Details", Library "Edit command", and the adapter
+/// fallbacks. There is no docked or detached variant any more.
+enum StudioConsoleWindow {
+    static let id = "console"
+    static let title = "Command Console"
+}
+
 @main
 struct MereRunApp: App {
     @NSApplicationDelegateAdaptor(MereRunAppDelegate.self) private var appDelegate
     @StateObject private var controller = MereRunController()
     @StateObject private var library = StudioLibraryStore()
-    @StateObject private var navigation = StudioNavigationCoordinator()
     @StateObject private var crashReporter = StudioCrashReporter()
-    @State private var deepLinkError: String?
     private let updaterController = SPUStandardUpdaterController(
         startingUpdater: true,
         updaterDelegate: nil,
@@ -42,7 +48,6 @@ struct MereRunApp: App {
             MereRunRootView()
                 .environmentObject(controller)
                 .environmentObject(library)
-                .environmentObject(navigation)
                 .frame(
                     minWidth: StudioLayoutPolicy.minimumWindowWidth,
                     minHeight: StudioLayoutPolicy.minimumWindowHeight
@@ -58,23 +63,14 @@ struct MereRunApp: App {
                 .task {
                     await controller.synchronizeCLIInstallationAfterLaunch()
                 }
-                .onOpenURL(perform: openDeepLink)
-                .alert(
-                    "Couldn’t open MereRun link",
-                    isPresented: Binding(
-                        get: { deepLinkError != nil },
-                        set: { if !$0 { deepLinkError = nil } }
-                    )
-                ) {
-                    Button("OK") { deepLinkError = nil }
-                } message: {
-                    Text(deepLinkError ?? "The MereRun link is invalid.")
-                }
         }
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unified(showsTitle: false))
         .windowResizability(.contentMinSize)
-        .defaultSize(width: 1280, height: 820)
+        .defaultSize(
+            width: StudioLayoutPolicy.defaultWindowWidth,
+            height: StudioLayoutPolicy.defaultWindowHeight
+        )
         .commands {
             MereRunCommands(
                 controller: controller,
@@ -83,32 +79,20 @@ struct MereRunApp: App {
             )
         }
 
+        Window(StudioConsoleWindow.title, id: StudioConsoleWindow.id) {
+            AdvancedControlSurface()
+                .environmentObject(controller)
+                .environmentObject(library)
+                .frame(minWidth: 960, minHeight: 560)
+        }
+        .defaultSize(width: 1_260, height: 780)
+        .windowResizability(.contentMinSize)
+
         Settings {
             MereRunSettingsView()
                 .environmentObject(controller)
                 .environmentObject(crashReporter)
                 .frame(width: 560)
-        }
-    }
-
-    private func openDeepLink(_ url: URL) {
-        do {
-            switch try MereRunDeepLink.parse(url) {
-            case .preview(let artifactURL):
-                NSApplication.shared.activate(ignoringOtherApps: true)
-                guard QuickLookCoordinator.shared.preview(artifactURL) else {
-                    deepLinkError = "Quick Look is unavailable."
-                    return
-                }
-                deepLinkError = nil
-            case .libraryImport(let receiptURL):
-                let item = try library.importReceipt(at: receiptURL)
-                NSApplication.shared.activate(ignoringOtherApps: true)
-                navigation.openLibraryItem(id: item.id, mode: item.mode)
-                deepLinkError = nil
-            }
-        } catch {
-            deepLinkError = error.localizedDescription
         }
     }
 }

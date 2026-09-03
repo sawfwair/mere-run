@@ -17,115 +17,23 @@ struct MereRunRootView: View {
     }
 }
 
+/// The Command Console's content: the full contract surface as three panes (template sidebar ·
+/// editor · run console) that share the window's width and resize with it.
 struct AdvancedControlSurface: View {
-    /// Docked beside the Studio canvas shows a single resizable column (template picker + editor);
-    /// detached shows the full three-pane (sidebar · editor · console).
-    var docked = false
-    var onDetach: (() -> Void)?
-    var onClose: (() -> Void)?
-
     var body: some View {
-        Group {
-            if docked {
-                DockedAdvancedEditor(onDetach: onDetach, onClose: onClose)
-            } else {
-                fullSurface
-            }
+        HSplitView {
+            CommandSidebar()
+                .frame(minWidth: 220, idealWidth: 268, maxWidth: 360)
+
+            CommandEditor()
+                .frame(minWidth: 380, idealWidth: 520, maxWidth: .infinity)
+                .layoutPriority(1)
+
+            RunConsole()
+                .frame(minWidth: 320, idealWidth: 440, maxWidth: .infinity)
         }
         .background(MereRunTheme.background.ignoresSafeArea())
         .foregroundStyle(MereRunTheme.textPrimary)
-    }
-
-    private var fullSurface: some View {
-        ScrollView(.horizontal) {
-            HStack(spacing: 0) {
-                CommandSidebar()
-                    .frame(width: 268)
-
-                Divider()
-                    .overlay(MereRunTheme.border.opacity(0.6))
-
-                CommandEditor()
-                    .frame(width: 500)
-
-                Divider()
-                    .overlay(MereRunTheme.border.opacity(0.6))
-
-                RunConsole()
-                    .frame(width: 440)
-            }
-            .frame(width: 1_210)
-        }
-    }
-}
-
-/// The docked Advanced column: a compact template picker (the sidebar's job, condensed) above the
-/// scrollable editor, so the 560-ish rail never scrolls horizontally. A detach button promotes it
-/// to the full three-pane.
-private struct DockedAdvancedEditor: View {
-    @EnvironmentObject private var controller: MereRunController
-    var onDetach: (() -> Void)?
-    var onClose: (() -> Void)?
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            header
-            Divider().overlay(MereRunTheme.border.opacity(0.5))
-            CommandEditor()
-        }
-    }
-
-    private var header: some View {
-        HStack(spacing: 10) {
-            Menu {
-                ForEach(CommandCategory.allCases) { category in
-                    let templates = CommandCatalog.templates(in: category)
-                    if !templates.isEmpty {
-                        Section(category.rawValue) {
-                            ForEach(templates) { template in
-                                Button(template.title) { controller.select(template) }
-                            }
-                        }
-                    }
-                }
-            } label: {
-                HStack(spacing: 8) {
-                    Image(systemName: controller.selectedTemplate.systemImage)
-                    Text(controller.selectedTemplate.title)
-                        .font(MereRunTheme.sectionFont)
-                        .lineLimit(1)
-                    Image(systemName: "chevron.up.chevron.down")
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundStyle(MereRunTheme.textMuted)
-                }
-            }
-            .menuStyle(.borderlessButton)
-            .fixedSize()
-
-            Spacer(minLength: 0)
-
-            if let onClose {
-                Button(action: onClose) {
-                    Image(systemName: "xmark")
-                        .font(.system(size: 11, weight: .semibold))
-                        .frame(width: 24, height: 24)
-                }
-                .buttonStyle(.mereIcon)
-                .help("Hide Advanced (⌃⌘E)")
-                .accessibilityLabel("Hide Advanced")
-            }
-
-            if let onDetach {
-                Button(action: onDetach) {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
-                }
-                .buttonStyle(.mereIcon)
-                .help("Detach to the full control surface")
-                .accessibilityLabel("Detach to the full control surface")
-            }
-        }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 12)
     }
 }
 

@@ -160,10 +160,9 @@ final class StudioServingMonitor: ObservableObject {
     }
 }
 
-struct StudioServingConsoleSheet: View {
+struct StudioServingConsoleView: View {
     @EnvironmentObject private var controller: MereRunController
     @EnvironmentObject private var library: StudioLibraryStore
-    @Environment(\.dismiss) private var dismiss
 
     @StateObject private var monitor = StudioServingMonitor()
     @State private var section: StudioServingSection = .overview
@@ -227,7 +226,6 @@ struct StudioServingConsoleSheet: View {
                 }
             }
         }
-        .frame(minWidth: 1_100, idealWidth: 1_180, minHeight: 700, idealHeight: 760)
         .background(MereRunTheme.background)
         .task {
             syncDraftFromController()
@@ -252,22 +250,9 @@ struct StudioServingConsoleSheet: View {
 
     private var header: some View {
         HStack(spacing: MereRunTheme.Spacing.md) {
-            ZStack {
-                RoundedRectangle(cornerRadius: MereRunTheme.Radius.lg)
-                    .fill(MereRunTheme.accentSoft)
-                Image(systemName: "network")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(MereRunTheme.accent)
-            }
-            .frame(width: 42, height: 42)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Serving & Agents")
-                    .font(MereRunTheme.titleFont)
-                Text("Operate the local API, model pool, resources, and connected tools")
-                    .font(MereRunTheme.captionFont)
-                    .foregroundStyle(MereRunTheme.textMuted)
-            }
+            Label(serviceStateTitle, systemImage: monitor.isReachable ? "checkmark.circle.fill" : "circle")
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(monitor.isReachable ? MereRunTheme.green : MereRunTheme.textMuted)
 
             Spacer()
 
@@ -278,13 +263,9 @@ struct StudioServingConsoleSheet: View {
             }
             .buttonStyle(.mereSecondary)
             .disabled(monitor.isRefreshing)
-
-            Button("Done") { dismiss() }
-                .buttonStyle(.merePrimary)
-                .keyboardShortcut(.defaultAction)
         }
         .padding(.horizontal, MereRunTheme.Spacing.xl)
-        .padding(.vertical, MereRunTheme.Spacing.md)
+        .padding(.vertical, MereRunTheme.Spacing.sm)
     }
 
     private var navigation: some View {

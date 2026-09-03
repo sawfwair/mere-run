@@ -68,21 +68,21 @@ enum StudioGeoTool: String, CaseIterable, Identifiable {
     }
 }
 
-/// Geospatial Lab: the first-class workspace for native Earth-observation inference.
+/// The Earth domain's content: native Earth-observation inference, one form per workflow.
 /// Runs stay durable Library jobs, and every produced safetensors file is previewable
 /// and revealable from the result panel like any other Studio artifact.
-struct StudioGeoLabSheet: View {
+struct StudioGeoLabView: View {
     @EnvironmentObject private var controller: MereRunController
     @EnvironmentObject private var library: StudioLibraryStore
-    @Environment(\.dismiss) private var dismiss
 
-    @State private var tool: StudioGeoTool
+    /// Owned by the shell's task control (Flood · Fire · TESSERA · OlmoEarth).
+    @Binding var tool: StudioGeoTool
     @State private var drafts: [StudioGeoTool: CommandDraft]
     @State private var requestID: UUID?
     @State private var statusMessage: String?
 
-    init(initialTool: StudioGeoTool = .flood) {
-        _tool = State(initialValue: initialTool)
+    init(tool: Binding<StudioGeoTool>) {
+        _tool = tool
         var seeded: [StudioGeoTool: CommandDraft] = [:]
         for item in StudioGeoTool.allCases {
             seeded[item] = CommandCatalog.template(id: item.templateID)?.defaultDraft() ?? CommandDraft()
@@ -106,49 +106,19 @@ struct StudioGeoLabSheet: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
+        HStack(spacing: 0) {
+            controls
+                .frame(width: 440)
             Divider().overlay(MereRunTheme.border.opacity(0.6))
-            HStack(spacing: 0) {
-                controls
-                    .frame(width: 440)
-                Divider().overlay(MereRunTheme.border.opacity(0.6))
-                resultPanel
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
+            resultPanel
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(width: 1_080, height: 720)
         .background(MereRunTheme.background)
         .foregroundStyle(MereRunTheme.textPrimary)
         .onChange(of: tool) { _, _ in
             requestID = nil
             statusMessage = nil
         }
-    }
-
-    private var header: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Geospatial Lab")
-                    .font(MereRunTheme.titleFont)
-                Text("Native Earth-observation inference on Apple Silicon")
-                    .font(MereRunTheme.captionFont)
-                    .foregroundStyle(MereRunTheme.textMuted)
-            }
-            Spacer()
-            Picker("Workflow", selection: $tool) {
-                ForEach(StudioGeoTool.allCases) { item in
-                    Label(item.title, systemImage: item.symbol).tag(item)
-                }
-            }
-            .pickerStyle(.segmented)
-            .frame(width: 420)
-            .accessibilityLabel("Geospatial workflow")
-            .accessibilityValue(tool.title)
-            Button("Done") { dismiss() }
-                .buttonStyle(.bordered)
-        }
-        .padding(MereRunTheme.Spacing.lg)
     }
 
     private var controls: some View {

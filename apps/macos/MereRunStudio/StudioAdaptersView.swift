@@ -23,10 +23,9 @@ struct StudioAdapterRow: Decodable, Equatable, Identifiable {
 /// First-class adapter hub shared by Image, Chat/Code, Music, and specialist video workflows.
 /// Catalog mutation still runs through the CLI contract, while every pull/training launch is a
 /// durable Library job rather than an invisible utility process.
-struct StudioAdaptersSheet: View {
+struct StudioAdaptersView: View {
     @EnvironmentObject private var controller: MereRunController
     @EnvironmentObject private var library: StudioLibraryStore
-    @Environment(\.dismiss) private var dismiss
 
     let activeModelID: String
     let onUse: (StudioAdapterRow) -> Void
@@ -78,7 +77,6 @@ struct StudioAdaptersSheet: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .frame(width: 980, height: 650)
         .background(MereRunTheme.background)
         .foregroundStyle(MereRunTheme.textPrimary)
         .task { await refresh() }
@@ -91,13 +89,10 @@ struct StudioAdaptersSheet: View {
 
     private var header: some View {
         HStack(spacing: MereRunTheme.Spacing.md) {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Adapters")
-                    .font(MereRunTheme.titleFont)
-                Text(statusMessage)
-                    .font(MereRunTheme.captionFont)
-                    .foregroundStyle(MereRunTheme.textMuted)
-            }
+            Text(statusMessage)
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textMuted)
+                .lineLimit(1)
             Spacer()
             Button {
                 revealAdapterStore()
@@ -121,12 +116,9 @@ struct StudioAdaptersSheet: View {
             }
             .buttonStyle(.bordered)
             .disabled(isRefreshing)
-
-            Button("Done") { dismiss() }
-                .buttonStyle(.borderedProminent)
-                .tint(MereRunTheme.accent)
         }
-        .padding(18)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
     }
 
     private var catalogList: some View {
@@ -281,7 +273,6 @@ struct StudioAdaptersSheet: View {
                 if row.installed {
                     Button {
                         onUse(row)
-                        dismiss()
                     } label: {
                         Label("Use in Studio", systemImage: "checkmark.circle.fill")
                     }
@@ -376,7 +367,6 @@ struct StudioAdaptersSheet: View {
                                 if let output = adapterOutput(for: item) {
                                     Button("Use") {
                                         onUseLocal(output.path)
-                                        dismiss()
                                     }
                                     .buttonStyle(.borderedProminent)
                                     .tint(MereRunTheme.accent)
@@ -408,7 +398,6 @@ struct StudioAdaptersSheet: View {
         templateID: CommandTemplateID
     ) -> some View {
         Button {
-            dismiss()
             onTrain(templateID)
         } label: {
             Label(title, systemImage: symbol)
@@ -474,7 +463,6 @@ struct StudioAdaptersSheet: View {
         panel.canChooseDirectories = false
         if panel.runModal() == .OK, let url = panel.url {
             onUseLocal(url.path)
-            dismiss()
         }
     }
 

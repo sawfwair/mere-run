@@ -253,13 +253,15 @@ final class StudioVoiceRecorder: NSObject, ObservableObject {
 
 }
 
-struct StudioVoiceSheet: View {
+struct StudioVoiceView: View {
     @EnvironmentObject private var controller: MereRunController
     @EnvironmentObject private var library: StudioLibraryStore
-    @Environment(\.dismiss) private var dismiss
 
     @StateObject private var recorder = StudioVoiceRecorder()
-    @State private var task: StudioVoiceTask
+    /// Owned by the shell's task control. Voice hosts Clone and Voices; Audio hosts Who Spoke
+    /// and Live. The rail mirrors the tasks of its host.
+    @Binding var task: StudioVoiceTask
+    let tasks: [StudioVoiceTask]
     @State private var synthesisDraft: CommandDraft
     @State private var transcriptionDraft: CommandDraft
     @State private var diarizationDraft: CommandDraft
@@ -280,8 +282,9 @@ struct StudioVoiceSheet: View {
 
     private let recorderTicker = Timer.publish(every: 0.2, on: .main, in: .common).autoconnect()
 
-    init(initialTask: StudioVoiceTask, initialDraft: StudioDraft) {
-        _task = State(initialValue: initialTask)
+    init(task: Binding<StudioVoiceTask>, tasks: [StudioVoiceTask], initialDraft: StudioDraft) {
+        _task = task
+        self.tasks = tasks
 
         var synthesis = CommandCatalog.template(id: .speechSynthesize)?.defaultDraft() ?? CommandDraft()
         synthesis.prompt = initialDraft.prompt
@@ -311,21 +314,16 @@ struct StudioVoiceSheet: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
+        HStack(spacing: 0) {
+            taskRail
+                .frame(width: 170)
             Divider().overlay(MereRunTheme.border.opacity(0.6))
-            HStack(spacing: 0) {
-                taskRail
-                    .frame(width: 170)
-                Divider().overlay(MereRunTheme.border.opacity(0.6))
-                configuration
-                    .frame(width: 420)
-                Divider().overlay(MereRunTheme.border.opacity(0.6))
-                resultPane
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
+            configuration
+                .frame(width: 420)
+            Divider().overlay(MereRunTheme.border.opacity(0.6))
+            resultPane
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(width: 1_210, height: 780)
         .background(MereRunTheme.background)
         .foregroundStyle(MereRunTheme.textPrimary)
         .task { refreshProfiles() }
@@ -359,39 +357,9 @@ struct StudioVoiceSheet: View {
         }
     }
 
-    private var header: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Voice Studio")
-                    .font(MereRunTheme.titleFont)
-                Text("Record, clone, synthesize, transcribe, identify speakers, and manage reusable voices")
-                    .font(MereRunTheme.captionFont)
-                    .foregroundStyle(MereRunTheme.textMuted)
-            }
-            Spacer()
-            if recorder.isRecording {
-                Label(
-                    StudioTimeFormat.string(recorder.duration),
-                    systemImage: "record.circle.fill"
-                )
-                .font(MereRunTheme.captionFont)
-                .foregroundStyle(MereRunTheme.red)
-            }
-            Button("Done") { dismiss() }
-                .buttonStyle(.bordered)
-        }
-        .padding(18)
-    }
-
     private var taskRail: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("WORKSPACE")
-                .font(.system(size: 9.5, weight: .bold))
-                .kerning(0.8)
-                .foregroundStyle(MereRunTheme.textMuted)
-                .padding(.horizontal, 12)
-                .padding(.bottom, 3)
-            ForEach(StudioVoiceTask.allCases) { item in
+            ForEach(tasks) { item in
                 Button {
                     task = item
                     statusMessage = nil
@@ -423,6 +391,14 @@ struct StudioVoiceSheet: View {
             }
             .buttonStyle(.borderedProminent)
             .tint(recorder.isRecording ? MereRunTheme.red : MereRunTheme.accent)
+            if recorder.isRecording {
+                Label(
+                    StudioTimeFormat.string(recorder.duration),
+                    systemImage: "record.circle.fill"
+                )
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.red)
+            }
             if let error = recorder.errorMessage {
                 Text(error)
                     .font(MereRunTheme.captionFont)

@@ -2,47 +2,28 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
+/// The Studio shell: a native split view whose sidebar lists the domains and whose detail area
+/// renders the current task — the prompt workspace for the twelve composer modes, or one of the
+/// former specialist sheets re-hosted inline. Navigation is one value (`NavigationModel`), and
+/// the only sheets left are true tasks (terms, the mask editor, Relay sign-in, rename, the Guide).
 struct StudioRootView: View {
     @EnvironmentObject private var controller: MereRunController
     @EnvironmentObject private var library: StudioLibraryStore
-    @EnvironmentObject private var navigation: StudioNavigationCoordinator
-    // Persisted per scene so relaunch restores the last mode and panel layout.
-    @SceneStorage("studio.mode") private var mode: StudioMode = .createImage
-    @SceneStorage("studio.showLibrary") private var showLibrary = true
-    @SceneStorage("studio.showAdvanced") private var showAdvanced = false
-    @State private var layoutClass: StudioLayoutClass = .regular
-    @State private var showCompactLibrary = false
+    @Environment(\.openWindow) private var openWindow
+    @StateObject private var navigation = NavigationModel()
+    // Persisted per scene so relaunch restores the last place, the last prompt mode, and the panel
+    // layout. `studio.mode` keeps its v1 meaning (the last prompt mode) so drafts and readiness
+    // stay attached to it while a System or Lab task is shown.
+    @SceneStorage("studio.destination") private var storedDestination: StudioDestination = .default
+    @SceneStorage("studio.mode") private var lastPromptMode: StudioMode = .createImage
+    @SceneStorage("studio.showLibrary") private var storedShowLibrary = true
+    @SceneStorage("studio.libraryScope") private var libraryScope: StudioLibraryScope = .domain
+    @State private var columnVisibility: NavigationSplitViewVisibility = .all
+    @State private var isRestoringDestination = false
     @State private var draft = StudioDraft()
     @State private var showOptions = false
-    @State private var showModels = false
-    @State private var showServing = false
-    @State private var showOperations = false
-    @State private var showPlugins = false
-    @State private var showGeoLab = false
-    @State private var showAdapters = false
-    @State private var showRealtimeMusic = false
-    @State private var showSCAIL = false
-    @State private var show3DCreation = false
-    @State private var showVisionLab = false
-    @State private var showVoiceStudio = false
-    @State private var voiceTask: StudioVoiceTask = .synthesize
-    @State private var showSFXLab = false
-    @State private var showTraining = false
-    @State private var trainingKind: StudioTrainingKind = .image
-    @State private var showMusicTools = false
-    @State private var musicTool: StudioMusicTool = .analyze
-    @State private var showAudioTools = false
-    @State private var audioTool: StudioAudioTool = .enhance
-    @State private var openTrainingAfterMusicTools = false
-    @State private var openRealtimeAfterMusicTools = false
-    @State private var showUtilityLab = false
-    @State private var utilityTask: StudioUtilityTask = .embeddings
     @State private var showHelp = false
-    @State private var advancedWidth: CGFloat = 560
-    @State private var advancedDragStartWidth: CGFloat?
-    @State private var advancedDetached = false
     @State private var isDropTargeted = false
-    @State private var selectedLibraryID: UUID?
     /// The conversation the canvas/composer targets in chat/code modes. nil means a fresh,
     /// not-yet-sent conversation (so the library has no empty row until the first message).
     @State private var activeConversationID: UUID?
@@ -52,12 +33,29 @@ struct StudioRootView: View {
     /// Locally installed models feeding the composer's quick-picker.
     @State private var installedModels: [StudioModelInventoryRow] = []
     @State private var modelUsageTermsByID: [String: StudioModelUsageTerms] = [:]
+    /// Vision Lab keeps sub-variants (face embed/compare/batch, multi-view geometry) behind one
+    /// toolbar task each; this is the variant its rail currently shows.
+    @State private var visionLabTask: StudioVisionTask = .faceDetect
+    @State private var imageDatasetTask: StudioUtilityTask = .datasetDiscovery
     @AppStorage("mererun.app.hasCompletedWelcome") private var hasCompletedWelcome = false
-    @State private var showWelcome = false
     @FocusState private var promptFocused: Bool
 
+    private var destination: StudioDestination { navigation.destination }
+
+    /// The prompt mode the composer and canvas belong to. While a non-prompt task is shown this is
+    /// the last prompt mode, so its draft, readiness, and conversation survive the detour.
+    private var mode: StudioMode {
+        destination.task.mode ?? lastPromptMode
+    }
+
+    private var showsPromptWorkspace: Bool {
+        destination.task.mode != nil
+    }
+
     private var selectedItem: StudioLibraryItem? {
-        if let selectedLibraryID, let found = library.items.first(where: { $0.id == selectedLibraryID }) {
+        if let selectedLibraryID = navigation.selectedLibraryID,
+           let found = library.items.first(where: { $0.id == selectedLibraryID }),
+           found.mode == mode {
             return found
         }
         if mode.isConversational {
@@ -114,262 +112,436 @@ struct StudioRootView: View {
         return "\(controller.status) · \(suffix)"
     }
 
-    private var modeCapabilities: [StudioMode: StudioModelCapability] {
-        Dictionary(
-            uniqueKeysWithValues: StudioMode.allCases.compactMap { candidate in
-                var candidateDraft = StudioDraft()
-                candidateDraft.reset(for: candidate)
-                let requirement = StudioCommandAdapter.capabilityRequirement(
-                    for: candidate,
-                    draft: candidateDraft
-                )
-                guard let requirement,
-                      case .managedModel(let modelID) = requirement,
-                      let capability = controller.modelCapabilitiesByID[modelID] else {
-                    return nil
-                }
-                return (candidate, capability)
+    /// Domains whose default task needs a managed model this machine cannot run.
+    private var domainUnavailableMessages: [StudioDomain: String] {
+        var messages: [StudioDomain: String] = [:]
+        for domain in StudioDomain.allCases {
+            guard let candidate = domain.defaultTask.mode else { continue }
+            var candidateDraft = StudioDraft()
+            candidateDraft.reset(for: candidate)
+            let requirement = StudioCommandAdapter.capabilityRequirement(for: candidate, draft: candidateDraft)
+            guard let requirement,
+                  case .managedModel(let modelID) = requirement,
+                  let message = controller.modelCapabilitiesByID[modelID]?.unavailableMessage else {
+                continue
             }
+            messages[domain] = message
+        }
+        return messages
+    }
+
+    private var showLibraryBinding: Binding<Bool> {
+        Binding(
+            get: { navigation.showLibrary },
+            set: { navigation.showLibrary = $0 }
         )
     }
 
-    // The body is staged (shell → panels → sheets → observers) so each stage stays a small,
+    private var domainBinding: Binding<StudioDomain> {
+        Binding(
+            get: { destination.domain },
+            set: { navigation.open(domain: $0) }
+        )
+    }
+
+    private var taskBinding: Binding<StudioTask> {
+        Binding(
+            get: { destination.task },
+            set: { navigation.open(task: $0) }
+        )
+    }
+
+    // The body is staged (shell → presentation → observers) so each stage stays a small,
     // independently type-checked expression.
     var body: some View {
         observedShell
     }
 
+    // MARK: - Shell
+
     private var shell: some View {
-        GeometryReader { geometry in
-            let layout = StudioLayoutPolicy.layoutClass(for: geometry.size.width)
-
-            adaptiveShell(layout: layout, availableWidth: geometry.size.width)
-                .onAppear { updateLayoutClass(layout) }
-                .onChange(of: layout) { _, nextLayout in
-                    updateLayoutClass(nextLayout)
-                }
-        }
-        .background(MereRunTheme.background.ignoresSafeArea())
-    }
-
-    private func adaptiveShell(layout: StudioLayoutClass, availableWidth: CGFloat) -> some View {
-        ZStack(alignment: .trailing) {
-            HStack(spacing: 0) {
-                if layout.isCompact {
-                    StudioSidebarRail(
-                        mode: $mode,
-                        modeCapabilities: modeCapabilities,
-                        onShowServing: { showServing = true },
-                        onShowOperations: { showOperations = true },
-                        onShowPlugins: { showPlugins = true },
-                        onShowModels: { showModels = true },
-                        onShowGeoLab: { showGeoLab = true },
-                        onShowHelp: { showHelp = true }
-                    )
-
-                    Divider()
-                        .overlay(MereRunTheme.border.opacity(0.4))
-                } else {
-                    regularNavigation
-
-                    Divider()
-                        .overlay(MereRunTheme.border.opacity(0.4))
-
-                    if showLibrary {
-                        regularLibrary
-
-                        Divider()
-                            .overlay(MereRunTheme.border.opacity(0.5))
-                    }
-                }
-
-                contentColumn(isCompact: layout.isCompact)
-            }
-
-            if layout.isCompact, showCompactLibrary {
-                compactDismissLayer { showCompactLibrary = false }
-
-                HStack(spacing: 0) {
-                    compactLibraryPanel(availableWidth: availableWidth)
-                    Spacer(minLength: 0)
-                }
-                .transition(.move(edge: .leading).combined(with: .opacity))
-                .zIndex(1)
-            }
-
-            if showAdvanced {
-                advancedPanel(layout: layout, availableWidth: availableWidth)
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
-                    .zIndex(2)
-            }
-        }
-        .background(MereRunTheme.background.ignoresSafeArea())
-    }
-
-    private var regularNavigation: some View {
-        StudioSidebar(
-            mode: $mode,
-            modeCapabilities: modeCapabilities,
-            serverStatus: controller.serverStatus,
-            resolvedCLI: controller.resolvedCLI,
-            onShowServing: { showServing = true },
-            onShowOperations: { showOperations = true },
-            onShowPlugins: { showPlugins = true },
-            onShowModels: { showModels = true },
-            onShowGeoLab: { showGeoLab = true },
-            onShowHelp: { showHelp = true }
-        )
-        .frame(width: StudioLayoutPolicy.sidebarWidth)
-    }
-
-    private var regularLibrary: some View {
-        StudioLibraryPanel(
-            items: library.items,
-            progressByID: controller.progressByRequestID,
-            selectedID: $selectedLibraryID,
-            isVisible: $showLibrary,
-            onDelete: deleteLibraryItem,
-            onRename: library.rename,
-            onQuickLook: { QuickLookCoordinator.shared.preview($0) },
-            onRetry: retryLibraryItem,
-            onEdit: editLibraryItem
-        )
-        .frame(width: StudioLayoutPolicy.libraryWidth)
-    }
-
-    private func compactLibraryPanel(availableWidth: CGFloat) -> some View {
-        StudioLibraryPanel(
-            items: library.items,
-            progressByID: controller.progressByRequestID,
-            selectedID: compactLibrarySelection,
-            isVisible: $showCompactLibrary,
-            onDelete: deleteLibraryItem,
-            onRename: library.rename,
-            onQuickLook: { QuickLookCoordinator.shared.preview($0) },
-            onRetry: retryLibraryItem,
-            onEdit: editLibraryItem
-        )
-        .frame(
-            width: StudioLayoutPolicy.compactPanelWidth(
-                availableWidth: availableWidth,
-                preferredWidth: 320
+        NavigationSplitView(columnVisibility: $columnVisibility) {
+            StudioSidebar(
+                selectedDomain: domainBinding,
+                unavailableMessages: domainUnavailableMessages,
+                serverStatus: controller.serverStatus,
+                resolvedCLI: controller.resolvedCLI,
+                onShowServer: { navigation.open(domain: .server) },
+                onShowModels: { navigation.open(task: .modelsInstalled) }
             )
-        )
-        .clipShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.xl))
-        .mereShadow(radius: 24, y: 0)
-        .padding(StudioLayoutPolicy.compactPanelInset)
-    }
-
-    private func compactDismissLayer(action: @escaping () -> Void) -> some View {
-        MereRunTheme.textPrimary.opacity(0.06)
-            .contentShape(Rectangle())
-            .onTapGesture(perform: action)
-            .transition(.opacity)
-            .zIndex(0)
-            .accessibilityHidden(true)
-    }
-
-    private func advancedPanel(layout: StudioLayoutClass, availableWidth: CGFloat) -> some View {
-        Group {
-            if layout.isCompact {
-                AdvancedControlSurface(
-                    docked: true,
-                    onClose: { showAdvanced = false }
-                )
-                    .environmentObject(library)
-                    .frame(
-                        width: StudioLayoutPolicy.compactPanelWidth(
-                            availableWidth: availableWidth,
-                            preferredWidth: advancedWidth
-                        )
-                    )
-                    .clipped()
-            } else {
-                HStack(spacing: 0) {
-                    advancedResizeHandle
-                    AdvancedControlSurface(
-                        docked: true,
-                        onDetach: { advancedDetached = true },
-                        onClose: { showAdvanced = false }
-                    )
-                        .environmentObject(library)
-                        .frame(width: advancedWidth)
-                        .clipped()
-                }
-            }
+        } detail: {
+            detailArea
+                .toolbar { toolbarContent }
         }
-        .background(MereRunTheme.background)
-        .mereShadow(radius: 24, y: 0)
+        .background(MereRunTheme.background.ignoresSafeArea())
     }
 
-    private var compactLibrarySelection: Binding<UUID?> {
-        Binding(
-            get: { selectedLibraryID },
-            set: { nextSelection in
-                selectedLibraryID = nextSelection
-                if nextSelection != nil { showCompactLibrary = false }
-            }
-        )
-    }
-
-    private var visibleLibraryBinding: Binding<Bool> {
-        Binding(
-            get: { layoutClass.isCompact ? showCompactLibrary : showLibrary },
-            set: { isVisible in
-                if layoutClass.isCompact {
-                    showCompactLibrary = isVisible
-                    if isVisible { showAdvanced = false }
-                } else {
-                    showLibrary = isVisible
-                }
-            }
-        )
-    }
-
-    private func deleteLibraryItem(_ id: UUID) {
-        library.delete(id: id)
-        if selectedLibraryID == id { selectedLibraryID = nil }
-    }
-
-    private func openImportedLibraryItem(_ request: StudioLibraryNavigationRequest) {
-        mode = request.mode
-        selectedLibraryID = request.itemID
-        showLibrary = true
-        showAdvanced = false
-        if layoutClass.isCompact {
-            showCompactLibrary = true
-        }
-    }
-
-    private func updateLayoutClass(_ nextLayout: StudioLayoutClass) {
-        guard layoutClass != nextLayout else { return }
-        layoutClass = nextLayout
-        if nextLayout == .regular { showCompactLibrary = false }
-    }
-
-    private func contentColumn(isCompact: Bool) -> some View {
+    private var detailArea: some View {
         VStack(spacing: 0) {
-            topBar(isCompact: isCompact)
+            banners
 
-            Divider()
-                .overlay(MereRunTheme.border.opacity(0.45))
+            HStack(spacing: 0) {
+                if navigation.showLibrary {
+                    libraryColumn
+                        .frame(width: StudioLayoutPolicy.libraryWidth)
+                        .transition(.move(edge: .leading).combined(with: .opacity))
 
-            if let persistenceError = library.lastPersistenceError {
-                MereBanner(
-                    severity: .warning,
-                    text: "Run history not saved: \(persistenceError)"
-                )
-                .padding(.horizontal, 24)
-                .padding(.top, 10)
+                    Divider()
+                        .overlay(MereRunTheme.border.opacity(0.5))
+                }
+
+                domainContent
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-
-            canvas(isCompact: isCompact)
-
-            composer(isCompact: isCompact)
-                .padding(.horizontal, isCompact ? 12 : 24)
-                .padding(.bottom, isCompact ? 12 : 20)
         }
-        .frame(minWidth: isCompact ? 0 : StudioLayoutPolicy.minimumCanvasWidth)
+        .background(MereRunTheme.background.ignoresSafeArea())
+        .foregroundStyle(MereRunTheme.textPrimary)
+    }
+
+    @ViewBuilder
+    private var banners: some View {
+        if let persistenceError = library.lastPersistenceError {
+            MereBanner(
+                severity: .warning,
+                text: "Run history not saved: \(persistenceError)"
+            )
+            .padding(.horizontal, MereRunTheme.Spacing.lg)
+            .padding(.top, MereRunTheme.Spacing.sm)
+        }
+
+        if !hasCompletedWelcome {
+            MereBanner(
+                severity: .info,
+                text: "Nothing leaves your Mac. Pick a domain, get its model once, and create.",
+                systemImage: "lock.shield",
+                onDismiss: { hasCompletedWelcome = true }
+            )
+            .padding(.horizontal, MereRunTheme.Spacing.lg)
+            .padding(.top, MereRunTheme.Spacing.sm)
+        }
+    }
+
+    private var libraryColumn: some View {
+        StudioLibraryPanel(
+            items: library.items,
+            domain: destination.domain,
+            scope: $libraryScope,
+            progressByID: controller.progressByRequestID,
+            selectedID: $navigation.selectedLibraryID,
+            onSelect: selectLibraryItem,
+            onDelete: deleteLibraryItem,
+            onRename: library.rename,
+            onQuickLook: { QuickLookCoordinator.shared.preview($0) },
+            onRetry: retryLibraryItem,
+            onEdit: editLibraryItem
+        )
+    }
+
+    // MARK: - Toolbar
+
+    @ToolbarContentBuilder
+    private var toolbarContent: some ToolbarContent {
+        ToolbarItem(placement: .navigation) {
+            domainTitle
+        }
+
+        ToolbarItem(placement: .principal) {
+            taskControl
+        }
+
+        ToolbarItemGroup(placement: .primaryAction) {
+            Button {
+                withAnimation(MereRunTheme.Motion.standard) {
+                    navigation.showLibrary.toggle()
+                }
+            } label: {
+                Image(systemName: "sidebar.squares.left")
+                    .foregroundStyle(navigation.showLibrary ? MereRunTheme.accent : MereRunTheme.textSecondary)
+            }
+            .help(navigation.showLibrary ? "Hide Library (⌥⌘L)" : "Show Library (⌥⌘L)")
+            .accessibilityLabel(navigation.showLibrary ? "Hide Library" : "Show Library")
+
+            Button {
+                openConsole()
+            } label: {
+                Image(systemName: "terminal")
+            }
+            .help("Command Console (⌥⌘C)")
+            .accessibilityLabel("Command Console")
+        }
+    }
+
+    private var domainTitle: some View {
+        HStack(spacing: MereRunTheme.Spacing.sm) {
+            Image(systemName: destination.domain.systemImage)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundStyle(MereRunTheme.accent)
+                .frame(width: 22)
+
+            VStack(alignment: .leading, spacing: 1) {
+                Text(destination.domain.title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(MereRunTheme.textPrimary)
+                Text(destination.domain.subtitle)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(MereRunTheme.textMuted)
+                    .lineLimit(1)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    @ViewBuilder
+    private var taskControl: some View {
+        switch StudioTaskControlStyle.style(for: destination.domain) {
+        case .none:
+            EmptyView()
+        case .segmented:
+            Picker("Task", selection: taskBinding) {
+                ForEach(destination.domain.tasks) { task in
+                    Text(task.title).tag(task)
+                }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .fixedSize()
+            .accessibilityLabel("\(destination.domain.title) task")
+        case .menu:
+            Picker("Task", selection: taskBinding) {
+                ForEach(destination.domain.tasks) { task in
+                    Text(task.title).tag(task)
+                }
+            }
+            .pickerStyle(.menu)
+            .labelsHidden()
+            .fixedSize()
+            .accessibilityLabel("\(destination.domain.title) task")
+        }
+    }
+
+    // MARK: - Domain content
+
+    @ViewBuilder
+    private var domainContent: some View {
+        switch destination.task {
+        case .imageGenerate, .videoGenerate, .musicCompose, .soundGenerate, .voiceSpeak,
+             .chatChat, .chatCode, .visionRead, .visionFind, .visionSegment, .visionTrack,
+             .audioTranscribe:
+            promptWorkspace
+        case .imageDatasets:
+            StudioUtilityLabView(
+                task: $imageDatasetTask,
+                tasks: [.datasetDiscovery, .imageValidation, .runPlan],
+                showsTaskPicker: true
+            )
+        case .imageTrain:
+            StudioTrainingView(kind: .image)
+        case .chatTrain:
+            StudioTrainingView(kind: .text)
+        case .musicTrain:
+            StudioTrainingView(kind: .music)
+        case .videoSubjects:
+            StudioSCAILView()
+        case .musicRealtime:
+            StudioRealtimeMusicView(initialDraft: draft)
+        case .musicAnalyze, .musicTranscribe:
+            StudioMusicToolsView(tool: musicToolBinding, tools: [.analyze, .transcribe])
+        case .musicSeparate:
+            StudioAudioToolsView(tool: .constant(.separate))
+        case .soundFoley, .soundCondition, .soundEncode, .soundDecode, .soundScore:
+            StudioSFXLabView(
+                task: sfxTaskBinding,
+                tasks: [.video, .condition, .encode, .decode, .score],
+                initialDraft: draft
+            )
+        case .voiceClone, .voiceVoices:
+            StudioVoiceView(task: voiceTaskBinding, tasks: [.synthesize, .profiles], initialDraft: draft)
+        case .threeDFromImage:
+            Studio3DCreationView()
+        case .visionDepth, .visionPose, .visionFaces, .visionFlow, .visionGeometry, .visionLive:
+            StudioVisionLabView(task: visionLabBinding)
+        case .audioWhoSpoke, .audioLive:
+            StudioVoiceView(task: voiceTaskBinding, tasks: [.diarize, .listen], initialDraft: draft)
+        case .audioEnhance, .audioSeparate:
+            StudioAudioToolsView(tool: audioToolBinding)
+        case .textEmbeddings, .textAnonymize:
+            StudioUtilityLabView(
+                task: utilityTaskBinding,
+                tasks: [.embeddings, .anonymize],
+                showsTaskPicker: false
+            )
+        case .earthFlood, .earthFire, .earthTessera, .earthOlmoEarth:
+            StudioGeoLabView(tool: geoToolBinding)
+        case .modelsInstalled:
+            StudioModelsView(onModelsChanged: {
+                refreshReadiness()
+                refreshInstalledModels()
+            })
+        case .modelsLocations:
+            StudioModelLocationsView(onLocationsChanged: {
+                refreshReadiness()
+                refreshInstalledModels()
+            })
+        case .modelsHealth:
+            StudioModelHealthView(scope: .health, onModelsChanged: {
+                refreshReadiness()
+                refreshInstalledModels()
+            })
+        case .modelsBenchmarks:
+            StudioModelHealthView(scope: .benchmarks, onModelsChanged: {
+                refreshReadiness()
+                refreshInstalledModels()
+            })
+        case .modelsAdapters:
+            StudioAdaptersView(
+                activeModelID: draft.model,
+                onUse: applyAdapter,
+                onUseLocal: applyLocalAdapter,
+                onTrain: openTraining
+            )
+        case .serverServing:
+            StudioServingConsoleView()
+        case .serverMusic:
+            StudioMusicToolsView(tool: .constant(.serve), tools: [.serve])
+        case .runsRuns:
+            StudioOperationsView()
+        case .pluginsCatalog:
+            StudioPluginsView()
+        }
+    }
+
+    // MARK: Task bindings for re-hosted views
+
+    private var musicToolBinding: Binding<StudioMusicTool> {
+        Binding(
+            get: {
+                switch destination.task {
+                case .musicTranscribe: return .transcribe
+                default: return .analyze
+                }
+            },
+            set: { tool in
+                switch tool {
+                case .analyze: navigation.open(task: .musicAnalyze)
+                case .transcribe: navigation.open(task: .musicTranscribe)
+                case .serve: navigation.open(task: .serverMusic)
+                }
+            }
+        )
+    }
+
+    private var audioToolBinding: Binding<StudioAudioTool> {
+        Binding(
+            get: { destination.task == .audioSeparate ? .separate : .enhance },
+            set: { navigation.open(task: $0 == .separate ? .audioSeparate : .audioEnhance) }
+        )
+    }
+
+    private var sfxTaskBinding: Binding<StudioSFXTask> {
+        Binding(
+            get: {
+                switch destination.task {
+                case .soundCondition: return .condition
+                case .soundEncode: return .encode
+                case .soundDecode: return .decode
+                case .soundScore: return .score
+                default: return .video
+                }
+            },
+            set: { task in
+                switch task {
+                case .generate: navigation.open(task: .soundGenerate)
+                case .video: navigation.open(task: .soundFoley)
+                case .condition: navigation.open(task: .soundCondition)
+                case .encode: navigation.open(task: .soundEncode)
+                case .decode: navigation.open(task: .soundDecode)
+                case .score: navigation.open(task: .soundScore)
+                }
+            }
+        )
+    }
+
+    private var voiceTaskBinding: Binding<StudioVoiceTask> {
+        Binding(
+            get: {
+                switch destination.task {
+                case .voiceVoices: return .profiles
+                case .audioWhoSpoke: return .diarize
+                case .audioLive: return .listen
+                case .audioTranscribe: return .transcribe
+                default: return .synthesize
+                }
+            },
+            set: { task in
+                switch task {
+                case .synthesize: navigation.open(task: .voiceClone)
+                case .profiles: navigation.open(task: .voiceVoices)
+                case .transcribe: navigation.open(task: .audioTranscribe)
+                case .diarize: navigation.open(task: .audioWhoSpoke)
+                case .listen: navigation.open(task: .audioLive)
+                }
+            }
+        )
+    }
+
+    private var utilityTaskBinding: Binding<StudioUtilityTask> {
+        Binding(
+            get: { destination.task == .textAnonymize ? .anonymize : .embeddings },
+            set: { task in
+                switch task {
+                case .embeddings: navigation.open(task: .textEmbeddings)
+                case .anonymize: navigation.open(task: .textAnonymize)
+                case .imageValidation, .datasetDiscovery, .runPlan:
+                    imageDatasetTask = task
+                    navigation.open(task: .imageDatasets)
+                }
+            }
+        )
+    }
+
+    private var geoToolBinding: Binding<StudioGeoTool> {
+        Binding(
+            get: {
+                switch destination.task {
+                case .earthFire: return .fire
+                case .earthTessera: return .tessera
+                case .earthOlmoEarth: return .olmoEarth
+                default: return .flood
+                }
+            },
+            set: { tool in
+                switch tool {
+                case .flood: navigation.open(task: .earthFlood)
+                case .fire: navigation.open(task: .earthFire)
+                case .tessera: navigation.open(task: .earthTessera)
+                case .olmoEarth: navigation.open(task: .earthOlmoEarth)
+                }
+            }
+        )
+    }
+
+    private var visionLabBinding: Binding<StudioVisionTask> {
+        Binding(
+            get: { visionLabTask },
+            set: { task in
+                visionLabTask = task
+                navigation.open(task: task.studioTask)
+            }
+        )
+    }
+
+    // MARK: - Prompt workspace
+
+    private var promptWorkspace: some View {
+        VStack(spacing: 0) {
+            canvas
+
+            composer
+                .padding(.horizontal, MereRunTheme.Spacing.xl)
+                .padding(.bottom, MereRunTheme.Spacing.xl)
+        }
+        .frame(minWidth: StudioLayoutPolicy.minimumCanvasWidth)
         .background {
             ZStack {
                 MereRunTheme.background
@@ -409,10 +581,9 @@ struct StudioRootView: View {
         .onPasteCommand(of: [.image]) { _ in pasteImageFromClipboard() }
     }
 
-    private func canvas(isCompact: Bool) -> some View {
+    private var canvas: some View {
         StudioCanvas(
             mode: mode,
-            isCompact: isCompact,
             item: selectedItem,
             conversationItem: activeConversationItem,
             conversationLiveText: activeConversationLiveText,
@@ -431,7 +602,7 @@ struct StudioRootView: View {
                 if let url = selectedItem?.outputURL { QuickLookCoordinator.shared.preview(url) }
             },
             onPullModel: pullModel,
-            onShowDetails: { showAdvanced = true },
+            onShowDetails: { openConsole() },
             onNewChat: startNewConversation,
             onCopy: copyToClipboard,
             onRetry: retryLastTurn,
@@ -444,10 +615,9 @@ struct StudioRootView: View {
         )
     }
 
-    private func composer(isCompact: Bool) -> some View {
+    private var composer: some View {
         StudioComposer(
             mode: mode,
-            isCompact: isCompact,
             draft: $draft,
             showOptions: $showOptions,
             isRunning: controller.isRunning,
@@ -460,155 +630,26 @@ struct StudioRootView: View {
             onStop: controller.cancel,
             onAttach: chooseAttachment,
             onPaste: pasteImageFromClipboard,
-            onShowModels: { showModels = true },
-            onShowAdapters: { showAdapters = true },
+            onShowModels: { navigation.open(task: .modelsInstalled) },
+            onShowAdapters: {
+                showOptions = false
+                navigation.open(task: .modelsAdapters)
+            },
             onShowRealtimeMusic: {
                 showOptions = false
-                showRealtimeMusic = true
+                navigation.open(task: .musicRealtime)
             }
         )
     }
 
-    private var sheetedShell: some View {
+    // MARK: - Presentation
+
+    private var presentedShell: some View {
         shell
-            .sheet(isPresented: $showServing) {
-                StudioServingConsoleSheet()
-                    .environmentObject(controller)
-                    .environmentObject(library)
-            }
-            .sheet(isPresented: $showOperations) {
-                StudioOperationsCenterSheet()
-                    .environmentObject(controller)
-            }
-            .sheet(isPresented: $showPlugins) {
-                StudioPluginsSheet()
-                    .environmentObject(controller)
-            }
-            .sheet(isPresented: $showGeoLab) {
-                StudioGeoLabSheet()
-                    .environmentObject(controller)
-                    .environmentObject(library)
-            }
-            .sheet(isPresented: $showModels) {
-                StudioModelsSheet(onModelsChanged: {
-                    refreshReadiness()
-                    refreshInstalledModels()
-                })
-                .environmentObject(controller)
-                .environmentObject(library)
-            }
-            .sheet(isPresented: $showAdapters) {
-                StudioAdaptersSheet(
-                    activeModelID: draft.model,
-                    onUse: applyAdapter,
-                    onUseLocal: applyLocalAdapter,
-                    onTrain: openAdvancedTraining
-                )
-                .environmentObject(controller)
-                .environmentObject(library)
-            }
-            .sheet(isPresented: $showRealtimeMusic) {
-                StudioRealtimeMusicSheet(initialDraft: draft)
-                    .environmentObject(controller)
-                    .environmentObject(library)
-            }
-            .sheet(isPresented: $showSCAIL) {
-                StudioSCAILSheet()
-                    .environmentObject(controller)
-                    .environmentObject(library)
-            }
-            .sheet(isPresented: $show3DCreation) {
-                Studio3DCreationSheet()
-                    .environmentObject(controller)
-                    .environmentObject(library)
-            }
-            .sheet(isPresented: $showVisionLab) {
-                StudioVisionLabSheet()
-                    .environmentObject(controller)
-                    .environmentObject(library)
-            }
-            .sheet(isPresented: $showVoiceStudio) {
-                StudioVoiceSheet(initialTask: voiceTask, initialDraft: draft)
-                    .environmentObject(controller)
-                    .environmentObject(library)
-            }
-            .sheet(isPresented: $showSFXLab) {
-                StudioSFXLabSheet(initialTask: .generate, initialDraft: draft)
-                    .environmentObject(controller)
-                    .environmentObject(library)
-            }
-            .sheet(isPresented: $showTraining) {
-                StudioTrainingSheet(initialKind: trainingKind)
-                    .environmentObject(controller)
-                    .environmentObject(library)
-            }
-            .sheet(isPresented: $showMusicTools, onDismiss: {
-                if openTrainingAfterMusicTools {
-                    openTrainingAfterMusicTools = false
-                    trainingKind = .music
-                    showTraining = true
-                } else if openRealtimeAfterMusicTools {
-                    openRealtimeAfterMusicTools = false
-                    showRealtimeMusic = true
-                }
-            }) {
-                StudioMusicToolsSheet(
-                    initialTool: musicTool,
-                    onOpenTraining: {
-                        openTrainingAfterMusicTools = true
-                    },
-                    onOpenRealtime: {
-                        openRealtimeAfterMusicTools = true
-                    }
-                )
-                .environmentObject(controller)
-                .environmentObject(library)
-            }
-            .sheet(isPresented: $showAudioTools) {
-                StudioAudioToolsSheet(initialTool: audioTool)
-                    .environmentObject(controller)
-                    .environmentObject(library)
-            }
-            .sheet(isPresented: $showUtilityLab) {
-                StudioUtilityLabSheet(initialTask: utilityTask)
-                    .environmentObject(controller)
-                    .environmentObject(library)
-            }
-            .sheet(isPresented: $showWelcome) {
-                StudioWelcomeSheet(
-                    resolvedCLI: controller.resolvedCLI,
-                    onBrowseModels: {
-                        hasCompletedWelcome = true
-                        showWelcome = false
-                        showModels = true
-                    },
-                    onDone: {
-                        hasCompletedWelcome = true
-                        showWelcome = false
-                    }
-                )
-            }
             .sheet(isPresented: $showHelp) {
                 StudioHelpSheet()
                     .environmentObject(controller)
                     .frame(width: 720, height: 560)
-            }
-            .sheet(isPresented: $advancedDetached) {
-                VStack(spacing: 0) {
-                    HStack {
-                        Text("Advanced — full control surface")
-                            .font(MereRunTheme.sectionFont)
-                        Spacer()
-                        Button("Dock") { advancedDetached = false }
-                            .keyboardShortcut(.defaultAction)
-                    }
-                    .padding(16)
-                    Divider().overlay(MereRunTheme.border.opacity(0.5))
-                    AdvancedControlSurface(docked: false)
-                }
-                .frame(width: 1_260, height: 780)
-                .environmentObject(controller)
-                .environmentObject(library)
             }
             .alert(
                 "Accept third-party model terms",
@@ -636,15 +677,41 @@ struct StudioRootView: View {
                     """
                 )
             }
-            .focusedSceneValue(\.showLibrary, visibleLibraryBinding)
-            .focusedSceneValue(\.showAdvanced, $showAdvanced)
-            .focusedSceneValue(\.showModels, $showModels)
-            .focusedSceneValue(\.showOperations, $showOperations)
-            .focusedSceneValue(\.showPlugins, $showPlugins)
+            .alert(
+                "Couldn’t open MereRun link",
+                isPresented: Binding(
+                    get: { navigation.deepLinkError != nil },
+                    set: { if !$0 { navigation.deepLinkError = nil } }
+                )
+            ) {
+                Button("OK") { navigation.deepLinkError = nil }
+            } message: {
+                Text(navigation.deepLinkError ?? "The MereRun link is invalid.")
+            }
+            .focusedSceneValue(\.studioActions, sceneActions)
+    }
+
+    private var sceneActions: StudioSceneActions {
+        StudioSceneActions(
+            destination: destination,
+            showLibrary: showLibraryBinding,
+            open: { navigation.open(destination: $0) },
+            openDomain: { navigation.open(domain: $0) },
+            newChat: startNewConversation,
+            canNewChat: showsPromptWorkspace && mode.isConversational,
+            runComposer: runStudioCommand,
+            canRun: showsPromptWorkspace && !readiness.blocksRun
+                && !(mode.isConversational && activeConversationRunning),
+            stop: controller.cancel,
+            canStop: controller.isRunning,
+            openConsole: { openConsole() },
+            showGuide: { showHelp = true },
+            importReceipt: importReceipt
+        )
     }
 
     private var lifecycleShell: some View {
-        sheetedShell
+        presentedShell
         .task {
             // Poll the local server status for the sidebar status cluster. status has a 1s probe
             // timeout, so a modest cadence keeps it live without hammering the CLI.
@@ -654,62 +721,42 @@ struct StudioRootView: View {
             }
         }
         .onAppear {
-            draft = freshDraft(for: mode)
-            // mode may be restored from @SceneStorage (e.g. chat) — onChange(of:mode) doesn't fire
-            // for the initial value, so replicate the conversational setup here to open the latest
-            // thread instead of leaving the canvas blank.
-            if mode.isConversational {
-                let latest = library.items.first { $0.mode == mode && $0.isConversation }
-                activeConversationID = latest?.id
-                selectedLibraryID = latest?.id
-                if let latest { applyConversationSettings(from: latest, to: &draft) }
-                draft.prompt = ""
-            } else {
-                selectedLibraryID = library.items.first { $0.mode == mode }?.id
+            navigation.showLibrary = storedShowLibrary
+            if storedDestination != navigation.destination {
+                // The destination observer would re-run the mode activation below; skip that one.
+                isRestoringDestination = true
+                navigation.destination = storedDestination
             }
-            controller.checkReadiness(for: mode, draft: draft)
+            activateMode(mode)
             refreshInstalledModels()
-            if !hasCompletedWelcome {
-                showWelcome = true
-            } else if mode != .listen {
-                promptFocused = true
-            }
+        }
+        .onOpenURL { url in
+            navigation.open(deepLink: url, library: library)
         }
     }
 
     private var navigationObservedShell: some View {
         lifecycleShell
-        .onReceive(navigation.$libraryRequest) { request in
-            guard let request else { return }
-            openImportedLibraryItem(request)
-        }
-        .onChange(of: showAdvanced) { _, isShown in
-            if isShown {
-                if layoutClass.isCompact { showCompactLibrary = false }
-                syncAdvancedToStudio()
+        .onChange(of: navigation.destination) { previous, next in
+            storedDestination = next
+            if isRestoringDestination {
+                isRestoringDestination = false
+                return
+            }
+            if let visionTask = next.task.visionLabTask, visionLabTask.studioTask != next.task {
+                visionLabTask = visionTask
+            }
+            guard let nextMode = next.task.mode else { return }
+            let previousMode = previous.task.mode ?? lastPromptMode
+            lastPromptMode = nextMode
+            if nextMode != previousMode {
+                activateMode(nextMode)
+            } else if nextMode != .listen {
+                promptFocused = true
             }
         }
-        .onChange(of: mode) { _, newMode in
-            var nextDraft = freshDraft(for: newMode)
-            studioError = nil
-            if newMode.isConversational {
-                // Open the most recent thread for this mode (or a fresh one) and reuse its
-                // system/model so follow-ups match; the composer starts empty.
-                let latest = library.items.first { $0.mode == newMode && $0.isConversation }
-                activeConversationID = latest?.id
-                selectedLibraryID = latest?.id
-                if let latest { applyConversationSettings(from: latest, to: &nextDraft) }
-                nextDraft.prompt = ""
-            } else {
-                activeConversationID = nil
-                selectedLibraryID = library.items.first { $0.mode == newMode }?.id
-            }
-            draft = nextDraft
-            if showAdvanced {
-                controller.syncAdvanced(to: newMode, from: nextDraft)
-            }
-            controller.checkReadiness(for: newMode, draft: draft)
-            if newMode != .listen { promptFocused = true }
+        .onChange(of: navigation.showLibrary) { _, isShown in
+            storedShowLibrary = isShown
         }
         .onChange(of: controller.recommendedChatModelID) { _, _ in
             guard mode == .chat, activeConversationID == nil else { return }
@@ -721,7 +768,7 @@ struct StudioRootView: View {
             controller.applyRecommendedDefaults(to: &draft, for: mode)
             refreshReadiness()
         }
-        .onChange(of: selectedLibraryID) { _, id in
+        .onChange(of: navigation.selectedLibraryID) { _, id in
             // Selecting a thread of the current conversation mode opens it in the canvas.
             guard mode.isConversational,
                   let id,
@@ -784,7 +831,7 @@ struct StudioRootView: View {
                 // Only follow selection if this is the thread the user is currently viewing — a
                 // background turn completing must not yank selection away from the foreground.
                 if mode.isConversational, activeConversationID == conversationID {
-                    selectedLibraryID = conversationID
+                    navigation.selectedLibraryID = conversationID
                 }
                 refreshReadiness()
                 return
@@ -800,7 +847,7 @@ struct StudioRootView: View {
                     commandPreview: result.commandPreview.maskingAPIKeyValue(),
                     artifactURLs: result.artifactURLs
                 )
-                selectedLibraryID = requestID
+                navigation.selectedLibraryID = requestID
             }
 
             let mutatedModels = result.templateID == .modelPull
@@ -823,222 +870,86 @@ struct StudioRootView: View {
             // guard keeps the thread selected instead of deselecting it.
             guard let requestID, library.items.contains(where: { $0.id == requestID }) else { return }
             library.markRunning(id: requestID)
-            selectedLibraryID = requestID
+            navigation.selectedLibraryID = requestID
         }
         .onChange(of: controller.lastOutputURL) { _, outputURL in
             guard let requestID = controller.activeRunRequestID, let outputURL,
                   library.items.contains(where: { $0.id == requestID }) else { return }
             library.updateOutput(id: requestID, outputURL: outputURL)
-            selectedLibraryID = requestID
+            navigation.selectedLibraryID = requestID
         }
     }
 
-    /// The slim, contextual header for the content column: which mode you're in, and the two
-    /// panel toggles. Machine-wide status lives in the sidebar; blocking states own the canvas.
-    private func topBar(isCompact: Bool) -> some View {
-        HStack(spacing: MereRunTheme.Spacing.sm) {
-            // The mode name is a static label in both layouts; switching lives in the
-            // sidebar (regular) or the icon rail (compact), never a subtle header menu.
-            Image(systemName: mode.systemImage)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(MereRunTheme.accent)
+    // MARK: - Navigation
 
-            VStack(alignment: .leading, spacing: 1) {
-                Text(mode.title)
-                    .font(.system(size: 15, weight: .semibold))
-                Text(mode.subtitle)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(MereRunTheme.textMuted)
-            }
-
-            Spacer()
-
-            if mode == .video {
-                Button {
-                    showSCAIL = true
-                } label: {
-                    Label("SCAIL", systemImage: "figure.run.square.stack")
-                        .font(.system(size: 12, weight: .semibold))
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .help("Open first-class SCAIL subject animation")
-            }
-
-            if mode == .speak || mode == .listen {
-                Button {
-                    voiceTask = mode == .listen ? .transcribe : .synthesize
-                    showVoiceStudio = true
-                } label: {
-                    Label("Voice Studio", systemImage: "waveform.badge.mic")
-                        .font(.system(size: 12, weight: .semibold))
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .help("Open synthesis, voice cloning, profiles, recording, and transcription")
-            }
-
-            if mode == .listen {
-                Button {
-                    audioTool = .enhance
-                    showAudioTools = true
-                } label: {
-                    Label("Audio Lab", systemImage: "waveform.badge.plus")
-                        .font(.system(size: 12, weight: .semibold))
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .help("Enhance speech or general audio with AP-BWE and UniverSR")
-            }
-
-            if mode == .sfx {
-                Button {
-                    showSFXLab = true
-                } label: {
-                    Label("SFX Lab", systemImage: "waveform.badge.plus")
-                        .font(.system(size: 12, weight: .semibold))
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .help("Open generation, video Foley, conditioning, codec, and CLAP tools")
-            }
-
-            if mode == .music {
-                Button {
-                    audioTool = .separate
-                    showAudioTools = true
-                } label: {
-                    Label("Separate", systemImage: "slider.horizontal.3")
-                        .font(.system(size: 12, weight: .semibold))
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .help("Create stems, remove reverb, or denoise with native RoFormer")
-
-                Button {
-                    musicTool = .analyze
-                    showMusicTools = true
-                } label: {
-                    Label("Music Tools", systemImage: "music.note.list")
-                        .font(.system(size: 12, weight: .semibold))
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .help("Open analysis, MIDI transcription, resident serving, and adapter training")
-            }
-
-            if mode == .createImage || mode == .chat || mode == .code {
-                Button {
-                    trainingKind = mode == .createImage ? .image : .text
-                    showTraining = true
-                } label: {
-                    Label("Training", systemImage: "chart.xyaxis.line")
-                        .font(.system(size: 12, weight: .semibold))
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .help("Open the first-class image, text, and music Training Studio")
-            }
-
-            if mode == .createImage || mode == .chat {
-                Button {
-                    utilityTask = mode == .createImage ? .imageValidation : .embeddings
-                    showUtilityLab = true
-                } label: {
-                    Label("Utilities", systemImage: "wrench.and.screwdriver")
-                        .font(.system(size: 12, weight: .semibold))
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .help("Explore embeddings, PII redaction, validation, datasets, and saved plans")
-            }
-
-            if mode == .createImage {
-                Button {
-                    show3DCreation = true
-                } label: {
-                    Label("Create 3D", systemImage: "cube.transparent")
-                        .font(.system(size: 12, weight: .semibold))
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .help("Open 3D Creation")
-            }
-
-            if [.readImage, .findObjects, .segment, .track].contains(mode) {
-                Button {
-                    showVisionLab = true
-                } label: {
-                    Label("Vision Lab", systemImage: "viewfinder.circle")
-                        .font(.system(size: 12, weight: .semibold))
-                }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .help("Open Advanced Vision Lab")
-            }
-
-            Button {
-                withAnimation(MereRunTheme.Motion.standard) {
-                    toggleLibrary(isCompact: isCompact)
-                }
-            } label: {
-                Image(systemName: "rectangle.stack")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(
-                        libraryIsVisible(isCompact: isCompact)
-                            ? MereRunTheme.accent
-                            : MereRunTheme.textSecondary
-                    )
-                    .frame(width: 30, height: 30)
-            }
-            .buttonStyle(.mereIcon)
-            .help(libraryIsVisible(isCompact: isCompact) ? "Hide library (⌃⌘L)" : "Show library (⌃⌘L)")
-            .accessibilityLabel(libraryIsVisible(isCompact: isCompact) ? "Hide library" : "Show library")
-
-            Button {
-                showAdapters = true
-            } label: {
-                Image(systemName: "square.stack.3d.up")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(MereRunTheme.textSecondary)
-                    .frame(width: 30, height: 30)
-            }
-            .buttonStyle(.mereIcon)
-            .help("Browse adapters")
-            .accessibilityLabel("Browse adapters")
-
-            Button {
-                withAnimation(MereRunTheme.Motion.standard) {
-                    if isCompact { showCompactLibrary = false }
-                    showAdvanced.toggle()
-                }
-            } label: {
-                Image(systemName: "slider.horizontal.3")
-                    .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(showAdvanced ? MereRunTheme.accent : MereRunTheme.textSecondary)
-                    .frame(width: 30, height: 30)
-            }
-            .buttonStyle(.mereIcon)
-            .help(showAdvanced ? "Hide Advanced (⌃⌘E)" : "Show Advanced (⌃⌘E)")
-            .accessibilityLabel(showAdvanced ? "Hide Advanced" : "Show Advanced")
+    /// Switches the composer, canvas, readiness, and Library selection to `newMode`. Honors a
+    /// Library row the user just picked (so selecting a row of another domain lands on that row),
+    /// otherwise opens the most recent item or thread of the mode.
+    private func activateMode(_ newMode: StudioMode) {
+        var nextDraft = freshDraft(for: newMode)
+        studioError = nil
+        let preferred = navigation.selectedLibraryID.flatMap { id in
+            library.items.first { $0.id == id && $0.mode == newMode }
         }
-        .padding(.horizontal, isCompact ? MereRunTheme.Spacing.md : MereRunTheme.Spacing.lg)
-        .frame(height: 52)
-        .background(VisualEffectBackground())
-    }
-
-    private func libraryIsVisible(isCompact: Bool) -> Bool {
-        isCompact ? showCompactLibrary : showLibrary
-    }
-
-    private func toggleLibrary(isCompact: Bool) {
-        if isCompact {
-            showAdvanced = false
-            showCompactLibrary.toggle()
+        if newMode.isConversational {
+            // Open the picked or most recent thread for this mode (or a fresh one) and reuse its
+            // system/model so follow-ups match; the composer starts empty.
+            let thread = preferred?.isConversation == true
+                ? preferred
+                : library.items.first { $0.mode == newMode && $0.isConversation }
+            activeConversationID = thread?.id
+            navigation.selectedLibraryID = thread?.id
+            if let thread { applyConversationSettings(from: thread, to: &nextDraft) }
+            nextDraft.prompt = ""
         } else {
-            showLibrary.toggle()
+            activeConversationID = nil
+            navigation.selectedLibraryID = preferred?.id ?? library.items.first { $0.mode == newMode }?.id
+        }
+        draft = nextDraft
+        controller.checkReadiness(for: newMode, draft: draft)
+        if newMode != .listen { promptFocused = true }
+    }
+
+    /// A Library row the user clicked. Rows of another mode switch the destination first;
+    /// `activateMode` then keeps the clicked row selected.
+    private func selectLibraryItem(_ item: StudioLibraryItem) {
+        navigation.selectedLibraryID = item.id
+        guard item.mode != mode || !showsPromptWorkspace else { return }
+        navigation.open(destination: item.mode.destination)
+    }
+
+    private func deleteLibraryItem(_ id: UUID) {
+        library.delete(id: id)
+        if navigation.selectedLibraryID == id { navigation.selectedLibraryID = nil }
+    }
+
+    /// Opens the Command Console window with the composer's draft carried into the Advanced
+    /// template for the current mode, so the console deepens the current task.
+    private func openConsole(syncingComposer: Bool = true) {
+        if syncingComposer {
+            controller.syncAdvanced(to: mode, from: draft)
+        }
+        openWindow(id: StudioConsoleWindow.id)
+    }
+
+    /// File ▸ Import Receipt…: the same validated path as the `mererun://library/import` link.
+    private func importReceipt() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = false
+        panel.allowedContentTypes = [.json]
+        panel.title = "Import receipt"
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        do {
+            let item = try library.importReceipt(at: url)
+            navigation.open(libraryItem: item.id, mode: item.mode)
+        } catch {
+            navigation.deepLinkError = error.localizedDescription
         }
     }
+
+    // MARK: - Running
 
     private func runStudioCommand() {
         studioError = nil
@@ -1071,7 +982,7 @@ struct StudioRootView: View {
                 ? .queued
                 : .running
             library.start(request: request, commandPreview: preview, status: status)
-            selectedLibraryID = request.id
+            navigation.selectedLibraryID = request.id
             controller.run(studio: request)
         } catch {
             studioError = error.localizedDescription
@@ -1114,7 +1025,7 @@ struct StudioRootView: View {
             )
             controller.run(studio: request)
             activeConversationID = conversationID
-            selectedLibraryID = conversationID
+            navigation.selectedLibraryID = conversationID
             draft.prompt = ""
             // The image rode with this turn; clear it so the next turn doesn't resend it.
             draft.inputPath = ""
@@ -1177,10 +1088,11 @@ struct StudioRootView: View {
             ? .queued
             : .running
         library.start(request: request, commandPreview: preview, status: status)
-        selectedLibraryID = request.id
+        navigation.selectedLibraryID = request.id
         _ = controller.run(studio: request)
     }
 
+    /// Library ▸ Edit command: loads the row's exact command into the Console window.
     private func editLibraryItem(_ item: StudioLibraryItem) {
         guard let templateID = item.templateID,
               let commandDraft = item.commandDraft,
@@ -1188,44 +1100,24 @@ struct StudioRootView: View {
             studioError = "This older Library item does not include editable command settings."
             return
         }
-        showAdvanced = true
-        Task { @MainActor in
-            await Task.yield()
-            controller.select(template)
-            controller.draft = commandDraft
-        }
+        controller.select(template)
+        controller.draft = commandDraft
+        openConsole(syncingComposer: false)
     }
 
-    /// A draggable divider that resizes the docked Advanced column. The panel is on the right, so
-    /// dragging left widens it; width is clamped to a usable range.
-    private var advancedResizeHandle: some View {
-        Rectangle()
-            .fill(MereRunTheme.border.opacity(0.55))
-            .frame(width: 4)
-            .contentShape(Rectangle().inset(by: -3))
-            .onHover { inside in
-                if inside { NSCursor.resizeLeftRight.push() } else { NSCursor.pop() }
-            }
-            .gesture(
-                DragGesture()
-                    .onChanged { value in
-                        let base = advancedDragStartWidth ?? advancedWidth
-                        if advancedDragStartWidth == nil { advancedDragStartWidth = base }
-                        advancedWidth = min(max(base - value.translation.width, 360), 860)
-                    }
-                    .onEnded { _ in advancedDragStartWidth = nil }
-            )
-    }
-
-    /// When Advanced opens, pre-select the template for the active Studio mode and carry over what
-    /// the composer already holds — including the shared depth fields — so Advanced deepens the
-    /// current task without silently reverting edits.
-    private func syncAdvancedToStudio() {
-        controller.syncAdvanced(to: mode, from: draft)
-    }
+    // MARK: - Adapters and training
 
     private func applyAdapter(_ adapter: StudioAdapterRow) {
-        let reference = adapter.path ?? adapter.id
+        applyAdapterReference(adapter.path ?? adapter.id)
+    }
+
+    private func applyLocalAdapter(_ path: String) {
+        applyAdapterReference(path)
+    }
+
+    /// Applies an adapter to the last prompt mode's draft and returns there. Modes whose adapters
+    /// are only typed in the raw command (for example SCAIL-2) open the Console instead.
+    private func applyAdapterReference(_ reference: String) {
         switch mode {
         case .music:
             let existing = draft.musicAdapterPaths
@@ -1234,45 +1126,29 @@ struct StudioRootView: View {
             if !existing.contains(reference) {
                 draft.musicAdapterPaths = (existing + [reference]).joined(separator: "\n")
             }
+            navigation.open(destination: mode.destination)
         case .createImage, .chat, .code:
             draft.loraPath = reference
+            navigation.open(destination: mode.destination)
         default:
-            // Specialist adapters (for example SCAIL-2) are applied from their typed Advanced
-            // workflow, which this opens with the catalog id already visible in the command.
-            showAdvanced = true
+            openConsole()
         }
     }
 
-    private func applyLocalAdapter(_ path: String) {
-        switch mode {
-        case .music:
-            let existing = draft.musicAdapterPaths
-                .components(separatedBy: .newlines)
-                .filter { !$0.isBlank }
-            if !existing.contains(path) {
-                draft.musicAdapterPaths = (existing + [path]).joined(separator: "\n")
-            }
-        case .createImage, .chat, .code:
-            draft.loraPath = path
-        default:
-            showAdvanced = true
-        }
-    }
-
-    private func openAdvancedTraining(_ templateID: CommandTemplateID) {
+    private func openTraining(_ templateID: CommandTemplateID) {
         switch templateID {
         case .imageTrainLoRA:
-            trainingKind = .image
+            navigation.open(task: .imageTrain)
         case .textTrainLoRA:
-            trainingKind = .text
+            navigation.open(task: .chatTrain)
         case .musicTrainAdapter:
-            trainingKind = .music
+            navigation.open(task: .musicTrain)
         default:
-            showAdvanced = true
-            return
+            openConsole()
         }
-        showTraining = true
     }
+
+    // MARK: - Drafts and conversations
 
     private func freshDraft(for mode: StudioMode) -> StudioDraft {
         var nextDraft = StudioDraft()
@@ -1304,14 +1180,14 @@ struct StudioRootView: View {
            item.messages?.isEmpty ?? true {
             library.delete(id: conversationID)
             activeConversationID = nil
-            selectedLibraryID = nil
+            navigation.selectedLibraryID = nil
         }
     }
 
     /// Starts a fresh, not-yet-persisted conversation (no library row until the first message).
     private func startNewConversation() {
         activeConversationID = nil
-        selectedLibraryID = nil
+        navigation.selectedLibraryID = nil
         studioError = nil
         var fresh = StudioDraft()
         fresh.reset(for: mode)
@@ -1330,6 +1206,8 @@ struct StudioRootView: View {
         if !text.isEmpty { return text }
         return result.exitCode == 0 ? "(No output.)" : "Run failed (exit code \(result.exitCode))."
     }
+
+    // MARK: - Readiness and models
 
     private func pullModel() {
         studioError = nil
@@ -1381,8 +1259,7 @@ struct StudioRootView: View {
         )
         pendingPullRefresh = StudioReadinessRefresh(mode: request.mode, draft: draft)
         controller.readinessByMode[request.mode] = .checking
-        // The canvas running overlay shows pull progress (bytes, speed, cancel) in place,
-        // so the Advanced console no longer needs to open for a pull.
+        // The canvas running overlay shows pull progress (bytes, speed, cancel) in place.
         if !controller.run(studio: effectiveRequest) {
             pendingPullRefresh = nil
             refreshReadiness()
@@ -1407,6 +1284,8 @@ struct StudioRootView: View {
             )
         }
     }
+
+    // MARK: - Attachments
 
     private func chooseAttachment() {
         let panel = NSOpenPanel()
@@ -1460,6 +1339,14 @@ struct StudioRootView: View {
         guard let url = selectedItem?.outputURL else { return }
         NSWorkspace.shared.activateFileViewerSelecting([url])
     }
+}
+
+/// Which Library rows the column shows: the current domain's, or everything.
+enum StudioLibraryScope: String, CaseIterable, Identifiable {
+    case domain
+    case all
+
+    var id: String { rawValue }
 }
 
 private struct StudioReadinessRefresh: Equatable {

@@ -325,11 +325,11 @@ struct StudioTrainingSnapshot: Equatable {
     }
 }
 
-struct StudioTrainingSheet: View {
+struct StudioTrainingView: View {
     @EnvironmentObject private var controller: MereRunController
     @EnvironmentObject private var library: StudioLibraryStore
-    @Environment(\.dismiss) private var dismiss
 
+    /// Fixed per host: Image ▸ Train, Chat ▸ Train, and Music ▸ Train each show one trainer.
     @State private var kind: StudioTrainingKind
     @State private var imageDraft: CommandDraft
     @State private var textDraft: CommandDraft
@@ -344,8 +344,8 @@ struct StudioTrainingSheet: View {
 
     private let refreshTimer = Timer.publish(every: 1.5, on: .main, in: .common).autoconnect()
 
-    init(initialKind: StudioTrainingKind) {
-        _kind = State(initialValue: initialKind)
+    init(kind: StudioTrainingKind) {
+        _kind = State(initialValue: kind)
 
         var image = CommandCatalog.template(id: .imageTrainLoRA)?.defaultDraft() ?? CommandDraft()
         image.outputPath = Self.timestampedOutput(prefix: "image-adapter")
@@ -381,18 +381,13 @@ struct StudioTrainingSheet: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
+        HStack(spacing: 0) {
+            leftColumn
+                .frame(width: 465)
             Divider().overlay(MereRunTheme.border.opacity(0.6))
-            HStack(spacing: 0) {
-                leftColumn
-                    .frame(width: 465)
-                Divider().overlay(MereRunTheme.border.opacity(0.6))
-                dashboard
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
+            dashboard
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(width: 1_260, height: 820)
         .background(MereRunTheme.background)
         .foregroundStyle(MereRunTheme.textPrimary)
         .onReceive(refreshTimer) { _ in refreshSnapshot() }
@@ -409,29 +404,6 @@ struct StudioTrainingSheet: View {
             statusMessage = nil
         }
         .task { seedComparisons() }
-    }
-
-    private var header: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Training Studio")
-                    .font(MereRunTheme.titleFont)
-                Text("Inspect data, preflight, train, resume, and compare local adapters")
-                    .font(MereRunTheme.captionFont)
-                    .foregroundStyle(MereRunTheme.textMuted)
-            }
-            Spacer()
-            Picker("Trainer", selection: $kind) {
-                ForEach(StudioTrainingKind.allCases) { item in
-                    Label(item.title, systemImage: item.symbol).tag(item)
-                }
-            }
-            .pickerStyle(.segmented)
-            .frame(width: 480)
-            Button("Done") { dismiss() }
-                .buttonStyle(.bordered)
-        }
-        .padding(18)
     }
 
     private var leftColumn: some View {
