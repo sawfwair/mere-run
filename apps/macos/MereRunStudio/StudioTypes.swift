@@ -265,6 +265,8 @@ struct StudioDraft: Codable, Equatable {
     var seed = ""
     var durationSeconds = 10.0
     var readImageAction: StudioReadImageAction = .inspect
+    /// Mask confidence floor for Segment and Track (the CLI `--threshold`); Find has none.
+    var visionThreshold = 0.05
     // Speak voice cloning (Studio surface). "style" uses the voice description; "clone" uses a
     // saved profile or reference audio.
     var voiceMode = "style"
@@ -390,6 +392,7 @@ struct StudioDraft: Codable, Equatable {
         seed = ""
         durationSeconds = 10
         readImageAction = .inspect
+        visionThreshold = base?.visionThreshold ?? 0.05
         voiceMode = "style"
         voiceProfile = ""
         refAudioPath = ""
@@ -748,6 +751,7 @@ enum StudioCommandAdapter {
             draft.prompt = prompt
             draft.inputPath = studioDraft.inputPath
             draft.model = studioDraft.model.isBlank ? draft.model : studioDraft.model
+            draft.visionThreshold = studioDraft.visionThreshold
 
         case .music:
             draft.prompt = prompt
