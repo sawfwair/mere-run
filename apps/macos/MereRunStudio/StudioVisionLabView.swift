@@ -2,7 +2,9 @@ import AppKit
 import SwiftUI
 import UniformTypeIdentifiers
 
-private enum StudioVisionTask: String, CaseIterable, Identifiable {
+/// The Vision Lab's tasks. The shell's task control groups them (Faces covers detect, embed,
+/// compare, and batch; Geometry covers single and multi-view); the rail picks the variant.
+enum StudioVisionTask: String, CaseIterable, Identifiable {
     case faceDetect = "Face detection"
     case faceEmbed = "Face embedding"
     case faceCompare = "Face comparison"
@@ -65,14 +67,41 @@ private enum StudioVisionTask: String, CaseIterable, Identifiable {
         [.faceDetect, .faceEmbed, .faceCompare, .faceBatch, .pose, .flow, .geometry, .geometryMultiview]
             .contains(self)
     }
+
+    /// The toolbar task this variant belongs to.
+    var studioTask: StudioTask {
+        switch self {
+        case .faceDetect, .faceEmbed, .faceCompare, .faceBatch: .visionFaces
+        case .pose: .visionPose
+        case .flow: .visionFlow
+        case .depthVideo: .visionDepth
+        case .geometry, .geometryMultiview: .visionGeometry
+        case .liveTrack: .visionLive
+        }
+    }
 }
 
-struct StudioVisionLabSheet: View {
+extension StudioTask {
+    /// The Vision Lab variant a toolbar task opens by default, or nil for non-lab tasks.
+    var visionLabTask: StudioVisionTask? {
+        switch self {
+        case .visionFaces: .faceDetect
+        case .visionPose: .pose
+        case .visionFlow: .flow
+        case .visionDepth: .depthVideo
+        case .visionGeometry: .geometry
+        case .visionLive: .liveTrack
+        default: nil
+        }
+    }
+}
+
+struct StudioVisionLabView: View {
     @EnvironmentObject private var controller: MereRunController
     @EnvironmentObject private var library: StudioLibraryStore
-    @Environment(\.dismiss) private var dismiss
 
-    @State private var task: StudioVisionTask = .faceDetect
+    /// Owned by the host so the rail and the shell's task control stay in step.
+    @Binding var task: StudioVisionTask
     @State private var primaryInput = ""
     @State private var secondaryInput = ""
     @State private var additionalInputs: [String] = []
@@ -123,20 +152,15 @@ struct StudioVisionLabSheet: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
+        HStack(spacing: 0) {
+            taskRail
+                .frame(width: 210)
             Divider().overlay(MereRunTheme.border.opacity(0.55))
-            HStack(spacing: 0) {
-                taskRail
-                    .frame(width: 210)
-                Divider().overlay(MereRunTheme.border.opacity(0.55))
-                configuration
-                    .frame(width: 390)
-                Divider().overlay(MereRunTheme.border.opacity(0.55))
-                resultPane
-            }
+            configuration
+                .frame(minWidth: 300, idealWidth: 390, maxWidth: 390)
+            Divider().overlay(MereRunTheme.border.opacity(0.55))
+            resultPane
         }
-        .frame(width: 1_290, height: 790)
         .background(MereRunTheme.background)
         .foregroundStyle(MereRunTheme.textPrimary)
         .onChange(of: task) { _, newTask in
@@ -148,25 +172,6 @@ struct StudioVisionLabSheet: View {
         .onAppear {
             model = CommandCatalog.template(id: task.templateID)?.defaultDraft().model ?? ""
         }
-    }
-
-    private var header: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "viewfinder.circle")
-                .font(.system(size: 25, weight: .semibold))
-                .foregroundStyle(MereRunTheme.accent)
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Advanced Vision Lab")
-                    .font(MereRunTheme.titleFont)
-                Text("Native overlays, motion fields, depth review, geometry, and live tracking")
-                    .font(MereRunTheme.captionFont)
-                    .foregroundStyle(MereRunTheme.textMuted)
-            }
-            Spacer()
-            Button("Done") { dismiss() }
-                .buttonStyle(.bordered)
-        }
-        .padding(18)
     }
 
     private var taskRail: some View {

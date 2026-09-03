@@ -141,9 +141,8 @@ enum StudioOperationsConfirmation: Identifiable {
     }
 }
 
-struct StudioOperationsCenterSheet: View {
+struct StudioOperationsView: View {
     @EnvironmentObject private var controller: MereRunController
-    @Environment(\.dismiss) private var dismiss
 
     @State private var scope: StudioOperationsScope = .local
     @State private var localRoot = FileManager.default.homeDirectoryForCurrentUser
@@ -192,12 +191,11 @@ struct StudioOperationsCenterSheet: View {
             Divider().overlay(MereRunTheme.border.opacity(0.5))
             HStack(spacing: 0) {
                 runList
-                    .frame(width: 430)
+                    .frame(minWidth: 300, idealWidth: 430, maxWidth: 430)
                 Divider().overlay(MereRunTheme.border.opacity(0.5))
                 detailPane
             }
         }
-        .frame(minWidth: 1_080, idealWidth: 1_180, minHeight: 690, idealHeight: 760)
         .background(MereRunTheme.background)
         .foregroundStyle(MereRunTheme.textPrimary)
         .task {
@@ -249,22 +247,10 @@ struct StudioOperationsCenterSheet: View {
 
     private var header: some View {
         HStack(spacing: MereRunTheme.Spacing.md) {
-            ZStack {
-                RoundedRectangle(cornerRadius: MereRunTheme.Radius.lg)
-                    .fill(MereRunTheme.accentSoft)
-                Image(systemName: "list.bullet.rectangle.portrait")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(MereRunTheme.accent)
-            }
-            .frame(width: 42, height: 42)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Runs & Operations")
-                    .font(MereRunTheme.titleFont)
-                Text("Inspect, retrieve, cancel, and retry durable work")
-                    .font(MereRunTheme.captionFont)
-                    .foregroundStyle(MereRunTheme.textMuted)
-            }
+            Text(statusMessage)
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textMuted)
+                .lineLimit(1)
             Spacer()
             Toggle("Live", isOn: $autoRefresh)
                 .toggleStyle(.switch)
@@ -276,12 +262,9 @@ struct StudioOperationsCenterSheet: View {
             }
             .buttonStyle(.mereSecondary)
             .disabled(isRefreshing)
-            Button("Done") { dismiss() }
-                .buttonStyle(.merePrimary)
-                .keyboardShortcut(.defaultAction)
         }
         .padding(.horizontal, MereRunTheme.Spacing.xl)
-        .padding(.vertical, MereRunTheme.Spacing.md)
+        .padding(.vertical, MereRunTheme.Spacing.sm)
     }
 
     private var controls: some View {

@@ -77,9 +77,8 @@ struct StudioModelLocationConfirmation: Identifiable {
 
 /// The first-class store editor: register read-only roots and explicit per-model bindings
 /// so a model kept on an external volume is usable without leaving the app.
-struct StudioModelLocationsSheet: View {
+struct StudioModelLocationsView: View {
     @EnvironmentObject private var controller: MereRunController
-    @Environment(\.dismiss) private var dismiss
 
     let onLocationsChanged: () -> Void
 
@@ -105,7 +104,6 @@ struct StudioModelLocationsSheet: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
             }
         }
-        .frame(minWidth: 860, idealWidth: 940, minHeight: 620, idealHeight: 700)
         .background(MereRunTheme.background)
         .foregroundStyle(MereRunTheme.textPrimary)
         .task { await refresh() }
@@ -123,23 +121,10 @@ struct StudioModelLocationsSheet: View {
 
     private var header: some View {
         HStack(spacing: MereRunTheme.Spacing.md) {
-            ZStack {
-                RoundedRectangle(cornerRadius: MereRunTheme.Radius.lg)
-                    .fill(MereRunTheme.accentSoft)
-                Image(systemName: "externaldrive.badge.checkmark")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(MereRunTheme.accent)
-            }
-            .frame(width: 42, height: 42)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Model locations")
-                    .font(MereRunTheme.titleFont)
-                Text(statusMessage)
-                    .font(MereRunTheme.captionFont)
-                    .foregroundStyle(MereRunTheme.textMuted)
-                    .lineLimit(1)
-            }
+            Text(statusMessage)
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textMuted)
+                .lineLimit(1)
             Spacer()
             if busy { ProgressView().controlSize(.small) }
             Button {
@@ -149,12 +134,9 @@ struct StudioModelLocationsSheet: View {
             }
             .buttonStyle(.mereSecondary)
             .disabled(busy)
-            Button("Done") { dismiss() }
-                .buttonStyle(.merePrimary)
-                .keyboardShortcut(.defaultAction)
         }
         .padding(.horizontal, MereRunTheme.Spacing.xl)
-        .padding(.vertical, MereRunTheme.Spacing.md)
+        .padding(.vertical, MereRunTheme.Spacing.sm)
     }
 
     private var primaryStoreCard: some View {

@@ -465,11 +465,11 @@ It identifies every connected device and reports concrete blockers such as a
 legacy worker, fleet policy, busy state, contract or worker version, missing
 node kind or model, accelerator backend or memory, and available disk.
 
-The macOS Studio app exposes a top-level **Runs & Operations** workspace. It
+The macOS Studio app exposes this as the **Runs** domain in its sidebar. It
 discovers local run folders and structured reports, lists recent Relay jobs,
 polls inspection state, shows artifact inventories, reveals local runs, and
-offers verified fetch, cancellation, and immutable Relay retry. The Advanced
-forms remain available for raw arguments and JSON streaming.
+offers verified fetch, cancellation, and immutable Relay retry. The Command
+Console window remains available for raw arguments and JSON streaming.
 
 Relay profile setup and device authorization also stay on the public
 `executor add relay`, `executor auth-status`, and `executor login` contracts.

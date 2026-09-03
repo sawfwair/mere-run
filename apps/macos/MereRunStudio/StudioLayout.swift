@@ -1,36 +1,15 @@
 import CoreGraphics
 
-/// The Studio has two deliberate window presentations. Regular keeps the desktop three-column
-/// workspace; compact promotes the canvas and composer, narrowing navigation to an icon rail
-/// and moving the library into an overlay.
-enum StudioLayoutClass: Equatable {
-    case compact
-    case regular
-
-    var isCompact: Bool { self == .compact }
-}
-
+/// Window and column sizing for the Studio shell. The sidebar is a native `NavigationSplitView`
+/// column (collapsible, user-resizable); the Library is a fixed column inside the detail area.
 enum StudioLayoutPolicy {
-    static let sidebarWidth: CGFloat = 212
-    /// The narrow-window icon rail: keeps every mode reachable when the full sidebar
-    /// doesn't fit, rather than hiding navigation entirely.
-    static let railWidth: CGFloat = 60
     static let libraryWidth: CGFloat = 272
-    static let minimumCanvasWidth: CGFloat = 620
+    /// The prompt workspace needs this much room for the canvas and composer beside the Library.
+    static let minimumCanvasWidth: CGFloat = 520
 
-    /// The regular shell needs room for sidebar + library + canvas. Crossing this content-driven
-    /// breakpoint changes the information architecture instead of squeezing those columns.
-    static let compactBreakpoint: CGFloat = sidebarWidth + libraryWidth + minimumCanvasWidth + 16
-
-    static let minimumWindowWidth: CGFloat = 480
-    static let minimumWindowHeight: CGFloat = 440
-    static let compactPanelInset: CGFloat = 12
-
-    static func layoutClass(for width: CGFloat) -> StudioLayoutClass {
-        width < compactBreakpoint ? .compact : .regular
-    }
-
-    static func compactPanelWidth(availableWidth: CGFloat, preferredWidth: CGFloat) -> CGFloat {
-        min(preferredWidth, max(availableWidth - (compactPanelInset * 2), 0))
-    }
+    static let defaultWindowWidth: CGFloat = 1_280
+    static let defaultWindowHeight: CGFloat = 820
+    /// Wide enough for a collapsed sidebar, the Library column, and the minimum canvas.
+    static let minimumWindowWidth: CGFloat = libraryWidth + minimumCanvasWidth
+    static let minimumWindowHeight: CGFloat = 520
 }

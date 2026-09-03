@@ -118,12 +118,13 @@ struct StudioNPYMetadata: Equatable {
     }
 }
 
-struct StudioSFXLabSheet: View {
+struct StudioSFXLabView: View {
     @EnvironmentObject private var controller: MereRunController
     @EnvironmentObject private var library: StudioLibraryStore
-    @Environment(\.dismiss) private var dismiss
 
-    @State private var task: StudioSFXTask
+    /// Owned by the shell's task control; the rail mirrors it for the tasks this host offers.
+    @Binding var task: StudioSFXTask
+    let tasks: [StudioSFXTask]
     @State private var generateDraft: CommandDraft
     @State private var videoDraft: CommandDraft
     @State private var conditionDraft: CommandDraft
@@ -133,8 +134,9 @@ struct StudioSFXLabSheet: View {
     @State private var requestID: UUID?
     @State private var statusMessage: String?
 
-    init(initialTask: StudioSFXTask = .generate, initialDraft: StudioDraft) {
-        _task = State(initialValue: initialTask)
+    init(task: Binding<StudioSFXTask>, tasks: [StudioSFXTask], initialDraft: StudioDraft) {
+        _task = task
+        self.tasks = tasks
 
         var generate = CommandCatalog.template(id: .sfxGenerate)?.defaultDraft() ?? CommandDraft()
         generate.prompt = initialDraft.prompt
@@ -188,57 +190,25 @@ struct StudioSFXLabSheet: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Divider().overlay(MereRunTheme.border.opacity(0.6))
-            HStack(spacing: 0) {
+        HStack(spacing: 0) {
+            if tasks.count > 1 {
                 taskRail
                     .frame(width: 175)
                 Divider().overlay(MereRunTheme.border.opacity(0.6))
-                configuration
-                    .frame(width: 420)
-                Divider().overlay(MereRunTheme.border.opacity(0.6))
-                resultPane
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            configuration
+                .frame(minWidth: 300, idealWidth: 420, maxWidth: 420)
+            Divider().overlay(MereRunTheme.border.opacity(0.6))
+            resultPane
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(width: 1_230, height: 780)
         .background(MereRunTheme.background)
         .foregroundStyle(MereRunTheme.textPrimary)
     }
 
-    private var header: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Sound FX Lab")
-                    .font(MereRunTheme.titleFont)
-                Text("Design, synchronize, condition, inspect, encode, decode, and score sound")
-                    .font(MereRunTheme.captionFont)
-                    .foregroundStyle(MereRunTheme.textMuted)
-            }
-            Spacer()
-            if let progress = requestID.flatMap({ controller.progressByRequestID[$0] }) {
-                Text(progress.label)
-                    .font(MereRunTheme.captionFont)
-                    .foregroundStyle(MereRunTheme.textSecondary)
-                ProgressView(value: progress.fractionCompleted)
-                    .frame(width: 150)
-            }
-            Button("Done") { dismiss() }
-                .buttonStyle(.bordered)
-        }
-        .padding(18)
-    }
-
     private var taskRail: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("TOOLS")
-                .font(.system(size: 9.5, weight: .bold))
-                .kerning(0.8)
-                .foregroundStyle(MereRunTheme.textMuted)
-                .padding(.horizontal, 12)
-                .padding(.bottom, 3)
-            ForEach(StudioSFXTask.allCases) { item in
+            ForEach(tasks) { item in
                 Button {
                     task = item
                     statusMessage = nil
