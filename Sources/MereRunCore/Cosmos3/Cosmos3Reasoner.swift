@@ -413,7 +413,7 @@ public final class Cosmos3Reasoner: @unchecked Sendable {
                 inputEmbeddings: embeddings,
                 positionIDs: positions
             )
-            let logits = transformer!.languageModelHead(hidden[hidden.dim(0) - 1])
+            let logits = transformer!.languageModelHead!(hidden[hidden.dim(0) - 1])
             let next: Int
             if request.temperature <= 0 {
                 next = Int(MLX.argMax(logits).item(Int32.self))

@@ -95,17 +95,32 @@ public final class Cosmos3DomainAwareLinear: Module {
 }
 
 final class Cosmos3MLP: Module {
+    let activation: Cosmos3FeedForwardActivation
+    @ModuleInfo(key: "gate_proj") var gateProjection: Linear?
     @ModuleInfo(key: "up_proj") var upProjection: Linear
     @ModuleInfo(key: "down_proj") var downProjection: Linear
 
-    init(hiddenSize: Int, intermediateSize: Int) {
+    init(
+        hiddenSize: Int,
+        intermediateSize: Int,
+        activation: Cosmos3FeedForwardActivation
+    ) {
+        self.activation = activation
+        self._gateProjection.wrappedValue = activation == .siluGated
+            ? Linear(hiddenSize, intermediateSize, bias: false)
+            : nil
         self._upProjection.wrappedValue = Linear(hiddenSize, intermediateSize, bias: false)
         self._downProjection.wrappedValue = Linear(intermediateSize, hiddenSize, bias: false)
     }
 
     func callAsFunction(_ input: MLXArray) -> MLXArray {
-        let activated = MLX.maximum(upProjection(input), MLXArray(0))
-        return downProjection(activated * activated)
+        switch activation {
+        case .reluSquared:
+            let activated = MLX.maximum(upProjection(input), MLXArray(0))
+            return downProjection(activated * activated)
+        case .siluGated:
+            return downProjection(MLXNN.silu(gateProjection!(input)) * upProjection(input))
+        }
     }
 }
 
@@ -119,13 +134,15 @@ final class Cosmos3PackedAttention: Module {
     @ModuleInfo(key: "to_k") var understandingKey: Linear
     @ModuleInfo(key: "to_v") var understandingValue: Linear
     @ModuleInfo(key: "to_out") var understandingOutput: Linear
+    @ModuleInfo(key: "norm_q") var understandingQueryNorm: RMSNorm?
+    @ModuleInfo(key: "norm_k") var understandingKeyNorm: RMSNorm?
     @ModuleInfo(key: "add_q_proj") var generationQuery: Linear
     @ModuleInfo(key: "add_k_proj") var generationKey: Linear
     @ModuleInfo(key: "add_v_proj") var generationValue: Linear
     @ModuleInfo(key: "to_add_out") var generationOutput: Linear
     @ModuleInfo(key: "norm_added_q") var generationQueryNorm: RMSNorm
     @ModuleInfo(key: "norm_added_k") var generationKeyNorm: RMSNorm
-    @ModuleInfo(key: "k_norm_und_for_gen") var understandingKeyNormForGeneration: RMSNorm
+    @ModuleInfo(key: "k_norm_und_for_gen") var understandingKeyNormForGeneration: RMSNorm?
 
     init(configuration: Cosmos3TransformerConfiguration) {
         self.attentionHeads = configuration.attentionHeadCount
@@ -140,6 +157,12 @@ final class Cosmos3PackedAttention: Module {
         self._understandingKey.wrappedValue = Linear(hidden, kvSize, bias: bias)
         self._understandingValue.wrappedValue = Linear(hidden, kvSize, bias: bias)
         self._understandingOutput.wrappedValue = Linear(qSize, hidden, bias: bias)
+        self._understandingQueryNorm.wrappedValue = configuration.normalizesUnderstandingQueriesAndKeys
+            ? RMSNorm(dimensions: configuration.headDimension, eps: configuration.rmsNormEpsilon)
+            : nil
+        self._understandingKeyNorm.wrappedValue = configuration.normalizesUnderstandingQueriesAndKeys
+            ? RMSNorm(dimensions: configuration.headDimension, eps: configuration.rmsNormEpsilon)
+            : nil
         self._generationQuery.wrappedValue = Linear(hidden, qSize, bias: bias)
         self._generationKey.wrappedValue = Linear(hidden, kvSize, bias: bias)
         self._generationValue.wrappedValue = Linear(hidden, kvSize, bias: bias)
@@ -152,10 +175,13 @@ final class Cosmos3PackedAttention: Module {
             dimensions: configuration.headDimension,
             eps: configuration.rmsNormEpsilon
         )
-        self._understandingKeyNormForGeneration.wrappedValue = RMSNorm(
-            dimensions: configuration.headDimension,
-            eps: configuration.rmsNormEpsilon
-        )
+        self._understandingKeyNormForGeneration.wrappedValue =
+            configuration.normalizesUnderstandingKeysForGeneration
+                ? RMSNorm(
+                    dimensions: configuration.headDimension,
+                    eps: configuration.rmsNormEpsilon
+                )
+                : nil
     }
 
     func callAsFunction(
@@ -181,7 +207,12 @@ final class Cosmos3PackedAttention: Module {
         let vGeneration = generationValue(generation)
             .reshaped(-1, keyValueHeads, headDimension)
 
-        let understandingKeyForGeneration = understandingKeyNormForGeneration(kUnderstanding)
+        if let understandingQueryNorm, let understandingKeyNorm {
+            qUnderstanding = understandingQueryNorm(qUnderstanding)
+            kUnderstanding = understandingKeyNorm(kUnderstanding)
+        }
+        let understandingKeyForGeneration = understandingKeyNormForGeneration?(kUnderstanding)
+            ?? kUnderstanding
         qUnderstanding = Cosmos3RotaryEmbedding.apply(
             qUnderstanding,
             cosine: rotary.understandingCosine,
@@ -237,6 +268,10 @@ final class Cosmos3PackedAttention: Module {
             .reshaped(-1, keyValueHeads, headDimension)
         let values = understandingValue(understanding)
             .reshaped(-1, keyValueHeads, headDimension)
+        if let understandingQueryNorm, let understandingKeyNorm {
+            queries = understandingQueryNorm(queries)
+            keys = understandingKeyNorm(keys)
+        }
         queries = Cosmos3RotaryEmbedding.apply(
             queries,
             cosine: cosine,
@@ -301,11 +336,13 @@ final class Cosmos3DecoderLayer: Module {
         self._attention.wrappedValue = Cosmos3PackedAttention(configuration: configuration)
         self._understandingMLP.wrappedValue = Cosmos3MLP(
             hiddenSize: configuration.hiddenSize,
-            intermediateSize: configuration.intermediateSize
+            intermediateSize: configuration.intermediateSize,
+            activation: configuration.feedForwardActivation
         )
         self._generationMLP.wrappedValue = Cosmos3MLP(
             hiddenSize: configuration.hiddenSize,
-            intermediateSize: configuration.intermediateSize
+            intermediateSize: configuration.intermediateSize,
+            activation: configuration.feedForwardActivation
         )
         self._understandingInputNorm.wrappedValue = RMSNorm(
             dimensions: configuration.hiddenSize,
@@ -392,18 +429,16 @@ public final class Cosmos3OmniTransformerModel: Module {
     @ModuleInfo(key: "layers") var layers: [Cosmos3DecoderLayer]
     @ModuleInfo(key: "norm") var understandingNorm: RMSNorm
     @ModuleInfo(key: "norm_moe_gen") var generationNorm: RMSNorm
-    @ModuleInfo(key: "lm_head") var languageModelHead: Linear
+    @ModuleInfo(key: "lm_head") var languageModelHead: Linear?
     @ModuleInfo(key: "proj_in") var visionInputProjection: Linear
     @ModuleInfo(key: "proj_out") var visionOutputProjection: Linear
     @ModuleInfo(key: "time_embedder") var timestepEmbedding: Cosmos3TimestepEmbedding
-    @ModuleInfo(key: "action_proj_in") var actionInputProjection: Cosmos3DomainAwareLinear
-    @ModuleInfo(key: "action_proj_out") var actionOutputProjection: Cosmos3DomainAwareLinear
-    @ModuleInfo(key: "action_modality_embed") var actionModalityEmbedding: MLXArray
+    @ModuleInfo(key: "action_proj_in") var actionInputProjection: Cosmos3DomainAwareLinear?
+    @ModuleInfo(key: "action_proj_out") var actionOutputProjection: Cosmos3DomainAwareLinear?
+    @ModuleInfo(key: "action_modality_embed") var actionModalityEmbedding: MLXArray?
 
     public init(configuration: Cosmos3TransformerConfiguration = Cosmos3TransformerConfiguration()) {
         precondition(configuration.validationIssues().isEmpty)
-        precondition(configuration.generatesActions)
-        let actionDimension = configuration.actionDimension!
         self.configuration = configuration
         self.rotaryEmbedding = Cosmos3RotaryEmbedding(
             headDimension: configuration.headDimension,
@@ -425,11 +460,13 @@ public final class Cosmos3OmniTransformerModel: Module {
             dimensions: configuration.hiddenSize,
             eps: configuration.rmsNormEpsilon
         )
-        self._languageModelHead.wrappedValue = Linear(
-            configuration.hiddenSize,
-            configuration.vocabularySize,
-            bias: false
-        )
+        self._languageModelHead.wrappedValue = configuration.includesLanguageModelHead
+            ? Linear(
+                configuration.hiddenSize,
+                configuration.vocabularySize,
+                bias: false
+            )
+            : nil
         self._visionInputProjection.wrappedValue = Linear(
             configuration.patchLatentDimension,
             configuration.hiddenSize,
@@ -443,17 +480,23 @@ public final class Cosmos3OmniTransformerModel: Module {
         self._timestepEmbedding.wrappedValue = Cosmos3TimestepEmbedding(
             hiddenSize: configuration.hiddenSize
         )
-        self._actionInputProjection.wrappedValue = Cosmos3DomainAwareLinear(
-            inputSize: actionDimension,
-            outputSize: configuration.hiddenSize,
-            domainCount: configuration.embodimentDomainCount
-        )
-        self._actionOutputProjection.wrappedValue = Cosmos3DomainAwareLinear(
-            inputSize: configuration.hiddenSize,
-            outputSize: actionDimension,
-            domainCount: configuration.embodimentDomainCount
-        )
-        self._actionModalityEmbedding.wrappedValue = MLX.zeros([configuration.hiddenSize])
+        self._actionInputProjection.wrappedValue = configuration.generatesActions
+            ? Cosmos3DomainAwareLinear(
+                inputSize: configuration.actionDimension!,
+                outputSize: configuration.hiddenSize,
+                domainCount: configuration.embodimentDomainCount
+            )
+            : nil
+        self._actionOutputProjection.wrappedValue = configuration.generatesActions
+            ? Cosmos3DomainAwareLinear(
+                inputSize: configuration.hiddenSize,
+                outputSize: configuration.actionDimension!,
+                domainCount: configuration.embodimentDomainCount
+            )
+            : nil
+        self._actionModalityEmbedding.wrappedValue = configuration.generatesActions
+            ? MLX.zeros([configuration.hiddenSize])
+            : nil
     }
 
     public func embedText(tokenIDs: MLXArray) -> MLXArray {
@@ -471,8 +514,9 @@ public final class Cosmos3OmniTransformerModel: Module {
         domainIDs: MLXArray,
         timesteps: MLXArray?
     ) -> MLXArray {
-        var projected = actionInputProjection(actions, domainIDs: domainIDs)
-            + actionModalityEmbedding
+        precondition(configuration.generatesActions)
+        var projected = actionInputProjection!(actions, domainIDs: domainIDs)
+            + actionModalityEmbedding!
         if let timesteps {
             projected = projected + timestepEmbedding(
                 timesteps.asType(.float32) * configuration.timestepScale
@@ -516,7 +560,8 @@ public final class Cosmos3OmniTransformerModel: Module {
     }
 
     public func actionPredictions(_ hidden: MLXArray, domainIDs: MLXArray) -> MLXArray {
-        actionOutputProjection(hidden, domainIDs: domainIDs)
+        precondition(configuration.generatesActions)
+        return actionOutputProjection!(hidden, domainIDs: domainIDs)
     }
 
     public func reasonerHidden(
@@ -549,7 +594,8 @@ public final class Cosmos3OmniTransformerModel: Module {
             Array(repeating: MLXArray(0..<tokens.size), count: 3),
             axis: 0
         )
-        return languageModelHead(reasonerHidden(
+        precondition(configuration.includesLanguageModelHead)
+        return languageModelHead!(reasonerHidden(
             inputEmbeddings: embedText(tokenIDs: tokens),
             positionIDs: positions
         ))

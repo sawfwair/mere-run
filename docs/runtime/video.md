@@ -11,7 +11,7 @@ resident to render multiple takes without reloading it.
 | Command | What it does |
 | --- | --- |
 | `mere.run video generate` | Generate MP4 video with native Swift/MLX video models. |
-| `mere.run video cosmos3` | Run native NVIDIA Cosmos3-Edge generation and action modes. |
+| `mere.run video cosmos3` | Run native NVIDIA Cosmos3 generation and action modes. |
 | `mere.run video animate` | Animate or replace a masked subject with native Swift/MLX SCAIL-2. |
 | `mere.run video prepare-masks` | Prepare reviewable, palette-safe SCAIL-2 masks with native SAM 3.1. |
 | `mere.run video session` | Keep an LTX 2.3 or LTX 2.5 runtime resident for JSONL generation requests. |
@@ -374,6 +374,10 @@ mere.run video cosmos3 "Identify safe routes through the room." \
 Use `mere.run guide video-cosmos3` for the full mode matrix and action-domain
 contract. The same runtime powers `world serve --backend cosmos3`, which keeps
 the transformer, VAE, and terminal latent resident across transitions.
+
+The native runtime also accepts the local MLX Q4 Cosmos3-Super Text2Image
+4-Step artifact for `--mode text-to-image`. It reads the fixed four-step
+stochastic schedule from the model root and disables classifier-free guidance.
 
 ### SCAIL-2 subject animation and replacement
 

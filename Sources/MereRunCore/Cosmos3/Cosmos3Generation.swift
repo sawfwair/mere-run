@@ -271,8 +271,8 @@ extension Cosmos3OmniTransformerModel {
             let domainIDs = MLXArray(
                 Array(repeating: Int32(actionDomain.domainID), count: actionCount)
             )
-            var actionHidden = actionInputProjection(actionLatents, domainIDs: domainIDs)
-                + actionModalityEmbedding
+            var actionHidden = actionInputProjection!(actionLatents, domainIDs: domainIDs)
+                + actionModalityEmbedding!
             if !noisyActionIndexes.isEmpty {
                 let timestepValues = MLX.full(
                     [noisyActionIndexes.count],
@@ -332,7 +332,7 @@ extension Cosmos3OmniTransformerModel {
                 let domainIDs = MLXArray(
                     Array(repeating: Int32(actionDomain.domainID), count: noisyActionIndexes.count)
                 )
-                var predictions = actionOutputProjection(
+                var predictions = actionOutputProjection!(
                     noisyHidden,
                     domainIDs: domainIDs
                 )
