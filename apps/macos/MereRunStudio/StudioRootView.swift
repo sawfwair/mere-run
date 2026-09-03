@@ -32,12 +32,19 @@ struct StudioRootView: View {
     @State private var pendingPullRefresh: StudioReadinessRefresh?
     @State private var pendingRestrictedPull: StudioRunRequest?
     @State private var studioError: String?
-    /// Locally installed models feeding the composer's quick-picker.
-    @State private var installedModels: [StudioModelInventoryRow] = []
+    /// Every `model list` row, installed or not, feeding the composer's model chip.
+    @State private var modelInventory: [StudioModelInventoryRow] = []
     @State private var modelUsageTermsByID: [String: StudioModelUsageTerms] = [:]
     @State private var imageDatasetTask: StudioUtilityTask = .datasetDiscovery
     @AppStorage("mererun.app.hasCompletedWelcome") private var hasCompletedWelcome = false
     @FocusState private var promptFocused: Bool
+    /// Drafts a prompt mode starts with instead of its defaults. The snapshot harness stages
+    /// sample content this way; the app passes nothing.
+    private let seededDrafts: [StudioMode: StudioDraft]
+
+    init(seededDrafts: [StudioMode: StudioDraft] = [:]) {
+        self.seededDrafts = seededDrafts
+    }
 
     private var destination: StudioDestination { navigation.destination }
 
@@ -89,6 +96,14 @@ struct StudioRootView: View {
 
     private var readiness: ModelReadinessState {
         controller.readinessByMode[mode] ?? .unknown("Readiness has not been checked yet.")
+    }
+
+    /// The seed the mode's most recent run was queued with, for the seed chip's "Reuse last".
+    private var lastSeed: String? {
+        library.items.lazy
+            .filter { $0.mode == mode }
+            .compactMap { $0.commandDraft?.seed.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty }
     }
 
     private var selectedCapabilityRequirement: StudioCapabilityRequirement? {
@@ -485,8 +500,6 @@ struct StudioRootView: View {
             canvas
 
             composer
-                .padding(.horizontal, MereRunTheme.Spacing.xl)
-                .padding(.bottom, MereRunTheme.Spacing.xl)
         }
         .frame(minWidth: StudioLayoutPolicy.minimumCanvasWidth)
         .background {
@@ -505,15 +518,13 @@ struct StudioRootView: View {
             .ignoresSafeArea()
         }
         .dropDestination(for: URL.self) { urls, _ in
-            guard !mode.acceptedTypes.isEmpty, let url = urls.first(where: \.isFileURL) else {
-                return false
-            }
-            draft.inputPath = url.path
+            // A file dropped anywhere on the canvas lands in the first well slot that takes it.
+            guard draft.attach(dropped: urls, for: mode) else { return false }
             studioError = nil
             return true
         } isTargeted: { targeted in
             withAnimation(MereRunTheme.Motion.quick) {
-                isDropTargeted = targeted && !mode.acceptedTypes.isEmpty
+                isDropTargeted = targeted && !mode.attachmentSlots.isEmpty
             }
         }
         .overlay {
@@ -571,12 +582,11 @@ struct StudioRootView: View {
             queuedCount: controller.queuedRunCount,
             readiness: readiness,
             sendBlocked: mode.isConversational && activeConversationRunning,
-            installedModels: installedModels,
+            modelInventory: modelInventory,
+            lastSeed: lastSeed,
             promptFocus: $promptFocused,
             onRun: runStudioCommand,
             onStop: controller.cancel,
-            onAttach: chooseAttachment,
-            onPaste: pasteImageFromClipboard,
             onShowModels: { navigation.open(task: .modelsInstalled) },
             onShowAdapters: {
                 showOptions = false
@@ -826,7 +836,7 @@ struct StudioRootView: View {
     /// otherwise opens the most recent item or thread of the mode.
     private func activateMode(_ newMode: StudioMode) {
         activatedMode = newMode
-        var nextDraft = freshDraft(for: newMode)
+        var nextDraft = seededDrafts[newMode] ?? freshDraft(for: newMode)
         studioError = nil
         let preferred = navigation.selectedLibraryID.flatMap { id in
             library.items.first { $0.id == id && $0.mode == newMode }
@@ -1221,13 +1231,13 @@ struct StudioRootView: View {
         controller.checkReadiness(for: mode, draft: draft)
     }
 
-    /// Refreshes the composer's installed-model quick-picker from `model list`.
+    /// Refreshes the composer's model chip from `model list`.
     private func refreshInstalledModels() {
         Task {
             let result = await controller.utilityCommandResult(args: ["model", "list"])
             guard result.exitCode == 0 else { return }
             let rows = StudioModelInventoryParser.rows(from: result.stdout)
-            installedModels = rows.filter(\.isInstalled)
+            modelInventory = rows
             modelUsageTermsByID = Dictionary(
                 uniqueKeysWithValues: rows.compactMap { row in
                     row.usageTerms.map { (row.id, $0) }
@@ -1250,31 +1260,24 @@ struct StudioRootView: View {
         }
     }
 
-    /// Pastes an image from the clipboard into the attachment (Edit ▸ Paste / ⌘V when the canvas,
-    /// not a text field, holds focus). Prefers a pasted image file; otherwise writes the pasted
-    /// bitmap to a temporary PNG. Only acts in modes that accept an image.
+    /// Pastes an image from the clipboard into the well (Edit ▸ Paste / ⌘V when the canvas, not a
+    /// text field, holds focus): the first empty image slot, else the first image slot. Prefers a
+    /// pasted image file; otherwise writes the pasted bitmap to a temporary PNG.
     private func pasteImageFromClipboard() {
-        guard mode.acceptedTypes.contains(.image) else { return }
+        guard let slot = mode.pastedImageSlot(in: draft) else { return }
         let pasteboard = NSPasteboard.general
-
-        if let urls = pasteboard.readObjects(
-            forClasses: [NSURL.self],
-            options: [.urlReadingFileURLsOnly: true]
-        ) as? [URL], let imageURL = urls.first(where: { StudioOutputFileKind.classify($0) == .image }) {
-            draft.inputPath = imageURL.path
+        let urls = StudioAttachmentPasteboard.fileURLs(from: pasteboard, for: slot)
+        if !urls.isEmpty {
+            slot.attach(urls, to: &draft)
             studioError = nil
             return
         }
-
-        guard let image = NSImage(pasteboard: pasteboard), let data = image.pngDataRepresentation() else {
-            studioError = "The clipboard has no image to paste."
-            return
-        }
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("pasted-\(UUID().uuidString).png")
         do {
-            try data.write(to: url)
-            draft.inputPath = url.path
+            guard let url = try StudioAttachmentPasteboard.writePastedImage(from: pasteboard) else {
+                studioError = "The clipboard has no image to paste."
+                return
+            }
+            slot.attach([url], to: &draft)
             studioError = nil
         } catch {
             studioError = "Could not paste image: \(error.localizedDescription)"
@@ -1310,14 +1313,5 @@ private extension String {
         var words = ShellWords.split(self)
         words = words.maskingSecrets()
         return words.shellQuoted()
-    }
-}
-
-private extension NSImage {
-    /// PNG encoding of the image (for persisting a pasted bitmap to a temp file).
-    func pngDataRepresentation() -> Data? {
-        guard let tiff = tiffRepresentation,
-              let bitmap = NSBitmapImageRep(data: tiff) else { return nil }
-        return bitmap.representation(using: .png, properties: [:])
     }
 }
