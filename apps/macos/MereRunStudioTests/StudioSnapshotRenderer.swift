@@ -265,7 +265,10 @@ enum StudioSnapshotRenderer {
     private static func makeOffscreenWindow(size: CGSize) -> NSWindow {
         let window = NSWindow(
             contentRect: CGRect(origin: .zero, size: size),
-            styleMask: [.titled, .fullSizeContentView],
+            // No `.fullSizeContentView`: the shell extends under the (transparent) title bar in
+            // the app, which an opaque offscreen title bar would hide. Below it, the detail area's
+            // top starts where the app's content header does relative to the window body.
+            styleMask: [.titled],
             backing: .buffered,
             defer: false
         )
