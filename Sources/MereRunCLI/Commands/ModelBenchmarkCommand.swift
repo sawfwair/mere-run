@@ -1,6 +1,6 @@
 import ArgumentParser
 import Foundation
-import MereRunCore
+@_spi(Benchmark) import MereRunCore
 #if canImport(Darwin)
 import Darwin
 #elseif canImport(Glibc)
@@ -21,11 +21,117 @@ struct ModelBenchmark: ParsableCommand {
             ModelBenchmarkGemma4KV.self,
             ModelBenchmarkGemma4MTP.self,
             ModelBenchmarkQ36MTP.self,
+            ModelBenchmarkQ38Verification.self,
             ModelBenchmarkLagunaDFlash.self,
             ModelBenchmarkAPIWorkload.self,
             ModelBenchmarkVLM.self,
         ]
     )
+}
+
+struct ModelBenchmarkQ38Verification: AsyncParsableCommand {
+    static let configuration = CommandConfiguration(
+        commandName: "q38-verification",
+        abstract: "Measure the Flash-Next target-only verification frontier."
+    )
+
+    @Option(name: [.long], help: "Flash-Next model id.")
+    var model: String = Q35Resources.q38FlashNext3BitNativePLEModelId
+
+    @Option(name: [.customShort("m"), .long], help: "Installed Flash-Next model root.")
+    var modelRoot: String
+
+    @Option(name: [.long], help: "Comma-separated linear verification widths.")
+    var widths: String = "1,4,8,16,32"
+
+    @Option(name: [.long], help: "Target-generated oracle token count.")
+    var tokens: Int = 128
+
+    @Option(name: [.long], help: "Measurement trials.")
+    var trials: Int = 2
+
+    @Flag(name: [.long], help: "Emit machine-readable JSON.")
+    var json = false
+
+    func validate() throws {
+        let supported = [
+            Q35Resources.q38FlashNextMixedModelId,
+            Q35Resources.q38FlashNext3BitModelId,
+            Q35Resources.q38FlashNext3BitNativePLEModelId,
+            Q35Resources.q38FlashNext4BitModelId,
+        ]
+        guard supported.contains(model) else {
+            throw ValidationError("--model must select a Flash-Next checkpoint.")
+        }
+        guard tokens >= 32 else {
+            throw ValidationError("--tokens must be at least 32.")
+        }
+        guard trials > 0 else {
+            throw ValidationError("--trials must be greater than zero.")
+        }
+        _ = try parsedWidths()
+    }
+
+    func run() async throws {
+        try MLXBundleSupport.ensureAvailable(quiet: json)
+        let prompt = "Write a complete Python LRU cache using a dictionary and a doubly linked list."
+        let messages = [ChatMessage(role: .user, content: prompt)]
+        let generator = Q35Generator(
+            modelId: model,
+            prefixKVCacheEnabled: false,
+            continuousBatchingEnabled: false
+        )
+        do {
+            _ = try await generator.chat(
+                ChatRequest(
+                    messages: messages,
+                    maxTokens: 1,
+                    temperature: 0,
+                    topP: 1,
+                    showThinking: false,
+                    stopOnEOS: false,
+                    maxContextTokens: 8_192
+                ),
+                modelPath: modelRoot,
+                progressHandler: nil
+            )
+            let results = try await generator.benchmarkVerificationFrontier(
+                messages: messages,
+                tokenCount: tokens,
+                widths: parsedWidths(),
+                trials: trials
+            )
+            if json {
+                let encoder = JSONEncoder()
+                encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+                print(String(decoding: try encoder.encode(results), as: UTF8.self))
+            } else {
+                for result in results {
+                    print(String(
+                        format: "width=%d trial=%d passes=%d verify_tps=%.2f parity=%@",
+                        result.width,
+                        result.trial,
+                        result.verificationPasses,
+                        result.verifiedTokensPerSecond,
+                        result.greedyOutputParity ? "yes" : "no"
+                    ))
+                }
+            }
+        } catch {
+            await generator.unload()
+            throw error
+        }
+        await generator.unload()
+    }
+
+    private func parsedWidths() throws -> [Int] {
+        try widths.split(separator: ",").map { value in
+            guard let width = Int(value), width > 0, width <= 32 else {
+                throw ValidationError("--widths values must be integers from 1 through 32.")
+            }
+            return width
+        }
+    }
 }
 
 struct ModelBenchmarkQ36MTP: AsyncParsableCommand {

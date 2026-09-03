@@ -230,6 +230,7 @@ let contractExemptCommandIDs: [String: String] = [
     "graph.worker.execute": "Machine-to-machine worker protocol, not a shell surface.",
     "graph.worker.inspect": "Machine-to-machine worker protocol, not a shell surface.",
     "graph.worker.cancel": "Machine-to-machine worker protocol, not a shell surface.",
+    "model.benchmark.q38-verification": "Research-only target-verification microbenchmark, not a product workflow.",
     "vision.image-to-3d": "VFX alias of image.reconstruct-3d, surfaced through the Image workspace.",
     "vision.image-to-3d-trellis2": "VFX alias of image.reconstruct-3d-trellis2.",
     "vision.image-to-3d-multiview": "VFX alias of image.reconstruct-3d-multiview."

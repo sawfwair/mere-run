@@ -184,6 +184,7 @@ Public tree:
     - `mere.run model benchmark gemma4-kv` — Compare Gemma4 default KV cache decode against packed PolarKV.
     - `mere.run model benchmark gemma4-mtp` — Compare Gemma4 serial decode against verified MTP speculative decode.
     - `mere.run model benchmark q36-mtp` — Compare Qwen-family serial decode against adaptive and forced MTP speculative decode.
+    - `mere.run model benchmark q38-verification` — Measure the Flash-Next target-only verification frontier.
     - `mere.run model benchmark laguna-dflash` — Measure Laguna target-only and DFlash decode in one resident process.
     - `mere.run model benchmark api-workload` — Replay a chat workload against a running API server and measure runtime cache counters.
     - `mere.run model benchmark vlm` — Compare vision-language chat models on synthetic or lmms-eval datasets.
@@ -2542,6 +2543,27 @@ parity. Greedy forced MTP uses the native
 block verifier; non-greedy forced MTP stays on the exact probabilistic
 speculative path. Use `--mtp-block-size` to test a different greedy draft block
 cap and `--forced-mtp-min-prompt-tokens` to adjust the forced policy threshold.
+
+### `mere.run model benchmark q38-verification`
+
+Measure optimized Flash-Next target passes at linear verification widths from
+one through 32. The benchmark first generates an oracle sequence with the same
+target. It then checks every verification width against that sequence for exact
+greedy parity.
+
+```bash
+swift run -c release mere.run model benchmark q38-verification \
+  --model-root /path/to/flash-next \
+  --widths 1,4,8,16,32 \
+  --tokens 128 \
+  --trials 2 \
+  --json
+```
+
+The timed region excludes model loading, prompt prefill, and oracle generation.
+This command measures an upper bound for accepted target tokens. It excludes
+draft cost, branch construction, and tree-shaped recurrent state. A faster wide
+pass doesn't qualify a speculative decoder by itself.
 
 ### `mere.run model benchmark api-workload`
 

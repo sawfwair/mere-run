@@ -444,6 +444,8 @@ not part of the everyday inference workflow. Lanes:
   decode.
 - `q36-mtp` — compares Qwen3.6 serial decode against adaptive and forced MTP
   speculative decode.
+- `q38-verification` — measures Flash-Next target-only linear verification at
+  widths from one through 32 and checks greedy output parity.
 - `api-workload` — replays a chat workload against a running API server and
   measures runtime cache counters.
 - `vlm` — compares vision-language chat models on synthetic or lmms-eval

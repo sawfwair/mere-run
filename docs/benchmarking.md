@@ -18,7 +18,7 @@ picking a lane and reading what it tells you.
 | Coding ability | `model benchmark code` | Generated Python against HumanEval tests in a local sandbox |
 | Vision-language behavior | `model benchmark vlm` | Synthetic image-question fixtures, or external `lmms-eval` datasets |
 | API serving throughput | `model benchmark api-workload` | End-to-end `/v1/chat/completions` request latency, TTFT, cache, and batching counters |
-| Runtime microbenchmarks | `model benchmark gemma4-kv`, `gemma4-mtp`, `q36-mtp` | KV-cache and speculative-decode modes against real checkpoints |
+| Runtime microbenchmarks | `model benchmark gemma4-kv`, `gemma4-mtp`, `q36-mtp`, `q38-verification` | KV-cache, speculative-decode, and target-verification modes against real checkpoints |
 | Fused model quality | `model benchmark fused` | Versioned 24-case Lite and 110-case Comprehensive chat/code/tools/long-context/vision suites, native sampled profiles, repeated trials, and calibration diagnostics |
 | External/private evals | `eval pack validate`, `eval run`, `eval promote` | Content-addressed external cases, matched model/adapter/prompt arms, logprob calibration, gates, and promotion receipts without importing pack content |
 
@@ -346,10 +346,19 @@ The microbenchmark commands are for runtime implementation work:
 - `model benchmark gemma4-kv`
 - `model benchmark gemma4-mtp`
 - `model benchmark q36-mtp`
+- `model benchmark q38-verification`
 
 They run real checkpoint paths with fixed prompt and decode lengths so runtime
 changes can be compared consistently. The built-in prompt fixtures are for
 runtime comparison, not model-quality evaluation.
+
+The `q38-verification` lane is narrower. It measures target-only linear blocks
+against target-generated oracle tokens. Use it to find the useful verification
+width before implementing a drafter or tree-aware recurrent kernels. Don't
+treat its rate as end-to-end generation throughput.
+
+For the first M4 Max result and the promotion decision, see the
+[Flash-Next verification frontier receipt](benchmarks/flash-next-verification-frontier-2026-09-03.md).
 
 Generic affine-8 KV and Psi/GLM compressed MLA are quality-sensitive controls,
 so their source-level structural/numerical checks are separate:

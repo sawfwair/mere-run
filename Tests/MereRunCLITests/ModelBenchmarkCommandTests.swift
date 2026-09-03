@@ -509,6 +509,30 @@ final class ModelBenchmarkCommandTests: XCTestCase {
         XCTAssertFalse(cmd.json)
     }
 
+    func testBenchmarkCommandExposesQ38VerificationSubcommand() {
+        let commandNames = Set(ModelBenchmark.configuration.subcommands.map { $0.configuration.commandName })
+        XCTAssertTrue(commandNames.contains("q38-verification"))
+    }
+
+    func testQ38VerificationBenchmarkParsesDefaults() throws {
+        let cmd = try ModelBenchmarkQ38Verification.parse(["--model-root", "/tmp/flash-next"])
+
+        XCTAssertEqual(cmd.model, Q35Resources.q38FlashNext3BitNativePLEModelId)
+        XCTAssertEqual(cmd.modelRoot, "/tmp/flash-next")
+        XCTAssertEqual(cmd.widths, "1,4,8,16,32")
+        XCTAssertEqual(cmd.tokens, 128)
+        XCTAssertEqual(cmd.trials, 2)
+        XCTAssertFalse(cmd.json)
+        XCTAssertNoThrow(try cmd.validate())
+    }
+
+    func testQ38VerificationBenchmarkRejectsInvalidWidth() {
+        XCTAssertThrowsError(try ModelBenchmarkQ38Verification.parse([
+            "--model-root", "/tmp/flash-next",
+            "--widths", "4,64",
+        ]))
+    }
+
     func testQ36MTPBenchmarkParsesOverrides() throws {
         let cmd = try ModelBenchmarkQ36MTP.parse([
             "--model", Q35Resources.q36NanoModelId,
