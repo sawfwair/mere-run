@@ -26,6 +26,8 @@ final class StudioSnapshotTests: XCTestCase {
     )
     static let consoleSize = CGSize(width: 1_260, height: 780)
     static let settingsSize = CGSize(width: 560, height: 640)
+    /// The size the design mockups are drawn at, for side-by-side fidelity review.
+    static let fidelitySize = CGSize(width: 1_440, height: 900)
 
     private var fixture: SnapshotFixture!
 
@@ -35,6 +37,29 @@ final class StudioSnapshotTests: XCTestCase {
             throw XCTSkip("Set MERERUN_STUDIO_SNAPSHOT_DIR to a directory to write Studio shell snapshots.")
         }
         fixture = try SnapshotFixture(outputDirectory: directory)
+    }
+
+    /// Image ▸ Generate at the mockup's 1440×900 with the mockup's own Library rows (a finished
+    /// run, a running one, a queued one, an older one), light and dark, for comparing the shell
+    /// chrome — sidebar, toolbar, footer, Library column — against the design boards.
+    func testFidelityImageGenerateSnapshots() throws {
+        let fidelity = try SnapshotFixture(outputDirectory: fixture.outputDirectory, seed: .mockup)
+        defer { fidelity.tearDown() }
+        for appearance in StudioSnapshotAppearance.allCases {
+            let navigation = NavigationModel()
+            let view = StudioRootView()
+                .environmentObject(fidelity.controller)
+                .environmentObject(fidelity.library)
+                .environmentObject(navigation)
+                .frame(width: Self.fidelitySize.width, height: Self.fidelitySize.height)
+            try fidelity.write(
+                view,
+                size: Self.fidelitySize,
+                appearance: appearance,
+                name: "fidelity-image-generate-\(appearance.rawValue)",
+                settle: 2.0
+            )
+        }
     }
 
     override func tearDownWithError() throws {
@@ -123,7 +148,15 @@ private final class SnapshotFixture {
     let crashReporter = StudioCrashReporter()
     private let processRunner = SnapshotProcessRunner()
 
-    init(outputDirectory: URL) throws {
+    /// Which rows the temporary Library holds.
+    enum Seed {
+        /// One row per kind of output (image, audio, transcript, chat, code) across several domains.
+        case fixture
+        /// The four Image rows the design mockups show, newest first.
+        case mockup
+    }
+
+    init(outputDirectory: URL, seed: Seed = .fixture) throws {
         self.outputDirectory = outputDirectory
         root = FileManager.default.temporaryDirectory
             .appendingPathComponent("StudioSnapshotTests-\(UUID().uuidString)", isDirectory: true)
@@ -140,7 +173,10 @@ private final class SnapshotFixture {
             resolvesCLIOnInit: true
         )
         library = StudioLibraryStore(libraryURL: root.appendingPathComponent("library.json"))
-        try seedLibrary()
+        switch seed {
+        case .fixture: try seedLibrary()
+        case .mockup: try seedMockupLibrary()
+        }
     }
 
     func tearDown() {
@@ -306,8 +342,76 @@ private final class SnapshotFixture {
         }
     }
 
+    /// The Image rows of the Studio v2 design boards: prompts, states, and order as drawn there.
+    private func seedMockupLibrary() throws {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        func at(hour: Int, minute: Int) -> Date {
+            calendar.date(byAdding: DateComponents(hour: hour, minute: minute), to: today) ?? today
+        }
+        var rows: [StudioLibraryItem] = []
+
+        for (index, seedRow) in Self.mockupImageRows.enumerated() {
+            var outputURL: URL?
+            if seedRow.hasOutput {
+                let url = root.appendingPathComponent("mockup-\(index).png", isDirectory: false)
+                try Self.writeFixturePNG(to: url, size: CGSize(width: 512, height: 512), hueOffset: seedRow.hue)
+                outputURL = url
+            }
+            let createdAt = at(hour: seedRow.hour, minute: seedRow.minute)
+            rows.append(StudioLibraryItem(
+                id: UUID(),
+                mode: .createImage,
+                prompt: seedRow.prompt,
+                inputURL: nil,
+                outputURL: outputURL,
+                createdAt: createdAt,
+                updatedAt: createdAt.addingTimeInterval(30),
+                status: seedRow.status,
+                exitCode: seedRow.status == .completed ? 0 : nil,
+                commandPreview: "mere.run image generate --model zimage-nano --size 1024x1024 --steps 4",
+                outputText: nil,
+                templateID: .imageGenerate,
+                artifactURLs: outputURL.map { [$0] }
+            ))
+        }
+
+        for row in rows.sorted(by: { $0.createdAt < $1.createdAt }) {
+            library.upsert(row)
+        }
+    }
+
+    private struct MockupImageRow {
+        let prompt: String
+        let status: StudioLibraryStatus
+        let hour: Int
+        let minute: Int
+        let hue: CGFloat
+        var hasOutput: Bool { status == .completed }
+    }
+
+    private static let mockupImageRows: [MockupImageRow] = [
+        MockupImageRow(
+            prompt: "A tiny brass astronaut watering a bonsai tree, cinematic macro",
+            status: .completed, hour: 12, minute: 43, hue: 0.10
+        ),
+        MockupImageRow(
+            prompt: "A polished obsidian fox figurine on a cobalt plinth, studio light",
+            status: .running, hour: 12, minute: 41, hue: 0.62
+        ),
+        MockupImageRow(
+            prompt: "a rainy diner window at dusk, warm neon",
+            status: .queued, hour: 12, minute: 40, hue: 0.95
+        ),
+        MockupImageRow(
+            prompt: "a ceramic coffee mug in soft morning light",
+            status: .completed, hour: 9, minute: 5, hue: 0.55
+        )
+    ]
+
     /// A soft two-tone gradient with a horizon line, so the canvas visibly shows an image.
-    private static func writeFixturePNG(to url: URL, size: CGSize) throws {
+    /// `hueOffset` shifts the palette so several fixtures read as different pictures.
+    private static func writeFixturePNG(to url: URL, size: CGSize, hueOffset: CGFloat = 0) throws {
         let width = Int(size.width)
         let height = Int(size.height)
         guard let rep = NSBitmapImageRep(
@@ -326,9 +430,17 @@ private final class SnapshotFixture {
         }
         NSGraphicsContext.saveGraphicsState()
         NSGraphicsContext.current = context
+        let skyTop = NSColor(calibratedRed: 0.98, green: 0.62, blue: 0.36, alpha: 1)
+        let skyBottom = NSColor(calibratedRed: 0.22, green: 0.20, blue: 0.42, alpha: 1)
         let sky = NSGradient(
-            starting: NSColor(calibratedRed: 0.98, green: 0.62, blue: 0.36, alpha: 1),
-            ending: NSColor(calibratedRed: 0.22, green: 0.20, blue: 0.42, alpha: 1)
+            starting: NSColor(
+                calibratedHue: (skyTop.hueComponent + hueOffset).truncatingRemainder(dividingBy: 1),
+                saturation: skyTop.saturationComponent, brightness: skyTop.brightnessComponent, alpha: 1
+            ),
+            ending: NSColor(
+                calibratedHue: (skyBottom.hueComponent + hueOffset).truncatingRemainder(dividingBy: 1),
+                saturation: skyBottom.saturationComponent, brightness: skyBottom.brightnessComponent, alpha: 1
+            )
         )
         sky?.draw(in: CGRect(x: 0, y: 0, width: width, height: height), angle: 90)
         NSColor(calibratedRed: 0.10, green: 0.11, blue: 0.16, alpha: 1).setFill()
@@ -380,7 +492,9 @@ private final class SnapshotFixture {
 // MARK: - Process seam
 
 /// Refuses every launch: reports one stderr line and a non-zero exit asynchronously so readiness
-/// and status probes settle to their "could not check" states without a CLI ever running.
+/// settles to its "could not check" state without a CLI ever running. The one exception is the
+/// sidebar's `status --json` probe, which is answered with a canned snapshot (server idle, 92
+/// models installed) so the footer renders its resting "Ready" state rather than a probe failure.
 private final class SnapshotProcessRunner: MereRunProcessRunning, @unchecked Sendable {
     private let lock = NSLock()
     private var refusedLaunches = 0
@@ -391,12 +505,27 @@ private final class SnapshotProcessRunner: MereRunProcessRunning, @unchecked Sen
         return refusedLaunches
     }
 
+    static let installedModelCount = 92
+
+    private static let statusSnapshot: String = {
+        let models = (1...installedModelCount).map { "{\"id\":\"model-\($0)\"}" }.joined(separator: ",")
+        return "{\"server\":{\"health\":\"down\",\"loadedModels\":[]},\"installedModels\":[\(models)]}\n"
+    }()
+
     func start(
         configuration: MereRunProcessConfiguration,
         stdout: @escaping @Sendable (String) -> Void,
         stderr: @escaping @Sendable (String) -> Void,
         termination: @escaping @Sendable (Int32) -> Void
     ) throws -> MereRunRunningProcess {
+        if configuration.arguments.first == "status", configuration.arguments.contains("--json") {
+            let snapshot = Self.statusSnapshot
+            DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(30)) {
+                stdout(snapshot)
+                termination(0)
+            }
+            return SnapshotRefusedProcess()
+        }
         lock.lock()
         refusedLaunches += 1
         lock.unlock()
