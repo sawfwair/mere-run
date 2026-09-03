@@ -937,6 +937,47 @@ final class MereRunControllerTests: XCTestCase {
         XCTAssertEqual(controller.status, "Running")
     }
 
+    func testNonInferenceJobsNeverTouchTheConsoleOrCompletionStream() async throws {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        var completions = 0
+        let subscription = controller.runCompletions.sink { _ in completions += 1 }
+        defer { subscription.cancel() }
+        let template = try XCTUnwrap(CommandCatalog.template(id: .modelList))
+        let draft = template.defaultDraft()
+        let request = JobRequest(
+            lane: .utility,
+            template: template,
+            draft: draft,
+            configuration: MereRunProcessConfiguration(
+                executableURL: URL(fileURLWithPath: "/usr/bin/true"),
+                arguments: template.arguments(from: draft),
+                currentDirectoryURL: FileManager.default.temporaryDirectory,
+                environment: [:],
+                keepsStandardInputOpen: false
+            ),
+            displayCommand: "mere.run model list"
+        )
+
+        let id = controller.jobs.submit(request)
+        XCTAssertTrue(controller.jobs.job(id)?.state.isRunning == true)
+        XCTAssertFalse(controller.isRunning)
+        XCTAssertEqual(controller.status, "Idle")
+        XCTAssertTrue(controller.logs.isEmpty)
+
+        runner.starts[0].stdout("ID Category\n")
+        runner.starts[0].termination(0)
+        await Task.yield()
+        await Task.yield()
+
+        XCTAssertEqual(controller.jobs.job(id)?.result?.exitCode, 0)
+        XCTAssertNil(controller.lastRunResult)
+        XCTAssertNil(controller.lastExitCode)
+        XCTAssertEqual(completions, 0)
+        XCTAssertTrue(controller.logs.isEmpty)
+    }
+
     func testAdvancedRunRefusesWhenTheInferenceLaneIsFull() throws {
         let runner = RecordingProcessRunner()
         let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)

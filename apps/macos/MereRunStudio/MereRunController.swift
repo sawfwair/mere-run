@@ -1063,11 +1063,24 @@ final class MereRunController: ObservableObject {
     @discardableResult
     func run() -> Bool {
         guard jobs.hasCapacity(in: .inference) else { return false }
-        if let shortCircuit = ensureCameraAccess(for: selectedTemplate.id, retry: { _ = $0.run() }) {
+        // Snapshot the editor now: a camera-permission retry must run what was submitted, not
+        // whatever the draft says once the user answers the prompt.
+        let template = selectedTemplate
+        let draft = draft
+        if let shortCircuit = ensureCameraAccess(for: template.id, retry: { controller in
+            guard controller.jobs.hasCapacity(in: .inference) else { return }
+            _ = controller.submitInferenceJob(
+                template: template,
+                draft: draft,
+                requestID: nil,
+                conversationID: nil,
+                queueNotice: nil
+            )
+        }) {
             return shortCircuit
         }
         return submitInferenceJob(
-            template: selectedTemplate,
+            template: template,
             draft: draft,
             requestID: nil,
             conversationID: nil,
@@ -1174,13 +1187,18 @@ final class MereRunController: ObservableObject {
     // MARK: Foreground mirror
 
     private func handle(_ event: JobStore.Event) {
+        // Only inference jobs are runs: they own the console, the library rows and the
+        // completion notifications. Utility and probe jobs are awaited by their submitters.
         switch event {
         case .started(let job):
+            guard job.lane == .inference else { return }
             setForeground(job)
         case .changed(let job):
+            guard job.lane == .inference else { return }
             mirrorForeground(job)
             mirrorCrossRunState(job)
         case .finished(let job, let result):
+            guard job.lane == .inference else { return }
             finish(job, result: result)
         }
         refreshQueuedRunCount()

@@ -12,8 +12,13 @@ enum JobStoreError: LocalizedError {
 /// Owns every job's lifecycle: lane capacities and FIFO queues, child processes behind the
 /// `MereRunProcessRunning` seam, output consumption, live artifact detection, cancellation and
 /// completion. Jobs stay observable after they finish (the most recent
-/// `finishedJobRetentionLimit` of them), so a view can keep showing a result without the store
-/// growing without bound.
+/// `finishedJobRetentionLimit` per lane), so a view can keep showing a result without the store
+/// growing without bound and without a burst of probes evicting a run the user is looking at.
+///
+/// Delivery order on completion: `events` receives `.finished(job, result)` first, then
+/// `completions` receives the result, then any `result(for:)` awaiters resume. All three run
+/// synchronously on the main actor from the same call, so a subscriber to any of them sees the
+/// job's final published state.
 @MainActor
 final class JobStore: ObservableObject {
     /// Synchronous lifecycle notifications, sent after the job's published state has changed.
@@ -36,23 +41,27 @@ final class JobStore: ObservableObject {
     /// Every retained job id in submission order.
     @Published private(set) var order: [JobID] = []
 
-    /// How many finished jobs stay observable before the oldest are dropped.
+    /// How many finished jobs per lane stay observable before that lane's oldest are dropped.
+    /// Eviction never crosses lanes, so probe and utility churn cannot drop a finished run.
     static let finishedJobRetentionLimit = 50
     /// How often a running job is re-probed for its `--output` file while the CLI is silent.
-    static let outputWatchInterval: Duration = .milliseconds(350)
+    static let defaultOutputWatchInterval: Duration = .milliseconds(350)
 
     private let processRunner: MereRunProcessRunning
     private let resolver: ArtifactResolver
+    private let outputWatchInterval: Duration
     private var queues: [JobLane: [JobID]] = [:]
     private var runningIDs: [JobLane: [JobID]] = [:]
     private var pendingResults: [JobID: [CheckedContinuation<JobResult, Never>]] = [:]
 
     init(
         processRunner: MereRunProcessRunning = FoundationMereRunProcessRunner(),
-        fileSystem: MereRunFileProbing = FileManager.default
+        fileSystem: MereRunFileProbing = FileManager.default,
+        outputWatchInterval: Duration = JobStore.defaultOutputWatchInterval
     ) {
         self.processRunner = processRunner
         resolver = ArtifactResolver(fileSystem: fileSystem)
+        self.outputWatchInterval = outputWatchInterval
     }
 
     // MARK: Reading
@@ -106,7 +115,9 @@ final class JobStore: ObservableObject {
     func submit(_ request: JobRequest) -> JobID {
         if request.lane == .probe, let key = request.dedupeKey,
            let existing = all.last(where: {
-               $0.state.isActive && $0.lane == .probe && $0.request.dedupeKey == key
+               // A superseded probe stays `.running` until its process dies; it must not be
+               // handed back to a new submitter that would then await its SIGTERM result.
+               $0.state.isActive && !$0.cancelRequested && $0.lane == .probe && $0.request.dedupeKey == key
            }) {
             if existing.request.configuration == request.configuration {
                 return existing.id
@@ -187,6 +198,7 @@ final class JobStore: ObservableObject {
             }
         }
         for job in running {
+            job.cancelRequested = true
             job.process?.terminate()
         }
     }
@@ -244,7 +256,9 @@ final class JobStore: ObservableObject {
                 }
             )
         } catch {
-            job.note(error.localizedDescription, stream: .stderr)
+            // Through the stderr path, not `note`, so the message reaches the result's
+            // `outputText` (and the library row) as well as the log.
+            job.consume(error.localizedDescription + "\n", stream: .stderr, resolver: resolver)
             finish(job, exitCode: -1)
         }
     }
@@ -268,12 +282,15 @@ final class JobStore: ObservableObject {
         events.send(.finished(job, result))
         completions.send(result)
         pendingResults.removeValue(forKey: job.id)?.forEach { $0.resume(returning: result) }
-        evictFinishedJobsIfNeeded()
+        evictFinishedJobsIfNeeded(in: job.lane)
         pump(job.lane)
     }
 
-    private func evictFinishedJobsIfNeeded() {
-        let finished = order.filter { jobs[$0]?.state.isTerminal == true }
+    private func evictFinishedJobsIfNeeded(in lane: JobLane) {
+        let finished = order.filter { id in
+            guard let job = jobs[id] else { return false }
+            return job.lane == lane && job.state.isTerminal
+        }
         let excess = finished.count - Self.finishedJobRetentionLimit
         guard excess > 0 else { return }
         let evicted = Set(finished.prefix(excess))
@@ -284,6 +301,7 @@ final class JobStore: ObservableObject {
     }
 
     private func startOutputWatch(for job: Job) {
+        let interval = outputWatchInterval
         job.outputWatchTask = Task { [weak self, weak job] in
             while !Task.isCancelled {
                 let alive = await MainActor.run { () -> Bool in
@@ -294,7 +312,7 @@ final class JobStore: ObservableObject {
                     return true
                 }
                 guard alive else { return }
-                try? await Task.sleep(for: Self.outputWatchInterval)
+                try? await Task.sleep(for: interval)
             }
         }
     }

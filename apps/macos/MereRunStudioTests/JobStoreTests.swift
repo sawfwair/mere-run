@@ -45,10 +45,11 @@ final class JobStoreTests: XCTestCase {
         let survivor = store.submit(try makeRequest(extra: "d"))
 
         XCTAssertTrue(store.cancel(queued))
-        XCTAssertEqual(store.job(queued)?.state, .cancelled(exit: JobResult.cancelledBeforeStartExitCode, at: results[0].completedAt))
+        let cancelled = try XCTUnwrap(results.first)
+        XCTAssertEqual(store.job(queued)?.state, .cancelled(exit: JobResult.cancelledBeforeStartExitCode, at: cancelled.completedAt))
         XCTAssertEqual(store.job(queued)?.status, "Cancelled")
         XCTAssertEqual(results.map(\.requestID), [cancelledRequestID])
-        XCTAssertEqual(results[0].exitCode, JobResult.cancelledBeforeStartExitCode)
+        XCTAssertEqual(cancelled.exitCode, JobResult.cancelledBeforeStartExitCode)
         XCTAssertEqual(store.queued(in: .inference).map(\.id), [survivor])
         XCTAssertFalse(store.cancel(queued), "a settled job cannot be cancelled twice")
 
@@ -138,6 +139,31 @@ final class JobStoreTests: XCTestCase {
         XCTAssertNotEqual(otherKey, superseding)
         XCTAssertEqual(runner.starts.count, 3)
         XCTAssertEqual(store.running(in: .probe).count, 3, "probes are never queued")
+    }
+
+    func testProbeDedupeNeverReturnsASupersededProbeThatIsStillDying() async throws {
+        let runner = RecordingProcessRunner()
+        let store = JobStore(processRunner: runner)
+
+        let first = store.submit(try makeRequest(lane: .probe, extra: "capabilities", dedupeKey: "createImage"))
+        let second = store.submit(try makeRequest(lane: .probe, extra: "list", dedupeKey: "createImage"))
+        XCTAssertEqual(runner.processes[0].terminateCallCount, 1)
+        XCTAssertTrue(store.job(first)?.state.isRunning == true, "the superseded probe has not exited yet")
+
+        runner.starts[1].termination(0)
+        await settle()
+
+        // Same configuration as the dying probe: a fresh launch, not the SIGTERM'd job.
+        let third = store.submit(try makeRequest(lane: .probe, extra: "capabilities", dedupeKey: "createImage"))
+        XCTAssertNotEqual(third, first)
+        XCTAssertNotEqual(third, second)
+        XCTAssertEqual(runner.starts.count, 3)
+
+        runner.starts[0].termination(15)
+        runner.starts[2].termination(0)
+        await settle()
+        XCTAssertEqual(store.job(first)?.state.exitCode, 15)
+        XCTAssertEqual(store.job(third)?.result?.exitCode, 0)
     }
 
     func testSendWritesToStandardInputOnlyWhileRunning() async throws {
@@ -247,7 +273,7 @@ final class JobStoreTests: XCTestCase {
 
     func testOutputWatchDetectsExpectedOutputWhileTheProcessIsSilent() async throws {
         let runner = RecordingProcessRunner()
-        let store = JobStore(processRunner: runner)
+        let store = JobStore(processRunner: runner, outputWatchInterval: .milliseconds(10))
         let temp = FileManager.default.temporaryDirectory
             .appendingPathComponent("JobStoreTests-\(UUID().uuidString)", isDirectory: true)
         let output = temp.appendingPathComponent("image.png", isDirectory: false)
@@ -257,22 +283,26 @@ final class JobStoreTests: XCTestCase {
             draft.outputPath = output.path
         })
         let job = try XCTUnwrap(store.job(id))
-        var changes = 0
+        let detected = expectation(description: "the watch publishes the detected artifact")
+        detected.assertForOverFulfill = true
         let subscription = store.events.sink { event in
-            if case .changed(let changed) = event, changed.id == id { changes += 1 }
+            if case .changed(let changed) = event, changed.id == id, changed.primaryArtifactURL != nil {
+                detected.fulfill()
+            }
         }
         defer { subscription.cancel() }
 
         XCTAssertTrue(FileManager.default.fileExists(atPath: temp.path), "preflight creates the output directory")
         XCTAssertNil(job.primaryArtifactURL)
-        let changesBeforeWrite = changes
 
         try Data("png".utf8).write(to: output)
-        try await Task.sleep(for: .milliseconds(700))
+        await fulfillment(of: [detected], timeout: 2)
 
         XCTAssertEqual(job.primaryArtifactURL?.path, output.path)
+        XCTAssertEqual(job.status, "Generated: image.png")
         XCTAssertTrue(job.state.isRunning)
-        XCTAssertEqual(changes, changesBeforeWrite + 1, "the watch publishes once per newly detected artifact")
+        // A few more ticks must not republish the same artifact.
+        try await Task.sleep(for: .milliseconds(50))
     }
 
     func testValidationFailureFailsPreflightWithoutLaunchingAndAdvancesTheQueue() async throws {
@@ -311,6 +341,8 @@ final class JobStoreTests: XCTestCase {
         XCTAssertEqual(job.state.exitCode, -1)
         XCTAssertTrue(job.log.lines.contains { $0.stream == .stderr && $0.text == "mere.run could not be launched." })
         XCTAssertEqual(job.result?.exitCode, -1)
+        XCTAssertEqual(job.result?.outputText, "mere.run could not be launched.")
+        XCTAssertEqual(job.status, "Exited -1")
         XCTAssertTrue(store.running.isEmpty)
     }
 
@@ -335,23 +367,44 @@ final class JobStoreTests: XCTestCase {
         XCTAssertNil(unknown)
     }
 
-    func testFinishedJobsAreRetainedUpToTheLimitOldestFirstOut() async throws {
+    func testFinishedJobsAreRetainedPerLaneOldestFirstOut() async throws {
         let runner = RecordingProcessRunner()
         let store = JobStore(processRunner: runner)
+        // A finished run the user may still be looking at.
+        let run = store.submit(try makeRequest(extra: "finished-run", requestID: UUID()))
+        runner.starts[0].termination(0)
+        await settle()
+
         var ids: [JobID] = []
         for index in 0...JobStore.finishedJobRetentionLimit {
             let id = store.submit(try makeRequest(lane: .utility, extra: "\(index)"))
             ids.append(id)
-            runner.starts[index].termination(0)
+            runner.starts[index + 1].termination(0)
             await settle()
         }
         let survivor = store.submit(try makeRequest(lane: .utility, extra: "running"))
 
-        XCTAssertNil(store.job(ids[0]), "the oldest finished job is evicted")
+        XCTAssertNil(store.job(ids[0]), "the oldest finished utility job is evicted")
         XCTAssertNotNil(store.job(ids[1]))
-        XCTAssertEqual(store.all.filter { $0.state.isTerminal }.count, JobStore.finishedJobRetentionLimit)
+        XCTAssertNotNil(store.job(run), "utility churn never evicts a finished run from another lane")
+        XCTAssertEqual(store.all.filter { $0.lane == .utility && $0.state.isTerminal }.count, JobStore.finishedJobRetentionLimit)
         XCTAssertNotNil(store.job(survivor))
-        XCTAssertEqual(store.order.count, JobStore.finishedJobRetentionLimit + 1)
+        XCTAssertEqual(store.order.count, JobStore.finishedJobRetentionLimit + 2)
+    }
+
+    func testTerminateAllSettlesRunningJobsAsCancelled() async throws {
+        let runner = RecordingProcessRunner()
+        let store = JobStore(processRunner: runner)
+        let id = store.submit(try makeRequest())
+
+        store.terminateAll()
+        runner.starts[0].termination(15)
+        await settle()
+
+        guard case .cancelled(let exit, _) = try XCTUnwrap(store.job(id)).state else {
+            return XCTFail("expected cancelled")
+        }
+        XCTAssertEqual(exit, 15)
     }
 
     func testInterruptSendsSIGINTOnlyToRunningJobs() async throws {
