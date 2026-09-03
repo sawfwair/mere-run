@@ -176,31 +176,41 @@ struct StudioRootView: View {
             )
         } detail: {
             detailArea
-                .toolbar { toolbarContent }
         }
         .background(MereRunTheme.background.ignoresSafeArea())
     }
 
+    // The detail area runs to the top of the window (the title bar is hidden and nothing sits in
+    // the window toolbar): the Library column on the left with its own header, and beside it the
+    // content column whose first row is the 52pt domain header. With the sidebar collapsed the
+    // traffic lights and sidebar toggle land over the detail's top-left corner, so whichever
+    // header is first leaves room for them.
     private var detailArea: some View {
-        VStack(spacing: 0) {
-            banners
+        HStack(spacing: 0) {
+            if showsLibraryColumn {
+                libraryColumn
+                    .frame(width: StudioLayoutPolicy.libraryWidth)
+                    .transition(reduceMotion ? .identity : .move(edge: .leading).combined(with: .opacity))
 
-            HStack(spacing: 0) {
-                if showsLibraryColumn {
-                    libraryColumn
-                        .frame(width: StudioLayoutPolicy.libraryWidth)
-                        .transition(reduceMotion ? .identity : .move(edge: .leading).combined(with: .opacity))
+                Divider()
+                    .overlay(MereRunTheme.border.opacity(0.53))
+            }
 
-                    Divider()
-                        .overlay(MereRunTheme.border.opacity(0.5))
-                }
-
+            VStack(spacing: 0) {
+                contentHeader
+                banners
                 domainContent
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .ignoresSafeArea(.container, edges: .top)
         .background(MereRunTheme.background.ignoresSafeArea())
         .foregroundStyle(MereRunTheme.textPrimary)
+    }
+
+    /// Space for the traffic lights and the sidebar toggle while the sidebar is collapsed.
+    private var windowChromeInset: CGFloat {
+        columnVisibility == .detailOnly ? StudioContentHeader.collapsedSidebarInset : 0
     }
 
     @ViewBuilder
@@ -238,89 +248,26 @@ struct StudioRootView: View {
             onRename: library.rename,
             onQuickLook: { QuickLookCoordinator.shared.preview($0) },
             onRetry: retryLibraryItem,
-            onEdit: editLibraryItem
+            onEdit: editLibraryItem,
+            leadingInset: windowChromeInset
         )
     }
 
-    // MARK: - Toolbar
+    // MARK: - Content header
 
-    // The toolbar is the window's real `NSToolbar`: domain glyph and title leading, the task
-    // control in the principal slot, and the Library, Inspector, and Command toggles trailing.
-    // The items draw their own chrome, so the macOS 26 glass platters are hidden.
-    @ToolbarContentBuilder
-    private var toolbarContent: some ToolbarContent {
-        StudioToolbarItem(placement: .navigation) {
-            domainTitle
-        }
-
-        StudioToolbarItem(placement: .principal) {
-            taskControl
-        }
-
-        StudioToolbarItem(placement: .primaryAction) {
-            HStack(spacing: 4) {
-                if destination.domain.hasPromptWorkspace {
-                    MereToolbarIconButton(
-                        systemImage: "sidebar.left",
-                        isActive: navigation.showLibrary,
-                        action: toggleLibrary
-                    )
-                    .help(navigation.showLibrary ? "Hide Library (⌥⌘L)" : "Show Library (⌥⌘L)")
-                    .accessibilityLabel(navigation.showLibrary ? "Hide Library" : "Show Library")
-                }
-
-                // The inspector column arrives with the feed canvas; the toggle holds its place.
-                MereToolbarIconButton(systemImage: "sidebar.right", isActive: false, action: {})
-                    .disabled(true)
-                    .opacity(0.45)
-                    .help("Inspector — coming soon")
-                    .accessibilityLabel("Inspector")
-                    .accessibilityHint("Not available yet")
-
-                MereToolbarIconButton(
-                    systemImage: "terminal",
-                    isActive: navigation.isConsoleOpen,
-                    action: { openConsole() }
-                )
-                .help("Command Console (⌥⌘C)")
-                .accessibilityLabel("Command Console")
-            }
-        }
-    }
-
-    private var domainTitle: some View {
-        HStack(spacing: MereRunTheme.Spacing.sm) {
-            Image(systemName: destination.domain.systemImage)
-                .font(.system(size: 14, weight: .medium))
-                .foregroundStyle(MereRunTheme.accent)
-                .frame(width: 16, height: 16)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text(destination.domain.title)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(MereRunTheme.textPrimary)
-                Text(destination.domain.subtitle)
-                    .font(.system(size: 11.5, weight: .medium))
-                    .foregroundStyle(MereRunTheme.textMuted)
-                    .lineLimit(1)
-                    .fixedSize(horizontal: true, vertical: false)
-            }
-        }
-        .padding(.leading, 2)
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isHeader)
-    }
-
-    @ViewBuilder
-    private var taskControl: some View {
-        switch StudioTaskControlStyle.style(for: destination.domain) {
-        case .none:
-            EmptyView()
-        case .segmented:
-            StudioTaskControl(domain: destination.domain, selection: taskBinding, visibleLimit: nil)
-        case .segmentedWithOverflow(let visible):
-            StudioTaskControl(domain: destination.domain, selection: taskBinding, visibleLimit: visible)
-        }
+    /// The 52pt header row at the top of the content column: domain glyph, title, and subtitle
+    /// leading; the task control in the middle; Library, Inspector, and Command toggles trailing.
+    private var contentHeader: some View {
+        StudioContentHeader(
+            domain: destination.domain,
+            task: taskBinding,
+            showsLibraryToggle: destination.domain.hasPromptWorkspace,
+            isLibraryShown: navigation.showLibrary,
+            isConsoleOpen: navigation.isConsoleOpen,
+            leadingInset: showsLibraryColumn ? 0 : windowChromeInset,
+            onToggleLibrary: toggleLibrary,
+            onOpenConsole: { openConsole() }
+        )
     }
 
     // MARK: - Domain content

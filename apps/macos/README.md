@@ -12,8 +12,9 @@ imported row. External launchers must never edit `library.json` directly.
 
 - `StudioNavigation.swift`: `StudioDomain`, `StudioTask`, `StudioDestination`,
   and the per-window `NavigationModel`.
-- `StudioRootView.swift`: the `NavigationSplitView` shell, toolbar, and the
-  prompt workspace; hosts every task in the detail area.
+- `StudioRootView.swift`: the `NavigationSplitView` shell, the content header
+  (`StudioTaskControl.swift`), and the prompt workspace; hosts every task in
+  the detail area.
 - `StudioTypes.swift`: user-facing mode, draft, and request types.
 - `CommandCatalog.swift`: mode-to-command templates.
 - `MereRunController.swift`: child-process launching and log capture.
@@ -32,10 +33,12 @@ the selected row is a solid accent pill drawn by the row itself (the native
 unchanged). The footer pill reads "Ready · N models" once the status probe
 answers, "Serving · N models" while the local server is up, and "Server
 unreachable" if the probe never answers; its popover holds the details. Every
-domain has **tasks** in the toolbar: one segmented pill for up to six tasks,
-or five segments plus a "More" menu segment for Vision. The toolbar's leading
-item is the domain glyph, title, and one-line subtitle; trailing are the
-Library, Inspector (placeholder, disabled), and Command Console toggles.
+domain has **tasks** in a 52pt header at the top of the content column, beside
+the Library (the window toolbar stays empty so the Library column runs to the
+top of the window): one segmented pill for up to six tasks, or five segments
+plus a "More" menu segment for Vision. The header's leading item is the domain
+glyph, title, and one-line subtitle; trailing are the Library, Inspector
+(placeholder, disabled), and Command Console toggles.
 Twelve tasks are the composer-driven prompt modes (`StudioMode`) and
 keep the canvas, composer, and Library column; every other task hosts a former
 specialist sheet inline, full height, with its own controls and no Done button.
@@ -60,10 +63,10 @@ state with its "Get the model" path and a one-time dismissible banner.
 
 The **Command Console** is a separate window (`Window("Command Console")`)
 hosting the complete raw contract surface — template sidebar, editor, and run
-console in three resizable panes. It opens from the toolbar, the View menu, the
+console in three resizable panes. It opens from the content header, the View menu, the
 readiness overlay's Details button, a Library row's "Edit command…", and the
 adapter fallbacks for modes whose adapters are typed only in the raw command.
-Opening it from the toolbar carries the composer's draft into the matching
+Opening it from the header carries the composer's draft into the matching
 template; raising an already-open console only brings it forward, so its edits
 stay. The console's own Run stays independent of the composer's, and while the
 console is key the Run menu drives it while Go and Help keep acting on the

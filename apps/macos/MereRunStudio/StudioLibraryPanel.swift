@@ -17,6 +17,8 @@ struct StudioLibraryPanel: View {
     let onQuickLook: (URL) -> Void
     let onRetry: (StudioLibraryItem) -> Void
     let onEdit: (StudioLibraryItem) -> Void
+    /// Extra leading space for the header while the window's traffic lights sit over it.
+    var leadingInset: CGFloat = 0
 
     @State private var searchText = ""
     @State private var renamingID: UUID?
@@ -106,7 +108,8 @@ struct StudioLibraryPanel: View {
             }
         }
         .padding(.top, 14)
-        .padding(.horizontal, 14)
+        .padding(.leading, 14 + leadingInset)
+        .padding(.trailing, 14)
         .padding(.bottom, 8)
     }
 

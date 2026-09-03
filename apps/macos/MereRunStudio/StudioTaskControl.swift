@@ -1,9 +1,126 @@
 import SwiftUI
 
-/// The toolbar's task control: one `MereSegmentedControl`-styled pill listing the domain's tasks.
+/// The 52pt header row at the top of the content column, beside the Library: the domain glyph,
+/// title, and one-line subtitle leading; the task control centered; the Library, Inspector, and
+/// Command toggles trailing; a hairline below. It lives in the content column, not the window
+/// toolbar, so the Library column can run to the top of the window.
+struct StudioContentHeader: View {
+    let domain: StudioDomain
+    @Binding var task: StudioTask
+    let showsLibraryToggle: Bool
+    let isLibraryShown: Bool
+    let isConsoleOpen: Bool
+    /// Extra leading space when the traffic lights and sidebar toggle sit over this header.
+    var leadingInset: CGFloat = 0
+    let onToggleLibrary: () -> Void
+    let onOpenConsole: () -> Void
+
+    static let height: CGFloat = 52
+    /// Clears the traffic lights and the sidebar toggle while the sidebar is collapsed.
+    static let collapsedSidebarInset: CGFloat = 112
+
+    var body: some View {
+        // Balanced like the design (220pt leading and trailing blocks, so the pill sits at the
+        // column's center) when the column is wide enough; otherwise the blocks shrink to their
+        // content so the pill never truncates at the default window width.
+        ViewThatFits(in: .horizontal) {
+            row(sideBlockWidth: 220)
+            row(sideBlockWidth: nil)
+        }
+        .padding(.leading, 18 + leadingInset)
+        .padding(.trailing, 16)
+        .frame(height: Self.height)
+        .frame(maxWidth: .infinity)
+        .background(MereRunTheme.background)
+        .overlay(alignment: .bottom) {
+            Rectangle()
+                .fill(MereRunTheme.border.opacity(0.53))
+                .frame(height: 1)
+        }
+    }
+
+    private func row(sideBlockWidth: CGFloat?) -> some View {
+        HStack(spacing: 12) {
+            title
+                .frame(minWidth: sideBlockWidth, alignment: .leading)
+            Spacer(minLength: 0)
+            taskControl
+                .fixedSize()
+            Spacer(minLength: 0)
+            toggles
+                .frame(minWidth: sideBlockWidth, alignment: .trailing)
+        }
+    }
+
+    private var title: some View {
+        HStack(spacing: MereRunTheme.Spacing.sm) {
+            Image(systemName: domain.systemImage)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(MereRunTheme.accent)
+                .frame(width: 16, height: 16)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(domain.title)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundStyle(MereRunTheme.textPrimary)
+                Text(domain.subtitle)
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(MereRunTheme.textMuted)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(.isHeader)
+    }
+
+    @ViewBuilder
+    private var taskControl: some View {
+        switch StudioTaskControlStyle.style(for: domain) {
+        case .none:
+            EmptyView()
+        case .segmented:
+            StudioTaskControl(domain: domain, selection: $task, visibleLimit: nil)
+        case .segmentedWithOverflow(let visible):
+            StudioTaskControl(domain: domain, selection: $task, visibleLimit: visible)
+        }
+    }
+
+    private var toggles: some View {
+        HStack(spacing: 4) {
+            if showsLibraryToggle {
+                MereToolbarIconButton(
+                    systemImage: "sidebar.left",
+                    isActive: isLibraryShown,
+                    action: onToggleLibrary
+                )
+                .help(isLibraryShown ? "Hide Library (⌥⌘L)" : "Show Library (⌥⌘L)")
+                .accessibilityLabel(isLibraryShown ? "Hide Library" : "Show Library")
+            }
+
+            // The inspector column arrives with the feed canvas; the toggle holds its place.
+            MereToolbarIconButton(systemImage: "sidebar.right", isActive: false, action: {})
+                .disabled(true)
+                .opacity(0.45)
+                .help("Inspector — coming soon")
+                .accessibilityLabel("Inspector")
+                .accessibilityHint("Not available yet")
+
+            MereToolbarIconButton(
+                systemImage: "terminal",
+                isActive: isConsoleOpen,
+                action: onOpenConsole
+            )
+            .help("Command Console (⌥⌘C)")
+            .accessibilityLabel("Command Console")
+        }
+    }
+}
+
+/// The header's task control: one `MereSegmentedControl`-styled pill listing the domain's tasks.
 /// Domains with more tasks than fit show the first `visibleLimit` as segments and the rest behind
 /// a "More" segment that opens a menu; when the current task is one of those, the segment shows
-/// its title and draws selected, so the toolbar always names where you are.
+/// its title and draws selected, so the header always names where you are.
 struct StudioTaskControl: View {
     let domain: StudioDomain
     @Binding var selection: StudioTask
@@ -87,26 +204,5 @@ struct StudioTaskControl: View {
         .fixedSize()
         .accessibilityLabel(overflowSelection.map { "More tasks, \($0.title) selected" } ?? "More tasks")
         .accessibilityAddTraits(overflowSelection == nil ? [] : .isSelected)
-    }
-}
-
-/// A toolbar item that draws its own chrome: on macOS 26 the shared glass platter is hidden so the
-/// Studio's flat title, pill, and 28pt icon tiles sit directly on the toolbar.
-struct StudioToolbarItem<Content: View>: ToolbarContent {
-    let placement: ToolbarItemPlacement
-    @ViewBuilder let content: () -> Content
-
-    init(placement: ToolbarItemPlacement, @ViewBuilder content: @escaping () -> Content) {
-        self.placement = placement
-        self.content = content
-    }
-
-    var body: some ToolbarContent {
-        if #available(macOS 26.0, *) {
-            ToolbarItem(placement: placement, content: content)
-                .sharedBackgroundVisibility(.hidden)
-        } else {
-            ToolbarItem(placement: placement, content: content)
-        }
     }
 }
