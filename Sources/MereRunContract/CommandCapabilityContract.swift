@@ -1131,6 +1131,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--decoder-subdirectory", label: "Decoder", kind: .string),
             .init(flag: "--vae-subdirectory", label: "VAE", kind: .string),
             .init(flag: "--lm-subdirectory", label: "Language model", kind: .string),
+            .init(flag: "--lm-model", label: "LM model", kind: .string),
             .init(flag: "--text-subdirectory", label: "Text encoder", kind: .string),
             .init(flag: "--use-lm", label: "Use LM planning", kind: .boolean),
             .init(flag: "--no-lm", label: "Disable LM planning", kind: .boolean),
@@ -1222,6 +1223,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--decoder-subdirectory", label: "Decoder", kind: .string),
             .init(flag: "--vae-subdirectory", label: "VAE", kind: .string),
             .init(flag: "--lm-subdirectory", label: "Language model", kind: .string),
+            .init(flag: "--lm-model", label: "LM model", kind: .string),
             .init(flag: "--duration", label: "Duration", kind: .number),
             .init(flag: "--max-new-tokens", label: "Max tokens", kind: .integer),
             .init(flag: "--lm-temperature", label: "LM temperature", kind: .number),
@@ -1366,6 +1368,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--decoder-subdirectory", label: "Decoder", kind: .string),
             .init(flag: "--vae-subdirectory", label: "VAE", kind: .string),
             .init(flag: "--lm-subdirectory", label: "Language model", kind: .string),
+            .init(flag: "--lm-model", label: "LM model", kind: .string),
             .init(flag: "--text-subdirectory", label: "Text encoder", kind: .string),
             .init(flag: "--adapter", label: "Adapter", kind: .file, repeatable: true),
             .init(flag: "--adapter-kind", label: "Adapter kind", kind: .choice, choices: ["auto", "lora", "lokr"]),
@@ -1421,6 +1424,15 @@ public enum MereRunCapabilityCatalog {
                 kind: .choice,
                 choices: ["auto", "quantized", "resident-bf16"]
             ),
+            .init(
+                flag: "--h3-acceleration",
+                label: "MiniMax-H3 acceleration",
+                kind: .choice,
+                choices: [
+                    "quality", "balanced", "maximum",
+                    "layers-45", "layers-40", "velocity-reuse-2", "token-reduction"
+                ]
+            ),
             .init(flag: "--guidance-scale", label: "Wan guidance", kind: .number),
             .init(flag: "--shift", label: "Wan schedule shift", kind: .number),
             .init(flag: "--negative-prompt", label: "Negative prompt", kind: .string),
@@ -1429,6 +1441,7 @@ public enum MereRunCapabilityCatalog {
             .init(flag: "--prompt-enhancer-model-root", label: "Prompt enhancer root", kind: .directory),
             .init(flag: "--audio", label: "Source audio", kind: .file),
             .init(flag: "--audio-start-time", label: "Audio start", kind: .number),
+            .init(flag: "--audio-max-duration", label: "Audio max duration", kind: .number),
             .init(flag: "--a2v-guidance-scale", label: "Audio-to-video guidance", kind: .number),
             .init(flag: "--video-cfg-guidance-scale", label: "Video CFG guidance", kind: .number),
             .init(flag: "--audio-cfg-guidance-scale", label: "Audio CFG guidance", kind: .number),

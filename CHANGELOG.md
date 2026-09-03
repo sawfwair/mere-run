@@ -6,6 +6,14 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### macOS
+
+- added `--lm-model` (music generate, analyze, and serve), `--h3-acceleration`,
+  and `--audio-max-duration` (video generate) to the shared capability
+  contract, so `mere.run catalog --json` and Studio agree with the CLI's
+  ArgumentParser definitions. Studio's contract test now builds argv from
+  maximal drafts and proves it reaches every flag the app can emit.
+
 ### Image
 
 - added the gated `image-flux1-dev` managed model with a separate Swift and MLX
