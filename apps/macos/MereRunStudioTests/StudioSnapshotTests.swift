@@ -24,6 +24,8 @@ final class StudioSnapshotTests: XCTestCase {
         width: StudioLayoutPolicy.defaultWindowWidth,
         height: StudioLayoutPolicy.defaultWindowHeight
     )
+    /// The size the v2 mockups were drawn at; fidelity renders use it so they overlay 1:1.
+    static let fidelitySize = CGSize(width: 1_440, height: 900)
     static let consoleSize = CGSize(width: 1_260, height: 780)
     static let settingsSize = CGSize(width: 560, height: 640)
 
@@ -64,6 +66,43 @@ final class StudioSnapshotTests: XCTestCase {
                     name: "shell-\(domain.rawValue)-\(appearance.rawValue)",
                     settle: 2.0,
                     afterAppear: { navigation.open(destination: domain.defaultDestination) }
+                )
+            }
+        }
+    }
+
+    /// The composer at mockup size with the mockup's sample content: Image ▸ Generate with an
+    /// empty well and the sample prompt, and Vision ▸ Find with `mug.png` attached, so the
+    /// renders line up with the v2 mockups for review.
+    func testComposerFidelitySnapshots() throws {
+        var image = StudioDraft()
+        image.reset(for: .createImage)
+        image.prompt = "a ceramic coffee mug in soft morning light"
+
+        var find = StudioDraft()
+        find.reset(for: .findObjects)
+        find.prompt = "every coffee cup and what it sits on"
+        find.inputPath = fixture.mugURL.path
+
+        let scenes: [(name: String, destination: StudioDestination, drafts: [StudioMode: StudioDraft])] = [
+            ("composer-image-generate", StudioTask.imageGenerate.destination, [.createImage: image]),
+            ("composer-vision-find", StudioTask.visionFind.destination, [.findObjects: find]),
+        ]
+        for scene in scenes {
+            for appearance in StudioSnapshotAppearance.allCases {
+                let navigation = NavigationModel()
+                let view = StudioRootView(seededDrafts: scene.drafts)
+                    .environmentObject(fixture.controller)
+                    .environmentObject(fixture.library)
+                    .environmentObject(navigation)
+                    .frame(width: Self.fidelitySize.width, height: Self.fidelitySize.height)
+                try fixture.write(
+                    view,
+                    size: Self.fidelitySize,
+                    appearance: appearance,
+                    name: "\(scene.name)-\(appearance.rawValue)",
+                    settle: 2.0,
+                    afterAppear: { navigation.open(destination: scene.destination) }
                 )
             }
         }
@@ -121,6 +160,8 @@ private final class SnapshotFixture {
     let controller: MereRunController
     let library: StudioLibraryStore
     let crashReporter = StudioCrashReporter()
+    /// A placeholder "mug.png" for the attachment well, drawn in-test.
+    let mugURL: URL
     private let processRunner = SnapshotProcessRunner()
 
     init(outputDirectory: URL) throws {
@@ -129,6 +170,8 @@ private final class SnapshotFixture {
             .appendingPathComponent("StudioSnapshotTests-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         try FileManager.default.createDirectory(at: outputDirectory, withIntermediateDirectories: true)
+        mugURL = root.appendingPathComponent("mug.png", isDirectory: false)
+        try Self.writeMugPNG(to: mugURL, side: 512)
 
         // The first-run banner is dismissed state in the volatile registration domain only, so the
         // shell renders as a returning user sees it without writing to any persistent defaults.
@@ -337,6 +380,51 @@ private final class SnapshotFixture {
         CGRect(x: width * 2 / 3, y: height / 3, width: 18, height: height / 3).fill()
         NSColor(calibratedRed: 1.0, green: 0.93, blue: 0.62, alpha: 1).setFill()
         NSBezierPath(ovalIn: CGRect(x: width * 2 / 3 - 6, y: height * 2 / 3 - 6, width: 30, height: 30)).fill()
+        NSGraphicsContext.restoreGraphicsState()
+        guard let data = rep.representation(using: .png, properties: [:]) else {
+            throw StudioSnapshotError.pngEncodingFailed
+        }
+        try data.write(to: url, options: .atomic)
+    }
+
+    /// A white mug with a handle on a warm grey ground, so the well's thumbnail reads as a photo.
+    private static func writeMugPNG(to url: URL, side: Int) throws {
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: side,
+            pixelsHigh: side,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        ), let context = NSGraphicsContext(bitmapImageRep: rep) else {
+            throw StudioSnapshotError.noBitmap
+        }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        let unit = CGFloat(side)
+        let ground = NSGradient(
+            starting: NSColor(calibratedRed: 0.86, green: 0.84, blue: 0.80, alpha: 1),
+            ending: NSColor(calibratedRed: 0.62, green: 0.60, blue: 0.57, alpha: 1)
+        )
+        ground?.draw(in: CGRect(x: 0, y: 0, width: unit, height: unit), angle: 75)
+        NSColor(calibratedWhite: 0.3, alpha: 0.18).setFill()
+        NSBezierPath(ovalIn: CGRect(x: unit * 0.18, y: unit * 0.14, width: unit * 0.62, height: unit * 0.12)).fill()
+        NSColor(calibratedWhite: 0.97, alpha: 1).setFill()
+        NSBezierPath(
+            roundedRect: CGRect(x: unit * 0.26, y: unit * 0.2, width: unit * 0.42, height: unit * 0.5),
+            xRadius: unit * 0.05,
+            yRadius: unit * 0.05
+        ).fill()
+        let handle = NSBezierPath(ovalIn: CGRect(x: unit * 0.6, y: unit * 0.3, width: unit * 0.22, height: unit * 0.26))
+        handle.lineWidth = unit * 0.05
+        NSColor(calibratedWhite: 0.95, alpha: 1).setStroke()
+        handle.stroke()
+        NSColor(calibratedRed: 0.80, green: 0.70, blue: 0.55, alpha: 1).setFill()
+        CGRect(x: unit * 0.26, y: unit * 0.2, width: unit * 0.42, height: unit * 0.1).fill()
         NSGraphicsContext.restoreGraphicsState()
         guard let data = rep.representation(using: .png, properties: [:]) else {
             throw StudioSnapshotError.pngEncodingFailed
