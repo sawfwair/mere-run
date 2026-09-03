@@ -67,3 +67,35 @@ public struct Cosmos3UniPCScheduler {
         solver.step(modelOutput: modelOutput, sample: sample)
     }
 }
+
+/// The stochastic four-step Euler sampler published with the distilled
+/// Cosmos3-Super text-to-image checkpoint.
+public struct Cosmos3DistilledEulerScheduler {
+    public let timesteps: [Float]
+    public let sigmas: [Float]
+    private var stepIndex = 0
+
+    public init(sigmas: [Float], trainTimesteps: Int = 1_000) {
+        precondition(!sigmas.isEmpty)
+        precondition(trainTimesteps > 0)
+        precondition(sigmas.allSatisfy { $0 > 0 && $0 <= 1 })
+        precondition(zip(sigmas, sigmas.dropFirst()).allSatisfy { pair in pair.0 > pair.1 })
+        self.timesteps = sigmas.map { $0 * Float(trainTimesteps) }
+        self.sigmas = sigmas + [0]
+    }
+
+    public mutating func step(
+        modelOutput: MLXArray,
+        sample: MLXArray,
+        noise: MLXArray
+    ) -> MLXArray {
+        precondition(stepIndex < timesteps.count)
+        precondition(noise.shape == sample.shape)
+        let sigma = sigmas[stepIndex]
+        let nextSigma = sigmas[stepIndex + 1]
+        stepIndex += 1
+        let prediction = sample.asType(.float32) - sigma * modelOutput.asType(.float32)
+        let next = (1 - nextSigma) * prediction + nextSigma * noise.asType(.float32)
+        return next.asType(modelOutput.dtype)
+    }
+}

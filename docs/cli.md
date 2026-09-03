@@ -102,7 +102,7 @@ Public tree:
     - `mere.run sfx video generate` — Generate an 8-second sound effect from a video or Synchformer features.
 - [`mere.run video`](/runtime/video) — Generate and understand video with native Swift/MLX pipelines.
   - `mere.run video animate` — Animate or replace a masked subject with native Swift/MLX SCAIL-2.
-  - `mere.run video cosmos3` — Run native NVIDIA Cosmos3-Edge generation and action modes.
+  - `mere.run video cosmos3` — Run native NVIDIA Cosmos3 generation and action modes.
   - `mere.run video dub-it` — Generate synchronized video and audio identity from one LTX 2.5 IC-LoRA reference.
   - `mere.run video export-latents` — Run native Swift/MLX distilled LTX denoising and export final latents.
   - `mere.run video generate` — Generate MP4 video with native Swift/MLX video models.

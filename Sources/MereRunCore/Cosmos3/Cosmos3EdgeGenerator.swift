@@ -19,6 +19,9 @@ public enum Cosmos3EdgeGeneratorError: LocalizedError, Sendable {
     case invalidFrameCount(Int)
     case invalidFPS(Int)
     case invalidStepCount(Int)
+    case distilledModeRequiresTextToImage(Cosmos3GenerationMode)
+    case distilledStepCount(expected: Int, received: Int)
+    case distilledGuidanceScale(Float)
     case conflictingConditioning
     case missingFile(URL)
     case emptyVideo(URL)
@@ -34,6 +37,12 @@ public enum Cosmos3EdgeGeneratorError: LocalizedError, Sendable {
             return "Cosmos3 frames per second must be positive; received \(fps)."
         case .invalidStepCount(let count):
             return "Cosmos3 denoising steps must be positive; received \(count)."
+        case .distilledModeRequiresTextToImage(let mode):
+            return "The distilled Cosmos3-Super checkpoint supports text-to-image only; received \(mode.rawValue)."
+        case .distilledStepCount(let expected, let received):
+            return "The distilled Cosmos3-Super checkpoint requires exactly \(expected) steps; received \(received)."
+        case .distilledGuidanceScale(let scale):
+            return "The distilled Cosmos3-Super checkpoint requires --guidance-scale 1; received \(scale)."
         case .conflictingConditioning:
             return "Cosmos3 accepts either image, video, or action conditioning in one request."
         case .missingFile(let url):
@@ -252,6 +261,21 @@ public final class Cosmos3EdgeGenerator: @unchecked Sendable {
         guard missing.isEmpty else {
             throw Cosmos3EdgeGeneratorError.missingModelFiles(missing)
         }
+        let distilled = try resources.loadDistilledConfiguration()
+        if let distilled {
+            guard options.mode == .textToImage else {
+                throw Cosmos3EdgeGeneratorError.distilledModeRequiresTextToImage(options.mode)
+            }
+            guard options.steps == distilled.sigmas.count else {
+                throw Cosmos3EdgeGeneratorError.distilledStepCount(
+                    expected: distilled.sigmas.count,
+                    received: options.steps
+                )
+            }
+            guard options.guidanceScale == 1 else {
+                throw Cosmos3EdgeGeneratorError.distilledGuidanceScale(options.guidanceScale)
+            }
+        }
         try await prepare(resources: resources)
         MLXRandom.seed(options.seed)
         let effectiveFrames = options.action.map { $0.chunkSize + 1 } ?? options.numFrames
@@ -276,7 +300,7 @@ public final class Cosmos3EdgeGenerator: @unchecked Sendable {
             width: conditioning.width,
             fps: Float(options.fps),
             action: options.action,
-            useSystemPrompt: options.useSystemPrompt
+            useSystemPrompt: options.useSystemPrompt || distilled != nil
         )
         let conditionalTokens = MLXArray(promptPair.conditionalTokenIDs.map(Int32.init))
         let unconditionalTokens = MLXArray(promptPair.unconditionalTokenIDs.map(Int32.init))
@@ -307,17 +331,21 @@ public final class Cosmos3EdgeGenerator: @unchecked Sendable {
         eval(visionLatents)
         if let actionLatents { eval(actionLatents) }
 
-        var visionScheduler = Cosmos3UniPCScheduler(
+        var visionScheduler = distilled == nil ? Cosmos3UniPCScheduler(
             steps: options.steps,
             shift: options.shift,
             schedule: options.schedule
-        )
+        ) : nil
+        var distilledScheduler = distilled.map {
+            Cosmos3DistilledEulerScheduler(sigmas: $0.sigmas)
+        }
         var actionScheduler = Cosmos3UniPCScheduler(
             steps: options.steps,
             shift: options.shift,
             schedule: options.schedule
         )
-        for (stepIndex, timestep) in visionScheduler.timesteps.enumerated() {
+        let timesteps = distilledScheduler?.timesteps ?? visionScheduler!.timesteps
+        for (stepIndex, timestep) in timesteps.enumerated() {
             try Task.checkCancellation()
             progressHandler?(GenerationProgress(
                 stage: .denoising,
@@ -361,10 +389,19 @@ public final class Cosmos3EdgeGenerator: @unchecked Sendable {
                         + options.guidanceScale * (conditionalAction - unconditionalAction)
                 }
             }
-            visionLatents = visionScheduler.step(
-                modelOutput: visionVelocity,
-                sample: visionLatents
-            )
+            if var scheduler = distilledScheduler {
+                visionLatents = scheduler.step(
+                    modelOutput: visionVelocity,
+                    sample: visionLatents,
+                    noise: MLXRandom.normal(visionLatents.shape)
+                )
+                distilledScheduler = scheduler
+            } else {
+                visionLatents = visionScheduler!.step(
+                    modelOutput: visionVelocity,
+                    sample: visionLatents
+                )
+            }
             visionLatents = visionConditionMask * conditioning.cleanVision
                 + (1 - visionConditionMask) * visionLatents
             if let velocity = actionVelocity,

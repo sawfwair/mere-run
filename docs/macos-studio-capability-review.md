@@ -8,6 +8,13 @@ Reviewed at commit `5525608` against `Sources/MereRunCLI`,
 `Sources/MereRunContract/CommandCapabilityContract.swift`, and
 `apps/macos/MereRunStudio`.
 
+> **Superseded reading (September 2026).** This review's "first-class workspace
+> per command" requirement was implemented as a dedicated sheet per command.
+> [macOS Studio v2](./macos-studio-v2.md) keeps the coverage goal and replaces
+> that reading: every capability is a peer task inside its domain, and what
+> varies is the surface archetype the task declares, not whether it has its own
+> sheet. The findings and counts below describe v1 as shipped.
+
 > **Reachability closed; workspaces outstanding.** The contract now describes
 > 127 of the CLI's 158 leaf commands, every one has a Studio surface, and the
 > remaining 31 are named exemptions in `contractExemptCommandIDs` rather than

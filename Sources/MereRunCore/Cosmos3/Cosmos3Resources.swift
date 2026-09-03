@@ -6,15 +6,33 @@ public enum Cosmos3ResourcesError: LocalizedError, Sendable {
     public var errorDescription: String? {
         switch self {
         case .invalidConfiguration(let url, let reason):
-            return "Invalid Cosmos3-Edge configuration at \(url.path): \(reason)"
+            return "Invalid Cosmos3 configuration at \(url.path): \(reason)"
         }
     }
 }
 
-public struct Cosmos3TransformerConfiguration: Codable, Hashable, Sendable {
+public enum Cosmos3FeedForwardActivation: String, Codable, Hashable, Sendable {
+    case reluSquared = "relu2"
+    case siluGated = "silu"
+}
+
+public struct Cosmos3QuantizationConfiguration: Codable, Hashable, Sendable {
+    public let bits: Int
+    public let groupSize: Int
+    public let mode: String
+
+    enum CodingKeys: String, CodingKey {
+        case bits
+        case groupSize = "group_size"
+        case mode
+    }
+}
+
+public struct Cosmos3TransformerConfiguration: Decodable, Hashable, Sendable {
     public let actionDimension: Int?
     public let generatesActions: Bool
     public let attentionBias: Bool
+    public let feedForwardActivation: Cosmos3FeedForwardActivation
     public let baseFPS: Int
     public let enablesFPSModulation: Bool
     public let headDimension: Int
@@ -36,6 +54,8 @@ public struct Cosmos3TransformerConfiguration: Codable, Hashable, Sendable {
     public let temporalCompressionFactor: Int
     public let timestepScale: Float
     public let normalizesUnderstandingKeysForGeneration: Bool
+    public let quantization: Cosmos3QuantizationConfiguration?
+    public let includesLanguageModelHead: Bool
     public let resetsSpatialPositionIDs: Bool
     public let temporalModalityMargin: Int
     public let vocabularySize: Int
@@ -44,6 +64,7 @@ public struct Cosmos3TransformerConfiguration: Codable, Hashable, Sendable {
         case actionDimension = "action_dim"
         case generatesActions = "action_gen"
         case attentionBias = "attention_bias"
+        case feedForwardActivation = "hidden_act"
         case baseFPS = "base_fps"
         case enablesFPSModulation = "enable_fps_modulation"
         case headDimension = "head_dim"
@@ -65,6 +86,9 @@ public struct Cosmos3TransformerConfiguration: Codable, Hashable, Sendable {
         case temporalCompressionFactor = "temporal_compression_factor"
         case timestepScale = "timestep_scale"
         case normalizesUnderstandingKeysForGeneration = "use_und_k_norm_for_gen"
+        case quantization
+        case quantizationConfig = "quantization_config"
+        case textToImageOnly = "mererun_text_to_image_only"
         case resetsSpatialPositionIDs = "unified_3d_mrope_reset_spatial_ids"
         case temporalModalityMargin = "unified_3d_mrope_temporal_modality_margin"
         case vocabularySize = "vocab_size"
@@ -74,6 +98,7 @@ public struct Cosmos3TransformerConfiguration: Codable, Hashable, Sendable {
         actionDimension: Int? = 64,
         generatesActions: Bool = true,
         attentionBias: Bool = false,
+        feedForwardActivation: Cosmos3FeedForwardActivation = .reluSquared,
         baseFPS: Int = 24,
         enablesFPSModulation: Bool = true,
         headDimension: Int = 128,
@@ -95,6 +120,8 @@ public struct Cosmos3TransformerConfiguration: Codable, Hashable, Sendable {
         temporalCompressionFactor: Int = 4,
         timestepScale: Float = 0.001,
         normalizesUnderstandingKeysForGeneration: Bool = true,
+        quantization: Cosmos3QuantizationConfiguration? = nil,
+        includesLanguageModelHead: Bool = true,
         resetsSpatialPositionIDs: Bool = true,
         temporalModalityMargin: Int = 15_000,
         vocabularySize: Int = 131_072
@@ -102,6 +129,7 @@ public struct Cosmos3TransformerConfiguration: Codable, Hashable, Sendable {
         self.actionDimension = actionDimension
         self.generatesActions = generatesActions
         self.attentionBias = attentionBias
+        self.feedForwardActivation = feedForwardActivation
         self.baseFPS = baseFPS
         self.enablesFPSModulation = enablesFPSModulation
         self.headDimension = headDimension
@@ -123,16 +151,73 @@ public struct Cosmos3TransformerConfiguration: Codable, Hashable, Sendable {
         self.temporalCompressionFactor = temporalCompressionFactor
         self.timestepScale = timestepScale
         self.normalizesUnderstandingKeysForGeneration = normalizesUnderstandingKeysForGeneration
+        self.quantization = quantization
+        self.includesLanguageModelHead = includesLanguageModelHead
         self.resetsSpatialPositionIDs = resetsSpatialPositionIDs
         self.temporalModalityMargin = temporalModalityMargin
         self.vocabularySize = vocabularySize
     }
 
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        self.actionDimension = try container.decodeIfPresent(Int.self, forKey: .actionDimension)
+        self.generatesActions = try container.decodeIfPresent(Bool.self, forKey: .generatesActions) ?? false
+        self.attentionBias = try container.decodeIfPresent(Bool.self, forKey: .attentionBias) ?? false
+        self.baseFPS = try container.decodeIfPresent(Int.self, forKey: .baseFPS) ?? 24
+        self.enablesFPSModulation = try container.decodeIfPresent(Bool.self, forKey: .enablesFPSModulation) ?? true
+        self.headDimension = try container.decode(Int.self, forKey: .headDimension)
+        self.hiddenSize = try container.decode(Int.self, forKey: .hiddenSize)
+        self.intermediateSize = try container.decode(Int.self, forKey: .intermediateSize)
+        self.latentChannels = try container.decode(Int.self, forKey: .latentChannels)
+        self.latentPatchSize = try container.decode(Int.self, forKey: .latentPatchSize)
+        self.attentionHeadCount = try container.decode(Int.self, forKey: .attentionHeadCount)
+        self.embodimentDomainCount = try container.decodeIfPresent(Int.self, forKey: .embodimentDomainCount) ?? 32
+        self.layerCount = try container.decode(Int.self, forKey: .layerCount)
+        self.keyValueHeadCount = try container.decode(Int.self, forKey: .keyValueHeadCount)
+        self.patchLatentDimension = try container.decode(Int.self, forKey: .patchLatentDimension)
+        self.normalizesUnderstandingQueriesAndKeys = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .normalizesUnderstandingQueriesAndKeys
+        ) ?? true
+        self.feedForwardActivation = try container.decodeIfPresent(
+            Cosmos3FeedForwardActivation.self,
+            forKey: .feedForwardActivation
+        ) ?? (normalizesUnderstandingQueriesAndKeys ? .siluGated : .reluSquared)
+        self.rmsNormEpsilon = try container.decode(Float.self, forKey: .rmsNormEpsilon)
+        self.ropeAxesDimensions = try container.decode([Int].self, forKey: .ropeAxesDimensions)
+        self.ropeTheta = try container.decode(Float.self, forKey: .ropeTheta)
+        self.soundDimension = try container.decodeIfPresent(Int.self, forKey: .soundDimension)
+        self.generatesSound = try container.decodeIfPresent(Bool.self, forKey: .generatesSound) ?? false
+        self.temporalCompressionFactor = try container.decodeIfPresent(
+            Int.self,
+            forKey: .temporalCompressionFactor
+        ) ?? 4
+        self.timestepScale = try container.decodeIfPresent(Float.self, forKey: .timestepScale) ?? 0.001
+        self.normalizesUnderstandingKeysForGeneration = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .normalizesUnderstandingKeysForGeneration
+        ) ?? false
+        self.quantization = try container.decodeIfPresent(
+            Cosmos3QuantizationConfiguration.self,
+            forKey: .quantizationConfig
+        ) ?? container.decodeIfPresent(Cosmos3QuantizationConfiguration.self, forKey: .quantization)
+        self.includesLanguageModelHead = !(try container.decodeIfPresent(
+            Bool.self,
+            forKey: .textToImageOnly
+        ) ?? false)
+        self.resetsSpatialPositionIDs = try container.decodeIfPresent(
+            Bool.self,
+            forKey: .resetsSpatialPositionIDs
+        ) ?? true
+        self.temporalModalityMargin = try container.decodeIfPresent(
+            Int.self,
+            forKey: .temporalModalityMargin
+        ) ?? 15_000
+        self.vocabularySize = try container.decode(Int.self, forKey: .vocabularySize)
+    }
+
     public func validationIssues() -> [String] {
         var issues: [String] = []
-        if hiddenSize != attentionHeadCount * headDimension {
-            issues.append("hidden_size must equal num_attention_heads * head_dim")
-        }
         if attentionHeadCount % keyValueHeadCount != 0 {
             issues.append("num_attention_heads must be divisible by num_key_value_heads")
         }
@@ -148,15 +233,54 @@ public struct Cosmos3TransformerConfiguration: Codable, Hashable, Sendable {
         if generatesSound && soundDimension == nil {
             issues.append("sound_dim is required when sound_gen is true")
         }
-        if normalizesUnderstandingQueriesAndKeys {
-            issues.append("Cosmos3-Edge requires qk_norm_for_text=false")
+        if normalizesUnderstandingQueriesAndKeys == normalizesUnderstandingKeysForGeneration {
+            issues.append(
+                "exactly one understanding key-normalization path must be enabled"
+            )
         }
-        if !normalizesUnderstandingKeysForGeneration {
-            issues.append("Cosmos3-Edge requires use_und_k_norm_for_gen=true")
+        if feedForwardActivation == .reluSquared && normalizesUnderstandingQueriesAndKeys {
+            issues.append("relu2 checkpoints require qk_norm_for_text=false")
+        }
+        if feedForwardActivation == .siluGated && !normalizesUnderstandingQueriesAndKeys {
+            issues.append("silu checkpoints require qk_norm_for_text=true")
+        }
+        if let quantization {
+            if !(2...8).contains(quantization.bits) {
+                issues.append("quantization bits must be between 2 and 8")
+            }
+            if quantization.groupSize < 1 {
+                issues.append("quantization group_size must be positive")
+            }
+            if quantization.mode != "affine" {
+                issues.append("Cosmos3 MLX checkpoints require affine quantization")
+            }
         }
         if layerCount < 1 { issues.append("num_hidden_layers must be positive") }
         if embodimentDomainCount < 1 { issues.append("num_embodiment_domains must be positive") }
         if temporalCompressionFactor < 1 { issues.append("temporal_compression_factor must be positive") }
+        return issues
+    }
+}
+
+public struct Cosmos3DistilledConfiguration: Decodable, Hashable, Sendable {
+    public let isDistilled: Bool
+    public let sigmas: [Float]
+
+    enum CodingKeys: String, CodingKey {
+        case isDistilled = "is_distilled"
+        case sigmas = "distilled_sigmas"
+    }
+
+    public func validationIssues() -> [String] {
+        var issues: [String] = []
+        if !isDistilled { issues.append("is_distilled must be true") }
+        if sigmas.isEmpty { issues.append("distilled_sigmas must not be empty") }
+        if sigmas.contains(where: { !$0.isFinite || $0 <= 0 || $0 > 1 }) {
+            issues.append("distilled_sigmas must contain values in (0, 1]")
+        }
+        if zip(sigmas, sigmas.dropFirst()).contains(where: { pair in pair.0 <= pair.1 }) {
+            issues.append("distilled_sigmas must be strictly descending")
+        }
         return issues
     }
 }
@@ -296,6 +420,8 @@ public struct Cosmos3Resources: Hashable, Sendable {
     public static let modelID = "video-cosmos3-edge-mlx"
     public static let officialRepoID = "nvidia/Cosmos3-Edge"
     public static let officialRevision = "6f58f6b4c91288838e60b6bcb2cc45d997e961de"
+    public static let superTextToImageRepository = "nvidia/Cosmos3-Super-Text2Image-4Step"
+    public static let superTextToImageRevision = "aa0d5a57b7b045d68daa60fbacd84ec723c7cb7b"
     public static let snapshotPatterns = [
         "LICENSE*",
         "README.md",
@@ -371,6 +497,9 @@ public struct Cosmos3Resources: Hashable, Sendable {
     public var schedulerConfigURL: URL {
         rootURL.appendingPathComponent("scheduler").appendingPathComponent("scheduler_config.json")
     }
+    public var modularModelIndexURL: URL {
+        rootURL.appendingPathComponent("modular_model_index.json")
+    }
     public var tokenizerConfigURL: URL {
         tokenizerRootURL.appendingPathComponent("tokenizer_config.json")
     }
@@ -428,6 +557,17 @@ public struct Cosmos3Resources: Hashable, Sendable {
         try Self.loadConfiguration(
             Cosmos3VAEConfiguration.self,
             from: vaeConfigURL,
+            validate: { $0.validationIssues() }
+        )
+    }
+
+    public func loadDistilledConfiguration() throws -> Cosmos3DistilledConfiguration? {
+        guard FileManager.default.fileExists(atPath: modularModelIndexURL.path) else {
+            return nil
+        }
+        return try Self.loadConfiguration(
+            Cosmos3DistilledConfiguration.self,
+            from: modularModelIndexURL,
             validate: { $0.validationIssues() }
         )
     }
