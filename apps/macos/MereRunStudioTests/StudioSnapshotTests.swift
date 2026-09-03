@@ -24,6 +24,8 @@ final class StudioSnapshotTests: XCTestCase {
         width: StudioLayoutPolicy.defaultWindowWidth,
         height: StudioLayoutPolicy.defaultWindowHeight
     )
+    /// The size the v2 mockups are drawn at.
+    static let fidelitySize = CGSize(width: 1_440, height: 900)
     static let consoleSize = CGSize(width: 1_260, height: 780)
     static let settingsSize = CGSize(width: 560, height: 640)
 
@@ -67,6 +69,42 @@ final class StudioSnapshotTests: XCTestCase {
                 )
             }
         }
+    }
+
+    /// Video ▸ Subjects in the Track stage: a three-subject plan whose masks were tracked (the
+    /// manifest, tracking, and quality reports the CLI would have written, with a synthesized
+    /// overlay frame), while a re-track job is held open by the process seam so the job bar
+    /// shows it running. No CLI starts. Rendered at the mockup size, light and dark, plus the
+    /// default window size.
+    func testVideoSubjectsProjectSnapshots() throws {
+        var seed = try fixture.seedTrackedSubjectsProject()
+        let renders: [(name: String, size: CGSize, appearance: StudioSnapshotAppearance, stage: StudioSubjectsStage)] = [
+            ("f8-subjects-light", Self.fidelitySize, .light, .track),
+            ("f8-subjects-dark", Self.fidelitySize, .dark, .track),
+            ("f8-subjects-compact-light", Self.shellSize, .light, .track),
+            ("f8-subjects-plan-light", Self.fidelitySize, .light, .plan),
+            ("f8-subjects-animate-light", Self.fidelitySize, .light, .animate)
+        ]
+        for render in renders {
+            seed.stage = render.stage
+            let navigation = NavigationModel()
+            let view = StudioRootView()
+                .environmentObject(fixture.controller)
+                .environmentObject(fixture.library)
+                .environmentObject(navigation)
+                .environment(\.studioSubjectsProjectSeed, seed)
+                .frame(width: render.size.width, height: render.size.height)
+            try fixture.write(
+                view,
+                size: render.size,
+                appearance: render.appearance,
+                name: render.name,
+                settle: 2.5,
+                afterAppear: { navigation.open(task: .videoSubjects) }
+            )
+        }
+        let maskRow = fixture.library.items.first { $0.id == seed.maskRequestID }
+        XCTAssertEqual(maskRow?.status, .running)
     }
 
     /// The Settings scene content at the width the app gives it.
@@ -306,6 +344,215 @@ private final class SnapshotFixture {
         }
     }
 
+    // MARK: Tracked subjects project
+
+    /// A `skate-clip-01` project with three subjects whose masks were tracked through 240 frames,
+    /// laid out the way `video prepare-masks` leaves an output directory: `manifest.json`,
+    /// `tracking.json`, `quality.json`, prepared reference images, and an overlay frame. The
+    /// re-track job is started through the real controller and Library paths and held open by
+    /// the process seam so the job bar shows it running.
+    func seedTrackedSubjectsProject() throws -> StudioSubjectsProjectSeed {
+        let project = root.appendingPathComponent("skate-clip-01", isDirectory: true)
+        let prepared = project.appendingPathComponent("tracked", isDirectory: true)
+        try FileManager.default.createDirectory(at: prepared, withIntermediateDirectories: true)
+        let drivingVideo = project.appendingPathComponent("skate-clip-01.mp4", isDirectory: false)
+        try Data().write(to: drivingVideo)
+
+        let frameCount = 240
+        let subjects = [
+            StudioSCAILSubject(
+                name: "Skater", color: "blue",
+                referenceImage: project.appendingPathComponent("skater-front.png").path,
+                referencePrompt: "skater", drivingPrompt: "skater"
+            ),
+            StudioSCAILSubject(
+                name: "Board", color: "red",
+                referenceImage: project.appendingPathComponent("board.png").path,
+                referencePrompt: "skateboard", drivingPositivePoints: "612,480"
+            ),
+            StudioSCAILSubject(
+                name: "Backpack", color: "green",
+                referenceImage: project.appendingPathComponent("backpack.png").path,
+                referencePrompt: "backpack", drivingBox: "500,200,600,330"
+            ),
+        ]
+        let corrections = [
+            StudioSCAILCorrection(subjectID: "Backpack", frameIndex: 88, positivePoints: "540,250"),
+            StudioSCAILCorrection(subjectID: "Backpack", frameIndex: 142, box: "505,205,605,335"),
+        ]
+        let swatches: [(name: String, color: NSColor)] = [
+            ("Skater", NSColor(calibratedRed: 0.61, green: 0.48, blue: 0.18, alpha: 1)),
+            ("Board", NSColor(calibratedRed: 0.37, green: 0.48, blue: 0.27, alpha: 1)),
+            ("Backpack", NSColor(calibratedRed: 0.61, green: 0.46, blue: 0.13, alpha: 1)),
+        ]
+        for (subject, swatch) in zip(subjects, swatches) {
+            try Self.writeSwatchPNG(to: URL(fileURLWithPath: subject.referenceImage), color: swatch.color)
+            try Self.writeSwatchPNG(
+                to: prepared.appendingPathComponent("reference-\(subject.name)-prepared.png"),
+                color: swatch.color
+            )
+        }
+        try Self.writeOverlayFramePNG(
+            to: prepared.appendingPathComponent("overlay-frame-88.png"),
+            size: CGSize(width: 832, height: 468)
+        )
+
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let manifest = StudioSCAILManifest(
+            status: "ready",
+            previewFrame: 88,
+            drivingSourcePath: drivingVideo.path,
+            drivingProxyPath: "driving-proxy.mp4",
+            drivingMaskPath: "driving-mask.mov",
+            overlayPreviewPath: "overlay-frame-88.png",
+            contactSheetPath: "contact-sheet.png",
+            trackingPath: "tracking.json",
+            qualityPath: "quality.json",
+            frameCount: frameCount,
+            fps: 24,
+            subjects: subjects.map {
+                StudioSCAILManifest.Subject(
+                    id: $0.name,
+                    color: $0.color,
+                    preparedReferenceImagePath: "reference-\($0.name)-prepared.png",
+                    referenceMaskPath: "reference-\($0.name)-mask.png"
+                )
+            },
+            corrections: corrections.map {
+                StudioSCAILManifest.Correction(subjectID: $0.subjectID, frameIndex: $0.frameIndex)
+            }
+        )
+        try encoder.encode(manifest).write(to: prepared.appendingPathComponent("manifest.json"))
+        let tracking = StudioSCAILTrackingReport(
+            frameCount: frameCount,
+            fps: 24,
+            subjects: zip(subjects, [240, 231, 240]).map { subject, visible in
+                StudioSCAILTrackingReport.Subject(
+                    id: subject.name,
+                    frames: (0..<frameCount).map { index in
+                        StudioSCAILTrackingReport.Frame(
+                            frameIndex: index,
+                            detections: [
+                                StudioSCAILTrackingReport.Detection(visible: index < visible, score: 0.92)
+                            ]
+                        )
+                    }
+                )
+            }
+        )
+        try encoder.encode(tracking).write(to: prepared.appendingPathComponent("tracking.json"))
+        let quality = StudioSCAILQualityReport(
+            blockingErrors: [],
+            warnings: [
+                StudioSCAILQualityReport.Warning(
+                    code: "weak_score", subjectID: "Board", frameIndex: 233,
+                    message: "Subject Board has weak mask confidence at frame 233."
+                ),
+            ]
+        )
+        try encoder.encode(quality).write(to: prepared.appendingPathComponent("quality.json"))
+
+        // The re-track the user just asked for: a real Library row and controller session.
+        guard let template = CommandCatalog.template(id: .videoPrepareMasks) else {
+            throw StudioSnapshotError.noContentView
+        }
+        var draft = template.defaultDraft()
+        draft.inputPath = project.appendingPathComponent("plan.json").path
+        draft.outputPath = prepared.path
+        draft.model = "vision-segment-sam31"
+        let request = StudioRunRequest(
+            mode: .video,
+            templateID: .videoPrepareMasks,
+            template: template,
+            draft: draft,
+            createdAt: Date().addingTimeInterval(-95)
+        )
+        let preview = controller.commandPreview(template: template, draft: draft, masksSecrets: true)
+        library.start(request: request, commandPreview: preview, status: .running)
+        processRunner.liveSessionMarker = "prepare-masks"
+        guard controller.run(studio: request), let live = processRunner.liveStarts.last else {
+            throw StudioSnapshotError.noContentView
+        }
+        live.stderr("Preparing SCAIL-2 masks from \(draft.inputPath)\n")
+        live.stderr("Segmenting 3 reference images with vision-segment-sam31\n")
+
+        var components = Calendar.current.dateComponents([.year, .month, .day], from: Date())
+        components.hour = 13
+        components.minute = 26
+        return StudioSubjectsProjectSeed(
+            drivingVideo: drivingVideo.path,
+            fps: 24,
+            subjects: subjects,
+            corrections: corrections,
+            preparedDirectory: prepared,
+            planSavedAt: Calendar.current.date(from: components),
+            stage: .track,
+            maskRequestID: request.id
+        )
+    }
+
+    /// A flat tinted tile standing in for a subject's reference image.
+    private static func writeSwatchPNG(to url: URL, color: NSColor) throws {
+        try writePNG(to: url, size: CGSize(width: 96, height: 96)) { bounds in
+            color.setFill()
+            bounds.fill()
+        }
+    }
+
+    /// A driving frame with each subject's mask tinted over it, as the CLI's overlay preview
+    /// shows: a dark studio gradient, the skater as a tall rounded shape, the board under the
+    /// feet, the backpack at the shoulder.
+    private static func writeOverlayFramePNG(to url: URL, size: CGSize) throws {
+        try writePNG(to: url, size: size) { bounds in
+            let ground = NSGradient(colors: [
+                NSColor(calibratedRed: 0.34, green: 0.34, blue: 0.36, alpha: 1),
+                NSColor(calibratedRed: 0.23, green: 0.23, blue: 0.25, alpha: 1),
+                NSColor(calibratedRed: 0.16, green: 0.16, blue: 0.18, alpha: 1),
+            ])
+            ground?.draw(in: bounds, angle: 90)
+            let width = bounds.width
+            let height = bounds.height
+            func rect(_ x: CGFloat, _ y: CGFloat, _ w: CGFloat, _ h: CGFloat) -> CGRect {
+                // Fractions of the frame, y from the top as the mockup lays them out.
+                CGRect(x: width * x, y: height * (1 - y - h), width: width * w, height: height * h)
+            }
+            NSColor(calibratedRed: 0.61, green: 0.48, blue: 0.18, alpha: 0.45).setFill()
+            NSBezierPath(roundedRect: rect(0.38, 0.22, 0.22, 0.60), xRadius: width * 0.09, yRadius: height * 0.18).fill()
+            NSColor(calibratedRed: 0.37, green: 0.48, blue: 0.27, alpha: 0.5).setFill()
+            NSBezierPath(roundedRect: rect(0.34, 0.78, 0.32, 0.08), xRadius: 6, yRadius: 6).fill()
+            NSColor(calibratedRed: 0.61, green: 0.46, blue: 0.13, alpha: 0.5).setFill()
+            NSBezierPath(roundedRect: rect(0.52, 0.32, 0.09, 0.18), xRadius: 6, yRadius: 6).fill()
+        }
+    }
+
+    private static func writePNG(to url: URL, size: CGSize, draw: (CGRect) -> Void) throws {
+        let width = Int(size.width)
+        let height = Int(size.height)
+        guard let rep = NSBitmapImageRep(
+            bitmapDataPlanes: nil,
+            pixelsWide: width,
+            pixelsHigh: height,
+            bitsPerSample: 8,
+            samplesPerPixel: 4,
+            hasAlpha: true,
+            isPlanar: false,
+            colorSpaceName: .deviceRGB,
+            bytesPerRow: 0,
+            bitsPerPixel: 0
+        ), let context = NSGraphicsContext(bitmapImageRep: rep) else {
+            throw StudioSnapshotError.noBitmap
+        }
+        NSGraphicsContext.saveGraphicsState()
+        NSGraphicsContext.current = context
+        draw(CGRect(x: 0, y: 0, width: width, height: height))
+        NSGraphicsContext.restoreGraphicsState()
+        guard let data = rep.representation(using: .png, properties: [:]) else {
+            throw StudioSnapshotError.pngEncodingFailed
+        }
+        try data.write(to: url, options: .atomic)
+    }
+
     /// A soft two-tone gradient with a horizon line, so the canvas visibly shows an image.
     private static func writeFixturePNG(to url: URL, size: CGSize) throws {
         let width = Int(size.width)
@@ -381,14 +628,46 @@ private final class SnapshotFixture {
 
 /// Refuses every launch: reports one stderr line and a non-zero exit asynchronously so readiness
 /// and status probes settle to their "could not check" states without a CLI ever running.
+///
+/// The one exception is a launch whose arguments contain `liveSessionMarker`: that is held open
+/// as a live session (never terminated, stdin recorded) so Session-archetype views can be
+/// rendered mid-run. The test feeds it the lines the CLI would have written.
 private final class SnapshotProcessRunner: MereRunProcessRunning, @unchecked Sendable {
+    struct LiveStart {
+        let configuration: MereRunProcessConfiguration
+        let stdout: @Sendable (String) -> Void
+        let stderr: @Sendable (String) -> Void
+        let process: SnapshotLiveProcess
+    }
+
     private let lock = NSLock()
     private var refusedLaunches = 0
+    private var _liveStarts: [LiveStart] = []
+    private var _liveSessionMarker: String?
 
     var refusedLaunchCount: Int {
         lock.lock()
         defer { lock.unlock() }
         return refusedLaunches
+    }
+
+    var liveSessionMarker: String? {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return _liveSessionMarker
+        }
+        set {
+            lock.lock()
+            _liveSessionMarker = newValue
+            lock.unlock()
+        }
+    }
+
+    var liveStarts: [LiveStart] {
+        lock.lock()
+        defer { lock.unlock() }
+        return _liveStarts
     }
 
     func start(
@@ -398,6 +677,12 @@ private final class SnapshotProcessRunner: MereRunProcessRunning, @unchecked Sen
         termination: @escaping @Sendable (Int32) -> Void
     ) throws -> MereRunRunningProcess {
         lock.lock()
+        if let marker = _liveSessionMarker, configuration.arguments.contains(marker) {
+            let process = SnapshotLiveProcess()
+            _liveStarts.append(LiveStart(configuration: configuration, stdout: stdout, stderr: stderr, process: process))
+            lock.unlock()
+            return process
+        }
         refusedLaunches += 1
         lock.unlock()
         DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(30)) {
@@ -410,4 +695,24 @@ private final class SnapshotProcessRunner: MereRunProcessRunning, @unchecked Sen
 
 private final class SnapshotRefusedProcess: MereRunRunningProcess {
     func terminate() {}
+}
+
+/// A session the harness holds open: nothing to terminate, stdin lines kept for assertions.
+private final class SnapshotLiveProcess: MereRunRunningProcess, @unchecked Sendable {
+    private let lock = NSLock()
+    private var _standardInputs: [String] = []
+
+    var standardInputs: [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return _standardInputs
+    }
+
+    func terminate() {}
+
+    func sendStandardInput(_ text: String) throws {
+        lock.lock()
+        _standardInputs.append(text)
+        lock.unlock()
+    }
 }
