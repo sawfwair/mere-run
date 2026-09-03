@@ -865,6 +865,95 @@ final class MereRunControllerTests: XCTestCase {
         XCTAssertEqual(streamed, [#"{"protocol":1,"type":"ready"}"# + "\n"])
     }
 
+    func testStudioRunIsObservableAsAJobWhileTheFacadeMirrorsIt() async throws {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        let template = try XCTUnwrap(CommandCatalog.template(id: .custom))
+        var draft = template.defaultDraft()
+        draft.extraArguments = "observe"
+        let request = StudioRunRequest(mode: .chat, templateID: .custom, template: template, draft: draft)
+
+        XCTAssertTrue(controller.run(studio: request))
+        let job = try XCTUnwrap(controller.jobs.job(requestID: request.id))
+        XCTAssertEqual(job.lane, .inference)
+        XCTAssertTrue(job.state.isRunning)
+        // The job carries the launch snapshot the controller built from Settings.
+        XCTAssertEqual(job.request.configuration.executableURL.path, "/usr/bin/true")
+        XCTAssertEqual(job.request.configuration.arguments, ["observe"])
+        XCTAssertTrue(job.request.configuration.environment["PATH"]?.hasPrefix("/opt/homebrew/bin:") == true)
+        XCTAssertEqual(job.displayCommand, "/usr/bin/true observe")
+        XCTAssertEqual(controller.logs.map(\.text), job.log.lines.map(\.text))
+
+        runner.starts[0].stdout("hello\n")
+        await Task.yield()
+        XCTAssertEqual(job.liveText, "hello\n")
+        XCTAssertEqual(controller.liveOutputText, job.liveText)
+        XCTAssertEqual(controller.status, job.status)
+
+        runner.starts[0].termination(0)
+        await Task.yield()
+        await Task.yield()
+        XCTAssertEqual(job.state.exitCode, 0)
+        XCTAssertEqual(controller.lastExitCode, 0)
+        XCTAssertFalse(controller.isRunning)
+        XCTAssertEqual(controller.lastRunResult, job.result)
+        // Finished jobs stay observable, so their logs are still readable by request id.
+        XCTAssertTrue(controller.logs(for: request.id).contains { $0.text == "Completed with exit code 0." })
+    }
+
+    func testQueuedRunKeepsPreviousForegroundUntilItStarts() async throws {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        let template = try XCTUnwrap(CommandCatalog.template(id: .custom))
+        func request(_ arg: String) -> StudioRunRequest {
+            var draft = template.defaultDraft()
+            draft.extraArguments = arg
+            return StudioRunRequest(mode: .createImage, templateID: .custom, template: template, draft: draft)
+        }
+        let first = request("first")
+        let second = request("second")
+        let queued = request("queued")
+
+        XCTAssertTrue(controller.run(studio: first))
+        XCTAssertTrue(controller.run(studio: second))
+        XCTAssertTrue(controller.run(studio: queued))
+        XCTAssertEqual(controller.activeRunRequestID, second.id)
+        XCTAssertEqual(controller.queuedRunCount, 1)
+        XCTAssertTrue(controller.logs.contains { $0.text == "Queued create image job." })
+        XCTAssertEqual(controller.jobs.job(requestID: queued.id)?.state, .queued)
+        // A queued run is not "running" for the row-level cancel, exactly as before.
+        XCTAssertFalse(controller.isRequestRunning(queued.id))
+        XCTAssertFalse(controller.cancel(requestID: queued.id))
+
+        runner.starts[1].termination(0)
+        await Task.yield()
+        await Task.yield()
+        // The dequeued run becomes the foreground the moment it starts.
+        XCTAssertEqual(controller.activeRunRequestID, queued.id)
+        XCTAssertTrue(controller.isRunning)
+        XCTAssertEqual(controller.queuedRunCount, 0)
+        XCTAssertEqual(controller.status, "Running")
+    }
+
+    func testAdvancedRunRefusesWhenTheInferenceLaneIsFull() throws {
+        let runner = RecordingProcessRunner()
+        let controller = MereRunController(processRunner: runner, resolvesCLIOnInit: false)
+        controller.cliPath = "/usr/bin/true"
+        let template = try XCTUnwrap(CommandCatalog.template(id: .custom))
+        controller.select(template)
+        controller.draft.extraArguments = "advanced"
+
+        XCTAssertTrue(controller.run())
+        XCTAssertTrue(controller.run())
+        // Studio runs queue beyond the cap; the Advanced console declines instead.
+        XCTAssertFalse(controller.run())
+        XCTAssertEqual(runner.starts.count, 2)
+        XCTAssertEqual(controller.queuedRunCount, 0)
+        XCTAssertTrue(controller.jobs.queued(in: .inference).isEmpty)
+    }
+
     func testDiagnosticsOmitConsoleTextAndCommandArguments() {
         let controller = MereRunController(processRunner: RecordingProcessRunner(), resolvesCLIOnInit: false)
         controller.logs = [
@@ -953,53 +1042,4 @@ private func unsupportedCapabilitiesOutput(for modelID: String, minimum: Int, de
       download: Hugging Face snapshot
       reason: Requires at least \(minimum) GB unified memory; detected \(detected) GB.
     """
-}
-
-private struct RecordingStart {
-    let configuration: MereRunProcessConfiguration
-    let stdout: @Sendable (String) -> Void
-    let stderr: @Sendable (String) -> Void
-    let termination: @Sendable (Int32) -> Void
-}
-
-private final class RecordingProcessRunner: MereRunProcessRunning {
-    private(set) var starts: [RecordingStart] = []
-    private(set) var processes: [RecordingProcess] = []
-
-    func start(
-        configuration: MereRunProcessConfiguration,
-        stdout: @escaping @Sendable (String) -> Void,
-        stderr: @escaping @Sendable (String) -> Void,
-        termination: @escaping @Sendable (Int32) -> Void
-    ) throws -> MereRunRunningProcess {
-        let process = RecordingProcess()
-        starts.append(
-            RecordingStart(
-                configuration: configuration,
-                stdout: stdout,
-                stderr: stderr,
-                termination: termination
-            )
-        )
-        processes.append(process)
-        return process
-    }
-}
-
-private final class RecordingProcess: MereRunRunningProcess {
-    private(set) var terminateCallCount = 0
-    private(set) var standardInputs: [String] = []
-
-    func terminate() {
-        terminateCallCount += 1
-    }
-
-    func sendStandardInput(_ text: String) throws {
-        standardInputs.append(text)
-    }
-}
-
-private final class StubFileProbe: MereRunFileProbing {
-    var existingPaths: Set<String> = []
-    func fileExists(atPath path: String) -> Bool { existingPaths.contains(path) }
 }
