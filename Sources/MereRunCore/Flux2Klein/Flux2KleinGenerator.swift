@@ -19,7 +19,7 @@ public actor Flux2KleinGenerator: ImageGenerator {
     var loadedModelPath: String?
     var loadedManifest: MereRunModelManifest?
     var loadedQuantization: ModelWeightsLoader.QuantizationParams?
-    var currentLoRA: LoRA?
+    var currentLoRAs: [LoRA] = []
     var currentTextLoRA: LoRA?
     var transformerLoRALayers: [String: TrainableLoRALayer]?
     var transformerLoRARankSignature: String?
@@ -27,6 +27,12 @@ public actor Flux2KleinGenerator: ImageGenerator {
     var compiledTransformerNeedsWarmup: Bool = true
 
     public init() {}
+
+    /// Preserve the checkpoint filename when its payload is a content-addressed symlink.
+    /// MLX selects the loader from the visible `.safetensors` extension.
+    static func checkpointFileURL(in directoryURL: URL, filename: String) -> URL {
+        directoryURL.appendingPathComponent(filename)
+    }
 
     // MARK: - Memory Management
 
@@ -41,7 +47,7 @@ public actor Flux2KleinGenerator: ImageGenerator {
         loadedModelPath = nil
         loadedManifest = nil
         loadedQuantization = nil
-        currentLoRA = nil
+        currentLoRAs = []
         transformerLoRALayers = nil
         transformerLoRARankSignature = nil
         currentTextLoRA = nil
@@ -95,6 +101,7 @@ public enum Flux2Error: LocalizedError {
     case referenceImageNotFound(URL)
     case referenceImageDecodeFailed(URL)
     case invalidManifest(String)
+    case invalidSigmaSchedule(String)
 
     public var errorDescription: String? {
         switch self {
@@ -118,6 +125,8 @@ public enum Flux2Error: LocalizedError {
             return "Failed to decode reference image: \(url.path)"
         case .invalidManifest(let message):
             return "Invalid model manifest: \(message)"
+        case .invalidSigmaSchedule(let message):
+            return "Invalid FLUX.2 sigma schedule: \(message)"
         }
     }
 }

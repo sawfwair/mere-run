@@ -17,7 +17,7 @@ public struct Flux2TransformerConfiguration: Sendable {
     public let eps: Float                // 1e-6
     public let ropeTheta: Float          // 2000
     public let axesDimsRope: [Int]       // [32, 32, 32, 32]
-    public let guidanceEmbeds: Bool      // false for base models
+    public let guidanceEmbeds: Bool      // true for FLUX.2-dev, false for Klein
     public let quantized: Bool           // true to use QuantizedLinear layers
 
     public init(
@@ -107,9 +107,13 @@ final class Flux2TimestepEmbedder: Module {
 
 final class Flux2TimeGuidanceEmbed: Module {
     @ModuleInfo(key: "timestep_embedder") var timestepEmbedder: Flux2TimestepEmbedder
+    @ModuleInfo(key: "guidance_embedder") var guidanceEmbedder: Flux2TimestepEmbedder?
 
-    init(hiddenSize: Int = 3072) {
+    init(hiddenSize: Int = 3072, guidanceEmbeds: Bool = false) {
         self._timestepEmbedder.wrappedValue = Flux2TimestepEmbedder(inDim: 256, hiddenSize: hiddenSize)
+        self._guidanceEmbedder.wrappedValue = guidanceEmbeds
+            ? Flux2TimestepEmbedder(inDim: 256, hiddenSize: hiddenSize)
+            : nil
         super.init()
     }
 
@@ -117,10 +121,9 @@ final class Flux2TimeGuidanceEmbed: Module {
         let timestepProj = Self.timestepProjection(timestep, dim: 256)
         let timestepEmb = timestepEmbedder(timestepProj)
 
-        // FLUX.2 Klein 4B doesn't have guidance layers (guidance_embeds=false)
-        // mflux always passes guidance=None for this model
-        // Only models with guidance_embeds=true use the guidance parameter
-        return timestepEmb
+        guard let guidance, let guidanceEmbedder else { return timestepEmb }
+        let guidanceProj = Self.timestepProjection(guidance * 1000, dim: 256)
+        return timestepEmb + guidanceEmbedder(guidanceProj)
     }
 
     /// Sinusoidal timestep projection (flip_sin_to_cos=True, downscale_freq_shift=0)
@@ -819,7 +822,10 @@ public final class Flux2Transformer2DModel: Module {
 
         self._xEmbedder.wrappedValue = Linear(config.inChannels, config.hiddenSize, bias: false)
         self._contextEmbedder.wrappedValue = Linear(config.contextDim, config.hiddenSize, bias: false)
-        self._timeGuidanceEmbed.wrappedValue = Flux2TimeGuidanceEmbed(hiddenSize: config.hiddenSize)
+        self._timeGuidanceEmbed.wrappedValue = Flux2TimeGuidanceEmbed(
+            hiddenSize: config.hiddenSize,
+            guidanceEmbeds: config.guidanceEmbeds
+        )
 
         // Modulation: 2 param sets for double stream (MSA + MLP), 1 for single
         self._doubleStreamModImg.wrappedValue = Flux2Modulation(hiddenSize: config.hiddenSize, modParamSets: 2)
@@ -853,7 +859,10 @@ public final class Flux2Transformer2DModel: Module {
         // Placeholder Linear layers - will be replaced
         self._xEmbedder.wrappedValue = Linear(1, 1, bias: false)
         self._contextEmbedder.wrappedValue = Linear(1, 1, bias: false)
-        self._timeGuidanceEmbed.wrappedValue = Flux2TimeGuidanceEmbed(hiddenSize: config.hiddenSize)
+        self._timeGuidanceEmbed.wrappedValue = Flux2TimeGuidanceEmbed(
+            hiddenSize: config.hiddenSize,
+            guidanceEmbeds: config.guidanceEmbeds
+        )
 
         self._doubleStreamModImg.wrappedValue = Flux2Modulation(hiddenSize: config.hiddenSize, modParamSets: 2)
         self._doubleStreamModTxt.wrappedValue = Flux2Modulation(hiddenSize: config.hiddenSize, modParamSets: 2)

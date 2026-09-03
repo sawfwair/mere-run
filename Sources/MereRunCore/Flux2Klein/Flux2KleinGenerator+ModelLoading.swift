@@ -20,6 +20,7 @@ extension Flux2KleinGenerator {
         let textEncoderComponent = try componentResolver.resolveDirectory(for: .textEncoder, fallbackLocalPath: "text_encoder")
         let tokenizerComponent = try componentResolver.resolveDirectory(for: .tokenizer, fallbackLocalPath: "tokenizer")
         let quantization = try ModelWeightsLoader.QuantizationParams.fromManifest(textEncoderComponent.sourceManifest)
+            ?? loadTextEncoderQuantization(from: textEncoderComponent.directoryURL)
 
         // Load text encoder
         progressHandler?(ChatProgress(stage: .loadingModel, message: "Loading text encoder"))
@@ -72,7 +73,8 @@ extension Flux2KleinGenerator {
             ropeTheta: rawConfig.ropeTheta,
             maxPositionEmbeddings: rawConfig.maxPositionEmbeddings,
             rmsNormEps: rawConfig.rmsNormEps,
-            headDim: rawConfig.headDim
+            headDim: rawConfig.headDim,
+            useQKNorm: rawConfig.architecture == .qwen3
         )
 
         textEncoder = QwenTextEncoder(configuration: config)
@@ -154,6 +156,7 @@ extension Flux2KleinGenerator {
 
         let transformerQuantization = try ModelWeightsLoader.QuantizationParams.fromManifest(transformerComponent.sourceManifest)
         let textEncoderQuantization = try ModelWeightsLoader.QuantizationParams.fromManifest(textEncoderComponent.sourceManifest)
+            ?? loadTextEncoderQuantization(from: textEncoderComponent.directoryURL)
 
         // Load transformer
         // Shared shard discovery resolves symlinked component directories before listing them.
@@ -180,7 +183,10 @@ extension Flux2KleinGenerator {
         let vaeConfig = try loadVAEConfig(from: vaeComponent.directoryURL)
         vae = AutoencoderKL(configuration: vaeConfig)
 
-        let vaeWeightsURL = vaeComponent.directoryURL.appendingPathComponent("diffusion_pytorch_model.safetensors").resolvingSymlinksInPath()
+        let vaeWeightsURL = Self.checkpointFileURL(
+            in: vaeComponent.directoryURL,
+            filename: "diffusion_pytorch_model.safetensors"
+        )
 
         // First, load BN running stats directly from safetensors
         let bnWeights = try loadBatchNormStats(from: vaeWeightsURL)
@@ -208,7 +214,7 @@ extension Flux2KleinGenerator {
         loadedModelPath = path
         loadedManifest = manifest
         loadedQuantization = transformerQuantization
-        currentLoRA = nil
+        currentLoRAs = []
         transformerLoRALayers = nil
         transformerLoRARankSignature = nil
         compiledTransformer = nil
@@ -216,42 +222,57 @@ extension Flux2KleinGenerator {
     }
 
     func applyLoRAIfNeeded(
-        _ lora: LoRA?,
+        _ loras: [LoRA],
         progressHandler: (@Sendable (GenerationProgress) -> Void)?
     ) async throws {
-        guard lora != currentLoRA else { return }
+        guard loras != currentLoRAs else { return }
         guard transformer != nil else { return }
 
-        // Clearing LoRA (keep injected wrappers but disable them).
-        guard let lora else {
+        // Clearing LoRAs keeps injected wrappers resident but disables every contribution.
+        guard !loras.isEmpty else {
             if let layers = transformerLoRALayers {
                 for layer in layers.values {
-                    layer.isActive = false
+                    Self.setAllLoRAContributions(in: layer, active: false)
                 }
             }
-            currentLoRA = nil
+            currentLoRAs = []
             progressHandler?(GenerationProgress(stage: .loadingLoRA, stepIndex: 1, totalSteps: 1))
             return
         }
 
-        progressHandler?(GenerationProgress(stage: .loadingLoRA, stepIndex: 0, totalSteps: 1))
-        let loraWeights = try await LoRAWeightLoader.load(from: lora)
+        progressHandler?(GenerationProgress(stage: .loadingLoRA, stepIndex: 0, totalSteps: loras.count))
+        var stackInputs: [Flux2LoRAStackInput] = []
+        stackInputs.reserveCapacity(loras.count)
+        for (index, lora) in loras.enumerated() {
+            let weights = try await LoRAWeightLoader.load(from: lora)
+            stackInputs.append(
+                Flux2LoRAStackInput(
+                    label: Self.loraLabel(for: lora),
+                    scale: Self.loraScale(for: lora),
+                    weights: weights
+                )
+            )
+            progressHandler?(
+                GenerationProgress(stage: .loadingLoRA, stepIndex: index + 1, totalSteps: loras.count)
+            )
+        }
+        let loraWeights = try Flux2LoRAStacker.stack(stackInputs)
         let targetRank = loraWeights.rank
-        let targetRanks = loraWeights.targetRanks.isEmpty ? nil : loraWeights.targetRanks
+        let targetRanks = loraWeights.targetRanks
         let targetRankSignature = Self.loraRankSignature(defaultRank: targetRank, targetRanks: targetRanks)
 
         if transformerLoRALayers == nil {
             transformerLoRALayers = try Flux2LoRAInjector.inject(
                 into: transformer!,
                 rank: targetRank,
-                alpha: loraWeights.alpha,
+                alpha: nil,
                 targetRanks: targetRanks,
                 zeroInitUp: true
             )
             transformerLoRARankSignature = targetRankSignature
             if let layers = transformerLoRALayers {
                 for layer in layers.values {
-                    layer.isActive = false
+                    Self.setAllLoRAContributions(in: layer, active: false)
                 }
             }
 
@@ -262,7 +283,7 @@ extension Flux2KleinGenerator {
             transformerLoRALayers = try Flux2LoRAInjector.inject(
                 into: transformer!,
                 rank: targetRank,
-                alpha: loraWeights.alpha,
+                alpha: nil,
                 targetRanks: targetRanks,
                 zeroInitUp: true,
                 allowReinjection: true
@@ -270,7 +291,7 @@ extension Flux2KleinGenerator {
             transformerLoRARankSignature = targetRankSignature
             if let layers = transformerLoRALayers {
                 for layer in layers.values {
-                    layer.isActive = false
+                    Self.setAllLoRAContributions(in: layer, active: false)
                 }
             }
 
@@ -286,31 +307,28 @@ extension Flux2KleinGenerator {
         var applied = 0
         for (path, layer) in layers {
             guard let weights = loraWeights.weights[path] else {
-                layer.isActive = false
+                Self.setAllLoRAContributions(in: layer, active: false)
                 continue
             }
 
-            layer.loraDown = weights.down.asType(.float32)
-            layer.loraUp = weights.up.asType(.float32)
+            try Self.validateLoRAWeightShapes(
+                path: path,
+                down: weights.down,
+                up: weights.up,
+                expectedDown: layer.loraDown.shape,
+                expectedUp: layer.loraUp.shape
+            )
+            layer.loraDown = weights.down
+            layer.loraUp = weights.up
             layer.isActive = true
             applied += 1
         }
-
-        // Apply user scale by scaling lora_down (delta scales linearly).
-        let userScale = Self.loraScale(for: lora)
-        if userScale != 1 {
-            let s = MLXArray(userScale)
-            for layer in layers.values where layer.isActive {
-                layer.loraDown = layer.loraDown * s
-            }
-        }
-        progressHandler?(GenerationProgress(stage: .loadingLoRA, stepIndex: 1, totalSteps: 1))
 
         guard applied > 0 else {
             throw LoRAError.invalidFormat(Self.noMatchingTransformerLayersMessage)
         }
 
-        currentLoRA = lora
+        currentLoRAs = loras
     }
 
     private static func loraScale(for lora: LoRA) -> Float {
@@ -319,6 +337,44 @@ extension Flux2KleinGenerator {
             return Float(scale)
         case .remote(_, let scale):
             return Float(scale)
+        }
+    }
+
+    private static func loraLabel(for lora: LoRA) -> String {
+        switch lora {
+        case .local(let path, _):
+            return path
+        case .remote(let reference, _):
+            return reference
+        }
+    }
+
+    static func validateLoRAWeightShapes(
+        path: String,
+        down: MLXArray,
+        up: MLXArray,
+        expectedDown: [Int],
+        expectedUp: [Int]
+    ) throws {
+        guard down.shape == expectedDown, up.shape == expectedUp else {
+            throw LoRAError.invalidFormat(
+                "LoRA target \(path) has down/up shapes \(down.shape)/\(up.shape); "
+                    + "the loaded FLUX.2 model requires \(expectedDown)/\(expectedUp). "
+                    + "Verify that every adapter was trained for this exact FLUX.2 base, not FLUX.1 or Klein."
+            )
+        }
+    }
+
+    private static func setAllLoRAContributions(
+        in layer: TrainableLoRALayer,
+        active: Bool
+    ) {
+        if let fused = layer as? FusedLoRALinear {
+            for contribution in fused.loras {
+                contribution.isActive = active
+            }
+        } else {
+            layer.isActive = active
         }
     }
 
@@ -347,16 +403,17 @@ extension Flux2KleinGenerator {
         encoderHiddenStates: MLXArray,
         timestep: MLXArray,
         imgIds: MLXArray,
-        txtIds: MLXArray
+        txtIds: MLXArray,
+        guidance: MLXArray? = nil
     ) -> MLXArray {
-        guard Self.compileEnabled else {
+        guard Self.compileEnabled, guidance == nil else {
             return transformer(
                 hiddenStates: hiddenStates,
                 encoderHiddenStates: encoderHiddenStates,
                 timestep: timestep,
                 imgIds: imgIds,
                 txtIds: txtIds,
-                guidance: nil
+                guidance: guidance
             )
         }
 
@@ -409,14 +466,13 @@ extension Flux2KleinGenerator {
             mlpRatio: config.mlpRatio,
             eps: config.eps,
             ropeTheta: config.ropeTheta,
-            axesDimsRope: config.axesDimsRope
+            axesDimsRope: config.axesDimsRope,
+            guidanceEmbeds: config.resolvedGuidanceEmbeds
         )
     }
 
     private func loadTextEncoderConfig(from textEncoderDir: URL) throws -> QwenTextEncoderConfiguration {
-        let configURL = textEncoderDir.appendingPathComponent("config.json")
-        let data = try Data(contentsOf: configURL)
-        let config = try JSONDecoder().decode(Flux2TextEncoderConfig.self, from: data)
+        let config = try loadRawTextEncoderConfig(from: textEncoderDir)
 
         return QwenTextEncoderConfiguration(
             vocabSize: config.vocabSize,
@@ -428,8 +484,27 @@ extension Flux2KleinGenerator {
             ropeTheta: config.ropeTheta,
             maxPositionEmbeddings: config.maxPositionEmbeddings,
             rmsNormEps: config.rmsNormEps,
-            headDim: config.headDim
+            headDim: config.headDim,
+            useQKNorm: config.architecture == .qwen3
         )
+    }
+
+    private func loadRawTextEncoderConfig(from textEncoderDir: URL) throws -> Flux2TextEncoderConfig {
+        let configURL = textEncoderDir.appendingPathComponent("config.json")
+        let data = try Data(contentsOf: configURL)
+        return try JSONDecoder().decode(Flux2TextEncoderConfig.self, from: data)
+    }
+
+    private func loadTextEncoderQuantization(
+        from textEncoderDir: URL
+    ) throws -> ModelWeightsLoader.QuantizationParams? {
+        let config = try loadRawTextEncoderConfig(from: textEncoderDir)
+        guard let quantization = config.quantizationConfig,
+              let bits = quantization.bits,
+              let groupSize = quantization.groupSize else {
+            return nil
+        }
+        return ModelWeightsLoader.QuantizationParams(bits: bits, groupSize: groupSize)
     }
 
     private func loadVAEConfig(from vaeDir: URL) throws -> VAEConfig {
@@ -519,30 +594,14 @@ extension Flux2KleinGenerator {
         let singleFileURL = url.appendingPathComponent("model.safetensors")
 
         let mapper: (String, MLXArray) -> [(String, MLXArray)] = { key, value in
-            // The Qwen3 text encoder used as an embedder only needs hidden states; the
-            // language-model output head (lm_head.*) is not part of the encoder and ships
-            // in some checkpoints (e.g. FLUX.2-klein-9B's 8B Qwen3 embedder). Drop it so
-            // Module.update(verify: .noUnusedKeys) doesn't reject the load.
-            if key == "lm_head" || key.hasPrefix("lm_head.") || key.hasPrefix("model.lm_head") {
-                return []
-            }
-            var mappedKey = key
-            if key.hasPrefix("model.") {
-                mappedKey = key.replacingOccurrences(of: "model.", with: "encoder.")
-            } else if !key.hasPrefix("encoder.") {
-                mappedKey = "encoder." + key
-            }
+            // Image conditioning needs hidden states, not language-model or vision outputs.
+            guard !key.hasPrefix("__discard__."),
+                  let mappedKey = Self.mapTextEncoderWeightKey(key) else { return [] }
             return [(mappedKey, value)]
         }
 
         let keyMapper: (String) -> String = { key in
-            if key.hasPrefix("model.") {
-                return "encoder." + String(key.dropFirst("model.".count))
-            }
-            if key.hasPrefix("encoder.") {
-                return key
-            }
-            return "encoder." + key
+            Self.mapTextEncoderWeightKey(key) ?? "__discard__.\(key)"
         }
 
         let fm = FileManager.default
@@ -574,6 +633,27 @@ extension Flux2KleinGenerator {
             keyMapper: keyMapper,
             quantization: quantization
         )
+    }
+
+    static func mapTextEncoderWeightKey(_ key: String) -> String? {
+        if key.hasPrefix("language_model.lm_head")
+            || key.hasPrefix("vision_tower.")
+            || key.hasPrefix("multi_modal_projector.") {
+            return nil
+        }
+        if key.hasPrefix("language_model.model.") {
+            return "encoder." + String(key.dropFirst("language_model.model.".count))
+        }
+        if key == "lm_head" || key.hasPrefix("lm_head.") || key.hasPrefix("model.lm_head") {
+            return nil
+        }
+        if key.hasPrefix("model.") {
+            return "encoder." + String(key.dropFirst("model.".count))
+        }
+        if key.hasPrefix("encoder.") {
+            return key
+        }
+        return "encoder." + key
     }
 
     private func loadTokenizer(from url: URL) throws -> QwenTokenizer {

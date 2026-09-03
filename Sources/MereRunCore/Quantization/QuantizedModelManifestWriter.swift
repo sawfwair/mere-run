@@ -21,7 +21,9 @@ public enum QuantizedModelManifestWriter {
             : outputModelRoot.lastPathComponent
 
         func inferFamily(from id: String) -> MereRunModelManifest.Family? {
+            if id.hasPrefix("image-flux1-") { return .flux1 }
             if id.hasPrefix("image-klein-") { return .klein }
+            if id.hasPrefix("image-flux2-") { return .klein }
             if id.hasPrefix("image-zimage-") { return .zimage }
             if id.hasPrefix("image-hidream-") { return .hidream }
             if id.hasPrefix("image-krea2-") { return .krea }
@@ -53,6 +55,7 @@ public enum QuantizedModelManifestWriter {
 
         let family = baseManifest.family ?? inferFamily(from: id) ?? {
             switch engine {
+            case .flux1: return .flux1
             case .flux2Klein: return .klein
             case .zimageTurbo: return .zimage
             case .hidreamO1: return .hidream
@@ -116,6 +119,8 @@ public enum QuantizedModelManifestWriter {
         let supports: [MereRunModelManifest.Capability] = {
             let baseline: [MereRunModelManifest.Capability] = baseManifest.supports ?? {
                 switch engine {
+                case .flux1:
+                    return [.txt2img, .loraInference]
                 case .flux2Klein:
                     return [.txt2img, .referenceEdit, .loraInference]
                 case .zimageTurbo:
@@ -256,6 +261,8 @@ public enum QuantizedModelManifestWriter {
         // If we couldn't infer defaults from the base manifest, set reasonable engine defaults.
         if manifest.defaults == nil {
             switch engine {
+            case .flux1:
+                manifest.defaults = MereRunModelManifest.Defaults(steps: 28, cfg: 3.5)
             case .flux2Klein:
                 manifest.defaults = MereRunModelManifest.Defaults(steps: 4, cfg: 1.0)
             case .zimageTurbo:

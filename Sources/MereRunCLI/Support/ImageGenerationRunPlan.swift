@@ -82,6 +82,7 @@ struct ImageGenerationRunPlanArguments: Codable, Equatable {
     let strength: Double?
     let cfgScale: Double?
     let sigmaShift: Double?
+    let sigmaList: String?
     let maxSequenceLength: Int
     let structuredPrompt: Bool
     let structuredPromptModel: String
@@ -89,6 +90,7 @@ struct ImageGenerationRunPlanArguments: Codable, Equatable {
     let structuredPromptMaxTokens: Int
     let structuredPromptOutput: String?
     let lora: String?
+    let loras: [String]?
     let loraScale: Double
     let kreaConditioningMultiplier: Double?
     let kreaConditioningLayerWeights: String?
@@ -110,6 +112,7 @@ struct ImageGenerationRunPlanArguments: Codable, Equatable {
         case strength
         case cfgScale = "cfg_scale"
         case sigmaShift = "sigma_shift"
+        case sigmaList = "sigmas"
         case maxSequenceLength = "max_sequence_length"
         case structuredPrompt = "structured_prompt"
         case structuredPromptModel = "structured_prompt_model"
@@ -117,6 +120,7 @@ struct ImageGenerationRunPlanArguments: Codable, Equatable {
         case structuredPromptMaxTokens = "structured_prompt_max_tokens"
         case structuredPromptOutput = "structured_prompt_output"
         case lora
+        case loras
         case loraScale = "lora_scale"
         case kreaConditioningMultiplier = "krea_conditioning_multiplier"
         case kreaConditioningLayerWeights = "krea_conditioning_layer_weights"
@@ -151,6 +155,7 @@ struct ImageGenerationRunPlanArguments: Codable, Equatable {
             strength: strength,
             cfgScale: cfgScale,
             sigmaShift: sigmaShift,
+            sigmaList: sigmaList,
             maxSequenceLength: maxSequenceLength,
             structuredPrompt: structuredPrompt,
             structuredPromptModel: structuredPromptModel,
@@ -158,6 +163,7 @@ struct ImageGenerationRunPlanArguments: Codable, Equatable {
             structuredPromptMaxTokens: structuredPromptMaxTokens,
             structuredPromptOutput: structuredPromptOutput,
             lora: lora,
+            loras: loras,
             loraScale: loraScale,
             kreaConditioningMultiplier: kreaConditioningMultiplier,
             kreaConditioningLayerWeights: kreaConditioningLayerWeights,
@@ -177,6 +183,7 @@ struct ImageGenerationRunPlanArguments: Codable, Equatable {
         appendOption("--negative-prompt", negativePrompt, to: &args)
         appendOption("--cfg", cfgScale, to: &args)
         appendOption("--sigma-shift", sigmaShift, to: &args)
+        appendOption("--sigmas", sigmaList, to: &args)
         appendOption("--steps", steps, to: &args)
         appendOption("--seed", seed, to: &args)
         appendOption("--input", input, to: &args)
@@ -191,7 +198,10 @@ struct ImageGenerationRunPlanArguments: Codable, Equatable {
         appendOption("--structured-prompt-model-root", structuredPromptModelRoot, to: &args)
         args += ["--structured-prompt-max-tokens", String(structuredPromptMaxTokens)]
         appendOption("--structured-prompt-output", structuredPromptOutput, to: &args)
-        appendOption("--lora", lora, to: &args)
+        let adapterArguments = loras ?? lora.map { [$0] } ?? []
+        for adapter in adapterArguments {
+            args += ["--lora", adapter]
+        }
         args += ["--lora-scale", String(loraScale)]
         appendOption("--krea-conditioning-multiplier", kreaConditioningMultiplier, to: &args)
         appendOption("--krea-conditioning-layer-weights", kreaConditioningLayerWeights, to: &args)

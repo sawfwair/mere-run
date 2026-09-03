@@ -30,7 +30,12 @@ public struct GenerationRequest: Sendable, Hashable {
     public var outputURL: URL
     public var model: String?
     public var maxSequenceLength: Int
-    public var lora: LoRA?
+    /// Ordered image LoRA adapters. Runtimes that support only one adapter use the first value.
+    public var loras: [LoRA]
+    public var lora: LoRA? {
+        get { loras.first }
+        set { loras = newValue.map { [$0] } ?? [] }
+    }
     public var enhancePrompt: Bool
     public var inputImage: URL?
     public var strength: Double
@@ -38,6 +43,8 @@ public struct GenerationRequest: Sendable, Hashable {
     public var keepOriginalAspect: Bool
     public var useBetaSigmas: Bool
     public var sigmaShift: Float?
+    /// Optional pre-shifted denoising sigmas. The scheduler appends the terminal zero.
+    public var sigmas: [Float]?
     public var kreaConditioningRebalance: Krea2ConditioningRebalance?
     public var kreaBaseQuantizationBits: Int?
 
@@ -55,12 +62,14 @@ public struct GenerationRequest: Sendable, Hashable {
         model: String? = nil,
         maxSequenceLength: Int = 512,
         lora: LoRA? = nil,
+        loras: [LoRA] = [],
         enhancePrompt: Bool = false,
         inputImage: URL? = nil,
         strength: Double = 0.75,
         keepOriginalAspect: Bool = false,
         useBetaSigmas: Bool = false,
         sigmaShift: Float? = nil,
+        sigmas: [Float]? = nil,
         kreaConditioningRebalance: Krea2ConditioningRebalance? = nil,
         kreaBaseQuantizationBits: Int? = nil
     ) {
@@ -76,13 +85,14 @@ public struct GenerationRequest: Sendable, Hashable {
         self.outputURL = outputURL
         self.model = model
         self.maxSequenceLength = maxSequenceLength
-        self.lora = lora
+        self.loras = loras.isEmpty ? lora.map { [$0] } ?? [] : loras
         self.enhancePrompt = enhancePrompt
         self.inputImage = inputImage
         self.strength = strength
         self.keepOriginalAspect = keepOriginalAspect
         self.useBetaSigmas = useBetaSigmas
         self.sigmaShift = sigmaShift
+        self.sigmas = sigmas
         self.kreaConditioningRebalance = kreaConditioningRebalance
         self.kreaBaseQuantizationBits = kreaBaseQuantizationBits
     }

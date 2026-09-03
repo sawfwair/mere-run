@@ -144,6 +144,8 @@ final class ManagedModelCatalogTests: XCTestCase {
 
     func testRestrictedModelInventoryIsCompleteAndCannotAutoDownload() throws {
         let expected = Set([
+            "image-flux1-dev",
+            "image-flux2-dev",
             "image-klein-9b",
             "image-klein-base-9b",
             "image-krea2-raw",
@@ -282,6 +284,8 @@ final class ManagedModelCatalogTests: XCTestCase {
 
     func testImageModelsHaveManagedDownloadSources() {
         let expectedPullableImageIDs = [
+            "image-flux1-dev",
+            "image-flux2-dev",
             "image-klein-nano",
             "image-klein-base",
             "image-klein-base-9b",
@@ -495,6 +499,40 @@ final class ManagedModelCatalogTests: XCTestCase {
         XCTAssertEqual(mounted["tokenizer"], "mlx-community/FLUX.2-klein-9B")
         XCTAssertEqual(mounted["vae"], "mlx-community/FLUX.2-klein-9B")
         XCTAssertEqual(mounted["scheduler"], "mlx-community/FLUX.2-klein-9B")
+    }
+
+    func testFlux2DevUsesPinnedGatedWeightsAndQuantizedMistralConditioner() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: "image-flux2-dev"))
+
+        XCTAssertEqual(spec.hubFallback?.repoId, "black-forest-labs/FLUX.2-dev")
+        XCTAssertEqual(spec.hubFallback?.revision, "26afe3a78bb242c0a8bb181dcc8937bb16e5c66c")
+        XCTAssertEqual(spec.hubFallback?.patterns.contains("text_encoder/*"), false)
+        XCTAssertEqual(spec.runtimeAutoDownloadAllowed, false)
+        XCTAssertEqual(spec.usageRestriction?.terms.count, 2)
+
+        let textEncoder = try XCTUnwrap(spec.mountedHubFallbacks.first)
+        XCTAssertEqual(textEncoder.destinationPath, "text_encoder")
+        XCTAssertEqual(
+            textEncoder.hubFallback.repoId,
+            "mlx-community/Mistral-Small-3.2-24B-Instruct-2506-4bit"
+        )
+        XCTAssertEqual(textEncoder.hubFallback.revision, "2a1d5eabfc504747bdc24178394821a1efc0edde")
+    }
+
+    func testFlux1DevUsesPinnedGatedDiffusersComponents() throws {
+        let spec = try XCTUnwrap(ManagedModelCatalog.spec(for: Flux1Resources.modelID))
+
+        XCTAssertEqual(spec.hubFallback?.repoId, Flux1Resources.upstreamRepoID)
+        XCTAssertEqual(spec.hubFallback?.revision, Flux1Resources.upstreamRevision)
+        XCTAssertEqual(spec.hubFallback?.patterns, Flux1Resources.snapshotPatterns)
+        XCTAssertEqual(spec.upstreamRevision, Flux1Resources.upstreamRevision)
+        XCTAssertEqual(spec.validationKind, .flux1)
+        XCTAssertEqual(spec.runtimeAutoDownloadAllowed, false)
+        XCTAssertEqual(spec.usageRestriction?.terms.first?.license, "FLUX.1 dev Non-Commercial License v1.1.1")
+        XCTAssertEqual(spec.estimatedDownloadBytes, Flux1Resources.estimatedDownloadBytes)
+        XCTAssertTrue(Flux1Resources.snapshotPatterns.contains("text_encoder/**"))
+        XCTAssertTrue(Flux1Resources.snapshotPatterns.contains("text_encoder_2/**"))
+        XCTAssertFalse(Flux1Resources.snapshotPatterns.contains("flux1-dev.safetensors"))
     }
 
     func testSAM31ManagedInstallMountsTokenizerForTextPrompts() throws {

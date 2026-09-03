@@ -471,7 +471,10 @@ public enum Flux2KleinLoRATrainer {
 
         let vaeConfig = try loadVAEConfig(from: vaeComponent.directoryURL)
         let vae = AutoencoderKL(configuration: vaeConfig)
-        let vaeWeightsURL = vaeComponent.directoryURL.appendingPathComponent("diffusion_pytorch_model.safetensors").resolvingSymlinksInPath()
+        let vaeWeightsURL = Flux2KleinGenerator.checkpointFileURL(
+            in: vaeComponent.directoryURL,
+            filename: "diffusion_pytorch_model.safetensors"
+        )
         let (bnMean, bnVar) = try loadBatchNormStats(from: vaeWeightsURL)
         try loadVAEWeights(from: vaeWeightsURL, to: vae)
 

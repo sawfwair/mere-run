@@ -23,7 +23,7 @@ extension Flux2KleinGenerator {
             try await loadModels(from: modelPath, progressHandler: progressHandler)
         }
 
-        try await applyLoRAIfNeeded(request.lora, progressHandler: progressHandler)
+        try await applyLoRAIfNeeded(request.loras, progressHandler: progressHandler)
 
         guard let transformer = transformer,
               let textEncoder = textEncoder,
@@ -54,12 +54,18 @@ extension Flux2KleinGenerator {
             throw Flux2Error.invalidManifest("Missing manifest.variant")
         }
         let isDistilled = variant == .distilled
+        let usesEmbeddedGuidance = transformer.config.guidanceEmbeds
+        if let sigmas = request.sigmas {
+            try Flux2EulerScheduler.validateCustomSigmas(sigmas, expectedSteps: request.steps)
+        }
 
         // CFG behavior differs between distilled and base models:
         // - Distilled: CFG only if user explicitly provides negative prompt (mflux behavior)
         // - Base: CFG required when guidance > 1.0, uses empty string as unconditional
         let useCFG: Bool
-        if isDistilled {
+        if usesEmbeddedGuidance {
+            useCFG = false
+        } else if isDistilled {
             let hasNegativePrompt = request.negativePrompt.map {
                 !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             } ?? false
@@ -196,7 +202,9 @@ extension Flux2KleinGenerator {
             numTrainTimesteps: 1000,
             imageSeqLen: seqLen,
             isDistilled: isDistilled,
-            sigmaShift: request.sigmaShift
+            usesEmpiricalMu: usesEmbeddedGuidance,
+            sigmaShift: request.sigmaShift,
+            customSigmas: request.sigmas
         )
 
         // Note: FLUX.2 Klein does NOT scale initial latents (unlike SD3/etc)
@@ -265,7 +273,8 @@ extension Flux2KleinGenerator {
                     encoderHiddenStates: promptEmbeds,
                     timestep: timestepTensor,
                     imgIds: imgIds,
-                    txtIds: txtIds
+                    txtIds: txtIds,
+                    guidance: usesEmbeddedGuidance ? MLXArray([Float(request.guidanceScale)]) : nil
                 )
             }
 
@@ -402,12 +411,23 @@ extension Flux2KleinGenerator {
         textEncoder: QwenTextEncoder,
         debugLog: ((String) -> Void)?
     ) throws -> (MLXArray, MLXArray) {
-        // Tokenize using FLUX.2 chat template (matching mflux with enable_thinking=False)
-        // Template (from `chat_template.jinja`): <|im_start|>user\n{prompt}<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n
+        // Klein uses Qwen3 conditioning; FLUX.2-dev uses Mistral Small 3.2.
         //
         // Important: we must NOT use `QwenTokenizer.encode(...)` here because it applies the
         // Z-Image system prefix/suffix (image-editing instructions), which breaks FLUX.2 prompts.
-        let promptWithTemplate = "<|im_start|>user\n\(prompt)<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
+        let usesMistral = !textEncoder.configuration.useQKNorm
+        let promptWithTemplate: String
+        if usesMistral {
+            let cleanedPrompt = prompt.replacingOccurrences(of: "[IMG]", with: "")
+            let systemPrompt = """
+            You are an AI that reasons about image descriptions. You give structured responses focusing on object relationships, object
+            attribution and actions without speculation.
+            """
+            promptWithTemplate = "<s>[SYSTEM_PROMPT]\(systemPrompt)[/SYSTEM_PROMPT]"
+                + "[INST]\(cleanedPrompt)[/INST]"
+        } else {
+            promptWithTemplate = "<|im_start|>user\n\(prompt)<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n"
+        }
         let encoded = tokenizer.encodePlain(prompts: [promptWithTemplate], maxLength: 512)
 
         if let debugLog {
@@ -415,35 +435,36 @@ extension Flux2KleinGenerator {
             debugLog("Tokenized \(tokens.count) tokens: \(tokens.prefix(20))...")
         }
 
-        // Get hidden states - diffusers uses indices 9, 18, 27 directly
-        // These are the outputs of layers 8, 17, 26 (0-indexed from transformers convention)
+        // Diffusers selects three architecture-specific intermediate hidden states.
         let result = textEncoder.forwardWithHiddenStates(
             inputIds: encoded.inputIds,
             attentionMask: encoded.attentionMask
         )
 
-        guard let hiddenStates = result.hiddenStates, hiddenStates.count >= 28 else {
+        let hiddenStateIndices = usesMistral ? [10, 20, 30] : [9, 18, 27]
+        guard let hiddenStates = result.hiddenStates,
+              let lastIndex = hiddenStateIndices.last,
+              hiddenStates.count > lastIndex else {
             throw Flux2Error.insufficientHiddenStates
         }
 
-        // Use direct indices 9, 18, 27 matching diffusers exactly.
-        // No RMSNorm: diffusers uses raw hidden states.
+        // Diffusers concatenates the raw states without applying RMSNorm.
         if let debugLog {
             debugLog("=== Hidden States Debug ===")
             debugLog("Total hidden states: \(hiddenStates.count)")
         }
 
-        let h1 = hiddenStates[9]   // hidden_states[9]
-        let h2 = hiddenStates[18]  // hidden_states[18]
-        let h3 = hiddenStates[27]  // hidden_states[27]
+        let h1 = hiddenStates[hiddenStateIndices[0]]
+        let h2 = hiddenStates[hiddenStateIndices[1]]
+        let h3 = hiddenStates[hiddenStateIndices[2]]
 
         if let debugLog {
-            debugLog("h1 (idx 9): shape=\(h1.shape), mean=\(h1.mean().item(Float.self)), std=\(sqrt((h1 * h1).mean().item(Float.self)))")
-            debugLog("h2 (idx 18): shape=\(h2.shape), mean=\(h2.mean().item(Float.self)), std=\(sqrt((h2 * h2).mean().item(Float.self)))")
-            debugLog("h3 (idx 27): shape=\(h3.shape), mean=\(h3.mean().item(Float.self)), std=\(sqrt((h3 * h3).mean().item(Float.self)))")
+            debugLog("h1 (idx \(hiddenStateIndices[0])): shape=\(h1.shape), mean=\(h1.mean().item(Float.self)), std=\(sqrt((h1 * h1).mean().item(Float.self)))")
+            debugLog("h2 (idx \(hiddenStateIndices[1])): shape=\(h2.shape), mean=\(h2.mean().item(Float.self)), std=\(sqrt((h2 * h2).mean().item(Float.self)))")
+            debugLog("h3 (idx \(hiddenStateIndices[2])): shape=\(h3.shape), mean=\(h3.mean().item(Float.self)), std=\(sqrt((h3 * h3).mean().item(Float.self)))")
         }
 
-        // Concatenate along feature dimension: [batch, seq, 2560*3 = 7680]
+        // Concatenate the three states along the feature dimension.
         let promptEmbeds = concatenated([h1, h2, h3], axis: -1)
 
         if let debugLog {

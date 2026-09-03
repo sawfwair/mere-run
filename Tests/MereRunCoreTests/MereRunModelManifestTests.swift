@@ -126,6 +126,45 @@ final class MereRunModelManifestTests: MereRunCoreTestCase {
         XCTAssertEqual(loaded.supports?.contains(.referenceEdit), true)
     }
 
+    func testFlux2DevTemplateKeepsGuidanceAndLicenseAcceptanceExplicit() {
+        let manifest = MereRunModelManifest.template(
+            for: .flux2Dev,
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+
+        XCTAssertEqual(manifest.id, "image-flux2-dev")
+        XCTAssertEqual(manifest.engine, .flux2Klein)
+        XCTAssertEqual(manifest.family, .klein)
+        XCTAssertEqual(manifest.variant, .standard)
+        XCTAssertEqual(manifest.defaults?.steps, 50)
+        XCTAssertEqual(manifest.defaults?.cfg, 4.0)
+        XCTAssertEqual(manifest.supports, [.txt2img, .referenceEdit, .loraInference])
+        XCTAssertEqual(manifest.sources?.count, 2)
+        XCTAssertEqual(manifest.usageTerms?.count, 2)
+        XCTAssertNil(manifest.usageTermsAcknowledged)
+    }
+
+    func testFlux1DevTemplateUsesSeparateArchitectureAndOfficialDefaults() {
+        let manifest = MereRunModelManifest.template(
+            for: .flux1Dev,
+            createdAt: Date(timeIntervalSince1970: 0)
+        )
+
+        XCTAssertEqual(manifest.id, Flux1Resources.modelID)
+        XCTAssertEqual(manifest.engine, .flux1)
+        XCTAssertEqual(manifest.family, .flux1)
+        XCTAssertEqual(manifest.variant, .standard)
+        XCTAssertEqual(manifest.defaults?.steps, 28)
+        XCTAssertEqual(manifest.defaults?.cfg, 3.5)
+        XCTAssertEqual(manifest.supports, [.txt2img, .loraInference])
+        XCTAssertEqual(
+            manifest.upstreamRepoId,
+            "\(Flux1Resources.upstreamRepoID)@\(Flux1Resources.upstreamRevision)"
+        )
+        XCTAssertEqual(manifest.usageTerms?.count, 1)
+        XCTAssertNil(manifest.usageTermsAcknowledged)
+    }
+
     func testWriteTemplateIfKnownOverwritesInvalidJSON() throws {
         let temp = try TestFileSystem.makeTempDir()
         defer { try? FileManager.default.removeItem(at: temp) }

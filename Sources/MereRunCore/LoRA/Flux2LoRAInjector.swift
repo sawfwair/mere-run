@@ -48,7 +48,7 @@ public enum Flux2LoRAInjector {
     ]
 
     public static func inject(
-        into transformer: Flux2Transformer2DModel,
+        into transformer: Module,
         rank: Int,
         alpha: Float? = nil,
         targetMode: TargetMode = .suffix,
@@ -162,7 +162,7 @@ public enum Flux2LoRAInjector {
     }
 
     public static func resolveTargetRanks(
-        in transformer: Flux2Transformer2DModel,
+        in transformer: Module,
         defaultRank: Int,
         targetSuffixes: [String] = defaultTargetSuffixes,
         targetRankSuffixes: [String: Int]

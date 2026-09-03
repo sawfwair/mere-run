@@ -4,6 +4,168 @@ import XCTest
 @testable import MereRunCore
 
 final class LoRAWeightLoaderTests: MereRunCoreTestCase {
+    func testFlux2LoRAStackerCombinesOrderedScaledUpdates() throws {
+        let first = LoRAWeights(
+            weights: [
+                "transformer_blocks.0.attn.to_q": (
+                    down: MLXArray([1, 2, 3, 4] as [Float]).reshaped([2, 2]),
+                    up: MLXArray([1, 2, 3, 4, 5, 6] as [Float]).reshaped([3, 2])
+                ),
+            ],
+            rank: 2,
+            alpha: 4
+        )
+        let second = LoRAWeights(
+            weights: [
+                "transformer_blocks.0.attn.to_q": (
+                    down: MLXArray([8, 12] as [Float]).reshaped([1, 2]),
+                    up: MLXArray([10, 20, 30] as [Float]).reshaped([3, 1])
+                ),
+            ],
+            rank: 1,
+            alpha: 1
+        )
+
+        let stacked = try Flux2LoRAStacker.stack([
+            Flux2LoRAStackInput(label: "turbo", scale: 0.5, weights: first),
+            Flux2LoRAStackInput(label: "style", scale: 0.25, weights: second),
+        ])
+        let pair = try XCTUnwrap(stacked.weights["transformer_blocks.0.attn.to_q"])
+
+        XCTAssertEqual(pair.down.shape, [3, 2])
+        XCTAssertEqual(pair.up.shape, [3, 3])
+        XCTAssertEqual(pair.down.asArray(Float.self), [1, 2, 3, 4, 2, 3])
+        XCTAssertEqual(pair.up.asArray(Float.self), [1, 2, 10, 3, 4, 20, 5, 6, 30])
+        XCTAssertEqual(stacked.targetRanks["transformer_blocks.0.attn.to_q"], 3)
+        XCTAssertEqual(stacked.alpha, 3)
+    }
+
+    func testFlux2LoRAStackerRejectsIncompatibleLayerDimensions() {
+        let first = LoRAWeights(
+            weights: [
+                "transformer_blocks.0.attn.to_q": (
+                    down: MLXArray.zeros([2, 4], dtype: .float32),
+                    up: MLXArray.zeros([6, 2], dtype: .float32)
+                ),
+            ],
+            rank: 2
+        )
+        let second = LoRAWeights(
+            weights: [
+                "transformer_blocks.0.attn.to_q": (
+                    down: MLXArray.zeros([1, 5], dtype: .float32),
+                    up: MLXArray.zeros([6, 1], dtype: .float32)
+                ),
+            ],
+            rank: 1
+        )
+
+        XCTAssertThrowsError(
+            try Flux2LoRAStacker.stack([
+                Flux2LoRAStackInput(label: "first", scale: 1, weights: first),
+                Flux2LoRAStackInput(label: "second", scale: 1, weights: second),
+            ])
+        ) { error in
+            XCTAssertEqual(
+                error as? Flux2LoRAStacker.StackError,
+                .incompatiblePair(
+                    label: "second",
+                    path: "transformer_blocks.0.attn.to_q",
+                    expectedInput: 4,
+                    actualInput: 5,
+                    expectedOutput: 6,
+                    actualOutput: 6
+                )
+            )
+        }
+    }
+
+    func testFlux2DevLoRAValidationRejectsFlux1HiddenWidth() {
+        XCTAssertThrowsError(
+            try Flux2KleinGenerator.validateLoRAWeightShapes(
+                path: "single_transformer_blocks.0.attn.to_q",
+                down: MLXArray.zeros([16, 3_072], dtype: .float32),
+                up: MLXArray.zeros([3_072, 16], dtype: .float32),
+                expectedDown: [16, 6_144],
+                expectedUp: [6_144, 16]
+            )
+        ) { error in
+            XCTAssertTrue(error.localizedDescription.contains("not FLUX.1"))
+            XCTAssertTrue(error.localizedDescription.contains("6144"))
+            XCTAssertTrue(error.localizedDescription.contains("3072"))
+        }
+    }
+
+    func testExternalFlux2DevLoRAWhenConfigured() throws {
+        guard let path = ProcessInfo.processInfo.environment["MERERUN_TEST_FLUX2_DEV_LORA"] else {
+            throw XCTSkip("Set MERERUN_TEST_FLUX2_DEV_LORA to inspect a real FLUX.2-dev adapter.")
+        }
+
+        let weights = try LoRAWeightLoader.load(from: URL(fileURLWithPath: path))
+        let pair = try XCTUnwrap(weights.weights["transformer_blocks.0.attn.to_q"])
+        XCTAssertEqual(pair.down.shape[1], 6_144)
+        XCTAssertEqual(pair.up.shape[0], 6_144)
+    }
+
+    func testExternalFlux1LoRAIsRejectedWhenConfigured() throws {
+        guard let path = ProcessInfo.processInfo.environment["MERERUN_TEST_FLUX1_LORA"] else {
+            throw XCTSkip("Set MERERUN_TEST_FLUX1_LORA to inspect a FLUX.1 adapter.")
+        }
+
+        let weights = try LoRAWeightLoader.load(from: URL(fileURLWithPath: path))
+        let pair = try XCTUnwrap(weights.weights["single_transformer_blocks.0.attn.to_q"])
+        XCTAssertThrowsError(
+            try Flux2KleinGenerator.validateLoRAWeightShapes(
+                path: "single_transformer_blocks.0.attn.to_q",
+                down: pair.down,
+                up: pair.up,
+                expectedDown: [pair.down.shape[0], 6_144],
+                expectedUp: [6_144, pair.up.shape[1]]
+            )
+        ) { error in
+            XCTAssertTrue(error.localizedDescription.contains("not FLUX.1"))
+        }
+    }
+
+    func testFlux1ArchitecturePreservesDiffusersSingleBlockOutputTarget() throws {
+        let temp = try TestFileSystem.makeTempDir()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let adapterURL = temp.appendingPathComponent("flux1.safetensors")
+        try MLX.save(
+            arrays: [
+                "transformer.single_transformer_blocks.0.proj_out.lora_A.weight":
+                    MLXArray.zeros([16, 15_360], dtype: .float32),
+                "transformer.single_transformer_blocks.0.proj_out.lora_B.weight":
+                    MLXArray.zeros([3_072, 16], dtype: .float32),
+            ],
+            url: adapterURL
+        )
+
+        let weights = try LoRAWeightLoader.load(from: adapterURL, architecture: .flux1)
+        let pair = try XCTUnwrap(weights.weights["single_transformer_blocks.0.proj_out"])
+        XCTAssertEqual(pair.down.shape, [16, 15_360])
+        XCTAssertEqual(pair.up.shape, [3_072, 16])
+        XCTAssertNil(weights.weights["single_transformer_blocks.0.attn.to_out"])
+    }
+
+    func testExternalFlux1LoRALoadsWithNativeTargetsWhenConfigured() throws {
+        guard let path = ProcessInfo.processInfo.environment["MERERUN_TEST_FLUX1_LORA"] else {
+            throw XCTSkip("Set MERERUN_TEST_FLUX1_LORA to inspect a real FLUX.1 adapter.")
+        }
+
+        let weights = try LoRAWeightLoader.load(
+            from: URL(fileURLWithPath: path),
+            architecture: .flux1
+        )
+        let query = try XCTUnwrap(weights.weights["single_transformer_blocks.0.attn.to_q"])
+        let projection = try XCTUnwrap(weights.weights["single_transformer_blocks.0.proj_out"])
+        XCTAssertEqual(query.down.shape, [16, 3_072])
+        XCTAssertEqual(query.up.shape, [3_072, 16])
+        XCTAssertEqual(projection.down.shape, [16, 15_360])
+        XCTAssertEqual(projection.up.shape, [3_072, 16])
+    }
+
     func testLoadInfersPerLayerRanks() throws {
         let temp = try TestFileSystem.makeTempDir()
         defer { try? FileManager.default.removeItem(at: temp) }

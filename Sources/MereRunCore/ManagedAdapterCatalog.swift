@@ -87,6 +87,9 @@ public struct ManagedAdapterSpec: Equatable, Sendable {
 
 public enum ManagedAdapterCatalog {
     public static let merePlatformAssistantID = "mere-platform-assistant"
+    public static let flux2DevTurboEightStepID = "flux2-dev-turbo-8step"
+    public static let flux2DevTurboEightStepRevision = "9ee51cd87578162cf8d02355a870bc5f4570045c"
+    public static let flux2DevLoRAFormat = "diffusers.flux2.transformer-lora"
     public static let scail2LightX2VFourStepID = "scail2-lightx2v-4step"
     public static let scail2LightX2VFourStepRevision = "27ae38da91014b947dd39cc3fa78b97cd7b386dd"
     public static let miniMaxH3TurboFourStepID = "minimax-h3-turbo-4step"
@@ -124,6 +127,53 @@ public enum ManagedAdapterCatalog {
                 filename: "mere-platform-assistant-v22.safetensors",
                 byteCount: 128_131_022,
                 sha256: "c4fec5979631b4031196c1e21c0b990437a26c5ebc52aec32f89338d64063290"
+            )
+        ),
+        ManagedAdapterSpec(
+            id: flux2DevTurboEightStepID,
+            title: "FLUX.2-dev Turbo 8-step",
+            version: String(flux2DevTurboEightStepRevision.prefix(12)),
+            summary: "Eight-step distilled LoRA and published sigma recipe for FLUX.2-dev.",
+            baseModelID: ModelResolver.ModelID.flux2Dev.rawValue,
+            format: flux2DevLoRAFormat,
+            license: "FLUX Non-Commercial License",
+            upstreamRevision: flux2DevTurboEightStepRevision,
+            usageRestriction: ManagedModelUsageRestriction(
+                summary: "The Turbo adapter inherits the non-commercial, "
+                    + "non-production FLUX.2-dev license and BFL Acceptable Use Policy.",
+                terms: [
+                    ManagedModelUsageTerm(
+                        component: "FLUX.2-dev Turbo adapter and base model",
+                        license: "FLUX Non-Commercial License",
+                        summary: "Weights are limited to non-commercial, non-production use; "
+                            + "commercial use requires a separate BFL license.",
+                        sourceRepoId: "fal/FLUX.2-dev-Turbo",
+                        sourceRevision: flux2DevTurboEightStepRevision,
+                        licenseURL: "https://huggingface.co/black-forest-labs/FLUX.2-dev/"
+                            + "blob/26afe3a78bb242c0a8bb181dcc8937bb16e5c66c/LICENSE.md"
+                    ),
+                    ManagedModelUsageTerm(
+                        component: "FLUX.2-dev Turbo use",
+                        license: "BFL Acceptable Use Policy",
+                        summary: "BFL's prohibited-use conditions apply independently of the non-commercial license.",
+                        sourceRepoId: "fal/FLUX.2-dev-Turbo",
+                        sourceRevision: flux2DevTurboEightStepRevision,
+                        licenseURL: "https://bfl.ai/legal/usage-policy"
+                    ),
+                ]
+            ),
+            releaseManifestURL: URL(
+                string: "https://huggingface.co/fal/FLUX.2-dev-Turbo/commit/\(flux2DevTurboEightStepRevision)"
+            )!,
+            downloadURL: URL(
+                string: "https://huggingface.co/fal/FLUX.2-dev-Turbo/"
+                    + "resolve/\(flux2DevTurboEightStepRevision)/"
+                    + "flux.2-turbo-lora.safetensors?download=true"
+            )!,
+            artifact: ModelArtifactPin(
+                filename: "flux.2-turbo-lora.safetensors",
+                byteCount: 2_760_818_216,
+                sha256: "f76cf9c2cc546ddca878799136434a1098477af3f4b0adff2cfd79f2ebe4aa01"
             )
         ),
         ManagedAdapterSpec(

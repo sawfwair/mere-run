@@ -504,6 +504,7 @@ public enum ManagedModelInstallShape: Hashable, Sendable {
 }
 
 public enum ManagedModelValidationKind: String, Hashable, Sendable {
+    case flux1
     case flux2Klein
     case bonsaiImage
     case zimageTurbo
@@ -718,6 +719,15 @@ public enum ManagedModelCatalog {
         "model_index.json",
         "transformer/*",
     ]
+    private static let flux2DevSnapshotPatterns = [
+        "LICENSE*",
+        "README.md",
+        "model_index.json",
+        "tokenizer/*",
+        "transformer/*",
+        "vae/*",
+        "scheduler/*",
+    ]
     private static let kleinNanoSnapshotPatterns = [
         "model_index.json",
         "scheduler/scheduler_config.json",
@@ -759,6 +769,9 @@ public enum ManagedModelCatalog {
     private static let zImageNanoUpstreamRevision = "b3a8f31115a11f2f9e2fa0bfbc8d78dcc3e6568b"
     private static let klein9BUpstreamRevision = "b0f0826a36667ec7c58253e50557ba76f8c0255e"
     private static let kleinBase9BUpstreamRevision = "32773329fbe7e81a90ef971740e8ba4b0364ecf3"
+    private static let flux2DevUpstreamRevision = "26afe3a78bb242c0a8bb181dcc8937bb16e5c66c"
+    private static let flux2DevTextEncoderRepoId = "mlx-community/Mistral-Small-3.2-24B-Instruct-2506-4bit"
+    private static let flux2DevTextEncoderRevision = "2a1d5eabfc504747bdc24178394821a1efc0edde"
     private static let sam31MLXRevision = "a992e302ea9b0f03f41dfd93414a4fd0e818f65b"
     private static let sam31TokenizerRevision = "694239a1479aab8fd1317c87c433c58acd7c6eab"
     private static let wooshWeightsRevision = "f7b524db359f95b2b0bdc4afce12120b72e68bff"
@@ -950,6 +963,36 @@ public enum ManagedModelCatalog {
             terms: [term] + additionalTerms
         )
     }
+
+    private static let flux2DevUsageRestriction = ManagedModelUsageRestriction(
+        summary: "FLUX.2-dev is limited to non-commercial, non-production use; BFL also requires filters or manual review and compliance with its Acceptable Use Policy.",
+        terms: [
+            ManagedModelUsageTerm(
+                component: "FLUX.2-dev transformer, VAE, and tokenizer",
+                license: "FLUX Non-Commercial License",
+                summary: "Weights are limited to non-commercial, non-production use; commercial use requires a separate BFL license, and generated content requires filters or manual review.",
+                sourceRepoId: "black-forest-labs/FLUX.2-dev",
+                sourceRevision: flux2DevUpstreamRevision,
+                licenseURL: "https://huggingface.co/black-forest-labs/FLUX.2-dev/blob/\(flux2DevUpstreamRevision)/LICENSE.md"
+            ),
+            ManagedModelUsageTerm(
+                component: "FLUX.2-dev use",
+                license: "BFL Acceptable Use Policy",
+                summary: "BFL's prohibited-use conditions apply independently of the non-commercial license.",
+                sourceRepoId: "black-forest-labs/FLUX.2-dev",
+                sourceRevision: flux2DevUpstreamRevision,
+                licenseURL: "https://bfl.ai/legal/usage-policy"
+            ),
+        ]
+    )
+
+    private static let flux1DevUsageRestriction = usageRestriction(
+        summary: "FLUX.1-dev weights and derivatives are limited to non-commercial, non-production use; content filtering or review and the license's prohibited-use conditions also apply.",
+        license: "FLUX.1 dev Non-Commercial License v1.1.1",
+        sourceRepoId: Flux1Resources.upstreamRepoID,
+        sourceRevision: Flux1Resources.upstreamRevision,
+        licenseURL: "https://huggingface.co/black-forest-labs/FLUX.1-dev/blob/\(Flux1Resources.upstreamRevision)/LICENSE.md"
+    )
 
     private static func krea2UsageRestriction(
         sourceRepoId: String,
@@ -1269,6 +1312,59 @@ public enum ManagedModelCatalog {
             installShape: .directoryRoot,
             validationKind: .flux2Klein,
             runtimeAutoDownloadAllowed: false
+        ),
+        ManagedModelSpec(
+            // Keep the gated, LoRA-compatible FLUX.2-dev image stack authoritative while
+            // replacing only its identical Mistral Small 3.2 text encoder with a pinned
+            // Apple-Silicon 4-bit conversion. This avoids about 35 GB of resident and
+            // downloaded weights without changing the transformer targeted by Dev LoRAs.
+            id: "image-flux2-dev",
+            category: .image,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: "black-forest-labs/FLUX.2-dev",
+                revision: flux2DevUpstreamRevision,
+                patterns: flux2DevSnapshotPatterns
+            ),
+            mountedHubFallbacks: [
+                MountedHubFallbackConfig(
+                    destinationPath: "text_encoder",
+                    hubFallback: HubFallbackConfig(
+                        repoId: flux2DevTextEncoderRepoId,
+                        revision: flux2DevTextEncoderRevision,
+                        patterns: [
+                            "README.md",
+                            "config.json",
+                            "model-*.safetensors",
+                            "model.safetensors.index.json",
+                        ]
+                    )
+                ),
+            ],
+            upstreamRepoId: "black-forest-labs/FLUX.2-dev",
+            upstreamRevision: flux2DevUpstreamRevision,
+            usageRestriction: flux2DevUsageRestriction,
+            validationKind: .flux2Klein,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: 78_100_000_000,
+            defaultCLICommands: ["image generate"]
+        ),
+        ManagedModelSpec(
+            id: Flux1Resources.modelID,
+            category: .image,
+            installShape: .directoryRoot,
+            hubFallback: HubFallbackConfig(
+                repoId: Flux1Resources.upstreamRepoID,
+                revision: Flux1Resources.upstreamRevision,
+                patterns: Flux1Resources.snapshotPatterns
+            ),
+            upstreamRepoId: Flux1Resources.upstreamRepoID,
+            upstreamRevision: Flux1Resources.upstreamRevision,
+            usageRestriction: flux1DevUsageRestriction,
+            validationKind: .flux1,
+            runtimeAutoDownloadAllowed: false,
+            estimatedDownloadBytes: Flux1Resources.estimatedDownloadBytes,
+            defaultCLICommands: ["image generate"]
         ),
         ManagedModelSpec(
             id: "image-bonsai-binary",
@@ -4176,6 +4272,8 @@ public extension ManagedModelSpec {
 
     private func missingPathsWithoutNormalization(in rootURL: URL, fileManager: FileManager = .default) -> [URL] {
         switch validationKind {
+        case .flux1:
+            return Flux1Resources(rootURL: rootURL).validate(fileManager: fileManager)
         case .flux2Klein:
             return Self.missingDiffusersImagePaths(in: rootURL, fileManager: fileManager)
         case .bonsaiImage:

@@ -6,7 +6,8 @@ public struct Flux2TransformerConfig: Decodable, Sendable {
     public let attentionHeadDim: Int
     public let axesDimsRope: [Int]
     public let eps: Float
-    public let guidanceEmbeds: Bool
+    /// Diffusers defaults this to `true`; older Klein configs persist `false` explicitly.
+    public let guidanceEmbeds: Bool?
     public let inChannels: Int
     public let jointAttentionDim: Int
     public let mlpRatio: Float
@@ -37,6 +38,7 @@ public struct Flux2TransformerConfig: Decodable, Sendable {
 
     public var hiddenSize: Int { numAttentionHeads * attentionHeadDim }
     public var mlpHiddenSize: Int { Int(Float(hiddenSize) * mlpRatio) }
+    public var resolvedGuidanceEmbeds: Bool { guidanceEmbeds ?? true }
 }
 
 // MARK: - Scheduler Config
@@ -106,9 +108,15 @@ public struct Flux2VAEConfig: Decodable, Sendable {
     }
 }
 
-// MARK: - Text Encoder Config (Qwen3)
+// MARK: - Text Encoder Config
 
 public struct Flux2TextEncoderConfig: Decodable, Sendable {
+    public enum Architecture: Equatable, Sendable {
+        case qwen3
+        case mistral3
+    }
+
+    public let architecture: Architecture
     public let hiddenSize: Int
     public let intermediateSize: Int
     public let numHiddenLayers: Int
@@ -122,6 +130,8 @@ public struct Flux2TextEncoderConfig: Decodable, Sendable {
     public let quantizationConfig: QuantizationConfig?
 
     enum CodingKeys: String, CodingKey {
+        case modelType = "model_type"
+        case textConfig = "text_config"
         case hiddenSize = "hidden_size"
         case intermediateSize = "intermediate_size"
         case numHiddenLayers = "num_hidden_layers"
@@ -132,7 +142,65 @@ public struct Flux2TextEncoderConfig: Decodable, Sendable {
         case ropeTheta = "rope_theta"
         case vocabSize = "vocab_size"
         case maxPositionEmbeddings = "max_position_embeddings"
+        case quantization
         case quantizationConfig = "quantization_config"
+    }
+
+    private struct TextConfig: Decodable {
+        let hiddenSize: Int
+        let intermediateSize: Int
+        let numHiddenLayers: Int
+        let numAttentionHeads: Int
+        let numKeyValueHeads: Int
+        let headDim: Int
+        let rmsNormEps: Float
+        let ropeTheta: Float
+        let vocabSize: Int
+        let maxPositionEmbeddings: Int
+
+        enum CodingKeys: String, CodingKey {
+            case hiddenSize = "hidden_size"
+            case intermediateSize = "intermediate_size"
+            case numHiddenLayers = "num_hidden_layers"
+            case numAttentionHeads = "num_attention_heads"
+            case numKeyValueHeads = "num_key_value_heads"
+            case headDim = "head_dim"
+            case rmsNormEps = "rms_norm_eps"
+            case ropeTheta = "rope_theta"
+            case vocabSize = "vocab_size"
+            case maxPositionEmbeddings = "max_position_embeddings"
+        }
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        if let nested = try container.decodeIfPresent(TextConfig.self, forKey: .textConfig) {
+            architecture = .mistral3
+            hiddenSize = nested.hiddenSize
+            intermediateSize = nested.intermediateSize
+            numHiddenLayers = nested.numHiddenLayers
+            numAttentionHeads = nested.numAttentionHeads
+            numKeyValueHeads = nested.numKeyValueHeads
+            headDim = nested.headDim
+            rmsNormEps = nested.rmsNormEps
+            ropeTheta = nested.ropeTheta
+            vocabSize = nested.vocabSize
+            maxPositionEmbeddings = nested.maxPositionEmbeddings
+        } else {
+            architecture = .qwen3
+            hiddenSize = try container.decode(Int.self, forKey: .hiddenSize)
+            intermediateSize = try container.decode(Int.self, forKey: .intermediateSize)
+            numHiddenLayers = try container.decode(Int.self, forKey: .numHiddenLayers)
+            numAttentionHeads = try container.decode(Int.self, forKey: .numAttentionHeads)
+            numKeyValueHeads = try container.decode(Int.self, forKey: .numKeyValueHeads)
+            headDim = try container.decode(Int.self, forKey: .headDim)
+            rmsNormEps = try container.decode(Float.self, forKey: .rmsNormEps)
+            ropeTheta = try container.decode(Float.self, forKey: .ropeTheta)
+            vocabSize = try container.decode(Int.self, forKey: .vocabSize)
+            maxPositionEmbeddings = try container.decode(Int.self, forKey: .maxPositionEmbeddings)
+        }
+        quantizationConfig = try container.decodeIfPresent(QuantizationConfig.self, forKey: .quantizationConfig)
+            ?? container.decodeIfPresent(QuantizationConfig.self, forKey: .quantization)
     }
 
     public struct QuantizationConfig: Decodable, Sendable {

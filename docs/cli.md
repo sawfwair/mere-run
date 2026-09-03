@@ -238,7 +238,7 @@ See [`model-sources.md`](./model-sources.md) for the full source story,
 including which IDs are pullable from Hugging Face. The most common managed IDs
 are:
 
-- Images: `image-klein-nano`, `image-klein-base`, `image-klein-base-9b`, `image-klein-max`,
+- Images: `image-flux1-dev`, `image-flux2-dev`, `image-klein-nano`, `image-klein-base`, `image-klein-base-9b`, `image-klein-max`,
   `image-bonsai-binary`, `image-bonsai-ternary`, `image-zimage-nano`, `image-zimage-base`, `image-zimage-max`,
   `image-hidream-o1`, `image-hidream-o1-dev`, `image-sensenova-u1-5-8b-mot`, `image-krea2-raw`,
   `image-krea2-turbo`,
@@ -487,7 +487,11 @@ Key options:
 - `--structured-prompt`, `--json-prompt`: expand the prompt into a structured JSON caption with a local text chat model before image generation
 - `--structured-prompt-model`: text chat model id for the adapter; defaults to `text-chat-gemma4-12b-4bit`
 - `--structured-prompt-output`: write the generated structured JSON caption to a file
-- `--lora`, `--lora-scale`
+- `--lora PATH_OR_ID[=SCALE]`: load an image LoRA. Repeat it to stack ordered,
+  independently scaled FLUX.1 or FLUX.2 adapters.
+- `--lora-scale`: default scale for `--lora` values without an inline scale
+- `--sigmas`: pre-shifted, descending FLUX.2 sigma values; a terminal zero is
+  optional
 - `--krea-base-quantization-bits 4|8`: quantize the frozen Krea transformer and
   load the text encoder, transformer, and VAE sequentially to reduce peak memory
 - `--preflight`: inspect the generation request without loading the model or writing an image
@@ -2386,6 +2390,7 @@ List the built-in public adapter catalog or install one immutable release:
 mere.run adapter list
 mere.run adapter list --json
 mere.run adapter pull mere-platform-assistant
+mere.run adapter pull flux2-dev-turbo-8step --accept-license
 mere.run adapter pull scail2-lightx2v-4step
 mere.run adapter pull minimax-h3-turbo-4step
 mere.run adapter pull minimax-h3-lightx2v-4step
@@ -2399,9 +2404,15 @@ mere.run adapter pull minimax-h3-fasth3-vsa-datafree-4step --accept-license
 The pull verifies the cataloged byte count and SHA-256 before atomically
 installing the adapter. Stdout contains only the installed path; progress and
 verification diagnostics go to stderr. Use the adapter id directly with
-`text chat --lora`, `api serve --lora`, or the matching SCAIL
-`video animate --distilled-adapter` option. `video animate --profile fast`
-selects `scail2-lightx2v-4step` and its fixed four-step schedule.
+`image generate --lora`, `text chat --lora`, `api serve --lora`, or the
+matching SCAIL `video animate --distilled-adapter` option. `video animate
+--profile fast` selects `scail2-lightx2v-4step` and its fixed four-step
+schedule.
+`image generate --lora flux2-dev-turbo-8step` selects the Turbo adapter's
+eight-step schedule and guidance default for `image-flux2-dev`. Repeat
+`--lora PATH_OR_ID[=SCALE]` to add local FLUX.2-dev adapters to the same run.
+For `image-flux1-dev`, repeat the same option to stack compatible FLUX.1
+adapters. FLUX.1, FLUX.2-dev, and Klein adapters aren't interchangeable.
 Use the MiniMax-H3 adapter ids with `video generate --h3-adapter`. FL2VA
 adapters support the compact BF16 and affine Q8 FL2VA bases and reject the
 legacy Q4 compatibility package. The Ref2V adapter uses the managed Ref2VA base

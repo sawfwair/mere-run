@@ -1,6 +1,6 @@
 # Flux2Klein
 
-FLUX.2 Klein image generation and LoRA training runtime.
+FLUX.2 Dev and Klein image generation runtime, with Klein LoRA training.
 
 - `Flux2KleinGenerator*.swift`: loading, prompt/reference encoding, denoising,
   decode, and generation support.

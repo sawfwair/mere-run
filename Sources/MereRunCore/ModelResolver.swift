@@ -15,6 +15,8 @@ public struct ModelResolver {
         case kleinBase9B = "image-klein-base-9b"
         case kleinBase = "image-klein-base"
         case kleinShared = "image-klein-shared"
+        case flux2Dev = "image-flux2-dev"
+        case flux1Dev = "image-flux1-dev"
         case bonsaiBinary = "image-bonsai-binary"
         case bonsaiTernary = "image-bonsai-ternary"
         case zetaNano = "image-zimage-nano"

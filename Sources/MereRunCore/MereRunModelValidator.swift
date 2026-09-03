@@ -440,6 +440,8 @@ public enum MereRunModelValidator {
 
         if let family = manifest.family, let engine = manifest.engine {
             switch family {
+            case .flux1 where engine != .flux1:
+                warnings.append("Manifest engine mismatch: family=flux1 expects flux1.")
             case .klein where engine != .flux2Klein:
                 warnings.append("Manifest engine mismatch: family=klein expects flux2-klein.")
             case .zimage where engine != .zimageTurbo:
@@ -616,7 +618,7 @@ public enum MereRunModelValidator {
 
     private static func manifestRequiresInlineQuantization(_ manifest: MereRunModelManifest) -> Bool {
         switch manifest.engine {
-        case .flux2Klein?, .zimageTurbo?, .ideogram4?, .qwen35HybridMoE?, .laguna?:
+        case .flux1?, .flux2Klein?, .zimageTurbo?, .ideogram4?, .qwen35HybridMoE?, .laguna?:
             return true
         default:
             return false
@@ -624,7 +626,9 @@ public enum MereRunModelValidator {
     }
 
     private static func inferFamily(from modelId: String) -> MereRunModelManifest.Family? {
+        if modelId.hasPrefix("image-flux1-") { return .flux1 }
         if modelId.hasPrefix("image-klein-") { return .klein }
+        if modelId.hasPrefix("image-flux2-") { return .klein }
         if modelId.hasPrefix("image-zimage-") { return .zimage }
         if modelId.hasPrefix("image-hidream-") { return .hidream }
         if modelId.hasPrefix("image-sensenova-") { return .senseNova }

@@ -170,7 +170,7 @@ enum InstalledModelSmokePlans {
         installedIDs: Set<String>
     ) -> InstalledModelSmokePlan? {
         switch spec.validationKind {
-        case .flux2Klein, .bonsaiImage, .zimageTurbo, .hidreamO1, .senseNovaU15, .krea2, .ideogram4SDNQ:
+        case .flux1, .flux2Klein, .bonsaiImage, .zimageTurbo, .hidreamO1, .senseNovaU15, .krea2, .ideogram4SDNQ:
             return direct(spec, route: "image generate") { runner in
                 try await runner.installedImageCheck(model: spec.id)
             }

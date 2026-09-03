@@ -41,6 +41,43 @@ final class ImageGenerateCommandParsingTests: XCTestCase {
         XCTAssertEqual(cmd.cfgScale, 1.0)
     }
 
+    func testParsesOrderedLoRAStackWithIndependentScales() throws {
+        let cmd = try ImageGenerate.parse([
+            "--prompt", "a studio portrait",
+            "--lora", "flux2-dev-turbo-8step=1.0",
+            "--lora", "/tmp/style.safetensors=0.65",
+            "--lora-scale", "0.8",
+        ])
+
+        XCTAssertEqual(
+            cmd.loraArguments,
+            ["flux2-dev-turbo-8step=1.0", "/tmp/style.safetensors=0.65"]
+        )
+        XCTAssertEqual(cmd.lora, "flux2-dev-turbo-8step=1.0")
+        XCTAssertEqual(
+            try ImageGenerate.parseLoRAArguments(
+                cmd.loraArguments,
+                defaultScale: cmd.loraScale
+            ),
+            [
+                .init(raw: "flux2-dev-turbo-8step=1.0", reference: "flux2-dev-turbo-8step", scale: 1),
+                .init(raw: "/tmp/style.safetensors=0.65", reference: "/tmp/style.safetensors", scale: 0.65),
+            ]
+        )
+    }
+
+    func testParsesTurboSigmaScheduleWithOptionalTerminalZero() throws {
+        let cmd = try ImageGenerate.parse([
+            "--prompt", "a studio portrait",
+            "--sigmas", "1, 0.6509, 0.4374, 0",
+        ])
+
+        XCTAssertEqual(
+            try ImageGenerate.parseSigmaList(cmd.sigmaList),
+            [1, 0.6509, 0.4374]
+        )
+    }
+
     func testParsesOptionalImageStrength() throws {
         let cmd = try ImageGenerate.parse([
             "--prompt", "a brass camera",
@@ -408,6 +445,118 @@ final class ImageGenerateCommandParsingTests: XCTestCase {
         XCTAssertEqual(commandFromPlan.seed, 42)
         XCTAssertFalse(commandFromPlan.preflight)
         XCTAssertFalse(commandFromPlan.json)
+    }
+
+    func testImageGenerationPreflightRoundTripsStackedLocalLoRAs() throws {
+        let temp = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let model = temp.appendingPathComponent("model", isDirectory: true)
+        try writeManifest(id: "image-flux2-dev", family: .klein, to: model)
+        let turbo = temp.appendingPathComponent("turbo.safetensors")
+        let style = temp.appendingPathComponent("style.safetensors")
+        try Data("turbo".utf8).write(to: turbo)
+        try Data("style".utf8).write(to: style)
+
+        let command = try ImageGenerate.parse([
+            "--prompt", "TRIGGER_TOKEN a studio portrait",
+            "--model", model.path,
+            "--lora", "\(turbo.path)=1.0",
+            "--lora", "\(style.path)=0.7",
+            "--preflight",
+            "--json",
+        ])
+        let envelope = command.makePreflightEnvelope(
+            outputURL: temp.appendingPathComponent("stacked.png")
+        )
+
+        XCTAssertEqual(envelope.status, .ok)
+        XCTAssertEqual(envelope.result.loras.map(\.path), [turbo.path, style.path])
+        XCTAssertEqual(envelope.result.loras.map(\.scale), [1, 0.7])
+        XCTAssertEqual(
+            envelope.result.runPlan.arguments.loras,
+            ["\(turbo.path)=1.0", "\(style.path)=0.7"]
+        )
+
+        let runPlan = try ImageRunPlan.parse(["/tmp/unused-plan.json"])
+        let replay = try runPlan.makeGenerateCommand(from: envelope.result.runPlan)
+        XCTAssertEqual(
+            replay.loraArguments,
+            ["\(turbo.path)=1.0", "\(style.path)=0.7"]
+        )
+    }
+
+    func testFlux1PreflightAcceptsStackedLoRAsAndUsesManifestDefaults() throws {
+        let temp = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let model = temp.appendingPathComponent("model", isDirectory: true)
+        try FileManager.default.createDirectory(at: model, withIntermediateDirectories: true)
+        let manifest = MereRunModelManifest(
+            id: Flux1Resources.modelID,
+            engine: .flux1,
+            family: .flux1,
+            variant: .standard,
+            precision: .bf16,
+            defaults: .init(steps: 28, cfg: 3.5),
+            supports: [.txt2img, .loraInference]
+        )
+        try manifest.write(to: model)
+        let fast = temp.appendingPathComponent("fast.safetensors")
+        let style = temp.appendingPathComponent("style.safetensors")
+        try Data("fast".utf8).write(to: fast)
+        try Data("style".utf8).write(to: style)
+
+        let command = try ImageGenerate.parse([
+            "--prompt", "a studio portrait",
+            "--model", model.path,
+            "--lora", "\(fast.path)=0.9",
+            "--lora", "\(style.path)=0.65",
+            "--preflight",
+            "--json",
+        ])
+        let envelope = command.makePreflightEnvelope(
+            outputURL: temp.appendingPathComponent("flux1.png")
+        )
+
+        XCTAssertEqual(envelope.status, .ok)
+        XCTAssertEqual(envelope.result.model.family, MereRunModelManifest.Family.flux1.rawValue)
+        XCTAssertEqual(envelope.result.plan.effectiveSteps, 28)
+        XCTAssertEqual(envelope.result.plan.effectiveCFGScale, 3.5)
+        XCTAssertEqual(envelope.result.loras.map(\.scale), [0.9, 0.65])
+        XCTAssertFalse(envelope.diagnostics.contains { $0.id == "lora_stack_model_unsupported" })
+    }
+
+    func testFlux2DevTurboPreflightAppliesPublishedRecipe() throws {
+        let temp = try makeTemporaryDirectory()
+        defer { try? FileManager.default.removeItem(at: temp) }
+
+        let model = temp.appendingPathComponent("model", isDirectory: true)
+        try writeManifest(id: "image-flux2-dev", family: .klein, to: model)
+        let command = try ImageGenerate.parse([
+            "--prompt", "a studio portrait",
+            "--model", model.path,
+            "--lora", ManagedAdapterCatalog.flux2DevTurboEightStepID,
+            "--preflight",
+            "--json",
+        ])
+        let envelope = command.makePreflightEnvelope(
+            outputURL: temp.appendingPathComponent("turbo.png")
+        )
+
+        XCTAssertEqual(envelope.result.plan.effectiveSteps, Flux2DevTurboRecipe.steps)
+        XCTAssertEqual(envelope.result.plan.effectiveCFGScale, Flux2DevTurboRecipe.guidanceScale)
+        XCTAssertEqual(envelope.result.plan.effectiveSigmas, Flux2DevTurboRecipe.sigmas)
+        let turbo = try XCTUnwrap(envelope.result.loras.first)
+        XCTAssertEqual(turbo.requested, ManagedAdapterCatalog.flux2DevTurboEightStepID)
+        if turbo.exists {
+            XCTAssertEqual(envelope.status, .ok)
+            XCTAssertFalse(envelope.diagnostics.contains { $0.id == "managed_lora_missing" })
+        } else {
+            XCTAssertEqual(envelope.status, .blocked)
+            XCTAssertTrue(envelope.diagnostics.contains { $0.id == "managed_lora_missing" })
+            XCTAssertTrue(envelope.actions.contains { $0.id == "pull-adapter-1" })
+        }
     }
 
     func testImageRunPlanMaterializesGenerationRunDirectory() throws {
