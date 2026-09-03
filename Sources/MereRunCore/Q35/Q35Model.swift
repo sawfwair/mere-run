@@ -214,7 +214,7 @@ final class Q35DecoderLayer: Module {
             )
 
             let mlpMix = mlpHyperConnection.mix(hyper)
-            let mlpOut = mlp(mlpMix.mixed)
+            let mlpOut = mlp(mlpMix.mixed, targetVerify: targetVerify)
             return mlpHyperConnection.inject(
                 blockOutput: mlpOut,
                 residual: mlpMix.residual,
@@ -257,7 +257,7 @@ final class Q35DecoderLayer: Module {
             h = x + attentionOut
         }
 
-        let mlpOut = mlp(postAttentionLayerNorm(h))
+        let mlpOut = mlp(postAttentionLayerNorm(h), targetVerify: targetVerify)
         return h + mlpOut
     }
 }

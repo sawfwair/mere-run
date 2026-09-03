@@ -137,6 +137,24 @@ class Q35SwitchLinear: Module {
         applyGather(x, indices: indices, sortedIndices: sortedIndices)
     }
 
+    func applyFlatExact(_ x: MLXArray, indices: MLXArray) -> MLXArray? {
+        #if os(macOS)
+        guard let scales, let biases else { return nil }
+        let resolved = resolvedQuantization(inputDim: x.dim(x.ndim - 1), scales: scales)
+        return SmallBatchAffineGatherQMV.matmul(
+            x,
+            weight: weight,
+            scales: scales,
+            biases: biases,
+            indices: indices,
+            groupSize: resolved.groupSize,
+            bits: resolved.bits
+        )
+        #else
+        return nil
+        #endif
+    }
+
     private func applyGather(_ x: MLXArray, indices: MLXArray, sortedIndices: Bool) -> MLXArray {
         let inputDim = x.dim(x.ndim - 1)
         let output: MLXArray
@@ -294,6 +312,45 @@ final class Q35SwitchGLU: Module {
         return downProj(activated, indices: indices)
     }
 
+    func serialTokens(_ x: MLXArray, indices: MLXArray) -> MLXArray {
+        precondition(x.ndim == 3 && indices.ndim == 3)
+        return MLX.concatenated((0..<x.dim(1)).map { row in
+            unsorted(
+                x[0..., row..<(row + 1), 0...],
+                indices: indices[0..., row..<(row + 1), 0...]
+            )
+        }, axis: 1)
+    }
+
+    func exactWide(_ x: MLXArray, indices: MLXArray) -> MLXArray? {
+        guard x.ndim == 3, x.dim(0) == 1, indices.ndim == 3 else { return nil }
+        let width = x.dim(1)
+        let topK = indices.dim(2)
+        let inputDim = x.dim(2)
+        let routeCount = width * topK
+        let flatIndices = indices.reshaped([routeCount])
+        let flatInput = MLX.broadcast(
+            x.expandedDimensions(axis: 2),
+            to: [1, width, topK, inputDim]
+        ).reshaped([routeCount, 1, inputDim])
+
+        let activated: MLXArray
+        if let fused = resolvedFusedGateUp(),
+           let fusedOutput = exactFusedGateUp(flatInput, fused: fused, indices: flatIndices) {
+            let parts = split(fusedOutput, indices: [fused.intermediate], axis: -1)
+            activated = MLXNN.silu(parts[0]) * parts[1]
+        } else if let gate = gateProj.applyFlatExact(flatInput, indices: flatIndices),
+                  let up = upProj.applyFlatExact(flatInput, indices: flatIndices) {
+            activated = q35Swiglu(gate, up)
+        } else {
+            return nil
+        }
+        guard let output = downProj.applyFlatExact(activated, indices: flatIndices) else {
+            return nil
+        }
+        return output.reshaped([1, width, topK, output.dim(2)])
+    }
+
     private func resolvedFusedGateUp() -> FusedGateUp? {
         guard Q35FusedSwitchGLUPolicy.enabled else { return nil }
 
@@ -449,6 +506,34 @@ final class Q35SwitchGLU: Module {
         let parts = split(output, indices: [fused.intermediate], axis: -1)
         return MLXNN.silu(parts[0]) * parts[1]
     }
+
+    private func exactFusedGateUp(
+        _ x: MLXArray,
+        fused: FusedGateUp,
+        indices: MLXArray
+    ) -> MLXArray? {
+        #if os(macOS)
+        guard let scales = fused.scales, let biases = fused.biases else { return nil }
+        let resolved = q35ResolvedQuantization(
+            inputDim: x.dim(x.ndim - 1),
+            packedInputDim: fused.weight.dim(fused.weight.ndim - 1),
+            scaleGroups: scales.dim(scales.ndim - 1),
+            fallbackGroupSize: gateProj.groupSize,
+            fallbackBits: gateProj.bits
+        )
+        return SmallBatchAffineGatherQMV.matmul(
+            x,
+            weight: fused.weight,
+            scales: scales,
+            biases: biases,
+            indices: indices,
+            groupSize: resolved.groupSize,
+            bits: resolved.bits
+        )
+        #else
+        return nil
+        #endif
+    }
 }
 
 private func q35ResolvedQuantization(
@@ -542,7 +627,7 @@ final class Q35FeedForward: Module {
         switchMLP?.prepareFusedGateUpAndReleaseSources() ?? false
     }
 
-    func callAsFunction(_ x: MLXArray) -> MLXArray {
+    func callAsFunction(_ x: MLXArray, targetVerify: Bool = false) -> MLXArray {
         if usesMoE,
            let gate,
            let switchMLP,
@@ -564,7 +649,16 @@ final class Q35FeedForward: Module {
             }
             if isQwen4Exp { scores = scores.asType(routerLogits.dtype) }
 
-            let switched = switchMLP(x, indices: indices)
+            let usesSerialRoutes = targetVerify && isQwen4Exp
+                && Q38WideVerificationPolicy.exactExpertRoutes
+                && x.ndim == 3 && x.dim(0) == 1 && (10...32).contains(x.dim(1))
+            // Wide route batches change gather-QMV arithmetic. Keep only the
+            // routed expert path serial-equivalent; the exact small-batch
+            // router, shared expert, and shared gate remain batched.
+            let switched = usesSerialRoutes
+                ? switchMLP.exactWide(x, indices: indices)
+                    ?? switchMLP.serialTokens(x, indices: indices)
+                : switchMLP(x, indices: indices)
             var routed = switched * MLX.expandedDimensions(scores, axis: scores.ndim)
             routed = routed.sum(axis: -2)
 

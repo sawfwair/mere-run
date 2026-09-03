@@ -54,3 +54,66 @@ speed result counts.
 The next bounded experiment is an exact width-8 branch verifier with an
 adaptive tree planner. Promote that work only if it beats the four-token path
 on code, math, and prose prompts after draft cost is included.
+
+## Exact-width follow-up
+
+The follow-up prototype makes the checkpoint's full greedy trajectory exact at
+widths 4, 8, 16, and 32. It combines row-accurate QSA replay with exact affine
+Q4 projection kernels and an exact gathered Q3 expert-route kernel. The wide
+Q4 policy is limited to the checkpoint shapes that affect greedy parity; the
+remaining wide projections use the native MLX path.
+
+The canonical release CLI ran three trials per width with no diagnostic
+environment overrides:
+
+```console
+mere.run model benchmark q38-verification \
+  --model-root <checkpoint> \
+  --widths 4,8,16,32 \
+  --tokens 128 \
+  --trials 3 \
+  --json
+```
+
+| Width | Verified tokens per second | Greedy parity | Previous target |
+| ---: | ---: | :---: | ---: |
+| 4 | 70.59-75.70 | Yes, 3/3 | 49.7-51.0 exact |
+| 8 | 99.19-104.47 | Yes, 3/3 | 77.6-81.4 exact |
+| 16 | 145.43-159.58 | Yes, 3/3 | 125-141 nonexact |
+| 32 | 160.57-187.68 | Yes, 3/3 | 187-191 nonexact |
+
+The mixed-width run exposed host/run-order variance at width 32. A separate
+five-trial width-32 readback measured 186.98-189.00 verified tokens per second,
+with a mean of 188.23 and greedy parity in all five trials. Four trials were in
+the 187-191 target band; the remaining trial was 0.017 tokens per second below
+its lower edge.
+
+The release receipt is
+`/tmp/q38-final-exact-rows-default-3trials.json` (SHA-256
+`5e9e46f97f36bad5b28ed774d0448e2cf42fdecefcb5cf06102426e45362a16c`).
+The isolated width-32 receipt is
+`/tmp/q38-final-width32-stability-5trials.json` (SHA-256
+`fcc139afa766e728af84890cb995523be5df604200ebcaa9b523c50ebc8c8274`).
+
+## Quality guardrail
+
+The Lite suite ran before the implementation, after the first exact-wide
+version, and after the final kernels. Each run completed 24 case-trials: 17
+were evaluable and seven required unavailable external fixtures.
+
+| Build | Mean score | Passes |
+| --- | ---: | ---: |
+| Baseline | 0.9235 | 12/17 |
+| Intermediate exact-wide | 0.9471 | 13/17 |
+| Final exact-wide | 0.9256 | 11/17 |
+
+These are single sampled trials, so the pass-count spread is not evidence of
+an improvement or regression. The final mean remains within 0.0021 of the
+baseline, while the deterministic full-checkpoint benchmark proves identical
+greedy output at every measured width. The final Lite report is
+`/tmp/q38-lite-final-exact-rows.report.json` (SHA-256
+`90b8008d26f88809573551eab6ce74070840884006308ffd03f9ef52ee33e710`).
+
+This remains a target-only verifier result. It does not qualify a production
+tree decoder or claim end-to-end generation throughput; draft cost, acceptance,
+adaptive planning, and workload-level quality still require separate evidence.

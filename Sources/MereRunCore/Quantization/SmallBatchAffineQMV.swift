@@ -1,15 +1,38 @@
 #if os(macOS)
+import Foundation
 import MLX
 import MLXFast
 
 /// A serial-arithmetic-preserving affine-Q4 matrix/vector kernel for the
-/// two-through-nine-row verification blocks used by Qwen MTP.
+/// two-through-thirty-two-row verification blocks used by Qwen MTP.
 ///
 /// MLX's native wide QMV deliberately reassociates the reduction to reuse
 /// weights across rows. This kernel retains the serial QMV's per-row reduction
 /// order while sharing the weight reads, which keeps speculative verification
 /// on the same greedy trajectory as one-token decoding.
 enum SmallBatchAffineQMV {
+    /// Wide Flash-Next verification only needs serial QMV arithmetic on these
+    /// checkpoint geometries to preserve the greedy trajectory. The omitted
+    /// 4x10240 injection and 2560x640 shared-down tails stay on MLX's wide
+    /// kernel; serializing either costs throughput without changing parity.
+    private static let q38WideExactShapes: Set<String> = [
+        "48x2560", "320x10240", "512x2560", "640x2560",
+        "2560x2560", "2560x6144", "6144x2560", "10240x320",
+        "10240x2560", "12288x2560", "248320x2560",
+    ]
+    private static let exactWideEnabled: Bool = {
+        let value = ProcessInfo.processInfo.environment["MERERUN_Q38_EXACT_WIDE_Q4"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .lowercased()
+        return value != "0" && value != "false" && value != "off"
+    }()
+    private static let exactWideShapes: Set<String>? = {
+        guard let raw = ProcessInfo.processInfo.environment["MERERUN_Q38_EXACT_WIDE_Q4_SHAPES"]?
+            .trimmingCharacters(in: .whitespacesAndNewlines),
+              !raw.isEmpty else { return nil }
+        return Set(raw.split(separator: ",").map(String.init))
+    }()
+
     private static let header = """
         template <int NA>
         inline void mere_affine4_qmv_wide(
@@ -131,6 +154,22 @@ enum SmallBatchAffineQMV {
         }
         """
 
+    private static let exactRowsKernel = MLXFast.metalKernel(
+        name: "mere_affine4_g64_exact_rows_qmv_v1",
+        inputNames: ["w", "scales", "biases", "x"],
+        outputNames: ["y"],
+        source: """
+            qmv_impl<bfloat16_t, 64, 4>(
+                w, scales, biases, x, y,
+                x_shape[x_ndim - 1], w_shape[0],
+                threadgroup_position_in_grid,
+                simdgroup_index_in_threadgroup,
+                thread_index_in_simdgroup);
+            """,
+        header: "// MLX_INCLUDE_AFFINE_QUANTIZED_HEADERS\n",
+        ensureRowContiguous: true
+    )
+
     private static let source = """
         const int m = x_shape[x_ndim - 2];
         const int k = x_shape[x_ndim - 1];
@@ -149,6 +188,29 @@ enum SmallBatchAffineQMV {
             case 7: mere_affine4_qmv_m<7, 4>(w, scales, biases, x, y, k, n, group_x, out_row, lid); break;
             case 8: mere_affine4_qmv_m<8, 4>(w, scales, biases, x, y, k, n, group_x, out_row, lid); break;
             case 9: mere_affine4_qmv_m<9, 3>(w, scales, biases, x, y, k, n, group_x, out_row, lid); break;
+            case 10: mere_affine4_qmv_m<10, 5>(w, scales, biases, x, y, k, n, group_x, out_row, lid); break;
+            case 11: mere_affine4_qmv_m<11, 4>(w, scales, biases, x, y, k, n, group_x, out_row, lid); break;
+            case 12: mere_affine4_qmv_m<12, 4>(w, scales, biases, x, y, k, n, group_x, out_row, lid); break;
+            case 13: mere_affine4_qmv_m<13, 5>(w, scales, biases, x, y, k, n, group_x, out_row, lid); break;
+            case 14: mere_affine4_qmv_m<14, 4>(w, scales, biases, x, y, k, n, group_x, out_row, lid); break;
+            case 15: mere_affine4_qmv_m<15, 5>(w, scales, biases, x, y, k, n, group_x, out_row, lid); break;
+            case 16: mere_affine4_qmv_m<16, 4>(w, scales, biases, x, y, k, n, group_x, out_row, lid); break;
+            case 17: mere_affine4_qmv_m<17, 5>(w, scales, biases, x, y, k, n, group_x, out_row, lid); break;
+            case 18: mere_affine4_qmv_m<18, 4>(w, scales, biases, x, y, k, n, group_x, out_row, lid); break;
+            case 19: mere_affine4_qmv_m<19, 4>(w, scales, biases, x, y, k, n, group_x, out_row, lid); break;
+            case 20: mere_affine4_qmv_m<20, 5>(w, scales, biases, x, y, k, n, group_x, out_row, lid); break;
+            case 21: mere_affine4_qmv_m<21, 3>(w, scales, biases, x, y, k, n, group_x, out_row, lid); break;
+            case 22: mere_affine4_qmv_m<22, 4>(w, scales, biases, x, y, k, n, group_x, out_row, lid); break;
+            case 23: mere_affine4_qmv_m<23, 4>(w, scales, biases, x, y, k, n, group_x, out_row, lid); break;
+            case 24: mere_affine4_qmv_m<24, 4>(w, scales, biases, x, y, k, n, group_x, out_row, lid); break;
+            case 25: mere_affine4_qmv_m<25, 5>(w, scales, biases, x, y, k, n, group_x, out_row, lid); break;
+            case 26: mere_affine4_qmv_m<26, 4>(w, scales, biases, x, y, k, n, group_x, out_row, lid); break;
+            case 27: mere_affine4_qmv_m<27, 4>(w, scales, biases, x, y, k, n, group_x, out_row, lid); break;
+            case 28: mere_affine4_qmv_m<28, 4>(w, scales, biases, x, y, k, n, group_x, out_row, lid); break;
+            case 29: mere_affine4_qmv_m<29, 3>(w, scales, biases, x, y, k, n, group_x, out_row, lid); break;
+            case 30: mere_affine4_qmv_m<30, 5>(w, scales, biases, x, y, k, n, group_x, out_row, lid); break;
+            case 31: mere_affine4_qmv_m<31, 4>(w, scales, biases, x, y, k, n, group_x, out_row, lid); break;
+            case 32: mere_affine4_qmv_m<32, 4>(w, scales, biases, x, y, k, n, group_x, out_row, lid); break;
             default: break;
         }
         """
@@ -171,7 +233,8 @@ enum SmallBatchAffineQMV {
         bits: Int,
         mode: QuantizationMode
     ) -> MLXArray? {
-        guard Device.defaultDevice().deviceType == .gpu,
+        guard exactWideEnabled,
+              Device.defaultDevice().deviceType == .gpu,
               bits == 4, groupSize == 64, mode == .affine else { return nil }
         guard x.dtype == .bfloat16,
               weight.dtype == .uint32,
@@ -185,7 +248,11 @@ enum SmallBatchAffineQMV {
         let inputSize = x.dim(-1)
         let outputSize = weight.dim(0)
         let width = x.size / inputSize
-        guard (2...9).contains(width),
+        let shape = "\(outputSize)x\(inputSize)"
+        let selected = exactWideShapes?.contains(shape)
+            ?? (width <= 9 || q38WideExactShapes.contains(shape))
+        guard selected,
+              (2...32).contains(width),
               x.dim(-2) == width,
               weight.dim(1) == inputSize / 8 else {
             return nil
@@ -196,7 +263,7 @@ enum SmallBatchAffineQMV {
         // the aligned kernel below. Native wide QMV changes their reduction
         // order too. Keep those small verification blocks on native one-row
         // QMV until a matching weight-reusing kernel covers the tail shapes.
-        guard inputSize % 512 == 0, outputSize % 8 == 0, outputSize >= 8 else {
+        guard outputSize % 8 == 0, outputSize >= 8 else {
             return MLX.concatenated((0..<width).map { row in
                 MLX.quantizedMM(
                     x[.ellipsis, row..<(row + 1), 0...], weight,
@@ -204,6 +271,18 @@ enum SmallBatchAffineQMV {
                     groupSize: groupSize, bits: bits, mode: mode
                 )
             }, axis: -2)
+        }
+
+        if !inputSize.isMultiple(of: 512) {
+            var outputShape = x.shape
+            outputShape[outputShape.count - 1] = outputSize
+            return exactRowsKernel(
+                [weight, scales, biases, x],
+                grid: (width * 32, (outputSize / 8) * 2, 1),
+                threadGroup: (32, 2, 1),
+                outputShapes: [outputShape],
+                outputDTypes: [.bfloat16]
+            )[0]
         }
 
         let inputsPerGroup: Int
@@ -216,6 +295,11 @@ enum SmallBatchAffineQMV {
         case 7: inputsPerGroup = 4
         case 8: inputsPerGroup = 4
         case 9: inputsPerGroup = 3
+        case 10: inputsPerGroup = 5
+        case 11, 12, 14, 16, 18, 19, 22, 23, 24, 26, 27, 28, 31, 32:
+            inputsPerGroup = 4
+        case 13, 15, 17, 20, 25, 30: inputsPerGroup = 5
+        case 21, 29: inputsPerGroup = 3
         default: return nil
         }
 
