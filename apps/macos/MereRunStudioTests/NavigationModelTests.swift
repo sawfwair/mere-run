@@ -45,8 +45,13 @@ final class NavigationModelTests: XCTestCase {
         XCTAssertEqual(StudioTaskControlStyle.style(for: .threeD), .none)
         XCTAssertEqual(StudioTaskControlStyle.style(for: .image), .segmented)
         XCTAssertEqual(StudioTaskControlStyle.style(for: .earth), .segmented)
-        XCTAssertEqual(StudioTaskControlStyle.style(for: .music), .menu)
-        XCTAssertEqual(StudioTaskControlStyle.style(for: .vision), .menu)
+        XCTAssertEqual(StudioTaskControlStyle.style(for: .music), .segmented)
+        XCTAssertEqual(StudioTaskControlStyle.style(for: .sound), .segmented)
+        XCTAssertEqual(StudioTaskControlStyle.style(for: .vision), .segmentedWithOverflow(visible: 5))
+        // The overflow keeps every task reachable and the visible ones in domain order.
+        let visible = Array(StudioDomain.vision.tasks.prefix(5))
+        XCTAssertEqual(visible, [.visionRead, .visionFind, .visionSegment, .visionTrack, .visionDepth])
+        XCTAssertLessThan(5, StudioDomain.vision.tasks.count)
     }
 
     // MARK: - Destinations

@@ -244,55 +244,69 @@ struct StudioRootView: View {
 
     // MARK: - Toolbar
 
+    // The toolbar is the window's real `NSToolbar`: domain glyph and title leading, the task
+    // control in the principal slot, and the Library, Inspector, and Command toggles trailing.
+    // The items draw their own chrome, so the macOS 26 glass platters are hidden.
     @ToolbarContentBuilder
     private var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .navigation) {
+        StudioToolbarItem(placement: .navigation) {
             domainTitle
         }
 
-        ToolbarItem(placement: .principal) {
+        StudioToolbarItem(placement: .principal) {
             taskControl
         }
 
-        ToolbarItemGroup(placement: .primaryAction) {
-            if destination.domain.hasPromptWorkspace {
-                Button {
-                    toggleLibrary()
-                } label: {
-                    Image(systemName: "sidebar.squares.left")
-                        .foregroundStyle(navigation.showLibrary ? MereRunTheme.accent : MereRunTheme.textSecondary)
+        StudioToolbarItem(placement: .primaryAction) {
+            HStack(spacing: 4) {
+                if destination.domain.hasPromptWorkspace {
+                    MereToolbarIconButton(
+                        systemImage: "sidebar.left",
+                        isActive: navigation.showLibrary,
+                        action: toggleLibrary
+                    )
+                    .help(navigation.showLibrary ? "Hide Library (⌥⌘L)" : "Show Library (⌥⌘L)")
+                    .accessibilityLabel(navigation.showLibrary ? "Hide Library" : "Show Library")
                 }
-                .help(navigation.showLibrary ? "Hide Library (⌥⌘L)" : "Show Library (⌥⌘L)")
-                .accessibilityLabel(navigation.showLibrary ? "Hide Library" : "Show Library")
-            }
 
-            Button {
-                openConsole()
-            } label: {
-                Image(systemName: "terminal")
+                // The inspector column arrives with the feed canvas; the toggle holds its place.
+                MereToolbarIconButton(systemImage: "sidebar.right", isActive: false, action: {})
+                    .disabled(true)
+                    .opacity(0.45)
+                    .help("Inspector — coming soon")
+                    .accessibilityLabel("Inspector")
+                    .accessibilityHint("Not available yet")
+
+                MereToolbarIconButton(
+                    systemImage: "terminal",
+                    isActive: navigation.isConsoleOpen,
+                    action: { openConsole() }
+                )
+                .help("Command Console (⌥⌘C)")
+                .accessibilityLabel("Command Console")
             }
-            .help("Command Console (⌥⌘C)")
-            .accessibilityLabel("Command Console")
         }
     }
 
     private var domainTitle: some View {
         HStack(spacing: MereRunTheme.Spacing.sm) {
             Image(systemName: destination.domain.systemImage)
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 14, weight: .medium))
                 .foregroundStyle(MereRunTheme.accent)
-                .frame(width: 22)
+                .frame(width: 16, height: 16)
 
-            VStack(alignment: .leading, spacing: 1) {
+            VStack(alignment: .leading, spacing: 2) {
                 Text(destination.domain.title)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(MereRunTheme.textPrimary)
                 Text(destination.domain.subtitle)
-                    .font(.system(size: 11, weight: .medium))
+                    .font(.system(size: 11.5, weight: .medium))
                     .foregroundStyle(MereRunTheme.textMuted)
                     .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
             }
         }
+        .padding(.leading, 2)
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
     }
@@ -303,25 +317,9 @@ struct StudioRootView: View {
         case .none:
             EmptyView()
         case .segmented:
-            Picker("Task", selection: taskBinding) {
-                ForEach(destination.domain.tasks) { task in
-                    Text(task.title).tag(task)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .fixedSize()
-            .accessibilityLabel("\(destination.domain.title) task")
-        case .menu:
-            Picker("Task", selection: taskBinding) {
-                ForEach(destination.domain.tasks) { task in
-                    Text(task.title).tag(task)
-                }
-            }
-            .pickerStyle(.menu)
-            .labelsHidden()
-            .fixedSize()
-            .accessibilityLabel("\(destination.domain.title) task")
+            StudioTaskControl(domain: destination.domain, selection: taskBinding, visibleLimit: nil)
+        case .segmentedWithOverflow(let visible):
+            StudioTaskControl(domain: destination.domain, selection: taskBinding, visibleLimit: visible)
         }
     }
 

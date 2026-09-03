@@ -447,15 +447,20 @@ extension StudioMode {
 enum StudioTaskControlStyle: Equatable {
     /// One task: the title alone is enough.
     case none
+    /// Every task as a segment of one pill.
     case segmented
-    case menu
+    /// The first `visible` tasks as segments, the rest behind a "More" segment that opens a menu.
+    case segmentedWithOverflow(visible: Int)
 
-    static let segmentedLimit = 4
+    /// The most segments the pill holds at the default window width with the Library shown.
+    static let segmentedLimit = 6
+    /// Segments shown before "More" when a domain has more tasks than `segmentedLimit`.
+    static let overflowVisibleCount = 5
 
     static func style(for domain: StudioDomain) -> StudioTaskControlStyle {
         let count = domain.tasks.count
         if count <= 1 { return .none }
-        return count <= segmentedLimit ? .segmented : .menu
+        return count <= segmentedLimit ? .segmented : .segmentedWithOverflow(visible: overflowVisibleCount)
     }
 }
 
