@@ -64,6 +64,21 @@ the full width. It is filtered to the current domain by default with an All
 segment — a row is filed under its command's domain (`CommandTemplateID.studioDomain`),
 so 3D meshes land under 3D and benchmark reports under Models — and picking a
 row from another domain switches the destination to it.
+
+The **composer** under the canvas is one surface for every prompt mode
+(`StudioComposer.swift`, declarations in `StudioComposerSchema.swift`). An
+**attachment well** shows the mode's slots — Image: input and reference images;
+Video: start frame, end frame, audio; Music: source and timbre references;
+Voice: reference audio; Vision and Audio tasks: their required input; Chat: a
+per-turn image that stays behind the paperclip until attached — and every slot
+takes a drop, a paste (⌘V), or a click to pick, storing straight into the draft
+field the CLI flag reads. Under the prompt, a **chip strip** shows the mode's two
+to four essentials (size, steps, seed, length, threshold, thinking) as menus, and
+the **model chip** is the only model control: it lists `model list` rows filtered
+to the mode's category, installed first, with "Auto" for the mode's default. The
+remaining depth stays in the options popover behind the sliders button until the
+inspector replaces it.
+
 Menus follow macOS convention: File ▸ New Chat (⌘N) and Import Receipt…, View ▸
 Show Library (⌥⌘L), Command Console (⌥⌘C), and the system sidebar toggle, Go ▸
 every domain (⌘1–⌘9, then ⌥⌘1…) plus the current domain's tasks, Run ▸ Run
