@@ -24,6 +24,8 @@ final class StudioSnapshotTests: XCTestCase {
         width: StudioLayoutPolicy.defaultWindowWidth,
         height: StudioLayoutPolicy.defaultWindowHeight
     )
+    /// The size the v2 mockups are drawn at.
+    static let fidelitySize = CGSize(width: 1_440, height: 900)
     static let consoleSize = CGSize(width: 1_260, height: 780)
     static let settingsSize = CGSize(width: 560, height: 640)
 
@@ -67,6 +69,45 @@ final class StudioSnapshotTests: XCTestCase {
                 )
             }
         }
+    }
+
+    /// Music ▸ Realtime mid-session: a Magenta RT2 run held open by the process seam (no CLI
+    /// starts), the CLI's own frame progress and steering echoes fed back as stderr, and the
+    /// recording it would be writing synthesized on disk so the waveform has peaks. Rendered at
+    /// the mockup size, light and dark, plus the default window size.
+    func testMusicRealtimeSessionSnapshots() throws {
+        let requestID = try fixture.seedLiveRealtimeSession()
+        let seed = StudioRealtimeSteeringSeed(
+            promptA: "slow-burn synthwave, hopeful bridge",
+            promptB: "brushed drums, dusty piano",
+            blend: 0.35
+        )
+        let renders: [(name: String, size: CGSize, appearance: StudioSnapshotAppearance)] = [
+            ("f7-realtime-light", Self.fidelitySize, .light),
+            ("f7-realtime-dark", Self.fidelitySize, .dark),
+            ("f7-realtime-compact-light", Self.shellSize, .light)
+        ]
+        for render in renders {
+            let navigation = NavigationModel()
+            let view = StudioRootView()
+                .environmentObject(fixture.controller)
+                .environmentObject(fixture.library)
+                .environmentObject(navigation)
+                .environment(\.studioRealtimeSteeringSeed, seed)
+                .frame(width: render.size.width, height: render.size.height)
+            try fixture.write(
+                view,
+                size: render.size,
+                appearance: render.appearance,
+                name: render.name,
+                settle: 2.0,
+                afterAppear: {
+                    navigation.open(task: .musicRealtime)
+                    self.fixture.steerLiveRealtimeSession(requestID: requestID)
+                }
+            )
+        }
+        XCTAssertTrue(fixture.controller.canSteerRealtimeMusic(requestID: requestID))
     }
 
     /// The Settings scene content at the width the app gives it.
@@ -306,6 +347,98 @@ private final class SnapshotFixture {
         }
     }
 
+    // MARK: Live realtime session
+
+    /// Starts a Magenta RT2 session through the real controller and Library paths. The process
+    /// seam holds the launch open instead of refusing it, so `canSteerRealtimeMusic` is true and
+    /// the view re-attaches on appear exactly as it would to a session the user started. The run
+    /// is backdated so the transport clock reads minutes in, and the recording the CLI would be
+    /// streaming to disk is synthesized with the writer's unpatched (zero-length) header.
+    func seedLiveRealtimeSession() throws -> UUID {
+        guard let template = CommandCatalog.template(id: .musicRealtime) else {
+            throw StudioSnapshotError.noContentView
+        }
+        let recordingURL = root.appendingPathComponent("realtime-session.wav", isDirectory: false)
+        try Self.writeGrowingFloatWAV(to: recordingURL, seconds: 254)
+
+        var draft = template.defaultDraft()
+        draft.prompt = "slow-burn synthwave, hopeful bridge, brushed drums, dusty piano"
+        draft.model = "music-magenta-rt2-medium"
+        draft.durationSeconds = 300
+        draft.outputPath = recordingURL.path
+        draft.musicPlay = true
+        draft.musicInteractive = true
+        draft.musicTemperature = 1.1
+        draft.musicTopK = 40
+        draft.musicCFGMusicCoCa = 4
+
+        let request = StudioRunRequest(
+            mode: .music,
+            templateID: .musicRealtime,
+            template: template,
+            draft: draft,
+            createdAt: Date().addingTimeInterval(-249)
+        )
+        let preview = controller.commandPreview(template: template, draft: draft, masksSecrets: true)
+        library.start(request: request, commandPreview: preview, status: .running)
+
+        processRunner.liveSessionMarker = "--interactive"
+        guard controller.run(studio: request), let live = processRunner.liveStarts.last else {
+            throw StudioSnapshotError.noContentView
+        }
+        live.stderr("Starting Magenta RT2 realtime model music-magenta-rt2-medium\n")
+        live.stderr("Interactive steering enabled. Commands: prompt <text> | temp | topk | mc | quit\n")
+        live.stderr("Realtime frame 6226/7500\n")
+        live.stderr("Realtime frame 6251/7500\n")
+        return request.id
+    }
+
+    /// What the user has done so far in the session: one prompt steer and the frames since.
+    func steerLiveRealtimeSession(requestID: UUID) {
+        guard let live = processRunner.liveStarts.last else { return }
+        controller.submitRealtimeMusicCommand(
+            "prompt slow-burn synthwave, hopeful bridge, brushed drums, dusty piano",
+            requestID: requestID
+        )
+        live.stderr("queued prompt\n")
+        live.stderr("Realtime frame 6301/7500\n")
+        live.stderr("Realtime frame 6326/7500\n")
+        live.stderr("Realtime frame 6353/7500\n")
+    }
+
+    /// A float32 mono WAV whose RIFF and data sizes are still zero, as `StreamingWAVWriter`
+    /// leaves them until it closes. The envelope changes slower than one waveform bar
+    /// (~2.6 s of a 96-bar view) so the bars swell and breathe instead of all peaking.
+    private static func writeGrowingFloatWAV(to url: URL, seconds: Int) throws {
+        let sampleRate = 8_000
+        let frames = sampleRate * seconds
+        let secondsPerBar = Float(seconds) / 96
+        var data = Data(capacity: 44 + frames * 4)
+        func appendLE32(_ value: UInt32) { withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) } }
+        func appendLE16(_ value: UInt16) { withUnsafeBytes(of: value.littleEndian) { data.append(contentsOf: $0) } }
+        data.append(contentsOf: Array("RIFF".utf8))
+        appendLE32(36)
+        data.append(contentsOf: Array("WAVE".utf8))
+        data.append(contentsOf: Array("fmt ".utf8))
+        appendLE32(16)
+        appendLE16(3)
+        appendLE16(1)
+        appendLE32(UInt32(sampleRate))
+        appendLE32(UInt32(sampleRate * 4))
+        appendLE16(4)
+        appendLE16(32)
+        data.append(contentsOf: Array("data".utf8))
+        appendLE32(0)
+        for index in 0..<frames {
+            let time = Float(index) / Float(sampleRate)
+            let bar = time / secondsPerBar
+            let envelope = 0.15 + 0.85 * abs(sin(bar * 0.37) * 0.7 + sin(bar * 1.3) * 0.3)
+            let value = sin(time * 2 * .pi * 220) * envelope
+            withUnsafeBytes(of: value.bitPattern.littleEndian) { data.append(contentsOf: $0) }
+        }
+        try data.write(to: url, options: .atomic)
+    }
+
     /// A soft two-tone gradient with a horizon line, so the canvas visibly shows an image.
     private static func writeFixturePNG(to url: URL, size: CGSize) throws {
         let width = Int(size.width)
@@ -381,14 +514,46 @@ private final class SnapshotFixture {
 
 /// Refuses every launch: reports one stderr line and a non-zero exit asynchronously so readiness
 /// and status probes settle to their "could not check" states without a CLI ever running.
+///
+/// The one exception is a launch whose arguments contain `liveSessionMarker`: that is held open
+/// as a live session (never terminated, stdin recorded) so Session-archetype views can be
+/// rendered mid-run. The test feeds it the lines the CLI would have written.
 private final class SnapshotProcessRunner: MereRunProcessRunning, @unchecked Sendable {
+    struct LiveStart {
+        let configuration: MereRunProcessConfiguration
+        let stdout: @Sendable (String) -> Void
+        let stderr: @Sendable (String) -> Void
+        let process: SnapshotLiveProcess
+    }
+
     private let lock = NSLock()
     private var refusedLaunches = 0
+    private var _liveStarts: [LiveStart] = []
+    private var _liveSessionMarker: String?
 
     var refusedLaunchCount: Int {
         lock.lock()
         defer { lock.unlock() }
         return refusedLaunches
+    }
+
+    var liveSessionMarker: String? {
+        get {
+            lock.lock()
+            defer { lock.unlock() }
+            return _liveSessionMarker
+        }
+        set {
+            lock.lock()
+            _liveSessionMarker = newValue
+            lock.unlock()
+        }
+    }
+
+    var liveStarts: [LiveStart] {
+        lock.lock()
+        defer { lock.unlock() }
+        return _liveStarts
     }
 
     func start(
@@ -398,6 +563,12 @@ private final class SnapshotProcessRunner: MereRunProcessRunning, @unchecked Sen
         termination: @escaping @Sendable (Int32) -> Void
     ) throws -> MereRunRunningProcess {
         lock.lock()
+        if let marker = _liveSessionMarker, configuration.arguments.contains(marker) {
+            let process = SnapshotLiveProcess()
+            _liveStarts.append(LiveStart(configuration: configuration, stdout: stdout, stderr: stderr, process: process))
+            lock.unlock()
+            return process
+        }
         refusedLaunches += 1
         lock.unlock()
         DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(30)) {
@@ -410,4 +581,24 @@ private final class SnapshotProcessRunner: MereRunProcessRunning, @unchecked Sen
 
 private final class SnapshotRefusedProcess: MereRunRunningProcess {
     func terminate() {}
+}
+
+/// A session the harness holds open: nothing to terminate, stdin lines kept for assertions.
+private final class SnapshotLiveProcess: MereRunRunningProcess, @unchecked Sendable {
+    private let lock = NSLock()
+    private var _standardInputs: [String] = []
+
+    var standardInputs: [String] {
+        lock.lock()
+        defer { lock.unlock() }
+        return _standardInputs
+    }
+
+    func terminate() {}
+
+    func sendStandardInput(_ text: String) throws {
+        lock.lock()
+        _standardInputs.append(text)
+        lock.unlock()
+    }
 }
