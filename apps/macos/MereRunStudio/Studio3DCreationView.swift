@@ -60,7 +60,7 @@ struct Studio3DCreationView: View {
     var body: some View {
         HStack(spacing: 0) {
             configuration
-                .frame(width: 430)
+                .frame(minWidth: 300, idealWidth: 430, maxWidth: 430)
             Divider().overlay(MereRunTheme.border.opacity(0.55))
             VStack(alignment: .leading, spacing: 12) {
                 resultHeader

@@ -247,7 +247,7 @@ struct StudioMusicToolsView: View {
                 Divider().overlay(MereRunTheme.border.opacity(0.6))
             }
             configuration
-                .frame(width: 430)
+                .frame(minWidth: 300, idealWidth: 430, maxWidth: 430)
             Divider().overlay(MereRunTheme.border.opacity(0.6))
             resultPane
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

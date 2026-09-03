@@ -66,7 +66,7 @@ struct StudioRealtimeMusicView: View {
         VStack(spacing: 0) {
             HStack(spacing: 0) {
                 transport
-                    .frame(width: 380)
+                    .frame(minWidth: 300, idealWidth: 380, maxWidth: 380)
                 Divider().overlay(MereRunTheme.border.opacity(0.5))
                 liveControls
                     .frame(maxWidth: .infinity)

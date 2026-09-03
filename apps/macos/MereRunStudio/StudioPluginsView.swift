@@ -85,7 +85,7 @@ struct StudioPluginsView: View {
             Divider().overlay(MereRunTheme.border.opacity(0.6))
             HStack(spacing: 0) {
                 pluginList
-                    .frame(width: 390)
+                    .frame(minWidth: 300, idealWidth: 390, maxWidth: 390)
                 Divider().overlay(MereRunTheme.border.opacity(0.5))
                 detailPane
             }

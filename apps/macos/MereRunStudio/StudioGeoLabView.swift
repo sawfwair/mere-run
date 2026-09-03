@@ -108,7 +108,7 @@ struct StudioGeoLabView: View {
     var body: some View {
         HStack(spacing: 0) {
             controls
-                .frame(width: 440)
+                .frame(minWidth: 300, idealWidth: 440, maxWidth: 440)
             Divider().overlay(MereRunTheme.border.opacity(0.6))
             resultPanel
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

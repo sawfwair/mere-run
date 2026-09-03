@@ -383,7 +383,7 @@ struct StudioTrainingView: View {
     var body: some View {
         HStack(spacing: 0) {
             leftColumn
-                .frame(width: 465)
+                .frame(minWidth: 340, idealWidth: 465, maxWidth: 465)
             Divider().overlay(MereRunTheme.border.opacity(0.6))
             dashboard
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

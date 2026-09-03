@@ -197,7 +197,7 @@ struct StudioSFXLabView: View {
                 Divider().overlay(MereRunTheme.border.opacity(0.6))
             }
             configuration
-                .frame(width: 420)
+                .frame(minWidth: 300, idealWidth: 420, maxWidth: 420)
             Divider().overlay(MereRunTheme.border.opacity(0.6))
             resultPane
                 .frame(maxWidth: .infinity, maxHeight: .infinity)

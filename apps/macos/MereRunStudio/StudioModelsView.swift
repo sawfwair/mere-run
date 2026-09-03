@@ -390,7 +390,7 @@ struct StudioModelsView: View {
 
             HStack(spacing: 0) {
                 modelList
-                    .frame(width: 360)
+                    .frame(minWidth: 280, idealWidth: 360, maxWidth: 360)
 
                 Divider()
                     .overlay(MereRunTheme.border.opacity(0.6))

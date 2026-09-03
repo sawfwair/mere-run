@@ -191,7 +191,7 @@ struct StudioOperationsView: View {
             Divider().overlay(MereRunTheme.border.opacity(0.5))
             HStack(spacing: 0) {
                 runList
-                    .frame(width: 430)
+                    .frame(minWidth: 300, idealWidth: 430, maxWidth: 430)
                 Divider().overlay(MereRunTheme.border.opacity(0.5))
                 detailPane
             }

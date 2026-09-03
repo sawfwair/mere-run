@@ -252,7 +252,7 @@ struct StudioSCAILView: View {
             Divider().overlay(MereRunTheme.border.opacity(0.55))
             HStack(spacing: 0) {
                 setupColumn
-                    .frame(width: 470)
+                    .frame(minWidth: 340, idealWidth: 470, maxWidth: 470)
                 Divider().overlay(MereRunTheme.border.opacity(0.55))
                 outputColumn
             }

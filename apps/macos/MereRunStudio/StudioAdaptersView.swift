@@ -71,7 +71,7 @@ struct StudioAdaptersView: View {
 
             HStack(spacing: 0) {
                 catalogList
-                    .frame(width: 350)
+                    .frame(minWidth: 280, idealWidth: 350, maxWidth: 350)
                 Divider().overlay(MereRunTheme.border.opacity(0.6))
                 detailPane
                     .frame(maxWidth: .infinity, maxHeight: .infinity)

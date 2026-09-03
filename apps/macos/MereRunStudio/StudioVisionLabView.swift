@@ -157,7 +157,7 @@ struct StudioVisionLabView: View {
                 .frame(width: 210)
             Divider().overlay(MereRunTheme.border.opacity(0.55))
             configuration
-                .frame(width: 390)
+                .frame(minWidth: 300, idealWidth: 390, maxWidth: 390)
             Divider().overlay(MereRunTheme.border.opacity(0.55))
             resultPane
         }
