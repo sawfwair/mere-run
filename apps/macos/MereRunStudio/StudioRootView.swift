@@ -34,6 +34,8 @@ struct StudioRootView: View {
     @State private var studioError: String?
     /// Locally installed models feeding the composer's quick-picker.
     @State private var installedModels: [StudioModelInventoryRow] = []
+    /// What Models ▸ Installed last reported, so the toolbar subtitle shows the real inventory.
+    @State private var modelInventorySummary: StudioModelInventorySummary?
     @State private var modelUsageTermsByID: [String: StudioModelUsageTerms] = [:]
     @State private var imageDatasetTask: StudioUtilityTask = .datasetDiscovery
     @AppStorage("mererun.app.hasCompletedWelcome") private var hasCompletedWelcome = false
@@ -287,7 +289,7 @@ struct StudioRootView: View {
                 Text(destination.domain.title)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(MereRunTheme.textPrimary)
-                Text(destination.domain.subtitle)
+                Text(domainSubtitle)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(MereRunTheme.textMuted)
                     .lineLimit(1)
@@ -295,6 +297,14 @@ struct StudioRootView: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityAddTraits(.isHeader)
+    }
+
+    /// Models reports its installed count and store size; every other domain keeps its tagline.
+    private var domainSubtitle: String {
+        if destination.domain == .models, let modelInventorySummary {
+            return modelInventorySummary.subtitle
+        }
+        return destination.domain.subtitle
     }
 
     @ViewBuilder
@@ -379,10 +389,16 @@ struct StudioRootView: View {
         case .earthFlood, .earthFire, .earthTessera, .earthOlmoEarth:
             StudioGeoLabView(tool: geoToolBinding)
         case .modelsInstalled:
-            StudioModelsView(onModelsChanged: {
-                refreshReadiness()
-                refreshInstalledModels()
-            })
+            StudioModelsView(
+                onModelsChanged: {
+                    refreshReadiness()
+                    refreshInstalledModels()
+                },
+                onInventoryChanged: { modelInventorySummary = $0 },
+                adapterTargetTitle: mode.destination.domain.title,
+                onUseAdapter: applyAdapter,
+                onTrain: openTraining
+            )
         case .modelsLocations:
             StudioModelLocationsView(onLocationsChanged: {
                 refreshReadiness()
@@ -1283,6 +1299,10 @@ struct StudioRootView: View {
             guard result.exitCode == 0 else { return }
             let rows = StudioModelInventoryParser.rows(from: result.stdout)
             installedModels = rows.filter(\.isInstalled)
+            modelInventorySummary = StudioModelInventorySummary(
+                installedCount: installedModels.count,
+                storageBytes: modelInventorySummary?.storageBytes
+            )
             modelUsageTermsByID = Dictionary(
                 uniqueKeysWithValues: rows.compactMap { row in
                     row.usageTerms.map { (row.id, $0) }

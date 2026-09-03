@@ -26,6 +26,8 @@ final class StudioSnapshotTests: XCTestCase {
     )
     static let consoleSize = CGSize(width: 1_260, height: 780)
     static let settingsSize = CGSize(width: 560, height: 640)
+    /// The size the Studio v2 mockups are drawn at, for fidelity comparisons.
+    static let fidelitySize = CGSize(width: 1_440, height: 900)
 
     private var fixture: SnapshotFixture!
 
@@ -102,6 +104,38 @@ final class StudioSnapshotTests: XCTestCase {
         }
     }
 
+    /// Models ▸ Installed at the mockup size with a seeded inventory: `model list`,
+    /// `model capabilities`, `model storage`, `model info`, `model runtime get`, and
+    /// `adapter list` are answered by a scripted runner, and the Library carries the runs the
+    /// detail column reads (usage, a quality gate, a benchmark) plus a running composer pull so
+    /// the job bar renders. No CLI is launched.
+    func testModelsInstalledFidelitySnapshots() throws {
+        let directory = try XCTUnwrap(Self.snapshotDirectory())
+        fixture.tearDown()
+        fixture = try SnapshotFixture(
+            outputDirectory: directory,
+            processRunner: ScriptedProcessRunner(script: ModelsInventoryScript.responses)
+        )
+        try fixture.seedModelsLibrary()
+
+        for appearance in StudioSnapshotAppearance.allCases {
+            let navigation = NavigationModel()
+            let view = StudioRootView()
+                .environmentObject(fixture.controller)
+                .environmentObject(fixture.library)
+                .environmentObject(navigation)
+                .frame(width: Self.fidelitySize.width, height: Self.fidelitySize.height)
+            try fixture.write(
+                view,
+                size: Self.fidelitySize,
+                appearance: appearance,
+                name: "models-installed-\(appearance.rawValue)",
+                settle: 3.0,
+                afterAppear: { navigation.open(task: .modelsInstalled) }
+            )
+        }
+    }
+
     private static func snapshotDirectory() -> URL? {
         guard let path = ProcessInfo.processInfo.environment["MERERUN_STUDIO_SNAPSHOT_DIR"],
               !path.trimmingCharacters(in: .whitespaces).isEmpty else {
@@ -121,10 +155,11 @@ private final class SnapshotFixture {
     let controller: MereRunController
     let library: StudioLibraryStore
     let crashReporter = StudioCrashReporter()
-    private let processRunner = SnapshotProcessRunner()
+    private let processRunner: MereRunProcessRunning
 
-    init(outputDirectory: URL) throws {
+    init(outputDirectory: URL, processRunner: MereRunProcessRunning = SnapshotProcessRunner()) throws {
         self.outputDirectory = outputDirectory
+        self.processRunner = processRunner
         root = FileManager.default.temporaryDirectory
             .appendingPathComponent("StudioSnapshotTests-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -306,6 +341,87 @@ private final class SnapshotFixture {
         }
     }
 
+    /// Runs the Models detail column reads: image generations with the seeded default model
+    /// (usage and last-run duration), a passed quality gate, a Lite benchmark, and a running
+    /// composer-initiated pull that the job bar and list report.
+    func seedModelsLibrary() throws {
+        let now = Date()
+        var rows: [StudioLibraryItem] = []
+
+        for (index, seconds) in [3.4, 3.6, 3.1].enumerated() {
+            let started = now.addingTimeInterval(-60 * Double(8 + index * 30))
+            rows.append(StudioLibraryItem(
+                id: UUID(),
+                mode: .createImage,
+                prompt: "Product shot of a linen-wrapped ceramic mug, soft window light",
+                inputURL: nil,
+                outputURL: nil,
+                createdAt: started,
+                updatedAt: started.addingTimeInterval(seconds),
+                status: .completed,
+                exitCode: 0,
+                commandPreview: "mere.run image generate --model image-zimage-nano --size 1024x1024 --steps 4",
+                outputText: nil
+            ))
+        }
+
+        let gateDate = now.addingTimeInterval(-60 * 60 * 24 * 4)
+        rows.append(StudioLibraryItem(
+            id: UUID(),
+            mode: .chat,
+            prompt: "",
+            inputURL: nil,
+            outputURL: nil,
+            createdAt: gateDate,
+            updatedAt: gateDate.addingTimeInterval(240),
+            status: .completed,
+            exitCode: 0,
+            commandPreview: "mere.run gate --suite all",
+            outputText: "gate: 5 suites passed",
+            templateID: .qualityGate
+        ))
+
+        var liteDraft = CommandDraft()
+        liteDraft.benchmarkSuite = "lite"
+        rows.append(StudioLibraryItem(
+            id: UUID(),
+            mode: .chat,
+            prompt: "",
+            inputURL: nil,
+            outputURL: nil,
+            createdAt: gateDate.addingTimeInterval(600),
+            updatedAt: gateDate.addingTimeInterval(900),
+            status: .completed,
+            exitCode: 0,
+            commandPreview: "mere.run model benchmark fused --suite lite --json",
+            outputText: nil,
+            templateID: .modelBenchmarkFused,
+            commandDraft: liteDraft
+        ))
+
+        var pullDraft = CommandDraft()
+        pullDraft.model = ModelsInventoryScript.pullingModelID
+        rows.append(StudioLibraryItem(
+            id: UUID(),
+            mode: .readImage,
+            prompt: "",
+            inputURL: nil,
+            outputURL: nil,
+            createdAt: now.addingTimeInterval(-60 * 3),
+            updatedAt: now.addingTimeInterval(-60 * 3),
+            status: .running,
+            exitCode: nil,
+            commandPreview: "mere.run model pull \(ModelsInventoryScript.pullingModelID)",
+            outputText: nil,
+            templateID: .modelPull,
+            commandDraft: pullDraft
+        ))
+
+        for row in rows.sorted(by: { $0.createdAt < $1.createdAt }) {
+            library.upsert(row)
+        }
+    }
+
     /// A soft two-tone gradient with a horizon line, so the canvas visibly shows an image.
     private static func writeFixturePNG(to url: URL, size: CGSize) throws {
         let width = Int(size.width)
@@ -410,4 +526,126 @@ private final class SnapshotProcessRunner: MereRunProcessRunning, @unchecked Sen
 
 private final class SnapshotRefusedProcess: MereRunRunningProcess {
     func terminate() {}
+}
+
+/// Answers the CLI invocations a page makes from a script keyed on their arguments, and refuses
+/// everything else the way `SnapshotProcessRunner` does. Output arrives asynchronously so the
+/// page's `.task` work observes the same ordering it would with a real process.
+private final class ScriptedProcessRunner: MereRunProcessRunning, @unchecked Sendable {
+    struct Response {
+        let matches: ([String]) -> Bool
+        let stdout: String
+        let exitCode: Int32
+    }
+
+    private let script: [Response]
+
+    init(script: [Response]) {
+        self.script = script
+    }
+
+    func start(
+        configuration: MereRunProcessConfiguration,
+        stdout: @escaping @Sendable (String) -> Void,
+        stderr: @escaping @Sendable (String) -> Void,
+        termination: @escaping @Sendable (Int32) -> Void
+    ) throws -> MereRunRunningProcess {
+        // The controller prepends `--models-root <path>` when a root is configured; match on the
+        // subcommand arguments that follow it.
+        var arguments = configuration.arguments
+        if arguments.first == "--models-root", arguments.count >= 2 {
+            arguments.removeFirst(2)
+        }
+        guard let response = script.first(where: { $0.matches(arguments) }) else {
+            DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(30)) {
+                stderr("Snapshot harness: no scripted response for \(arguments.joined(separator: " ")).\n")
+                termination(1)
+            }
+            return SnapshotRefusedProcess()
+        }
+        DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(30)) {
+            if !response.stdout.isEmpty { stdout(response.stdout) }
+            termination(response.exitCode)
+        }
+        return SnapshotRefusedProcess()
+    }
+}
+
+/// The model inventory the Models ▸ Installed fidelity render shows: the mockup's sample
+/// lineup, expressed the way `mere.run model list`, `model capabilities`, `model storage`,
+/// `model info`, `model runtime get`, and `adapter list` print it.
+private enum ModelsInventoryScript {
+    static let defaultModelID = "image-zimage-nano"
+    static let pullingModelID = "vision-chat-qwen3.6-vl-4b"
+
+    static let modelList = """
+    ID                         Category     Status     Referenced
+    ---------------------------------------------------------------
+    image-zimage-nano          image        installed  2.1 GB
+    text-chat-qwen3.6-4b       text-chat    installed  2.6 GB
+    vision-chat-qwen3.6-vl-4b  vision-chat  missing    —
+    video-ltx2-fast            video        installed  9.4 GB
+    music-ace-step-1.5         music        installed  3.3 GB
+    music-magenta-rt2-medium   music        installed  1.9 GB
+    speech-tts-kokoro-82m      speech-tts   installed  330 MB
+    speech-asr-parakeet-tdt    speech-asr   installed  2.4 GB
+
+    """
+
+    static let capabilities = """
+    {"models": [
+      {"id": "image-zimage-nano", "title": "Zimage Nano", "summary": "", "minimumUnifiedMemoryGB": 8, "recommendedUnifiedMemoryGB": 16, "supported": true, "reasons": [], "estimatedDownloadBytes": 2100000000, "sourceRepository": "mere-run/zimage-nano-q4", "publisher": "mere.run"},
+      {"id": "text-chat-qwen3.6-4b", "title": "Qwen3.6 4B", "summary": "", "minimumUnifiedMemoryGB": 8, "recommendedUnifiedMemoryGB": 16, "supported": true, "reasons": [], "estimatedDownloadBytes": 2600000000, "sourceRepository": "mere-run/qwen3.6-4b-q4", "publisher": "mere.run"},
+      {"id": "vision-chat-qwen3.6-vl-4b", "title": "Qwen3.6-VL 4B", "summary": "", "minimumUnifiedMemoryGB": 8, "recommendedUnifiedMemoryGB": 16, "supported": true, "reasons": [], "estimatedDownloadBytes": 4800000000, "sourceRepository": "mere-run/qwen3.6-vl-4b-q4", "publisher": "mere.run"},
+      {"id": "video-ltx2-fast", "title": "LTX-2 Fast", "summary": "", "minimumUnifiedMemoryGB": 16, "recommendedUnifiedMemoryGB": 32, "supported": true, "reasons": [], "estimatedDownloadBytes": 9400000000, "sourceRepository": "mere-run/ltx2-fast", "publisher": "mere.run"},
+      {"id": "music-ace-step-1.5", "title": "ACE-Step 1.5", "summary": "", "minimumUnifiedMemoryGB": 8, "recommendedUnifiedMemoryGB": 16, "supported": true, "reasons": [], "estimatedDownloadBytes": 3300000000, "sourceRepository": "mere-run/ace-step-1.5", "publisher": "mere.run"},
+      {"id": "music-magenta-rt2-medium", "title": "Magenta RT2 medium", "summary": "", "minimumUnifiedMemoryGB": 8, "recommendedUnifiedMemoryGB": 16, "supported": true, "reasons": [], "estimatedDownloadBytes": 1900000000, "sourceRepository": "mere-run/magenta-rt2-medium", "publisher": "mere.run"},
+      {"id": "speech-tts-kokoro-82m", "title": "Kokoro 82M", "summary": "", "minimumUnifiedMemoryGB": 4, "recommendedUnifiedMemoryGB": 8, "supported": true, "reasons": [], "estimatedDownloadBytes": 330000000, "sourceRepository": "mere-run/kokoro-82m", "publisher": "mere.run"},
+      {"id": "speech-asr-parakeet-tdt", "title": "Parakeet TDT", "summary": "", "minimumUnifiedMemoryGB": 16, "recommendedUnifiedMemoryGB": 16, "supported": false, "reasons": ["Needs 16 GB of unified memory; this Mac has 8 GB."], "estimatedDownloadBytes": 2400000000, "sourceRepository": "mere-run/parakeet-tdt", "publisher": "mere.run"}
+    ]}
+    """
+
+    static let storage = """
+    {"applicationSupportBytes": 48000000000, "garbageCollectableBytes": 0, "models": []}
+    """
+
+    static var modelInfo: String {
+        let root = NSHomeDirectory() + "/Library/Application Support/MereRun/models/image-zimage-nano"
+        return """
+        Model Root: \(root)
+        Model ID: image-zimage-nano
+        Source: primary
+        Ownership: primary-managed
+
+        Manifest (local)
+          schemaVersion: 2
+          id: image-zimage-nano
+          engine: mlx
+          precision: bf16
+          quantization: bits=4 groupSize=64 scheme=affine
+          upstreamRepoId: mere-run/zimage-nano-q4
+
+        Validation
+          isValid: true
+
+        """
+    }
+
+    static let adapters = """
+    {"schemaVersion": 1, "adapterStore": "/tmp/adapters", "adapters": [
+      {"id": "linen-still-life-v2", "title": "Linen still life", "version": "2", "summary": "", "baseModelID": "image-zimage-nano", "format": "lora", "license": "MIT", "byteCount": 48000000, "installed": true, "path": "/tmp/adapters/linen-still-life-v2"},
+      {"id": "bronze-product-shots", "title": "Bronze product shots", "version": "1", "summary": "", "baseModelID": "image-zimage-nano", "format": "lora", "license": "MIT", "byteCount": 44000000, "installed": true, "path": "/tmp/adapters/bronze-product-shots"}
+    ]}
+    """
+
+    static var responses: [ScriptedProcessRunner.Response] {
+        [
+            .init(matches: { $0 == ["model", "list"] }, stdout: modelList, exitCode: 0),
+            .init(matches: { $0 == ["model", "capabilities", "--all", "--json"] }, stdout: capabilities, exitCode: 0),
+            .init(matches: { $0 == ["model", "storage", "--json"] }, stdout: storage, exitCode: 0),
+            .init(matches: { $0.starts(with: ["model", "info", defaultModelID]) }, stdout: modelInfo, exitCode: 0),
+            .init(matches: { $0.starts(with: ["model", "runtime", "get"]) }, stdout: "{\"pinned\": false}\n", exitCode: 0),
+            .init(matches: { $0 == ["adapter", "list", "--json"] }, stdout: adapters, exitCode: 0),
+        ]
+    }
 }
