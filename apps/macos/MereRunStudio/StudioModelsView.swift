@@ -329,10 +329,9 @@ enum StudioModelInventoryParser {
     }
 }
 
-struct StudioModelsSheet: View {
+struct StudioModelsView: View {
     @EnvironmentObject private var controller: MereRunController
     @EnvironmentObject private var library: StudioLibraryStore
-    @Environment(\.dismiss) private var dismiss
 
     let onModelsChanged: () -> Void
 
@@ -364,8 +363,6 @@ struct StudioModelsSheet: View {
     @State private var runtimeTopP = ""
     @State private var runtimeMinP = ""
     @State private var runtimePinned = false
-    @State private var showHealth = false
-    @State private var showLocations = false
 
     private var installedRows: [StudioModelInventoryRow] {
         rows.filter(\.isInstalled)
@@ -393,7 +390,7 @@ struct StudioModelsSheet: View {
 
             HStack(spacing: 0) {
                 modelList
-                    .frame(width: 360)
+                    .frame(minWidth: 280, idealWidth: 360, maxWidth: 360)
 
                 Divider()
                     .overlay(MereRunTheme.border.opacity(0.6))
@@ -402,7 +399,6 @@ struct StudioModelsSheet: View {
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .frame(width: 920, height: 600)
         .background(MereRunTheme.background)
         .foregroundStyle(MereRunTheme.textPrimary)
         .task {
@@ -453,30 +449,14 @@ struct StudioModelsSheet: View {
                 )
             }
         }
-        .sheet(isPresented: $showHealth) {
-            StudioModelHealthSheet(onModelsChanged: onModelsChanged)
-                .environmentObject(controller)
-                .environmentObject(library)
-        }
-        .sheet(isPresented: $showLocations) {
-            StudioModelLocationsSheet(onLocationsChanged: {
-                Task { await refresh() }
-                onModelsChanged()
-            })
-            .environmentObject(controller)
-        }
     }
 
     private var header: some View {
         HStack(spacing: 14) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Models")
-                    .font(MereRunTheme.titleFont)
-                Text(statusMessage)
-                    .font(MereRunTheme.captionFont)
-                    .foregroundStyle(MereRunTheme.textMuted)
-                    .lineLimit(1)
-            }
+            Text(statusMessage)
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textMuted)
+                .lineLimit(1)
 
             Spacer()
 
@@ -505,36 +485,15 @@ struct StudioModelsSheet: View {
             .help("Preview unreferenced payloads and partial downloads before deleting them")
 
             Button {
-                showLocations = true
-            } label: {
-                Label("Locations", systemImage: "externaldrive.badge.checkmark")
-            }
-            .buttonStyle(.bordered)
-            .help("Register read-only search roots and explicit model bindings")
-
-            Button {
-                showHealth = true
-            } label: {
-                Label("Health", systemImage: "checkmark.shield")
-            }
-            .buttonStyle(.bordered)
-            .help("Audit manifests and run installed-model quality gates")
-
-            Button {
                 Task { await refresh() }
             } label: {
                 Label("Refresh", systemImage: "arrow.clockwise")
             }
             .buttonStyle(.bordered)
             .disabled(isRefreshing)
-
-            Button("Done") {
-                dismiss()
-            }
-            .buttonStyle(.borderedProminent)
-            .tint(MereRunTheme.accent)
         }
-        .padding(18)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
     }
 
     private var modelList: some View {

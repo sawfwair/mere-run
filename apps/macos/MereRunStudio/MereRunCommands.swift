@@ -3,18 +3,17 @@ import Sparkle
 import SwiftUI
 import UniformTypeIdentifiers
 
-/// Top-level menu bar commands. View-toggle commands (Library/Advanced/Models) are
-/// installed by `StudioRootView` via focused scene values once the UI state is shared.
+/// Top-level menu bar commands. Everything that acts on a window goes through the
+/// `StudioSceneActions` the key window publishes as a focused scene value: the Studio window
+/// publishes its composer, Library, and navigation; the Command Console publishes its own
+/// Run/Stop and forwards navigation to the Studio window. Items stay disabled when no window
+/// of ours is key.
 struct MereRunCommands: Commands {
     @ObservedObject var controller: MereRunController
     @ObservedObject var library: StudioLibraryStore
     let updater: SPUUpdater
 
-    @FocusedValue(\.showLibrary) private var showLibrary: Binding<Bool>?
-    @FocusedValue(\.showAdvanced) private var showAdvanced: Binding<Bool>?
-    @FocusedValue(\.showModels) private var showModels: Binding<Bool>?
-    @FocusedValue(\.showOperations) private var showOperations: Binding<Bool>?
-    @FocusedValue(\.showPlugins) private var showPlugins: Binding<Bool>?
+    @FocusedValue(\.studioActions) private var actions: StudioSceneActions?
 
     /// Writes a secret-free support report the user can attach to an issue.
     private func exportDiagnostics() {
@@ -33,53 +32,79 @@ struct MereRunCommands: Commands {
     }
 
     var body: some Commands {
-        // Single-window studio: remove the default "New" item rather than spawn windows.
-        CommandGroup(replacing: .newItem) {}
+        // Single-window studio: "New" starts a chat thread instead of spawning windows.
+        CommandGroup(replacing: .newItem) {
+            Button("New Chat") {
+                actions?.newChat()
+            }
+            .keyboardShortcut("n", modifiers: .command)
+            .disabled(actions?.canNewChat != true)
+
+            Divider()
+
+            Button("Import Receipt…") {
+                actions?.importReceipt()
+            }
+            .disabled(actions == nil)
+        }
 
         CommandGroup(after: .appInfo) {
             MereRunCheckForUpdatesView(updater: updater)
         }
 
-        // View toggles act on whichever Studio window is key (via focused scene values). When no
-        // Studio window holds focus all three are nil, so the group (and its divider) stay empty.
+        // The system Show/Hide Sidebar item already lives in this group (NavigationSplitView owns it).
         CommandGroup(after: .sidebar) {
-            if showLibrary != nil || showAdvanced != nil || showModels != nil
-                || showOperations != nil || showPlugins != nil {
-                if let showLibrary {
-                    Toggle("Show Library", isOn: showLibrary)
-                        .keyboardShortcut("l", modifiers: [.command, .control])
+            Toggle("Show Library", isOn: actions?.showLibrary ?? .constant(false))
+                .keyboardShortcut("l", modifiers: [.command, .option])
+                .disabled(actions?.canShowLibrary != true)
+
+            Button("Command Console") {
+                actions?.openConsole()
+            }
+            .keyboardShortcut("c", modifiers: [.command, .option])
+            .disabled(actions == nil)
+
+            Divider()
+        }
+
+        CommandMenu("Go") {
+            ForEach(StudioDomainGroup.allCases) { group in
+                ForEach(group.domains) { domain in
+                    domainItem(domain)
                 }
-                if let showAdvanced {
-                    Toggle("Show Advanced", isOn: showAdvanced)
-                        .keyboardShortcut("e", modifiers: [.command, .control])
+                if group != StudioDomainGroup.allCases.last {
+                    Divider()
                 }
-                if let showModels {
-                    Button("Browse Models…") { showModels.wrappedValue = true }
-                        .keyboardShortcut("m", modifiers: [.command, .shift])
-                }
-                if let showOperations {
-                    Button("Runs & Operations…") { showOperations.wrappedValue = true }
-                        .keyboardShortcut("r", modifiers: [.command, .control])
-                }
-                if let showPlugins {
-                    Button("Plugins…") { showPlugins.wrappedValue = true }
-                        .keyboardShortcut("p", modifiers: [.command, .shift])
-                }
+            }
+
+            if let actions, actions.destination.domain.tasks.count > 1 {
                 Divider()
+                ForEach(actions.destination.domain.tasks) { task in
+                    Toggle(
+                        task.title,
+                        isOn: Binding(
+                            get: { task == actions.destination.task },
+                            set: { isOn in
+                                if isOn { actions.open(task.destination) }
+                            }
+                        )
+                    )
+                }
             }
         }
 
         CommandMenu("Run") {
             Button("Run") {
-                controller.run()
+                actions?.runComposer()
             }
-            .disabled(controller.isRunning)
+            .keyboardShortcut(.return, modifiers: .command)
+            .disabled(actions?.canRun != true)
 
             Button("Stop") {
-                controller.cancel()
+                actions?.stop()
             }
             .keyboardShortcut(".", modifiers: .command)
-            .disabled(!controller.isRunning)
+            .disabled(actions?.canStop != true)
 
             Divider()
 
@@ -97,9 +122,31 @@ struct MereRunCommands: Commands {
         }
 
         CommandGroup(replacing: .help) {
+            Button("mere.run Guide") {
+                actions?.showGuide()
+            }
+            .keyboardShortcut("?", modifiers: .command)
+            .disabled(actions == nil)
+
             Link("mere.run", destination: URL(string: "https://mere.run")!)
             Divider()
             Button("Export Diagnostics…") { exportDiagnostics() }
+        }
+    }
+
+    @ViewBuilder
+    private func domainItem(_ domain: StudioDomain) -> some View {
+        let button = Button {
+            actions?.openDomain(domain)
+        } label: {
+            Label(domain.title, systemImage: domain.systemImage)
+        }
+        .disabled(actions == nil)
+
+        if let shortcut = domain.keyboardShortcut {
+            button.keyboardShortcut(shortcut)
+        } else {
+            button
         }
     }
 }

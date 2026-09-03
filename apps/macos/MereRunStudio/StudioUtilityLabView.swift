@@ -242,13 +242,15 @@ struct StudioRunPlanDocument: Equatable {
     }
 }
 
-struct StudioUtilityLabSheet: View {
-    @Environment(\.dismiss) private var dismiss
+struct StudioUtilityLabView: View {
     @EnvironmentObject private var controller: MereRunController
     @EnvironmentObject private var library: StudioLibraryStore
 
-    let initialTask: StudioUtilityTask
-    @State private var task: StudioUtilityTask
+    /// Owned by the host. Image ▸ Datasets shows its own picker over the dataset utilities;
+    /// Text drives Embeddings and Anonymize from the shell's task control.
+    @Binding var task: StudioUtilityTask
+    let tasks: [StudioUtilityTask]
+    let showsTaskPicker: Bool
     @State private var requestID: UUID?
     @State private var inputText = "semantic search query\nrelated document"
     @State private var model = ""
@@ -271,9 +273,10 @@ struct StudioUtilityLabSheet: View {
     @State private var materializePath = ""
     @State private var outputPath = ""
 
-    init(initialTask: StudioUtilityTask = .embeddings) {
-        self.initialTask = initialTask
-        _task = State(initialValue: initialTask)
+    init(task: Binding<StudioUtilityTask>, tasks: [StudioUtilityTask], showsTaskPicker: Bool) {
+        _task = task
+        self.tasks = tasks
+        self.showsTaskPicker = showsTaskPicker
     }
 
     private var item: StudioLibraryItem? {
@@ -293,30 +296,16 @@ struct StudioUtilityLabSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text("Utility Lab")
-                        .font(MereRunTheme.titleFont)
-                    Text("Structured results for small, powerful local workflows")
-                        .font(MereRunTheme.captionFont)
-                        .foregroundStyle(MereRunTheme.textMuted)
+            if showsTaskPicker {
+                Picker("Utility", selection: $task) {
+                    ForEach(tasks) { candidate in
+                        Label(candidate.title, systemImage: candidate.systemImage)
+                            .tag(candidate)
+                    }
                 }
-                Spacer()
-                Button("Done") { dismiss() }
-                    .keyboardShortcut(.cancelAction)
+                .pickerStyle(.segmented)
+                .padding(16)
             }
-            .padding(18)
-
-            Divider().overlay(MereRunTheme.border.opacity(0.5))
-
-            Picker("Utility", selection: $task) {
-                ForEach(StudioUtilityTask.allCases) { candidate in
-                    Label(candidate.title, systemImage: candidate.systemImage)
-                        .tag(candidate)
-                }
-            }
-            .pickerStyle(.segmented)
-            .padding(16)
 
             HSplitView {
                 ScrollView {
@@ -330,14 +319,13 @@ struct StudioUtilityLabSheet: View {
                     .frame(minWidth: 520, maxWidth: .infinity, maxHeight: .infinity)
             }
         }
-        .frame(minWidth: 1_040, minHeight: 720)
         .background(MereRunTheme.background)
         .onChange(of: task) { _, _ in
             requestID = nil
             applyTaskDefaults()
         }
         .onAppear {
-            if task == initialTask { applyTaskDefaults() }
+            applyTaskDefaults()
         }
     }
 

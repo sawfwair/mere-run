@@ -48,9 +48,8 @@ struct StudioPluginConfirmation: Identifiable {
     var id: String { "\(plugin.id):\(channel):\(force):\(kind.rawValue)" }
 }
 
-struct StudioPluginsSheet: View {
+struct StudioPluginsView: View {
     @EnvironmentObject private var controller: MereRunController
-    @Environment(\.dismiss) private var dismiss
 
     @State private var catalog: StudioPluginCatalogSnapshot?
     @State private var selectedID: String?
@@ -86,12 +85,11 @@ struct StudioPluginsSheet: View {
             Divider().overlay(MereRunTheme.border.opacity(0.6))
             HStack(spacing: 0) {
                 pluginList
-                    .frame(width: 390)
+                    .frame(minWidth: 300, idealWidth: 390, maxWidth: 390)
                 Divider().overlay(MereRunTheme.border.opacity(0.5))
                 detailPane
             }
         }
-        .frame(minWidth: 980, idealWidth: 1_080, minHeight: 650, idealHeight: 720)
         .background(MereRunTheme.background)
         .foregroundStyle(MereRunTheme.textPrimary)
         .task { await refresh() }
@@ -132,22 +130,10 @@ struct StudioPluginsSheet: View {
 
     private var header: some View {
         HStack(spacing: MereRunTheme.Spacing.md) {
-            ZStack {
-                RoundedRectangle(cornerRadius: MereRunTheme.Radius.lg)
-                    .fill(MereRunTheme.accentSoft)
-                Image(systemName: "puzzlepiece.extension")
-                    .font(.system(size: 20, weight: .semibold))
-                    .foregroundStyle(MereRunTheme.accent)
-            }
-            .frame(width: 42, height: 42)
-
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Plugins")
-                    .font(MereRunTheme.titleFont)
-                Text("Discover, install, update, and verify official companion tools")
-                    .font(MereRunTheme.captionFont)
-                    .foregroundStyle(MereRunTheme.textMuted)
-            }
+            Text(statusMessage)
+                .font(MereRunTheme.captionFont)
+                .foregroundStyle(MereRunTheme.textMuted)
+                .lineLimit(1)
             Spacer()
             if let busyAction {
                 ProgressView().controlSize(.small)
@@ -162,12 +148,9 @@ struct StudioPluginsSheet: View {
             }
             .buttonStyle(.mereSecondary)
             .disabled(isRefreshing || busyAction != nil)
-            Button("Done") { dismiss() }
-                .buttonStyle(.merePrimary)
-                .keyboardShortcut(.defaultAction)
         }
         .padding(.horizontal, MereRunTheme.Spacing.xl)
-        .padding(.vertical, MereRunTheme.Spacing.md)
+        .padding(.vertical, MereRunTheme.Spacing.sm)
     }
 
     private var pluginList: some View {

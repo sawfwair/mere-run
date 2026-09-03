@@ -3055,8 +3055,8 @@ swift run mere.run agent status --json
 swift run mere.run agent status --pi-path /path/to/pi --json
 ```
 
-The JSON shape is the readiness contract used by the macOS Serving & Agents
-Console. Dates use ISO 8601 and paths identify the provider configuration and
+The JSON shape is the readiness contract used by the macOS Studio's Server
+domain. Dates use ISO 8601 and paths identify the provider configuration and
 extension that the CLI will actually use.
 
 ### `mere.run agent install-pi`

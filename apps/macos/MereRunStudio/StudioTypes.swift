@@ -230,25 +230,6 @@ enum StudioMode: String, CaseIterable, Codable, Identifiable {
     }
 }
 
-/// Sidebar sections. Order here is the navigation order.
-enum StudioModeGroup: String, CaseIterable, Identifiable {
-    case create = "Create"
-    case converse = "Converse"
-    case voice = "Voice"
-    case vision = "Vision"
-
-    var id: String { rawValue }
-
-    var modes: [StudioMode] {
-        switch self {
-        case .create: return [.createImage, .video, .music, .sfx]
-        case .converse: return [.chat, .code]
-        case .voice: return [.speak, .listen]
-        case .vision: return [.readImage, .findObjects, .segment, .track]
-        }
-    }
-}
-
 enum StudioReadImageAction: String, CaseIterable, Codable, Identifiable {
     case inspect
     case ocr

@@ -25,10 +25,9 @@ private enum Studio3DEngine: String, CaseIterable, Identifiable {
     }
 }
 
-struct Studio3DCreationSheet: View {
+struct Studio3DCreationView: View {
     @EnvironmentObject private var controller: MereRunController
     @EnvironmentObject private var library: StudioLibraryStore
-    @Environment(\.dismiss) private var dismiss
 
     @State private var engine: Studio3DEngine = .trellis
     @State private var sourcePath = ""
@@ -59,25 +58,20 @@ struct Studio3DCreationSheet: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
+        HStack(spacing: 0) {
+            configuration
+                .frame(minWidth: 300, idealWidth: 430, maxWidth: 430)
             Divider().overlay(MereRunTheme.border.opacity(0.55))
-            HStack(spacing: 0) {
-                configuration
-                    .frame(width: 430)
-                Divider().overlay(MereRunTheme.border.opacity(0.55))
-                VStack(alignment: .leading, spacing: 12) {
-                    resultHeader
-                    StudioSpecialistResultView(
-                        requestID: requestID,
-                        preferredKinds: [.model3D, .image, .text]
-                    )
-                }
-                .padding(18)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            VStack(alignment: .leading, spacing: 12) {
+                resultHeader
+                StudioSpecialistResultView(
+                    requestID: requestID,
+                    preferredKinds: [.model3D, .image, .text]
+                )
             }
+            .padding(18)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(width: 1_180, height: 760)
         .background(MereRunTheme.background)
         .foregroundStyle(MereRunTheme.textPrimary)
         .onChange(of: engine) { _, _ in
@@ -85,25 +79,6 @@ struct Studio3DCreationSheet: View {
             outputDirectory = StudioSpecialistFiles.timestampedDirectory(component: "3D").path
             errorMessage = nil
         }
-    }
-
-    private var header: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "cube.transparent")
-                .font(.system(size: 25, weight: .semibold))
-                .foregroundStyle(MereRunTheme.accent)
-            VStack(alignment: .leading, spacing: 3) {
-                Text("3D Creation")
-                    .font(MereRunTheme.titleFont)
-                Text("Single-image PBR, fast mesh, and ordered multiview reconstruction")
-                    .font(MereRunTheme.captionFont)
-                    .foregroundStyle(MereRunTheme.textMuted)
-            }
-            Spacer()
-            Button("Done") { dismiss() }
-                .buttonStyle(.bordered)
-        }
-        .padding(18)
     }
 
     private var configuration: some View {

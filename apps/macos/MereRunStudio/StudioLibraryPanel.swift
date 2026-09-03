@@ -1,13 +1,17 @@
 import AppKit
 import SwiftUI
 
-/// Run history as a second column: searchable, grouped by day, keyboard-navigable
-/// (arrows move, Space previews), with Quick Look surfacing on hover.
+/// Run history as a column beside the current task: filtered to the current domain (or All),
+/// searchable, grouped by day, keyboard-navigable (arrows move, Space previews), with Quick Look
+/// surfacing on hover. Picking a row of another domain switches the destination.
 struct StudioLibraryPanel: View {
     let items: [StudioLibraryItem]
+    let domain: StudioDomain
+    @Binding var scope: StudioLibraryScope
     let progressByID: [UUID: StudioRunProgress]
     @Binding var selectedID: UUID?
-    @Binding var isVisible: Bool
+    /// A row the user picked (click or arrow keys), as opposed to a programmatic selection.
+    let onSelect: (StudioLibraryItem) -> Void
     let onDelete: (UUID) -> Void
     let onRename: (UUID, String) -> Void
     let onQuickLook: (URL) -> Void
@@ -18,10 +22,17 @@ struct StudioLibraryPanel: View {
     @State private var renamingID: UUID?
     @State private var renameText = ""
 
+    private var scopedItems: [StudioLibraryItem] {
+        switch scope {
+        case .all: return items
+        case .domain: return items.filter { $0.domain == domain }
+        }
+    }
+
     private var filteredItems: [StudioLibraryItem] {
         let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !query.isEmpty else { return items }
-        return items.filter { item in
+        guard !query.isEmpty else { return scopedItems }
+        return scopedItems.filter { item in
             item.displayTitle.lowercased().contains(query)
                 || item.displayKindTitle.lowercased().contains(query)
                 || item.prompt.lowercased().contains(query)
@@ -84,22 +95,19 @@ struct StudioLibraryPanel: View {
         HStack(spacing: MereRunTheme.Spacing.xs) {
             Text("Library")
                 .font(.system(size: 15, weight: .semibold))
-            Text("\(items.count)")
+            Text("\(scopedItems.count)")
                 .font(MereRunTheme.captionFont)
                 .foregroundStyle(MereRunTheme.textMuted)
             Spacer()
-            Button {
-                withAnimation(MereRunTheme.Motion.standard) {
-                    isVisible = false
-                }
-            } label: {
-                Image(systemName: "xmark")
-                    .font(.system(size: 11, weight: .semibold))
-                    .frame(width: 24, height: 24)
+            Picker("Scope", selection: $scope) {
+                Text(domain.title).tag(StudioLibraryScope.domain)
+                Text("All").tag(StudioLibraryScope.all)
             }
-            .buttonStyle(.mereIcon)
-            .help("Hide library (⌃⌘L)")
-            .accessibilityLabel("Hide library")
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .controlSize(.small)
+            .fixedSize()
+            .accessibilityLabel("Library scope")
         }
         .padding(.horizontal, MereRunTheme.Spacing.md)
         .frame(height: 52)
@@ -142,13 +150,19 @@ struct StudioLibraryPanel: View {
             Image(systemName: "rectangle.stack")
                 .font(.system(size: 28, weight: .semibold))
                 .foregroundStyle(MereRunTheme.textMuted)
-            Text(items.isEmpty ? "Runs you create will land here." : "No matching runs.")
+            Text(emptyMessage)
                 .font(MereRunTheme.captionFont)
                 .foregroundStyle(MereRunTheme.textMuted)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .padding(MereRunTheme.Spacing.xl)
+    }
+
+    private var emptyMessage: String {
+        if items.isEmpty { return "Runs you create will land here." }
+        if scopedItems.isEmpty { return "No \(domain.title) runs yet. Choose All to see every run." }
+        return "No matching runs."
     }
 
     private var list: some View {
@@ -172,7 +186,7 @@ struct StudioLibraryPanel: View {
                             isSelected: selectedID == item.id,
                             onQuickLook: item.outputURL.map { url in { onQuickLook(url) } }
                         ) {
-                            selectedID = item.id
+                            onSelect(item)
                         }
                         .contextMenu {
                             if let url = item.outputURL {
@@ -180,7 +194,7 @@ struct StudioLibraryPanel: View {
                             }
                             if item.commandDraft != nil, item.templateID != nil {
                                 Button("Run again") { onRetry(item) }
-                                Button("Edit in Advanced") { onEdit(item) }
+                                Button("Edit command…") { onEdit(item) }
                             }
                             Button("Rename") {
                                 renameText = item.displayTitle
@@ -213,11 +227,11 @@ struct StudioLibraryPanel: View {
         let visible = filteredItems
         guard !visible.isEmpty else { return .ignored }
         guard let selectedID, let index = visible.firstIndex(where: { $0.id == selectedID }) else {
-            self.selectedID = offset > 0 ? visible.first?.id : visible.last?.id
+            if let edge = offset > 0 ? visible.first : visible.last { onSelect(edge) }
             return .handled
         }
         let next = min(max(index + offset, 0), visible.count - 1)
-        self.selectedID = visible[next].id
+        onSelect(visible[next])
         return .handled
     }
 }

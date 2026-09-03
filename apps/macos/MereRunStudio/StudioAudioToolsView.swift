@@ -36,19 +36,19 @@ enum StudioAudioTool: String, CaseIterable, Identifiable {
     }
 }
 
-struct StudioAudioToolsSheet: View {
+struct StudioAudioToolsView: View {
     @EnvironmentObject private var controller: MereRunController
     @EnvironmentObject private var library: StudioLibraryStore
-    @Environment(\.dismiss) private var dismiss
 
-    @State private var tool: StudioAudioTool
+    /// Owned by the shell's task control; Enhance and Separate are toolbar tasks now.
+    @Binding var tool: StudioAudioTool
     @State private var enhanceDraft: CommandDraft
     @State private var separationDraft: CommandDraft
     @State private var requestID: UUID?
     @State private var statusMessage: String?
 
-    init(initialTool: StudioAudioTool) {
-        _tool = State(initialValue: initialTool)
+    init(tool: Binding<StudioAudioTool>) {
+        _tool = tool
         _enhanceDraft = State(
             initialValue: CommandCatalog.template(id: .audioEnhance)?.defaultDraft() ?? CommandDraft()
         )
@@ -62,47 +62,19 @@ struct StudioAudioToolsSheet: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
+        HStack(spacing: 0) {
+            controls
+                .frame(minWidth: 300, idealWidth: 440, maxWidth: 440)
             Divider().overlay(MereRunTheme.border.opacity(0.6))
-            HStack(spacing: 0) {
-                controls
-                    .frame(width: 440)
-                Divider().overlay(MereRunTheme.border.opacity(0.6))
-                resultPanel
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-            }
+            resultPanel
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(width: 1_080, height: 720)
         .background(MereRunTheme.background)
         .foregroundStyle(MereRunTheme.textPrimary)
         .onChange(of: tool) { _, _ in
             requestID = nil
             statusMessage = nil
         }
-    }
-
-    private var header: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Audio Lab")
-                    .font(MereRunTheme.titleFont)
-                Text("Native enhancement, stem separation, dereverb, and denoise")
-                    .font(MereRunTheme.captionFont)
-                    .foregroundStyle(MereRunTheme.textMuted)
-            }
-            Spacer()
-            Picker("Tool", selection: $tool) {
-                ForEach(StudioAudioTool.allCases) { item in
-                    Label(item.title, systemImage: item.symbol).tag(item)
-                }
-            }
-            .pickerStyle(.segmented)
-            .frame(width: 360)
-            Button("Done") { dismiss() }
-                .buttonStyle(.bordered)
-        }
-        .padding(18)
     }
 
     private var controls: some View {

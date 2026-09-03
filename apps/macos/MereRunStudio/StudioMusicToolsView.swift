@@ -193,29 +193,24 @@ struct StudioMIDISummary: Equatable {
     }
 }
 
-struct StudioMusicToolsSheet: View {
+struct StudioMusicToolsView: View {
     @EnvironmentObject private var controller: MereRunController
     @EnvironmentObject private var library: StudioLibraryStore
-    @Environment(\.dismiss) private var dismiss
 
-    let onOpenTraining: () -> Void
-    let onOpenRealtime: () -> Void
-
-    @State private var tool: StudioMusicTool
+    /// Owned by the shell's task control. Music hosts Analyze and Transcribe; Server hosts the
+    /// resident music server.
+    @Binding var tool: StudioMusicTool
+    /// The tools this host offers; the rail is hidden when there is only one.
+    let tools: [StudioMusicTool]
     @State private var analyzeDraft: CommandDraft
     @State private var transcribeDraft: CommandDraft
     @State private var serveDraft: CommandDraft
     @State private var requestID: UUID?
     @State private var statusMessage: String?
 
-    init(
-        initialTool: StudioMusicTool = .analyze,
-        onOpenTraining: @escaping () -> Void,
-        onOpenRealtime: @escaping () -> Void
-    ) {
-        self.onOpenTraining = onOpenTraining
-        self.onOpenRealtime = onOpenRealtime
-        _tool = State(initialValue: initialTool)
+    init(tool: Binding<StudioMusicTool>, tools: [StudioMusicTool]) {
+        _tool = tool
+        self.tools = tools
 
         var analyze = CommandCatalog.template(id: .musicAnalyze)?.defaultDraft() ?? CommandDraft()
         analyze.model = analyze.model.isBlank ? "music-acestep" : analyze.model
@@ -245,64 +240,25 @@ struct StudioMusicToolsSheet: View {
     }
 
     var body: some View {
-        VStack(spacing: 0) {
-            header
-            Divider().overlay(MereRunTheme.border.opacity(0.6))
-            HStack(spacing: 0) {
+        HStack(spacing: 0) {
+            if tools.count > 1 {
                 toolRail
                     .frame(width: 185)
                 Divider().overlay(MereRunTheme.border.opacity(0.6))
-                configuration
-                    .frame(width: 430)
-                Divider().overlay(MereRunTheme.border.opacity(0.6))
-                resultPane
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
+            configuration
+                .frame(minWidth: 300, idealWidth: 430, maxWidth: 430)
+            Divider().overlay(MereRunTheme.border.opacity(0.6))
+            resultPane
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
-        .frame(width: 1_240, height: 790)
         .background(MereRunTheme.background)
         .foregroundStyle(MereRunTheme.textPrimary)
     }
 
-    private var header: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Music Tools")
-                    .font(MereRunTheme.titleFont)
-                Text("Understand source audio, extract editable MIDI, and keep ACE-Step resident")
-                    .font(MereRunTheme.captionFont)
-                    .foregroundStyle(MereRunTheme.textMuted)
-            }
-            Spacer()
-            Button {
-                dismiss()
-                onOpenRealtime()
-            } label: {
-                Label("Realtime", systemImage: "waveform.path.ecg")
-            }
-            .buttonStyle(.bordered)
-            Button {
-                dismiss()
-                onOpenTraining()
-            } label: {
-                Label("Train adapter", systemImage: "chart.xyaxis.line")
-            }
-            .buttonStyle(.bordered)
-            Button("Done") { dismiss() }
-                .buttonStyle(.bordered)
-        }
-        .padding(18)
-    }
-
     private var toolRail: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("SPECIALISTS")
-                .font(.system(size: 9.5, weight: .bold))
-                .kerning(0.8)
-                .foregroundStyle(MereRunTheme.textMuted)
-                .padding(.horizontal, 12)
-                .padding(.bottom, 3)
-            ForEach(StudioMusicTool.allCases) { item in
+            ForEach(tools) { item in
                 Button {
                     tool = item
                     statusMessage = nil
@@ -319,16 +275,6 @@ struct StudioMusicToolsSheet: View {
                 .buttonStyle(.plain)
             }
             Spacer()
-            if tool == .serve, controller.isRunning {
-                Button(role: .destructive) {
-                    controller.cancel()
-                    statusMessage = "Stopping resident music server…"
-                } label: {
-                    Label("Stop server", systemImage: "stop.fill")
-                        .frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.bordered)
-            }
         }
         .padding(12)
     }
@@ -343,6 +289,16 @@ struct StudioMusicToolsSheet: View {
                     transcriptionControls
                 case .serve:
                     serverControls
+                    if controller.isRunning {
+                        Button(role: .destructive) {
+                            controller.cancel()
+                            statusMessage = "Stopping resident music server…"
+                        } label: {
+                            Label("Stop server", systemImage: "stop.fill")
+                                .frame(maxWidth: .infinity)
+                        }
+                        .buttonStyle(.bordered)
+                    }
                 }
                 if let statusMessage {
                     Text(statusMessage)

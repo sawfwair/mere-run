@@ -394,7 +394,7 @@ Reads and updates typed per-model API runtime settings that control how a model
 behaves when served by `mere.run api serve`. `get` prints the stored settings
 for one managed model ID or configured alias; `set` updates them.
 
-The macOS Studio's top-level **Serving & Agents > Model Pool** view uses these
+The macOS Studio's **Server ▸ Serving ▸ Model Pool** view uses these
 same settings for both text models and managed sidecars. Text rows additionally
 support explicit HTTP load/unload. Sidecars load on first request and expose
 their lifecycle, readiness, queue, replacement, failure, and eviction state;

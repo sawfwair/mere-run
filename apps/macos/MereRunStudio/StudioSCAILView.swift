@@ -168,10 +168,9 @@ private struct StudioSCAILManifest: Decodable {
     }
 }
 
-struct StudioSCAILSheet: View {
+struct StudioSCAILView: View {
     @EnvironmentObject private var controller: MereRunController
     @EnvironmentObject private var library: StudioLibraryStore
-    @Environment(\.dismiss) private var dismiss
 
     @State private var mode = "animation"
     @State private var prompt = "a cinematic full-body performance with natural motion"
@@ -253,12 +252,11 @@ struct StudioSCAILSheet: View {
             Divider().overlay(MereRunTheme.border.opacity(0.55))
             HStack(spacing: 0) {
                 setupColumn
-                    .frame(width: 470)
+                    .frame(minWidth: 340, idealWidth: 470, maxWidth: 470)
                 Divider().overlay(MereRunTheme.border.opacity(0.55))
                 outputColumn
             }
         }
-        .frame(width: 1_260, height: 790)
         .background(MereRunTheme.background)
         .foregroundStyle(MereRunTheme.textPrimary)
         .onReceive(controller.runCompletions) { result in
@@ -279,27 +277,20 @@ struct StudioSCAILSheet: View {
         }
     }
 
+    /// The stage line: reference segmentation → driving-video tracking → review → animation.
     private var header: some View {
         HStack(spacing: 12) {
             Image(systemName: "figure.run.square.stack")
-                .font(.system(size: 25, weight: .semibold))
+                .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(MereRunTheme.accent)
-            VStack(alignment: .leading, spacing: 3) {
-                Text("SCAIL Subject Studio")
-                    .font(MereRunTheme.titleFont)
-                Text("Reference segmentation → driving-video tracking → review → animation")
-                    .font(MereRunTheme.captionFont)
-                    .foregroundStyle(MereRunTheme.textMuted)
-            }
-            Spacer()
             Text(statusMessage)
                 .font(MereRunTheme.captionFont)
                 .foregroundStyle(MereRunTheme.textSecondary)
                 .lineLimit(1)
-            Button("Done") { dismiss() }
-                .buttonStyle(.bordered)
+            Spacer()
         }
-        .padding(18)
+        .padding(.horizontal, 18)
+        .padding(.vertical, 10)
     }
 
     private var setupColumn: some View {

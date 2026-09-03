@@ -3,10 +3,9 @@ import SwiftUI
 
 /// A native transport/control surface for the CLI's long-lived Magenta RT2 session.
 /// The CLI remains the source of truth; controls are sent over its documented stdin protocol.
-struct StudioRealtimeMusicSheet: View {
+struct StudioRealtimeMusicView: View {
     @EnvironmentObject private var controller: MereRunController
     @EnvironmentObject private var library: StudioLibraryStore
-    @Environment(\.dismiss) private var dismiss
 
     @State private var prompt: String
     @State private var model: String
@@ -65,11 +64,9 @@ struct StudioRealtimeMusicSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-            Divider().overlay(MereRunTheme.border.opacity(0.5))
             HStack(spacing: 0) {
                 transport
-                    .frame(width: 380)
+                    .frame(minWidth: 300, idealWidth: 380, maxWidth: 380)
                 Divider().overlay(MereRunTheme.border.opacity(0.5))
                 liveControls
                     .frame(maxWidth: .infinity)
@@ -77,27 +74,11 @@ struct StudioRealtimeMusicSheet: View {
             Divider().overlay(MereRunTheme.border.opacity(0.5))
             footer
         }
-        .frame(width: 960, height: 680)
         .background(MereRunTheme.background)
         .foregroundStyle(MereRunTheme.textPrimary)
         .task {
             midiInputs = await controller.loadMIDIInputs()
         }
-    }
-
-    private var header: some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Realtime music")
-                    .font(.system(size: 20, weight: .semibold))
-                Text("Magenta RT2 playback, recording, MIDI, and live prompt steering")
-                    .font(MereRunTheme.captionFont)
-                    .foregroundStyle(MereRunTheme.textMuted)
-            }
-            Spacer()
-            liveBadge
-        }
-        .padding(20)
     }
 
     private var liveBadge: some View {
@@ -286,6 +267,7 @@ struct StudioRealtimeMusicSheet: View {
 
     private var footer: some View {
         HStack {
+            liveBadge
             if let url = item?.outputURL {
                 Button {
                     QuickLookCoordinator.shared.preview(url)
@@ -294,7 +276,6 @@ struct StudioRealtimeMusicSheet: View {
                 }
             }
             Spacer()
-            Button("Close") { dismiss() }
             Button(
                 isLive ? "Running" : (item?.status == .queued ? "Queued" : "Start session"),
                 action: start

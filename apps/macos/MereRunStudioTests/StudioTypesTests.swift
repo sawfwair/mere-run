@@ -103,11 +103,11 @@ final class StudioTypesTests: XCTestCase {
 
     func testRealtimeMusicSurfaceDoesNotReuseAnACEStepModel() {
         XCTAssertEqual(
-            StudioRealtimeMusicSheet.preferredModel(from: "music-acestep-xl-turbo"),
+            StudioRealtimeMusicView.preferredModel(from: "music-acestep-xl-turbo"),
             "music-magenta-rt2-small"
         )
         XCTAssertEqual(
-            StudioRealtimeMusicSheet.preferredModel(from: "music-magenta-rt2-medium"),
+            StudioRealtimeMusicView.preferredModel(from: "music-magenta-rt2-medium"),
             "music-magenta-rt2-medium"
         )
     }
