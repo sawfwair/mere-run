@@ -191,16 +191,32 @@ owns only the typed local `world serve` runtime endpoint, authentication, model
 selection, status, and the handoff to `https://diorama.mere.run`; it must not
 duplicate Diorama's product experience.
 
-Models ▸ Installed includes one-click managed downloads with live CLI output,
-explicit third-party terms acceptance, cancellation with resumable partials;
+Models ▸ Installed is a list-and-detail page. The toolbar subtitle reports the
+real inventory ("92 installed · 48 GB on this Mac", from `model list` and
+`model storage`). The 320pt list shows installed models plus any model being
+pulled, with a family chip row (Image, Chat, Vision, …) and a status dot: green
+installed, accent pulling, yellow when the CLI reports the model as unsupported
+on this Mac. Pull… opens a sheet of the models that are not installed yet; a
+pull keeps its explicit third-party terms acceptance, live CLI output, and
+cancellation with resumable partials. The detail column shows the model's
+facts (store, source, last used and run count from the Library, manifest
+verification from `model info`), a Health panel (latest quality gate and
+manifest audit, with Run gate and Benchmark… routing to those tasks), a
+Performance panel (last run length, unified-memory needs, latest benchmark),
+the adapters whose base model it is (Use in <domain> applies one to the
+composer, Train new… opens the trainer), and the runtime-settings editor and raw
+`model info` output under two folds. Rows whose data the CLI or Library does
+not have are omitted rather than faked. A job bar at the page bottom reports a
+pull, MiniMax-H3 optimize/rebuild, or storage clean-up in flight (composer
+pulls arrive through their Library row) with Cancel and Log. Reveal, Remove…,
+refresh, opening the store, and clean-up stay on the page.
+
 Models ▸ Health is the manifest audit and quality gate. Successful downloads
 refresh the inventory in place. Manifest audit is a structured dry run, repair
 requires confirmation and writes only missing known manifests, and
 installed-model correctness/performance gates run as durable Library jobs with
 JSON reports. Existing model browsing, storage cleanup, and runtime policy
 remain in the Models and Server domains rather than being duplicated.
-Installed MiniMax-H3 models expose a native optimize/rebuild action with streamed
-receipts instead of requiring a terminal round trip.
 
 Server is a sidebar domain. **Server ▸ Serving**
 owns API preflight/start/stop/restart, external-server reconnection, LAN/auth
@@ -283,7 +299,11 @@ recorded decision that it should not have one.
 
 `StudioSnapshotTests` renders the shell for visual review without driving the
 live app: every domain at its default task at 1280×820 in light and dark, plus
-the Settings content and the Command Console. It is skipped unless
+the Settings content and the Command Console, and Models ▸ Installed at the
+1440×900 mockup size with a scripted model inventory (`model list`,
+`capabilities`, `storage`, `info`, `runtime get`, and `adapter list` answered
+from fixtures, plus Library rows for usage, a quality gate, a benchmark, and a
+running composer pull). It is skipped unless
 `MERERUN_STUDIO_SNAPSHOT_DIR` names a directory, so CI and a plain `swift test`
 never render anything:
 
@@ -293,7 +313,8 @@ MERERUN_STUDIO_SNAPSHOT_DIR=/tmp/shell-shots swift test --filter StudioSnapshotT
 
 `StudioSnapshotRenderer` hosts each view in an `NSWindow` that is never ordered
 on screen and captures it with `cacheDisplay`, so nothing appears on the Mac
-running it. The controller uses a process runner that refuses every launch and
+running it. The controller uses a process runner that refuses every launch (or,
+for the Models render, answers only the scripted inventory commands) and
 the Library is a temporary `library.json` seeded with fixture rows, so no CLI
 process starts and the user's Library is never read or written. Two fidelity
 gaps are deliberate: macOS 26 glass and scroll-edge effects only composite on

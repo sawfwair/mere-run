@@ -6,6 +6,9 @@ import SwiftUI
 /// toolbar, so the Library column can run to the top of the window.
 struct StudioContentHeader: View {
     let domain: StudioDomain
+    /// The one-line subtitle under the title: the domain's tagline, or a live fact such as the
+    /// Models inventory.
+    let subtitle: String
     @Binding var task: StudioTask
     let showsLibraryToggle: Bool
     let isLibraryShown: Bool
@@ -63,7 +66,7 @@ struct StudioContentHeader: View {
                 Text(domain.title)
                     .font(.system(size: 15, weight: .semibold))
                     .foregroundStyle(MereRunTheme.textPrimary)
-                Text(domain.subtitle)
+                Text(subtitle)
                     .font(.system(size: 11.5, weight: .medium))
                     .foregroundStyle(MereRunTheme.textMuted)
                     .lineLimit(1)
