@@ -1,9 +1,10 @@
-# Cosmos3-Edge native runtime
+# Cosmos3 native runtime
 
-This directory contains the native Swift/MLX port of NVIDIA Cosmos3-Edge. It
-uses the official, immutable `nvidia/Cosmos3-Edge` Diffusers snapshot directly;
-there is no Python subprocess, converted runtime checkpoint, or remote
-inference dependency.
+This directory contains the native Swift/MLX ports of NVIDIA Cosmos3-Edge and
+the distilled Cosmos3-Super text-to-image model. Cosmos3-Edge uses the official,
+immutable Diffusers snapshot directly. Cosmos3-Super uses a publishable MLX Q4
+artifact converted from an immutable NVIDIA revision. Neither runtime launches
+Python or uses remote inference.
 
 ## Reading order
 
@@ -14,13 +15,14 @@ inference dependency.
 3. `Cosmos3Sequence.swift` implements text, vision, and action packing plus
    multimodal rotary position IDs.
 4. `Cosmos3Transformer.swift` implements the shared omnimodal
-   generation/understanding transformer and Edge mixture-of-transformers
-   blocks.
+   generation/understanding transformer, including the Edge ReLU-squared path
+   and the Super gated-SiLU path.
 5. `Cosmos3ModelLoader.swift` maps the official Diffusers checkpoint into the
    native transformer and shared Wan VAE.
 6. `Cosmos3Tokenizer.swift` reproduces the published generation prompts and
    multimodal metadata.
-7. `Cosmos3Scheduler.swift` implements NVIDIA's shifted-flow UniPC schedule.
+7. `Cosmos3Scheduler.swift` implements NVIDIA's shifted-flow UniPC schedule and
+   the stochastic four-step Euler schedule published with Cosmos3-Super.
 8. `Cosmos3EdgeGenerator.swift` owns text/image/video generation, image
    editing, action-conditioned forward dynamics, policy generation, inverse
    dynamics, decode, and output.
@@ -47,8 +49,8 @@ inference dependency.
 
 ## Parity evidence
 
-`Tests/MereRunCoreTests/Cosmos3EdgeTests.swift` covers published configuration,
-checkpoint inventory, action layouts, prompt templates, sequence geometry,
-mode defaults, warm-world continuity, and deterministic numerical fixtures
-exported from the pinned NVIDIA source by
-`scripts/export-cosmos3-edge-parity.py`.
+`Tests/MereRunCoreTests/Cosmos3EdgeTests.swift` covers both transformer families,
+published configuration and checkpoint inventories, the distilled schedule,
+action layouts, prompt templates, sequence geometry, mode defaults, warm-world
+continuity, and deterministic Edge fixtures exported from the pinned NVIDIA
+source by `scripts/export-cosmos3-edge-parity.py`.

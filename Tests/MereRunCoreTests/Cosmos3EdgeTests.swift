@@ -365,6 +365,22 @@ final class Cosmos3EdgeTests: MereRunCoreTestCase {
         }
     }
 
+    func testDistilledEulerScheduleMatchesPublishedFourStepUpdate() {
+        var scheduler = Cosmos3DistilledEulerScheduler(
+            sigmas: [1, 0.9375, 0.8333333333333334, 0.625]
+        )
+        XCTAssertEqual(scheduler.timesteps, [1_000, 937.5, 833.3333, 625])
+        XCTAssertEqual(scheduler.sigmas, [1, 0.9375, 0.8333333, 0.625, 0])
+
+        let result = scheduler.step(
+            modelOutput: MLXArray([Float(0.25)]),
+            sample: MLXArray([Float(1)]),
+            noise: MLXArray([Float(0.5)])
+        )
+        eval(result)
+        XCTAssertEqual(result.item(Float.self), 0.515625, accuracy: 1e-6)
+    }
+
     func testPromptMetadataAndActionJSONMatchPublishedTemplates() throws {
         let text = try Cosmos3Tokenizer.renderPrompts(
             prompt: "A quiet station.",
@@ -427,6 +443,107 @@ final class Cosmos3EdgeTests: MereRunCoreTestCase {
         XCTAssertTrue(keys.contains("layers.27.mlp_moe_gen.up_proj.weight"))
         XCTAssertFalse(keys.contains("layers.0.mlp.gate_proj.weight"))
         XCTAssertFalse(keys.contains("layers.0.self_attn.norm_q.weight"))
+    }
+
+    func testDecodesCosmos3SuperTextToImageConfiguration() throws {
+        let configuration = try JSONDecoder().decode(
+            Cosmos3TransformerConfiguration.self,
+            from: Data(Self.superTransformerConfigJSON.utf8)
+        )
+
+        XCTAssertEqual(configuration.hiddenSize, 5_120)
+        XCTAssertEqual(configuration.intermediateSize, 25_600)
+        XCTAssertEqual(configuration.layerCount, 64)
+        XCTAssertEqual(configuration.feedForwardActivation, .siluGated)
+        XCTAssertTrue(configuration.normalizesUnderstandingQueriesAndKeys)
+        XCTAssertFalse(configuration.normalizesUnderstandingKeysForGeneration)
+        XCTAssertFalse(configuration.generatesActions)
+        XCTAssertFalse(configuration.generatesSound)
+        XCTAssertFalse(configuration.includesLanguageModelHead)
+        XCTAssertEqual(configuration.quantization?.bits, 4)
+        XCTAssertEqual(configuration.quantization?.groupSize, 64)
+        XCTAssertTrue(configuration.validationIssues().isEmpty)
+    }
+
+    func testCosmos3SuperTextToImageInventoryHasExactTensorCount() throws {
+        let configuration = try JSONDecoder().decode(
+            Cosmos3TransformerConfiguration.self,
+            from: Data(Self.superTransformerConfigJSON.utf8)
+        )
+        let keys = Cosmos3CheckpointInventory.transformerKeys(configuration: configuration)
+
+        XCTAssertEqual(keys.count, 1_419)
+        XCTAssertTrue(keys.contains("layers.0.mlp.gate_proj.weight"))
+        XCTAssertTrue(keys.contains("layers.63.self_attn.norm_q.weight"))
+        XCTAssertFalse(keys.contains("layers.0.self_attn.k_norm_und_for_gen.weight"))
+        XCTAssertFalse(keys.contains("lm_head.weight"))
+    }
+
+    func testCosmos3SuperQuantizedInventoryMapsPackedWeightsAndIgnoresSoundHeads() throws {
+        let configuration = try JSONDecoder().decode(
+            Cosmos3TransformerConfiguration.self,
+            from: Data(Self.superTransformerConfigJSON.utf8)
+        )
+        let expected = Cosmos3CheckpointInventory.transformerKeys(configuration: configuration)
+        var weightMap = Dictionary(uniqueKeysWithValues: expected.map { ($0, "model.safetensors") })
+        let base = "layers.0.mlp.up_proj"
+        weightMap[base + ".scales"] = "model.safetensors"
+        weightMap[base + ".biases"] = "model.safetensors"
+        weightMap["audio_modality_embed"] = "model.safetensors"
+        weightMap["audio_proj_in.weight"] = "model.safetensors"
+        weightMap["audio_proj_in.bias"] = "model.safetensors"
+        weightMap["audio_proj_out.weight"] = "model.safetensors"
+        weightMap["audio_proj_out.bias"] = "model.safetensors"
+
+        try Cosmos3CheckpointInventory.validateTransformerIndex(
+            HFSafetensorsIndex(metadata: nil, weightMap: weightMap),
+            configuration: configuration
+        )
+    }
+
+    func testTinyCosmos3SuperBackboneIsFiniteWithoutActionOrLanguageHeads() {
+        let configuration = Cosmos3TransformerConfiguration(
+            actionDimension: nil,
+            generatesActions: false,
+            feedForwardActivation: .siluGated,
+            headDimension: 8,
+            hiddenSize: 16,
+            intermediateSize: 32,
+            latentChannels: 2,
+            latentPatchSize: 2,
+            attentionHeadCount: 2,
+            embodimentDomainCount: 3,
+            layerCount: 1,
+            keyValueHeadCount: 1,
+            patchLatentDimension: 8,
+            normalizesUnderstandingQueriesAndKeys: true,
+            ropeAxesDimensions: [2, 1, 1],
+            normalizesUnderstandingKeysForGeneration: false,
+            includesLanguageModelHead: false,
+            vocabularySize: 32
+        )
+        let model = Cosmos3OmniTransformerModel(configuration: configuration)
+        let text = model.embedText(tokenIDs: MLXArray([Int32(1), 2]))
+        let vision = model.projectVision(
+            MLX.zeros([2, 8]),
+            timesteps: MLXArray([Float(1_000), 1_000])
+        )
+        let positionIDs = Cosmos3PositionIDs(
+            temporal: [0, 1, 15_002, 15_002],
+            height: [0, 1, 0, 0],
+            width: [0, 1, 0, 1],
+            nextTemporalOffset: 15_003
+        ).mlxArray
+        let output = model(understanding: text, generation: vision, positionIDs: positionIDs)
+        eval(output.understanding, output.generation)
+
+        let parameterKeys = Set(model.parameters().flattened().map(\.0))
+        XCTAssertTrue(parameterKeys.contains("layers.0.mlp.gate_proj.weight"))
+        XCTAssertTrue(parameterKeys.contains("layers.0.self_attn.norm_q.weight"))
+        XCTAssertFalse(parameterKeys.contains("lm_head.weight"))
+        XCTAssertFalse(parameterKeys.contains("action_modality_embed"))
+        XCTAssertTrue(output.understanding.asArray(Float.self).allSatisfy(\.isFinite))
+        XCTAssertTrue(output.generation.asArray(Float.self).allSatisfy(\.isFinite))
     }
 
     func testDiffusersWanVAEKeysMapToNativeWanLayout() {
@@ -1001,6 +1118,40 @@ final class Cosmos3EdgeTests: MereRunCoreTestCase {
     private func maxAbsoluteError(_ lhs: MLXArray, _ rhs: MLXArray) -> Float {
         MLX.max(MLX.abs(lhs.asType(.float32) - rhs.asType(.float32))).item(Float.self)
     }
+
+    private static let superTransformerConfigJSON = """
+    {
+      "action_dim": 32,
+      "action_gen": false,
+      "attention_bias": false,
+      "base_fps": 24,
+      "enable_fps_modulation": true,
+      "head_dim": 128,
+      "hidden_act": "silu",
+      "hidden_size": 5120,
+      "intermediate_size": 25600,
+      "latent_channel": 48,
+      "latent_patch_size": 2,
+      "mererun_text_to_image_only": true,
+      "num_attention_heads": 64,
+      "num_embodiment_domains": 32,
+      "num_hidden_layers": 64,
+      "num_key_value_heads": 8,
+      "patch_latent_dim": 192,
+      "quantization_config": {"bits": 4, "group_size": 64, "mode": "affine"},
+      "rms_norm_eps": 0.000001,
+      "rope_axes_dim": [24, 20, 20],
+      "rope_theta": 5000000,
+      "sound_dim": 64,
+      "sound_gen": false,
+      "temporal_compression_factor": 4,
+      "timestep_scale": 0.001,
+      "use_und_k_norm_for_gen": false,
+      "unified_3d_mrope_reset_spatial_ids": true,
+      "unified_3d_mrope_temporal_modality_margin": 15000,
+      "vocab_size": 151936
+    }
+    """
 
     private static let transformerConfigJSON = """
     {

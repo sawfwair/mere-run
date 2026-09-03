@@ -16,6 +16,11 @@ The format is based on Keep a Changelog.
 
 ### Image
 
+- added native Swift/MLX inference and resumable conversion tooling for
+  NVIDIA Cosmos3-Super Text2Image 4-Step. The Q4 artifact pins the source
+  revision, preserves the BF16 VAE and small projections, removes unused sound
+  and language heads, records checksums and conversion provenance, and enforces
+  the checkpoint's fixed stochastic four-step, no-CFG recipe.
 - added the gated `image-flux1-dev` managed model with a separate Swift and MLX
   FLUX.1 runtime. The runtime loads the pinned BFL transformer, CLIP-L,
   T5-XXL, VAE, tokenizer, and scheduler components, uses the published
