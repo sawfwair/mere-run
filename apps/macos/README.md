@@ -75,10 +75,14 @@ ordered Ref2VA image/video/audio references without emitting incompatible LTX
 flags. Its general attachment workflow supports a start image, end keyframe,
 and source audio. The Command Console's Video templates contain
 guided SCAIL-2, Cosmos3, mask-preparation, latent-export, and resident-session
-workflows. Video ▸ Subjects hosts the SCAIL subject workflow with multi-subject
-reference/selector authoring, preview and full-video SAM tracking, immutable
-keyframe corrections, before/after playback, complete continuity/profile controls,
-and durable Library jobs.
+workflows. Video ▸ Subjects hosts the SCAIL subject workflow as a three-stage
+project board (Plan → Track → Animate) with a stage rail, a mask preview that
+scrubs by frame and flips between masks and the driving clip, subject rows, and
+stats read from the CLI's manifest, tracking, and quality reports. It keeps
+multi-subject reference/selector authoring, preview and full-video SAM tracking,
+immutable keyframe corrections, the continuity/profile controls (under each
+stage's "More" row), plan.json persistence, and durable Library jobs with a job
+bar for the running stage.
 
 Text uses the same contract for native/MLX chat, code, embeddings,
 anonymization, and text-LoRA training. Chat exposes typed text/JSON response
