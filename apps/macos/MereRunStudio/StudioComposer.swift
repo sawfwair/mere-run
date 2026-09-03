@@ -3,9 +3,6 @@ import MereRunContract
 import SwiftUI
 import UniformTypeIdentifiers
 
-// F1 token: the text/glyph color on an accent fill. Moves to MereRunTheme with the other v2 tokens.
-private let onAccent = MereRunTheme.dynamic(light: "FFFFFF", dark: "1B160A")
-
 /// The composer pinned under the canvas: the attachment well, the prompt, and a strip of the
 /// mode's essential parameters as chips, with Run on the right. Slots and chips come from
 /// `StudioComposerSchema.swift`; the remaining depth stays behind the options popover.
@@ -614,7 +611,7 @@ struct StudioComposer: View {
                 Circle().fill(sendEnabled ? MereRunTheme.accent : MereRunTheme.surfaceRaised)
                 Image(systemName: "arrow.up")
                     .font(.system(size: 14, weight: .semibold))
-                    .foregroundStyle(sendEnabled ? onAccent : MereRunTheme.textMuted)
+                    .foregroundStyle(sendEnabled ? MereRunTheme.onAccent : MereRunTheme.textMuted)
             }
             .frame(width: Metrics.sendDiameter, height: Metrics.sendDiameter)
         }

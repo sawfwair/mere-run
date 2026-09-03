@@ -1,9 +1,6 @@
 import AppKit
 import SwiftUI
 
-// F1 token: the text/glyph color on an accent fill. Moves to MereRunTheme with the other v2 tokens.
-private let onAccent = MereRunTheme.dynamic(light: "FFFFFF", dark: "1B160A")
-
 /// Music ▸ Realtime: the Session archetype for the CLI's long-lived Magenta RT2 process.
 ///
 /// One column of panels — transport, waveform, steering, session log — over a job bar. The CLI
@@ -178,7 +175,7 @@ struct StudioRealtimeMusicView: View {
                 ZStack {
                     Circle().fill(MereRunTheme.accent)
                     TransportGlyph(stop: isPending)
-                        .stroke(onAccent, style: StrokeStyle(lineWidth: 1.15, lineCap: .round, lineJoin: .round))
+                        .stroke(MereRunTheme.onAccent, style: StrokeStyle(lineWidth: 1.15, lineCap: .round, lineJoin: .round))
                         .frame(width: 16, height: 16)
                 }
                 .frame(width: 40, height: 40)

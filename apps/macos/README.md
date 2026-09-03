@@ -191,8 +191,8 @@ owns only the typed local `world serve` runtime endpoint, authentication, model
 selection, status, and the handoff to `https://diorama.mere.run`; it must not
 duplicate Diorama's product experience.
 
-Models ▸ Installed is a list-and-detail page. The toolbar subtitle reports the
-real inventory ("92 installed · 48 GB on this Mac", from `model list` and
+Models ▸ Installed is a list-and-detail page. The content header's subtitle
+reports the real inventory ("92 installed · 48 GB on this Mac", from `model list` and
 `model storage`). The 320pt list shows installed models plus any model being
 pulled, with a family chip row (Image, Chat, Vision, …) and a status dot: green
 installed, accent pulling, yellow when the CLI reports the model as unsupported
@@ -299,8 +299,13 @@ recorded decision that it should not have one.
 
 `StudioSnapshotTests` renders the shell for visual review without driving the
 live app: every domain at its default task at 1280×820 in light and dark, plus
-the Settings content and the Command Console, and Models ▸ Installed at the
-1440×900 mockup size with a scripted model inventory (`model list`,
+the Settings content and the Command Console, and fidelity renders at the
+1440×900 mockup size for comparing against the design boards: Image ▸ Generate
+with the boards' four Library rows, the composer with the boards' sample prompt
+and an in-test image attached (Image ▸ Generate and Vision ▸ Find), Music ▸
+Realtime mid-session (a run the process seam holds open, fed the CLI's frame
+progress and steering echoes, with its recording synthesized on disk), and
+Models ▸ Installed with a scripted model inventory (`model list`,
 `capabilities`, `storage`, `info`, `runtime get`, and `adapter list` answered
 from fixtures, plus Library rows for usage, a quality gate, a benchmark, and a
 running composer pull). It is skipped unless
@@ -313,8 +318,10 @@ MERERUN_STUDIO_SNAPSHOT_DIR=/tmp/shell-shots swift test --filter StudioSnapshotT
 
 `StudioSnapshotRenderer` hosts each view in an `NSWindow` that is never ordered
 on screen and captures it with `cacheDisplay`, so nothing appears on the Mac
-running it. The controller uses a process runner that refuses every launch (or,
-for the Models render, answers only the scripted inventory commands) and
+running it. The controller uses a process runner that refuses every launch
+(answering only the sidebar's status probe; for the Realtime render it holds
+the session launch open, and for the Models render it answers only the
+scripted inventory commands) and
 the Library is a temporary `library.json` seeded with fixture rows, so no CLI
 process starts and the user's Library is never read or written. Two fidelity
 gaps are deliberate: macOS 26 glass and scroll-edge effects only composite on

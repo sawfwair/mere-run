@@ -330,9 +330,6 @@ enum StudioModelInventoryParser {
 }
 
 
-// F1 token: text on an accent fill (mockup `onAccent`); light #FFFFFF, dark #1B160A.
-private let onAccent = MereRunTheme.dynamic(light: "FFFFFF", dark: "1B160A")
-
 private enum ModelsMetrics {
     static let listWidth: CGFloat = 320
     static let rowHeight: CGFloat = 40
@@ -2021,7 +2018,7 @@ private struct ModelsPrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(onAccent)
+            .foregroundStyle(MereRunTheme.onAccent)
             .padding(.horizontal, 14)
             .frame(height: 28)
             .background {

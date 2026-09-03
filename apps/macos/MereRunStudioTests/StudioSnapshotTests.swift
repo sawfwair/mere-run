@@ -860,10 +860,14 @@ private final class SnapshotProcessRunner: MereRunProcessRunning, @unchecked Sen
 
     static let installedModelCount = 92
 
-    private static let statusSnapshot: String = {
+    /// What `status --json` prints for an idle server with `installedModelCount` models, so the
+    /// sidebar footer settles to "Ready · N models".
+    static func statusSnapshot(installedModelCount: Int) -> String {
         let models = (1...installedModelCount).map { "{\"id\":\"model-\($0)\"}" }.joined(separator: ",")
         return "{\"server\":{\"health\":\"down\",\"loadedModels\":[]},\"installedModels\":[\(models)]}\n"
-    }()
+    }
+
+    private static let statusSnapshot = statusSnapshot(installedModelCount: installedModelCount)
 
     var liveSessionMarker: String? {
         get {
@@ -988,6 +992,8 @@ private final class ScriptedProcessRunner: MereRunProcessRunning, @unchecked Sen
 private enum ModelsInventoryScript {
     static let defaultModelID = "image-zimage-nano"
     static let pullingModelID = "vision-chat-qwen3.6-vl-4b"
+    /// The rows of `modelList` whose status is installed; the sidebar footer counts the same.
+    static let installedModelCount = 7
 
     static let modelList = """
     ID                         Category     Status     Referenced
@@ -1051,6 +1057,11 @@ private enum ModelsInventoryScript {
 
     static var responses: [ScriptedProcessRunner.Response] {
         [
+            .init(
+                matches: { $0.first == "status" && $0.contains("--json") },
+                stdout: SnapshotProcessRunner.statusSnapshot(installedModelCount: installedModelCount),
+                exitCode: 0
+            ),
             .init(matches: { $0 == ["model", "list"] }, stdout: modelList, exitCode: 0),
             .init(matches: { $0 == ["model", "capabilities", "--all", "--json"] }, stdout: capabilities, exitCode: 0),
             .init(matches: { $0 == ["model", "storage", "--json"] }, stdout: storage, exitCode: 0),
