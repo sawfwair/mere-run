@@ -14,11 +14,11 @@ machine.
 | `mere.run model runtime set` | Update typed API runtime settings for a managed model. |
 | `mere.run status` | Show local server, loaded model, and installed model status. |
 
-## macOS Serving & Agents console
+## macOS Server domain
 
-MereRun Studio exposes this control plane as a top-level **Serving & Agents**
-destination (or `Shift-Command-S`). It is an operational client of the public
-CLI and HTTP contracts, not a second runtime. The console provides:
+MereRun Studio exposes this control plane as the **Server** domain in its
+sidebar (Go ▸ Server, `Option-Command-4`). It is an operational client of the
+public CLI and HTTP contracts, not a second runtime. The Serving task provides:
 
 - API preflight, app-owned start, stop, restart, and reconnection to a server
   started outside Studio
