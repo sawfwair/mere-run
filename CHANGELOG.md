@@ -6,6 +6,30 @@ The format is based on Keep a Changelog.
 
 ## Unreleased
 
+### CLI
+
+- added optional `default_value`, `group`, `tier`, `range`, and `depends_on`
+  metadata to every option in the shared capability contract and populated it
+  for the prompt-mode capabilities (`image.generate`, `text.chat`, `text.code`,
+  `speech.synthesize`, `speech.transcribe`, `vision.inspect`, `vision.ocr`,
+  `vision.caption`, `vision.ground`, `vision.segment`, `vision.track`,
+  `music.generate`, `video.generate`, `sfx.generate`). The fields are additive,
+  `mere.run catalog --json` omits them when unset, and a CLI test proves every
+  declared default matches the ArgumentParser help.
+- added `--receipt` to `image generate`, `video generate`, `music generate`,
+  `sfx generate`, `speech synthesize`, `speech transcribe`, `vision ground`,
+  `vision segment`, and `vision track`. It appends one final
+  `{"event":"result","exit":0,"outputs":[{"path":…,"kind":…}]}` line to stdout
+  after the unchanged human output, listing the primary artifact first and any
+  sidecars (detections, masks, recipes, candidates, stems, timings) with a
+  `role`.
+- extended `--progress-json` from `image generate` to `video generate`
+  (MiniMax-H3 and Wan lanes), `music generate` (MiniMax Music 3 and Magenta
+  RT2 lanes), `sfx generate`, and `speech synthesize`, using the same
+  `{"event":"progress","stage":…,"step":…,"total_steps":…}` line. The native
+  LTX video lanes and the ACE-Step pipeline expose no per-step callback and
+  emit no events.
+
 ### macOS
 
 - added `--lm-model` (music generate, analyze, and serve), `--h3-acceleration`,

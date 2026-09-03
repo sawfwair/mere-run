@@ -141,6 +141,131 @@ import Testing
     #expect(decoded == document)
 }
 
+/// The capabilities behind Studio's prompt modes. Every option on these carries
+/// the group and tier metadata the contract-driven inspector renders from.
+private let promptModeCapabilityIDs: [String] = [
+    "image.generate", "text.chat", "text.code",
+    "speech.synthesize", "speech.transcribe",
+    "vision.inspect", "vision.ocr", "vision.caption", "vision.ground", "vision.segment", "vision.track",
+    "music.generate", "video.generate", "sfx.generate"
+]
+
+private let knownOptionGroups: Set<String> = [
+    MereRunCapabilityOptionGroup.prompt,
+    MereRunCapabilityOptionGroup.inputs,
+    MereRunCapabilityOptionGroup.output,
+    MereRunCapabilityOptionGroup.modelAndAdapters,
+    MereRunCapabilityOptionGroup.sampling,
+    MereRunCapabilityOptionGroup.run
+]
+
+@Test func promptModeCapabilitiesDeclareOptionMetadata() {
+    for id in promptModeCapabilityIDs {
+        let capability = MereRunCapabilityCatalog.command(id: id)
+        #expect(capability != nil, "Missing prompt-mode capability \(id)")
+        for option in capability?.options ?? [] {
+            #expect(option.group != nil, "\(id) \(option.flag) has no group")
+            #expect(option.tier != nil, "\(id) \(option.flag) has no tier")
+        }
+        #expect(
+            capability?.options.contains { $0.tier == .essential } == true,
+            "\(id) declares no essential option for the chip strip"
+        )
+    }
+}
+
+@Test func capabilityOptionMetadataIsWellFormed() {
+    for command in MereRunCapabilityCatalog.document.commands {
+        let flags = Set(command.options.map(\.flag))
+        for option in command.options {
+            let context = "\(command.id) \(option.flag)"
+
+            if let group = option.group {
+                #expect(knownOptionGroups.contains(group), "\(context) uses unknown group \(group)")
+            }
+
+            if let value = option.defaultValue {
+                switch option.kind {
+                case .integer:
+                    #expect(Int(value) != nil, "\(context) default \(value) is not an integer")
+                case .number:
+                    #expect(Double(value) != nil, "\(context) default \(value) is not a number")
+                case .boolean:
+                    #expect(["true", "false"].contains(value), "\(context) default \(value) is not a boolean")
+                case .choice:
+                    #expect(option.choices.contains(value), "\(context) default \(value) is not one of \(option.choices)")
+                case .string, .file, .directory:
+                    #expect(!value.isEmpty, "\(context) declares an empty default")
+                }
+            }
+
+            if let dependsOn = option.dependsOn {
+                #expect(dependsOn != option.flag, "\(context) depends on itself")
+                #expect(flags.contains(dependsOn), "\(context) depends on undeclared flag \(dependsOn)")
+            }
+
+            guard let range = option.range else { continue }
+            #expect(option.kind == .integer || option.kind == .number, "\(context) declares a range on a non-numeric option")
+            #expect(range.min != nil || range.max != nil || range.step != nil, "\(context) declares an empty range")
+            if let min = range.min, let max = range.max {
+                #expect(min <= max, "\(context) range min \(min) exceeds max \(max)")
+            }
+            if let step = range.step {
+                #expect(step > 0, "\(context) range step must be positive")
+            }
+            if option.kind == .integer {
+                for bound in [range.min, range.max, range.step].compactMap({ $0 }) {
+                    #expect(bound == bound.rounded(), "\(context) integer range uses fractional bound \(bound)")
+                }
+            }
+            if let value = option.defaultValue, let number = Double(value) {
+                if let min = range.min {
+                    #expect(number >= min, "\(context) default \(value) is below range min \(min)")
+                }
+                if let max = range.max {
+                    #expect(number <= max, "\(context) default \(value) is above range max \(max)")
+                }
+            }
+        }
+    }
+}
+
+@Test func receiptAndProgressFlagsAreDeclaredExactlyWhereEmitted() {
+    let commands = MereRunCapabilityCatalog.document.commands
+    let withReceipt = commands.filter { $0.options.contains { $0.flag == "--receipt" } }.map(\.id)
+    let withProgress = commands.filter { $0.options.contains { $0.flag == "--progress-json" } }.map(\.id)
+
+    #expect(Set(withReceipt) == Set(MereRunCapabilityCatalog.receiptCapabilityIDs))
+    #expect(Set(withProgress) == Set(MereRunCapabilityCatalog.progressJSONCapabilityIDs))
+    #expect(Set(MereRunCapabilityCatalog.progressJSONCapabilityIDs).isSubset(of: Set(withReceipt)))
+}
+
+@Test func optionMetadataSerializesAdditivelyAndDecodesLegacyJSON() throws {
+    let encoder = JSONEncoder()
+    encoder.outputFormatting = [.sortedKeys]
+
+    let width = try #require(MereRunCapabilityCatalog.imageGenerate.options.first { $0.flag == "--width" })
+    let widthJSON = String(decoding: try encoder.encode(width), as: UTF8.self)
+    #expect(widthJSON.contains(#""default_value":"1024""#))
+    #expect(widthJSON.contains(#""group":"Output""#))
+    #expect(widthJSON.contains(#""tier":"essential""#))
+    #expect(widthJSON.contains(#""range":{"max":2048,"min":256,"step":16}"#))
+    #expect(!widthJSON.contains("depends_on"))
+
+    let mask = try #require(MereRunCapabilityCatalog.imageGenerate.options.first { $0.flag == "--mask" })
+    #expect(String(decoding: try encoder.encode(mask), as: UTF8.self).contains(#""depends_on":"--input""#))
+
+    let bare = MereRunCapabilityOption(flag: "--x", label: "X", kind: .string)
+    let bareJSON = String(decoding: try encoder.encode(bare), as: UTF8.self)
+    #expect(bareJSON == #"{"choices":[],"flag":"--x","kind":"string","label":"X","repeatable":false,"required":false}"#)
+
+    let legacy = Data(#"{"flag":"--y","label":"Y","kind":"integer","required":false,"repeatable":false,"choices":[]}"#.utf8)
+    let decoded = try JSONDecoder().decode(MereRunCapabilityOption.self, from: legacy)
+    #expect(decoded == MereRunCapabilityOption(flag: "--y", label: "Y", kind: .integer))
+    #expect(decoded.defaultValue == nil && decoded.group == nil && decoded.tier == nil)
+    #expect(decoded.range == nil && decoded.dependsOn == nil)
+}
+
 @Test func capabilityFlagsAreUniqueWithinCommands() {
     for command in MereRunCapabilityCatalog.document.commands {
         let flags = command.options.map(\.flag)
