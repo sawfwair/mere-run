@@ -141,6 +141,12 @@ struct StudioAnalyzeImageView: View {
         )
         return RoundedRectangle(cornerRadius: 4)
             .strokeBorder(MereRunTheme.accent, lineWidth: 2)
+            // The design's inset hairline: it keeps the accent edge readable over a pale subject.
+            .overlay {
+                RoundedRectangle(cornerRadius: 3)
+                    .strokeBorder(Color.black.opacity(0.25), lineWidth: 1)
+                    .padding(2)
+            }
             .frame(width: max(rect.width, 2), height: max(rect.height, 2))
             .overlay(alignment: .topLeading) {
                 StudioAnalyzeBoxLabel(text: detection.tabLabel)

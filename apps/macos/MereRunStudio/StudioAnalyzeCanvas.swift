@@ -73,8 +73,11 @@ struct StudioAnalyzeCanvas: View {
         readiness.blocksRun || pullJob != nil
     }
 
+    /// An input-first task shows its input the moment there is one: attaching a picture and then
+    /// still being told to "Choose image…" would be absurd, so the serif empty state is only for
+    /// an empty well with nothing to report.
     private var hasBody: Bool {
-        resultCard != nil || !pendingCards.isEmpty || showsReadinessCard
+        inputURL != nil || resultCard != nil || !pendingCards.isEmpty || showsReadinessCard
     }
 
     private var view: StudioAnalyzeResultView {
@@ -151,7 +154,8 @@ struct StudioAnalyzeCanvas: View {
                 .buttonStyle(.mereSecondary)
                 .help("Pick a different \(archetype.inputKind.noun)")
             Spacer(minLength: 8)
-            if archetype.views.count > 1 {
+            // Nothing has been found yet, so there is nothing to switch between.
+            if archetype.views.count > 1, resultCard != nil {
                 MereSegmentedControl(
                     archetype.views,
                     selection: Binding(get: { view }, set: { chosenView = $0 }),
