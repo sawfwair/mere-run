@@ -16,7 +16,20 @@ imported row. External launchers must never edit `library.json` directly.
   (`StudioTaskControl.swift`), and the prompt workspace; hosts every task in
   the detail area.
 - `StudioTypes.swift`: user-facing mode, draft, and request types.
-- `CommandCatalog.swift`: mode-to-command templates.
+- `CommandCatalog.swift`: `CommandTemplateID`, `CommandDraft`, and the
+  `CommandTemplate` record type.
+- `Catalog/`: one file per command category holding that category's
+  `CommandTemplate` records and the function that builds each template's argv.
+  `CommandFlags.swift` is generated from `MereRunCapabilityCatalog` by
+  `./scripts/update-studio-command-flags.sh`, so every flag the app emits is a
+  constant the shared contract declares and a renamed flag is a compile error;
+  `ArgumentBuilder` appends positionals, switches, `--flag value` pairs,
+  repeated options, and `--x` / `--no-x` pairs, and `optionUnlessDefault` drops
+  a value the contract already declares as the CLI's default. `CommandDefaults`
+  holds each template's starting draft, reading the contract's `default_value`
+  where it declares one. `Fixtures/command-argv.txt` and
+  `Fixtures/command-default-drafts.txt` in the test target pin both;
+  `./scripts/update-studio-argv-fixture.sh` re-records them.
 - `Jobs/`: the job model. `JobStore` owns every child process the app launches
   behind the `MereRunProcessRunning` seam (`Process()` appears only in
   `Jobs/ProcessRunner.swift` and the synchronous `CLIBootstrapInstaller`
