@@ -113,3 +113,152 @@ extension View {
         .animation(MereRunTheme.Motion.quick, value: hovering)
     }
 }
+
+/// The Studio's segmented control: a 2pt-padded `surfaceRaised` pill whose selected segment is a
+/// raised `segmentedSelection` tile. Every segment is a real button (VoiceOver reads it as a
+/// selected/unselected button; Tab and Space work), so it keeps the semantics of a native picker
+/// while drawing the way the design specifies.
+struct MereSegmentedControl<Item: Hashable>: View {
+    let items: [Item]
+    @Binding var selection: Item
+    let title: (Item) -> String
+    /// Names the whole control for VoiceOver ("Image task", "Library scope").
+    var accessibilityLabelText: String?
+
+    init(
+        _ items: [Item],
+        selection: Binding<Item>,
+        accessibilityLabel: String? = nil,
+        title: @escaping (Item) -> String
+    ) {
+        self.items = items
+        _selection = selection
+        self.title = title
+        accessibilityLabelText = accessibilityLabel
+    }
+
+    var body: some View {
+        HStack(spacing: 2) {
+            ForEach(items, id: \.self) { item in
+                MereSegment(
+                    title: title(item),
+                    isSelected: item == selection,
+                    action: { selection = item }
+                )
+            }
+        }
+        .padding(2)
+        .background {
+            RoundedRectangle(cornerRadius: 7)
+                .fill(MereRunTheme.surfaceRaised)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel(accessibilityLabelText ?? "Options")
+    }
+}
+
+/// One segment of `MereSegmentedControl` (also its overflow "More" segment): 24pt tall, 12pt
+/// horizontal padding, radius 5.5; selected = `segmentedSelection` fill, a 1pt shadow, semibold.
+struct MereSegment<Label: View>: View {
+    let isSelected: Bool
+    let action: () -> Void
+    @ViewBuilder let label: () -> Label
+
+    @State private var hovering = false
+
+    init(isSelected: Bool, action: @escaping () -> Void, @ViewBuilder label: @escaping () -> Label) {
+        self.isSelected = isSelected
+        self.action = action
+        self.label = label
+    }
+
+    var body: some View {
+        Button(action: action) {
+            label()
+                .font(.system(size: 12, weight: isSelected ? .semibold : .medium))
+                .foregroundStyle(isSelected ? MereRunTheme.textPrimary : MereRunTheme.textSecondary)
+                .lineLimit(1)
+                .padding(.horizontal, 12)
+                .frame(height: 24)
+                .background {
+                    RoundedRectangle(cornerRadius: 5.5)
+                        .fill(fill)
+                        .shadow(
+                            color: isSelected ? MereRunTheme.shadowColor : .clear,
+                            radius: 1,
+                            y: 1
+                        )
+                }
+                .contentShape(RoundedRectangle(cornerRadius: 5.5))
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .animation(MereRunTheme.Motion.quick, value: hovering)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
+    private var fill: Color {
+        if isSelected { return MereRunTheme.segmentedSelection }
+        if hovering { return MereRunTheme.hoverFill }
+        return .clear
+    }
+}
+
+extension MereSegment where Label == Text {
+    init(title: String, isSelected: Bool, action: @escaping () -> Void) {
+        self.init(isSelected: isSelected, action: action) { Text(title) }
+    }
+}
+
+/// A 28pt toolbar toggle: `accentSoft` tile and accent glyph while its panel is shown, quiet
+/// `textSecondary` glyph otherwise, hover fill in between.
+struct MereToolbarIconButton: View {
+    let systemImage: String
+    let isActive: Bool
+    let action: () -> Void
+
+    @State private var hovering = false
+
+    var body: some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(isActive ? MereRunTheme.accent : MereRunTheme.textSecondary)
+                .frame(width: 28, height: 28)
+                .background {
+                    RoundedRectangle(cornerRadius: MereRunTheme.Radius.sm)
+                        .fill(fill)
+                }
+                .contentShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.sm))
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
+        .animation(MereRunTheme.Motion.quick, value: hovering)
+        .accessibilityAddTraits(isActive ? .isSelected : [])
+    }
+
+    private var fill: Color {
+        if isActive { return MereRunTheme.accentSoft }
+        if hovering { return MereRunTheme.hoverFill }
+        return .clear
+    }
+}
+
+/// The 10.5pt uppercase caption that labels sidebar sections, Library days, and panel groups.
+struct MereEyebrow: View {
+    let text: String
+
+    init(_ text: String) {
+        self.text = text
+    }
+
+    var body: some View {
+        Text(text)
+            .font(.system(size: 10.5, weight: .semibold))
+            .kerning(0.63)
+            .textCase(.uppercase)
+            .foregroundStyle(MereRunTheme.textMuted)
+            .lineLimit(1)
+            .accessibilityAddTraits(.isHeader)
+    }
+}

@@ -32,12 +32,21 @@ struct StudioRootView: View {
     @State private var pendingPullRefresh: StudioReadinessRefresh?
     @State private var pendingRestrictedPull: StudioRunRequest?
     @State private var studioError: String?
-    /// Locally installed models feeding the composer's quick-picker.
-    @State private var installedModels: [StudioModelInventoryRow] = []
+    /// Every `model list` row, installed or not, feeding the composer's model chip.
+    @State private var modelInventory: [StudioModelInventoryRow] = []
+    /// What Models ▸ Installed last reported, so the content header's subtitle shows the real inventory.
+    @State private var modelInventorySummary: StudioModelInventorySummary?
     @State private var modelUsageTermsByID: [String: StudioModelUsageTerms] = [:]
     @State private var imageDatasetTask: StudioUtilityTask = .datasetDiscovery
     @AppStorage("mererun.app.hasCompletedWelcome") private var hasCompletedWelcome = false
     @FocusState private var promptFocused: Bool
+    /// Drafts a prompt mode starts with instead of its defaults. The snapshot harness stages
+    /// sample content this way; the app passes nothing.
+    private let seededDrafts: [StudioMode: StudioDraft]
+
+    init(seededDrafts: [StudioMode: StudioDraft] = [:]) {
+        self.seededDrafts = seededDrafts
+    }
 
     private var destination: StudioDestination { navigation.destination }
 
@@ -89,6 +98,14 @@ struct StudioRootView: View {
 
     private var readiness: ModelReadinessState {
         controller.readinessByMode[mode] ?? .unknown("Readiness has not been checked yet.")
+    }
+
+    /// The seed the mode's most recent run was queued with, for the seed chip's "Reuse last".
+    private var lastSeed: String? {
+        library.items.lazy
+            .filter { $0.mode == mode }
+            .compactMap { $0.commandDraft?.seed.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .first { !$0.isEmpty }
     }
 
     private var selectedCapabilityRequirement: StudioCapabilityRequirement? {
@@ -176,31 +193,41 @@ struct StudioRootView: View {
             )
         } detail: {
             detailArea
-                .toolbar { toolbarContent }
         }
         .background(MereRunTheme.background.ignoresSafeArea())
     }
 
+    // The detail area runs to the top of the window (the title bar is hidden and nothing sits in
+    // the window toolbar): the Library column on the left with its own header, and beside it the
+    // content column whose first row is the 52pt domain header. With the sidebar collapsed the
+    // traffic lights and sidebar toggle land over the detail's top-left corner, so whichever
+    // header is first leaves room for them.
     private var detailArea: some View {
-        VStack(spacing: 0) {
-            banners
+        HStack(spacing: 0) {
+            if showsLibraryColumn {
+                libraryColumn
+                    .frame(width: StudioLayoutPolicy.libraryWidth)
+                    .transition(reduceMotion ? .identity : .move(edge: .leading).combined(with: .opacity))
 
-            HStack(spacing: 0) {
-                if showsLibraryColumn {
-                    libraryColumn
-                        .frame(width: StudioLayoutPolicy.libraryWidth)
-                        .transition(reduceMotion ? .identity : .move(edge: .leading).combined(with: .opacity))
+                Divider()
+                    .overlay(MereRunTheme.border.opacity(0.53))
+            }
 
-                    Divider()
-                        .overlay(MereRunTheme.border.opacity(0.5))
-                }
-
+            VStack(spacing: 0) {
+                contentHeader
+                banners
                 domainContent
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
+        .ignoresSafeArea(.container, edges: .top)
         .background(MereRunTheme.background.ignoresSafeArea())
         .foregroundStyle(MereRunTheme.textPrimary)
+    }
+
+    /// Space for the traffic lights and the sidebar toggle while the sidebar is collapsed.
+    private var windowChromeInset: CGFloat {
+        columnVisibility == .detailOnly ? StudioContentHeader.collapsedSidebarInset : 0
     }
 
     @ViewBuilder
@@ -238,91 +265,35 @@ struct StudioRootView: View {
             onRename: library.rename,
             onQuickLook: { QuickLookCoordinator.shared.preview($0) },
             onRetry: retryLibraryItem,
-            onEdit: editLibraryItem
+            onEdit: editLibraryItem,
+            leadingInset: windowChromeInset
         )
     }
 
-    // MARK: - Toolbar
+    // MARK: - Content header
 
-    @ToolbarContentBuilder
-    private var toolbarContent: some ToolbarContent {
-        ToolbarItem(placement: .navigation) {
-            domainTitle
-        }
-
-        ToolbarItem(placement: .principal) {
-            taskControl
-        }
-
-        ToolbarItemGroup(placement: .primaryAction) {
-            if destination.domain.hasPromptWorkspace {
-                Button {
-                    toggleLibrary()
-                } label: {
-                    Image(systemName: "sidebar.squares.left")
-                        .foregroundStyle(navigation.showLibrary ? MereRunTheme.accent : MereRunTheme.textSecondary)
-                }
-                .help(navigation.showLibrary ? "Hide Library (⌥⌘L)" : "Show Library (⌥⌘L)")
-                .accessibilityLabel(navigation.showLibrary ? "Hide Library" : "Show Library")
-            }
-
-            Button {
-                openConsole()
-            } label: {
-                Image(systemName: "terminal")
-            }
-            .help("Command Console (⌥⌘C)")
-            .accessibilityLabel("Command Console")
-        }
+    /// The 52pt header row at the top of the content column: domain glyph, title, and subtitle
+    /// leading; the task control in the middle; Library, Inspector, and Command toggles trailing.
+    private var contentHeader: some View {
+        StudioContentHeader(
+            domain: destination.domain,
+            subtitle: domainSubtitle,
+            task: taskBinding,
+            showsLibraryToggle: destination.domain.hasPromptWorkspace,
+            isLibraryShown: navigation.showLibrary,
+            isConsoleOpen: navigation.isConsoleOpen,
+            leadingInset: showsLibraryColumn ? 0 : windowChromeInset,
+            onToggleLibrary: toggleLibrary,
+            onOpenConsole: { openConsole() }
+        )
     }
 
-    private var domainTitle: some View {
-        HStack(spacing: MereRunTheme.Spacing.sm) {
-            Image(systemName: destination.domain.systemImage)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(MereRunTheme.accent)
-                .frame(width: 22)
-
-            VStack(alignment: .leading, spacing: 1) {
-                Text(destination.domain.title)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundStyle(MereRunTheme.textPrimary)
-                Text(destination.domain.subtitle)
-                    .font(.system(size: 11, weight: .medium))
-                    .foregroundStyle(MereRunTheme.textMuted)
-                    .lineLimit(1)
-            }
+    /// Models reports its installed count and store size; every other domain keeps its tagline.
+    private var domainSubtitle: String {
+        if destination.domain == .models, let modelInventorySummary {
+            return modelInventorySummary.subtitle
         }
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(.isHeader)
-    }
-
-    @ViewBuilder
-    private var taskControl: some View {
-        switch StudioTaskControlStyle.style(for: destination.domain) {
-        case .none:
-            EmptyView()
-        case .segmented:
-            Picker("Task", selection: taskBinding) {
-                ForEach(destination.domain.tasks) { task in
-                    Text(task.title).tag(task)
-                }
-            }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .fixedSize()
-            .accessibilityLabel("\(destination.domain.title) task")
-        case .menu:
-            Picker("Task", selection: taskBinding) {
-                ForEach(destination.domain.tasks) { task in
-                    Text(task.title).tag(task)
-                }
-            }
-            .pickerStyle(.menu)
-            .labelsHidden()
-            .fixedSize()
-            .accessibilityLabel("\(destination.domain.title) task")
-        }
+        return destination.domain.subtitle
     }
 
     // MARK: - Domain content
@@ -379,10 +350,16 @@ struct StudioRootView: View {
         case .earthFlood, .earthFire, .earthTessera, .earthOlmoEarth:
             StudioGeoLabView(tool: geoToolBinding)
         case .modelsInstalled:
-            StudioModelsView(onModelsChanged: {
-                refreshReadiness()
-                refreshInstalledModels()
-            })
+            StudioModelsView(
+                onModelsChanged: {
+                    refreshReadiness()
+                    refreshInstalledModels()
+                },
+                onInventoryChanged: { modelInventorySummary = $0 },
+                adapterTargetTitle: mode.destination.domain.title,
+                onUseAdapter: applyAdapter,
+                onTrain: openTraining
+            )
         case .modelsLocations:
             StudioModelLocationsView(onLocationsChanged: {
                 refreshReadiness()
@@ -540,8 +517,6 @@ struct StudioRootView: View {
             canvas
 
             composer
-                .padding(.horizontal, MereRunTheme.Spacing.xl)
-                .padding(.bottom, MereRunTheme.Spacing.xl)
         }
         .frame(minWidth: StudioLayoutPolicy.minimumCanvasWidth)
         .background {
@@ -560,15 +535,13 @@ struct StudioRootView: View {
             .ignoresSafeArea()
         }
         .dropDestination(for: URL.self) { urls, _ in
-            guard !mode.acceptedTypes.isEmpty, let url = urls.first(where: \.isFileURL) else {
-                return false
-            }
-            draft.inputPath = url.path
+            // A file dropped anywhere on the canvas lands in the first well slot that takes it.
+            guard draft.attach(dropped: urls, for: mode) else { return false }
             studioError = nil
             return true
         } isTargeted: { targeted in
             withAnimation(MereRunTheme.Motion.quick) {
-                isDropTargeted = targeted && !mode.acceptedTypes.isEmpty
+                isDropTargeted = targeted && !mode.attachmentSlots.isEmpty
             }
         }
         .overlay {
@@ -626,12 +599,11 @@ struct StudioRootView: View {
             queuedCount: controller.queuedRunCount,
             readiness: readiness,
             sendBlocked: mode.isConversational && activeConversationRunning,
-            installedModels: installedModels,
+            modelInventory: modelInventory,
+            lastSeed: lastSeed,
             promptFocus: $promptFocused,
             onRun: runStudioCommand,
             onStop: controller.cancel,
-            onAttach: chooseAttachment,
-            onPaste: pasteImageFromClipboard,
             onShowModels: { navigation.open(task: .modelsInstalled) },
             onShowAdapters: {
                 showOptions = false
@@ -881,7 +853,7 @@ struct StudioRootView: View {
     /// otherwise opens the most recent item or thread of the mode.
     private func activateMode(_ newMode: StudioMode) {
         activatedMode = newMode
-        var nextDraft = freshDraft(for: newMode)
+        var nextDraft = seededDrafts[newMode] ?? freshDraft(for: newMode)
         studioError = nil
         let preferred = navigation.selectedLibraryID.flatMap { id in
             library.items.first { $0.id == id && $0.mode == newMode }
@@ -1276,13 +1248,17 @@ struct StudioRootView: View {
         controller.checkReadiness(for: mode, draft: draft)
     }
 
-    /// Refreshes the composer's installed-model quick-picker from `model list`.
+    /// Refreshes the composer's model chip from `model list`.
     private func refreshInstalledModels() {
         Task {
             let result = await controller.utilityCommandResult(args: ["model", "list"])
             guard result.exitCode == 0 else { return }
             let rows = StudioModelInventoryParser.rows(from: result.stdout)
-            installedModels = rows.filter(\.isInstalled)
+            modelInventory = rows
+            modelInventorySummary = StudioModelInventorySummary(
+                installedCount: rows.filter(\.isInstalled).count,
+                storageBytes: modelInventorySummary?.storageBytes
+            )
             modelUsageTermsByID = Dictionary(
                 uniqueKeysWithValues: rows.compactMap { row in
                     row.usageTerms.map { (row.id, $0) }
@@ -1305,31 +1281,24 @@ struct StudioRootView: View {
         }
     }
 
-    /// Pastes an image from the clipboard into the attachment (Edit ▸ Paste / ⌘V when the canvas,
-    /// not a text field, holds focus). Prefers a pasted image file; otherwise writes the pasted
-    /// bitmap to a temporary PNG. Only acts in modes that accept an image.
+    /// Pastes an image from the clipboard into the well (Edit ▸ Paste / ⌘V when the canvas, not a
+    /// text field, holds focus): the first empty image slot, else the first image slot. Prefers a
+    /// pasted image file; otherwise writes the pasted bitmap to a temporary PNG.
     private func pasteImageFromClipboard() {
-        guard mode.acceptedTypes.contains(.image) else { return }
+        guard let slot = mode.pastedImageSlot(in: draft) else { return }
         let pasteboard = NSPasteboard.general
-
-        if let urls = pasteboard.readObjects(
-            forClasses: [NSURL.self],
-            options: [.urlReadingFileURLsOnly: true]
-        ) as? [URL], let imageURL = urls.first(where: { StudioOutputFileKind.classify($0) == .image }) {
-            draft.inputPath = imageURL.path
+        let urls = StudioAttachmentPasteboard.fileURLs(from: pasteboard, for: slot)
+        if !urls.isEmpty {
+            slot.attach(urls, to: &draft)
             studioError = nil
             return
         }
-
-        guard let image = NSImage(pasteboard: pasteboard), let data = image.pngDataRepresentation() else {
-            studioError = "The clipboard has no image to paste."
-            return
-        }
-        let url = FileManager.default.temporaryDirectory
-            .appendingPathComponent("pasted-\(UUID().uuidString).png")
         do {
-            try data.write(to: url)
-            draft.inputPath = url.path
+            guard let url = try StudioAttachmentPasteboard.writePastedImage(from: pasteboard) else {
+                studioError = "The clipboard has no image to paste."
+                return
+            }
+            slot.attach([url], to: &draft)
             studioError = nil
         } catch {
             studioError = "Could not paste image: \(error.localizedDescription)"
@@ -1365,14 +1334,5 @@ private extension String {
         var words = ShellWords.split(self)
         words = words.maskingSecrets()
         return words.shellQuoted()
-    }
-}
-
-private extension NSImage {
-    /// PNG encoding of the image (for persisting a pasted bitmap to a temp file).
-    func pngDataRepresentation() -> Data? {
-        guard let tiff = tiffRepresentation,
-              let bitmap = NSBitmapImageRep(data: tiff) else { return nil }
-        return bitmap.representation(using: .png, properties: [:])
     }
 }

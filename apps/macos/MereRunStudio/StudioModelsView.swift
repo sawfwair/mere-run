@@ -329,18 +329,53 @@ enum StudioModelInventoryParser {
     }
 }
 
+
+private enum ModelsMetrics {
+    static let listWidth: CGFloat = 320
+    static let rowHeight: CGFloat = 40
+    static let dot: CGFloat = 8
+    static let jobBarHeight: CGFloat = 40
+    static let detailPadding = EdgeInsets(top: 22, leading: 24, bottom: 22, trailing: 24)
+    static let panelRadius: CGFloat = 10
+}
+
+/// Models ▸ Installed: a 320pt list of installed (and in-flight) models beside a detail column
+/// of facts, health, performance, and the adapters that target the model, with a job bar for
+/// pulls, optimizations, and storage clean-ups pinned to the page bottom.
 struct StudioModelsView: View {
     @EnvironmentObject private var controller: MereRunController
     @EnvironmentObject private var library: StudioLibraryStore
+    @EnvironmentObject private var navigation: NavigationModel
 
     let onModelsChanged: () -> Void
+    /// Reports installed count and store size so the toolbar subtitle can show them.
+    let onInventoryChanged: (StudioModelInventorySummary) -> Void
+    /// The domain an adapter is applied to ("Image" in "Use in Image").
+    let adapterTargetTitle: String
+    let onUseAdapter: (StudioAdapterRow) -> Void
+    let onTrain: (CommandTemplateID) -> Void
+
+    init(
+        onModelsChanged: @escaping () -> Void,
+        onInventoryChanged: @escaping (StudioModelInventorySummary) -> Void = { _ in },
+        adapterTargetTitle: String = "Image",
+        onUseAdapter: @escaping (StudioAdapterRow) -> Void = { _ in },
+        onTrain: @escaping (CommandTemplateID) -> Void = { _ in }
+    ) {
+        self.onModelsChanged = onModelsChanged
+        self.onInventoryChanged = onInventoryChanged
+        self.adapterTargetTitle = adapterTargetTitle
+        self.onUseAdapter = onUseAdapter
+        self.onTrain = onTrain
+    }
 
     @State private var rows: [StudioModelInventoryRow] = []
+    @State private var adapters: [StudioAdapterRow] = []
     @State private var selectedID: String?
     @State private var detailText = ""
-    @State private var statusMessage = "Loading models"
-    @State private var showAll = false
+    @State private var statusMessage = ""
     @State private var searchText = ""
+    @State private var selectedFamily: StudioModelFamily?
     @State private var isRefreshing = false
     @State private var loadingInfoID: String?
     @State private var loadingRuntimeID: String?
@@ -351,9 +386,12 @@ struct StudioModelsView: View {
     @State private var cancellingDownloadID: String?
     @State private var removingID: String?
     @State private var optimizingID: String?
+    @State private var optimizeCommandID: UUID?
+    @State private var cleanupCommandID: UUID?
     @State private var pendingAlert: StudioModelsAlert?
     @State private var storageReport: StudioModelStorageReport?
     @State private var isCleaningStorage = false
+    @State private var infoFactsByID: [String: StudioModelInfoFacts] = [:]
     @State private var runtimeSettingsByID: [String: StudioRuntimeSettings] = [:]
     @State private var runtimeAlias = ""
     @State private var runtimeTTL = ""
@@ -363,18 +401,59 @@ struct StudioModelsView: View {
     @State private var runtimeTopP = ""
     @State private var runtimeMinP = ""
     @State private var runtimePinned = false
+    @State private var showPullSheet = false
+    @State private var showJobLog = false
+    @State private var showRuntimeSettings = false
+    @State private var showDetails = false
+    @State private var jobLog = ""
 
     private var installedRows: [StudioModelInventoryRow] {
         rows.filter(\.isInstalled)
     }
 
-    private var visibleRows: [StudioModelInventoryRow] {
-        let scoped = showAll ? rows : installedRows
-        let query = searchText.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
-        guard !query.isEmpty else { return scoped }
-        return scoped.filter { row in
-            row.id.lowercased().contains(query) || row.category.lowercased().contains(query)
+    private var missingRows: [StudioModelInventoryRow] {
+        rows.filter { !$0.isInstalled && $0.id != downloadingID }
+    }
+
+    /// The page's own job first; otherwise a composer-initiated pull from the Library.
+    private var activeJob: StudioModelsJob? {
+        if let downloadingID {
+            return StudioModelsJob(
+                kind: .pull,
+                modelID: downloadingID,
+                subject: displayName(for: downloadingID),
+                progress: downloadProgress,
+                isCancelling: cancellingDownloadID == downloadingID
+            )
         }
+        if let optimizingID {
+            return StudioModelsJob(kind: .optimize, modelID: optimizingID, subject: displayName(for: optimizingID))
+        }
+        if isCleaningStorage {
+            return StudioModelsJob(kind: .cleanup, modelID: nil, subject: "model storage")
+        }
+        return StudioModelsPresenter.libraryPullJob(
+            in: library.items,
+            rows: rows,
+            progressByRequestID: controller.progressByRequestID
+        )
+    }
+
+    private var pullingIDs: Set<String> {
+        guard let job = activeJob, job.kind == .pull, let modelID = job.modelID else { return [] }
+        return [modelID]
+    }
+
+    private var families: [StudioModelFamily] {
+        StudioModelsPresenter.families(in: StudioModelsPresenter.listRows(rows, pullingIDs: pullingIDs))
+    }
+
+    private var visibleRows: [StudioModelInventoryRow] {
+        StudioModelsPresenter.filter(
+            StudioModelsPresenter.listRows(rows, pullingIDs: pullingIDs),
+            family: selectedFamily,
+            query: searchText
+        )
     }
 
     private var selectedRow: StudioModelInventoryRow? {
@@ -383,20 +462,27 @@ struct StudioModelsView: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            header
-
-            Divider()
-                .overlay(MereRunTheme.border.opacity(0.6))
-
             HStack(spacing: 0) {
-                modelList
-                    .frame(minWidth: 280, idealWidth: 360, maxWidth: 360)
+                listColumn
+                    .frame(width: ModelsMetrics.listWidth)
+                    .overlay(alignment: .trailing) {
+                        Rectangle()
+                            .fill(MereRunTheme.border.opacity(0.4))
+                            .frame(width: 1)
+                    }
 
-                Divider()
-                    .overlay(MereRunTheme.border.opacity(0.6))
-
-                detailPane
+                detailColumn
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
+            }
+
+            if let job = activeJob {
+                StudioModelsJobBar(
+                    job: job,
+                    onCancel: { cancel(job) },
+                    onLog: { showJobLog.toggle() },
+                    showLog: $showJobLog,
+                    log: log(for: job)
+                )
             }
         }
         .background(MereRunTheme.background)
@@ -404,10 +490,8 @@ struct StudioModelsView: View {
         .task {
             await refresh()
         }
-        .onChange(of: showAll) {
-            if let selectedID, visibleRows.contains(where: { $0.id == selectedID }) {
-                return
-            }
+        .onChange(of: visibleRows.map(\.id)) { _, ids in
+            if let selectedID, ids.contains(selectedID) { return }
             guard let first = visibleRows.first else {
                 selectedID = nil
                 detailText = ""
@@ -415,22 +499,28 @@ struct StudioModelsView: View {
             }
             select(first)
         }
+        .sheet(isPresented: $showPullSheet) {
+            StudioModelPullSheet(rows: missingRows) { row in
+                showPullSheet = false
+                requestDownload(row)
+            }
+        }
         .alert(item: $pendingAlert) { pending in
             switch pending {
             case .download(let row):
                 Alert(
                     title: Text("Accept third-party model terms"),
                     message: Text(downloadTermsMessage(row)),
-                    primaryButton: .default(Text("Accept & Download")) {
+                    primaryButton: .default(Text("Accept & Pull")) {
                         Task { await download(row, acknowledgingUsageTerms: true) }
                     },
                     secondaryButton: .cancel()
                 )
             case .removal(let row):
                 Alert(
-                    title: Text("Purge \(row.id)?"),
+                    title: Text("Remove \(displayName(for: row.id))?"),
                     message: Text(removalMessage(row)),
-                    primaryButton: .destructive(Text("Purge")) {
+                    primaryButton: .destructive(Text("Remove")) {
                         Task { await purge(row) }
                     },
                     secondaryButton: .cancel()
@@ -451,122 +541,74 @@ struct StudioModelsView: View {
         }
     }
 
-    private var header: some View {
-        HStack(spacing: 14) {
-            Text(statusMessage)
-                .font(MereRunTheme.captionFont)
-                .foregroundStyle(MereRunTheme.textMuted)
-                .lineLimit(1)
+    // MARK: - List column
 
-            Spacer()
-
-            Picker("Scope", selection: $showAll) {
-                Text("Downloaded").tag(false)
-                Text("All").tag(true)
-            }
-            .pickerStyle(.segmented)
-            .frame(width: 230)
-
-            Button {
-                revealStore()
-            } label: {
-                Label("Files", systemImage: "folder")
-            }
-            .buttonStyle(.bordered)
-            .help("Open model storage in Finder")
-
-            Button {
-                Task { await previewStorageCleanup() }
-            } label: {
-                Label("Clean Up", systemImage: "externaldrive.badge.minus")
-            }
-            .buttonStyle(.bordered)
-            .disabled(isRefreshing || isCleaningStorage)
-            .help("Preview unreferenced payloads and partial downloads before deleting them")
-
-            Button {
-                Task { await refresh() }
-            } label: {
-                Label("Refresh", systemImage: "arrow.clockwise")
-            }
-            .buttonStyle(.bordered)
-            .disabled(isRefreshing)
-        }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 12)
-    }
-
-    private var modelList: some View {
+    private var listColumn: some View {
         VStack(alignment: .leading, spacing: 0) {
-            searchField
-                .padding(.horizontal, 12)
-                .padding(.top, 12)
-                .padding(.bottom, 8)
+            HStack(spacing: 8) {
+                StudioModelsSearchPill(
+                    text: $searchText,
+                    placeholder: "Search \(installedRows.count) \(installedRows.count == 1 ? "model" : "models")"
+                )
 
-            HStack {
-                Text(showAll ? "All known models" : "Downloaded")
-                    .font(.system(size: 10.5, weight: .semibold))
-                    .kerning(0.5)
-                    .textCase(.uppercase)
-                    .foregroundStyle(MereRunTheme.textMuted)
-                Spacer()
-                Text("\(visibleRows.count)")
-                    .font(MereRunTheme.captionFont)
-                    .foregroundStyle(MereRunTheme.textMuted)
+                Button("Pull…") {
+                    showPullSheet = true
+                }
+                .buttonStyle(ModelsPrimaryButtonStyle())
+                .disabled(isRefreshing)
+                .help("Pull a model into managed storage")
             }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 6)
+            .padding(EdgeInsets(top: 14, leading: 14, bottom: 8, trailing: 14))
+
+            familyChips
+                .padding(EdgeInsets(top: 0, leading: 14, bottom: 10, trailing: 14))
 
             if visibleRows.isEmpty {
                 emptyList
             } else {
                 ScrollView {
-                    LazyVStack(spacing: 4) {
+                    LazyVStack(spacing: 1) {
                         ForEach(visibleRows) { row in
                             StudioModelListRow(
-                                row: row,
-                                isSelected: selectedID == row.id,
-                                runtime: runtimeSettingsByID[row.id]
+                                name: displayName(for: row.id),
+                                meta: StudioModelsPresenter.meta(for: row, status: status(of: row)),
+                                status: status(of: row),
+                                isSelected: selectedID == row.id
                             ) {
                                 select(row)
                             }
                         }
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.bottom, 14)
+                    .padding(.horizontal, 8)
+                    .padding(.bottom, 12)
                 }
+            }
+
+            if !statusMessage.isEmpty {
+                Text(statusMessage)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(MereRunTheme.textMuted)
+                    .lineLimit(2)
+                    .padding(EdgeInsets(top: 6, leading: 14, bottom: 10, trailing: 14))
+                    .accessibilityAddTraits(.updatesFrequently)
             }
         }
     }
 
-    private var searchField: some View {
-        HStack(spacing: 7) {
-            Image(systemName: "magnifyingglass")
-                .font(.system(size: 12, weight: .medium))
-                .foregroundStyle(MereRunTheme.textMuted)
-            TextField("Search models", text: $searchText)
-                .textFieldStyle(.plain)
-                .font(.system(size: 12.5))
-            if !searchText.isEmpty {
-                Button {
-                    searchText = ""
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 11))
+    private var familyChips: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                StudioModelsChip(title: "All", isSelected: selectedFamily == nil) {
+                    selectedFamily = nil
                 }
-                .buttonStyle(.mereIcon(tint: MereRunTheme.textMuted))
-                .accessibilityLabel("Clear search")
+                ForEach(families) { family in
+                    StudioModelsChip(title: family.title, isSelected: selectedFamily == family) {
+                        selectedFamily = selectedFamily == family ? nil : family
+                    }
+                }
             }
         }
-        .padding(.horizontal, MereRunTheme.Spacing.sm)
-        .frame(height: 30)
-        .background {
-            Capsule()
-                .fill(MereRunTheme.surface)
-                .overlay {
-                    Capsule().strokeBorder(MereRunTheme.border.opacity(0.7), lineWidth: 1)
-                }
-        }
+        .accessibilityLabel("Model family")
     }
 
     private var emptyList: some View {
@@ -584,329 +626,388 @@ struct StudioModelsView: View {
     }
 
     private var emptyListMessage: String {
+        if isRefreshing, rows.isEmpty { return "Loading models…" }
         if !searchText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
             return "No models match the search."
         }
-        return showAll ? "No models reported." : "No downloaded models yet."
+        if selectedFamily != nil { return "No installed models in this family." }
+        return "No models installed yet. Pull one to get started."
     }
 
-    private var detailPane: some View {
-        VStack(alignment: .leading, spacing: 14) {
+    // MARK: - Detail column
+
+    private var detailColumn: some View {
+        Group {
             if let selectedRow {
-                selectedHeader(selectedRow)
-
                 ScrollView {
-                    Text(detailBody(for: selectedRow))
-                        .font(MereRunTheme.monoFont)
-                        .foregroundStyle(MereRunTheme.textSecondary)
-                        .textSelection(.enabled)
-                        .frame(maxWidth: .infinity, alignment: .topLeading)
-                        .padding(14)
-                }
-                .merePanel()
-            } else {
-                Spacer()
-                emptyDetail
-                Spacer()
-            }
-        }
-        .padding(18)
-    }
-
-    private func selectedHeader(_ row: StudioModelInventoryRow) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(row.title ?? row.id)
-                        .font(.system(size: 18, weight: .semibold))
-                    Text(modelStatusLine(row))
-                        .font(MereRunTheme.captionFont)
-                        .foregroundStyle(MereRunTheme.textMuted)
-                    if let summary = row.summary {
-                        Text(summary)
-                            .font(MereRunTheme.bodyFont)
-                            .foregroundStyle(MereRunTheme.textSecondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    modelFacts(row)
-                    if row.supported == false, !row.supportReasons.isEmpty {
-                        Text(row.supportReasons.joined(separator: " "))
-                            .font(MereRunTheme.captionFont)
-                            .foregroundStyle(MereRunTheme.yellow)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                    if let usageTerms = row.usageTerms {
-                        Text("Third-party usage terms · acceptance required for new downloads")
-                            .font(MereRunTheme.captionFont)
-                            .foregroundStyle(MereRunTheme.yellow)
-                        Text(usageTerms.summary)
-                            .font(MereRunTheme.captionFont)
-                            .foregroundStyle(MereRunTheme.textMuted)
-                        HStack(spacing: 8) {
-                            ForEach(Array(usageTerms.links.enumerated()), id: \.offset) { index, url in
-                                Link("Review terms \(index + 1)", destination: url)
-                                    .font(MereRunTheme.captionFont)
+                    VStack(alignment: .leading, spacing: 14) {
+                        detailHeader(selectedRow)
+                        factsPanel(selectedRow)
+                        if selectedRow.isInstalled {
+                            HStack(alignment: .top, spacing: 14) {
+                                healthPanel(selectedRow)
+                                performancePanel(selectedRow)
                             }
+                            .fixedSize(horizontal: false, vertical: true)
+                            adaptersPanel(selectedRow)
+                            runtimePanel(selectedRow)
+                            detailsPanel(selectedRow)
+                        } else {
+                            pullPanel(selectedRow)
                         }
                     }
+                    .padding(ModelsMetrics.detailPadding)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
                 }
+            } else {
+                emptyDetail
+            }
+        }
+    }
 
-                Spacer()
+    private func detailHeader(_ row: StudioModelInventoryRow) -> some View {
+        HStack(alignment: .top, spacing: 14) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(displayName(for: row.id))
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(MereRunTheme.textPrimary)
+                    .lineLimit(1)
+                    .accessibilityAddTraits(.isHeader)
 
-                if loadingInfoID == row.id || downloadingID == row.id || removingID == row.id
-                    || optimizingID == row.id {
-                    ProgressView()
-                        .controlSize(.small)
+                HStack(spacing: 6) {
+                    StudioModelsTag(title: StudioModelsPresenter.family(of: row).title)
+                    if let size = StudioModelsPresenter.sizeChip(for: row, facts: infoFactsByID[row.id]) {
+                        StudioModelsTag(title: size)
+                    }
+                    ForEach(StudioModelsPresenter.defaultDomainTitles(for: row.id), id: \.self) { domain in
+                        StudioModelsTag(title: "Default for \(domain)", accent: true)
+                    }
+                    if row.supported == false {
+                        StudioModelsTag(title: "Needs attention", accent: true)
+                    }
                 }
             }
+
+            Spacer(minLength: 14)
 
             if row.isInstalled {
-                installedModelActions(row)
-                runtimeSettingsEditor(row)
-                installedModelFilesActions(row)
-            } else {
-                missingModelActions(row)
+                headerActions(row)
+            } else if downloadingID == row.id || pullingIDs.contains(row.id) {
+                ProgressView()
+                    .controlSize(.small)
             }
         }
     }
 
-    private func modelStatusLine(_ row: StudioModelInventoryRow) -> String {
-        let sizeDescription = row.isInstalled
-            ? "\(row.size) referenced"
-            : "\(row.displayedSize) estimated download"
-        return "\(row.id) · \(row.category) · \(row.status) · \(sizeDescription)"
-    }
+    private func headerActions(_ row: StudioModelInventoryRow) -> some View {
+        HStack(spacing: 8) {
+            if loadingInfoID == row.id || removingID == row.id || optimizingID == row.id {
+                ProgressView()
+                    .controlSize(.small)
+            }
 
-    private func modelFacts(_ row: StudioModelInventoryRow) -> some View {
-        HStack(spacing: 12) {
-            if let estimatedDownloadBytes = row.estimatedDownloadBytes {
-                Label(
-                    "Checkpoint \(Self.bytes(estimatedDownloadBytes))",
-                    systemImage: "externaldrive"
-                )
-            }
-            if let minimumUnifiedMemoryGB = row.minimumUnifiedMemoryGB {
-                Label("\(minimumUnifiedMemoryGB) GB RAM minimum", systemImage: "memorychip")
-            }
-            if let sourceRepository = row.sourceRepository,
-               let sourceURL = URL(string: "https://huggingface.co/\(sourceRepository)") {
-                Link(destination: sourceURL) {
-                    Label("By \(row.publisher ?? sourceRepository)", systemImage: "person.crop.circle")
-                }
-            } else if let publisher = row.publisher {
-                Label("By \(publisher)", systemImage: "person.crop.circle")
-            }
-        }
-        .font(MereRunTheme.captionFont)
-        .foregroundStyle(MereRunTheme.textMuted)
-    }
-
-    private func installedModelActions(_ row: StudioModelInventoryRow) -> some View {
-        HStack(spacing: 10) {
-            Button {
-                Task { await runtimeLoad(row) }
-            } label: {
-                Label("Load", systemImage: "play.fill")
-            }
-            .buttonStyle(.bordered)
-            .disabled(loadingRuntimeID != nil)
-
-            Button {
-                Task { await runtimeUnload(row) }
-            } label: {
-                Label("Unload", systemImage: "stop.fill")
-            }
-            .buttonStyle(.bordered)
-            .disabled(loadingRuntimeID != nil)
-
-            Button {
-                Task { await saveRuntimeSettings(for: row, pinned: true) }
-            } label: {
-                Label("Pin", systemImage: "pin")
-            }
-            .buttonStyle(.bordered)
-            .disabled(loadingRuntimeID != nil)
-
-            Button {
-                Task { await saveRuntimeSettings(for: row, pinned: false) }
-            } label: {
-                Label("Unpin", systemImage: "pin.slash")
-            }
-            .buttonStyle(.bordered)
-            .disabled(loadingRuntimeID != nil)
-        }
-    }
-
-    private func installedModelFilesActions(_ row: StudioModelInventoryRow) -> some View {
-        HStack(spacing: 10) {
-            Button {
-                Task { await loadInfo(for: row) }
-            } label: {
-                Label("Inspect", systemImage: "info.circle")
-            }
-            .buttonStyle(.bordered)
-            .disabled(loadingInfoID != nil)
-
-            Button {
+            Button("Reveal") {
                 Task { await reveal(row) }
-            } label: {
-                Label("Finder", systemImage: "magnifyingglass")
             }
-            .buttonStyle(.bordered)
+            .buttonStyle(ModelsSecondaryButtonStyle())
             .disabled(loadingInfoID != nil)
-            .help("Reveal this model's source folder in Finder")
+            .help("Reveal this model's folder in Finder")
 
             if StudioModelOptimizationCommand.supports(modelID: row.id) {
-                Button {
+                Button("Optimize") {
                     Task { await optimize(row, replacing: false) }
-                } label: {
-                    Label("Optimize", systemImage: "bolt.badge.clock")
                 }
-                .buttonStyle(.borderedProminent)
-                .tint(MereRunTheme.accent)
+                .buttonStyle(ModelsSecondaryButtonStyle())
                 .disabled(optimizingID != nil)
                 .help("Build the inference-only MiniMax-H3 AdaLN cache")
+            }
 
-                Menu {
+            Button("Remove…") {
+                pendingAlert = .removal(row)
+            }
+            .buttonStyle(ModelsSecondaryButtonStyle())
+            .disabled(removingID != nil)
+
+            Menu {
+                Button("Refresh inventory") {
+                    Task { await refresh() }
+                }
+                .disabled(isRefreshing)
+                Button("Inspect manifest and components") {
+                    showDetails = true
+                    Task { await loadInfo(for: row) }
+                }
+                .disabled(loadingInfoID != nil)
+                if StudioModelOptimizationCommand.supports(modelID: row.id) {
                     Button("Rebuild optimization cache") {
                         Task { await optimize(row, replacing: true) }
                     }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
+                    .disabled(optimizingID != nil)
                 }
-                .disabled(optimizingID != nil)
-            }
-
-            Button(role: .destructive) {
-                pendingAlert = .removal(row)
+                Divider()
+                Button("Open model store in Finder") {
+                    revealStore()
+                }
+                Button("Clean up storage…") {
+                    Task { await previewStorageCleanup() }
+                }
+                .disabled(isRefreshing || isCleaningStorage)
             } label: {
-                Label("Purge", systemImage: "trash")
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 12, weight: .semibold))
+                    .frame(width: 26, height: 26)
             }
-            .buttonStyle(.bordered)
-            .disabled(removingID != nil)
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
+            .fixedSize()
+            .frame(width: 26, height: 26)
+            .background {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(MereRunTheme.surfaceRaised)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 6)
+                            .strokeBorder(MereRunTheme.border.opacity(0.6), lineWidth: 1)
+                    }
+            }
+            .accessibilityLabel("More model actions")
         }
     }
 
-    private func missingModelActions(_ row: StudioModelInventoryRow) -> some View {
-        VStack(alignment: .leading, spacing: MereRunTheme.Spacing.sm) {
-            Text("Download this model into Mere's managed model storage. The CLI checks hardware, disk space, and the pinned source before transferring weights.")
-                .font(MereRunTheme.bodyFont)
-                .foregroundStyle(MereRunTheme.textSecondary)
+    private func factsPanel(_ row: StudioModelInventoryRow) -> some View {
+        let facts = infoFactsByID[row.id]
+        let usage = StudioModelsPresenter.usage(of: row.id, in: library.items)
+        return VStack(spacing: 0) {
+            if row.isInstalled {
+                StudioModelsKeyValueRow(
+                    key: "Store",
+                    value: StudioModelsPresenter.abbreviatedPath(storePath(for: facts)),
+                    mono: true
+                )
+            }
+            if let source = StudioModelsPresenter.sourceLine(for: row) {
+                StudioModelsKeyValueRow(key: "Source", value: source, mono: true)
+            } else if let publisher = row.publisher, !publisher.isBlank {
+                StudioModelsKeyValueRow(key: "Publisher", value: publisher, mono: false)
+            }
+            if let usage {
+                StudioModelsKeyValueRow(key: "Last used", value: StudioModelsPresenter.usageLine(usage), mono: false)
+            }
+            if row.isInstalled, let verified = facts?.verifiedLine {
+                StudioModelsKeyValueRow(key: "Verified", value: verified, mono: false)
+            }
+            if !row.isInstalled, row.displayedSize != "—" {
+                StudioModelsKeyValueRow(key: "Download", value: row.displayedSize, mono: true)
+            }
+            if let summary = row.summary, !summary.isBlank {
+                Text(summary)
+                    .font(.system(size: 12))
+                    .foregroundStyle(MereRunTheme.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 6)
+            }
+        }
+        .padding(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+        .modelsPanel()
+    }
 
-            HStack(spacing: MereRunTheme.Spacing.sm) {
-                Button {
-                    requestDownload(row)
-                } label: {
-                    if downloadingID == row.id {
-                        HStack(spacing: 7) {
-                            ProgressView()
-                                .controlSize(.small)
-                            Text(cancellingDownloadID == row.id ? "Cancelling…" : "Downloading…")
-                        }
-                    } else {
-                        Label("Download", systemImage: "arrow.down.circle.fill")
-                    }
-                }
-                .buttonStyle(.borderedProminent)
-                .tint(MereRunTheme.accent)
-                .disabled(downloadingID != nil || isRefreshing)
+    private func healthPanel(_ row: StudioModelInventoryRow) -> some View {
+        let gate = StudioModelsPresenter.gateLine(in: library.items)
+        let facts = infoFactsByID[row.id]
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("Health")
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundStyle(MereRunTheme.textPrimary)
 
-                if downloadingID == row.id {
-                    Button("Cancel", role: .cancel) {
-                        cancelDownload()
-                    }
-                    .buttonStyle(.bordered)
-                    .disabled(cancellingDownloadID == row.id)
-                }
-
-                Spacer()
-
-                if row.displayedSize != "—" {
-                    Text("\(row.displayedSize) download")
-                        .font(MereRunTheme.monoFont)
-                        .foregroundStyle(MereRunTheme.textMuted)
+            if let gate {
+                StudioModelsStatusLine(text: gate.text, color: gate.ok ? MereRunTheme.green : MereRunTheme.red)
+            }
+            if let facts, let hasManifest = facts.hasManifest {
+                if !hasManifest {
+                    StudioModelsStatusLine(text: "Manifest missing", color: MereRunTheme.yellow)
+                } else if facts.isValid == false {
+                    StudioModelsStatusLine(text: "Validation failed", color: MereRunTheme.red)
+                } else {
+                    StudioModelsStatusLine(text: "Manifest audit clean", color: MereRunTheme.green)
                 }
             }
-
-            if downloadingID == row.id, let progress = downloadProgress {
-                VStack(alignment: .leading, spacing: 5) {
-                    if let fraction = progress.fractionCompleted {
-                        ProgressView(value: fraction)
-                            .progressViewStyle(.linear)
-                    } else {
-                        ProgressView()
-                            .controlSize(.small)
-                    }
-                    HStack(spacing: 6) {
-                        Text(progress.label)
-                        if let detail = progress.detail {
-                            Text("· \(detail)")
-                        }
-                    }
-                    .font(MereRunTheme.captionFont)
+            if row.supported == false {
+                StudioModelsStatusLine(
+                    text: row.supportReasons.first ?? "Not supported on this Mac",
+                    color: MereRunTheme.yellow
+                )
+            }
+            if gate == nil, facts?.hasManifest == nil, row.supported != false {
+                Text("No checks recorded yet")
+                    .font(.system(size: 12.5, weight: .medium))
                     .foregroundStyle(MereRunTheme.textMuted)
-                    .lineLimit(1)
-                }
             }
 
-            if row.usageTerms != nil {
-                Text("Review the linked terms above. Download requires explicit acceptance.")
-                    .font(MereRunTheme.captionFont)
-                    .foregroundStyle(MereRunTheme.yellow)
+            HStack(spacing: 6) {
+                Button("Run gate") {
+                    navigation.open(task: .modelsHealth)
+                }
+                .buttonStyle(ModelsSecondaryButtonStyle())
+                Button("Benchmark…") {
+                    navigation.open(task: .modelsBenchmarks)
+                }
+                .buttonStyle(ModelsSecondaryButtonStyle())
             }
+            .padding(.top, 4)
         }
-        .padding(MereRunTheme.Spacing.md)
-        .merePanel()
+        .padding(EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .modelsPanel()
     }
 
-    private func runtimeSettingsEditor(_ row: StudioModelInventoryRow) -> some View {
-        VStack(alignment: .leading, spacing: MereRunTheme.Spacing.sm) {
-            Text("Runtime settings")
-                .font(.system(size: 10.5, weight: .semibold))
-                .kerning(0.5)
-                .textCase(.uppercase)
-                .foregroundStyle(MereRunTheme.textMuted)
+    private func performancePanel(_ row: StudioModelInventoryRow) -> some View {
+        let lastRun = StudioModelsPresenter.lastRunDuration(for: row.id, in: library.items)
+        let memory = StudioModelsPresenter.memoryLine(for: row)
+        let benchmark = StudioModelsPresenter.benchmarkLine(in: library.items)
+        return VStack(alignment: .leading, spacing: 8) {
+            Text("Performance")
+                .font(.system(size: 12.5, weight: .semibold))
+                .foregroundStyle(MereRunTheme.textPrimary)
 
-            Grid(alignment: .leading, horizontalSpacing: MereRunTheme.Spacing.sm, verticalSpacing: 8) {
-                GridRow {
-                    runtimeField("Alias", text: $runtimeAlias, width: 150)
-                    runtimeField("TTL seconds", text: $runtimeTTL, width: 100)
-                    runtimeField("Context", text: $runtimeMaxContext, width: 100)
-                }
-                GridRow {
-                    runtimeField("Max tokens", text: $runtimeMaxTokens, width: 150)
-                    runtimeField("Temperature", text: $runtimeTemperature, width: 100)
-                    runtimeField("Top P", text: $runtimeTopP, width: 100)
-                }
-                GridRow {
-                    runtimeField("Min P", text: $runtimeMinP, width: 150)
-                }
+            if let lastRun {
+                StudioModelsKeyValueRow(key: "Last run", value: lastRun, mono: true)
             }
-
-            HStack(spacing: MereRunTheme.Spacing.sm) {
-                Toggle("Pinned", isOn: $runtimePinned)
-                    .toggleStyle(.checkbox)
-                    .font(MereRunTheme.captionFont)
-
-                Spacer()
-
-                Button {
-                    Task { await saveRuntimeSettings(for: row, pinned: runtimePinned) }
-                } label: {
-                    Label("Save settings", systemImage: "checkmark")
-                }
-                .buttonStyle(.merePrimary)
-                .disabled(!row.isInstalled || loadingRuntimeID != nil)
+            if let memory {
+                StudioModelsKeyValueRow(key: "Unified memory", value: memory, mono: true)
+            }
+            if let benchmark {
+                StudioModelsKeyValueRow(key: "Last benchmark", value: benchmark, mono: false)
+            }
+            if lastRun == nil, memory == nil, benchmark == nil {
+                Text("No runs recorded yet")
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(MereRunTheme.textMuted)
             }
         }
-        .padding(MereRunTheme.Spacing.md)
-        .background {
-            RoundedRectangle(cornerRadius: MereRunTheme.Radius.lg)
-                .fill(MereRunTheme.surface.opacity(0.55))
-                .overlay {
-                    RoundedRectangle(cornerRadius: MereRunTheme.Radius.lg)
-                        .strokeBorder(MereRunTheme.border.opacity(0.5), lineWidth: 1)
+        .padding(EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16))
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .modelsPanel()
+    }
+
+    private func adaptersPanel(_ row: StudioModelInventoryRow) -> some View {
+        let using = adapters.filter { $0.baseModelID == row.id }
+        let training = StudioModelsPresenter.family(of: row).trainingTemplateID
+        return VStack(spacing: 0) {
+            HStack {
+                Text("Adapters using this model")
+                    .font(.system(size: 12.5, weight: .semibold))
+                    .foregroundStyle(MereRunTheme.textPrimary)
+                Spacer()
+                if let training {
+                    Button("Train new…") {
+                        onTrain(training)
+                    }
+                    .buttonStyle(.plain)
+                    .font(.system(size: 11.5, weight: .medium))
+                    .foregroundStyle(MereRunTheme.accent)
                 }
+            }
+            .padding(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
+            .overlay(alignment: .bottom) {
+                Rectangle().fill(MereRunTheme.border.opacity(0.4)).frame(height: 1)
+            }
+
+            if using.isEmpty {
+                Text("No adapters target this model yet.")
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(MereRunTheme.textMuted)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(EdgeInsets(top: 10, leading: 16, bottom: 12, trailing: 16))
+            } else {
+                ForEach(using) { adapter in
+                    HStack(spacing: 10) {
+                        VStack(alignment: .leading, spacing: 1) {
+                            Text(adapter.id)
+                                .font(.system(size: 12.5, weight: .medium, design: .monospaced))
+                                .foregroundStyle(MereRunTheme.textPrimary)
+                                .lineLimit(1)
+                            Text(adapterMeta(adapter))
+                                .font(.system(size: 11, weight: .medium))
+                                .foregroundStyle(MereRunTheme.textMuted)
+                                .lineLimit(1)
+                        }
+                        Spacer(minLength: 10)
+                        Button("Use in \(adapterTargetTitle)") {
+                            onUseAdapter(adapter)
+                        }
+                        .buttonStyle(ModelsSecondaryButtonStyle())
+                        .disabled(!adapter.installed)
+                        .help(adapter.installed ? "Apply this adapter to the composer" : "Pull the adapter first")
+                    }
+                    .padding(EdgeInsets(top: 10, leading: 16, bottom: 10, trailing: 16))
+                    .overlay(alignment: .bottom) {
+                        Rectangle().fill(MereRunTheme.border.opacity(0.27)).frame(height: 1)
+                    }
+                }
+            }
+        }
+        .modelsPanel()
+    }
+
+    private func adapterMeta(_ adapter: StudioAdapterRow) -> String {
+        StudioModelsPresenter.adapterMeta(
+            format: adapter.format,
+            byteCount: adapter.byteCount,
+            version: adapter.version,
+            installed: adapter.installed
+        )
+    }
+
+    private func runtimePanel(_ row: StudioModelInventoryRow) -> some View {
+        StudioModelsDisclosurePanel(title: "Runtime settings", isExpanded: $showRuntimeSettings) {
+            VStack(alignment: .leading, spacing: MereRunTheme.Spacing.sm) {
+                HStack(spacing: 6) {
+                    Button("Load") {
+                        Task { await runtimeLoad(row) }
+                    }
+                    .buttonStyle(ModelsSecondaryButtonStyle())
+                    Button("Unload") {
+                        Task { await runtimeUnload(row) }
+                    }
+                    .buttonStyle(ModelsSecondaryButtonStyle())
+                    Button(runtimePinned ? "Unpin" : "Pin") {
+                        Task { await saveRuntimeSettings(for: row, pinned: !runtimePinned) }
+                    }
+                    .buttonStyle(ModelsSecondaryButtonStyle())
+                    if loadingRuntimeID == row.id {
+                        ProgressView().controlSize(.small)
+                    }
+                }
+                .disabled(loadingRuntimeID != nil)
+
+                Grid(alignment: .leading, horizontalSpacing: MereRunTheme.Spacing.sm, verticalSpacing: 8) {
+                    GridRow {
+                        runtimeField("Alias", text: $runtimeAlias, width: 150)
+                        runtimeField("TTL seconds", text: $runtimeTTL, width: 100)
+                        runtimeField("Context", text: $runtimeMaxContext, width: 100)
+                    }
+                    GridRow {
+                        runtimeField("Max tokens", text: $runtimeMaxTokens, width: 150)
+                        runtimeField("Temperature", text: $runtimeTemperature, width: 100)
+                        runtimeField("Top P", text: $runtimeTopP, width: 100)
+                    }
+                    GridRow {
+                        runtimeField("Min P", text: $runtimeMinP, width: 150)
+                    }
+                }
+
+                HStack(spacing: MereRunTheme.Spacing.sm) {
+                    Toggle("Pinned", isOn: $runtimePinned)
+                        .toggleStyle(.checkbox)
+                        .font(MereRunTheme.captionFont)
+                    Spacer()
+                    Button("Save settings") {
+                        Task { await saveRuntimeSettings(for: row, pinned: runtimePinned) }
+                    }
+                    .buttonStyle(ModelsPrimaryButtonStyle())
+                    .disabled(loadingRuntimeID != nil)
+                }
+            }
         }
     }
 
@@ -922,31 +1023,135 @@ struct StudioModelsView: View {
         }
     }
 
+    private func detailsPanel(_ row: StudioModelInventoryRow) -> some View {
+        StudioModelsDisclosurePanel(title: "Details", isExpanded: $showDetails) {
+            Text(detailBody(for: row))
+                .font(.system(size: 11.5, design: .monospaced))
+                .foregroundStyle(MereRunTheme.textSecondary)
+                .textSelection(.enabled)
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+        }
+    }
+
+    private func pullPanel(_ row: StudioModelInventoryRow) -> some View {
+        VStack(alignment: .leading, spacing: MereRunTheme.Spacing.sm) {
+            if let usageTerms = row.usageTerms {
+                Text("Third-party usage terms · acceptance required before pulling")
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.yellow)
+                Text(usageTerms.summary)
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.textMuted)
+                    .fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 8) {
+                    ForEach(Array(usageTerms.links.enumerated()), id: \.offset) { index, url in
+                        Link("Review terms \(index + 1)", destination: url)
+                            .font(MereRunTheme.captionFont)
+                    }
+                }
+            }
+            if row.supported == false, !row.supportReasons.isEmpty {
+                Text(row.supportReasons.joined(separator: " "))
+                    .font(MereRunTheme.captionFont)
+                    .foregroundStyle(MereRunTheme.yellow)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            HStack(spacing: 8) {
+                if downloadingID == row.id {
+                    Button("Cancel pull") {
+                        cancelDownload()
+                    }
+                    .buttonStyle(ModelsSecondaryButtonStyle())
+                    .disabled(cancellingDownloadID == row.id)
+                } else if pullingIDs.contains(row.id) {
+                    Text("Pulling from the composer")
+                        .font(MereRunTheme.captionFont)
+                        .foregroundStyle(MereRunTheme.textMuted)
+                } else {
+                    Button("Pull") {
+                        requestDownload(row)
+                    }
+                    .buttonStyle(ModelsPrimaryButtonStyle())
+                    .disabled(downloadingID != nil || isRefreshing)
+                }
+            }
+
+            if !detailText.isEmpty {
+                Text(detailText)
+                    .font(.system(size: 11.5, design: .monospaced))
+                    .foregroundStyle(MereRunTheme.textSecondary)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .topLeading)
+            }
+        }
+        .padding(EdgeInsets(top: 14, leading: 16, bottom: 14, trailing: 16))
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .modelsPanel()
+    }
+
     private var emptyDetail: some View {
         VStack(spacing: 10) {
-            Image(systemName: "info.circle")
+            Image(systemName: "shippingbox")
                 .font(.system(size: 28, weight: .medium))
                 .foregroundStyle(MereRunTheme.textMuted)
-            Text("Select a downloaded model to inspect, reveal, or purge it.")
+            Text(rows.isEmpty && isRefreshing ? "Loading models…" : "Select a model to see its facts, health, and adapters.")
                 .font(MereRunTheme.bodyFont)
                 .foregroundStyle(MereRunTheme.textMuted)
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    // MARK: - Presentation helpers
+
+    /// The store that holds the model: its resolved root's parent when `model info` has reported
+    /// one (external stores included), otherwise the configured managed store.
+    private func storePath(for facts: StudioModelInfoFacts?) -> String {
+        guard let root = facts?.root else { return modelStoreURL.path }
+        return URL(fileURLWithPath: root, isDirectory: true).deletingLastPathComponent().path
+    }
+
+    private func displayName(for modelID: String) -> String {
+        rows.first { $0.id == modelID }.map(StudioModelsPresenter.displayName) ?? modelID
+    }
+
+    private func status(of row: StudioModelInventoryRow) -> StudioModelRowStatus {
+        StudioModelsPresenter.status(of: row, job: activeJob)
     }
 
     private func detailBody(for row: StudioModelInventoryRow) -> String {
-        if !row.isInstalled {
-            return detailText.isEmpty ? "\(row.id) is not downloaded." : detailText
-        }
         if detailText.isEmpty {
-            return "Select Inspect to load manifest, validation, and component paths."
+            return loadingInfoID == row.id ? "Loading manifest, validation, and component paths…" : "No details loaded."
         }
         return detailText
     }
 
+    private func log(for job: StudioModelsJob) -> String {
+        if let itemID = job.libraryItemID {
+            let item = library.items.first { $0.id == itemID }
+            return item?.outputText ?? "Pull started from the composer. Its log is in the Library row."
+        }
+        return jobLog.isEmpty ? "Waiting for output…" : jobLog
+    }
+
+    private func cancel(_ job: StudioModelsJob) {
+        if let itemID = job.libraryItemID {
+            _ = controller.cancel(requestID: itemID)
+            return
+        }
+        switch job.kind {
+        case .pull:
+            cancelDownload()
+        case .optimize:
+            if let optimizeCommandID { _ = controller.cancelUtilityCommand(optimizeCommandID) }
+        case .cleanup:
+            if let cleanupCommandID { _ = controller.cancelUtilityCommand(cleanupCommandID) }
+        }
+    }
+
     private func select(_ row: StudioModelInventoryRow) {
         selectedID = row.id
-        detailText = row.isInstalled ? "" : "\(row.id) is not downloaded."
+        detailText = ""
         guard row.isInstalled else { return }
         Task { await loadInfo(for: row) }
         Task { await loadRuntimeSettings(for: row) }
@@ -960,6 +1165,8 @@ struct StudioModelsView: View {
         }
     }
 
+    // MARK: - Commands
+
     @MainActor
     private func download(_ row: StudioModelInventoryRow, acknowledgingUsageTerms: Bool) async {
         let modelID = row.id
@@ -967,10 +1174,12 @@ struct StudioModelsView: View {
         cancellingDownloadID = nil
         downloadProgress = nil
         downloadProgressOutput = ""
+        jobLog = ""
         let commandID = UUID()
         downloadCommandID = commandID
-        statusMessage = "Downloading \(modelID)…"
-        detailText = "Starting managed download for \(modelID)…\n"
+        statusMessage = ""
+        selectedID = modelID
+        detailText = ""
 
         let result = await controller.utilityCommandResult(
             args: StudioModelDownloadCommand.arguments(
@@ -986,8 +1195,7 @@ struct StudioModelsView: View {
                 if let progress = StudioModelDownloadCommand.latestProgress(in: downloadProgressOutput) {
                     downloadProgress = progress
                 }
-                guard selectedID == modelID else { return }
-                detailText = StudioModelDownloadCommand.appendingOutput(chunk, to: detailText)
+                jobLog = StudioModelDownloadCommand.appendingOutput(chunk, to: jobLog)
             }
         )
 
@@ -1002,17 +1210,11 @@ struct StudioModelsView: View {
             detailText = result.outputText
         }
         if wasCancelled {
-            statusMessage = "Cancelled download for \(modelID)"
-            if selectedID == modelID {
-                detailText = StudioModelDownloadCommand.appendingOutput(
-                    "\nDownload cancelled. Its resumable partial payload remains available to the next pull.\n",
-                    to: detailText
-                )
-            }
+            statusMessage = "Cancelled pull for \(displayName(for: modelID)). The partial payload resumes on the next pull."
             return
         }
         guard result.exitCode == 0 else {
-            statusMessage = "Could not download \(modelID)"
+            statusMessage = "Could not pull \(displayName(for: modelID))"
             return
         }
 
@@ -1022,7 +1224,6 @@ struct StudioModelsView: View {
         if keepSelection, let installed = rows.first(where: { $0.id == modelID }) {
             select(installed)
         }
-        statusMessage = "Downloaded \(modelID)"
     }
 
     private func cancelDownload() {
@@ -1032,7 +1233,6 @@ struct StudioModelsView: View {
             return
         }
         cancellingDownloadID = modelID
-        statusMessage = "Cancelling download for \(modelID)…"
     }
 
     private func downloadTermsMessage(_ row: StudioModelInventoryRow) -> String {
@@ -1048,7 +1248,6 @@ struct StudioModelsView: View {
     @MainActor
     private func refresh() async {
         isRefreshing = true
-        statusMessage = "Refreshing model inventory..."
         let result = await controller.utilityCommandResult(args: ["model", "list"])
 
         guard result.exitCode == 0 else {
@@ -1075,8 +1274,18 @@ struct StudioModelsView: View {
             storageReport = report
             applyStorageUsage(report)
         }
+        let adapterResult = await controller.utilityCommandResult(args: ["adapter", "list", "--json"])
+        if adapterResult.exitCode == 0,
+           let data = StudioOperationsJSON.objectData(adapterResult.stdout),
+           let payload = try? JSONDecoder().decode(StudioAdapterCatalogPayload.self, from: data) {
+            adapters = payload.adapters
+        }
         isRefreshing = false
-        updateStatusMessage()
+        statusMessage = ""
+        onInventoryChanged(StudioModelInventorySummary(
+            installedCount: installedRows.count,
+            storageBytes: storageReport?.applicationSupportBytes
+        ))
         if let selectedID, visibleRows.contains(where: { $0.id == selectedID }) {
             return
         }
@@ -1118,17 +1327,17 @@ struct StudioModelsView: View {
     @MainActor
     private func saveRuntimeSettings(for row: StudioModelInventoryRow, pinned: Bool) async {
         loadingRuntimeID = row.id
-        statusMessage = "Saving runtime settings for \(row.id)..."
         var args = ["model", "runtime", "set", row.id, pinned ? "--pinned" : "--unpinned"]
         appendRuntimeSettingArgs(to: &args)
         let result = await controller.utilityCommandResult(args: args)
         loadingRuntimeID = nil
         if result.exitCode == 0 {
-            statusMessage = "Saved runtime settings for \(row.id)"
+            statusMessage = "Saved runtime settings for \(displayName(for: row.id))"
             await loadRuntimeSettings(for: row)
         } else {
-            statusMessage = "Could not save runtime settings for \(row.id)"
+            statusMessage = "Could not save runtime settings for \(displayName(for: row.id))"
             detailText = result.outputText
+            showDetails = true
         }
     }
 
@@ -1179,7 +1388,7 @@ struct StudioModelsView: View {
     @MainActor
     private func runtimeServerAction(_ row: StudioModelInventoryRow, action: String) async {
         loadingRuntimeID = row.id
-        statusMessage = "\(action.capitalized)ing \(row.id)..."
+        let name = displayName(for: row.id)
         do {
             var request = URLRequest(url: controller.runtimeURL(path: "/runtime/models/\(row.id)/\(action)"))
             request.httpMethod = "POST"
@@ -1189,7 +1398,7 @@ struct StudioModelsView: View {
             let (_, response) = try await URLSession.shared.data(for: request)
             let http = response as? HTTPURLResponse
             if (200..<300).contains(http?.statusCode ?? 500) {
-                statusMessage = "\(action.capitalized)ed \(row.id)"
+                statusMessage = "\(action.capitalized)ed \(name)"
             } else {
                 statusMessage = "Runtime \(action) returned HTTP \(http?.statusCode ?? 0)"
             }
@@ -1203,85 +1412,91 @@ struct StudioModelsView: View {
     private func loadInfo(for row: StudioModelInventoryRow) async {
         guard row.isInstalled else { return }
         loadingInfoID = row.id
-        statusMessage = "Inspecting \(row.id)..."
         let result = await controller.utilityCommandResult(args: ["model", "info", row.id, "--components"])
         loadingInfoID = nil
-        detailText = result.outputText
-        statusMessage = result.exitCode == 0 ? "\(installedRows.count) downloaded · \(rows.count) known" : "Could not inspect \(row.id)"
+        if result.exitCode == 0 {
+            infoFactsByID[row.id] = StudioModelsPresenter.facts(fromInfo: result.stdout)
+        } else {
+            statusMessage = "Could not inspect \(displayName(for: row.id))"
+        }
+        if selectedID == row.id {
+            detailText = result.outputText
+        }
     }
 
     @MainActor
     private func reveal(_ row: StudioModelInventoryRow) async {
         guard row.isInstalled else { return }
-        loadingInfoID = row.id
-        statusMessage = "Resolving \(row.id) folder..."
-
-        let info: String
-        if let root = StudioModelInventoryParser.modelRoot(from: detailText) {
-            reveal(url: root)
-            loadingInfoID = nil
-            statusMessage = "\(installedRows.count) downloaded · \(rows.count) known"
+        if let root = infoFactsByID[row.id]?.root {
+            reveal(url: URL(fileURLWithPath: root, isDirectory: true))
             return
-        } else {
-            let result = await controller.utilityCommandResult(args: ["model", "info", row.id])
-            info = result.outputText
         }
-
+        loadingInfoID = row.id
+        let result = await controller.utilityCommandResult(args: ["model", "info", row.id])
         loadingInfoID = nil
-        guard let root = StudioModelInventoryParser.modelRoot(from: info) else {
-            statusMessage = "Could not resolve \(row.id) folder"
-            detailText = info
+        guard let root = StudioModelInventoryParser.modelRoot(from: result.outputText) else {
+            statusMessage = "Could not resolve the \(displayName(for: row.id)) folder"
+            detailText = result.outputText
+            showDetails = true
             return
         }
         reveal(url: root)
-        statusMessage = "\(installedRows.count) downloaded · \(rows.count) known"
     }
 
     @MainActor
     private func purge(_ row: StudioModelInventoryRow) async {
         removingID = row.id
-        statusMessage = "Purging \(row.id)..."
         let result = await controller.utilityCommandResult(args: ["model", "remove", row.id, "--force"])
         removingID = nil
         detailText = result.outputText
         if result.exitCode == 0 {
+            infoFactsByID[row.id] = nil
             onModelsChanged()
             await refresh()
         } else {
-            statusMessage = "Could not purge \(row.id)"
+            statusMessage = "Could not remove \(displayName(for: row.id))"
+            showDetails = true
         }
     }
 
     @MainActor
     private func optimize(_ row: StudioModelInventoryRow, replacing: Bool) async {
         optimizingID = row.id
-        statusMessage = replacing ? "Rebuilding optimization cache for \(row.id)…" : "Optimizing \(row.id)…"
-        detailText = "Preparing MiniMax-H3 inference cache…\n"
+        let commandID = UUID()
+        optimizeCommandID = commandID
+        jobLog = replacing ? "Rebuilding the MiniMax-H3 inference cache…\n" : "Preparing the MiniMax-H3 inference cache…\n"
         let result = await controller.utilityCommandResult(
             args: StudioModelOptimizationCommand.arguments(modelID: row.id, replacing: replacing),
+            commandID: commandID,
             onOutput: { chunk in
-                guard selectedID == row.id else { return }
-                detailText = StudioModelDownloadCommand.appendingOutput(chunk, to: detailText)
+                jobLog = StudioModelDownloadCommand.appendingOutput(chunk, to: jobLog)
             }
         )
         optimizingID = nil
-        detailText = result.outputText.isEmpty ? detailText : result.outputText
+        optimizeCommandID = nil
+        if selectedID == row.id {
+            detailText = result.outputText.isEmpty ? jobLog : result.outputText
+        }
         statusMessage = result.exitCode == 0
-            ? "Optimized \(row.id)"
-            : "Could not optimize \(row.id)"
+            ? "Optimized \(displayName(for: row.id))"
+            : "Could not optimize \(displayName(for: row.id))"
     }
 
     @MainActor
     private func previewStorageCleanup() async {
         isCleaningStorage = true
-        statusMessage = "Inspecting model storage..."
-        let command = await controller.utilityCommandResult(args: ["model", "gc", "--json"])
+        let commandID = UUID()
+        cleanupCommandID = commandID
+        jobLog = "Inspecting model storage…\n"
+        let command = await controller.utilityCommandResult(args: ["model", "gc", "--json"], commandID: commandID)
         isCleaningStorage = false
+        cleanupCommandID = nil
         guard command.exitCode == 0,
               let data = command.stdout.data(using: .utf8),
               let output = try? JSONDecoder().decode(StudioModelGarbageCollectOutput.self, from: data) else {
             statusMessage = "Could not inspect model storage"
             detailText = command.outputText
+            showDetails = true
             return
         }
         guard !output.plan.items.isEmpty else {
@@ -1289,21 +1504,30 @@ struct StudioModelsView: View {
             return
         }
         pendingAlert = .cleanup(output.plan)
-        statusMessage = "\(Self.bytes(output.plan.reclaimableBytes)) can be cleaned up"
     }
 
     @MainActor
     private func cleanStorage() async {
         isCleaningStorage = true
-        statusMessage = "Cleaning model storage..."
-        let command = await controller.utilityCommandResult(args: ["model", "gc", "--force", "--json"])
+        let commandID = UUID()
+        cleanupCommandID = commandID
+        jobLog = "Cleaning model storage…\n"
+        let command = await controller.utilityCommandResult(
+            args: ["model", "gc", "--force", "--json"],
+            commandID: commandID,
+            onOutput: { chunk in
+                jobLog = StudioModelDownloadCommand.appendingOutput(chunk, to: jobLog)
+            }
+        )
         isCleaningStorage = false
+        cleanupCommandID = nil
         guard command.exitCode == 0,
               let data = command.stdout.data(using: .utf8),
               let output = try? JSONDecoder().decode(StudioModelGarbageCollectOutput.self, from: data),
               let result = output.result else {
             statusMessage = "Could not clean model storage"
             detailText = command.outputText
+            showDetails = true
             return
         }
         statusMessage = "Reclaimed \(Self.bytes(result.reclaimedBytes))"
@@ -1334,15 +1558,6 @@ struct StudioModelsView: View {
                 sharedBytes: usage.sharedBytes,
                 externalBytes: usage.externalBytes
             )
-        }
-    }
-
-    private func updateStatusMessage() {
-        if let storageReport {
-            statusMessage = "\(installedRows.count) downloaded · \(Self.bytes(storageReport.applicationSupportBytes)) used"
-                + " · \(Self.bytes(storageReport.garbageCollectableBytes)) cleanable"
-        } else {
-            statusMessage = "\(installedRows.count) downloaded · \(rows.count) known"
         }
     }
 
@@ -1386,86 +1601,468 @@ struct StudioModelsView: View {
     }
 }
 
-/// One model in the catalog list: install dot, name, category/runtime facts, size in the
-/// trailing column where the eye expects it.
+// MARK: - Pull sheet
+
+/// The models that are not installed yet, each with a Pull action. Usage-terms acceptance and
+/// the progress feedback stay with the Installed page: it starts the pull and shows the job bar.
+struct StudioModelPullSheet: View {
+    let rows: [StudioModelInventoryRow]
+    let onPull: (StudioModelInventoryRow) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var searchText = ""
+    @State private var selectedFamily: StudioModelFamily?
+
+    private var visibleRows: [StudioModelInventoryRow] {
+        StudioModelsPresenter.filter(rows, family: selectedFamily, query: searchText)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 8) {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Pull a model")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundStyle(MereRunTheme.textPrimary)
+                    Text("\(rows.count) available · downloads into managed storage")
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(MereRunTheme.textMuted)
+                }
+                Spacer()
+                Button("Done") { dismiss() }
+                    .buttonStyle(ModelsSecondaryButtonStyle())
+                    .keyboardShortcut(.cancelAction)
+            }
+            .padding(EdgeInsets(top: 16, leading: 16, bottom: 10, trailing: 16))
+
+            StudioModelsSearchPill(text: $searchText, placeholder: "Search \(rows.count) models")
+                .padding(EdgeInsets(top: 0, leading: 16, bottom: 8, trailing: 16))
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    StudioModelsChip(title: "All", isSelected: selectedFamily == nil) { selectedFamily = nil }
+                    ForEach(StudioModelsPresenter.families(in: rows)) { family in
+                        StudioModelsChip(title: family.title, isSelected: selectedFamily == family) {
+                            selectedFamily = selectedFamily == family ? nil : family
+                        }
+                    }
+                }
+            }
+            .padding(EdgeInsets(top: 0, leading: 16, bottom: 10, trailing: 16))
+
+            Rectangle().fill(MereRunTheme.border.opacity(0.4)).frame(height: 1)
+
+            if visibleRows.isEmpty {
+                Text(rows.isEmpty ? "Every known model is installed." : "No models match.")
+                    .font(MereRunTheme.bodyFont)
+                    .foregroundStyle(MereRunTheme.textMuted)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+            } else {
+                ScrollView {
+                    LazyVStack(spacing: 1) {
+                        ForEach(visibleRows) { row in
+                            pullRow(row)
+                        }
+                    }
+                    .padding(8)
+                }
+            }
+        }
+        .frame(width: 560, height: 520)
+        .background(MereRunTheme.background)
+        .foregroundStyle(MereRunTheme.textPrimary)
+    }
+
+    private func pullRow(_ row: StudioModelInventoryRow) -> some View {
+        HStack(spacing: 10) {
+            Circle()
+                .fill(row.supported == false ? MereRunTheme.yellow : MereRunTheme.textMuted)
+                .frame(width: ModelsMetrics.dot, height: ModelsMetrics.dot)
+                .accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 1) {
+                Text(StudioModelsPresenter.displayName(row))
+                    .font(.system(size: 12.5, weight: .medium))
+                    .foregroundStyle(MereRunTheme.textPrimary)
+                    .lineLimit(1)
+                Text(pullMeta(row))
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundStyle(row.supported == false ? MereRunTheme.yellow : MereRunTheme.textMuted)
+                    .lineLimit(1)
+            }
+            Spacer(minLength: 10)
+            Button("Pull") { onPull(row) }
+                .buttonStyle(ModelsSecondaryButtonStyle())
+                .help(row.usageTerms == nil ? "Pull \(row.id)" : "Requires accepting third-party usage terms")
+        }
+        .padding(.horizontal, 10)
+        .frame(minHeight: ModelsMetrics.rowHeight)
+        .accessibilityElement(children: .combine)
+    }
+
+    private func pullMeta(_ row: StudioModelInventoryRow) -> String {
+        var parts = [StudioModelsPresenter.family(of: row).title]
+        if row.displayedSize != "—" { parts.append("\(row.displayedSize) download") }
+        if row.usageTerms != nil { parts.append("third-party terms") }
+        if row.supported == false, let reason = row.supportReasons.first { parts.append(reason) }
+        return parts.joined(separator: " · ")
+    }
+}
+
+// MARK: - Job bar
+
+/// The page-bottom job bar: dot, label, muted detail, a ≤260pt progress track, Cancel, Log.
+private struct StudioModelsJobBar: View {
+    let job: StudioModelsJob
+    let onCancel: () -> Void
+    let onLog: () -> Void
+    @Binding var showLog: Bool
+    let log: String
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Circle()
+                .fill(MereRunTheme.accent)
+                .frame(width: ModelsMetrics.dot, height: ModelsMetrics.dot)
+                .accessibilityHidden(true)
+            Text(job.label)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(MereRunTheme.textPrimary)
+                .lineLimit(1)
+            if let detail = job.detail {
+                Text(detail)
+                    .font(.system(size: 12, weight: .medium))
+                    .foregroundStyle(MereRunTheme.textMuted)
+                    .lineLimit(1)
+            }
+            StudioModelsProgressTrack(fraction: job.fraction)
+                .frame(maxWidth: 260)
+            Spacer(minLength: 0)
+            Button("Cancel", action: onCancel)
+                .buttonStyle(ModelsSecondaryButtonStyle())
+                .disabled(job.isCancelling)
+            Button("Log", action: onLog)
+                .buttonStyle(ModelsSecondaryButtonStyle())
+                .popover(isPresented: $showLog, arrowEdge: .bottom) {
+                    ScrollView {
+                        Text(log)
+                            .font(.system(size: 11.5, design: .monospaced))
+                            .foregroundStyle(MereRunTheme.textSecondary)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .topLeading)
+                            .padding(12)
+                    }
+                    .frame(width: 520, height: 280)
+                    .background(MereRunTheme.surface)
+                }
+        }
+        .padding(.horizontal, 16)
+        .frame(height: ModelsMetrics.jobBarHeight)
+        .frame(maxWidth: .infinity)
+        .background(MereRunTheme.background)
+        .overlay(alignment: .top) {
+            Rectangle().fill(MereRunTheme.border.opacity(0.53)).frame(height: 1)
+        }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("\(job.label). \(job.detail ?? "")")
+    }
+}
+
+/// A 4pt track; indeterminate progress shows a soft animated sweep, and none under Reduce Motion.
+private struct StudioModelsProgressTrack: View {
+    let fraction: Double?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var sweep = false
+
+    var body: some View {
+        GeometryReader { proxy in
+            ZStack(alignment: .leading) {
+                Capsule().fill(MereRunTheme.surfaceRaised)
+                if let fraction {
+                    Capsule()
+                        .fill(MereRunTheme.accent)
+                        .frame(width: max(4, proxy.size.width * min(max(fraction, 0), 1)))
+                } else if !reduceMotion {
+                    Capsule()
+                        .fill(MereRunTheme.accent.opacity(0.7))
+                        .frame(width: proxy.size.width * 0.3)
+                        .offset(x: sweep ? proxy.size.width * 0.7 : 0)
+                        .animation(.easeInOut(duration: 1.2).repeatForever(autoreverses: true), value: sweep)
+                        .onAppear { sweep = true }
+                } else {
+                    Capsule().fill(MereRunTheme.accent.opacity(0.35))
+                }
+            }
+        }
+        .frame(height: 4)
+        .accessibilityElement()
+        .accessibilityLabel("Progress")
+        .accessibilityValue(fraction.map { "\(Int(($0 * 100).rounded())) percent" } ?? "in progress")
+    }
+}
+
+// MARK: - Pieces
+
+/// One model in the list: an 8pt status dot, the display name, and "Family · size".
 private struct StudioModelListRow: View {
-    let row: StudioModelInventoryRow
+    let name: String
+    let meta: String
+    let status: StudioModelRowStatus
     let isSelected: Bool
-    let runtime: StudioRuntimeSettings?
     let action: () -> Void
 
     @State private var hovering = false
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: MereRunTheme.Spacing.sm) {
+            HStack(spacing: 10) {
                 Circle()
-                    .fill(row.isInstalled ? MereRunTheme.green : MereRunTheme.border)
-                    .frame(width: 7, height: 7)
+                    .fill(status.color)
+                    .frame(width: ModelsMetrics.dot, height: ModelsMetrics.dot)
                     .accessibilityHidden(true)
 
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(row.id)
-                        .font(.system(size: 12.5, weight: .semibold))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(name)
+                        .font(.system(size: 12.5, weight: .medium))
                         .foregroundStyle(MereRunTheme.textPrimary)
                         .lineLimit(1)
                         .truncationMode(.middle)
-                    HStack(spacing: 6) {
-                        Text(row.category)
-                        if row.usageTerms != nil {
-                            Label("terms", systemImage: "doc.text")
-                                .labelStyle(.titleAndIcon)
-                        }
-                        if !row.isInstalled {
-                            Text("·")
-                            Text(row.status)
-                        }
-                        if let runtime {
-                            if runtime.pinned {
-                                Label("pinned", systemImage: "pin.fill")
-                                    .labelStyle(.titleAndIcon)
-                            }
-                            if let alias = runtime.alias {
-                                Text("→ \(alias)")
-                            }
-                        }
-                    }
-                    .font(MereRunTheme.captionFont)
-                    .foregroundStyle(MereRunTheme.textMuted)
-                    .lineLimit(1)
+                    Text(meta)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundStyle(MereRunTheme.textMuted)
+                        .lineLimit(1)
                 }
-
-                Spacer(minLength: 8)
-
-                Text(row.displayedSize)
-                    .font(.system(size: 11, design: .monospaced))
-                    .foregroundStyle(MereRunTheme.textMuted)
+                Spacer(minLength: 0)
             }
             .padding(.horizontal, 10)
-            .padding(.vertical, 8)
+            .frame(height: ModelsMetrics.rowHeight)
             .background {
                 RoundedRectangle(cornerRadius: MereRunTheme.Radius.md)
-                    .fill(rowFill)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: MereRunTheme.Radius.md)
-                            .strokeBorder(
-                                isSelected ? MereRunTheme.accent.opacity(0.5) : Color.clear,
-                                lineWidth: 1
-                            )
-                    }
+                    .fill(isSelected ? MereRunTheme.accentSoft : hovering ? MereRunTheme.hoverFill : Color.clear)
             }
             .contentShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.md))
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .animation(MereRunTheme.Motion.quick, value: hovering)
-        .accessibilityLabel("\(row.id), \(row.category), \(row.status), \(row.displayedSize)")
+        .accessibilityLabel("\(name), \(meta), \(status.accessibilityDescription)")
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
+}
 
-    private var rowFill: Color {
-        if isSelected { return MereRunTheme.accentSoft }
-        if hovering { return MereRunTheme.hoverFill }
-        return MereRunTheme.surface.opacity(0.35)
+/// The 28pt capsule search field with a leading glass.
+private struct StudioModelsSearchPill: View {
+    @Binding var text: String
+    let placeholder: String
+
+    var body: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(MereRunTheme.textMuted)
+            TextField(placeholder, text: $text)
+                .textFieldStyle(.plain)
+                .font(.system(size: 12))
+                .foregroundStyle(MereRunTheme.textPrimary)
+            if !text.isEmpty {
+                Button {
+                    text = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 11))
+                }
+                .buttonStyle(.mereIcon(tint: MereRunTheme.textMuted))
+                .accessibilityLabel("Clear search")
+            }
+        }
+        .padding(.horizontal, 10)
+        .frame(height: 28)
+        .frame(maxWidth: .infinity)
+        .background {
+            Capsule()
+                .fill(MereRunTheme.surface)
+                .overlay {
+                    Capsule().strokeBorder(MereRunTheme.border.opacity(0.8), lineWidth: 1)
+                }
+        }
+    }
+}
+
+/// A 24pt filter chip; selected chips take the accent wash and accent text.
+private struct StudioModelsChip: View {
+    let title: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            Text(title)
+                .font(.system(size: 11.5, weight: .medium))
+                .foregroundStyle(isSelected ? MereRunTheme.accent : MereRunTheme.textPrimary)
+                .padding(.horizontal, 9)
+                .frame(height: 24)
+                .background {
+                    RoundedRectangle(cornerRadius: 6)
+                        .fill(isSelected ? MereRunTheme.accentSoft : MereRunTheme.surfaceRaised)
+                }
+                .contentShape(RoundedRectangle(cornerRadius: 6))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+    }
+}
+
+/// A 20pt fact tag under the detail title ("Image", "Q4 · 2.1 GB", "Default for Image").
+private struct StudioModelsTag: View {
+    let title: String
+    var accent = false
+
+    var body: some View {
+        Text(title)
+            .font(.system(size: 10.5, weight: .medium))
+            .foregroundStyle(accent ? MereRunTheme.accent : MereRunTheme.textPrimary)
+            .padding(.horizontal, 9)
+            .frame(height: 20)
+            .background {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(accent ? MereRunTheme.accentSoft : MereRunTheme.surfaceRaised)
+            }
+    }
+}
+
+/// A key on the left, a value on the right, 24pt tall.
+private struct StudioModelsKeyValueRow: View {
+    let key: String
+    let value: String
+    let mono: Bool
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(key)
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(MereRunTheme.textSecondary)
+                .lineLimit(1)
+            Spacer(minLength: 12)
+            Text(value)
+                .font(.system(size: 12, weight: .medium, design: mono ? .monospaced : .default))
+                .foregroundStyle(MereRunTheme.textPrimary)
+                .lineLimit(1)
+                .truncationMode(.middle)
+                .textSelection(.enabled)
+        }
+        .frame(minHeight: 24)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// A status dot beside a sentence, for the Health panel.
+private struct StudioModelsStatusLine: View {
+    let text: String
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Circle()
+                .fill(color)
+                .frame(width: ModelsMetrics.dot, height: ModelsMetrics.dot)
+                .accessibilityHidden(true)
+            Text(text)
+                .font(.system(size: 12.5, weight: .medium))
+                .foregroundStyle(MereRunTheme.textPrimary)
+                .lineLimit(2)
+        }
+        .accessibilityElement(children: .combine)
+    }
+}
+
+/// A panel whose body folds away behind its title, for the secondary editors under the fold.
+private struct StudioModelsDisclosurePanel<Content: View>: View {
+    let title: String
+    @Binding var isExpanded: Bool
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(MereRunTheme.Motion.standard) { isExpanded.toggle() }
+            } label: {
+                HStack(spacing: 8) {
+                    Text(title)
+                        .font(.system(size: 12.5, weight: .semibold))
+                        .foregroundStyle(MereRunTheme.textPrimary)
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundStyle(MereRunTheme.textMuted)
+                        .rotationEffect(.degrees(isExpanded ? 0 : -90))
+                }
+                .padding(EdgeInsets(top: 12, leading: 16, bottom: 12, trailing: 16))
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityAddTraits(isExpanded ? [.isButton, .isSelected] : .isButton)
+            .accessibilityHint(isExpanded ? "Collapse" : "Expand")
+
+            if isExpanded {
+                content()
+                    .padding(EdgeInsets(top: 0, leading: 16, bottom: 14, trailing: 16))
+            }
+        }
+        .modelsPanel()
+    }
+}
+
+/// `btnPrimary`: 28pt, accent fill, on-accent 13pt semibold text, 6pt radius.
+private struct ModelsPrimaryButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(MereRunTheme.onAccent)
+            .padding(.horizontal, 14)
+            .frame(height: 28)
+            .background {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(MereRunTheme.accent.opacity(configuration.isPressed ? 0.8 : 1))
+            }
+            .opacity(isEnabled ? 1 : 0.5)
+            .contentShape(RoundedRectangle(cornerRadius: 6))
+    }
+}
+
+/// `btnSecondary`: 26pt, raised surface, hairline border, 11.5pt medium text, 6pt radius.
+private struct ModelsSecondaryButtonStyle: ButtonStyle {
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(.system(size: 11.5, weight: .medium))
+            .foregroundStyle(MereRunTheme.textPrimary)
+            .padding(.horizontal, 10)
+            .frame(height: 26)
+            .background {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(configuration.isPressed ? MereRunTheme.accentSoft : MereRunTheme.surfaceRaised)
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 6)
+                            .strokeBorder(MereRunTheme.border.opacity(0.6), lineWidth: 1)
+                    }
+            }
+            .opacity(isEnabled ? 1 : 0.5)
+            .contentShape(RoundedRectangle(cornerRadius: 6))
+    }
+}
+
+private extension View {
+    /// `panel`: surface fill, hairline border, 10pt radius.
+    func modelsPanel() -> some View {
+        background {
+            RoundedRectangle(cornerRadius: ModelsMetrics.panelRadius)
+                .fill(MereRunTheme.surface)
+                .overlay {
+                    RoundedRectangle(cornerRadius: ModelsMetrics.panelRadius)
+                        .strokeBorder(MereRunTheme.border.opacity(0.8), lineWidth: 1)
+                }
+        }
     }
 }

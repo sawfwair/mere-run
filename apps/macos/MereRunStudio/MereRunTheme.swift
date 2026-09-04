@@ -1,4 +1,5 @@
 import AppKit
+import CoreText
 import SwiftUI
 
 enum MereRunTheme {
@@ -19,6 +20,12 @@ enum MereRunTheme {
     static let green = dynamic(light: "5E7A45", dark: "8EAA74")
     static let yellow = dynamic(light: "9C7520", dark: "D2A24E")
     static let red = dynamic(light: "C2493B", dark: "D98072")
+    /// Glyphs and labels drawn on a solid `accent` fill (the selected sidebar row, primary buttons).
+    static let onAccent = dynamic(light: "FFFFFF", dark: "1B160A")
+    /// The raised, selected segment of a segmented control sitting on `surfaceRaised`.
+    static let segmentedSelection = dynamic(light: "FFFFFF", dark: "3A362E")
+    /// The wordmark's period — the one green that is brand, not status. Same in both appearances.
+    static let wordmarkGreen = dynamic(light: "2D6A4F", dark: "2D6A4F")
 
     /// Transient pointer-hover fill for rows and icon buttons.
     static let hoverFill = dynamicNSColor(
@@ -43,6 +50,76 @@ enum MereRunTheme {
     // hero) — never controls or body copy. Serif-on-paper is a core identity element.
     static let displayFont = Font.system(.largeTitle, design: .serif, weight: .medium)
     static let displaySmallFont = Font.system(.title2, design: .serif, weight: .medium)
+
+    /// The brand face: Caveat (SIL Open Font License 1.1), bundled under `Resources/Fonts` and
+    /// registered with Core Text on first use. Only the sidebar wordmark uses it.
+    enum Brand {
+        static let familyName = "Caveat"
+        static let fontFileName = "Caveat[wght]"
+        static let wordmarkSize: CGFloat = 27
+
+        /// Caveat Medium at `size`, or the system serif when the bundled face is unavailable so the
+        /// wordmark still reads as a wordmark.
+        static func font(size: CGFloat = wordmarkSize) -> Font {
+            if isAvailable {
+                return Font.custom(familyName, fixedSize: size).weight(.medium)
+            }
+            return Font.system(size: size, weight: .medium, design: .serif)
+        }
+
+        /// Whether Caveat can be drawn by this process — registered from the bundle by `register()`
+        /// or already installed on the machine.
+        static var isAvailable: Bool {
+            register()
+            return NSFont(name: familyName, size: wordmarkSize) != nil
+        }
+
+        /// Registers the bundled font for this process. Safe to call repeatedly; the work happens
+        /// once. Returns true when Caveat is available afterwards.
+        @discardableResult
+        static func register() -> Bool {
+            registration
+        }
+
+        private static let registration: Bool = {
+            if NSFont(name: familyName, size: wordmarkSize) != nil { return true }
+            guard let url = fontURL() else { return false }
+            var error: Unmanaged<CFError>?
+            if CTFontManagerRegisterFontsForURL(url as CFURL, .process, &error) { return true }
+            // Registered earlier by another bundle in this process still counts as available.
+            if let error = error?.takeRetainedValue(),
+               CFErrorGetCode(error) == CTFontManagerError.alreadyRegistered.rawValue {
+                return true
+            }
+            return false
+        }()
+
+        /// The bundled font file, looked up in the SwiftPM resource bundle wherever this process
+        /// finds it: `Contents/Resources` of the packaged app, or beside the executable (or the
+        /// test bundle) in a SwiftPM build directory. Never `Bundle.module`, whose accessor traps
+        /// when the bundle is missing; a missing font must degrade, not crash.
+        static func fontURL() -> URL? {
+            let bundleName = "MereRun_MereRunApp.bundle"
+            var roots: [URL] = []
+            if let resources = Bundle.main.resourceURL { roots.append(resources) }
+            roots.append(Bundle.main.bundleURL)
+            if let executable = Bundle.main.executableURL {
+                roots.append(executable.deletingLastPathComponent())
+            }
+            let hostBundle = Bundle(for: BrandBundleLocator.self)
+            roots.append(hostBundle.bundleURL.deletingLastPathComponent())
+            if let hostResources = hostBundle.resourceURL { roots.append(hostResources) }
+            for root in roots {
+                let candidate = root
+                    .appendingPathComponent(bundleName, isDirectory: true)
+                    .appendingPathComponent("Fonts", isDirectory: true)
+                    .appendingPathComponent(fontFileName, isDirectory: false)
+                    .appendingPathExtension("ttf")
+                if FileManager.default.fileExists(atPath: candidate.path) { return candidate }
+            }
+            return nil
+        }
+    }
 
     /// Consistent spacing scale for padding/stack spacing.
     enum Spacing {
@@ -87,6 +164,9 @@ enum MereRunTheme {
         })
     }
 }
+
+/// Anchors `Bundle(for:)` to this module: the app executable, or the test host it is linked into.
+private final class BrandBundleLocator {}
 
 extension Color {
     init(hex: String) {

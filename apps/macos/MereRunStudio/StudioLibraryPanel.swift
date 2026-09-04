@@ -17,6 +17,8 @@ struct StudioLibraryPanel: View {
     let onQuickLook: (URL) -> Void
     let onRetry: (StudioLibraryItem) -> Void
     let onEdit: (StudioLibraryItem) -> Void
+    /// Extra leading space for the header while the window's traffic lights sit over it.
+    var leadingInset: CGFloat = 0
 
     @State private var searchText = ""
     @State private var renamingID: UUID?
@@ -64,10 +66,6 @@ struct StudioLibraryPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             header
-
-            Divider()
-                .overlay(MereRunTheme.border.opacity(0.5))
-
             searchField
 
             if filteredItems.isEmpty {
@@ -92,35 +90,38 @@ struct StudioLibraryPanel: View {
     }
 
     private var header: some View {
-        HStack(spacing: MereRunTheme.Spacing.xs) {
+        HStack(spacing: 8) {
             Text("Library")
-                .font(.system(size: 15, weight: .semibold))
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundStyle(MereRunTheme.textPrimary)
             Text("\(scopedItems.count)")
-                .font(MereRunTheme.captionFont)
+                .font(.system(size: 11, weight: .medium))
                 .foregroundStyle(MereRunTheme.textMuted)
-            Spacer()
-            Picker("Scope", selection: $scope) {
-                Text(domain.title).tag(StudioLibraryScope.domain)
-                Text("All").tag(StudioLibraryScope.all)
+                .accessibilityLabel("\(scopedItems.count) runs")
+            Spacer(minLength: 0)
+            MereSegmentedControl(
+                StudioLibraryScope.allCases,
+                selection: $scope,
+                accessibilityLabel: "Library scope"
+            ) { scope in
+                scope == .domain ? domain.title : "All"
             }
-            .pickerStyle(.segmented)
-            .labelsHidden()
-            .controlSize(.small)
-            .fixedSize()
-            .accessibilityLabel("Library scope")
         }
-        .padding(.horizontal, MereRunTheme.Spacing.md)
-        .frame(height: 52)
+        .padding(.top, 14)
+        .padding(.leading, 14 + leadingInset)
+        .padding(.trailing, 14)
+        .padding(.bottom, 8)
     }
 
     private var searchField: some View {
-        HStack(spacing: 7) {
+        HStack(spacing: 6) {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 12, weight: .medium))
                 .foregroundStyle(MereRunTheme.textMuted)
-            TextField("Search runs", text: $searchText)
+            TextField("Search", text: $searchText)
                 .textFieldStyle(.plain)
-                .font(.system(size: 12.5))
+                .font(.system(size: 12))
+                .foregroundStyle(MereRunTheme.textPrimary)
             if !searchText.isEmpty {
                 Button {
                     searchText = ""
@@ -132,17 +133,17 @@ struct StudioLibraryPanel: View {
                 .accessibilityLabel("Clear search")
             }
         }
-        .padding(.horizontal, MereRunTheme.Spacing.sm)
-        .frame(height: 30)
+        .padding(.horizontal, 10)
+        .frame(height: 28)
         .background {
             Capsule()
                 .fill(MereRunTheme.surface)
                 .overlay {
-                    Capsule().strokeBorder(MereRunTheme.border.opacity(0.7), lineWidth: 1)
+                    Capsule().strokeBorder(MereRunTheme.border.opacity(0.8), lineWidth: 1)
                 }
         }
-        .padding(.horizontal, MereRunTheme.Spacing.sm)
-        .padding(.vertical, MereRunTheme.Spacing.sm)
+        .padding(.horizontal, 12)
+        .padding(.bottom, 8)
     }
 
     private var emptyState: some View {
@@ -167,17 +168,12 @@ struct StudioLibraryPanel: View {
 
     private var list: some View {
         ScrollView {
-            LazyVStack(alignment: .leading, spacing: 4, pinnedViews: []) {
+            LazyVStack(alignment: .leading, spacing: 2, pinnedViews: []) {
                 ForEach(daySections, id: \.day) { section in
-                    Text(section.title)
-                        .font(.system(size: 10.5, weight: .semibold))
-                        .kerning(0.5)
-                        .foregroundStyle(MereRunTheme.textMuted)
-                        .textCase(.uppercase)
-                        .padding(.horizontal, 10)
-                        .padding(.top, MereRunTheme.Spacing.sm)
+                    MereEyebrow(section.title)
+                        .padding(.horizontal, 8)
+                        .padding(.top, 6)
                         .padding(.bottom, 2)
-                        .accessibilityAddTraits(.isHeader)
 
                     ForEach(section.items) { item in
                         StudioLibraryRow(
@@ -207,7 +203,7 @@ struct StudioLibraryPanel: View {
                     }
                 }
             }
-            .padding(.horizontal, MereRunTheme.Spacing.xs)
+            .padding(.horizontal, 6)
             .padding(.bottom, MereRunTheme.Spacing.sm)
         }
         .focusable()
@@ -236,6 +232,8 @@ struct StudioLibraryPanel: View {
     }
 }
 
+/// One Library row: a 40pt thumbnail (or a glyph tile), the title on one line, and a meta line
+/// that carries a status dot while the run is queued, running, or failed.
 private struct StudioLibraryRow: View {
     let item: StudioLibraryItem
     let progress: StudioRunProgress?
@@ -254,34 +252,28 @@ private struct StudioLibraryRow: View {
 
     var body: some View {
         Button(action: action) {
-            HStack(spacing: MereRunTheme.Spacing.sm) {
+            HStack(spacing: 10) {
                 thumbnail
-                    .frame(width: 52, height: 42)
-                    .background(isSelected ? MereRunTheme.surface : MereRunTheme.accentSoft.opacity(0.5))
-                    .clipShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.base))
+                    .frame(width: 40, height: 40)
+                    .background(MereRunTheme.surfaceRaised)
+                    .clipShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.sm))
 
-                VStack(alignment: .leading, spacing: 3) {
+                VStack(alignment: .leading, spacing: 1) {
                     Text(item.displayTitle)
                         .font(.system(size: 12.5, weight: .medium))
                         .foregroundStyle(MereRunTheme.textPrimary)
                         .lineLimit(1)
+                        .truncationMode(.tail)
                     HStack(spacing: 4) {
-                        if item.status != .completed {
+                        if let statusColor {
                             Circle()
                                 .fill(statusColor)
-                                .frame(width: 5, height: 5)
+                                .frame(width: 8, height: 8)
                         }
-                        Text(subtitle)
-                            .font(MereRunTheme.captionFont)
+                        Text(meta)
+                            .font(.system(size: 11, weight: .medium))
                             .foregroundStyle(MereRunTheme.textMuted)
                             .lineLimit(1)
-                    }
-                    if item.status == .running, let progress {
-                        ProgressView(value: progress.fractionCompleted)
-                            .progressViewStyle(.linear)
-                            .tint(MereRunTheme.accent)
-                            .accessibilityLabel(progress.label)
-                            .accessibilityValue(progressAccessibilityValue(progress))
                     }
                 }
 
@@ -301,25 +293,20 @@ private struct StudioLibraryRow: View {
                     .transition(.opacity)
                 }
             }
-            .padding(6)
+            .padding(.vertical, 6)
+            .padding(.horizontal, 8)
             .background {
-                RoundedRectangle(cornerRadius: MereRunTheme.Radius.lg)
+                RoundedRectangle(cornerRadius: MereRunTheme.Radius.md)
                     .fill(rowFill)
-                    .overlay {
-                        RoundedRectangle(cornerRadius: MereRunTheme.Radius.lg)
-                            .strokeBorder(
-                                isSelected ? MereRunTheme.accent.opacity(0.4) : Color.clear,
-                                lineWidth: 1
-                            )
-                    }
             }
-            .contentShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.lg))
+            .contentShape(RoundedRectangle(cornerRadius: MereRunTheme.Radius.md))
         }
         .buttonStyle(.plain)
         .onHover { hovering = $0 }
         .animation(MereRunTheme.Motion.quick, value: hovering)
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(item.displayKindTitle), \(item.status.rawValue), \(item.displayTitle)")
+        .accessibilityValue(meta)
         .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
     }
 
@@ -329,27 +316,41 @@ private struct StudioLibraryRow: View {
         return .clear
     }
 
-    private var subtitle: String {
-        if item.status == .completed {
-            let origin = item.source.map { "\($0.title) · " } ?? ""
-            return "\(origin)\(item.displayKindTitle) · \(Self.timeFormatter.string(from: item.createdAt))"
+    /// The task that made the row ("Generate", "Find"), or the command's own title when a
+    /// specialist command other than the mode's prompt template produced it.
+    private var kindTitle: String {
+        if let templateID = item.templateID, templateID != item.mode.defaultTemplateID {
+            return item.displayKindTitle
         }
-        return "\(item.displayKindTitle) · \(item.status.rawValue)"
+        return item.mode.destination.task.title
     }
 
-    private var statusColor: Color {
+    /// "Generate · 12:43 PM" once done; "Running · 62%" / "Queued" / "Failed · 12:43 PM" otherwise.
+    private var meta: String {
         switch item.status {
-        case .queued: return MereRunTheme.textMuted
-        case .running: return MereRunTheme.yellow
-        case .completed: return MereRunTheme.green
+        case .completed:
+            let origin = item.source.map { "\($0.title) · " } ?? ""
+            return "\(origin)\(kindTitle) · \(Self.timeFormatter.string(from: item.createdAt))"
+        case .running:
+            if let fraction = progress?.fractionCompleted {
+                return "Running · \(Int((fraction * 100).rounded()))%"
+            }
+            if let detail = progress?.detail { return "Running · \(detail)" }
+            return "Running"
+        case .queued:
+            return "Queued"
+        case .failed:
+            return "Failed · \(Self.timeFormatter.string(from: item.createdAt))"
+        }
+    }
+
+    private var statusColor: Color? {
+        switch item.status {
+        case .queued: return MereRunTheme.yellow
+        case .running: return MereRunTheme.accent
+        case .completed: return nil
         case .failed: return MereRunTheme.red
         }
-    }
-
-    private func progressAccessibilityValue(_ progress: StudioRunProgress) -> String {
-        if let detail = progress.detail { return detail }
-        guard let fraction = progress.fractionCompleted else { return "In progress" }
-        return "\(Int((fraction * 100).rounded())) percent"
     }
 
     @ViewBuilder
@@ -357,14 +358,14 @@ private struct StudioLibraryRow: View {
         if let url = item.outputURL, StudioOutputFileKind.classify(url) == .image {
             StudioAsyncImagePreview(
                 url: url,
-                maxPixelSize: 180,
+                maxPixelSize: 160,
                 contentMode: .fill,
                 fallbackSystemImage: item.displaySystemImage
             )
         } else {
             Image(systemName: item.displaySystemImage)
-                .font(.system(size: 15, weight: .semibold))
-                .foregroundStyle(MereRunTheme.accent)
+                .font(.system(size: 14, weight: .medium))
+                .foregroundStyle(MereRunTheme.textMuted)
         }
     }
 }
