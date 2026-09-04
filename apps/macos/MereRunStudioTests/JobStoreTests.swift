@@ -488,13 +488,14 @@ final class JobStoreTests: XCTestCase {
         XCTAssertFalse(store.isRunning(template: .imageGenerate))
     }
 
-    func testStartedEventPrecedesTheLaunchedCommandLogLine() throws {
+    func testStartedEventPrecedesTheLaunchedCommandLogLineAndOutputChunksPrecedeChanged() async throws {
         let runner = RecordingProcessRunner()
         let store = JobStore(processRunner: runner)
         var trace: [String] = []
         let subscription = store.events.sink { event in
             switch event {
             case .started(let job): trace.append("started:\(job.log.lines.count)")
+            case .output(let job, let stream, let text): trace.append("output:\(stream.label):\(text):\(job.log.lines.count)")
             case .changed(let job): trace.append("changed:\(job.log.lines.count)")
             case .finished: trace.append("finished")
             }
@@ -506,6 +507,95 @@ final class JobStoreTests: XCTestCase {
         XCTAssertEqual(trace, ["started:0", "changed:1"])
         XCTAssertEqual(store.job(id)?.log.lines.first?.text, "mere.run trace")
         XCTAssertEqual(store.job(id)?.status, "Running")
+
+        // A chunk is delivered verbatim, after the job folded it into its log, before `.changed`.
+        runner.starts[0].stdout("hello\n")
+        runner.starts[0].stderr("careful\n")
+        await settle()
+        XCTAssertEqual(
+            Array(trace.dropFirst(2)),
+            ["output:out:hello\n:2", "changed:2", "output:err:careful\n:3", "changed:3"]
+        )
+    }
+
+    func testRawRequestsSkipPreflightAndArtifactDetectionAndCaptureCompleteOutput() async throws {
+        let runner = RecordingProcessRunner()
+        let probe = StubFileProbe()
+        probe.existingPaths = ["/tmp/config.json"]
+        let store = JobStore(processRunner: runner, fileSystem: probe)
+
+        let id = store.submit(
+            .utility(
+                arguments: ["config", "path"],
+                configuration: makeConfiguration(arguments: ["config", "path"]),
+                displayCommand: "mere.run config path"
+            )
+        )
+        let job = try XCTUnwrap(store.job(id))
+        XCTAssertEqual(job.lane, .utility)
+        XCTAssertTrue(job.state.isRunning, "a raw command has no template to validate against")
+        XCTAssertNil(job.request.templateID)
+        XCTAssertNil(job.request.template)
+        XCTAssertNil(job.request.draft)
+        XCTAssertNil(job.expectedOutput)
+        XCTAssertFalse(job.detectsArtifacts)
+        XCTAssertEqual(job.status, "Running")
+
+        let long = String(repeating: "x", count: 40 * 1024)
+        runner.starts[0].stdout("/tmp/config.json\n")
+        runner.starts[0].stdout(long)
+        runner.starts[0].stderr("warning: stale cache\n")
+        await settle()
+        XCTAssertTrue(job.artifacts.isEmpty, "an existing path on stdout is data, not an artifact")
+        XCTAssertEqual(job.status, "Running")
+
+        runner.starts[0].termination(1)
+        await settle()
+        let result = try XCTUnwrap(job.result)
+        XCTAssertEqual(result.exitCode, 1)
+        XCTAssertEqual(result.templateID, .custom)
+        XCTAssertNil(result.outputURL)
+        XCTAssertTrue(result.artifactURLs.isEmpty)
+        XCTAssertEqual(result.standardOutput, "/tmp/config.json\n" + long, "stdout is captured whole, past the console cap")
+        XCTAssertEqual(result.standardError, "warning: stale cache\n")
+        XCTAssertEqual(result.outputText?.hasSuffix("\n\nSTDERR\nwarning: stale cache"), true)
+        XCTAssertEqual(job.status, "Exited 1")
+
+        // Catalog commands keep reporting through `outputText` only.
+        let templated = store.submit(try makeRequest(extra: "templated"))
+        runner.starts[1].stdout("done\n")
+        runner.starts[1].termination(0)
+        await settle()
+        XCTAssertNil(store.job(templated)?.result?.standardOutput)
+        XCTAssertNil(store.job(templated)?.result?.standardError)
+        XCTAssertEqual(store.job(templated)?.result?.outputText, "done")
+    }
+
+    func testProbeRequestsCarryTheirDedupeKeyAndSubmitHonorsAnExplicitID() throws {
+        let runner = RecordingProcessRunner()
+        let store = JobStore(processRunner: runner)
+
+        let probe = JobRequest.probe(
+            arguments: ["status", "--json"],
+            configuration: makeConfiguration(arguments: ["status", "--json"]),
+            displayCommand: "mere.run status --json",
+            dedupeKey: "server-status"
+        )
+        XCTAssertEqual(probe.lane, .probe)
+        XCTAssertEqual(probe.dedupeKey, "server-status")
+        XCTAssertNil(probe.requestID)
+        XCTAssertNil(probe.conversationID)
+
+        let first = store.submit(probe)
+        let duplicate = store.submit(probe, id: JobID())
+        XCTAssertEqual(duplicate, first, "a deduplicated probe keeps the in-flight job's id")
+        XCTAssertEqual(runner.starts.count, 1)
+
+        let named = JobID()
+        XCTAssertEqual(store.submit(try makeRequest(lane: .utility, extra: "named"), id: named), named)
+        XCTAssertTrue(store.job(named)?.state.isRunning == true)
+        XCTAssertTrue(store.cancel(named))
+        XCTAssertEqual(runner.processes[1].terminateCallCount, 1)
     }
 }
 
@@ -541,6 +631,16 @@ private extension JobStoreTests {
             ),
             displayCommand: (["mere.run"] + args).shellQuoted(),
             dedupeKey: dedupeKey
+        )
+    }
+
+    func makeConfiguration(arguments: [String]) -> MereRunProcessConfiguration {
+        MereRunProcessConfiguration(
+            executableURL: URL(fileURLWithPath: "/usr/bin/true"),
+            arguments: arguments,
+            currentDirectoryURL: FileManager.default.temporaryDirectory,
+            environment: [:],
+            keepsStandardInputOpen: false
         )
     }
 

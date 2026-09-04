@@ -31,17 +31,41 @@ enum JobLane: Hashable, CaseIterable, Sendable {
     }
 }
 
+/// What a job runs: a catalog command, or raw CLI arguments a Studio surface built itself.
+enum JobCommand {
+    /// A catalog command. The template and draft are the immutable snapshot the lifecycle reads
+    /// for validation, output detection, sidecar discovery and interactive protocols.
+    case templated(CommandTemplate, CommandDraft)
+    /// Raw `mere.run` arguments with no catalog template: utility reads and writes (`model list`,
+    /// `config set`) and readiness/status probes. There is nothing to validate, no output file
+    /// to detect and no sidecars; the complete stdout and stderr are captured for the submitter
+    /// instead (`JobResult.standardOutput` / `standardError`).
+    case raw(arguments: [String])
+
+    var template: CommandTemplate? {
+        if case .templated(let template, _) = self { return template }
+        return nil
+    }
+
+    var draft: CommandDraft? {
+        if case .templated(_, let draft) = self { return draft }
+        return nil
+    }
+
+    var isRaw: Bool {
+        if case .raw = self { return true }
+        return false
+    }
+}
+
 /// Everything a job needs to run, captured at submission and never mutated afterwards. A queued
 /// job executes from this snapshot, so it never observes later edits to the Advanced draft or
 /// Settings.
 struct JobRequest {
     let lane: JobLane
-    /// The command this job runs. Template and draft are the immutable snapshot the lifecycle
-    /// reads for validation, output detection, sidecar discovery and interactive protocols.
-    let template: CommandTemplate
-    let draft: CommandDraft
+    let command: JobCommand
     /// Durable Studio request id (a library row, or a per-turn id for chat). Nil for runs started
-    /// from the Advanced console, which have no library row.
+    /// from the Advanced console, which have no library row, and for raw commands.
     let requestID: UUID?
     /// The conversation this run is a turn of, when chat/code. Conversation turns skip artifact
     /// detection and keep the full reply beyond the console buffer.
@@ -49,12 +73,13 @@ struct JobRequest {
     /// The fully resolved child-process launch: executable, argv, working directory, environment
     /// (secrets travel here, never in argv) and whether stdin stays open for steering.
     let configuration: MereRunProcessConfiguration
-    /// Shell-quoted command line for the console, library rows and results.
+    /// Shell-quoted command line for the console, library rows and results (secrets masked).
     let displayCommand: String
     /// For `.probe` jobs: a resubmission with the same key and the same configuration returns the
     /// in-flight job instead of starting another; a different configuration supersedes it.
     let dedupeKey: String?
 
+    /// A catalog command.
     init(
         lane: JobLane,
         template: CommandTemplate,
@@ -66,14 +91,66 @@ struct JobRequest {
         dedupeKey: String? = nil
     ) {
         self.lane = lane
-        self.template = template
-        self.draft = draft
+        command = .templated(template, draft)
         self.requestID = requestID
         self.conversationID = conversationID
         self.configuration = configuration
         self.displayCommand = displayCommand
         self.dedupeKey = dedupeKey
     }
+
+    private init(
+        lane: JobLane,
+        arguments: [String],
+        configuration: MereRunProcessConfiguration,
+        displayCommand: String,
+        dedupeKey: String?
+    ) {
+        self.lane = lane
+        command = .raw(arguments: arguments)
+        requestID = nil
+        conversationID = nil
+        self.configuration = configuration
+        self.displayCommand = displayCommand
+        self.dedupeKey = dedupeKey
+    }
+
+    /// A raw-argument command in the utility lane: a short CLI read or write whose complete
+    /// output the submitter awaits. `arguments` are the `mere.run` arguments as typed (the
+    /// launcher prefix, if any, lives in `configuration.arguments`).
+    static func utility(
+        arguments: [String],
+        configuration: MereRunProcessConfiguration,
+        displayCommand: String
+    ) -> JobRequest {
+        JobRequest(
+            lane: .utility,
+            arguments: arguments,
+            configuration: configuration,
+            displayCommand: displayCommand,
+            dedupeKey: nil
+        )
+    }
+
+    /// A raw-argument probe: never queued, deduplicated by `dedupeKey` (see `JobStore.submit`).
+    static func probe(
+        arguments: [String],
+        configuration: MereRunProcessConfiguration,
+        displayCommand: String,
+        dedupeKey: String
+    ) -> JobRequest {
+        JobRequest(
+            lane: .probe,
+            arguments: arguments,
+            configuration: configuration,
+            displayCommand: displayCommand,
+            dedupeKey: dedupeKey
+        )
+    }
+
+    var template: CommandTemplate? { command.template }
+    var draft: CommandDraft? { command.draft }
+    var templateID: CommandTemplateID? { command.template?.id }
 }
 
 /// Why a job never launched its process.
@@ -227,6 +304,8 @@ struct JobResult: Identifiable, Equatable {
 
     let id: UUID
     let requestID: UUID?
+    /// The catalog command this was a run of. Raw-argument jobs report `.custom`, the catalog's
+    /// own raw-argument command.
     let templateID: CommandTemplateID
     let commandPreview: String
     let exitCode: Int32
@@ -237,6 +316,11 @@ struct JobResult: Identifiable, Equatable {
     /// When this run was a chat/code turn, the conversation it belongs to (so completion routes
     /// to the thread rather than the legacy single-result path).
     let conversationID: UUID?
+    /// For raw-argument jobs, the complete stdout, uncapped, so the submitter can parse structured
+    /// output (`--json`, `model list`) whole. Nil for catalog commands, which report `outputText`.
+    let standardOutput: String?
+    /// For raw-argument jobs, the complete stderr. Nil for catalog commands.
+    let standardError: String?
 
     init(
         id: UUID = UUID(),
@@ -248,7 +332,9 @@ struct JobResult: Identifiable, Equatable {
         artifactURLs: [URL] = [],
         outputText: String?,
         completedAt: Date = Date(),
-        conversationID: UUID? = nil
+        conversationID: UUID? = nil,
+        standardOutput: String? = nil,
+        standardError: String? = nil
     ) {
         self.id = id
         self.requestID = requestID
@@ -260,6 +346,8 @@ struct JobResult: Identifiable, Equatable {
         self.outputText = outputText
         self.completedAt = completedAt
         self.conversationID = conversationID
+        self.standardOutput = standardOutput
+        self.standardError = standardError
     }
 }
 
@@ -324,9 +412,12 @@ final class Job: ObservableObject, Identifiable {
 
     private var stdoutBuffer = ""
     private var stderrBuffer = ""
-    /// Unbounded stdout accumulator for conversation turns only (chat/code), so a long reply
-    /// is captured in full — `stdoutBuffer` is capped at 32 KB for the console.
+    /// Unbounded stdout accumulator for conversation turns (so a long reply is captured in full)
+    /// and raw-argument jobs (so a submitter can parse `--json` output whole) — `stdoutBuffer`
+    /// is capped at 32 KB for the console.
     private var fullOutput = ""
+    /// Unbounded stderr accumulator for raw-argument jobs, whose submitters read stderr as data.
+    private var fullErrorOutput = ""
     /// Length of `fullOutput` at the last live think-strip; used to throttle re-stripping the
     /// whole accumulator on every chunk (it would otherwise be O(n²) over a long reply).
     private var lastLiveStripLength = 0
@@ -342,7 +433,11 @@ final class Job: ObservableObject, Identifiable {
         self.id = id
         self.request = request
         self.submittedAt = submittedAt
-        expectedOutput = ArtifactResolver.expectedOutput(template: request.template, draft: request.draft)
+        if case .templated(let template, let draft) = request.command {
+            expectedOutput = ArtifactResolver.expectedOutput(template: template, draft: draft)
+        } else {
+            expectedOutput = nil
+        }
     }
 
     var lane: JobLane { request.lane }
@@ -351,7 +446,13 @@ final class Job: ObservableObject, Identifiable {
     var primaryArtifactURL: URL? {
         artifacts.first { $0.role == .primary }?.url
     }
+    /// Whether output-file detection applies: catalog commands other than conversation turns.
+    /// Conversation replies are prose, and raw commands have no output contract to read.
+    var detectsArtifacts: Bool { !request.command.isRaw && !isConversationTurn }
     private var isConversationTurn: Bool { request.conversationID != nil }
+    private var isRawCommand: Bool { request.command.isRaw }
+    /// The template a result is attributed to; raw commands report the catalog's raw-argument one.
+    private var resultTemplateID: CommandTemplateID { request.templateID ?? .custom }
 
     // MARK: Lifecycle (JobStore only)
 
@@ -381,18 +482,20 @@ final class Job: ObservableObject, Identifiable {
     func consume(_ text: String, stream: LogStream, resolver: ArtifactResolver) {
         switch stream {
         case .stdout:
-            if request.template.id == .videoSession {
+            if request.templateID == .videoSession {
                 consumeVideoSessionOutput(text)
             }
             stdoutBuffer = Self.trimmed(stdoutBuffer + text, toByteLimit: Self.stdoutBufferByteLimit)
             liveText = stdoutBuffer.replacingOccurrences(of: "\0", with: "")
-            if isConversationTurn {
-                // Conversation turns accumulate the full (untrimmed) reply and publish a live,
-                // think-stripped view so a streaming bubble renders even when backgrounded. The
-                // streaming variant hides an in-progress (unclosed) reasoning block. Re-stripping
-                // the whole accumulator on every chunk is O(n²), so throttle to ~every 80 chars of
-                // growth; finish always publishes the complete, fully-stripped reply.
+            if isConversationTurn || isRawCommand {
                 fullOutput += text
+            }
+            if isConversationTurn {
+                // Conversation turns publish a live, think-stripped view of the full reply so a
+                // streaming bubble renders even when backgrounded. The streaming variant hides an
+                // in-progress (unclosed) reasoning block. Re-stripping the whole accumulator on
+                // every chunk is O(n²), so throttle to ~every 80 chars of growth; finish always
+                // publishes the complete, fully-stripped reply.
                 // Publish immediately on the first chunk (fast first render), then throttle.
                 if lastLiveStripLength == 0
                     || fullOutput.count - lastLiveStripLength >= Self.liveStripGranularity {
@@ -402,12 +505,15 @@ final class Job: ObservableObject, Identifiable {
                         streaming: true
                     )
                 }
-            } else {
+            } else if detectsArtifacts {
                 refreshPrimaryArtifact(resolver: resolver)
             }
         case .stderr:
             stderrBuffer = Self.trimmed(stderrBuffer + text, toByteLimit: Self.stderrBufferByteLimit)
-            if request.template.id == .videoSession,
+            if isRawCommand {
+                fullErrorOutput += text
+            }
+            if request.templateID == .videoSession,
                text.localizedCaseInsensitiveContains("session ready") {
                 status = "Resident session ready"
             }
@@ -446,26 +552,35 @@ final class Job: ObservableObject, Identifiable {
         progress = nil
 
         // Conversation replies are prose, not artifacts — never run output-file detection on them
-        // (a path-like substring in a reply must not become a bogus artifact or status).
-        let detectedOutput = isConversationTurn
-            ? nil
-            : resolver.primaryOutput(expected: expectedOutput, stdout: stdoutBuffer)
-        let reportedOutputs = isConversationTurn ? [] : resolver.reportedOutputs(stdout: stdoutBuffer)
-        let artifactURLs = StudioArtifactDiscovery.urls(
-            templateID: request.template.id,
-            draft: request.draft,
-            primaryOutput: detectedOutput,
-            reportedOutputs: reportedOutputs
-        )
+        // (a path-like substring in a reply must not become a bogus artifact or status). Raw
+        // commands have no output contract to read either.
+        let detectedOutput = detectsArtifacts
+            ? resolver.primaryOutput(expected: expectedOutput, stdout: stdoutBuffer)
+            : nil
+        let reportedOutputs = detectsArtifacts ? resolver.reportedOutputs(stdout: stdoutBuffer) : []
+        let artifactURLs: [URL]
+        if case .templated(let template, let draft) = request.command {
+            artifactURLs = StudioArtifactDiscovery.urls(
+                templateID: template.id,
+                draft: draft,
+                primaryOutput: detectedOutput,
+                reportedOutputs: reportedOutputs
+            )
+        } else {
+            artifactURLs = []
+        }
         // Conversation turns finalize from the unbounded, think-stripped accumulator so long
-        // replies are not clipped by the 32 KB console buffer; other modes use the buffer.
+        // replies are not clipped by the 32 KB console buffer; raw commands from their complete
+        // stdout/stderr for the same reason; other modes use the console buffers.
         let outputText: String?
         if isConversationTurn {
             // Strip reasoning for conversation turns on EVERY exit path (not just success) so
             // <think> blocks and STDERR never leak into the next turn's replayed prompt.
             outputText = ConversationTranscript.stripThinkTags(fullOutput.replacingOccurrences(of: "\0", with: ""))
+        } else if isRawCommand {
+            outputText = Self.capturedResultText(stdout: fullOutput, stderr: fullErrorOutput, exitCode: exitCode)
         } else {
-            outputText = capturedResultText(exitCode: exitCode)
+            outputText = Self.capturedResultText(stdout: stdoutBuffer, stderr: stderrBuffer, exitCode: exitCode)
         }
 
         let primary = detectedOutput ?? primaryArtifactURL
@@ -483,19 +598,20 @@ final class Job: ObservableObject, Identifiable {
         state = cancelRequested && exitCode != 0
             ? .cancelled(exit: exitCode, at: date)
             : .finished(exit: exitCode, at: date)
-        releaseBuffers()
-
         let result = JobResult(
             requestID: request.requestID,
-            templateID: request.template.id,
+            templateID: resultTemplateID,
             commandPreview: displayCommand,
             exitCode: exitCode,
             outputURL: detectedOutput,
             artifactURLs: artifactURLs,
             outputText: outputText,
             completedAt: date,
-            conversationID: request.conversationID
+            conversationID: request.conversationID,
+            standardOutput: isRawCommand ? fullOutput : nil,
+            standardError: isRawCommand ? fullErrorOutput : nil
         )
+        releaseBuffers()
         self.result = result
         return result
     }
@@ -506,7 +622,7 @@ final class Job: ObservableObject, Identifiable {
         log.append(failure.message, stream: .system)
         let result = JobResult(
             requestID: request.requestID,
-            templateID: request.template.id,
+            templateID: resultTemplateID,
             commandPreview: displayCommand,
             exitCode: failure.exitCode,
             outputURL: nil,
@@ -524,7 +640,7 @@ final class Job: ObservableObject, Identifiable {
         log.append(LogLine(stream: .system, text: "Cancelled before start."))
         let result = JobResult(
             requestID: request.requestID,
-            templateID: request.template.id,
+            templateID: resultTemplateID,
             commandPreview: displayCommand,
             exitCode: JobResult.cancelledBeforeStartExitCode,
             outputURL: nil,
@@ -566,9 +682,10 @@ final class Job: ObservableObject, Identifiable {
         }
     }
 
-    private func capturedResultText(exitCode: Int32) -> String? {
-        let stdout = Self.nonEmptyTrimmed(stdoutBuffer)
-        guard exitCode != 0, let stderr = Self.nonEmptyTrimmed(stderrBuffer) else {
+    /// The captured stdout, with stderr appended only when the command failed.
+    private static func capturedResultText(stdout: String, stderr: String, exitCode: Int32) -> String? {
+        let stdout = nonEmptyTrimmed(stdout)
+        guard exitCode != 0, let stderr = nonEmptyTrimmed(stderr) else {
             return stdout
         }
         if let stdout {
@@ -583,6 +700,7 @@ final class Job: ObservableObject, Identifiable {
         stdoutBuffer = ""
         stderrBuffer = ""
         fullOutput = ""
+        fullErrorOutput = ""
         interactiveOutputBuffer = ""
     }
 
