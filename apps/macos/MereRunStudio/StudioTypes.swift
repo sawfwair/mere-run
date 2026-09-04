@@ -628,17 +628,22 @@ enum StudioCommandError: LocalizedError, Equatable {
 }
 
 enum StudioCommandAdapter {
+    /// Translates the composer's draft into the command it runs. `validating: false` skips the
+    /// prompt/attachment checks so a preview (the Command view) can show an incomplete draft.
     static func makeRequest(
         mode: StudioMode,
         draft studioDraft: StudioDraft,
-        conversationID: UUID? = nil
+        conversationID: UUID? = nil,
+        validating: Bool = true
     ) throws -> StudioRunRequest {
         let templateID = templateID(for: mode, draft: studioDraft)
         guard let template = CommandCatalog.template(id: templateID) else {
             throw StudioCommandError.missingTemplate(templateID)
         }
 
-        try validate(mode: mode, templateID: templateID, draft: studioDraft)
+        if validating {
+            try validate(mode: mode, templateID: templateID, draft: studioDraft)
+        }
 
         var draft = template.defaultDraft()
         let prompt = studioDraft.prompt.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -1370,7 +1375,7 @@ enum StudioProgressParser {
               progress.totalSteps > 0 else { return nil }
         let current = min(progress.step + 1, progress.totalSteps) // the CLI emits a 0-based step index
         return StudioRunProgress(
-            label: "Generating",
+            label: progress.stage.capitalized,
             fractionCompleted: Double(current) / Double(progress.totalSteps),
             detail: "Step \(current) of \(progress.totalSteps)"
         )

@@ -10,13 +10,17 @@ struct StudioContentHeader: View {
     /// Models inventory.
     let subtitle: String
     @Binding var task: StudioTask
-    let showsLibraryToggle: Bool
+    /// Prompt tasks show the Library and Inspector toggles; the Command toggle is always there.
+    let showsPanelToggles: Bool
     let isLibraryShown: Bool
-    let isConsoleOpen: Bool
+    let isInspectorShown: Bool
+    /// The Command view column is open (prompt tasks) or the Command Console window is (others).
+    let isCommandShown: Bool
     /// Extra leading space when the traffic lights and sidebar toggle sit over this header.
     var leadingInset: CGFloat = 0
     let onToggleLibrary: () -> Void
-    let onOpenConsole: () -> Void
+    let onToggleInspector: () -> Void
+    let onToggleCommand: () -> Void
 
     static let height: CGFloat = 52
     /// Clears the traffic lights and the sidebar toggle while the sidebar is collapsed.
@@ -91,7 +95,7 @@ struct StudioContentHeader: View {
 
     private var toggles: some View {
         HStack(spacing: 4) {
-            if showsLibraryToggle {
+            if showsPanelToggles {
                 MereToolbarIconButton(
                     systemImage: "sidebar.left",
                     isActive: isLibraryShown,
@@ -99,23 +103,23 @@ struct StudioContentHeader: View {
                 )
                 .help(isLibraryShown ? "Hide Library (⌥⌘L)" : "Show Library (⌥⌘L)")
                 .accessibilityLabel(isLibraryShown ? "Hide Library" : "Show Library")
-            }
 
-            // The inspector column arrives with the feed canvas; the toggle holds its place.
-            MereToolbarIconButton(systemImage: "sidebar.right", isActive: false, action: {})
-                .disabled(true)
-                .opacity(0.45)
-                .help("Inspector — coming soon")
-                .accessibilityLabel("Inspector")
-                .accessibilityHint("Not available yet")
+                MereToolbarIconButton(
+                    systemImage: "sidebar.right",
+                    isActive: isInspectorShown,
+                    action: onToggleInspector
+                )
+                .help(isInspectorShown ? "Hide Inspector (⌥⌘I)" : "Show Inspector (⌥⌘I)")
+                .accessibilityLabel(isInspectorShown ? "Hide Inspector" : "Show Inspector")
+            }
 
             MereToolbarIconButton(
                 systemImage: "terminal",
-                isActive: isConsoleOpen,
-                action: onOpenConsole
+                isActive: isCommandShown,
+                action: onToggleCommand
             )
-            .help("Command Console (⌥⌘C)")
-            .accessibilityLabel("Command Console")
+            .help(showsPanelToggles ? "Command view (⌥⌘C)" : "Command Console (⌥⌘C)")
+            .accessibilityLabel(showsPanelToggles ? "Command view" : "Command Console")
         }
     }
 }
