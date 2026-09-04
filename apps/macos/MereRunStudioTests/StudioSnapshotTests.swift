@@ -455,19 +455,30 @@ final class StudioSnapshotTests: XCTestCase {
         }
     }
 
-    /// The Command Console window content at its default window size.
+    /// The Command Console: the catalog, `image generate` rendered from the contract, and the run
+    /// pane. At the mockup size so it can be read against the Command board, whose grouped rows,
+    /// monospaced flag column and "Will run" block it follows.
     func testCommandConsoleSnapshots() throws {
         for appearance in StudioSnapshotAppearance.allCases {
-            let view = AdvancedControlSurface()
+            let view = StudioConsoleView()
                 .environmentObject(fixture.controller)
                 .environmentObject(fixture.library)
                 .environmentObject(NavigationModel())
-                .frame(width: Self.consoleSize.width, height: Self.consoleSize.height)
+                .frame(width: Self.fidelitySize.width, height: Self.fidelitySize.height)
             try fixture.write(
                 view,
-                size: Self.consoleSize,
+                size: Self.fidelitySize,
                 appearance: appearance,
-                name: "console-\(appearance.rawValue)"
+                name: "console-\(appearance.rawValue)",
+                settle: 2.0,
+                afterAppear: {
+                    guard let template = CommandCatalog.template(id: .imageGenerate) else { return }
+                    self.fixture.controller.select(template)
+                    self.fixture.controller.draft.prompt = "a ceramic coffee mug in soft morning light"
+                    self.fixture.controller.draft.model = "image-zimage-nano-q4"
+                    self.fixture.controller.draft.outputPath =
+                        "~/Pictures/mere.run/Image/ceramic-coffee-mug-8813.png"
+                }
             )
         }
     }

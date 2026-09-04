@@ -53,7 +53,8 @@ final class StudioLibraryStore: ObservableObject {
     func start(
         request: StudioRunRequest,
         commandPreview: String,
-        status: StudioLibraryStatus = .running
+        status: StudioLibraryStatus = .running,
+        arguments: [String]? = nil
     ) -> StudioLibraryItem {
         let item = StudioLibraryItem(
             id: request.id,
@@ -68,7 +69,8 @@ final class StudioLibraryStore: ObservableObject {
             commandPreview: commandPreview,
             outputText: nil,
             templateID: request.templateID,
-            commandDraft: request.draft
+            commandDraft: request.draft,
+            commandArguments: arguments
         )
         upsert(item)
         return item

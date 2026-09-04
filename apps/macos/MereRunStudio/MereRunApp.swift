@@ -31,6 +31,22 @@ enum StudioConsoleWindow {
     static let title = "Command Console"
 }
 
+/// The Studio window's content: the shell, on the theme, with the CLI resolved once the window
+/// is up so the status cluster and the composer know what they are talking to.
+struct MereRunRootView: View {
+    @EnvironmentObject private var controller: MereRunController
+
+    var body: some View {
+        StudioRootView()
+            .background(MereRunTheme.background.ignoresSafeArea())
+            .foregroundStyle(MereRunTheme.textPrimary)
+            .onAppear {
+                controller.refreshResolvedCLI()
+                controller.refreshCLIVersion()
+            }
+    }
+}
+
 @main
 struct MereRunApp: App {
     @NSApplicationDelegateAdaptor(MereRunAppDelegate.self) private var appDelegate
@@ -88,7 +104,7 @@ struct MereRunApp: App {
         }
 
         Window(StudioConsoleWindow.title, id: StudioConsoleWindow.id) {
-            AdvancedControlSurface()
+            StudioConsoleView()
                 .environmentObject(controller)
                 .environmentObject(library)
                 .environmentObject(navigation)
