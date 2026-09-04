@@ -94,4 +94,62 @@ final class ConversationTranscriptTests: XCTestCase {
         XCTAssertEqual(withReserve.prompt, "latest")
         XCTAssertGreaterThanOrEqual(withReserve.approxChars, 90)
     }
+
+    func testBudgetDerivesFromContextWindowLessTheReplyRoom() {
+        XCTAssertEqual(
+            ConversationTranscript.budgetChars(contextTokens: 32_768, maxOutputTokens: 2_048),
+            (32_768 - 2_048) * ConversationTranscript.charsPerContextToken
+        )
+        // No context known: the fixed default, exactly as before.
+        XCTAssertEqual(
+            ConversationTranscript.budgetChars(contextTokens: nil, maxOutputTokens: 2_048),
+            ConversationTranscript.defaultBudgetChars
+        )
+        XCTAssertEqual(
+            ConversationTranscript.budgetChars(contextTokens: 0, maxOutputTokens: 2_048),
+            ConversationTranscript.defaultBudgetChars
+        )
+        // A tiny context still leaves room for the latest turn.
+        XCTAssertEqual(
+            ConversationTranscript.budgetChars(contextTokens: 1_024, maxOutputTokens: 4_096),
+            ConversationTranscript.minimumBudgetChars
+        )
+    }
+
+    func testContextTokensPreferExplicitSizeThenInventoryThenNothing() {
+        let inventory = [
+            StudioModelInventoryRow(
+                id: "text-chat-qwen3.6-4b", category: "text-chat", status: "installed", size: "2.4 GB",
+                usageTerms: nil, contextWindow: 40_960
+            ),
+            StudioModelInventoryRow(
+                id: "text-chat-unknown", category: "text-chat", status: "installed", size: "1 GB", usageTerms: nil
+            ),
+        ]
+        XCTAssertEqual(
+            ConversationTranscript.contextTokens(
+                requestedContextSize: 8_192, model: "text-chat-qwen3.6-4b", inventory: inventory
+            ),
+            8_192
+        )
+        XCTAssertEqual(
+            ConversationTranscript.contextTokens(requestedContextSize: 0, model: "text-chat-qwen3.6-4b", inventory: inventory),
+            40_960
+        )
+        XCTAssertNil(
+            ConversationTranscript.contextTokens(requestedContextSize: 0, model: "text-chat-unknown", inventory: inventory)
+        )
+        XCTAssertNil(ConversationTranscript.contextTokens(requestedContextSize: 0, model: "", inventory: inventory))
+    }
+
+    func testDecodeSpeedIsReadFromTheLatestStatsLine() {
+        let lines = [
+            "Loading model…",
+            "time=3.10s load=0.40s prefill=0.20s decode=2.50s tokens=98 decode_tps=39.20 e2e_tps=31.61",
+            "time=2.90s load=0.00s prefill=0.20s decode=2.40s tokens=99 decode_tps=41.25 e2e_tps=34.13 prefill_tps=812.00",
+        ]
+        XCTAssertEqual(ConversationTranscript.decodeTokensPerSecond(in: lines), 41.25)
+        XCTAssertNil(ConversationTranscript.decodeTokensPerSecond(in: ["no stats here"]))
+        XCTAssertNil(ConversationTranscript.decodeTokensPerSecond(in: ["decode_tps=0.00"]))
+    }
 }

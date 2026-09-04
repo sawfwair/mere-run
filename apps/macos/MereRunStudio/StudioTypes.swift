@@ -972,6 +972,14 @@ struct StudioMessage: Codable, Identifiable, Equatable {
     /// The image attached to this user turn (vision chat), so edit/retry resend it. Optional so
     /// older persisted threads decode unchanged.
     var imagePath: String?
+    /// The model that produced this assistant turn, recorded when the reply lands so a thread
+    /// whose model changed mid-way says which turn ran on what. nil on user turns and on threads
+    /// persisted before turns recorded it.
+    var model: String?
+    /// The system prompt in effect for this assistant turn (nil = the command's default).
+    var systemPrompt: String?
+    /// Decode throughput the CLI reported for this assistant turn (`--stats`), when it did.
+    var tokensPerSecond: Double?
 
     init(
         id: UUID = UUID(),
@@ -979,7 +987,10 @@ struct StudioMessage: Codable, Identifiable, Equatable {
         content: String,
         createdAt: Date = Date(),
         failed: Bool = false,
-        imagePath: String? = nil
+        imagePath: String? = nil,
+        model: String? = nil,
+        systemPrompt: String? = nil,
+        tokensPerSecond: Double? = nil
     ) {
         self.id = id
         self.role = role
@@ -987,6 +998,9 @@ struct StudioMessage: Codable, Identifiable, Equatable {
         self.createdAt = createdAt
         self.failed = failed
         self.imagePath = imagePath
+        self.model = model
+        self.systemPrompt = systemPrompt
+        self.tokensPerSecond = tokensPerSecond
     }
 }
 
