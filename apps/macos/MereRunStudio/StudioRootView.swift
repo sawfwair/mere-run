@@ -44,6 +44,9 @@ struct StudioRootView: View {
     @State private var pendingPullRefresh: StudioReadinessRefresh?
     @State private var pendingRestrictedPull: StudioRunRequest?
     @State private var studioError: String?
+    /// A run whose user-visible destination could not be created, explained once per launch.
+    @State private var outputFallbackNotice: String?
+    @State private var outputFallbackAnnounced = false
     /// Every `model list` row, installed or not, feeding the composer's model chip.
     @State private var modelInventory: [StudioModelInventoryRow] = []
     /// What Models ▸ Installed last reported, so the content header's subtitle shows the real inventory.
@@ -374,6 +377,17 @@ struct StudioRootView: View {
             MereBanner(
                 severity: .warning,
                 text: "Run history not saved: \(persistenceError)"
+            )
+            .padding(.horizontal, MereRunTheme.Spacing.lg)
+            .padding(.top, MereRunTheme.Spacing.sm)
+        }
+
+        if let outputFallbackNotice {
+            MereBanner(
+                severity: .warning,
+                text: outputFallbackNotice,
+                systemImage: "folder.badge.questionmark",
+                onDismiss: { self.outputFallbackNotice = nil }
             )
             .padding(.horizontal, MereRunTheme.Spacing.lg)
             .padding(.top, MereRunTheme.Spacing.sm)
@@ -1338,7 +1352,7 @@ struct StudioRootView: View {
         }
 
         do {
-            let request = try StudioCommandAdapter.makeRequest(mode: mode, draft: draft)
+            let request = try prepareDestination(of: StudioCommandAdapter.makeRequest(mode: mode, draft: draft))
             let preview = controller
                 .commandPreview(template: request.template, draft: request.draft, masksSecrets: true)
             let status: StudioLibraryStatus = jobMonitor.hasInferenceCapacity ? .running : .queued
@@ -1348,6 +1362,27 @@ struct StudioRootView: View {
         } catch {
             studioError = error.localizedDescription
         }
+    }
+
+    /// Makes the run's destination folder exist. A sandbox denial, a read-only home, or a root
+    /// pointing at a volume that is not mounted sends the run back to App Outputs rather than
+    /// failing it; the banner says so once per launch so the surprise is explained, not silent.
+    private func prepareDestination(of request: StudioRunRequest) -> StudioRunRequest {
+        let prepared = StudioOutputLocation.preparingDestination(of: request.draft)
+        if let reason = prepared.fallbackReason, !outputFallbackAnnounced {
+            outputFallbackAnnounced = true
+            outputFallbackNotice = "\(reason) Saving to \(StudioOutputLocation.abbreviate(StudioOutputLocation.appOutputsRoot())) instead."
+        }
+        guard prepared.draft != request.draft else { return request }
+        return StudioRunRequest(
+            id: request.id,
+            mode: request.mode,
+            templateID: request.templateID,
+            template: request.template,
+            draft: prepared.draft,
+            createdAt: request.createdAt,
+            conversationID: request.conversationID
+        )
     }
 
     /// The composer's Stop: the run of this mode in flight, or the thread's turn.
@@ -1581,13 +1616,28 @@ struct StudioRootView: View {
             studioError = "This older Library item does not include a replayable command."
             return
         }
-        let request = StudioRunRequest(
+        // A replay writes its own file: the recorded draft still points at the run that made it,
+        // so Rerun and Vary would otherwise overwrite the picture they came from.
+        var replayDraft = commandDraft
+        if !commandDraft.outputPath.isBlank {
+            replayDraft.outputPath = StudioOutputLocation.namedOutputPath(
+                templateID: templateID,
+                outputKind: template.outputKind,
+                prompt: commandDraft.prompt,
+                seed: commandDraft.seed,
+                fingerprint: "\(templateID.rawValue)\u{1}\(commandDraft.prompt)\u{1}\(commandDraft.model)\u{1}\(item.id)",
+                fallbackStem: template.title,
+                existing: commandDraft.outputPath
+            )
+            StudioVisionResultPaths.rederive(in: &replayDraft, previousOutputPath: commandDraft.outputPath)
+        }
+        let request = prepareDestination(of: StudioRunRequest(
             mode: item.mode,
             templateID: templateID,
             template: template,
-            draft: commandDraft
-        )
-        let preview = controller.commandPreview(template: template, draft: commandDraft, masksSecrets: true)
+            draft: replayDraft
+        ))
+        let preview = controller.commandPreview(template: template, draft: request.draft, masksSecrets: true)
         let status: StudioLibraryStatus = jobMonitor.hasInferenceCapacity ? .running : .queued
         library.start(request: request, commandPreview: preview, status: status)
         navigation.selectedLibraryID = request.id
