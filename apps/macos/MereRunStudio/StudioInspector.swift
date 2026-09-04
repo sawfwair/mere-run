@@ -265,7 +265,7 @@ struct StudioInspector: View {
                         .font(.system(size: 11, weight: .semibold))
                         .foregroundStyle(MereRunTheme.accent)
                 }
-                Text(StudioModelPicker<EmptyView>.displayLabel(for: mode, model: draft.model))
+                Text(StudioModelNaming.displayLabel(for: mode, model: draft.model))
                     .font(.system(size: 13))
                     .foregroundStyle(MereRunTheme.textPrimary)
                     .lineLimit(1)
@@ -282,7 +282,7 @@ struct StudioInspector: View {
         }
         .help(readiness.blocksRun ? readiness.message : "Model")
         .accessibilityLabel("Model")
-        .accessibilityValue(StudioModelPicker<EmptyView>.resolvedModelID(for: mode, model: draft.model))
+        .accessibilityValue(StudioModelNaming.resolvedModelID(for: mode, model: draft.model))
 
         switch mode {
         case .createImage, .chat:

@@ -365,7 +365,7 @@ struct StudioAnalyzeResultPanel: View {
     private var meta: String {
         var parts: [String] = []
         if let model = document?.modelID ?? item.commandDraft?.model, !model.isBlank {
-            parts.append(StudioComposer.displayModelName(model))
+            parts.append(StudioModelNaming.displayName(model))
         }
         let elapsed = item.updatedAt.timeIntervalSince(item.createdAt)
         if elapsed >= 0.05 { parts.append(String(format: "%.1f s", elapsed)) }

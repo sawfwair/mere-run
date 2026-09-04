@@ -326,7 +326,7 @@ enum StudioFeedChips {
             break
         }
         if !draft.model.isBlank {
-            chips.append(StudioComposer.displayModelName(draft.model))
+            chips.append(StudioModelNaming.displayName(draft.model))
         }
         return chips
     }

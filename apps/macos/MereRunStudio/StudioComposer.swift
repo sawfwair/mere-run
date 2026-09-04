@@ -442,68 +442,13 @@ struct StudioComposer: View {
     // MARK: - Model chip
 
     private var modelChip: some View {
-        StudioModelPicker(mode: mode, model: $draft.model, modelInventory: modelInventory, onShowModels: onShowModels) {
-            StudioComposerChipLabel(title: modelLabel, leadingSystemImage: modelStatusGlyph)
-        }
-        .fixedSize()
-        .help(modelHelp)
-        .accessibilityLabel("Model")
-        .accessibilityValue(modelAccessibilityValue)
-    }
-
-    /// The resolved model id for this run: the explicit draft model, else the mode's default.
-    private var rawModelID: String {
-        StudioModelPicker<EmptyView>.resolvedModelID(for: mode, model: draft.model)
-    }
-
-    private var modelLabel: String {
-        rawModelID.isEmpty ? "Auto" : Self.displayModelName(rawModelID)
-    }
-
-    /// A glyph before the model name when the model is not ready: missing locally, or unsupported.
-    private var modelStatusGlyph: String? {
-        switch readiness {
-        case .missingModel: return "arrow.down.circle"
-        case .unsupported: return "exclamationmark.triangle"
-        case .checking, .ready, .unknown: return nil
-        }
-    }
-
-    private var modelHelp: String {
-        let identity = rawModelID.isEmpty ? "Auto — the mode's default model" : "Model: \(rawModelID)"
-        switch readiness {
-        case .ready, .unknown: return identity
-        default: return "\(identity) · \(readiness.message)"
-        }
-    }
-
-    private var modelAccessibilityValue: String {
-        let identity = rawModelID.isEmpty ? "Automatic" : rawModelID
-        return "\(identity), \(readiness.title)"
-    }
-
-    /// A human-facing label for a model id: drop the modality/category prefix and
-    /// title-case the distinctive remainder ("text-agent-deepseek-v4-flash" →
-    /// "Deepseek V4 Flash"). The exact id stays in the chip's tooltip, so the
-    /// friendly name never hides what the CLI actually expects.
-    static func displayModelName(_ id: String) -> String {
-        let leaf = id.components(separatedBy: "/").last ?? id
-        let prefixes = [
-            "text-chat-", "text-agent-", "text-embed-", "text-code-",
-            "image-", "video-", "music-", "sfx-", "speech-tts-", "speech-asr-", "speech-",
-            "embed-", "vision-ground-", "vision-segment-", "vision-chat-", "vision-ocr-", "vision-", "text-"
-        ]
-        var core = leaf
-        for prefix in prefixes where core.hasPrefix(prefix) {
-            core = String(core.dropFirst(prefix.count))
-            break
-        }
-        let words = core.split(separator: "-").map { token -> String in
-            guard let first = token.first, first.isLetter else { return String(token) }
-            return first.uppercased() + token.dropFirst()
-        }
-        let label = words.joined(separator: " ")
-        return label.isEmpty ? leaf : label
+        StudioModelChip(
+            mode: mode,
+            model: $draft.model,
+            modelInventory: modelInventory,
+            readiness: readiness,
+            onShowModels: onShowModels
+        )
     }
 
     // MARK: - Right cluster

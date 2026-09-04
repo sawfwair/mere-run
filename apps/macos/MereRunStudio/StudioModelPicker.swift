@@ -1,8 +1,10 @@
 import SwiftUI
 
-/// The one model control, shared by the composer's model chip and the inspector's model row:
-/// "Auto" (the mode's default), then `model list` rows filtered to the mode's category,
-/// installed first, then a jump to Models. Both surfaces bind the same draft field.
+/// The one model menu, shared by every surface that picks a model: the composer's chip, the
+/// Converse thread header, and the inspector's model row. "Auto" (the mode's default) comes
+/// first, then `model list` rows filtered to the mode's categories, installed before
+/// downloadable, then a jump to Models. Every surface binds the same draft field, so a model
+/// picked in one is the model the next run uses.
 struct StudioModelPicker<Label: View>: View {
     let mode: StudioMode
     @Binding var model: String
@@ -10,27 +12,11 @@ struct StudioModelPicker<Label: View>: View {
     let onShowModels: () -> Void
     @ViewBuilder let label: () -> Label
 
-    /// The mode's template default, shown as "Auto".
-    static func defaultModelID(for mode: StudioMode) -> String {
-        CommandCatalog.template(id: mode.defaultTemplateID)?.defaultModel ?? ""
-    }
-
-    /// The resolved model id for a run: the explicit draft model, else the mode's default.
-    static func resolvedModelID(for mode: StudioMode, model: String) -> String {
-        let current = model.trimmingCharacters(in: .whitespacesAndNewlines)
-        return current.isEmpty ? defaultModelID(for: mode) : current
-    }
-
-    static func displayLabel(for mode: StudioMode, model: String) -> String {
-        let resolved = resolvedModelID(for: mode, model: model)
-        return resolved.isEmpty ? "Auto" : StudioComposer.displayModelName(resolved)
-    }
-
     var body: some View {
         Menu {
-            let defaultID = Self.defaultModelID(for: mode)
+            let defaultID = StudioModelNaming.defaultModelID(for: mode)
             Toggle(isOn: Binding(get: { model.isBlank }, set: { _ in model = "" })) {
-                Text(defaultID.isEmpty ? "Auto" : "Auto · \(StudioComposer.displayModelName(defaultID))")
+                Text(defaultID.isEmpty ? "Auto" : "Auto · \(StudioModelNaming.displayName(defaultID))")
             }
             let choices = mode.modelChoices(from: modelInventory)
             let installed = choices.filter(\.isInstalled)
@@ -61,9 +47,61 @@ struct StudioModelPicker<Label: View>: View {
     private func modelRow(_ row: StudioModelInventoryRow) -> some View {
         Toggle(isOn: Binding(get: { row.id == model }, set: { _ in model = row.id })) {
             SwiftUI.Label(
-                StudioComposer.displayModelName(row.id),
+                StudioModelNaming.displayName(row.id),
                 systemImage: row.isInstalled ? "internaldrive" : "arrow.down.circle"
             )
         }
+    }
+}
+
+/// The model picker drawn as a composer chip: the resolved model's name, a glyph when the model
+/// is not ready to run, and the exact id in the tooltip. The composer's chip strip and the
+/// Converse thread header share it, so a model reads the same way wherever it is picked.
+struct StudioModelChip: View {
+    let mode: StudioMode
+    @Binding var model: String
+    /// Every row of `model list`, installed or not; the menu filters it to the mode.
+    let modelInventory: [StudioModelInventoryRow]
+    let readiness: ModelReadinessState
+    let onShowModels: () -> Void
+
+    var body: some View {
+        StudioModelPicker(mode: mode, model: $model, modelInventory: modelInventory, onShowModels: onShowModels) {
+            StudioComposerChipLabel(title: label, leadingSystemImage: statusGlyph)
+        }
+        .fixedSize()
+        .help(help)
+        .accessibilityLabel("Model")
+        .accessibilityValue(accessibilityValue)
+    }
+
+    private var resolvedModelID: String {
+        StudioModelNaming.resolvedModelID(for: mode, model: model)
+    }
+
+    private var label: String {
+        StudioModelNaming.displayLabel(for: mode, model: model)
+    }
+
+    /// A glyph before the model name when the model is not ready: missing locally, or unsupported.
+    private var statusGlyph: String? {
+        switch readiness {
+        case .missingModel: return "arrow.down.circle"
+        case .unsupported: return "exclamationmark.triangle"
+        case .checking, .ready, .unknown: return nil
+        }
+    }
+
+    private var help: String {
+        let identity = resolvedModelID.isEmpty ? "Auto — the mode's default model" : "Model: \(resolvedModelID)"
+        switch readiness {
+        case .ready, .unknown: return identity
+        default: return "\(identity) · \(readiness.message)"
+        }
+    }
+
+    private var accessibilityValue: String {
+        let identity = resolvedModelID.isEmpty ? "Automatic" : resolvedModelID
+        return "\(identity), \(readiness.title)"
     }
 }

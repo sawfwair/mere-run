@@ -93,7 +93,7 @@ enum StudioActivity {
             let model = job.request.draft.model.trimmingCharacters(in: .whitespacesAndNewlines)
             // The same friendly name the composer's model chip shows, so one model reads the same
             // way wherever it appears.
-            return model.isEmpty ? "Pull model" : "Pull \(StudioComposer.displayModelName(model))"
+            return model.isEmpty ? "Pull model" : "Pull \(StudioModelNaming.displayName(model))"
         }
         // A prompt task names itself the way the task control does ("Generate", "Transcribe");
         // everything else falls back to the template's own title.
